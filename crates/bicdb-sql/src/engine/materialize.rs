@@ -3425,6 +3425,7 @@ impl<'db> SqlEngine<'db> {
             | "lpad"
             | "rpad"
             | "bicdb_variadic_call" => Some("text".to_string()),
+            "bicdb_referential_checks_enabled" => Some("bool".into()),
             "bicdb_oracle_nvl_text"
             | "bicdb_oracle_nvl2_text"
             | "bicdb_oracle_nvl_convert_text"

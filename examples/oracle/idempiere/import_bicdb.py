@@ -2,8 +2,8 @@
 """Import the exported Oracle application into an isolated BicDB preview database.
 
 Each phase records its own result. Tables/data alone are not application
-acceptance. Source foreign-key validation and deferment must be retained when
-the foreign-key phase is implemented; they are never silently discarded.
+acceptance. The foreign-key phase verifies source validation and deferment state;
+orphan inventory and full application qualification remain separate gates.
 """
 import argparse
 import base64
@@ -227,21 +227,26 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--snapshot', required=True, type=Path)
     parser.add_argument('--pg-dsn-env', default='BICDB_PG_DSN')
-    parser.add_argument('--phase', choices=['tables', 'data', 'verify', 'indexes', 'types', 'character-types', 'blob-types'], required=True)
+    parser.add_argument('--phase', choices=['tables', 'data', 'verify', 'indexes', 'types', 'character-types', 'blob-types', 'foreign-keys'], required=True)
     parser.add_argument('--report', required=True, type=Path)
     parser.add_argument('--resume', action='store_true', help='validate the prior journal and completed objects before resuming')
     parser.add_argument('--source-character-set', choices=['AL32UTF8'], help='qualified source environment for character-types')
     parser.add_argument('--source-string-size', choices=['STANDARD'], help='qualified source environment for character-types')
-    parser.add_argument('--check-only', action='store_true', help='read-only character-types/blob-types preflight without probe DDL or ALTER')
-    parser.add_argument('--writers-quiesced', action='store_true', help='confirm target writers and schema changes are stopped for BLOB reconciliation')
+    parser.add_argument('--check-only', action='store_true', help='read-only character-types/blob-types/foreign-keys preflight without probe DDL or ALTER')
+    parser.add_argument('--writers-quiesced', action='store_true', help='confirm target writers and schema changes are stopped for BLOB or foreign-key reconciliation')
     args = parser.parse_args()
+    if args.phase == 'foreign-keys':
+        if args.source_character_set or args.source_string_size:
+            parser.error('character environment options require --phase character-types')
+        from foreign_keys import migrate
+        return migrate(args)
     if args.phase == 'blob-types':
         if args.source_character_set or args.source_string_size:
             parser.error('character environment options require --phase character-types')
         from blob_types import migrate
         return migrate(args)
     if args.writers_quiesced:
-        parser.error('--writers-quiesced requires --phase blob-types')
+        parser.error('--writers-quiesced requires --phase blob-types or foreign-keys')
     if args.phase == 'character-types':
         from character_types import migrate
         return migrate(args)

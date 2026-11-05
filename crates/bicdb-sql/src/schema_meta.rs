@@ -5586,3 +5586,100 @@ pub(crate) fn require_unused_relation_oid(db: &BicDb, oid: i64) -> Result<()> {
     }
     Ok(())
 }
+
+/// Native schema enforcement state, separate from PostgreSQL's declared
+/// pg_constraint.conenforced flag (which trigger switches do not change).
+pub(crate) fn referential_checks_enabled(db: &BicDb, args: &[SqlValue]) -> Result<SqlValue> {
+    if args.len() != 1 {
+        return Err(SqlError::InvalidSql(
+            "bicdb_referential_checks_enabled requires a relation name".into(),
+        ));
+    }
+    if matches!(args[0], SqlValue::Null) {
+        return Ok(SqlValue::Null);
+    }
+    let text = args[0].to_cell();
+    let mut parser = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql(&text)
+        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+    let name = parser
+        .parse_object_name(false)
+        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+    if parser.peek_token().token != Token::EOF {
+        return Err(SqlError::InvalidSql(
+            "unexpected suffix in relation name".into(),
+        ));
+    }
+    let relation = relation_name(&name)?;
+    Ok(load_schema(db, &relation)?
+        .map(|schema| SqlValue::Bool(!schema.referential_checks_disabled))
+        .unwrap_or(SqlValue::Null))
+}
+
+#[cfg(test)]
+mod referential_checks_tests {
+    use super::*;
+    fn run(db: &mut BicDb, profile: &str, sql: &str) -> SqlResult {
+        let sql = if oracle::is_oracle_profile(profile) {
+            oracle::lower_session_sql(db, sql, profile, None, "bicdb").unwrap()
+        } else {
+            sql.into()
+        };
+        SqlSession::new(db).execute(&sql).unwrap()
+    }
+    #[test]
+    fn table_enforcement_state_is_distinct_from_declared_constraint_enforcement() {
+        for profile in [oracle::POSTGRES_PROFILE, oracle::ORACLE_PREVIEW_PROFILE] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open(root.path()).unwrap();
+            oracle::ensure_database_profile(&mut db, profile).unwrap();
+            for sql in [
+                r#"CREATE SCHEMA "Mixed.Schema""#,
+                r#"CREATE TABLE "Mixed.Schema"."P"("ID" INTEGER PRIMARY KEY)"#,
+                r#"CREATE TABLE "Mixed.Schema"."C"("ID" INTEGER PRIMARY KEY,"PID" INTEGER,CONSTRAINT "FK" FOREIGN KEY("PID") REFERENCES "Mixed.Schema"."P"("ID"))"#,
+            ] {
+                run(&mut db, profile, sql);
+            }
+            let query = r#"SELECT bicdb_referential_checks_enabled('"Mixed.Schema"."C"')"#;
+            assert_eq!(
+                run(&mut db, profile, query).rows,
+                vec![vec![SqlValue::Bool(true)]]
+            );
+            run(
+                &mut db,
+                profile,
+                r#"ALTER TABLE "Mixed.Schema"."C" DISABLE TRIGGER ALL"#,
+            );
+            assert_eq!(
+                run(&mut db, profile, query).rows,
+                vec![vec![SqlValue::Bool(false)]]
+            );
+            assert_eq!(
+                run(
+                    &mut db,
+                    profile,
+                    r#"SELECT "conenforced" FROM "pg_catalog"."pg_constraint" WHERE "conname"='FK'"#
+                )
+                .rows,
+                vec![vec![SqlValue::Bool(true)]]
+            );
+            drop(db);
+            let mut db = BicDb::open(root.path()).unwrap();
+            oracle::ensure_database_profile(&mut db, profile).unwrap();
+            assert_eq!(
+                run(&mut db, profile, query).rows,
+                vec![vec![SqlValue::Bool(false)]]
+            );
+            run(
+                &mut db,
+                profile,
+                r#"ALTER TABLE "Mixed.Schema"."C" ENABLE TRIGGER ALL"#,
+            );
+            assert_eq!(
+                run(&mut db, profile, query).rows,
+                vec![vec![SqlValue::Bool(true)]]
+            );
+            assert_eq!(run(&mut db,profile,"SELECT bicdb_referential_checks_enabled(NULL),bicdb_referential_checks_enabled('missing')").rows,vec![vec![SqlValue::Null,SqlValue::Null]]);
+        }
+    }
+}

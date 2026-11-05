@@ -9,6 +9,28 @@ fn session_db() -> (tempfile::TempDir, BicDb) {
 }
 
 #[test]
+fn json_coalesce_fallbacks_preserve_values_inside_json_constructors() {
+    let (_dir, mut db) = session_db();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE TABLE snapshots(id int PRIMARY KEY,body jsonb); INSERT INTO snapshots VALUES(1,NULL),(2,'[1]'::jsonb)").unwrap();
+    session.execute("CREATE FUNCTION fallback_summary() RETURNS jsonb LANGUAGE plpgsql AS $$ BEGIN RETURN jsonb_build_object('items',COALESCE(NULL::jsonb,'[]')); END $$").unwrap();
+    for (sql, expected) in [
+        ("SELECT jsonb_build_object('items',COALESCE(jsonb_agg(body),'[]')) FROM snapshots WHERE false",json!({"items":[]})),
+        ("SELECT jsonb_build_object('items',COALESCE(NULL::jsonb,'[]'))",json!({"items":[]})),
+        ("SELECT jsonb_build_object('items',COALESCE((SELECT jsonb_agg(body) FROM snapshots WHERE false),'[]'))",json!({"items":[]})),
+        ("SELECT jsonb_build_object('items',COALESCE(body,'[]')) FROM snapshots WHERE id=1",json!({"items":[]})),
+        ("SELECT jsonb_build_object('items',COALESCE(body,'[]')) FROM snapshots WHERE id=2",json!({"items":[1]})),
+        ("SELECT fallback_summary()",json!({"items":[]})),
+        ("SELECT jsonb_build_object('items',COALESCE(NULL::json,'[]'))",json!({"items":[]})),
+        ("SELECT jsonb_build_object('items',COALESCE(NULL::jsonb,'{\"ready\":true}'))",json!({"items":{"ready":true}})),
+        ("SELECT jsonb_build_object('items',COALESCE('[1]'::jsonb,((1/0)::text)::jsonb))",json!({"items":[1]})),
+    ] {
+        assert_eq!(session.execute(sql).unwrap().rows,vec![vec![SqlValue::json(expected)]],"{sql}");
+    }
+    assert_eq!(session.execute("UPDATE snapshots SET body=body WHERE id=1 RETURNING jsonb_build_object('items',COALESCE(body,'[]'))").unwrap().rows,vec![vec![SqlValue::json(json!({"items":[]}))]]);
+}
+
+#[test]
 fn jsonb_array_element_functions_preserve_postgres_null_and_text_semantics() {
     let (_dir, mut db) = session_db();
     let mut session = SqlSession::new(&mut db);

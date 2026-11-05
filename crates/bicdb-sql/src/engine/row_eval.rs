@@ -1449,11 +1449,11 @@ impl<'db> SqlEngine<'db> {
                 .iter()
                 .map(|arg| self.infer_slot_row_expr_type(context.row_lookup.columns(), arg))
                 .collect::<Vec<_>>();
-            select_common_pg_type(self.db_ref(), &arg_types, "COALESCE")?;
+            let common_type = select_common_pg_type(self.db_ref(), &arg_types, "COALESCE")?;
             for arg in arg_exprs.iter() {
                 let value = self.eval_slot_row_value(row, context, arg)?;
                 if !matches!(value, SqlValue::Null) {
-                    return Ok(value);
+                    return coerce_common_json_value(value, Some(&common_type));
                 }
             }
             return Ok(SqlValue::Null);
@@ -2917,10 +2917,16 @@ impl<'db> SqlEngine<'db> {
             return Ok(value);
         }
         if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
-            for arg in function_args(function) {
-                let value = self.eval_row_value(row, &arg)?;
+            let arguments = function_arg_list(function);
+            let types = arguments
+                .iter()
+                .map(|arg| self.infer_sql_row_expr_type(row, arg))
+                .collect::<Vec<_>>();
+            let common_type = select_common_pg_type(self.db_ref(), &types, "COALESCE")?;
+            for arg in arguments.iter() {
+                let value = self.eval_row_value(row, arg)?;
                 if !matches!(value, SqlValue::Null) {
-                    return Ok(value);
+                    return coerce_common_json_value(value, Some(&common_type));
                 }
             }
             return Ok(SqlValue::Null);

@@ -252,11 +252,11 @@ impl<'db> SqlEngine<'db> {
                         .iter()
                         .map(|arg| projected_expr_pg_type_with_db(self.db_ref(), arg))
                         .collect::<Vec<_>>();
-                    select_common_pg_type(self.db_ref(), &types, "COALESCE")?;
+                    let common_type = select_common_pg_type(self.db_ref(), &types, "COALESCE")?;
                     for argument in arguments.iter() {
                         let value = self.eval_select_constant_expr(argument)?;
                         if !matches!(value, SqlValue::Null) {
-                            return Ok(value);
+                            return coerce_common_json_value(value, Some(&common_type));
                         }
                     }
                     return Ok(SqlValue::Null);

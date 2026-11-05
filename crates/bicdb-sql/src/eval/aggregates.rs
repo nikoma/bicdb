@@ -649,6 +649,16 @@ pub(crate) fn common_type_category(db: &BicDb, pg_type: &str) -> Result<char> {
     })
 }
 
+/// Unknown string literals selected by a JSON-valued conditional expression
+/// become JSON values before a surrounding constructor sees them. Otherwise
+/// an empty array fallback is incorrectly embedded as the string "[]".
+pub(crate) fn coerce_common_json_value(value: SqlValue, pg_type: Option<&str>) -> Result<SqlValue> {
+    match pg_type {
+        Some(pg_type @ ("json" | "jsonb")) => cast_value_to_pg_type(value, pg_type),
+        _ => Ok(value),
+    }
+}
+
 pub(crate) fn common_type_implicit_direction(from: &str, to: &str) -> bool {
     pg_cast_allows(from, to, PgCastContext::Implicit)
 }

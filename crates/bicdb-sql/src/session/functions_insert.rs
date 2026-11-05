@@ -2396,7 +2396,7 @@ impl<'db> SqlSession<'db> {
                 .iter()
                 .map(|argument| projected_expr_pg_type(argument, Some(schema)))
                 .collect::<Vec<_>>();
-            select_common_pg_type(self.db_ref(), &types, "COALESCE")?;
+            let common_type = select_common_pg_type(self.db_ref(), &types, "COALESCE")?;
             for argument in arguments.iter() {
                 let Some(value) =
                     self.eval_target_record_expr(table, alias, schema, record, argument)?
@@ -2404,7 +2404,7 @@ impl<'db> SqlSession<'db> {
                     return Ok(None);
                 };
                 if !matches!(value, SqlValue::Null) {
-                    return Ok(Some(value));
+                    return coerce_common_json_value(value, Some(&common_type)).map(Some);
                 }
             }
             return Ok(Some(SqlValue::Null));

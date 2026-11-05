@@ -1,0 +1,169 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "programme_complete": false,
+  "implementation_commit": "b5b0a3558b9eeeb6843fa435f015f87c06c5b43d",
+  "source_base_commit": "b77e40d687f8fc15e7e4d5249ddea02007b99ca5",
+  "source_files_sha256": {
+    "crates/bicdb-app-runtime/src/host.rs": "a6d29b019172e11eb4c19ae030b8e5f6adccc3c2ea3a9178e312432d4b6345d2",
+    "crates/bicdb-pgwire/src/protocol_wire.rs": "07b855de128fd94899f3b514a603fff8d646e3b0250d5b8d3dc1128513625a1a",
+    "crates/bicdb-sql/src/adaptive.rs": "f6534f7d11e416f17d50431a3c0954dc520592a6e36ea98238f5185d263124c7",
+    "crates/bicdb-sql/src/catalog_rows.rs": "f61ab92a69a35ee639d2be697da42b920e0aa9933a9dbe69b952bfcf0953c473",
+    "crates/bicdb-sql/src/engine/materialize.rs": "7935ec2f656867305652a9779ba5935d0ab13a64bb5aa95a8c157811848522b8",
+    "crates/bicdb-sql/src/eval/aggregates.rs": "73831b130ee07c53f09bd33c865d042933d1c0b3e485f936eb4dc2ab970d34a4",
+    "crates/bicdb-sql/src/eval/temporal_json_oid.rs": "d6870536141a65504cd2318e5518c271d914619a129d85e844b401e948493119",
+    "crates/bicdb-sql/src/external_sort.rs": "0494e0128e9c6a0e38908282bc03afa1fdd82b3dc322d389251be0c45a1c5681",
+    "crates/bicdb-sql/src/jsonb.rs": "0cc5fa79fe8ea6d081e0e0b8ae8a65851f7ab09b038f5f685f3dae3cdbef343a",
+    "crates/bicdb-sql/src/lib.rs": "f31c5f6372a4ed7f1176886e80501dd4c2c935906e35cc200a0d297776cde887",
+    "crates/bicdb-sql/src/oracle.rs": "4fc893ade989fef31c3c1a32079f489b997fa9c14b81513c4c0220e28717ac24",
+    "crates/bicdb-sql/src/oracle/current_time.rs": "9b2ae39d6a295fd5e32598faddeea1bbf204209d8b392ddb6053a5eb01d24d0b",
+    "crates/bicdb-sql/src/oracle/errors.rs": "86f7343ee0e8433894615c15786f840993bfd1069ef9871bf0b0a3d27bbcd12e",
+    "crates/bicdb-sql/src/oracle/nvl2.rs": "bd2075a3e335f60fb6a99426f1571edb9dafa79fcb5883bf2514435402fa28fa",
+    "crates/bicdb-sql/src/oracle/raw_values.rs": "89b54cc673fdb234805500b519232f41927955f2fdf9f04089650e1aca72b15d",
+    "crates/bicdb-sql/src/oracle/routine_arithmetic.rs": "9f6f2cdcf7bdcbc9488884162eaadd2ca397b3e20fd27aaa7c0afd61414adb66",
+    "crates/bicdb-sql/src/oracle/text_patterns.rs": "34a11e3d8ea203ec4ed145dc618229b8aaa824909d259e1850e75fb3d20cd5d7",
+    "crates/bicdb-sql/src/pg_scalar_extra.rs": "a52a760273d185bc3503e27f308960d3a78dafa93128de322e8da05f177057e6",
+    "crates/bicdb-sql/src/records.rs": "ac09357d25403aeedec641b755afec1e4def2d2c3b06aff20ca6868725a2e300",
+    "crates/bicdb-sql/src/routines.rs": "5d644d3f4846569243165297541b610e02bd837b1a09563c8718883d765d7daa",
+    "crates/bicdb-sql/src/routines/type_identity_tests.rs": "51e8e1fc681793b875e2f894a14047ac787a0587a6a601bec4f24b2075bf06b5",
+    "crates/bicdb-sql/src/schema_meta.rs": "f463465777f2506b861873ac34db0d0eff3e4e756d5c0e88bc833b79cb7d8d9e",
+    "crates/bicdb-sql/src/select_exec.rs": "fc148f5d5b80b1ea123ce0699a627fcfe8abc7fa3fc453d2200815a4feb4c70c",
+    "crates/bicdb-sql/src/session.rs": "9c7b36139bab2acfedf5ed95e9cdee431136a0a5ed14c155ed1eb79aeb04e40e",
+    "crates/bicdb-sql/src/session/domain_types.rs": "ec8d8406e1483831a18b471a5d24f65435adc3e79cc5e8ec15f4cb53bb785253",
+    "crates/bicdb-sql/src/session/functions_insert.rs": "35d9c5b10c96b8dfff5b9556c13e8c82e997e9e573a398e004b86005826d59ec",
+    "crates/bicdb-sql/src/session/txn_update.rs": "f17010da04934061f884a82ea0c6fec031e2f5c550e3fbe7c6cf7e80cce3f342",
+    "crates/bicdb-sql/src/type_codec.rs": "7962b4ed283325cc4649066c7947f339be4edfaa7b54f64c0b77b617eb4f32d2",
+    "crates/bicdb-sql/src/virtual_tables.rs": "5e8e98fe0d04ca5358f672fac41dce251088647b42628f33d0a69dc100ccddea",
+    "crates/bicdb-sql/src/oracle/lobs.rs": "8f6cf68414711eab632c91636fd67da01d720f7de1b09e8c1e749c262f3f8eba"
+  },
+  "candidate_binary_sha256": "5fabd334fb93eccffc68eb6a11d26551923d0e1af3bb3b6b0729c35076af4578",
+  "candidate_deployed": false,
+  "accepted_application_replaced": false,
+  "github_workflows_added": false,
+  "github_workflows_manually_run": false,
+  "checks": [
+    {
+      "name": "sql-library",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "bicdb-sql",
+        "--lib"
+      ],
+      "passed": 656,
+      "failed": 0,
+      "ignored": 3,
+      "ignored_tests": [
+        "adaptive::host::tests::bench_host_vs_oracle_read_path",
+        "adaptive::lower::tests::bench_control_flow_interpreter_vs_wasm",
+        "adaptive::lower::tests::bench_proc_with_sql_interpreter_vs_wasm"
+      ]
+    },
+    {
+      "name": "workspace",
+      "command": [
+        "cargo",
+        "check",
+        "--locked",
+        "--workspace",
+        "--all-targets"
+      ],
+      "returncode": 0,
+      "results": []
+    },
+    {
+      "name": "sql-integration",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "recursive_query_stack",
+        "--test",
+        "binary_storage",
+        "--test",
+        "routine_privilege_lists",
+        "--test",
+        "external_sort_stream",
+        "--test",
+        "predicate_projection"
+      ],
+      "returncode": 0,
+      "results": [
+        "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.28s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.45s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.03s",
+        "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.75s"
+      ]
+    },
+    {
+      "name": "protocol",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "oracle_hr",
+        "--test",
+        "protocol"
+      ],
+      "returncode": 0,
+      "results": [
+        "test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.36s",
+        "test result: ok. 176 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.43s"
+      ]
+    },
+    {
+      "name": "build",
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "-p",
+        "bicdb-pgwire",
+        "--example",
+        "oracle_server"
+      ],
+      "returncode": 0,
+      "results": []
+    }
+  ],
+  "rust_tests_passed": 897,
+  "reference": {
+    "source": "Oracle",
+    "version": "23.26.3.0.0",
+    "temporary_blobs": {
+      "matched": 18,
+      "total": 18,
+      "cleanup_errors": []
+    },
+    "hextoraw": {
+      "matched": 24,
+      "total": 24,
+      "cleanup_errors": []
+    }
+  },
+  "postgres_binary_control": {
+    "success": true,
+    "binary_result_preserved": true,
+    "oracle_function_rejected": true,
+    "connection_recovers": true
+  },
+  "owned_probe_servers_stopped": true,
+  "owned_probe_data_removed": true,
+  "licensing": "passed",
+  "open_core_boundary": "passed",
+  "remaining": [
+    "Persistent row-backed locator reads, identities and mutation",
+    "Transactional locator snapshots and rollback/commit receipts",
+    "All implicit conversion paths, expression/view lineage, comparisons and arrays",
+    "Complete DBMS_LOB, CLOB, streaming and JDBC LOB APIs",
+    "Unmodified upstream application LOB test and whole application/programme acceptance"
+  ]
+}

@@ -1,0 +1,275 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "empty",
+      "source": {
+        "id": "empty",
+        "actual": "",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "empty",
+        "actual": "",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "raw_initialization",
+      "source": {
+        "id": "raw_initialization",
+        "actual": "AB",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "raw_initialization",
+        "actual": "AB",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "raw_assignment",
+      "source": {
+        "id": "raw_assignment",
+        "actual": "CD",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "raw_assignment",
+        "actual": "CD",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "direct_raw_return",
+      "source": {
+        "id": "direct_raw_return",
+        "actual": "EF",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "direct_raw_return",
+        "actual": "EF",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "alias_source_write",
+      "source": {
+        "id": "alias_source_write",
+        "actual": "AB",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "alias_source_write",
+        "actual": "AB",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "alias_destination_write",
+      "source": {
+        "id": "alias_destination_write",
+        "actual": "AB01",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "alias_destination_write",
+        "actual": "AB01",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "self_append",
+      "source": {
+        "id": "self_append",
+        "actual": "ABAB",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "self_append",
+        "actual": "ABAB",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "named_append",
+      "source": {
+        "id": "named_append",
+        "actual": "AB01",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "named_append",
+        "actual": "AB01",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "empty_source",
+      "source": {
+        "id": "empty_source",
+        "actual": "AB",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "empty_source",
+        "actual": "AB",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "temporary_length",
+      "source": {
+        "id": "temporary_length",
+        "actual": "3",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "temporary_length",
+        "actual": "3",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "temporary_flag",
+      "source": {
+        "id": "temporary_flag",
+        "actual": "1",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "temporary_flag",
+        "actual": "1",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "empty_length",
+      "source": {
+        "id": "empty_length",
+        "actual": "0",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "empty_length",
+        "actual": "0",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "empty_flag",
+      "source": {
+        "id": "empty_flag",
+        "actual": "0",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "empty_flag",
+        "actual": "0",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "null_length",
+      "source": {
+        "id": "null_length",
+        "actual": null,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "null_length",
+        "actual": null,
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "null_flag",
+      "source": {
+        "id": "null_flag",
+        "actual": null,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "null_flag",
+        "actual": null,
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "empty_destination",
+      "source": {
+        "id": "empty_destination",
+        "actual": "ORA-14553",
+        "sqlstate": null,
+        "oracle_code": 14553,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "empty_destination",
+        "actual": "ORA-14553",
+        "sqlstate": "25006",
+        "oracle_code": null,
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "null_source_empty_destination",
+      "source": {
+        "id": "null_source_empty_destination",
+        "actual": "ORA-06502",
+        "sqlstate": null,
+        "oracle_code": 6502,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "null_source_empty_destination",
+        "actual": "ORA-06502",
+        "sqlstate": "22004",
+        "oracle_code": null,
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "null_destination_empty_source",
+      "source": {
+        "id": "null_destination_empty_source",
+        "actual": "ORA-06502",
+        "sqlstate": null,
+        "oracle_code": 6502,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "null_destination_empty_source",
+        "actual": "ORA-06502",
+        "sqlstate": "22004",
+        "oracle_code": null,
+        "qualified": true
+      },
+      "matched": true
+    }
+  ],
+  "total": 18,
+  "matched": 18,
+  "cleanup_errors": [],
+  "source_qualified": true,
+  "success": true
+}

@@ -13,7 +13,8 @@ Temporary changes survive commit, rollback and rollback to savepoint.
 
 The public [comparison fixture](../../../examples/oracle/reference/temporary_blobs.py)
 creates nonce-named functions, compares 18 observations and removes those
-functions. It checks binary results, aliasing, length/temporary status, NULL
+functions. The [comparison observations](temporary-blobs-comparison.json) check
+binary results, aliasing, length/temporary status, NULL
 priority and the different empty-destination errors for SQL versus PL/SQL
 callers. [Validation results](validation-results.json) record the executed checks.
 The HEXTORAW comparison separately protects the previously qualified conversion

@@ -2485,7 +2485,181 @@ impl<'db> SqlSession<'db> {
         .or_else(|| projected_expr_pg_type_with_db(self.db_ref(), expr))
     }
 
+    // Keep builtin/stored-function dispatch out of the recursive expression
+    // frame. In development builds, combining every dispatch temporary with
+    // every operator temporary exhausted ordinary worker stacks in short chains
+    // of security-definer identity helpers.
+    #[inline(never)]
+    fn eval_session_function_expr(&mut self, expr: &Expr, function: &Function) -> Result<SqlValue> {
+        let dispatch_key = crate::eval::expr_type_scope()
+            .map(|(generation, ir)| (generation, ir, function as *const Function as usize));
+        let remembered = dispatch_key
+            .and_then(|key| FN_DISPATCH_MEMO.with(|memo| memo.borrow().get(&key).cloned()));
+        if let Some(dispatch) = remembered.as_deref().filter(|d| d.stored) {
+            // Straight to the stored function: the earlier dispatchers
+            // are name-only and declined last time for this node.
+            let mut args = PooledArgs::take();
+            for arg in function_arg_list(function).iter() {
+                let value = self.eval_session_expr(arg)?;
+                args.push(value);
+            }
+            if let Some(value) = self.eval_stored_function_value(&dispatch.name, &args)? {
+                return Ok(value);
+            }
+        }
+        let name = match remembered.as_deref() {
+            Some(dispatch) => std::borrow::Cow::Borrowed(dispatch.name.as_str()),
+            None => object_name_lowercase(&function.name)?,
+        };
+        if matches!(name.as_ref(), "coalesce" | "pg_catalog.coalesce") {
+            validate_common_type_expr(self.db_ref(), expr)?;
+            let arguments = function_arg_list(function);
+            let types = arguments
+                .iter()
+                .map(|arg| projected_expr_pg_type_with_db(self.db_ref(), arg))
+                .collect::<Vec<_>>();
+            let common_type = select_common_pg_type(self.db_ref(), &types, "COALESCE")?;
+            for argument in arguments.iter() {
+                let value = self.eval_session_expr(argument)?;
+                if !matches!(value, SqlValue::Null) {
+                    return coerce_common_json_value(value, Some(&common_type));
+                }
+            }
+            return Ok(SqlValue::Null);
+        }
+        if let Some((name, [base_expr, json_expr])) = populate_record_call(function)? {
+            let base = self.eval_session_expr(base_expr)?;
+            let json = self.eval_session_expr(json_expr)?;
+            return populate_record_value(self.db_ref(), &name, base_expr, base, json);
+        }
+        validate_common_type_expr(self.db_ref(), expr)?;
+        let mut args = PooledArgs::take();
+        let arg_exprs = function_arg_list(function);
+        for arg in arg_exprs.iter() {
+            let value = self.eval_session_expr(arg)?;
+            args.push(value);
+        }
+        let arg_types = arg_exprs
+            .iter()
+            .map(|arg| projected_expr_pg_type_with_db(self.db_ref(), arg))
+            .collect::<Vec<_>>();
+        if is_row_constructor(function) {
+            return Ok(anonymous_record_value(
+                std::mem::take(&mut *args),
+                arg_types,
+            ));
+        }
+        if matches!(name.as_ref(), "pg_typeof" | "pg_catalog.pg_typeof") {
+            return Ok(pg_typeof_result(
+                arg_types.first().and_then(Option::as_ref),
+                args.first(),
+            ));
+        }
+        if matches!(name.as_ref(), "txid_current" | "pg_catalog.txid_current") {
+            require_arg_count("txid_current", &args, 0)?;
+            let transaction_id = if let Some(tx) = &self.tx {
+                tx.id().0
+            } else {
+                // A standalone SELECT still has an implicit PostgreSQL
+                // transaction. Allocate its ID for this statement and
+                // release the read-only transaction immediately.
+                let tx = self.begin_session_transaction()?;
+                let transaction_id = tx.id().0;
+                tx.rollback()?;
+                transaction_id
+            };
+            return Ok(SqlValue::Int(transaction_id as i64));
+        }
+        if let Some(value) = eval_network_function_value(&name, &args, &arg_types)?
+            .or(eval_user_range_function_value(
+                self.db_ref(),
+                &name,
+                &args,
+                &arg_types,
+            )?)
+            .or(eval_range_function_value(&name, &args, &arg_types)?)
+        {
+            return Ok(value);
+        }
+        if let Some(value) = self
+            .sql_engine()
+            .eval_runtime_function_value(&name, &args)?
+        {
+            return Ok(value);
+        }
+        if let Some(value) = eval_session_function_value(&name, &args, &self.session_gucs)? {
+            return Ok(value);
+        }
+        if let Some(value) =
+            eval_privilege_function_value(self.db_ref(), &name, &args, &self.session_gucs)?
+        {
+            return Ok(value);
+        }
+        if let Some(value) = eval_db_catalog_function_value(
+            self.db_ref(),
+            &name,
+            &args,
+            self.read_tx().map(Transaction::visibility_watermark),
+            Some(&self.session_gucs),
+        )? {
+            return Ok(value);
+        }
+        if let Some(value) = eval_broker_function_value(
+            self.db_ref(),
+            &name,
+            &args,
+            BrokerCaller::Sql {
+                context: self.security_context.as_ref(),
+                superuser: session_role_is_superuser(self.db_ref(), &self.session_gucs),
+            },
+            self.read_tx(),
+        )? {
+            return Ok(value);
+        }
+        if let Some(value) = eval_json_function_call_value(function, &args)? {
+            return Ok(value);
+        }
+        if let Some(value) = eval_catalog_function_value(&name, &args) {
+            return Ok(value);
+        }
+        if let Some(value) = eval_compatibility_function_value_with_db(
+            self.db_ref(),
+            &name,
+            &args,
+            Some(&arg_types),
+        )? {
+            return Ok(value);
+        }
+        if let Some(value) = eval_spatial_function_value(&name, &args, &arg_types)? {
+            return Ok(value);
+        }
+        let stored = self.eval_stored_function_value(&name, &args)?;
+        if let Some(key) = dispatch_key {
+            if remembered.is_none() {
+                let entry = std::rc::Rc::new(FnDispatch {
+                    name: name.to_string(),
+                    stored: stored.is_some(),
+                });
+                FN_DISPATCH_MEMO.with(|memo| {
+                    let mut memo = memo.borrow_mut();
+                    if memo.len() >= ROUTINE_NODE_MEMO_MAX {
+                        memo.clear();
+                    }
+                    memo.insert(key, entry);
+                });
+            }
+        }
+        if let Some(value) = stored {
+            return Ok(value);
+        }
+        eval_builtin_function_value(function)
+    }
+
     pub(crate) fn eval_session_expr(&mut self, expr: &Expr) -> Result<SqlValue> {
+        let mut expr = expr;
+        while let Expr::Nested(inner) = expr {
+            expr = inner;
+        }
         match expr {
             Expr::Value(value) => {
                 if let Some(value) = routine_var_from_value(&self.routine_vars, value) {
@@ -2528,171 +2702,7 @@ impl<'db> SqlSession<'db> {
                 let result = self.execute_query(query)?;
                 Ok(array_value(subquery_values(result)?))
             }
-            Expr::Function(function) => {
-                let dispatch_key = crate::eval::expr_type_scope()
-                    .map(|(generation, ir)| (generation, ir, function as *const Function as usize));
-                let remembered = dispatch_key
-                    .and_then(|key| FN_DISPATCH_MEMO.with(|memo| memo.borrow().get(&key).cloned()));
-                if let Some(dispatch) = remembered.as_deref().filter(|d| d.stored) {
-                    // Straight to the stored function: the earlier dispatchers
-                    // are name-only and declined last time for this node.
-                    let mut args = PooledArgs::take();
-                    for arg in function_arg_list(function).iter() {
-                        let value = self.eval_session_expr(arg)?;
-                        args.push(value);
-                    }
-                    if let Some(value) = self.eval_stored_function_value(&dispatch.name, &args)? {
-                        return Ok(value);
-                    }
-                }
-                let name = match remembered.as_deref() {
-                    Some(dispatch) => std::borrow::Cow::Borrowed(dispatch.name.as_str()),
-                    None => object_name_lowercase(&function.name)?,
-                };
-                if matches!(name.as_ref(), "coalesce" | "pg_catalog.coalesce") {
-                    validate_common_type_expr(self.db_ref(), expr)?;
-                    let arguments = function_arg_list(function);
-                    let types = arguments
-                        .iter()
-                        .map(|arg| projected_expr_pg_type_with_db(self.db_ref(), arg))
-                        .collect::<Vec<_>>();
-                    let common_type = select_common_pg_type(self.db_ref(), &types, "COALESCE")?;
-                    for argument in arguments.iter() {
-                        let value = self.eval_session_expr(argument)?;
-                        if !matches!(value, SqlValue::Null) {
-                            return coerce_common_json_value(value, Some(&common_type));
-                        }
-                    }
-                    return Ok(SqlValue::Null);
-                }
-                if let Some((name, [base_expr, json_expr])) = populate_record_call(function)? {
-                    let base = self.eval_session_expr(base_expr)?;
-                    let json = self.eval_session_expr(json_expr)?;
-                    return populate_record_value(self.db_ref(), &name, base_expr, base, json);
-                }
-                validate_common_type_expr(self.db_ref(), expr)?;
-                let mut args = PooledArgs::take();
-                let arg_exprs = function_arg_list(function);
-                for arg in arg_exprs.iter() {
-                    let value = self.eval_session_expr(arg)?;
-                    args.push(value);
-                }
-                let arg_types = arg_exprs
-                    .iter()
-                    .map(|arg| projected_expr_pg_type_with_db(self.db_ref(), arg))
-                    .collect::<Vec<_>>();
-                if is_row_constructor(function) {
-                    return Ok(anonymous_record_value(
-                        std::mem::take(&mut *args),
-                        arg_types,
-                    ));
-                }
-                if matches!(name.as_ref(), "pg_typeof" | "pg_catalog.pg_typeof") {
-                    return Ok(pg_typeof_result(
-                        arg_types.first().and_then(Option::as_ref),
-                        args.first(),
-                    ));
-                }
-                if matches!(name.as_ref(), "txid_current" | "pg_catalog.txid_current") {
-                    require_arg_count("txid_current", &args, 0)?;
-                    let transaction_id = if let Some(tx) = &self.tx {
-                        tx.id().0
-                    } else {
-                        // A standalone SELECT still has an implicit PostgreSQL
-                        // transaction. Allocate its ID for this statement and
-                        // release the read-only transaction immediately.
-                        let tx = self.begin_session_transaction()?;
-                        let transaction_id = tx.id().0;
-                        tx.rollback()?;
-                        transaction_id
-                    };
-                    return Ok(SqlValue::Int(transaction_id as i64));
-                }
-                if let Some(value) = eval_network_function_value(&name, &args, &arg_types)?
-                    .or(eval_user_range_function_value(
-                        self.db_ref(),
-                        &name,
-                        &args,
-                        &arg_types,
-                    )?)
-                    .or(eval_range_function_value(&name, &args, &arg_types)?)
-                {
-                    return Ok(value);
-                }
-                if let Some(value) = self
-                    .sql_engine()
-                    .eval_runtime_function_value(&name, &args)?
-                {
-                    return Ok(value);
-                }
-                if let Some(value) = eval_session_function_value(&name, &args, &self.session_gucs)?
-                {
-                    return Ok(value);
-                }
-                if let Some(value) =
-                    eval_privilege_function_value(self.db_ref(), &name, &args, &self.session_gucs)?
-                {
-                    return Ok(value);
-                }
-                if let Some(value) = eval_db_catalog_function_value(
-                    self.db_ref(),
-                    &name,
-                    &args,
-                    self.read_tx().map(Transaction::visibility_watermark),
-                    Some(&self.session_gucs),
-                )? {
-                    return Ok(value);
-                }
-                if let Some(value) = eval_broker_function_value(
-                    self.db_ref(),
-                    &name,
-                    &args,
-                    BrokerCaller::Sql {
-                        context: self.security_context.as_ref(),
-                        superuser: session_role_is_superuser(self.db_ref(), &self.session_gucs),
-                    },
-                    self.read_tx(),
-                )? {
-                    return Ok(value);
-                }
-                if let Some(value) = eval_json_function_call_value(function, &args)? {
-                    return Ok(value);
-                }
-                if let Some(value) = eval_catalog_function_value(&name, &args) {
-                    return Ok(value);
-                }
-                if let Some(value) = eval_compatibility_function_value_with_db(
-                    self.db_ref(),
-                    &name,
-                    &args,
-                    Some(&arg_types),
-                )? {
-                    return Ok(value);
-                }
-                if let Some(value) = eval_spatial_function_value(&name, &args, &arg_types)? {
-                    return Ok(value);
-                }
-                let stored = self.eval_stored_function_value(&name, &args)?;
-                if let Some(key) = dispatch_key {
-                    if remembered.is_none() {
-                        let entry = std::rc::Rc::new(FnDispatch {
-                            name: name.to_string(),
-                            stored: stored.is_some(),
-                        });
-                        FN_DISPATCH_MEMO.with(|memo| {
-                            let mut memo = memo.borrow_mut();
-                            if memo.len() >= ROUTINE_NODE_MEMO_MAX {
-                                memo.clear();
-                            }
-                            memo.insert(key, entry);
-                        });
-                    }
-                }
-                if let Some(value) = stored {
-                    return Ok(value);
-                }
-                eval_builtin_function_value(function)
-            }
+            Expr::Function(function) => self.eval_session_function_expr(expr, function),
             Expr::Cast {
                 expr, data_type, ..
             } => {
@@ -2990,7 +3000,6 @@ impl<'db> SqlSession<'db> {
                 let result = self.execute_query(subquery)?;
                 Ok(SqlValue::Bool(result.rows.is_empty() == *negated))
             }
-            Expr::Nested(expr) => self.eval_session_expr(expr),
             Expr::Collate { expr, collation } => {
                 normalize_column_collation(collation)?;
                 self.eval_session_expr(expr)

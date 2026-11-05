@@ -4244,6 +4244,7 @@ impl<'db> SqlSession<'db> {
                     detail: None,
                 })),
             RoutineStmt::RaiseException {
+                notice,
                 message,
                 arguments,
                 detail,
@@ -4254,6 +4255,45 @@ impl<'db> SqlSession<'db> {
                     .iter()
                     .map(|argument| self.eval_routine_expr(frame, argument))
                     .collect::<Result<Vec<_>>>()?;
+                if *notice {
+                    let detail = detail
+                        .as_ref()
+                        .map(|expr| {
+                            self.eval_routine_expr(frame, expr)
+                                .map(|value| value.to_cell())
+                        })
+                        .transpose()?;
+                    let mut fields = Vec::new();
+                    if let Some(detail) = detail {
+                        fields.push(SqlErrorField::Detail(detail));
+                    }
+                    if let Some(table) = &error_fields.table {
+                        fields.push(SqlErrorField::Table(table.clone()));
+                    }
+                    if let Some(column) = &error_fields.column {
+                        fields.push(SqlErrorField::Column(column.clone()));
+                    }
+                    if let Some(constraint) = &error_fields.constraint {
+                        fields.push(SqlErrorField::Constraint(constraint.clone()));
+                    }
+                    let suppressed =
+                        self.session_gucs
+                            .get("client_min_messages")
+                            .is_some_and(|level| {
+                                matches!(
+                                    level.to_ascii_lowercase().as_str(),
+                                    "warning" | "error" | "fatal" | "panic"
+                                )
+                            });
+                    if !suppressed {
+                        crate::statement_context::note_notice(SqlNotice {
+                            sqlstate: sqlstate.clone(),
+                            message: format_routine_raise_message(message, &arguments),
+                            fields,
+                        })?;
+                    }
+                    return Ok(RoutineControl::Continue);
+                }
                 // A raised integrity error naming its constraint is reported
                 // as a constraint violation so clients see the constraint.
                 if error_fields.constraint.is_some() {

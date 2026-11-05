@@ -2622,6 +2622,7 @@ pub(crate) fn execute_message(
     let columns = stream.columns().to_vec();
     let column_types = stream.column_types().to_vec();
     let column_metadata = stream.column_metadata().to_vec();
+    let notices = stream.take_notices();
     let batch = stream.next_batch(max_rows);
     let suspended = !stream.is_done();
     let command_tag = stream.command_complete_tag();
@@ -2653,6 +2654,7 @@ pub(crate) fn execute_message(
             command_tag: Some(command_tag),
             column_types,
             column_metadata,
+            notices,
         },
         result_formats,
         source_sql,
@@ -2677,6 +2679,7 @@ pub(crate) fn execute_portal_stream_batch(
     let columns = stream.columns().to_vec();
     let column_types = stream.column_types().to_vec();
     let column_metadata = stream.column_metadata().to_vec();
+    let notices = stream.take_notices();
     let batch = stream.next_batch(max_rows);
     let suspended = !stream.is_done();
     let command_tag = stream.command_complete_tag();
@@ -2702,6 +2705,7 @@ pub(crate) fn execute_portal_stream_batch(
             command_tag: Some(command_tag),
             column_types,
             column_metadata,
+            notices,
         },
         result_formats,
         source_sql,

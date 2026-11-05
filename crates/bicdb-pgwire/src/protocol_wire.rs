@@ -365,13 +365,18 @@ pub(crate) fn error_response_for_error(
     error: &PgWireError,
 ) -> Result<()> {
     match error {
-        PgWireError::Sql(error) => error_response_with_fields(
-            stream,
-            "ERROR",
-            error.sqlstate(),
-            &error.to_string(),
-            &error.fields(),
-        ),
+        PgWireError::Sql(error) => {
+            for notice in error.notices() {
+                notice_response(stream, notice)?;
+            }
+            error_response_with_fields(
+                stream,
+                "ERROR",
+                error.sqlstate(),
+                &error.to_string(),
+                &error.fields(),
+            )
+        }
         PgWireError::Authentication => {
             error_response_with_fields(stream, "FATAL", "28P01", &error.to_string(), &[])
         }
@@ -462,6 +467,31 @@ pub(crate) fn error_response_with_fields(
     message: &str,
     fields: &[SqlErrorField],
 ) -> Result<()> {
+    diagnostic_response(stream, b'E', severity, code, message, fields)
+}
+
+pub(crate) fn notice_response(
+    stream: &mut ClientStream,
+    notice: &bicdb_sql::SqlNotice,
+) -> Result<()> {
+    diagnostic_response(
+        stream,
+        b'N',
+        "NOTICE",
+        &notice.sqlstate,
+        &notice.message,
+        &notice.fields,
+    )
+}
+
+fn diagnostic_response(
+    stream: &mut ClientStream,
+    tag: u8,
+    severity: &str,
+    code: &str,
+    message: &str,
+    fields: &[SqlErrorField],
+) -> Result<()> {
     let mut payload = Vec::new();
     payload.push(b'S');
     cstr(&mut payload, severity);
@@ -504,7 +534,7 @@ pub(crate) fn error_response_with_fields(
         }
     }
     payload.push(0);
-    write_message(stream, b'E', &payload)
+    write_message(stream, tag, &payload)
 }
 
 pub(crate) fn write_message(stream: &mut ClientStream, tag: u8, payload: &[u8]) -> Result<()> {

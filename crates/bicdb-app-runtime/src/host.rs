@@ -11,7 +11,7 @@ use bicdb_core::{
     NativeCommitValidator, NativeInvariantAggregateFunction, NativeInvariantBinaryOperator,
     NativeInvariantDefinition, NativeInvariantExpression, NativeInvariantKind,
     NativeInvariantUnaryOperator, NativeInvariantValueType, PublishOptions, Record,
-    SecurityContext, Transaction, TransactionIsolation,
+    SecurityContext, Transaction, TransactionIsolation, TransactionRollbackMark,
 };
 use bicdb_extension::abi_v2::{
     ActorContext, AggregateSpec, ApplicationAggregateFunctionV1, ApplicationCallKindV1,
@@ -347,9 +347,7 @@ impl RealtimeProvider for DenyServices {
 #[derive(Clone)]
 struct Savepoint {
     transaction: HostHandle,
-    write_len: usize,
-    lock_len: usize,
-    broker_len: usize,
+    mark: TransactionRollbackMark,
 }
 
 #[derive(Clone)]
@@ -1931,9 +1929,7 @@ impl CapabilityHost {
                 let tx = self.transaction_mut(transaction)?;
                 let savepoint = Savepoint {
                     transaction,
-                    write_len: tx.write_len(),
-                    lock_len: tx.lock_len(),
-                    broker_len: tx.broker_publish_len(),
+                    mark: tx.rollback_mark(),
                 };
                 let handle = self.next_handle(&self.savepoints);
                 self.savepoints.insert(handle, savepoint);
@@ -1954,8 +1950,7 @@ impl CapabilityHost {
                         )
                     })?;
                 let tx = self.transaction_mut(transaction)?;
-                tx.truncate_writes_and_locks(savepoint.write_len, savepoint.lock_len)?;
-                tx.truncate_broker_publishes(savepoint.broker_len);
+                tx.rollback_to_mark(savepoint.mark)?;
                 Ok(HostValue::Unit)
             }
             Request::Release {
@@ -6762,6 +6757,7 @@ pub(crate) mod tests {
             command_tag: Some("SELECT 1".to_string()),
             column_types: vec![Some("text".to_string())],
             column_metadata: vec![],
+            notices: vec![],
         };
 
         assert_eq!(
@@ -7172,6 +7168,79 @@ pub(crate) mod tests {
             Arc::new(LocalBlobProvider::open(root.join("blobs"), vec![7; 32]).unwrap()),
             Arc::new(Mutex::<Vec<ObservabilityEvent>>::default()),
         )
+    }
+
+    #[test]
+    fn native_savepoint_restores_deferred_sql_effects_and_keeps_transaction_identity() {
+        let directory = tempfile::tempdir().unwrap();
+        let db = BicDb::open(directory.path().join("savepoint-effects-db")).unwrap();
+        let mut host = CapabilityHost::new(
+            &db,
+            manifest(),
+            actor(now_ms() + 30_000),
+            services(directory.path()),
+        )
+        .unwrap();
+        let begin = |host: &mut CapabilityHost| match host
+            .transaction(TransactionRequest::Begin {
+                isolation: IsolationLevel::ReadCommitted,
+            })
+            .unwrap()
+        {
+            HostValue::Handle(handle) => handle,
+            other => panic!("unexpected begin result {other:?}"),
+        };
+        let transaction = begin(&mut host);
+        let foreign = begin(&mut host);
+        let before = json!({"fixture": "before-savepoint"});
+        host.transaction_mut(transaction)
+            .unwrap()
+            .push_deferred_hook(before.clone());
+        host.transaction_mut(foreign)
+            .unwrap()
+            .push_deferred_hook(json!({"fixture": "other-transaction"}));
+        let savepoint = match host
+            .transaction(TransactionRequest::Savepoint {
+                transaction,
+                name: "keep".into(),
+            })
+            .unwrap()
+        {
+            HostValue::Handle(handle) => handle,
+            other => panic!("unexpected savepoint result {other:?}"),
+        };
+        assert!(host
+            .transaction(TransactionRequest::RollbackTo {
+                transaction: foreign,
+                savepoint
+            })
+            .is_err());
+        for index in 0..2 {
+            host.transaction_mut(transaction)
+                .unwrap()
+                .push_deferred_hook(json!({"fixture": "rolled-back", "index": index}));
+            host.transaction(TransactionRequest::RollbackTo {
+                transaction,
+                savepoint,
+            })
+            .unwrap();
+        }
+        assert_eq!(
+            host.transaction_mut(transaction)
+                .unwrap()
+                .take_deferred_hooks(),
+            vec![before]
+        );
+        assert_eq!(
+            host.transaction_mut(foreign).unwrap().take_deferred_hooks(),
+            vec![json!({"fixture": "other-transaction"})]
+        );
+        host.transaction(TransactionRequest::Rollback { transaction })
+            .unwrap();
+        host.transaction(TransactionRequest::Rollback {
+            transaction: foreign,
+        })
+        .unwrap();
     }
 
     #[test]

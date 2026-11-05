@@ -1775,6 +1775,11 @@ fn sql_profile_join_rows<R: SqlRowMemoryEstimate>(rows: &[R], candidate_pairs: u
 fn sql_result_memory_estimate(result: &SqlResult) -> usize {
     result.columns.iter().map(String::len).sum::<usize>()
         + sql_result_rows_memory_estimate(&result.rows)
+        + result
+            .notices
+            .iter()
+            .map(SqlNotice::memory_estimate)
+            .sum::<usize>()
 }
 
 fn sql_result_rows_memory_estimate(rows: &[Vec<SqlValue>]) -> usize {
@@ -1952,6 +1957,13 @@ pub enum SqlError {
 
     #[error(transparent)]
     Rethrown(Arc<SqlError>),
+
+    /// Diagnostics emitted before a failing statement still belong to its caller.
+    #[error("{error}")]
+    WithNotices {
+        error: Box<SqlError>,
+        notices: Vec<SqlNotice>,
+    },
 }
 
 impl SqlError {
@@ -1963,10 +1975,16 @@ impl SqlError {
     }
 
     pub(crate) fn is_resource_limit(&self) -> bool {
+        if let Self::WithNotices { error, .. } = self {
+            return error.is_resource_limit();
+        }
         matches!(self, Self::ResourceLimit { .. })
     }
 
     pub(crate) fn is_query_interruption(&self) -> bool {
+        if let Self::WithNotices { error, .. } = self {
+            return error.is_query_interruption();
+        }
         matches!(
             self,
             Self::BicDb(BicDbError::QueryCanceled | BicDbError::QueryTimedOut)
@@ -2076,6 +2094,7 @@ impl SqlError {
 
     pub fn sqlstate(&self) -> &str {
         match self {
+            Self::WithNotices { error, .. } => error.sqlstate(),
             Self::OracleError { sqlstate, .. } => sqlstate,
             Self::OracleContext { inner, .. } => inner.sqlstate(),
             Self::Rethrown(error) => error.sqlstate(),
@@ -2102,6 +2121,7 @@ impl SqlError {
 
     pub fn fields(&self) -> Vec<SqlErrorField> {
         match self {
+            Self::WithNotices { error, .. } => error.fields(),
             Self::OracleError { .. } => vec![SqlErrorField::Detail(
                 oracle::errors::transport_detail(self),
             )],
@@ -2172,7 +2192,7 @@ impl SqlError {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SqlErrorField {
     Detail(String),
     Schema(String),
@@ -2226,6 +2246,57 @@ pub struct SqlResult {
     /// typmod; computed expressions use PostgreSQL's zero/-1 sentinel values.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub column_metadata: Vec<SqlColumnMetadata>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notices: Vec<SqlNotice>,
+}
+
+/// A nonfatal PL/pgSQL NOTICE returned to the executing client, never server logs.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SqlNotice {
+    pub sqlstate: String,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fields: Vec<SqlErrorField>,
+}
+
+impl std::fmt::Debug for SqlNotice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SqlNotice")
+            .field("sqlstate", &self.sqlstate)
+            .field("message", &"[redacted]")
+            .field("fields", &"[redacted]")
+            .finish()
+    }
+}
+
+impl SqlNotice {
+    pub fn memory_estimate(&self) -> usize {
+        self.sqlstate.len()
+            + self.message.len()
+            + self
+                .fields
+                .iter()
+                .map(|field| match field {
+                    SqlErrorField::Detail(value)
+                    | SqlErrorField::Schema(value)
+                    | SqlErrorField::Table(value)
+                    | SqlErrorField::Column(value)
+                    | SqlErrorField::DataType(value)
+                    | SqlErrorField::Constraint(value)
+                    | SqlErrorField::Hint(value) => value.len(),
+                })
+                .sum::<usize>()
+    }
+}
+
+impl SqlError {
+    pub fn notices(&self) -> &[SqlNotice] {
+        match self {
+            Self::WithNotices { notices, .. } => notices,
+            Self::OracleContext { inner, .. } | Self::Rethrown(inner) => inner.notices(),
+            _ => &[],
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -2253,6 +2324,7 @@ pub struct SqlRowStream {
     command_tag: Option<String>,
     column_types: Vec<Option<String>>,
     column_metadata: Vec<SqlColumnMetadata>,
+    notices: Vec<SqlNotice>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -2285,6 +2357,7 @@ impl SqlResult {
             command_tag: None,
             column_types: Vec::new(),
             column_metadata: Vec::new(),
+            notices: Vec::new(),
         }
     }
 
@@ -2295,6 +2368,7 @@ impl SqlResult {
             command_tag: None,
             column_types: Vec::new(),
             column_metadata: Vec::new(),
+            notices: Vec::new(),
         }
     }
 
@@ -2305,6 +2379,7 @@ impl SqlResult {
             command_tag: Some(tag.into()),
             column_types: Vec::new(),
             column_metadata: Vec::new(),
+            notices: Vec::new(),
         }
     }
 
@@ -2351,11 +2426,15 @@ impl SqlResult {
             command_tag: self.command_tag,
             column_types: self.column_types,
             column_metadata: self.column_metadata,
+            notices: self.notices,
         }
     }
 }
 
 impl SqlRowStream {
+    pub fn take_notices(&mut self) -> Vec<SqlNotice> {
+        std::mem::take(&mut self.notices)
+    }
     pub fn columns(&self) -> &[String] {
         &self.columns
     }
@@ -2380,6 +2459,11 @@ impl SqlRowStream {
 
     pub fn memory_estimate(&self) -> usize {
         self.columns.iter().map(String::len).sum::<usize>()
+            + self
+                .notices
+                .iter()
+                .map(SqlNotice::memory_estimate)
+                .sum::<usize>()
             + self
                 .rows
                 .iter()
@@ -2414,6 +2498,7 @@ impl SqlRowStream {
             command_tag: self.command_tag.clone(),
             column_types: self.column_types.clone(),
             column_metadata: self.column_metadata.clone(),
+            notices: Vec::new(),
         }
     }
 }
@@ -4506,6 +4591,7 @@ enum RoutineStmt {
         name: String,
     },
     RaiseException {
+        notice: bool,
         message: String,
         arguments: Vec<RoutineExpr>,
         detail: Option<RoutineExpr>,

@@ -2279,6 +2279,9 @@ pub(crate) fn write_query_result(
         server.sync_quorum.wait_for(seq)?;
     }
     let mut stats = StreamWriteStats::default();
+    for notice in &result.notices {
+        notice_response(stream, notice)?;
+    }
     if !result.columns.is_empty() {
         let db = server.read_db_for_transaction_progress()?;
         validate_format_arity(result_formats, result.columns.len(), "result")?;

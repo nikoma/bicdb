@@ -261,7 +261,7 @@ impl<'db> SqlEngine<'db> {
                     }
                     return Ok(SqlValue::Null);
                 }
-                let arg_exprs = function_args(function);
+                let arg_exprs = function_arg_list(function);
                 let arg_types = arg_exprs
                     .iter()
                     .map(|arg| projected_expr_pg_type_with_db(self.db_ref(), arg))

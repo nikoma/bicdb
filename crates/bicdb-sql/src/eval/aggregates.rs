@@ -3804,6 +3804,62 @@ mod function_arg_list_tests {
 #[cfg(test)]
 mod type_memo_ownership_tests {
     use super::*;
+    fn evaluation_keeps_original_type_nodes(virtual_rows: bool) {
+        let statements = Parser::parse_sql(
+            &PostgreSqlDialect {},
+            "SELECT jsonb_build_object('label',COALESCE(NULL::text,'pending_acceptance'),'target',COALESCE(NULL::jsonb,'{}'::jsonb),'number',COALESCE(NULL::numeric,85))",
+        )
+        .unwrap();
+        let mut owned = BTreeSet::new();
+        let _ = sqlparser::ast::visit_expressions(&statements, |expr| {
+            owned.insert(expr as *const Expr as usize);
+            ControlFlow::<()>::Continue(())
+        });
+        let Statement::Query(query) = &statements[0] else {
+            panic!("query")
+        };
+        let SetExpr::Select(select) = query.body.as_ref() else {
+            panic!("select")
+        };
+        let SelectItem::UnnamedExpr(expr) = &select.projection[0] else {
+            panic!("expression")
+        };
+        let root = tempfile::tempdir().unwrap();
+        let db = BicDb::open(root.path()).unwrap();
+        let engine = SqlEngine::new(&db);
+        EXPR_TYPE_MEMO.with(|memo| memo.borrow_mut().clear());
+        let _scope = enter_expr_type_scope(0xf0c05, 0xf0c05);
+        for _ in 0..64 {
+            let value = if virtual_rows {
+                eval_virtual_value(&BTreeMap::new(), expr).unwrap()
+            } else {
+                engine.eval_select_constant_expr(expr).unwrap()
+            };
+            let json: JsonValue = serde_json::from_str(&value.to_cell()).unwrap();
+            assert_eq!(json["label"], "pending_acceptance");
+            assert!(json["target"].is_object());
+            assert_eq!(json["number"].as_f64(), Some(85.0));
+            assert_eq!(expr_type_scope(), Some((0xf0c05, 0xf0c05)));
+            EXPR_TYPE_MEMO.with(|memo| {
+                for (_, _, address, _) in memo.borrow().keys() {
+                    assert!(
+                        owned.contains(address),
+                        "evaluation retained a temporary argument address in the type memo"
+                    );
+                }
+            });
+        }
+    }
+
+    #[test]
+    fn constant_evaluation_type_memos_reference_original_arguments() {
+        evaluation_keeps_original_type_nodes(false);
+    }
+
+    #[test]
+    fn virtual_evaluation_type_memos_reference_original_arguments() {
+        evaluation_keeps_original_type_nodes(true);
+    }
 
     #[test]
     fn ordinary_function_type_memos_reference_original_ast_nodes() {

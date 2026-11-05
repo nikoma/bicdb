@@ -329,7 +329,7 @@ impl<'db> SqlSession<'db> {
                     Some(exprs) => exprs
                         .map(|arg| self.eval_session_expr(arg))
                         .collect::<Result<Vec<_>>>()?,
-                    None => function_args(function)
+                    None => function_arg_list(function)
                         .iter()
                         .map(|arg| self.eval_session_expr(arg))
                         .collect::<Result<Vec<_>>>()?,
@@ -2409,7 +2409,7 @@ impl<'db> SqlSession<'db> {
             }
             return Ok(Some(SqlValue::Null));
         }
-        let arg_exprs = function_args(function);
+        let arg_exprs = function_arg_list(function);
         let args = arg_exprs
             .iter()
             .map(|arg| {

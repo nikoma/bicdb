@@ -64,3 +64,12 @@ suite covers pagination, repeated calls, null/zero counts, negative counts, and
 FETCH with positional parameters, alongside a PostgreSQL control. The parser's
 existing restriction on nonliteral named FETCH counts remains separate from
 this LIMIT/OFFSET fix; the EHR sync function uses LIMIT.
+
+Row-context operator result types resolve their operands from the row's schema
+before applying context-free fallbacks. This preserves JSONB concatenation in
+CASE branches rather than rejecting it as a text/JSONB mismatch. Temporary
+row-limit rewrites also suspend routine-node type memos so an ephemeral AST
+address cannot carry a different expression's cached type into a later call.
+The Carrier compatibility suite covers direct row projection and the EHR-shaped
+paginated JSONB feed with changed limits on repeated invocations. The regression
+fails before the fix; 55 Carrier/type/JSON storage and composite checks pass.

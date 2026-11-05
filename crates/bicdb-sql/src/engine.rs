@@ -3457,6 +3457,18 @@ pub(crate) fn row_columns_expr_pg_type<'a>(
     if let Expr::Nested(inner) | Expr::Collate { expr: inner, .. } = expr {
         return row_columns_expr_pg_type(db, inner, columns.iter().copied());
     }
+    if let Expr::BinaryOp { left, op, right } = expr {
+        // A context-free concat fallback is text; applying it before resolving
+        // row operands incorrectly rejects JSONB CASE/COALESCE branches.
+        return projected_binary_expr_pg_type_with_types(
+            left,
+            op,
+            right,
+            None,
+            row_columns_expr_pg_type(db, left, columns.iter().copied()),
+            row_columns_expr_pg_type(db, right, columns.iter().copied()),
+        );
+    }
     if let Expr::Case {
         conditions,
         else_result,

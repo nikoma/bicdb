@@ -812,3 +812,14 @@ contract. The reference fixture includes tuple, composite and partially NULL
 relationships; the executable upgrade fixture checks legacy values and old
 server rejection. These checks remain distinct from the pending import of all
 application relationships and their business-workflow qualification.
+
+
+## Foreign-key parent lookup and cross-width timing
+
+The [parent lookup checkpoint](evidence/oracle-foreign-key-parent-lookups-2026-11-05/README.md)
+uses latest-committed primary-key point reads with pending-write overlays, typed
+equality checks and scan fallback. It also corrects PostgreSQL out-of-range
+child-key diagnostics while preserving deferred timing. Separate native
+references, trace counts and executable fencing results accompany the change.
+Source relationship installation, orphan inventory and application workflows
+with all relationships enforced remain open migration gates.

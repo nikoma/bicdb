@@ -1,0 +1,272 @@
+{
+  "source_commit": "8a6404b8e0f383527d5a9eea1a12a929f698aefc",
+  "binary_sha256": "f639f352979e2715b7a0fb5afd8f27bb570ef9b5ea41e376e603554cfe6d784a",
+  "fixture_source_sha256": "ca82c80e83b5cda246997e6ac0c8161cdce3bdfdfa01af4a8f5ed274f502bcfe",
+  "application_qualified": false,
+  "goal_complete": false,
+  "reference_summary": {
+    "oracle": {
+      "matched": 17,
+      "total": 17,
+      "source_qualified": true,
+      "cleanup_errors": []
+    },
+    "postgres": {
+      "matched": 18,
+      "total": 21,
+      "source_qualified": true,
+      "cleanup_errors": []
+    }
+  },
+  "mismatched_cases": [
+    {
+      "id": "postgres_cross_width_immediate",
+      "source": {
+        "id": "postgres_cross_width_immediate",
+        "observations": {
+          "catalog": [
+            false,
+            false,
+            true,
+            "NO ACTION",
+            [
+              "NO",
+              "NO"
+            ]
+          ],
+          "insert": "foreign_key",
+          "rows": 1
+        },
+        "expected": {
+          "catalog": [
+            false,
+            false,
+            true,
+            "NO ACTION",
+            [
+              "NO",
+              "NO"
+            ]
+          ],
+          "insert": "foreign_key",
+          "rows": 1
+        },
+        "diagnostics": [
+          {
+            "oracle_code": null,
+            "sqlstate": "23503"
+          }
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "postgres_cross_width_immediate",
+        "observations": {
+          "catalog": [
+            false,
+            false,
+            true,
+            "NO ACTION",
+            [
+              "NO",
+              "NO"
+            ]
+          ],
+          "insert": "other:22003",
+          "rows": 1
+        },
+        "expected": {
+          "catalog": [
+            false,
+            false,
+            true,
+            "NO ACTION",
+            [
+              "NO",
+              "NO"
+            ]
+          ],
+          "insert": "foreign_key",
+          "rows": 1
+        },
+        "diagnostics": [
+          {
+            "oracle_code": null,
+            "sqlstate": "22003"
+          }
+        ],
+        "qualified": false
+      },
+      "diagnostics_compared": true,
+      "diagnostics_matched": false,
+      "matched": false
+    },
+    {
+      "id": "postgres_cross_width_deferred",
+      "source": {
+        "id": "postgres_cross_width_deferred",
+        "observations": {
+          "catalog": [
+            true,
+            true,
+            true,
+            "NO ACTION",
+            [
+              "YES",
+              "YES"
+            ]
+          ],
+          "insert": "ok",
+          "commit": "foreign_key",
+          "rows": 1
+        },
+        "expected": {
+          "catalog": [
+            true,
+            true,
+            true,
+            "NO ACTION",
+            [
+              "YES",
+              "YES"
+            ]
+          ],
+          "insert": "ok",
+          "commit": "foreign_key",
+          "rows": 1
+        },
+        "diagnostics": [
+          {
+            "oracle_code": null,
+            "sqlstate": "23503"
+          }
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "postgres_cross_width_deferred",
+        "observations": {
+          "catalog": [
+            true,
+            true,
+            true,
+            "NO ACTION",
+            [
+              "YES",
+              "YES"
+            ]
+          ],
+          "insert": "other:22003",
+          "commit": "ok",
+          "rows": 1
+        },
+        "expected": {
+          "catalog": [
+            true,
+            true,
+            true,
+            "NO ACTION",
+            [
+              "YES",
+              "YES"
+            ]
+          ],
+          "insert": "ok",
+          "commit": "foreign_key",
+          "rows": 1
+        },
+        "diagnostics": [
+          {
+            "oracle_code": null,
+            "sqlstate": "22003"
+          }
+        ],
+        "qualified": false
+      },
+      "diagnostics_compared": true,
+      "diagnostics_matched": false,
+      "matched": false
+    },
+    {
+      "id": "postgres_cross_width_repaired",
+      "source": {
+        "id": "postgres_cross_width_repaired",
+        "observations": {
+          "catalog": [
+            true,
+            true,
+            true,
+            "NO ACTION",
+            [
+              "YES",
+              "YES"
+            ]
+          ],
+          "insert": "ok",
+          "commit": "ok",
+          "rows": 1
+        },
+        "expected": {
+          "catalog": [
+            true,
+            true,
+            true,
+            "NO ACTION",
+            [
+              "YES",
+              "YES"
+            ]
+          ],
+          "insert": "ok",
+          "commit": "ok",
+          "rows": 1
+        },
+        "diagnostics": [],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "postgres_cross_width_repaired",
+        "observations": {
+          "catalog": [
+            true,
+            true,
+            true,
+            "NO ACTION",
+            [
+              "YES",
+              "YES"
+            ]
+          ],
+          "insert": "other:22003",
+          "unexpected_error": "other:25P02",
+          "error_statement": "DELETE FROM \"BIC_FK_02451D5EDE34_C\" WHERE \"ID\"=2"
+        },
+        "expected": {
+          "catalog": [
+            true,
+            true,
+            true,
+            "NO ACTION",
+            [
+              "YES",
+              "YES"
+            ]
+          ],
+          "insert": "ok",
+          "commit": "ok",
+          "rows": 1
+        },
+        "diagnostics": [
+          {
+            "oracle_code": null,
+            "sqlstate": "22003"
+          }
+        ],
+        "qualified": false
+      },
+      "diagnostics_compared": true,
+      "diagnostics_matched": false,
+      "matched": false
+    }
+  ]
+}

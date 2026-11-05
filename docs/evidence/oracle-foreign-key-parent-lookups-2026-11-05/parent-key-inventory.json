@@ -1,0 +1,9 @@
+{
+  "source_manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+  "foreign_keys": 3826,
+  "referenced_parent_kinds": {
+    "P": 3823,
+    "U": 3
+  },
+  "migration_qualified": false
+}

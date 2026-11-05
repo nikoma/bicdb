@@ -1,0 +1,17 @@
+{
+  "format": 1,
+  "current_binary_sha256": "ea4f037f73511437bbdc91135ab470cae8507ce573347ffd4ffe834b34019c13",
+  "previous_binary_sha256": "baf321e9447a874c9baf511432eb4a433a2acdf81f2da3570c1f76123abdc3cf",
+  "checks": [
+    "previous_binary_reproduces_unchanged_key_exemption",
+    "native_blob_append_does_not_invent_foreign_key_assignment_intent",
+    "current_binary_upgrades_legacy_fk_contract_without_row_rewrite",
+    "previous_binary_rejects_upgraded_profile_before_serving",
+    "current_binary_reopens_repairs_reference_and_preserves_blob_values",
+    "blob_schema_save_retains_old_writer_fence"
+  ],
+  "application_qualified": false,
+  "success": true,
+  "disposable_database_removed": true,
+  "fixture_sha256": "04f0682dc264492d11ae8d9ba4ae87f34d09d74229da097638f60b95b64e25fc"
+}

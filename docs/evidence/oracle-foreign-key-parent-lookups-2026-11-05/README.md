@@ -38,3 +38,31 @@ All exported application foreign keys still require source-faithful migration,
 orphan inventory and business-workflow qualification. Secondary-key indexing,
 all key types, recovery/concurrency schedules and complete Oracle conformance
 remain broader programme work.
+
+## Recorded validation
+
+The [live comparison](reference-results.json) passes **17/17 Oracle cases and
+21/21 PostgreSQL cases**, with each source satisfying its own explicit
+expectations. The [previous binary](baseline-results.json) matched 18/21
+PostgreSQL cases; its three new immediate/deferred cross-width failures are
+recorded separately. PostgreSQL SQLSTATEs are compared; Oracle error-number
+equivalence is not claimed.
+
+The same live comparison records 17 Oracle-profile and 19 PostgreSQL parent
+point lookups, with six fallback scans in each profile. These are aggregate
+counts for this fixture, including expected invalid references, rather than a
+workload benchmark. The [source inventory](parent-key-inventory.json) has 3,823
+relationships referencing primary keys and three referencing other unique keys;
+this does not prove that every source relationship has migrated or used a
+particular runtime path.
+
+The [validation record](validation-results.json) includes 706 passed SQL library
+tests, three ignored, all selected integration suites, 181 PostgreSQL and 48
+Oracle-profile protocol tests, and workspace/all-target checks. The first final
+build was interrupted when the memory guard's 12 GiB floor was crossed. The
+build resumed successfully with SQL development code-generation units set to
+512 and the same memory floor. The record preserves both resource outcomes.
+
+All six [executable upgrade/fencing checks](writer-fence-results.json) passed
+again. The accepted application deployment remains separate from these candidate
+results; its exported foreign keys are not counted as installed here.

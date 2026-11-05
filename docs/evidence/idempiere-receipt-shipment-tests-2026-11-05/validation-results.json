@@ -1,0 +1,92 @@
+{
+  "format": 1,
+  "server_source_commit": "ed9ca8b74bea10e14beeb9c0e02e46279d2e5a1b",
+  "server_sha256": "d8f47af87a8eaa2e930a66d97f9f44ce57db8a15b14e980575884e6d84d87dd4",
+  "test_bundle": {
+    "name": "org.idempiere.test",
+    "version": "13.0.0.202611011311",
+    "sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7"
+  },
+  "reports": [
+    {
+      "file": "TEST-org.idempiere.test.base.InOutTest.xml",
+      "name": "org.idempiere.test.base.InOutTest",
+      "tests": "5",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0"
+    }
+  ],
+  "testcases": [
+    {
+      "name": "testMatReceiptPosting",
+      "classname": "org.idempiere.test.base.InOutTest",
+      "time": "119.872"
+    },
+    {
+      "name": "testFreightCostRuleCustomerAccount",
+      "classname": "org.idempiere.test.base.InOutTest",
+      "time": "3.542"
+    },
+    {
+      "name": "testMatShipmentPosting",
+      "classname": "org.idempiere.test.base.InOutTest",
+      "time": "39.692"
+    },
+    {
+      "name": "testShipmentRePosting",
+      "classname": "org.idempiere.test.base.InOutTest",
+      "time": "42.032"
+    },
+    {
+      "name": "testCreditCheckInOut",
+      "classname": "org.idempiere.test.base.InOutTest",
+      "time": "16.137"
+    }
+  ],
+  "junit_report_sha256": "309d3f9e5127cfd5e245058f66249c075626bb864e5aec1a955cb9d251ea66e8",
+  "public_migration": {
+    "success": true,
+    "reconciled_columns": 16,
+    "definitions_before": {
+      "routines": 62,
+      "views": 160
+    },
+    "definitions_preserved": true,
+    "public_migration_report_sha256": "20df8e443b94a15e5603549282e3a4698eda42eebe4f796e87f0de85ec2a73bc",
+    "full_target_table_fingerprints_preserved": true,
+    "public_importer_sha256": "e468eea1adddf72ff6be8ea2e22718b3bb8db45dec3eb69a4b360076e83a547f",
+    "application_qualified": false
+  },
+  "source_manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+  "source_data_equality_checked_by_migration": false,
+  "shutdown_results": [
+    {
+      "role": "test_jvm",
+      "returncode": 0
+    },
+    {
+      "role": "database",
+      "returncode": 0
+    }
+  ],
+  "external_network_isolated": true,
+  "primary_database_used_for_test_mutations": false,
+  "resource_guard": {
+    "status": "completed",
+    "minimum_observed_available_bytes": 15960780800,
+    "peak_owned_rss_bytes": 4226596864
+  },
+  "invoice_attempt": {
+    "status": "resource_interrupted_before_jvm",
+    "guard_status": "aborted_low_memory",
+    "minimum_observed_available_bytes": 10640416768,
+    "peak_owned_rss_bytes": 1393278976,
+    "java_started": false,
+    "tests_run": false,
+    "application_qualified": false
+  },
+  "source_foreign_keys_installed": false,
+  "application_qualified": false,
+  "goal_complete": false
+}

@@ -780,3 +780,13 @@ cover simple and extended execution, transaction-local changes, rollback and
 resets. A C-driver NULL timestamptz reproduction distinguishes the earlier client
 crash from successful decoding with the patched server. Broader startup options,
 timezone/NLS conformance and full application acceptance remain open.
+
+
+## Original receipt and shipment posting tests
+
+The [original InOutTest checkpoint](evidence/idempiere-receipt-shipment-tests-2026-11-05/README.md)
+passes five receipt/shipment, reposting, freight and credit tests after the public
+BLOB migration phase. Accounting-entry assertions come from the unmodified
+upstream test bundle. This does not qualify foreign-key enforcement, which has
+not yet been installed for the exported application, or the complete application.
+The invoice attempt was resource-interrupted before Java and is not counted.

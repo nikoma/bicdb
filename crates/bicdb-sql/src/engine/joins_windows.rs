@@ -1727,10 +1727,18 @@ impl<'db> SqlEngine<'db> {
     ) -> Result<SqlValue> {
         let name = object_name(&function.name)?.to_ascii_lowercase();
         if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
-            for arg in borrowed_function_args(function) {
-                let value = self.eval_row_aggregate_expr(rows, columns, &arg)?;
+            let arguments = borrowed_function_args(function);
+            let types = arguments
+                .iter()
+                .map(|arg| {
+                    row_columns_expr_pg_type(self.db_ref(), arg, columns.iter().map(String::as_str))
+                })
+                .collect::<Vec<_>>();
+            let common_type = select_common_pg_type(self.db_ref(), &types, "COALESCE")?;
+            for arg in &arguments {
+                let value = self.eval_row_aggregate_expr(rows, columns, arg)?;
                 if !matches!(value, SqlValue::Null) {
-                    return Ok(value);
+                    return coerce_common_json_value(value, Some(&common_type));
                 }
             }
             return Ok(SqlValue::Null);

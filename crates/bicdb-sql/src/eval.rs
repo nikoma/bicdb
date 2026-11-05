@@ -395,10 +395,16 @@ pub(crate) fn eval_value(record: &Record, expr: &Expr) -> Result<SqlValue> {
 pub(crate) fn eval_record_function_value(record: &Record, function: &Function) -> Result<SqlValue> {
     let name = object_name(&function.name)?.to_ascii_lowercase();
     if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
-        for arg in function_arg_list(function).iter() {
+        let arguments = function_arg_list(function);
+        let types = arguments
+            .iter()
+            .map(|arg| projected_expr_pg_type(arg, None))
+            .collect::<Vec<_>>();
+        let common_type = select_common_builtin_projected_type(&types);
+        for arg in arguments.iter() {
             let value = eval_value(record, arg)?;
             if !matches!(value, SqlValue::Null) {
-                return Ok(value);
+                return coerce_common_json_value(value, common_type.as_deref());
             }
         }
         return Ok(SqlValue::Null);
@@ -770,10 +776,16 @@ pub(crate) fn eval_constant_function_value(function: &Function) -> Result<SqlVal
         )));
     }
     if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
-        for arg in function_args(function) {
-            let value = eval_constant_expr(&arg)?;
+        let arguments = function_arg_list(function);
+        let types = arguments
+            .iter()
+            .map(|arg| projected_expr_pg_type(arg, None))
+            .collect::<Vec<_>>();
+        let common_type = select_common_builtin_projected_type(&types);
+        for arg in arguments.iter() {
+            let value = eval_constant_expr(arg)?;
             if !matches!(value, SqlValue::Null) {
-                return Ok(value);
+                return coerce_common_json_value(value, common_type.as_deref());
             }
         }
         return Ok(SqlValue::Null);

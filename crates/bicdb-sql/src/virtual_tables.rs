@@ -1185,10 +1185,16 @@ pub(crate) fn eval_virtual_value(
         Expr::Function(function) => {
             let name = object_name(&function.name)?.to_ascii_lowercase();
             if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
-                for arg in function_arg_list(function).iter() {
+                let arguments = function_arg_list(function);
+                let types = arguments
+                    .iter()
+                    .map(|arg| projected_expr_pg_type(arg, None))
+                    .collect::<Vec<_>>();
+                let common_type = select_common_builtin_projected_type(&types);
+                for arg in arguments.iter() {
                     let value = eval_virtual_value(row, arg)?;
                     if !matches!(value, SqlValue::Null) {
-                        return Ok(value);
+                        return coerce_common_json_value(value, common_type.as_deref());
                     }
                 }
                 return Ok(SqlValue::Null);

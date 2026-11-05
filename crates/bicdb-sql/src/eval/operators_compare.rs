@@ -3086,10 +3086,15 @@ pub(crate) fn eval_record_aggregate_function_value(
     let name = object_name(&function.name)?.to_ascii_lowercase();
     let arg_exprs = borrowed_function_args(function);
     if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
+        let types = arg_exprs
+            .iter()
+            .map(|arg| projected_expr_pg_type(arg, schema))
+            .collect::<Vec<_>>();
+        let common_type = select_common_builtin_projected_type(&types);
         for arg in &arg_exprs {
             let value = eval_record_aggregate_expr(records, arg, schema)?;
             if !matches!(value, SqlValue::Null) {
-                return Ok(value);
+                return coerce_common_json_value(value, common_type.as_deref());
             }
         }
         return Ok(SqlValue::Null);

@@ -211,6 +211,13 @@ pub(crate) fn relation_name(name: &ObjectName) -> Result<String> {
 /// schema encoding identical to INSERT/SELECT; COPY previously bypassed it
 /// and silently wrote into `public`.
 pub(crate) fn relation_name_from_parts(parts: &[String]) -> Result<String> {
+    let direct_name = |name: &str| {
+        !name.is_empty()
+            && name.len() <= 255
+            && name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+    };
     match parts {
         [schema, table] if schema == "pg_catalog" => Ok(format!("pg_catalog.{table}")),
         [schema, table] if schema == "information_schema" => {
@@ -220,10 +227,11 @@ pub(crate) fn relation_name_from_parts(parts: &[String]) -> Result<String> {
         // collections, so the qualifier must survive rather than being
         // encoded into a physical collection name.
         [schema, table] if schema == "bicdb_projection" => Ok(format!("bicdb_projection.{table}")),
-        [schema, table] if schema == "public" => Ok(table.clone()),
+        [schema, table] if schema == "public" && direct_name(table) => Ok(table.clone()),
         [schema, table] => {
             // Core collections have no schema dimension. Encode a
-            // non-public SQL schema into a path-safe, collision-resistant
+            // non-public SQL schema, or a quoted public name that cannot be
+            // stored directly, into a path-safe, collision-resistant
             // physical relation name instead of silently discarding it. The
             // table component is hex so quoted identifiers cannot inject
             // separators; the fixed schema digest keeps the durable name
@@ -239,9 +247,27 @@ pub(crate) fn relation_name_from_parts(parts: &[String]) -> Result<String> {
             "relation names beginning with `__bicdb_s_` are reserved for schema isolation"
                 .to_string(),
         )),
-        [table] => Ok(table.clone()),
+        [table] if direct_name(table) => Ok(table.clone()),
+        [table] => relation_name_from_parts(&["public".to_string(), table.clone()]),
         _ => Ok(parts.join(".")),
     }
+}
+
+/// Index metadata retains its logical spelling. Index storage performs its
+/// own encoding with the owning table's namespace.
+pub(crate) fn index_relation_name(name: &ObjectName) -> Result<String> {
+    let parts = object_name_parts(name);
+    match parts.as_slice() {
+        [index] if index.starts_with("__bicdb_s_") => relation_name_from_parts(&parts),
+        [index] => Ok(index.clone()),
+        [schema, index] if schema == "public" => Ok(index.clone()),
+        _ => relation_name_from_parts(&parts),
+    }
+}
+
+pub(crate) fn relation_default_alias(name: &ObjectName) -> String {
+    let last = object_name_parts(name).last().cloned().unwrap_or_default();
+    logical_relation_name(&last).unwrap_or(last)
 }
 
 /// Recovers the SQL relation name from a schema-isolated physical name.
@@ -271,6 +297,14 @@ pub(crate) fn logical_relation_name(physical: &str) -> Option<String> {
     let bytes = hex::decode(encoded).ok()?;
     let name = String::from_utf8(bytes).ok()?;
     Some(format!("{name}{suffix}"))
+}
+
+/// Earlier public views could use logical names that core collections cannot
+/// store. Only the public encoding may fall back to those legacy catalog keys.
+pub(crate) fn legacy_public_relation_name(physical: &str) -> Option<String> {
+    let logical = logical_relation_name(physical)?;
+    let encoded = relation_name_from_parts(&["public".to_string(), logical.clone()]).ok()?;
+    (encoded == physical).then_some(logical)
 }
 
 pub(crate) fn relation_schema_name(name: &ObjectName) -> String {

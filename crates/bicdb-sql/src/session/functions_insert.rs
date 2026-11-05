@@ -958,7 +958,7 @@ impl<'db> SqlSession<'db> {
             let mut seen = BTreeSet::new();
             for (id, _, _) in &rows {
                 if !seen.insert(id.as_str()) {
-                    return Err(unique_violation(&arbiter.name));
+                    return Err(unique_violation(schema, &arbiter.name));
                 }
                 sql_profile_index_lookup();
             }
@@ -968,12 +968,12 @@ impl<'db> SqlSession<'db> {
                     rows.iter().map(|(id, _, _)| id.as_str()),
                 )?;
                 if existing.into_iter().any(|exists| exists) {
-                    return Err(unique_violation(&arbiter.name));
+                    return Err(unique_violation(schema, &arbiter.name));
                 }
             } else {
                 for (id, _, _) in &rows {
                     if self.db_ref().get_unchecked(table, id)?.is_some() {
-                        return Err(unique_violation(&arbiter.name));
+                        return Err(unique_violation(schema, &arbiter.name));
                     }
                 }
             }

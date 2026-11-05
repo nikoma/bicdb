@@ -6,6 +6,8 @@ pub type Result<T> = std::result::Result<T, BicDbError>;
 
 #[derive(Debug, Error)]
 pub enum BicDbError {
+    #[error("unique index `{index}` has duplicate keys")]
+    UniqueIndexBuildConflict { index: String },
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
 

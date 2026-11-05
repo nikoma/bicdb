@@ -929,7 +929,7 @@ pub(crate) fn unique_arbiters_for_table_uncached(
                     let index_name = executable_indexes
                         .iter()
                         .find(|index| {
-                            index.name == *name
+                            index.name == sql_index_storage_name(&schema.schema_name, name)
                                 && index.collection.eq_ignore_ascii_case(table)
                                 && index.unique
                                 && index.predicate == expected_predicate
@@ -954,7 +954,12 @@ pub(crate) fn unique_arbiters_for_table_uncached(
         if index.unique {
             let definition = executable_indexes.iter().find(|definition| {
                 definition.collection.eq_ignore_ascii_case(table)
-                    && definition.name.eq_ignore_ascii_case(&index.name)
+                    && definition
+                        .name
+                        .eq_ignore_ascii_case(&sql_index_storage_name(
+                            &schema.schema_name,
+                            &index.name,
+                        ))
             });
             let predicate = definition.and_then(|definition| definition.predicate.clone());
             let key = definition
@@ -980,7 +985,7 @@ pub(crate) fn unique_arbiters_for_table_uncached(
                 } else {
                     UniqueNullPolicy::Distinct
                 },
-                name: index.name.clone(),
+                name: catalog_display_name(&index.name),
                 index_name,
                 key,
                 predicate,
@@ -1105,7 +1110,7 @@ pub(crate) fn validate_unique_arbiter_records(
         let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
         if let Some(existing_id) = seen.get(&key) {
             if !allow_existing_same_id || existing_id != &record.id {
-                return Err(unique_violation(&arbiter.name));
+                return Err(unique_violation(schema, &arbiter.name));
             }
         } else {
             seen.insert(key, record.id.clone());
@@ -1155,7 +1160,7 @@ pub(crate) fn validate_unique_arbiter_records(
                 ids.iter()
                     .any(|id| !allow_existing_same_id || id != &record.id)
             }) {
-                return Err(unique_violation(&arbiter.name));
+                return Err(unique_violation(schema, &arbiter.name));
             }
         }
         return Ok(());
@@ -1193,7 +1198,7 @@ pub(crate) fn validate_unique_arbiter_records(
             .iter()
             .any(|id| !allow_existing_same_id || id != &record.id)
         {
-            return Err(unique_violation(&arbiter.name));
+            return Err(unique_violation(schema, &arbiter.name));
         }
         // Committed index entries cannot see this transaction's earlier writes.
         let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
@@ -1201,7 +1206,7 @@ pub(crate) fn validate_unique_arbiter_records(
             ids.iter()
                 .any(|id| !allow_existing_same_id || id != &record.id)
         }) {
-            return Err(unique_violation(&arbiter.name));
+            return Err(unique_violation(schema, &arbiter.name));
         }
     }
     Ok(())
@@ -1326,7 +1331,7 @@ pub(crate) fn validate_unique_primary_key_arbiter_records(
             None => db.get_unchecked(table, &record_id)?,
         };
         if existing.is_some_and(|existing| !allow_existing_same_id || existing.id != record.id) {
-            return Err(unique_violation(&arbiter.name));
+            return Err(unique_violation(schema, &arbiter.name));
         }
     }
     Ok(true)
@@ -2993,9 +2998,12 @@ pub(crate) fn constraint_violation(
     SqlError::ConstraintViolation {
         sqlstate,
         message,
+        schema: None,
         table,
         column,
         constraint,
+        oracle_code: None,
+        unique_origin: None,
     }
 }
 
@@ -3013,14 +3021,29 @@ pub(crate) fn integrity_sqlstate(code: &str) -> Option<&'static str> {
     })
 }
 
-pub(crate) fn unique_violation(name: &str) -> SqlError {
-    constraint_violation(
-        "23505",
-        format!("duplicate key value violates unique constraint \"{name}\""),
-        None,
-        None,
-        Some(name.to_string()),
-    )
+pub(crate) fn unique_violation(schema: &TableSchema, name: &str) -> SqlError {
+    SqlError::ConstraintViolation {
+        sqlstate: "23505",
+        message: format!("duplicate key value violates unique constraint \"{name}\""),
+        schema: Some(schema.schema_name.clone()),
+        table: Some(catalog_display_name(&schema.name)),
+        column: None,
+        constraint: Some(name.to_string()),
+        oracle_code: None,
+        unique_origin: Some(UniqueViolationOrigin::Write),
+    }
+}
+
+pub(crate) fn unique_validation_violation(
+    schema: &TableSchema,
+    name: &str,
+    primary_key: bool,
+) -> SqlError {
+    let mut error = unique_violation(schema, name);
+    if let SqlError::ConstraintViolation { unique_origin, .. } = &mut error {
+        *unique_origin = Some(UniqueViolationOrigin::ConstraintValidation { primary_key });
+    }
+    error
 }
 
 pub(crate) fn exclusion_violation(table: &str, name: &str) -> SqlError {

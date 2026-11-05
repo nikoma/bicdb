@@ -4468,6 +4468,9 @@ pub(crate) fn pg_index_filter_matches(
 }
 
 pub(crate) fn relation_catalog_namespace(db: &BicDb, name: &str) -> Result<String> {
+    if legacy_public_relation_name(name).is_some() {
+        return Ok("public".into());
+    }
     if name.starts_with("__bicdb_s_") {
         let logical = catalog_display_name(name);
         for namespace in list_namespaces(db)? {
@@ -7250,9 +7253,14 @@ pub(crate) fn catalog_indexes(schemas: &[TableSchema], db: &BicDb) -> Vec<Catalo
             if unique_constraint_is_primary_key(schema, name, columns) {
                 continue;
             }
-            let Some(definition) = executable.get(name).filter(|index| {
-                index.collection == schema.name && index.unique && index.kind == IndexKind::BTree
-            }) else {
+            let Some(definition) = executable
+                .get(&sql_index_storage_name(&schema.schema_name, name))
+                .filter(|index| {
+                    index.collection == schema.name
+                        && index.unique
+                        && index.kind == IndexKind::BTree
+                })
+            else {
                 continue;
             };
             indexes.push(CatalogIndex {
@@ -7282,11 +7290,9 @@ pub(crate) fn catalog_indexes(schemas: &[TableSchema], db: &BicDb) -> Vec<Catalo
                 continue;
             }
             if !index.internal_index_names.is_empty() {
-                if !index
-                    .internal_index_names
-                    .iter()
-                    .all(|name| executable.contains_key(name))
-                {
+                if !index.internal_index_names.iter().all(|name| {
+                    executable.contains_key(&sql_index_storage_name(&schema.schema_name, name))
+                }) {
                     continue;
                 }
                 let indkey = index
@@ -7334,7 +7340,9 @@ pub(crate) fn catalog_indexes(schemas: &[TableSchema], db: &BicDb) -> Vec<Catalo
                 });
                 continue;
             }
-            let Some(definition) = executable.get(&index.name) else {
+            let Some(definition) =
+                executable.get(&sql_index_storage_name(&schema.schema_name, &index.name))
+            else {
                 continue;
             };
             let full_text = definition.kind == IndexKind::FullText;

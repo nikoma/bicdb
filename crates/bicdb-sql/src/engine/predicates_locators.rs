@@ -708,7 +708,7 @@ impl<'db> SqlEngine<'db> {
         let alias_name = table_alias
             .as_ref()
             .map(|alias| alias.name.value.clone())
-            .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(&table).to_string());
+            .unwrap_or_else(|| relation_default_alias(name));
 
         if let Some(args) = args {
             if is_generate_series_table_function(&table) {

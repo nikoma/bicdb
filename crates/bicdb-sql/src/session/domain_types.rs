@@ -215,7 +215,11 @@ impl<'db> SqlSession<'db> {
             ));
         }
 
-        let view = relation_name(&create_view.name)?;
+        let requested = relation_name(&create_view.name)?;
+        // Replacement preserves a legacy view's key and relation/type OIDs.
+        let view = load_view(self.db_ref(), &requested)?
+            .map(|view| view.name)
+            .unwrap_or(requested);
         require_user_relation_name(&view)?;
         self.require_schema_create_privilege(&relation_schema_name(&create_view.name))?;
         if load_schema(self.db_ref(), &view)?.is_some()
@@ -466,12 +470,13 @@ impl<'db> SqlSession<'db> {
             }
             ObjectType::Index => {
                 for name in names {
-                    let index = relation_name(name)?;
+                    let index = index_relation_name(name)?;
                     // An index belongs to its table, so the table's
                     // authority governs it — dropping an index is a
                     // performance and constraint change to someone else's
                     // relation.
-                    if let Some(table) = self.table_owning_index(&index)? {
+                    let owning_table = self.table_owning_index(&index)?;
+                    if let Some(table) = &owning_table {
                         self.require_table_ownership(&table, "drop an index on it")?;
                     }
                     if list_schemas(self.db_ref())?.iter().any(|schema| {
@@ -483,7 +488,7 @@ impl<'db> SqlSession<'db> {
                             "cannot drop index {index} because constraint {index} requires it"
                         )));
                     }
-                    let existed = self.drop_session_index(&index)?;
+                    let existed = self.drop_session_index(&index, owning_table.as_deref())?;
                     if !existed && !if_exists {
                         return Err(SqlError::InvalidSql(format!("index `{index}` not found")));
                     }
@@ -906,7 +911,7 @@ impl<'db> SqlSession<'db> {
                         constraint,
                         *not_valid,
                     )? {
-                        if !self.rename_session_index(&old_index_name, &new_index_name)? {
+                        if !self.rename_session_index(&old_index_name, &new_index_name, &table)? {
                             return Err(SqlError::InvalidSql(format!(
                                 "index \"{old_index_name}\" does not exist"
                             )));
@@ -924,7 +929,7 @@ impl<'db> SqlSession<'db> {
                         &ident_value(name),
                         *if_exists,
                     )? {
-                        self.drop_session_index(&index_name)?;
+                        self.drop_session_index(&index_name, Some(&table))?;
                     }
                     schema_dirty = true;
                 }
@@ -936,7 +941,7 @@ impl<'db> SqlSession<'db> {
                         &ident_value(old_name),
                         &ident_value(new_name),
                     )? {
-                        if !self.rename_session_index(&old_index_name, &new_index_name)? {
+                        if !self.rename_session_index(&old_index_name, &new_index_name, &table)? {
                             return Err(SqlError::InvalidSql(format!(
                                 "index \"{old_index_name}\" does not exist"
                             )));
@@ -1493,7 +1498,7 @@ impl<'db> SqlSession<'db> {
                 }
                 let key = typed_unique_key_label(schema, &arbiter.key, &values)?;
                 if !seen.insert(key) {
-                    return Err(unique_violation(&arbiter.name));
+                    return Err(unique_violation(schema, &arbiter.name));
                 }
             }
         }
@@ -2411,7 +2416,7 @@ impl<'db> SqlSession<'db> {
                 let index_name = create_index
                     .name
                     .as_ref()
-                    .map(relation_name)
+                    .map(index_relation_name)
                     .transpose()?
                     .unwrap_or_else(|| format!("idx_{}_{}", table, view.indexes.len() + 1));
 
@@ -2474,7 +2479,7 @@ impl<'db> SqlSession<'db> {
         let index_name = create_index
             .name
             .as_ref()
-            .map(relation_name)
+            .map(index_relation_name)
             .transpose()?
             .unwrap_or_else(|| format!("idx_{}_{}", table, schema.indexes.len() + 1));
         if !self

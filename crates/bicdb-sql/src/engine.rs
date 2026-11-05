@@ -518,7 +518,7 @@ impl ParameterTypeResolver<'_, '_> {
                     let alias_name = alias
                         .as_ref()
                         .map(|alias| alias.name.value.clone())
-                        .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(&table).to_string());
+                        .unwrap_or_else(|| relation_default_alias(name));
                     let alias_columns = alias
                         .as_ref()
                         .map(|alias| alias.columns.as_slice())
@@ -1616,6 +1616,9 @@ pub(crate) fn json_set_function_type_error(
     SqlError::ConstraintViolation {
         sqlstate: "22023",
         message: format!("{}: {}", function.name(), message.into()),
+        schema: None,
+        oracle_code: None,
+        unique_origin: None,
         table: None,
         column: None,
         constraint: None,
@@ -4549,13 +4552,7 @@ impl<'db> SqlEngine<'db> {
         let alias_name = alias
             .as_ref()
             .map(|alias| alias.name.value.clone())
-            .unwrap_or_else(|| {
-                collection
-                    .rsplit('.')
-                    .next()
-                    .unwrap_or(&collection)
-                    .to_string()
-            });
+            .unwrap_or_else(|| relation_default_alias(name));
 
         if self.cte(&collection).is_some() {
             return self.execute_row_query(select, query);
@@ -4569,7 +4566,9 @@ impl<'db> SqlEngine<'db> {
             self.require_relation_privilege(&collection, "SELECT")?;
             let mut ctes = self.ctes.clone();
             ctes.insert(
-                view_key(&view.name),
+                // The query may use an encoded alias for a legacy catalog key.
+                // Key the materialization by the identity the row reader uses.
+                view_key(&collection),
                 self.materialize_view_with_selection(
                     &view,
                     &alias_name,

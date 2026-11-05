@@ -658,9 +658,7 @@ fn table_factor_alias(factor: &TableFactor) -> Option<String> {
         return Some(alias.name.value.clone());
     }
     match factor {
-        TableFactor::Table { name, .. } => relation_name(name)
-            .ok()
-            .map(|table| table.rsplit('.').next().unwrap_or(&table).to_string()),
+        TableFactor::Table { name, .. } => Some(relation_default_alias(name)),
         _ => None,
     }
 }

@@ -2838,5 +2838,8 @@ pub(crate) fn pg_namespace_catalog_rows_by_oid(
 }
 
 pub(crate) fn cte_key(name: &str) -> String {
-    name.to_ascii_lowercase()
+    legacy_public_relation_name(name)
+        .as_deref()
+        .unwrap_or(name)
+        .to_ascii_lowercase()
 }

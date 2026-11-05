@@ -340,7 +340,7 @@ pub(crate) fn alter_table_add_constraint(
             db.drop_index(&executable.name)?;
             db.create_index(IndexDefinition {
                 nulls_not_distinct: false,
-                name: constraint_name.clone(),
+                name: sql_index_storage_name(&schema.schema_name, &constraint_name),
                 collection: table.to_string(),
                 fields,
                 unique: true,
@@ -442,7 +442,10 @@ pub(crate) fn rewrite_records_for_primary_key(
         let fields = record_fields_for_schema(&record, schema);
         let new_record = record_from_fields(table, Some(schema), fields)?;
         if !new_ids.insert(new_record.id.clone()) {
-            return Err(unique_violation(&schema.primary_key_constraint_name()));
+            return Err(unique_violation(
+                schema,
+                &schema.primary_key_constraint_name(),
+            ));
         }
         if new_record.id == old_id {
             unchanged_ids.insert(old_id.clone());
@@ -868,7 +871,7 @@ pub(crate) fn validate_unique_key_records(
         }
         let key = typed_column_key_label(schema, columns, &key)?;
         if seen.insert(key, record.id.clone()).is_some() {
-            return Err(unique_violation(name));
+            return Err(unique_validation_violation(schema, name, reject_nulls));
         }
     }
     Ok(())

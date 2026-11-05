@@ -21032,10 +21032,9 @@ fn build_index_state_with_options(
                 );
             }
             if enforce_unique && index.definition.unique && has_duplicate {
-                return Err(BicDbError::Index(format!(
-                    "unique index `{}` has duplicate keys",
-                    index.definition.name
-                )));
+                return Err(BicDbError::UniqueIndexBuildConflict {
+                    index: index.definition.name.clone(),
+                });
             }
         }
         IndexKind::FullText | IndexKind::Jsonb | IndexKind::Array => {

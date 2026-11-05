@@ -21,7 +21,9 @@
       "-p",
       "test_foreign_key*.py",
       "-v"
-    ]
+    ],
+    "source_commit": "a7b38e94fa2e378b386bfbf3b965a890bc6fbdb2",
+    "fixture_cleanup_failures_fail_tests": true
   },
   "references": {
     "oracle": {
@@ -294,8 +296,8 @@
     "combined-tests": {
       "status": "completed",
       "returncode": 0,
-      "peak_group_rss_bytes": 175726592,
-      "minimum_observed_available_bytes": 17508491264,
+      "peak_group_rss_bytes": 175685632,
+      "minimum_observed_available_bytes": 17498505216,
       "minimum_available_gib": 12.0
     },
     "reference": {

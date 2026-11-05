@@ -41,3 +41,6 @@ legacy-row policy, online consistency, full application acceptance and productio
 qualification remain uncompleted gates. The inventory output keeps
 `orphan_inventory_qualified`, `data_compared_to_source` and
 `application_qualified` false even when its bounded counting task succeeds.
+
+The final 26-test rerun explicitly propagates reused fixture cleanup failures to
+the owning test, including a nonzero native server shutdown. All tests passed.

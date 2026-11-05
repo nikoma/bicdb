@@ -39,17 +39,37 @@ impl SqlEngine<'_> {
         }
         let mut relations = Vec::new();
         for from in &select.from {
-            relations.push(&from.relation);
+            let start = relations.len();
+            relations.push((&from.relation, false));
             for join in &from.joins {
-                if !matches!(
-                    join.join_operator,
-                    JoinOperator::Inner(_) | JoinOperator::Join(_) | JoinOperator::CrossJoin(_)
-                ) {
-                    return Err(SqlError::Unsupported(
-                        "row locking supports inner joins of base tables".into(),
-                    ));
-                }
-                relations.push(&join.relation);
+                // OF may lock a preserved base table even when another input
+                // is a nullable outer/lateral join. Track null-extension per
+                // input; a later RIGHT/FULL join also makes earlier inputs
+                // nullable. Never attempt to lock an absent outer-join row.
+                let nullable = match join.join_operator {
+                    JoinOperator::Inner(_) | JoinOperator::Join(_) | JoinOperator::CrossJoin(_) => {
+                        false
+                    }
+                    JoinOperator::Left(_) | JoinOperator::LeftOuter(_) => true,
+                    JoinOperator::Right(_) | JoinOperator::RightOuter(_) => {
+                        for (_, nullable) in &mut relations[start..] {
+                            *nullable = true;
+                        }
+                        false
+                    }
+                    JoinOperator::FullOuter(_) => {
+                        for (_, nullable) in &mut relations[start..] {
+                            *nullable = true;
+                        }
+                        true
+                    }
+                    _ => {
+                        return Err(SqlError::Unsupported(
+                            "row locking does not support this join type".into(),
+                        ))
+                    }
+                };
+                relations.push((&join.relation, nullable));
             }
         }
         let mut targets = Vec::new();
@@ -58,7 +78,7 @@ impl SqlEngine<'_> {
         for lock in &query.locks {
             let requested = lock.of.as_ref().map(object_name).transpose()?;
             let before = targets.len();
-            for relation in &relations {
+            for (relation, nullable) in &relations {
                 let TableFactor::Table {
                     name,
                     alias,
@@ -84,6 +104,12 @@ impl SqlEngine<'_> {
                     .is_some_and(|requested| requested != &logical_alias && requested != &name)
                 {
                     continue;
+                }
+                if *nullable {
+                    return Err(SqlError::Unsupported(
+                        "FOR UPDATE/SHARE cannot be applied to the nullable side of an outer join"
+                            .into(),
+                    ));
                 }
                 let table = resolve_session_relation_name(self.db_ref(), &physical_name)?;
                 // Unaliased row sets use the encoded physical relation as

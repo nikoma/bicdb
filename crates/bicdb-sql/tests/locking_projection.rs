@@ -128,6 +128,66 @@ fn joined_wildcards_and_positional_sorting_keep_visible_columns() {
         .is_err());
 }
 
+#[test]
+fn outer_join_lateral_reads_lock_only_the_requested_preserved_table() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    SqlSession::new(&mut db).execute("CREATE TABLE checkins (id INT PRIMARY KEY); CREATE TABLE responses (id INT PRIMARY KEY, checkin_id INT); INSERT INTO checkins VALUES (1),(2); INSERT INTO responses VALUES (10,1),(11,1)").unwrap();
+    let mut holder = SqlSession::new_shared(&db);
+    holder.execute("BEGIN").unwrap();
+    assert_eq!(holder.execute("SELECT c.id,r.id FROM checkins c LEFT JOIN LATERAL (SELECT r.id FROM responses r WHERE r.checkin_id=c.id ORDER BY r.id DESC LIMIT 1) r ON true ORDER BY c.id FOR UPDATE OF c").unwrap().rows,
+        vec![vec![SqlValue::Int(1),SqlValue::Int(11)],vec![SqlValue::Int(2),SqlValue::Null]]);
+    let mut other = SqlSession::new_shared(&db);
+    for id in [1, 2] {
+        assert_eq!(
+            other
+                .execute(&format!(
+                    "SELECT id FROM checkins WHERE id={id} FOR UPDATE NOWAIT"
+                ))
+                .unwrap_err()
+                .sqlstate(),
+            "55P03"
+        );
+    }
+    assert_eq!(
+        other
+            .execute("SELECT id FROM responses ORDER BY id FOR UPDATE NOWAIT")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(10)], vec![SqlValue::Int(11)]]
+    );
+    holder.execute("ROLLBACK").unwrap();
+    assert_eq!(
+        other
+            .execute("SELECT id FROM checkins ORDER BY id FOR UPDATE NOWAIT")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(2)]]
+    );
+}
+
+#[test]
+fn outer_joins_refuse_locking_nullable_sides_but_allow_preserved_sides() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE TABLE left_rows (id INT PRIMARY KEY); CREATE TABLE right_rows (id INT PRIMARY KEY); INSERT INTO left_rows VALUES (1),(2); INSERT INTO right_rows VALUES (1),(3)").unwrap();
+    assert_eq!(session.execute("SELECT r.id FROM left_rows l RIGHT JOIN right_rows r ON l.id=r.id ORDER BY r.id FOR UPDATE OF r").unwrap().rows,
+        vec![vec![SqlValue::Int(1)],vec![SqlValue::Int(3)]]);
+    for query in [
+        "SELECT l.id FROM left_rows l LEFT JOIN right_rows r ON l.id=r.id FOR UPDATE OF r",
+        "SELECT r.id FROM left_rows l RIGHT JOIN right_rows r ON l.id=r.id FOR UPDATE OF l",
+        "SELECT l.id FROM left_rows l LEFT JOIN right_rows r ON l.id=r.id FOR UPDATE",
+        "SELECT l.id FROM left_rows l FULL JOIN right_rows r ON l.id=r.id FOR UPDATE OF l",
+        "SELECT r.id FROM left_rows l FULL JOIN right_rows r ON l.id=r.id FOR UPDATE OF r",
+        "SELECT l.id FROM left_rows l JOIN right_rows r ON l.id=r.id RIGHT JOIN left_rows x ON x.id=l.id FOR UPDATE OF l",
+    ] {
+        let error=session.execute(query).unwrap_err();
+        assert_eq!(error.sqlstate(), "0A000", "{query}: {error}");
+        assert!(error.to_string().contains("nullable side"), "{query}: {error}");
+    }
+}
+
 fn effects(session: &mut SqlSession<'_>) -> Vec<Vec<SqlValue>> {
     let group = uuid::Uuid::new_v4();
     let result = session

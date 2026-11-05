@@ -4212,13 +4212,16 @@ fn execute_server_transaction_sql(
             ensure_server_writable(server)?;
             let admission = server.try_admit_write()?;
             let mut db = server.write_db_with_admission(&admission)?;
-            let mut session = sql_session_for_server(server, &mut db)
-                .with_security_context(state.security_context.clone())
-                .with_session_guc_state(session_state)
-                .with_catalog_cache(catalog_cache)
-                .with_ddl_undo_log(ddl_undo_log)
-                .with_cancellation(cancellation.clone())
-                .with_pending_transaction(tx);
+            // Escalating database access must preserve this connection's
+            // backend identity and advisory locks, including signed operation
+            // bindings consumed by BEFORE triggers and restored for retry.
+            let mut session =
+                with_connection_guc_state(sql_session_for_server(server, &mut db), server, state)
+                    .with_session_guc_state(session_state)
+                    .with_catalog_cache(catalog_cache)
+                    .with_ddl_undo_log(ddl_undo_log)
+                    .with_cancellation(cancellation.clone())
+                    .with_pending_transaction(tx);
             let result = session.execute(sql);
             let recovered = session.last_statement_error_recovered();
             notifications = session.take_pending_notifications();

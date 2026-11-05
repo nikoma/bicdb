@@ -94,3 +94,18 @@ python examples/oracle/reference/temporal_mutations.py --reference oracle --orac
 ```
 
 Use bounded build concurrency and monitor available memory on shared hosts.
+
+## Subsequent application upgrade
+
+The [clean runtime upgrade](application-upgrade.json) opens a copy of the stopped
+current application database without recreating original objects. All 77
+[selected workflow observations](workflow-after-ui.json) and 27 settled business
+queries retain their pre-upgrade values, including the completed project issue and reversal. The 62
+routine and 160 view fingerprints are unchanged; all 11,983 projected view labels
+and type families match the source. All 141 rows of three saved Trial Balance
+reports retain their fingerprints. Their PDFs were not regenerated.
+
+The actual application JVM serves HTTP 200 and the browser reaches the GardenAdmin
+desktop and standard Issue to Project process. This qualifies the recorded
+upgrade and navigation; the remaining upstream failures, broader workflows and
+full application acceptance remain open.

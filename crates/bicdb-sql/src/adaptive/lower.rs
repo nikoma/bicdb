@@ -308,7 +308,27 @@ fn lower_bound(be: &BoundExpr) -> Option<IrExpr> {
                 _ => None,
             }
         }
-        BoundExpr::Compare { left, op, right } => {
+        BoundExpr::Compare {
+            left,
+            op,
+            right,
+            left_type,
+            right_type,
+        } => {
+            if [left_type.as_deref(), right_type.as_deref()]
+                .into_iter()
+                .flatten()
+                .any(|kind| {
+                    let kind = kind.strip_suffix("[]").unwrap_or(kind);
+                    matches!(
+                        kind,
+                        "date" | "timestamp" | "timestamptz" | "time" | "timetz" | "interval"
+                    )
+                })
+            {
+                // The numeric IR comparison has no temporal type/zone contract.
+                return None;
+            }
             let l = bx(lower_bound(left)?);
             let r = bx(lower_bound(right)?);
             let cmp = match op {

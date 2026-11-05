@@ -610,6 +610,8 @@ pub(crate) enum BoundExpr {
         left: Box<BoundExpr>,
         op: BinaryOperator,
         right: Box<BoundExpr>,
+        left_type: Option<String>,
+        right_type: Option<String>,
     },
     And(Box<BoundExpr>, Box<BoundExpr>),
     Or(Box<BoundExpr>, Box<BoundExpr>),
@@ -1793,10 +1795,42 @@ impl BoundExprScope {
                     if !expr_may_need_tuple_comparison(left)
                         && !expr_may_need_tuple_comparison(right) =>
                 {
+                    let mut left_type = self.known_expr_type(left);
+                    let mut right_type = self.known_expr_type(right);
+                    let temporal = |kind: &Option<String>| {
+                        kind.as_deref().is_some_and(|kind| {
+                            matches!(
+                                kind.strip_suffix("[]").unwrap_or(kind),
+                                "date"
+                                    | "timestamp"
+                                    | "timestamptz"
+                                    | "time"
+                                    | "timetz"
+                                    | "interval"
+                            )
+                        })
+                    };
+                    // An unresolved column needs the row evaluator's schema.
+                    // Only unknown literals may inherit the other operand's
+                    // temporal type; an unknown slot is not a SQL literal.
+                    if temporal(&left_type) && right_type.is_none() {
+                        if !matches!(right.as_ref(), Expr::Value(_)) {
+                            return None;
+                        }
+                        right_type = left_type.clone();
+                    }
+                    if temporal(&right_type) && left_type.is_none() {
+                        if !matches!(left.as_ref(), Expr::Value(_)) {
+                            return None;
+                        }
+                        left_type = right_type.clone();
+                    }
                     Some(BoundExpr::Compare {
                         left: Box::new(self.bind_in(left, ctx)?),
                         op: op.clone(),
                         right: Box::new(self.bind_in(right, ctx)?),
+                        left_type,
+                        right_type,
                     })
                 }
                 BinaryOperator::Arrow | BinaryOperator::LongArrow => None,
@@ -2320,11 +2354,30 @@ impl BoundExpr {
 
     pub(crate) fn eval_truth(&self, frame: &BoundExprFrame<'_>) -> Result<Option<bool>> {
         match self {
-            Self::Compare { left, op, right } => compare_values(
-                left.eval_borrowed(frame)?.as_ref(),
+            Self::Compare {
+                left,
                 op,
-                right.eval_borrowed(frame)?.as_ref(),
-            ),
+                right,
+                left_type,
+                right_type,
+            } => {
+                let left = left.eval_borrowed(frame)?;
+                let right = right.eval_borrowed(frame)?;
+                // Unknown slot types are not unknown literals. Use temporal
+                // promotion here only when both operand types are resolved.
+                if left_type.is_some() && right_type.is_some() {
+                    if let Some(truth) = compare_temporal_values(
+                        left_type.as_deref(),
+                        right_type.as_deref(),
+                        left.as_ref(),
+                        op,
+                        right.as_ref(),
+                    )? {
+                        return Ok(truth);
+                    }
+                }
+                compare_values(left.as_ref(), op, right.as_ref())
+            }
             Self::And(left, right) => {
                 let left = left.eval_truth(frame)?;
                 if matches!(left, Some(false)) {

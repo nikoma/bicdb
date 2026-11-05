@@ -1611,6 +1611,122 @@ fn integer_range_errors_are_consistent_across_query_bind_and_copy() {
 }
 
 #[test]
+fn postgres_temporal_bindings_keep_declared_types() {
+    temporal_bindings_keep_declared_types("postgres");
+}
+
+#[test]
+fn oracle_transport_temporal_bindings_keep_declared_types() {
+    temporal_bindings_keep_declared_types("oracle-preview-v1");
+}
+
+fn temporal_bindings_keep_declared_types(profile: &str) {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = PgWireServer::open(
+        dir.path(),
+        PgWireConfig {
+            sql_profile: profile.into(),
+            fsync: false,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let serving = server.clone();
+    let task = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
+    let mut client = TcpStream::connect(address).unwrap();
+    client
+        .set_read_timeout(Some(Duration::from_secs(30)))
+        .unwrap();
+    send_startup_version_with_options(
+        &mut client,
+        196_608,
+        true,
+        &[("options", &format!("-c bicdb.sql_profile={profile}"))],
+    );
+    read_until_ready(&mut client);
+    for (oid, left, right) in [
+        (1082, "2000-01-01", "2000-01-01"),
+        (1083, "03:04:05", "03:04:05.000000"),
+        (1114, "2000-01-01 00:00:00+00", "2000-01-01T00:00:00"),
+        (1184, "2000-01-01 02:00:00+02", "2000-01-01 00:00:00+00"),
+        (1186, "1 day", "24:00:00"),
+        (1266, "03:04:05+02", "03:04:05.000000+02:00"),
+    ] {
+        send_parse(&mut client, "temporal_pair", "SELECT $1=$2", &[oid, oid]);
+        send_bind(&mut client, "", "temporal_pair", &[left, right]);
+        send_execute(&mut client, "");
+        send_sync(&mut client);
+        assert_eq!(
+            read_query_rows(&mut client),
+            vec![vec!["t".to_string()]],
+            "{profile}: temporal OID {oid}"
+        );
+        let array_oid = bicdb_sql::pg_type_spec_by_oid(oid)
+            .unwrap()
+            .array_oid
+            .unwrap();
+        let left = format!("{{\"{left}\"}}");
+        let right = format!("{{\"{right}\"}}");
+        send_parse(
+            &mut client,
+            "temporal_array_pair",
+            "SELECT $1=$2",
+            &[array_oid, array_oid],
+        );
+        send_bind(&mut client, "", "temporal_array_pair", &[&left, &right]);
+        send_execute(&mut client, "");
+        send_sync(&mut client);
+        assert_eq!(
+            read_query_rows(&mut client),
+            vec![vec!["t".to_string()]],
+            "{profile}: temporal array OID {array_oid}"
+        );
+    }
+    send_parse(&mut client, "mixed_encoding", "SELECT $1=$2", &[1114, 1114]);
+    send_bind_binary(
+        &mut client,
+        "",
+        "mixed_encoding",
+        &[
+            (0, b"2000-01-01 00:00:00+00".to_vec()),
+            (1, 0_i64.to_be_bytes().to_vec()),
+        ],
+        &[],
+    );
+    send_execute(&mut client, "");
+    send_sync(&mut client);
+    assert_eq!(read_query_rows(&mut client), vec![vec!["t".to_string()]]);
+    send_parse(
+        &mut client,
+        "typed_null",
+        "SELECT CAST(pg_typeof($1) AS TEXT),$1 IS NULL",
+        &[1114],
+    );
+    let mut payload = Vec::new();
+    cstr(&mut payload, "");
+    cstr(&mut payload, "typed_null");
+    put_i16(&mut payload, 0);
+    put_i16(&mut payload, 1);
+    put_i32(&mut payload, -1);
+    put_i16(&mut payload, 0);
+    send_message(&mut client, b'B', &payload);
+    send_execute(&mut client, "");
+    send_sync(&mut client);
+    assert_eq!(
+        read_query_rows(&mut client),
+        vec![vec![
+            "timestamp without time zone".to_string(),
+            "t".to_string()
+        ]]
+    );
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.request_shutdown();
+    task.join().unwrap().unwrap();
+}
+
+#[test]
 fn oracle_driver_deallocate_preserves_protocol_statement_names() {
     for profile in ["postgres", "oracle-hr-v1", "oracle-preview-v1"] {
         let dir = tempfile::tempdir().unwrap();

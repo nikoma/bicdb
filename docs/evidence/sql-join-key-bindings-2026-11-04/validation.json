@@ -1,0 +1,408 @@
+{
+  "format": 1,
+  "source_commit": "04d3590a7d940a8dce1d82edfd45828dd6b77172",
+  "binary_sha256": "12a7525e48b7896d4a7eb4b87e59f5a8040649c47b0aec983f9a5d545e24159d",
+  "steps": [
+    {
+      "name": "build",
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "-p",
+        "bicdb-pgwire",
+        "--example",
+        "oracle_server"
+      ],
+      "returncode": 0,
+      "counts": []
+    },
+    {
+      "name": "sql",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "--",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 632,
+          "failed": 0,
+          "ignored": 3
+        }
+      ]
+    },
+    {
+      "name": "type_consistency",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "type_consistency",
+        "--",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "sql_regressions",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "cell_rows",
+        "--test",
+        "projection_pushdown",
+        "--test",
+        "column_references",
+        "--test",
+        "typed_comparison",
+        "--test",
+        "prepared_typed_join",
+        "--test",
+        "write_path_authorization",
+        "--",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 17,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "scope_regressions",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "view_owner_execution_identity",
+        "--test",
+        "ownership_authorization",
+        "--test",
+        "view_column_lineage",
+        "--",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "pgwire",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-pgwire",
+        "--tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 124,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 1
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 39,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 169,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 1
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    }
+  ],
+  "focused_steps": [
+    {
+      "name": "focus",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "comma_view_join_retains_rows",
+        "--",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "focus-bicdb_cell_rows",
+      "command": [
+        "qualified-sql-test-harness",
+        "comma_view_join_retains_rows",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "focus-bicdb_rowid_fast_path",
+      "command": [
+        "qualified-sql-test-harness",
+        "comma_view_join_retains_rows",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "focus-bicdb_locator_plans",
+      "command": [
+        "qualified-sql-test-harness",
+        "comma_view_join_retains_rows",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "focus-bicdb_txn_lookup_cache",
+      "command": [
+        "qualified-sql-test-harness",
+        "comma_view_join_retains_rows",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "scalar-subquery-regression",
+      "command": [
+        "qualified-sql-test-harness",
+        "update_delete_with_empty_scalar_subquery_key_match_no_rows",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "correlated-scalar-key-regression",
+      "command": [
+        "qualified-sql-test-harness",
+        "delete_using_correlated_scalar_subquery_binds_full_primary_key",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "duplicate-key-predicates",
+      "command": [
+        "qualified-sql-test-harness",
+        "duplicate_primary_key_terms_retain_residual_predicates",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "build",
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "-p",
+        "bicdb-pgwire",
+        "--example",
+        "oracle_server"
+      ],
+      "returncode": 0,
+      "counts": []
+    }
+  ],
+  "formatting_passed": true,
+  "diff_check_passed": true,
+  "python_fixture_syntax_passed": true,
+  "compiler_version_unchanged": 27,
+  "profile_metadata_unchanged": true,
+  "application_qualified": false,
+  "release_published": false,
+  "source_files_sha256": {
+    "crates/bicdb-sql/src/engine/predicates_locators.rs": "147b8bb2a3ba163bdf84f107fbb6debcc3290069f951cfadb4cb2a4d319c1863",
+    "crates/bicdb-sql/src/engine/records_plan.rs": "e49e406837c57a58d9b9fc0f651aed6dda7d2b2972685f883791467eadf6dcc6",
+    "crates/bicdb-sql/src/engine/view_predicates.rs": "9371dd4ac2229ffaad3f9820577d9ec6cb21e1ff75bf534651e36ce942a8b194",
+    "examples/oracle/reference/key_bound_mutations.py": "8131175175dbc3c6b3d420d97569aacfac23e2c1d1b1783dab434edd52ca7830",
+    "examples/oracle/reference/view_pending_joins.py": "984e442b065b73f9db18c3fee38952d356c92b32c6d0f86748fcb681364f0d34"
+  },
+  "memory_guard": {
+    "start_available_gib": 14.0,
+    "minimum_available_gib": 8,
+    "minimum_observed_available_bytes": 16242413568,
+    "peak_group_rss_bytes": 4711071744
+  }
+}

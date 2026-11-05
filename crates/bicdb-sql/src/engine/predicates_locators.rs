@@ -1705,6 +1705,9 @@ impl<'db> SqlEngine<'db> {
             let mut prefix = Vec::with_capacity(plan.prefix_exprs.len());
             let mut prefix_complete = true;
             for (field_idx, expr) in plan.prefix_exprs.iter().enumerate() {
+                if !self.expr_is_bound_without_table_row(expr)? {
+                    continue 'plans;
+                }
                 let value = self.eval_dynamic_bound_expr(expr)?;
                 // An unjoined input currently evaluates to NULL. It cannot
                 // narrow this table to an index's NULL keys: defer the
@@ -1741,6 +1744,9 @@ impl<'db> SqlEngine<'db> {
                 let mut has_null_bound = false;
                 let range_field = plan.fields.get(prefix.len());
                 for (op, expr) in &plan.range_bounds {
+                    if !self.expr_is_bound_without_table_row(expr)? {
+                        continue 'plans;
+                    }
                     let value = index_value_from_sql(self.eval_dynamic_bound_expr(expr)?)?;
                     let value = if let (Some(schema), Some(field)) = (schema, range_field) {
                         typed_index_predicate_value(schema, field, value)?
@@ -1821,6 +1827,9 @@ impl<'db> SqlEngine<'db> {
                     } else {
                         let mut filters = Vec::with_capacity(candidate.plan.filters.len());
                         for (idx, expr) in &candidate.plan.filters {
+                            if !self.expr_is_bound_without_table_row(expr)? {
+                                continue;
+                            }
                             let value = self.eval_dynamic_bound_expr(expr)?;
                             if matches!(value, SqlValue::Null) {
                                 continue;
@@ -1918,18 +1927,14 @@ impl<'db> SqlEngine<'db> {
                 continue;
             }
             if self.expr_matches_table_index_field(left, table, alias, schema, field)? {
-                if self.expr_references_table(right, table, alias, schema)?
-                    || !self.expr_is_bound_without_table_row(right)?
-                {
+                if self.expr_references_table(right, table, alias, schema)? {
                     continue;
                 }
                 bounds.push((op.clone(), (**right).clone()));
                 continue;
             }
             if self.expr_matches_table_index_field(right, table, alias, schema, field)? {
-                if self.expr_references_table(left, table, alias, schema)?
-                    || !self.expr_is_bound_without_table_row(left)?
-                {
+                if self.expr_references_table(left, table, alias, schema)? {
                     continue;
                 }
                 bounds.push((reverse_comparison(op), (**left).clone()));
@@ -2273,6 +2278,9 @@ impl<'db> SqlEngine<'db> {
             sql_profile_index_catalog_entry_considered();
             let mut prefix = Vec::with_capacity(plan.prefix_exprs.len());
             for (field_idx, expr) in plan.prefix_exprs.iter().enumerate() {
+                if !self.expr_is_bound_without_table_row(expr)? {
+                    continue 'plans;
+                }
                 let value = self.eval_dynamic_bound_expr(expr)?;
                 if matches!(value, SqlValue::Null) {
                     continue 'plans;
@@ -2292,6 +2300,9 @@ impl<'db> SqlEngine<'db> {
                 let mut has_null_bound = false;
                 let range_field = plan.fields.get(prefix.len());
                 for (op, expr) in &plan.range_bounds {
+                    if !self.expr_is_bound_without_table_row(expr)? {
+                        continue 'plans;
+                    }
                     let value = index_value_from_sql(self.eval_dynamic_bound_expr(expr)?)?;
                     let value = match (schema, range_field) {
                         (Some(schema), Some(field)) => {
@@ -2318,6 +2329,9 @@ impl<'db> SqlEngine<'db> {
                 } else {
                     let mut filters = Vec::with_capacity(plan.filters.len());
                     for (idx, expr) in &plan.filters {
+                        if !self.expr_is_bound_without_table_row(expr)? {
+                            continue;
+                        }
                         let value = self.eval_dynamic_bound_expr(expr)?;
                         if matches!(value, SqlValue::Null) {
                             continue;
@@ -2766,7 +2780,10 @@ impl<'db> SqlEngine<'db> {
                 continue;
             };
             let bound = if field_on_left { right } else { left };
-            if self.expr_is_bound_without_table_row(bound)?
+            // This early shortcut must not execute a scalar query in addition
+            // to the actual lookup. Its NULL result is handled by that lookup.
+            if !expr_contains_subquery(bound)
+                && self.expr_is_bound_without_table_row(bound)?
                 && matches!(self.eval_dynamic_bound_expr(bound)?, SqlValue::Null)
             {
                 return Ok(true);
@@ -2837,6 +2854,7 @@ impl<'db> SqlEngine<'db> {
 
     pub(crate) fn expr_is_bound_without_table_row(&self, expr: &Expr) -> Result<bool> {
         Ok(match expr {
+            Expr::Subquery(query) => self.query_is_bound_without_table_row(query)?,
             Expr::Value(_) | Expr::TypedString(_) | Expr::Interval(_) => true,
             Expr::Identifier(ident) => {
                 routine_var_from_ident(&self.routine_vars, ident).is_some()
@@ -2937,6 +2955,106 @@ impl<'db> SqlEngine<'db> {
             }
             _ => false,
         })
+    }
+
+    /// A scalar query can supply a lookup key before the target row exists
+    /// when every column resolves inside the query or to an available outer
+    /// binding. More complex scopes retain their residual predicate instead.
+    fn query_is_bound_without_table_row(&self, query: &Query) -> Result<bool> {
+        use sqlparser::ast::{Visit, Visitor};
+        use std::ops::ControlFlow;
+
+        let SetExpr::Select(select) = query.body.as_ref() else {
+            return Ok(false);
+        };
+        if query.with.is_some() {
+            return Ok(false);
+        }
+        let mut local = Vec::new();
+        for from in &select.from {
+            for relation in
+                std::iter::once(&from.relation).chain(from.joins.iter().map(|join| &join.relation))
+            {
+                let TableFactor::Table {
+                    name,
+                    alias,
+                    args: None,
+                    ..
+                } = relation
+                else {
+                    return Ok(false);
+                };
+                if alias
+                    .as_ref()
+                    .is_some_and(|alias| !alias.columns.is_empty())
+                {
+                    return Ok(false);
+                }
+                let name = relation_name(name)?;
+                if self.cte(&name).is_some() {
+                    return Ok(false);
+                }
+                let table = resolve_session_relation_name_if_exists(self.db_ref(), &name);
+                let Some(schema) = load_schema_shared(self.db_ref(), &table)? else {
+                    return Ok(false);
+                };
+                let alias = alias
+                    .as_ref()
+                    .map(|alias| alias.name.value.clone())
+                    .unwrap_or_else(|| name.rsplit('.').next().unwrap_or(&name).to_string());
+                local.push((table, alias, schema));
+            }
+        }
+        #[derive(Default)]
+        struct References {
+            queries: usize,
+            columns: Vec<Expr>,
+        }
+        impl Visitor for References {
+            type Break = ();
+            fn pre_visit_query(&mut self, _: &Query) -> ControlFlow<()> {
+                self.queries += 1;
+                // A nested scope needs its own name resolution proof.
+                if self.queries > 1 {
+                    ControlFlow::Break(())
+                } else {
+                    ControlFlow::Continue(())
+                }
+            }
+            fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<()> {
+                if matches!(expr, Expr::Identifier(_) | Expr::CompoundIdentifier(_)) {
+                    self.columns.push(expr.clone());
+                }
+                ControlFlow::Continue(())
+            }
+        }
+        let mut references = References::default();
+        if query.visit(&mut references).is_break() {
+            return Ok(false);
+        }
+        for reference in &references.columns {
+            if local.iter().any(|(table, alias, schema)| {
+                normalize_table_field_expr(reference, table, alias, Some(schema)).is_some()
+            }) {
+                continue;
+            }
+            if let Expr::CompoundIdentifier(parts) = reference {
+                if parts.len() >= 2
+                    && local.iter().any(|(table, alias, _)| {
+                        let qualifier = &parts[parts.len() - 2].value;
+                        qualifier.eq_ignore_ascii_case(table)
+                            || qualifier.eq_ignore_ascii_case(alias)
+                    })
+                {
+                    // A local relation shadows an identically named outer one.
+                    return Ok(false);
+                }
+            }
+            if !self.expr_is_bound_without_table_row(reference)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 
     pub(crate) fn primary_key_record_ids_for_table_selection(
@@ -3102,7 +3220,10 @@ impl<'db> SqlEngine<'db> {
             let matched = if let Some(idx) =
                 self.primary_key_expr_index(left, table, alias, Some(schema), &primary_key_columns)?
             {
+                // A structural key equality is not covered when lookup could
+                // not bind its value; candidates may come from a key prefix.
                 if self.expr_references_table(right, table, alias, Some(schema))?
+                    || !self.expr_is_bound_without_table_row(right)?
                     || expr_contains_volatile_function(right)
                 {
                     return Ok(false);
@@ -3116,6 +3237,7 @@ impl<'db> SqlEngine<'db> {
                 &primary_key_columns,
             )? {
                 if self.expr_references_table(left, table, alias, Some(schema))?
+                    || !self.expr_is_bound_without_table_row(left)?
                     || expr_contains_volatile_function(left)
                 {
                     return Ok(false);
@@ -3127,7 +3249,11 @@ impl<'db> SqlEngine<'db> {
             let Some(idx) = matched else {
                 return Ok(false);
             };
-            matched_columns.insert(idx);
+            // The lookup binds one value per column. Additional equalities
+            // still need checking, even when they name that same key column.
+            if !matched_columns.insert(idx) {
+                return Ok(false);
+            }
         }
         Ok(matched_columns.len() == primary_key_columns.len())
     }
@@ -3298,7 +3424,9 @@ impl<'db> SqlEngine<'db> {
                 continue;
             };
             if self.expr_matches_table_index_field(left, table, alias, schema, field)? {
-                if self.expr_references_table(right, table, alias, schema)? {
+                if self.expr_references_table(right, table, alias, schema)?
+                    || !self.expr_is_bound_without_table_row(right)?
+                {
                     continue;
                 }
                 let value = self.eval_dynamic_bound_expr(right)?;
@@ -3314,7 +3442,9 @@ impl<'db> SqlEngine<'db> {
                 return Ok(Some(value));
             }
             if self.expr_matches_table_index_field(right, table, alias, schema, field)? {
-                if self.expr_references_table(left, table, alias, schema)? {
+                if self.expr_references_table(left, table, alias, schema)?
+                    || !self.expr_is_bound_without_table_row(left)?
+                {
                     continue;
                 }
                 let value = self.eval_dynamic_bound_expr(left)?;
@@ -3525,8 +3655,14 @@ impl<'db> SqlEngine<'db> {
         column: &str,
     ) -> Result<Option<SqlValue>> {
         match self.dynamic_equality_value_expr(selection, table, alias, schema, column)? {
-            Some(expr) => self.eval_dynamic_bound_expr(expr).map(Some),
-            None => Ok(None),
+            // A column of another join input is not a constant until its row
+            // is available. Evaluating it in an empty row can produce NULL;
+            // the primary-key range path would then incorrectly prove that
+            // the whole selection has no candidates.
+            Some(expr) if self.expr_is_bound_without_table_row(expr)? => {
+                self.eval_dynamic_bound_expr(expr).map(Some)
+            }
+            Some(_) | None => Ok(None),
         }
     }
 
@@ -6637,6 +6773,96 @@ pub(crate) fn nth_and_term(expr: &Expr, index: usize) -> Option<&Expr> {
     }
     let mut remaining = index;
     walk(expr, &mut remaining)
+}
+
+#[cfg(test)]
+mod key_predicate_coverage_tests {
+    use super::*;
+
+    fn duplicate_key_terms(profile: &str) {
+        for delete in [false, true] {
+            for conflict in [false, true] {
+                for explicit_transaction in [false, true] {
+                    let directory = tempfile::tempdir().unwrap();
+                    let mut db = BicDb::open(directory.path()).unwrap();
+                    oracle::ensure_database_profile(&mut db, profile).unwrap();
+                    for sql in [
+                        "CREATE TABLE key_terms(a INTEGER,b INTEGER,status VARCHAR(12),PRIMARY KEY(a,b))",
+                        "INSERT INTO key_terms VALUES(1,1,'done'),(1,2,'done'),(2,1,'done')",
+                    ] {
+                        let sql = if oracle::is_oracle_profile(profile) {
+                            oracle::lower_session_sql(&db, sql, profile, None, "bicdb").unwrap()
+                        } else { sql.to_string() };
+                        SqlSession::new(&mut db).execute(&sql).unwrap();
+                    }
+                    let lower = |sql: &str| {
+                        if oracle::is_oracle_profile(profile) {
+                            oracle::lower_session_sql(&db, sql, profile, None, "bicdb").unwrap()
+                        } else {
+                            sql.to_string()
+                        }
+                    };
+                    let verb = if delete { "DELETE" } else { "UPDATE" };
+                    let operation = if delete {
+                        "DELETE FROM key_terms"
+                    } else {
+                        "UPDATE key_terms SET status='changed'"
+                    };
+                    let other = if conflict { 2 } else { 1 };
+                    let mutation = lower(&format!("{operation} WHERE a=1 AND b=1 AND b={other}"));
+                    let select = lower("SELECT a,b,status FROM key_terms ORDER BY a,b");
+                    let original = vec![
+                        vec!["1".to_string(), "1".to_string(), "done".to_string()],
+                        vec!["1".to_string(), "2".to_string(), "done".to_string()],
+                        vec!["2".to_string(), "1".to_string(), "done".to_string()],
+                    ];
+                    let mut expected = original.clone();
+                    if !conflict {
+                        if delete {
+                            expected.remove(0);
+                        } else {
+                            expected[0][2] = "changed".into();
+                        }
+                    }
+                    let mut session = SqlSession::new(&mut db);
+                    if explicit_transaction {
+                        session.execute("BEGIN").unwrap();
+                    }
+                    let result = session.execute(&mutation).unwrap();
+                    let expected_tag = format!("{verb} {}", usize::from(!conflict));
+                    assert_eq!(
+                        result.command_tag.as_deref(),
+                        Some(expected_tag.as_str()),
+                        "{profile}: {mutation}"
+                    );
+                    let rows = |session: &mut SqlSession<'_>| {
+                        session
+                            .execute(&select)
+                            .unwrap()
+                            .rows
+                            .iter()
+                            .map(|row| row.iter().map(SqlValue::to_cell).collect::<Vec<_>>())
+                            .collect::<Vec<_>>()
+                    };
+                    assert_eq!(rows(&mut session), expected, "{profile}: {mutation}");
+                    if explicit_transaction {
+                        session.execute("ROLLBACK").unwrap();
+                        assert_eq!(rows(&mut session), original, "{profile}: caller rollback");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn postgres_duplicate_primary_key_terms_retain_residual_predicates() {
+        duplicate_key_terms(oracle::POSTGRES_PROFILE);
+    }
+
+    #[test]
+    fn oracle_duplicate_primary_key_terms_retain_residual_predicates() {
+        duplicate_key_terms(oracle::ORACLE_PREVIEW_PROFILE);
+    }
 }
 
 #[cfg(test)]

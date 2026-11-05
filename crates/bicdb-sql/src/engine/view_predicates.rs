@@ -298,6 +298,101 @@ mod tests {
         SqlSession::new(db).execute(&sql)
     }
 
+    fn pending_comma_view_join(profile: &str) {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        oracle::ensure_database_profile(&mut db, profile).unwrap();
+        for sql in [
+            "CREATE TABLE join_items(item_id NUMERIC(10,0) PRIMARY KEY,allow_zero CHAR(1),kind CHAR(1),verified CHAR(1))",
+            "CREATE TABLE join_headers(header_id NUMERIC(10,0) PRIMARY KEY,item_id NUMERIC(10,0),active CHAR(1),mode_flag CHAR(1))",
+            "CREATE TABLE join_lines(line_id NUMERIC(10,0) PRIMARY KEY,header_id NUMERIC(10,0),item_id NUMERIC(10,0),active CHAR(1),qty NUMERIC)",
+            "CREATE INDEX join_header_item ON join_headers(item_id)",
+            "CREATE INDEX join_line_header ON join_lines(header_id)",
+            "CREATE INDEX join_item_kind ON join_items(kind)",
+            "CREATE INDEX join_item_filter ON join_items(kind,item_id,allow_zero)",
+            "CREATE VIEW join_edges(edge_id,active,parent_id,child_id,qty) AS SELECT l.line_id,l.active,v.item_id,l.item_id,l.qty FROM join_headers v JOIN join_lines l ON v.header_id=l.header_id WHERE v.active='Y' AND v.mode_flag='A'",
+            "INSERT INTO join_items VALUES(1,'Y','Y','Y'),(2,'Y','N','N')",
+            "INSERT INTO join_headers VALUES(10,1,'Y','A')",
+            "INSERT INTO join_lines VALUES(100,10,2,'Y',5)",
+        ] {
+            execute(&mut db, sql, profile).unwrap();
+        }
+        let lower = |sql: &str| {
+            if oracle::is_oracle_profile(profile) {
+                oracle::lower_session_sql(&db, sql, profile, None, "bicdb").unwrap()
+            } else {
+                sql.to_owned()
+            }
+        };
+        let comma = lower("SELECT v.child_id,i.kind FROM join_edges v,join_items i WHERE v.child_id=i.item_id AND v.parent_id=1 AND v.child_id<>1 AND (i.kind='N' OR i.verified='Y') AND v.active='Y'");
+        let explicit = lower("SELECT v.child_id,i.kind FROM join_edges v JOIN join_items i ON v.child_id=i.item_id WHERE v.parent_id=1 AND v.child_id<>1 AND (i.kind='N' OR i.verified='Y') AND v.active='Y'");
+        let coalesced = lower("SELECT v.child_id,i.kind FROM join_edges v,join_items i WHERE COALESCE(v.child_id,3)=i.item_id AND v.parent_id=1 AND v.child_id<>1 AND (i.kind='N' OR i.verified='Y') AND v.active='Y'");
+        let correlated = lower("SELECT v.child_id,i.kind FROM join_edges v,join_items i WHERE i.item_id=(SELECT MAX(s.item_id) FROM join_lines s WHERE s.item_id=v.child_id) AND v.parent_id=1 AND v.child_id<>1 AND (i.kind='N' OR i.verified='Y') AND v.active='Y'");
+        let scalar_coalesced = lower("SELECT v.child_id,i.kind FROM join_edges v,join_items i WHERE i.item_id=COALESCE((SELECT MAX(s.item_id) FROM join_lines s WHERE s.item_id=v.child_id),3) AND v.parent_id=1 AND v.child_id<>1 AND (i.kind='N' OR i.verified='Y') AND v.active='Y'");
+        let secondary = lower("SELECT v.child_id,i.kind FROM join_edges v,join_items i WHERE i.kind=CASE WHEN v.child_id=2 THEN 'N' ELSE 'Y' END AND v.parent_id=1 AND v.child_id<>1 AND (i.kind='N' OR i.verified='Y') AND v.active='Y'");
+        let secondary_range = lower("SELECT v.child_id,i.kind FROM join_edges v,join_items i WHERE i.kind<=CASE WHEN v.child_id=2 THEN 'N' ELSE 'A' END AND v.parent_id=1 AND v.child_id<>1 AND (i.kind='N' OR i.verified='Y') AND v.active='Y'");
+        let secondary_filter = lower("SELECT v.child_id,i.kind FROM join_edges v,join_items i WHERE i.kind='N' AND i.item_id>0 AND i.allow_zero=CASE WHEN v.child_id=2 THEN 'Y' ELSE 'N' END AND v.parent_id=1 AND v.child_id<>1 AND (i.kind='N' OR i.verified='Y') AND v.active='Y'");
+        let update = lower("UPDATE join_items SET allow_zero='N' WHERE item_id=1");
+        let mut session = SqlSession::new(&mut db);
+        let rows = |session: &mut SqlSession<'_>, sql: &str| {
+            session
+                .execute(sql)
+                .unwrap()
+                .rows
+                .iter()
+                .map(|row| row.iter().map(SqlValue::to_cell).collect::<Vec<_>>())
+                .collect::<Vec<_>>()
+        };
+        let expected = vec![vec!["2".to_string(), "N".to_string()]];
+        session.execute("BEGIN").unwrap();
+        assert_eq!(rows(&mut session, &comma), expected, "{profile}: before");
+        session.execute(&update).unwrap();
+        assert_eq!(
+            rows(&mut session, &explicit),
+            expected,
+            "{profile}: explicit JOIN"
+        );
+        assert_eq!(
+            rows(&mut session, &comma),
+            expected,
+            "{profile}: comma join with unrelated pending writes"
+        );
+        assert_eq!(
+            rows(&mut session, &coalesced),
+            expected,
+            "{profile}: an unavailable join field is not a COALESCE constant"
+        );
+        assert_eq!(
+            rows(&mut session, &correlated),
+            expected,
+            "{profile}: correlated scalar lookup"
+        );
+        assert_eq!(
+            rows(&mut session, &scalar_coalesced),
+            expected,
+            "{profile}: scalar query inside COALESCE"
+        );
+        for query in [&secondary, &secondary_range, &secondary_filter] {
+            assert_eq!(
+                rows(&mut session, query),
+                expected,
+                "{profile}: secondary index binding"
+            );
+        }
+        session.execute("ROLLBACK").unwrap();
+        assert_eq!(rows(&mut session, &comma), expected, "{profile}: restored");
+    }
+
+    #[test]
+    fn postgres_comma_view_join_retains_rows_with_pending_writes() {
+        pending_comma_view_join(oracle::POSTGRES_PROFILE);
+    }
+
+    #[test]
+    fn oracle_comma_view_join_retains_rows_with_pending_writes() {
+        pending_comma_view_join(oracle::ORACLE_PREVIEW_PROFILE);
+    }
+
     #[test]
     fn ordinary_union_views_derive_typed_metadata_without_executing_their_definitions() {
         for profile in [oracle::POSTGRES_PROFILE, oracle::ORACLE_PREVIEW_PROFILE] {

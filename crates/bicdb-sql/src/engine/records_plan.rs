@@ -2237,7 +2237,11 @@ impl<'db> SqlEngine<'db> {
                 Some((term_idx, field_on_left)) => match nth_and_term(selection, *term_idx) {
                     Some(Expr::BinaryOp { left, right, .. }) => {
                         let bound = if *field_on_left { right } else { left };
-                        Some(self.eval_dynamic_bound_expr(bound)?)
+                        if self.expr_is_bound_without_table_row(bound)? {
+                            Some(self.eval_dynamic_bound_expr(bound)?)
+                        } else {
+                            None
+                        }
                     }
                     _ => None,
                 },

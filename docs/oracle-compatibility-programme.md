@@ -682,3 +682,15 @@ records native, SQL, protocol and actual WAL append-failure checks. These are
 building blocks for persistent LOB snapshot semantics. Persistent LOB storage and
 mutation, source-type reconciliation and complete application acceptance remain
 open; this checkpoint does not change the accepted application deployment.
+
+## Persistent BLOB ownership source contract
+
+The [operation-specific ownership observations](evidence/oracle-persistent-blob-ownership-2026-11-05/README.md)
+separate old-locator reads, SQL value copies and APPEND after deletion,
+replacement, primary-key movement, commit and rollback. Eight cases repeated
+twice on the native reference resolve the previously ambiguous combined
+DELETE/INSERT/APPEND failure: copying succeeds before commit, while APPEND raises
+ORA-22275. Uncommitted replacement instead raises ORA-22922 for APPEND while
+retaining readable/copyable old bytes. Committing either invalidation also
+invalidates the observed old locator's reads and copies. These are implementation
+requirements, not delivered persistent-LOB support or application qualification.

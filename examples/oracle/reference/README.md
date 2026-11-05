@@ -733,3 +733,11 @@ nonce-named functions in dedicated reference/target schemas and drops them.
 Run with the same `BICDB_PG_DSN`, `--reference oracle`, `--oracle-config` and
 `--output` arguments as the other Oracle comparisons. Persistent row locators,
 LOB streaming and complete application qualification are outside this fixture.
+
+### Persistent BLOB ownership source probe
+
+`persistent_blob_ownership.py` runs native Oracle observations without requiring
+a BicDB target. It isolates locator reads, SQL copies and APPEND errors after
+row deletion, replacement, primary-key changes, commit and rollback. See the
+[recorded source contract](../../../docs/evidence/oracle-persistent-blob-ownership-2026-11-05/README.md)
+for the eight cases, reproduction command and remaining implementation scope.

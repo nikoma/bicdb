@@ -1,0 +1,504 @@
+{
+  "format": 1,
+  "reference": "oracle",
+  "cases": [
+    {
+      "id": "delete_then_copy",
+      "repeat": 0,
+      "actual": {
+        "read_before": "AB",
+        "copy_code": "OK",
+        "append_code": "ORA22275",
+        "read_after": "AB",
+        "rows": [
+          [
+            2,
+            "AB"
+          ]
+        ]
+      },
+      "expected": {
+        "read_before": "AB",
+        "copy_code": "OK",
+        "append_code": "ORA22275",
+        "read_after": "AB",
+        "rows": [
+          [
+            2,
+            "AB"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "delete_without_copy",
+      "repeat": 0,
+      "actual": {
+        "read_before": "AB",
+        "copy_code": "SKIPPED",
+        "append_code": "ORA22275",
+        "read_after": "AB",
+        "rows": []
+      },
+      "expected": {
+        "read_before": "AB",
+        "copy_code": "SKIPPED",
+        "append_code": "ORA22275",
+        "read_after": "AB",
+        "rows": []
+      },
+      "matched": true
+    },
+    {
+      "id": "delete_commit_then_copy",
+      "repeat": 0,
+      "actual": {
+        "read_before": "ORA22922",
+        "copy_code": "ORA22922",
+        "append_code": "ORA22922",
+        "read_after": "ORA22922",
+        "rows": []
+      },
+      "expected": {
+        "read_before": "ORA22922",
+        "copy_code": "ORA22922",
+        "append_code": "ORA22922",
+        "read_after": "ORA22922",
+        "rows": []
+      },
+      "matched": true
+    },
+    {
+      "id": "delete_rollback_then_copy",
+      "repeat": 0,
+      "actual": {
+        "read_before": "AB",
+        "copy_code": "OK",
+        "append_code": "ORA22920",
+        "read_after": "AB",
+        "rows": [
+          [
+            1,
+            "AB"
+          ],
+          [
+            2,
+            "AB"
+          ]
+        ]
+      },
+      "expected": {
+        "read_before": "AB",
+        "copy_code": "OK",
+        "append_code": "ORA22920",
+        "read_after": "AB",
+        "rows": [
+          [
+            1,
+            "AB"
+          ],
+          [
+            2,
+            "AB"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "replace_then_copy",
+      "repeat": 0,
+      "actual": {
+        "read_before": "AB",
+        "copy_code": "OK",
+        "append_code": "ORA22922",
+        "read_after": "AB",
+        "rows": [
+          [
+            1,
+            "CD"
+          ],
+          [
+            2,
+            "AB"
+          ]
+        ]
+      },
+      "expected": {
+        "read_before": "AB",
+        "copy_code": "OK",
+        "append_code": "ORA22922",
+        "read_after": "AB",
+        "rows": [
+          [
+            1,
+            "CD"
+          ],
+          [
+            2,
+            "AB"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "replace_commit_then_copy",
+      "repeat": 0,
+      "actual": {
+        "read_before": "ORA22922",
+        "copy_code": "ORA22922",
+        "append_code": "ORA22922",
+        "read_after": "ORA22922",
+        "rows": [
+          [
+            1,
+            "CD"
+          ]
+        ]
+      },
+      "expected": {
+        "read_before": "ORA22922",
+        "copy_code": "ORA22922",
+        "append_code": "ORA22922",
+        "read_after": "ORA22922",
+        "rows": [
+          [
+            1,
+            "CD"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "move_then_copy",
+      "repeat": 0,
+      "actual": {
+        "read_before": "AB",
+        "copy_code": "OK",
+        "append_code": "OK",
+        "read_after": "AB01",
+        "rows": [
+          [
+            2,
+            "AB"
+          ],
+          [
+            3,
+            "AB01"
+          ]
+        ]
+      },
+      "expected": {
+        "read_before": "AB",
+        "copy_code": "OK",
+        "append_code": "OK",
+        "read_after": "AB01",
+        "rows": [
+          [
+            2,
+            "AB"
+          ],
+          [
+            3,
+            "AB01"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "move_commit_then_copy",
+      "repeat": 0,
+      "actual": {
+        "read_before": "AB",
+        "copy_code": "OK",
+        "append_code": "ORA22920",
+        "read_after": "AB",
+        "rows": [
+          [
+            2,
+            "AB"
+          ],
+          [
+            3,
+            "AB"
+          ]
+        ]
+      },
+      "expected": {
+        "read_before": "AB",
+        "copy_code": "OK",
+        "append_code": "ORA22920",
+        "read_after": "AB",
+        "rows": [
+          [
+            2,
+            "AB"
+          ],
+          [
+            3,
+            "AB"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "delete_then_copy",
+      "repeat": 1,
+      "actual": {
+        "read_before": "AB",
+        "copy_code": "OK",
+        "append_code": "ORA22275",
+        "read_after": "AB",
+        "rows": [
+          [
+            2,
+            "AB"
+          ]
+        ]
+      },
+      "expected": {
+        "read_before": "AB",
+        "copy_code": "OK",
+        "append_code": "ORA22275",
+        "read_after": "AB",
+        "rows": [
+          [
+            2,
+            "AB"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "delete_without_copy",
+      "repeat": 1,
+      "actual": {
+        "read_before": "AB",
+        "copy_code": "SKIPPED",
+        "append_code": "ORA22275",
+        "read_after": "AB",
+        "rows": []
+      },
+      "expected": {
+        "read_before": "AB",
+        "copy_code": "SKIPPED",
+        "append_code": "ORA22275",
+        "read_after": "AB",
+        "rows": []
+      },
+      "matched": true
+    },
+    {
+      "id": "delete_commit_then_copy",
+      "repeat": 1,
+      "actual": {
+        "read_before": "ORA22922",
+        "copy_code": "ORA22922",
+        "append_code": "ORA22922",
+        "read_after": "ORA22922",
+        "rows": []
+      },
+      "expected": {
+        "read_before": "ORA22922",
+        "copy_code": "ORA22922",
+        "append_code": "ORA22922",
+        "read_after": "ORA22922",
+        "rows": []
+      },
+      "matched": true
+    },
+    {
+      "id": "delete_rollback_then_copy",
+      "repeat": 1,
+      "actual": {
+        "read_before": "AB",
+        "copy_code": "OK",
+        "append_code": "ORA22920",
+        "read_after": "AB",
+        "rows": [
+          [
+            1,
+            "AB"
+          ],
+          [
+            2,
+            "AB"
+          ]
+        ]
+      },
+      "expected": {
+        "read_before": "AB",
+        "copy_code": "OK",
+        "append_code": "ORA22920",
+        "read_after": "AB",
+        "rows": [
+          [
+            1,
+            "AB"
+          ],
+          [
+            2,
+            "AB"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "replace_then_copy",
+      "repeat": 1,
+      "actual": {
+        "read_before": "AB",
+        "copy_code": "OK",
+        "append_code": "ORA22922",
+        "read_after": "AB",
+        "rows": [
+          [
+            1,
+            "CD"
+          ],
+          [
+            2,
+            "AB"
+          ]
+        ]
+      },
+      "expected": {
+        "read_before": "AB",
+        "copy_code": "OK",
+        "append_code": "ORA22922",
+        "read_after": "AB",
+        "rows": [
+          [
+            1,
+            "CD"
+          ],
+          [
+            2,
+            "AB"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "replace_commit_then_copy",
+      "repeat": 1,
+      "actual": {
+        "read_before": "ORA22922",
+        "copy_code": "ORA22922",
+        "append_code": "ORA22922",
+        "read_after": "ORA22922",
+        "rows": [
+          [
+            1,
+            "CD"
+          ]
+        ]
+      },
+      "expected": {
+        "read_before": "ORA22922",
+        "copy_code": "ORA22922",
+        "append_code": "ORA22922",
+        "read_after": "ORA22922",
+        "rows": [
+          [
+            1,
+            "CD"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "move_then_copy",
+      "repeat": 1,
+      "actual": {
+        "read_before": "AB",
+        "copy_code": "OK",
+        "append_code": "OK",
+        "read_after": "AB01",
+        "rows": [
+          [
+            2,
+            "AB"
+          ],
+          [
+            3,
+            "AB01"
+          ]
+        ]
+      },
+      "expected": {
+        "read_before": "AB",
+        "copy_code": "OK",
+        "append_code": "OK",
+        "read_after": "AB01",
+        "rows": [
+          [
+            2,
+            "AB"
+          ],
+          [
+            3,
+            "AB01"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "move_commit_then_copy",
+      "repeat": 1,
+      "actual": {
+        "read_before": "AB",
+        "copy_code": "OK",
+        "append_code": "ORA22920",
+        "read_after": "AB",
+        "rows": [
+          [
+            2,
+            "AB"
+          ],
+          [
+            3,
+            "AB"
+          ]
+        ]
+      },
+      "expected": {
+        "read_before": "AB",
+        "copy_code": "OK",
+        "append_code": "ORA22920",
+        "read_after": "AB",
+        "rows": [
+          [
+            2,
+            "AB"
+          ],
+          [
+            3,
+            "AB"
+          ]
+        ]
+      },
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "original_objects_mutated": false,
+  "target_compared": false,
+  "application_qualified": false,
+  "implementation_qualified": false,
+  "source_version": "23.26.3.0.0",
+  "connection_closed": true,
+  "total": 16,
+  "matched": 16,
+  "success": true
+}

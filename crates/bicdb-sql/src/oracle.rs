@@ -722,11 +722,31 @@ fn lower_oracle_sql(
     }
     // Transaction modes belong to the PG transport grammar. Keep their tokens
     // contextual rather than reserving ISOLATION/LEVEL as Oracle identifiers.
+    let session_characteristics = ["SET", "SESSION", "CHARACTERISTICS", "AS", "TRANSACTION"]
+        .iter()
+        .enumerate()
+        .all(|(i, value)| source.get(i).is_some_and(|token| word(token, value)));
+    if preview
+        && (word(&source[0], "COMMIT") || word(&source[0], "ROLLBACK"))
+        && source.iter().any(|token| word(token, "CHAIN"))
+    {
+        let statements = parse_statements(sql)?;
+        if let [Statement::Commit { .. }
+        | Statement::Rollback {
+            savepoint: None, ..
+        }] = statements.as_slice()
+        {
+            return Ok(statements[0].to_string());
+        }
+    }
     if preview
         && (word(&source[0], "SET") && source.get(1).is_some_and(|t| word(t, "TRANSACTION"))
-            || word(&source[0], "BEGIN") && !procedural)
+            || word(&source[0], "BEGIN") && !procedural
+            || session_characteristics)
     {
-        if parse_transaction_control_for_profile(sql, ORACLE_PREVIEW_PROFILE)?.is_some() {
+        if parse_transaction_control_for_profile(sql, ORACLE_PREVIEW_PROFILE)?.is_some()
+            || session_characteristics
+        {
             return Ok(parse_statements(sql)?[0].to_string());
         }
     }

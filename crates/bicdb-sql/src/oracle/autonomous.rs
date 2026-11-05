@@ -286,6 +286,7 @@ impl SqlSession<'_> {
                 suspension.set_child(tx.id())?;
             }
             self.tx = Some(tx);
+            self.set_transaction_isolation_label(self.default_transaction_isolation()?)?;
         }
         Ok(())
     }

@@ -675,7 +675,9 @@ pub fn parse_transaction_control_for_profile(
             Ok(Some(TransactionControl::Begin))
         }
         Statement::Set(Set::SetTransaction {
-            modes, snapshot, ..
+            modes,
+            snapshot,
+            session,
         }) => {
             if snapshot.is_some() {
                 return Err(SqlError::Unsupported(
@@ -683,10 +685,44 @@ pub fn parse_transaction_control_for_profile(
                 ));
             }
             validate_profile_transaction_modes(modes, profile == oracle::ORACLE_PREVIEW_PROFILE)?;
-            Ok(Some(TransactionControl::SetTransaction))
+            Ok((!session).then_some(TransactionControl::SetTransaction))
         }
         _ => Ok(None),
     }
+}
+
+/// The explicit mode of a transaction command, independent of connection
+/// defaults. Transport hosts use this after validating BEGIN's grammar.
+pub fn parse_transaction_isolation_for_profile(
+    sql: &str,
+    profile: &str,
+) -> Result<Option<&'static str>> {
+    let statements = parse_statements(sql)?;
+    let [statement] = statements.as_slice() else {
+        return Ok(None);
+    };
+    let modes = match statement {
+        Statement::StartTransaction { modes, .. } => modes,
+        Statement::Set(Set::SetTransaction {
+            modes,
+            session: false,
+            ..
+        }) => modes,
+        _ => return Ok(None),
+    };
+    validate_profile_transaction_modes(modes, profile == oracle::ORACLE_PREVIEW_PROFILE)?;
+    Ok(modes.iter().find_map(|mode| match mode {
+        TransactionMode::IsolationLevel(TransactionIsolationLevel::ReadCommitted) => {
+            Some("read committed")
+        }
+        TransactionMode::IsolationLevel(TransactionIsolationLevel::RepeatableRead) => {
+            Some("repeatable read")
+        }
+        TransactionMode::IsolationLevel(TransactionIsolationLevel::Serializable) => {
+            Some("serializable")
+        }
+        _ => None,
+    }))
 }
 
 pub(crate) fn validate_profile_transaction_modes(

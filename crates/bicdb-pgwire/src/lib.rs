@@ -3178,13 +3178,24 @@ fn execute_server_query(
     if sql.contains(';') {
         let statements = split_sql_statements(sql);
         if statements.len() > 1 {
-            let first = normalize_executable_sql(&statements[0]);
-            let begins = is_transaction_control_candidate(&first)
-                && parse_transaction_control_for_profile(
-                    &statements[0],
-                    &server.config.sql_profile,
-                )? == Some(TransactionControl::Begin);
-            if state.in_transaction || begins {
+            let mut boundaries = state.in_transaction;
+            if !boundaries {
+                for statement in &statements {
+                    let normalized = normalize_executable_sql(statement);
+                    if is_transaction_control_candidate(&normalized)
+                        && parse_transaction_control_for_profile(
+                            statement,
+                            &server.config.sql_profile,
+                        )?
+                        .is_some()
+                        || delegation::transaction_end(statement, &normalized)?.is_some()
+                    {
+                        boundaries = true;
+                        break;
+                    }
+                }
+            }
+            if boundaries {
                 for statement in &statements[..statements.len() - 1] {
                     if matches!(
                         parse_copy_statement(statement)?,
@@ -4044,10 +4055,6 @@ pub(crate) fn deliver_notifications(
     }
 }
 
-fn isolation_fixes_snapshot(normalized: &str) -> bool {
-    normalized.contains("repeatable read") || normalized.contains("serializable")
-}
-
 fn execute_server_transaction_sql(
     server: &Arc<PgWireServer>,
     state: &mut ConnectionState,
@@ -4423,13 +4430,31 @@ fn execute_server_sql_with_options_normalized(
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         if transaction_control == Some(Some(TransactionControl::Begin)) {
             let result = begin_buffered_transaction(server, state);
-            if result.is_ok() && isolation_fixes_snapshot(normalized) {
-                state
-                    .tx
-                    .as_mut()
-                    .unwrap()
-                    .set_snapshot_isolation(true, state.last_commit_seq)?;
-                state.tx_fixed_snapshot = true;
+            if result.is_ok() {
+                if let Some(isolation) = bicdb_sql::parse_transaction_isolation_for_profile(
+                    sql,
+                    &server.config.sql_profile,
+                )? {
+                    let fixed = isolation != "read committed";
+                    state
+                        .tx
+                        .as_mut()
+                        .unwrap()
+                        .set_snapshot_isolation(fixed, state.last_commit_seq)?;
+                    state
+                        .tx
+                        .as_mut()
+                        .unwrap()
+                        .set_statement_write_conflict_check(
+                            fixed
+                                && server.config.sql_profile
+                                    == bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE,
+                        )?;
+                    state.tx_fixed_snapshot = fixed;
+                    state
+                        .session_state
+                        .set_transaction_isolation_label(isolation)?;
+                }
             }
             result
         } else if transaction_control == Some(Some(TransactionControl::SetTransaction)) {
@@ -4458,6 +4483,11 @@ fn execute_server_sql_with_options_normalized(
                 }
             }
         } else if let Some(ending) = transaction_end {
+            let chain_isolation = state
+                .session_state
+                .session_gucs()
+                .get("transaction_isolation")
+                .cloned();
             let (result, chain) = match ending {
                 delegation::TransactionEnd::Commit { chain } if !state.failed_transaction => (
                     commit_buffered_transaction(server, state, &cancellation)?,
@@ -4471,6 +4501,27 @@ fn execute_server_sql_with_options_normalized(
             };
             if chain {
                 begin_buffered_transaction(server, state)?;
+                if let Some(isolation) = chain_isolation {
+                    let fixed = isolation != "read committed";
+                    state
+                        .tx
+                        .as_mut()
+                        .unwrap()
+                        .set_snapshot_isolation(fixed, state.last_commit_seq)?;
+                    state
+                        .tx
+                        .as_mut()
+                        .unwrap()
+                        .set_statement_write_conflict_check(
+                            fixed
+                                && server.config.sql_profile
+                                    == bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE,
+                        )?;
+                    state.tx_fixed_snapshot = fixed;
+                    state
+                        .session_state
+                        .set_transaction_isolation_label(&isolation)?;
+                }
             }
             Ok(result)
         } else if let Some(command) = parse_savepoint_command(normalized) {

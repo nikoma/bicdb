@@ -756,6 +756,14 @@ impl<'db> SqlSession<'db> {
             return Err(protected_security_setting_error(&setting));
         }
         match setting.as_str() {
+            "default_transaction_isolation" => {
+                let value = super::transaction_defaults::validate_default_isolation(
+                    &value.to_cell(),
+                    oracle::preview_routine_language_enabled(self.db_ref())?,
+                )?;
+                Arc::make_mut(&mut self.session_gucs).insert(setting, value.into());
+                Ok(())
+            }
             "bicdb.max_lag" => {
                 let duration = value.to_cell();
                 if bicdb_core::query_budget::parse_duration(&duration).is_none() {

@@ -650,7 +650,15 @@ impl BicDb {
     }
 
     pub(crate) fn detect_commit_conflicts(&self, tx: &Transaction) -> Result<()> {
-        for write in &tx.writes {
+        self.detect_buffered_write_conflicts(tx, &tx.writes)
+    }
+
+    pub(crate) fn detect_buffered_write_conflicts(
+        &self,
+        tx: &Transaction,
+        writes: &[TxWrite],
+    ) -> Result<()> {
+        for write in writes {
             let Some(state) = self
                 .collections
                 .get(&write.collection)
@@ -691,6 +699,7 @@ impl BicDb {
                     let refreshed = tx
                         .writes
                         .iter()
+                        .chain(writes.iter())
                         .filter(|other| {
                             other.collection == write.collection
                                 && other.record_id == write.record_id

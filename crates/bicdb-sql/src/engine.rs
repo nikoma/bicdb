@@ -4047,9 +4047,15 @@ impl<'db> SqlEngine<'db> {
                 )))
             }
             "show transaction_isolation" | "show transaction.isolation.level" => {
+                let value = self
+                    .session_gucs
+                    .get("transaction_isolation")
+                    .or_else(|| self.session_gucs.get("default_transaction_isolation"))
+                    .cloned()
+                    .unwrap_or_else(|| "read committed".into());
                 Ok(Some(SqlResult::new(
                     vec!["transaction_isolation".to_string()],
-                    vec![vec![SqlValue::String("read committed".to_string())]],
+                    vec![vec![SqlValue::String(value)]],
                 )))
             }
             "show datestyle" => {
@@ -4264,6 +4270,21 @@ impl<'db> SqlEngine<'db> {
             .map(|part| part.value.as_str())
             .collect::<Vec<_>>()
             .join(".");
+        if matches!(
+            name.to_ascii_lowercase().as_str(),
+            "transaction_isolation" | "transaction.isolation.level"
+        ) {
+            let value = self
+                .session_gucs
+                .get("transaction_isolation")
+                .or_else(|| self.session_gucs.get("default_transaction_isolation"))
+                .cloned()
+                .unwrap_or_else(|| "read committed".into());
+            return Ok(SqlResult::new(
+                vec!["transaction_isolation".into()],
+                vec![vec![SqlValue::String(value)]],
+            ));
+        }
         match name.to_ascii_lowercase().as_str() {
             "bicdb.vector_search" => {
                 let mode = match self.settings.vector_search {

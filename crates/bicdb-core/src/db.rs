@@ -8492,6 +8492,9 @@ pub struct Transaction {
     // lower commit sequence is still applying. Carrying the row observation
     // into a later write prevents the raised snapshot from masking that change.
     observed_record_versions: Mutex<FxHashMap<String, FxHashMap<String, u64>>>,
+    /// Opt-in SQL profiles may report write conflicts at the statement
+    /// boundary. Commit validation remains mandatory in either mode.
+    statement_write_conflicts: bool,
     state: TxState,
     writes: Vec<TxWrite>,
     // Index over `writes`: collection -> record id -> position of the LAST
@@ -14264,6 +14267,16 @@ impl Transaction {
         self.isolation
     }
 
+    /// Validate newly buffered writes against their observed snapshots before
+    /// accepting a statement. The default retains deferred commit checks.
+    pub fn set_statement_write_conflict_check(&mut self, enabled: bool) -> Result<()> {
+        if self.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        self.statement_write_conflicts = enabled;
+        Ok(())
+    }
+
     /// Select statement-refresh or fixed-snapshot reads before this transaction
     /// acquires row locks or writes. Trusted serializable transactions keep
     /// their stronger read validation and cannot be changed through this API.
@@ -16319,7 +16332,11 @@ impl Transaction {
 
     /// Appends buffered writes and indexes them. The only sanctioned way to
     /// grow `writes`.
-    fn push_writes(&mut self, writes: Vec<TxWrite>) {
+    fn push_writes(&mut self, writes: Vec<TxWrite>) -> Result<()> {
+        if self.statement_write_conflicts {
+            self.db_ref()
+                .detect_buffered_write_conflicts(self, &writes)?;
+        }
         if !writes.is_empty() && !self.prepared_wal.is_empty() {
             self.prepared_wal.clear();
         }
@@ -16348,6 +16365,7 @@ impl Transaction {
                 }
             }
         }
+        Ok(())
     }
 
     /// Rebuilds the write index after `writes` was truncated (savepoint
@@ -16496,7 +16514,7 @@ impl Transaction {
                 changed: None,
             });
         }
-        self.push_writes(writes);
+        self.push_writes(writes)?;
         Ok(())
     }
 
@@ -16874,7 +16892,7 @@ impl Transaction {
                 });
             }
         }
-        self.push_writes(writes);
+        self.push_writes(writes)?;
         Ok(())
     }
 
@@ -17058,7 +17076,7 @@ impl Transaction {
                 });
             }
         }
-        self.push_writes(writes);
+        self.push_writes(writes)?;
         Ok(())
     }
 
@@ -17109,7 +17127,7 @@ impl Transaction {
                 });
             }
         }
-        self.push_writes(writes);
+        self.push_writes(writes)?;
         Ok(())
     }
 
@@ -17143,6 +17161,9 @@ impl Transaction {
     ) -> Result<Option<(Option<Record>, u64)>> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
+        }
+        if self.isolation != TransactionIsolation::ReadCommitted {
+            return Ok(None);
         }
         if self.last_pending_write(collection, id).is_some() {
             return Ok(None);
@@ -17216,6 +17237,9 @@ impl Transaction {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
+        if self.isolation != TransactionIsolation::ReadCommitted {
+            return Ok(None);
+        }
         if self.last_pending_write(collection, id).is_some() {
             return Ok(None);
         }
@@ -17271,6 +17295,9 @@ impl Transaction {
     ) -> Result<Option<(Option<Record>, u64)>> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
+        }
+        if self.isolation != TransactionIsolation::ReadCommitted {
+            return Ok(None);
         }
         if self.last_pending_write(collection, id).is_some() {
             return Ok(None);

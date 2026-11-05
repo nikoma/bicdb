@@ -1,0 +1,309 @@
+{
+  "format": 1,
+  "tool_source_commit": "f1d03a37c03b780b4b10fca2061902cd00c0053a",
+  "engine_source_commit": "2b645c97431b55e1e903ec16d9994489e3610f1a",
+  "binary_sha256": "52cd4ceced937a468fa9f63bdb8511560ea6c074549bbc59da8fa19f50e5fbce",
+  "engine_main_delivery_commit": "a46ab7ad9e26737e379e11e2e6473473abdc2f25",
+  "query_fixture_sha256": "822ce408a6997a42c0135ed24573801dbec1ffb775f4b3948918847b687d6a64",
+  "native_tests": {
+    "passed": 26,
+    "failed": 0,
+    "skipped": 0,
+    "migration_tests": 13,
+    "inventory_tests": 13,
+    "command": [
+      "python",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "examples/oracle/idempiere",
+      "-p",
+      "test_foreign_key*.py",
+      "-v"
+    ]
+  },
+  "references": {
+    "oracle": {
+      "reference": {
+        "cases": [
+          {
+            "case": "duplicate_orphans",
+            "success": true,
+            "orphan_rows": 2,
+            "expected_orphan_rows": 2
+          },
+          {
+            "case": "composite_partial_null",
+            "success": true,
+            "orphan_rows": 2,
+            "expected_orphan_rows": 2
+          },
+          {
+            "case": "crossed_key_order",
+            "success": true,
+            "orphan_rows": 1,
+            "expected_orphan_rows": 1
+          },
+          {
+            "case": "empty_parent",
+            "success": true,
+            "orphan_rows": 3,
+            "expected_orphan_rows": 3
+          },
+          {
+            "case": "empty_child",
+            "success": true,
+            "orphan_rows": 0,
+            "expected_orphan_rows": 0
+          },
+          {
+            "case": "nullable_parent",
+            "success": true,
+            "orphan_rows": 1,
+            "expected_orphan_rows": 1
+          },
+          {
+            "case": "self_reference",
+            "success": true,
+            "orphan_rows": 2,
+            "expected_orphan_rows": 2
+          },
+          {
+            "case": "fixed_character_padding",
+            "success": true,
+            "orphan_rows": 2,
+            "expected_orphan_rows": 2
+          },
+          {
+            "case": "empty_character_key",
+            "success": true,
+            "orphan_rows": 2,
+            "expected_orphan_rows": 2
+          }
+        ],
+        "cleanup_errors": [],
+        "server_version": "23.26.3.0.0",
+        "success": true
+      },
+      "candidate": {
+        "cases": [
+          {
+            "case": "duplicate_orphans",
+            "success": true,
+            "orphan_rows": 2,
+            "expected_orphan_rows": 2
+          },
+          {
+            "case": "composite_partial_null",
+            "success": true,
+            "orphan_rows": 2,
+            "expected_orphan_rows": 2
+          },
+          {
+            "case": "crossed_key_order",
+            "success": true,
+            "orphan_rows": 1,
+            "expected_orphan_rows": 1
+          },
+          {
+            "case": "empty_parent",
+            "success": true,
+            "orphan_rows": 3,
+            "expected_orphan_rows": 3
+          },
+          {
+            "case": "empty_child",
+            "success": true,
+            "orphan_rows": 0,
+            "expected_orphan_rows": 0
+          },
+          {
+            "case": "nullable_parent",
+            "success": true,
+            "orphan_rows": 1,
+            "expected_orphan_rows": 1
+          },
+          {
+            "case": "self_reference",
+            "success": true,
+            "orphan_rows": 2,
+            "expected_orphan_rows": 2
+          },
+          {
+            "case": "fixed_character_padding",
+            "success": true,
+            "orphan_rows": 2,
+            "expected_orphan_rows": 2
+          },
+          {
+            "case": "empty_character_key",
+            "success": true,
+            "orphan_rows": 2,
+            "expected_orphan_rows": 2
+          }
+        ],
+        "cleanup_errors": [],
+        "server_version": 180004,
+        "success": true
+      },
+      "matched": 9,
+      "total": 9,
+      "success": true
+    },
+    "postgres": {
+      "reference": {
+        "cases": [
+          {
+            "case": "duplicate_orphans",
+            "success": true,
+            "orphan_rows": 2,
+            "expected_orphan_rows": 2
+          },
+          {
+            "case": "composite_partial_null",
+            "success": true,
+            "orphan_rows": 2,
+            "expected_orphan_rows": 2
+          },
+          {
+            "case": "crossed_key_order",
+            "success": true,
+            "orphan_rows": 1,
+            "expected_orphan_rows": 1
+          },
+          {
+            "case": "empty_parent",
+            "success": true,
+            "orphan_rows": 3,
+            "expected_orphan_rows": 3
+          },
+          {
+            "case": "empty_child",
+            "success": true,
+            "orphan_rows": 0,
+            "expected_orphan_rows": 0
+          },
+          {
+            "case": "nullable_parent",
+            "success": true,
+            "orphan_rows": 1,
+            "expected_orphan_rows": 1
+          },
+          {
+            "case": "self_reference",
+            "success": true,
+            "orphan_rows": 2,
+            "expected_orphan_rows": 2
+          },
+          {
+            "case": "fixed_character_padding",
+            "success": true,
+            "orphan_rows": 2,
+            "expected_orphan_rows": 2
+          },
+          {
+            "case": "empty_character_key",
+            "success": true,
+            "orphan_rows": 3,
+            "expected_orphan_rows": 3
+          }
+        ],
+        "cleanup_errors": [],
+        "server_version": 180004,
+        "success": true
+      },
+      "candidate": {
+        "cases": [
+          {
+            "case": "duplicate_orphans",
+            "success": true,
+            "orphan_rows": 2,
+            "expected_orphan_rows": 2
+          },
+          {
+            "case": "composite_partial_null",
+            "success": true,
+            "orphan_rows": 2,
+            "expected_orphan_rows": 2
+          },
+          {
+            "case": "crossed_key_order",
+            "success": true,
+            "orphan_rows": 1,
+            "expected_orphan_rows": 1
+          },
+          {
+            "case": "empty_parent",
+            "success": true,
+            "orphan_rows": 3,
+            "expected_orphan_rows": 3
+          },
+          {
+            "case": "empty_child",
+            "success": true,
+            "orphan_rows": 0,
+            "expected_orphan_rows": 0
+          },
+          {
+            "case": "nullable_parent",
+            "success": true,
+            "orphan_rows": 1,
+            "expected_orphan_rows": 1
+          },
+          {
+            "case": "self_reference",
+            "success": true,
+            "orphan_rows": 2,
+            "expected_orphan_rows": 2
+          },
+          {
+            "case": "fixed_character_padding",
+            "success": true,
+            "orphan_rows": 2,
+            "expected_orphan_rows": 2
+          },
+          {
+            "case": "empty_character_key",
+            "success": true,
+            "orphan_rows": 3,
+            "expected_orphan_rows": 3
+          }
+        ],
+        "cleanup_errors": [],
+        "server_version": 180004,
+        "success": true
+      },
+      "matched": 9,
+      "total": 9,
+      "success": true
+    }
+  },
+  "reference_processes_stopped": true,
+  "reference_server_exit_codes": [
+    0,
+    0
+  ],
+  "disposable_postgres_container_removed": true,
+  "syntax_and_help_checked": true,
+  "github_workflows_changed_or_dispatched": false,
+  "full_application_inventory_completed": false,
+  "data_compared_to_source": false,
+  "application_qualified": false,
+  "resources": {
+    "combined-tests": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 175726592,
+      "minimum_observed_available_bytes": 17508491264,
+      "minimum_available_gib": 12.0
+    },
+    "reference": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 311173120,
+      "minimum_observed_available_bytes": 17550618624,
+      "minimum_available_gib": 12.0
+    }
+  }
+}

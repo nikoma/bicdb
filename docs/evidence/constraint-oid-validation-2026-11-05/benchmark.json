@@ -1,0 +1,48 @@
+{
+  "format": 1,
+  "source_commit": "2b645c97431b55e1e903ec16d9994489e3610f1a",
+  "baseline_source_commit": "9b4999401c479c7ff3fbf1eb2c8a0f4001308881",
+  "scope": "three cold catalog validation invocations on one disposable 915-table application database copy with 357 imported foreign keys; not end-to-end migration or production throughput qualification",
+  "application_qualified": false,
+  "baseline": {
+    "schema_count": 915,
+    "seconds": [
+      2.728779755,
+      1.848250394,
+      1.849095196
+    ],
+    "table_rows_materialized": [
+      18342,
+      18342,
+      18342
+    ],
+    "median_seconds": 1.849095196
+  },
+  "optimized": {
+    "schema_count": 915,
+    "seconds": [
+      1.454309174,
+      0.621996467,
+      0.592886351
+    ],
+    "table_rows_materialized": [
+      0,
+      0,
+      0
+    ],
+    "median_seconds": 0.621996467
+  },
+  "median_speedup": 2.972838744436148,
+  "sql_library": {
+    "passed": 713,
+    "failed": 0,
+    "ignored": 4,
+    "new_tests_passed": [
+      "cold_oid_validation_does_not_materialize_table_catalog_rows",
+      "direct_oid_slots_match_actual_catalog_rows_for_every_constraint_kind",
+      "identifier_fencing_rejects_collisions_and_invalid_values"
+    ],
+    "ignored_benchmark_run_separately": true
+  },
+  "baseline_instrumentation": "Baseline production validator plus the same test-only row counter and manually invoked benchmark harness; no production-path optimization."
+}

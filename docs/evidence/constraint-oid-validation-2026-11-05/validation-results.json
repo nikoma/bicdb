@@ -1,0 +1,157 @@
+{
+  "format": 1,
+  "source_commit": "2b645c97431b55e1e903ec16d9994489e3610f1a",
+  "binary_sha256": "52cd4ceced937a468fa9f63bdb8511560ea6c074549bbc59da8fa19f50e5fbce",
+  "steps": [
+    {
+      "name": "build",
+      "returncode": 0,
+      "command": [
+        "cargo",
+        "--config",
+        "profile.dev.package.bicdb-sql.codegen-units=512",
+        "build",
+        "--example",
+        "oracle_server"
+      ]
+    },
+    {
+      "name": "migration",
+      "returncode": 0,
+      "command": [
+        "/root/.local/state/bicdb/oracle-reference/venv/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "examples/oracle/idempiere",
+        "-p",
+        "test_foreign_keys.py",
+        "-v"
+      ],
+      "tests_passed": 13
+    },
+    {
+      "name": "blob-migration",
+      "returncode": 0,
+      "command": [
+        "/root/.local/state/bicdb/oracle-reference/venv/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "examples/oracle/idempiere",
+        "-p",
+        "test_blob_types.py",
+        "-v"
+      ],
+      "tests_passed": 7
+    },
+    {
+      "name": "deferred-fk",
+      "returncode": 0,
+      "command": [
+        "cargo",
+        "--config",
+        "profile.dev.package.bicdb-sql.codegen-units=512",
+        "--config",
+        "profile.test.package.bicdb-sql.codegen-units=512",
+        "test",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "deferred_foreign_keys"
+      ],
+      "tests_passed": 20
+    },
+    {
+      "name": "fk-authorization",
+      "returncode": 0,
+      "command": [
+        "cargo",
+        "--config",
+        "profile.dev.package.bicdb-sql.codegen-units=512",
+        "--config",
+        "profile.test.package.bicdb-sql.codegen-units=512",
+        "test",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "foreign_key_authorization"
+      ],
+      "tests_passed": 8
+    },
+    {
+      "name": "protocol",
+      "returncode": 0,
+      "command": [
+        "cargo",
+        "--config",
+        "profile.dev.package.bicdb-sql.codegen-units=512",
+        "--config",
+        "profile.test.package.bicdb-sql.codegen-units=512",
+        "test",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "protocol"
+      ],
+      "tests_passed": 181
+    },
+    {
+      "name": "oracle-protocol",
+      "returncode": 0,
+      "command": [
+        "cargo",
+        "--config",
+        "profile.dev.package.bicdb-sql.codegen-units=512",
+        "--config",
+        "profile.test.package.bicdb-sql.codegen-units=512",
+        "test",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "oracle_hr"
+      ],
+      "tests_passed": 48
+    },
+    {
+      "name": "workspace",
+      "returncode": 0,
+      "command": [
+        "cargo",
+        "--config",
+        "profile.dev.package.bicdb-sql.codegen-units=512",
+        "--config",
+        "profile.test.package.bicdb-sql.codegen-units=512",
+        "check",
+        "--workspace",
+        "--all-targets"
+      ]
+    }
+  ],
+  "sql_library": {
+    "passed": 713,
+    "failed": 0,
+    "ignored": 4
+  },
+  "format_check_passed": true,
+  "github_workflows_changed_or_dispatched": false,
+  "application_qualified": false,
+  "resources": {
+    "full": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 5530173440,
+      "minimum_observed_available_bytes": 14506053632,
+      "minimum_available_gib": 12.0
+    },
+    "native-validation": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 5182001152,
+      "minimum_observed_available_bytes": 14738407424,
+      "minimum_available_gib": 12.0
+    }
+  }
+}

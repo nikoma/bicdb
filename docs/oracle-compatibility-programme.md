@@ -17,6 +17,12 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [constraint catalog checkpoint](evidence/constraint-oid-validation-2026-11-05/README.md)
+removes table-row construction from global identifier validation while preserving
+identifier slots and collision checks in both profiles. A retained application
+snapshot shows approximately threefold lower median cold validation time; this
+is a focused measurement, not whole-workload or application qualification.
+
 The [persistent BLOB application checkpoint](evidence/oracle-persistent-blob-application-2026-11-05/README.md)
 records the newer 53/53 original persistence-class and 20/20 original insert-class
 results on an isolated clone,

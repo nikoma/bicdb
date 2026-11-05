@@ -339,6 +339,23 @@ pub(crate) fn table_constraint_row(
     name: &str,
     constraint_type: &str,
 ) -> BTreeMap<String, SqlValue> {
+    let timing = if constraint_type == "FOREIGN KEY" {
+        schema
+            .constraints
+            .iter()
+            .find_map(|constraint| match constraint {
+                ConstraintSchema::ForeignKey {
+                    name: actual,
+                    deferrable,
+                    initially_deferred,
+                    ..
+                } if actual == name => Some((*deferrable, *initially_deferred)),
+                _ => None,
+            })
+    } else {
+        None
+    }
+    .unwrap_or((false, false));
     virtual_row([
         ("constraint_catalog", SqlValue::String("bicdb".to_string())),
         (
@@ -356,8 +373,14 @@ pub(crate) fn table_constraint_row(
             "constraint_type",
             SqlValue::String(constraint_type.to_string()),
         ),
-        ("is_deferrable", SqlValue::String("NO".to_string())),
-        ("initially_deferred", SqlValue::String("NO".to_string())),
+        (
+            "is_deferrable",
+            SqlValue::String(if timing.0 { "YES" } else { "NO" }.into()),
+        ),
+        (
+            "initially_deferred",
+            SqlValue::String(if timing.1 { "YES" } else { "NO" }.into()),
+        ),
         ("enforced", SqlValue::String("YES".to_string())),
         (
             "nulls_distinct",

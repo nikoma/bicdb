@@ -20,6 +20,7 @@ mod dml_temporal_tests;
 mod dual;
 pub(crate) mod dynamic_sql;
 pub(crate) mod errors;
+mod foreign_keys;
 mod function_attributes;
 pub(crate) mod hierarchy;
 pub mod host_binds;
@@ -458,6 +459,9 @@ fn lower_profile_sql_in_namespace(
         },
     )?;
     if profile == ORACLE_PREVIEW_PROFILE {
+        if let Some(command) = foreign_keys::timing_sql(&lowered, namespace)? {
+            return Ok(command);
+        }
         if collections::declaration(db, &lowered)?.is_some() {
             return Ok(lowered);
         }
@@ -477,6 +481,9 @@ pub fn lower_typed_native_sql(
     oids: &[i32],
 ) -> Result<String> {
     if profile == ORACLE_PREVIEW_PROFILE {
+        if let Some(command) = foreign_keys::timing_sql(sql, None)? {
+            return Ok(command);
+        }
         if collections::declaration(db, sql)?.is_some() {
             return Ok(sql.to_string());
         }
@@ -544,6 +551,9 @@ pub fn lower_session_sql(
     }
     let schema = preview_schema(db, search_path, user)?.unwrap_or_else(default_schema_name);
     let lowered = lower_profile_sql_in_namespace(db, sql, profile, Some(&schema))?;
+    if let Some(command) = foreign_keys::timing_sql(&lowered, Some(&schema))? {
+        return Ok(command);
+    }
     // Anonymous blocks are raw routine source, not a sqlparser Statement.
     // Their scoped SQL is namespace-bound by the interpreter before execution.
     if collections::declaration(db, &lowered)?.is_some() {
@@ -1365,6 +1375,11 @@ fn canonical_tokens_with_routine_types(
     } else {
         BTreeSet::new()
     };
+    let constraint_syntax = if preview {
+        foreign_keys::syntax_positions(source)
+    } else {
+        BTreeSet::new()
+    };
     let hierarchical = preview
         && source
             .windows(2)
@@ -1397,6 +1412,11 @@ fn canonical_tokens_with_routine_types(
     let mut i = 0;
     while i < source.len() {
         let t = &source[i];
+        if constraint_syntax.contains(&i) {
+            pieces.push(render_token(t).to_ascii_uppercase());
+            i += 1;
+            continue;
+        }
         if deterministic.contains(&i) {
             pieces.push("IMMUTABLE".into());
             i += 1;
@@ -1905,6 +1925,11 @@ fn lower_native(db: &BicDb, sql: &str, preview: bool, namespace: Option<&str>) -
     let sql = bounded_locks.as_deref().unwrap_or(sql);
     let rewritten = preview.then(|| rewrite_is_json_predicates(sql)).flatten();
     let sql = rewritten.as_deref().unwrap_or(sql);
+    if preview {
+        if let Some(command) = foreign_keys::timing_sql(sql, namespace)? {
+            return Ok(command);
+        }
+    }
     let _grammar = syntax::Scope::new(preview);
     let _multisets = collections::multisets::Scope::new(preview);
     let _context = session_context::Scope::new(preview);

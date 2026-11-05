@@ -312,3 +312,65 @@ fn constraint_mode_follows_renames_but_a_new_constraint_has_its_own_identity() {
     let mut sql = SqlSession::new(&mut db);
     sql.execute("BEGIN; SET CONSTRAINTS clinical_fk DEFERRED; ALTER TABLE children RENAME CONSTRAINT clinical_fk TO renamed_fk; UPDATE children SET patient=20 WHERE id=1; UPDATE parents SET patient=20 WHERE id=1; SET CONSTRAINTS renamed_fk IMMEDIATE; COMMIT").unwrap();
 }
+
+#[test]
+fn oracle_constraint_names_follow_the_selected_schema_without_session_search_path() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    bicdb_sql::oracle::ensure_database_profile(&mut db, bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE)
+        .unwrap();
+    let mut session = SqlSession::new_shared(&db);
+    for sql in [
+        "CREATE SCHEMA timing_schema",
+        "CREATE TABLE timing_schema.p(id INTEGER PRIMARY KEY)",
+        "CREATE TABLE timing_schema.c(id INTEGER PRIMARY KEY,pid INTEGER)",
+        "ALTER TABLE timing_schema.c ADD CONSTRAINT selected_fk FOREIGN KEY(pid) REFERENCES timing_schema.p(id) DEFERRABLE INITIALLY DEFERRED",
+        "BEGIN",
+    ] {
+        let lowered = bicdb_sql::oracle::lower_session_sql(
+            &db, sql, bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE, None, "bicdb",
+        ).unwrap();
+        session.execute(&lowered).unwrap();
+    }
+    let lowered = bicdb_sql::oracle::lower_session_sql(
+        &db,
+        "SET CONSTRAINTS selected_fk IMMEDIATE",
+        bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE,
+        Some("\"TIMING_SCHEMA\""),
+        "bicdb",
+    )
+    .unwrap();
+    assert!(lowered.contains("\"TIMING_SCHEMA\".\"SELECTED_FK\""));
+    session.execute(&lowered).unwrap();
+    session.execute("ROLLBACK").unwrap();
+}
+
+#[test]
+fn information_schema_timing_follows_alter_constraint_and_rollback() {
+    let (_root, mut db) = seeded();
+    let mut session = SqlSession::new(&mut db);
+    let query = "SELECT is_deferrable,initially_deferred FROM information_schema.table_constraints WHERE constraint_name='clinical_fk'";
+    assert_eq!(
+        session.execute(query).unwrap().rows[0],
+        vec![
+            SqlValue::String("YES".into()),
+            SqlValue::String("NO".into()),
+        ]
+    );
+    session.execute("BEGIN; ALTER TABLE children ALTER CONSTRAINT clinical_fk DEFERRABLE INITIALLY DEFERRED").unwrap();
+    assert_eq!(
+        session.execute(query).unwrap().rows[0],
+        vec![
+            SqlValue::String("YES".into()),
+            SqlValue::String("YES".into()),
+        ]
+    );
+    session.execute("ROLLBACK").unwrap();
+    assert_eq!(
+        session.execute(query).unwrap().rows[0],
+        vec![
+            SqlValue::String("YES".into()),
+            SqlValue::String("NO".into()),
+        ]
+    );
+}

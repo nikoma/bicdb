@@ -396,7 +396,7 @@ impl<'db> SqlSession<'db> {
                                     };
                                     if !*deferrable {
                                         return Err(SqlError::RaisedException {
-                                            sqlstate: "55000".into(),
+                                            sqlstate: "42809".into(),
                                             message: format!("constraint {name} is not deferrable"),
                                             detail: None,
                                         });

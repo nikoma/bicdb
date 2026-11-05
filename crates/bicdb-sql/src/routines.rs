@@ -14,6 +14,7 @@ mod attribute_tests;
 #[cfg(test)]
 mod keyword_tests;
 pub(crate) mod nested_blocks;
+mod node_ownership;
 pub(crate) mod parameterized_cursors;
 mod procedural_case;
 #[cfg(test)]
@@ -88,6 +89,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             .collect::<Vec<_>>();
         let symbol_names = routine_symbol_names(&params, &[], &statements, &[]);
         return Ok(RoutineIR {
+            node_ownership: CompiledNodeOwnership::default(),
             params,
             symbol_names,
             declarations: Vec::new(),
@@ -217,6 +219,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
         &mut exception_handlers,
     );
     Ok(RoutineIR {
+        node_ownership: CompiledNodeOwnership::default(),
         params,
         symbol_names,
         declarations,

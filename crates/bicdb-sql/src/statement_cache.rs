@@ -217,6 +217,10 @@ pub(crate) fn templatize(sql: &str) -> Option<(String, Vec<BoundLiteral>)> {
 #[derive(Debug, Clone)]
 pub(crate) struct CachedTemplate {
     pub(crate) statements: Vec<Statement>,
+    pub(crate) node_ownership: CompiledNodeOwnership,
+    // Binding changes values in place, but a numeric literal may change SQL
+    // type (integer, bigint, numeric). Such a change starts a fresh memo scope.
+    literal_types: Vec<u8>,
     /// Catalog generations under which the column references were checked.
     pub(crate) columns_checked: Option<[u64; 3]>,
     /// (value-node ordinal in visit order, index into the lifted literals).
@@ -251,6 +255,8 @@ impl CachedTemplate {
             ))),
             None => Ok(Self {
                 statements,
+                node_ownership: CompiledNodeOwnership::default(),
+                literal_types: Vec::new(),
                 columns_checked: None,
                 literal_slots: slots,
             }),
@@ -270,6 +276,20 @@ impl CachedTemplate {
             return Err(SqlError::InvalidSql(
                 "statement template literal count changed".to_string(),
             ));
+        }
+        let types = literals
+            .iter()
+            .map(|literal| match literal {
+                BoundLiteral::Str(_) => 0,
+                BoundLiteral::Num(text) if text.contains(['.', 'e', 'E']) => 3,
+                BoundLiteral::Num(text) if text.parse::<i32>().is_ok() => 1,
+                BoundLiteral::Num(text) if text.parse::<i64>().is_ok() => 2,
+                BoundLiteral::Num(_) => 3,
+            })
+            .collect::<Vec<_>>();
+        if self.literal_types != types {
+            self.node_ownership = CompiledNodeOwnership::default();
+            self.literal_types = types;
         }
         let mut slot = 0usize;
         let mut ordinal = 0usize;

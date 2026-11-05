@@ -1047,6 +1047,7 @@ thread_local! {
     /// nodes have stable addresses for the life of the compiled routine, and
     /// the generation (routine + schema catalogs) guards recompiles and DDL.
     static EXPR_TYPE_SCOPE: std::cell::Cell<Option<(u64, usize)>> = const { std::cell::Cell::new(None) };
+    static EXPR_TYPE_OWNED_NODES: std::cell::RefCell<Option<Arc<FxHashSet<usize>>>> = const { std::cell::RefCell::new(None) };
     static EXPR_TYPE_MEMO: std::cell::RefCell<FxHashMap<(u64, usize, usize, u64), std::rc::Rc<Option<String>>>> =
         std::cell::RefCell::new(FxHashMap::default());
     #[cfg(test)]
@@ -1056,24 +1057,57 @@ thread_local! {
 const EXPR_TYPE_MEMO_MAX: usize = 65_536;
 
 /// Restores the previous scope on drop (nested routine calls).
-pub(crate) struct ExprTypeScopeGuard(Option<(u64, usize)>);
+pub(crate) struct ExprTypeScopeGuard(Option<(u64, usize)>, Option<Arc<FxHashSet<usize>>>);
 
 impl Drop for ExprTypeScopeGuard {
     fn drop(&mut self) {
         EXPR_TYPE_SCOPE.with(|scope| scope.set(self.0));
+        EXPR_TYPE_OWNED_NODES.with(|nodes| nodes.replace(self.1.take()));
     }
 }
 
 /// Enter the type-inference memo scope of a routine invocation.
+#[cfg(test)]
 pub(crate) fn enter_expr_type_scope(generation: u64, routine_ir: usize) -> ExprTypeScopeGuard {
-    EXPR_TYPE_SCOPE.with(|scope| ExprTypeScopeGuard(scope.replace(Some((generation, routine_ir)))))
+    replace_expr_type_scope(Some((generation, routine_ir)), None)
+}
+
+pub(crate) fn enter_owned_expr_type_scope(
+    generation: u64,
+    routine_ir: usize,
+    nodes: Arc<FxHashSet<usize>>,
+) -> ExprTypeScopeGuard {
+    replace_expr_type_scope(Some((generation, routine_ir)), Some(nodes))
+}
+
+fn replace_expr_type_scope(
+    next: Option<(u64, usize)>,
+    owners: Option<Arc<FxHashSet<usize>>>,
+) -> ExprTypeScopeGuard {
+    let previous = EXPR_TYPE_SCOPE.with(|scope| scope.replace(next));
+    let owners = EXPR_TYPE_OWNED_NODES.with(|nodes| nodes.replace(owners));
+    ExprTypeScopeGuard(previous, owners)
+}
+
+pub(crate) fn can_memoize_routine_node(address: usize) -> bool {
+    expr_type_scope().is_some()
+        && EXPR_TYPE_OWNED_NODES.with(|nodes| {
+            nodes
+                .borrow()
+                .as_ref()
+                .is_none_or(|nodes| nodes.contains(&address))
+        })
+}
+
+pub(crate) fn can_memoize_routine_expr(expr: &Expr) -> bool {
+    can_memoize_routine_node(expr as *const Expr as usize)
 }
 
 /// Temporary query nodes and synthetic argument rewrites have no stable node
 /// ownership. Keep their inference out of the address memo while retaining the
 /// surrounding scope.
 pub(crate) fn suspend_expr_type_scope() -> ExprTypeScopeGuard {
-    EXPR_TYPE_SCOPE.with(|scope| ExprTypeScopeGuard(scope.replace(None)))
+    replace_expr_type_scope(None, None)
 }
 
 /// The active scope's generation, for other per-node memos to share.
@@ -1144,6 +1178,9 @@ fn memoized_expr_pg_type(
     tag: u64,
     compute: impl FnOnce() -> Option<String>,
 ) -> std::rc::Rc<Option<String>> {
+    if !can_memoize_routine_expr(expr) {
+        return std::rc::Rc::new(compute());
+    }
     let key = (generation, routine_ir, expr as *const Expr as usize, tag);
     if let Some(hit) = EXPR_TYPE_MEMO.with(|memo| memo.borrow().get(&key).cloned()) {
         return hit;
@@ -3805,6 +3842,108 @@ mod function_arg_list_tests {
 #[cfg(test)]
 mod type_memo_ownership_tests {
     use super::*;
+
+    #[test]
+    fn routine_scopes_only_retain_nodes_owned_by_the_compiled_routine() {
+        fn expression(sql: &str) -> Expr {
+            let Statement::Query(query) = Parser::parse_sql(&PostgreSqlDialect {}, sql)
+                .unwrap()
+                .remove(0)
+            else {
+                panic!("query")
+            };
+            let SetExpr::Select(mut select) = *query.body else {
+                panic!("select")
+            };
+            let SelectItem::UnnamedExpr(expr) = select.projection.remove(0) else {
+                panic!("expression")
+            };
+            expr
+        }
+        fn verify(session: &mut SqlSession<'_>, ir: &RoutineIR) {
+            let RoutineStmt::Sql(Statement::Query(query)) = &ir.statements[0] else {
+                panic!("SQL routine")
+            };
+            let SetExpr::Select(select) = query.body.as_ref() else {
+                panic!("select")
+            };
+            let SelectItem::UnnamedExpr(original) = &select.projection[0] else {
+                panic!("expression")
+            };
+            let _scope = session.enter_routine_expr_type_scope(ir);
+            EXPR_TYPE_MEMO.with(|memo| memo.borrow_mut().clear());
+            let mut temporary = Box::new(original.clone());
+            {
+                let engine = SqlEngine::new(session.db_ref())
+                    .with_routine_ir(Some(expr_type_scope().unwrap().1));
+                let (_row_scope, context) = engine.bound_row_context(&[]);
+                assert_eq!(
+                    projected_expr_pg_type_with_db(session.db_ref(), &temporary).as_deref(),
+                    Some("numeric")
+                );
+                assert_eq!(
+                    engine
+                        .row_expr_pg_type(&temporary, &context)
+                        .as_deref()
+                        .as_deref(),
+                    Some("numeric")
+                );
+                *temporary = expression("SELECT NULL::jsonb");
+                assert_eq!(
+                    projected_expr_pg_type_with_db(session.db_ref(), &temporary).as_deref(),
+                    Some("jsonb"),
+                    "temporary expression addresses cannot retain a previous type"
+                );
+                assert_eq!(
+                    engine
+                        .row_expr_pg_type(&temporary, &context)
+                        .as_deref()
+                        .as_deref(),
+                    Some("jsonb"),
+                    "row typing must also respect expression ownership"
+                );
+                assert_eq!(
+                    projected_expr_pg_type_with_db(session.db_ref(), original).as_deref(),
+                    Some("numeric")
+                );
+                let count = SQL_EXPR_TYPE_UNCACHED_CALLS.with(std::cell::Cell::get);
+                assert_eq!(
+                    projected_expr_pg_type_with_db(session.db_ref(), original).as_deref(),
+                    Some("numeric")
+                );
+                assert_eq!(
+                    SQL_EXPR_TYPE_UNCACHED_CALLS.with(std::cell::Cell::get),
+                    count,
+                    "IR-owned expressions still use the memo"
+                );
+            }
+            EXPR_TYPE_MEMO.with(|memo| {
+                assert!(!memo
+                    .borrow()
+                    .keys()
+                    .any(|(_, _, node, _)| *node == temporary.as_ref() as *const Expr as usize))
+            });
+            let mut call = Box::new(expression("SELECT memo_scope_one()"));
+            assert_eq!(session.eval_session_expr(&call).unwrap(), SqlValue::Int(1));
+            *call = expression("SELECT memo_scope_two()");
+            assert_eq!(
+                session.eval_session_expr(&call).unwrap(),
+                SqlValue::Int(2),
+                "temporary function nodes cannot reuse another function's dispatch"
+            );
+        }
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session.execute("CREATE FUNCTION memo_scope_root() RETURNS numeric LANGUAGE sql AS $$SELECT NULL::numeric$$; CREATE FUNCTION memo_scope_one() RETURNS int LANGUAGE sql AS $$SELECT 1$$; CREATE FUNCTION memo_scope_two() RETURNS int LANGUAGE sql AS $$SELECT 2$$").unwrap();
+        let schema = load_routine(session.db_ref(), RoutineKind::Function, "memo_scope_root")
+            .unwrap()
+            .unwrap();
+        let ir = compile_routine_ir(&schema).unwrap();
+        verify(&mut session, &ir);
+        let copied_ir = ir.clone();
+        verify(&mut session, &copied_ir);
+    }
     fn evaluation_keeps_original_type_nodes(virtual_rows: bool) {
         let statements = Parser::parse_sql(
             &PostgreSqlDialect {},

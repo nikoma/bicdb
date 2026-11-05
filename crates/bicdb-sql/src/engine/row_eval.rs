@@ -118,18 +118,15 @@ impl<'db> SqlEngine<'db> {
         expr: &Expr,
         context: &BoundRowContext,
     ) -> std::rc::Rc<Option<String>> {
-        let Some(ir) = self.routine_ir else {
+        let scope = crate::eval::expr_type_scope()
+            .filter(|_| self.routine_ir.is_some() && crate::eval::can_memoize_routine_expr(expr));
+        let Some((generation, ir)) = scope else {
             return std::rc::Rc::new(row_columns_expr_pg_type(
                 self.db_ref(),
                 expr,
                 context.column_keys().iter().map(String::as_str),
             ));
         };
-        // The routine entry captured the catalog generation once; fall back
-        // to a lock read only when no scope is active.
-        let generation = crate::eval::expr_type_scope()
-            .map(|(generation, _)| generation)
-            .unwrap_or_else(|| self.db_ref().collection_generation(ROUTINE_COLLECTION));
         let key = (generation, ir, expr as *const Expr as usize);
         if let Some(hit) = ROW_EXPR_TYPE_MEMO.with(|memo| memo.borrow().get(&key).cloned()) {
             return hit;
@@ -1403,13 +1400,12 @@ impl<'db> SqlEngine<'db> {
     ) -> Result<SqlValue> {
         // The branch-type check only produces an error; for IR-owned CASE
         // nodes it is done once per catalog generation.
-        let validated_key = if self.memo_operand_types {
-            self.routine_ir.map(|ir| {
-                let generation = crate::eval::expr_type_scope()
-                    .map(|(generation, _)| generation)
-                    .unwrap_or_else(|| self.db_ref().collection_generation(ROUTINE_COLLECTION));
-                (generation, ir, conditions.as_ptr() as usize)
-            })
+        let validated_key = if self.memo_operand_types
+            && crate::eval::can_memoize_routine_node(conditions.as_ptr() as usize)
+        {
+            self.routine_ir
+                .and(crate::eval::expr_type_scope())
+                .map(|(generation, ir)| (generation, ir, conditions.as_ptr() as usize))
         } else {
             None
         };

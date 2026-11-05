@@ -5884,14 +5884,12 @@ impl<'db> SqlEngine<'db> {
         // Routine-IR-owned node: the plan is keyed by the node itself. The
         // IR fixes both the statement text and the variable name shape, and
         // the generation covers recompiles and DDL.
-        if ir_plan_cache::enabled() && self.ir_owned_statement && self.ctes.is_empty() {
-            if let Some(ir) = self.routine_ir {
-                let generation = crate::eval::expr_type_scope()
-                    .map(|(generation, _)| generation)
-                    .unwrap_or_else(|| {
-                        db.collection_generation(ROUTINE_COLLECTION)
-                            ^ db.collection_generation(SCHEMA_COLLECTION).rotate_left(32)
-                    });
+        if ir_plan_cache::enabled()
+            && self.ir_owned_statement
+            && self.ctes.is_empty()
+            && crate::eval::can_memoize_routine_node(query as *const Query as usize)
+        {
+            if let Some((generation, ir)) = self.routine_ir.and(crate::eval::expr_type_scope()) {
                 let key = (
                     db.instance_id(),
                     generation,
@@ -5963,17 +5961,15 @@ impl<'db> SqlEngine<'db> {
     /// The IR-node key for a routine-owned statement node (`None` when the
     /// statement is not IR-owned, a CTE is in scope, or no routine runs).
     pub(crate) fn ir_plan_node_key(&self, node: usize) -> Option<(u64, u64, usize, usize)> {
-        if !(self.ir_owned_statement && self.ctes.is_empty()) {
+        if !(self.ir_owned_statement
+            && self.ctes.is_empty()
+            && crate::eval::can_memoize_routine_node(node))
+        {
             return None;
         }
-        let ir = self.routine_ir?;
+        self.routine_ir?;
+        let (generation, ir) = crate::eval::expr_type_scope()?;
         let db = self.db_ref();
-        let generation = crate::eval::expr_type_scope()
-            .map(|(generation, _)| generation)
-            .unwrap_or_else(|| {
-                db.collection_generation(ROUTINE_COLLECTION)
-                    ^ db.collection_generation(SCHEMA_COLLECTION).rotate_left(32)
-            });
         Some((db.instance_id(), generation, ir, node))
     }
 

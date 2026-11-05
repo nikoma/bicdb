@@ -1904,6 +1904,17 @@ pub(crate) fn scalar_subquery_pg_type(
     let (SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. }) = item else {
         return None;
     };
+    // Built-in JSON constructors/aggregates declare their result independently
+    // of the input row shape. In particular, jsonb_agg(to_jsonb(x)) over a
+    // derived grouped query is still JSONB when it returns no rows. Resolve
+    // that type without executing a source or requiring its column metadata.
+    if let Expr::Function(function) = expr {
+        if let Some(pg_type) = json_function_call_pg_type(function)
+            .filter(|pg_type| matches!(pg_type.as_str(), "json" | "jsonb"))
+        {
+            return Some(pg_type);
+        }
+    }
     match select.from.as_slice() {
         [] => projected_expr_pg_type_with_db(db, expr),
         from if !from.is_empty() => {

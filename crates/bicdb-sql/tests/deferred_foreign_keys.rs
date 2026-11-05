@@ -319,19 +319,19 @@ fn oracle_constraint_names_follow_the_selected_schema_without_session_search_pat
     let mut db = BicDb::open(root.path()).unwrap();
     bicdb_sql::oracle::ensure_database_profile(&mut db, bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE)
         .unwrap();
-    let mut session = SqlSession::new_shared(&db);
     for sql in [
         "CREATE SCHEMA timing_schema",
         "CREATE TABLE timing_schema.p(id INTEGER PRIMARY KEY)",
         "CREATE TABLE timing_schema.c(id INTEGER PRIMARY KEY,pid INTEGER)",
         "ALTER TABLE timing_schema.c ADD CONSTRAINT selected_fk FOREIGN KEY(pid) REFERENCES timing_schema.p(id) DEFERRABLE INITIALLY DEFERRED",
-        "BEGIN",
     ] {
         let lowered = bicdb_sql::oracle::lower_session_sql(
             &db, sql, bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE, None, "bicdb",
         ).unwrap();
-        session.execute(&lowered).unwrap();
+        SqlSession::new(&mut db).execute(&lowered).unwrap();
     }
+    let mut session = SqlSession::new_shared(&db);
+    session.execute("BEGIN").unwrap();
     let lowered = bicdb_sql::oracle::lower_session_sql(
         &db,
         "SET CONSTRAINTS selected_fk IMMEDIATE",

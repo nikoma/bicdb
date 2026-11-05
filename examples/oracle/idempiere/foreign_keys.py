@@ -203,9 +203,18 @@ def probe_support(cursor, schema):
         if cursor.fetchone() != (999,):
             raise ValueError('failed probe commit did not preserve legacy row')
     finally:
-        cursor.execute('ROLLBACK')
+        cleanup_error = None
+        try:
+            cursor.execute('ROLLBACK')
+        except Exception as error:
+            cleanup_error = error
         for table in reversed(created):
-            cursor.execute('DROP TABLE ' + table, prepare=False)
+            try:
+                cursor.execute('DROP TABLE ' + table, prepare=False)
+            except Exception as error:
+                cleanup_error = error
+        if cleanup_error is not None:
+            raise cleanup_error
 
 
 def migrate(args):

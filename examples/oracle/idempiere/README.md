@@ -321,3 +321,10 @@ For legacy BLOB columns, the explicit `blob-types` phase supports read-only
 preflight, target-value fingerprints and resumable conversion. See the
 [BLOB migration guide](../../../docs/oracle-blob-migration.md) for commands,
 writer-quiescence requirements and limits.
+
+
+The [foreign-key migration guide](../../../docs/oracle-foreign-key-migration.md)
+documents read-only preflight, quiesced apply, exact source state matching and
+resumable target-value verification through `--phase foreign-keys`. Successful
+relationship installation remains separate from orphan inventory, source value
+equality and application qualification.

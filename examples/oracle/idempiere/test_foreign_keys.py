@@ -77,6 +77,20 @@ class ForeignKeyPlanTests(unittest.TestCase):
                          dict(identity,completed=None)]:
             with self.subTest(previous=previous),self.assertRaises(ValueError):target.validate_journal(previous,identity,plan)
 
+    def test_failed_capability_probe_rolls_back_and_attempts_every_owned_drop(self):
+        class Cursor:
+            def __init__(self):self.sql=[]
+            def execute(self,sql,*args,**kwargs):
+                self.sql.append(sql)
+                if sql.startswith('DROP TABLE') and sql.endswith('_C"'):
+                    raise RuntimeError('injected child cleanup failure')
+            def fetchone(self):return (999,)
+        cursor=Cursor()
+        with self.assertRaisesRegex(RuntimeError,'cleanup failure'):target.probe_support(cursor,'A"B')
+        drops=[sql for sql in cursor.sql if sql.startswith('DROP TABLE')]
+        self.assertEqual(len(drops),2);self.assertTrue(drops[-1].endswith('_P"'))
+        self.assertIn('ROLLBACK',cursor.sql)
+
     def test_apply_refuses_active_writers_before_manifest_or_connection_access(self):
         with self.assertRaisesRegex(ValueError,'writers-quiesced'):
             target.migrate(SimpleNamespace(check_only=False,writers_quiesced=False))
@@ -84,43 +98,38 @@ class ForeignKeyPlanTests(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get('BICDB_ORACLE_SERVER'),'set BICDB_ORACLE_SERVER for native migration acceptance')
 class ForeignKeyMigrationIntegrationTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.temp=tempfile.TemporaryDirectory(prefix='bicdb-fk-migration-test-');cls.addClassCleanup(cls.temp.cleanup)
-        cls.root=Path(cls.temp.name)
-        with socket.socket() as sock:sock.bind(('127.0.0.1',0));cls.port=sock.getsockname()[1]
-        cls.log=(cls.root/'server.log').open('wb');cls.addClassCleanup(cls.log.close)
-        cls.start_server();cls.addClassCleanup(cls.stop_server);cls.connect_server()
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory(prefix='bicdb-fk-migration-test-');self.addCleanup(self.temp.cleanup)
+        self.root=Path(self.temp.name)
+        with socket.socket() as sock:sock.bind(('127.0.0.1',0));self.port=sock.getsockname()[1]
+        self.log=(self.root/'server.log').open('wb');self.addCleanup(self.log.close)
+        self.start_server();self.addCleanup(self.stop_server);self.connect_server()
 
-    @classmethod
-    def start_server(cls):
-        cls.child=subprocess.Popen([os.environ['BICDB_ORACLE_SERVER'],str(cls.root/'db'),str(cls.port),'oracle-preview-v1','8','4'],stdout=cls.log,stderr=subprocess.STDOUT)
+    def start_server(self):
+        self.child=subprocess.Popen([os.environ['BICDB_ORACLE_SERVER'],str(self.root/'db'),str(self.port),'oracle-preview-v1','8','4'],stdout=self.log,stderr=subprocess.STDOUT)
 
-    @classmethod
-    def stop_server(cls):
-        if cls.child.poll() is None:
-            cls.child.send_signal(signal.SIGINT)
-            try:cls.child.wait(timeout=15)
-            except subprocess.TimeoutExpired:cls.child.kill();cls.child.wait()
-        if cls.child.returncode!=0:raise RuntimeError('fixture server did not stop cleanly')
+    def stop_server(self):
+        if self.child.poll() is None:
+            self.child.send_signal(signal.SIGINT)
+            try:self.child.wait(timeout=15)
+            except subprocess.TimeoutExpired:self.child.kill();self.child.wait()
+        if self.child.returncode!=0:raise RuntimeError('fixture server did not stop cleanly')
 
-    @classmethod
-    def connect_server(cls):
+    def connect_server(self):
         import psycopg
-        cls.dsn=f'host=127.0.0.1 port={cls.port} user=bicdb dbname=bicdb'
+        self.dsn=f'host=127.0.0.1 port={self.port} user=bicdb dbname=bicdb'
         for _ in range(300):
-            if cls.child.poll() is not None:raise RuntimeError('fixture startup failed: '+(cls.root/'server.log').read_text())
+            if self.child.poll() is not None:raise RuntimeError('fixture startup failed: '+(self.root/'server.log').read_text())
             try:
-                cls.conn=psycopg.connect(cls.dsn,autocommit=True,options='-c bicdb.sql_profile=oracle-preview-v1',connect_timeout=1)
-                cls.addClassCleanup(cls.conn.close);return
+                self.conn=psycopg.connect(self.dsn,autocommit=True,options='-c bicdb.sql_profile=oracle-preview-v1',connect_timeout=1)
+                self.addCleanup(self.conn.close);return
             except psycopg.OperationalError as error:
                 if error.sqlstate is not None:raise
                 time.sleep(.1)
         raise RuntimeError('fixture startup timed out')
 
-    @classmethod
-    def restart_server(cls):
-        cls.conn.close();cls.stop_server();cls.start_server();cls.connect_server()
+    def restart_server(self):
+        self.conn.close();self.stop_server();self.start_server();self.connect_server()
 
     def setup_schema(self):
         schema='FK_'+str(time.time_ns())+'"Q';m=manifest(schema);q=target.quote
@@ -154,6 +163,13 @@ class ForeignKeyMigrationIntegrationTests(unittest.TestCase):
             c.execute('INSERT INTO '+q(schema)+'."Q" VALUES(1,2)')
             c.execute('INSERT INTO '+q(schema)+'."P" VALUES(2,20)')
             c.execute('INSERT INTO '+q(schema)+'."C" VALUES(2,2,0)')
+            c.execute('INSERT INTO '+q(schema)+'."U" VALUES(1,10)')
+            c.execute('SAVEPOINT before_bad_unique_reference')
+            import psycopg
+            with self.assertRaises(psycopg.Error) as caught:
+                c.execute('INSERT INTO '+q(schema)+'."U" VALUES(2,999)')
+            self.assertEqual(caught.exception.sqlstate,'23503')
+            c.execute('ROLLBACK TO SAVEPOINT before_bad_unique_reference')
             c.execute('SET CONSTRAINTS ALL IMMEDIATE')
             c.execute('DELETE FROM '+q(schema)+'."P" WHERE "ID"=2')
             c.execute('SELECT "PID" FROM '+q(schema)+'."Q"');self.assertEqual(c.fetchone(),(None,))
@@ -186,6 +202,29 @@ class ForeignKeyMigrationIntegrationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'differs from source'):self.migrate(args)
         with self.conn.cursor() as c:
             state=target.catalog(c,m['source_schema']);self.assertEqual(state['constraints'][(item['table'],item['name'])]['delete_rule'],'NO ACTION')
+
+    def test_composite_unique_parent_and_partial_null_reference_are_preserved(self):
+        m,args=self.setup_schema();schema=m['source_schema'];q=target.quote
+        parent=copy.deepcopy(m['constraints'][4]);parent.update(name='P_BOTH_U',columns=['ID','ALT']);m['constraints'].append(parent)
+        child=copy.deepcopy(m['constraints'][0]);child.update(table='T',name='T_PK');m['constraints'].append(child)
+        fk=copy.deepcopy(next(c for c in m['constraints'] if c['kind']=='R'));fk.update(table='T',name='T_FK',columns=['PID','CODE'],referenced_constraint='P_BOTH_U',validated='VALIDATED',deferrable='DEFERRABLE',deferred='DEFERRED');m['constraints'].append(fk)
+        m['tables'].append(dict(name='T',columns=['ID','PID','CODE'],rows=1))
+        with self.conn.cursor() as c:
+            c.execute('ALTER TABLE '+q(schema)+'."P" ADD CONSTRAINT "P_BOTH_U" UNIQUE("ID","ALT")')
+            c.execute('CREATE TABLE '+q(schema)+'."T"("ID" INTEGER CONSTRAINT "T_PK" PRIMARY KEY,"PID" INTEGER,"CODE" INTEGER)')
+            c.execute('INSERT INTO '+q(schema)+'."T" VALUES(1,999,NULL)')
+        (args.snapshot/'manifest.json').write_text(json.dumps(m));args.check_only=False;args.writers_quiesced=True
+        self.assertEqual(len(self.migrate(args)['completed']),4)
+        with self.conn.cursor() as c:
+            c.execute('SELECT "PID","CODE" FROM '+q(schema)+'."T"');self.assertEqual(c.fetchone(),(999,None))
+
+    def test_child_without_explicit_primary_key_has_correct_catalog_column_positions(self):
+        m,args=self.setup_schema();schema=m['source_schema'];q=target.quote
+        fk=copy.deepcopy(next(c for c in m['constraints'] if c['kind']=='R'));fk.update(table='N',name='N_FK',validated='VALIDATED');m['constraints'].append(fk)
+        m['tables'].append(dict(name='N',columns=['PID','NOTE'],rows=0))
+        with self.conn.cursor() as c:c.execute('CREATE TABLE '+q(schema)+'."N"("PID" INTEGER,"NOTE" INTEGER)')
+        (args.snapshot/'manifest.json').write_text(json.dumps(m));args.check_only=False;args.writers_quiesced=True
+        self.assertEqual(len(self.migrate(args)['completed']),4)
 
     def test_changed_target_projection_is_refused_before_probe_or_installation(self):
         m,args=self.setup_schema()

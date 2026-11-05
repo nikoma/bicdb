@@ -15,6 +15,8 @@ pub struct Process {
     pub client: reqwest::Client,
     microvm: Option<crate::microvm::Resources>,
     stopped: bool,
+    private_work: Option<std::path::PathBuf>,
+    startup_timeout_ms: u64,
 }
 
 impl Process {
@@ -26,6 +28,9 @@ impl Process {
         token: &str,
         node: &Path,
     ) -> Result<Self> {
+        let configuration = crate::app_config::Config::read(app_dir)?;
+        let mut prepared = configuration.prepare(release, directory, app_dir)?;
+        let directory = prepared.directory.as_path();
         let listener = TcpListener::bind("127.0.0.1:0")?;
         let address = listener.local_addr()?;
         // The child binds before becoming ready; failed/racing binds fail activation.
@@ -60,11 +65,15 @@ impl Process {
                 "BICDB_ENTRYPOINT",
                 directory.join(&release.manifest.entrypoint),
             )
-            .env("BICDB_DATABASE_URL", endpoint)
-            .env("BICDB_DATABASE_TOKEN", token)
             .stdin(Stdio::null())
             .stdout(Stdio::from(log.try_clone()?))
             .stderr(Stdio::from(log));
+        if configuration.identity.is_none() {
+            command
+                .env("BICDB_DATABASE_URL", endpoint)
+                .env("BICDB_DATABASE_TOKEN", token);
+        }
+        configuration.configure(&mut command, &prepared)?;
         let client = upstream_client()?;
         let child = spawn_supervised(&mut command)?;
         Ok(Self {
@@ -73,6 +82,8 @@ impl Process {
             client,
             microvm: None,
             stopped: false,
+            private_work: prepared.work.take(),
+            startup_timeout_ms: configuration.startup_timeout_ms,
         })
     }
 
@@ -88,7 +99,13 @@ impl Process {
             client,
             microvm: Some(resources),
             stopped: false,
+            private_work: None,
+            startup_timeout_ms: 10_000,
         }
+    }
+
+    pub fn operator_isolated(&self) -> bool {
+        self.private_work.is_some()
     }
 
     pub fn exited(&mut self) -> Result<bool> {
@@ -124,7 +141,7 @@ impl Process {
             .redirect(reqwest::redirect::Policy::none())
             .build()?;
         let started = Instant::now();
-        while started.elapsed() < Duration::from_secs(10) {
+        while started.elapsed() < Duration::from_millis(self.startup_timeout_ms) {
             if self.exited()? {
                 bail!("application exited before readiness; inspect application logs");
             }
@@ -133,18 +150,23 @@ impl Process {
             } else {
                 "/health"
             };
-            if let Ok(response) = client
-                .get(format!("http://{}{path}", self.address))
-                .header("x-bic-internal-token", token)
-                .send()
-            {
+            let request = client.get(format!("http://{}{path}", self.address));
+            let request = if self.operator_isolated() {
+                request
+            } else {
+                request.header("x-bic-internal-token", token)
+            };
+            if let Ok(response) = request.send() {
                 if response.status().is_success() {
                     return Ok(());
                 }
             }
             std::thread::sleep(Duration::from_millis(30));
         }
-        bail!("application did not become ready within 10 seconds")
+        bail!(
+            "application did not become ready within {} milliseconds",
+            self.startup_timeout_ms
+        )
     }
 
     pub fn stop(&mut self) {
@@ -173,6 +195,9 @@ impl Process {
             }
         }
         self.microvm.take();
+        if let Some(work) = self.private_work.take() {
+            let _ = fs::remove_dir_all(work);
+        }
     }
 }
 

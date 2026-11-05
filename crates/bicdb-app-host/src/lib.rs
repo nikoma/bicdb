@@ -1,4 +1,5 @@
 //! Durable application deployment, state and supervised execution.
+pub mod app_config;
 pub mod cli;
 pub mod database;
 mod events;

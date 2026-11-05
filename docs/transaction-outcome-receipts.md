@@ -54,3 +54,7 @@ after a buffered commit error.
 These APIs support future execution-value provenance, including persistent LOB
 snapshots. They do not themselves implement LOB identities, reads or mutation,
 and do not change PostgreSQL transaction semantics or qualify an application.
+
+On Linux, an isolated child also exercises a real kernel-enforced short WAL
+append. The observer remains recovery-required through transaction/database
+drop, and the durable WAL watermark does not advance past the failed append.

@@ -209,3 +209,94 @@ fn predecision_validation_failure_remains_pending_until_retry_or_drop() {
     }
     assert_eq!(db.get("rows", "two").unwrap().unwrap().metadata["value"], 2);
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn failed_wal_append_reports_recovery_required_instead_of_abort() {
+    const CHILD: &str = "BICDB_RECEIPT_WAL_APPEND_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        // File-size limits and signal dispositions are process-wide. Keep the
+        // kernel-enforced I/O failure out of the concurrently running harness.
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "failed_wal_append_reports_recovery_required_instead_of_abort",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env(CHILD, "1")
+            .stdout(std::process::Stdio::null())
+            .status()
+            .unwrap();
+        assert!(status.success(), "isolated WAL append receipt audit failed");
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open_with_config(
+        root.path(),
+        DbConfig::default()
+            .with_fsync(true)
+            .with_storage_mode(bicdb_core::StorageMode::EmbeddedMemory),
+    )
+    .unwrap();
+    db.create_collection("rows").unwrap();
+    db.insert("rows", row(1)).unwrap();
+    let mut tx = db.begin_transaction().unwrap();
+    tx.update(
+        "rows",
+        Record::new("one").with_metadata(json!({"payload":"x".repeat(1_048_576)})),
+    )
+    .unwrap();
+    let receipt = tx.observe_record_write("rows", "one").unwrap();
+    let durable_before = db.tx_log_handle().stats().written_seq;
+    let before = std::fs::metadata(root.path().join("transactions.log"))
+        .unwrap()
+        .len();
+    let mut original: libc::rlimit = unsafe { std::mem::zeroed() };
+    assert_eq!(
+        unsafe { libc::getrlimit(libc::RLIMIT_FSIZE, &mut original) },
+        0
+    );
+    let signal = unsafe { libc::signal(libc::SIGXFSZ, libc::SIG_IGN) };
+    assert_ne!(signal, libc::SIG_ERR);
+    // Leave room for small pre-decision control files. The much larger redo
+    // must fail in WAL append, not during commit-sequence reservation.
+    let limited = libc::rlimit {
+        rlim_cur: before + 64 * 1024,
+        rlim_max: original.rlim_max,
+    };
+    assert_eq!(unsafe { libc::setrlimit(libc::RLIMIT_FSIZE, &limited) }, 0);
+    let result = db.commit_buffered_transaction(&mut tx);
+    // Restore the child's resources before inspecting the error or closing
+    // the database. Nothing modifies the parent process's limits or signals.
+    assert_eq!(unsafe { libc::setrlimit(libc::RLIMIT_FSIZE, &original) }, 0);
+    assert_ne!(
+        unsafe { libc::signal(libc::SIGXFSZ, signal) },
+        libc::SIG_ERR
+    );
+    assert!(result.is_err());
+    assert_eq!(
+        db.tx_log_handle().stats().written_seq,
+        durable_before,
+        "the failure must precede durable WAL publication"
+    );
+    assert!(
+        db.check_recovery_state().is_err(),
+        "commit result: {result:?}; outcome: {:?}",
+        receipt.transaction().outcome()
+    );
+    assert!(matches!(
+        receipt.transaction().outcome(),
+        TransactionOutcome::RecoveryRequired { .. }
+    ));
+    drop(tx);
+    assert!(matches!(
+        receipt.transaction().outcome(),
+        TransactionOutcome::RecoveryRequired { .. }
+    ));
+    drop(db);
+    assert!(matches!(
+        receipt.transaction().outcome(),
+        TransactionOutcome::RecoveryRequired { .. }
+    ));
+}

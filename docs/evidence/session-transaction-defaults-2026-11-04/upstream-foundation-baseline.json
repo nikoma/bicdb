@@ -1,0 +1,146 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "entire_application_tested": false,
+  "upstream_commit": "da0730aec42f3e9f5f671e81a70ff71e24d5e534",
+  "binary_sha256": "81f4a2669addfdd4a4bdd57a570fa0143a0de147376e87721cb7ca2de809b451",
+  "source_main_commit": "251f331cacb70a0bd817940d54c64372b9525a1d",
+  "provider": "DB_Oracle through PostgreSQL transport",
+  "disposable_database": true,
+  "primary_database_used_for_test_mutations": false,
+  "external_network_isolated": true,
+  "processes_stopped": true,
+  "rollback_reconciliation_qualified": false,
+  "passed": 163,
+  "totals": {
+    "tests": 170,
+    "errors": 2,
+    "failures": 5,
+    "skipped": 0
+  },
+  "suites": [
+    {
+      "name": "org.idempiere.test.base.DBTest",
+      "tests": 55,
+      "errors": 2,
+      "failures": 0,
+      "skipped": 0,
+      "report_sha256": "8c0c05f4b8da836daffdb58084b00d7be33551aad95784d5f65280c9a2b705be"
+    },
+    {
+      "name": "org.idempiere.test.base.DocumentStatusTest",
+      "tests": 1,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0,
+      "report_sha256": "3c1350a6dc888e91a565cdad6199acb6f4d594c5e19c4f876dcc385fb4ac92fb"
+    },
+    {
+      "name": "org.idempiere.test.base.GetBOMFunctionsTest",
+      "tests": 1,
+      "errors": 0,
+      "failures": 1,
+      "skipped": 0,
+      "report_sha256": "07287805940b480c67ef3392243d8a6b9cc843d566280f8b035ab8c67f25c3b2"
+    },
+    {
+      "name": "org.idempiere.test.base.MStorageTest",
+      "tests": 1,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0,
+      "report_sha256": "1dd5c734b7b9f1ca0715c2bd73fc868c33bb6d470daf7140b3f27b126fd3ee89"
+    },
+    {
+      "name": "org.idempiere.test.base.POInsertSQLTest",
+      "tests": 20,
+      "errors": 0,
+      "failures": 1,
+      "skipped": 0,
+      "report_sha256": "318979f3378b08445ab8e2fabec22ddaf9a3ed3737f9db0a8b8b45f1dc1f7157"
+    },
+    {
+      "name": "org.idempiere.test.base.POTest",
+      "tests": 53,
+      "errors": 0,
+      "failures": 2,
+      "skipped": 0,
+      "report_sha256": "82c3d112473b24308954b9ce5a26c5a8487c1731cdbbbfe73f1c2830632bcbd6"
+    },
+    {
+      "name": "org.idempiere.test.base.QueryTest",
+      "tests": 20,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0,
+      "report_sha256": "1948987a1a91ce2c06b172f72f83c45ac0012a1f37b0190f56b1eafaa6613d11"
+    },
+    {
+      "name": "org.idempiere.test.base.TrxTest",
+      "tests": 18,
+      "errors": 0,
+      "failures": 1,
+      "skipped": 0,
+      "report_sha256": "0acaa2e94b732ce9f371ac79ec5ddb80c8398be0f8ba028b8cf589dc9719b168"
+    },
+    {
+      "name": "org.idempiere.test.workflow.WFMaterialReceiptTest",
+      "tests": 1,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0,
+      "report_sha256": "d0c11ad92c96e13934cef50a82381e3203f5a227a23f9bbcfcd7005f7b30e4ab"
+    }
+  ],
+  "failures": [
+    {
+      "classname": "org.idempiere.test.base.DBTest",
+      "name": "testCreateConnectionMultipleIndependent",
+      "kind": "error",
+      "type": "java.lang.IllegalStateException",
+      "assessment": "Connection serializable default command fails to parse; addressed by this SQL checkpoint, application retest separate."
+    },
+    {
+      "classname": "org.idempiere.test.base.DBTest",
+      "name": "testCreateConnectionSerializable",
+      "kind": "error",
+      "type": "java.lang.IllegalStateException",
+      "assessment": "Connection serializable default command fails to parse; addressed by this SQL checkpoint, application retest separate."
+    },
+    {
+      "classname": "org.idempiere.test.base.GetBOMFunctionsTest",
+      "name": "test_getBOMFunctions",
+      "kind": "failure",
+      "type": "org.opentest4j.AssertionFailedError",
+      "assessment": "In-transaction BOM price expectation fails; semantic cause remains under investigation."
+    },
+    {
+      "classname": "org.idempiere.test.base.POInsertSQLTest",
+      "name": "testToInsertSQLAndExecute",
+      "kind": "failure",
+      "type": "org.opentest4j.AssertionFailedError",
+      "assessment": "PL/SQL binary LOB declaration fails to parse; broader LOB locator/append behavior remains unqualified."
+    },
+    {
+      "classname": "org.idempiere.test.base.POTest",
+      "name": "testValidateUniqueIndex",
+      "kind": "failure",
+      "type": "org.opentest4j.AssertionFailedError",
+      "assessment": "Duplicate is rejected but expected translated message is absent; client error identity/metadata remains under investigation."
+    },
+    {
+      "classname": "org.idempiere.test.base.POTest",
+      "name": "testOptimisticLocking",
+      "kind": "failure",
+      "type": "org.opentest4j.AssertionFailedError",
+      "assessment": "First optimistic update fails; timestamp bind/predicate behavior remains under investigation."
+    },
+    {
+      "classname": "org.idempiere.test.base.TrxTest",
+      "name": "testReleaseSavepoint",
+      "kind": "failure",
+      "type": "java.lang.AssertionError",
+      "assessment": "Source-based test limitation: Oracle branch returns without calling the mocked releaseSavepoint operation, so the injected exception cannot occur."
+    }
+  ]
+}

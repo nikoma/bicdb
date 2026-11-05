@@ -1,0 +1,274 @@
+{
+  "format": 1,
+  "source_commit": "92248f33dfe4fd91d6e34eed572a771cc827e6c8",
+  "binary_sha256": "12687fcf127e097e1b79005d353bc02d6a0853008be56e8e6e9ff50721a8cb74",
+  "source_files_sha256": {
+    "crates/bicdb-core/src/db.rs": "f3ddb9c671180148ca537953643b380bcde9e3255fbcdb88abe4acb718c36439",
+    "crates/bicdb-core/src/db/access_mutation.rs": "1b637df7909f9d1a60223c3422f25bcfbcb86adc09fe58bf64407932eed041d6",
+    "crates/bicdb-core/src/db/commit_snapshot.rs": "e0a7bee988a37c10e5d08e903e3bb92110439e00d5d52c66e9860b425542771e",
+    "crates/bicdb-core/tests/transaction_isolation.rs": "0dd77180b95bf1dece53a83a06eaa9b6b6faef91064b4b92f201a520c224c5bd",
+    "crates/bicdb-pgwire/src/lib.rs": "84336483a87daeb5290bc2c578b4d1cc5a67b4d52c088867555efd3354c0bc4f",
+    "crates/bicdb-pgwire/src/sql_parsing.rs": "3feeb51d60c90f737b87b33cb7807cad3529e22944454483b1986cc09881daca",
+    "crates/bicdb-pgwire/tests/oracle_hr.rs": "082af985ac20665419bba52a00ff8e7102b955d99545818d5b597d485e359a00",
+    "crates/bicdb-sql/src/engine.rs": "e7896717870bdf3b08ddb3c80fc690266da28cf6c4d1e6b8c3662143742fd8f0",
+    "crates/bicdb-sql/src/eval/value_ops1.rs": "a9a0347e39d2ddabb592b39767827a51ae40b9081507a65db022e8e2c7efbcf2",
+    "crates/bicdb-sql/src/oracle.rs": "25fa390fce87a3e0c09537e41ee9c3f351368f7fafe2b01710e0f92f77713a69",
+    "crates/bicdb-sql/src/oracle/autonomous.rs": "83c097721f6ad617e42a0116a73d1a7f1018f245decc97fc3bb0e3ef4df434eb",
+    "crates/bicdb-sql/src/schema_meta.rs": "55d0feb920caa2108dbe0ad305db80fc3b0e2fcc1ae3727fe80143bbd5252503",
+    "crates/bicdb-sql/src/session.rs": "26a374ba67feb47a35b171926b9020392c557df5f6ad3ae968ce71ef9701cf78",
+    "crates/bicdb-sql/src/session/raw_ddl_analyze.rs": "52ed343fbf81ad2aefc176429ed15f0ab4292bf4eda13a1b1e3329bcc089726e",
+    "crates/bicdb-sql/src/session/transaction_defaults.rs": "2c06dcdcf60232bbfd04bf2abf46a4df70484fd333d4ff72a6794150899db8a1",
+    "examples/oracle/reference/session_isolation.py": "ff82276841f6852c1a3eb45051df5c5ad74462750bd73be64a7ffa5346f6be05"
+  },
+  "steps": [
+    {
+      "name": "build",
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "-p",
+        "bicdb-pgwire",
+        "--example",
+        "oracle_server"
+      ],
+      "returncode": 0,
+      "counts": []
+    },
+    {
+      "name": "core",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "transaction_isolation",
+        "--test",
+        "transaction_rollback_mark",
+        "--test",
+        "snapshot",
+        "--test",
+        "sync_transaction_visibility",
+        "--",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "sql",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "--",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 628,
+          "failed": 0,
+          "ignored": 3
+        }
+      ]
+    },
+    {
+      "name": "type_consistency",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "type_consistency",
+        "--",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "sql_regressions",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "cell_rows",
+        "--test",
+        "projection_pushdown",
+        "--test",
+        "column_references",
+        "--test",
+        "typed_comparison",
+        "--test",
+        "prepared_typed_join",
+        "--test",
+        "write_path_authorization",
+        "--",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 17,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "pgwire",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-pgwire",
+        "--tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 124,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 1
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 39,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 169,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 1
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    }
+  ],
+  "formatting_passed": true,
+  "diff_check_passed": true,
+  "compiler_version_unchanged": 27,
+  "profile_metadata_unchanged": true,
+  "application_qualified": false,
+  "release_published": false,
+  "memory_guard": {
+    "start_available_gib": 14.0,
+    "minimum_available_gib": 8,
+    "minimum_observed_available_bytes": 13003681792
+  }
+}

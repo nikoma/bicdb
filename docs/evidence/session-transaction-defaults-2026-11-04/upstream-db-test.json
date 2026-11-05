@@ -1,0 +1,108 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "entire_application_tested": false,
+  "source_commit": "92248f33dfe4fd91d6e34eed572a771cc827e6c8",
+  "runtime_binary_sha256": "12687fcf127e097e1b79005d353bc02d6a0853008be56e8e6e9ff50721a8cb74",
+  "upstream_commit": "da0730aec42f3e9f5f671e81a70ff71e24d5e534",
+  "test_reports": [
+    {
+      "file": "TEST-org.idempiere.test.base.DBTest.xml",
+      "name": "org.idempiere.test.base.DBTest",
+      "tests": "55",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0"
+    }
+  ],
+  "added_bundles": [
+    {
+      "name": "org.idempiere.test",
+      "version": "13.0.0.202611011311",
+      "sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7"
+    },
+    {
+      "name": "org.eclipse.tycho.surefire.osgibooter",
+      "version": "4.0.8",
+      "sha256": "d8d645a8cb944e880751f4f0180af33a0384ab53f240c4473784c6cad7d3915c"
+    },
+    {
+      "name": "org.eclipse.tycho.surefire.junit59",
+      "version": "4.0.8",
+      "sha256": "c96e2c66bb7c8b71631884b6439124ab8b464e2c7d47c9efb05febc3a671d771"
+    },
+    {
+      "name": "junit-jupiter-api",
+      "version": "5.9.1",
+      "sha256": "5d2fe4d719dffb25a95d77e9c7a34893cbbb1b4cc6c86f2726af7e0fb7035b2f"
+    },
+    {
+      "name": "junit-jupiter-params",
+      "version": "5.9.1",
+      "sha256": "30157f26d857ba4f84c0d84d156f55f056e80dc09b4281affa8b1ed4d3205c08"
+    },
+    {
+      "name": "junit-platform-commons",
+      "version": "1.9.1",
+      "sha256": "a8e82d510bbbce5fe1777b2ecf7bc68401e9ae8327009e029b2db5798403d25e"
+    },
+    {
+      "name": "org.opentest4j",
+      "version": "1.2.0",
+      "sha256": "58812de60898d976fb81ef3b62da05c6604c18fd4a249f5044282479fc286af2"
+    },
+    {
+      "name": "org.apiguardian.api",
+      "version": "1.1.2",
+      "sha256": "b509448ac506d607319f182537f0b35d71007582ec741832a1f111e5b5b70b38"
+    },
+    {
+      "name": "assertj-core",
+      "version": "3.22.0",
+      "sha256": "419b7594a869147ee9578f5af2297fdd2c03c07c835927dbf4a7b32ad22cb411"
+    }
+  ],
+  "report_sha256": "182f6108d5c77a1f1f6cbd0fe942e078073f8f201c3e0ae804d8ae4ccc39087b",
+  "processes_stopped": true,
+  "primary_database_used_for_test_mutations": false,
+  "external_network": {
+    "interfaces": [
+      "lo"
+    ],
+    "routes": [],
+    "network_isolated": true,
+    "application_qualified": false
+  },
+  "rollback_reconciliation": {
+    "format": 1,
+    "application_qualified": false,
+    "read_only": true,
+    "prior_workflow_checks": 67,
+    "settled_business_queries": 27,
+    "object_fingerprints": {
+      "routines": {
+        "count": 62,
+        "sha256": "f444b2e861c0b5ea8712d20306c6beff6dc98ffad2ef3b9e717d4408593e73ec"
+      },
+      "views": {
+        "count": 160,
+        "sha256": "65e8ca1aa9aac0f1b4c7df2d9e8f66e39db6a3075a52e3a95cabb2ddb9305915"
+      }
+    },
+    "new_business_records": {
+      "orders": 0,
+      "receipts": 0,
+      "projects": 0,
+      "issues": 0,
+      "project_lines": 0
+    },
+    "primary_database_used": false,
+    "selected_business_rollback_verified": true,
+    "scope": "Selected workflow observations, business queries, object fingerprints and new order/receipt/project/issue counts; not a full-table audit."
+  },
+  "memory_guard": {
+    "start_available_gib": 14.0,
+    "minimum_available_gib": 8,
+    "minimum_observed_available_bytes": 13135876096
+  }
+}

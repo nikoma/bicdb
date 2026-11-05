@@ -1629,11 +1629,12 @@ impl BoundExprScope {
         self
     }
 
-    fn known_expr_type(&self, expr: &Expr) -> Option<String> {
+    pub(crate) fn known_expr_type(&self, expr: &Expr) -> Option<String> {
         match expr {
-            Expr::Identifier(ident) => self
-                .var_id(&ident.value)
-                .and_then(|id| self.var_types.as_ref()?.get(&id).cloned()),
+            Expr::Identifier(ident) => match self.bind_identifier(&[ident_value(ident)])? {
+                BoundExpr::Var(id) => self.var_types.as_ref()?.get(&id).cloned(),
+                _ => None,
+            },
             Expr::Value(value) if matches!(value.value, Value::Placeholder(_)) => {
                 let Value::Placeholder(name) = &value.value else {
                     unreachable!()

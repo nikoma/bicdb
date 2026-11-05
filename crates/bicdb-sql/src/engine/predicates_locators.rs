@@ -4246,7 +4246,13 @@ impl<'db> SqlEngine<'db> {
         else {
             return Ok(None);
         };
-        if !routine.schema.returns_set {
+        if !routine.schema.returns_set
+            && !routine
+                .ir
+                .params
+                .iter()
+                .any(|param| matches!(param.mode, RoutineArgMode::Out | RoutineArgMode::InOut))
+        {
             return Err(SqlError::UnsupportedPlpgsqlFeature(format!(
                 "stored routine {} is not set-returning",
                 routine.schema.name
@@ -4311,6 +4317,12 @@ impl<'db> SqlEngine<'db> {
         ) {
             if declared.len() == result.columns.len() {
                 result.columns = declared.into_iter().map(|(name, _)| name).collect();
+            }
+        }
+        if !routine.schema.returns_set {
+            result.rows.truncate(1);
+            if result.rows.is_empty() {
+                result.rows.push(vec![SqlValue::Null; result.columns.len()]);
             }
         }
         let alias_name = table_alias
@@ -5276,7 +5288,11 @@ impl<'db> SqlEngine<'db> {
             if let Some(routine) =
                 resolve_routine_cached(self.db_ref(), RoutineKind::Function, &table)?
             {
-                if !routine.schema.returns_set {
+                if !routine.schema.returns_set
+                    && !routine.ir.params.iter().any(|param| {
+                        matches!(param.mode, RoutineArgMode::Out | RoutineArgMode::InOut)
+                    })
+                {
                     return Err(SqlError::UnsupportedPlpgsqlFeature(format!(
                         "stored routine {} is not set-returning",
                         routine.schema.name
@@ -5288,7 +5304,11 @@ impl<'db> SqlEngine<'db> {
                         routine.schema.language, routine.schema.name
                     )));
                 }
-                let source_columns = if routine.schema.return_type.eq_ignore_ascii_case("record") {
+                let declared =
+                    super::materialize::declared_table_function_columns(self.db_ref(), &table);
+                let source_columns = if let Some(declared) = declared {
+                    declared.into_iter().map(|(name, _)| name).collect()
+                } else if routine.schema.return_type.eq_ignore_ascii_case("record") {
                     table_alias
                         .map(|alias| {
                             alias

@@ -3204,12 +3204,20 @@ impl<'db> SqlEngine<'db> {
                 )
             }
         };
-        let scope = BoundExprScope {
+        let mut scope = BoundExprScope {
             cols: cols.clone(),
             exact_vars,
             array_vars: Arc::new(FxHashSet::default()),
             var_types: None,
         };
+        if let Some(slots) = slots {
+            let types = slots
+                .types
+                .iter()
+                .map(|(name, kind)| (name.clone(), kind.pg_type.clone()))
+                .collect::<Vec<_>>();
+            scope = scope.with_var_types(&types);
+        }
         let row_lookup = SlotRowLookup { cols };
         let context = BoundRowContext {
             row_lookup: row_lookup.clone(),

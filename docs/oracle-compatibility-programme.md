@@ -17,6 +17,14 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [lookup-binding checkpoint](evidence/sql-join-key-bindings-2026-11-04/README.md)
+defers unavailable join inputs before primary/secondary index probes and keeps
+residual mutation predicates for unbound or repeated key equalities. Independent
+references pass 23/23 join and 12/12 mutation controls in each profile. The
+original Oracle-provider BOM test passes over PostgreSQL transport with rollback
+reconciliation on a disposable copy. Full application and programme acceptance
+remain incomplete.
+
 The [connection-isolation checkpoint](evidence/session-transaction-defaults-2026-11-04/README.md)
 separates future connection defaults from active transaction modes, preserves
 transaction boundaries after batch setup statements, and checks Oracle-profile

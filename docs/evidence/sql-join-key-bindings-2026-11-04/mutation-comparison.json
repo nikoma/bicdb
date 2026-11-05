@@ -1,0 +1,2188 @@
+{
+  "application_qualified": false,
+  "binary_sha256": "12a7525e48b7896d4a7eb4b87e59f5a8040649c47b0aec983f9a5d545e24159d",
+  "fixture_sha256": "8131175175dbc3c6b3d420d97569aacfac23e2c1d1b1783dab434edd52ca7830",
+  "profiles": {
+    "oracle": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": "23.26.3.0.0",
+      "cases": [
+        {
+          "id": "update_conflicting_key",
+          "source": {
+            "id": "update_conflicting_key",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "update_conflicting_key",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "delete_conflicting_key",
+          "source": {
+            "id": "delete_conflicting_key",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "delete_conflicting_key",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "update_repeated_key",
+          "source": {
+            "id": "update_repeated_key",
+            "expected": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "changed"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "changed"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "update_repeated_key",
+            "expected": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "changed"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "changed"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "delete_repeated_key",
+          "source": {
+            "id": "delete_repeated_key",
+            "expected": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "delete_repeated_key",
+            "expected": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "update_empty_scalar",
+          "source": {
+            "id": "update_empty_scalar",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "update_empty_scalar",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "delete_empty_scalar",
+          "source": {
+            "id": "delete_empty_scalar",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "delete_empty_scalar",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "update_empty_aggregate",
+          "source": {
+            "id": "update_empty_aggregate",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "update_empty_aggregate",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "delete_empty_aggregate",
+          "source": {
+            "id": "delete_empty_aggregate",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "delete_empty_aggregate",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "update_null_literal",
+          "source": {
+            "id": "update_null_literal",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "update_null_literal",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "delete_null_literal",
+          "source": {
+            "id": "delete_null_literal",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "delete_null_literal",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "update_nonnull_scalar",
+          "source": {
+            "id": "update_nonnull_scalar",
+            "expected": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "changed"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "changed"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "update_nonnull_scalar",
+            "expected": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "changed"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "changed"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "delete_nonnull_scalar",
+          "source": {
+            "id": "delete_nonnull_scalar",
+            "expected": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "delete_nonnull_scalar",
+            "expected": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 12,
+      "matched": 12,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "source_execution_error": null,
+      "target_execution_error": null,
+      "success": true
+    },
+    "postgres": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": 180004,
+      "cases": [
+        {
+          "id": "update_conflicting_key",
+          "source": {
+            "id": "update_conflicting_key",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "update_conflicting_key",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "delete_conflicting_key",
+          "source": {
+            "id": "delete_conflicting_key",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "delete_conflicting_key",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "update_repeated_key",
+          "source": {
+            "id": "update_repeated_key",
+            "expected": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "changed"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "changed"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "update_repeated_key",
+            "expected": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "changed"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "changed"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "delete_repeated_key",
+          "source": {
+            "id": "delete_repeated_key",
+            "expected": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "delete_repeated_key",
+            "expected": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "update_empty_scalar",
+          "source": {
+            "id": "update_empty_scalar",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "update_empty_scalar",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "delete_empty_scalar",
+          "source": {
+            "id": "delete_empty_scalar",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "delete_empty_scalar",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "update_empty_aggregate",
+          "source": {
+            "id": "update_empty_aggregate",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "update_empty_aggregate",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "delete_empty_aggregate",
+          "source": {
+            "id": "delete_empty_aggregate",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "delete_empty_aggregate",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "update_null_literal",
+          "source": {
+            "id": "update_null_literal",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "update_null_literal",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "delete_null_literal",
+          "source": {
+            "id": "delete_null_literal",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "delete_null_literal",
+            "expected": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 0,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "update_nonnull_scalar",
+          "source": {
+            "id": "update_nonnull_scalar",
+            "expected": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "changed"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "changed"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "update_nonnull_scalar",
+            "expected": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "changed"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  1,
+                  2,
+                  "changed"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "delete_nonnull_scalar",
+          "source": {
+            "id": "delete_nonnull_scalar",
+            "expected": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "delete_nonnull_scalar",
+            "expected": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "affected": 1,
+              "rows": [
+                [
+                  1,
+                  1,
+                  "done"
+                ],
+                [
+                  2,
+                  1,
+                  "done"
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 12,
+      "matched": 12,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "source_execution_error": null,
+      "target_execution_error": null,
+      "success": true
+    }
+  },
+  "cleanup_complete": true
+}

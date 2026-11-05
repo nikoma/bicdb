@@ -1,0 +1,1658 @@
+{
+  "application_qualified": false,
+  "binary_sha256": "12a7525e48b7896d4a7eb4b87e59f5a8040649c47b0aec983f9a5d545e24159d",
+  "fixture_sha256": "984e442b065b73f9db18c3fee38952d356c92b32c6d0f86748fcb681364f0d34",
+  "profiles": {
+    "oracle": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": "23.26.3.0.0",
+      "cases": [
+        {
+          "id": "before",
+          "source": {
+            "id": "before",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "before",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_update_comma",
+          "source": {
+            "id": "pending_update_comma",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_update_comma",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_update_explicit",
+          "source": {
+            "id": "pending_update_explicit",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_update_explicit",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_update_known_null",
+          "source": {
+            "id": "pending_update_known_null",
+            "expected": [],
+            "qualified": true,
+            "actual": []
+          },
+          "bicdb": {
+            "id": "pending_update_known_null",
+            "expected": [],
+            "qualified": true,
+            "actual": []
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_update_scalar_local",
+          "source": {
+            "id": "pending_update_scalar_local",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_update_scalar_local",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_update_scalar_correlated",
+          "source": {
+            "id": "pending_update_scalar_correlated",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_update_scalar_correlated",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_update_scalar_coalesced",
+          "source": {
+            "id": "pending_update_scalar_coalesced",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_update_scalar_coalesced",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_secondary_case",
+          "source": {
+            "id": "pending_secondary_case",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_secondary_case",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_secondary_range",
+          "source": {
+            "id": "pending_secondary_range",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_secondary_range",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_secondary_filter",
+          "source": {
+            "id": "pending_secondary_filter",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_secondary_filter",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "rollback_update",
+          "source": {
+            "id": "rollback_update",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "rollback_update",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_insert_comma",
+          "source": {
+            "id": "pending_insert_comma",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_insert_comma",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "rollback_insert",
+          "source": {
+            "id": "rollback_insert",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "rollback_insert",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_delete_comma",
+          "source": {
+            "id": "pending_delete_comma",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_delete_comma",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "rollback_delete",
+          "source": {
+            "id": "rollback_delete",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "rollback_delete",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_matched_row_excluded",
+          "source": {
+            "id": "pending_matched_row_excluded",
+            "expected": [],
+            "qualified": true,
+            "actual": []
+          },
+          "bicdb": {
+            "id": "pending_matched_row_excluded",
+            "expected": [],
+            "qualified": true,
+            "actual": []
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_matched_row_reenabled",
+          "source": {
+            "id": "pending_matched_row_reenabled",
+            "expected": [
+              [
+                2,
+                "Y"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "Y"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_matched_row_reenabled",
+            "expected": [
+              [
+                2,
+                "Y"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "Y"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "rollback_matched_row",
+          "source": {
+            "id": "rollback_matched_row",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "rollback_matched_row",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "committed_update",
+          "source": {
+            "id": "committed_update",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "committed_update",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_view_source_comma",
+          "source": {
+            "id": "pending_view_source_comma",
+            "expected": [
+              [
+                3,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                3,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_view_source_comma",
+            "expected": [
+              [
+                3,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                3,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_view_source_explicit",
+          "source": {
+            "id": "pending_view_source_explicit",
+            "expected": [
+              [
+                3,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                3,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_view_source_explicit",
+            "expected": [
+              [
+                3,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                3,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_view_source_coalesce",
+          "source": {
+            "id": "pending_view_source_coalesce",
+            "expected": [
+              [
+                3,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                3,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_view_source_coalesce",
+            "expected": [
+              [
+                3,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                3,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "rollback_view_source",
+          "source": {
+            "id": "rollback_view_source",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "rollback_view_source",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 23,
+      "matched": 23,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "source_execution_error": null,
+      "target_execution_error": null,
+      "success": true
+    },
+    "postgres": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": 180004,
+      "cases": [
+        {
+          "id": "before",
+          "source": {
+            "id": "before",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "before",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_update_comma",
+          "source": {
+            "id": "pending_update_comma",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_update_comma",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_update_explicit",
+          "source": {
+            "id": "pending_update_explicit",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_update_explicit",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_update_known_null",
+          "source": {
+            "id": "pending_update_known_null",
+            "expected": [],
+            "qualified": true,
+            "actual": []
+          },
+          "bicdb": {
+            "id": "pending_update_known_null",
+            "expected": [],
+            "qualified": true,
+            "actual": []
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_update_scalar_local",
+          "source": {
+            "id": "pending_update_scalar_local",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_update_scalar_local",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_update_scalar_correlated",
+          "source": {
+            "id": "pending_update_scalar_correlated",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_update_scalar_correlated",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_update_scalar_coalesced",
+          "source": {
+            "id": "pending_update_scalar_coalesced",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_update_scalar_coalesced",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_secondary_case",
+          "source": {
+            "id": "pending_secondary_case",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_secondary_case",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_secondary_range",
+          "source": {
+            "id": "pending_secondary_range",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_secondary_range",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_secondary_filter",
+          "source": {
+            "id": "pending_secondary_filter",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_secondary_filter",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "rollback_update",
+          "source": {
+            "id": "rollback_update",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "rollback_update",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_insert_comma",
+          "source": {
+            "id": "pending_insert_comma",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_insert_comma",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "rollback_insert",
+          "source": {
+            "id": "rollback_insert",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "rollback_insert",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_delete_comma",
+          "source": {
+            "id": "pending_delete_comma",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_delete_comma",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "rollback_delete",
+          "source": {
+            "id": "rollback_delete",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "rollback_delete",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_matched_row_excluded",
+          "source": {
+            "id": "pending_matched_row_excluded",
+            "expected": [],
+            "qualified": true,
+            "actual": []
+          },
+          "bicdb": {
+            "id": "pending_matched_row_excluded",
+            "expected": [],
+            "qualified": true,
+            "actual": []
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_matched_row_reenabled",
+          "source": {
+            "id": "pending_matched_row_reenabled",
+            "expected": [
+              [
+                2,
+                "Y"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "Y"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_matched_row_reenabled",
+            "expected": [
+              [
+                2,
+                "Y"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "Y"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "rollback_matched_row",
+          "source": {
+            "id": "rollback_matched_row",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "rollback_matched_row",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "committed_update",
+          "source": {
+            "id": "committed_update",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "committed_update",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_view_source_comma",
+          "source": {
+            "id": "pending_view_source_comma",
+            "expected": [
+              [
+                3,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                3,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_view_source_comma",
+            "expected": [
+              [
+                3,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                3,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_view_source_explicit",
+          "source": {
+            "id": "pending_view_source_explicit",
+            "expected": [
+              [
+                3,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                3,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_view_source_explicit",
+            "expected": [
+              [
+                3,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                3,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_view_source_coalesce",
+          "source": {
+            "id": "pending_view_source_coalesce",
+            "expected": [
+              [
+                3,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                3,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "pending_view_source_coalesce",
+            "expected": [
+              [
+                3,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                3,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "rollback_view_source",
+          "source": {
+            "id": "rollback_view_source",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "rollback_view_source",
+            "expected": [
+              [
+                2,
+                "N"
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                2,
+                "N"
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 23,
+      "matched": 23,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "source_execution_error": null,
+      "target_execution_error": null,
+      "success": true
+    }
+  },
+  "cleanup_complete": true
+}

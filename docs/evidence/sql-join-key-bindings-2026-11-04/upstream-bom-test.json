@@ -1,0 +1,340 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "entire_application_tested": false,
+  "source_commit": "04d3590a7d940a8dce1d82edfd45828dd6b77172",
+  "runtime_binary_sha256": "12a7525e48b7896d4a7eb4b87e59f5a8040649c47b0aec983f9a5d545e24159d",
+  "upstream_commit": "da0730aec42f3e9f5f671e81a70ff71e24d5e534",
+  "provider": "DB_Oracle through PostgreSQL transport",
+  "test_reports": [
+    {
+      "file": "TEST-org.idempiere.test.base.GetBOMFunctionsTest.xml",
+      "name": "org.idempiere.test.base.GetBOMFunctionsTest",
+      "tests": "1",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0"
+    }
+  ],
+  "report_hashes": [
+    {
+      "file": "TEST-org.idempiere.test.base.GetBOMFunctionsTest.xml",
+      "sha256": "fd1946e4e665b9fe19f5813aa61687bbc0d034ef5bcdc42609b03c976942509f"
+    }
+  ],
+  "added_bundles": [
+    {
+      "name": "org.idempiere.test",
+      "version": "13.0.0.202611011311",
+      "sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7"
+    },
+    {
+      "name": "org.eclipse.tycho.surefire.osgibooter",
+      "version": "4.0.8",
+      "sha256": "d8d645a8cb944e880751f4f0180af33a0384ab53f240c4473784c6cad7d3915c"
+    },
+    {
+      "name": "org.eclipse.tycho.surefire.junit59",
+      "version": "4.0.8",
+      "sha256": "c96e2c66bb7c8b71631884b6439124ab8b464e2c7d47c9efb05febc3a671d771"
+    },
+    {
+      "name": "junit-jupiter-api",
+      "version": "5.9.1",
+      "sha256": "5d2fe4d719dffb25a95d77e9c7a34893cbbb1b4cc6c86f2726af7e0fb7035b2f"
+    },
+    {
+      "name": "junit-jupiter-params",
+      "version": "5.9.1",
+      "sha256": "30157f26d857ba4f84c0d84d156f55f056e80dc09b4281affa8b1ed4d3205c08"
+    },
+    {
+      "name": "junit-platform-commons",
+      "version": "1.9.1",
+      "sha256": "a8e82d510bbbce5fe1777b2ecf7bc68401e9ae8327009e029b2db5798403d25e"
+    },
+    {
+      "name": "org.opentest4j",
+      "version": "1.2.0",
+      "sha256": "58812de60898d976fb81ef3b62da05c6604c18fd4a249f5044282479fc286af2"
+    },
+    {
+      "name": "org.apiguardian.api",
+      "version": "1.1.2",
+      "sha256": "b509448ac506d607319f182537f0b35d71007582ec741832a1f111e5b5b70b38"
+    },
+    {
+      "name": "assertj-core",
+      "version": "3.22.0",
+      "sha256": "419b7594a869147ee9578f5af2297fdd2c03c07c835927dbf4a7b32ad22cb411"
+    }
+  ],
+  "processes_stopped": true,
+  "primary_database_used_for_test_mutations": false,
+  "network_isolation": {
+    "interfaces": [
+      "lo"
+    ],
+    "only_loopback": true
+  },
+  "rollback_reconciliation": {
+    "format": 1,
+    "application_qualified": false,
+    "read_only": true,
+    "prior_workflow_checks": 67,
+    "settled_business_queries": 27,
+    "object_fingerprints": {
+      "routines": {
+        "count": 62,
+        "sha256": "f444b2e861c0b5ea8712d20306c6beff6dc98ffad2ef3b9e717d4408593e73ec"
+      },
+      "views": {
+        "count": 160,
+        "sha256": "65e8ca1aa9aac0f1b4c7df2d9e8f66e39db6a3075a52e3a95cabb2ddb9305915"
+      }
+    },
+    "new_business_records": {
+      "orders": 0,
+      "receipts": 0,
+      "projects": 0,
+      "issues": 0,
+      "project_lines": 0
+    },
+    "upstream_transaction_rollback_verified": true,
+    "primary_database_used": false
+  },
+  "seed_restoration": {
+    "application_qualified": false,
+    "primary_database_used": false,
+    "read_only": true,
+    "source_version": "23.26.3.0.0",
+    "source_objects_mutated": false,
+    "seed_rows_restored": true,
+    "prices": 7,
+    "products": 4,
+    "scope": "Selected price amounts/active flags and product stock/override flags, with update timestamps and users",
+    "source_rows": {
+      "prices": [
+        [
+          "200033",
+          "133",
+          "104",
+          "Y",
+          "33",
+          "33.75",
+          "27",
+          "2003-01-21T20:17:49.000000",
+          "0"
+        ],
+        [
+          "200034",
+          "134",
+          "104",
+          "Y",
+          "66",
+          "67.5",
+          "54",
+          "2003-01-21T20:17:49.000000",
+          "0"
+        ],
+        [
+          "200059",
+          "135",
+          "104",
+          "Y",
+          "22",
+          "22.5",
+          "18",
+          "2003-01-21T20:17:49.000000",
+          "0"
+        ],
+        [
+          "200084",
+          "145",
+          "104",
+          "Y",
+          "520",
+          "500",
+          "496",
+          "2008-09-24T13:49:44.000000",
+          "100"
+        ],
+        [
+          "200095",
+          "133",
+          "200000",
+          "Y",
+          "25.5",
+          "22.95",
+          "21.68",
+          "2022-03-02T22:54:06.000000",
+          "100"
+        ],
+        [
+          "200096",
+          "134",
+          "200000",
+          "Y",
+          "51",
+          "45.9",
+          "43.35",
+          "2022-03-02T22:54:07.000000",
+          "100"
+        ],
+        [
+          "200097",
+          "135",
+          "200000",
+          "Y",
+          "17",
+          "15.3",
+          "14.45",
+          "2022-03-02T22:54:07.000000",
+          "100"
+        ]
+      ],
+      "products": [
+        [
+          "133",
+          "Y",
+          "Y",
+          "2013-09-19T21:21:47.000000",
+          "100"
+        ],
+        [
+          "134",
+          "Y",
+          "Y",
+          "2008-09-23T15:59:04.000000",
+          "100"
+        ],
+        [
+          "135",
+          "Y",
+          "Y",
+          "2008-09-23T15:59:04.000000",
+          "100"
+        ],
+        [
+          "145",
+          "Y",
+          "Y",
+          "2013-09-19T21:21:47.000000",
+          "100"
+        ]
+      ]
+    },
+    "bicdb_rows": {
+      "prices": [
+        [
+          "200033",
+          "133",
+          "104",
+          "Y",
+          "33",
+          "33.75",
+          "27",
+          "2003-01-21T20:17:49.000000",
+          "0"
+        ],
+        [
+          "200034",
+          "134",
+          "104",
+          "Y",
+          "66",
+          "67.5",
+          "54",
+          "2003-01-21T20:17:49.000000",
+          "0"
+        ],
+        [
+          "200059",
+          "135",
+          "104",
+          "Y",
+          "22",
+          "22.5",
+          "18",
+          "2003-01-21T20:17:49.000000",
+          "0"
+        ],
+        [
+          "200084",
+          "145",
+          "104",
+          "Y",
+          "520",
+          "500",
+          "496",
+          "2008-09-24T13:49:44.000000",
+          "100"
+        ],
+        [
+          "200095",
+          "133",
+          "200000",
+          "Y",
+          "25.5",
+          "22.95",
+          "21.68",
+          "2022-03-02T22:54:06.000000",
+          "100"
+        ],
+        [
+          "200096",
+          "134",
+          "200000",
+          "Y",
+          "51",
+          "45.9",
+          "43.35",
+          "2022-03-02T22:54:07.000000",
+          "100"
+        ],
+        [
+          "200097",
+          "135",
+          "200000",
+          "Y",
+          "17",
+          "15.3",
+          "14.45",
+          "2022-03-02T22:54:07.000000",
+          "100"
+        ]
+      ],
+      "products": [
+        [
+          "133",
+          "Y",
+          "Y",
+          "2013-09-19T21:21:47.000000",
+          "100"
+        ],
+        [
+          "134",
+          "Y",
+          "Y",
+          "2008-09-23T15:59:04.000000",
+          "100"
+        ],
+        [
+          "135",
+          "Y",
+          "Y",
+          "2008-09-23T15:59:04.000000",
+          "100"
+        ],
+        [
+          "145",
+          "Y",
+          "Y",
+          "2013-09-19T21:21:47.000000",
+          "100"
+        ]
+      ]
+    }
+  },
+  "assertions_modified": false
+}

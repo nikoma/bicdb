@@ -9,6 +9,30 @@ fn session_db() -> (tempfile::TempDir, BicDb) {
 }
 
 #[test]
+fn routine_json_fallbacks_infer_aggregate_types_over_derived_sources() {
+    let (_dir, mut db) = session_db();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE TABLE summary_items(id int PRIMARY KEY,kind text); INSERT INTO summary_items VALUES(1,'walk')").unwrap();
+    session.execute("CREATE FUNCTION derived_summary(p_empty boolean) RETURNS jsonb LANGUAGE plpgsql AS $$ BEGIN RETURN jsonb_build_object('items',COALESCE((SELECT jsonb_agg(to_jsonb(x)) FROM (SELECT kind,count(*) AS sessions FROM summary_items WHERE NOT p_empty GROUP BY kind ORDER BY kind) x),'[]'),'by_kind',COALESCE((SELECT jsonb_object_agg(x.kind,x.sessions) FROM (SELECT kind,count(*) AS sessions FROM summary_items WHERE NOT p_empty GROUP BY kind) x),'{}')); END $$").unwrap();
+    for (empty, expected) in [
+        (true, json!({"items":[],"by_kind":{}})),
+        (
+            false,
+            json!({"items":[{"kind":"walk","sessions":1}],"by_kind":{"walk":1}}),
+        ),
+        (true, json!({"items":[],"by_kind":{}})),
+    ] {
+        assert_eq!(
+            session
+                .execute(&format!("SELECT derived_summary({empty})"))
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::json(expected)]]
+        );
+    }
+}
+
+#[test]
 fn json_coalesce_fallbacks_preserve_values_inside_json_constructors() {
     let (_dir, mut db) = session_db();
     let mut session = SqlSession::new(&mut db);

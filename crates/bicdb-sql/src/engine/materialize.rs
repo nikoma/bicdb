@@ -4179,11 +4179,17 @@ pub(crate) fn declared_table_function_columns(
     let [Statement::CreateFunction(create)] = statements.as_slice() else {
         return None;
     };
-    let data_type = match create.return_type.as_ref()? {
+    let data_type = create.return_type.as_ref().map(|result| match result {
         FunctionReturnType::DataType(data_type) | FunctionReturnType::SetOf(data_type) => data_type,
-    };
-    let DataType::Table(Some(columns)) = data_type else {
-        return None;
+    });
+    let Some(DataType::Table(Some(columns))) = data_type else {
+        let outputs = parse_routine_params(&routine.args)
+            .ok()?
+            .into_iter()
+            .filter(|param| matches!(param.mode, RoutineArgMode::Out | RoutineArgMode::InOut))
+            .map(|param| Some((param.name?, param.type_schema.map(|kind| kind.pg_type))))
+            .collect::<Option<Vec<_>>>()?;
+        return (!outputs.is_empty()).then_some(outputs);
     };
     columns
         .iter()

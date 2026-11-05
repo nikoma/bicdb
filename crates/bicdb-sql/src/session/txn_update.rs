@@ -4779,15 +4779,22 @@ impl<'db> SqlSession<'db> {
         let Some((generation, ir)) = crate::eval::expr_type_scope() else {
             return Ok(None);
         };
+        // Decide whether the whole expression can use this path before any
+        // stored call executes. A later builtin/unknown call otherwise falls
+        // back to the generic evaluator and repeats earlier writes.
+        let all_stored = FN_DISPATCH_MEMO.with(|memo| {
+            let memo = memo.borrow();
+            calls.iter().all(|call| {
+                memo.get(&(generation, ir, call.node))
+                    .is_some_and(|dispatch| dispatch.stored)
+            })
+        });
+        if !all_stored {
+            return Ok(None);
+        }
         let mut results = smallvec::SmallVec::<[SqlValue; 4]>::with_capacity(calls.len());
         let empty_row = SqlRow::default();
         for call in calls {
-            let key = (generation, ir, call.node);
-            let stored = FN_DISPATCH_MEMO
-                .with(|memo| memo.borrow().get(&key).map(|dispatch| dispatch.stored));
-            if stored != Some(true) {
-                return Ok(None);
-            }
             let mut args = smallvec::SmallVec::<[SqlValue; 8]>::with_capacity(call.args.len());
             {
                 let arg_frame = BoundExprFrame {
@@ -4805,7 +4812,15 @@ impl<'db> SqlSession<'db> {
             }
             match self.eval_stored_function_value(&call.name, &args)? {
                 Some(value) => results.push(value),
-                None => return Ok(None),
+                // A preceding call may have changed the routine catalog.
+                // Report the missing function; replaying the expression is
+                // unsafe after effects have already occurred.
+                None => {
+                    return Err(SqlError::undefined_function(format!(
+                        "function {} does not exist",
+                        call.name
+                    )))
+                }
             }
         }
         Ok(Some(results))

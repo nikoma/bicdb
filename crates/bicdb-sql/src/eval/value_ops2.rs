@@ -2738,11 +2738,25 @@ pub(crate) fn cast_expr_value_with_db(
     data_type: &DataType,
     schema: Option<&TableSchema>,
 ) -> Result<SqlValue> {
+    cast_expr_value_with_db_and_source_type(db, value, expr, data_type, schema, None)
+}
+
+/// A bound routine scope knows declared parameter/local types that a
+/// context-free AST typer cannot infer (notably date + integer).
+pub(crate) fn cast_expr_value_with_db_and_source_type(
+    db: &BicDb,
+    value: SqlValue,
+    expr: &Expr,
+    data_type: &DataType,
+    schema: Option<&TableSchema>,
+    source_type: Option<String>,
+) -> Result<SqlValue> {
     if matches!(value, SqlValue::Null) && data_type.to_string().eq_ignore_ascii_case("record") {
         return Ok(SqlValue::Null);
     }
     let target_pg_type = pg_type_from_data_type(data_type).ok().map(|value| value.0);
-    let source_pg_type = projected_expr_pg_type(expr, schema)
+    let source_pg_type = source_type
+        .or_else(|| projected_expr_pg_type(expr, schema))
         .or_else(|| projected_expr_pg_type_with_db(db, expr))
         .or_else(|| catalog_oid_alias_expr_type(expr).map(str::to_string));
     let internal_array_input = target_pg_type

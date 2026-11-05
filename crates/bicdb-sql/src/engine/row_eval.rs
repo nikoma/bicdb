@@ -1197,7 +1197,15 @@ impl<'db> SqlEngine<'db> {
                         .map(SqlValue::String);
                     }
                 }
-                cast_expr_value_with_db(self.db_ref(), value, expr, data_type, None)
+                let (scope, _) = self.bound_row_context(context.column_keys());
+                cast_expr_value_with_db_and_source_type(
+                    self.db_ref(),
+                    value,
+                    expr,
+                    data_type,
+                    None,
+                    scope.known_expr_type(expr),
+                )
             }
             Expr::Position { expr, r#in } => eval_position_typed_value(
                 self.eval_slot_row_value(row, context, expr)?,
@@ -2754,7 +2762,16 @@ impl<'db> SqlEngine<'db> {
                         .map(SqlValue::String);
                     }
                 }
-                cast_expr_value_with_db(self.db_ref(), value, expr, data_type, None)
+                let columns = row.keys().cloned().collect::<Vec<_>>();
+                let (scope, _) = self.bound_row_context(&columns);
+                cast_expr_value_with_db_and_source_type(
+                    self.db_ref(),
+                    value,
+                    expr,
+                    data_type,
+                    None,
+                    scope.known_expr_type(expr),
+                )
             }
             Expr::Position { expr, r#in } => eval_position_typed_value(
                 self.eval_row_value(row, expr)?,

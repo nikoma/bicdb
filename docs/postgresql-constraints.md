@@ -1,5 +1,12 @@
 # PostgreSQL Constraints
 
+Table renames preserve incoming foreign-key references, including self
+references, deferred validation and cascading deletes. References follow the
+renamed base table when a compatibility view reuses its old name. Transaction
+and savepoint rollback restore the previous dependency metadata, and committed
+references persist across reopen. Regression coverage is in
+`crates/bicdb-sql/tests/renamed_foreign_keys.rs`.
+
 BicDB enforces a practical PostgreSQL-compatible subset of table constraints for
 SQL tables created through `CREATE TABLE` or added later with supported
 `ALTER TABLE ... ADD CONSTRAINT` forms.

@@ -11,6 +11,11 @@ Supported expression forms:
   evaluated with scaled integer math instead of `f64` drift.
 - Date/timestamp plus or minus interval strings in the compatibility subset
   (`days`, `hours`, `minutes`, `seconds`), plus interval addition/subtraction.
+- Interval scaling accepts numeric multipliers in either order and a numeric
+  divisor after an interval. Uncast prepared parameters in these positions are
+  described as `float8`, including expiry expressions such as
+  `NOW() + ($1 * INTERVAL '1 second')`; explicit scalar casts retain their type.
+  Multiplying or dividing two intervals returns SQLSTATE `42883`.
 - String concatenation with `||`.
 - Boolean `AND`, `OR`, and `NOT` with PostgreSQL-style unknown handling.
 - `IS NULL`, `IS NOT NULL`, `IS DISTINCT FROM`, and `IS NOT DISTINCT FROM`.

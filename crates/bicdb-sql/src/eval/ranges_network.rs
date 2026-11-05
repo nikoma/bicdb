@@ -3532,6 +3532,14 @@ pub(crate) fn eval_typed_interval_arithmetic(
 ) -> Result<Option<SqlValue>> {
     let left_interval = left_type == Some("interval");
     let right_interval = right_type == Some("interval");
+    if left_interval
+        && right_interval
+        && matches!(op, BinaryOperator::Multiply | BinaryOperator::Divide)
+    {
+        return Err(SqlError::undefined_function(format!(
+            "operator does not exist: interval {op} interval"
+        )));
+    }
     let supported = (left_interval
         && right_interval
         && matches!(op, BinaryOperator::Plus | BinaryOperator::Minus))

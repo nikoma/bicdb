@@ -1310,6 +1310,14 @@ fn binary_operand_types(
             right.or(left).map(str::to_string),
             left.or(right).map(str::to_string),
         ),
+        BinaryOperator::Multiply if (left == Some("interval")) != (right == Some("interval")) => (
+            Some(left.unwrap_or("float8").to_string()),
+            Some(right.unwrap_or("float8").to_string()),
+        ),
+        BinaryOperator::Divide if left == Some("interval") && right != Some("interval") => (
+            Some("interval".to_string()),
+            Some(right.unwrap_or("float8").to_string()),
+        ),
         BinaryOperator::Plus
         | BinaryOperator::Minus
         | BinaryOperator::Multiply

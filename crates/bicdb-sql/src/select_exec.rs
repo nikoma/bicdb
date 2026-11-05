@@ -5628,7 +5628,14 @@ pub(crate) fn relation_oid_filters_from_selection_and_pg_class_join(
 ) -> Result<Option<BTreeSet<i64>>> {
     let mut oids = BTreeSet::new();
     if let Some(oid) = relation_oid_filter_from_selection(db, selection, alias, table, fields)? {
-        oids.insert(oid);
+        match oid {
+            Some(oid) => {
+                oids.insert(oid);
+            }
+            // Equality to a known NULL never admits a row. Keep that distinct
+            // from an expression we could not resolve while planning.
+            None => return Ok(Some(BTreeSet::new())),
+        }
     }
 
     let Some(selection) = selection else {
@@ -5859,13 +5866,14 @@ pub(crate) fn qualified_field_alias(expr: &Expr, field: &str) -> Option<String> 
     }
 }
 
+/// Outer None is an unresolved predicate; Some(None) is a known SQL NULL.
 pub(crate) fn relation_oid_filter_from_selection(
     db: &BicDb,
     selection: Option<&Expr>,
     alias: &str,
     table: &str,
     fields: &[&str],
-) -> Result<Option<i64>> {
+) -> Result<Option<Option<i64>>> {
     let Some(selection) = selection else {
         return Ok(None);
     };
@@ -6127,7 +6135,7 @@ pub(crate) fn relation_oid_comparison(
     alias: &str,
     table: &str,
     fields: &[&str],
-) -> Result<Option<i64>> {
+) -> Result<Option<Option<i64>>> {
     let Expr::BinaryOp {
         left,
         op: BinaryOperator::Eq,
@@ -6206,12 +6214,20 @@ pub(crate) fn relation_oid_literal_value(db: &BicDb, expr: &Expr) -> Result<Opti
         Expr::Nested(expr) => return relation_oid_literal_value(db, expr),
         _ => eval_constant_expr(expr)?,
     };
-    Ok(sql_value_i64(&value))
+    if matches!(value, SqlValue::Null) {
+        return Ok(None);
+    }
+    sql_value_i64(&value).map(Some).ok_or_else(|| {
+        SqlError::Unsupported("relation OID predicate is not an integer or NULL".to_string())
+    })
 }
 
-pub(crate) fn optional_relation_oid_literal_value(db: &BicDb, expr: &Expr) -> Result<Option<i64>> {
+pub(crate) fn optional_relation_oid_literal_value(
+    db: &BicDb,
+    expr: &Expr,
+) -> Result<Option<Option<i64>>> {
     match relation_oid_literal_value(db, expr) {
-        Ok(value) => Ok(value),
+        Ok(value) => Ok(Some(value)),
         Err(SqlError::Unsupported(_)) => Ok(None),
         Err(error) => Err(error),
     }

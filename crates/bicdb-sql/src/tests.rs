@@ -1,6 +1,42 @@
 use super::*;
 
 #[test]
+fn catalog_oid_null_prunes_correlated_catalogue_work() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for index in 0..8 {
+        session
+            .execute(&format!(
+                "CREATE TABLE oid_noise_{index}(id integer PRIMARY KEY)"
+            ))
+            .unwrap();
+    }
+    SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().push(SqlProfileStats::default()));
+    let result = session.execute("SELECT count(*) FROM pg_constraint c WHERE c.conrelid = to_regclass('public.absent_oid_target') AND (SELECT count(*) FROM pg_attribute a WHERE a.attrelid = c.conrelid) > 0");
+    let stats = SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().pop().unwrap());
+    assert_eq!(result.unwrap().rows, vec![vec![SqlValue::Int(0)]]);
+    assert_eq!(stats.scalar_subqueries, 0, "a NULL relation OID cannot match any constraint; do not evaluate correlated subqueries for unrelated tables");
+}
+
+#[test]
+fn catalog_oid_null_keeps_dynamic_and_disjunctive_filters() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE oid_target(id integer PRIMARY KEY)")
+        .unwrap();
+    for (sql, expected) in [
+        // The primary key also contributes its NOT NULL catalogue constraint.
+        ("SELECT count(*) FROM pg_constraint c WHERE c.conrelid = to_regclass('absent_oid_target') OR c.conrelid = to_regclass('oid_target')", 2),
+        ("SELECT count(*) FROM pg_constraint c WHERE c.conrelid = to_regclass(CASE WHEN c.contype = 'p' THEN 'oid_target' ELSE 'absent_oid_target' END)", 1),
+    ] {
+        assert_eq!(session.execute(sql).unwrap().rows, vec![vec![SqlValue::Int(expected)]], "{sql}");
+    }
+}
+
+#[test]
 fn hash_join_conjunction_avoids_cartesian_candidate_pairs() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(dir.path()).unwrap();

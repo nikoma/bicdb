@@ -2501,6 +2501,7 @@ impl<'db> SqlSession<'db> {
     #[inline(never)]
     fn eval_session_function_expr(&mut self, expr: &Expr, function: &Function) -> Result<SqlValue> {
         let dispatch_key = crate::eval::expr_type_scope()
+            .filter(|_| crate::eval::can_memoize_routine_expr(expr))
             .map(|(generation, ir)| (generation, ir, function as *const Function as usize));
         let remembered = dispatch_key
             .and_then(|key| FN_DISPATCH_MEMO.with(|memo| memo.borrow().get(&key).cloned()));
@@ -3281,7 +3282,7 @@ impl<'db> SqlSession<'db> {
             return Ok(None);
         };
         let ir: &RoutineIR = &routine.ir;
-        let key = (generation, ir as *const RoutineIR as usize, args.len());
+        let key = (generation, ir.memo_identity(), args.len());
         let slots = INLINE_RETURN_MEMO.with(|memo| {
             if let Some(hit) = memo.borrow().get(&key) {
                 return hit.clone();
@@ -3539,9 +3540,7 @@ impl<'db> SqlSession<'db> {
         ir: &RoutineIR,
         args: &[SqlValue],
     ) -> Result<SqlResult> {
-        let previous_ir = self
-            .current_routine_ir
-            .replace(ir as *const RoutineIR as usize);
+        let previous_ir = self.current_routine_ir.replace(ir.memo_identity());
         let _type_scope = self.enter_routine_expr_type_scope(ir);
         let executed = self.execute_plpgsql_procedure_ir_inner(ir, args);
         self.current_routine_ir = previous_ir;
@@ -3599,9 +3598,7 @@ impl<'db> SqlSession<'db> {
         ir: &RoutineIR,
         args: &[SqlValue],
     ) -> Result<SqlValue> {
-        let previous_ir = self
-            .current_routine_ir
-            .replace(ir as *const RoutineIR as usize);
+        let previous_ir = self.current_routine_ir.replace(ir.memo_identity());
         let _type_scope = self.enter_routine_expr_type_scope(ir);
         let executed = self.execute_plpgsql_function_value_inner(routine, ir, args);
         self.current_routine_ir = previous_ir;
@@ -3622,7 +3619,7 @@ impl<'db> SqlSession<'db> {
         let generation = crate::eval::expr_type_scope()
             .map(|(generation, _)| generation)
             .unwrap_or_else(|| routine_memo_generation(self.db_ref()));
-        let key = (generation, ir as *const RoutineIR as usize);
+        let key = (generation, ir.memo_identity());
         let template = FRAME_TEMPLATE_MEMO.with(|memo| {
             if let Some(hit) = memo.borrow().get(&key) {
                 return std::rc::Rc::clone(hit);
@@ -3654,7 +3651,22 @@ impl<'db> SqlSession<'db> {
         ir: &RoutineIR,
     ) -> crate::eval::ExprTypeScopeGuard {
         let generation = routine_memo_generation(self.db_ref());
-        crate::eval::enter_expr_type_scope(generation, ir as *const RoutineIR as usize)
+        crate::eval::enter_owned_expr_type_scope(
+            generation,
+            ir.memo_identity(),
+            ir.owned_ast_nodes(),
+        )
+    }
+
+    pub(crate) fn enter_cached_statement_expr_type_scope(
+        &self,
+        cached: &crate::statement_cache::CachedTemplate,
+    ) -> crate::eval::ExprTypeScopeGuard {
+        crate::eval::enter_owned_expr_type_scope(
+            routine_memo_generation(self.db_ref()),
+            cached.node_ownership.id,
+            cached.node_ownership.statement_nodes(&cached.statements),
+        )
     }
 
     /// Per-node memo of the inferred types a routine expression's binary
@@ -3670,7 +3682,12 @@ impl<'db> SqlSession<'db> {
         op: &BinaryOperator,
         right: &Expr,
     ) -> std::rc::Rc<RoutineBinaryExprTypes> {
-        let Some(ir) = self.current_routine_ir else {
+        let scope = crate::eval::expr_type_scope().filter(|_| {
+            self.current_routine_ir.is_some()
+                && crate::eval::can_memoize_routine_expr(left)
+                && crate::eval::can_memoize_routine_expr(right)
+        });
+        let Some((generation, ir)) = scope else {
             return std::rc::Rc::new(RoutineBinaryExprTypes::compute(
                 self.db_ref(),
                 left,
@@ -3678,9 +3695,6 @@ impl<'db> SqlSession<'db> {
                 right,
             ));
         };
-        let generation = crate::eval::expr_type_scope()
-            .map(|(generation, _)| generation)
-            .unwrap_or_else(|| routine_memo_generation(self.db_ref()));
         let key = (generation, ir, left as *const Expr as usize);
         if let Some(hit) = ROUTINE_EXPR_TYPE_MEMO.with(|memo| memo.borrow().get(&key).cloned()) {
             return hit;

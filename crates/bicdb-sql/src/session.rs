@@ -991,9 +991,9 @@ pub struct SqlSession<'db> {
     conflict_arbiter_memo:
         std::cell::RefCell<Option<(String, Vec<String>, Option<records::UniqueConflictArbiter>)>>,
     /// Identity of the compiled routine IR whose statements are executing
-    /// (`&RoutineIR as usize`), or None outside routine bodies. Keys the
+    /// (a unique per-compilation token), or None outside routine bodies. Keys the
     /// per-node expression-type memo: IR nodes are immutable and live as long
-    /// as the routine cache holds the IR, which only changes with routine DDL
+    /// as the routine cache holds the IR; tokens are not reused after eviction
     /// (the routine collection generation is part of the memo key).
     pub(crate) current_routine_ir: Option<usize>,
     /// True while the statement being executed is owned by the current
@@ -3422,9 +3422,10 @@ impl<'db> SqlSession<'db> {
         // state, not on every execution of the statement.
         let stamp = self.column_check_stamp();
         let check_columns = cached.columns_checked != Some(stamp);
-        let result = cached
-            .bind(&literals)
-            .and_then(|()| self.execute_statement_list_checked(&cached.statements, check_columns));
+        let result = cached.bind(&literals).and_then(|()| {
+            let _types = self.enter_cached_statement_expr_type_scope(&cached);
+            self.execute_statement_list_checked(&cached.statements, check_columns)
+        });
         if result.is_ok() && check_columns && self.column_references_checkable() {
             cached.columns_checked = Some(stamp);
         }

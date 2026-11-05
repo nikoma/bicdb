@@ -253,7 +253,7 @@ impl<'db> SqlSession<'db> {
         self.execute_with_routine_security(&routine.schema, |session| {
             let previous_ir = session
                 .current_routine_ir
-                .replace(routine.ir.as_ref() as *const RoutineIR as usize);
+                .replace(routine.ir.memo_identity());
             let _type_scope = session.enter_routine_expr_type_scope(&routine.ir);
             let result = (|| {
                 let mut frame = session.routine_frame_for_call(&routine.ir, args)?;

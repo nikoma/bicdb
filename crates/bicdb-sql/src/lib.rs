@@ -4684,6 +4684,7 @@ enum PlpgsqlIfBranch {
 
 #[derive(Clone, Debug)]
 struct RoutineIR {
+    node_ownership: CompiledNodeOwnership,
     params: Vec<RoutineParam>,
     symbol_names: Vec<String>,
     declarations: Vec<RoutineDecl>,
@@ -4694,6 +4695,46 @@ struct RoutineIR {
     oracle_statement_rollback: bool,
     oracle_error_diagnostics: Option<oracle::errors::Diagnostics>,
     oracle_autonomous: bool,
+}
+
+/// Per-compilation identity and addresses whose lifetime is the routine's.
+/// A deep clone has different AST storage and receives a fresh identity.
+struct CompiledNodeOwnership {
+    id: usize,
+    nodes: OnceLock<Arc<FxHashSet<usize>>>,
+}
+
+impl Default for CompiledNodeOwnership {
+    fn default() -> Self {
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(1);
+        let id = NEXT
+            .fetch_update(
+                std::sync::atomic::Ordering::Relaxed,
+                std::sync::atomic::Ordering::Relaxed,
+                |id| id.checked_add(1),
+            )
+            .expect("routine memo identity space exhausted");
+        Self {
+            id,
+            nodes: OnceLock::new(),
+        }
+    }
+}
+
+impl Clone for CompiledNodeOwnership {
+    fn clone(&self) -> Self {
+        Self::default()
+    }
+}
+
+impl fmt::Debug for CompiledNodeOwnership {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CompiledNodeOwnership")
+            .field("id", &self.id)
+            .field("nodes", &self.nodes.get().map(|nodes| nodes.len()))
+            .finish()
+    }
 }
 
 fn routine_block_may_write(statements: &[RoutineStmt]) -> bool {

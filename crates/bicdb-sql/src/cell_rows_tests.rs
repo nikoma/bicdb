@@ -1777,6 +1777,14 @@ fn call_arguments_are_typed_once_per_cached_statement() {
         uncached,
         "a repeated CALL must not re-infer its argument types"
     );
+    // The cached AST stays put, but rebinding a different numeric literal
+    // class must invalidate its type memo rather than reuse the old type.
+    assert_eq!(call(&mut sql, 1, "1")[0].to_cell(), "14.00");
+    assert_eq!(call(&mut sql, 1, "0.50")[0].to_cell(), "14.50");
+    assert_eq!(
+        call(&mut sql, 1, "2147483648")[0].to_cell(),
+        "2147483662.50"
+    );
 }
 
 #[test]

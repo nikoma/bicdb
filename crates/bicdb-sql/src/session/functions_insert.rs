@@ -267,13 +267,16 @@ impl<'db> SqlSession<'db> {
         // Evaluate the arguments in place: `function_args` deep-clones every
         // argument expression (TPC-C's NEW_ORDER call carries eleven, one a
         // nested cast) only for them to be evaluated once and dropped.
-        // The arguments are typed under the callee's expression-type scope:
-        // a cached CALL keeps its argument nodes at stable addresses, so the
-        // per-node type memo (source types of the casts every TPC-C call
-        // carries) hits from the second call on. Without the scope every
-        // call re-inferred them from scratch.
+        // A cached CALL (or an outer routine) owns its argument nodes. Keep
+        // that scope while evaluating them; the callee's IR owns only its own
+        // body/defaults. Unowned CALL nodes remain uncached.
         let args = {
-            let _types = self.enter_routine_expr_type_scope(&routine.ir);
+            let _types =
+                if crate::eval::can_memoize_routine_node(function as *const Function as usize) {
+                    None
+                } else {
+                    Some(self.enter_routine_expr_type_scope(&routine.ir))
+                };
             let has_outputs = routine
                 .ir
                 .params

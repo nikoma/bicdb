@@ -1402,15 +1402,13 @@ impl<'db> SqlEngine<'db> {
         // projection): for routine-IR-owned statements they are computed once
         // per catalog generation.
         let typing_key = if self.ir_owned_statement
+            && crate::eval::can_memoize_routine_node(select as *const Select as usize)
             && self.ctes.is_empty()
             && !self.projection_references_routine_vars(select)
         {
-            self.routine_ir.map(|ir| {
-                let generation = crate::eval::expr_type_scope()
-                    .map(|(generation, _)| generation)
-                    .unwrap_or_else(|| self.db_ref().collection_generation(ROUTINE_COLLECTION));
-                (generation, ir, select as *const Select as usize)
-            })
+            self.routine_ir
+                .and(crate::eval::expr_type_scope())
+                .map(|(generation, ir)| (generation, ir, select as *const Select as usize))
         } else {
             None
         };

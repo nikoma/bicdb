@@ -3589,7 +3589,16 @@ pub(crate) fn row_columns_expr_pg_type<'a>(
             return select_common_pg_type(db, &arg_types, &bare_name.to_ascii_uppercase()).ok();
         }
     }
-    if let Some(pg_type) = projected_expr_pg_type_with_db(db, expr) {
+    // A bare column has no database-wide type: resolve it from the row's
+    // relations below. The context-free typer still recognizes reserved
+    // identity/system names. Avoid a catalog lookup on cloned aggregate
+    // column nodes, whose addresses correctly stay outside the routine memo.
+    let direct_type = if matches!(expr, Expr::Identifier(_) | Expr::CompoundIdentifier(_)) {
+        projected_expr_pg_type(expr, None)
+    } else {
+        projected_expr_pg_type_with_db(db, expr)
+    };
+    if let Some(pg_type) = direct_type {
         return Some(pg_type);
     }
     let mut relation_type = None;

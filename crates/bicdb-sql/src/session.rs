@@ -4,6 +4,7 @@
 //! Moved items were bumped to `pub(crate)` so existing call sites keep
 //! resolving; `lib.rs` re-exports this module via `pub use session::*;`.
 
+pub(crate) mod deferred_constraints;
 mod domain_types;
 mod flashback;
 mod merge;
@@ -3203,6 +3204,9 @@ impl<'db> SqlSession<'db> {
             return Ok(result);
         }
 
+        if let Some(result) = self.execute_raw_constraint_command(sql)? {
+            return Ok(result);
+        }
         if let Some(result) = self.execute_raw_alter_table_set_schema(sql)? {
             return Ok(result);
         }
@@ -3443,6 +3447,9 @@ impl<'db> SqlSession<'db> {
             if let Some(result) = self.execute_raw_create_trigger(sql)? {
                 return Ok(result);
             }
+            if let Some(result) = self.execute_raw_constraint_command(sql)? {
+                return Ok(result);
+            }
             if let Some(result) = self.execute_raw_alter_table_set_schema(sql)? {
                 return Ok(result);
             }
@@ -3508,6 +3515,10 @@ impl<'db> SqlSession<'db> {
                 continue;
             }
             if let Some(result) = self.execute_raw_alter_column_compression(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_constraint_command(&statement)? {
                 last_result = Some(result);
                 continue;
             }

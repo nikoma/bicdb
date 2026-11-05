@@ -893,6 +893,7 @@ impl<'db> SqlSession<'db> {
                         self.require_reference_privilege(
                             &table,
                             &[ConstraintSchema::ForeignKey {
+                                constraint_id: String::new(),
                                 name: String::new(),
                                 columns: Vec::new(),
                                 foreign_table: relation_name(&foreign_key.foreign_table)?,
@@ -900,6 +901,8 @@ impl<'db> SqlSession<'db> {
                                 on_delete: ForeignKeyAction::NoAction,
                                 on_update: ForeignKeyAction::NoAction,
                                 validated: true,
+                                deferrable: false,
+                                initially_deferred: false,
                             }],
                         )?;
                     }

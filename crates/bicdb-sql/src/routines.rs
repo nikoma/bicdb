@@ -1754,6 +1754,14 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
             targets,
         });
     }
+    if crate::session::deferred_constraints::parse_constraint_command(statement)?.is_some() {
+        // sqlparser has no AST for these PostgreSQL commands. Preserve only a
+        // validated constant statement and dispatch through the normal session
+        // executor with the same transaction and routine ownership checks.
+        return Ok(RoutineStmt::DynamicExecute(RoutineExpr::unbound(
+            Expr::Value(Value::SingleQuotedString(statement.to_string()).into()),
+        )));
+    }
     match parse_single_statement(statement) {
         Ok(statement) => Ok(RoutineStmt::Sql(statement)),
         Err(original) if oracle::collections::routine_constructors_enabled() => {

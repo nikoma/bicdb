@@ -401,7 +401,9 @@ pub(crate) fn validate_updated_records(
             {
                 let old_key = record_column_values(before, schema, columns);
                 let new_key = record_column_values(record, schema, columns);
-                if typed_column_values_not_distinct(schema, columns, &old_key, &new_key)? {
+                if before.id == record.id
+                    && typed_column_values_not_distinct(schema, columns, &old_key, &new_key)?
+                {
                     continue;
                 }
             }
@@ -2286,6 +2288,41 @@ pub(crate) fn validate_foreign_keys(
 }
 
 pub(crate) fn validate_foreign_key_constraint(
+    db: &BicDb,
+    tx: Option<&Transaction>,
+    table: &str,
+    schema: &TableSchema,
+    record: &Record,
+    constraint: &ConstraintSchema,
+) -> Result<()> {
+    use crate::session::deferred_constraints::{foreign_key_is_deferred, queue_foreign_key_check};
+    if foreign_key_is_deferred(tx, table, constraint) {
+        let ConstraintSchema::ForeignKey {
+            name,
+            columns,
+            foreign_table,
+            referred_columns,
+            ..
+        } = constraint
+        else {
+            unreachable!()
+        };
+        let key = record_column_values(record, schema, columns);
+        if key.iter().any(|value| matches!(value, SqlValue::Null)) {
+            return Ok(());
+        }
+        let parent =
+            load_schema(db, foreign_table)?.ok_or_else(|| foreign_key_violation(table, name))?;
+        // Reserve the same key now as immediate FK checks and parent writes.
+        // Delaying the reservation would permit a concurrent parent deletion.
+        reserve_foreign_key(tx, &parent, referred_columns, &key)?;
+        queue_foreign_key_check(tx.unwrap(), table, constraint, &record.id);
+        return Ok(());
+    }
+    validate_foreign_key_constraint_immediate(db, tx, table, schema, record, constraint)
+}
+
+pub(crate) fn validate_foreign_key_constraint_immediate(
     db: &BicDb,
     tx: Option<&Transaction>,
     table: &str,

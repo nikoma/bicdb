@@ -1907,6 +1907,29 @@ impl CapabilityHost {
                     )
                 })?;
                 self.remove_transaction_resources(transaction.id().0);
+                let transaction = if transaction.has_deferred_hooks() {
+                    let database = unsafe { self.db.as_ref() };
+                    let mut session = SqlSession::new_shared_secure(
+                        database,
+                        raw_sql_security_context(&self.actor),
+                    )
+                    .with_deferred_commit()
+                    .with_pending_transaction(transaction)
+                    .with_signed_application_security_guc_compatibility();
+                    session.fire_deferred_row_triggers().map_err(|error| {
+                        AppRuntimeError::Invocation(format!(
+                            "deferred SQL validation failed (SQLSTATE {}): {error}",
+                            error.sqlstate()
+                        ))
+                    })?;
+                    session.take_pending_transaction().ok_or_else(|| {
+                        AppRuntimeError::Invocation(
+                            "deferred SQL validation consumed its transaction".into(),
+                        )
+                    })?
+                } else {
+                    transaction
+                };
                 transaction.commit()?;
                 Ok(HostValue::Unit)
             }
@@ -7168,6 +7191,112 @@ pub(crate) mod tests {
             Arc::new(LocalBlobProvider::open(root.join("blobs"), vec![7; 32]).unwrap()),
             Arc::new(Mutex::<Vec<ObservabilityEvent>>::default()),
         )
+    }
+
+    #[test]
+    fn native_commit_validates_deferred_foreign_keys_before_persisting() {
+        for parent_id in [1, 999, 2] {
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("native-deferred-fk");
+            let mut db = BicDb::open(&path).unwrap();
+            SqlSession::new(&mut db).execute("CREATE TABLE parents(id INT PRIMARY KEY); INSERT INTO parents VALUES(1),(2); CREATE TABLE allowed(id TEXT PRIMARY KEY,value INT,tenant_id TEXT,CONSTRAINT native_fk FOREIGN KEY(value) REFERENCES parents(id) DEFERRABLE)").unwrap();
+            SqlSession::new(&mut db).execute("CREATE FUNCTION native_deferred_guard() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF current_setting('bicdb.current_user',true) IS DISTINCT FROM 'user-1' THEN RAISE EXCEPTION 'wrong deferred actor' USING ERRCODE='42501'; END IF; IF NEW.value=2 THEN RAISE EXCEPTION 'deferred guard rejected row' USING ERRCODE='23514'; END IF; RETURN NEW; END $$; CREATE CONSTRAINT TRIGGER native_deferred_guard AFTER INSERT ON allowed DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION native_deferred_guard()").unwrap();
+            db.set_mutation_policy(
+                "allowed",
+                MutationPolicy::grants_required().with_tenant_field("tenant_id"),
+            )
+            .unwrap();
+            let mut extension = Arc::try_unwrap(manifest()).unwrap();
+            extension
+                .permissions
+                .write_relations
+                .insert("allowed".into());
+            let permission = extension
+                .application
+                .as_deref_mut()
+                .unwrap()
+                .relation_permissions
+                .iter_mut()
+                .find(|p| p.relation == "allowed")
+                .unwrap();
+            permission.actions.insert(DatabaseAction::Insert);
+            permission
+                .writable_columns
+                .extend(["id".into(), "value".into(), "tenant_id".into()]);
+            let mut host = CapabilityHost::new(
+                &db,
+                Arc::new(extension),
+                actor(now_ms() + 60_000),
+                services(directory.path()),
+            )
+            .unwrap();
+            let transaction = handle(call(
+                &mut host,
+                HostRequest::Transaction(TransactionRequest::Begin {
+                    isolation: IsolationLevel::ReadCommitted,
+                }),
+            ));
+            let declaration = |id: &str, sql: &str, actions, parameters| RawSqlDeclaration {
+                id: id.into(),
+                sql: sql.into(),
+                sha256: hash(),
+                relations: BTreeSet::from(["allowed".into()]),
+                routines: BTreeSet::new(),
+                actions,
+                parameters,
+                result: vec![],
+                max_affected_rows: 10,
+            };
+            host.execute_declared_sql(
+                transaction,
+                &declaration(
+                    "defer",
+                    "SET CONSTRAINTS native_fk DEFERRED",
+                    BTreeSet::from([DatabaseAction::Execute]),
+                    vec![],
+                ),
+                vec![],
+            )
+            .unwrap();
+            host.execute_declared_sql(
+                transaction,
+                &declaration(
+                    "insert",
+                    "INSERT INTO allowed(id,value,tenant_id) VALUES($1,$2,$3)",
+                    BTreeSet::from([DatabaseAction::Insert]),
+                    vec![FieldType::String, FieldType::Int64, FieldType::String],
+                ),
+                vec![json!("row-1"), json!(parent_id), json!("tenant-1")],
+            )
+            .unwrap();
+            assert!(host
+                .transaction_mut(transaction)
+                .unwrap()
+                .has_deferred_hooks());
+            let committed = host.transaction(TransactionRequest::Commit { transaction });
+            if parent_id == 1 {
+                committed.unwrap();
+            } else {
+                assert!(committed
+                    .unwrap_err()
+                    .to_string()
+                    .contains(if parent_id == 999 { "23503" } else { "23514" }));
+            }
+            drop(host);
+            drop(db);
+            let mut reopened = BicDb::open(&path).unwrap();
+            assert_eq!(
+                SqlSession::new(&mut reopened)
+                    .execute("SELECT count(*) FROM allowed")
+                    .unwrap()
+                    .rows,
+                vec![vec![bicdb_sql::SqlValue::Int(if parent_id == 1 {
+                    1
+                } else {
+                    0
+                })]]
+            );
+        }
     }
 
     #[test]

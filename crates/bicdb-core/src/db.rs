@@ -8471,6 +8471,7 @@ pub struct TransactionRollbackMark {
     lock_len: usize,
     broker_publish_len: usize,
     deferred_hook_len: usize,
+    constraint_mode_len: usize,
 }
 
 impl TransactionRollbackMark {
@@ -8564,7 +8565,11 @@ pub struct Transaction {
     // whole BEGIN..COMMIT span. Fired by the SQL layer immediately before
     // commit; dropped with the transaction on rollback, which is exactly the
     // semantics deferral requires.
-    deferred_hooks: Vec<serde_json::Value>,
+    deferred_hooks: Mutex<Vec<serde_json::Value>>,
+    // SQL constraint timing belongs to the transaction, including when native
+    // hosts and pgwire move it between short-lived sessions. Journal updates
+    // so rollback marks restore the timing as well as the queued checks.
+    constraint_modes: Mutex<Vec<(String, bool)>>,
     mutation_grants: BTreeMap<MutationGrantId, MutationGrant>,
     next_mutation_grant: u64,
     commit_validators: Vec<NativeCommitValidator>,
@@ -14235,19 +14240,39 @@ impl Transaction {
     /// Queue an opaque deferred hook (a DEFERRABLE INITIALLY DEFERRED trigger
     /// call serialized by the SQL layer) to fire immediately before this
     /// transaction commits.
-    pub fn push_deferred_hook(&mut self, hook: serde_json::Value) {
-        self.deferred_hooks.push(hook);
+    pub fn push_deferred_hook(&self, hook: serde_json::Value) {
+        self.deferred_hooks.lock().push(hook);
     }
 
     pub fn has_deferred_hooks(&self) -> bool {
-        !self.deferred_hooks.is_empty()
+        !self.deferred_hooks.lock().is_empty()
     }
 
     /// Take the queued hooks for firing. Firing may queue more (a deferred
     /// body writing rows that carry deferred triggers), so callers loop until
     /// this returns empty.
     pub fn take_deferred_hooks(&mut self) -> Vec<serde_json::Value> {
-        std::mem::take(&mut self.deferred_hooks)
+        std::mem::take(&mut *self.deferred_hooks.lock())
+    }
+
+    /// Snapshot pending SQL effects without consuming them. Switching a
+    /// constraint to IMMEDIATE must validate existing effects while retaining
+    /// the queue for savepoint rollback and final commit validation.
+    pub fn deferred_hooks_snapshot(&self) -> Vec<serde_json::Value> {
+        self.deferred_hooks.lock().clone()
+    }
+
+    pub fn set_constraint_deferred(&self, key: String, deferred: bool) {
+        self.constraint_modes.lock().push((key, deferred));
+    }
+
+    pub fn constraint_deferred(&self, key: &str) -> Option<bool> {
+        self.constraint_modes
+            .lock()
+            .iter()
+            .rev()
+            .find(|(candidate, _)| candidate == key)
+            .map(|(_, value)| *value)
     }
 
     pub fn id(&self) -> TransactionId {
@@ -16684,7 +16709,8 @@ impl Transaction {
             write_len: self.write_len(),
             lock_len: self.lock_len(),
             broker_publish_len: self.broker_publish_len(),
-            deferred_hook_len: self.deferred_hooks.len(),
+            deferred_hook_len: self.deferred_hooks.lock().len(),
+            constraint_mode_len: self.constraint_modes.lock().len(),
         }
     }
 
@@ -16698,7 +16724,10 @@ impl Transaction {
         }
         self.truncate_writes_and_locks(mark.write_len, mark.lock_len)?;
         self.truncate_broker_publishes(mark.broker_publish_len);
-        self.deferred_hooks.truncate(mark.deferred_hook_len);
+        self.deferred_hooks.lock().truncate(mark.deferred_hook_len);
+        self.constraint_modes
+            .lock()
+            .truncate(mark.constraint_mode_len);
         Ok(())
     }
 

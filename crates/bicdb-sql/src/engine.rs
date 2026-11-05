@@ -37,7 +37,16 @@ struct RelationColumnMetadata {
     columns: Vec<(String, SqlColumnMetadata)>,
 }
 
+/// Constraint timing commands have no parameters or output columns. Protocol
+/// Describe must identify them without applying their transactional effects.
+pub fn is_constraint_timing_command(sql: &str) -> Result<bool> {
+    Ok(crate::session::deferred_constraints::parse_constraint_command(sql)?.is_some())
+}
+
 fn parse_inference_statements(db: &BicDb, sql: &str) -> Result<Vec<Statement>> {
+    if is_constraint_timing_command(sql)? {
+        return Ok(Vec::new());
+    }
     // A dollar-quoted anonymous body is one command with no wire parameters
     // or result columns. Its procedural syntax is parsed at execution, just
     // like a stored routine body; $1 inside it is not an outer bind marker.

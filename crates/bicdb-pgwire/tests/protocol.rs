@@ -18,6 +18,97 @@ use sqlx::{Connection as _, Row as _};
 type HmacSha256 = Hmac<Sha256>;
 
 #[test]
+fn deferred_foreign_keys_survive_wire_sessions_and_check_commit_and_savepoints() {
+    let dir = tempfile::tempdir().unwrap();
+    drop(BicDb::open(dir.path()).unwrap());
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+    let mut client = TcpStream::connect(address).unwrap();
+    client
+        .set_read_timeout(Some(Duration::from_secs(15)))
+        .unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    for command in [
+        "CREATE TABLE fk_parent(id INT PRIMARY KEY,patient INT,UNIQUE(id,patient))",
+        "CREATE TABLE fk_child(id INT PRIMARY KEY,parent_id INT,patient INT,CONSTRAINT clinical_fk FOREIGN KEY(parent_id,patient) REFERENCES fk_parent(id,patient))",
+        "DO $$ BEGIN ALTER TABLE fk_child ALTER CONSTRAINT clinical_fk DEFERRABLE INITIALLY IMMEDIATE; END $$",
+        "INSERT INTO fk_parent VALUES(1,10)", "INSERT INTO fk_child VALUES(1,1,10)", "BEGIN",
+    ] {
+        send_query(&mut client,command);
+        assert!(!read_tags_until_ready(&mut client).0.contains(&b'E'),"{command}");
+    }
+    send_parse(
+        &mut client,
+        "defer_fk",
+        "SET CONSTRAINTS clinical_fk DEFERRED",
+        &[],
+    );
+    send_bind(&mut client, "defer_portal", "defer_fk", &[]);
+    send_execute_max(&mut client, "defer_portal", 0);
+    send_sync(&mut client);
+    let (tags, status) = read_tags_until_ready(&mut client);
+    assert!(!tags.contains(&b'E'), "{tags:?}");
+    assert_eq!(status, b'T');
+    for command in [
+        "UPDATE fk_parent SET patient=20 WHERE id=1",
+        "SAVEPOINT keep",
+        "UPDATE fk_child SET patient=99 WHERE id=1",
+        "ROLLBACK TO SAVEPOINT keep",
+        "UPDATE fk_child SET patient=20 WHERE id=1",
+        "SET CONSTRAINTS clinical_fk IMMEDIATE",
+        "COMMIT",
+    ] {
+        send_query(&mut client, command);
+        assert!(
+            !read_tags_until_ready(&mut client).0.contains(&b'E'),
+            "{command}"
+        );
+    }
+    send_query(
+        &mut client,
+        "BEGIN; SET CONSTRAINTS clinical_fk DEFERRED; UPDATE fk_child SET patient=99 WHERE id=1",
+    );
+    assert!(!read_tags_until_ready(&mut client).0.contains(&b'E'));
+    send_parse(
+        &mut client,
+        "validate_fk",
+        "SET CONSTRAINTS clinical_fk IMMEDIATE",
+        &[],
+    );
+    send_bind(&mut client, "validate_portal", "validate_fk", &[]);
+    send_describe_portal(&mut client, "validate_portal");
+    send_sync(&mut client);
+    assert!(
+        !read_tags_until_ready(&mut client).0.contains(&b'E'),
+        "Describe must not validate or change constraint timing"
+    );
+    send_execute_max(&mut client, "validate_portal", 0);
+    send_sync(&mut client);
+    assert!(read_error_response(&mut client).contains("23503"));
+    send_query(&mut client, "ROLLBACK");
+    read_until_ready(&mut client);
+    send_query(
+        &mut client,
+        "BEGIN; SET CONSTRAINTS clinical_fk DEFERRED; UPDATE fk_child SET patient=99 WHERE id=1",
+    );
+    assert!(!read_tags_until_ready(&mut client).0.contains(&b'E'));
+    send_query(&mut client, "COMMIT");
+    let (error, status) = read_error_response_with_status(&mut client);
+    assert!(error.contains("23503"), "{error}");
+    assert_eq!(status, b'I');
+    send_query(&mut client, "SELECT patient FROM fk_child");
+    assert_eq!(read_query_rows(&mut client), vec![vec!["20".to_string()]]);
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
+#[test]
 fn plpgsql_notice_reaches_client_once_and_preserves_later_errors() {
     let dir = tempfile::tempdir().unwrap();
     drop(BicDb::open(dir.path()).unwrap());

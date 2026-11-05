@@ -106,3 +106,29 @@ and verified identity context. They acquire real connection/transaction-scoped
 locks. Preparing/describing these calls does not evaluate arguments or acquire
 locks. These capabilities do not replace SQL role grants or signed-operation
 checks, and do not by themselves certify an application's complete deployment.
+
+## Deferred foreign keys
+
+Foreign keys support `DEFERRABLE INITIALLY IMMEDIATE` and `DEFERRABLE INITIALLY
+DEFERRED`, including `ALTER TABLE ... ALTER CONSTRAINT` inside a `DO` block.
+`SET CONSTRAINTS name [, ...] DEFERRED|IMMEDIATE` changes transaction-local
+foreign-key timing; schema-qualified names and the first matching schema in
+`search_path` are supported. `pg_constraint` and `pg_get_constraintdef` expose
+the recorded default timing. Altering a constraint requires table ownership.
+
+Checks use the final row state at commit or when switched back to IMMEDIATE.
+Failures preserve SQLSTATE 23503 and roll back the write. Savepoint rollback
+restores timing and pending checks. Parent-key reservations still serialize
+conflicting referential writes. RESTRICT actions remain immediate; NO ACTION
+can be deferred. Autocommit validates at statement end.
+
+The native application host also finalizes deferred SQL effects before commit,
+with the authenticated actor's security context. A direct core commit refuses
+unprocessed SQL effects. Stable constraint identities prevent renaming a
+constraint or relation from dropping its pending validation.
+
+This timing implementation covers foreign keys. Named timing changes for other
+constraint classes fail explicitly. `SET CONSTRAINTS ALL` covers foreign keys
+and refuses when constraint triggers are present, since changing their firing
+mode through ALL is not implemented. Existing INITIALLY DEFERRED constraint
+triggers still fire at commit. Finalization grants no new mutation authority.

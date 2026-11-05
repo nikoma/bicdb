@@ -4917,6 +4917,8 @@ pub(crate) fn pg_constraint_rows_from_schemas(
         let name = schema.primary_key_constraint_name();
         if pg_constraint_filter_matches(&name, "p", table_oid, names, types, relation_oids) {
             rows.push(pg_constraint_row(PgConstraintRow {
+                condeferrable: false,
+                condeferred: false,
                 oid: pg_constraint_oid(table_oid, 0),
                 name,
                 contype: "p",
@@ -4945,6 +4947,8 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                 if pg_constraint_filter_matches(&name, "n", table_oid, names, types, relation_oids)
                 {
                     rows.push(pg_constraint_row(PgConstraintRow {
+                        condeferrable: false,
+                        condeferred: false,
                         oid: pg_constraint_oid(table_oid, constraint_slot),
                         name,
                         contype: "n",
@@ -4990,6 +4994,8 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                         relation_oids,
                     ) {
                         rows.push(pg_constraint_row(PgConstraintRow {
+                            condeferrable: false,
+                            condeferred: false,
                             oid: pg_constraint_oid(table_oid, constraint_slot),
                             name: name.clone(),
                             contype: "u",
@@ -5029,6 +5035,8 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                         relation_oids,
                     ) {
                         rows.push(pg_constraint_row(PgConstraintRow {
+                            condeferrable: false,
+                            condeferred: false,
                             oid: pg_constraint_oid(table_oid, constraint_slot),
                             name: name.clone(),
                             contype: "c",
@@ -5058,6 +5066,9 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                     on_delete,
                     on_update,
                     validated,
+                    deferrable,
+                    initially_deferred,
+                    ..
                 } => {
                     if pg_constraint_filter_matches(
                         name,
@@ -5068,6 +5079,8 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                         relation_oids,
                     ) {
                         rows.push(pg_constraint_row(PgConstraintRow {
+                            condeferrable: *deferrable,
+                            condeferred: *initially_deferred,
                             oid: pg_constraint_oid(table_oid, constraint_slot),
                             name: name.clone(),
                             contype: "f",
@@ -5102,6 +5115,8 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                     ) {
                         let columns = exclusion_constraint_columns(equal_columns, range);
                         rows.push(pg_constraint_row(PgConstraintRow {
+                            condeferrable: false,
+                            condeferred: false,
                             oid: pg_constraint_oid(table_oid, constraint_slot),
                             name: name.clone(),
                             contype: "x",
@@ -5191,6 +5206,8 @@ pub(crate) fn pg_constraint_filter_matches(
 }
 
 pub(crate) struct PgConstraintRow {
+    pub(crate) condeferrable: bool,
+    pub(crate) condeferred: bool,
     pub(crate) oid: i64,
     pub(crate) name: String,
     pub(crate) contype: &'static str,
@@ -5212,8 +5229,8 @@ pub(crate) fn pg_constraint_row(row: PgConstraintRow) -> BTreeMap<String, SqlVal
         ("conname", SqlValue::String(row.name)),
         ("connamespace", SqlValue::Int(row.connamespace)),
         ("contype", SqlValue::String(row.contype.to_string())),
-        ("condeferrable", SqlValue::Bool(false)),
-        ("condeferred", SqlValue::Bool(false)),
+        ("condeferrable", SqlValue::Bool(row.condeferrable)),
+        ("condeferred", SqlValue::Bool(row.condeferred)),
         ("conenforced", SqlValue::Bool(true)),
         ("convalidated", SqlValue::Bool(row.convalidated)),
         ("conrelid", SqlValue::Int(row.conrelid)),
@@ -5874,9 +5891,18 @@ pub(crate) fn constraint_definition_value(
                 format!("{}.{}", foreign_schema.schema_name, foreign_schema.name)
             };
             SqlValue::String(format!(
-                "FOREIGN KEY ({columns}) REFERENCES {}({})",
+                "FOREIGN KEY ({columns}) REFERENCES {}({}){}",
                 foreign_name,
-                referred_columns.join(", ")
+                referred_columns.join(", "),
+                if virtual_cell(constraint, "condeferrable") == SqlValue::Bool(true) {
+                    if virtual_cell(constraint, "condeferred") == SqlValue::Bool(true) {
+                        " DEFERRABLE INITIALLY DEFERRED"
+                    } else {
+                        " DEFERRABLE"
+                    }
+                } else {
+                    ""
+                }
             ))
         }
         "n" => column_names

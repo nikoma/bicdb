@@ -164,6 +164,8 @@ pub(crate) fn virtual_table_columns_for_empty_join(table: &str) -> Option<Vec<St
             ))),
             "pg_constraint" => Some(virtual_row_column_names(pg_constraint_row(
                 PgConstraintRow {
+                    condeferrable: false,
+                    condeferred: false,
                     oid: 0,
                     name: String::new(),
                     contype: "c",

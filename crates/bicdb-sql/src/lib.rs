@@ -3544,6 +3544,10 @@ enum ConstraintSchema {
     },
     ForeignKey {
         name: String,
+        // Stable across table/constraint renames; deferred checks must not be
+        // discarded or rebound when a display name changes in a transaction.
+        #[serde(default)]
+        constraint_id: String,
         columns: Vec<String>,
         foreign_table: String,
         referred_columns: Vec<String>,
@@ -3551,6 +3555,10 @@ enum ConstraintSchema {
         on_update: ForeignKeyAction,
         #[serde(default = "default_true")]
         validated: bool,
+        #[serde(default)]
+        deferrable: bool,
+        #[serde(default)]
+        initially_deferred: bool,
     },
     Exclusion {
         name: String,

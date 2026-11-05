@@ -5203,6 +5203,11 @@ impl<'db> SqlSession<'db> {
                 }
                 let child_key = typed_column_key_label(schema, referred_columns, &values)?;
                 if parent_keys.contains(&child_key) {
+                    if *on_delete == ForeignKeyAction::NoAction
+                        && self.defer_inbound_foreign_key(child_schema, name, &child)?
+                    {
+                        continue;
+                    }
                     return Err(foreign_key_violation(&child_schema.name, name));
                 }
             }
@@ -5472,6 +5477,15 @@ impl<'db> SqlSession<'db> {
                     .iter()
                     .any(|(old_key, _)| *old_key == child_key)
                 {
+                    if constraint.on_update == ForeignKeyAction::NoAction
+                        && self.defer_inbound_foreign_key(
+                            &constraint.child_schema,
+                            &constraint.name,
+                            &child,
+                        )?
+                    {
+                        continue;
+                    }
                     return Err(foreign_key_violation(
                         &constraint.child_schema.name,
                         &constraint.name,

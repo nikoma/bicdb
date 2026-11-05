@@ -84,6 +84,23 @@ impl<'db> SqlSession<'db> {
                     _ => {}
                 }
             }
+            match load_schema(self.db_ref(), &table) {
+                Ok(Some(schema))
+                    if schema.constraints.iter().any(|constraint| {
+                        matches!(
+                            constraint,
+                            ConstraintSchema::ForeignKey {
+                                deferrable: true,
+                                ..
+                            }
+                        )
+                    }) =>
+                {
+                    return ControlFlow::Break(Ok(true))
+                }
+                Err(error) => return ControlFlow::Break(Err(error)),
+                _ => {}
+            }
             if triggers.iter().any(|trigger| {
                 trigger.enabled
                     && trigger.for_each.eq_ignore_ascii_case("row")
@@ -448,8 +465,8 @@ impl<'db> SqlSession<'db> {
         Ok(())
     }
 
-    /// Drain the deferred constraint-trigger queue riding the open
-    /// transaction. Called with the transaction still open, immediately before
+    /// Drain deferred foreign-key checks and constraint-trigger calls riding
+    /// the open transaction. Called with the transaction still open, immediately before
     /// it commits; an error here aborts the commit exactly as a failed
     /// statement would. Public because the pgwire server commits buffered
     /// transactions itself and must drain through a session first.
@@ -462,7 +479,20 @@ impl<'db> SqlSession<'db> {
             if hooks.is_empty() {
                 return Ok(());
             }
+            let mut checked_foreign_keys = BTreeSet::new();
             for hook in hooks {
+                if hook.get("foreign_key_check").is_some() {
+                    // A row can be updated repeatedly. Check its final state
+                    // once per batch; triggers may enqueue a fresh later batch.
+                    if checked_foreign_keys.insert(hook.to_string()) {
+                        super::deferred_constraints::validate_foreign_key_hook(
+                            self.db_ref(),
+                            self.tx.as_ref(),
+                            &hook,
+                        )?;
+                    }
+                    continue;
+                }
                 let call: DeferredTriggerCall = serde_json::from_value(hook).map_err(|error| {
                     SqlError::InvalidSql(format!("malformed deferred trigger hook: {error}"))
                 })?;

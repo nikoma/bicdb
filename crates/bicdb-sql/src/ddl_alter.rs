@@ -1887,6 +1887,7 @@ pub(crate) fn column_constraints_from_def(
                         .collect()
                 };
                 constraints.push(ConstraintSchema::ForeignKey {
+                    constraint_id: uuid::Uuid::new_v4().to_string(),
                     name: option
                         .name
                         .as_ref()
@@ -1898,6 +1899,17 @@ pub(crate) fn column_constraints_from_def(
                     on_delete: foreign_key_action(foreign_key.on_delete.as_ref()),
                     on_update: foreign_key_action(foreign_key.on_update.as_ref()),
                     validated: true,
+                    deferrable: foreign_key
+                        .characteristics
+                        .as_ref()
+                        .is_some_and(|c| c.deferrable.unwrap_or(false)),
+                    initially_deferred: foreign_key.characteristics.as_ref().is_some_and(|c| {
+                        c.deferrable.unwrap_or(false)
+                            && matches!(
+                                c.initially,
+                                Some(sqlparser::ast::DeferrableInitial::Deferred)
+                            )
+                    }),
                 });
             }
             _ => {}
@@ -1941,6 +1953,7 @@ pub(crate) fn table_constraint_schema(
         TableConstraint::ForeignKey(foreign_key) => {
             reject_unsupported_constraint_characteristics(foreign_key.characteristics.as_ref())?;
             vec![ConstraintSchema::ForeignKey {
+                constraint_id: uuid::Uuid::new_v4().to_string(),
                 name: foreign_key
                     .name
                     .as_ref()
@@ -1971,6 +1984,17 @@ pub(crate) fn table_constraint_schema(
                 on_delete: foreign_key_action(foreign_key.on_delete.as_ref()),
                 on_update: foreign_key_action(foreign_key.on_update.as_ref()),
                 validated: true,
+                deferrable: foreign_key
+                    .characteristics
+                    .as_ref()
+                    .is_some_and(|c| c.deferrable.unwrap_or(false)),
+                initially_deferred: foreign_key.characteristics.as_ref().is_some_and(|c| {
+                    c.deferrable.unwrap_or(false)
+                        && matches!(
+                            c.initially,
+                            Some(sqlparser::ast::DeferrableInitial::Deferred)
+                        )
+                }),
             }]
         }
         TableConstraint::PrimaryKey(primary_key) => {

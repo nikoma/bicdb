@@ -86,6 +86,41 @@ impl SqlEngine<'_> {
                     ..
                 } = relation
                 else {
+                    // A FROM function contributes values, not lockable tuples.
+                    // Unqualified FOR UPDATE still locks every base input;
+                    // explicitly naming the function itself remains an error.
+                    let function_names = match relation {
+                        TableFactor::Table {
+                            name,
+                            alias,
+                            args: Some(_),
+                            ..
+                        }
+                        | TableFactor::Function { name, alias, .. } => Some((
+                            alias.as_ref().map(|alias| alias.name.value.clone()),
+                            object_name(name)?,
+                        )),
+                        TableFactor::UNNEST { alias, .. } => Some((
+                            alias.as_ref().map(|alias| alias.name.value.clone()),
+                            "unnest".to_string(),
+                        )),
+                        TableFactor::TableFunction { alias, .. } => Some((
+                            alias.as_ref().map(|alias| alias.name.value.clone()),
+                            String::new(),
+                        )),
+                        _ => None,
+                    };
+                    if let Some((alias, name)) = function_names {
+                        if requested
+                            .as_ref()
+                            .is_some_and(|requested| alias.as_ref().unwrap_or(&name) == requested)
+                        {
+                            return Err(SqlError::Unsupported(
+                                "FOR UPDATE/SHARE cannot be applied to a function".into(),
+                            ));
+                        }
+                        continue;
+                    }
                     if requested.is_none() {
                         return Err(SqlError::Unsupported(
                             "row locking targets must be base tables".into(),

@@ -404,6 +404,7 @@ impl BicDb {
         let applied = self.last_committed_tx.load(AtomicOrdering::Acquire);
         tx.state = TxState::Committed;
         tx.committed_seq = Some(applied);
+        tx.receipt_commit_finished(applied);
         Ok(applied)
     }
 

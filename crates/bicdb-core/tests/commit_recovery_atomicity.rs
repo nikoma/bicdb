@@ -2,7 +2,7 @@
 //! live handle and recover every collection, never a committed table prefix.
 use bicdb_core::{
     BicDb, DbConfig, IndexDefinition, IndexField, IndexKind, OnlineBackupLimits, Record,
-    StorageMode,
+    StorageMode, TransactionOutcome,
 };
 use serde_json::json;
 use std::time::{Duration, Instant};
@@ -64,9 +64,35 @@ fn failed_materialization_child() {
             "1"
         },
     );
-    let error = tx.commit().unwrap_err();
+    let buffered = std::env::var_os("BICDB_MATERIALIZATION_BUFFERED").is_some();
+    let mut observer = (!buffered).then(|| tx.observe_outcome());
+    let receipt = (!buffered).then(|| tx.observe_record_write("a_accounts", "after").unwrap());
+    let error = if buffered {
+        let error = db.commit_buffered_transaction(&mut tx).unwrap_err();
+        // No observer existed before the failed decision. Creating one now
+        // must preserve uncertainty rather than reconstructing Pending.
+        let late_observer = tx.observe_outcome();
+        assert!(matches!(
+            late_observer.outcome(),
+            TransactionOutcome::RecoveryRequired { .. }
+        ));
+        observer = Some(late_observer);
+        drop(tx);
+        error
+    } else {
+        tx.commit().unwrap_err()
+    };
     std::env::remove_var(&failpoint);
     assert!(error.to_string().contains("injected"), "{error}");
+    let observer = observer.unwrap();
+    assert!(matches!(
+        observer.outcome(),
+        TransactionOutcome::RecoveryRequired { .. }
+    ));
+    if let Some(receipt) = receipt {
+        assert_eq!(receipt.transaction().outcome(), observer.outcome());
+        assert_eq!(receipt.rollback_boundary(), None);
+    }
     assert!(db.check_recovery_state().is_err());
     assert!(db.get("a_accounts", "after").is_err());
     assert!(db.begin_transaction().is_err());
@@ -83,12 +109,31 @@ fn failed_materialization_child() {
 
 #[test]
 fn crash_after_failed_apply_recovers_the_entire_durable_transaction() {
-    for (mode, failpoint) in [
-        (StorageMode::EmbeddedMemory, "BICDB_TEST_FAIL_COMMIT_APPLY"),
-        (StorageMode::ServerPaged, "BICDB_TEST_FAIL_COMMIT_APPLY"),
+    for (mode, failpoint, buffered) in [
+        (
+            StorageMode::EmbeddedMemory,
+            "BICDB_TEST_FAIL_COMMIT_APPLY",
+            false,
+        ),
+        (
+            StorageMode::ServerPaged,
+            "BICDB_TEST_FAIL_COMMIT_APPLY",
+            false,
+        ),
         (
             StorageMode::ServerPaged,
             "BICDB_TEST_FAIL_PAGED_COLLECTION_APPLY",
+            false,
+        ),
+        (
+            StorageMode::EmbeddedMemory,
+            "BICDB_TEST_FAIL_COMMIT_APPLY",
+            true,
+        ),
+        (
+            StorageMode::ServerPaged,
+            "BICDB_TEST_FAIL_COMMIT_APPLY",
+            true,
         ),
     ] {
         let root = tempfile::tempdir().unwrap();
@@ -121,7 +166,11 @@ fn crash_after_failed_apply_recovers_the_entire_durable_transaction() {
             }
             db.checkpoint_for_resume().unwrap();
         }
-        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+        let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+        if buffered {
+            command.env("BICDB_MATERIALIZATION_BUFFERED", "1");
+        }
+        let mut child = command
             .args(["--exact", "failed_materialization_child", "--nocapture"])
             .env("BICDB_MATERIALIZATION_CHILD", root.path())
             .env("BICDB_MATERIALIZATION_FAILPOINT", failpoint)

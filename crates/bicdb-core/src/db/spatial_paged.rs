@@ -2335,11 +2335,13 @@ impl BicDb {
             }
         };
         self.tx_log.enqueue(commit_seq, wal_bytes);
+        tx.receipt_commit_started(commit_seq);
         // A durable logical decision precedes every physical/resident apply.
         // A failed sync may still have persisted it, so errors fence the handle
         // and leave the complete redo intact for restart and replication.
         if let Err(error) = self.tx_log.write_durable(commit_seq) {
             self.recovery_required.store(true, AtomicOrdering::Release);
+            tx.receipt_recovery_required(commit_seq);
             return Err(error);
         }
         timer.lap(&commit_trace::WAL_ENCODE);
@@ -2403,6 +2405,7 @@ impl BicDb {
         })();
         if let Err(error) = apply_result {
             self.recovery_required.store(true, AtomicOrdering::Release);
+            tx.receipt_recovery_required(commit_seq);
             return Err(error);
         }
         // Done: drop the tx_states entry rather than leaving a `Committed`
@@ -2420,6 +2423,7 @@ impl BicDb {
         release_owned_write_locks(&self.write_locks, tx.id, &locked_keys);
         tx.state = TxState::Committed;
         tx.committed_seq = Some(commit_seq);
+        tx.receipt_commit_finished(commit_seq);
         timer.lap(&commit_trace::BOOKKEEPING);
         commit_trace::tick();
         // So this thread's next `begin_transaction` does not start behind its own

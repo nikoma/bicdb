@@ -47,6 +47,7 @@ mod index_build;
 mod pitr_maintenance;
 mod row_lock_waiters;
 mod spatial_paged;
+mod transaction_receipts;
 mod transaction_suspension;
 mod wait_graph;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
@@ -66,6 +67,10 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering as AtomicOrdering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+pub use transaction_receipts::{
+    TransactionOutcome, TransactionOutcomeObserver, TransactionWriteReceipt,
+    TransactionWriteRollback,
+};
 pub use transaction_suspension::TransactionSuspension;
 
 use petgraph::algo::{astar, dijkstra};
@@ -8496,6 +8501,8 @@ pub struct Transaction {
     /// boundary. Commit validation remains mandatory in either mode.
     statement_write_conflicts: bool,
     state: TxState,
+    outcome_observer: OnceLock<Arc<transaction_receipts::OutcomeState>>,
+    write_receipts: Option<Box<transaction_receipts::ReceiptJournal>>,
     writes: Vec<TxWrite>,
     // Index over `writes`: collection -> record id -> position of the LAST
     // buffered write for that key. Read-your-writes overlays used to scan the
@@ -16807,6 +16814,7 @@ impl Transaction {
             self.writes.truncate(len);
             self.rebuild_write_index();
         }
+        self.rollback_write_receipts(self.writes.len());
         let retained = self
             .writes
             .iter()
@@ -16831,6 +16839,7 @@ impl Transaction {
             self.writes.truncate(write_len);
             self.rebuild_write_index();
         }
+        self.rollback_write_receipts(self.writes.len());
         let released = {
             let locked = self.locked_keys.get_mut();
             locked.split_off(lock_len)
@@ -17577,6 +17586,7 @@ fn release_owned_write_locks(
 impl Drop for Transaction {
     fn drop(&mut self) {
         if self.state == TxState::Pending {
+            self.receipt_aborted();
             // Release this transaction's record locks for abandoned (never
             // committed/rolled-back) transactions. We go through our own handle
             // to the shared lock map rather than dereferencing `db`, so drop is

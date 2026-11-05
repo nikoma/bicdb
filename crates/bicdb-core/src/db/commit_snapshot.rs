@@ -260,6 +260,7 @@ impl BicDb {
         let locked_keys = tx.locked_keys.get_mut().take_all();
         release_owned_write_locks(&self.write_locks, tx.id, &locked_keys);
         tx.state = TxState::Aborted;
+        tx.receipt_aborted();
         Ok(())
     }
 

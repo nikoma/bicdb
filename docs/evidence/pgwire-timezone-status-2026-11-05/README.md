@@ -34,3 +34,10 @@ with zero skips using the C driver, followed by full-snapshot preflight, apply
 and resume for all 16 BLOB columns with all affected target table fingerprints
 preserved. The owned database shut down successfully. The validation record
 identifies exact source/binary hashes and separates the earlier diagnostic control.
+
+
+The later delivery merge passed 12 JSON regression tests, 181 general protocol
+tests and 48 Oracle protocol tests, plus workspace/all-target checking and the
+server build. Its source and binary hashes are recorded separately from the
+preceding full-snapshot C-driver qualification. No new accepted deployment is
+implied by the delivery build.

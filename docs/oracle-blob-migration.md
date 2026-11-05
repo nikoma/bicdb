@@ -42,7 +42,10 @@ After preflight, apply checks a real stored `DBMS_LOB.APPEND` using a temporary
 probe table before converting source columns. Apply therefore needs probe-table
 CREATE/DELETE/DROP privileges in addition to reading and altering the affected
 tables. It deletes the probe row before
-dropping the table. Every unjournaled source BLOB receives an explicit
+dropping the table. The probe itself can advance the durable reader-version
+fence; dropping it does not restore compatibility with older binaries. Returning
+to an older reader requires the pre-upgrade backup. Every unjournaled source BLOB
+receives an explicit
 `ALTER TABLE ... MODIFY (... BLOB)`, even if the existing public logical label
 already says BLOB: that label alone cannot distinguish older storage generations.
 Native BYTEA columns absent from the source BLOB declarations stay BYTEA.

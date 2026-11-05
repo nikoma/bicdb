@@ -115,5 +115,47 @@
       "apply": "0382da0e7114a6a7642e81c8bfe230515c332c0ece1738ce9e2683f7099df485",
       "resume": "0382da0e7114a6a7642e81c8bfe230515c332c0ece1738ce9e2683f7099df485"
     }
+  },
+  "delivery_merge_validation": {
+    "source_commit": "ed9ca8b74bea10e14beeb9c0e02e46279d2e5a1b",
+    "server_sha256": "d8f47af87a8eaa2e930a66d97f9f44ce57db8a15b14e980575884e6d84d87dd4",
+    "guard_status": "completed",
+    "minimum_observed_available_bytes": 15225303040,
+    "steps": [
+      {
+        "name": "build",
+        "returncode": 0,
+        "log_sha256": "3052649b37050f7c6abaf0580e250b8efa2f66c363d11ece93a0e47c0053433f"
+      },
+      {
+        "name": "jsonb-srf",
+        "returncode": 0,
+        "log_sha256": "c53dbee3ff2645283b201eeedeca3567017306f8638e7aba66bd26574ffb93d0",
+        "passed": 12,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "name": "protocol",
+        "returncode": 0,
+        "log_sha256": "01f1c1b96125640058dd6e667477461ceafa416ca520c0391e5f8d0907012cb4",
+        "passed": 181,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "name": "oracle-protocol",
+        "returncode": 0,
+        "log_sha256": "7e71adb46e6c7abac04a7c7a48ff6a32c84ec3d6cbce1b008a1ac3e6f886cd81",
+        "passed": 48,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "name": "workspace",
+        "returncode": 0,
+        "log_sha256": "c472e82b28be84a023889be1c26c88697cc47088bf845a63d9bb1788d8e7814f"
+      }
+    ]
   }
 }

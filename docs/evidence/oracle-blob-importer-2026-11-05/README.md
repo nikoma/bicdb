@@ -48,3 +48,10 @@ code 0, with no mutations to the accepted application's database. The resource
 guard completed with its 12 GiB headroom floor intact. This proves target-value
 preservation for this export, not source-row equality after application writes
 or full application acceptance.
+
+
+The later delivery merge passed 12 JSON regression tests, 181 general protocol
+tests and 48 Oracle protocol tests, plus workspace/all-target checking and the
+server build. Its source and binary hashes are recorded separately from the
+preceding full-snapshot C-driver qualification. No new accepted deployment is
+implied by the delivery build.

@@ -1,0 +1,173 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "block_error",
+      "source": {
+        "id": "block_error",
+        "actual": 1,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "block_error",
+        "actual": "23505",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "only_block_writes_removed",
+      "source": {
+        "id": "only_block_writes_removed",
+        "actual": [
+          1,
+          2
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "only_block_writes_removed",
+        "actual": [
+          1,
+          2
+        ],
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "subsequent_write_allowed",
+      "source": {
+        "id": "subsequent_write_allowed",
+        "actual": [
+          1,
+          2,
+          5
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "subsequent_write_allowed",
+        "actual": [
+          1,
+          2,
+          5
+        ],
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "caller_rollback",
+      "source": {
+        "id": "caller_rollback",
+        "actual": [
+          1
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "caller_rollback",
+        "actual": [
+          1
+        ],
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "commit_error",
+      "source": {
+        "id": "commit_error",
+        "actual": 1,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "commit_error",
+        "actual": "23505",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "explicit_commit_preserved",
+      "source": {
+        "id": "explicit_commit_preserved",
+        "actual": [
+          1,
+          2,
+          3
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "explicit_commit_preserved",
+        "actual": [
+          1,
+          2,
+          3
+        ],
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "write_after_committed_block_error",
+      "source": {
+        "id": "write_after_committed_block_error",
+        "actual": [
+          1,
+          2,
+          3,
+          5
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "write_after_committed_block_error",
+        "actual": [
+          1,
+          2,
+          3,
+          5
+        ],
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "later_rollback_preserves_commit",
+      "source": {
+        "id": "later_rollback_preserves_commit",
+        "actual": [
+          1,
+          2,
+          3
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "later_rollback_preserves_commit",
+        "actual": [
+          1,
+          2,
+          3
+        ],
+        "qualified": true
+      },
+      "matched": true
+    }
+  ],
+  "total": 8,
+  "matched": 8,
+  "cleanup_errors": [],
+  "source_qualified": true,
+  "success": true,
+  "target_sql_profile": "oracle-preview-v1",
+  "reference": "oracle",
+  "oracle_disable_oob": false,
+  "binary_sha256": "20b02172e9e77efb09583dc6867b88e91ca5970f6d97c235da81b590192318a4",
+  "source_version": "23.26.3.0.0",
+  "fixture_sha256": "b521a74adfdd62ff2bef3d502ca29f5021124c8d0b896653cc3e7b196ec1af0b"
+}

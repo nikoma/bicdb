@@ -4053,6 +4053,28 @@ impl<'db> SqlSession<'db> {
                 Ok(RoutineControl::Continue)
             }
             RoutineStmt::Sql(statement) => {
+                if frame.oracle_statement_rollback
+                    && matches!(
+                        statement,
+                        Statement::Commit { .. }
+                            | Statement::Rollback {
+                                savepoint: None,
+                                ..
+                            }
+                    )
+                {
+                    // Acquire exclusive execution before ending the caller's
+                    // transaction. Later statements may require it, and a
+                    // fallback must still be safe before any durable boundary.
+                    // Autonomous children already forbid replay and use only
+                    // shared core APIs while their parent borrows the database.
+                    if !self.oracle_autonomous {
+                        self.db_mut()?;
+                    }
+                    // Authored transaction boundaries must never be replayed
+                    // while escalating a later operation to exclusive access.
+                    crate::statement_context::note_independent_execution();
+                }
                 let result = self.execute_routine_sql(frame, statement)?;
                 frame.set(ROUTINE_FOUND_VAR, SqlValue::Bool(sql_result_found(&result)));
                 Ok(RoutineControl::Continue)
@@ -4806,6 +4828,21 @@ impl<'db> SqlSession<'db> {
         } else {
             Vec::new()
         };
+        if frame.oracle_statement_rollback
+            && self.tx.is_none()
+            && matches!(
+                statement,
+                Statement::Insert(_)
+                    | Statement::Update(_)
+                    | Statement::Delete(_)
+                    | Statement::Merge(_)
+            )
+        {
+            // An authored COMMIT/ROLLBACK may have ended the block's unit.
+            // Its next mutation starts another pending unit, rather than
+            // taking the ordinary standalone mutation's auto-commit path.
+            self.tx = Some(self.begin_session_transaction()?);
+        }
         let previous = self.bind_routine_frame(frame);
         let owned = std::mem::replace(&mut self.ir_owned_statement, true);
         let oracle_context = (!call).then(|| {

@@ -618,3 +618,15 @@ server agree on ownership and private-access exclusions. All 1,118 selected
 engine regressions and 13 retained reference families pass. The failed runtime
 was rejected and the previous runtime restored with 77 workflow observations
 preserved; full application qualification remains a separate gate.
+
+## Anonymous input and statement recovery checkpoint
+
+The [anonymous input checkpoint](evidence/oracle-anonymous-inputs-2026-11-05/README.md)
+preserves input bindings, declaration/SQL type inference and namespace selection
+in preview anonymous blocks over PostgreSQL extended protocol. Eight native
+Oracle controls qualify bounded caller rollback, continuation and explicit commit
+behavior. Default PostgreSQL failed-transaction behavior and ordinary lock-error
+paths retain independent regression coverage. The source checkpoint passes 993
+selected Rust regressions and 13 retained reference families. JDBC application
+integration, LOB locators, Parse/Bind continuation, broader procedural semantics
+and complete application/programme acceptance remain open.

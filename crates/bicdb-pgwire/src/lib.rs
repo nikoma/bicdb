@@ -2448,7 +2448,7 @@ fn handle_frontend_message(
                     abort_copy_in(state);
                     state.failed_queries += 1;
                     server.failed_queries.fetch_add(1, Ordering::SeqCst);
-                    state.record_query_error();
+                    state.record_query_error(&server.config.sql_profile);
                     error_response_for_error(stream, &error)?;
                     if error.closes_connection() {
                         return Ok(false);
@@ -2476,7 +2476,7 @@ fn handle_frontend_message(
                 Err(error) => {
                     state.failed_queries += 1;
                     server.failed_queries.fetch_add(1, Ordering::SeqCst);
-                    state.record_query_error();
+                    state.record_query_error(&server.config.sql_profile);
                     error_response_for_error(stream, &error)?;
                     if error.closes_connection() {
                         return Ok(false);
@@ -2493,7 +2493,7 @@ fn handle_frontend_message(
                 let message = cstring_payload(&payload).unwrap_or("COPY failed");
                 state.failed_queries += 1;
                 server.failed_queries.fetch_add(1, Ordering::SeqCst);
-                state.record_query_error();
+                state.record_query_error(&server.config.sql_profile);
                 error_response(stream, message)?;
                 if extended {
                     state.discard_until_sync = true;
@@ -2551,7 +2551,7 @@ fn handle_frontend_message(
                         lowered.as_str()
                     }
                     Err(error) => {
-                        state.record_query_error();
+                        state.record_query_error(&server.config.sql_profile);
                         error_response_for_error(stream, &error)?;
                         ready_for_query_status(stream, state.transaction_status())?;
                         return Ok(true);
@@ -2584,7 +2584,7 @@ fn handle_frontend_message(
                 Err(error) => {
                     state.failed_queries += 1;
                     server.failed_queries.fetch_add(1, Ordering::SeqCst);
-                    state.record_query_error();
+                    state.record_query_error(&server.config.sql_profile);
                     log_failed_query(server, state, Some(query), &error);
                     error_response_for_error(stream, &error)?;
                     write_interval_style_status(stream, state)?;
@@ -2601,7 +2601,7 @@ fn handle_frontend_message(
                 parse_complete(stream)?;
             }
             Err(error) => {
-                state.record_query_error();
+                state.record_query_error(&server.config.sql_profile);
                 state.discard_until_sync = true;
                 error_response_for_error(stream, &error)?;
                 if error.closes_connection() {
@@ -2645,7 +2645,7 @@ fn handle_frontend_message(
                         Err(error) => {
                             state.failed_queries += 1;
                             server.failed_queries.fetch_add(1, Ordering::SeqCst);
-                            state.record_query_error();
+                            state.record_query_error(&server.config.sql_profile);
                             state.discard_until_sync = true;
                             log_failed_query(server, state, source_sql.as_deref(), &error);
                             error_response_for_error(stream, &error)?;
@@ -2675,7 +2675,7 @@ fn handle_frontend_message(
                 if let Err(error) = outcome {
                     state.failed_queries += 1;
                     server.failed_queries.fetch_add(1, Ordering::SeqCst);
-                    state.record_query_error();
+                    state.record_query_error(&server.config.sql_profile);
                     state.discard_until_sync = true;
                     log_failed_query(server, state, source_sql.as_deref(), &error);
                     error_response_for_error(stream, &error)?;
@@ -2713,7 +2713,7 @@ fn handle_frontend_message(
                 Err(error) => {
                     state.failed_queries += 1;
                     server.failed_queries.fetch_add(1, Ordering::SeqCst);
-                    state.record_query_error();
+                    state.record_query_error(&server.config.sql_profile);
                     state.discard_until_sync = true;
                     log_failed_query(server, state, source_sql.as_deref(), &error);
                     error_response_for_error(stream, &error)?;
@@ -2764,6 +2764,7 @@ fn handle_frontend_message(
 struct PreparedStatement {
     sql: String,
     param_type_oids: Vec<i32>,
+    oracle_host_block: Option<Arc<bicdb_sql::oracle::host_binds::AnonymousBlock>>,
 }
 
 #[derive(Clone, Debug)]
@@ -2914,6 +2915,7 @@ struct ConnectionState {
     failed_queries: u64,
     in_transaction: bool,
     failed_transaction: bool,
+    oracle_error_recovered: bool,
     discard_until_sync: bool,
     tx_statements: Vec<TxBufferedOperation>,
     tx: Option<Transaction>,
@@ -3042,6 +3044,7 @@ impl ConnectionState {
             failed_queries: 0,
             in_transaction: false,
             failed_transaction: false,
+            oracle_error_recovered: false,
             discard_until_sync: false,
             tx_statements: Vec::new(),
             tx: None,
@@ -3090,13 +3093,17 @@ impl ConnectionState {
         }
     }
 
-    fn record_query_error(&mut self) {
+    fn record_query_error(&mut self, profile: &str) {
+        if profile == bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE && self.oracle_error_recovered {
+            return;
+        }
         if self.in_transaction {
             self.failed_transaction = true;
         }
     }
 
     fn observe_request(&mut self, bytes: usize) {
+        self.oracle_error_recovered = false;
         self.active_request_bytes = bytes;
     }
 
@@ -3108,7 +3115,14 @@ impl ConnectionState {
         let prepared = self
             .prepared
             .values()
-            .map(|statement| statement.sql.len() + statement.param_type_oids.len() * 4)
+            .map(|statement| {
+                statement.sql.len()
+                    + statement.param_type_oids.len() * 4
+                    + statement
+                        .oracle_host_block
+                        .as_ref()
+                        .map_or(0, |block| block.memory_estimate())
+            })
             .sum::<usize>();
         let portals = self
             .portals
@@ -3399,6 +3413,7 @@ fn execute_sql_prepared_statement_query(
                     PreparedStatement {
                         sql: statement_sql,
                         param_type_oids,
+                        oracle_host_block: None,
                     },
                 );
                 return Ok(Some(SqlPreparedStatementResult {
@@ -3430,6 +3445,7 @@ fn execute_sql_prepared_statement_query(
                 PreparedStatement {
                     sql: statement.to_string(),
                     param_type_oids,
+                    oracle_host_block: None,
                 },
             );
             Ok(Some(SqlPreparedStatementResult {
@@ -3475,7 +3491,13 @@ fn execute_sql_prepared_statement_query(
                 .zip(prepared.param_type_oids.iter().copied())
                 .map(|(expr, oid)| sql_prepared_parameter(expr, oid))
                 .collect::<Result<Vec<_>>>()?;
-            let sql = substitute_parameters(&prepared.sql, &params)?;
+            let sql = match &prepared.oracle_host_block {
+                Some(block) => {
+                    let db = server.read_db_for_transaction_progress()?;
+                    block.bind(&db, &params)?
+                }
+                None => substitute_parameters(&prepared.sql, &params)?,
+            };
             let result = execute_server_sql_with_options(server, state, &sql, true)?;
             Ok(Some(SqlPreparedStatementResult {
                 result,
@@ -4089,6 +4111,7 @@ fn execute_server_transaction_sql(
         ddl_undo_log,
         independent,
         independent_sequence,
+        recovered,
     ) = {
         let db = server.read_db_for_transaction_progress()?;
         let mut session =
@@ -4098,6 +4121,7 @@ fn execute_server_transaction_sql(
                 .with_cancellation(cancellation.clone())
                 .with_pending_transaction(tx);
         let result = session.execute(sql);
+        let recovered = session.last_statement_error_recovered();
         notifications = session.take_pending_notifications();
         let session_state = session.session_guc_state();
         let pending_tx = session.take_pending_transaction();
@@ -4113,52 +4137,57 @@ fn execute_server_transaction_sql(
             ddl_undo_log,
             independent,
             independent_sequence,
+            recovered,
         )
     };
     state.last_commit_seq = state.last_commit_seq.max(independent_sequence);
     let ran_exclusive = !independent
         && matches!(&result, Err(SqlError::Unsupported(message)) if message == "operation requires exclusive database access");
-    let (result, session_state, pending_tx, catalog_cache, ddl_undo_log) = if ran_exclusive {
-        let Some(tx) = pending_tx else {
-            return Err(PgWireError::Server(
-                "transaction is open but no transaction state is available".to_string(),
-            ));
+    let (result, session_state, pending_tx, catalog_cache, ddl_undo_log, recovered) =
+        if ran_exclusive {
+            let Some(tx) = pending_tx else {
+                return Err(PgWireError::Server(
+                    "transaction is open but no transaction state is available".to_string(),
+                ));
+            };
+            ensure_server_writable(server)?;
+            let admission = server.try_admit_write()?;
+            let mut db = server.write_db_with_admission(&admission)?;
+            let mut session = sql_session_for_server(server, &mut db)
+                .with_security_context(state.security_context.clone())
+                .with_session_guc_state(session_state)
+                .with_catalog_cache(catalog_cache)
+                .with_ddl_undo_log(ddl_undo_log)
+                .with_cancellation(cancellation.clone())
+                .with_pending_transaction(tx);
+            let result = session.execute(sql);
+            let recovered = session.last_statement_error_recovered();
+            notifications = session.take_pending_notifications();
+            state.last_commit_seq = state
+                .last_commit_seq
+                .max(session.last_independent_commit_sequence());
+            let session_state = session.session_guc_state();
+            let pending_tx = session.take_pending_transaction();
+            let ddl_undo_log = session.take_ddl_undo_log();
+            let catalog_cache = session.into_catalog_cache();
+            (
+                result,
+                session_state,
+                pending_tx,
+                catalog_cache,
+                ddl_undo_log,
+                recovered,
+            )
+        } else {
+            (
+                result,
+                session_state,
+                pending_tx,
+                catalog_cache,
+                ddl_undo_log,
+                recovered,
+            )
         };
-        ensure_server_writable(server)?;
-        let admission = server.try_admit_write()?;
-        let mut db = server.write_db_with_admission(&admission)?;
-        let mut session = sql_session_for_server(server, &mut db)
-            .with_security_context(state.security_context.clone())
-            .with_session_guc_state(session_state)
-            .with_catalog_cache(catalog_cache)
-            .with_ddl_undo_log(ddl_undo_log)
-            .with_cancellation(cancellation.clone())
-            .with_pending_transaction(tx);
-        let result = session.execute(sql);
-        notifications = session.take_pending_notifications();
-        state.last_commit_seq = state
-            .last_commit_seq
-            .max(session.last_independent_commit_sequence());
-        let session_state = session.session_guc_state();
-        let pending_tx = session.take_pending_transaction();
-        let ddl_undo_log = session.take_ddl_undo_log();
-        let catalog_cache = session.into_catalog_cache();
-        (
-            result,
-            session_state,
-            pending_tx,
-            catalog_cache,
-            ddl_undo_log,
-        )
-    } else {
-        (
-            result,
-            session_state,
-            pending_tx,
-            catalog_cache,
-            ddl_undo_log,
-        )
-    };
     if ran_exclusive && result.is_ok() && pending_tx.is_none() {
         // Exclusive statements commit inside the session; with the write lock
         // released, hold the acknowledgement for the synchronous standbys.
@@ -4166,8 +4195,13 @@ fn execute_server_transaction_sql(
             .sync_quorum
             .wait_for(server.replication_feed.durable_seq())?;
     }
+    state.oracle_error_recovered = result.is_err() && recovered;
     state.session_state = session_state;
     state.tx = pending_tx;
+    state.tx_fixed_snapshot = state
+        .tx
+        .as_ref()
+        .is_some_and(|tx| tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted);
     if result.is_ok() {
         state.tx_notifications.extend(notifications);
     }

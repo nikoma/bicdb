@@ -2184,6 +2184,7 @@ pub(crate) fn parse_message(
     let mut idx = 0;
     let name = read_cstr(payload, &mut idx)?;
     let sql = read_cstr(payload, &mut idx)?;
+    let source_sql = sql.clone();
     let mut sql = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
         let db = server.read_db_for_transaction_progress()?;
         bicdb_sql::oracle::lower_session_sql(
@@ -2224,7 +2225,22 @@ pub(crate) fn parse_message(
     let typed_sql = live_queries::parse_subscribe(&sql)
         .map(|subscribe| subscribe.query)
         .unwrap_or(&sql);
-    let inferred = if let Some(copy) = parse_copy_statement(typed_sql)? {
+    let oracle_host_block = bicdb_sql::oracle::host_binds::prepare(
+        &db,
+        &source_sql,
+        &sql,
+        &server.config.sql_profile,
+        state
+            .session_state
+            .session_gucs()
+            .get("search_path")
+            .map(String::as_str),
+        &state.user,
+    )?
+    .map(Arc::new);
+    let inferred = if let Some(block) = &oracle_host_block {
+        block.parameter_types().to_vec()
+    } else if let Some(copy) = parse_copy_statement(typed_sql)? {
         if let Some(query) = copy.query {
             infer_parameter_types(&db, &query)?
         } else {
@@ -2239,6 +2255,7 @@ pub(crate) fn parse_message(
         statement: PreparedStatement {
             sql,
             param_type_oids,
+            oracle_host_block,
         },
     })
 }
@@ -2321,7 +2338,10 @@ pub(crate) fn bind_message(
         portal_name,
         Portal {
             replica_watermark: None,
-            sql: substitute_parameters(&statement.sql, &params)?,
+            sql: match &statement.oracle_host_block {
+                Some(block) => block.bind(&db, &params)?,
+                None => substitute_parameters(&statement.sql, &params)?,
+            },
             source_sql: statement.sql.clone(),
             result_formats,
             stream: None,

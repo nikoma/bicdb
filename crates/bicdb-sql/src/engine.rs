@@ -91,6 +91,23 @@ pub fn infer_parameter_types(db: &BicDb, sql: &str) -> Result<Vec<Option<String>
     Ok(resolver.types)
 }
 
+/// Infer host inputs without initializing a frame or executing procedural SQL.
+pub(crate) fn infer_routine_host_parameter_types(
+    db: &BicDb,
+    declarations: &[RoutineDecl],
+    statements: &[RoutineStmt],
+    handlers: &[RoutineExceptionHandler],
+) -> Vec<Option<String>> {
+    let engine = SqlEngine::new(db);
+    let mut resolver = ParameterTypeResolver {
+        engine: &engine,
+        types: Vec::new(),
+        ctes: BTreeMap::new(),
+    };
+    resolver.routine_block(declarations, statements, handlers, &BTreeMap::new());
+    resolver.types
+}
+
 /// Resolve a query's logical PostgreSQL output types without executing it.
 /// Extended-protocol Describe uses this when its null binds produce no rows.
 pub fn infer_query_result_types(db: &BicDb, sql: &str) -> Result<Option<Vec<Option<String>>>> {
@@ -193,6 +210,197 @@ struct ParameterTypeResolver<'engine, 'db> {
 }
 
 impl ParameterTypeResolver<'_, '_> {
+    fn routine_env(locals: &BTreeMap<String, String>) -> Vec<RelationColumns> {
+        vec![RelationColumns {
+            alias: String::new(),
+            row_type: None,
+            columns: locals
+                .iter()
+                .map(|(n, t)| (n.clone(), Some(t.clone())))
+                .collect(),
+        }]
+    }
+
+    fn routine_block(
+        &mut self,
+        declarations: &[RoutineDecl],
+        statements: &[RoutineStmt],
+        handlers: &[RoutineExceptionHandler],
+        outer: &BTreeMap<String, String>,
+    ) {
+        let mut locals = outer.clone();
+        for declaration in declarations {
+            if let RoutineDecl::Variable {
+                name,
+                pg_type: Some(kind),
+                ..
+            } = declaration
+            {
+                locals.insert(name.clone(), kind.clone());
+            }
+        }
+        let env = Self::routine_env(&locals);
+        for declaration in declarations {
+            match declaration {
+                RoutineDecl::Variable {
+                    pg_type,
+                    default_expr: Some(value),
+                    ..
+                } => self.expr(&value.expr, &env, pg_type.as_deref()),
+                RoutineDecl::Cursor { query, params, .. } => {
+                    self.query(query, None);
+                    for param in params {
+                        if let Some(value) = &param.default_expr {
+                            self.expr(
+                                value,
+                                &env,
+                                param.type_schema.as_ref().map(|t| t.pg_type.as_str()),
+                            );
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        self.routine_statements(statements, &locals);
+        for handler in handlers {
+            self.routine_statements(&handler.statements, &locals);
+        }
+    }
+
+    fn routine_statements(
+        &mut self,
+        statements: &[RoutineStmt],
+        locals: &BTreeMap<String, String>,
+    ) {
+        let env = Self::routine_env(locals);
+        for statement in statements {
+            match statement {
+                RoutineStmt::Block {
+                    declarations,
+                    body,
+                    handlers,
+                } => self.routine_block(declarations, body, handlers, locals),
+                RoutineStmt::Assignment { target, expr } => {
+                    let expected = match target {
+                        RoutineAssignmentTarget::Variable(name) => locals.get(name).cloned(),
+                        RoutineAssignmentTarget::ArrayElement { array_name, index } => {
+                            self.expr(&index.expr, &env, Some("integer"));
+                            locals
+                                .get(array_name)
+                                .and_then(|t| array_element_pg_type(t))
+                                .map(str::to_owned)
+                        }
+                    };
+                    self.expr(&expr.expr, &env, expected.as_deref());
+                }
+                RoutineStmt::Sql(sql) | RoutineStmt::SqlInto { statement: sql, .. } => {
+                    self.statement(sql)
+                }
+                RoutineStmt::SelectInto { query, targets, .. } => {
+                    let expected = targets
+                        .iter()
+                        .map(|n| locals.get(n).cloned())
+                        .collect::<Vec<_>>();
+                    self.query(query, Some(&expected));
+                }
+                RoutineStmt::Perform { query } | RoutineStmt::ReturnQuery(query) => {
+                    self.query(query, None)
+                }
+                RoutineStmt::QueryForLoop { query, body, .. } => {
+                    self.query(query, None);
+                    self.routine_statements(body, locals);
+                }
+                RoutineStmt::If {
+                    condition,
+                    then_body,
+                    else_body,
+                } => {
+                    self.expr(&condition.expr, &env, Some("boolean"));
+                    self.routine_statements(then_body, locals);
+                    self.routine_statements(else_body, locals);
+                }
+                RoutineStmt::Case {
+                    expression,
+                    arms,
+                    else_body,
+                } => {
+                    self.expr(&expression.expr, &env, None);
+                    for arm in arms {
+                        self.routine_statements(arm, locals);
+                    }
+                    if let Some(body) = else_body {
+                        self.routine_statements(body, locals);
+                    }
+                }
+                RoutineStmt::ForLoop {
+                    iterator,
+                    lower,
+                    upper,
+                    body,
+                } => {
+                    self.expr(&lower.expr, &env, Some("integer"));
+                    self.expr(&upper.expr, &env, Some("integer"));
+                    let mut inner = locals.clone();
+                    inner.insert(iterator.clone(), "integer".into());
+                    self.routine_statements(body, &inner);
+                }
+                RoutineStmt::ForeachLoop { array, body, .. } => {
+                    self.expr(&array.expr, &env, None);
+                    self.routine_statements(body, locals);
+                }
+                RoutineStmt::WhileLoop { condition, body } => {
+                    self.expr(&condition.expr, &env, Some("boolean"));
+                    self.routine_statements(body, locals);
+                }
+                RoutineStmt::Loop { body } => self.routine_statements(body, locals),
+                RoutineStmt::CursorForLoop {
+                    arguments, body, ..
+                } => {
+                    for argument in arguments {
+                        self.expr(&argument.expr.expr, &env, None);
+                    }
+                    self.routine_statements(body, locals);
+                }
+                RoutineStmt::OpenCursor { arguments, .. } => {
+                    for argument in arguments {
+                        self.expr(&argument.expr.expr, &env, None);
+                    }
+                }
+                RoutineStmt::DynamicExecute(value) => self.expr(&value.expr, &env, Some("text")),
+                RoutineStmt::OracleDynamicExecute(immediate) => {
+                    self.expr(&immediate.command.expr, &env, Some("text"));
+                    for value in &immediate.using {
+                        self.expr(&value.expr, &env, None);
+                    }
+                }
+                RoutineStmt::RaiseException {
+                    arguments, detail, ..
+                } => {
+                    for value in arguments {
+                        self.expr(&value.expr, &env, None);
+                    }
+                    if let Some(value) = detail {
+                        self.expr(&value.expr, &env, Some("text"));
+                    }
+                }
+                RoutineStmt::OracleBuiltin { arguments, .. } => {
+                    for value in arguments {
+                        self.expr(&value.expr, &env, None);
+                    }
+                }
+                RoutineStmt::Return(Some(value)) => self.expr(&value.expr, &env, None),
+                RoutineStmt::ContinueLoop
+                | RoutineStmt::Null
+                | RoutineStmt::ExitLoop
+                | RoutineStmt::FetchCursor { .. }
+                | RoutineStmt::CloseCursor { .. }
+                | RoutineStmt::Rethrow
+                | RoutineStmt::Return(None) => {}
+            }
+        }
+    }
+
     fn statement(&mut self, statement: &Statement) {
         match statement {
             Statement::Query(query) => self.query(query, None),

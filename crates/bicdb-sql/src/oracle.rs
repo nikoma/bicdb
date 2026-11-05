@@ -22,6 +22,7 @@ pub(crate) mod dynamic_sql;
 pub(crate) mod errors;
 mod function_attributes;
 pub(crate) mod hierarchy;
+pub mod host_binds;
 pub(crate) mod lock_waits;
 mod namespaces;
 pub(crate) mod national;

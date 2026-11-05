@@ -1038,6 +1038,7 @@ pub struct SqlSession<'db> {
     pub(crate) oracle_autonomous_lock_epoch: u64,
     pub(crate) oracle_suspension: Option<Arc<bicdb_core::TransactionSuspension>>,
     independent_commits_observed: bool,
+    statement_error_recovered: bool,
     independent_execution_observed: bool,
     latest_independent_sequence: u64,
     /// For that child session, the caller's transaction (if any), read through
@@ -2324,6 +2325,7 @@ impl<'db> SqlSession<'db> {
             oracle_autonomous_lock_epoch: 0,
             oracle_suspension: None,
             independent_commits_observed: false,
+            statement_error_recovered: false,
             independent_execution_observed: false,
             latest_independent_sequence: 0,
             parent_tx: None,
@@ -2909,6 +2911,7 @@ impl<'db> SqlSession<'db> {
     }
 
     pub fn execute(&mut self, sql: &str) -> Result<SqlResult> {
+        self.statement_error_recovered = false;
         self.db_ref().check_recovery_state()?;
         // A per-row routine call reaches raw SQL only through dynamic EXECUTE
         // fallbacks for statements sqlparser cannot represent (DDL, grants).
@@ -2919,21 +2922,81 @@ impl<'db> SqlSession<'db> {
         // not be answered from a stale arbiter.
         self.conflict_arbiter_memo.borrow_mut().take();
         let effects = crate::statement_context::StatementScope::enter();
-        let result = self.with_implicit_guc_statement(|session| {
-            let mut result = session.execute_profiled(sql)?;
-            session.apply_bytea_output(&mut result);
-            Ok(result)
-        });
+        let atomic = self.tx.is_some() && oracle::preview_routine_language_enabled(self.db_ref())?;
+        let execute = |session: &mut Self| {
+            session.with_implicit_guc_statement(|session| {
+                let mut result = session.execute_profiled(sql)?;
+                session.apply_bytea_output(&mut result);
+                Ok(result)
+            })
+        };
+        let (result, recovered) = if atomic {
+            self.with_oracle_statement_boundary(execute)
+        } else {
+            (execute(self), false)
+        };
         self.independent_commits_observed = effects.independently_committed();
         self.independent_execution_observed = effects.independent_execution();
         self.latest_independent_sequence = effects.latest_sequence();
         self.observe_independent_commit()?;
         match result {
             Ok(result) => Ok(result),
-            Err(error) => Err(oracle::errors::profile_constraint_error(
-                self.db_ref(),
-                error,
-            )?),
+            Err(error) => {
+                let error = oracle::errors::profile_constraint_error(self.db_ref(), error)?;
+                self.statement_error_recovered = recovered;
+                Err(error)
+            }
+        }
+    }
+
+    /// True only after restoring a failed preview statement's pending work.
+    /// Transport layers must not infer recoverability from an error code alone.
+    pub fn last_statement_error_recovered(&self) -> bool {
+        self.statement_error_recovered
+    }
+
+    fn with_oracle_statement_boundary<T>(
+        &mut self,
+        execute: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> (Result<T>, bool) {
+        let tx = self.tx.as_ref().expect("pending Oracle statement");
+        let id = tx.id();
+        let mark = tx.rollback_mark();
+        let ddl_len = self.ddl_undo.len();
+        let savepoint_len = self.savepoints.len();
+        let mut gucs = self.session_guc_state();
+        let deferred = std::mem::replace(&mut self.defer_commit, true);
+        let result = execute(self);
+        self.defer_commit = deferred;
+        if result.is_ok() {
+            return (result, false);
+        }
+        let cleanup = (|| {
+            match self.tx.as_mut() {
+                Some(tx) if tx.id() == id => {
+                    tx.rollback_to_mark(mark)?;
+                    self.rollback_ddl_to_len(ddl_len)?;
+                    self.savepoints.truncate(savepoint_len);
+                    gucs.currvals = std::mem::take(&mut self.currvals);
+                    let lastval = self.session_gucs.get(LASTVAL_SESSION_KEY).cloned();
+                    self.install_session_guc_state(gucs);
+                    if let Some(lastval) = lastval {
+                        Arc::make_mut(&mut self.session_gucs)
+                            .insert(LASTVAL_SESSION_KEY.into(), lastval);
+                    }
+                }
+                Some(_) => {
+                    self.rollback_current_transaction()?;
+                }
+                // A COMMIT/ROLLBACK inside the call ended the original unit.
+                // Its durable effects must not be undone with an old mark.
+                None => {}
+            }
+            Ok(())
+        })();
+        match cleanup {
+            Ok(()) => (result, true),
+            Err(error) => (Err(error), false),
         }
     }
 
@@ -3012,6 +3075,7 @@ impl<'db> SqlSession<'db> {
     /// diagnostics that want to preserve normal statement semantics without
     /// measuring parser or SQL-string construction cost.
     pub fn execute_statement_ast(&mut self, statement: &Statement) -> Result<SqlResult> {
+        self.statement_error_recovered = false;
         let _clock = oracle::current_time::StatementScope::new();
         self.db_ref().check_recovery_state()?;
         let effects = crate::statement_context::StatementScope::enter();
@@ -3030,6 +3094,7 @@ impl<'db> SqlSession<'db> {
     /// Execute a stored procedure directly from its already-typed arguments,
     /// bypassing SQL text parsing and `CALL` AST construction.
     pub fn call_procedure(&mut self, name: &str, args: &[SqlValue]) -> Result<SqlResult> {
+        self.statement_error_recovered = false;
         self.db_ref().check_recovery_state()?;
         let effects = crate::statement_context::StatementScope::enter();
         let result = self.with_implicit_guc_statement(|session| {
@@ -3647,6 +3712,9 @@ impl<'db> SqlSession<'db> {
         if self.oracle_autonomous {
             self.oracle_autonomous_epoch += 1;
             self.oracle_autonomous_active = false;
+            crate::statement_context::note_independent_commit(committed_sequence);
+            self.snapshot_floor = self.snapshot_floor.max(committed_sequence);
+        } else if self.defer_commit {
             crate::statement_context::note_independent_commit(committed_sequence);
             self.snapshot_floor = self.snapshot_floor.max(committed_sequence);
         }

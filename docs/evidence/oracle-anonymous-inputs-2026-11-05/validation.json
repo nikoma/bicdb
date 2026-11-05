@@ -1,0 +1,30 @@
+{
+  "format": 1,
+  "goal_complete": false,
+  "application_qualified": false,
+  "deployed": false,
+  "binary_sha256": "20b02172e9e77efb09583dc6867b88e91ca5970f6d97c235da81b590192318a4",
+  "source_parent": "081e2931b5dcd819998b33ff7e44cd572b9223a0",
+  "source_files_sha256": {
+    "crates/bicdb-pgwire/src/lib.rs": "bd9f516b8671159eff5e38c0a29c95b249a5ea165fe0eaf1519b8f0a304e86b7",
+    "crates/bicdb-pgwire/src/sql_parsing.rs": "68cb75a2387d56208ddab65e454afd47439f7263a8eb575d0195ee12b246a180",
+    "crates/bicdb-pgwire/tests/oracle_hr.rs": "5a0f51b556fca80ab5807a68adcae627712a5b7537f593bfc3bfc3e20e997d51",
+    "crates/bicdb-sql/src/engine.rs": "68b05d979d6eb19525dba579e70fd7071c93c081edaf00910f6de484f2e0ddf5",
+    "crates/bicdb-sql/src/oracle.rs": "f641025f8fbbb6542cb7fe795f9b9b3990ee6b5b436c8505ce6ca6cc0d229c7b",
+    "crates/bicdb-sql/src/session.rs": "ff510008fea6aab6843aa5aa2760ab1ad6e40b22c9970db1a0d30da2d032f1ab",
+    "crates/bicdb-sql/src/session/domain_types.rs": "0ff39a3f71a0c55ac76272f68f8ff34b24b637b46a965bc2932f7b2a51ea2da6",
+    "crates/bicdb-sql/src/session/txn_update.rs": "013dbc8d589398a6d9f2f9c35f5d312ae4ddcdb59cccfdaf7a34b86ac99e8b2c",
+    "examples/oracle/reference/README.md": "b99de4a0733396a62787333fe6f322c20b5987806b7fbcf5d9acb1d909e4f3c7",
+    "crates/bicdb-sql/src/oracle/host_binds.rs": "7593cd9958c88046903c69d9d12048d11beed03fabd41cfe601fd5b8c7a6dff2",
+    "examples/oracle/reference/anonymous_host_transactions.py": "b521a74adfdd62ff2bef3d502ca29f5021124c8d0b896653cc3e7b196ec1af0b"
+  },
+  "local_tests_passed": 993,
+  "local_tests_failed": 0,
+  "preexisting_ignored_benchmarks": 3,
+  "workspace_all_targets_check_passed": true,
+  "format_check_passed": true,
+  "whitespace_check_passed": true,
+  "new_oracle_transaction_controls_matched": 8,
+  "retained_reference_families_passed": 13,
+  "installed_jdbc_adapter_qualified": false
+}

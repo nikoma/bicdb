@@ -1143,3 +1143,28 @@ as text; the general scalar type fix resolves them. Compiler 26 and metadata for
 5 remain unchanged, with 24 new/prior/new reader checks across both profiles.
 Full view values/type modifiers, remaining application workflows and the wider
 compatibility programme remain open.
+
+## Bound anonymous submissions
+
+The preview accepts PostgreSQL extended-protocol input parameters in raw Oracle
+`BEGIN ... END` and `DECLARE ... BEGIN ... END` submissions. Parameter inference
+uses declarations and supported SQL contexts without executing the block during
+Parse or Describe. Bind preserves the namespace selected during Parse and lowers
+the Oracle source with the decoded parameter values. Parameter-like text inside
+strings, comments and native dollar-quoted routine bodies remains literal.
+Native PostgreSQL `DO` bodies do not gain outer host parameters.
+
+When a failed preview statement has restored its pending changes successfully,
+the PostgreSQL transport permits the caller transaction to continue. Prior caller
+writes remain pending. An explicit `COMMIT` inside a block remains durable if a
+later operation fails; uncommitted writes after that boundary are rolled back.
+The transport requires confirmation of cleanup rather than inferring transaction
+health from a SQLSTATE. Default PostgreSQL failed-transaction behavior is unchanged.
+Parse/Bind failures and errors without confirmed cleanup retain conservative
+transaction-failure handling; this is not complete Oracle error continuation.
+
+This server contract does not prevent a client library from splitting a block
+before transmission. In particular, stock PostgreSQL JDBC preparation requires
+separate integration to submit an Oracle block atomically with its input binds.
+Callable OUT parameters, complete PL/SQL transaction conformance and Oracle LOB
+locators are not qualified by anonymous input binding.

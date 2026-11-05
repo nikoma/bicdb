@@ -3248,3 +3248,220 @@ async fn oracle_session_context_uses_peer_metadata_and_refuses_client_forgery() 
     connection.await.unwrap();
     drop(running);
 }
+
+#[tokio::test]
+async fn oracle_anonymous_host_binds_keep_metadata_literals_and_repeat_execution() {
+    use tokio_postgres::types::Type;
+    let directory = tempfile::tempdir().unwrap();
+    let server = Running::with_profile(directory.path(), "oracle-preview-v1");
+    let (client, connection) = transaction_defaults_connect(&server, "oracle-preview-v1").await;
+    client
+        .batch_execute("CREATE TABLE host_rows(key_value INTEGER PRIMARY KEY,payload TEXT)")
+        .await
+        .unwrap();
+    let statement = client
+        .prepare("BEGIN INSERT INTO host_rows VALUES($1,$2); END;")
+        .await
+        .unwrap();
+    assert_eq!(statement.params(), &[Type::INT4, Type::TEXT]);
+    assert!(statement.columns().is_empty());
+    let count: i64 = client
+        .query_one("SELECT CAST(COUNT(*) AS BIGINT) FROM host_rows", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(count, 0, "Parse and Describe must not execute the body");
+    let text = "report $bicdb_oracle_0$; punctuation ? 'Привет'";
+    client.execute(&statement, &[&7_i32, &text]).await.unwrap();
+    let empty: Option<&str> = None;
+    client.execute(&statement, &[&8_i32, &empty]).await.unwrap();
+    let rows = client
+        .query(
+            "SELECT key_value,payload FROM host_rows ORDER BY key_value",
+            &[],
+        )
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].get::<_, i32>(0), 7);
+    assert_eq!(rows[0].get::<_, String>(1), text);
+    assert_eq!(rows[1].get::<_, Option<String>>(1), None);
+    let quoted = client
+        .prepare("BEGIN INSERT INTO host_rows VALUES($1,'literal $9'); -- $200 is a comment\nEND;")
+        .await
+        .unwrap();
+    assert_eq!(quoted.params(), &[Type::INT4]);
+    client.execute(&quoted, &[&9_i32]).await.unwrap();
+    assert_eq!(
+        client
+            .query_one("SELECT payload FROM host_rows WHERE key_value=9", &[])
+            .await
+            .unwrap()
+            .get::<_, String>(0),
+        "literal $9"
+    );
+    drop(client);
+    connection.await.unwrap();
+}
+
+#[tokio::test]
+async fn oracle_anonymous_host_binds_resolve_declaration_defaults_and_assignments() {
+    use tokio_postgres::types::Type;
+    let directory = tempfile::tempdir().unwrap();
+    let server = Running::with_profile(directory.path(), "oracle-preview-v1");
+    let (client, connection) = transaction_defaults_connect(&server, "oracle-preview-v1").await;
+    client
+        .batch_execute("CREATE TABLE host_rows(key_value INTEGER PRIMARY KEY,payload TEXT)")
+        .await
+        .unwrap();
+    for (sql,key) in [
+        ("DECLARE item INTEGER := $1; BEGIN INSERT INTO host_rows VALUES(item,'default'); END;",1_i32),
+        ("DECLARE item INTEGER; BEGIN item := $1; INSERT INTO host_rows VALUES(item,'assignment'); END;",2_i32),
+    ] {
+        let statement=client.prepare(sql).await.unwrap();
+        assert_eq!(statement.params(), &[Type::INT4]);
+        client.execute(&statement,&[&key]).await.unwrap();
+    }
+    assert_eq!(
+        client
+            .query("SELECT key_value FROM host_rows", &[])
+            .await
+            .unwrap()
+            .len(),
+        2
+    );
+    drop(client);
+    connection.await.unwrap();
+}
+
+#[tokio::test]
+async fn oracle_anonymous_host_binds_preserve_caller_transactions_and_statement_rollback() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = Running::with_profile(directory.path(), "oracle-preview-v1");
+    let (client, connection) = transaction_defaults_connect(&server, "oracle-preview-v1").await;
+    client.batch_execute("CREATE TABLE host_rows(key_value INTEGER PRIMARY KEY,payload TEXT);INSERT INTO host_rows VALUES(1,'base');BEGIN;INSERT INTO host_rows VALUES(2,'prior')").await.unwrap();
+    let statement=client.prepare("BEGIN INSERT INTO host_rows VALUES($1,'temporary'); INSERT INTO host_rows VALUES(1,'duplicate'); END;").await.unwrap();
+    let error = client.execute(&statement, &[&3_i32]).await.unwrap_err();
+    assert_eq!(error.code().unwrap().code(), "23505");
+    let rows = client
+        .query("SELECT key_value FROM host_rows ORDER BY key_value", &[])
+        .await
+        .unwrap();
+    assert_eq!(
+        rows.iter().map(|r| r.get::<_, i32>(0)).collect::<Vec<_>>(),
+        vec![1, 2]
+    );
+    client.batch_execute("ROLLBACK").await.unwrap();
+    assert_eq!(
+        client
+            .query("SELECT key_value FROM host_rows", &[])
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    drop(client);
+    connection.await.unwrap();
+}
+
+#[tokio::test]
+async fn oracle_anonymous_host_binds_do_not_reinterpret_native_dollar_quoted_bodies() {
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        let server = Running::with_profile(directory.path(), profile);
+        let (client, connection) = transaction_defaults_connect(&server, profile).await;
+        let result = client
+            .prepare("DO $$BEGIN PERFORM $1; END$$ LANGUAGE plpgsql")
+            .await;
+        if profile == "postgres" {
+            assert!(result.unwrap().params().is_empty());
+        } else {
+            // The preview front end rejects explicit PostgreSQL DO source.
+            // Its generated internal DO representation is a separate boundary.
+            assert_eq!(result.unwrap_err().code().unwrap().code(), "42601");
+        }
+        drop(client);
+        connection.await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn oracle_anonymous_host_error_policies_remain_independent() {
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        let server = Running::with_profile(directory.path(), profile);
+        let (client, connection) = transaction_defaults_connect(&server, profile).await;
+        client.batch_execute("CREATE TABLE host_rows(key_value INTEGER PRIMARY KEY);INSERT INTO host_rows VALUES(1);BEGIN;INSERT INTO host_rows VALUES(2)").await.unwrap();
+        let error = client
+            .execute("INSERT INTO host_rows VALUES($1)", &[&1_i32])
+            .await
+            .unwrap_err();
+        assert_eq!(error.code().unwrap().code(), "23505");
+        if profile == "postgres" {
+            let error = client
+                .query("SELECT key_value FROM host_rows", &[])
+                .await
+                .unwrap_err();
+            assert_eq!(error.code().unwrap().code(), "25P02");
+        } else {
+            let rows = client
+                .query("SELECT key_value FROM host_rows ORDER BY key_value", &[])
+                .await
+                .unwrap();
+            assert_eq!(
+                rows.iter().map(|r| r.get::<_, i32>(0)).collect::<Vec<_>>(),
+                vec![1, 2]
+            );
+            client
+                .batch_execute("INSERT INTO host_rows VALUES(4)")
+                .await
+                .unwrap();
+        }
+        client.batch_execute("ROLLBACK").await.unwrap();
+        assert_eq!(
+            client
+                .query("SELECT key_value FROM host_rows", &[])
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+        drop(client);
+        connection.await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn oracle_anonymous_host_commit_boundaries_preserve_durable_work() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = Running::with_profile(directory.path(), "oracle-preview-v1");
+    let (client, connection) = transaction_defaults_connect(&server, "oracle-preview-v1").await;
+    client.batch_execute("CREATE TABLE host_rows(key_value INTEGER PRIMARY KEY);INSERT INTO host_rows VALUES(1);BEGIN;INSERT INTO host_rows VALUES(2)").await.unwrap();
+    let statement=client.prepare("BEGIN INSERT INTO host_rows VALUES($1); COMMIT; INSERT INTO host_rows VALUES(4); INSERT INTO host_rows VALUES(1); END;").await.unwrap();
+    for (key, expected) in [(3_i32, vec![1, 2, 3]), (6_i32, vec![1, 2, 3, 6])] {
+        let error = client.execute(&statement, &[&key]).await.unwrap_err();
+        assert_eq!(error.code().unwrap().code(), "23505");
+        let rows = client
+            .query("SELECT key_value FROM host_rows ORDER BY key_value", &[])
+            .await
+            .unwrap();
+        assert_eq!(
+            rows.iter().map(|r| r.get::<_, i32>(0)).collect::<Vec<_>>(),
+            expected
+        );
+    }
+    client
+        .batch_execute("BEGIN;INSERT INTO host_rows VALUES(5);ROLLBACK")
+        .await
+        .unwrap();
+    assert_eq!(
+        client
+            .query("SELECT key_value FROM host_rows", &[])
+            .await
+            .unwrap()
+            .len(),
+        4
+    );
+    drop(client);
+    connection.await.unwrap();
+}

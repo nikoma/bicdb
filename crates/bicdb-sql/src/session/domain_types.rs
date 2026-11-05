@@ -2350,6 +2350,8 @@ impl<'db> SqlSession<'db> {
         }
         // Anonymous blocks own temporary AST nodes. Do not cache them under a
         // surrounding stored routine's stable IR identity.
+        let previous_defer = self.defer_commit;
+        self.defer_commit |= oracle_block;
         let previous_ir = self.current_routine_ir.take();
         let previous_owned = std::mem::replace(&mut self.ir_owned_statement, false);
         let result = (|| {
@@ -2368,6 +2370,7 @@ impl<'db> SqlSession<'db> {
             }
             Ok(())
         })();
+        self.defer_commit = previous_defer;
         self.current_routine_ir = previous_ir;
         self.ir_owned_statement = previous_owned;
         match result {

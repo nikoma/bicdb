@@ -715,3 +715,10 @@ uses explicit datetime bounds; PostgreSQL also checks unknown ISO literals.
 The [bounded checkpoint](../../../docs/evidence/sql-typed-between-2026-11-04/README.md)
 retains two pre-existing PostgreSQL volatile-evaluation differences: its CLI
 returns nonzero while those cases remain unqualified. Nonce objects are removed.
+
+`anonymous_host_transactions.py` uses the common connection arguments with
+`--reference oracle`. Eight controls compare bound anonymous-block failures,
+continuation of the caller transaction, explicit commits inside a block and
+rollback of later uncommitted writes. Each run creates and removes its own
+nonce table. This compares protocol submission; JDBC statement splitting and
+LOB locators require separate qualification.

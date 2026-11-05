@@ -1129,8 +1129,10 @@ pub(super) fn lower_sql_builtins(
 }
 
 impl sqlparser::ast::VisitorMut for Resolve<'_> {
-    type Break = SqlError;
-    fn pre_visit_statement(&mut self, statement: &mut Statement) -> ControlFlow<SqlError> {
+    // AST visitors carry their break value through every recursive frame.
+    // Keep the large structured SQL diagnostic out of that hot stack path.
+    type Break = Box<SqlError>;
+    fn pre_visit_statement(&mut self, statement: &mut Statement) -> ControlFlow<Box<SqlError>> {
         self.sql_depth += 1;
         self.statement_from.push(if self.env.decode {
             match statement {
@@ -1155,25 +1157,28 @@ impl sqlparser::ast::VisitorMut for Resolve<'_> {
         });
         ControlFlow::Continue(())
     }
-    fn post_visit_statement(&mut self, _: &mut Statement) -> ControlFlow<SqlError> {
+    fn post_visit_statement(&mut self, _: &mut Statement) -> ControlFlow<Box<SqlError>> {
         self.sql_depth -= 1;
         self.statement_from.pop();
         ControlFlow::Continue(())
     }
-    fn pre_visit_query(&mut self, query: &mut Query) -> ControlFlow<SqlError> {
+    fn pre_visit_query(&mut self, query: &mut Query) -> ControlFlow<Box<SqlError>> {
         self.queries.push(query.clone());
         ControlFlow::Continue(())
     }
-    fn pre_visit_select(&mut self, select: &mut sqlparser::ast::Select) -> ControlFlow<SqlError> {
+    fn pre_visit_select(
+        &mut self,
+        select: &mut sqlparser::ast::Select,
+    ) -> ControlFlow<Box<SqlError>> {
         self.selects.push((self.queries.len(), select.clone()));
         ControlFlow::Continue(())
     }
-    fn post_visit_select(&mut self, _: &mut sqlparser::ast::Select) -> ControlFlow<SqlError> {
+    fn post_visit_select(&mut self, _: &mut sqlparser::ast::Select) -> ControlFlow<Box<SqlError>> {
         let (depth, _) = self.selects.pop().expect("SELECT scope");
         debug_assert_eq!(depth, self.queries.len());
         ControlFlow::Continue(())
     }
-    fn post_visit_query(&mut self, query: &mut Query) -> ControlFlow<SqlError> {
+    fn post_visit_query(&mut self, query: &mut Query) -> ControlFlow<Box<SqlError>> {
         let previous = self.queries.pop().expect("query scope");
         if let Some(parent) = self.queries.last_mut() {
             struct Refresh<'a> {
@@ -1211,7 +1216,7 @@ impl sqlparser::ast::VisitorMut for Resolve<'_> {
         }
         ControlFlow::Continue(())
     }
-    fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<SqlError> {
+    fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<Box<SqlError>> {
         if self.env.number_formats && super::number_formats::input(expr).is_some() {
             let input = super::number_formats::input(expr).expect("checked input");
             let kind = match self.kind(input) {
@@ -1223,13 +1228,13 @@ impl sqlparser::ast::VisitorMut for Resolve<'_> {
             };
             if kind != "defer" {
                 if let Err(error) = super::number_formats::lower_expression(expr, kind) {
-                    return ControlFlow::Break(error);
+                    return ControlFlow::Break(Box::new(error));
                 }
             }
         }
 
         if let Err(error) = super::session_context::lower_expression(expr) {
-            return ControlFlow::Break(error);
+            return ControlFlow::Break(Box::new(error));
         }
         if self.env.text_patterns {
             let conversion = super::text_patterns::convert_text_arguments(expr, |value| {
@@ -1253,10 +1258,10 @@ impl sqlparser::ast::VisitorMut for Resolve<'_> {
                 ))
             });
             if let Err(error) = conversion {
-                return ControlFlow::Break(error);
+                return ControlFlow::Break(Box::new(error));
             }
             if let Err(error) = super::text_patterns::lower_expression(expr) {
-                return ControlFlow::Break(error);
+                return ControlFlow::Break(Box::new(error));
             }
         }
         if let Some(namespace) = self.env.collection_namespace.as_deref() {
@@ -1264,13 +1269,13 @@ impl sqlparser::ast::VisitorMut for Resolve<'_> {
                 if let Err(error) =
                     super::collections::method_expression(expr, &self.env.collections)
                 {
-                    return ControlFlow::Break(error);
+                    return ControlFlow::Break(Box::new(error));
                 }
             }
             if let Err(error) =
                 super::collections::constructor_expression(self.db, expr, Some(namespace))
             {
-                return ControlFlow::Break(error);
+                return ControlFlow::Break(Box::new(error));
             }
         }
         if super::collections::multisets::enabled() {
@@ -1281,12 +1286,12 @@ impl sqlparser::ast::VisitorMut for Resolve<'_> {
                 self.env.collection_namespace.as_deref(),
                 self.sql_depth > 0 || !self.queries.is_empty(),
             ) {
-                return ControlFlow::Break(error);
+                return ControlFlow::Break(Box::new(error));
             }
         }
         match self.rewrite(expr) {
             Ok(()) => ControlFlow::Continue(()),
-            Err(error) => ControlFlow::Break(error),
+            Err(error) => ControlFlow::Break(Box::new(error)),
         }
     }
 }
@@ -1301,7 +1306,7 @@ fn visit<T: sqlparser::ast::VisitMut>(db: &BicDb, env: &Environment, node: &mut 
         statement_from: Vec::new(),
     }) {
         ControlFlow::Continue(()) => Ok(()),
-        ControlFlow::Break(error) => Err(error),
+        ControlFlow::Break(error) => Err(*error),
     }
 }
 

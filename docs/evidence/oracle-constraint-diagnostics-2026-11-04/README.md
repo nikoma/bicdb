@@ -83,3 +83,13 @@ identifier-length/case rules, namespace relocation, all cross-owner index cases,
 DDL implicit-commit semantics, broader LOB APIs and full application acceptance
 remain separate compatibility work. This checkpoint does not establish Oracle
 conformance, certification or production qualification.
+
+## Subsequent runtime qualification
+
+Browser qualification found a stack overflow in recursive query analysis on the
+diagnostic candidate, after the desktop was reached. That runtime upgrade was
+rejected and the previous runtime restored. The
+[recursive query qualification](../sql-recursive-query-stack-2026-11-04/README.md)
+records the neutral reproducer, independent sources and corrective visitor
+change. The test and reference results above remain results for their recorded
+binary; they do not establish acceptance of the rejected runtime.

@@ -136,17 +136,19 @@ pub(crate) fn duration(db: &BicDb, query: &Query) -> Result<Option<Duration>> {
 pub(crate) fn validate<T: sqlparser::ast::Visit>(db: &BicDb, node: &T) -> Result<()> {
     struct Policies<'a>(&'a BicDb);
     impl sqlparser::ast::Visitor for Policies<'_> {
-        type Break = SqlError;
-        fn pre_visit_query(&mut self, query: &Query) -> ControlFlow<SqlError> {
+        // A recursive policy scan must not copy the diagnostic payload
+        // into each generated AST visitor frame.
+        type Break = Box<SqlError>;
+        fn pre_visit_query(&mut self, query: &Query) -> ControlFlow<Box<SqlError>> {
             match duration(self.0, query) {
                 Ok(_) => ControlFlow::Continue(()),
-                Err(error) => ControlFlow::Break(error),
+                Err(error) => ControlFlow::Break(Box::new(error)),
             }
         }
     }
     match sqlparser::ast::Visit::visit(node, &mut Policies(db)) {
         ControlFlow::Continue(()) => Ok(()),
-        ControlFlow::Break(error) => Err(error),
+        ControlFlow::Break(error) => Err(*error),
     }
 }
 

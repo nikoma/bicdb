@@ -13,6 +13,50 @@ fn session_rows(session: &mut SqlSession<'_>, sql: &str) -> Vec<Vec<SqlValue>> {
 }
 
 #[test]
+fn dropping_an_obsolete_function_signature_preserves_the_current_table_function() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE SCHEMA clinical; CREATE FUNCTION clinical.targets(p UUID,d DATE,e UUID) RETURNS TABLE(id UUID) LANGUAGE plpgsql AS $$ BEGIN RETURN QUERY SELECT p; END $$").unwrap();
+    for obsolete in ["uuid,date", "uuid,text,uuid", ""] {
+        session
+            .execute(&format!(
+                "DROP FUNCTION IF EXISTS clinical.targets({obsolete})"
+            ))
+            .unwrap();
+    }
+    assert_eq!(session_rows(&mut session,"SELECT id FROM clinical.targets('00000000-0000-4000-8000-000000000001'::uuid,CURRENT_DATE,NULL::uuid)"),vec![vec![SqlValue::String("00000000-0000-4000-8000-000000000001".into())]]);
+    assert_eq!(
+        session
+            .execute("DROP FUNCTION clinical.targets(uuid,date)")
+            .unwrap_err()
+            .sqlstate(),
+        "42883"
+    );
+    session.execute("CREATE ROLE drop_guest;GRANT USAGE ON SCHEMA clinical TO drop_guest;SET ROLE drop_guest;DROP FUNCTION IF EXISTS clinical.targets(uuid,date)").unwrap();
+    assert_eq!(
+        session
+            .execute("DROP FUNCTION clinical.targets(uuid,date,uuid)")
+            .unwrap_err()
+            .sqlstate(),
+        "42501"
+    );
+    session.execute("RESET ROLE").unwrap();
+    session
+        .execute("BEGIN;DROP FUNCTION clinical.targets(uuid,date,uuid);ROLLBACK")
+        .unwrap();
+    assert_eq!(session_rows(&mut session,"SELECT count(*) FROM clinical.targets('00000000-0000-4000-8000-000000000001'::uuid,CURRENT_DATE,NULL::uuid)"),vec![vec![SqlValue::Int(1)]]);
+    session
+        .execute("DROP FUNCTION clinical.targets(uuid,date,uuid)")
+        .unwrap();
+    assert!(session
+        .execute("SELECT * FROM clinical.targets(NULL::uuid,CURRENT_DATE,NULL::uuid)")
+        .is_err());
+    session.execute("CREATE FUNCTION clinical.echo(n INTEGER,OUT v TEXT) LANGUAGE plpgsql AS $$ BEGIN v:=n::text; END $$;DROP FUNCTION clinical.echo(INT4)").unwrap();
+    assert!(session.execute("SELECT clinical.echo(1)").is_err());
+}
+
+#[test]
 fn scalar_derived_commands_write_once_in_the_owning_statement_transaction() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();

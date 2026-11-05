@@ -110,3 +110,16 @@ pass after restoration. Joins, lateral/correlated sources, filtered wrappers,
 nonzero outer row-count clauses and projection set-returning sources retain their
 existing execution path. This adds the scalar command shape used by the EHR;
 the complete clinical workflow and deployment are qualified separately.
+
+`DROP FUNCTION` with an explicit signature checks the current routine's input
+argument types before ownership or deletion. A cleanup for an obsolete two-input
+signature therefore preserves a current three-input table function. Wrong types
+and an empty signature also remain misses; `IF EXISTS` is harmless, otherwise
+the missing function reports 42883. Matching drops still require ownership and
+remain transactional. Builtin type aliases match by OID; OUT slots, names,
+defaults and typmods do not change input identity. The regression reproduces the
+EHR reflection function being deleted before the fix, then passes with all 61
+focused Carrier/type/assignment/ownership checks. This does not add general
+routine overloading or change procedure resolution. A database already migrated
+with the old deletion bug must be recreated or repaired deliberately; replaying
+existing successful migration receipts does not restore the missing function.

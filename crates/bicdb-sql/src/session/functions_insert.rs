@@ -525,6 +525,7 @@ impl<'db> SqlSession<'db> {
         &self,
         kind: RoutineKind,
         name_ast: &ObjectName,
+        signature: Option<&[sqlparser::ast::OperateFunctionArg]>,
     ) -> Result<Option<RoutineSchema>> {
         let (schema, name) = routine_schema_and_name(&object_name(name_ast)?);
         let routine = load_routine(self.db_ref(), kind, &name)?.filter(|routine| {
@@ -537,6 +538,36 @@ impl<'db> SqlSession<'db> {
             };
             name_ast.0.len() == 1 || routine_schema_name(routine) == schema
         });
+        if let (Some(routine), Some(signature)) = (&routine, signature) {
+            // DROP an obsolete overload must not delete the current routine
+            // merely because its name matches. Identity uses input argument
+            // types, not parameter names, defaults, OUT slots or typmods.
+            let declared = parse_routine_params(&routine.args)?;
+            let inputs = declared
+                .iter()
+                .filter(|arg| arg.mode != RoutineArgMode::Out)
+                .collect::<Vec<_>>();
+            let requested = signature
+                .iter()
+                .filter(|arg| arg.mode != Some(sqlparser::ast::ArgMode::Out))
+                .map(|arg| routine_type_schema(&arg.data_type))
+                .collect::<Result<Vec<_>>>()?;
+            if inputs.len() != requested.len()
+                || !inputs.iter().zip(&requested).all(|(input, requested)| {
+                    input.type_schema.as_ref().is_some_and(|declared| {
+                        match (
+                            pg_type_oid_by_name(&declared.pg_type),
+                            pg_type_oid_by_name(&requested.pg_type),
+                        ) {
+                            (Some(left), Some(right)) => left == right,
+                            _ => declared.pg_type == requested.pg_type,
+                        }
+                    })
+                })
+            {
+                return Ok(None);
+            }
+        }
         if let Some(routine) = &routine {
             let object = match kind {
                 RoutineKind::Function => "function",
@@ -558,13 +589,17 @@ impl<'db> SqlSession<'db> {
         for desc in &drop_function.func_desc {
             // Match CREATE's routine keys; table relation encoding is separate.
             let name = normalize_object_name(&object_name(&desc.name)?);
-            let Some(routine) = self.owned_routine_for_drop(RoutineKind::Function, &desc.name)?
+            let Some(routine) = self.owned_routine_for_drop(
+                RoutineKind::Function,
+                &desc.name,
+                desc.args.as_deref(),
+            )?
             else {
                 if drop_function.if_exists {
                     continue;
                 }
-                return Err(SqlError::InvalidSql(format!(
-                    "function \"{name}\" does not exist"
+                return Err(SqlError::undefined_function(format!(
+                    "function \"{desc}\" does not exist"
                 )));
             };
             let dependents = list_user_types(self.db_ref())?
@@ -596,10 +631,11 @@ impl<'db> SqlSession<'db> {
     ) -> Result<SqlResult> {
         for desc in proc_desc {
             let name = normalize_object_name(&object_name(&desc.name)?);
-            let existed = match self.owned_routine_for_drop(RoutineKind::Procedure, &desc.name)? {
-                Some(routine) => self.delete_session_routine(&routine)?,
-                None => false,
-            };
+            let existed =
+                match self.owned_routine_for_drop(RoutineKind::Procedure, &desc.name, None)? {
+                    Some(routine) => self.delete_session_routine(&routine)?,
+                    None => false,
+                };
             if !existed && !if_exists {
                 return Err(SqlError::InvalidSql(format!(
                     "procedure \"{name}\" does not exist"

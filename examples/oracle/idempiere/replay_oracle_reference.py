@@ -7,6 +7,7 @@ used as a reference only; BicDB application transport remains PostgreSQL.
 """
 import argparse
 import collections
+import datetime
 import hashlib
 import json
 from pathlib import Path
@@ -14,8 +15,9 @@ import re
 import uuid
 
 from foreign_keys import declarations
+from export_reference import value_projection, decode_reference_row
 from foreign_key_orphans import count_orphans
-from import_bicdb import decode, oracle_type, quote, save_report, source_row_hashes, verify_values
+from import_bicdb import decode, oracle_type, quote, row_hash, save_report, source_row_hashes
 from temporal_types import declaration as temporal_declaration
 
 
@@ -62,6 +64,71 @@ def create_table_sql(name, columns):
     return ('CREATE GLOBAL TEMPORARY TABLE ' + quote(name) + '(' +
             ','.join(quote(column['name']) + ' ' + reference_type(column) for column in columns) +
             ') ON COMMIT PRESERVE ROWS')
+
+
+def reference_bindings(columns, driver, empty_columns=()):
+    expressions, types = [], []
+    for index, column in enumerate(columns):
+        kind = column['type']
+        if index in empty_columns:
+            expressions.append('EMPTY_' + kind + '()')
+            continue
+        position = len(types) + 1
+        if kind.endswith('WITH TIME ZONE'):
+            expressions.append("TO_TIMESTAMP_TZ(:" + str(position) + ", 'YYYY-MM-DD HH24:MI:SS.FF6TZH:TZM')")
+            types.append(driver.DB_TYPE_VARCHAR)
+        else:
+            expressions.append(':' + str(position))
+            key = kind if kind in {'NUMBER', 'RAW', 'DATE', 'BLOB', 'CLOB'} else ('TIMESTAMP' if kind.startswith('TIMESTAMP') else 'VARCHAR')
+            types.append(getattr(driver, 'DB_TYPE_' + key))
+    return expressions, types
+
+
+def encode_reference_row(row, columns, lob_value=None, empty_columns=()):
+    result = []
+    for index, (value, column) in enumerate(zip(row, columns, strict=True)):
+        if index in empty_columns:continue
+        kind = column['type']
+        if kind in {'BLOB', 'CLOB'}:
+            if value == (b'' if kind == 'BLOB' else ''):raise ValueError('empty Oracle LOB requires its SQL constructor')
+            if value is not None and lob_value is None:raise ValueError('Oracle LOB requires a locator')
+            result.append(lob_value(kind, value) if value is not None else None)
+        elif kind.endswith('WITH TIME ZONE') and value is not None:
+            if not isinstance(value, datetime.datetime) or value.utcoffset() is None:
+                raise ValueError('source zoned timestamp must retain an explicit offset')
+            result.append(value.isoformat(sep=' ', timespec='microseconds'))
+        else:result.append(value)
+    return result
+
+
+def insert_reference_batch(connection, name, columns, rows, driver, lob_value):
+    groups = collections.defaultdict(list)
+    for row in rows:
+        empty = tuple(i for i, (value, column) in enumerate(zip(row, columns, strict=True))
+                      if column['type'] in {'BLOB', 'CLOB'} and value == (b'' if column['type'] == 'BLOB' else ''))
+        groups[empty].append(row)
+    for empty, group in groups.items():
+        expressions, types = reference_bindings(columns, driver, empty)
+        sql = 'INSERT INTO ' + quote(name) + ' VALUES(' + ','.join(expressions) + ')'
+        with connection.cursor() as writer:
+            if types:
+                writer.setinputsizes(*types)
+                writer.executemany(sql, [encode_reference_row(row, columns, lob_value, empty) for row in group])
+            else:
+                for _ in group:writer.execute(sql)
+
+
+def verify_reference_values(cursor, snapshot, owner, table, columns):
+    expected = source_row_hashes(snapshot, table)
+    cursor.execute('SELECT ' + value_projection(columns) + ' FROM ' + quote(owner) + '.' + quote(table['name']), fetch_lobs=True)
+    actual = []
+    while rows := cursor.fetchmany(500):
+        actual.extend(row_hash(decode_reference_row(row, columns)) for row in rows)
+    actual.sort()
+    if actual != expected:raise ValueError('Oracle reference row values differ from exported table ' + table['name'])
+    digest = hashlib.sha256()
+    for value in actual:digest.update(value)
+    return digest.hexdigest()
 
 
 def cleanup_tables(cursor, mapping):
@@ -144,6 +211,10 @@ def replay(args):
     try:
         with connect() as connection:
             report['oracle_version'] = connection.version
+            def lob_value(kind, value):
+                lob = connection.createlob(getattr(oracledb, 'DB_TYPE_' + kind))
+                lob.write(value)
+                return lob
             with connection.cursor() as cursor:
                 owner = check_owner(cursor)
                 cursor.arraysize = 500
@@ -151,25 +222,17 @@ def replay(args):
                     source_row_hashes(args.snapshot, table)
                     name = report['table_map'][table['name']]
                     cursor.execute(create_table_sql(name, columns[table['name']]))
-                    types = []
-                    for column in columns[table['name']]:
-                        kind = column['type']
-                        if kind == 'NUMBER':types.append(oracledb.DB_TYPE_NUMBER)
-                        elif kind in {'BLOB', 'CLOB', 'RAW', 'DATE'}:types.append(getattr(oracledb, 'DB_TYPE_' + kind))
-                        elif kind.startswith('TIMESTAMP'):types.append(oracledb.DB_TYPE_TIMESTAMP_TZ if kind.endswith('WITH TIME ZONE') else oracledb.DB_TYPE_TIMESTAMP)
-                        else:types.append(oracledb.DB_TYPE_VARCHAR)
-                    sql = 'INSERT INTO ' + quote(name) + ' VALUES(' + ','.join(':' + str(i+1) for i in range(len(types))) + ')'
                     # Array-bind state must not be reused by the bind-free
                     # verification and counting queries on the read cursor.
-                    with connection.cursor() as writer:
-                        writer.setinputsizes(*types)
-                        with (args.snapshot / table['file']).open() as rows:
-                            batch = []
-                            for line in rows:
-                                batch.append([decode(value) for value in json.loads(line)])
-                                if len(batch) == 500:writer.executemany(sql, batch);batch.clear()
-                            if batch:writer.executemany(sql, batch)
-                    digest = verify_values(cursor, args.snapshot, owner, dict(table, name=name))
+                    with (args.snapshot / table['file']).open() as rows:
+                        batch = []
+                        for line in rows:
+                            batch.append([decode(value) for value in json.loads(line)])
+                            if len(batch) == 500:
+                                insert_reference_batch(connection, name, columns[table['name']], batch, oracledb, lob_value)
+                                batch.clear()
+                        if batch:insert_reference_batch(connection, name, columns[table['name']], batch, oracledb, lob_value)
+                    digest = verify_reference_values(cursor, args.snapshot, owner, dict(table, name=name), columns[table['name']])
                     report['verified_tables'].append(dict(table=table['name'], rows=table['rows'], sha256=digest))
                     if (index+1) % 32 == 0:
                         save_report(args.report, report)

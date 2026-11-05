@@ -32,6 +32,26 @@ def quote(name):
     return '"' + name.replace('"', '""') + '"'
 
 
+def value_projection(columns):
+    projection = []
+    for column in columns:
+        name = quote(column['name'])
+        if column['type'].endswith('WITH TIME ZONE'):
+            projection.append("TO_CHAR(" + name + ", 'YYYY-MM-DD HH24:MI:SS.FF6 TZH:TZM') AS " + name)
+        else:projection.append(name)
+    return ','.join(projection)
+
+
+def decode_reference_row(row, columns):
+    values = list(row)
+    for i, column in enumerate(columns):
+        if column['type'].endswith('WITH TIME ZONE') and values[i] is not None:
+            values[i] = datetime.datetime.fromisoformat(values[i])
+        elif column['type'] in {'BLOB', 'CLOB'} and values[i] is not None and hasattr(values[i], 'read'):
+            values[i] = values[i].read()
+    return values
+
+
 def export(config_path, directory):
     import oracledb
     oracledb.defaults.fetch_decimals = True
@@ -105,26 +125,14 @@ def export(config_path, directory):
                 count = 0
                 with (directory / filename).open('x') as target:
                     table_columns = [column for column in columns if column['table'] == table]
-                    timezone_positions = [i for i, column in enumerate(table_columns)
-                                          if column['type'].endswith('WITH TIME ZONE')]
                     # python-oracledb's default TIMESTAMP WITH TIME ZONE fetch
                     # returns a naive datetime. Preserve the actual source
                     # offset explicitly rather than guessing a session zone.
-                    projection = []
-                    for i, column in enumerate(table_columns):
-                        name = quote(column['name'])
-                        if i in timezone_positions:
-                            projection.append("TO_CHAR(" + name + ", 'YYYY-MM-DD HH24:MI:SS.FF6 TZH:TZM') AS " + name)
-                        else:
-                            projection.append(name)
-                    cursor.execute('SELECT ' + ','.join(projection) + ' FROM ' + quote(table))
+                    cursor.execute('SELECT ' + value_projection(table_columns) + ' FROM ' + quote(table), fetch_lobs=True)
                     names = [description.name for description in cursor.description]
                     while batch := cursor.fetchmany(500):
                         for row in batch:
-                            values = list(row)
-                            for i in timezone_positions:
-                                if values[i] is not None:
-                                    values[i] = datetime.datetime.fromisoformat(values[i])
+                            values = decode_reference_row(row, table_columns)
                             target.write(json.dumps([cell(value) for value in values], ensure_ascii=False) + '\n')
                         count += len(batch)
                 with (directory / filename).open('rb') as content:
@@ -134,6 +142,7 @@ def export(config_path, directory):
                 if len(tables) % 100 == 0:
                     print(f'Exported {len(tables)}/{len(table_names)} tables', flush=True)
         manifest = dict(format=1, application='iDempiere 13', oracle_database_version=con.version,
+                        value_encoding=dict(version=2, timestamp_with_time_zone='offset-preserved', lob_empty_values='preserved'),
                         source_schema=config['user'].upper(), started_at=started,
                         snapshot='Oracle read-only transaction', observed_scn=observed_scn,
                         cdc_resume_position=False, objects=objects, tables=tables, columns=columns,

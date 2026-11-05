@@ -24,16 +24,18 @@ def snapshot(root, extra=False):
     rows = dict(P=[[1, 10]], C=[[1, 999, 0]], Q=[], U=[])
     manifest['columns'] = [column(table['name'], name) for table in manifest['tables'] for name in table['columns']]
     if extra:
-        names = ['N', 'V', 'C', 'L', 'B', 'R', 'D', 'T']
+        names = ['N', 'V', 'C', 'L', 'B', 'R', 'D', 'T', 'Z']
         manifest['tables'].append(dict(name='PAYLOAD', columns=names))
         columns = [column('PAYLOAD', 'N'), column('PAYLOAD', 'V', 'VARCHAR2'), column('PAYLOAD', 'C', 'CHAR'),
                    column('PAYLOAD', 'L', 'CLOB'), column('PAYLOAD', 'B', 'BLOB'), column('PAYLOAD', 'R', 'RAW'),
-                   column('PAYLOAD', 'D', 'DATE'), column('PAYLOAD', 'T', 'TIMESTAMP(6)')]
+                   column('PAYLOAD', 'D', 'DATE'), column('PAYLOAD', 'T', 'TIMESTAMP(6)'), column('PAYLOAD', 'Z', 'TIMESTAMP(6) WITH TIME ZONE')]
         columns[0].update(precision=38, scale=0);columns[2].update(bytes=3, characters=3)
         manifest['columns'].extend(columns)
         rows['PAYLOAD'] = [[decimal.Decimal('12345678901234567890123456789012345678'), 'hello', 'é ',
                             'é'*9001, bytes([0, 255]), bytes([1, 128]), datetime.datetime(2026, 11, 1, 12, 34, 56),
-                            datetime.datetime(2026, 11, 1, 12, 34, 56, 123456)]]
+                            datetime.datetime(2026, 11, 1, 12, 34, 56, 123456),
+                            datetime.datetime(2026, 11, 1, 12, 34, 56, 123456, datetime.timezone(datetime.timedelta(hours=5, minutes=30)))],
+                           [decimal.Decimal('0'), None, None, '', b'', None, None, None, None]]
     root.mkdir()
     for index, table in enumerate(manifest['tables']):
         data = b''.join((json.dumps([export.cell(value) for value in row], ensure_ascii=False)+'\n').encode() for row in rows[table['name']])
@@ -44,6 +46,22 @@ def snapshot(root, extra=False):
 
 
 class OracleReplayPlanTests(unittest.TestCase):
+    def test_offset_projection_and_locator_decoding_preserve_distinctions(self):
+        columns = [column('T', 'Z"Q', 'TIMESTAMP(6) WITH TIME ZONE'), column('T', 'L', 'CLOB'), column('T', 'B', 'BLOB')]
+        self.assertIn('TO_CHAR("Z""Q",', target.value_projection(columns))
+        row = target.decode_reference_row(['2026-11-01 12:34:56.123456 +05:30', SimpleNamespace(read=lambda: ''), SimpleNamespace(read=lambda: b'')], columns)
+        self.assertEqual(row[0].utcoffset(), datetime.timedelta(hours=5, minutes=30));self.assertEqual(row[1:], ['', b''])
+        self.assertEqual(target.decode_reference_row([None, None, None], columns), [None, None, None])
+
+    def test_zoned_binds_require_offsets_and_empty_lobs_use_sql_constructors(self):
+        columns = [column('T', 'Z', 'TIMESTAMP(6) WITH TIME ZONE')]
+        with self.assertRaisesRegex(ValueError, 'explicit offset'):
+            target.encode_reference_row([datetime.datetime(2026, 11, 1)], columns)
+        value = datetime.datetime(2026, 11, 1, tzinfo=datetime.timezone(datetime.timedelta(hours=-4)))
+        self.assertTrue(target.encode_reference_row([value], columns)[0].endswith('-04:00'))
+        expressions, types = target.reference_bindings([column('T', 'L', 'CLOB'), column('T', 'B', 'BLOB')], SimpleNamespace(), (0, 1))
+        self.assertEqual(expressions, ['EMPTY_CLOB()', 'EMPTY_BLOB()']);self.assertEqual(types, [])
+
     def test_reference_ddl_uses_oracle_raw_and_source_character_units(self):
         columns = [column('T', 'Q"R', 'RAW'), column('T', 'B', 'CHAR'), column('T', 'C', 'VARCHAR2')]
         columns[0]['bytes'] = 16;columns[1].update(characters=3, character_unit='B');columns[2].update(characters=3, character_unit='C')

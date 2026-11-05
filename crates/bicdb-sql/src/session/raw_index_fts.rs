@@ -916,9 +916,8 @@ impl<'db> SqlSession<'db> {
     }
 
     fn execute_query_inner(&mut self, query: &Query) -> Result<SqlResult> {
-        // LIMIT/OFFSET clauses evaluate as constants, so `$n` bind parameters
-        // in them (`LIMIT LEAST($3, 500)`) resolve here from the session's
-        // positional parameters before execution.
+        // Resolve named routine variables and positional parameters in every
+        // nested row-count clause before CTE materialization.
         if let Some(bound) = self.bind_limit_clause_placeholders(query) {
             return self.execute_query(&bound);
         }
@@ -963,68 +962,104 @@ impl<'db> SqlSession<'db> {
         self.sql_engine().execute_query(query)
     }
 
-    /// Substitutes `$n` placeholders inside the query's LIMIT/OFFSET clause
-    /// with literal values from the session's routine variables. Returns a
-    /// rewritten query only when a placeholder was actually replaced.
+    /// Bind row-count expressions at every query level before a CTE or
+    /// subquery reaches the engine's constant LIMIT/OFFSET evaluator. Other
+    /// expressions keep normal column/variable resolution and the stored IR
+    /// remains unchanged between calls.
     fn bind_limit_clause_placeholders(&self, query: &Query) -> Option<Query> {
-        use sqlparser::ast::LimitClause;
+        use sqlparser::ast::{
+            visit_expressions, visit_expressions_mut, LimitClause, Visit, VisitMut, Visitor,
+            VisitorMut,
+        };
+        use std::ops::ControlFlow;
         let vars = &self.routine_vars;
-        if vars.is_empty() || query.limit_clause.is_none() {
+        if vars.is_empty() {
             return None;
         }
-        fn bind_expr(expr: &mut Expr, vars: &BTreeMap<String, SqlValue>, changed: &mut bool) {
+        fn value(expr: &Expr, vars: &BTreeMap<String, SqlValue>) -> Option<SqlValue> {
             match expr {
-                Expr::Value(value) => {
-                    if let Value::Placeholder(name) = &value.value {
-                        if let Some(bound) = crate::select_exec::routine_var_from_name(vars, name) {
-                            *expr = sql_value_to_literal_expr(&bound);
-                            *changed = true;
-                        }
+                Expr::Identifier(ident) => crate::select_exec::routine_var_from_ident(vars, ident),
+                Expr::Value(value) => match &value.value {
+                    Value::Placeholder(name) => {
+                        crate::select_exec::routine_var_from_name(vars, name)
                     }
-                }
-                Expr::Nested(inner) => bind_expr(inner, vars, changed),
-                Expr::Cast { expr: inner, .. } => bind_expr(inner, vars, changed),
-                Expr::UnaryOp { expr: inner, .. } => bind_expr(inner, vars, changed),
-                Expr::BinaryOp { left, right, .. } => {
-                    bind_expr(left, vars, changed);
-                    bind_expr(right, vars, changed);
-                }
-                Expr::Function(function) => {
-                    if let sqlparser::ast::FunctionArguments::List(list) = &mut function.args {
-                        for arg in &mut list.args {
-                            if let sqlparser::ast::FunctionArg::Unnamed(
-                                sqlparser::ast::FunctionArgExpr::Expr(inner),
-                            ) = arg
-                            {
-                                bind_expr(inner, vars, changed);
-                            }
-                        }
-                    }
-                }
-                _ => {}
+                    _ => None,
+                },
+                _ => None,
             }
         }
-        let mut limit_clause = query.limit_clause.clone()?;
-        let mut changed = false;
-        match &mut limit_clause {
-            LimitClause::LimitOffset { limit, offset, .. } => {
-                if let Some(limit) = limit {
-                    bind_expr(limit, vars, &mut changed);
+        fn count_expressions(query: &Query) -> Vec<&Expr> {
+            let mut counts = Vec::new();
+            match &query.limit_clause {
+                Some(LimitClause::LimitOffset { limit, offset, .. }) => {
+                    counts.extend(limit.as_ref());
+                    counts.extend(offset.as_ref().map(|o| &o.value));
                 }
-                if let Some(offset) = offset {
-                    bind_expr(&mut offset.value, vars, &mut changed);
+                Some(LimitClause::OffsetCommaLimit { offset, limit }) => {
+                    counts.push(offset);
+                    counts.push(limit);
                 }
+                None => {}
             }
-            LimitClause::OffsetCommaLimit { offset, limit } => {
-                bind_expr(offset, vars, &mut changed);
-                bind_expr(limit, vars, &mut changed);
+            counts.extend(query.fetch.as_ref().and_then(|f| f.quantity.as_ref()));
+            counts
+        }
+        struct Finder<'a>(&'a BTreeMap<String, SqlValue>);
+        impl Visitor for Finder<'_> {
+            type Break = ();
+            fn pre_visit_query(&mut self, query: &Query) -> ControlFlow<()> {
+                let found = count_expressions(query).into_iter().any(|count| {
+                    visit_expressions(count, |expr| {
+                        if value(expr, self.0).is_some() {
+                            ControlFlow::Break(())
+                        } else {
+                            ControlFlow::Continue(())
+                        }
+                    })
+                    .is_break()
+                });
+                if found {
+                    ControlFlow::Break(())
+                } else {
+                    ControlFlow::Continue(())
+                }
             }
         }
-        changed.then(|| {
-            let mut query = query.clone();
-            query.limit_clause = Some(limit_clause);
-            query
-        })
+        if query.visit(&mut Finder(vars)).is_continue() {
+            return None;
+        }
+        struct Binder<'a>(&'a BTreeMap<String, SqlValue>);
+        impl VisitorMut for Binder<'_> {
+            type Break = ();
+            fn pre_visit_query(&mut self, query: &mut Query) -> ControlFlow<()> {
+                let mut bind = |expr: &mut Expr| {
+                    if let Some(bound) = value(expr, self.0) {
+                        *expr = sql_value_to_literal_expr(&bound);
+                    }
+                    ControlFlow::<()>::Continue(())
+                };
+                match &mut query.limit_clause {
+                    Some(LimitClause::LimitOffset { limit, offset, .. }) => {
+                        let _ = visit_expressions_mut(limit, &mut bind);
+                        if let Some(offset) = offset {
+                            let _ = visit_expressions_mut(&mut offset.value, &mut bind);
+                        }
+                    }
+                    Some(LimitClause::OffsetCommaLimit { offset, limit }) => {
+                        let _ = visit_expressions_mut(offset, &mut bind);
+                        let _ = visit_expressions_mut(limit, &mut bind);
+                    }
+                    None => {}
+                }
+                if let Some(fetch) = &mut query.fetch {
+                    let _ = visit_expressions_mut(&mut fetch.quantity, &mut bind);
+                }
+                ControlFlow::Continue(())
+            }
+        }
+        let mut rewritten = query.clone();
+        let _ = VisitMut::visit(&mut rewritten, &mut Binder(vars));
+        Some(rewritten)
     }
 
     pub(crate) fn execute_odoo_parent_store_update_with_recursive_cte(

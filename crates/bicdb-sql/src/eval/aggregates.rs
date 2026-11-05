@@ -3597,7 +3597,7 @@ pub(crate) fn apply_limit<R>(records: &mut Vec<R>, query: &Query) -> Result<()> 
 }
 
 pub(crate) fn integer_expr(expr: &Expr) -> Result<usize> {
-    Ok(optional_count_expr(expr)?.unwrap_or(0))
+    Ok(row_count_expr(expr, "2201X", "OFFSET must not be negative")?.unwrap_or(0))
 }
 
 /// Resolve a `LIMIT`/`OFFSET` clause expression to a row count, matching
@@ -3607,8 +3607,16 @@ pub(crate) fn integer_expr(expr: &Expr) -> Result<usize> {
 /// `OFFSET NULL` as `0`). Accepts integer, float (rounded), and string values —
 /// the string case covers `LIMIT '500'` and text/unknown-typed bind parameters
 /// (`LIMIT $1` where the driver sends the value as text), both of which
-/// PostgreSQL coerces rather than rejects. Negative values clamp to `0`.
+/// PostgreSQL coerces rather than rejects. Negative values are refused.
 pub(crate) fn optional_count_expr(expr: &Expr) -> Result<Option<usize>> {
+    row_count_expr(expr, "2201W", "LIMIT must not be negative")
+}
+
+fn row_count_expr(
+    expr: &Expr,
+    negative_code: &'static str,
+    negative_message: &str,
+) -> Result<Option<usize>> {
     let count = match eval_constant_expr(expr)? {
         SqlValue::Null => return Ok(None),
         SqlValue::Int(value) => value,
@@ -3616,7 +3624,14 @@ pub(crate) fn optional_count_expr(expr: &Expr) -> Result<Option<usize>> {
         SqlValue::String(value) => parse_count_string(&value)?,
         _ => return Err(non_negative_integer_error()),
     };
-    Ok(Some(count.max(0) as usize))
+    if count < 0 {
+        return Err(SqlError::data_exception(
+            negative_code,
+            negative_message,
+            None,
+        ));
+    }
+    Ok(Some(count as usize))
 }
 
 pub(crate) fn parse_count_string(value: &str) -> Result<i64> {

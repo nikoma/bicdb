@@ -52,3 +52,15 @@ concurrent job workers, pending-job recovery after SIGKILL, and real HTTP/WebSoc
 requests. The report lists the generic SQL/catalog/constraint defects exposed by
 the campaign and their regression tests. This is a tested application workload;
 it does not imply unrestricted compatibility with other Rails applications.
+
+## Routine row-count expressions
+
+PL/pgSQL named variables and positional parameters in LIMIT/OFFSET are bound
+before execution at every query level, including CTEs and nested subqueries.
+Binding preserves the stored routine tree across successive calls. NULL counts
+retain PostgreSQL semantics (unbounded LIMIT, zero OFFSET); negative counts fail
+with 2201W for LIMIT and 2201X for OFFSET. The focused Carrier compatibility
+suite covers pagination, repeated calls, null/zero counts, negative counts, and
+FETCH with positional parameters, alongside a PostgreSQL control. The parser's
+existing restriction on nonliteral named FETCH counts remains separate from
+this LIMIT/OFFSET fix; the EHR sync function uses LIMIT.

@@ -13,6 +13,71 @@ fn session_rows(session: &mut SqlSession<'_>, sql: &str) -> Vec<Vec<SqlValue>> {
 }
 
 #[test]
+fn routine_row_limits_bind_named_variables_inside_ctes_and_subqueries() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE TABLE page_rows(id INT PRIMARY KEY); INSERT INTO page_rows VALUES(1),(2),(3),(4)").unwrap();
+    session.execute("CREATE FUNCTION bounded_page(p_limit INT,p_offset INT) RETURNS BIGINT LANGUAGE plpgsql AS $$ DECLARE result BIGINT; BEGIN WITH page AS (SELECT id FROM page_rows ORDER BY id LIMIT LEAST(p_limit,3) OFFSET p_offset), metadata AS (SELECT sum(id)::bigint AS total FROM page) SELECT total INTO result FROM metadata; RETURN result; END $$").unwrap();
+    for (limit, offset, total) in [(2, 1, 5), (1, 0, 1), (9, 1, 9), (2, 2, 7)] {
+        assert_eq!(
+            session_rows(
+                &mut session,
+                &format!("SELECT bounded_page({limit},{offset})")
+            ),
+            vec![vec![SqlValue::Int(total)]]
+        );
+    }
+    session.execute("CREATE FUNCTION nested_page(p_limit INT) RETURNS BIGINT LANGUAGE plpgsql AS $$ DECLARE result BIGINT; BEGIN SELECT sum(id)::bigint INTO result FROM (SELECT id FROM page_rows ORDER BY id LIMIT p_limit) selected; RETURN result; END $$").unwrap();
+    assert_eq!(
+        session_rows(&mut session, "SELECT nested_page(2)"),
+        vec![vec![SqlValue::Int(3)]]
+    );
+}
+
+#[test]
+fn routine_row_limits_preserve_null_zero_negative_and_fetch_semantics() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE page_rows(id INT PRIMARY KEY); INSERT INTO page_rows VALUES(1),(2),(3)",
+        )
+        .unwrap();
+    session.execute("CREATE FUNCTION page_limit(p_limit INT) RETURNS SETOF INT LANGUAGE plpgsql AS $$ BEGIN RETURN QUERY SELECT id FROM page_rows ORDER BY id LIMIT p_limit; END $$").unwrap();
+    assert_eq!(
+        session_rows(&mut session, "SELECT * FROM page_limit(NULL)"),
+        vec![
+            vec![SqlValue::Int(1)],
+            vec![SqlValue::Int(2)],
+            vec![SqlValue::Int(3)]
+        ]
+    );
+    assert!(session_rows(&mut session, "SELECT * FROM page_limit(0)").is_empty());
+    assert_eq!(
+        session
+            .execute("SELECT * FROM page_limit(-1)")
+            .unwrap_err()
+            .sqlstate(),
+        "2201W"
+    );
+    session.execute("CREATE FUNCTION page_offset(p_offset INT) RETURNS SETOF INT LANGUAGE plpgsql AS $$ BEGIN RETURN QUERY SELECT id FROM page_rows ORDER BY id OFFSET p_offset; END $$").unwrap();
+    assert_eq!(
+        session
+            .execute("SELECT * FROM page_offset(-1)")
+            .unwrap_err()
+            .sqlstate(),
+        "2201X"
+    );
+    session.execute("CREATE FUNCTION page_fetch(p_limit INT) RETURNS SETOF INT LANGUAGE plpgsql AS $$ BEGIN RETURN QUERY SELECT id FROM page_rows ORDER BY id FETCH FIRST $1 ROWS ONLY; END $$").unwrap();
+    assert_eq!(
+        session_rows(&mut session, "SELECT * FROM page_fetch(2)"),
+        vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(2)]]
+    );
+}
+
+#[test]
 fn partial_unique_index_on_jsonb_text_field_constrains_only_matching_rows() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();

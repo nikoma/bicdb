@@ -3067,20 +3067,26 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn eval_set_config_function(&mut self, function: &Function) -> Result<SqlValue> {
-        let args = function_args(function);
+        let args = function_arg_list(function);
         if args.len() != 3 {
             return Err(SqlError::InvalidSql(format!(
                 "set_config expects 3 arguments, got {}",
                 args.len()
             )));
         }
-        let SqlValue::String(setting) = self.eval_session_expr(&args[0])? else {
+        let SqlValue::String(setting) =
+            self.eval_session_expr(args.get(0).expect("validated argument count"))?
+        else {
             return Err(SqlError::InvalidSql(
                 "set_config name must be text".to_string(),
             ));
         };
-        let value = self.eval_session_expr(&args[1])?.to_cell();
-        let SqlValue::Bool(local) = self.eval_session_expr(&args[2])? else {
+        let value = self
+            .eval_session_expr(args.get(1).expect("validated argument count"))?
+            .to_cell();
+        let SqlValue::Bool(local) =
+            self.eval_session_expr(args.get(2).expect("validated argument count"))?
+        else {
             return Err(SqlError::InvalidSql(
                 "set_config is_local must be boolean".to_string(),
             ));
@@ -3100,7 +3106,7 @@ impl<'db> SqlSession<'db> {
 
     pub(crate) fn eval_sequence_function(&mut self, function: &Function) -> Result<SqlValue> {
         let name = object_name(&function.name)?.to_ascii_lowercase();
-        let args = function_args(function);
+        let args = function_arg_list(function);
         match name.as_str() {
             "nextval" | "pg_catalog.nextval" => {
                 let sequence =
@@ -3145,7 +3151,8 @@ impl<'db> SqlSession<'db> {
                 }
                 let sequence =
                     normalize_sequence_name(&self.eval_sequence_arg(args.first(), "setval")?)?;
-                let value = self.eval_session_expr(&args[1])?;
+                let value =
+                    self.eval_session_expr(args.get(1).expect("validated argument count"))?;
                 let Some(value) = sql_value_i64(&value) else {
                     return Err(SqlError::InvalidSql(
                         "setval value must be an integer".to_string(),

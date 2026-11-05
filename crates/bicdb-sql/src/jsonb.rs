@@ -482,7 +482,7 @@ fn numeric_arguments_as_json_numbers(
     ) {
         return None;
     }
-    let expressions = crate::function_args(function);
+    let expressions = crate::function_arg_list(function);
     let mut normalized = None::<Vec<SqlValue>>;
     for (index, value) in args.iter().enumerate() {
         let SqlValue::String(text) = value else {
@@ -522,8 +522,8 @@ fn numeric_json_expr(expr: &Expr) -> bool {
     if name != "round" && name != "pg_catalog.round" {
         return false;
     }
-    let args = crate::function_args(function);
-    args.len() == 2 && numeric_json_expr(&args[0])
+    let args = crate::function_arg_list(function);
+    args.len() == 2 && args.first().is_some_and(numeric_json_expr)
 }
 
 fn normalize_jsonb_literal_arguments(
@@ -547,7 +547,7 @@ fn normalize_jsonb_literal_arguments(
         | "jsonb_send" => &[0],
         _ => return Ok(None),
     };
-    let expressions = crate::function_args(function);
+    let expressions = crate::function_arg_list(function);
     let mut normalized = args.to_vec();
     let mut changed = false;
     for &position in jsonb_positions {

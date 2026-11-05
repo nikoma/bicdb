@@ -1199,7 +1199,7 @@ pub(crate) fn eval_virtual_value(
                 }
                 return Ok(SqlValue::Null);
             }
-            let arg_exprs = function_args(function);
+            let arg_exprs = function_arg_list(function);
             let args = arg_exprs
                 .iter()
                 .map(|arg| eval_virtual_value(row, arg))
@@ -1347,6 +1347,9 @@ pub(crate) fn execute_builtin_function(
     tx: Option<&bicdb_core::Transaction>,
     session_gucs: Option<&HashMap<String, String>>,
 ) -> Result<SqlResult> {
+    // This compatibility path synthesizes Expr::Function wrappers and argument
+    // rewrites. Their addresses cannot outlive this call in a routine's memo.
+    let _temporary_types = suspend_expr_type_scope();
     let name = object_name(&function.name)?.to_ascii_lowercase();
     let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
     if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {

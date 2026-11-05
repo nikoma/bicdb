@@ -409,7 +409,7 @@ pub(crate) fn eval_record_function_value(record: &Record, function: &Function) -
         }
         return Ok(SqlValue::Null);
     }
-    let arg_exprs = function_args(function);
+    let arg_exprs = function_arg_list(function);
     let args = arg_exprs
         .iter()
         .map(|arg| eval_value(record, arg))
@@ -724,7 +724,7 @@ pub(crate) fn eval_setting_value(expr: &Expr) -> Result<SqlValue> {
 
 pub(crate) fn eval_builtin_function_value(function: &Function) -> Result<SqlValue> {
     let name = object_name(&function.name)?.to_ascii_lowercase();
-    let arg_exprs = function_args(function);
+    let arg_exprs = function_arg_list(function);
     let arg_types = arg_exprs
         .iter()
         .map(|arg| projected_expr_pg_type(arg, None))
@@ -790,7 +790,7 @@ pub(crate) fn eval_constant_function_value(function: &Function) -> Result<SqlVal
         }
         return Ok(SqlValue::Null);
     }
-    let arg_exprs = function_args(function);
+    let arg_exprs = function_arg_list(function);
     let args = arg_exprs
         .iter()
         .map(eval_constant_expr)

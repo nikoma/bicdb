@@ -1,0 +1,52 @@
+{
+  "source_commit": "a72754c06be496c67b3ed23edcea9e0a8eeaaf2a",
+  "application_qualified": false,
+  "success": true,
+  "binary_sha256": "2d856aa532033ecd18342cb42d9f55a7a60fd71c81276a39ea6782f12a7b28d5",
+  "checks": [
+    {
+      "suite": "oracle_unit",
+      "passed": 209,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "binary_storage",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "recursive_query_stack",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "routine_privilege_lists",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "oracle_hr_protocol",
+      "passed": 45,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "general_protocol",
+      "passed": 174,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "workspace_all_targets": "passed",
+  "licensing": "passed",
+  "open_core_boundary": "passed",
+  "source_oracle_hex_cases_matched": 24,
+  "blob_protocol_cases_passed": 7,
+  "clean_server_shutdowns": 4,
+  "accepted_application_replaced": false,
+  "workflows_added": false
+}

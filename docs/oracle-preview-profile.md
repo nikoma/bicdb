@@ -1172,3 +1172,43 @@ that bounded integration using public PostgreSQL JDBC interfaces. Its
 covers input-only prepared blocks, direct statements and three query modes.
 Callable OUT parameters, complete PL/SQL transaction conformance and Oracle LOB
 locators remain unqualified.
+
+
+## Durable BLOB column provenance
+
+New preview `CREATE TABLE` and `ALTER TABLE` BLOB declarations retain a logical
+`BLOB` modifier while using the native binary payload and PostgreSQL `bytea` wire
+codec. `bicdb_oracle_column_type(relation, column)` reports `BLOB` for such columns;
+explicit native `BYTEA` columns remain unmarked. Binary payloads and SQL NULL
+remain distinct. BLOB declarations with a length and BLOB arrays are unsupported.
+
+Saving a BLOB declaration upgrades the durable preview feature marker to format
+six. Earlier servers must reject that marker rather than silently treating the
+new declaration as ordinary BYTEA. Later character, temporal, hierarchical and
+collection declarations retain the upgraded marker. This upgrade is sticky even
+if the last BLOB column is subsequently removed.
+
+Existing imported BYTEA columns are not automatically reclassified: migration
+must use the original source type inventory and an explicit type conversion.
+This column metadata is a prerequisite for persistent locator identities. It
+does not yet implement `EMPTY_BLOB()`, `DBMS_LOB.APPEND`, temporary LOBs or JDBC
+LOB locator APIs. Procedural BLOB declarations still use the earlier binary
+lowering until the versioned procedural locator implementation is qualified.
+
+
+## Hexadecimal RAW conversion
+
+The preview lowers `HEXTORAW` through a separate Oracle scalar helper. Character
+input is interpreted as hexadecimal digits, with a leading zero for an odd digit
+count; empty input and SQL NULL produce NULL. Whitespace, non-hexadecimal digits
+and PostgreSQL-style binary prefixes are invalid (`ORA-01465`, SQLSTATE `22018`).
+Numeric and RAW inputs use their resolved types and the existing preview default
+character conversions before hexadecimal decoding. Thus numeric `1.0` and text
+`'1.0'` have different results. The native PostgreSQL binary parser and authored
+PostgreSQL functions named `hextoraw` retain their independent behavior.
+
+The [reference comparison](../examples/oracle/reference/hex_to_raw.py) checks
+literal and bound text, NUMBER and RAW operands against Oracle. General RAW size
+limits, BLOB operands and all implicit conversion families remain separate
+qualification items. New stored routines use contract 28 for this conversion;
+contract 27 and its catalog OID remain available with their previous rules.

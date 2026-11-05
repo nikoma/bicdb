@@ -1,0 +1,138 @@
+{
+  "cases": [
+    {
+      "id": "uppercase",
+      "actual": "00FF",
+      "qualified": true
+    },
+    {
+      "id": "mixed_case",
+      "actual": "ABCD",
+      "qualified": true
+    },
+    {
+      "id": "one_digit",
+      "actual": "0A",
+      "qualified": true
+    },
+    {
+      "id": "odd_length",
+      "actual": "0ABC",
+      "qualified": true
+    },
+    {
+      "id": "invalid_digit",
+      "oracle_code": 1465,
+      "actual": "invalid_hex",
+      "qualified": true
+    },
+    {
+      "id": "internal_space",
+      "oracle_code": 1465,
+      "actual": "invalid_hex",
+      "qualified": true
+    },
+    {
+      "id": "outer_spaces",
+      "oracle_code": 1465,
+      "actual": "invalid_hex",
+      "qualified": true
+    },
+    {
+      "id": "empty",
+      "actual": null,
+      "qualified": true
+    },
+    {
+      "id": "null",
+      "actual": null,
+      "qualified": true
+    },
+    {
+      "id": "national",
+      "actual": "00FF",
+      "qualified": true
+    },
+    {
+      "id": "integer",
+      "actual": "01",
+      "qualified": true
+    },
+    {
+      "id": "odd_integer",
+      "actual": "0123",
+      "qualified": true
+    },
+    {
+      "id": "fraction",
+      "oracle_code": 1465,
+      "actual": "invalid_hex",
+      "qualified": true
+    },
+    {
+      "id": "negative",
+      "oracle_code": 1465,
+      "actual": "invalid_hex",
+      "qualified": true
+    },
+    {
+      "id": "bytea_prefix",
+      "oracle_code": 1465,
+      "actual": "invalid_hex",
+      "qualified": true
+    },
+    {
+      "id": "hex_prefix",
+      "oracle_code": 1465,
+      "actual": "invalid_hex",
+      "qualified": true
+    },
+    {
+      "id": "integral_numeric_scale",
+      "actual": "01",
+      "qualified": true
+    },
+    {
+      "id": "text_numeric_scale",
+      "oracle_code": 1465,
+      "actual": "invalid_hex",
+      "qualified": true
+    },
+    {
+      "id": "raw_conversion",
+      "actual": "AB",
+      "qualified": true
+    },
+    {
+      "id": "fixed_character_padding",
+      "oracle_code": 1465,
+      "actual": "invalid_hex",
+      "qualified": true
+    },
+    {
+      "id": "bound_text",
+      "actual": "0ABC",
+      "qualified": true
+    },
+    {
+      "id": "bound_numeric_scale",
+      "actual": "01",
+      "qualified": true
+    },
+    {
+      "id": "bound_numeric_text",
+      "oracle_code": 1465,
+      "actual": "invalid_hex",
+      "qualified": true
+    },
+    {
+      "id": "bound_raw",
+      "actual": "AB",
+      "qualified": true
+    }
+  ],
+  "cleanup_errors": [],
+  "server_version": "23.26.3.0.0",
+  "total": 24,
+  "success": true
+}

@@ -1,0 +1,370 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "uppercase",
+      "source": {
+        "id": "uppercase",
+        "actual": "00FF",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "uppercase",
+        "actual": "00FF",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "mixed_case",
+      "source": {
+        "id": "mixed_case",
+        "actual": "ABCD",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "mixed_case",
+        "actual": "ABCD",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "one_digit",
+      "source": {
+        "id": "one_digit",
+        "actual": "0A",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "one_digit",
+        "actual": "0A",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "odd_length",
+      "source": {
+        "id": "odd_length",
+        "actual": "0ABC",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "odd_length",
+        "actual": "0ABC",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "invalid_digit",
+      "source": {
+        "id": "invalid_digit",
+        "oracle_code": 1465,
+        "actual": "invalid_hex",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "invalid_digit",
+        "sqlstate": "22018",
+        "actual": "invalid_hex",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "internal_space",
+      "source": {
+        "id": "internal_space",
+        "oracle_code": 1465,
+        "actual": "invalid_hex",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "internal_space",
+        "sqlstate": "22018",
+        "actual": "invalid_hex",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "outer_spaces",
+      "source": {
+        "id": "outer_spaces",
+        "oracle_code": 1465,
+        "actual": "invalid_hex",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "outer_spaces",
+        "sqlstate": "22018",
+        "actual": "invalid_hex",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "empty",
+      "source": {
+        "id": "empty",
+        "actual": null,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "empty",
+        "actual": null,
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "null",
+      "source": {
+        "id": "null",
+        "actual": null,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "null",
+        "actual": null,
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "national",
+      "source": {
+        "id": "national",
+        "actual": "00FF",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "national",
+        "actual": "00FF",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "integer",
+      "source": {
+        "id": "integer",
+        "actual": "01",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "integer",
+        "actual": "01",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "odd_integer",
+      "source": {
+        "id": "odd_integer",
+        "actual": "0123",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "odd_integer",
+        "actual": "0123",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "fraction",
+      "source": {
+        "id": "fraction",
+        "oracle_code": 1465,
+        "actual": "invalid_hex",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "fraction",
+        "sqlstate": "22018",
+        "actual": "invalid_hex",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "negative",
+      "source": {
+        "id": "negative",
+        "oracle_code": 1465,
+        "actual": "invalid_hex",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "negative",
+        "sqlstate": "22018",
+        "actual": "invalid_hex",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "bytea_prefix",
+      "source": {
+        "id": "bytea_prefix",
+        "oracle_code": 1465,
+        "actual": "invalid_hex",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "bytea_prefix",
+        "sqlstate": "22018",
+        "actual": "invalid_hex",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "hex_prefix",
+      "source": {
+        "id": "hex_prefix",
+        "oracle_code": 1465,
+        "actual": "invalid_hex",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "hex_prefix",
+        "sqlstate": "22018",
+        "actual": "invalid_hex",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "integral_numeric_scale",
+      "source": {
+        "id": "integral_numeric_scale",
+        "actual": "01",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "integral_numeric_scale",
+        "actual": "01",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "text_numeric_scale",
+      "source": {
+        "id": "text_numeric_scale",
+        "oracle_code": 1465,
+        "actual": "invalid_hex",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "text_numeric_scale",
+        "sqlstate": "22018",
+        "actual": "invalid_hex",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "raw_conversion",
+      "source": {
+        "id": "raw_conversion",
+        "actual": "AB",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "raw_conversion",
+        "actual": "AB",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "fixed_character_padding",
+      "source": {
+        "id": "fixed_character_padding",
+        "oracle_code": 1465,
+        "actual": "invalid_hex",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "fixed_character_padding",
+        "sqlstate": "22018",
+        "actual": "invalid_hex",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "bound_text",
+      "source": {
+        "id": "bound_text",
+        "actual": "0ABC",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "bound_text",
+        "actual": "0ABC",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "bound_numeric_scale",
+      "source": {
+        "id": "bound_numeric_scale",
+        "actual": "01",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "bound_numeric_scale",
+        "actual": "01",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "bound_numeric_text",
+      "source": {
+        "id": "bound_numeric_text",
+        "oracle_code": 1465,
+        "actual": "invalid_hex",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "bound_numeric_text",
+        "sqlstate": "22018",
+        "actual": "invalid_hex",
+        "qualified": true
+      },
+      "matched": true
+    },
+    {
+      "id": "bound_raw",
+      "source": {
+        "id": "bound_raw",
+        "actual": "AB",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "bound_raw",
+        "actual": "AB",
+        "qualified": true
+      },
+      "matched": true
+    }
+  ],
+  "total": 24,
+  "matched": 24,
+  "cleanup_errors": [],
+  "source_qualified": true,
+  "success": true,
+  "target_sql_profile": "oracle-preview-v1",
+  "reference": "oracle",
+  "oracle_disable_oob": false
+}

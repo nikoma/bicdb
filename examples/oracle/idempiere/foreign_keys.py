@@ -97,15 +97,16 @@ def catalog(cursor, schema):
     if len(relations) != len(set(relations.values())):
         raise ValueError('target table names are ambiguous')
     attributes = {}
-    ids = list(relations)
-    for at in range(0, len(ids), 128):
-        chunk = ids[at:at + 128]
-        cursor.execute('SELECT "attrelid","attnum","attname" FROM "pg_catalog"."pg_attribute" WHERE NOT "attisdropped" AND "attnum">0 AND "attrelid" IN (' + ','.join('%s' for _ in chunk) + ')', chunk)
-        for relation, number, name in cursor.fetchall():
-            key = (relation, number)
-            if key in attributes:
-                raise ValueError('target attribute numbers are ambiguous')
-            attributes[key] = name
+    # Inventory attributes once and retain only this namespace's tables.
+    # Repeated large IN predicates made catalog preflight expensive on broad schemas.
+    cursor.execute('SELECT "attrelid","attnum","attname" FROM "pg_catalog"."pg_attribute" WHERE NOT "attisdropped" AND "attnum">0')
+    for relation, number, name in cursor:
+        if relation not in relations:
+            continue
+        key = (relation, number)
+        if key in attributes:
+            raise ValueError('target attribute numbers are ambiguous')
+        attributes[key] = name
     cursor.execute(CONSTRAINT_SELECT + ' WHERE "connamespace"=%s', (namespace,))
     constraints = {}
     for values in cursor.fetchall():

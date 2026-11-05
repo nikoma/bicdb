@@ -226,6 +226,16 @@ class ForeignKeyMigrationIntegrationTests(unittest.TestCase):
         (args.snapshot/'manifest.json').write_text(json.dumps(m));args.check_only=False;args.writers_quiesced=True
         self.assertEqual(len(self.migrate(args)['completed']),4)
 
+    def test_attribute_inventory_excludes_other_namespaces(self):
+        m,args=self.setup_schema();other='OTHER_'+str(time.time_ns());q=target.quote
+        with self.conn.cursor() as c:
+            c.execute('CREATE SCHEMA '+q(other))
+            c.execute('CREATE TABLE '+q(other)+'."UNRELATED"("PRIVATE_COLUMN" INTEGER)')
+            state=target.catalog(c,m['source_schema'])
+        self.assertEqual(set(state['columns']),{'P','C','Q','U'})
+        self.assertFalse(any(name=='PRIVATE_COLUMN' for name in state['attributes'].values()))
+        self.assertTrue(self.migrate(args)['success'])
+
     def test_changed_target_projection_is_refused_before_probe_or_installation(self):
         m,args=self.setup_schema()
         with self.conn.cursor() as c:c.execute('ALTER TABLE '+target.quote(m['source_schema'])+'."C" ADD COLUMN "EXTRA" INTEGER')

@@ -5220,19 +5220,19 @@ pub(crate) fn validate_constraint_catalog_oids(db: &BicDb) -> Result<()> {
         return Ok(());
     }
     let schemas = list_schemas(db)?;
-    let mut rows =
-        pg_constraint_rows_from_schemas(db, &schemas, &table_oids(db), None, None, None)?;
-    rows.extend(pg_domain_constraint_rows(db, None, None)?);
-    let mut seen = BTreeSet::new();
-    for row in rows {
-        let oid = sql_value_i64(&virtual_cell(&row, "oid"))
-            .ok_or_else(|| SqlError::InvalidSql("constraint has no catalog OID".into()))?;
-        if u32::try_from(oid).is_err() || oid == 0 || !seen.insert(oid) {
-            return Err(SqlError::InvalidSql(format!(
-                "constraint catalog OID {oid} is invalid or collides with another constraint"
-            )));
-        }
-    }
+    let relation_oids = table_oids(db);
+    // Only identifiers are needed here. Constructing table rows also resolves
+    // attributes and parses CHECK expressions for every catalog generation.
+    let domain_oids = pg_domain_constraint_rows(db, None, None)?
+        .iter()
+        .map(|row| {
+            sql_value_i64(&virtual_cell(row, "oid"))
+                .ok_or_else(|| SqlError::InvalidSql("constraint has no catalog OID".into()))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    validate_constraint_oid_values(
+        table_constraint_oids(&schemas, &relation_oids).chain(domain_oids),
+    )?;
     CONSTRAINT_OID_VALIDATION.with(|memo| {
         let mut memo = memo.borrow_mut();
         if memo.len() >= 1024 {
@@ -5240,6 +5240,53 @@ pub(crate) fn validate_constraint_catalog_oids(db: &BicDb) -> Result<()> {
         }
         memo.insert(db.instance_id(), stamp);
     });
+    Ok(())
+}
+
+/// Same slots and traversal order as the table catalog row builder: declared
+/// primary keys first, then visible NOT NULL and non-primary stored constraints.
+fn table_constraint_oids<'a>(
+    schemas: &'a [TableSchema],
+    relation_oids: &'a BTreeMap<String, i64>,
+) -> impl Iterator<Item = i64> + 'a {
+    let primary = schemas
+        .iter()
+        .filter(|schema| !primary_key_columns_for_schema(schema).is_empty())
+        .map(|schema| pg_constraint_oid(*relation_oids.get(&schema.name).unwrap_or(&0), 0));
+    let ordinary = schemas.iter().flat_map(move |schema| {
+        let not_null = schema
+            .columns
+            .iter()
+            .filter(|column| !column.hidden && (!column.nullable || column.primary_key))
+            .count();
+        let stored = schema
+            .constraints
+            .iter()
+            .filter(|constraint| match constraint {
+                ConstraintSchema::Unique { name, columns, .. }
+                | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. } => {
+                    !unique_constraint_is_primary_key(schema, name, columns)
+                }
+                ConstraintSchema::Check { .. }
+                | ConstraintSchema::ForeignKey { .. }
+                | ConstraintSchema::Exclusion { .. } => true,
+            })
+            .count();
+        let oid = *relation_oids.get(&schema.name).unwrap_or(&0);
+        (1..=not_null + stored).map(move |slot| pg_constraint_oid(oid, slot as i64))
+    });
+    primary.chain(ordinary)
+}
+
+fn validate_constraint_oid_values(oids: impl IntoIterator<Item = i64>) -> Result<()> {
+    let mut seen = BTreeSet::new();
+    for oid in oids {
+        if u32::try_from(oid).is_err() || oid == 0 || !seen.insert(oid) {
+            return Err(SqlError::InvalidSql(format!(
+                "constraint catalog OID {oid} is invalid or collides with another constraint"
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -5279,6 +5326,8 @@ pub(crate) struct PgConstraintRow {
 }
 
 pub(crate) fn pg_constraint_row(row: PgConstraintRow) -> BTreeMap<String, SqlValue> {
+    #[cfg(test)]
+    CONSTRAINT_TABLE_ROW_BUILDS.with(|count| count.set(count.get() + 1));
     virtual_row([
         ("oid", SqlValue::Int(row.oid)),
         ("conname", SqlValue::String(row.name)),
@@ -7921,3 +7970,11 @@ mod foreign_key_projection_tests {
         }
     }
 }
+
+#[cfg(test)]
+thread_local! {
+    static CONSTRAINT_TABLE_ROW_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+#[cfg(test)]
+#[path = "catalog_rows/constraint_oid_tests.rs"]
+mod constraint_oid_tests;

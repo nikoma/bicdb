@@ -170,6 +170,14 @@ follow [server setup](SERVER_MODE.md) before exposing a service remotely.
 BicDB is **beta**, with a tested subset of PostgreSQL behavior. Read
 [current limitations](#current-limitations) before choosing it for critical data.
 
+## Coming from PostgreSQL?
+
+- [Compatibility matrix: implementation, verification and limitations](docs/postgresql-operations-comparison.md)
+- [PostgreSQL-to-BicDB migration guide](docs/postgresql-migration.md)
+- [Configuration reference](docs/server-configuration.md) and [commented TOML example](docs/examples/bicdb.toml)
+- [Production deployment and operations](docs/production-deployment.md)
+- [HA guarantees](docs/high-availability.md), [backup and recovery](docs/backup-recovery.md), and [security contracts](docs/production-security-hardening.md)
+
 ## What to explore next
 
 | Your next step | Start here |
@@ -180,8 +188,6 @@ BicDB is **beta**, with a tested subset of PostgreSQL behavior. Read
 | Use Redis clients with durable keys | [Redis cache](docs/redis-cache.md) |
 | Run offline in a browser | [Browser client](web/bicdb-client/README.md) |
 | Add vectors, spatial data, or durable queues | [Capabilities](#capabilities) and [owner's guide](docs/owners-guide.md) |
-| Configure and deploy a server | [Configuration](docs/server-configuration.md) and [production deployment](docs/production-deployment.md) |
-| Evaluate or migrate from PostgreSQL | [Operations comparison](docs/postgresql-operations-comparison.md) and [migration guide](docs/postgresql-migration.md) |
 | Operate replication or a cluster | [Owner's guide](docs/owners-guide.md) |
 | Verify recovery, switch regions, and protect workloads | [Verification and workload protection](docs/verification-and-workload-protection.md) |
 

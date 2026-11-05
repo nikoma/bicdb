@@ -6,6 +6,29 @@ operational procedures. BicDB remains a developing system; qualify the exact
 version against your application. Rows below describe capabilities and limits,
 not certification of PostgreSQL parity.
 
+## Reading support and evidence
+
+The labels below answer three separate questions:
+
+- **Implemented:** the relevant code path exists, within the stated limits.
+- **Verified:** specified checks actually ran against an identified source version
+  and environment. A test file by itself is a reproducible check, not an execution
+  record. Passing a few cases does not establish an entire feature's compatibility.
+- **Production-qualified:** the exact build, configuration, workload, failure
+  model and deployment have passed recorded operational acceptance, including
+  recovery and agreed RPO/RTO. Unit/integration tests and a deployment example
+  cannot establish this status.
+
+The [configuration and regression execution record](evidence/server-configuration-2026-11-05.json)
+pins the local Linux test runs behind the verified entries below. Its broad
+regression run precedes an upstream SQL merge; the final combined source has
+separate configuration integration and workspace-check results. This matrix
+claims **no blanket production qualification** for PostgreSQL workloads.
+Release-specific differential SQL evidence has its own narrower scope in the
+[PostgreSQL compatibility report](../POSTGRES_COMPATIBILITY.md).
+
+## Operational comparison
+
 | Area | PostgreSQL 18 | BicDB |
 | --- | --- | --- |
 | Databases and schemas | Multiple databases per instance, schemas within databases | Standalone database or `serve --cluster` database routing; SQL schemas/catalog compatibility is a subset. Databases sharing a server share its process/failure domain. |
@@ -22,6 +45,28 @@ not certification of PostgreSQL parity.
 | Backups and migration | Native physical backup/WAL plus logical exports | Native BicDB backup/restore; physical PostgreSQL backups and WAL are incompatible. Logical migration requires compatibility review and reconciliation. |
 | Client protocol | Native PostgreSQL protocol, COPY and catalogs | PostgreSQL drivers work within implemented SQL/protocol/catalog coverage. Text/CSV COPY is available; binary COPY is not supported. An unmodified arbitrary pg_dump restore is not guaranteed. |
 | Deployment | Native packages, containers and Kubernetes ecosystems | Native executable, container examples; Kubernetes packaging requires operator validation. No qualified first-party Kubernetes operator is claimed here. |
+
+## Verification and qualification by area
+
+“Not established” is a qualification limit, not a prediction of whether a
+particular deployment will work. Tests named without an execution record remain
+checks to run for your build and environment.
+
+| Area | Implemented scope/status | Verification evidence and limits | Production qualification |
+| --- | --- | --- | --- |
+| Databases and schemas | Implemented subset | Executed [protocol checks](../crates/bicdb-pgwire/tests/protocol.rs): multiple persistent databases, transactional shared roles, database-local types and schema-qualified COPY/functions. No complete catalog/schema parity claim. | Not established for arbitrary PostgreSQL applications. |
+| Configuration | Implemented TOML and inspection commands | Executed [resolver tests](../crates/bicdb-cli/src/server_config.rs) and [live CLI tests](../crates/bicdb-cli/tests/server_configuration_cli.rs): precedence, types, paths, unopened validation, frozen drift snapshots, TLS and hostname rejection. See pinned execution record above. | Workload/host resource sizing and rollout acceptance remain deployment-specific. |
+| Transactions | Implemented READ COMMITTED and restricted repeatable-read form | Executed `pgwire_transaction_isolation_commands_accept_read_only_repeatable_read` and protocol transaction regressions. These do not prove PostgreSQL SERIALIZABLE/SSI behavior. | Not established beyond individually qualified isolation/retry workloads. |
+| Locks | Implemented subset | Executed protocol row/advisory lock checks, including `tokio_postgres_row_locks_survive_protocol_messages_and_skip_before_limit`. Full PostgreSQL table-lock strengths, fairness and deadlock parity are not verified. | Application contention and retry behavior require qualification. |
+| HA | Implemented native replication/failover | Executed [CLI failover checks](../crates/bicdb-cli/tests/ha_failover_cli.rs). These selected failure cases do not qualify every partition, topology or timeout policy. [HA guarantees and limits](high-availability.md) define the contract. | Required RPO/RTO and fencing must be demonstrated in the target topology. |
+| Horizontal placement | Implemented membership/range-placement paths | [Cluster operations](distributed-cluster-operations.md) separates retained certified single-range behavior from remaining distributed SQL work. The configuration test run does not qualify placement. | No general cross-range SQL qualification claimed. |
+| Authentication and TLS | Implemented internal login/SCRAM/channel binding; external methods limited | Executed password/SCRAM protocol cases, [TLS channel-binding tests](../crates/bicdb-pgwire/tests/tls_channel_binding.rs), explicit libpq interoperability check and authenticated configuration inspection. Client-certificate rejection is checked; LDAP/PAM/GSSAPI support is not inferred. | Identity provisioning, rotation and trust configuration require deployment acceptance. |
+| Authorization/security | Implemented roles/grants/RLS subset and host protections | Executed protocol ACL/RLS/ownership cases and configuration snapshot denial after role/session-authorization changes. Selected cases are not an independent security audit. See [security contracts](production-security-hardening.md). | No blanket security certification; profile/evidence gates and workload policies require qualification. |
+| Same-directory protection | Implemented native writer claim | [Directory-lock tests](../crates/bicdb-core/tests/single_writer_directory_lock.rs) are reproducible checks; they were **not rerun in the linked configuration batch**. Same-process tests alone do not qualify multi-host/shared-volume operation. | Network/shared filesystem behavior not established. |
+| Backups/recovery | Implemented native backup/restore mechanisms | [Backup contracts and drills](backup-recovery.md) and [online backup tests](../crates/bicdb-pgwire/tests/online_backups.rs) describe separate checks. The configuration batch did **not** execute full online-backup/restore drills. | Requires restoration and recovery-time evidence for the exact deployment. |
+| Migration/client protocol | Implemented PostgreSQL transport and text/CSV COPY subset | Executed protocol driver, catalog, COPY and binary-COPY rejection cases. No arbitrary pg_dump/pg_restore or production migration qualification follows. Use the [migration acceptance steps](postgresql-migration.md). | Requires source/target reconciliation, application acceptance and rollback rehearsal. |
+| Extensions/plugins | Selected built-ins/WASM interfaces; native PostgreSQL extension ABI unsupported | The linked configuration batch does not establish third-party extension compatibility. Inventory and test each dependency; native PostgreSQL shared libraries are not compatible plugins. | Not established for arbitrary extension-dependent workloads. |
+| Deployment | Native executable; container/systemd examples; Kubernetes requirements documented | Live CLI tests run as native Linux processes. Compose/Kubernetes production behavior was not qualified by that batch. See [deployment guide](production-deployment.md). | No qualified first-party Kubernetes operator or universal container deployment claim. |
 
 Transaction access-mode parsing does not establish PostgreSQL-equivalent
 read-only write enforcement; use tested roles/grants for authorization.

@@ -1,0 +1,198 @@
+{
+  "format": 1,
+  "date": "2026-11-05",
+  "kind": "local execution summary; not CI attestation",
+  "environment": {
+    "os": "Linux",
+    "architecture": "x86_64",
+    "rust": "1.96.0",
+    "build_jobs": 1,
+    "incremental": false,
+    "test_threads": 1
+  },
+  "broad_source_commit": "d57ece01120f7d6aa1253568e49dc3402ef6a7b1",
+  "broad_suite_passed": 407,
+  "additional_distinct_checks": [
+    {
+      "name": "CLI configuration resolver",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-cli",
+        "--bin",
+        "bicdb",
+        "server_config::tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "passed": 7
+    },
+    {
+      "name": "Explicit libpq TLS channel binding",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "tls_channel_binding",
+        "libpq_requires",
+        "--",
+        "--ignored",
+        "--test-threads=1"
+      ],
+      "passed": 1
+    }
+  ],
+  "total_distinct_pre_merge_tests_passed": 415,
+  "checks": [
+    {
+      "name": "cli-config-and-operations",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-cli",
+        "--test",
+        "server_configuration_cli",
+        "--test",
+        "server_options_cli",
+        "--test",
+        "cell_mode_cli",
+        "--test",
+        "operator_cli",
+        "--test",
+        "user_password_env",
+        "--test",
+        "ha_failover_cli",
+        "--",
+        "--test-threads=1"
+      ],
+      "result": "passed",
+      "passed": 16,
+      "rust_summaries": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.39s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.90s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.79s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s",
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s"
+      ]
+    },
+    {
+      "name": "pgwire-unit",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-pgwire",
+        "--lib",
+        "--",
+        "--test-threads=1"
+      ],
+      "result": "passed",
+      "passed": 132,
+      "rust_summaries": [
+        "test result: ok. 132 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 73.30s"
+      ]
+    },
+    {
+      "name": "pgwire-protocol-oracle-tls",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "protocol",
+        "--test",
+        "oracle_hr",
+        "--test",
+        "tls_channel_binding",
+        "--",
+        "--test-threads=1"
+      ],
+      "result": "passed",
+      "passed": 228,
+      "rust_summaries": [
+        "test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 27.70s",
+        "test result: ok. 177 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 131.04s",
+        "test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 16.46s"
+      ]
+    },
+    {
+      "name": "sql-application-compatibility",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "carrier_hub_compat",
+        "--",
+        "--test-threads=1"
+      ],
+      "result": "passed",
+      "passed": 31,
+      "rust_summaries": [
+        "test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.68s"
+      ]
+    },
+    {
+      "name": "workspace-all-targets",
+      "command": [
+        "cargo",
+        "check",
+        "--locked",
+        "--workspace",
+        "--all-targets"
+      ],
+      "result": "passed",
+      "passed": 0,
+      "rust_summaries": []
+    }
+  ],
+  "final_delivery_commit": "206ed49082f275d2c2eacc2e17092c85c84cded5",
+  "post_merge": {
+    "workspace_all_targets": "passed at b35e90c00f7106993312e6f1d9f12a8671ae8fd2",
+    "initial_configuration_tests": {
+      "passed": 2,
+      "failed": 1,
+      "cause": "test used TCP availability as readiness while recovery listener declined TLS"
+    },
+    "correction_commit": "206ed49082f275d2c2eacc2e17092c85c84cded5",
+    "correction": "Wait for SSLRequest acceptance before testing authenticated TLS inspection",
+    "final_configuration_integration_tests": {
+      "passed": 3,
+      "failed": 0
+    },
+    "complete_broad_suite_rerun_on_final_delivery": false
+  },
+  "earlier_corrected_failures": [
+    "CLI schema construction exhausted the default test-thread stack; parser now uses an explicit bounded worker stack",
+    "TLS fixture initially reused a CA identity as a leaf; final fixture has a distinct key and CA:FALSE certificate"
+  ],
+  "resource_interruption": "One build was stopped by its memory guard and subsequently resumed; interrupted work was not counted as a passing run",
+  "final_source_sha256": {
+    "crates/bicdb-cli/src/server_config.rs": "073f4bf8a50be320295ca5645703adcb8f215eed36f4d30471a4460fec9ccf72",
+    "crates/bicdb-cli/tests/server_configuration_cli.rs": "1e4707889dd8fe009dc961b2e398b42bbf3633931af6878117b14a38ccc3ac92",
+    "crates/bicdb-pgwire/src/database_options.rs": "bf934b7b637a1e6188a6e6fefacee9a1d632c4a09b4eca18a6bf76a7c273d0e1",
+    "crates/bicdb-pgwire/src/sql_parsing.rs": "2ff4bfd04b99561067b42ff232e68e96598a929a7caef9f14ced2d469a57dc2b"
+  },
+  "limits": [
+    "Selected protocol and native process tests, not exhaustive PostgreSQL conformance",
+    "No general production workload, HA topology or Kubernetes qualification",
+    "No full online-backup/restore drill in this batch",
+    "Directory-lock tests not executed in this batch",
+    "No new release or production deployment performed"
+  ],
+  "production_qualified": false,
+  "programme_complete": false
+}

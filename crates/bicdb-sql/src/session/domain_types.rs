@@ -1339,6 +1339,19 @@ impl<'db> SqlSession<'db> {
                 Some(column_name.to_string()),
             ));
         }
+        let blob_rewrite = oracle::lob_storage::is_column(&previous_column)
+            || oracle::lob_storage::is_column(&updated_column);
+        if blob_rewrite {
+            if self.tx.is_some() || schema.partitioning.is_some() {
+                return Err(SqlError::Unsupported("Oracle BLOB column reconciliation requires a quiescent, unpartitioned table outside an active transaction".into()));
+            }
+            if previous_column.pg_type != "bytea" || updated_column.pg_type != "bytea" {
+                return Err(SqlError::Unsupported(
+                    "Oracle BLOB column reconciliation requires binary source and target storage"
+                        .into(),
+                ));
+            }
+        }
         self.rewrite_altered_column_default(table, &previous_column, &mut updated_column)?;
 
         let mut updated_parent = schema.clone();
@@ -1378,7 +1391,8 @@ impl<'db> SqlSession<'db> {
             }
         }
 
-        let rewrite = using.is_some()
+        let rewrite = blob_rewrite
+            || using.is_some()
             || column_type_change_requires_rewrite(
                 &previous_column,
                 &updated_parent.columns[column_index],
@@ -1390,7 +1404,12 @@ impl<'db> SqlSession<'db> {
             let mut unchanged_source = source_metadata_only;
             if rewrite {
                 for record in &mut records {
-                    let current = record_column_value(record, &previous, column_name);
+                    let current = if oracle::lob_storage::is_column(&previous.columns[column_index])
+                    {
+                        oracle::lob_storage::read(record, &previous.name, column_name)?
+                    } else {
+                        record_column_value(record, &previous, column_name)
+                    };
                     let original = source_metadata_only.then(|| current.clone());
                     let value = if let Some(expr) = using {
                         self.eval_target_record_expr(
@@ -1467,6 +1486,32 @@ impl<'db> SqlSession<'db> {
             .collect::<Result<Vec<_>>>()?;
         let apply_result = (|| -> Result<()> {
             for (previous, updated, records) in &planned {
+                if blob_rewrite {
+                    let old_column = &previous.columns[column_index];
+                    let mut old_ids = Vec::new();
+                    if oracle::lob_storage::is_column(old_column) {
+                        for record in self.db_ref().scan_collection(&previous.name)? {
+                            if let SqlValue::OracleLob(blob) = oracle::lob_storage::read(
+                                &record,
+                                &previous.name,
+                                &old_column.name,
+                            )? {
+                                if let Some(descriptor) = blob.stored_descriptor() {
+                                    old_ids.push(descriptor.value_id);
+                                }
+                            }
+                        }
+                    }
+                    oracle::lob_storage::rewrite_column(
+                        self.db_mut()?,
+                        &previous.name,
+                        old_column,
+                        updated,
+                        records.clone(),
+                        old_ids,
+                    )?;
+                    continue;
+                }
                 if unchanged_source_tables.contains(&previous.name) {
                     save_schema(self.db_mut()?, updated)?;
                     continue;

@@ -58,3 +58,19 @@ and do not change PostgreSQL transaction semantics or qualify an application.
 On Linux, an isolated child also exercises a real kernel-enforced short WAL
 append. The observer remains recovery-required through transaction/database
 drop, and the durable WAL watermark does not advance past the failed append.
+
+## Transaction-local write annotations
+
+`annotate_record_write(collection, id, namespace, key, value)` associates an
+opaque integer tag with an actual buffered record write. `record_write_tag`
+returns the newest surviving tag in the pending transaction. Namespace/key are
+128-bit integers and the value is a 64-bit integer; there are no caller callbacks,
+application payloads or database pointers in this state. Tags grant no mutation
+authority and are not WAL data or durable commit evidence.
+
+Nested rollback follows the observed write prefix; late registration for an
+older retained write survives. Repeated annotation of the same key/write replaces
+the prior tag. Invalidated versions are pruned and cannot reappear when write
+slots are reused. Terminal outcomes clear the tag map, and separate transactions
+never share it. BLOB mutation uses this to distinguish pending deletion and
+replacement; current owner, SQL authorization and row-lock checks remain separate.

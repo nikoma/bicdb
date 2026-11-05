@@ -2573,6 +2573,9 @@ pub(crate) fn default_session_guc(name: &str) -> Option<&'static str> {
 }
 
 pub(crate) fn bytea_argument(value: &SqlValue) -> Result<Option<Vec<u8>>> {
+    if let SqlValue::OracleLob(blob) = value {
+        return Ok(Some(blob.read_bytes()?.to_vec()));
+    }
     if matches!(value, SqlValue::Null) {
         return Ok(None);
     }

@@ -3550,3 +3550,54 @@ async fn postgres_quoted_column_origin_metadata_preserves_distinct_case() {
     drop(client);
     connection.await.unwrap();
 }
+
+#[tokio::test]
+async fn oracle_chunked_persistent_blob_append_roundtrips_over_pg_driver_and_rolls_back() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = Running::with_profile(directory.path(), "oracle-preview-v1");
+    let (client, connection) = transaction_defaults_connect(&server, "oracle-preview-v1").await;
+    client.batch_execute("CREATE TABLE blob_streams(id NUMBER PRIMARY KEY,b BLOB); INSERT INTO blob_streams VALUES(1,HEXTORAW('AB'))").await.unwrap();
+    client.batch_execute("BEGIN").await.unwrap();
+    let expected = (0..8193usize)
+        .map(|index| (index % 251) as u8)
+        .collect::<Vec<_>>();
+    let mut block=String::from("DECLARE d BLOB; BEGIN UPDATE blob_streams SET b=EMPTY_BLOB() WHERE id=1; SELECT b INTO d FROM blob_streams WHERE id=1 FOR UPDATE;");
+    for chunk in expected.chunks(1024) {
+        let hex = chunk
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        block.push_str(&format!("DBMS_LOB.APPEND(d,HEXTORAW('{hex}'));"));
+    }
+    block.push_str("END;");
+    let statement = client.prepare(&block).await.unwrap();
+    client.execute(&statement, &[]).await.unwrap();
+    assert_eq!(
+        client
+            .query_one("SELECT b FROM blob_streams", &[])
+            .await
+            .unwrap()
+            .get::<_, Vec<u8>>(0),
+        expected
+    );
+    client.batch_execute("ROLLBACK").await.unwrap();
+    assert_eq!(
+        client
+            .query_one("SELECT b FROM blob_streams", &[])
+            .await
+            .unwrap()
+            .get::<_, Vec<u8>>(0),
+        vec![0xab]
+    );
+    client.batch_execute("CREATE FUNCTION read_stream RETURN BLOB IS d BLOB; BEGIN SELECT b INTO d FROM blob_streams WHERE id=1; RETURN d; END;").await.unwrap();
+    assert_eq!(
+        client
+            .query_one("SELECT read_stream() FROM DUAL", &[])
+            .await
+            .unwrap()
+            .get::<_, Vec<u8>>(0),
+        vec![0xab]
+    );
+    drop(client);
+    connection.await.unwrap();
+}

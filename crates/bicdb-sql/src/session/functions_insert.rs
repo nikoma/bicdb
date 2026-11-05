@@ -2008,10 +2008,20 @@ impl<'db> SqlSession<'db> {
         record: &Record,
         expr: &Expr,
     ) -> Result<Option<SqlValue>> {
+        let column_value = |name: &str| {
+            if schema
+                .column(name)
+                .is_some_and(oracle::lob_storage::is_column)
+            {
+                oracle::lob_storage::read(record, table, name)
+            } else {
+                Ok(record_column_value(record, schema, name))
+            }
+        };
         match expr {
             Expr::Identifier(ident) => {
                 if table_has_field(Some(schema), &ident.value) {
-                    return Ok(Some(record_column_value(record, schema, &ident.value)));
+                    return Ok(Some(column_value(&ident.value)?));
                 }
                 Ok(Some(
                     routine_var_from_ident(&self.routine_vars, ident).unwrap_or(SqlValue::Null),
@@ -2025,7 +2035,7 @@ impl<'db> SqlSession<'db> {
                 if let Some((field, _)) =
                     target_record_field_from_parts(table, alias, Some(schema), &parts)
                 {
-                    return Ok(Some(record_column_value(record, schema, &field)));
+                    return Ok(Some(column_value(&field)?));
                 }
                 Ok(Some(
                     routine_var_from_parts(&self.routine_vars, &parts)?.unwrap_or(SqlValue::Null),

@@ -440,7 +440,7 @@ pub(crate) fn cast_routine_return_value(
     routine: &RoutineSchema,
 ) -> Result<SqlValue> {
     if oracle::lobs::returns_blob(routine)? {
-        return oracle::lobs::coerce(value);
+        return oracle::lobs::resolve_export(oracle::lobs::coerce(value)?);
     }
     let return_type = routine.return_type.trim();
     if matches!(return_type, "" | "void" | "record" | "trigger") {
@@ -1325,7 +1325,7 @@ pub(crate) fn merge_inherited_constraints(
     constraints
 }
 
-pub(crate) fn save_schema(db: &mut BicDb, schema: &TableSchema) -> Result<()> {
+pub(crate) fn prepare_schema_record(db: &mut BicDb, schema: &TableSchema) -> Result<Record> {
     require_user_relation_name(&schema.name)?;
     oracle::temporal_columns::prepare_save(db, schema)?;
     oracle::character_columns::prepare_save(db, schema)?;
@@ -1335,12 +1335,16 @@ pub(crate) fn save_schema(db: &mut BicDb, schema: &TableSchema) -> Result<()> {
     if sql_profile_active() {
         sql_profile_schema_save(serde_json::to_vec(&metadata)?.len());
     }
-    db.insert(
-        SCHEMA_COLLECTION,
-        Record::new(&schema.name).with_metadata(metadata),
-    )?;
+    Ok(Record::new(&schema.name).with_metadata(metadata))
+}
+pub(crate) fn cache_saved_schema(db: &BicDb, schema: &TableSchema) {
     sql_schema_list_cache_invalidate(db);
     sql_schema_cache_set(db, &schema.name, Some(std::sync::Arc::new(schema.clone())));
+}
+pub(crate) fn save_schema(db: &mut BicDb, schema: &TableSchema) -> Result<()> {
+    let record = prepare_schema_record(db, schema)?;
+    db.insert(SCHEMA_COLLECTION, record)?;
+    cache_saved_schema(db, schema);
     Ok(())
 }
 

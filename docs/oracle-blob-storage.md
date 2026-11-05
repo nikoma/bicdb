@@ -6,10 +6,12 @@ compatibility metadata format 7. Routine BLOB signatures retain their existing
 logical modifier. An older Oracle-profile reader must reject the newer metadata
 rather than interpret identity-bearing cells as ordinary binary values.
 
-This is storage infrastructure for persistent locators. It does **not** deliver
-persistent `DBMS_LOB.APPEND`, stored-locator PL/SQL assignment, cross-transaction
-locator rebinding, or full application acceptance. Those runtime paths remain
-unsupported until read-version binding and mutation authorization are connected.
+Selected persistent PL/SQL operations now bind static SELECT INTO and DML
+RETURNING values to transaction-aware histories. APPEND supports temporary and
+stored BLOB operands, with current owner, database instance, UPDATE privilege,
+row-policy and held-lock checks. Persistent writes called from SQL are refused.
+This is not complete DBMS_LOB, unchanged Oracle JDBC support, or full application
+acceptance.
 
 ## Value identity and writes
 
@@ -41,19 +43,23 @@ still requires its own application boundary.
 ## Migration and remaining integration
 
 No column-name heuristic turns legacy BYTEA into a BLOB. An explicit
-`ALTER TABLE ... MODIFY (... BLOB)` requests logical conversion; compare source
-and target binary values before accepting it. Existing logical format-6 columns
-are not silently reclassified as identity-bearing columns merely by reopening a
-database. A source-manifest-driven reconciliation and application migration
-qualification remain required.
+`ALTER TABLE ... MODIFY (... BLOB)` requests binary-column reconciliation on an
+unpartitioned table outside an active transaction. Schema, converted rows and
+owner mappings share one native commit; the monotonic reader fence can advance
+before it. Binary conversion back to BYTEA removes the previous owner mappings.
+This bounded operation is not Oracle-equivalent transactional DDL or general
+partitioned-table conversion. Compare a source manifest and binary values before
+accepting a migration. Reopening a format-6 database does not silently upgrade
+its logical columns. Application migration qualification remains required.
 
 The owner registry is not yet a general DDL lifecycle service. Rename, recycle,
 truncate, drop, flashback and schema conversion need dedicated identity/registry
-acceptance before persistent locator writes can rely on them. In particular,
+acceptance for persistent locator lifecycle behavior. In particular,
 lookup validation rejects stale owners; it does not establish registry garbage
-collection or preservation across all DDL operations. General index, trigger,
-constraint and functional-index behavior during future locator mutation also
-requires source comparisons and acceptance.
+collection or preservation across all DDL operations. APPEND uses native writes and existing SQL validation without ordinary UPDATE
+triggers. General functional-index, OPEN/CLOSE, deferred-effect and extension
+behavior still requires source comparisons and acceptance. Cursor/dynamic-SQL
+acquisition and broader package APIs remain separate integration work.
 
 See [read-version tracking](oracle-lob-read-versions.md) for the separate runtime
 history layer and its native Oracle acquisition/ownership observations. Storage

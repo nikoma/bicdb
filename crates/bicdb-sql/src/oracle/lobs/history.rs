@@ -200,7 +200,52 @@ impl History {
     }
 }
 
+impl PartialEq for ReadVersion {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.history, &other.history)
+            && self.acquisition == other.acquisition
+            && self.bytes == other.bytes
+            && self.writer.as_ref().map(TransactionWriteReceipt::id)
+                == other.writer.as_ref().map(TransactionWriteReceipt::id)
+            && self
+                .acquisition_write
+                .as_ref()
+                .map(TransactionWriteReceipt::id)
+                == other
+                    .acquisition_write
+                    .as_ref()
+                    .map(TransactionWriteReceipt::id)
+    }
+}
+impl Eq for ReadVersion {}
+
 impl ReadVersion {
+    pub(super) fn belongs_to(&self, tx: &Transaction) -> bool {
+        self.history.origin.same_transaction(&tx.observe_outcome())
+    }
+    pub(super) fn with_read_bytes(mut self, bytes: Arc<[u8]>) -> Self {
+        self.bytes = bytes;
+        self
+    }
+    pub(super) fn after_current_write(
+        &self,
+        tx: &mut Transaction,
+        record_id: &str,
+    ) -> Result<Self> {
+        let actual = tx.observe_record_write(&self.history.collection, record_id)?;
+        let receipt = self
+            .history
+            .changes()?
+            .iter()
+            .rev()
+            .find(|change| {
+                change.receipt.write_len() == actual.write_len()
+                    && change.receipt.rollback_boundary().is_none()
+            })
+            .map(|change| change.receipt.clone())
+            .ok_or_else(uncertain_outcome)?;
+        self.after_write(receipt)
+    }
     /// Advance only the destination after a successfully recorded append.
     pub(super) fn after_write(&self, receipt: TransactionWriteReceipt) -> Result<Self> {
         if !self.history.origin.same_transaction(receipt.transaction())
@@ -574,6 +619,31 @@ impl State {
     fn registry(&self) -> &Arc<Mutex<Registry>> {
         self.shared
             .get_or_init(|| Arc::new(Mutex::new(Registry::default())))
+    }
+
+    pub(super) fn record_write(
+        &mut self,
+        tx: &mut Transaction,
+        identity: &ValueIdentity,
+        record_id: &str,
+        version: OwnerVersion,
+    ) -> Result<()> {
+        let Some(shared) = self.shared.get() else {
+            return Ok(());
+        };
+        let history = {
+            let registry = shared.lock().map_err(|_| uncertain_outcome())?;
+            registry
+                .origins
+                .iter()
+                .find(|origin| origin.origin.same_transaction(&tx.observe_outcome()))
+                .and_then(|origin| origin.values.get(identity))
+                .and_then(std::sync::Weak::upgrade)
+        };
+        if let Some(history) = history {
+            history.record(tx, record_id, version)?;
+        }
+        Ok(())
     }
 
     pub(super) fn capture(

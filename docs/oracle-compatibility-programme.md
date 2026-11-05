@@ -719,3 +719,15 @@ values survive primary-key moves. Owner changes share native row transactions.
 This does not connect stored values to the read-version layer or implement
 persistent APPEND. DDL lifecycle coverage, legacy source-manifest reconciliation,
 full application acceptance and the remaining programme work stay open.
+
+## Selected persistent BLOB execution
+
+Static SELECT INTO and RETURNING now bind stored BLOB values to origin-local
+read histories. APPEND resolves current ownership, checks current SQL rights,
+row policy, database instance and held locks, and writes through native
+transactions without ordinary UPDATE triggers. Later-transaction reuse restores
+the current owner's baseline on rollback. Explicit binary-column reconciliation
+is bounded to unpartitioned tables outside active transactions. See the
+[BLOB contract](oracle-blob-storage.md) for remaining DDL, acquisition, package,
+index and migration limits. Full application and programme acceptance remain
+open; a local regression run does not qualify a deployed application.

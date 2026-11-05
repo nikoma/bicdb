@@ -300,3 +300,59 @@ fn failed_wal_append_reports_recovery_required_instead_of_abort() {
         TransactionOutcome::RecoveryRequired { .. }
     ));
 }
+
+#[test]
+fn write_tags_follow_native_savepoints_without_cross_transaction_state() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db =
+        BicDb::open_with_config(root.path(), DbConfig::default().with_fsync(false)).unwrap();
+    db.create_collection("rows").unwrap();
+    db.insert("rows", row(0)).unwrap();
+    let mut tx = db.begin_transaction().unwrap();
+    assert!(tx.annotate_record_write("rows", "one", 1, 7, 1).is_err());
+    assert_eq!(tx.record_write_tag(1, 7).unwrap(), None);
+    tx.update("rows", row(1)).unwrap();
+    let first = tx.annotate_record_write("rows", "one", 1, 7, 11).unwrap();
+    let outer = tx.rollback_mark();
+    tx.update("rows", row(2)).unwrap();
+    tx.annotate_record_write("rows", "one", 1, 7, 22).unwrap();
+    tx.annotate_record_write("rows", "one", 2, 7, 99).unwrap();
+    let inner = tx.rollback_mark();
+    tx.update("rows", row(3)).unwrap();
+    tx.annotate_record_write("rows", "one", 1, 7, 33).unwrap();
+    assert_eq!(tx.record_write_tag(1, 7).unwrap(), Some(33));
+    tx.rollback_to_mark(inner).unwrap();
+    assert_eq!(tx.record_write_tag(1, 7).unwrap(), Some(22));
+    tx.rollback_to_mark(outer).unwrap();
+    assert_eq!(tx.record_write_tag(1, 7).unwrap(), Some(11));
+    assert_eq!(tx.record_write_tag(2, 7).unwrap(), None);
+    tx.update("rows", row(4)).unwrap();
+    let replacement = tx.annotate_record_write("rows", "one", 1, 7, 44).unwrap();
+    assert!(replacement.id() > first.id());
+    assert_eq!(tx.record_write_tag(1, 7).unwrap(), Some(44));
+    let other = db.begin_transaction().unwrap();
+    assert_eq!(other.record_write_tag(1, 7).unwrap(), None);
+    drop(other);
+    let seq = db.commit_buffered_transaction(&mut tx).unwrap();
+    db.tx_log_handle().write_durable(seq).unwrap();
+    tx.finalize_commit_admission().unwrap();
+    assert!(tx.record_write_tag(1, 7).is_err());
+    let next = db.begin_transaction().unwrap();
+    assert_eq!(next.record_write_tag(1, 7).unwrap(), None);
+}
+
+#[test]
+fn late_write_tag_registration_survives_rollback_to_its_existing_write() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db =
+        BicDb::open_with_config(root.path(), DbConfig::default().with_fsync(false)).unwrap();
+    db.create_collection("rows").unwrap();
+    let mut tx = db.begin_transaction().unwrap();
+    tx.insert("rows", row(1)).unwrap();
+    let mark = tx.rollback_mark();
+    tx.annotate_record_write("rows", "one", 1, 7, 11).unwrap();
+    tx.annotate_record_write("rows", "one", 1, 7, 12).unwrap();
+    tx.rollback_to_mark(mark).unwrap();
+    assert_eq!(tx.record_write_tag(1, 7).unwrap(), Some(12));
+    tx.rollback().unwrap();
+}

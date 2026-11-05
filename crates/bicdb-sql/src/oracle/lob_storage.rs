@@ -88,6 +88,10 @@ pub(crate) fn storage(value: SqlValue) -> Result<JsonValue> {
         _ => None,
     }
     .unwrap_or_else(Uuid::new_v4);
+    let value = match value {
+        SqlValue::OracleLob(blob) => SqlValue::String(format_bytea_hex(&blob.read_bytes()?)),
+        other => other,
+    };
     encode(id, value)
 }
 
@@ -170,18 +174,65 @@ pub(crate) fn lookup(db: &BicDb, tx: Option<&Transaction>, id: Uuid) -> Result<O
     }))
 }
 
+/// Explicit binary reconciliation: schema, converted rows and owner mappings
+/// share one native commit. The reader fence can advance monotonically first.
+pub(crate) fn rewrite_column(
+    db: &mut BicDb,
+    table: &str,
+    old_column: &ColumnSchema,
+    schema: &TableSchema,
+    mut records: Vec<Record>,
+    old_ids: Vec<Uuid>,
+) -> Result<()> {
+    let schema_record = prepare_schema_record(db, schema)?;
+    let tx = db.begin_transaction()?;
+    let mut session = SqlSession::new(db).with_pending_transaction(tx);
+    if is_column(old_column) {
+        for id in old_ids {
+            session
+                .tx
+                .as_mut()
+                .expect("owned transaction")
+                .delete(OWNERS, &id.to_string())?;
+        }
+    }
+    session.prepare_blob_records_in_schema(table, schema, &mut records, None)?;
+    for record in &records {
+        validate_record_local_constraints(table, schema, record, Some(&session.sql_engine()))?;
+    }
+    let mut tx = session
+        .take_pending_transaction()
+        .expect("owned transaction");
+    tx.batch_insert(table, records)?;
+    tx.insert(SCHEMA_COLLECTION, schema_record)?;
+    drop(session);
+    tx.commit()?;
+    cache_saved_schema(db, schema);
+    Ok(())
+}
+
 impl SqlSession<'_> {
     pub(crate) fn prepare_blob_records(
         &mut self,
         table: &str,
         records: &mut [Record],
         moved_from: Option<&Record>,
-    ) -> Result<()> {
+    ) -> Result<Vec<lobs::WriteEvent>> {
         let Some(schema) =
             load_schema_shared(self.db_ref(), table)?.filter(|schema| has_columns(schema))
         else {
-            return Ok(());
+            return Ok(Vec::new());
         };
+        self.prepare_blob_records_in_schema(table, &schema, records, moved_from)
+    }
+    pub(crate) fn prepare_blob_records_in_schema(
+        &mut self,
+        table: &str,
+        schema: &TableSchema,
+        records: &mut [Record],
+        moved_from: Option<&Record>,
+    ) -> Result<Vec<lobs::WriteEvent>> {
+        let mut events = Vec::new();
         let tx = self.tx.as_mut().ok_or_else(|| {
             unsupported("identity-bearing BLOB writes require a statement transaction")
         })?;
@@ -237,11 +288,31 @@ impl SqlSession<'_> {
                     if column.name.eq_ignore_ascii_case("payload") {
                         record.payload = None;
                     }
+                    events.push(lobs::WriteEvent {
+                        descriptor: Descriptor {
+                            value_id: id,
+                            collection: table.into(),
+                            column: column.name.clone(),
+                            record_id: record.id.clone(),
+                        },
+                        written_record_id: record.id.clone(),
+                        kind: lobs::WriteKind::Present(Arc::from(bytes)),
+                    });
                     Some(id)
                 };
                 if previous != next {
                     if let Some(id) = previous {
                         tx.delete(OWNERS, &id.to_string())?;
+                        events.push(lobs::WriteEvent {
+                            descriptor: Descriptor {
+                                value_id: id,
+                                collection: table.into(),
+                                column: column.name.clone(),
+                                record_id: before.as_ref().expect("previous owner").id.clone(),
+                            },
+                            written_record_id: record.id.clone(),
+                            kind: lobs::WriteKind::Replaced,
+                        });
                     }
                 }
                 if let Some(id) = next {
@@ -260,15 +331,20 @@ impl SqlSession<'_> {
                 }
             }
         }
-        Ok(())
+        Ok(events)
     }
 
-    pub(crate) fn remove_blob_owners(&mut self, table: &str, ids: &[(String, u64)]) -> Result<()> {
+    pub(crate) fn remove_blob_owners(
+        &mut self,
+        table: &str,
+        ids: &[(String, u64)],
+    ) -> Result<Vec<lobs::WriteEvent>> {
         let Some(schema) =
             load_schema_shared(self.db_ref(), table)?.filter(|schema| has_columns(schema))
         else {
-            return Ok(());
+            return Ok(Vec::new());
         };
+        let mut events = Vec::new();
         let tx = self.tx.as_mut().ok_or_else(|| {
             unsupported("identity-bearing BLOB deletes require a statement transaction")
         })?;
@@ -283,11 +359,21 @@ impl SqlSession<'_> {
                         .flatten()
                     {
                         tx.delete(OWNERS, &id.to_string())?;
+                        events.push(lobs::WriteEvent {
+                            descriptor: Descriptor {
+                                value_id: id,
+                                collection: table.into(),
+                                column: column.name.clone(),
+                                record_id: record.id.clone(),
+                            },
+                            written_record_id: record.id.clone(),
+                            kind: lobs::WriteKind::Deleted,
+                        });
                     }
                 }
             }
         }
-        Ok(())
+        Ok(events)
     }
 }
 

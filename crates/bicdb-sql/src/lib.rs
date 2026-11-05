@@ -4699,6 +4699,13 @@ fn routine_handlers_may_write(handlers: &[RoutineExceptionHandler]) -> bool {
 fn routine_declarations_may_write(declarations: &[RoutineDecl]) -> bool {
     declarations.iter().any(|declaration| match declaration {
         RoutineDecl::Cursor { query, .. } => query_may_write(query),
+        // BLOB acquisitions require a transaction-backed read history even
+        // when this routine ultimately performs no persistent mutation.
+        RoutineDecl::Variable { type_modifier, .. }
+            if oracle::lobs::is_modifier(type_modifier.as_ref()) =>
+        {
+            true
+        }
         RoutineDecl::Alias { .. } | RoutineDecl::Variable { .. } => false,
     })
 }
@@ -4745,6 +4752,10 @@ fn routine_statement_may_write(statement: &RoutineStmt) -> bool {
         | RoutineStmt::CursorForLoop { body, .. }
         | RoutineStmt::Loop { body }
         | RoutineStmt::WhileLoop { body, .. } => routine_block_may_write(body),
+        RoutineStmt::OracleBuiltin {
+            builtin: oracle::errors::Builtin::LobAppend,
+            ..
+        } => true,
         RoutineStmt::ContinueLoop
         | RoutineStmt::ExitLoop
         | RoutineStmt::Null

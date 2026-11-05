@@ -5,6 +5,7 @@
 //! uncertain decision across database recovery.
 use super::{BicDbError, Result, Transaction, TransactionId, TxState};
 use parking_lot::Mutex;
+use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 
 /// The lifecycle of the transaction which produced an execution value.
@@ -104,6 +105,13 @@ pub(super) struct ReceiptJournal {
     last_id: u64,
     writes: Vec<Weak<WriteState>>,
     prune_at: usize,
+    tags: Mutex<HashMap<(u128, u128), Vec<WriteTag>>>,
+}
+
+#[derive(Debug)]
+struct WriteTag {
+    receipt: TransactionWriteReceipt,
+    value: u64,
 }
 
 impl Default for ReceiptJournal {
@@ -112,6 +120,7 @@ impl Default for ReceiptJournal {
             last_id: 0,
             writes: Vec::new(),
             prune_at: 64,
+            tags: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -179,6 +188,87 @@ impl Transaction {
         Ok(TransactionWriteReceipt { transaction, write })
     }
 
+    /// Attach small, transaction-local derived state to an actual buffered
+    /// record write. Namespace/key are opaque integers; the tag contains no
+    /// callbacks, database pointers or mutation authority. Registration neither
+    /// writes a row nor acquires a lock. It follows the observed write even if
+    /// registered after a savepoint for an earlier write.
+    ///
+    /// Tags are not WAL data or commit certificates. They are released on a
+    /// terminal outcome and cannot be transferred between transactions. A
+    /// repeated annotation of the same key/write replaces its previous value;
+    /// earlier write versions remain available for savepoint rollback.
+    pub fn annotate_record_write(
+        &mut self,
+        collection: &str,
+        record_id: &str,
+        namespace: u128,
+        key: u128,
+        value: u64,
+    ) -> Result<TransactionWriteReceipt> {
+        let receipt = self.observe_record_write(collection, record_id)?;
+        let notes = self
+            .write_receipts
+            .as_mut()
+            .expect("registered receipt")
+            .tags
+            .get_mut();
+        let history = notes.entry((namespace, key)).or_default();
+        history.retain(|note| note.receipt.rollback_boundary().is_none());
+        if history
+            .last()
+            .is_some_and(|last| last.receipt.write_len() > receipt.write_len())
+        {
+            return Err(BicDbError::TransactionConflict(
+                "write tags must follow buffered write order".into(),
+            ));
+        }
+        if history
+            .last()
+            .is_some_and(|last| last.receipt.write_len() == receipt.write_len())
+        {
+            history.pop();
+        }
+        history.push(WriteTag {
+            receipt: receipt.clone(),
+            value,
+        });
+        Ok(receipt)
+    }
+
+    /// Return the newest surviving tag in this pending transaction. A missing
+    /// tag is not a statement about durable data; callers must still inspect
+    /// the current row and enforce their own authorization and lock contracts.
+    pub fn record_write_tag(&self, namespace: u128, key: u128) -> Result<Option<u64>> {
+        if self.state != TxState::Pending
+            || self
+                .outcome_observer
+                .get()
+                .is_some_and(|observer| *observer.outcome.lock() != TransactionOutcome::Pending)
+        {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        Ok(self.write_receipts.as_ref().and_then(|journal| {
+            journal
+                .tags
+                .lock()
+                .get(&(namespace, key))
+                .and_then(|history| {
+                    history
+                        .iter()
+                        .rev()
+                        .find(|note| note.receipt.rollback_boundary().is_none())
+                        .map(|note| note.value)
+                })
+        }))
+    }
+
+    fn clear_write_tags(&self) {
+        if let Some(journal) = self.write_receipts.as_ref() {
+            *journal.tags.lock() = HashMap::new();
+        }
+    }
+
     pub(super) fn rollback_write_receipts(&mut self, retained_write_len: usize) {
         let Some(journal) = self.write_receipts.as_mut() else {
             return;
@@ -199,6 +289,14 @@ impl Transaction {
             }
         });
         journal.prune_at = journal.writes.len().max(32).saturating_mul(2);
+        let tags = journal.tags.get_mut();
+        tags.retain(|_, history| {
+            history.retain(|note| note.receipt.rollback_boundary().is_none());
+            !history.is_empty()
+        });
+        if tags.capacity() > tags.len().max(32).saturating_mul(4) {
+            tags.shrink_to(tags.len().max(32));
+        }
     }
 
     pub(super) fn receipt_commit_started(&self, sequence: u64) {
@@ -208,12 +306,14 @@ impl Transaction {
     }
 
     pub(super) fn receipt_commit_finished(&self, sequence: u64) {
+        self.clear_write_tags();
         if let Some(observer) = self.outcome_observer.get() {
             *observer.outcome.lock() = TransactionOutcome::Committed { sequence };
         }
     }
 
     pub(super) fn receipt_recovery_required(&self, sequence: u64) {
+        self.clear_write_tags();
         // Preserve uncertainty even if the first observer is requested only
         // after a buffered commit returned an error.
         *self.observe_outcome().0.outcome.lock() =
@@ -221,6 +321,7 @@ impl Transaction {
     }
 
     pub(super) fn receipt_aborted(&self) {
+        self.clear_write_tags();
         if let Some(observer) = self.outcome_observer.get() {
             let mut outcome = observer.outcome.lock();
             *outcome = match *outcome {

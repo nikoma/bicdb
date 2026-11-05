@@ -1267,6 +1267,7 @@ fn syntax_word(value: &str, preview: bool) -> bool {
             | "FUNCTION"
             | "LANGUAGE"
             | "RETURN"
+            | "RETURNING"
             | "RETURNS"
             | "DECLARE"
             | "IF"

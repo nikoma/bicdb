@@ -4,7 +4,9 @@ This internal layer tracks the read versions of an Oracle BLOB value using
 native transaction outcome/write receipts. It is carried through
 `SqlSessionCatalogCache`, so transaction state can survive the PostgreSQL
 server's short-lived SQL sessions. It is a prerequisite for persistent locators,
-not delivered persistent-column locator execution or DBMS_LOB row mutation.
+used by the selected static acquisition and APPEND paths described in the
+[BLOB storage contract](oracle-blob-storage.md). It does not establish full LOB
+API or application qualification.
 
 ## Origin-local behavior
 
@@ -59,15 +61,11 @@ separate source results from native core/session tests. The earlier
 [ownership probe](evidence/oracle-persistent-blob-ownership-2026-11-05/README.md)
 records operation-specific copy/APPEND errors.
 
-[Identity-bearing BLOB storage](oracle-blob-storage.md) adds durable per-value
-IDs and transactional current-owner metadata as a separate layer. Stored-column
-read-version binding, rebinding an old locator's read snapshot for a later
-transaction's write, authorized APPEND, index/constraint maintenance without
-ordinary UPDATE triggers, DDL lifecycle integration and explicit legacy-column
-reconciliation remain integration work.
-The later transaction's rollback baseline must come from the current owner,
-not from an old locator's cached bytes. Cross-transaction reuse observations
-are source requirements, not implemented rebinding acceptance.
-
-This infrastructure does not change PostgreSQL bytea into locator semantics,
-implement CLOB/streaming/all DBMS_LOB APIs, or qualify a complete application.
+[Identity-bearing BLOB storage](oracle-blob-storage.md) connects selected static
+SELECT/RETURNING acquisitions and APPEND to this layer. Reusing an old snapshot
+in a later transaction preserves its append base, while rollback uses that
+transaction's current owner baseline. Native write annotations distinguish
+pending deletion from replacement even across short-lived SQL sessions. Actual
+RETURNING acquisitions read the normalized buffered row, rather than a
+provisional pre-write UUID. Broader acquisition paths, DDL lifecycle, complete
+LOB APIs, migration qualification and full application acceptance remain open.

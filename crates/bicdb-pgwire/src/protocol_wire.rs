@@ -1018,6 +1018,11 @@ pub(crate) fn encode_result_value_with_memo(
 }
 
 pub(crate) fn encode_text_result_value(value: &SqlValue, oid: i32) -> Result<Vec<u8>> {
+    if oid == 17 {
+        if let SqlValue::OracleLob(blob) = value {
+            return Ok(blob.try_to_cell()?.into_bytes());
+        }
+    }
     if let Some(element_oid) = array_element_oid(oid) {
         return Ok(postgres_array_text_result(value, element_oid)?.into_bytes());
     }
@@ -1304,7 +1309,10 @@ pub(crate) fn encode_binary_result_value(value: &SqlValue, oid: i32) -> Result<V
             SqlValue::Bool(value) => Ok(vec![u8::from(*value)]),
             _ => unsupported_binary_result(oid, value),
         },
-        17 => Ok(decode_bytea_cell(&value.to_cell())),
+        17 => match value {
+            SqlValue::OracleLob(blob) => Ok(blob.read_bytes()?.to_vec()),
+            _ => Ok(decode_bytea_cell(&value.to_cell())),
+        },
         18 => bicdb_sql::pg_internal_char_byte(value)
             .or_else(|| match value {
                 SqlValue::String(value) if value.len() == 1 => value.as_bytes().first().copied(),

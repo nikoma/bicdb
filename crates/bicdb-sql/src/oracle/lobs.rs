@@ -1,6 +1,7 @@
 //! Runtime BLOB values. Locator capabilities never cross JSON or wire boundaries.
 use super::*;
 mod history;
+mod persistent;
 pub(crate) use history::State;
 
 thread_local! { static ENABLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
@@ -188,7 +189,12 @@ pub(crate) fn append(
             "cannot perform a lob write operation inside a query",
         ));
     }
-    Arc::make_mut(destination).append_temporary(source.bytes())?;
+    let source_bytes = source.read_bytes()?;
+    if destination.stored_descriptor().is_some() {
+        *destination = Arc::new(persistent::append(session, destination, &source_bytes)?);
+    } else {
+        Arc::make_mut(destination).append_temporary(&source_bytes)?;
+    }
     session.assign_routine_value(frame, &target, SqlValue::OracleLob(destination.clone()))?;
     Ok(RoutineControl::Continue)
 }
@@ -207,6 +213,8 @@ enum Storage {
 pub struct Value {
     storage: Storage,
     bytes: Vec<u8>,
+    version: Option<history::ReadVersion>,
+    database_instance: Option<u64>,
 }
 
 impl std::fmt::Debug for Value {
@@ -231,18 +239,24 @@ impl Value {
         Self {
             storage: Storage::Empty,
             bytes: Vec::new(),
+            version: None,
+            database_instance: None,
         }
     }
     pub(crate) fn temporary(bytes: Vec<u8>) -> Self {
         Self {
             storage: Storage::Temporary,
             bytes,
+            version: None,
+            database_instance: None,
         }
     }
     pub(crate) fn stored(descriptor: super::lob_storage::Descriptor, bytes: Vec<u8>) -> Self {
         Self {
             storage: Storage::Stored(descriptor),
             bytes,
+            version: None,
+            database_instance: None,
         }
     }
     pub(crate) fn stored_descriptor(&self) -> Option<&super::lob_storage::Descriptor> {
@@ -251,11 +265,28 @@ impl Value {
             _ => None,
         }
     }
+    /// Resolve the readable snapshot, including rollback and origin outcome.
+    /// This grants no authority to mutate its stored owner.
+    pub fn read_bytes(&self) -> Result<Arc<[u8]>> {
+        match &self.version {
+            Some(version) => version.read(),
+            None => Ok(Arc::from(self.bytes.as_slice())),
+        }
+    }
+    fn refreshed(&self) -> Result<Self> {
+        let mut value = self.clone();
+        value.bytes = self.read_bytes()?.to_vec();
+        Ok(value)
+    }
     pub(crate) fn bytes(&self) -> &[u8] {
         &self.bytes
     }
     pub(crate) fn is_temporary(&self) -> bool {
         matches!(self.storage, Storage::Temporary)
+    }
+    /// Fallible binary text export for transaction-backed execution values.
+    pub fn try_to_cell(&self) -> Result<String> {
+        Ok(format_bytea_hex(&self.read_bytes()?))
     }
     pub(crate) fn to_cell(&self) -> String {
         format_bytea_hex(&self.bytes)
@@ -278,13 +309,24 @@ impl Value {
 
 pub(crate) fn coerce(value: SqlValue) -> Result<SqlValue> {
     match value {
-        SqlValue::OracleLob(ref blob) if blob.stored_descriptor().is_some() => Err(unsupported(
-            "stored BLOB locator execution requires read-version binding",
-        )),
+        SqlValue::OracleLob(ref blob)
+            if blob.stored_descriptor().is_some() && blob.version.is_none() =>
+        {
+            Err(unsupported(
+                "stored BLOB locator execution requires read-version binding",
+            ))
+        }
         SqlValue::Null | SqlValue::OracleLob(_) => Ok(value),
         _ => Err(unsupported(
             "BLOB assignment requires a qualified binary conversion",
         )),
+    }
+}
+
+pub(crate) fn resolve_export(value: SqlValue) -> Result<SqlValue> {
+    match value {
+        SqlValue::OracleLob(blob) => Ok(SqlValue::OracleLob(Arc::new(blob.refreshed()?))),
+        other => Ok(other),
     }
 }
 
@@ -320,13 +362,13 @@ pub(crate) fn scalar(name: &str, args: &[SqlValue]) -> Result<Option<SqlValue>> 
             match value {
                 SqlValue::Null => Ok(Some(SqlValue::Null)),
                 SqlValue::OracleLob(value) => {
-                    if value.stored_descriptor().is_some() {
+                    if value.stored_descriptor().is_some() && value.version.is_none() {
                         return Err(unsupported(
                             "stored BLOB locator execution requires read-version binding",
                         ));
                     }
                     Ok(Some(SqlValue::Int(if name.ends_with("getlength") {
-                        value.bytes().len() as i64
+                        value.read_bytes()?.len() as i64
                     } else {
                         i64::from(value.is_temporary())
                     })))
@@ -708,5 +750,65 @@ mod tests {
             .to_string()
             .contains("ORA-22275"));
         assert!(coerce(SqlValue::String("\\xab".into())).is_err());
+    }
+}
+
+const WRITE_TAG_NAMESPACE: u128 = u128::from_be_bytes(*b"bicdb:oracle:lob");
+#[derive(Debug)]
+pub(crate) enum WriteKind {
+    Present(Arc<[u8]>),
+    Deleted,
+    Replaced,
+}
+#[derive(Debug)]
+pub(crate) struct WriteEvent {
+    pub descriptor: super::lob_storage::Descriptor,
+    pub written_record_id: String,
+    pub kind: WriteKind,
+}
+impl SqlSession<'_> {
+    pub(crate) fn record_blob_writes(&mut self, events: Vec<WriteEvent>) -> Result<()> {
+        if events.is_empty() {
+            return Ok(());
+        }
+        let tx = self.tx.as_mut().ok_or_else(|| {
+            unsupported("BLOB observations require the pending owner transaction")
+        })?;
+        for event in events {
+            let key = history::ValueIdentity {
+                collection: event.descriptor.collection.clone(),
+                column: event.descriptor.column.clone(),
+                value_id: event.descriptor.value_id,
+            };
+            let version = match event.kind {
+                WriteKind::Present(bytes) => history::OwnerVersion::Present {
+                    record_id: event.written_record_id.clone(),
+                    bytes,
+                },
+                WriteKind::Deleted => {
+                    tx.annotate_record_write(
+                        &event.descriptor.collection,
+                        &event.written_record_id,
+                        WRITE_TAG_NAMESPACE,
+                        event.descriptor.value_id.as_u128(),
+                        1,
+                    )?;
+                    history::OwnerVersion::Deleted
+                }
+                WriteKind::Replaced => {
+                    tx.annotate_record_write(
+                        &event.descriptor.collection,
+                        &event.written_record_id,
+                        WRITE_TAG_NAMESPACE,
+                        event.descriptor.value_id.as_u128(),
+                        2,
+                    )?;
+                    history::OwnerVersion::Replaced
+                }
+            };
+            self.oracle_lobs
+                .record_write(tx, &key, &event.written_record_id, version)?;
+        }
+        Ok(())
     }
 }

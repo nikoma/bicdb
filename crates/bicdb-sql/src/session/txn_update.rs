@@ -4026,7 +4026,8 @@ impl<'db> SqlSession<'db> {
                 targets,
                 strict,
             } => {
-                let result = self.execute_routine_query(frame, query)?;
+                let mut result = self.execute_routine_query(frame, query)?;
+                self.bind_blob_result(&mut result, Some(query), false)?;
                 if *strict || frame.oracle_statement_rollback {
                     if result.rows.is_empty() {
                         return Err(SqlError::NoDataFound);
@@ -4084,7 +4085,8 @@ impl<'db> SqlSession<'db> {
                 Ok(RoutineControl::Continue)
             }
             RoutineStmt::SqlInto { statement, targets } => {
-                let result = self.execute_routine_sql(frame, statement)?;
+                let mut result = self.execute_routine_sql(frame, statement)?;
+                self.bind_blob_result(&mut result, None, true)?;
                 let found = !result.rows.is_empty();
                 assign_routine_targets_with_columns(
                     frame,
@@ -4795,6 +4797,19 @@ impl<'db> SqlSession<'db> {
         frame: &mut RoutineFrame,
         query: &Query,
     ) -> Result<SqlResult> {
+        if frame.oracle_statement_rollback
+            && self.tx.is_none()
+            && (query_has_row_locks(query)
+                || frame
+                    .assignment_types
+                    .values()
+                    .any(|schema| oracle::lobs::is_modifier(schema.type_modifier.as_ref())))
+        {
+            // A query after an authored COMMIT/ROLLBACK belongs to the next
+            // procedural unit. Its locks and BLOB acquisition must survive
+            // until that unit ends, rather than auto-committing the SELECT.
+            self.tx = Some(self.begin_session_transaction()?);
+        }
         let oracle_context = self.oracle_exception.take();
         let oracle_tokens = std::mem::take(&mut self.oracle_error_tokens);
         let _diagnostics = oracle::errors::DiagnosticScope::new(None);

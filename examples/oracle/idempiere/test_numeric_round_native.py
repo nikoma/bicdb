@@ -33,6 +33,10 @@ class NumericRoundNativeTests(unittest.TestCase):
             c.execute('SELECT ROUND(%s,2) FROM DUAL', (2**0.5,), prepare=True)
             self.assertEqual(c.fetchone(), (Decimal('1.41'),))
             self.assertEqual(c.description[0].type_code, 1700)
+            c.execute('CREATE FUNCTION "round"(n IN NUMBER,p IN NUMBER) RETURN NUMBER IS '
+                      'BEGIN RETURN 77; END;', prepare=False)
+            c.execute('SELECT "round"(1,2) FROM DUAL')
+            self.assertEqual(c.fetchone(), (77,))
 
     def test_postgres_round_keeps_explicit_numeric_coercion_and_float_overload_rejection(self):
         import psycopg

@@ -33,6 +33,7 @@
         <Bundle-Version>0.1.0</Bundle-Version>
         <Export-Package>org.bicdb.jdbc.oracle;version="0.1.0"</Export-Package>
         <Require-Bundle>org.postgresql.jdbc;bundle-version="[42.7.8,42.7.9)"</Require-Bundle>
+        <Import-Package>javax.sql.rowset.serial</Import-Package>
       </manifestEntries></archive></configuration>
     </plugin>
   </plugins></build>

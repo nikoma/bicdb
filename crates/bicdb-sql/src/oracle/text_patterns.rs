@@ -84,6 +84,21 @@ pub(crate) fn convert_text_arguments(
 
 pub(crate) fn lower_expression(expr: &mut Expr) -> Result<()> {
     match expr {
+        Expr::Like {
+            escape_char: Some(value),
+            ..
+        } if matches!(&value.value, sqlparser::ast::Value::Null)
+            || matches!(&value.value, sqlparser::ast::Value::SingleQuotedString(text) if text.chars().count() > 1) =>
+        {
+            // Validate source literals before execution, including predicates
+            // with NULL operands. Source empty strings have already become
+            // NULL here. The empty execution sentinel below remains distinct.
+            return Err(errors::database_error(
+                -1425,
+                "22025",
+                "escape character must be character string of length 1",
+            ));
+        }
         Expr::Like { escape_char, .. } if escape_char.is_none() => {
             // Oracle has no implicit escape character. The native PostgreSQL
             // evaluator uses an empty explicit escape to disable its default

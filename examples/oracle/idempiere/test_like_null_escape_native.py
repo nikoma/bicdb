@@ -1,4 +1,4 @@
-"""Explicit NULL escape is unknown; source empty-string rules stay independent."""
+"""Independent PostgreSQL strictness and source-observed Oracle escape errors."""
 import os
 import unittest
 
@@ -13,22 +13,43 @@ class NullEscapeCases:
         fixture.setUp()
         return fixture.conn
 
-    def test_null_escape_has_three_valued_constant_and_row_predicates(self):
+    def assert_invalid_oracle_escape(self, connection, query, params=None):
+        with self.assertRaises(Exception) as caught:
+            connection.execute(query, params) if params is not None else connection.execute(query)
+        self.assertEqual(caught.exception.sqlstate, '22025')
+        self.assertIn('ORA-01425', str(caught.exception))
+
+    def test_null_escape_has_profile_specific_constant_and_row_predicates(self):
         connection = self.fixture()
         query = "SELECT CASE WHEN 'abc' LIKE 'abc' ESCAPE NULL THEN 1 WHEN 'abc' NOT LIKE 'abc' ESCAPE NULL THEN 0 ELSE 2 END"
-        self.assertEqual(connection.execute(query).fetchall(), [(2,)])
+        if self.profile == 'postgres':
+            self.assertEqual(connection.execute(query).fetchall(), [(2,)])
+        else:
+            self.assert_invalid_oracle_escape(connection, query)
         connection.execute('CREATE TABLE null_escape_rows(label VARCHAR(30))')
         connection.execute("INSERT INTO null_escape_rows VALUES('abc'),('other')")
-        self.assertEqual(connection.execute('SELECT COUNT(*) FROM null_escape_rows WHERE label LIKE label ESCAPE NULL').fetchall(), [(0,)])
-        self.assertEqual(connection.execute('SELECT COUNT(*) FROM null_escape_rows WHERE label NOT LIKE label ESCAPE NULL').fetchall(), [(0,)])
+        for operator in ['LIKE', 'NOT LIKE']:
+            query = 'SELECT COUNT(*) FROM null_escape_rows WHERE label '+operator+' label ESCAPE NULL'
+            if self.profile == 'postgres':
+                self.assertEqual(connection.execute(query).fetchall(), [(0,)])
+            else:
+                self.assert_invalid_oracle_escape(connection, query)
 
     def test_bound_null_and_literal_empty_escape_keep_profile_rules(self):
         connection = self.fixture()
         query = "SELECT CASE WHEN 'abc' LIKE 'abc' ESCAPE %s THEN 1 ELSE 2 END"
-        self.assertEqual(connection.execute(query, (None,)).fetchall(), [(2,)])
+        if self.profile == 'postgres':
+            self.assertEqual(connection.execute(query, (None,)).fetchall(), [(2,)])
+        else:
+            self.assert_invalid_oracle_escape(connection, query, (None,))
         self.assertEqual(connection.execute(query, ('|',)).fetchall(), [(1,)])
         empty = "SELECT CASE WHEN 'abc' LIKE 'abc' ESCAPE '' THEN 1 ELSE 2 END"
-        self.assertEqual(connection.execute(empty).fetchall(), [(1 if self.profile == 'postgres' else 2,)])
+        if self.profile == 'postgres':
+            self.assertEqual(connection.execute(empty).fetchall(), [(1,)])
+        else:
+            self.assert_invalid_oracle_escape(connection, empty)
+            for predicate in ["NULL LIKE 'abc' ESCAPE NULL", "NULL LIKE 'abc' ESCAPE 'xx'", "'abc' LIKE NULL ESCAPE 'xx'", "'abc' LIKE 'abc' ESCAPE 'xx'"]:
+                self.assert_invalid_oracle_escape(connection, 'SELECT 1 WHERE '+predicate)
 
 
 @unittest.skipUnless(os.environ.get('BICDB_ORACLE_SERVER'), 'set BICDB_ORACLE_SERVER')

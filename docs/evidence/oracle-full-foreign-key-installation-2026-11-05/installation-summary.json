@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "phase": "foreign-keys",
+  "profile": "oracle-preview-v1",
+  "source_manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+  "migration_report_sha256": "ab3ac8a16dd94b6effa51f4a4f87e8d1bf4029d3da7c779142a595d61088eda4",
+  "native_source_commit": "2b645c97431b55e1e903ec16d9994489e3610f1a",
+  "native_binary_sha256": "52cd4ceced937a468fa9f63bdb8511560ea6c074549bbc59da8fa19f50e5fbce",
+  "relationships_installed": 3826,
+  "unique_relationships": 3826,
+  "source_validation_states": {
+    "validated": 912,
+    "not_validated": 2914
+  },
+  "parent_kinds": {
+    "P": 3823,
+    "U": 3
+  },
+  "fingerprinted_tables": 888,
+  "all_before_after_fingerprints_equal": true,
+  "preserved_definitions": {
+    "routines": 62,
+    "views": 160
+  },
+  "database_shutdown_returncode": 0,
+  "migration_completed": true,
+  "data_compared_to_source": false,
+  "orphan_inventory_qualified": false,
+  "application_qualified": false,
+  "goal_complete": false
+}

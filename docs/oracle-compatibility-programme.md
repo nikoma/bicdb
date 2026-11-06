@@ -57,6 +57,16 @@ Each phase and the final clean database shutdown exit zero. This closes that
 pristine saved-source baseline gate; original application tests/workflows,
 routine rights, exact view descriptors/values and recovery remain separate gates.
 
+The [relation-owner and host-status checkpoint](evidence/oracle-relation-owners-2026-11-06/README.md)
+adds explicit transactional namespace/table/view ownership mapping to a registered
+non-superuser role. Independent native PostgreSQL/preview controls preserve
+quoted namespace identity, rollback and unrelated-data isolation. Native role
+administration and host-status commands retain their client-interface meaning;
+bootstrap superuser catalog flags reflect existing authority. SQL, authorization,
+protocol and migration-tool suites pass within their stated scope. Mapping the
+complete pristine application target, its original test rerun, routine rights
+and the remaining programme gates are still separate work.
+
 The [full-FK foundation checkpoint](evidence/idempiere-full-fk-foundation-2026-11-05/README.md)
 passes all 89 selected original application tests, with zero failures/errors/skips,
 verified Oracle-provider/PostgreSQL-driver origins and clean JVM/database exits.

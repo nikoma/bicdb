@@ -1,0 +1,62 @@
+{
+  "format": 1,
+  "status": "native_relation_owner_mapping_and_host_status_verified",
+  "engine_source_commit": "51cfb588721113d828e787be0648669b5e441c64",
+  "tool_source_commit": "51cfb588721113d828e787be0648669b5e441c64",
+  "native_binary_sha256": "9dc481dca8f802e21e01e0a7d3073bbb112b6024a9989c4b67b6bc938fc148d8",
+  "checks": {
+    "sql_library": {
+      "passed": 724,
+      "ignored": 4
+    },
+    "ownership_authorization": {
+      "passed": 29
+    },
+    "pgwire_protocol": {
+      "passed": 183
+    },
+    "oracle_hr_protocol": {
+      "passed": 48
+    },
+    "migration_tools": {
+      "total": 195,
+      "passed": 191,
+      "skipped": 4
+    },
+    "focused_ownership_subset": {
+      "passed": 13
+    },
+    "focused_host_status_subset": {
+      "passed": 4
+    }
+  },
+  "skipped_external_reference_tests": [
+    "test_quoted_owner_and_catalog_shadow_survive_default_schema_change (test_export_owner_identity_oracle.ExportOwnerIdentityOracleTests.test_quoted_owner_and_catalog_shadow_survive_default_schema_change)",
+    "test_compiled_package_type_bodies_and_enabled_disabled_triggers (test_export_stored_source_oracle.StoredSourceOracleTests.test_compiled_package_type_bodies_and_enabled_disabled_triggers)",
+    "test_binary_lobs_character_units_and_precise_values_round_trip (test_replay_oracle_reference.OracleReplayIntegrationTests.test_binary_lobs_character_units_and_precise_values_round_trip)",
+    "test_saved_orphans_are_replayed_and_removed (test_replay_oracle_reference.OracleReplayIntegrationTests.test_saved_orphans_are_replayed_and_removed)"
+  ],
+  "negative_bootstrap_catalog_control": {
+    "engine_source_commit": "1596e7b441e5317ca6400984a8800184abd2a4a7",
+    "binary_sha256": "4b6034824a1ee79f4073376f92dee79113a7a221e3daa8300638d7682796fc54",
+    "expected_assertion_failures": 2,
+    "unexpected_errors": 0
+  },
+  "resource_observation": {
+    "compiler_jobs": 1,
+    "incremental_compilation": false,
+    "startup_headroom_gib": 20.5,
+    "minimum_headroom_gib": 14.5,
+    "peak_group_rss_bytes": 5610729472,
+    "minimum_observed_available_bytes": 16922071040,
+    "maximum_observed_memory_full_avg10": 0.18
+  },
+  "application_after_mapping_qualified": false,
+  "routine_ownership_qualified": false,
+  "sequence_ownership_qualified": false,
+  "type_ownership_qualified": false,
+  "role_privilege_closure_qualified": false,
+  "production_qualified": false,
+  "oracle_conformance_claimed": false,
+  "goal_complete": false
+}

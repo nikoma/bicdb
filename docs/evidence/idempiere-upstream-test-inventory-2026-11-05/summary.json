@@ -1,0 +1,24 @@
+{
+  "format": 1,
+  "jar_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+  "class_prefix": "org.idempiere.test.",
+  "examined_classes": 342,
+  "classes_with_direct_tests": 155,
+  "direct_test_methods": 1441,
+  "source_code_modified": false,
+  "application_executed": false,
+  "execution_plan_qualified": false,
+  "runtime_conditions_evaluated": false,
+  "application_qualified": false,
+  "parser_tests_passed": 6,
+  "foundation_classes_checked": {
+    "org.idempiere.test.base.InvoiceTest": 2,
+    "org.idempiere.test.model.InvoiceCustomerTest": 9,
+    "org.idempiere.test.base.InOutTest": 5,
+    "org.idempiere.test.base.POTest": 53,
+    "org.idempiere.test.base.POInsertSQLTest": 20
+  },
+  "foundation_direct_methods": 89,
+  "source_report_sha256": "09c9f36d12af55f2de1098474e8cab10588f6b0715cf137428cf2f436460e271",
+  "upstream_source_commit": "da0730aec42f3e9f5f671e81a70ff71e24d5e534"
+}

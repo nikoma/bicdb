@@ -1,0 +1,1552 @@
+[
+  {
+    "name": "org.idempiere.test.acct.AccountingSchemaValidRangeTest",
+    "class_sha256": "721aabe6419fee68b3f30ee6260f39c7def75affe95fc082dd075bfd8aeb04bb",
+    "direct_test_methods": 2,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 2
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.adwindow.GridFieldTest",
+    "class_sha256": "4bbca116da9a4e48b600b2e77aa8e00fcaa1d88281cc394f5cb0431870488aa7",
+    "direct_test_methods": 26,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 26
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.adwindow.GridFieldVOTest",
+    "class_sha256": "20d76dcac845e2a4b0a4c674ae0d2e9698fa6cc5990fc32fc2001c9eafe00865",
+    "direct_test_methods": 5,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 5
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.adwindow.GridTabTest",
+    "class_sha256": "a58390d213e0d4adbe8240f7d1af81055ef20d535494f208726efd635edb96ae",
+    "direct_test_methods": 67,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 67
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.adwindow.GridTabVOTest",
+    "class_sha256": "d80ad17a1063191a2624edebb54f45315e6c57559a665f759cc13282a509707b",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.adwindow.GridTableTest",
+    "class_sha256": "928a911d97883d843d97eca0b4b2f6bd8c65814f21446f4003b70fec1de3fd35",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.adwindow.GridWindowTest",
+    "class_sha256": "66e13c7fc1920db3105f82f12f79dbdc503977805781d7fc0f547c3f788742cf",
+    "direct_test_methods": 12,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 12
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.AcessSQLParserTest",
+    "class_sha256": "f52517cb4d901b526d8d9fb418d513abf030109092c0dc824fc8ce786e6e9606",
+    "direct_test_methods": 15,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 15
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.AmtInWordsTest",
+    "class_sha256": "07c557f6dc12052b36d95268734ad3a3f18eb35ed41c690408b6f82df91f7d5d",
+    "direct_test_methods": 2,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 2
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.AttachmentProviderTest",
+    "class_sha256": "665bbf362485918122a2bd609959bdc387906cdcc348d51538b5b846dc36e516",
+    "direct_test_methods": 3,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 3
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.CLoggerTest",
+    "class_sha256": "a1c97eb7829c2447d2c98d2d4ac8c179767745a532f13781560d502d80293bd1",
+    "direct_test_methods": 2,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 2
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.Convert_PostgreSQLTest",
+    "class_sha256": "ccd005567e55d43cc871f5424fd5ff4ecb80e159345c84eb4543f28d858951ad",
+    "direct_test_methods": 25,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 25
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.DBTest",
+    "class_sha256": "bca4e4b810b98792095ef1feba339b7e5d6ad2bb4004eb6aa9baee5478751cff",
+    "direct_test_methods": 55,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 55
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.DocumentSearchTest",
+    "class_sha256": "e752319a71fb2c5312ae5b5e1d0c91e00731d25e7a44800e0075e96bb3575184",
+    "direct_test_methods": 2,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 2
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.DocumentStatusTest",
+    "class_sha256": "89f30acd0749a24bb3c4a89db41e1442a782266e69154027fee7ab2c91259c65",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.DynamicServiceLocatorTest",
+    "class_sha256": "1b3245886d0067457d7add62a1b0ed9f1e36c5599bf4edec3f3709bd8935b6cb",
+    "direct_test_methods": 6,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 6
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.EmailFormatValidatorTest",
+    "class_sha256": "d5dda5774d8e2d490cc275ed18f6abbec99c4ab805e357bdf0f4e5388c213c66",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.params.ParameterizedTest": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.EnvTest",
+    "class_sha256": "80530b24f322a1f6fe4d162db9040c42348dbf90b94cf6bc0780234781f78819",
+    "direct_test_methods": 70,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 70
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.GenericPaymentExportTest",
+    "class_sha256": "45d362f83129d01dafdbab5ad3b4bc038f2d029f8a7f10c5d155096ba0c264e9",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.GenericZoomProviderTest",
+    "class_sha256": "56958043b08cd4e9ccc0b031392646696d318ef89665241f872b5c451b49b3a7",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.GetBOMFunctionsTest",
+    "class_sha256": "a4feff3fe5762baa1930c6401f1547d722438cc28941712ee2ec93293fb2610c",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.InOutTest",
+    "class_sha256": "111c1a6b6756db533b00b52267fd65b259807c500585ed0001c988136474f533",
+    "direct_test_methods": 5,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 5
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.InitialClientSetupTest",
+    "class_sha256": "d5eaaeba16eebe8fa98c46a2b5c1cd3c9432cd6821b89f9a22c24fe6509308e0",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.InvoiceTest",
+    "class_sha256": "b0ee17274501f2e3d1a9b755fe1e38aa76145a874d9a35110633ba8cf1e1bdc9",
+    "direct_test_methods": 2,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 2
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.JfreeChartBuilderTest",
+    "class_sha256": "64d4502aa264a8e641bf064067848960e184588d9d59044c5bf3e838b60de433",
+    "direct_test_methods": 9,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 9
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.JsonFieldTest",
+    "class_sha256": "4daf618598255ab5598c8a6dc113ede9c56d9c683a1a4c3448177acb4dd8b8f1",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.KeyNamePairTest",
+    "class_sha256": "8d69b672a091512ae3bcab41f21f17ba4e2bbd49ab834ead97820fb98721a290",
+    "direct_test_methods": 6,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 6
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.LogicExpressionTest",
+    "class_sha256": "7afe7c91507e2330153dd23f5b879c04e8597de4df8b816ff9dd7876cda2e51e",
+    "direct_test_methods": 23,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 23
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.MColumnTest",
+    "class_sha256": "fb22e5a6c1175077d10ae051abe2091c480f453fc515ab1de9fdff004006eccf",
+    "direct_test_methods": 49,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 49
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.MDocumentStatusTest",
+    "class_sha256": "56703ce386c8fdd4b59ed2b630e42e9be300c7d7485dbea860877a895de1908b",
+    "direct_test_methods": 2,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 2
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.MFieldTest",
+    "class_sha256": "410e00a7715d2b6536686f43a8128f99c8476186e5b786752ec88c6ff3a1d096",
+    "direct_test_methods": 14,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 14
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.MMeasureCalcTest",
+    "class_sha256": "4fd451aaa3bb192ad6e9c7a414beca6b3f52edddf14c29d007054ecd18c04da3",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.MProcessTest",
+    "class_sha256": "de25e92d00ef5bacfa2d68b963f0e5047dcc9b472256bd9018203b61804e7837",
+    "direct_test_methods": 22,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 22
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.MQueryTest",
+    "class_sha256": "ffeb1d88ed7b8e201b8ae54a3d4882dfc337f77a266e810eb27490ea11c7f3b3",
+    "direct_test_methods": 18,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 18
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.MRelationTypeTest",
+    "class_sha256": "7512b56af95ca86804dab6ad3d6c6386cfc352851ecace8f08ad19af639541e5",
+    "direct_test_methods": 2,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 2
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.MStorageTest",
+    "class_sha256": "31806485835c1a5a2396900cf55dac1e834fc61514b733565b5649c9aef1e39f",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.MTabTest",
+    "class_sha256": "4831b03ca3b203068139b1edc553f8a1858266cc96d66a95f4c192b1a7456136",
+    "direct_test_methods": 14,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 14
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.MTableTest",
+    "class_sha256": "b38bdfcfe44f1af690ae9feb31368d9b6c982415de60b251269c136048f78ad9",
+    "direct_test_methods": 38,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 38
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.MWindowTest",
+    "class_sha256": "5b64e9731ed17f82d15f1f3d4dbdf122d7a99f05d38bd607863511187e0dec1e",
+    "direct_test_methods": 16,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 16
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.M_ElementTest",
+    "class_sha256": "e2cb545bf635659fdaf1a5418eefe2cbd3e3f8ad632ea52ba2f828e4ca9b1fad",
+    "direct_test_methods": 16,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 16
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.MappedByNameFactoryTest",
+    "class_sha256": "24314e58fad02915084349921cc6ae353a733abb230b9b3a338842f9bf7bb5d6",
+    "direct_test_methods": 10,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 10
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.MappedProcessFactoryTest",
+    "class_sha256": "5b5989c7fdb65bcc1322c626caf640ecc0943fac80081969123437332b08d8b5",
+    "direct_test_methods": 2,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 2
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.MarkdownTest",
+    "class_sha256": "f3987d3eadf6f7affddd41dc0d6956b23fe244183bdc18cc6db5bbfa9707b94a",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.MatchInv2ndAcctSchemaTest",
+    "class_sha256": "23d4cffde974b0c15fe41dde457ac888bfd69ed24b12a73616e51ef6060ad370",
+    "direct_test_methods": 14,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 14
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.MatchInvTest",
+    "class_sha256": "3411fe20a243dbf58f9363a6e5629832796c4298ee53b75f52e421f094ebf4ff",
+    "direct_test_methods": 8,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 8
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.MatchInvTestIsolated",
+    "class_sha256": "df03a0d81f4ed32cd4d6ec5656c28f0584404801b60bb9b540438e907c7f1b3b",
+    "direct_test_methods": 4,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 4
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.MatchPOTest",
+    "class_sha256": "d0a2a84937d49b82e8ef40b1da77d312ce967559eaaa781e79f8a072cd4e5898",
+    "direct_test_methods": 10,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 10
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.ModelInterfaceGeneratorTest",
+    "class_sha256": "17d053ba4697e0b80001bf46315a5a8f8751089c4404aef5ac635fc2231469af",
+    "direct_test_methods": 2,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 2
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.MsgTest",
+    "class_sha256": "44ea235bdaff94dddb2440a27dfd611ab382e98fa0eb09e808c3e24b6fcc8374",
+    "direct_test_methods": 17,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 17
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.POCrossTenantTest",
+    "class_sha256": "8a58f9ba309fdb2fe1da84429d74f32d5f9a9de7757c9eb07402b3cb66123367",
+    "direct_test_methods": 11,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 11
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.POInfoTest",
+    "class_sha256": "2a7d4c230aca1ea33d1d0d7b600541e9dcc6c0425370875af07de04d4fb4696a",
+    "direct_test_methods": 49,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 49
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.POInsertSQLTest",
+    "class_sha256": "1bc967b8d4a797125b71823598ebd43473ea2d71aceb7a1a2cf3f3c8bf34b835",
+    "direct_test_methods": 20,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 20
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.POTableAttributeTest",
+    "class_sha256": "fdfa8da6343c2406e64ee78f3c08d8ffbbd3be074a69057fd85634432e0ba04b",
+    "direct_test_methods": 3,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 3
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.POTest",
+    "class_sha256": "e900ecf326cb96ee2addbe01c1248b032b1432acfa07677e9c1c3953edec00b6",
+    "direct_test_methods": 53,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 53
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.PasswordResetTest",
+    "class_sha256": "04e00fdb168f0a0e400d35957c1c25702940e728da5f6fe5c1925d5da6dc164b",
+    "direct_test_methods": 8,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 8
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.QueryTest",
+    "class_sha256": "e598a83319688491187a2a8542046451d982b0483aa5adbb7ffef0768fa3b1bb",
+    "direct_test_methods": 20,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 20
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.ReportTest",
+    "class_sha256": "c4198ca9491782bb19d6bbf4db4a3b77e4dd9902db421e32518b253660367b22",
+    "direct_test_methods": 5,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 5
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.SecureInterfaceTest",
+    "class_sha256": "fd6f007855be959cea87a4cd4ed5f2b3e41ab74b951c7df109c09244c1ff1768",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.TimeUtilTest",
+    "class_sha256": "585472ae9975b5020728c7d21a64ceec577eef08f24b774e7c6bc61a0cd9f896",
+    "direct_test_methods": 4,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 4
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.TrxTest",
+    "class_sha256": "4e88f1a9aacaf65f25d2990d1d0344ba1e22464f28059e1c7dcd22b7692e3d17",
+    "direct_test_methods": 18,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 18
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.UtilTest",
+    "class_sha256": "626a516f7f4ef8bcefa6a97c81f55d76b2e34316f4492e9dd97698a63dcb0595",
+    "direct_test_methods": 21,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 21
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.base.ValueNamePairTest",
+    "class_sha256": "e8e10be5b3bca4de97f1c2ed70cbc2bd8f03198cf3a627c81b896784c1cda0cc",
+    "direct_test_methods": 7,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 7
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.commission.CommissionRunTest",
+    "class_sha256": "be98839f7ab16c1f45922663a32a426e8c4a616130a4820bc933ce4c00dcd9dc",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.costing.AveragePOCostingTest",
+    "class_sha256": "f1623ea12041808a747eac64770199b2b186971198a9fe13f896f34ccfa1d544",
+    "direct_test_methods": 33,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 33
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.costing.BackDateAveragePOCostingTest",
+    "class_sha256": "a94604be4efa8806d9cca8810a66fa47df92764817357d0ca9d901794badfab1",
+    "direct_test_methods": 96,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 96
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.costing.NonStockedExpTypeAvgPOCostingTest",
+    "class_sha256": "d30744f8c74880e77f8a3c16d5ce2d3cf576c0f559ff1f6906cc8987cbda8abc",
+    "direct_test_methods": 5,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 5
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.costing.NonStockedExpTypeStdCostingTest",
+    "class_sha256": "3d6ebad993d66f485a9e798c636a32e6ac6d5e1353013c1d7d5ce0632a28b23e",
+    "direct_test_methods": 5,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 5
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.dashboard.FavouriteWidgetTest",
+    "class_sha256": "2cef8347d196728fbcd6f60426ad6af21f503bffbd3aac6a999f6edeeeafeee7",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.dunning.DunningRunTest",
+    "class_sha256": "c44827b384d47306fb316489dc2e4a74e369b5d31a3506d345183f6471bce56d",
+    "direct_test_methods": 4,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 4
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.event.EventDelegateAnnotationTest",
+    "class_sha256": "2cd55c1d7da7d2b4bc5908287424fd3364ee3cc6665499018750cb8dc7ba9d73",
+    "direct_test_methods": 3,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 3
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.event.EventHandlerTest",
+    "class_sha256": "da84e0e99e287e6a3e7278f47f9136f1f4ded58989abde1a7a4ba259fbca406b",
+    "direct_test_methods": 8,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 8
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.form.AllocationFormTest",
+    "class_sha256": "cb06412a65bad36a72b0e827525b68366ae4a398f866f1a0cb2446c76981880c",
+    "direct_test_methods": 2,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 2
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.form.ArchiveViewerFormTest",
+    "class_sha256": "493c1e01c651094a2cd732d0301b0e869ce2cca31afb6bba4d5b1e2e62a5285a",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.form.BOMDropFormTest",
+    "class_sha256": "55ee61a9c9a5d9fea117591b5ef7206329539288d80c1dd67e0fb59b00d73b72",
+    "direct_test_methods": 3,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 3
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.form.BOMViewerFormTest",
+    "class_sha256": "b014029c40786094058ed0164fa8380dba369c5a114d0d54d39d7053a0217dfb",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.form.ChargeFormTest",
+    "class_sha256": "1429cc5233aa5e4ecc89e890cdec2596bcc9a23bb5cfd15eebf9ff6a891b464e",
+    "direct_test_methods": 2,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 2
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.form.CreateFromDepositBatchFormTest",
+    "class_sha256": "f6475fe5dc66b070711347cd6c6d18954f5fce3ed8fdb16c9a04695c13bab0a3",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.form.CreateFromInvoiceFormTest",
+    "class_sha256": "320c7eabf095d270f40e9880b8a1140ff256d6df7fb704a2eab61af7f5be0263",
+    "direct_test_methods": 2,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 2
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.form.CreateFromPackageShipmentFormTest",
+    "class_sha256": "26db8f3e290d7479f6d19de5461571c4acd1828e303158ef2240c89e88fbe402",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.form.CreateFromRMAFormTest",
+    "class_sha256": "6cf386d8734385d39b47fb129af0d190ba3b668e2ba96c4f2ae9463a1483663f",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.form.CreateFromShipmentFormTest",
+    "class_sha256": "88b76bf30d6c6e2016cdbcd0cef9890260c4d29a77203e4d13275d11b3e40039",
+    "direct_test_methods": 3,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 3
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.form.CreateFromStatementFormTest",
+    "class_sha256": "db9552c2f65b8a124be0b875ce9e2fae8966d1c227675e9a6de9f4457eb44954",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.form.FactReconcileFormTest",
+    "class_sha256": "5e69635b10d030dbe7d1528c5368185f46b0ce9782be82bb1544ecca35444dd6",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.form.MatchFormTest",
+    "class_sha256": "b07a13c270a468ad2634e3a1093e241826aa1192f08d2de8422d2fcda6145343",
+    "direct_test_methods": 3,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 3
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.form.MergeFormTest",
+    "class_sha256": "5453a9d220c1a4cde882e437ebc79e6f7958638784b07652ff16c775e9f95c58",
+    "direct_test_methods": 3,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 3
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.form.PaySelectFormTest",
+    "class_sha256": "e6f2544d390c000959ce9bff3d5b9d2ccaeb39ac885fc1ae2a8bb590b4e6f5b3",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.form.PaymentFormTest",
+    "class_sha256": "e1ab65148149bd2d4eb28a61c508e4324a2fac7412f163a5bb2399edeceb82cb",
+    "direct_test_methods": 4,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 4
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.jasper.PrintWithinProcess",
+    "class_sha256": "d21a4859345c0d428f43cec8f4afab95a3031a3f46575e768c5c414c2fc6f70f",
+    "direct_test_methods": 4,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 4
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.Allocation2ndAcctSchemaTest",
+    "class_sha256": "642a71ddfaca8a881754f4ff96aaceeb19aaf7b46873587aba8ebd0b0109042e",
+    "direct_test_methods": 21,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 21
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.AllocationTest",
+    "class_sha256": "1eeadce153e02ca32772f03ffdccdf30dc39fa1c5df43466be7e21acbdce05be",
+    "direct_test_methods": 19,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 19
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.AnnotationColumnCalloutFactoryTest",
+    "class_sha256": "40f7ae106ccb0cb4d4e43b76447c923b34e74aabe9acb028e43244f604283335",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.BankStatementTest",
+    "class_sha256": "04ed2970104135a10a6851768e121eb97f8bf49885417287b312673aa167b2e7",
+    "direct_test_methods": 3,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 3
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.CalloutEngineTest",
+    "class_sha256": "03f889378ae34e5c7c47421d187fc382662f1283254219aaa1e6ebae884d81d0",
+    "direct_test_methods": 10,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 10
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.CalloutTest",
+    "class_sha256": "5676c323cc42424a26cba1e5c6012a9b67ae9d09f1ec652195fa148e64bc89a4",
+    "direct_test_methods": 2,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 2
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.FixedAssetsTest",
+    "class_sha256": "ba149b9354522dcdf171d3205e2467638167bcb0933a02ed11c33f85dce02e39",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.FormTest",
+    "class_sha256": "52d5b8d0e9358e33c9937b568c2b8dd0b5eced5f723acffbef86462989d471cb",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.InventoryLineUOMTest",
+    "class_sha256": "d715bc9cf321e342820bc6f46df99f7b978e8f50c8c940f9b07f88a2a34978a9",
+    "direct_test_methods": 7,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 7
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.InventoryMoveTest",
+    "class_sha256": "6c39d689796b4ad2ae960d3360db8144ee8da21a62282080b27d8319036a2bfa",
+    "direct_test_methods": 4,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 4
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.InventoryTest",
+    "class_sha256": "473fb39cce5ab9cc63d68ccdb617de95b4038ef6e841f46c71ef8239f314395b",
+    "direct_test_methods": 5,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 5
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.InventoryTestIsolated",
+    "class_sha256": "5f185089728d523a4fb13fde4625892ff0964b475f17a441003128734dd83713",
+    "direct_test_methods": 2,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 2
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.InvoiceCustomerTest",
+    "class_sha256": "2135b4fa035587eb76f2cb2bd829acafa843b5db0eb2c1962562246acebee991",
+    "direct_test_methods": 9,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 9
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MArchiveTest",
+    "class_sha256": "9799ad7e08fbf9cbf3b7fef9d58e607e622c5916ad1f44fda3a0787be86c0c03",
+    "direct_test_methods": 5,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 5
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MAttachmentFileTest",
+    "class_sha256": "f48b14b6d12edc08f2ef330ac4729d98b60794e854f179e0821a4c0d542fdd0b",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MAttributeInstanceLineTest",
+    "class_sha256": "ad4a7d14feff0478199fa45f03448a53dbc2ecd9bd249265a574cf789be015a2",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MAttributeInstanceTest",
+    "class_sha256": "5b5775757504b850e204ffe7f846bdd5d5aec5955b6e414c03d23cb2dce2a50e",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MAttributeSetTest",
+    "class_sha256": "f4a4b4ba4349bc862fdac7ad6a1912b8b3707871207cbf4d6d6fa3f76ad57a56",
+    "direct_test_methods": 5,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 5
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MBankTransferTest",
+    "class_sha256": "5cce2c13711c0a81446e782d2bf3cefcc88b9c513f6ce0202367c02c136442d3",
+    "direct_test_methods": 3,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 3
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MClientTest",
+    "class_sha256": "7f20b2523783ec39de02eaa4ed487d5e408a8b3986a8aebdd5a7929255bd41df",
+    "direct_test_methods": 26,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 26
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MDiscountSchemaTest",
+    "class_sha256": "91e39b4eb79e6de9c00a64fb4fc33a9501b7a43e216e250c0572cb42efe56f2b",
+    "direct_test_methods": 2,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 2
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MFieldCustomizationTest",
+    "class_sha256": "74e09fbeae4669c404ab0628c28f4e5fef53506b2f98ec2ea8999532c76a44af",
+    "direct_test_methods": 4,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 4
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MImageTest",
+    "class_sha256": "45c008fdc1ce201c96c301c74406271fb8be6a2f38fcac227f85017f4fb2a1a5",
+    "direct_test_methods": 3,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 3
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MInfoWindowTest",
+    "class_sha256": "d7d592453f5903a5fd8a9c9f645d1428bd94a16cbf7564cbbf40f02c79bea6e6",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MJournalLineASITest",
+    "class_sha256": "91b176a8bb4a3ac5c1270f650ff85e5f5892ed5cdcc58a746ae6dab671839ac2",
+    "direct_test_methods": 3,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 3
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MOrgTest",
+    "class_sha256": "7ee14c5fb9cd3dcc230ac2a22e4b0f18fdcf9f15251ac9f2de48d8aefec0dc00",
+    "direct_test_methods": 14,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 14
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MPrintFormatTest",
+    "class_sha256": "1e273800a70de3825962d8885289307862b9195955624d316ca3e187436af278",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MProductTest",
+    "class_sha256": "305790426a3d579b75d4cd0e8b2d5d6d2d31b68eb027cfe1b971ba7b5aa6aec8",
+    "direct_test_methods": 3,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 3
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MProjectTypeTest",
+    "class_sha256": "48af8b53645497f3d0e22a6c7b62dae014363f75eeed8982e7e531e54963e5c8",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MRequestTest",
+    "class_sha256": "28e009d7c4f18004f66628608815339e2682f3a16ccddac849bd3344f27a7f4d",
+    "direct_test_methods": 2,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 2
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MRoleMockedTest",
+    "class_sha256": "8fbc166eb71a6255a6cd36fc9f804ef8bc88ceed399a7e4c31cb6179bba58f95",
+    "direct_test_methods": 4,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 4
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MRoleTest",
+    "class_sha256": "cba2bbd7d6a7d6bdc736708424998e9398a863d7159fa31d0dfe2bf5b6c955e3",
+    "direct_test_methods": 67,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 67
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MSchedulerTest",
+    "class_sha256": "26cecb2e860eb93c82db5ecb1b780136c452cf2595ac14a488daf768601eae9b",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MSequenceTest",
+    "class_sha256": "15f434b616555002d848ea14287c55b76e2e7f64f0c4958cee567c58c4249b4b",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MStorageOnHandTest",
+    "class_sha256": "0922a7d3d49eba56fd4091844152c30494dbb4e6825cdb676ea24108d85883e2",
+    "direct_test_methods": 2,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 2
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MStorageOnHandTestIsolated",
+    "class_sha256": "6109375fa7d38fb2fa84b6e22ca3f0b8b98ecd260ef4a69910ecf8481b5552be",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MTaxTest",
+    "class_sha256": "15c7cddbfe94cd2b8207e9f58f08453fbdf3750ce4720da0a45f8fb3b3d65027",
+    "direct_test_methods": 4,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 4
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MTestTest",
+    "class_sha256": "30a676e86a57e4670183ca8c5588d198babe88277c1f3551c2b46bc8ae9e9fdb",
+    "direct_test_methods": 3,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 3
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MTestUUTest",
+    "class_sha256": "90c269e542053c28f829d2e7b324d49f5435f415faea7ea10058989c11a4262a",
+    "direct_test_methods": 4,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 4
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MToolBarButtonRestrictTest",
+    "class_sha256": "803a450a6265c8516c63c2583965deff6a810d2b311374b1da966ac261512a5a",
+    "direct_test_methods": 2,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 2
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MUOMConversionTest",
+    "class_sha256": "8c606268a20bce512c7b47b4ffae081018d79e262fdd6d5903a85d4f34a606c9",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MUserTest",
+    "class_sha256": "3b4694585a429305b07374b6ddb7e59381d7ec1eda15c8df71956e7600192716",
+    "direct_test_methods": 35,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 35
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MappedColumnCalloutFactoryTest",
+    "class_sha256": "15543324a34e464ebea59d66ed47202cbb4dd6e87e6d3349ab0a082819980a51",
+    "direct_test_methods": 2,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 2
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MappedDocumentFactoryTest",
+    "class_sha256": "bf07178c5541584269878e2e979ef715965c226ea254e8d788ed2a2d153cd6ae",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MappedModelFactoryTest",
+    "class_sha256": "cf6c958326d4755b3e7d2b30af1b411e05bb0307e89c22a49683e3029f78b9e2",
+    "direct_test_methods": 3,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 3
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.MatchingTest",
+    "class_sha256": "26c0b9841fa4a6cc486eee9e5e28aaf7290f441e740f24eb09f7e672440463b1",
+    "direct_test_methods": 3,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 3
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.ModelClassMappingTest",
+    "class_sha256": "43426a94b2d0bb9986c073e059d7db511c8bda3db5bc53ffb296e22f681cfbcd",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.ModelForeignKeyTest",
+    "class_sha256": "a35b5d9698babc57bb204bc3b315624a64d819b6b6f6ddec0d033dbede942d37",
+    "direct_test_methods": 5,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 5
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.ModelValidationEngineTest",
+    "class_sha256": "6c2bb7fb2dd333bf2a351e8ab9eeede66405eda858f0aa6cbffd96eaa256e897",
+    "direct_test_methods": 3,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 3
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.PaymentTest",
+    "class_sha256": "5de33050268464a2557c4da7cabbd6c82986675f131134fdc4ae7fc6a7ff57df",
+    "direct_test_methods": 4,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 4
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.ProcessTest",
+    "class_sha256": "367f91b39769db052e06b6a2e32853afa0a8e0f79b2a378d78f4f5ceca0d4c2d",
+    "direct_test_methods": 5,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 5
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.ProductionTest",
+    "class_sha256": "de647b09810f9a009d0e1685872255bbb78e5de1830fbe602d7e56291802d002",
+    "direct_test_methods": 4,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 4
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.ProductionTestIsolated",
+    "class_sha256": "f0a358584f45f874911a623cc24c64eddad16e13181c606b85f8c46828c97e02",
+    "direct_test_methods": 5,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 5
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.PurchaseOrderTest",
+    "class_sha256": "e066daad063fc93e7aeb6c5cf41220fe131263cb84d5f223a1db769f80be1087",
+    "direct_test_methods": 16,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 16
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.RequisitionTest",
+    "class_sha256": "54915f982d11b4e0d9feb8d4824ad09e17cfb5b4838f11ca2f31522f6f657b44",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.model.SalesOrderTest",
+    "class_sha256": "977b44a644d08c4e73957a2e5846285042345eaf51352b26c41fc5ed3e43f471",
+    "direct_test_methods": 22,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 22
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.performance.CacheTest",
+    "class_sha256": "02717bafc9385a7b2e6ea53889b626474f01deca92e0e05774a914d621173bf2",
+    "direct_test_methods": 21,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 21
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.print.ServerReportCtlTest",
+    "class_sha256": "5b83dd627ad044d777e36dd32abcff1da97958829ca0fef5e4d5b1b48debf54f",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.process.ProjectIssueTest",
+    "class_sha256": "68975a572669b7640c8d121561e5d9263c21c3ee0d9442f27866bf440fb3eb08",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.tracking.AuditTraceContextTest",
+    "class_sha256": "f75266b5b502bfae744baa4d3ddda68ea86956ee3abf5c3caf741309e0511b16",
+    "direct_test_methods": 3,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 3
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.ui.FindWindowRelatedSearchTest",
+    "class_sha256": "2454d6432de47ee6fd20ad9956542fa451292746c78a4c0ca67b5f5a9e51285a",
+    "direct_test_methods": 15,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 15
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.ui.InfoGeneralPanelTest",
+    "class_sha256": "b4f812f665a42cfe3106b81d1b0deccc9c066001b9548ecbb5cb079e8b46d6e5",
+    "direct_test_methods": 5,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 5
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.ui.InfoWindowTest",
+    "class_sha256": "0c56e16966a1eafee7259feb05b983f9e58bf327649cf8cffcbd105cc80fdff0",
+    "direct_test_methods": 4,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 4
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.ui.ReportViewerContentRendererFactoryTest",
+    "class_sha256": "509a0bf541e7c3e6becee9aa7ff2acf8af3fa137613e0fcc223814aef5bce846",
+    "direct_test_methods": 10,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 10
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.ui.ServerPushEndPointTest",
+    "class_sha256": "a3fb37e6df2a5c4d5046da49cff8976d328ef2939a88c730dae3e942c9ead6ac",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.ui.WProcessParameterFormTest",
+    "class_sha256": "df14b7e046c00ce5147c90d4ecea9ff995062102222ce6b1aa513bd1c3dcb013",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  },
+  {
+    "name": "org.idempiere.test.workflow.WFMaterialReceiptTest",
+    "class_sha256": "2ece3a108c74b10b8d0ecfa0c4f9868aa5ee09e9fadaa14e437e4cb53f7c1955",
+    "direct_test_methods": 1,
+    "annotation_kinds": {
+      "org.junit.jupiter.api.Test": 1
+    },
+    "abstract": false,
+    "disabled_annotation": false
+  }
+]

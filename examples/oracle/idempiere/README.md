@@ -349,3 +349,7 @@ records all 3,826 relationships installed on an exercised native target, with
 read-only orphan inventory found zero unmatched references and matched all 3,826
 counts against the independent Oracle replay. Pristine source value equality and
 full application acceptance remain separate gates.
+
+The [upstream test inventory guide](../../../docs/oracle-application-test-inventory.md)
+tracks directly annotated tests in the pinned compiled JAR without executing
+application code. Inventory counts and runtime acceptance are separate.

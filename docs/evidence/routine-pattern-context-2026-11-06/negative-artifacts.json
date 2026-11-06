@@ -1,0 +1,12 @@
+{
+  "result": "0 passed / 2 failed, expected",
+  "sources": {
+    "crates/bicdb-sql/src/engine/materialize.rs": "de58fc4ae0ca482d31c931f0ccb6cc07e99fae8323c8ab8ff6216f47e2471462",
+    "crates/bicdb-sql/src/session/txn_update.rs": "1687a25a6f06282b16d7c2f4d7cc3f3916860b181798af9a9316b44ad9d69fff",
+    "crates/bicdb-sql/tests/routine_pattern_context.rs": "b7564deb8ec867cb302adca63c1512fa987572060fd16932843f69a8af8f050a"
+  },
+  "artifacts": {
+    "/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rlib": "2e9875f5e3d396a8eeaa0f0578204273e6c6162e40da85cae36afbfa158a5bd5",
+    "/root/ehr-bicdb-migration-20261104/target/debug/deps/routine_pattern_context-3335d76f3e0cef46": "587b7cd721ac1782bcd85be8071e220b55bbc2cdb6fe7dd005363fd20e837dd2"
+  }
+}

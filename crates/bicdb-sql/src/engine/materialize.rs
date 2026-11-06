@@ -401,6 +401,8 @@ impl<'db> SqlEngine<'db> {
             // including catalogue predicates in VALUES-based schema checks.
             // The pure evaluator cannot resolve nested to_regclass() calls.
             Expr::BinaryOp { .. }
+            | Expr::Like { .. }
+            | Expr::ILike { .. }
             | Expr::IsNull(_)
             | Expr::IsNotNull(_)
             | Expr::IsTrue(_)

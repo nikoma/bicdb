@@ -66,6 +66,21 @@ impl ExistsProbeMemo {
 /// its statement-local candidate index is being reused. Keep unsupported trees
 /// on the ordinary evaluator, including views, functions and modifying CTEs.
 pub(super) fn probe_query_safe(db: &BicDb, query: &Query) -> bool {
+    struct HasExists;
+    impl Visitor for HasExists {
+        type Break = ();
+        fn pre_visit_expr(&mut self, expression: &Expr) -> ControlFlow<()> {
+            if matches!(expression, Expr::Exists { .. }) {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        }
+    }
+    // Ordinary point reads do not need schema/policy eligibility probes.
+    if query.visit(&mut HasExists).is_continue() {
+        return false;
+    }
     if !super::row_eval::subquery_is_memoizable(db, query) {
         return false;
     }

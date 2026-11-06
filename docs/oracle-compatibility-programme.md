@@ -82,6 +82,13 @@ pass. Full-export owner/data qualification and unchanged original application
 reruns remain separate gates; the earlier application failure counts are not
 relabelled as passing.
 
+The [routine-mapped pristine baseline checkpoint](evidence/idempiere-pristine-routine-owner-baseline-2026-11-06/README.md)
+then completes owner readback for all 48 functions and 14 procedures, repeats
+915-table source-value equality, all 3,826 FK/orphan checks, view metadata and
+stored-definition preservation, and shuts down cleanly. Unchanged original
+application tests use separate clones. Full routine execution, security,
+application behavior and recovery remain unqualified.
+
 The [full-FK foundation checkpoint](evidence/idempiere-full-fk-foundation-2026-11-05/README.md)
 passes all 89 selected original application tests, with zero failures/errors/skips,
 verified Oracle-provider/PostgreSQL-driver origins and clean JVM/database exits.

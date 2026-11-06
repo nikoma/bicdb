@@ -1,0 +1,52 @@
+{
+  "format": 1,
+  "status": "pristine_relation_and_routine_mapped_saved_source_baseline_verified",
+  "engine_source_commit": "a4d766d3f7fd92e15ff22beb214b285a70f76d27",
+  "tool_source_commit": "a4d766d3f7fd92e15ff22beb214b285a70f76d27",
+  "native_binary_sha256": "23da439894484eef3409ab6c3444df9e97c5256737bab9e91760b24d7f6d2c9f",
+  "manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+  "baseline_report_sha256": "ebd109d58a0be463e882817f5eb7d034c58236173553987a8f7b6df3869ff294",
+  "retained_report_sha256": {
+    "relation-owners": "568ae1ffcfd5f57dbcbec19c113a5cfdc12018fde052c746bc8d6c1506ff544d",
+    "routine-owners": "f5ec16412a9995419ab6c9fbd53aeb00fb334a4fd8e8fc56906e382d6dd74b54",
+    "foreign-keys": "f2ff686f44c078c37d0a1a8861e8fa88446e9c1bc2f0207b9b623e85ad1969d9",
+    "verify": "f63c53543affb58d28ab51ed3fa04ee35d9dae0586aed5f9267b96f409450d69",
+    "foreign-key-orphans": "1cefa780226e8e60e2a5c63980fb0a1b2cecc6c81cd8df4ba98ce43912486287",
+    "orphan-comparison": "17b30a0bd0fc4ac6b712a967c104a0b09cbed25a688b45da6790a41e8364c807",
+    "view-metadata": "ca51f8fee78a8aa1f71362b279d2c842f0067132340cd018fc3711e52b8f8e83"
+  },
+  "checks": {
+    "namespace_owners": 1,
+    "table_owners": 915,
+    "view_owners": 160,
+    "function_owners": 48,
+    "procedure_owners": 14,
+    "routine_definitions_preserved_except_owner": true,
+    "view_definitions_preserved_except_owner": true,
+    "source_tables": 915,
+    "source_rows": 185471,
+    "foreign_keys": 3826,
+    "foreign_key_fingerprint_tables": 888,
+    "source_orphan_counts_matched": 3826,
+    "all_orphan_counts_zero": true,
+    "view_labels_and_broad_type_families_verified": true,
+    "application_role_one_nonempty_table_count_verified": true,
+    "clean_database_shutdown": true
+  },
+  "resource_observation": {
+    "startup_headroom_gib": 20.5,
+    "minimum_headroom_gib": 12.0,
+    "peak_group_rss_bytes": 5352587264,
+    "minimum_observed_available_bytes": 22554525696,
+    "maximum_observed_memory_full_avg10": 0
+  },
+  "routine_execution_qualified": false,
+  "exact_view_descriptors_and_values_qualified": false,
+  "source_privilege_equivalence_qualified": false,
+  "role_privilege_closure_qualified": false,
+  "authentication_qualified": false,
+  "full_application_qualified": false,
+  "production_qualified": false,
+  "oracle_conformance_claimed": false,
+  "goal_complete": false
+}

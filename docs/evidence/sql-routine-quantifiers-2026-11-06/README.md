@@ -52,3 +52,5 @@ manifest; it does not pretend PostgreSQL physical-storage sizing exists here.
 This establishes interpreter behavior and its regression coverage. Production
 runtime builds, complete EHR workflows, clinical-data reconciliation, physical
 HA failure drills and production admission remain separate gates.
+
+Latest-main integration `3c2c40d639716d9b7d07547f2cadd358e4cf4d0c` includes the concurrent residual correlated EXISTS changes and national-character reference observations from `cbc5d9f`. The complete SQL library passes again: **760 passed, zero failed, four ignored**, in 162.43 seconds. The actual integration log is retained alongside the original causal evidence. Formatting also passes. Runtime build and production application acceptance remain separate.

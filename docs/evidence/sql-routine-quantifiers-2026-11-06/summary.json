@@ -24,5 +24,16 @@
     "ehr-bicdb-quantified-after-v4.txt": "d1940eafcb5aba0dd2cda9a136c421e1193d748ada1658fe8354e7dc8246c832",
     "ehr-bicdb-quantified-after-v5.txt": "e4642286bacaedf279f06d8f0460d95e12ff5413887f39cde3a970054cca2a1f",
     "ehr-bicdb-quantified-before-v2.txt": "6b74c40ab5b96abbc90aff4bda16e016428619582dcca1890866ca73992573c6"
+  },
+  "latest_main_integration": {
+    "source_commit": "3c2c40d639716d9b7d07547f2cadd358e4cf4d0c",
+    "includes": "cbc5d9f safe residual correlated EXISTS probes and national cast source observations",
+    "sql_library": {
+      "passed": 760,
+      "failed": 0,
+      "ignored": 4,
+      "seconds": 162.43
+    },
+    "log_sha256": "5da6468a7489d390c4b54f5ade30654c3b501c841732dd4a861a250208aebfaf"
   }
 }

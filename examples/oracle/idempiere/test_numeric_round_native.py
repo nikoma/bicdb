@@ -15,6 +15,30 @@ class NumericRoundNativeTests(unittest.TestCase):
         f.setUp()
         return f
 
+    def test_oracle_explicit_numeric_operands_share_precision_policy(self):
+        import psycopg
+        f = self.fixture('oracle-preview-v1')
+        with f.conn.cursor() as c:
+            for operand in ['15.193', 'CAST(15.193 AS NUMERIC)',
+                            'CAST(15.193 AS NUMBER)', '(CAST(15.193 AS NUMBER))']:
+                for precision, expected in [('1.5', Decimal('15.2')),
+                                            ('-1.5', Decimal('20'))]:
+                    with self.subTest(operand=operand, precision=precision):
+                        c.execute('SELECT ROUND('+operand+','+precision+') FROM DUAL', prepare=True)
+                        self.assertEqual(c.fetchone(), (expected,))
+                        self.assertEqual(c.description[0].type_code, 1700)
+                with self.subTest(operand=operand), self.assertRaises(psycopg.errors.NumericValueOutOfRange):
+                    c.execute('SELECT ROUND('+operand+',1001) FROM DUAL', prepare=True)
+
+    def test_postgres_explicit_numeric_operands_keep_native_rounding(self):
+        f = self.fixture('postgres')
+        with f.conn.cursor() as c:
+            for precision, expected in [(1, Decimal('15.2')), (-1, Decimal('20')),
+                                        (2, Decimal('15.19'))]:
+                c.execute('SELECT ROUND(CAST(15.193 AS NUMERIC),%s)', (precision,), prepare=True)
+                self.assertEqual(c.fetchone(), (expected,))
+                self.assertEqual(c.description[0].type_code, 1700)
+
     def test_oracle_round_scale_coerces_numeric_operands_and_retains_exact_literals(self):
         f = self.fixture('oracle-preview-v1')
         with f.conn.cursor() as c:

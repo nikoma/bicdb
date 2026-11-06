@@ -372,23 +372,20 @@ fn rewrite_with_parameters(
                 if plain_round {
                     let args = function_args(function);
                     if let [arg, scale] = args.as_slice() {
-                        let already_numeric = matches!(arg, Expr::Cast { data_type, .. }
-                            if routine_type_schema(data_type).is_ok_and(|t| t.pg_type == "numeric"));
-                        if !already_numeric
-                            && (matches!(
-                                self.input_type(arg).as_deref(),
-                                Some(
-                                    "numeric"
-                                        | "int2"
-                                        | "int4"
-                                        | "int8"
-                                        | "float4"
-                                        | "float8"
-                                        | "text"
-                                        | "varchar"
-                                        | "bpchar"
-                                )
-                            ) || matches!(arg, Expr::Value(value) if matches!(value.value, Value::Null)))
+                        if matches!(
+                            self.input_type(arg).as_deref(),
+                            Some(
+                                "numeric"
+                                    | "int2"
+                                    | "int4"
+                                    | "int8"
+                                    | "float4"
+                                    | "float8"
+                                    | "text"
+                                    | "varchar"
+                                    | "bpchar"
+                            )
+                        ) || matches!(arg, Expr::Value(value) if matches!(value.value, Value::Null))
                         {
                             // Oracle ROUND(n, scale) returns NUMBER even when
                             // n is floating point. PostgreSQL's two-argument

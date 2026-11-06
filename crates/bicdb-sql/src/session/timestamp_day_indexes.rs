@@ -79,6 +79,29 @@ fn qualify(profile: &str) {
         .rows,
         vec![vec![SqlValue::Int(1)]]
     );
+    let range = format!("{expression} >= TIMESTAMP '1999-12-31 00:00:00' AND {expression} < TIMESTAMP '2000-01-02 00:00:00'");
+    let range_query = format!("SELECT id FROM calendar_rows WHERE {range}");
+    let lowered_range = if profile == oracle::POSTGRES_PROFILE {
+        range_query.clone()
+    } else {
+        oracle::lower_session_sql(sql.db_ref(), &range_query, profile, None, "bicdb").unwrap()
+    };
+    let range_plan = sql.execute(&format!("EXPLAIN {lowered_range}")).unwrap();
+    assert!(
+        range_plan.rows.iter().flatten().any(|cell| {
+            let line = cell.to_cell();
+            line.contains("Index") && line.contains(&definition.name)
+        }),
+        "day range must use its physical index: {:?}",
+        range_plan.rows
+    );
+    assert_eq!(
+        run(&mut sql, profile, &(range_query + " ORDER BY id"))
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(2)]]
+    );
+
     // Rounding before truncation changes which day the row belongs to. The
     // uncast index must not exclude a row rounded across the epoch boundary.
     let rounded = if profile == oracle::POSTGRES_PROFILE {

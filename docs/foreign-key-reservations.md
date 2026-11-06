@@ -60,3 +60,9 @@ The [2026-11-05 qualification checkpoint](evidence/oracle-foreign-key-reservatio
 records executed native, protocol and independent Oracle comparisons, including
 candidate identity and remaining boundaries. Full application and production
 acceptance remain separate gates.
+
+The [core cleanup checkpoint](evidence/transaction-integrity-truncation-2026-11-05/README.md)
+qualifies write-only truncation and read-lock suffix rejection with the same
+standalone input before/after the fix, focused regressions, broader native
+checks and independent Oracle comparisons. This does not qualify the separate
+full application, production resource or saturated admission contracts.

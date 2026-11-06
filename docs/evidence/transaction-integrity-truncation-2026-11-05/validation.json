@@ -1,0 +1,199 @@
+{
+  "format": 1,
+  "native_source_commit": "550e2d67a22776b7c5011c6de728e7301d095887",
+  "native_binary_sha256": "d814d798edb16bfbfa48f926b27c2a899fec5c9c905893eabd29af32e019e4b0",
+  "steps": [
+    {
+      "name": "core-integrity-truncation",
+      "returncode": 0,
+      "log_sha256": "989db956f59bd8a985b210113b48279e0f3cdabb1b3f76715741b309b599923c",
+      "rust_test_targets": [
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "build",
+      "returncode": 0,
+      "log_sha256": "8263faab933d16ced9c353767315b11a90fde5dc75b065dfbd446e1eba213a0a"
+    },
+    {
+      "name": "sql-foreign-keys",
+      "returncode": 0,
+      "log_sha256": "85449483d3ac32c2b056b4710e90e703038993e9fbfc13e0a1ac3d6fad323cdb",
+      "rust_test_targets": [
+        {
+          "passed": 20,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "core-reservations",
+      "returncode": 0,
+      "log_sha256": "460886b8da0a76e2eb258974b87b58d5644d623aefe53abd2212474d1d441a55",
+      "rust_test_targets": [
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "core-locks",
+      "returncode": 0,
+      "log_sha256": "44dcf3f84c71070317ef362d7c1622c721e2ccc94c4f5b317d608765898872e3",
+      "rust_test_targets": [
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "core-waiters",
+      "returncode": 0,
+      "log_sha256": "69e0d92bb8a6a11c6b66812a5a83169377a0dba517ed7a77e0c45785b5311658",
+      "rust_test_targets": [
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "core-receipts",
+      "returncode": 0,
+      "log_sha256": "8bd40cfc3d4e28a758c96b69b380bff967b85faede8050a19bc413209b05a2f4",
+      "rust_test_targets": [
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "sql-library",
+      "returncode": 0,
+      "log_sha256": "9b3330c521247dc97ecf806835cd0364e62ee6955154415925cce3f416358ee2",
+      "rust_test_targets": [
+        {
+          "passed": 717,
+          "failed": 0,
+          "ignored": 4
+        }
+      ]
+    },
+    {
+      "name": "pgwire-protocol",
+      "returncode": 0,
+      "log_sha256": "5754a2e0361b070118c6c01f172edae9257986c376d3e8ab819bfbfd5e424735",
+      "rust_test_targets": [
+        {
+          "passed": 183,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "oracle-hr-protocol",
+      "returncode": 0,
+      "log_sha256": "81f018ac8ef1c309943a44fcab5d1605156f73119b0490cc5754350a129aa0c6",
+      "rust_test_targets": [
+        {
+          "passed": 48,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "native-tools",
+      "returncode": 0,
+      "log_sha256": "c440e04adf56b7dc8cd977af1705c2c68e4bbe1b86f4f1911a4be2f3e8650516",
+      "python_tests": {
+        "total": 128,
+        "passed": 125,
+        "skipped": 3,
+        "failed": 0
+      }
+    }
+  ],
+  "prior_core_api_reproduction": {
+    "source_sha256": "0eff4aa0c30b004d1e17cbc4ea8fa4f46cfb52ea66b18910f59f998fd52514c0",
+    "core_rlib_sha256": "7d08dc43667ea2335bd209e9d2cfb5d853156bed378af4f2562ecddce3db8e00",
+    "probe_returncode": 42,
+    "observation": "retained_write_count=1 reference_protected=false unique_protected=false",
+    "temporary_artifacts_removed": true
+  },
+  "same_input_after_fix": {
+    "source_sha256": "0eff4aa0c30b004d1e17cbc4ea8fa4f46cfb52ea66b18910f59f998fd52514c0",
+    "core_rlib_sha256": "267a3c70f853bf36141cac3c61bd8247a59f5a1d17f2a938e8f70c2a011e4ee1",
+    "probe_returncode": 0,
+    "observation": "retained_write_count=1 reference_protected=true unique_protected=true",
+    "temporary_artifacts_removed": true
+  },
+  "oracle_version": "23.26.3.0.0",
+  "source_comparison_cases_matched": 13,
+  "application_qualified": false,
+  "production_qualified": false,
+  "goal_complete": false,
+  "native_tools_prerequisite_retry": {
+    "failed_tests": 2,
+    "reason": "The isolated worktree had no built JDBC adapter; two provider compilation tests asserted this prerequisite.",
+    "log_sha256": "76aaf83e0a3a100e96711991e5a598579e5dbc63b858a0e375b0dfb5bbb4f423"
+  },
+  "sdk_prerequisite_build": {
+    "jar_sha256": "f4d1c6069b7caa4d6747a2b50f56c39f6f2c4b854c18bb9880459da52d7695ef",
+    "build_returncode": 0,
+    "unit_tests_passed": 10,
+    "unit_tests_failed": 0,
+    "staged_runtime_class_comparison": {
+      "format": 1,
+      "classes_identical": true,
+      "staged_classes": 6,
+      "new_classes": 6,
+      "different_classes": []
+    },
+    "unchanged_rust_results_reused": true
+  }
+}

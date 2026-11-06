@@ -906,6 +906,20 @@ impl<'db> SqlEngine<'db> {
         let table = resolve_session_relation_name(self.db_ref(), &table)?;
         self.require_relation_privilege(&table, "SELECT")?;
 
+        if self.heap_lock_identity {
+            if let Some(schema) = load_schema_shared(self.db_ref(), &table)?.as_deref() {
+                if primary_key_columns_for_schema(schema).is_empty() {
+                    return self.heap_lock_row_set(
+                        &table,
+                        &alias_name,
+                        schema,
+                        selection,
+                        needed_columns,
+                    );
+                }
+            }
+        }
+
         // Cell-row path: schema table, no RLS filter/policy, and the selection
         // resolves through an index — read each visible row's cells straight
         // from its resident JSON text (no `Value` tree, nothing cached), one

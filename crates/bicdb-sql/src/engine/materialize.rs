@@ -1061,6 +1061,9 @@ impl<'db> SqlEngine<'db> {
             .iter()
             .filter(|column| !is_postgres_system_column(column))
             .filter(|column| {
+                column.rsplit('.').next() != Some(super::row_locks::HEAP_LOCK_IDENTITY)
+            })
+            .filter(|column| {
                 !(hide_flashback_pseudo && flashback::is_flashback_pseudo_column(column))
             })
             .cloned()

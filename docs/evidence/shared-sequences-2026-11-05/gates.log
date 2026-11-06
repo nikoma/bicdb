@@ -1,0 +1,6 @@
+Verified latest-base negative shared_sequences
+Verified latest-base negative sequence_lock_progress
+Verified latest-base positive shared_sequences
+Verified latest-base positive sequence_lock_progress
+Verified latest-base positive bicdb_sql
+Latest-base focused and protocol gates passed

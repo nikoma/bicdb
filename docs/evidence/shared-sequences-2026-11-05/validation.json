@@ -1,0 +1,412 @@
+{
+  "engine_base_commit": "13e36c7e4d52ba136f2bed041dee5ec26c666e5f",
+  "source_file_sha256": "1687a25a6f06282b16d7c2f4d7cc3f3916860b181798af9a9316b44ad9d69fff",
+  "results": [
+    {
+      "label": "negative-shared_sequences",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "shared_sequences",
+        "--message-format=json-render-diagnostics",
+        "--",
+        "--nocapture"
+      ],
+      "result": "test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s",
+      "full_log_sha256": "f3491072c7a1ae092abb340048e18ef3c34164ac80a78342a1ae3fb661ec5dd9",
+      "compiler_completed": true
+    },
+    {
+      "label": "negative-sequence_lock_progress",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "sequence_lock_progress",
+        "--message-format=json-render-diagnostics",
+        "--",
+        "--nocapture"
+      ],
+      "result": "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.50s",
+      "full_log_sha256": "c2130554ed46a3ef70bde3df4c158e8d9e36d25d252c9e347b74821fc9f45915",
+      "compiler_completed": true
+    },
+    {
+      "label": "positive-shared_sequences",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "shared_sequences",
+        "--message-format=json-render-diagnostics",
+        "--",
+        "--nocapture"
+      ],
+      "result": "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.01s",
+      "full_log_sha256": "f542abc53b68a4b7c1e41d64e64b2436edb9e74a842b55ba30884eb0fd3bb93c",
+      "compiler_completed": true
+    },
+    {
+      "label": "positive-sequence_lock_progress",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "sequence_lock_progress",
+        "--message-format=json-render-diagnostics",
+        "--",
+        "--nocapture"
+      ],
+      "result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s",
+      "full_log_sha256": "1b17a6ebb96d49ff8922a9995437f84bd6d28b9f58a232c45eeb6e5c179860e9",
+      "compiler_completed": true
+    },
+    {
+      "label": "positive-bicdb_sql",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "--message-format=json-render-diagnostics",
+        "--",
+        "--nocapture"
+      ],
+      "result": "test result: ok. 717 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 27.61s",
+      "full_log_sha256": "e688cd396bced598ad2b1ce7405398aa1398de74a1ef66aca9286ee92698e557",
+      "compiler_completed": true
+    },
+    {
+      "label": "focused-pg_dump_identity_restore",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "pg_dump_identity_restore",
+        "--message-format=json-render-diagnostics",
+        "--",
+        "--nocapture"
+      ],
+      "result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s",
+      "full_log_sha256": "cf0b0e5e808ed6790781b14e8ba45b1456415505e9a4dd8570d9b3e32d39a9eb",
+      "compiler_completed": true
+    },
+    {
+      "label": "focused-pg_dump_schema_qualified_restore",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "pg_dump_schema_qualified_restore",
+        "--message-format=json-render-diagnostics",
+        "--",
+        "--nocapture"
+      ],
+      "result": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s",
+      "full_log_sha256": "65f9c2d4f4d4a5baa268caa1cb01513654995e923679444377abc894ffb71e46",
+      "compiler_completed": true
+    },
+    {
+      "label": "focused-ownership_authorization",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "ownership_authorization",
+        "--message-format=json-render-diagnostics",
+        "--",
+        "--nocapture"
+      ],
+      "result": "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.88s",
+      "full_log_sha256": "8c6023a5175e76923dae37b49b8a2c3dbd9ef91523a2770fa18e42332d646f06",
+      "compiler_completed": true
+    },
+    {
+      "label": "focused-transaction_uniqueness",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "transaction_uniqueness",
+        "--message-format=json-render-diagnostics",
+        "--",
+        "--nocapture"
+      ],
+      "result": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s",
+      "full_log_sha256": "0eff9c705c8dd4723561508591473ac37885976419e68b51aa366ccbb6710fea",
+      "compiler_completed": true
+    },
+    {
+      "label": "focused-platform_correctness_audit",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "platform_correctness_audit",
+        "--message-format=json-render-diagnostics",
+        "--",
+        "--nocapture"
+      ],
+      "result": "test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.98s",
+      "full_log_sha256": "4d729f67a9571838ed36d925858115a83e2b38e57ebf992fb8d7010763c361d9",
+      "compiler_completed": true
+    },
+    {
+      "label": "focused-ehr_routine_results",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "ehr_routine_results",
+        "--message-format=json-render-diagnostics",
+        "--",
+        "--nocapture"
+      ],
+      "result": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s",
+      "full_log_sha256": "c44a65231e5c55aa110803862525f0715af26ed6668a7818cb3a62e31d965f20",
+      "compiler_completed": true
+    },
+    {
+      "label": "focused-carrier_hub_compat",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "carrier_hub_compat",
+        "--message-format=json-render-diagnostics",
+        "--",
+        "--nocapture"
+      ],
+      "result": "test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.20s",
+      "full_log_sha256": "aaa88778c6e16a64b03b2e899c431428b0be81c148d3ca788368daef8c25af47",
+      "compiler_completed": true
+    },
+    {
+      "label": "focused-deferred_foreign_keys",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "deferred_foreign_keys",
+        "--message-format=json-render-diagnostics",
+        "--",
+        "--nocapture"
+      ],
+      "result": "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.50s",
+      "full_log_sha256": "68d94b4d0b9f48316357fd82888c4bd4058b8f83b91147ddb84bc8038473f705",
+      "compiler_completed": true
+    },
+    {
+      "label": "focused-type_consistency",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "type_consistency",
+        "--message-format=json-render-diagnostics",
+        "--",
+        "--nocapture"
+      ],
+      "result": "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s",
+      "full_log_sha256": "0dc641d4e029212aef3f1fc4c14e7920936745faec0714772ca9e35a8b323902",
+      "compiler_completed": true
+    },
+    {
+      "label": "focused-shared_foreign_key_references",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "shared_foreign_key_references",
+        "--message-format=json-render-diagnostics",
+        "--",
+        "--nocapture"
+      ],
+      "result": "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s",
+      "full_log_sha256": "a93b028684e0433963fd13cf74e11577786a2a3392cd80aaffd49faa3b3decd6",
+      "compiler_completed": true
+    },
+    {
+      "label": "protocol",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "protocol",
+        "--message-format=json-render-diagnostics",
+        "--",
+        "--nocapture"
+      ],
+      "result": "test result: ok. 183 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.86s",
+      "full_log_sha256": "8b793cf30aa0487c33bc4585fb9f531b068fff8b6e94cfe55ddda02151dd347e",
+      "compiler_completed": true
+    }
+  ],
+  "negative_artifacts": [
+    {
+      "name": "shared_sequences",
+      "source_sha256": "9e06ab55a2b1056ee2380cc1c44a41bfc61ee53ebd17c534fe523e6c07e84a1d",
+      "sql_library_sha256": "22f392d1588cf1ab081a400731651e28a3720e87fc13d676b686fd5118c5ee3f",
+      "binary_sha256": "09cb46d1ed3b92bd22bf720d1843944bb7ca31b61e459e85cd1fe61df984f7bd",
+      "fresh": false
+    },
+    {
+      "name": "sequence_lock_progress",
+      "source_sha256": "9e06ab55a2b1056ee2380cc1c44a41bfc61ee53ebd17c534fe523e6c07e84a1d",
+      "sql_library_sha256": "b9e729efc5a0a82d8c8eb6e5cf47730ab8ee7e50585e8511a7e976f77ade665d",
+      "binary_sha256": "584a2d266866e3f0f3a089233a1f77346fe4ea806d33e6675e844dd8e9446e11",
+      "fresh": false
+    }
+  ],
+  "positive_artifacts": [
+    {
+      "name": "shared_sequences",
+      "source_sha256": "1687a25a6f06282b16d7c2f4d7cc3f3916860b181798af9a9316b44ad9d69fff",
+      "sql_library_sha256": "faf7fab11dd9e7e4b1153224765bd0e764f05d593d31282aeec30a56e40c6177",
+      "binary_sha256": "4ba92a93923a988ddcb5841856c5d9fa3254e3cd54bda43ba24999e6e71eaba1",
+      "fresh": false
+    },
+    {
+      "name": "sequence_lock_progress",
+      "source_sha256": "1687a25a6f06282b16d7c2f4d7cc3f3916860b181798af9a9316b44ad9d69fff",
+      "sql_library_sha256": "4b59f9f0db929e706b9dbf1398590084802a3f6467d775e05e051dd93ea0ba3d",
+      "binary_sha256": "7a77d741599470f4a1de00cb618d4c9b672fbbc8a4c5b00d7d95836dbfde186b",
+      "fresh": false
+    },
+    {
+      "name": "bicdb_sql",
+      "source_sha256": "1687a25a6f06282b16d7c2f4d7cc3f3916860b181798af9a9316b44ad9d69fff",
+      "binary_sha256": "56c1015bfd4ddc8ac1611f1850f111a091bc9007a8ec259c1055edd2ab1b4a58",
+      "fresh": false
+    }
+  ],
+  "log_filter": "Cargo compiler-artifact and compiler-message JSON omitted from attached text; full-log hashes retained",
+  "production_qualified": false,
+  "focused_artifacts": [
+    {
+      "name": "pg_dump_identity_restore",
+      "sql_library_sha256": "faf7fab11dd9e7e4b1153224765bd0e764f05d593d31282aeec30a56e40c6177",
+      "fresh": false,
+      "binary_sha256": "43b90dab8c37d4cd699029fd18538dcd86c126dd500668b71c014a51bdd447aa",
+      "retired_bytes": 1286986288
+    },
+    {
+      "name": "pg_dump_schema_qualified_restore",
+      "sql_library_sha256": "faf7fab11dd9e7e4b1153224765bd0e764f05d593d31282aeec30a56e40c6177",
+      "fresh": false,
+      "binary_sha256": "1d3b97837b3456db560467d010f436c799bbbe9c154768d82a388fb1cf3dfce7",
+      "retired_bytes": 1287032408
+    },
+    {
+      "name": "ownership_authorization",
+      "sql_library_sha256": "faf7fab11dd9e7e4b1153224765bd0e764f05d593d31282aeec30a56e40c6177",
+      "fresh": false,
+      "binary_sha256": "354ea47d4f0032191d3e9d70363ec129150a2e3206e9f779643736a0fe35e616",
+      "retired_bytes": 1287009480
+    },
+    {
+      "name": "transaction_uniqueness",
+      "sql_library_sha256": "faf7fab11dd9e7e4b1153224765bd0e764f05d593d31282aeec30a56e40c6177",
+      "fresh": false,
+      "binary_sha256": "f86308c5db5627a970fd34c0cf28bbd831eb29a8f4695bd0363f95930888da6e",
+      "retired_bytes": 1286975472
+    },
+    {
+      "name": "platform_correctness_audit",
+      "sql_library_sha256": "faf7fab11dd9e7e4b1153224765bd0e764f05d593d31282aeec30a56e40c6177",
+      "fresh": false,
+      "binary_sha256": "10efba23ba33c22a54edab2e8b97e2c0768c2c3bb5f3003a53c3b4e082075d9e",
+      "retired_bytes": 1290027848
+    },
+    {
+      "name": "ehr_routine_results",
+      "sql_library_sha256": "faf7fab11dd9e7e4b1153224765bd0e764f05d593d31282aeec30a56e40c6177",
+      "fresh": false,
+      "binary_sha256": "fb49eb771fbd3620684f3cc22d2aa4690560fe12f6c42e8e18ec408466ce082e",
+      "retired_bytes": 1287039104
+    },
+    {
+      "name": "carrier_hub_compat",
+      "sql_library_sha256": "faf7fab11dd9e7e4b1153224765bd0e764f05d593d31282aeec30a56e40c6177",
+      "fresh": false,
+      "binary_sha256": "95134d169204d787708865d762f02bf75cf961ad871216889667e9e961ec8710",
+      "retired_bytes": 1287899224
+    },
+    {
+      "name": "deferred_foreign_keys",
+      "sql_library_sha256": "faf7fab11dd9e7e4b1153224765bd0e764f05d593d31282aeec30a56e40c6177",
+      "fresh": false,
+      "binary_sha256": "fa0cc2a3f54ba5b883cd0cf717f220599f937d2cab99074a641318ade4834277",
+      "retired_bytes": 1292069568
+    },
+    {
+      "name": "type_consistency",
+      "sql_library_sha256": "faf7fab11dd9e7e4b1153224765bd0e764f05d593d31282aeec30a56e40c6177",
+      "fresh": false,
+      "binary_sha256": "2665ff65cd07916be9cf689a0b80e4f72b1519ccf1b0727e9e8393daa903664f",
+      "retired_bytes": 1289273560
+    },
+    {
+      "name": "shared_foreign_key_references",
+      "sql_library_sha256": "faf7fab11dd9e7e4b1153224765bd0e764f05d593d31282aeec30a56e40c6177",
+      "fresh": false,
+      "binary_sha256": "dd41e5869b469bab5b91930cddb935205d42e9964b177b6d34f908c6ae5c3b9d",
+      "retired_bytes": 1287071440
+    },
+    {
+      "name": "protocol",
+      "sql_library_sha256": "4b59f9f0db929e706b9dbf1398590084802a3f6467d775e05e051dd93ea0ba3d",
+      "fresh": false,
+      "binary_sha256": "82edb224706270e6c07628844aea9676444100ddb276679e45258c8beedfa698",
+      "retired_bytes": 1493139576
+    }
+  ]
+}

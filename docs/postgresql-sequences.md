@@ -34,6 +34,13 @@ Sequence state is persisted separately from table rows. Like PostgreSQL 18.4,
 `nextval` is not rolled back: if a transaction consumes a sequence value and
 then rolls back, the next transaction observes the advanced sequence.
 
+Shared SQL sessions serialize sequence changes with a short independent core
+transaction. Allocation does not acquire the global database writer guard:
+a transaction can allocate its synchronization cursor while another session
+waits inside a stored function for its advisory lock. Bulk default allocation
+and `setval` use the same durable path and remain independent of an outer
+transaction rollback.
+
 Catalog exposure is intentionally practical rather than exhaustive. Sequence
 metadata appears in `information_schema.sequences`, `pg_catalog.pg_class` with
 `relkind = 'S'`, `pg_catalog.pg_sequence`, and `pg_catalog.pg_sequences`.

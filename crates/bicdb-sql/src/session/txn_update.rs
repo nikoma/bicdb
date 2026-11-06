@@ -5058,12 +5058,71 @@ impl<'db> SqlSession<'db> {
         }
     }
 
-    pub(crate) fn nextval(&mut self, sequence_name: &str) -> Result<i64> {
+    /// Sequence state is independent of the caller's transaction. Persist it
+    /// with a short, row-serialized core transaction through shared database
+    /// access: escalating to a global writer here deadlocks when another
+    /// shared session is waiting for this caller's advisory/row lock.
+    fn mutate_sequence<T>(
+        &mut self,
+        sequence_name: &str,
+        privileges: &[&str],
+        change: impl FnOnce(&mut SequenceSchema) -> (Result<T>, bool),
+    ) -> Result<T> {
+        self.cancellation.check()?;
         let mut sequence = load_sequence_required(self.db_ref(), sequence_name)?;
-        self.require_sequence_privilege(&sequence, &["USAGE", "UPDATE"])?;
-        let value = advance_sequence(&mut sequence)?;
-        save_sequence(self.db_mut()?, &sequence)?;
-        self.currvals.insert(sequence.name.clone(), value);
+        self.require_sequence_privilege(&sequence, privileges)?;
+        if crate::statement_context::describing() {
+            // Describe may inspect a procedural result, but cannot consume a
+            // nontransactional value or change persistent sequence state.
+            return change(&mut sequence).0;
+        }
+        let mut allocation = self.db_ref().begin_transaction()?;
+        allocation.set_snapshot_isolation(false, 0)?;
+        let latest = allocation
+            .read_committed_update_stored_reservation(SEQUENCE_COLLECTION, &sequence.name)?;
+        let (record, observed) = match latest {
+            Some((Some(record), observed)) => (record.to_record()?, observed),
+            Some((None, _)) => {
+                return Err(SqlError::InvalidSql(format!(
+                    "relation \"{sequence_name}\" does not exist"
+                )))
+            }
+            None => {
+                let record = allocation
+                    .get(SEQUENCE_COLLECTION, &sequence.name)?
+                    .ok_or_else(|| {
+                        SqlError::InvalidSql(format!("relation \"{sequence_name}\" does not exist"))
+                    })?;
+                ((*record).clone(), 0)
+            }
+        };
+        sequence = serde_json::from_value(record.metadata.clone())?;
+        let (result, changed) = change(&mut sequence);
+        if changed {
+            self.cancellation.check()?;
+            let record =
+                Record::new(sequence.name.clone()).with_metadata(serde_json::to_value(&sequence)?);
+            allocation.write_upserts_with_statement_snapshots(
+                SEQUENCE_COLLECTION,
+                [(record, observed)],
+            )?;
+            let committed = allocation.commit_with_sequence()?;
+            crate::statement_context::note_independent_commit(committed);
+            self.snapshot_floor = self.snapshot_floor.max(committed);
+        } else {
+            allocation.rollback()?;
+        }
+        result
+    }
+
+    pub(crate) fn nextval(&mut self, sequence_name: &str) -> Result<i64> {
+        let value = self.mutate_sequence(sequence_name, &["USAGE", "UPDATE"], |sequence| {
+            match advance_sequence(sequence) {
+                Ok(value) => (Ok(value), true),
+                Err(error) => (Err(error), false),
+            }
+        })?;
+        self.currvals.insert(sequence_name.to_string(), value);
         Arc::make_mut(&mut self.session_gucs)
             .insert(LASTVAL_SESSION_KEY.to_string(), value.to_string());
         Ok(value)
@@ -5073,23 +5132,18 @@ impl<'db> SqlSession<'db> {
         if count == 0 {
             return Ok(Vec::new());
         }
-        let mut sequence = load_sequence_required(self.db_ref(), sequence_name)?;
-        self.require_sequence_privilege(&sequence, &["USAGE", "UPDATE"])?;
-        let mut values = Vec::with_capacity(count);
-        for _ in 0..count {
-            match advance_sequence(&mut sequence) {
-                Ok(value) => values.push(value),
-                Err(error) => {
-                    if !values.is_empty() {
-                        save_sequence(self.db_mut()?, &sequence)?;
-                    }
-                    return Err(error);
+        let values = self.mutate_sequence(sequence_name, &["USAGE", "UPDATE"], |sequence| {
+            let mut values = Vec::with_capacity(count);
+            for _ in 0..count {
+                match advance_sequence(sequence) {
+                    Ok(value) => values.push(value),
+                    Err(error) => return (Err(error), !values.is_empty()),
                 }
             }
-        }
-        save_sequence(self.db_mut()?, &sequence)?;
+            (Ok(values), true)
+        })?;
         if let Some(value) = values.last().copied() {
-            self.currvals.insert(sequence.name.clone(), value);
+            self.currvals.insert(sequence_name.to_string(), value);
             Arc::make_mut(&mut self.session_gucs)
                 .insert(LASTVAL_SESSION_KEY.to_string(), value.to_string());
         }
@@ -5102,18 +5156,21 @@ impl<'db> SqlSession<'db> {
         value: i64,
         is_called: bool,
     ) -> Result<()> {
-        let mut sequence = load_sequence_required(self.db_ref(), sequence_name)?;
-        self.require_sequence_privilege(&sequence, &["UPDATE"])?;
-        if value < sequence.min_value || value > sequence.max_value {
-            return Err(SqlError::numeric_value_out_of_range(format!(
-                "setval: value {value} is out of bounds for sequence \"{}\" ({}..{})",
-                sequence.name, sequence.min_value, sequence.max_value
-            )));
-        }
-        sequence.last_value = value;
-        sequence.is_called = is_called;
-        save_sequence(self.db_mut()?, &sequence)?;
-        self.currvals.insert(sequence.name.clone(), value);
+        self.mutate_sequence(sequence_name, &["UPDATE"], |sequence| {
+            if value < sequence.min_value || value > sequence.max_value {
+                return (
+                    Err(SqlError::numeric_value_out_of_range(format!(
+                        "setval: value {value} is out of bounds for sequence \"{}\" ({}..{})",
+                        sequence.name, sequence.min_value, sequence.max_value
+                    ))),
+                    false,
+                );
+            }
+            sequence.last_value = value;
+            sequence.is_called = is_called;
+            (Ok(()), true)
+        })?;
+        self.currvals.insert(sequence_name.to_string(), value);
         Arc::make_mut(&mut self.session_gucs)
             .insert(LASTVAL_SESSION_KEY.to_string(), value.to_string());
         Ok(())
@@ -5585,8 +5642,12 @@ impl<'db> SqlSession<'db> {
                             matches!(item, ConstraintSchema::ForeignKey { name, .. } if name == &constraint.name)
                         }).ok_or_else(|| SqlError::InvalidSql("inbound foreign key declaration disappeared".into()))?;
                         validate_foreign_key_constraint_immediate(
-                            self.db_ref(), self.tx.as_ref(), &constraint.child_schema.name,
-                            &constraint.child_schema, &child, foreign_key,
+                            self.db_ref(),
+                            self.tx.as_ref(),
+                            &constraint.child_schema.name,
+                            &constraint.child_schema,
+                            &child,
+                            foreign_key,
                         )?;
                         continue;
                     }

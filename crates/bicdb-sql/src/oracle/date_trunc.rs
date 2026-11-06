@@ -394,7 +394,7 @@ fn rewrite_with_parameters(
                             // n is floating point. PostgreSQL's two-argument
                             // overload instead requires numeric input.
                             match expression(&format!(
-                                "ROUND(CAST({} AS NUMERIC),{scale})",
+                                "bicdb_oracle_number_round({},{scale})",
                                 exact_numeric_operand_sql(arg)
                             )) {
                                 Ok(lowered) => *expr = lowered,

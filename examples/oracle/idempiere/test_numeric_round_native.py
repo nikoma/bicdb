@@ -33,6 +33,13 @@ class NumericRoundNativeTests(unittest.TestCase):
             c.execute('SELECT ROUND(%s,2) FROM DUAL', (2**0.5,), prepare=True)
             self.assertEqual(c.fetchone(), (Decimal('1.41'),))
             self.assertEqual(c.description[0].type_code, 1700)
+            for binary, expected in [(2.675, Decimal('2.67')), (1.005, Decimal('1')),
+                                     (-2.675, Decimal('-2.67'))]:
+                c.execute('SELECT ROUND(%s,2) FROM DUAL', (binary,), prepare=True)
+                self.assertEqual(c.fetchone(), (expected,))
+                self.assertEqual(c.description[0].type_code, 1700)
+            c.execute('SELECT ROUND(2.675,2),ROUND(1.005,2) FROM DUAL')
+            self.assertEqual(c.fetchone(), (Decimal('2.68'),Decimal('1.01')))
             c.execute('CREATE FUNCTION "round"(n IN NUMBER,p IN NUMBER) RETURN NUMBER IS '
                       'BEGIN RETURN 77; END;', prepare=False)
             c.execute('SELECT "round"(1,2) FROM DUAL')

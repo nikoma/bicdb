@@ -761,7 +761,7 @@ pub fn lower_session_sql(
         return procedures::render(function);
     }
     let mut statements = parse_statements(&lowered)?;
-    namespaces::qualify_quoted_functions(db, &mut statements, &schema)?;
+    namespaces::qualify_quoted_functions(db, &mut statements, &schema, sql)?;
     output::lower_calls(&mut statements)?;
     storage_catalog::lower(db, &mut statements, &schema)?;
     namespaces::qualify_with_calls(&mut statements, &schema);

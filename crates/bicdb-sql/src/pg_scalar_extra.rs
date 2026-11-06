@@ -665,6 +665,7 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             | "bicdb_oracle_number_divide"
             | "bicdb_oracle_number_arithmetic"
             | "bicdb_oracle_number_trunc"
+            | "bicdb_oracle_number_round"
             | "bicdb_oracle_plsql_number_trunc"
             | "bicdb_oracle_date_coerce"
             | "bicdb_oracle_date_subtract"
@@ -693,7 +694,10 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
     if name == "bicdb_oracle_number_arithmetic" {
         arity(name, args, 4..=4)?;
     }
-    if name == "bicdb_oracle_number_divide" {
+    if matches!(
+        name,
+        "bicdb_oracle_number_divide" | "bicdb_oracle_number_round"
+    ) {
         arity(name, args, 2..=2)?;
     }
     if name == "bicdb_oracle_date_coerce" {
@@ -981,6 +985,32 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             )?
         }
         "bicdb_oracle_number_divide" => oracle_number_divide(&args[0], &args[1])?,
+        "bicdb_oracle_number_round" => {
+            let precision = parse_decimal(&args[1].to_cell())?;
+            let precision = (precision.mantissa / pow10_bigint(precision.scale))
+                .to_i64()
+                .filter(|precision| (-1000..=1000).contains(precision))
+                .ok_or_else(|| {
+                    SqlError::numeric_value_out_of_range(
+                        "Oracle numeric ROUND precision exceeds the supported -1000..1000 range",
+                    )
+                })?;
+            let text = match &args[0] {
+                SqlValue::Float(value) if value.is_finite() => {
+                    // A binary64 denominator is at most 2^1074. Fixed decimal
+                    // formatting at that scale retains its exact value, unlike
+                    // a shortest round-trip string (2.675 is below the tie).
+                    format!("{value:.1074}")
+                }
+                SqlValue::Float(_) => {
+                    return Err(SqlError::numeric_value_out_of_range(
+                        "Oracle numeric ROUND requires finite input",
+                    ))
+                }
+                value => value.to_cell(),
+            };
+            SqlValue::String(round_decimal_half_away(parse_decimal(&text)?, precision))
+        }
         "bicdb_oracle_number_arithmetic" => {
             oracle_number_arithmetic(&args[0], &args[1], &args[2].to_cell(), &args[3].to_cell())?
         }

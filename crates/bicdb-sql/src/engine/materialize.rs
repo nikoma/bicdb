@@ -3490,7 +3490,8 @@ impl<'db> SqlEngine<'db> {
             | "bicdb_oracle_number_divide"
             | "bicdb_oracle_number_arithmetic"
             | "bicdb_oracle_date_subtract"
-            | "bicdb_oracle_number_trunc" => Some("numeric".to_string()),
+            | "bicdb_oracle_number_trunc"
+            | "bicdb_oracle_number_round" => Some("numeric".to_string()),
             "bicdb_oracle_decode_date"
             | "bicdb_oracle_nvl_timestamp"
             | "bicdb_oracle_nvl2_timestamp"

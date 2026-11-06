@@ -7,10 +7,36 @@ pub(super) fn qualify_quoted_functions<T: sqlparser::ast::VisitMut>(
     db: &BicDb,
     node: &mut T,
     schema: &str,
+    source: &str,
 ) -> Result<()> {
+    // Canonical lowering also quotes originally unquoted routine names.
+    // Resolve only calls that were explicitly quoted in the submitted SQL;
+    // legacy unqualified routine lookup must keep its existing contract.
+    if !source.contains('"') {
+        return Ok(());
+    }
+    let Ok(original) = Parser::parse_sql(&OracleDialect {}, source) else {
+        // Do not guess provenance for extended grammar or stored legacy SQL.
+        return Ok(());
+    };
+    let mut quoted = BTreeSet::new();
+    let _ = sqlparser::ast::visit_expressions(&original, |expr| {
+        if let Expr::Function(function) = expr {
+            if let [part] = function.name.0.as_slice() {
+                if let Some(ident) = part.as_ident().filter(|ident| ident.quote_style.is_some()) {
+                    quoted.insert(ident.value.clone());
+                }
+            }
+        }
+        ControlFlow::<()>::Continue(())
+    });
+    if quoted.is_empty() {
+        return Ok(());
+    }
     struct Resolve<'a> {
         db: &'a BicDb,
         schema: &'a str,
+        quoted: &'a BTreeSet<String>,
     }
     impl sqlparser::ast::VisitorMut for Resolve<'_> {
         type Break = SqlError;
@@ -24,6 +50,9 @@ pub(super) fn qualify_quoted_functions<T: sqlparser::ast::VisitMut>(
             let Some(ident) = part.as_ident().filter(|ident| ident.quote_style.is_some()) else {
                 return ControlFlow::Continue(());
             };
+            if !self.quoted.contains(&ident.value) {
+                return ControlFlow::Continue(());
+            }
             let routine = match load_routine(self.db, RoutineKind::Function, &ident.value) {
                 Ok(Some(routine)) => routine,
                 Ok(None) => return ControlFlow::Continue(()),
@@ -51,7 +80,14 @@ pub(super) fn qualify_quoted_functions<T: sqlparser::ast::VisitMut>(
             ControlFlow::Continue(())
         }
     }
-    match sqlparser::ast::VisitMut::visit(node, &mut Resolve { db, schema }) {
+    match sqlparser::ast::VisitMut::visit(
+        node,
+        &mut Resolve {
+            db,
+            schema,
+            quoted: &quoted,
+        },
+    ) {
         ControlFlow::Continue(()) => Ok(()),
         ControlFlow::Break(error) => Err(error),
     }

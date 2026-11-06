@@ -954,8 +954,10 @@ enum StoreCommand {
     /// engine. `embedded_memory` keeps every row and index resident, so a
     /// store whose working set outgrew RAM belongs in `server_paged` with its
     /// bounded buffer pool. ADR-004 forbids reinterpreting a directory in
-    /// place, so this copies; the source is opened read-only and never
-    /// modified. Offline on both sides.
+    /// place, so this copies. Offline on both sides. The ordinary source
+    /// recovery path may checkpoint physical metadata; use an offline clone
+    /// if the original must remain byte-for-byte unchanged. The target is
+    /// reopened and its records, collection policies and indexes verified.
     MigrateMode {
         /// Existing database directory to read.
         source: PathBuf,
@@ -3662,6 +3664,10 @@ fn main() -> Result<()> {
                     report.indexes,
                     report.source_mode,
                     report.target_mode
+                );
+                println!(
+                    "Verified {} records after reopening the target",
+                    report.verified_records
                 );
                 println!(
                     "The new database must be OPENED as `{}` — a default open is refused by the \
@@ -11452,13 +11458,10 @@ fn open_db_with_key_args(
     key_env: Option<String>,
 ) -> Result<BicDb> {
     let encryption = db_encryption_for_path(path, key, key_env)?;
+    let config = DbConfig::default().with_storage_mode(storage_mode(path)?);
     match encryption {
-        Some(encryption) => Ok(BicDb::open_with_encryption(
-            path,
-            DbConfig::default(),
-            encryption,
-        )?),
-        None => Ok(BicDb::open(path)?),
+        Some(encryption) => Ok(BicDb::open_with_encryption(path, config, encryption)?),
+        None => Ok(BicDb::open_with_config(path, config)?),
     }
 }
 

@@ -2696,6 +2696,37 @@ impl<'db> SqlSession<'db> {
                     SqlError::Unsupported(format!("unsupported value expression {expr}"))
                 })
             }
+            Expr::Like {
+                negated,
+                any,
+                expr: value,
+                pattern,
+                escape_char,
+            }
+            | Expr::ILike {
+                negated,
+                any,
+                expr: value,
+                pattern,
+                escape_char,
+            } => {
+                if *any {
+                    return Err(SqlError::Unsupported(
+                        "LIKE/ILIKE ANY is not supported".into(),
+                    ));
+                }
+                let value = self.eval_session_expr(value)?;
+                let pattern = self.eval_session_expr(pattern)?;
+                Ok(eval_like_values(
+                    value,
+                    pattern,
+                    *negated,
+                    matches!(expr, Expr::ILike { .. }),
+                    escape_char.as_ref(),
+                )?
+                .map(SqlValue::Bool)
+                .unwrap_or(SqlValue::Null))
+            }
             Expr::Function(function) if is_sequence_function(function)? => {
                 self.eval_sequence_function(function)
             }

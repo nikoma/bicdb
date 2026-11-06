@@ -1,0 +1,61 @@
+{
+  "status": "VERIFIED",
+  "tests": [
+    {
+      "label": "regressions",
+      "exit": 0,
+      "result": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s"
+      ],
+      "log_sha256": "6fa1b2b6334b4bdf19d97fb464f8154ba3844519b3c57efc6569850f6ada9193"
+    },
+    {
+      "label": "unit",
+      "exit": 0,
+      "result": [
+        "test result: ok. 717 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 27.88s"
+      ],
+      "log_sha256": "5354f73977ac1605dc8a6da7bbfc733a5dab406828552ff16c3dd4dd71a1dc63"
+    },
+    {
+      "label": "raw_ddl_batches",
+      "exit": 0,
+      "result": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s"
+      ],
+      "log_sha256": "3f29b81d34eb51a6ac696d2a883fc56e7685d643d27ee9082450a0fd48452b36"
+    },
+    {
+      "label": "routine_assignment_types",
+      "exit": 0,
+      "result": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s"
+      ],
+      "log_sha256": "bc7e0caf702b9bab1235eec031262307e4a0cfe7aca92dae5f0a03ac3f4a2560"
+    },
+    {
+      "label": "routine_expression_stack",
+      "exit": 0,
+      "result": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s"
+      ],
+      "log_sha256": "57d9e54e9c27c780328a117d7ce7f44c1c8f6b30e0b453c8f92fe2c114b9eeef"
+    },
+    {
+      "label": "ehr_routine_results",
+      "exit": 0,
+      "result": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s"
+      ],
+      "log_sha256": "38f4063fd2cb7bdc42d408eefd00ac54ec5d9a2c7e777d06eea23aae7cfa3866"
+    },
+    {
+      "label": "protocol",
+      "exit": 0,
+      "result": [
+        "test result: ok. 183 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.51s"
+      ],
+      "log_sha256": "8432c7ad73d107b9518a16868b0482dfab8bc98783ac1be76c5e9ff105c739c0"
+    }
+  ]
+}

@@ -101,9 +101,33 @@
   "failing_case": "AllocationTest.testAllocateVendorInvoice",
   "failing_assertion_line": 361,
   "foundation_tests_previously_passed": 89,
-  "source_oracle_order_comparison_pending": true,
+  "source_oracle_order_comparison_pending": false,
   "test_assertions_or_bytecode_changed": false,
   "application_qualified": false,
   "full_oracle_programme_qualified": false,
-  "production_qualified": false
+  "production_qualified": false,
+  "read_only_oracle_control": {
+    "version": "23.26.3.0.0",
+    "source_modified": false,
+    "original_stopped_container_restored": true,
+    "exact_application_query_sha256": "3c10a3badc4ca4763d8609e6b23312e69e475485d49e2cce361bfbb8f59a5f3e",
+    "ordered_currency_choices": [
+      "USD",
+      "EUR"
+    ],
+    "unordered_currency_choices": [
+      "EUR",
+      "USD"
+    ],
+    "both_eligible_default_flags_equal": true,
+    "explicit_identifier_tie_break_currency_choices": [
+      "USD",
+      "EUR"
+    ]
+  },
+  "target_ordered_currency_choices": [
+    "EUR",
+    "USD"
+  ],
+  "failure_classification": "Ordering portability dependency is supported by observed row selection; no arithmetic defect or complete application fix established."
 }

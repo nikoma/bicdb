@@ -22,10 +22,14 @@ The failure is `AllocationTest.testAllocateVendorInvoice`, at the balance
 assertion on original source line 361. Target traces show a currency conversion
 after the application selects a price list. A read-only target control finds
 multiple eligible price lists with equal values for the query's sole ordering
-key. This is an investigation lead, not a verified Oracle comparison or a
-conclusion that the engine or application is at fault. The source Oracle order
-comparison remains pending. No seed flags, assertions or application bytecode
-were changed to obtain a passing result.
+key. A subsequent read-only Oracle 23.26.3 control chooses the dollar list first
+for the exact application query; the target chooses the euro list first. On
+Oracle, removing the ordering clause reverses those tied records. An explicit
+identifier tie-break selects the dollar list on both systems. These observations
+support an ordering-portability dependency; they do not establish an arithmetic
+defect or complete the application fix. No source data was modified, and the
+Oracle container was returned to its original stopped state. No seed flags,
+assertions or application bytecode were changed to obtain a passing result.
 
 All five expected classes and their exact invocation counts reported. Original
 source and class hashes, the complete test JAR hash, and eight runtime class

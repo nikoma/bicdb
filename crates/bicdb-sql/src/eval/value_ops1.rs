@@ -107,6 +107,13 @@ pub(crate) fn eval_db_catalog_function_value(
             return Ok(Some(value));
         }
     }
+    // IS JSON lowers to a value-only predicate, including inside CHECK
+    // constraints. It must remain usable by ordinary writers just like the
+    // SQL predicate itself. Match this exact helper, never the bicdb_ prefix:
+    // administrative functions below still require the effective superuser.
+    if bare_name == "bicdb_is_json" {
+        return crate::jsonb::eval_json_function_value(bare_name, args);
+    }
     // A qualified user-schema name is not a builtin name, even when that
     // schema starts with bicdb_. Catalog builtins are unqualified or pg_catalog.
     if !bare_name.contains('.') && (bare_name.starts_with("bicdb_") || bare_name == "travel_time") {

@@ -116,6 +116,13 @@ protocol and migration-tool checks pass. The application's existing baseline
 still needs a separately qualified paged copy and explicit monitoring access;
 its original business failure, remaining tests and full programme remain open.
 
+The [original accounting and grid checkpoint](evidence/idempiere-original-pristine-metadata-2026-11-06/README.md)
+passes another 100 unchanged original tests. Original source/class hashes and
+seven runtime origins match; the JVM and database exit zero. This brings the
+separately versioned batches to 252 passes and one retained vendor-invoice
+failure across 253 reported invocations. The other 1,211 planned invocations,
+complete application behavior and broader programme remain unverified.
+
 The [full-FK foundation checkpoint](evidence/idempiere-full-fk-foundation-2026-11-05/README.md)
 passes all 89 selected original application tests, with zero failures/errors/skips,
 verified Oracle-provider/PostgreSQL-driver origins and clean JVM/database exits.

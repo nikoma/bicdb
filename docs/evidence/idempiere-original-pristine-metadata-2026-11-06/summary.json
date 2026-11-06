@@ -1,0 +1,124 @@
+{
+  "format": 1,
+  "source_commit": "675973280789ef2b414c935d26054178c04a88b5",
+  "binary_sha256": "d8c4f026d86b905f95fcc8240a0b3dca759ad609d3e33a1c396dd40a2d8019e6",
+  "original_test_jar_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+  "original_source_and_class_hashes_checked": true,
+  "test_assertions_or_bytecode_changed": false,
+  "selected_runtime_class_origins": [
+    {
+      "class_name": "org.compiere.db.DB_Oracle",
+      "source_sha256": "330a951360185f9acc875e98985255bda467adac447d1a866ae0a7f210026288",
+      "matched": true
+    },
+    {
+      "class_name": "org.bicdb.jdbc.oracle.OracleDriver",
+      "source_sha256": "9102b2ad40e5f9f1366e9d1a126556ec240c5e8423df5c30e02590506a3333ac",
+      "matched": true
+    },
+    {
+      "class_name": "org.postgresql.Driver",
+      "source_sha256": "2a32a9dcbc42d67a50ad3a0de5efd102c8d2be46720045f2cbd6689f160ab7c7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.acct.AccountingSchemaValidRangeTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.adwindow.GridFieldTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.adwindow.GridFieldVOTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.adwindow.GridTabTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    }
+  ],
+  "expected_test_counts_matched": true,
+  "selected_classes_all_reported": true,
+  "tests": 100,
+  "passed": 100,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "class_results": [
+    {
+      "class_name": "org.idempiere.test.acct.AccountingSchemaValidRangeTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "83069f98d921b9a28549da27b6bfe256312d614767c59f6fc312baa5c8ed407b",
+      "elapsed_seconds": 372.835
+    },
+    {
+      "class_name": "org.idempiere.test.adwindow.GridFieldTest",
+      "tests": 26,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "406ac2b65b2bb0fda5b73078e6270bf71f9f9dd149888665e3af3e41543640d0",
+      "elapsed_seconds": 24.088
+    },
+    {
+      "class_name": "org.idempiere.test.adwindow.GridFieldVOTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "5d8a4941ab4a33cccefd1cc784c34c90208ba5f0cdec1a7157b9900db445ab40",
+      "elapsed_seconds": 0.494
+    },
+    {
+      "class_name": "org.idempiere.test.adwindow.GridTabTest",
+      "tests": 67,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "5550950fd3efa3c46984030d937c98e0c43f63bc215f29998a3a435190d07615",
+      "elapsed_seconds": 473.039
+    }
+  ],
+  "test_jvm_exit": 0,
+  "database_exit": 0,
+  "processes_stopped": true,
+  "external_network_isolated": true,
+  "source_blob_columns_reconciled": 16,
+  "source_table_fingerprints_preserved": true,
+  "application_qualified": false,
+  "full_oracle_programme_qualified": false,
+  "production_qualified": false,
+  "earlier_results": {
+    "tests": 153,
+    "passed": 152,
+    "failures": 1
+  },
+  "combined_results_across_explicit_revisions": {
+    "tests": 253,
+    "passed": 252,
+    "failures": 1,
+    "remaining_planned_invocations_unverified": 1211
+  },
+  "retained_failure": "AllocationTest.testAllocateVendorInvoice",
+  "resource_guard": {
+    "status": "completed",
+    "returncode": 0,
+    "peak_group_rss_bytes": 5265866752,
+    "minimum_observed_available_bytes": 22451122176,
+    "maximum_observed_memory_full_avg10": 0
+  },
+  "cleanup": {
+    "reclaimed_allocated_bytes": 582168576,
+    "logs_xml_and_provenance_retained": true,
+    "pristine_baseline_preserved": true,
+    "only_passed_closed_disposable_database_removed": true
+  }
+}

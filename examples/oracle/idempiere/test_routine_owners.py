@@ -62,9 +62,9 @@ class RoutineOwnerMigrationNativeTests(unittest.TestCase):
                           'AS $$ BEGIN RETURN 7; END $$', prepare=False)
                 c.execute('CREATE PROCEDURE "routine_mapping"."p"() LANGUAGE plpgsql '
                           'AS $$ BEGIN NULL; END $$', prepare=False)
-        (f.snapshot/'manifest.json').write_text(json.dumps(dict(source_schema=schema,
+        (f.root/'manifest.json').write_text(json.dumps(dict(source_schema=schema,
             routines=[dict(name='F',kind='FUNCTION'),dict(name='P',kind='PROCEDURE')])))
-        args = SimpleNamespace(snapshot=f.snapshot, report=f.root/'routine-owners.json',
+        args = SimpleNamespace(snapshot=f.root, report=f.root/'routine-owners.json',
             pg_dsn_env='BICDB_ROUTINE_OWNER_TEST_DSN',target_owner='mapped_owner',profile=profile,
             writers_quiesced=True,check_only=False,resume=False)
         return f,args
@@ -76,6 +76,17 @@ class RoutineOwnerMigrationNativeTests(unittest.TestCase):
     def check_profile(self,profile):
         import psycopg
         f,args = self.fixture(profile)
+        args.check_only=True
+        preflight=self.migrate(f,args)
+        self.assertTrue(preflight['success'])
+        self.assertFalse(preflight['ownership_transaction_committed'])
+        self.assertFalse(preflight['routine_owners_verified'])
+        saved=args.report.read_bytes()
+        args.check_only=False;args.resume=True
+        with self.assertRaisesRegex(ValueError,'journal differs'):
+            self.migrate(f,args)
+        self.assertEqual(args.report.read_bytes(),saved)
+        args.report=f.root/'applied-routine-owners.json';args.resume=False
         result = self.migrate(f,args)
         self.assertTrue(result['ownership_transaction_committed'])
         self.assertTrue(result['routine_owners_verified'])
@@ -107,7 +118,7 @@ class RoutineOwnerMigrationNativeTests(unittest.TestCase):
 
     def test_missing_superuser_other_owner_and_extra_routine_are_refused(self):
         f,args = self.fixture('oracle-preview-v1')
-        schema,plan = target.declarations(json.loads((f.snapshot/'manifest.json').read_text()))
+        schema,plan = target.declarations(json.loads((f.root/'manifest.json').read_text()))
         with f.conn.cursor() as c:
             before=target.catalog(c,schema,plan)
         for role in ['missing','bicdb']:
@@ -131,7 +142,7 @@ class RoutineOwnerMigrationNativeTests(unittest.TestCase):
     def test_later_ddl_failure_rolls_back_the_complete_owner_mapping(self):
         import psycopg
         f,args = self.fixture('postgres')
-        schema,plan = target.declarations(json.loads((f.snapshot/'manifest.json').read_text()))
+        schema,plan = target.declarations(json.loads((f.root/'manifest.json').read_text()))
         with f.conn.cursor() as c:
             before=target.catalog(c,schema,plan)
         original=target.quote

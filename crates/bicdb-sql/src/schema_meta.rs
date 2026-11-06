@@ -3034,6 +3034,13 @@ thread_local! {
 
 pub(crate) const RELATION_NAME_MEMO_CAP: usize = 1024;
 
+fn exact_view_name_exists(db: &BicDb, name: &str) -> bool {
+    let Ok(Some(record)) = db.get(VIEW_COLLECTION, name) else {
+        return false;
+    };
+    serde_json::from_value::<ViewSchema>(record.metadata).is_ok_and(|view| view.name == name)
+}
+
 pub(crate) fn resolve_relation_name_memoized(db: &BicDb, name: &str) -> Option<String> {
     // Instance IDs distinguish databases even when an allocation address and
     // every catalog generation are reused after closing another database.
@@ -3067,12 +3074,13 @@ pub(crate) fn resolve_relation_name_memoized(db: &BicDb, name: &str) -> Option<S
         || graph_virtual_table_names().contains(&name)
     {
         Some(name.to_string())
-    } else if let Ok(Some(view)) = load_view(db, name) {
-        Some(view.name)
+    } else if exact_view_name_exists(db, name) {
+        Some(name.to_string())
     } else {
         legacy.filter(|legacy| {
             (legacy_collection_present && !is_internal_sql_collection(legacy))
                 || graph_virtual_table_names().contains(&legacy.as_str())
+                || exact_view_name_exists(db, legacy)
         })
     };
     RELATION_NAME_MEMO.with(|memo| {

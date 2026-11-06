@@ -4,16 +4,19 @@ No existing application objects are changed. Original rows, later writes and
 valid savepoints are checked after ORA-01086, including a fully rolled-back
 transaction. PostgreSQL transport RELEASE is deliberately a separate contract.
 """
+import re
 import uuid
 
 from persistent_blob_ownership import main as reference_main
 
 
-def observe(factory, repetitions=2):
+def observe(factory, repetitions=2, *, table_name=None):
     if not 1 <= repetitions <= 10:
         raise ValueError('repetitions must be between 1 and 10')
     import oracledb
-    table = 'BICDB_SP_' + uuid.uuid4().hex[:16].upper()
+    table = table_name or 'BICDB_SP_' + uuid.uuid4().hex[:16].upper()
+    if not re.fullmatch(r'BICDB_SP_[0-9A-F]{16}', table):
+        raise ValueError('owned savepoint probe table must be a nonce identifier')
     report = dict(format=1, reference='oracle', cases=[], cleanup_errors=[],
                   original_objects_mutated=False, target_compared=False,
                   application_qualified=False, implementation_qualified=False)
@@ -22,6 +25,7 @@ def observe(factory, repetitions=2):
         connection.autocommit = False
         connection.call_timeout = 15000
         report['source_version'] = connection.version
+        report['owned_table'] = table
         with connection.cursor() as cursor:
             def rows():
                 cursor.execute('SELECT id FROM ' + table + ' ORDER BY id')

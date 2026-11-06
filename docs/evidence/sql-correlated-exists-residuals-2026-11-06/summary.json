@@ -1,0 +1,161 @@
+{
+  "format": 1,
+  "implementation_source_commit": "4861c5d8aefc2edee2aa435a7bd981c0302e7a7a",
+  "backend_sha256": "72a0c0e1ab1d3df2420f41efa54c13566827b3642811ad45549c705e8b8e1aef",
+  "checks": [
+    {
+      "name": "format",
+      "returncode": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "execution_source_commit": "4861c5d8aefc2edee2aa435a7bd981c0302e7a7a",
+      "reused_for_unchanged_code": false
+    },
+    {
+      "name": "probe-focus",
+      "returncode": 0,
+      "log_sha256": "64b61cf388a476090cd57226925baf3141335530d8d5955c95039dc28263737b",
+      "execution_source_commit": "4861c5d8aefc2edee2aa435a7bd981c0302e7a7a",
+      "reused_for_unchanged_code": false
+    },
+    {
+      "name": "build",
+      "returncode": 0,
+      "log_sha256": "2e4b769748570732d311910d1a98dd6455bfe793b5a20acf5a7087d1f7751614",
+      "execution_source_commit": "4861c5d8aefc2edee2aa435a7bd981c0302e7a7a",
+      "reused_for_unchanged_code": false
+    },
+    {
+      "name": "native-residual-probe",
+      "returncode": 0,
+      "log_sha256": "1efe619653146f4b033fdbf4bd5b5762cb73420d50a6dbff3d085ba3fce6e7f0",
+      "execution_source_commit": "4861c5d8aefc2edee2aa435a7bd981c0302e7a7a",
+      "reused_for_unchanged_code": false
+    },
+    {
+      "name": "sql-library",
+      "returncode": 0,
+      "log_sha256": "4326513664b64109a62518a1c5bd9c05f452c9df933d612ebf189e1581411bb3",
+      "execution_source_commit": "4861c5d8aefc2edee2aa435a7bd981c0302e7a7a",
+      "reused_for_unchanged_code": false
+    },
+    {
+      "name": "native-tools",
+      "returncode": 0,
+      "log_sha256": "7f5925464374888d232ece8efe9f98739484017416c7866036ac604822b51531",
+      "execution_source_commit": "4861c5d8aefc2edee2aa435a7bd981c0302e7a7a",
+      "reused_for_unchanged_code": false
+    },
+    {
+      "name": "protocol",
+      "returncode": 0,
+      "log_sha256": "244d050769f63ac878dc8e5a8580a3d1fdbe5e45b1f910f84731b36094abe3f0",
+      "execution_source_commit": "4861c5d8aefc2edee2aa435a7bd981c0302e7a7a",
+      "reused_for_unchanged_code": false
+    },
+    {
+      "name": "oracle-hr",
+      "returncode": 0,
+      "log_sha256": "3bda5de7d307e0481454d817b532195dd23819fbdf986a4a71814aa09a1357c9",
+      "execution_source_commit": "4861c5d8aefc2edee2aa435a7bd981c0302e7a7a",
+      "reused_for_unchanged_code": false
+    },
+    {
+      "name": "authorization",
+      "returncode": 0,
+      "log_sha256": "bd7e296d3b897ab99ea295c12f85ea78fa6904518584f70795914950adb92f65",
+      "execution_source_commit": "4861c5d8aefc2edee2aa435a7bd981c0302e7a7a",
+      "reused_for_unchanged_code": false
+    },
+    {
+      "name": "jdbc-probe",
+      "returncode": 0,
+      "log_sha256": "c80aa5853951cf4f62f1766556952295ea9257bfe23c545073fb601dd18967fb",
+      "execution_source_commit": "4861c5d8aefc2edee2aa435a7bd981c0302e7a7a",
+      "reused_for_unchanged_code": false
+    }
+  ],
+  "results": {
+    "sql_library": {
+      "passed": 751,
+      "failed": 0,
+      "ignored": 4
+    },
+    "probe_focus": {
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    "native_tools": {
+      "passed": 259,
+      "skipped": 4,
+      "failed": 0
+    },
+    "protocol": {
+      "passed": 183,
+      "failed": 0,
+      "ignored": 0
+    },
+    "oracle_integration": {
+      "passed": 48,
+      "failed": 0,
+      "ignored": 0
+    },
+    "authorization_json": {
+      "passed": 44,
+      "failed": 0,
+      "ignored": 0
+    },
+    "jdbc_unit": {
+      "passed": 25,
+      "failed": 0
+    },
+    "jdbc_live": {
+      "extended": 83,
+      "simple": 83,
+      "extendedCacheEverything": 83,
+      "postgres_profile": 1
+    }
+  },
+  "adapter_identity": {
+    "format": 1,
+    "staged_sdk_sha256": "8d0d10b01a5b6caf7cf6528372c46e1f95998e799b87ff43509946d5c343b6d5",
+    "probe_sdk_sha256": "2b380ef7ef88b663bb63a913ed704ed59870beb12a75cfaa264bb4c57ab6206a",
+    "production_class_count": 10,
+    "production_class_bytes_equal": true,
+    "resources_compared": [
+      "META-INF/services/java.sql.Driver"
+    ]
+  },
+  "previous_backend_control": {
+    "format": 1,
+    "status": "baseline_correct_rows_scan_bound_failed",
+    "tests_run": 2,
+    "expected_failures": 2,
+    "errors": 0,
+    "backend_source_commit": "62a1e076fb836d7dd033e09bb1060cffd04eafbd",
+    "backend_sha256": "f5e1ac0314dcbb29211c25a40198c3fa746957a215a9c7d83629169b1b6e1557",
+    "test_sha256": "357cf575bd6d9537730992d0161e7888729287159cf5575af93e3ba46c6b4c67",
+    "profiles": {
+      "oracle-preview-v1": 26,
+      "postgres": 26
+    },
+    "log_sha256": "13bc08c024d0f853e58041cf0198bb362c3cbc68bdbec77e0dd3a351cc1a818c",
+    "implementation_qualified": false,
+    "application_qualified": false
+  },
+  "original_client_setup_previous_backend": {
+    "period_control_inserts_completed": 384,
+    "operational_timeout_events": 6,
+    "run_interrupted": true,
+    "application_test_completed": false,
+    "junit_pass_claimed": false,
+    "natural_junit_failure_claimed": false,
+    "original_assertions_changed": false,
+    "retry_required": true
+  },
+  "application_qualified": false,
+  "production_qualified": false,
+  "release_published": false,
+  "deployment_verified": false,
+  "oracle_programme_complete": false
+}

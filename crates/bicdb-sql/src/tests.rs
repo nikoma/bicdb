@@ -8750,8 +8750,8 @@ fn correlated_row_contexts_refill_nested_aliases_and_nulls() {
             ],
             "{profile}"
         );
-        // Reversing the projected column order changes layout, and a later
-        // statement must refill values from current transaction-visible data.
+        // A later statement with different projected order must read current
+        // transaction-visible data, including the updated correlated value.
         execute(&mut session, "UPDATE outer_values SET v=40 WHERE id=4");
         assert_eq!(
             execute(

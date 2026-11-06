@@ -119,3 +119,7 @@ complete production qualification remain broader programme gates.
 The [read-only orphan inventory](oracle-foreign-key-orphan-inventory.md) uses the
 completed migration journal and checks its target baseline before and after
 counting. It does not repair legacy rows or qualify source-data equality.
+
+See the [reference reservation contract](foreign-key-reservations.md) for the
+separate child-reference and parent-key-mutation concurrency rules. Installation
+and orphan-count success do not qualify all transaction schedules.

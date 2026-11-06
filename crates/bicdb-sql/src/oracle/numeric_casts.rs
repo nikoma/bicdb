@@ -45,10 +45,10 @@ mod tests {
     fn source_numeric_cast_defaults_preserve_number_and_explicit_modifiers() {
         let sql = source_cast_defaults("SELECT CAST(15.193 AS NUMBER),CAST(15.193 AS NUMERIC),CAST(15.193 AS DECIMAL),CAST(15.193 AS DEC),CAST(15.193 AS NUMERIC(8,3)) FROM DUAL").unwrap();
         assert!(sql.contains("AS NUMBER)"), "{sql}");
-        assert!(sql.contains("AS NUMERIC(38, 0))"), "{sql}");
-        assert!(sql.contains("AS DECIMAL(38, 0))"), "{sql}");
-        assert!(sql.contains("AS DEC(38, 0))"), "{sql}");
-        assert!(sql.contains("AS NUMERIC(8, 3))"), "{sql}");
+        assert!(sql.contains("AS NUMERIC(38,0))"), "{sql}");
+        assert!(sql.contains("AS DECIMAL(38,0))"), "{sql}");
+        assert!(sql.contains("AS DEC(38,0))"), "{sql}");
+        assert!(sql.contains("AS NUMERIC(8,3))"), "{sql}");
     }
 
     #[test]

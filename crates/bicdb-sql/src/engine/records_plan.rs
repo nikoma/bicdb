@@ -1784,7 +1784,11 @@ impl<'db> SqlEngine<'db> {
                     .map(index_value_from_sql)
                     .transpose()?
                 } else {
-                    equality_value(selection, field)?
+                    equality_value(selection, field)?.or_else(|| {
+                        schema.as_ref().and_then(|schema| {
+                            folded_text_equality_prefix(schema, selection, field)
+                        })
+                    })
                 };
                 let Some(mut value) = value else {
                     break;
@@ -2513,6 +2517,51 @@ impl<'db> SqlEngine<'db> {
         }
         Ok(())
     }
+}
+
+/// An exact text equality implies equality of its case-converted index key.
+/// This is only a candidate bound: the original WHERE expression must still
+/// filter rows, since distinct strings can have the same converted key.
+fn folded_text_equality_prefix(
+    schema: &TableSchema,
+    selection: &Expr,
+    field: &IndexField,
+) -> Option<IndexValue> {
+    let (inner, upper) = match field {
+        IndexField::Upper(inner) => (inner.as_ref(), true),
+        IndexField::Lower(inner) => (inner.as_ref(), false),
+        _ => return None,
+    };
+    let IndexField::MetadataPath(path) = inner else {
+        return None;
+    };
+    let [name] = path.as_slice() else {
+        return None;
+    };
+    let column = schema.column(name)?;
+    // Padded characters, user-defined equality, and locale collations need
+    // their own implication proof. Do not infer raw string bounds for them.
+    if !matches!(column.pg_type.as_str(), "text" | "varchar")
+        || column.user_type.is_some()
+        || column.collation.is_some()
+        || !matches!(
+            column.type_modifier,
+            None | Some(PgTypeModifier::Character { .. })
+                | Some(PgTypeModifier::OracleCharacterV1 { fixed: false, .. })
+        )
+    {
+        return None;
+    }
+    let IndexValue::String(value) = equality_value(selection, inner).ok()?? else {
+        return None;
+    };
+    // Match the core index extractor's Unicode conversion, including keys
+    // which expand to multiple characters. No arbitrary SQL is evaluated.
+    Some(IndexValue::String(if upper {
+        value.to_uppercase()
+    } else {
+        value.to_lowercase()
+    }))
 }
 
 /// Collect, iteratively (never recursively — a hostile query can nest deeply),

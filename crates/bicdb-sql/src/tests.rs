@@ -8178,6 +8178,134 @@ fn upper_expression_index_backfill_mutation_uniqueness_and_reopen() {
 }
 
 #[test]
+fn folded_text_equality_uses_index_and_keeps_exact_residual() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE folded_names(id int PRIMARY KEY, tenant int, label text)")
+        .unwrap();
+    session.execute("INSERT INTO folded_names VALUES (1,7,'Straße'),(2,7,'STRASSE'),(3,8,'Straße'),(4,7,NULL),(5,7,'Mixed'),(6,7,'mixed'),(7,7,'İ'),(8,7,'i̇')").unwrap();
+    let queries = [
+        "SELECT id FROM folded_names n WHERE n.label='Straße' AND tenant=7 ORDER BY id",
+        "SELECT id FROM folded_names WHERE 'mixed'=label ORDER BY id",
+        "SELECT id FROM folded_names WHERE label='İ' ORDER BY id",
+        "SELECT id FROM folded_names WHERE label='i̇' ORDER BY id",
+        "SELECT id FROM folded_names WHERE label='absent' ORDER BY id",
+    ];
+    let expected: Vec<_> = queries
+        .iter()
+        .map(|sql| session.execute(sql).unwrap().rows)
+        .collect();
+    for function in ["upper", "lower"] {
+        session
+            .execute(&format!(
+                "CREATE INDEX folded_lookup ON folded_names({function}(label),tenant)"
+            ))
+            .unwrap();
+        for (sql, expected) in queries.iter().zip(&expected) {
+            SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().push(SqlProfileStats::default()));
+            let result = session.execute(sql);
+            let stats = SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().pop().unwrap());
+            assert_eq!(&result.unwrap().rows, expected, "{function}: {sql}");
+            assert!(stats.index_lookup_count > 0, "{function}: {sql}: {stats:?}");
+            assert_eq!(stats.full_scan_count, 0, "{function}: {sql}");
+        }
+        session.execute("DROP INDEX folded_lookup").unwrap();
+    }
+}
+
+#[test]
+fn folded_text_equality_preserves_pending_mutations_and_reopen() {
+    let dir = tempfile::tempdir().unwrap();
+    {
+        let mut db = BicDb::open(dir.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session
+            .execute("CREATE TABLE folded_pending(id int PRIMARY KEY, label varchar(20))")
+            .unwrap();
+        session
+            .execute("INSERT INTO folded_pending VALUES (1,'Hello'),(2,'HELLO'),(3,'Other')")
+            .unwrap();
+        session
+            .execute("CREATE INDEX folded_pending_lookup ON folded_pending(lower(label))")
+            .unwrap();
+        session.execute("BEGIN").unwrap();
+        session
+            .execute("INSERT INTO folded_pending VALUES (4,'Hello')")
+            .unwrap();
+        session
+            .execute("UPDATE folded_pending SET label='Hello' WHERE id=3")
+            .unwrap();
+        session
+            .execute("DELETE FROM folded_pending WHERE id=1")
+            .unwrap();
+        assert_eq!(
+            session
+                .execute("SELECT id FROM folded_pending WHERE label='Hello' ORDER BY id")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(3)], vec![SqlValue::Int(4)]]
+        );
+        session.execute("ROLLBACK").unwrap();
+        assert_eq!(
+            session
+                .execute("SELECT id FROM folded_pending WHERE label='Hello'")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(1)]]
+        );
+        session
+            .execute("UPDATE folded_pending SET label='Hello' WHERE id=3")
+            .unwrap();
+        drop(session);
+        db.flush().unwrap();
+    }
+    let mut db = BicDb::open(dir.path()).unwrap();
+    assert!(db.verify_index("folded_pending_lookup").unwrap().valid);
+    assert_eq!(
+        SqlSession::new(&mut db)
+            .execute("SELECT id FROM folded_pending WHERE label='Hello' ORDER BY id")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(3)]]
+    );
+}
+
+#[test]
+fn folded_text_equality_declines_padding_collation_and_nonconjunctions() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE TABLE folded_fallback(id int PRIMARY KEY, padded char(5), collated text COLLATE \"C\", label text)").unwrap();
+    session.execute("INSERT INTO folded_fallback VALUES (1,'ab','ab','ab'),(2,'AB','AB','AB'),(3,NULL,NULL,NULL)").unwrap();
+    let queries = [
+        "SELECT id FROM folded_fallback WHERE padded='ab' ORDER BY id",
+        "SELECT id FROM folded_fallback WHERE collated='ab' ORDER BY id",
+        "SELECT id FROM folded_fallback WHERE label='ab' OR label IS NULL ORDER BY id",
+        "SELECT id FROM folded_fallback WHERE label IS NULL ORDER BY id",
+    ];
+    let expected: Vec<_> = queries
+        .iter()
+        .map(|sql| session.execute(sql).unwrap().rows)
+        .collect();
+    for field in ["padded", "collated", "label"] {
+        session
+            .execute(&format!(
+                "CREATE INDEX folded_{field} ON folded_fallback(upper({field}))"
+            ))
+            .unwrap();
+    }
+    for (sql, expected) in queries.iter().zip(&expected) {
+        SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().push(SqlProfileStats::default()));
+        let result = session.execute(sql);
+        let stats = SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().pop().unwrap());
+        assert_eq!(&result.unwrap().rows, expected, "{sql}");
+        assert_eq!(stats.index_lookup_count, 0, "{sql}: {stats:?}");
+    }
+}
+
+#[test]
 fn metadata_only_indexes_are_not_catalogued_as_ready_or_valid() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(dir.path()).unwrap();

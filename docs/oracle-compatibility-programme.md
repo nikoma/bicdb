@@ -961,3 +961,13 @@ and tests the phase on native disposable databases. Orphan inventory and full
 application acceptance remain separate. Filtered parent-column metadata and
 constraints on tables without declared primary keys have general regressions.
 Explicit key/index names still require schema-namespace compatibility work.
+
+
+## Storage monitoring catalog gate
+
+The [storage catalog contract](oracle-storage-catalog-contract.md) records a
+background monitoring query that currently fails on `DBA_FREE_SPACE`. The
+read-only allocator inventory foundation has page-manager regression coverage;
+Oracle view resolution, descriptors, monitoring grants and source/application
+qualification remain open. Host filesystem free space and fabricated empty
+results are not substitutes for reusable database extents.

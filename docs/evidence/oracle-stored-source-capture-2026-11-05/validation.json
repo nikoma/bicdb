@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "tool_source_commit": "3d924200d5bfb62fd501986bb61cbe43ffbfd921",
+  "fixture_sha256": "39d8472fa6d8a4abf343266cf2b8a38a59999a8070eb1ca54001074f07ac0da2",
+  "exporter_sha256": "1d740aec8cd93c5a31f452813897003420ce1f835f2cfbdaa64ccd9b80647e2b",
+  "oracle_server_version": "23.26.3.0.0",
+  "live_tests_passed": 1,
+  "live_tests_failed": 0,
+  "captured_objects": {
+    "routines": 2,
+    "type_declarations": 1,
+    "type_bodies": 1,
+    "package_specifications": 1,
+    "package_bodies": 1,
+    "triggers": 2
+  },
+  "trigger_states": [
+    "ENABLED",
+    "DISABLED"
+  ],
+  "all_fixture_objects_valid": true,
+  "source_line_continuity_and_exact_ddl_checked": true,
+  "remaining_fixture_objects": 0,
+  "disposable_owner_dropped": true,
+  "reference_container_restored": true,
+  "cleanup_errors": [],
+  "log_sha256": "849fb489b686f899c0185e0dc6542f52ff50d12299efba03fd4659bd2f4588af",
+  "target_package_execution_qualified": false,
+  "application_qualified": false,
+  "goal_complete": false
+}

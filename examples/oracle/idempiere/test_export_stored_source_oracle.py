@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import time
 import unittest
 import uuid
 
@@ -51,6 +52,24 @@ class StoredSourceOracleTests(unittest.TestCase):
                 self.assertEqual(cursor.fetchone(), (0,))
                 cursor.execute('SELECT '+q('F')+'(),'+q('PKG')+'.answer() FROM dual')
                 self.assertEqual(cursor.fetchone(), (7,42))
+                # Fresh Oracle DDL can reject an immediately following
+                # read-only snapshot with ORA-01466. Establish readability on
+                # this owned fixture before starting the export's own snapshot.
+                # Never retry a partially completed export or mix its snapshots.
+                deadline = time.monotonic()+10
+                while True:
+                    connection.rollback()
+                    try:
+                        cursor.execute('SET TRANSACTION READ ONLY')
+                        cursor.execute('SELECT COUNT(*) FROM '+q('T'))
+                        self.assertEqual(cursor.fetchone(), (0,))
+                        break
+                    except oracledb.DatabaseError as error:
+                        if error.args[0].code != 1466 or time.monotonic() >= deadline:
+                            raise
+                        time.sleep(.1)
+                    finally:
+                        connection.rollback()
                 with tempfile.TemporaryDirectory(prefix='bicdb-source-capture-') as name:
                     directory = Path(name)/'export'
                     target.export(config_path, directory)

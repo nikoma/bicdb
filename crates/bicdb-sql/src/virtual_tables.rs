@@ -2999,7 +2999,7 @@ pub(crate) fn index_field_from_expr_for_schema(
         Expr::Function(function)
             if object_name_lowercase(&function.name).is_ok_and(|name| {
                 matches!(
-                    name,
+                    name.as_ref(),
                     "date_trunc" | "pg_catalog.date_trunc" | "bicdb_oracle_trunc_date"
                 )
             }) =>

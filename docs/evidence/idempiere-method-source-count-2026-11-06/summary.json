@@ -1,0 +1,34 @@
+{
+  "format": 1,
+  "status": "original_static_method_source_count_verified",
+  "returncode": 0,
+  "jar_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+  "helper_sha256": "87e795bcf2eab2241243c66570d671d6a189a96619c0eb63f06938592db4990e",
+  "class_name": "org.idempiere.test.base.EmailFormatValidatorTest",
+  "provider": "data",
+  "invocations": 24,
+  "original_bytecode_changed": false,
+  "junit_discovery_qualified": false,
+  "test_assertions_executed": false,
+  "application_qualified": false,
+  "direct_annotated_methods": 1441,
+  "planned_invocations_after_known_expansion": 1464,
+  "planned_classes": 155,
+  "remaining_after_foundation_and_business": 1311,
+  "all_application_tests_passed": false,
+  "checks": [
+    {
+      "name": "original-provider",
+      "returncode": 0,
+      "log_sha256": "18b5bac9924e09483256e57d7a93dbe79ab89926ccefa032dd6cfb1599cf9f27"
+    },
+    {
+      "name": "incorrect-origin",
+      "returncode": 1,
+      "log_sha256": "ec3c9b241876192fcb89df9471868c1796b687f998c4b38a50dd1c74cb9b9ab9"
+    }
+  ],
+  "inventory_tool_tests_passed": 6,
+  "oracle_server_used": false,
+  "postgres_server_used": false
+}

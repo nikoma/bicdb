@@ -375,6 +375,8 @@ def main():
                     probe_constraint_null_support(cursor, schema)
                 report['verified_nullable_unique_constraints'] = []
                 report['verified_character_columns'] = []
+                rechecked = 0
+                completed_count = len(report['completed'])
                 for table in manifest['tables']:
                     name = table['name']
                     if args.phase != 'tables' or name in report['completed']:
@@ -394,6 +396,9 @@ def main():
                             expected = 0 if args.phase == 'tables' else table['rows']
                             if int(cursor.fetchone()[0]) != expected:
                                 raise ValueError('completed target table row count differs from journal phase')
+                        rechecked += 1
+                        if rechecked % 32 == 0 or rechecked == completed_count:
+                            print(f'{args.phase}: rechecked {rechecked}/{completed_count} completed tables', flush=True)
                         continue
                     print(f"{args.phase}: {name}", flush=True)
                     if args.phase == 'tables':

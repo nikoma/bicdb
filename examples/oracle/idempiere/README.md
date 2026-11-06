@@ -136,7 +136,10 @@ and application execution as outstanding. The data phase validates and freezes
 each source row file before COPY, requires an empty uncompleted target table,
 and commits its per-table COPY/count checks before advancing the journal.
 `--resume` checks the journal's manifest digest, profile, endpoint and completed
-prefix, plus completed table columns/counts. The journal is a development resume
+prefix, plus completed table columns/counts. It prints a recheck count every 32
+completed tables and at the end of that prefix, after the applicable metadata,
+count and value checks pass. This progress does not mark the entire phase
+complete. The journal is a development resume
 mechanism; it does not certify an unmodified target or make import atomic across
 all tables. See the [source-value verification contract](../../../docs/oracle-source-value-verification.md).
 Use the independent `verify` phase to compare complete row multisets,

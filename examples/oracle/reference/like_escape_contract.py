@@ -42,6 +42,19 @@ def observe(factory):
         try:
             with connection.cursor() as cursor:
                 cursor.execute('SET TRANSACTION READ ONLY')
+                cursor.execute("SELECT PARAMETER,VALUE FROM NLS_DATABASE_PARAMETERS WHERE PARAMETER IN ('NLS_CHARACTERSET','NLS_NCHAR_CHARACTERSET')")
+                report['database_nls'] = dict(cursor.fetchall())
+                cursor.execute("SELECT PARAMETER,VALUE FROM NLS_SESSION_PARAMETERS WHERE PARAMETER IN ('NLS_COMP','NLS_SORT','NLS_LENGTH_SEMANTICS')")
+                report['session_nls'] = dict(cursor.fetchall())
+                # Compare a literal with the same bound Unicode value. Oracle
+                # escape observations depend on the source/client encoding;
+                # retain byte lengths and dumps rather than inferring them.
+                cursor.execute("SELECT LENGTH('§'),LENGTHB('§'),DUMP('§',1016),LENGTH(:v),LENGTHB(:v),DUMP(:v,1016) FROM DUAL", {'v': '§'})
+                report['unicode_encoding_control'] = dict(zip(
+                    ['literal_length', 'literal_byte_length', 'literal_dump',
+                     'bind_length', 'bind_byte_length', 'bind_dump'], cursor.fetchone()))
+                report['reference_driver_version'] = oracledb.__version__
+                report['reference_driver_thin_mode'] = oracledb.is_thin_mode()
                 for name, predicate, binds in PLANS:
                     sql = 'SELECT CASE WHEN (' + predicate + ') THEN 1 WHEN NOT (' + predicate + ') THEN 0 ELSE 2 END FROM DUAL'
                     item = dict(id=name, sql=sql, binds=binds)

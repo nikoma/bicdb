@@ -263,13 +263,22 @@ def verify_values(cursor, snapshot, schema, table):
 
 
 def save_report(path, report):
-    temporary = path.with_name(path.name + '.tmp')
-    with temporary.open('w') as target:
-        json.dump(report, target, indent=2)
-        target.write('\n')
-        target.flush()
-        os.fsync(target.fileno())
-    temporary.replace(path)
+    # Create an exclusive sibling so a pre-existing file/link is never reused.
+    # Keeping staging on the same filesystem preserves atomic replacement.
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8',
+                                         prefix='.' + path.name + '.', suffix='.tmp',
+                                         dir=path.parent, delete=False) as target:
+            temporary = Path(target.name)
+            json.dump(report, target, indent=2)
+            target.write('\n')
+            target.flush()
+            os.fsync(target.fileno())
+        temporary.replace(path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def main():

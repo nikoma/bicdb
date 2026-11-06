@@ -146,3 +146,7 @@ records traced fresh/resumed query counts, a negative counter control and a
 post-install mismatch/resume control. All 15 pure/native migration checks pass;
 these focused results do not establish production throughput or full application
 acceptance.
+
+The shared [journal publication contract](oracle-migration-journals.md) describes
+atomic JSON replacement, private file permissions and failure cleanup. These
+filesystem properties do not replace source/target identity or migration checks.

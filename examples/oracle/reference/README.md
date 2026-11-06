@@ -1,5 +1,15 @@
 # Oracle reference queries
 
+`sequence_state.py --reference oracle --oracle-config /private/oracle.json
+--output /private/sequence-state.json` compares NEXTVAL/CURRVAL across rollback
+and savepoint rollback, and allocations through four connections. Use a
+dedicated Oracle owner with CREATE SEQUENCE and an explicit Oracle-preview
+BicDB target. Both sides create and remove nonce sequences. The
+[combined checkpoint](../../../docs/evidence/transaction-integrity-truncation-2026-11-05/README.md)
+records its two source cases alongside independent PostgreSQL shared-sequence
+and lock-progress tests. This does not qualify min/max, cycle/cache, distributed
+allocation or complete sequence behavior.
+
 `foreign_key_writer_fence.py --current-server /path/to/current/oracle_server
 --previous-server /path/to/previous/oracle_server --output /private/fence.json`
 qualifies an upgrade on a disposable database created by the previous binary.

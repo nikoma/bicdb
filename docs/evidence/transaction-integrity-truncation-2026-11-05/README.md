@@ -37,3 +37,32 @@ ownership, production operation or complete Oracle compatibility. See the
 [reservation contract](../../foreign-key-reservations.md) for supported key moves
 and remaining boundaries. The separately interrupted application batch still
 requires all 89 original tests on a fresh full-schema copy.
+
+## Combined sequence and cleanup qualification
+
+Main concurrently gained shared sequence allocation. The
+[combined validation](combined-validation.json) rebuilds and tests that engine
+together with the cleanup fix. It adds the shared-sequence concurrency/default
+regressions and the protocol lock-progress regression to the existing full
+SQL, protocol, native-tool and Oracle-profile suites. Counts and log hashes
+identify the actual combined run.
+
+The [sequence reference](combined-sequence-reference.json) matches two additional
+Oracle cases: NEXTVAL/CURRVAL state across rollback and rollback to a savepoint,
+and 32 allocations through four connections whose transactions roll
+back. The PostgreSQL transport crosses its automatic prepare threshold during
+the latter. These supplement the combined
+[foreign-key](combined-foreign-key-reference.json) and
+[BLOB](combined-blob-reference.json) comparisons, for 15 matched source cases.
+Both sides remove their owned objects and the native comparison databases exit
+cleanly. Min/max, cycle/cache policy, distributed allocation and full sequence
+conformance remain separate gates. The interrupted application batch still
+requires all 89 original tests and broader application/recovery qualification.
+
+Reference startup initially failed because the host filesystem had no blocks
+available to Oracle's unprivileged process. Cleanup reclaimed 10.07 GiB from
+19 closed, superseded test databases, retaining their logs/reports/metadata and
+preserving the active application and full-FK baseline. Filesystem reserves were
+unchanged. Only the source-reference stage was repeated against the same verified
+native source and binary; all 15 cases then passed. This is environment recovery,
+not a production storage-availability qualification.

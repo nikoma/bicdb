@@ -1,0 +1,200 @@
+{
+  "format": 1,
+  "native_source_commit": "dc6e3c5a1f9943ec9cb63abf7157ed1d58281986",
+  "native_binary_sha256": "b8828534f9a2dd20540dc87cf9c1975dff36697ef58ed88ddadcc65d2fbe90aa",
+  "integration_reason": "Main concurrently gained shared sequence allocation. The combined core cleanup and sequence engine was rebuilt and qualified; component results were not substituted for this combined run.",
+  "steps": [
+    {
+      "name": "core-integrity-truncation",
+      "returncode": 0,
+      "log_sha256": "600d53dec17b876c38b8d1ffd28cec5bd47db601a676751f3358e63bd19095d8",
+      "rust_test_targets": [
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "build",
+      "returncode": 0,
+      "log_sha256": "917938d395c8dae05233707346a9eb1da16565d38957e1a08b653d6773cbc0f1"
+    },
+    {
+      "name": "sql-shared-sequences",
+      "returncode": 0,
+      "log_sha256": "9f6edf1955cfbd0449c812544227e75c25862bf9fa898129718c722834065082",
+      "rust_test_targets": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "sql-foreign-keys",
+      "returncode": 0,
+      "log_sha256": "c17d36217e9358922ac27c301697502e4f7f20f2bed4c486f82384a9303cbb3e",
+      "rust_test_targets": [
+        {
+          "passed": 20,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "core-reservations",
+      "returncode": 0,
+      "log_sha256": "414ac1500429578f28a4fa3edbbbfe094c2340ff4823ab8eb090a2a038cd9a65",
+      "rust_test_targets": [
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "core-locks",
+      "returncode": 0,
+      "log_sha256": "acc33f69b3ff290c363d2b8ed9e84415c521125be2aab108b0977c46f20cdd99",
+      "rust_test_targets": [
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "core-waiters",
+      "returncode": 0,
+      "log_sha256": "0532c5a6df149daf116bc0e417c98cb3dc3fa7a697d6cfc22d46a7511ccb4efd",
+      "rust_test_targets": [
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "core-receipts",
+      "returncode": 0,
+      "log_sha256": "6f21b57041d20e76e4ad140a8389562f2c93f99882fc3c2d40224de6bc499268",
+      "rust_test_targets": [
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "sql-library",
+      "returncode": 0,
+      "log_sha256": "8e751c3308d26de235164cf451915a43f45a42749cff2bb9aaf271995735d077",
+      "rust_test_targets": [
+        {
+          "passed": 717,
+          "failed": 0,
+          "ignored": 4
+        }
+      ]
+    },
+    {
+      "name": "pgwire-protocol",
+      "returncode": 0,
+      "log_sha256": "11fef0cfe7379a8a30faa816258e7dd190c6444adc6ab663bda07d47551778ad",
+      "rust_test_targets": [
+        {
+          "passed": 183,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "pgwire-sequence-progress",
+      "returncode": 0,
+      "log_sha256": "ee15dbaec21c60857fc2a3139c0f6fdb6f39385abaef080f6ba82a2443a50bf4",
+      "rust_test_targets": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "oracle-hr-protocol",
+      "returncode": 0,
+      "log_sha256": "182a1f40c6eb5bb3378a88ae1dd69760bc4a944655516f9bf16c881f47849534",
+      "rust_test_targets": [
+        {
+          "passed": 48,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "native-tools",
+      "returncode": 0,
+      "log_sha256": "37908aec05aeebdb417daa675daa274cac3d9d0cd1ca48e7ee9469db5dc9f402",
+      "python_tests": {
+        "total": 128,
+        "passed": 125,
+        "skipped": 3,
+        "failed": 0
+      }
+    }
+  ],
+  "oracle_version": "23.26.3.0.0",
+  "source_comparison_cases_matched": 15,
+  "application_qualified": false,
+  "production_qualified": false,
+  "goal_complete": false,
+  "prior_reference_environment_failure": {
+    "kind": "Oracle temporary-tablespace write failed with ENOSPC during reference startup",
+    "native_checks_already_passed": true,
+    "native_checks_reused_after_source_and_binary_verification": true,
+    "reclaimed_closed_test_databases": 19,
+    "reclaimed_allocated_bytes": 10814791680,
+    "filesystem_reserved_blocks_unchanged": true,
+    "active_application_and_full_foreign_key_baseline_preserved": true
+  }
+}

@@ -9,18 +9,16 @@ NATIVE = '"pg_catalog"."bicdb_oracle_free_space"'
 LABELS = ['TABLESPACE_NAME', 'FILE_ID', 'BLOCK_ID', 'BYTES', 'BLOCKS', 'RELATIVE_FNO']
 
 
-class PagedFixture(fixtures.ForeignKeyMigrationIntegrationTests):
-    def start_server(self):
-        self.child = subprocess.Popen(
-            [os.environ['BICDB_ORACLE_SERVER'], str(self.root/'db'), str(self.port),
-             self.profile, '8', '4', 'server_paged'],
-            stdout=self.log, stderr=subprocess.STDOUT)
-
-
 @unittest.skipUnless(os.environ.get('BICDB_ORACLE_SERVER'),
                      'set BICDB_ORACLE_SERVER for native storage catalog checks')
 class StorageCatalogNativeTests(unittest.TestCase):
     def fixture(self, profile):
+        class PagedFixture(fixtures.ForeignKeyMigrationIntegrationTests):
+            def start_server(self):
+                self.child = subprocess.Popen(
+                    [os.environ['BICDB_ORACLE_SERVER'], str(self.root/'db'), str(self.port),
+                     self.profile, '8', '4', 'server_paged'],
+                    stdout=self.log, stderr=subprocess.STDOUT)
         f = PagedFixture(methodName='runTest')
         f.profile = profile
         self.addCleanup(lambda: self.assertTrue(f.doCleanups(), 'storage fixture cleanup failed'))

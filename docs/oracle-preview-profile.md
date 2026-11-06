@@ -466,6 +466,12 @@ toward zero; procedural calls round precision halfway away from zero to satisfy
 the builtin integer parameter. The native two-argument numeric overload takes integer precision
 and preserves its decimal display scale.
 
+The [scaled numeric ROUND contract](oracle-numeric-round.md) separately covers
+NUMBER results, finite binary operands, literal precision and direct SQL quote
+provenance. The [native storage catalog contract](oracle-storage-catalog-contract.md)
+defines the restricted `DBA_FREE_SPACE` mapping for paged stores; it does not
+provide fabricated free-space rows for memory-backed databases.
+
 The preview supports W (weeks from the month's first day), WW (weeks from the
 year's first day), ISO weeks/year starts, and D/DY/DAY with its AMERICA default
 (Sunday). Gregorian/AMERICA reference settings are required for the generated

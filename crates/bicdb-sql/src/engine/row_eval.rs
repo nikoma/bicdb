@@ -3237,12 +3237,14 @@ impl<'db> SqlEngine<'db> {
     }
 
     pub(crate) fn infer_sql_row_expr_type(&self, row: &SqlRow, expr: &Expr) -> Option<String> {
-        row_columns_expr_pg_type(self.db_ref(), expr, row.keys().map(String::as_str)).or_else(|| {
-            self.routine_slots.as_ref()?;
-            let columns = row.keys().cloned().collect::<Vec<_>>();
-            let (scope, _) = self.bound_row_context(&columns);
-            scope.known_expr_type(expr)
-        })
+        row_columns_expr_pg_type(self.db_ref(), expr, row.keys().map(String::as_str)).or_else(
+            || {
+                self.routine_slots.as_ref()?;
+                let columns = row.keys().cloned().collect::<Vec<_>>();
+                let (scope, _) = self.bound_row_context(&columns);
+                scope.known_expr_type(expr)
+            },
+        )
     }
 
     pub(crate) fn infer_slot_row_expr_type(
@@ -3250,14 +3252,15 @@ impl<'db> SqlEngine<'db> {
         columns: &[String],
         expr: &Expr,
     ) -> Option<String> {
-        row_columns_expr_pg_type(self.db_ref(), expr, columns.iter().map(String::as_str))
-            .or_else(|| {
+        row_columns_expr_pg_type(self.db_ref(), expr, columns.iter().map(String::as_str)).or_else(
+            || {
                 self.routine_slots.as_ref()?;
                 // The binder preserves column precedence and ambiguity. A
                 // same-named argument must not capture a local row column.
                 let (scope, _) = self.bound_row_context(columns);
                 scope.known_expr_type(expr)
-            })
+            },
+        )
     }
 
     pub(crate) fn execute_scalar_subquery(&self, query: &Query) -> Result<SqlValue> {

@@ -106,6 +106,16 @@ rows among equal ordering keys, supporting a portability dependency. Remaining
 batches, resolution of the original failure and full application qualification
 remain open.
 
+The [storage-catalog and numeric-expression checkpoint](evidence/oracle-storage-catalog-2026-11-06/README.md)
+adds actual reusable-page inventory, restricted monitoring grants, native
+maintenance boundaries and Oracle-preview dictionary resolution. Numeric
+carriers/descriptors, quoted dotted setting resets and scaled numeric ROUND
+have independent PostgreSQL and preview controls. Fifteen ROUND values match
+read-only Oracle controls fetched as exact decimals. Broad SQL, authorization,
+protocol and migration-tool checks pass. The application's existing baseline
+still needs a separately qualified paged copy and explicit monitoring access;
+its original business failure, remaining tests and full programme remain open.
+
 The [full-FK foundation checkpoint](evidence/idempiere-full-fk-foundation-2026-11-05/README.md)
 passes all 89 selected original application tests, with zero failures/errors/skips,
 verified Oracle-provider/PostgreSQL-driver origins and clean JVM/database exits.

@@ -1,0 +1,159 @@
+{
+  "format": 1,
+  "qualified_source_commit": "675973280789ef2b414c935d26054178c04a88b5",
+  "page_allocator_source_commit": "aa5d3634afd2d4212cf02be2cbe0ca22913e86fa",
+  "page_and_core_sources_identical_to_allocator_baseline": true,
+  "development_server_sha256": "d8c4f026d86b905f95fcc8240a0b3dca759ad609d3e33a1c396dd40a2d8019e6",
+  "cli_sha256": "e785e31b6eda976f5434d2798401e8b776453198f171f6d865708c7ac113bfe4",
+  "published_release": false,
+  "accepted_application_upgraded": false,
+  "checks": {
+    "page_manager": {
+      "passed": 35,
+      "source_commit": "aa5d3634afd2d4212cf02be2cbe0ca22913e86fa"
+    },
+    "sql_library": {
+      "passed": 728,
+      "failed": 0,
+      "ignored": 4
+    },
+    "authorization_and_json": {
+      "passed": 44,
+      "failed": 0
+    },
+    "pgwire_protocol": {
+      "passed": 183,
+      "failed": 0
+    },
+    "oracle_hr": {
+      "passed": 48,
+      "failed": 0
+    },
+    "migration_tools": {
+      "total": 216,
+      "passed": 212,
+      "skipped": 4,
+      "failed": 0
+    },
+    "focused_storage": {
+      "passed": 6,
+      "included_in_migration_tools": true
+    },
+    "focused_numeric_round": {
+      "passed": 2,
+      "included_in_migration_tools": true
+    },
+    "offline_storage_copy": {
+      "passed": 2,
+      "failed": 0
+    },
+    "cli_build": {
+      "passed": true
+    }
+  },
+  "oracle_round_reference": {
+    "format": 1,
+    "source_commit": "675973280789ef2b414c935d26054178c04a88b5",
+    "binary_sha256": "d8c4f026d86b905f95fcc8240a0b3dca759ad609d3e33a1c396dd40a2d8019e6",
+    "oracle_version": "23.26.3.0.0",
+    "source_numeric_fetch_exact": true,
+    "expressions_compared": 15,
+    "cases": [
+      {
+        "name": "numbers",
+        "actual": [
+          "1.41",
+          "15.2",
+          "-15.2",
+          "20",
+          "9007199254740993.12",
+          null
+        ],
+        "source_reference": [
+          "1.41",
+          "15.2",
+          "-15.2",
+          "20",
+          "9007199254740993.12",
+          null
+        ],
+        "source_values_equal": true,
+        "native_numeric_type_oids_checked": true
+      },
+      {
+        "name": "typed_binary_operands",
+        "actual": [
+          "15.2",
+          "2.67",
+          "1.00"
+        ],
+        "source_reference": [
+          "15.2",
+          "2.67",
+          "1"
+        ],
+        "source_values_equal": true,
+        "native_numeric_type_oids_checked": true
+      },
+      {
+        "name": "fractional_scales_and_ties",
+        "actual": [
+          "15.2",
+          "20",
+          "-15.2",
+          "2.68",
+          "1.01",
+          "-2.67"
+        ],
+        "source_reference": [
+          "15.2",
+          "20",
+          "-15.2",
+          "2.68",
+          "1.01",
+          "-2.67"
+        ],
+        "source_values_equal": true,
+        "native_numeric_type_oids_checked": true
+      }
+    ],
+    "passed": true,
+    "full_oracle_numeric_conformance": false
+  },
+  "monitoring_fixture": [
+    {
+      "profile": "oracle-preview-v1",
+      "rows": [
+        [
+          "BICDB_PAGED",
+          3,
+          "0.7031250000000000000000000000000000000000",
+          "536.000000000000000000000000000000000000",
+          "74.00",
+          "90",
+          "67",
+          "65.56"
+        ]
+      ],
+      "expected_free_mb": "0.703125",
+      "free_mb_exact": true,
+      "expected_fragmentation": "65.56",
+      "fragmentation_exact_to_two_places": true
+    }
+  ],
+  "resource_guard": {
+    "completed": true,
+    "peak_process_group_rss_bytes": 5503991808,
+    "minimum_observed_available_bytes": 23024599040,
+    "maximum_observed_memory_full_avg10": 0,
+    "minimum_headroom_gib": 14.5,
+    "compiler_jobs": 1,
+    "incremental_compilation": false
+  },
+  "application_foundation_tests_passed": 89,
+  "application_business_tests_passed": 63,
+  "application_business_tests_failed": 1,
+  "application_qualified": false,
+  "production_qualified": false,
+  "full_oracle_programme_qualified": false
+}

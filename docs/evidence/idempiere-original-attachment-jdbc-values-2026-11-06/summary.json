@@ -1,0 +1,57 @@
+{
+  "format": 1,
+  "backend_source_commit": "a97545fc25234c89a4361e0dbfe8c98a02cb3e94",
+  "backend_sha256": "59179f2a0cb4a8d3f765c306ed523a81c1647e061156d82a4bacd98e03b68fba",
+  "adapter_source_commit": "3db8c5d885c34bd3c7c3d5ddd33e77fcaeb35f58",
+  "adapter_sha256": "f50dc5f0a1ecc2a03011a46343e10bdaedd89eafa469ed2a81271b17b16f1ce4",
+  "provider_sha256": "9045e6772e40f5ad85e8dd238ca6614de8fca3876b274915913b51bbed201980",
+  "original_test_jar_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+  "original_classes": [
+    {
+      "name": "org.idempiere.test.base.AttachmentProviderTest",
+      "direct_test_methods": 3,
+      "expected_invocations": 3,
+      "class_sha256": "665bbf362485918122a2bd609959bdc387906cdcc348d51538b5b846dc36e516",
+      "source_sha256": "eb13b82117dbfe7b5d2950a7af8a58de14198d82d44e6cbdb6898a1b22ab8bef"
+    }
+  ],
+  "source_and_class_hashes_checked": true,
+  "runtime_origins": [
+    {
+      "class_name": "org.compiere.db.DB_Oracle",
+      "source_sha256": "9045e6772e40f5ad85e8dd238ca6614de8fca3876b274915913b51bbed201980",
+      "matched": true
+    },
+    {
+      "class_name": "org.bicdb.jdbc.oracle.OracleDriver",
+      "source_sha256": "f50dc5f0a1ecc2a03011a46343e10bdaedd89eafa469ed2a81271b17b16f1ce4",
+      "matched": true
+    },
+    {
+      "class_name": "org.postgresql.Driver",
+      "source_sha256": "2a32a9dcbc42d67a50ad3a0de5efd102c8d2be46720045f2cbd6689f160ab7c7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.AttachmentProviderTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    }
+  ],
+  "xml_sha256": "4cb9f25683b31f99036bd01cc1d8cfd251525fa4848ddda9c7c3dfae92f4ff58",
+  "tests": 3,
+  "passed": 3,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "jvm_exit_code": 0,
+  "database_exit_code": 0,
+  "processes_stopped": true,
+  "test_assertions_or_bytecode_changed": false,
+  "retest_excluded_from_distinct_invocation_totals": true,
+  "prior_failed_results_preserved": true,
+  "passed_database_reclaimed_allocated_bytes": 575684608,
+  "full_application_qualified": false,
+  "production_qualified": false,
+  "full_oracle_programme_qualified": false
+}

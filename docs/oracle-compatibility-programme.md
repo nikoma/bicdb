@@ -139,6 +139,22 @@ tools, Oracle wire and authorization checks pass with exact revision provenance
 and documented skips. This does not rerun full application acceptance or close
 the retained vendor-invoice and attachment errors.
 
+The [original database/document checkpoint](evidence/idempiere-original-pristine-database-2026-11-06/README.md)
+passes another 88 unchanged original invocations, including all 55 database API
+tests. Across separately versioned batches, 400 of 402 distinct reported
+invocations pass; 1,062 planned invocations remain unverified. The separate
+[attachment retest](evidence/idempiere-original-attachment-heap-2026-11-06/README.md)
+gets past the primary-key locking rejection and exposes the JDBC BLOB stream
+binding gap. It still fails and is excluded from the distinct totals. Complete
+application, paged-baseline and broader programme acceptance remain open.
+
+The [JDBC binary-value checkpoint](evidence/oracle-jdbc-blob-values-2026-11-06/README.md)
+adds BLOB stream/object bindings and read-only Blob getters in the explicit
+Oracle adapter. Nineteen unit tests, provider compilation and 214 native checks
+pass using the unchanged qualified backend. Writable JDBC locators and complete
+LOB APIs remain unimplemented. A fresh original attachment run with this adapter
+is required before closing that application error.
+
 The [physical heap-row locking checkpoint](evidence/sql-heap-row-locks-2026-11-06/README.md)
 removes the declared-primary-key prerequisite for base-table locking reads.
 Eight independent PostgreSQL/Oracle-preview controls exercise duplicate rows,
@@ -1031,3 +1047,12 @@ read-only allocator inventory foundation has page-manager regression coverage;
 Oracle view resolution, descriptors, monitoring grants and source/application
 qualification remain open. Host filesystem free space and fabricated empty
 results are not substitutes for reusable database extents.
+
+
+## JDBC client-created binary values
+
+The [client-created BLOB checkpoint](evidence/oracle-jdbc-created-blobs-2026-11-06/README.md)
+adds bounded mutable values from `Connection.createBlob()` and real
+write/bind/free/read checks over PostgreSQL JDBC. This completes the client
+construction API for the documented scope, not writable persistent locators
+or full application compatibility.

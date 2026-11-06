@@ -45,6 +45,10 @@ public final class OracleConnections {
             if (objectMethod(proxy, method, args)) return objectResult(proxy, method, args);
             if (method.getName().equals("unwrap") && ((Class<?>) args[0]).isInstance(proxy)) return proxy;
             if (method.getName().equals("isWrapperFor") && ((Class<?>) args[0]).isInstance(proxy)) return true;
+            if (method.getName().equals("createBlob")) {
+                if (delegate.isClosed()) throw new SQLException("Connection is closed", "08003");
+                return new OracleCreatedBlob();
+            }
             Object result;
             boolean anonymous = false;
             if (method.getName().equals("prepareStatement")) {
@@ -102,6 +106,8 @@ public final class OracleConnections {
             if (name.equals("getConnection")) return owner;
             if (name.equals("unwrap") && ((Class<?>) args[0]).isInstance(proxy)) return proxy;
             if (name.equals("isWrapperFor") && ((Class<?>) args[0]).isInstance(proxy)) return true;
+            if (delegate instanceof PreparedStatement
+                    && OracleBlobs.bind((PreparedStatement) delegate, method, args)) return null;
             if (anonymous && (name.equals("getParameterMetaData") || name.equals("getMetaData"))) {
                 // Describe has no simple-query equivalent. Never send an
                 // unbound block as a simple query while obtaining metadata.
@@ -153,6 +159,9 @@ public final class OracleConnections {
                                 if (objectMethod(p, m, a)) return objectResult(p, m, a);
                                 if (m.getName().equals("unwrap") && ((Class<?>) a[0]).isInstance(p)) return p;
                                 if (m.getName().equals("isWrapperFor") && ((Class<?>) a[0]).isInstance(p)) return true;
+                                if (a != null && (m.getName().equals("getBlob")
+                                        || (m.getName().equals("getObject") && a.length == 2 && a[1] == java.sql.Blob.class))
+                                        && OracleBlobs.binaryColumn(rows, a[0])) return OracleBlobs.read(rows, a[0]);
                                 Object value = call(rows, m, a);
                                 return m.getName().equals("getStatement") && value != null ? proxy : value;
                             });

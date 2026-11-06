@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "source_commit": "a97545fc25234c89a4361e0dbfe8c98a02cb3e94",
+  "binary_sha256": "59179f2a0cb4a8d3f765c306ed523a81c1647e061156d82a4bacd98e03b68fba",
+  "original_test_jar_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+  "sdk_sha256": "9102b2ad40e5f9f1366e9d1a126556ec240c5e8423df5c30e02590506a3333ac",
+  "provider_sha256": "330a951360185f9acc875e98985255bda467adac447d1a866ae0a7f210026288",
+  "source_and_class_hashes_checked": true,
+  "selected_runtime_class_origins": [
+    {
+      "class_name": "org.compiere.db.DB_Oracle",
+      "source_sha256": "330a951360185f9acc875e98985255bda467adac447d1a866ae0a7f210026288",
+      "matched": true
+    },
+    {
+      "class_name": "org.bicdb.jdbc.oracle.OracleDriver",
+      "source_sha256": "9102b2ad40e5f9f1366e9d1a126556ec240c5e8423df5c30e02590506a3333ac",
+      "matched": true
+    },
+    {
+      "class_name": "org.postgresql.Driver",
+      "source_sha256": "2a32a9dcbc42d67a50ad3a0de5efd102c8d2be46720045f2cbd6689f160ab7c7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.AttachmentProviderTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    }
+  ],
+  "class_results": [
+    {
+      "class_name": "org.idempiere.test.base.AttachmentProviderTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 1,
+      "skipped": 0,
+      "xml_sha256": "51b3ef01b88cf60dcb868d39f4106e45300cb1b29b0422dbba9baec49e375398"
+    }
+  ],
+  "tests": 3,
+  "passed": 2,
+  "failures": 0,
+  "errors": 1,
+  "skipped": 0,
+  "test_assertions_or_bytecode_changed": false,
+  "test_jvm_exit": 255,
+  "database_exit": 0,
+  "processes_stopped": true,
+  "application_qualified": false,
+  "production_qualified": false,
+  "full_oracle_programme_qualified": false,
+  "retest": true,
+  "excluded_from_distinct_invocation_totals": true,
+  "failed_database_preserved": true,
+  "failing_case": "AttachmentProviderTest.testDBLargeObjectProvider",
+  "reported_error": "DeleteError during cleanup",
+  "earlier_save_error": "PostgreSQL JDBC fastpath function lo_creat is unknown",
+  "previous_primary_key_locking_rejection_observed": false,
+  "new_adapter_not_used_in_this_run": true
+}

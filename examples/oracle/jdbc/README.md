@@ -60,6 +60,31 @@ driver and can bypass the adapter. As with the underlying connection, callers
 must serialize use of a connection; these wrappers do not add concurrent JDBC
 connection semantics.
 
+### Binary BLOB values
+
+The adapter binds `setBlob(InputStream)` and its explicit-length overload through
+the PostgreSQL driver's BYTEA stream setters. These calls retain the driver's
+stream handling and do not allocate PostgreSQL OID large objects. Caller-owned
+streams remain caller-owned. `setBlob(Blob)` and Blob-valued `setObject` overloads
+copy binary values, with a 64 MiB buffering limit; use an InputStream for larger
+values, subject to the underlying driver and server limits. Null BLOB bindings
+remain different from non-null empty values.
+
+`getBlob` and typed `getObject(..., Blob.class)` on BYTEA results return
+materialized read-only snapshots, with one-based JDBC read positions and
+`free()` support. They are not writable Oracle locators. Mutation methods fail
+explicitly with `0A000`; they never accept a detached write that would be lost.
+`Connection.createBlob()` returns an initially empty, mutable client value.
+It supports binary writes and streams, reads, search, truncation and `free()`;
+its size is bounded to 64 MiB. Bind it explicitly with `setBlob` to store a copy.
+Creating or changing this value does not insert a row or mutate a stored BLOB.
+Closed connections reject creation. Retrieved BLOB snapshots remain read-only.
+Read/write persistent locator lifecycle, complete Oracle BLOB metadata and
+streaming result reads require further implementation. Ordinary PostgreSQL
+connections retain their existing driver behavior.
+
+### Validation
+
 The unit tests exercise lexical boundaries and the driver's public parser. The
 executable `OracleAdapterProbe` under `src/test/java` additionally requires a
 disposable database. It creates/removes a nonce table and checks actual input

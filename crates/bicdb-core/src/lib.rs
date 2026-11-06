@@ -219,6 +219,7 @@ pub use db::{
     restore_from_log_archive, restore_point_in_time, verify_restore_drill, LogReplayReport,
     RestoreDrillReport, TableChecksum, VerificationManifest, LOG_ARCHIVE_HOLDER,
 };
+pub use db::{timestamp_day_index_inputs_supported, timestamp_day_index_value};
 pub use db::{
     CommitAdmission, CommitAdmissionIntent, CommitAdmissionMutation, CommitAdmissionTicket,
 };

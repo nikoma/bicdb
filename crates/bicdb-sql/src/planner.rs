@@ -3263,7 +3263,13 @@ pub(crate) fn normalize_table_lookup_field_expr(
         } => {
             let normalized = normalize_table_lookup_field_expr(inner, table, alias, schema)?;
             let Expr::Identifier(ident) = &normalized else {
-                return Some(normalized);
+                let schema = schema?;
+                let field = index_field_from_expr_for_schema(schema, &normalized).ok()?;
+                let source = index_field_pg_type(schema, &field)?;
+                let (target, modifier) = pg_type_from_data_type(data_type).ok()?;
+                return (modifier.is_none()
+                    && lookup_cast_preserves_equality(&source, false, &target))
+                .then_some(normalized);
             };
             let Some(column) = schema.and_then(|schema| schema.column(&ident.value)) else {
                 return Some(normalized);
@@ -3276,6 +3282,43 @@ pub(crate) fn normalize_table_lookup_field_expr(
                     &target,
                 ))
             .then_some(normalized)
+        }
+        Expr::Function(function)
+            if object_name_lowercase(&function.name).is_ok_and(|name| {
+                matches!(
+                    name.as_ref(),
+                    "date_trunc" | "pg_catalog.date_trunc" | "bicdb_oracle_trunc_date"
+                )
+            }) =>
+        {
+            // Bind references structurally while retaining the function and
+            // every literal. Only the new timestamp-day physical transform is
+            // admitted here; other expression-index families keep their own
+            // existing planner contracts.
+            let schema = schema?;
+            let mut normalized = expr.clone();
+            let result = sqlparser::ast::visit_expressions_mut(&mut normalized, |node| {
+                match node {
+                    Expr::Identifier(_) | Expr::CompoundIdentifier(_) => {
+                        let Some(bound) =
+                            normalize_table_field_expr(node, table, alias, Some(schema))
+                        else {
+                            return ControlFlow::Break(());
+                        };
+                        *node = bound;
+                    }
+                    // Precision-changing casts can cross midnight. Do not
+                    // match them to the uncast physical key.
+                    Expr::Cast { .. } => return ControlFlow::Break(()),
+                    _ => {}
+                }
+                ControlFlow::Continue(())
+            });
+            if result.is_break() {
+                return None;
+            }
+            let field = index_field_from_expr_for_schema(schema, &normalized).ok()?;
+            matches!(field, IndexField::TimestampDay(_)).then_some(normalized)
         }
         _ => normalize_table_field_expr(expr, table, alias, schema),
     }
@@ -3968,6 +4011,7 @@ pub(crate) fn collect_index_column_heads(fields: &[IndexField], out: &mut BTreeS
             IndexField::Lower(inner)
             | IndexField::Upper(inner)
             | IndexField::Trim(inner)
+            | IndexField::TimestampDay(inner)
             | IndexField::Coalesce { field: inner, .. } => {
                 collect_index_column_heads(std::slice::from_ref(inner), out);
             }

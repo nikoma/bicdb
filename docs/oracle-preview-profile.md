@@ -68,6 +68,11 @@ also bind unqualified targets to that application schema. Explicit namespaces
 retain their selection. PostgreSQL driver `DEALLOCATE` commands preserve native
 prepared-statement identifiers, including quoted mixed-case names; these names
 are independent of Oracle application-name folding.
+The selected PostgreSQL-driver transport also accepts `RELEASE SAVEPOINT` using
+PostgreSQL savepoint semantics. Releasing retains pending writes and leaves the
+outer transaction rollbackable. Quoted and driver-generated names keep their
+exact spelling. This is driver transport handling, separate from Oracle SQL
+application syntax; it does not add `RELEASE` as a globally reserved identifier.
 When an ordinary column and a row alias share a name, type inference prefers
 the scalar column, matching row evaluation and preserving driver scalar types.
 PostgreSQL protocol Describe also resolves explicit, fully typed FROM
@@ -424,6 +429,19 @@ whole-second DATE results and NULLs. Native PostgreSQL interval addition and
 qualified user functions retain their existing behavior. Alternate NLS calendars,
 timezone conversion, BC boundary conformance and Oracle-specific error codes
 remain unqualified; other calendar functions remain separate work.
+
+Fixed-day B-tree expression indexes use canonical timestamp-without-time-zone
+keys for `TRUNC(column)` / `TRUNC(column, 'DD')` and PostgreSQL
+`date_trunc('day', column)`. They floor negative as well as positive epoch values
+to midnight, preserve NULLs and timestamp infinities, and maintain keys through
+writes, rollback, and reopen. Index construction rejects unsupported storage
+envelopes; reconcile legacy column types before retrying. Numeric TRUNC, zoned
+timestamps, other format masks, and precision-changing input casts do not use
+this physical transform. A predicate that rounds its input before truncating
+must retain that cast and cannot probe an index on the unrounded expression.
+This implementation scope does not establish production build cost,
+concurrent index creation, general function indexing, or complete temporal
+conformance.
 
 The [routine datetime evidence](evidence/oracle-routine-datetime-2026-11-01/README.md)
 records version-1 values and its original application namespace failure. The

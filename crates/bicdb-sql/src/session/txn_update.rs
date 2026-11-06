@@ -1444,6 +1444,7 @@ impl<'db> SqlSession<'db> {
                 IndexField::Lower(inner)
                 | IndexField::Upper(inner)
                 | IndexField::Trim(inner)
+                | IndexField::TimestampDay(inner)
                 | IndexField::Coalesce { field: inner, .. } => {
                     index_field_touches(inner, touches, primary_key_columns)
                 }

@@ -1372,6 +1372,7 @@ impl<'db> SqlEngine<'db> {
         if let Some(selection) = &select.selection {
             self.add_index_filter_candidates(
                 collection,
+                alias,
                 selection,
                 &indexes,
                 stats,
@@ -1749,6 +1750,7 @@ impl<'db> SqlEngine<'db> {
     pub(crate) fn add_index_filter_candidates(
         &self,
         collection: &str,
+        alias: &str,
         selection: &Expr,
         indexes: &[IndexDefinition],
         stats: Option<&TableStatistics>,
@@ -1767,7 +1769,24 @@ impl<'db> SqlEngine<'db> {
         {
             let mut prefix = Vec::new();
             for field in &index.fields {
-                let Some(mut value) = equality_value(selection, field)? else {
+                let value = if matches!(field, IndexField::TimestampDay(_)) {
+                    // The static path needs the same schema-aware expression
+                    // identity as dynamic joins. Do not execute arbitrary
+                    // functions to obtain a planning-time bound.
+                    self.dynamic_equality_field_expr(
+                        selection,
+                        collection,
+                        alias,
+                        schema.as_ref(),
+                        field,
+                    )?
+                    .and_then(|bound| eval_constant_expr(bound).ok())
+                    .map(index_value_from_sql)
+                    .transpose()?
+                } else {
+                    equality_value(selection, field)?
+                };
+                let Some(mut value) = value else {
                     break;
                 };
                 if let Some(schema) = schema.as_ref() {
@@ -1826,7 +1845,34 @@ impl<'db> SqlEngine<'db> {
             let [field] = index.fields.as_slice() else {
                 continue;
             };
-            let Some((mut lower, mut upper)) = range_bounds(selection, field)? else {
+            let bounds = if matches!(field, IndexField::TimestampDay(_)) {
+                let mut lower = None;
+                let mut upper = None;
+                for (operator, expression) in self.dynamic_range_bound_exprs(
+                    selection,
+                    collection,
+                    alias,
+                    schema.as_ref(),
+                    field,
+                )? {
+                    let Ok(value) = eval_constant_expr(&expression) else {
+                        continue;
+                    };
+                    if matches!(value, SqlValue::Null) {
+                        continue;
+                    }
+                    let value = index_value_from_sql(value)?;
+                    match operator {
+                        BinaryOperator::Gt | BinaryOperator::GtEq => lower = Some(value),
+                        BinaryOperator::Lt | BinaryOperator::LtEq => upper = Some(value),
+                        _ => {}
+                    }
+                }
+                (lower.is_some() || upper.is_some()).then_some((lower, upper))
+            } else {
+                range_bounds(selection, field)?
+            };
+            let Some((mut lower, mut upper)) = bounds else {
                 continue;
             };
             if let Some(schema) = schema.as_ref() {

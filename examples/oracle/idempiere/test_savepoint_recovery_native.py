@@ -30,6 +30,7 @@ class SavepointRecoveryNativeTests(unittest.TestCase):
             self.assertEqual(cursor.fetchall(), [(1, 'before')])
             cursor.execute('SELECT COUNT(*) FROM recovery_child')
             self.assertEqual(cursor.fetchone(), (0,))
+            cursor.execute('RELEASE SAVEPOINT workflow_start')
             # An application may retain objects whose inserts were rolled back.
             # A zero update count must allow reinsertion in the same transaction.
             for table in ['recovery_parent', 'recovery_child']:
@@ -37,12 +38,22 @@ class SavepointRecoveryNativeTests(unittest.TestCase):
                 cursor.execute('UPDATE ' + table + ' SET state=%s WHERE id=2', ('failed',))
                 self.assertEqual(cursor.rowcount, 0)
                 cursor.execute('ROLLBACK TO SAVEPOINT object_save')
+                cursor.execute('RELEASE SAVEPOINT object_save')
                 if table == 'recovery_parent':
                     cursor.execute('INSERT INTO recovery_parent VALUES(3, %s)', ('failed',))
                 else:
                     cursor.execute('INSERT INTO recovery_child VALUES(3, 3, %s)', ('failed',))
                 self.assertEqual(cursor.rowcount, 1)
             cursor.execute('COMMIT')
+            # Driver-generated savepoint names are opaque protocol identifiers.
+            # Release retains writes inside the still-rollbackable outer scope.
+            cursor.execute('BEGIN')
+            cursor.execute('SAVEPOINT "JDBC_Mixed"')
+            cursor.execute('UPDATE recovery_parent SET state=%s WHERE id=1', ('released',))
+            cursor.execute('RELEASE SAVEPOINT "JDBC_Mixed"')
+            cursor.execute('ROLLBACK')
+            cursor.execute('SELECT state FROM recovery_parent WHERE id=1')
+            self.assertEqual(cursor.fetchone(), ('before',))
         fixture.restart_server()
         with fixture.conn.cursor() as cursor:
             cursor.execute('SELECT id, state FROM recovery_parent ORDER BY id')

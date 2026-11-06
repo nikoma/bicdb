@@ -8,6 +8,8 @@ pub(crate) mod deferred_constraints;
 mod domain_types;
 mod flashback;
 mod merge;
+#[cfg(test)]
+mod timestamp_day_indexes;
 pub(crate) use merge::UpdateMatchPolicy;
 pub(crate) mod recycle_bin;
 pub(crate) use recycle_bin::is_recycle_bin_name;

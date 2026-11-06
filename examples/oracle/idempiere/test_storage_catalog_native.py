@@ -71,6 +71,8 @@ class StorageCatalogNativeTests(unittest.TestCase):
             with self.assertRaises(psycopg.errors.InsufficientPrivilege):
                 c.execute('SELECT * FROM "private_records"')
             with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+                c.execute('VACUUM', prepare=False)
+            with self.assertRaises(psycopg.errors.InsufficientPrivilege):
                 c.execute('GRANT SELECT ON '+NATIVE+' TO unrelated_reader', prepare=False)
         with f.conn.cursor() as admin:
             admin.execute('REVOKE SELECT ON '+NATIVE+' FROM monitor_group', prepare=False)
@@ -124,6 +126,12 @@ class StorageCatalogNativeTests(unittest.TestCase):
                 self.assertEqual(c.fetchall(), [(37,)])
             c.execute('SELECT * FROM '+NATIVE+' WHERE 1=0')
             self.assertEqual([d.name for d in c.description], LABELS)
+            for operand in ['"AMOUNT"', 'a."AMOUNT"']:
+                c.execute('WITH amounts("AMOUNT") AS '
+                          '(SELECT CAST(3.25 AS numeric) UNION ALL SELECT CAST(6.75 AS numeric)) '
+                          'SELECT SUM('+operand+')/2 FROM amounts a', prepare=True)
+                self.assertEqual(c.description[0].type_code, 1700)
+                self.assertEqual(c.fetchone(), (5,))
 
     def check_inventory(self, profile):
         import psycopg

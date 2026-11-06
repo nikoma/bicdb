@@ -603,7 +603,7 @@ pub(crate) fn env_lookup_unqualified(env: &[RelationColumns], name: &str) -> Opt
             // Aliased base rows carry a second block for the physical-table
             // qualifier. Both entries name the same column, rather than two
             // ambiguous FROM sources. Derived-table duplicates remain errors.
-            if column == &needle {
+            if column.eq_ignore_ascii_case(&needle) {
                 if found_in_relation && relation.row_type.is_some() {
                     continue;
                 }
@@ -628,7 +628,7 @@ pub(crate) fn env_lookup_qualified(
         .find(|relation| relation.alias == qualifier)?
         .columns
         .iter()
-        .find(|(name, _)| name == column)
+        .find(|(name, _)| name.eq_ignore_ascii_case(column))
         .and_then(|(_, ty)| ty.clone())
 }
 
@@ -1855,10 +1855,10 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             "power" | "pow" | "sqrt" | "cbrt" | "exp" | "ln" | "log" => {
                 return Some("float8".to_string())
             }
-            "bicdb_oracle_blob_getlength" | "bicdb_oracle_blob_istemporary"
-            | "bicdb_oracle_sql_blob_getlength" | "bicdb_oracle_sql_blob_istemporary" => {
-                return Some("int8".into())
-            }
+            "bicdb_oracle_blob_getlength"
+            | "bicdb_oracle_blob_istemporary"
+            | "bicdb_oracle_sql_blob_getlength"
+            | "bicdb_oracle_sql_blob_istemporary" => return Some("int8".into()),
             "bicdb_oracle_hextoraw" | "bicdb_oracle_empty_blob" | "bicdb_oracle_blob_from_raw" => {
                 return Some("bytea".to_string())
             }

@@ -615,6 +615,17 @@ fn postgres_catalog_read(sql: &str) -> bool {
 // expressions or rewriting the registered role name. Execution still uses the
 // ordinary ownership, role-membership and privilege checks.
 fn postgres_owner_administration(sql: &str) -> bool {
+    let trimmed = sql.trim();
+    if trimmed
+        .strip_suffix(';')
+        .unwrap_or(trimmed)
+        .trim()
+        .eq_ignore_ascii_case("VACUUM")
+    {
+        // Native store maintenance keeps its administrator gate even when
+        // the client has opted into Oracle application SQL semantics.
+        return true;
+    }
     let first = sql.split_whitespace().next().unwrap_or_default();
     if !["CREATE", "ALTER", "DROP", "GRANT", "REVOKE", "SET", "RESET"]
         .iter()
@@ -668,7 +679,7 @@ mod owner_administration_boundary_tests {
     use super::*;
 
     #[test]
-    fn only_native_role_and_owner_commands_select_the_boundary() {
+    fn only_native_role_owner_and_plain_maintenance_commands_select_the_boundary() {
         for sql in [
             "CREATE ROLE app_owner LOGIN NOSUPERUSER",
             "ALTER ROLE app_owner NOLOGIN",
@@ -677,6 +688,8 @@ mod owner_administration_boundary_tests {
             "SET ROLE app_owner",
             "SET LOCAL ROLE app_owner",
             "RESET ROLE",
+            "VACUUM",
+            " vacuum; ",
             "ALTER SCHEMA \"Source Q\" OWNER TO app_owner",
             "ALTER TABLE \"Source Q\".\"T\" OWNER TO app_owner",
             "ALTER VIEW \"Source Q\".\"V\" OWNER TO app_owner",
@@ -701,6 +714,8 @@ mod owner_administration_boundary_tests {
             "RESET ROLE; SELECT 1",
             "SET owner TO 1",
             "RESET owner",
+            "VACUUM FULL",
+            "VACUUM; SELECT 1",
         ] {
             assert!(!postgres_owner_administration(sql), "{sql}");
         }

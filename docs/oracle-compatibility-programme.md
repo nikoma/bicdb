@@ -17,6 +17,12 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [correlated EXISTS candidate-probe checkpoint](evidence/sql-correlated-exists-probes-2026-11-06/README.md)
+qualifies bounded statement-local candidate maps and primary-key list lookups,
+with independent PostgreSQL/Oracle-preview result, NULL, duplicate and rollback
+controls. The full regression batch passes; original application retests and
+production workload qualification remain separate gates.
+
 The [fixed-day index and driver-savepoint checkpoint](evidence/sql-timestamp-day-indexes-2026-11-06/README.md)
 qualifies physical timestamp day keys, SQL equality/range plans and PostgreSQL-driver
 RELEASE name resolution, with three Oracle and three independent PostgreSQL source

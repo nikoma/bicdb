@@ -194,6 +194,17 @@ impl<'db> SqlEngine<'db> {
     ) -> Result<Option<bool>> {
         match expr {
             Expr::Nested(inner) => self.eval_row_truth_typed(row, inner, env),
+            Expr::UnaryOp {
+                op: UnaryOperator::Not,
+                expr,
+            } => Ok(self.eval_row_truth_typed(row, expr, env)?.map(|v| !v)),
+            Expr::Exists { .. } => {
+                let columns: Vec<String> = row.keys().cloned().collect();
+                let values = row.values().cloned().collect();
+                let (_scope, context) = self.bound_row_context(&columns);
+                self.eval_slot_row_truth_typed(&values, &context, expr, env)
+            }
+
             Expr::Between {
                 expr,
                 negated,
@@ -387,6 +398,28 @@ impl<'db> SqlEngine<'db> {
     ) -> Result<Option<bool>> {
         match expr {
             Expr::Nested(inner) => self.eval_slot_row_truth_typed(row, context, inner, env),
+            Expr::UnaryOp {
+                op: UnaryOperator::Not,
+                expr,
+            } => Ok(self
+                .eval_slot_row_truth_typed(row, context, expr, env)?
+                .map(|v| !v)),
+            Expr::Exists { subquery, negated } => {
+                let candidate = self.exists_candidate_query(row, context, subquery, env)?;
+                let exists = if let Some(candidate) = candidate {
+                    !self
+                        .run_slot_subquery(row, context, &candidate, None)?
+                        .rows
+                        .is_empty()
+                } else {
+                    !self
+                        .execute_correlated_slot_query(row, context, subquery)?
+                        .rows
+                        .is_empty()
+                };
+                Ok(Some(if *negated { !exists } else { exists }))
+            }
+
             Expr::Between {
                 expr,
                 negated,
@@ -957,10 +990,19 @@ impl<'db> SqlEngine<'db> {
                 self.eval_slot_row_truth(row, context, expr)?.is_some(),
             )),
             Expr::Exists { subquery, negated } => {
-                let exists = !self
-                    .execute_correlated_slot_query(row, context, subquery)?
-                    .rows
-                    .is_empty();
+                let exists = if let Some(candidate) =
+                    self.exists_candidate_query(row, context, subquery, &[])?
+                {
+                    !self
+                        .run_slot_subquery(row, context, &candidate, None)?
+                        .rows
+                        .is_empty()
+                } else {
+                    !self
+                        .execute_correlated_slot_query(row, context, subquery)?
+                        .rows
+                        .is_empty()
+                };
                 Ok(Some(if *negated { !exists } else { exists }))
             }
             Expr::Subquery(query) => {

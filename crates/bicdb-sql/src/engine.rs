@@ -9,7 +9,9 @@
 // code compiles unchanged.
 use crate::*;
 pub(crate) mod column_check;
+mod exists_probe;
 pub(crate) mod flashback;
+use exists_probe::ExistsProbeMemo;
 mod hierarchy;
 mod joins_windows;
 pub(crate) mod materialize;
@@ -3806,6 +3808,7 @@ pub struct SqlEngine<'db> {
     /// Results of uncorrelated subqueries in row predicates, kept for the
     /// outermost `execute_query` call on this engine (see `SubqueryMemo`).
     pub(crate) subquery_memo: SubqueryMemo,
+    exists_probe_memo: ExistsProbeMemo,
     /// Memoizes `bound_row_context` results. A `SqlEngine` binds
     /// `routine_vars` once at construction and never reassigns it, so for a given
     /// column layout the scope and context are stable for the engine's lifetime.
@@ -3964,6 +3967,7 @@ impl<'db> SqlEngine<'db> {
             record_lookup_cache: Rc::new(RefCell::new(BTreeMap::new())),
             bound_var_cache: RefCell::new(None),
             subquery_memo: SubqueryMemo::default(),
+            exists_probe_memo: ExistsProbeMemo::default(),
             bound_context_cache: Rc::new(RefCell::new(BTreeMap::new())),
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
@@ -4000,6 +4004,7 @@ impl<'db> SqlEngine<'db> {
             record_lookup_cache: Rc::new(RefCell::new(BTreeMap::new())),
             bound_var_cache: RefCell::new(None),
             subquery_memo: SubqueryMemo::default(),
+            exists_probe_memo: ExistsProbeMemo::default(),
             bound_context_cache: Rc::new(RefCell::new(BTreeMap::new())),
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
@@ -4056,6 +4061,7 @@ impl<'db> SqlEngine<'db> {
             record_lookup_cache: Rc::new(RefCell::new(BTreeMap::new())),
             bound_var_cache: RefCell::new(None),
             subquery_memo: SubqueryMemo::default(),
+            exists_probe_memo: ExistsProbeMemo::default(),
             bound_context_cache,
             cancellation,
             fts_limits,
@@ -4094,6 +4100,7 @@ impl<'db> SqlEngine<'db> {
             record_lookup_cache: Rc::new(RefCell::new(BTreeMap::new())),
             bound_var_cache: RefCell::new(None),
             subquery_memo: SubqueryMemo::default(),
+            exists_probe_memo: ExistsProbeMemo::default(),
             bound_context_cache: Rc::new(RefCell::new(BTreeMap::new())),
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
@@ -4666,6 +4673,9 @@ impl<'db> SqlEngine<'db> {
     pub(crate) fn execute_query(&self, query: &Query) -> Result<SqlResult> {
         self.db_ref().check_recovery_state()?;
         let _subqueries = self.subquery_memo.scope();
+        let _probes = self.exists_probe_memo.scope(
+            self.outer_row.is_none() && exists_probe::probe_query_safe(self.db_ref(), query),
+        );
         self.execute_query_unscoped(query)
     }
 
@@ -5258,6 +5268,7 @@ impl<'db> SqlEngine<'db> {
             record_lookup_cache: self.record_lookup_cache.clone(),
             bound_var_cache: RefCell::new(None),
             subquery_memo: SubqueryMemo::default(),
+            exists_probe_memo: ExistsProbeMemo::default(),
             bound_context_cache: Rc::new(RefCell::new(BTreeMap::new())),
             cancellation: self.cancellation.clone(),
             fts_limits: self.fts_limits,

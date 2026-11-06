@@ -8763,3 +8763,131 @@ fn correlated_row_contexts_refill_nested_aliases_and_nulls() {
         );
     }
 }
+
+#[test]
+fn exists_candidate_probes_bound_unindexed_multi_column_correlation() {
+    for profile in [oracle::POSTGRES_PROFILE, oracle::ORACLE_PREVIEW_PROFILE] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        oracle::ensure_database_profile(&mut db, profile).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        let execute = |session: &mut SqlSession<'_>, source: &str| {
+            let sql = if profile == oracle::POSTGRES_PROFILE {
+                source.to_string()
+            } else {
+                oracle::lower_session_sql(session.db_ref(), source, profile, None, "bicdb").unwrap()
+            };
+            session.execute(&sql)
+        };
+        let number = if profile == oracle::POSTGRES_PROFILE {
+            "INTEGER"
+        } else {
+            "NUMBER(10)"
+        };
+        for source in [
+            "CREATE SCHEMA \"probe_ops\"".to_string(),
+            format!("CREATE TABLE \"probe_ops\".request_rows(id {number} PRIMARY KEY,tenant {number},period {number})"),
+            format!("CREATE TABLE \"probe_ops\".request_types(id {number} PRIMARY KEY,tenant {number},kind VARCHAR(8))"),
+            format!("CREATE TABLE \"probe_ops\".control_rows(id {number} PRIMARY KEY,period {number},kind VARCHAR(8))"),
+            "INSERT INTO \"probe_ops\".request_types VALUES(1,1,'A'),(2,1,'B'),(3,2,'X')".to_string(),
+            format!("INSERT INTO \"probe_ops\".request_rows VALUES {}", (1..=32).map(|n|format!("({n},1,{n})")).collect::<Vec<_>>().join(",")),
+            // Duplicate control keys and duplicate requests must not duplicate
+            // the boolean EXISTS result. A NULL correlation key never matches.
+            "INSERT INTO \"probe_ops\".request_rows VALUES(33,1,NULL),(34,1,1)".to_string(),
+            format!("INSERT INTO \"probe_ops\".control_rows VALUES {}", (1..=64).map(|n|format!("({n},{},'A')", (n+1)/2)).collect::<Vec<_>>().join(",")),
+        ] { execute(&mut session, &source).unwrap(); }
+        let query = "SELECT DISTINCT r.period,t.kind FROM \"probe_ops\".request_rows r FULL JOIN \"probe_ops\".request_types t ON r.tenant=t.tenant WHERE r.tenant=1 AND NOT EXISTS(SELECT * FROM \"probe_ops\".control_rows c WHERE c.period=r.period AND c.kind=t.kind) ORDER BY r.period NULLS LAST,t.kind";
+        SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().push(SqlProfileStats::default()));
+        let result = execute(&mut session, query);
+        let stats = SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().pop().unwrap());
+        let rows = result.unwrap().rows;
+        let actual = rows
+            .iter()
+            .map(|row| {
+                (
+                    if matches!(row[0], SqlValue::Null) {
+                        None
+                    } else {
+                        Some(row[0].to_cell())
+                    },
+                    row[1].to_cell(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let mut expected = (1..=32)
+            .map(|n| (Some(n.to_string()), "B".to_string()))
+            .collect::<Vec<_>>();
+        expected.extend([(None, "A".to_string()), (None, "B".to_string())]);
+        assert_eq!(actual, expected, "{profile}");
+        assert!(
+            stats.full_scan_count <= 3,
+            "{profile}: {} repeated full scans",
+            stats.full_scan_count
+        );
+        // Rebuild from current transaction-visible contents for each statement.
+        execute(&mut session, "BEGIN").unwrap();
+        execute(&mut session, "SAVEPOINT before_new_control").unwrap();
+        execute(
+            &mut session,
+            "INSERT INTO \"probe_ops\".control_rows VALUES(65,1,'B')",
+        )
+        .unwrap();
+        assert_eq!(execute(&mut session, query).unwrap().rows.len(), 33);
+        execute(&mut session, "ROLLBACK TO SAVEPOINT before_new_control").unwrap();
+        assert_eq!(execute(&mut session, query).unwrap().rows.len(), 34);
+        execute(&mut session, "ROLLBACK").unwrap();
+    }
+}
+
+#[test]
+fn primary_key_lists_preserve_numeric_identity_and_pending_changes() {
+    for kind in ["INTEGER", "NUMERIC(30,4)"] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session
+            .execute(&format!(
+                "CREATE TABLE list_keys(id {kind} PRIMARY KEY, label TEXT)"
+            ))
+            .unwrap();
+        session
+            .execute("INSERT INTO list_keys VALUES(1,'one'),(2,'two'),(3,'three')")
+            .unwrap();
+        let query =
+            "SELECT k.label FROM list_keys k WHERE k.id IN(1.0000,2,2,NULL,99) ORDER BY k.id";
+        assert_eq!(
+            session.execute(query).unwrap().rows,
+            vec![
+                vec![SqlValue::String("one".into())],
+                vec![SqlValue::String("two".into())]
+            ]
+        );
+        session.execute("BEGIN").unwrap();
+        session.execute("DELETE FROM list_keys WHERE id=1").unwrap();
+        session
+            .execute("INSERT INTO list_keys VALUES(99,'pending')")
+            .unwrap();
+        assert_eq!(
+            session.execute(query).unwrap().rows,
+            vec![
+                vec![SqlValue::String("two".into())],
+                vec![SqlValue::String("pending".into())]
+            ]
+        );
+        assert!(session
+            .execute("SELECT * FROM list_keys WHERE id IN(NULL)")
+            .unwrap()
+            .rows
+            .is_empty());
+        session.execute("ROLLBACK").unwrap();
+        assert_eq!(session.execute(query).unwrap().rows.len(), 2);
+        assert_eq!(
+            session
+                .execute("SELECT * FROM list_keys WHERE id NOT IN(1,NULL)")
+                .unwrap()
+                .rows
+                .len(),
+            0
+        );
+    }
+}

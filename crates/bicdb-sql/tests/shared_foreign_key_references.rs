@@ -164,9 +164,11 @@ fn deferred_parent_key_moves_and_child_followup_preserve_references() {
 #[test]
 fn committed_references_reject_parent_key_moves_without_losing_rows() {
     for profile in PROFILES {
-        let (_root, db) = seeded(profile, "");
+        let (_root, mut db) = seeded(profile, "");
+        SqlSession::new(&mut db)
+            .execute("INSERT INTO children VALUES(1,1)")
+            .unwrap();
         let mut sql = SqlSession::new_shared(&db);
-        sql.execute("INSERT INTO children VALUES(1,1)").unwrap();
         assert_eq!(
             sql.execute("UPDATE parents SET id=2 WHERE id=1")
                 .unwrap_err()
@@ -201,10 +203,11 @@ fn parent_key_cascade_updates_nonkey_child_references() {
 #[test]
 fn no_action_observes_the_final_key_set_with_profile_specific_uniqueness() {
     for profile in PROFILES {
-        let (_root, db) = seeded(profile, "");
-        let mut sql = SqlSession::new_shared(&db);
-        sql.execute("INSERT INTO parents VALUES(2,8,20); INSERT INTO children VALUES(1,1)")
+        let (_root, mut db) = seeded(profile, "");
+        SqlSession::new(&mut db)
+            .execute("INSERT INTO parents VALUES(2,8,20); INSERT INTO children VALUES(1,1)")
             .unwrap();
+        let mut sql = SqlSession::new_shared(&db);
         let moved = sql.execute("UPDATE parents SET id=3-id");
         let label = if profile == oracle::POSTGRES_PROFILE {
             assert_eq!(moved.unwrap_err().sqlstate(), "23505");

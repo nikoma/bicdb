@@ -1,0 +1,116 @@
+{
+  "format": 1,
+  "source_commit": "a97545fc25234c89a4361e0dbfe8c98a02cb3e94",
+  "binary_sha256": "59179f2a0cb4a8d3f765c306ed523a81c1647e061156d82a4bacd98e03b68fba",
+  "original_test_jar_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+  "sdk_sha256": "9102b2ad40e5f9f1366e9d1a126556ec240c5e8423df5c30e02590506a3333ac",
+  "provider_sha256": "330a951360185f9acc875e98985255bda467adac447d1a866ae0a7f210026288",
+  "source_and_class_hashes_checked": true,
+  "selected_runtime_class_origins": [
+    {
+      "class_name": "org.compiere.db.DB_Oracle",
+      "source_sha256": "330a951360185f9acc875e98985255bda467adac447d1a866ae0a7f210026288",
+      "matched": true
+    },
+    {
+      "class_name": "org.bicdb.jdbc.oracle.OracleDriver",
+      "source_sha256": "9102b2ad40e5f9f1366e9d1a126556ec240c5e8423df5c30e02590506a3333ac",
+      "matched": true
+    },
+    {
+      "class_name": "org.postgresql.Driver",
+      "source_sha256": "2a32a9dcbc42d67a50ad3a0de5efd102c8d2be46720045f2cbd6689f160ab7c7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.DBTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.DocumentSearchTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.DocumentStatusTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.DynamicServiceLocatorTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.EmailFormatValidatorTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    }
+  ],
+  "class_results": [
+    {
+      "class_name": "org.idempiere.test.base.DBTest",
+      "tests": 55,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "602bef5a713c76bf79e318e4d665dd339aee57dd5b1d6f68a95b2b76564f6e63"
+    },
+    {
+      "class_name": "org.idempiere.test.base.DocumentSearchTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "d7e7c6cb4b035f6918047f57832b370442e336574ff2af090a30801f8787d4f0"
+    },
+    {
+      "class_name": "org.idempiere.test.base.DocumentStatusTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "7c362cd3932c2b353a6f04c0a5804eb0090cb990a1f71f10d99b8d4468d0d751"
+    },
+    {
+      "class_name": "org.idempiere.test.base.DynamicServiceLocatorTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "6b7b090c5c1f5498d8c630b3b99466bbc8b4a980874539eb6f59c3cf2dbbc6c0"
+    },
+    {
+      "class_name": "org.idempiere.test.base.EmailFormatValidatorTest",
+      "tests": 24,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "aef92701ffe5dfdf2f985fcc8ca9a4fab9125cacabe5f851269fd01857edc6de"
+    }
+  ],
+  "tests": 88,
+  "passed": 88,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "test_assertions_or_bytecode_changed": false,
+  "test_jvm_exit": 0,
+  "database_exit": 0,
+  "processes_stopped": true,
+  "application_qualified": false,
+  "production_qualified": false,
+  "full_oracle_programme_qualified": false,
+  "cleanup": {
+    "reclaimed_allocated_bytes": 573747200,
+    "logs_xml_provenance_and_pristine_baseline_retained": true
+  },
+  "combined_distinct_original_invocations_across_explicit_revisions": {
+    "tests": 402,
+    "passed": 400,
+    "failures": 1,
+    "errors": 1,
+    "remaining_planned_unverified": 1062
+  }
+}

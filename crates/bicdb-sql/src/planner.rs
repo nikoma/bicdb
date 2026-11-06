@@ -1643,6 +1643,30 @@ impl BoundExprScope {
                     .and_then(|id| self.var_types.as_ref()?.get(&id).cloned())
             }
             Expr::Nested(inner) => self.known_expr_type(inner),
+            Expr::Function(function)
+                if matches!(
+                    object_name(&function.name)
+                        .ok()?
+                        .to_ascii_lowercase()
+                        .trim_start_matches("pg_catalog."),
+                    "coalesce" | "nullif" | "greatest" | "least" | "ifnull"
+                ) =>
+            {
+                let args = function_args(function);
+                let types = args
+                    .iter()
+                    .map(|arg| self.known_expr_type(arg))
+                    .collect::<Vec<_>>();
+                // A row/CTE column this scope cannot type is not an unknown
+                // string literal. Do not manufacture text for an enclosing
+                // CASE when all arguments are unresolved row expressions.
+                if types.iter().all(Option::is_none)
+                    && args.iter().any(|arg| !matches!(arg, Expr::Value(_)))
+                {
+                    return None;
+                }
+                select_common_builtin_projected_type(&types)
+            }
             Expr::BinaryOp { left, op, right } => temporal_binary_result_type(
                 self.known_expr_type(left).as_deref(),
                 op,

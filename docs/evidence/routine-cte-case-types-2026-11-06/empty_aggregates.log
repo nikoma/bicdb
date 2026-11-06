@@ -1,0 +1,6 @@
+running 2 tests
+test empty_ungrouped_aggregates_return_one_postgresql_shaped_row ... ok
+test empty_join_aggregates_are_ungrouped_while_grouped_aggregates_stay_empty ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s
+

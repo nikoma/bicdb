@@ -1,0 +1,12 @@
+running 8 tests
+test typed_result_views_preserve_expression_types_without_changing_sql_value ... ok
+test query_result_types_survive_empty_catalog_reflection_results ... ok
+test parameter_types_follow_postgres_common_type_selection ... ok
+test parameter_types_follow_schema_assignment_and_expression_context ... ok
+test prepared_array_types_follow_every_context_used_by_cognee ... ok
+test table_unnest_joins_preserve_result_and_delete_parameter_types ... ok
+test stored_function_parameter_types_follow_the_declared_signature_without_running_the_body ... ok
+test registry_catalog_attribute_and_planner_types_agree_exhaustively ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+

@@ -1,0 +1,7 @@
+running 3 tests
+test sql_out_parameters_form_a_single_row_source ... ok
+test date_parameter_arithmetic_retains_its_type_through_timestamp_casts ... ok
+test nested_command_in_json_runs_once_after_dispatch_warms ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+

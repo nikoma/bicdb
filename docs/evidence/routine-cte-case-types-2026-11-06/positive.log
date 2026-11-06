@@ -1,0 +1,7 @@
+running 3 tests
+test scheduled_adherence_case_preserves_dates_and_numeric_result_in_a_sql_routine ... ok
+test routine_case_keeps_unresolved_cte_function_arguments_out_of_text_inference ... ok
+test therapeutic_content_status_reports_completion_and_adherence_with_typed_ctes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+

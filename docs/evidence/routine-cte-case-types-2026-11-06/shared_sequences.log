@@ -1,0 +1,6 @@
+running 2 tests
+test shared_batch_defaults_and_setval_keep_nontransactional_sequence_state ... ok
+test shared_sequence_allocations_are_unique_durable_and_survive_outer_rollback ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.98s
+

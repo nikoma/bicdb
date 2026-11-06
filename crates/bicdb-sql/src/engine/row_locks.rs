@@ -13,6 +13,10 @@ pub(crate) fn is_read_committed_lock_refresh(error: &SqlError) -> bool {
 
 pub(crate) type RowLockTarget = (String, String, TableSchema, Vec<String>, Option<NonBlock>);
 
+// NUL cannot occur in a protocol SQL identifier. This slot is execution-local,
+// never a catalog column, and must not appear in wildcard output.
+pub(super) const HEAP_LOCK_IDENTITY: &str = "\0bicdb_heap_lock_identity";
+
 impl SqlEngine<'_> {
     pub(crate) fn execute_locking_query(&self, query: &Query) -> Result<SqlResult> {
         self.tx.ok_or_else(|| {
@@ -166,11 +170,6 @@ impl SqlEngine<'_> {
                     SqlError::Unsupported("row locking targets must be base tables".into())
                 })?;
                 let keys = primary_key_columns_for_schema(&schema);
-                if keys.is_empty() {
-                    return Err(SqlError::Unsupported(
-                        "row locking currently requires a primary key".into(),
-                    ));
-                }
                 targets.push((table, row_alias, schema, keys, lock.nonblock));
             }
             if targets.len() == before {
@@ -186,7 +185,7 @@ impl SqlEngine<'_> {
         }
         // The normalized FROM and cached ordering expressions are temporary,
         // so pointer-keyed routine-IR memos must not outlive these AST nodes.
-        let engine = self
+        let mut engine = self
             .inherit_transaction(SqlEngine::with_ctes_and_context(
                 self.db_ref(),
                 self.settings,
@@ -198,6 +197,7 @@ impl SqlEngine<'_> {
             .with_routine_slots(self.routine_slots.clone())
             .with_cancellation(self.cancellation.clone())
             .with_fts_limits(self.fts_limits);
+        engine.heap_lock_identity = targets.iter().any(|(_, _, _, keys, _)| keys.is_empty());
         let from = Self::comma_from_items_to_cross_join(&select.from);
         let row_set = engine.row_set_from_table_with_joins_with_selection(
             &from,
@@ -223,6 +223,18 @@ impl SqlEngine<'_> {
         let key_slots = targets
             .iter()
             .map(|(_, alias, _, keys, _)| {
+                if keys.is_empty() {
+                    let name = format!("{alias}.{HEAP_LOCK_IDENTITY}");
+                    return columns
+                        .iter()
+                        .position(|column| column == &name)
+                        .map(|slot| vec![slot])
+                        .ok_or_else(|| {
+                            SqlError::Unsupported(
+                                "locking input lost its physical row identity".into(),
+                            )
+                        });
+                }
                 keys.iter()
                     .map(|key| {
                         slot_row_column_index(columns, &format!("{alias}.{key}"))
@@ -247,15 +259,26 @@ impl SqlEngine<'_> {
             // UPDATE USING policies are additional to SELECT visibility for
             // a locking read. Check every target before reserving any row.
             for ((table, _, schema, keys, _), slots) in targets.iter().zip(&key_slots) {
-                let id = record_id_from_column_values(
-                    table,
-                    schema,
-                    keys,
-                    &slots
-                        .iter()
-                        .map(|slot| row[*slot].clone())
-                        .collect::<Vec<_>>(),
-                )?;
+                let id = if keys.is_empty() {
+                    match &row[slots[0]] {
+                        SqlValue::String(id) => id.clone(),
+                        _ => {
+                            return Err(SqlError::Unsupported(
+                                "locking input has no physical row identity".into(),
+                            ))
+                        }
+                    }
+                } else {
+                    record_id_from_column_values(
+                        table,
+                        schema,
+                        keys,
+                        &slots
+                            .iter()
+                            .map(|slot| row[*slot].clone())
+                            .collect::<Vec<_>>(),
+                    )?
+                };
                 let Some(record) = self.get_record(table, &id)? else {
                     skip = true;
                     break;
@@ -359,6 +382,52 @@ impl SqlEngine<'_> {
         }
         apply_row_limit(&mut locked, query)?;
         Ok(locked)
+    }
+
+    /// Keep heap tuple identities beside their visible values through joins,
+    /// sorting and filtering. Equal visible rows still represent distinct locks.
+    pub(crate) fn heap_lock_row_set(
+        &self,
+        table: &str,
+        alias: &str,
+        schema: &TableSchema,
+        selection: Option<&Expr>,
+        needed_columns: Option<&ReferencedColumns>,
+    ) -> Result<RowSet> {
+        let records = match self.indexed_records_for_table_selection(
+            table,
+            alias,
+            Some(schema),
+            selection,
+        )? {
+            Some(records) => records,
+            None => {
+                sql_profile_full_scan();
+                self.scan_records(table)?
+            }
+        };
+        sql_profile_records_materialized(&records);
+        let mut fields = row_fields_for_records(Some(schema), &records);
+        retain_referenced_fields(&mut fields, needed_columns, table, alias);
+        let mut columns = row_output_columns_from_fields(table, alias, &fields);
+        columns.extend(postgres_system_output_columns(table, alias));
+        columns.push(format!("{alias}.{HEAP_LOCK_IDENTITY}"));
+        let ids = records
+            .iter()
+            .map(|record| record.id.clone())
+            .collect::<Vec<_>>();
+        let metadata = self.postgres_system_metadata_batch(table, &ids)?;
+        let mut rows = Vec::with_capacity(records.len());
+        for (index, (record, metadata)) in records.iter().zip(metadata).enumerate() {
+            if index % 1024 == 0 {
+                self.check_cancellation()?;
+            }
+            let mut row = slot_row_from_record_fields(table, alias, &fields, record)?;
+            row.extend(self.postgres_system_values(table, alias, Some(schema), metadata));
+            row.push(SqlValue::String(record.id.clone()));
+            rows.push(row);
+        }
+        Ok(RowSet { rows, columns })
     }
     /// Sorting may need an output expression before locks/limit. Cache that
     /// exact expression once per candidate and reuse its value for output.

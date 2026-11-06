@@ -270,6 +270,11 @@ impl<'db> SqlEngine<'db> {
         constraint: &JoinConstraint,
         needed_columns: Option<&ReferencedColumns>,
     ) -> Result<Option<RowSet>> {
+        // The record-backed shortcut does not carry physical heap identities.
+        // Use the ordinary materialized join while a locking read needs them.
+        if self.heap_lock_identity {
+            return Ok(None);
+        }
         let JoinConstraint::On(selection) = constraint else {
             return Ok(None);
         };

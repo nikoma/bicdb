@@ -3771,6 +3771,8 @@ pub(crate) type SharedBoundContextCache = Rc<RefCell<BTreeMap<Vec<String>, Bound
 pub struct SqlEngine<'db> {
     pub(crate) db: &'db BicDb,
     pub(crate) tx: Option<&'db Transaction>,
+    /// Preserve physical heap identities only while materializing locking reads.
+    pub(crate) heap_lock_identity: bool,
     pub(crate) settings: SqlSettings,
     pub(crate) ctes: BTreeMap<String, CteResult>,
     pub(crate) security_context: Option<SecurityContext>,
@@ -3943,6 +3945,7 @@ impl<'db> SqlEngine<'db> {
         Self {
             db,
             tx: None,
+            heap_lock_identity: false,
             settings,
             ctes: BTreeMap::new(),
             security_context: None,
@@ -3978,6 +3981,7 @@ impl<'db> SqlEngine<'db> {
         Self {
             db,
             tx: None,
+            heap_lock_identity: false,
             settings,
             ctes: BTreeMap::new(),
             security_context,
@@ -4033,6 +4037,7 @@ impl<'db> SqlEngine<'db> {
         Self {
             db,
             tx,
+            heap_lock_identity: false,
             settings,
             ctes,
             security_context,
@@ -4070,6 +4075,7 @@ impl<'db> SqlEngine<'db> {
         Self {
             db,
             tx: None,
+            heap_lock_identity: false,
             settings,
             ctes,
             security_context,
@@ -4201,6 +4207,7 @@ impl<'db> SqlEngine<'db> {
             .with_optional_runtime(self.runtime.clone())
             .with_routine_host(self.routine_host)
             .with_oracle_output(self.oracle_output.clone());
+        engine.heap_lock_identity = self.heap_lock_identity;
         if engine.outer_row.is_none() {
             engine.outer_row.clone_from(&self.outer_row);
         }
@@ -5234,6 +5241,7 @@ impl<'db> SqlEngine<'db> {
         SqlEngine {
             db: self.db,
             tx: self.tx,
+            heap_lock_identity: self.heap_lock_identity,
             settings: self.settings,
             ctes: self.ctes.clone(),
             routine_ir: None,

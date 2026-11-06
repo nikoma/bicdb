@@ -1786,7 +1786,9 @@ impl<'db> SqlEngine<'db> {
                 } else {
                     equality_value(selection, field)?.or_else(|| {
                         schema.as_ref().and_then(|schema| {
-                            folded_text_equality_prefix(schema, selection, field)
+                            folded_text_equality_prefix(
+                                self, schema, selection, collection, alias, field,
+                            )
                         })
                     })
                 };
@@ -2522,9 +2524,12 @@ impl<'db> SqlEngine<'db> {
 /// An exact text equality implies equality of its case-converted index key.
 /// This is only a candidate bound: the original WHERE expression must still
 /// filter rows, since distinct strings can have the same converted key.
-fn folded_text_equality_prefix(
+pub(super) fn folded_text_equality_prefix(
+    engine: &SqlEngine<'_>,
     schema: &TableSchema,
     selection: &Expr,
+    table: &str,
+    alias: &str,
     field: &IndexField,
 ) -> Option<IndexValue> {
     let (inner, upper) = match field {
@@ -2575,8 +2580,9 @@ fn folded_text_equality_prefix(
             if !matches!(
                 column_expr,
                 Expr::Identifier(_) | Expr::CompoundIdentifier(_)
-            ) || !index_field_from_expr(column_expr)
-                .is_ok_and(|candidate| index_field_matches(&candidate, inner))
+            ) || !engine
+                .expr_matches_table_index_field(column_expr, table, alias, Some(schema), inner)
+                .ok()?
             {
                 continue;
             }

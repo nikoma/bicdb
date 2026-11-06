@@ -31,6 +31,7 @@ pub(crate) mod lock_waits;
 mod namespaces;
 pub(crate) mod national;
 pub(crate) mod number_formats;
+mod numeric_casts;
 mod nvl;
 mod nvl2;
 mod outer_joins;
@@ -739,6 +740,10 @@ pub fn lower_session_sql(
     if postgres_catalog_read(sql) || postgres_owner_administration(sql) {
         return Ok(sql.to_string());
     }
+    // Apply source-only type defaults before NUMBER is lowered to the native
+    // unconstrained NUMERIC carrier, and before pgwire renders bind values.
+    let numeric_source = numeric_casts::source_cast_defaults(sql);
+    let sql = numeric_source.as_deref().unwrap_or(sql);
     let schema = preview_schema(db, search_path, user)?.unwrap_or_else(default_schema_name);
     let scoped = namespaces::bind_source_quoted_functions(db, sql, &schema)?;
     let lowered = lower_profile_sql_in_namespace(

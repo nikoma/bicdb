@@ -131,6 +131,14 @@ origins and XML counts match. Across the separately versioned batches, 312 of
 314 reported invocations pass; one assertion failure and one error remain.
 Another 1,150 planned invocations and full application qualification remain open.
 
+The [numeric-cast and exact-text index checkpoint](evidence/oracle-round-index-2026-11-06/README.md)
+adds source CAST defaults confirmed against read-only Oracle, consistent scaled
+ROUND precision handling and inferred expression-index probes with residual
+filtering. PostgreSQL behavior has independent controls. SQL, protocol, native
+tools, Oracle wire and authorization checks pass with exact revision provenance
+and documented skips. This does not rerun full application acceptance or close
+the retained vendor-invoice and attachment errors.
+
 The [full-FK foundation checkpoint](evidence/idempiere-full-fk-foundation-2026-11-05/README.md)
 passes all 89 selected original application tests, with zero failures/errors/skips,
 verified Oracle-provider/PostgreSQL-driver origins and clean JVM/database exits.

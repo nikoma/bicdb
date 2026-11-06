@@ -1,0 +1,154 @@
+{
+  "format": 1,
+  "qualification_source_commit": "58c678fd76df45400a5bcc09616bd85a74dabcb9",
+  "binary_source_commit": "9fd07c4db0e4e856b19d5c3ea9a3f1e4a7a375f4",
+  "binary_sha256": "ec648b2f64a1322fa2e88eb3ba20337ee289083418c6bdcd40050b079ca36642",
+  "cli_source_commit": "58c678fd76df45400a5bcc09616bd85a74dabcb9",
+  "cli_sha256": "b150267985387d80c040a3b86a5569cfb6baf52d9279e1f9648c65ed977e9537",
+  "implementation_equivalence_verified": true,
+  "changed_files_between_binary_and_qualification": [
+    "crates/bicdb-pgwire/tests/oracle_hr.rs"
+  ],
+  "fixture_change": "Oracle-only fractional input casts use NUMBER; PostgreSQL NUMERIC inputs and all expected value assertions retained.",
+  "checks": [
+    {
+      "name": "focused-source-casts",
+      "source_commit": "9fd07c4db0e4e856b19d5c3ea9a3f1e4a7a375f4",
+      "returncode": 0,
+      "reused_unchanged_implementation": true,
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "focused-index",
+      "source_commit": "9fd07c4db0e4e856b19d5c3ea9a3f1e4a7a375f4",
+      "returncode": 0,
+      "reused_unchanged_implementation": true,
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "native-storage",
+      "source_commit": "9fd07c4db0e4e856b19d5c3ea9a3f1e4a7a375f4",
+      "returncode": 0,
+      "reused_unchanged_implementation": true,
+      "tests": 6,
+      "passed": 6,
+      "skipped": 0
+    },
+    {
+      "name": "native-round",
+      "source_commit": "9fd07c4db0e4e856b19d5c3ea9a3f1e4a7a375f4",
+      "returncode": 0,
+      "reused_unchanged_implementation": true,
+      "tests": 4,
+      "passed": 4,
+      "skipped": 0
+    },
+    {
+      "name": "native-folded-equality",
+      "source_commit": "9fd07c4db0e4e856b19d5c3ea9a3f1e4a7a375f4",
+      "returncode": 0,
+      "reused_unchanged_implementation": true,
+      "tests": 1,
+      "passed": 1,
+      "skipped": 0
+    },
+    {
+      "name": "quoted-routine-namespace",
+      "source_commit": "9fd07c4db0e4e856b19d5c3ea9a3f1e4a7a375f4",
+      "returncode": 0,
+      "reused_unchanged_implementation": true,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "routine-drop-authorization",
+      "source_commit": "9fd07c4db0e4e856b19d5c3ea9a3f1e4a7a375f4",
+      "returncode": 0,
+      "reused_unchanged_implementation": true,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "sql-library",
+      "source_commit": "9fd07c4db0e4e856b19d5c3ea9a3f1e4a7a375f4",
+      "returncode": 0,
+      "reused_unchanged_implementation": true,
+      "passed": 733,
+      "failed": 0,
+      "ignored": 4
+    },
+    {
+      "name": "native-tools",
+      "source_commit": "9fd07c4db0e4e856b19d5c3ea9a3f1e4a7a375f4",
+      "returncode": 0,
+      "reused_unchanged_implementation": true,
+      "tests": 219,
+      "passed": 215,
+      "skipped": 4
+    },
+    {
+      "name": "protocol",
+      "source_commit": "9fd07c4db0e4e856b19d5c3ea9a3f1e4a7a375f4",
+      "returncode": 0,
+      "reused_unchanged_implementation": true,
+      "passed": 183,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "oracle-hr",
+      "source_commit": "58c678fd76df45400a5bcc09616bd85a74dabcb9",
+      "returncode": 0,
+      "reused_unchanged_implementation": false,
+      "passed": 48,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "authorization-and-json",
+      "source_commit": "58c678fd76df45400a5bcc09616bd85a74dabcb9",
+      "passed": 44,
+      "returncode": 0
+    }
+  ],
+  "resource_observations": [
+    {
+      "status": "command_failed",
+      "returncode": 1,
+      "peak_group_rss_bytes": 5614661632,
+      "minimum_observed_available_bytes": 22164627456,
+      "maximum_observed_memory_full_avg10": 0.18
+    },
+    {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 5381009408,
+      "minimum_observed_available_bytes": 23051501568,
+      "maximum_observed_memory_full_avg10": 0.72
+    },
+    {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 5271322624,
+      "minimum_observed_available_bytes": 22671929344,
+      "maximum_observed_memory_full_avg10": 0.77
+    }
+  ],
+  "prior_failed_fixture_results_retained": true,
+  "prior_interrupted_resource_attempts_retained": true,
+  "source_oracle_numeric_cast_control": "../oracle-numeric-cast-defaults-2026-11-06/source-control.json",
+  "full_application_tests_rerun": false,
+  "application_qualified": false,
+  "full_oracle_programme_qualified": false,
+  "production_qualified": false,
+  "cleanup": {
+    "reclaimed_allocated_bytes": 1431912448,
+    "qualified_binaries_dependencies_and_logs_preserved": true
+  }
+}

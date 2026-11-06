@@ -1,0 +1,55 @@
+{
+  "format": 1,
+  "engine_source_commit": "b9845721893047621c2215a97cd190c0c3ede025",
+  "binary_sha256": "317cf94b595ea7b4dd4a15d849a2f77365e6cca51e1c4ab49a1a33c1d4b07e0b",
+  "class_name": "org.idempiere.test.base.InvoiceTest",
+  "tests": {
+    "passed": 2,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": "71.373",
+    "methods": [
+      "testDiscountAmt",
+      "testCreditCheckInvoice"
+    ]
+  },
+  "test_bundle_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+  "junit_report_sha256": "30d66293732b7e8a7621871fc67dfd1398e33fc9db79255085af741c5eeeb9fe",
+  "oracle_provider_class_loaded_from_staged_jar": true,
+  "postgresql_transport_adapter_class_loaded_from_staged_sdk": true,
+  "provider_sha256": "330a951360185f9acc875e98985255bda467adac447d1a866ae0a7f210026288",
+  "sdk_sha256": "9102b2ad40e5f9f1366e9d1a126556ec240c5e8423df5c30e02590506a3333ac",
+  "external_network_isolated": true,
+  "primary_database_used_for_test_mutations": false,
+  "processes_stopped": true,
+  "shutdown_results": [
+    {
+      "role": "test_jvm",
+      "returncode": 0
+    },
+    {
+      "role": "database",
+      "returncode": 0
+    }
+  ],
+  "jvm_returncode": 0,
+  "complete_source_foreign_key_phase_applied": false,
+  "remaining_diagnostics": {
+    "workflow_audit_update_zero_messages": 4,
+    "unselected_original_provider_singleton_warning": true,
+    "audit_semantics_qualified": false,
+    "clean_runtime_packaging_qualified": false
+  },
+  "resource_guard": {
+    "status": "completed",
+    "returncode": 0,
+    "peak_group_rss_bytes": 4090847232,
+    "minimum_observed_available_bytes": 15754350592,
+    "minimum_available_gib": 14.0
+  },
+  "application_qualified": false,
+  "repeat_after_full_fk_migration_required": true,
+  "accepted_application_updated": false,
+  "github_workflows_changed_or_dispatched": false
+}

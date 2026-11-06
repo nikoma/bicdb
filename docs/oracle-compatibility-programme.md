@@ -17,6 +17,13 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [original invoice-class diagnostic](evidence/idempiere-invoice-diagnostic-2026-11-05/README.md)
+passes 2/2 original tests on the current native candidate: discount calculation
+and credit-stop rejection followed by successful completion. Oracle provider and
+PostgreSQL adapter selection are attested. This predates full FK installation;
+audit diagnostics, packaging, full-schema repetition and whole application
+acceptance remain open.
+
 The [temporal export preflight](evidence/oracle-export-preflight-2026-11-05/README.md)
 rejects precision beyond the microsecond codec and local-zone declarations before
 row files are created. All 915 supported application projections are unchanged.

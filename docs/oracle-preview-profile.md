@@ -442,6 +442,11 @@ must retain that cast and cannot probe an index on the unrounded expression.
 This implementation scope does not establish production build cost,
 concurrent index creation, general function indexing, or complete temporal
 conformance.
+Persisted day indexes introduce the `TimestampDay` index-catalog variant. Older
+binaries that do not recognize it must refuse the catalog instead of ignoring
+the index. Upgrade readers before creating these indexes; mixed-version
+replication, downgrade and rollback to an older binary require separate
+qualification.
 
 The [routine datetime evidence](evidence/oracle-routine-datetime-2026-11-01/README.md)
 records version-1 values and its original application namespace failure. The

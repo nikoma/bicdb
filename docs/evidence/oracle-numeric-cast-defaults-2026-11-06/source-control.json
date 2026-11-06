@@ -1,0 +1,92 @@
+{
+  "format": 1,
+  "oracle_server_version": "23.26.3.0.0",
+  "source_modified": false,
+  "read_only_transaction": true,
+  "numeric_fetch_exact": true,
+  "original_container_state_restored": true,
+  "controls": [
+    {
+      "name": "round_explicit_operand_casts",
+      "sql_sha256": "ff431b94bff3bea921fdabdc4f4c8cbfd6bb2fb2e3014d0095d85ee719018be1",
+      "columns": [
+        "CAST(15.193ASNUMBER)",
+        "CAST(15.193ASNUMERIC)",
+        "CAST(15.193ASDECIMAL)",
+        "ROUND(CAST(15.193ASNUMBER),1.5)",
+        "ROUND(CAST(15.193ASNUMERIC),1.5)",
+        "ROUND(CAST(15.193ASDECIMAL),1.5)"
+      ],
+      "description": [
+        {
+          "name": "CAST(15.193ASNUMBER)",
+          "type_code": "<DbType DB_TYPE_NUMBER>",
+          "display_size": 127,
+          "internal_size": null,
+          "precision": 0,
+          "scale": -127,
+          "null_ok": true
+        },
+        {
+          "name": "CAST(15.193ASNUMERIC)",
+          "type_code": "<DbType DB_TYPE_NUMBER>",
+          "display_size": 39,
+          "internal_size": null,
+          "precision": 38,
+          "scale": 0,
+          "null_ok": true
+        },
+        {
+          "name": "CAST(15.193ASDECIMAL)",
+          "type_code": "<DbType DB_TYPE_NUMBER>",
+          "display_size": 39,
+          "internal_size": null,
+          "precision": 38,
+          "scale": 0,
+          "null_ok": true
+        },
+        {
+          "name": "ROUND(CAST(15.193ASNUMBER),1.5)",
+          "type_code": "<DbType DB_TYPE_NUMBER>",
+          "display_size": 127,
+          "internal_size": null,
+          "precision": null,
+          "scale": null,
+          "null_ok": true
+        },
+        {
+          "name": "ROUND(CAST(15.193ASNUMERIC),1.5)",
+          "type_code": "<DbType DB_TYPE_NUMBER>",
+          "display_size": 127,
+          "internal_size": null,
+          "precision": null,
+          "scale": null,
+          "null_ok": true
+        },
+        {
+          "name": "ROUND(CAST(15.193ASDECIMAL),1.5)",
+          "type_code": "<DbType DB_TYPE_NUMBER>",
+          "display_size": 127,
+          "internal_size": null,
+          "precision": null,
+          "scale": null,
+          "null_ok": true
+        }
+      ],
+      "rows": [
+        [
+          "15.193",
+          "15",
+          "15",
+          "15.2",
+          "15",
+          "15"
+        ]
+      ],
+      "success": true
+    }
+  ],
+  "full_numeric_type_semantics_qualified": false,
+  "application_qualified": false,
+  "production_qualified": false
+}

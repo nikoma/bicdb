@@ -1784,7 +1784,13 @@ impl<'db> SqlEngine<'db> {
                     .map(index_value_from_sql)
                     .transpose()?
                 } else {
-                    equality_value(selection, field)?
+                    equality_value(selection, field)?.or_else(|| {
+                        schema.as_ref().and_then(|schema| {
+                            folded_text_equality_prefix(
+                                self, schema, selection, collection, alias, field,
+                            )
+                        })
+                    })
                 };
                 let Some(mut value) = value else {
                     break;
@@ -2513,6 +2519,90 @@ impl<'db> SqlEngine<'db> {
         }
         Ok(())
     }
+}
+
+/// An exact text equality implies equality of its case-converted index key.
+/// This is only a candidate bound: the original WHERE expression must still
+/// filter rows, since distinct strings can have the same converted key.
+pub(super) fn folded_text_equality_prefix(
+    engine: &SqlEngine<'_>,
+    schema: &TableSchema,
+    selection: &Expr,
+    table: &str,
+    alias: &str,
+    field: &IndexField,
+) -> Option<IndexValue> {
+    let (inner, upper) = match field {
+        IndexField::Upper(inner) => (inner.as_ref(), true),
+        IndexField::Lower(inner) => (inner.as_ref(), false),
+        _ => return None,
+    };
+    let IndexField::MetadataPath(path) = inner else {
+        return None;
+    };
+    let [name] = path.as_slice() else {
+        return None;
+    };
+    let column = schema.column(name)?;
+    // Padded characters, user-defined equality, and locale collations need
+    // their own implication proof. Do not infer raw string bounds for them.
+    if !matches!(column.pg_type.as_str(), "text" | "varchar")
+        || column.user_type.is_some()
+        || column.collation.is_some()
+        || !matches!(
+            column.type_modifier,
+            None | Some(PgTypeModifier::Character { .. })
+                | Some(PgTypeModifier::OracleCharacterV1 { fixed: false, .. })
+        )
+    {
+        return None;
+    }
+    fn unnest(mut expr: &Expr) -> &Expr {
+        while let Expr::Nested(inner) = expr {
+            expr = inner;
+        }
+        expr
+    }
+    let value = and_terms(selection).into_iter().find_map(|term| {
+        let Expr::BinaryOp {
+            left,
+            op: BinaryOperator::Eq,
+            right,
+        } = unnest(term)
+        else {
+            return None;
+        };
+        for (column_expr, bound) in [(left, right), (right, left)] {
+            let column_expr = unnest(column_expr);
+            // The older index-field parser erases CAST and COLLATE. That is
+            // not an implication proof: CAST(label AS varchar(2))='ab' can
+            // match 'abc', and a query-level collation can change equality.
+            if !matches!(
+                column_expr,
+                Expr::Identifier(_) | Expr::CompoundIdentifier(_)
+            ) || !engine
+                .expr_matches_table_index_field(column_expr, table, alias, Some(schema), inner)
+                .ok()?
+            {
+                continue;
+            }
+            let Expr::Value(bound) = unnest(bound) else {
+                continue;
+            };
+            if let Value::SingleQuotedString(value) = &bound.value {
+                return Some(value.clone());
+            }
+        }
+        None
+    })?;
+    // Match the durable core key extractor, which currently converts ASCII
+    // letters only. Using Unicode conversion here would miss existing keys
+    // such as Straße. This inference does not change SQL function semantics.
+    Some(IndexValue::String(if upper {
+        value.to_ascii_uppercase()
+    } else {
+        value.to_ascii_lowercase()
+    }))
 }
 
 /// Collect, iteratively (never recursively — a hostile query can nest deeply),

@@ -1576,12 +1576,23 @@ impl<'db> SqlEngine<'db> {
             }
             let mut prefix_exprs = Vec::new();
             for field in &index.fields {
-                let Some(expr) =
-                    self.dynamic_equality_field_expr(selection, table, alias, schema, field)?
-                else {
+                let expr = self
+                    .dynamic_equality_field_expr(selection, table, alias, schema, field)?
+                    .cloned()
+                    .or_else(|| {
+                        let IndexValue::String(value) =
+                            super::records_plan::folded_text_equality_prefix(
+                                self, schema?, selection, table, alias, field,
+                            )?
+                        else {
+                            return None;
+                        };
+                        Some(Expr::Value(Value::SingleQuotedString(value).into()))
+                    });
+                let Some(expr) = expr else {
                     break;
                 };
-                prefix_exprs.push(expr.clone());
+                prefix_exprs.push(expr);
             }
             let mut range_bounds = Vec::new();
             let mut filters = Vec::new();
@@ -3482,7 +3493,11 @@ impl<'db> SqlEngine<'db> {
                 return Ok(Some(value));
             }
         }
-        Ok(None)
+        Ok(schema.and_then(|schema| {
+            super::records_plan::folded_text_equality_prefix(
+                self, schema, selection, table, alias, field,
+            )
+        }))
     }
 
     pub(crate) fn dynamic_range_bounds(

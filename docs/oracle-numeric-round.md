@@ -35,6 +35,21 @@ authoritative. Unquoted builtin calls retain their own meaning.
 The current helper admits precisions from -1000 through 1000 and rejects values
 outside that range instead of silently clamping them.
 
+The same precision policy applies when the operand is explicitly cast. Source
+types still matter: bare Oracle `CAST(n AS NUMERIC)` and `CAST(n AS DECIMAL)`
+default to precision 38 and scale 0, whereas bare `CAST(n AS NUMBER)` preserves
+the fractional operand. The session frontend applies these source CAST defaults
+before NUMBER becomes the native unconstrained numeric carrier and before
+PostgreSQL bind values are rendered. Thus a numeric bind parameter retains its
+fractional value. The PostgreSQL profile keeps its unconstrained bare numeric
+and decimal casts. [Read-only source observations](evidence/oracle-numeric-cast-defaults-2026-11-06/source-control.json)
+record the distinction for `15.193` and its scaled ROUND results.
+
+This source CAST handling covers statements parsed at the session boundary.
+Default modifiers in bare NUMERIC/DECIMAL table declarations, extended PL/SQL
+source, native internal SQL and all descriptor typmods need separate
+qualification; they are not established by these expression controls.
+
 This checkpoint does not qualify datetime ROUND overloads, Oracle's complete
 numeric range, arbitrary floating-point boundary equivalence, NLS conversion,
 all PL/SQL or extended-grammar quote-provenance contexts, or a full

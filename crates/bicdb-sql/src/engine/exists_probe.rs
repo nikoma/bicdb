@@ -207,6 +207,27 @@ fn numeric_correlation(
         }
         schema.column(column)
     }
+    // Residual filters stay on the original subquery. Only admit expressions
+    // whose evaluation cannot introduce conversion/collation/function errors:
+    // pruning another key must not suppress a fallible residual evaluation.
+    fn safe_residual(expression: &Expr, qualifier: &[String], schema: &TableSchema) -> bool {
+        match unwrap_nested_expr(expression) {
+            Expr::BinaryOp { left, op: BinaryOperator::And | BinaryOperator::Or, right } =>
+                safe_residual(left, qualifier, schema) && safe_residual(right, qualifier, schema),
+            Expr::UnaryOp { op: UnaryOperator::Not, expr } => safe_residual(expr, qualifier, schema),
+            Expr::IsNull(expr) | Expr::IsNotNull(expr) => inner(expr, qualifier, schema).is_some(),
+            Expr::BinaryOp { left, op: BinaryOperator::Eq | BinaryOperator::NotEq, right } => {
+                [(left.as_ref(), right.as_ref()), (right.as_ref(), left.as_ref())].into_iter().any(|(column, value)| {
+                    inner(column, qualifier, schema).is_some_and(|column|
+                        column.user_type.is_none() && column.collation.is_none()
+                        && matches!(pg_type_oid_by_name(&column.pg_type), Some(25 | 1042 | 1043))
+                        && matches!(unwrap_nested_expr(value), Expr::Value(value) if matches!(value.value, Value::SingleQuotedString(_) | Value::Null)))
+                })
+            }
+            Expr::Value(value) => matches!(value.value, Value::Boolean(_) | Value::Null),
+            _ => false,
+        }
+    }
     fn outer(
         expression: &Expr,
         qualifier: &[String],
@@ -271,9 +292,9 @@ fn numeric_correlation(
                         return Some(());
                     }
                 }
-                None
+                safe_residual(expression, qualifier, schema).then_some(())
             }
-            _ => None,
+            _ => safe_residual(expression, qualifier, schema).then_some(()),
         }
     }
     let mut key = None;

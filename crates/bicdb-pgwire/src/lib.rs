@@ -2580,7 +2580,12 @@ fn handle_frontend_message(
         b'Q' => {
             let query = cstring_payload(&payload)?;
             let lowered;
-            let query = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
+            // Host status commands are interpreted by pgwire, outside the
+            // application's SQL namespace. Keep their existing exact command
+            // boundary and authorization checks in every SQL profile.
+            let query = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
+                && !is_server_status_query(query)
+            {
                 let database = if state.in_transaction {
                     server.read_db_for_transaction_progress()
                 } else {

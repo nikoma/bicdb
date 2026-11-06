@@ -2219,7 +2219,9 @@ pub(crate) fn parse_message(
     let name = read_cstr(payload, &mut idx)?;
     let sql = read_cstr(payload, &mut idx)?;
     let source_sql = sql.clone();
-    let mut sql = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
+    let mut sql = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
+        && !is_server_status_query(&sql)
+    {
         let db = server.read_db_for_transaction_progress()?;
         bicdb_sql::oracle::lower_session_sql(
             &db,

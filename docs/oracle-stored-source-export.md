@@ -31,6 +31,10 @@ The read-only snapshot covers subsequent catalog and row queries; schema writers
 must still be stopped as described below. Older exports without
 `source_identity` remain readable but do not establish these owner checks.
 This capture metadata does not qualify native Oracle owner/privilege semantics.
+For a quoted mixed-case owner, the configuration's `user` value must retain the
+Oracle driver's login quoting, for example `"user": "\"MixedOwner\""`. The exporter
+passes that login value to the driver and records the database-reported identity,
+which has no surrounding login quotes.
 
 Both `catalog.json` and the completed `manifest.json` contain:
 
@@ -73,9 +77,9 @@ physical database export. Keep schema writers stopped for a migration capture;
 catalog coverage checks do not acquire a DDL lease or establish CDC positioning.
 
 The [bounded evidence](evidence/oracle-stored-source-export-2026-11-05/README.md)
-contains offline fixtures and a legacy-DDL reconstruction control. Live Oracle
-qualification of the new categories is pending. No package or trigger execution
-support on BicDB is claimed by a successful export.
+contains offline fixtures and a legacy-DDL reconstruction control. The later
+live-source record below adds source-database evidence. No package or trigger
+execution support on BicDB is claimed by a successful export.
 
 ## Executable live-source acceptance
 
@@ -103,3 +107,8 @@ This is a source-export acceptance test; it does not run those objects on BicDB.
 The [live Oracle source-capture record](evidence/oracle-stored-source-capture-2026-11-05/README.md)
 qualifies an empty-owner fixture with compiled package/type bodies and both
 trigger states. Source capture and target execution remain separate gates.
+
+The [owner-identity qualification](evidence/oracle-export-owner-identity-2026-11-06/README.md)
+adds a live quoted-owner/default-schema/dictionary-shadow check and reruns the
+stored-source fixture: 19 checks passed with no skips. It does not qualify target
+ownership, target stored-code execution or full application behavior.

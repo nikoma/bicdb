@@ -1,0 +1,41 @@
+{
+  "format": 1,
+  "status": "bounded_live_export_identity_verified",
+  "qualified_tool_source_commit": "2977ac2f0bebd65a5b04c59b7b6a8e127bfa0309",
+  "oracle_server_version": "23.26.3.0.0",
+  "checks": {
+    "pure_passed": 17,
+    "live_oracle_passed": 2,
+    "failed": 0,
+    "skipped": 0
+  },
+  "source_files_sha256": {
+    "export_reference.py": "1f7de3557a85f2b2473980504b499c86bbdcc62c78e25a8bb93e1522d48dff50",
+    "test_export_owner_identity.py": "5817bf469be8efc16a0545144b10708fb26658c272aea08b6c08b2b1096e2cf9",
+    "test_export_owner_identity_oracle.py": "497e08e7b156e88a71dec08e0302670d8942a77c23e02ed75e31528fe623c7ba",
+    "test_export_stored_source.py": "b57f517cac287bd78320b9fac997fe0163ef3768cc1edc411455e5323eb331dd",
+    "test_export_stored_source_oracle.py": "39d8472fa6d8a4abf343266cf2b8a38a59999a8070eb1ca54001074f07ac0da2",
+    "test_export_temporal_preflight.py": "1e7536a74ea3f6a45ad7e3f42cf0e04ef0504f6915553bfe3891ffac0230146a"
+  },
+  "live_log_sha256": "f1e017a01c1c4066d395f2f55dc1ab905339fa11547f3018091d0711061bd476",
+  "acceptance": {
+    "database_reported_quoted_owner": true,
+    "changed_default_schema_reset": true,
+    "dictionary_shadow_not_used": true,
+    "exact_owner_qualified_rows": true,
+    "read_only_snapshot_setup_preserved": true,
+    "stored_source_categories_preserved": true,
+    "trigger_states_preserved": true,
+    "diagnostic_scn_not_cdc_position": true
+  },
+  "cleanup": {
+    "remaining_fixture_objects": 0,
+    "disposable_owner_dropped": true,
+    "reference_container_restored_stopped": true,
+    "errors": []
+  },
+  "target_owner_privileges_qualified": false,
+  "target_stored_code_execution_qualified": false,
+  "full_application_qualified": false,
+  "goal_complete": false
+}

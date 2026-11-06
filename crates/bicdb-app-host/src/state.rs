@@ -375,3 +375,180 @@ impl Replica {
             .into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{
+        net::TcpListener,
+        process::{Command, Stdio},
+        time::Instant,
+    };
+
+    struct Peer(std::process::Child);
+    impl Drop for Peer {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    fn openssl(directory: &Path, args: &[&str]) {
+        let result = Command::new("openssl")
+            .current_dir(directory)
+            .args(args)
+            .output()
+            .expect("OpenSSL test prerequisite");
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn private_state_forwarding_trusts_the_group_ca_and_authenticates_the_member() {
+        let root = tempfile::tempdir().unwrap();
+        openssl(
+            root.path(),
+            &[
+                "req",
+                "-x509",
+                "-newkey",
+                "ec",
+                "-pkeyopt",
+                "ec_paramgen_curve:P-256",
+                "-nodes",
+                "-days",
+                "1",
+                "-subj",
+                "/CN=state-test-ca",
+                "-keyout",
+                "ca.key",
+                "-out",
+                "ca.crt",
+            ],
+        );
+        openssl(
+            root.path(),
+            &[
+                "req",
+                "-newkey",
+                "ec",
+                "-pkeyopt",
+                "ec_paramgen_curve:P-256",
+                "-nodes",
+                "-subj",
+                "/CN=state-member",
+                "-keyout",
+                "node.key",
+                "-out",
+                "node.csr",
+            ],
+        );
+        std::fs::write(root.path().join("extensions"),"basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth,clientAuth\nsubjectAltName=IP:127.0.0.1,DNS:state.internal\n").unwrap();
+        openssl(
+            root.path(),
+            &[
+                "x509",
+                "-req",
+                "-in",
+                "node.csr",
+                "-CA",
+                "ca.crt",
+                "-CAkey",
+                "ca.key",
+                "-CAcreateserial",
+                "-days",
+                "1",
+                "-extfile",
+                "extensions",
+                "-out",
+                "node.crt",
+            ],
+        );
+        let reservation = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = reservation.local_addr().unwrap();
+        drop(reservation);
+        let _peer = Peer(
+            Command::new("openssl")
+                .current_dir(root.path())
+                .args([
+                    "s_server",
+                    "-accept",
+                    &address.to_string(),
+                    "-cert",
+                    "node.crt",
+                    "-key",
+                    "node.key",
+                    "-CAfile",
+                    "ca.crt",
+                    "-Verify",
+                    "1",
+                    "-verify_return_error",
+                    "-www",
+                    "-quiet",
+                ])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .unwrap(),
+        );
+        let mut group:Group=serde_json::from_value(serde_json::json!({"cluster_id":"test","node_id":"n2","initial_primary":"n1","nodes":{},"tls":{"certificate":root.path().join("node.crt"),"key":root.path().join("node.key"),"ca":root.path().join("ca.crt"),"server_name":"state.internal"}})).unwrap();
+        let url = format!("https://{address}/");
+        let client = group.forwarding_client().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let response = loop {
+            match client
+                .get(&url)
+                .timeout(Duration::from_secs(2))
+                .send()
+                .await
+            {
+                Ok(response) => break response,
+                Err(error) => {
+                    assert!(
+                        Instant::now() < deadline,
+                        "private peer TLS failed: {error:#}"
+                    );
+                    tokio::time::sleep(Duration::from_millis(20)).await;
+                }
+            }
+        };
+        assert!(response.status().is_success());
+        let body = response.text().await.unwrap();
+        assert!(
+            body.contains("Client certificate") && body.contains("state-member"),
+            "peer must verify and receive the member certificate"
+        );
+        let ca =
+            reqwest::Certificate::from_pem(&std::fs::read(root.path().join("ca.crt")).unwrap())
+                .unwrap();
+        let anonymous = reqwest::Client::builder()
+            .no_proxy()
+            .add_root_certificate(ca)
+            .build()
+            .unwrap();
+        assert!(
+            anonymous
+                .get(&url)
+                .timeout(Duration::from_secs(2))
+                .send()
+                .await
+                .is_err(),
+            "peer requires client authentication"
+        );
+        group.tls = None;
+        assert!(
+            group
+                .forwarding_client()
+                .unwrap()
+                .get(&url)
+                .timeout(Duration::from_secs(2))
+                .send()
+                .await
+                .is_err(),
+            "public trust alone cannot authenticate a private peer"
+        );
+    }
+}

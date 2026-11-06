@@ -246,6 +246,29 @@ The preview's [documented mappings](../../../docs/oracle-preview-profile.md) are
 explicit adaptations. This tool is not a general-purpose Oracle migration tool,
 and the application and database still need the acceptance stages below.
 
+## Inspect stored-code migration inputs
+
+Generate a reviewable plan from a trusted exported snapshot before installing
+stored code:
+
+```sh
+python3 examples/oracle/idempiere/schema_code.py \
+  --snapshot /path/to/snapshot --report /path/to/new-code-plan.json
+```
+
+The planner validates standalone function/procedure declaration identities and
+source view column positions. It qualifies routine declarations with the source
+schema and emits explicit ordered view labels, preserving routine bodies and
+view queries. The report contains generated SQL and source/generated hashes;
+treat it with the same confidentiality as the source snapshot. It refuses to
+overwrite an existing report and does not connect to a database or execute SQL.
+
+This is input validation, not an installer or a dependency resolver. It does not
+prove compilation, execution, view values, ownership, privileges, or application
+compatibility. Packages, triggers, types, grants, and dependency ordering require
+separate migration and qualification. Review these gates before applying code;
+do not replace missing dependencies with placeholder routines.
+
 ## Explicit JDBC transport preparation
 
 `prepare_provider.py --checkout EXTERNAL_CHECKOUT --report PRIVATE_REPORT.json`

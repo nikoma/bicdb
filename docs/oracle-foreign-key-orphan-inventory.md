@@ -113,12 +113,48 @@ Oracle replay report passes the reference-side checks for all 3,826
 relationships. The full application-target comparison remains pending until
 source foreign-key installation and target inventory finish.
 
+## Resume an interrupted inventory
+
 The inventory output is saved after bounded batches and on ordinary failure.
-The inventory command does not resume a partial count; rerunning starts a new read-only
-inventory against the same completed migration baseline. It refuses to use the
-source manifest or migration journal as its output path. If an explicit,
-separately approved data repair occurs, rerun the migration verification phase
-to establish its new baseline before inventorying that changed target.
+Without `--resume`, rerunning starts a fresh read-only inventory. To retain a
+partial count prefix, use the same snapshot, completed migration journal,
+endpoint and output path:
+
+```sh
+python examples/oracle/idempiere/foreign_key_orphans.py \
+  --snapshot /private/export \
+  --migration-report /private/foreign-keys.json \
+  --report /private/foreign-key-orphans.json \
+  --writers-quiesced --resume
+```
+
+Resume requires exact source/profile/endpoint identity and the same completed
+migration-report digest. Counts must form an exact ordered declaration prefix,
+use nonnegative integers, preserve complete original table fingerprints once
+any count is retained, and contain zero orphans for validated relationships.
+Changed/reordered declarations, malformed counts or a different migration
+baseline are refused. A source/target identity rejection preserves the supplied
+journal rather than overwriting another attempt's evidence.
+
+After identity validation, completion flags are invalidated. The full current
+catalog, enforcement switches, projections and row baseline are rechecked before
+any prior counts can be reused. Only pending relationships are counted; the
+final catalog and all row fingerprints are checked again. Even a previously
+completed journal goes through these metadata/data checks. The
+`resumed_from_relationships` field records the prefix considered for reuse;
+`inventory_completed` and `success`, together with a zero command exit, remain
+the completion gates. A failed command must not be treated as success because a
+retained older report has completion flags.
+
+Quiescence is required throughout interruption and resume; this does not acquire
+a lease or authenticate journal authors. Preserve the private journal and its
+provenance alongside the migration backup. Console fingerprint counters count
+affected tables, while count counters refer to relationships.
+
+The output cannot replace the source manifest or migration journal. If an
+explicit, separately approved data repair occurs, rerun migration verification
+to establish its new baseline and start a new inventory for that changed target.
+Resume never repairs rows or silently resets the baseline.
 
 ## Bounded evidence
 

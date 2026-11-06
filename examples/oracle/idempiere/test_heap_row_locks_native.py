@@ -74,16 +74,16 @@ class HeapLockCases:
             a.execute("INSERT INTO "+table+" VALUES (1,'same'),(2,'same')")
             a.execute('CREATE INDEX '+table+'_tag ON '+table+'(tag)')
         a.execute('BEGIN')
-        self.assertEqual(a.execute('SELECT l.label,r.label FROM heap_left l JOIN heap_right r ON l.tag=r.tag WHERE l.tag=1 FOR UPDATE OF r').fetchall(), [('same', 'same')])
+        self.assertEqual(a.execute('SELECT l.label,r.label FROM heap_left l JOIN heap_right r ON l.tag=r.tag WHERE l.tag=1 FOR UPDATE OF '+('r.tag' if self.profile != 'postgres' else 'r')).fetchall(), [('same', 'same')])
         b.execute('BEGIN')
         self.assertEqual(b.execute('SELECT tag FROM heap_left WHERE tag=1 FOR UPDATE NOWAIT').fetchall(), [(1,)])
         with self.assertRaises(psycopg.errors.LockNotAvailable):
             b.execute('SELECT tag FROM heap_right WHERE tag=1 FOR UPDATE NOWAIT')
         b.execute('ROLLBACK')
         a.execute('ROLLBACK')
-        self.assertEqual(a.execute('SELECT l.tag FROM heap_left l LEFT JOIN heap_right r ON l.tag=r.tag WHERE l.tag=1 FOR UPDATE OF l').fetchall(), [(1,)])
+        self.assertEqual(a.execute('SELECT l.tag FROM heap_left l LEFT JOIN heap_right r ON l.tag=r.tag WHERE l.tag=1 FOR UPDATE OF '+('l.tag' if self.profile != 'postgres' else 'l')).fetchall(), [(1,)])
         with self.assertRaises(psycopg.errors.FeatureNotSupported):
-            a.execute('SELECT l.tag FROM heap_left l LEFT JOIN heap_right r ON l.tag=r.tag FOR UPDATE OF r')
+            a.execute('SELECT l.tag FROM heap_left l LEFT JOIN heap_right r ON l.tag=r.tag FOR UPDATE OF '+('r.tag' if self.profile != 'postgres' else 'r'))
 
     def test_heap_lock_requires_update_and_respects_update_rls(self):
         import psycopg
@@ -91,26 +91,35 @@ class HeapLockCases:
         admin, reader, peer = f.conn, self.peer(f), self.peer(f)
         admin.execute('CREATE TABLE heap_secure(tag INTEGER)')
         admin.execute('INSERT INTO heap_secure VALUES (1),(2)')
-        admin.execute('CREATE ROLE heap_reader')
-        admin.execute('GRANT SELECT ON heap_secure TO heap_reader')
-        reader.execute('SET ROLE heap_reader')
+        admin.execute('CREATE ROLE "heap_reader"')
+        admin.execute('GRANT SELECT ON heap_secure TO "heap_reader"')
+        reader.execute('SET ROLE "heap_reader"')
         with self.assertRaises(psycopg.errors.InsufficientPrivilege):
             reader.execute('SELECT tag FROM heap_secure WHERE FALSE FOR UPDATE')
-        admin.execute('GRANT UPDATE ON heap_secure TO heap_reader')
-        admin.execute('ALTER TABLE heap_secure ENABLE ROW LEVEL SECURITY')
-        admin.execute('CREATE POLICY heap_select ON heap_secure FOR SELECT USING (tag=1)')
+        admin.execute('GRANT UPDATE ON heap_secure TO "heap_reader"')
+        table = '"HEAP_SECURE"' if self.profile != 'postgres' else '"heap_secure"'
+        column = '"TAG"' if self.profile != 'postgres' else '"tag"'
+        admin.execute('ALTER TABLE '+table+' ENABLE ROW LEVEL SECURITY')
+        admin.execute('CREATE POLICY heap_select ON '+table+' FOR SELECT USING ('+column+'=1)')
         reader.execute('BEGIN')
         self.assertEqual(reader.execute('SELECT tag FROM heap_secure FOR UPDATE').fetchall(), [])
         peer.execute('BEGIN')
         self.assertEqual(peer.execute('SELECT tag FROM heap_secure WHERE tag=1 FOR UPDATE NOWAIT').fetchall(), [(1,)])
         peer.execute('ROLLBACK')
         reader.execute('ROLLBACK')
-        admin.execute('CREATE POLICY heap_update ON heap_secure FOR UPDATE USING (tag=1)')
+        admin.execute('CREATE POLICY heap_update ON '+table+' FOR UPDATE USING ('+column+'=1)')
         reader.execute('BEGIN')
         self.assertEqual(reader.execute('SELECT tag FROM heap_secure FOR UPDATE').fetchall(), [(1,)])
         with self.assertRaises(psycopg.errors.LockNotAvailable):
             peer.execute('SELECT tag FROM heap_secure WHERE tag=1 FOR UPDATE NOWAIT')
         reader.execute('ROLLBACK')
+        with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+            reader.execute('CREATE POLICY escaped_policy ON '+table+' FOR SELECT USING (true)')
+        with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+            reader.execute('ALTER TABLE '+table+' DISABLE ROW LEVEL SECURITY')
+        admin.execute('REVOKE UPDATE ON heap_secure FROM "heap_reader"')
+        with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+            reader.execute('SELECT tag FROM heap_secure WHERE FALSE FOR UPDATE')
 
 
 @unittest.skipUnless(os.environ.get('BICDB_ORACLE_SERVER'), 'set BICDB_ORACLE_SERVER')

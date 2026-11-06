@@ -647,7 +647,18 @@ fn postgres_owner_administration(sql: &str) -> bool {
     let [statement] = statements.as_slice() else {
         return false;
     };
+    let quoted_relation = |name: &ObjectName| {
+        !name.0.is_empty()
+            && name.0.iter().all(|part| {
+                part.as_ident()
+                    .is_some_and(|ident| ident.quote_style.is_some())
+            })
+    };
     match statement {
+        // Policies are native operational metadata, rather than an Oracle VPD
+        // syntax claim. Exact quoted target names select this boundary; policy
+        // ownership and privilege checks remain in the ordinary executor.
+        Statement::CreatePolicy(policy) => quoted_relation(&policy.table_name),
         Statement::Grant(grant) => storage_catalog::native_privilege_objects(&grant.objects),
         Statement::Revoke(revoke) => storage_catalog::native_privilege_objects(&revoke.objects),
         Statement::Set(sqlparser::ast::Set::SetRole { .. }) => true,
@@ -662,10 +673,17 @@ fn postgres_owner_administration(sql: &str) -> bool {
         }
         Statement::AlterTable(table) => {
             !table.operations.is_empty()
-                && table
-                    .operations
-                    .iter()
-                    .all(|operation| matches!(operation, AlterTableOperation::OwnerTo { .. }))
+                && table.operations.iter().all(|operation| {
+                    matches!(operation, AlterTableOperation::OwnerTo { .. })
+                        || (quoted_relation(&table.name)
+                            && matches!(
+                                operation,
+                                AlterTableOperation::EnableRowLevelSecurity
+                                    | AlterTableOperation::DisableRowLevelSecurity
+                                    | AlterTableOperation::ForceRowLevelSecurity
+                                    | AlterTableOperation::NoForceRowLevelSecurity
+                            ))
+                })
         }
         Statement::AlterFunction(function) => {
             function.kind == AlterFunctionKind::Function
@@ -678,6 +696,26 @@ fn postgres_owner_administration(sql: &str) -> bool {
 #[cfg(test)]
 mod owner_administration_boundary_tests {
     use super::*;
+
+    #[test]
+    fn privilege_grammar_is_scoped_to_each_command_without_reserving_expression_names() {
+        let directory = tempfile::tempdir().unwrap();
+        let db = BicDb::open(directory.path()).unwrap();
+        let source = tokens(
+            "GRANT SELECT ON t TO \"r\"; SELECT grant,option FROM t; REVOKE SELECT ON t FROM \"r\"",
+        )
+        .unwrap();
+        let lowered =
+            canonical_tokens_with_routine_types(&db, &source, true, false, false, None).unwrap();
+        let sql = lowered
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(sql.starts_with("GRANT SELECT"), "{sql}");
+        assert!(sql.contains("SELECT \"GRANT\" , \"OPTION\""), "{sql}");
+        assert!(sql.contains("REVOKE SELECT"), "{sql}");
+    }
 
     #[test]
     fn only_native_role_owner_and_plain_maintenance_commands_select_the_boundary() {
@@ -696,6 +734,8 @@ mod owner_administration_boundary_tests {
             "ALTER VIEW \"Source Q\".\"V\" OWNER TO app_owner",
             "ALTER FUNCTION \"Source Q\".\"F\"(integer) OWNER TO app_owner",
             "ALTER PROCEDURE \"Source Q\".\"P\"(integer) OWNER TO app_owner",
+            "ALTER TABLE \"Source Q\".\"T\" ENABLE ROW LEVEL SECURITY",
+            "CREATE POLICY p ON \"Source Q\".\"T\" FOR SELECT USING (\"OWNER\"=1)",
         ] {
             assert!(postgres_owner_administration(sql), "{sql}");
         }
@@ -704,6 +744,9 @@ mod owner_administration_boundary_tests {
             "SELECT role,owner,login FROM source_rows",
             "CREATE TABLE source_rows (role NUMBER,owner NUMBER)",
             "GRANT SELECT ON source_rows TO app_owner",
+            "CREATE POLICY p ON source_rows FOR SELECT USING (owner=1)",
+            "ALTER TABLE source_rows ENABLE ROW LEVEL SECURITY",
+            "CREATE POLICY p ON \"Source Q\".\"T\" USING (true); SELECT 1",
             "ALTER TABLE source_rows ADD COLUMN owner NUMBER",
             "CREATE ROLE app_owner; SELECT 1",
             "ALTER VIEW v OWNER TO app_owner; SELECT 1",
@@ -1602,6 +1645,7 @@ fn canonical_tokens_with_routine_types(
     } else {
         BTreeSet::new()
     };
+    let mut privilege_command = false;
     let hierarchical = preview
         && source
             .windows(2)
@@ -1634,6 +1678,29 @@ fn canonical_tokens_with_routine_types(
     let mut i = 0;
     while i < source.len() {
         let t = &source[i];
+        if i == 0 || source[i - 1] == Token::SemiColon {
+            privilege_command = preview && (word(t, "GRANT") || word(t, "REVOKE"));
+        }
+        // Preserve privilege grammar in this command only. These words remain
+        // ordinary Oracle identifiers in unrelated expressions and declarations.
+        if privilege_command
+            && [
+                "GRANT",
+                "REVOKE",
+                "PRIVILEGES",
+                "OPTION",
+                "GRANTED",
+                "CASCADE",
+                "RESTRICT",
+            ]
+            .iter()
+            .any(|keyword| word(t, keyword))
+            && (i == 0 || source[i - 1] != Token::Period)
+        {
+            pieces.push(render_token(t).to_ascii_uppercase());
+            i += 1;
+            continue;
+        }
         if constraint_syntax.contains(&i) {
             pieces.push(render_token(t).to_ascii_uppercase());
             i += 1;

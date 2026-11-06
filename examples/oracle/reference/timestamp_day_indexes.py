@@ -92,18 +92,25 @@ def observe(factory, dialect='oracle'):
 
 def compare(source_factory, target_factory, dialect):
     source, target = observe(source_factory, dialect), observe(target_factory, dialect)
-    return dict(source=source, target=target,
-                success=not source['cleanup_errors'] and not target['cleanup_errors']
-                and all(item['qualified'] for result in [source, target] for item in result['cases']),
+    pairs = list(zip(source['cases'], target['cases'], strict=True))
+    matched = sum(a['id'] == b['id'] and a['qualified'] and b['qualified'] for a, b in pairs)
+    return dict(source=source, target=target, total=len(pairs), matched=matched,
+                success=len(pairs) == 3 and matched == 3
+                and not source['cleanup_errors'] and not target['cleanup_errors'],
                 application_qualified=False)
 
 
 def run(source_factory, target_factory):
-    return compare(source_factory, target_factory, 'oracle')
+    # The shared CLI supplies a source factory selected by --reference.
+    # Probe its driver without creating objects, then use that dialect on both
+    # sides. PostgreSQL date_trunc is independent of Oracle TRUNC syntax.
+    with source_factory() as connection:
+        dialect = 'oracle' if type(connection).__module__.startswith('oracledb') else 'postgres'
+    return compare(source_factory, target_factory, dialect)
 
 
 def run_postgres(source_factory, target_factory):
     return compare(source_factory, target_factory, 'postgres')
 
 
-if __name__ == '__main__': comparison_main(run)
+if __name__ == '__main__': raise SystemExit(comparison_main(run, __doc__))

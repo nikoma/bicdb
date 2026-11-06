@@ -1,5 +1,17 @@
 # Oracle reference queries
 
+`timestamp_day_indexes.py --reference oracle --oracle-config /private/oracle.json
+--output /private/day-indexes.json` compares three bounded timestamp day-index
+cases: backfill and mutation, duplicate rejection during unique construction,
+and NULL/savepoint rollback behavior. Use a dedicated Oracle owner with CREATE
+TABLE and quota, plus an Oracle-preview BicDB target selected by `BICDB_PG_DSN`.
+For independent PostgreSQL controls, use `--reference postgres` with
+`ORACLE_CONTROL_PG_DSN` and a default-PostgreSQL BicDB target. Each side must
+satisfy explicit expected values and executable-index checks. Nonce tables are
+removed, including Oracle PURGE. The CLI returns a nonzero status on comparison
+failure. Other datetime masks, zoned timestamps, concurrency, upgrade/downgrade
+and production maintenance cost remain separate qualification.
+
 `sequence_state.py --reference oracle --oracle-config /private/oracle.json
 --output /private/sequence-state.json` compares NEXTVAL/CURRVAL across rollback
 and savepoint rollback, and allocations through four connections. Use a

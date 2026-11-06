@@ -162,6 +162,31 @@ impl<'db> SqlEngine<'db> {
         ))
     }
 
+    /// Constant SELECT expressions inside a SQL function retain the declared
+    /// argument type even when a value uses a shared text representation.
+    /// In particular, a bytea argument must not select the text overload.
+    pub(crate) fn constant_expr_pg_type(&self, expr: &Expr) -> Option<String> {
+        let name = match expr {
+            Expr::Identifier(ident) => Some(ident.value.as_str()),
+            Expr::Value(value) => match &value.value {
+                Value::Placeholder(name) => Some(name.as_str()),
+                _ => None,
+            },
+            Expr::Nested(inner) | Expr::Collate { expr: inner, .. } => {
+                return self.constant_expr_pg_type(inner);
+            }
+            _ => None,
+        };
+        name.and_then(|name| {
+            self.routine_slots
+                .as_ref()?
+                .types
+                .get(normalized_object_name_ref(name).as_ref())
+                .map(|schema| schema.pg_type.clone())
+        })
+        .or_else(|| projected_expr_pg_type_with_db(self.db_ref(), expr))
+    }
+
     pub(crate) fn eval_select_constant_expr(&self, expr: &Expr) -> Result<SqlValue> {
         if let Expr::Identifier(ident) = expr {
             if ident.value.eq_ignore_ascii_case("current_date") {
@@ -207,7 +232,7 @@ impl<'db> SqlEngine<'db> {
                 branch_types.push(
                     else_result
                         .as_deref()
-                        .and_then(|result| projected_expr_pg_type_with_db(self.db_ref(), result)),
+                        .and_then(|result| self.constant_expr_pg_type(result)),
                 );
                 branch_types.extend(conditions.iter().map(|condition| {
                     projected_expr_pg_type_with_db(self.db_ref(), &condition.result)
@@ -224,9 +249,7 @@ impl<'db> SqlEngine<'db> {
                             &self.eval_select_constant_expr(&condition.condition)?,
                             operand
                                 .as_deref()
-                                .and_then(|expr| {
-                                    projected_expr_pg_type_with_db(self.db_ref(), expr)
-                                })
+                                .and_then(|expr| self.constant_expr_pg_type(expr))
                                 .as_deref(),
                             projected_expr_pg_type_with_db(self.db_ref(), &condition.condition)
                                 .as_deref(),
@@ -250,7 +273,7 @@ impl<'db> SqlEngine<'db> {
                     let arguments = function_arg_list(function);
                     let types = arguments
                         .iter()
-                        .map(|arg| projected_expr_pg_type_with_db(self.db_ref(), arg))
+                        .map(|arg| self.constant_expr_pg_type(arg))
                         .collect::<Vec<_>>();
                     let common_type = select_common_pg_type(self.db_ref(), &types, "COALESCE")?;
                     for argument in arguments.iter() {
@@ -264,7 +287,7 @@ impl<'db> SqlEngine<'db> {
                 let arg_exprs = function_arg_list(function);
                 let arg_types = arg_exprs
                     .iter()
-                    .map(|arg| projected_expr_pg_type_with_db(self.db_ref(), arg))
+                    .map(|arg| self.constant_expr_pg_type(arg))
                     .collect::<Vec<_>>();
                 let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
                 if matches!(
@@ -285,7 +308,7 @@ impl<'db> SqlEngine<'db> {
                         | "array_replace"
                         | "array_cat"
                 ) {
-                    projected_expr_pg_type_with_db(self.db_ref(), expr).ok_or_else(|| {
+                    self.constant_expr_pg_type(expr).ok_or_else(|| {
                         SqlError::data_exception_public(
                             "42804",
                             format!("could not determine polymorphic type for {bare_name}"),
@@ -406,7 +429,7 @@ impl<'db> SqlEngine<'db> {
             Expr::Position { expr, r#in } => eval_position_typed_value(
                 self.eval_select_constant_expr(expr)?,
                 self.eval_select_constant_expr(r#in)?,
-                projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref() == Some("bytea")
+                self.constant_expr_pg_type(expr).as_deref() == Some("bytea")
                     || projected_expr_pg_type_with_db(self.db_ref(), r#in).as_deref()
                         == Some("bytea"),
             ),
@@ -427,7 +450,7 @@ impl<'db> SqlEngine<'db> {
                 let types = array
                     .elem
                     .iter()
-                    .map(|expr| projected_expr_pg_type_with_db(self.db_ref(), expr))
+                    .map(|expr| self.constant_expr_pg_type(expr))
                     .collect::<Vec<_>>();
                 select_common_pg_type(self.db_ref(), &types, "ARRAY")?;
                 array
@@ -443,13 +466,13 @@ impl<'db> SqlEngine<'db> {
                     .collect::<Result<Vec<_>>>()?,
                 exprs
                     .iter()
-                    .map(|expr| projected_expr_pg_type_with_db(self.db_ref(), expr))
+                    .map(|expr| self.constant_expr_pg_type(expr))
                     .collect(),
             )),
             Expr::CompoundFieldAccess { root, access_chain } => eval_access_chain_expr(
                 root,
                 access_chain,
-                projected_expr_pg_type_with_db(self.db_ref(), root).as_deref() == Some("jsonb"),
+                self.constant_expr_pg_type(root).as_deref() == Some("jsonb"),
                 |expr| self.eval_select_constant_expr(expr),
             ),
             Expr::Exists { subquery, negated } => {
@@ -3481,8 +3504,10 @@ impl<'db> SqlEngine<'db> {
             "length" | "char_length" | "character_length" | "octet_length" | "bit_length"
             | "position" | "strpos" | "ascii" => Some("int4".to_string()),
             "bit_count" | "crc32" | "crc32c" => Some("int8".to_string()),
-            "bicdb_oracle_blob_getlength" | "bicdb_oracle_blob_istemporary"
-            | "bicdb_oracle_sql_blob_getlength" | "bicdb_oracle_sql_blob_istemporary" => Some("int8".into()),
+            "bicdb_oracle_blob_getlength"
+            | "bicdb_oracle_blob_istemporary"
+            | "bicdb_oracle_sql_blob_getlength"
+            | "bicdb_oracle_sql_blob_istemporary" => Some("int8".into()),
             "bicdb_oracle_empty_blob"
             | "bicdb_oracle_blob_from_raw"
             | "bicdb_oracle_hextoraw"

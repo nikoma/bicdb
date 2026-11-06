@@ -3557,14 +3557,14 @@ impl<'db> SqlEngine<'db> {
             match item {
                 SelectItem::UnnamedExpr(expr) => {
                     columns.push(select_expr_column_name(expr));
-                    column_types.push(projected_expr_pg_type_with_db(self.db_ref(), expr));
+                    column_types.push(self.constant_expr_pg_type(expr));
                     if include_row {
                         row.push(self.eval_select_constant_expr(expr)?);
                     }
                 }
                 SelectItem::ExprWithAlias { expr, alias } => {
                     columns.push(alias.value.clone());
-                    column_types.push(projected_expr_pg_type_with_db(self.db_ref(), expr));
+                    column_types.push(self.constant_expr_pg_type(expr));
                     if include_row {
                         row.push(self.eval_select_constant_expr(expr)?);
                     }

@@ -62,6 +62,11 @@ class SqlBlobReadNativeTests(unittest.TestCase):
             cursor.execute('CREATE FUNCTION "DBMS_LOB"."TEXT_LENGTH"(b TEXT) RETURNS INTEGER LANGUAGE SQL AS $$SELECT octet_length(b)+5$$')
             cursor.execute('SELECT "DBMS_LOB"."TEXT_LENGTH"(%s)',(r'\xab',),prepare=True)
             self.assertEqual(cursor.fetchall(),[(9,)])
+            cursor.execute('CREATE FUNCTION "DBMS_LOB"."BYTE_LENGTH_ROWS"(b BYTEA) RETURNS TABLE(n INTEGER) LANGUAGE SQL AS $$SELECT octet_length(b)+5$$')
+            cursor.execute('SELECT n FROM "DBMS_LOB"."BYTE_LENGTH_ROWS"(%s)',(b'\xab',),prepare=True)
+            self.assertEqual(cursor.fetchall(),[(6,)])
+            cursor.execute('SELECT n FROM "DBMS_LOB"."BYTE_LENGTH_ROWS"(NULL::BYTEA)',prepare=True)
+            self.assertEqual(cursor.fetchall(),[(None,)])
 
 
 if __name__ == '__main__': unittest.main()

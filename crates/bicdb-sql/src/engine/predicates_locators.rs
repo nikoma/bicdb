@@ -4319,6 +4319,7 @@ impl<'db> SqlEngine<'db> {
             // Only declared arguments cross into a SQL function body.
             .with_outer_slot_row(OuterSlotRow::from_slot(&[], &[]))
             .with_shared_routine_vars(frame.materialized_values())
+            .with_routine_slots(Some(frame.slot_binding()))
             .with_cancellation(self.cancellation.clone()),
         );
         let mut result = None;

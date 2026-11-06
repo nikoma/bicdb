@@ -81,6 +81,13 @@ columns, referenced table, actions, matching mode, timing, validation and declar
 enforcement exactly match. A validated source relationship validates target rows;
 an invalid target row stops that installation instead of being deleted or repaired.
 
+Console output identifies catalog checks, baseline table fingerprinting, the
+capability probe, relationship installation and final table fingerprinting.
+Fingerprint counters count affected tables; installation counters count source
+relationships. Fingerprint progress is emitted every 32 tables and at the final
+table, including during read-only preflight. Use the report's success and
+completion flags for acceptance; console progress is not a completed journal.
+
 The journal is saved in bounded batches and on normal completion/failure. Resume
 rechecks the exact completed declaration prefix, target identity, catalogs,
 enforcement switches and saved target row fingerprints:

@@ -253,6 +253,7 @@ def migrate(args):
                     raise ValueError('foreign-key journal is missing completed table fingerprints')
                 can_write = True
             with connection.cursor() as cursor:
+                print('foreign-keys: catalog and declaration preflight', flush=True)
                 state = catalog(cursor, schema)
                 expected = {(item['table'], item['name']): item for item in plan}
                 for key, actual in state['constraints'].items():
@@ -274,14 +275,18 @@ def migrate(args):
                 for table in affected:
                     if state['columns'].get(table) != set(tables[table]['columns']):
                         raise ValueError('target table projection differs from the exported source')
-                for table in affected:
+                print('foreign-keys: recording baseline table fingerprints', flush=True)
+                for ordinal, table in enumerate(affected, 1):
                     fingerprint = table_fingerprint(cursor, schema, tables[table])
                     prior = report['table_fingerprints'].get(table)
                     if prior is not None and prior['before'] != fingerprint:
                         raise ValueError('target rows changed since foreign-key migration began')
                     report['table_fingerprints'][table] = dict(before=fingerprint)
+                    if ordinal % 32 == 0 or ordinal == len(affected):
+                        print('foreign-keys: baseline fingerprints ' + str(ordinal) + '/' + str(len(affected)), flush=True)
                 save_report(args.report, report)
                 if not args.check_only and plan:
+                    print('foreign-keys: checking target enforcement capabilities', flush=True)
                     probe_support(cursor, schema)
                     report['capability_verified'] = True
                 for index, item in enumerate(plan):
@@ -299,11 +304,14 @@ def migrate(args):
                         save_report(args.report, report)
                         print('foreign-keys: ' + str(index + 1) + '/' + str(len(plan)), flush=True)
                 enforcement_enabled(cursor, schema, [item['table'] for item in plan])
-                for table in affected:
+                print('foreign-keys: verifying final table fingerprints', flush=True)
+                for ordinal, table in enumerate(affected, 1):
                     after = table_fingerprint(cursor, schema, tables[table])
                     if report['table_fingerprints'][table]['before'] != after:
                         raise ValueError('target rows changed during foreign-key migration')
                     report['table_fingerprints'][table]['after'] = after
+                    if ordinal % 32 == 0 or ordinal == len(affected):
+                        print('foreign-keys: final fingerprints ' + str(ordinal) + '/' + str(len(affected)), flush=True)
                 report['migration_completed'] = not args.check_only and len(report['completed']) == len(plan)
                 report['success'] = args.check_only or report['migration_completed']
     finally:

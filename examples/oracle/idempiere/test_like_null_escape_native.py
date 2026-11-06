@@ -45,11 +45,11 @@ class NullEscapeCases:
             self.assert_invalid_oracle_escape(connection, query, ('',))
             self.assert_invalid_oracle_escape(connection, query, ('xx',))
         self.assertEqual(connection.execute(query, ('|',)).fetchall(), [(1,)])
-        unicode_escape = "SELECT CASE WHEN 'x%tail' LIKE %s ESCAPE %s THEN 1 ELSE 0 END"
+        unicode_escape = "SELECT CASE WHEN %s LIKE %s ESCAPE %s THEN 1 ELSE 0 END"
         if self.profile == 'postgres':
-            self.assertEqual(connection.execute(unicode_escape, ('x§%%', '§')).fetchall(), [(1,)])
+            self.assertEqual(connection.execute(unicode_escape, ('x%tail', 'x§%%', '§')).fetchall(), [(1,)])
         else:
-            self.assert_invalid_oracle_escape(connection, unicode_escape, ('x§%%', '§'))
+            self.assert_invalid_oracle_escape(connection, unicode_escape, ('x%tail', 'x§%%', '§'))
         empty = "SELECT CASE WHEN 'abc' LIKE 'abc' ESCAPE '' THEN 1 ELSE 2 END"
         if self.profile == 'postgres':
             self.assertEqual(connection.execute(empty).fetchall(), [(1,)])

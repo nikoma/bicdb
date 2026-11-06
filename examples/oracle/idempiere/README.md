@@ -342,3 +342,9 @@ documents read-only preflight, quiesced apply, exact source state matching and
 resumable target-value verification through `--phase foreign-keys`. Successful
 relationship installation remains separate from orphan inventory, source value
 equality and application qualification.
+
+The [full foreign-key installation checkpoint](../../../docs/evidence/oracle-full-foreign-key-installation-2026-11-05/README.md)
+records all 3,826 relationships installed on an exercised native target, with
+888 participating-table fingerprints and stored definitions preserved. Complete
+orphan comparison, pristine source value equality and full application acceptance
+remain separate gates.

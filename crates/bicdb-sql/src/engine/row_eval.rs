@@ -1190,7 +1190,10 @@ impl<'db> SqlEngine<'db> {
                         .as_deref()
                         .and_then(|pg_type| pg_type.strip_suffix("[]"))
                     {
-                        return postgres_array_text_value(
+                        if matches!(value, SqlValue::Null) {
+                            return Ok(SqlValue::Null);
+                        }
+                        return postgres_array_cast_text_value(
                             &value,
                             pg_type_delimiter_with_db(self.db_ref(), element_type)?,
                         )
@@ -2755,7 +2758,10 @@ impl<'db> SqlEngine<'db> {
                         .as_deref()
                         .and_then(|pg_type| pg_type.strip_suffix("[]"))
                     {
-                        return postgres_array_text_value(
+                        if matches!(value, SqlValue::Null) {
+                            return Ok(SqlValue::Null);
+                        }
+                        return postgres_array_cast_text_value(
                             &value,
                             pg_type_delimiter_with_db(self.db_ref(), element_type)?,
                         )

@@ -1475,7 +1475,7 @@ pub(crate) fn cast_expr_value(
                 .map(|user_type| user_type.scalar_delimiter())
                 .or_else(|| pg_type_delimiter(element_type))
                 .unwrap_or(',');
-            return postgres_array_text_value(&value, delimiter).map(SqlValue::String);
+            return postgres_array_cast_text_value(&value, delimiter).map(SqlValue::String);
         }
     }
     if target_type == "oid" {
@@ -1735,6 +1735,23 @@ pub(crate) fn cast_expr_value(
         &target_type,
         pg_type_modifier_from_data_type(data_type)?.as_ref(),
     )
+}
+
+// SQL casts must retain array subscripts, just like the wire codec. The
+// lower-level body renderer stays prefix-free for the codec's typed header.
+pub(crate) fn postgres_array_cast_text_value(value: &SqlValue, delimiter: char) -> Result<String> {
+    let text = postgres_array_text_value(value, delimiter)?;
+    let (array, bounds) =
+        array_json_parts(value, "array text cast")?.ok_or_else(|| invalid_array_text("NULL"))?;
+    if bounds.iter().all(|lower| *lower == 1) {
+        return Ok(text);
+    }
+    let prefix = bounds
+        .iter()
+        .zip(array_dimensions(array))
+        .map(|(lower, length)| format!("[{}:{}]", lower, i64::from(*lower) + length as i64 - 1))
+        .collect::<String>();
+    Ok(format!("{prefix}={text}"))
 }
 
 pub(crate) fn postgres_array_text_value(value: &SqlValue, delimiter: char) -> Result<String> {
@@ -2813,7 +2830,7 @@ pub(crate) fn cast_expr_value_with_db_and_source_type(
                 .map(|user_type| user_type.scalar_delimiter())
                 .map(Ok)
                 .unwrap_or_else(|| pg_type_delimiter_with_db(db, element_type))?;
-            return postgres_array_text_value(&value, delimiter).map(SqlValue::String);
+            return postgres_array_cast_text_value(&value, delimiter).map(SqlValue::String);
         }
     }
     if matches!(target_pg_type.as_deref(), Some("text" | "varchar"))

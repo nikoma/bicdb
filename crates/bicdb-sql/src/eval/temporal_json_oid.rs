@@ -1612,6 +1612,9 @@ pub(crate) fn select_expr_column_name(expr: &Expr) -> String {
 
 pub(crate) fn row_expr_column_name(expr: &Expr) -> String {
     match expr {
+        // Match SELECT without FROM: a literal's value is never its SQL name.
+        // In particular, dots inside text must not become binding qualifiers.
+        Expr::Value(_) => "?column?".to_string(),
         Expr::Identifier(ident) => ident.value.clone(),
         Expr::CompoundIdentifier(idents) => idents
             .last()

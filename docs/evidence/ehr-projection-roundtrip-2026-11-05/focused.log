@@ -1,0 +1,1080 @@
+ehr-bicdb-insight-focused-base_types.log
+running 4 tests
+test base_type_finalization_rolls_back_to_the_original_shell ... ok
+test base_type_like_copies_only_the_physical_representation ... ok
+test base_types_reject_unsafe_or_mismatched_codecs ... ok
+test shell_finalizes_to_durable_registered_base_type ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.89s
+
+
+ehr-bicdb-insight-focused-carrier_hub_compat.log
+running 38 tests
+test drop_database_parses_the_force_option ... ok
+test named_user_exception_handlers_allow_success_and_match_only_their_sqlstates ... ok
+test plpgsql_uuid_v7_with_bit_operations ... ok
+test describe_types_guarded_table_functions_from_their_declaration ... ok
+test named_user_exception_diagnostics_restore_outer_handler_and_do_not_leak ... ok
+test grant_on_a_missing_function_is_an_error ... ok
+test jsonb_existence_operators_work_in_check_constraints_and_where ... ok
+test limit_stops_select_list_evaluation_early ... ok
+test plpgsql_case_statement_forms ... ok
+test named_user_exception_handlers_roll_back_failed_body_changes ... ok
+test grants_on_system_catalog_views_are_accepted ... ok
+test has_table_privilege_accepts_relation_oids ... ok
+test raise_using_constraint_reports_a_constraint_violation ... ok
+test plpgsql_case_statement_inside_if_block ... ok
+test dropping_an_obsolete_function_signature_preserves_the_current_table_function ... ok
+test pg_depend_links_check_constraints_and_policies_to_called_functions ... ok
+test locking_clause_may_precede_limit_in_queue_claims ... ok
+test correlated_subqueries_see_an_outer_set_returning_function_alias ... ok
+test sql_table_function_columns_are_the_declared_returns_table_columns ... ok
+test partial_unique_index_on_jsonb_text_field_constrains_only_matching_rows ... ok
+test routine_paginated_jsonb_case_keeps_column_types_and_changed_arguments ... ok
+test routine_row_limits_bind_named_variables_inside_ctes_and_subqueries ... ok
+test inner_join_with_where_pinned_primary_key_returns_the_joined_row ... ok
+test disable_trigger_all_suspends_foreign_keys_for_a_data_load ... ok
+test routine_row_limits_preserve_null_zero_negative_and_fetch_semantics ... ok
+test check_constraints_call_user_functions_and_use_typed_arithmetic ... ok
+test set_returning_function_alias_column_is_typed ... ok
+test statement_timestamp_is_a_timestamptz_in_scalar_and_aggregate_selects ... ok
+test timestamp_column_interval_arithmetic_is_exact ... ok
+test with_recursive_evaluates_non_self_referencing_union_ctes_once ... ok
+test function_dependency_grants_reach_policies_of_tables_granted_through_functions ... ok
+test scalar_derived_commands_write_once_in_the_owning_statement_transaction ... ok
+test row_security_policy_subqueries_follow_the_session ... ok
+test weak_row_lock_strengths_parse_in_queries_and_routines ... ok
+test unique_index_on_multi_column_coalesce_keys_on_the_first_non_null_column ... ok
+test correlated_exists_per_array_element_on_wide_rows ... ok
+test repeated_grouped_summary_routines_keep_timezone_and_date_types ... ok
+test regprocedure_casts_follow_routine_changes ... ok
+
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.20s
+
+
+ehr-bicdb-insight-focused-composite_types.log
+running 12 tests
+test anonymous_records_preserve_null_empty_quoting_and_nested_values ... ok
+test anonymous_records_match_postgresql_text_type_json_and_comparison_semantics ... ok
+test table_rows_are_first_class_composite_values ... ok
+test named_composite_arrays_preserve_typed_elements_and_subscripts ... ok
+test table_row_types_keep_constraints_at_table_boundaries ... ok
+test named_composite_types_create_cast_store_and_report_catalogs ... ok
+test named_composite_drop_respects_nested_dependencies_and_cascade ... ok
+test named_composite_alter_rejects_dependent_type_changes_and_rolls_back ... ok
+test named_composite_rename_preserves_oids_and_updates_nested_definitions ... ok
+test table_row_type_oids_survive_reopen_and_disappear_with_the_table ... ok
+test named_composite_attributes_evolve_existing_scalar_array_and_nested_values ... ok
+test table_row_type_oids_dependencies_and_renames_survive_reopen ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.12s
+
+
+ehr-bicdb-insight-focused-deferred_foreign_keys.log
+running 20 tests
+test autocommit_defers_until_statement_end_and_never_persists_an_orphan ... ok
+test initially_deferred_enforces_commit_and_restrict_remains_immediate ... ok
+test not_valid_constraint_does_not_revalidate_untouched_legacy_rows ... ok
+test unresolved_deferred_reference_refuses_commit_and_rolls_back ... ok
+test rollback_restores_constraint_mode_and_discards_rolled_back_checks ... ok
+test successful_immediate_validation_does_not_destroy_savepoint_check_history ... ok
+test core_commit_cannot_bypass_pending_sql_validation ... ok
+test a_changed_row_primary_key_keeps_its_pending_foreign_key_validation ... ok
+test mode_is_transaction_local_and_does_not_leak_to_another_session ... ok
+test parent_delete_is_deferred_but_unresolved_deletion_fails ... ok
+test switching_to_immediate_checks_pending_rows_and_restores_on_savepoint_rollback ... ok
+test deferred_checks_follow_the_final_row_and_allow_deleted_transient_rows ... ok
+test deferred_child_still_reserves_the_parent_key_against_concurrent_deletion ... ok
+test constraint_mode_follows_renames_but_a_new_constraint_has_its_own_identity ... ok
+test information_schema_timing_follows_alter_constraint_and_rollback ... ok
+test oracle_constraint_names_follow_the_selected_schema_without_session_search_path ... ok
+test deferred_child_before_parent_is_validated_and_persists_across_sessions ... ok
+test alter_constraint_in_do_block_is_catalogued_transactional_and_owner_checked ... ok
+test composite_patient_move_allows_both_parent_first_and_child_first ... ok
+test pending_checks_cannot_be_bypassed_by_renaming_the_constraint_or_table ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.51s
+
+
+ehr-bicdb-insight-focused-domain_types.log
+running 5 tests
+test named_domain_not_null_constraints_follow_postgres_lifecycle ... ok
+test domains_enforce_base_typmods_defaults_checks_arrays_and_catalogs ... ok
+test domains_can_build_on_enums_and_other_domains ... ok
+test alter_domain_manages_defaults_nullability_and_check_lifecycle ... ok
+test domain_postgres_syntax_collation_drop_tag_and_transaction_undo ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.01s
+
+
+ehr-bicdb-insight-focused-ehr_routine_results.log
+running 3 tests
+test sql_out_parameters_form_a_single_row_source ... ok
+test date_parameter_arithmetic_retains_its_type_through_timestamp_casts ... ok
+test nested_command_in_json_runs_once_after_dispatch_warms ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+
+
+ehr-bicdb-insight-focused-empty_aggregates.log
+running 2 tests
+test empty_ungrouped_aggregates_return_one_postgresql_shaped_row ... ok
+test empty_join_aggregates_are_ungrouped_while_grouped_aggregates_stay_empty ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+
+ehr-bicdb-insight-focused-gates.log
+running 4 tests
+test array_text_cast_keeps_nondefault_subscripts_for_rollback_copy ... ok
+test unaliased_literals_keep_postgresql_names_through_ctes_and_union_wildcards ... ok
+test array_text_cast_preserves_null_in_record_join_and_aggregate_paths ... ok
+test insight_table_function_preserves_literal_values_and_declared_names ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 0, "test_executables_processed": 0, "target_free_before": 17080893440, "target_free_after": 17080893440, "ram_cache_bytes": 22629319359}
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.76s
+     Running tests/carrier_hub_compat.rs (target/debug/deps/carrier_hub_compat-f9f0263f7a127878)
+
+running 38 tests
+test drop_database_parses_the_force_option ... ok
+test named_user_exception_handlers_allow_success_and_match_only_their_sqlstates ... ok
+test plpgsql_uuid_v7_with_bit_operations ... ok
+test describe_types_guarded_table_functions_from_their_declaration ... ok
+test named_user_exception_diagnostics_restore_outer_handler_and_do_not_leak ... ok
+test grant_on_a_missing_function_is_an_error ... ok
+test jsonb_existence_operators_work_in_check_constraints_and_where ... ok
+test limit_stops_select_list_evaluation_early ... ok
+test plpgsql_case_statement_forms ... ok
+test named_user_exception_handlers_roll_back_failed_body_changes ... ok
+test grants_on_system_catalog_views_are_accepted ... ok
+test has_table_privilege_accepts_relation_oids ... ok
+test raise_using_constraint_reports_a_constraint_violation ... ok
+test plpgsql_case_statement_inside_if_block ... ok
+test dropping_an_obsolete_function_signature_preserves_the_current_table_function ... ok
+test pg_depend_links_check_constraints_and_policies_to_called_functions ... ok
+test locking_clause_may_precede_limit_in_queue_claims ... ok
+test correlated_subqueries_see_an_outer_set_returning_function_alias ... ok
+test sql_table_function_columns_are_the_declared_returns_table_columns ... ok
+test partial_unique_index_on_jsonb_text_field_constrains_only_matching_rows ... ok
+test routine_paginated_jsonb_case_keeps_column_types_and_changed_arguments ... ok
+test routine_row_limits_bind_named_variables_inside_ctes_and_subqueries ... ok
+test inner_join_with_where_pinned_primary_key_returns_the_joined_row ... ok
+test disable_trigger_all_suspends_foreign_keys_for_a_data_load ... ok
+test routine_row_limits_preserve_null_zero_negative_and_fetch_semantics ... ok
+test check_constraints_call_user_functions_and_use_typed_arithmetic ... ok
+test set_returning_function_alias_column_is_typed ... ok
+test statement_timestamp_is_a_timestamptz_in_scalar_and_aggregate_selects ... ok
+test timestamp_column_interval_arithmetic_is_exact ... ok
+test with_recursive_evaluates_non_self_referencing_union_ctes_once ... ok
+test function_dependency_grants_reach_policies_of_tables_granted_through_functions ... ok
+test scalar_derived_commands_write_once_in_the_owning_statement_transaction ... ok
+test row_security_policy_subqueries_follow_the_session ... ok
+test weak_row_lock_strengths_parse_in_queries_and_routines ... ok
+test unique_index_on_multi_column_coalesce_keys_on_the_first_non_null_column ... ok
+test correlated_exists_per_array_element_on_wide_rows ... ok
+test repeated_grouped_summary_routines_keep_timezone_and_date_types ... ok
+test regprocedure_casts_follow_routine_changes ... ok
+
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.20s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 928114208, "test_executables_processed": 1, "target_free_before": 15800987648, "target_free_after": 16729104384, "ram_cache_bytes": 22629319359}
+441 |     pub(crate) fn values_unprobed(&self) -> &SlotRow {
+    |                   ^^^^^^^^^^^^^^^
+
+warning: function `has_trusted_identity` is never used
+    --> crates/bicdb-sql/src/eval/value_ops1.rs:1964:15
+     |
+1964 | pub(crate) fn has_trusted_identity(session_gucs: &HashMap<String, String>) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `canonical_jsonb_identity_text` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:1981:15
+     |
+1981 | pub(crate) fn canonical_jsonb_identity_text(value: &JsonValue) -> String {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `pg_timestamp_from_unix_seconds` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:2847:15
+     |
+2847 | pub(crate) fn pg_timestamp_from_unix_seconds(seconds: i64) -> PgTimestamp {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["lib"],"crate_types":["lib"],"name":"bicdb_sql","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/src/lib.rs","edition":"2021","doc":true,"doctest":true,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rlib","/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rmeta"],"executable":null,"fresh":true}
+warning: `bicdb-sql` (lib) generated 61 warnings (run `cargo fix --lib -p bicdb-sql` to apply 7 suggestions)
+   Compiling bicdb-sql v1.0.438-beta (/root/ehr-bicdb-migration-20261104/crates/bicdb-sql)
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["test"],"crate_types":["bin"],"name":"jsonb_srf","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/tests/jsonb_srf.rs","edition":"2021","doc":false,"doctest":false,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":true},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/jsonb_srf-b14e5c99f131b7e7"],"executable":"/root/ehr-bicdb-migration-20261104/target/debug/deps/jsonb_srf-b14e5c99f131b7e7","fresh":false}
+{"reason":"build-finished","success":true}
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.54s
+     Running tests/jsonb_srf.rs (target/debug/deps/jsonb_srf-b14e5c99f131b7e7)
+
+running 12 tests
+test jsonb_array_element_functions_preserve_postgres_null_and_text_semantics ... ok
+test jsonb_set_functions_are_strict_and_reject_the_wrong_json_shape ... ok
+test jsonb_each_and_typed_record_functions_match_postgres ... ok
+test jsonb_array_element_functions_expand_no_from_projections ... ok
+test jsonb_object_keys_matches_postgres_order_in_from_and_projection_forms ... ok
+test jsonb_text_elements_support_cognee_scalar_alias_filters_and_aggregation ... ok
+test lateral_derived_jsonb_metadata_survives_an_empty_left_input ... ok
+test jsonb_table_functions_are_implicitly_lateral_and_support_explicit_join_kinds ... ok
+test carrier_element_gallery_lateral_derived_query_matches_declared_and_derived_elements ... ok
+test cognee_jsonb_tag_selection_and_removal_flow_preserves_edge_cases ... ok
+test json_coalesce_fallbacks_preserve_values_inside_json_constructors ... ok
+test routine_json_fallbacks_infer_aggregate_types_over_derived_sources ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 927858320, "test_executables_processed": 1, "target_free_before": 15449640960, "target_free_after": 16377495552, "ram_cache_bytes": 22629319359}
+warning: associated items `from_sql_row` and `values_unprobed` are never used
+   --> crates/bicdb-sql/src/planner.rs:415:19
+    |
+402 | impl OuterSlotRow {
+    | ----------------- associated items in this implementation
+...
+415 |     pub(crate) fn from_sql_row(row: &SqlRow) -> Self {
+    |                   ^^^^^^^^^^^^
+...
+441 |     pub(crate) fn values_unprobed(&self) -> &SlotRow {
+    |                   ^^^^^^^^^^^^^^^
+
+warning: function `has_trusted_identity` is never used
+    --> crates/bicdb-sql/src/eval/value_ops1.rs:1964:15
+     |
+1964 | pub(crate) fn has_trusted_identity(session_gucs: &HashMap<String, String>) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `canonical_jsonb_identity_text` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:1981:15
+     |
+1981 | pub(crate) fn canonical_jsonb_identity_text(value: &JsonValue) -> String {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `pg_timestamp_from_unix_seconds` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:2847:15
+     |
+2847 | pub(crate) fn pg_timestamp_from_unix_seconds(seconds: i64) -> PgTimestamp {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["lib"],"crate_types":["lib"],"name":"bicdb_sql","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/src/lib.rs","edition":"2021","doc":true,"doctest":true,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rlib","/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rmeta"],"executable":null,"fresh":true}
+warning: `bicdb-sql` (lib) generated 61 warnings (run `cargo fix --lib -p bicdb-sql` to apply 7 suggestions)
+   Compiling bicdb-sql v1.0.438-beta (/root/ehr-bicdb-migration-20261104/crates/bicdb-sql)
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["test"],"crate_types":["bin"],"name":"ehr_routine_results","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/tests/ehr_routine_results.rs","edition":"2021","doc":false,"doctest":false,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":true},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/ehr_routine_results-94518c16f1431f68"],"executable":"/root/ehr-bicdb-migration-20261104/target/debug/deps/ehr_routine_results-94518c16f1431f68","fresh":false}
+{"reason":"build-finished","success":true}
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.39s
+     Running tests/ehr_routine_results.rs (target/debug/deps/ehr_routine_results-94518c16f1431f68)
+
+running 3 tests
+test sql_out_parameters_form_a_single_row_source ... ok
+test date_parameter_arithmetic_retains_its_type_through_timestamp_casts ... ok
+test nested_command_in_json_runs_once_after_dispatch_warms ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 927594336, "test_executables_processed": 1, "target_free_before": 15098449920, "target_free_after": 16026042368, "ram_cache_bytes": 22629319359}
+
+warning: associated items `from_sql_row` and `values_unprobed` are never used
+   --> crates/bicdb-sql/src/planner.rs:415:19
+    |
+402 | impl OuterSlotRow {
+    | ----------------- associated items in this implementation
+...
+415 |     pub(crate) fn from_sql_row(row: &SqlRow) -> Self {
+    |                   ^^^^^^^^^^^^
+...
+441 |     pub(crate) fn values_unprobed(&self) -> &SlotRow {
+    |                   ^^^^^^^^^^^^^^^
+
+warning: function `has_trusted_identity` is never used
+    --> crates/bicdb-sql/src/eval/value_ops1.rs:1964:15
+     |
+1964 | pub(crate) fn has_trusted_identity(session_gucs: &HashMap<String, String>) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `canonical_jsonb_identity_text` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:1981:15
+     |
+1981 | pub(crate) fn canonical_jsonb_identity_text(value: &JsonValue) -> String {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `pg_timestamp_from_unix_seconds` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:2847:15
+     |
+2847 | pub(crate) fn pg_timestamp_from_unix_seconds(seconds: i64) -> PgTimestamp {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["lib"],"crate_types":["lib"],"name":"bicdb_sql","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/src/lib.rs","edition":"2021","doc":true,"doctest":true,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rlib","/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rmeta"],"executable":null,"fresh":true}
+warning: `bicdb-sql` (lib) generated 61 warnings (run `cargo fix --lib -p bicdb-sql` to apply 7 suggestions)
+   Compiling bicdb-sql v1.0.438-beta (/root/ehr-bicdb-migration-20261104/crates/bicdb-sql)
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["test"],"crate_types":["bin"],"name":"lateral_routine_sources","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/tests/lateral_routine_sources.rs","edition":"2021","doc":false,"doctest":false,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":true},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/lateral_routine_sources-7570e3174efc7510"],"executable":"/root/ehr-bicdb-migration-20261104/target/debug/deps/lateral_routine_sources-7570e3174efc7510","fresh":false}
+{"reason":"build-finished","success":true}
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.41s
+     Running tests/lateral_routine_sources.rs (target/debug/deps/lateral_routine_sources-7570e3174efc7510)
+
+running 2 tests
+test lateral_sql_routines_bind_each_left_row_and_preserve_qualified_output_types ... ok
+test lateral_sql_routines_keep_definer_identity_and_execute_refusals_for_empty_sources ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 927594064, "test_executables_processed": 1, "target_free_before": 14746996736, "target_free_after": 15674589184, "ram_cache_bytes": 22629319359}
+...
+415 |     pub(crate) fn from_sql_row(row: &SqlRow) -> Self {
+    |                   ^^^^^^^^^^^^
+...
+441 |     pub(crate) fn values_unprobed(&self) -> &SlotRow {
+    |                   ^^^^^^^^^^^^^^^
+
+warning: function `has_trusted_identity` is never used
+    --> crates/bicdb-sql/src/eval/value_ops1.rs:1964:15
+     |
+1964 | pub(crate) fn has_trusted_identity(session_gucs: &HashMap<String, String>) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `canonical_jsonb_identity_text` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:1981:15
+     |
+1981 | pub(crate) fn canonical_jsonb_identity_text(value: &JsonValue) -> String {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `pg_timestamp_from_unix_seconds` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:2847:15
+     |
+2847 | pub(crate) fn pg_timestamp_from_unix_seconds(seconds: i64) -> PgTimestamp {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["lib"],"crate_types":["lib"],"name":"bicdb_sql","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/src/lib.rs","edition":"2021","doc":true,"doctest":true,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rlib","/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rmeta"],"executable":null,"fresh":true}
+warning: `bicdb-sql` (lib) generated 61 warnings (run `cargo fix --lib -p bicdb-sql` to apply 7 suggestions)
+   Compiling bicdb-sql v1.0.438-beta (/root/ehr-bicdb-migration-20261104/crates/bicdb-sql)
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["test"],"crate_types":["bin"],"name":"type_consistency","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/tests/type_consistency.rs","edition":"2021","doc":false,"doctest":false,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":true},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/type_consistency-bb77ecbf0eb7db07"],"executable":"/root/ehr-bicdb-migration-20261104/target/debug/deps/type_consistency-bb77ecbf0eb7db07","fresh":false}
+{"reason":"build-finished","success":true}
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.54s
+     Running tests/type_consistency.rs (target/debug/deps/type_consistency-bb77ecbf0eb7db07)
+
+running 8 tests
+test parameter_types_follow_postgres_common_type_selection ... ok
+test typed_result_views_preserve_expression_types_without_changing_sql_value ... ok
+test query_result_types_survive_empty_catalog_reflection_results ... ok
+test table_unnest_joins_preserve_result_and_delete_parameter_types ... ok
+test parameter_types_follow_schema_assignment_and_expression_context ... ok
+test prepared_array_types_follow_every_context_used_by_cognee ... ok
+test stored_function_parameter_types_follow_the_declared_signature_without_running_the_body ... ok
+test registry_catalog_attribute_and_planner_types_agree_exhaustively ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 927990040, "test_executables_processed": 1, "target_free_before": 14393311232, "target_free_after": 15321300992, "ram_cache_bytes": 22629319359}
+    |
+402 | impl OuterSlotRow {
+    | ----------------- associated items in this implementation
+...
+415 |     pub(crate) fn from_sql_row(row: &SqlRow) -> Self {
+    |                   ^^^^^^^^^^^^
+...
+441 |     pub(crate) fn values_unprobed(&self) -> &SlotRow {
+    |                   ^^^^^^^^^^^^^^^
+
+warning: function `has_trusted_identity` is never used
+    --> crates/bicdb-sql/src/eval/value_ops1.rs:1964:15
+     |
+1964 | pub(crate) fn has_trusted_identity(session_gucs: &HashMap<String, String>) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `canonical_jsonb_identity_text` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:1981:15
+     |
+1981 | pub(crate) fn canonical_jsonb_identity_text(value: &JsonValue) -> String {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `pg_timestamp_from_unix_seconds` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:2847:15
+     |
+2847 | pub(crate) fn pg_timestamp_from_unix_seconds(seconds: i64) -> PgTimestamp {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["lib"],"crate_types":["lib"],"name":"bicdb_sql","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/src/lib.rs","edition":"2021","doc":true,"doctest":true,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rlib","/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rmeta"],"executable":null,"fresh":true}
+warning: `bicdb-sql` (lib) generated 61 warnings (run `cargo fix --lib -p bicdb-sql` to apply 7 suggestions)
+   Compiling bicdb-sql v1.0.438-beta (/root/ehr-bicdb-migration-20261104/crates/bicdb-sql)
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["test"],"crate_types":["bin"],"name":"domain_types","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/tests/domain_types.rs","edition":"2021","doc":false,"doctest":false,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":true},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/domain_types-6cb69356ed810663"],"executable":"/root/ehr-bicdb-migration-20261104/target/debug/deps/domain_types-6cb69356ed810663","fresh":false}
+{"reason":"build-finished","success":true}
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.42s
+     Running tests/domain_types.rs (target/debug/deps/domain_types-6cb69356ed810663)
+
+running 5 tests
+test named_domain_not_null_constraints_follow_postgres_lifecycle ... ok
+test domains_enforce_base_typmods_defaults_checks_arrays_and_catalogs ... ok
+test domains_can_build_on_enums_and_other_domains ... ok
+test alter_domain_manages_defaults_nullability_and_check_lifecycle ... ok
+test domain_postgres_syntax_collation_drop_tag_and_transaction_undo ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.01s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 927618464, "test_executables_processed": 1, "target_free_before": 14042165248, "target_free_after": 14969782272, "ram_cache_bytes": 22629319359}
+
+warning: function `canonical_jsonb_identity_text` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:1981:15
+     |
+1981 | pub(crate) fn canonical_jsonb_identity_text(value: &JsonValue) -> String {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `pg_timestamp_from_unix_seconds` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:2847:15
+     |
+2847 | pub(crate) fn pg_timestamp_from_unix_seconds(seconds: i64) -> PgTimestamp {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["lib"],"crate_types":["lib"],"name":"bicdb_sql","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/src/lib.rs","edition":"2021","doc":true,"doctest":true,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rlib","/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rmeta"],"executable":null,"fresh":true}
+warning: `bicdb-sql` (lib) generated 61 warnings (run `cargo fix --lib -p bicdb-sql` to apply 7 suggestions)
+   Compiling bicdb-sql v1.0.438-beta (/root/ehr-bicdb-migration-20261104/crates/bicdb-sql)
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["test"],"crate_types":["bin"],"name":"deferred_foreign_keys","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/tests/deferred_foreign_keys.rs","edition":"2021","doc":false,"doctest":false,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":true},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/deferred_foreign_keys-b6cc11aeae4b6f49"],"executable":"/root/ehr-bicdb-migration-20261104/target/debug/deps/deferred_foreign_keys-b6cc11aeae4b6f49","fresh":false}
+{"reason":"build-finished","success":true}
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.44s
+     Running tests/deferred_foreign_keys.rs (target/debug/deps/deferred_foreign_keys-b6cc11aeae4b6f49)
+
+running 20 tests
+test autocommit_defers_until_statement_end_and_never_persists_an_orphan ... ok
+test initially_deferred_enforces_commit_and_restrict_remains_immediate ... ok
+test not_valid_constraint_does_not_revalidate_untouched_legacy_rows ... ok
+test unresolved_deferred_reference_refuses_commit_and_rolls_back ... ok
+test rollback_restores_constraint_mode_and_discards_rolled_back_checks ... ok
+test successful_immediate_validation_does_not_destroy_savepoint_check_history ... ok
+test core_commit_cannot_bypass_pending_sql_validation ... ok
+test a_changed_row_primary_key_keeps_its_pending_foreign_key_validation ... ok
+test mode_is_transaction_local_and_does_not_leak_to_another_session ... ok
+test parent_delete_is_deferred_but_unresolved_deletion_fails ... ok
+test switching_to_immediate_checks_pending_rows_and_restores_on_savepoint_rollback ... ok
+test deferred_checks_follow_the_final_row_and_allow_deleted_transient_rows ... ok
+test deferred_child_still_reserves_the_parent_key_against_concurrent_deletion ... ok
+test constraint_mode_follows_renames_but_a_new_constraint_has_its_own_identity ... ok
+test information_schema_timing_follows_alter_constraint_and_rollback ... ok
+test oracle_constraint_names_follow_the_selected_schema_without_session_search_path ... ok
+test deferred_child_before_parent_is_validated_and_persists_across_sessions ... ok
+test alter_constraint_in_do_block_is_catalogued_transactional_and_owner_checked ... ok
+test composite_patient_move_allows_both_parent_first_and_child_first ... ok
+test pending_checks_cannot_be_bypassed_by_renaming_the_constraint_or_table ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.51s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 927630368, "test_executables_processed": 1, "target_free_before": 13688762368, "target_free_after": 14616391680, "ram_cache_bytes": 22629319359}
+
+warning: associated items `from_sql_row` and `values_unprobed` are never used
+   --> crates/bicdb-sql/src/planner.rs:415:19
+    |
+402 | impl OuterSlotRow {
+    | ----------------- associated items in this implementation
+...
+415 |     pub(crate) fn from_sql_row(row: &SqlRow) -> Self {
+    |                   ^^^^^^^^^^^^
+...
+441 |     pub(crate) fn values_unprobed(&self) -> &SlotRow {
+    |                   ^^^^^^^^^^^^^^^
+
+warning: function `has_trusted_identity` is never used
+    --> crates/bicdb-sql/src/eval/value_ops1.rs:1964:15
+     |
+1964 | pub(crate) fn has_trusted_identity(session_gucs: &HashMap<String, String>) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `canonical_jsonb_identity_text` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:1981:15
+     |
+1981 | pub(crate) fn canonical_jsonb_identity_text(value: &JsonValue) -> String {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `pg_timestamp_from_unix_seconds` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:2847:15
+     |
+2847 | pub(crate) fn pg_timestamp_from_unix_seconds(seconds: i64) -> PgTimestamp {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["lib"],"crate_types":["lib"],"name":"bicdb_sql","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/src/lib.rs","edition":"2021","doc":true,"doctest":true,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rlib","/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rmeta"],"executable":null,"fresh":true}
+warning: `bicdb-sql` (lib) generated 61 warnings (run `cargo fix --lib -p bicdb-sql` to apply 7 suggestions)
+   Compiling bicdb-sql v1.0.438-beta (/root/ehr-bicdb-migration-20261104/crates/bicdb-sql)
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["test"],"crate_types":["bin"],"name":"empty_aggregates","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/tests/empty_aggregates.rs","edition":"2021","doc":false,"doctest":false,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":true},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/empty_aggregates-238fd764a9dcd766"],"executable":"/root/ehr-bicdb-migration-20261104/target/debug/deps/empty_aggregates-238fd764a9dcd766","fresh":false}
+{"reason":"build-finished","success":true}
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.39s
+     Running tests/empty_aggregates.rs (target/debug/deps/empty_aggregates-238fd764a9dcd766)
+
+running 2 tests
+test empty_ungrouped_aggregates_return_one_postgresql_shaped_row ... ok
+test empty_join_aggregates_are_ungrouped_while_grouped_aggregates_stay_empty ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 927575328, "test_executables_processed": 1, "target_free_before": 13337382912, "target_free_after": 14264958976, "ram_cache_bytes": 22629319359}
+warning: associated items `from_sql_row` and `values_unprobed` are never used
+   --> crates/bicdb-sql/src/planner.rs:415:19
+    |
+402 | impl OuterSlotRow {
+    | ----------------- associated items in this implementation
+...
+415 |     pub(crate) fn from_sql_row(row: &SqlRow) -> Self {
+    |                   ^^^^^^^^^^^^
+...
+441 |     pub(crate) fn values_unprobed(&self) -> &SlotRow {
+    |                   ^^^^^^^^^^^^^^^
+
+warning: function `has_trusted_identity` is never used
+    --> crates/bicdb-sql/src/eval/value_ops1.rs:1964:15
+     |
+1964 | pub(crate) fn has_trusted_identity(session_gucs: &HashMap<String, String>) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `canonical_jsonb_identity_text` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:1981:15
+     |
+1981 | pub(crate) fn canonical_jsonb_identity_text(value: &JsonValue) -> String {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `pg_timestamp_from_unix_seconds` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:2847:15
+     |
+2847 | pub(crate) fn pg_timestamp_from_unix_seconds(seconds: i64) -> PgTimestamp {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["lib"],"crate_types":["lib"],"name":"bicdb_sql","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/src/lib.rs","edition":"2021","doc":true,"doctest":true,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rlib","/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rmeta"],"executable":null,"fresh":true}
+warning: `bicdb-sql` (lib) generated 61 warnings (run `cargo fix --lib -p bicdb-sql` to apply 7 suggestions)
+   Compiling bicdb-sql v1.0.438-beta (/root/ehr-bicdb-migration-20261104/crates/bicdb-sql)
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["test"],"crate_types":["bin"],"name":"streaming_aggregates","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/tests/streaming_aggregates.rs","edition":"2021","doc":false,"doctest":false,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":true},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/streaming_aggregates-14e4be3bea9e14f3"],"executable":"/root/ehr-bicdb-migration-20261104/target/debug/deps/streaming_aggregates-14e4be3bea9e14f3","fresh":false}
+{"reason":"build-finished","success":true}
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.45s
+     Running tests/streaming_aggregates.rs (target/debug/deps/streaming_aggregates-14e4be3bea9e14f3)
+
+running 3 tests
+test spot_values_are_the_expected_constants ... ok
+test streamed_aggregates_match_the_materializing_oracle_embedded ... ok
+test streamed_aggregates_match_the_materializing_oracle_paged ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.07s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 927620160, "test_executables_processed": 1, "target_free_before": 12985864192, "target_free_after": 13913485312, "ram_cache_bytes": 22629319359}
+
+warning: associated items `from_sql_row` and `values_unprobed` are never used
+   --> crates/bicdb-sql/src/planner.rs:415:19
+    |
+402 | impl OuterSlotRow {
+    | ----------------- associated items in this implementation
+...
+415 |     pub(crate) fn from_sql_row(row: &SqlRow) -> Self {
+    |                   ^^^^^^^^^^^^
+...
+441 |     pub(crate) fn values_unprobed(&self) -> &SlotRow {
+    |                   ^^^^^^^^^^^^^^^
+
+warning: function `has_trusted_identity` is never used
+    --> crates/bicdb-sql/src/eval/value_ops1.rs:1964:15
+     |
+1964 | pub(crate) fn has_trusted_identity(session_gucs: &HashMap<String, String>) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `canonical_jsonb_identity_text` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:1981:15
+     |
+1981 | pub(crate) fn canonical_jsonb_identity_text(value: &JsonValue) -> String {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `pg_timestamp_from_unix_seconds` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:2847:15
+     |
+2847 | pub(crate) fn pg_timestamp_from_unix_seconds(seconds: i64) -> PgTimestamp {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["lib"],"crate_types":["lib"],"name":"bicdb_sql","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/src/lib.rs","edition":"2021","doc":true,"doctest":true,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rlib","/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rmeta"],"executable":null,"fresh":true}
+warning: `bicdb-sql` (lib) generated 61 warnings (run `cargo fix --lib -p bicdb-sql` to apply 7 suggestions)
+   Compiling bicdb-sql v1.0.438-beta (/root/ehr-bicdb-migration-20261104/crates/bicdb-sql)
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["test"],"crate_types":["bin"],"name":"recursive_query_stack","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/tests/recursive_query_stack.rs","edition":"2021","doc":false,"doctest":false,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":true},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/recursive_query_stack-f0190611b9a3cfb8"],"executable":"/root/ehr-bicdb-migration-20261104/target/debug/deps/recursive_query_stack-f0190611b9a3cfb8","fresh":false}
+{"reason":"build-finished","success":true}
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.52s
+     Running tests/recursive_query_stack.rs (target/debug/deps/recursive_query_stack-f0190611b9a3cfb8)
+
+running 2 tests
+test postgres_correlated_predicate_fits_protocol_worker_stack ... ok
+test oracle_correlated_predicate_fits_protocol_worker_stack ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 927388832, "test_executables_processed": 1, "target_free_before": 12632776704, "target_free_after": 13560164352, "ram_cache_bytes": 22629319359}
+    |                 ^^^^
+
+warning: associated items `from_sql_row` and `values_unprobed` are never used
+   --> crates/bicdb-sql/src/planner.rs:415:19
+    |
+402 | impl OuterSlotRow {
+    | ----------------- associated items in this implementation
+...
+415 |     pub(crate) fn from_sql_row(row: &SqlRow) -> Self {
+    |                   ^^^^^^^^^^^^
+...
+441 |     pub(crate) fn values_unprobed(&self) -> &SlotRow {
+    |                   ^^^^^^^^^^^^^^^
+
+warning: function `has_trusted_identity` is never used
+    --> crates/bicdb-sql/src/eval/value_ops1.rs:1964:15
+     |
+1964 | pub(crate) fn has_trusted_identity(session_gucs: &HashMap<String, String>) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `canonical_jsonb_identity_text` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:1981:15
+     |
+1981 | pub(crate) fn canonical_jsonb_identity_text(value: &JsonValue) -> String {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `pg_timestamp_from_unix_seconds` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:2847:15
+     |
+2847 | pub(crate) fn pg_timestamp_from_unix_seconds(seconds: i64) -> PgTimestamp {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["lib"],"crate_types":["lib"],"name":"bicdb_sql","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/src/lib.rs","edition":"2021","doc":true,"doctest":true,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rlib","/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rmeta"],"executable":null,"fresh":true}
+warning: `bicdb-sql` (lib) generated 61 warnings (run `cargo fix --lib -p bicdb-sql` to apply 7 suggestions)
+   Compiling bicdb-sql v1.0.438-beta (/root/ehr-bicdb-migration-20261104/crates/bicdb-sql)
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["test"],"crate_types":["bin"],"name":"routine_expression_stack","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/tests/routine_expression_stack.rs","edition":"2021","doc":false,"doctest":false,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":true},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/routine_expression_stack-f617b485a011a411"],"executable":"/root/ehr-bicdb-migration-20261104/target/debug/deps/routine_expression_stack-f617b485a011a411","fresh":false}
+{"reason":"build-finished","success":true}
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.32s
+     Running tests/routine_expression_stack.rs (target/debug/deps/routine_expression_stack-f617b485a011a411)
+
+running 1 test
+test nested_identity_helpers_fit_an_ordinary_protocol_worker_stack ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 927585888, "test_executables_processed": 1, "target_free_before": 12281143296, "target_free_after": 13208727552, "ram_cache_bytes": 22629319359}
+402 | impl OuterSlotRow {
+    | ----------------- associated items in this implementation
+...
+415 |     pub(crate) fn from_sql_row(row: &SqlRow) -> Self {
+    |                   ^^^^^^^^^^^^
+...
+441 |     pub(crate) fn values_unprobed(&self) -> &SlotRow {
+    |                   ^^^^^^^^^^^^^^^
+
+warning: function `has_trusted_identity` is never used
+    --> crates/bicdb-sql/src/eval/value_ops1.rs:1964:15
+     |
+1964 | pub(crate) fn has_trusted_identity(session_gucs: &HashMap<String, String>) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `canonical_jsonb_identity_text` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:1981:15
+     |
+1981 | pub(crate) fn canonical_jsonb_identity_text(value: &JsonValue) -> String {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `pg_timestamp_from_unix_seconds` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:2847:15
+     |
+2847 | pub(crate) fn pg_timestamp_from_unix_seconds(seconds: i64) -> PgTimestamp {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["lib"],"crate_types":["lib"],"name":"bicdb_sql","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/src/lib.rs","edition":"2021","doc":true,"doctest":true,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rlib","/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rmeta"],"executable":null,"fresh":true}
+warning: `bicdb-sql` (lib) generated 61 warnings (run `cargo fix --lib -p bicdb-sql` to apply 7 suggestions)
+   Compiling bicdb-sql v1.0.438-beta (/root/ehr-bicdb-migration-20261104/crates/bicdb-sql)
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["test"],"crate_types":["bin"],"name":"select_row_locks","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/tests/select_row_locks.rs","edition":"2021","doc":false,"doctest":false,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":true},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/select_row_locks-d7c27083b376a1a3"],"executable":"/root/ehr-bicdb-migration-20261104/target/debug/deps/select_row_locks-d7c27083b376a1a3","fresh":false}
+{"reason":"build-finished","success":true}
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.55s
+     Running tests/select_row_locks.rs (target/debug/deps/select_row_locks-d7c27083b376a1a3)
+
+running 6 tests
+test blocking_row_wait_honors_cancellation_and_releases_transaction_locks_on_rollback ... ok
+test explicit_lateral_function_lock_targets_are_refused_without_weakening_base_privileges ... ok
+test lateral_table_functions_preserve_base_row_locks_and_skip_locked_limits ... ok
+test row_locks_skip_contended_rows_before_limit_and_follow_savepoints ... ok
+test row_locks_contend_with_mutations_and_enforce_privileges ... ok
+test row_locks_do_not_lock_another_roles_rls_hidden_rows ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 928792784, "test_executables_processed": 1, "target_free_before": 11928363008, "target_free_after": 12857155584, "ram_cache_bytes": 22629319359}
+    |                 ^^^^
+
+warning: associated items `from_sql_row` and `values_unprobed` are never used
+   --> crates/bicdb-sql/src/planner.rs:415:19
+    |
+402 | impl OuterSlotRow {
+    | ----------------- associated items in this implementation
+...
+415 |     pub(crate) fn from_sql_row(row: &SqlRow) -> Self {
+    |                   ^^^^^^^^^^^^
+...
+441 |     pub(crate) fn values_unprobed(&self) -> &SlotRow {
+    |                   ^^^^^^^^^^^^^^^
+
+warning: function `has_trusted_identity` is never used
+    --> crates/bicdb-sql/src/eval/value_ops1.rs:1964:15
+     |
+1964 | pub(crate) fn has_trusted_identity(session_gucs: &HashMap<String, String>) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `canonical_jsonb_identity_text` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:1981:15
+     |
+1981 | pub(crate) fn canonical_jsonb_identity_text(value: &JsonValue) -> String {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `pg_timestamp_from_unix_seconds` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:2847:15
+     |
+2847 | pub(crate) fn pg_timestamp_from_unix_seconds(seconds: i64) -> PgTimestamp {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["lib"],"crate_types":["lib"],"name":"bicdb_sql","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/src/lib.rs","edition":"2021","doc":true,"doctest":true,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rlib","/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rmeta"],"executable":null,"fresh":true}
+warning: `bicdb-sql` (lib) generated 61 warnings (run `cargo fix --lib -p bicdb-sql` to apply 7 suggestions)
+   Compiling bicdb-sql v1.0.438-beta (/root/ehr-bicdb-migration-20261104/crates/bicdb-sql)
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["test"],"crate_types":["bin"],"name":"rls_boolean_depth","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/tests/rls_boolean_depth.rs","edition":"2021","doc":false,"doctest":false,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":true},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/rls_boolean_depth-5536201b9ca7bb37"],"executable":"/root/ehr-bicdb-migration-20261104/target/debug/deps/rls_boolean_depth-5536201b9ca7bb37","fresh":false}
+{"reason":"build-finished","success":true}
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.40s
+     Running tests/rls_boolean_depth.rs (target/debug/deps/rls_boolean_depth-5536201b9ca7bb37)
+
+running 1 test
+test deeply_nested_role_policies_preserve_tenant_scope_and_null_semantics ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 927663360, "test_executables_processed": 1, "target_free_before": 11578023936, "target_free_after": 12505686016, "ram_cache_bytes": 22629319359}
+   --> crates/bicdb-sql/src/planner.rs:415:19
+    |
+402 | impl OuterSlotRow {
+    | ----------------- associated items in this implementation
+...
+415 |     pub(crate) fn from_sql_row(row: &SqlRow) -> Self {
+    |                   ^^^^^^^^^^^^
+...
+441 |     pub(crate) fn values_unprobed(&self) -> &SlotRow {
+    |                   ^^^^^^^^^^^^^^^
+
+warning: function `has_trusted_identity` is never used
+    --> crates/bicdb-sql/src/eval/value_ops1.rs:1964:15
+     |
+1964 | pub(crate) fn has_trusted_identity(session_gucs: &HashMap<String, String>) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `canonical_jsonb_identity_text` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:1981:15
+     |
+1981 | pub(crate) fn canonical_jsonb_identity_text(value: &JsonValue) -> String {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `pg_timestamp_from_unix_seconds` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:2847:15
+     |
+2847 | pub(crate) fn pg_timestamp_from_unix_seconds(seconds: i64) -> PgTimestamp {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["lib"],"crate_types":["lib"],"name":"bicdb_sql","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/src/lib.rs","edition":"2021","doc":true,"doctest":true,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rlib","/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rmeta"],"executable":null,"fresh":true}
+warning: `bicdb-sql` (lib) generated 61 warnings (run `cargo fix --lib -p bicdb-sql` to apply 7 suggestions)
+   Compiling bicdb-sql v1.0.438-beta (/root/ehr-bicdb-migration-20261104/crates/bicdb-sql)
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["test"],"crate_types":["bin"],"name":"routine_owner_execution_identity","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/tests/routine_owner_execution_identity.rs","edition":"2021","doc":false,"doctest":false,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":true},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/routine_owner_execution_identity-58b2634dac6b91e9"],"executable":"/root/ehr-bicdb-migration-20261104/target/debug/deps/routine_owner_execution_identity-58b2634dac6b91e9","fresh":false}
+{"reason":"build-finished","success":true}
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.38s
+     Running tests/routine_owner_execution_identity.rs (target/debug/deps/routine_owner_execution_identity-58b2634dac6b91e9)
+
+running 4 tests
+test an_ownerless_routine_is_still_only_reassignable_by_a_superuser ... ok
+test an_owned_definer_routine_still_runs_as_its_owner ... ok
+test an_ownerless_definer_routine_still_works_for_an_authorized_caller ... ok
+test an_ownerless_definer_routine_does_not_run_as_bootstrap ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 927581040, "test_executables_processed": 1, "target_free_before": 11226660864, "target_free_after": 12154241024, "ram_cache_bytes": 22629319359}
+   --> crates/bicdb-sql/src/planner.rs:415:19
+    |
+402 | impl OuterSlotRow {
+    | ----------------- associated items in this implementation
+...
+415 |     pub(crate) fn from_sql_row(row: &SqlRow) -> Self {
+    |                   ^^^^^^^^^^^^
+...
+441 |     pub(crate) fn values_unprobed(&self) -> &SlotRow {
+    |                   ^^^^^^^^^^^^^^^
+
+warning: function `has_trusted_identity` is never used
+    --> crates/bicdb-sql/src/eval/value_ops1.rs:1964:15
+     |
+1964 | pub(crate) fn has_trusted_identity(session_gucs: &HashMap<String, String>) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `canonical_jsonb_identity_text` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:1981:15
+     |
+1981 | pub(crate) fn canonical_jsonb_identity_text(value: &JsonValue) -> String {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `pg_timestamp_from_unix_seconds` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:2847:15
+     |
+2847 | pub(crate) fn pg_timestamp_from_unix_seconds(seconds: i64) -> PgTimestamp {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["lib"],"crate_types":["lib"],"name":"bicdb_sql","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/src/lib.rs","edition":"2021","doc":true,"doctest":true,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rlib","/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rmeta"],"executable":null,"fresh":true}
+warning: `bicdb-sql` (lib) generated 61 warnings (run `cargo fix --lib -p bicdb-sql` to apply 7 suggestions)
+   Compiling bicdb-sql v1.0.438-beta (/root/ehr-bicdb-migration-20261104/crates/bicdb-sql)
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["test"],"crate_types":["bin"],"name":"base_types","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/tests/base_types.rs","edition":"2021","doc":false,"doctest":false,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":true},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/base_types-ee2a4852842b0054"],"executable":"/root/ehr-bicdb-migration-20261104/target/debug/deps/base_types-ee2a4852842b0054","fresh":false}
+{"reason":"build-finished","success":true}
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.40s
+     Running tests/base_types.rs (target/debug/deps/base_types-ee2a4852842b0054)
+
+running 4 tests
+test base_type_finalization_rolls_back_to_the_original_shell ... ok
+test base_type_like_copies_only_the_physical_representation ... ok
+test base_types_reject_unsafe_or_mismatched_codecs ... ok
+test shell_finalizes_to_durable_registered_base_type ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.89s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 927713248, "test_executables_processed": 1, "target_free_before": 10875006976, "target_free_after": 11802718208, "ram_cache_bytes": 22629319359}
+441 |     pub(crate) fn values_unprobed(&self) -> &SlotRow {
+    |                   ^^^^^^^^^^^^^^^
+
+warning: function `has_trusted_identity` is never used
+    --> crates/bicdb-sql/src/eval/value_ops1.rs:1964:15
+     |
+1964 | pub(crate) fn has_trusted_identity(session_gucs: &HashMap<String, String>) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `canonical_jsonb_identity_text` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:1981:15
+     |
+1981 | pub(crate) fn canonical_jsonb_identity_text(value: &JsonValue) -> String {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `pg_timestamp_from_unix_seconds` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:2847:15
+     |
+2847 | pub(crate) fn pg_timestamp_from_unix_seconds(seconds: i64) -> PgTimestamp {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["lib"],"crate_types":["lib"],"name":"bicdb_sql","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/src/lib.rs","edition":"2021","doc":true,"doctest":true,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rlib","/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rmeta"],"executable":null,"fresh":true}
+warning: `bicdb-sql` (lib) generated 61 warnings (run `cargo fix --lib -p bicdb-sql` to apply 7 suggestions)
+   Compiling bicdb-sql v1.0.438-beta (/root/ehr-bicdb-migration-20261104/crates/bicdb-sql)
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["test"],"crate_types":["bin"],"name":"composite_types","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/tests/composite_types.rs","edition":"2021","doc":false,"doctest":false,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":true},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/composite_types-375371d399b46faf"],"executable":"/root/ehr-bicdb-migration-20261104/target/debug/deps/composite_types-375371d399b46faf","fresh":false}
+{"reason":"build-finished","success":true}
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.46s
+     Running tests/composite_types.rs (target/debug/deps/composite_types-375371d399b46faf)
+
+running 12 tests
+test anonymous_records_preserve_null_empty_quoting_and_nested_values ... ok
+test anonymous_records_match_postgresql_text_type_json_and_comparison_semantics ... ok
+test table_rows_are_first_class_composite_values ... ok
+test named_composite_arrays_preserve_typed_elements_and_subscripts ... ok
+test table_row_types_keep_constraints_at_table_boundaries ... ok
+test named_composite_types_create_cast_store_and_report_catalogs ... ok
+test named_composite_drop_respects_nested_dependencies_and_cascade ... ok
+test named_composite_alter_rejects_dependent_type_changes_and_rolls_back ... ok
+test named_composite_rename_preserves_oids_and_updates_nested_definitions ... ok
+test table_row_type_oids_survive_reopen_and_disappear_with_the_table ... ok
+test named_composite_attributes_evolve_existing_scalar_array_and_nested_values ... ok
+test table_row_type_oids_dependencies_and_renames_survive_reopen ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.12s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 927770568, "test_executables_processed": 1, "target_free_before": 10523377664, "target_free_after": 11451150336, "ram_cache_bytes": 22629319359}
+    | ----------------- associated items in this implementation
+...
+415 |     pub(crate) fn from_sql_row(row: &SqlRow) -> Self {
+    |                   ^^^^^^^^^^^^
+...
+441 |     pub(crate) fn values_unprobed(&self) -> &SlotRow {
+    |                   ^^^^^^^^^^^^^^^
+
+warning: function `has_trusted_identity` is never used
+    --> crates/bicdb-sql/src/eval/value_ops1.rs:1964:15
+     |
+1964 | pub(crate) fn has_trusted_identity(session_gucs: &HashMap<String, String>) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `canonical_jsonb_identity_text` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:1981:15
+     |
+1981 | pub(crate) fn canonical_jsonb_identity_text(value: &JsonValue) -> String {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `pg_timestamp_from_unix_seconds` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:2847:15
+     |
+2847 | pub(crate) fn pg_timestamp_from_unix_seconds(seconds: i64) -> PgTimestamp {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["lib"],"crate_types":["lib"],"name":"bicdb_sql","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/src/lib.rs","edition":"2021","doc":true,"doctest":true,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rlib","/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rmeta"],"executable":null,"fresh":true}
+warning: `bicdb-sql` (lib) generated 61 warnings (run `cargo fix --lib -p bicdb-sql` to apply 7 suggestions)
+   Compiling bicdb-sql v1.0.438-beta (/root/ehr-bicdb-migration-20261104/crates/bicdb-sql)
+{"reason":"compiler-artifact","package_id":"path+file:///root/ehr-bicdb-migration-20261104/crates/bicdb-sql#1.0.438-beta","manifest_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/Cargo.toml","target":{"kind":["test"],"crate_types":["bin"],"name":"routine_privilege_lists","src_path":"/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/tests/routine_privilege_lists.rs","edition":"2021","doc":false,"doctest":false,"test":true},"profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":true},"features":["adaptive-procs","default","extension-host"],"filenames":["/root/ehr-bicdb-migration-20261104/target/debug/deps/routine_privilege_lists-f0af676a94c6d1bc"],"executable":"/root/ehr-bicdb-migration-20261104/target/debug/deps/routine_privilege_lists-f0af676a94c6d1bc","fresh":false}
+{"reason":"build-finished","success":true}
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.36s
+     Running tests/routine_privilege_lists.rs (target/debug/deps/routine_privilege_lists-f0af676a94c6d1bc)
+
+running 7 tests
+test multi_function_grants_cannot_bypass_ownership ... ok
+test anonymous_block_cannot_self_grant_someone_elses_functions ... ok
+test missing_later_function_does_not_grant_an_earlier_function ... ok
+test anonymous_block_invalid_later_target_cannot_partially_grant ... ok
+test anonymous_block_function_list_grants_apply_every_target ... ok
+test a_function_grant_at_the_start_of_a_batch_does_not_swallow_later_statements ... ok
+test multi_function_grants_and_revokes_cover_every_target_in_a_batch ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 927579592, "test_executables_processed": 1, "target_free_before": 10172125184, "target_free_after": 11099705344, "ram_cache_bytes": 22629319359}
+{"timestamp":1793928497,"event":"connection.opened","severity":"info","fields":{"connection_id":1,"database":"bicdb","peer_addr":"127.0.0.1:39982","tls":false,"user":"bicdb"}}
+{"timestamp":1793928497,"event":"connection.closed","severity":"info","fields":{"connection_id":2}}
+{"timestamp":1793928497,"event":"connection.closed","severity":"info","fields":{"connection_id":1}}
+test tokio_postgres_parameterized_insert_returning_describes_portal ... ok
+test suspended_cursor_does_not_starve_short_query ... ok
+{"timestamp":1793928497,"event":"connection.opened","severity":"info","fields":{"connection_id":1,"database":"bicdb","peer_addr":"127.0.0.1:54158","tls":false,"user":"bicdb"}}
+{"timestamp":1793928497,"event":"query.failed","severity":"warn","fields":{"connection_id":2,"error":"sql error: deadlock detected while waiting for advisory lock","query":"SELECT pg_advisory_lock([REDACTED]::bigint)","sqlstate":"40P01"}}
+{"timestamp":1793928497,"event":"connection.closed","severity":"info","fields":{"connection_id":1}}
+{"timestamp":1793928497,"event":"connection.closed","severity":"info","fields":{"connection_id":2}}
+test tokio_postgres_advisory_locks_match_postgres_connection_semantics ... ok
+{"timestamp":1793928497,"event":"connection.closed","severity":"info","fields":{"connection_id":1}}
+test table_row_type_oids_and_codecs_survive_rename_and_reopen ... ok
+{"timestamp":1793928497,"event":"connection.opened","severity":"info","fields":{"connection_id":1,"database":"bicdb","peer_addr":"127.0.0.1:46728","tls":false,"user":"bicdb"}}
+{"timestamp":1793928497,"event":"connection.closed","severity":"info","fields":{"connection_id":1}}
+test xml_wire_binary_and_copy_paths_validate_and_canonicalize ... ok
+{"timestamp":1793928498,"event":"connection.closed","severity":"info","fields":{"connection_id":1}}
+test tokio_postgres_runs_asyncpg_jit_and_recursive_type_discovery_contract ... ok
+{"timestamp":1793928498,"event":"connection.closed","severity":"info","fields":{"connection_id":1}}
+test result_column_oids_are_consistent_across_query_shapes ... ok
+{"timestamp":1793928498,"event":"connection.opened","severity":"info","fields":{"connection_id":2,"database":"bicdb","peer_addr":"127.0.0.1:46740","tls":false,"user":"bot_runtime"}}
+{"timestamp":1793928498,"event":"connection.closed","severity":"info","fields":{"connection_id":1}}
+test text_format_binds_preserve_numeric_looking_character_keys ... ok
+{"timestamp":1793928498,"event":"query.failed","severity":"warn","fields":{"connection_id":2,"error":"sql error: authorization denied: must be owner of relation bot_tasks to ALTER TABLE","query":"BEGIN; ALTER TABLE bot_tasks ADD COLUMN unauthorized TEXT; ROLLBACK","sqlstate":"42501"}}
+{"timestamp":1793928498,"event":"query.failed","severity":"warn","fields":{"connection_id":2,"error":"sql error: authorization denied: permission denied for schema public","query":"BEGIN; CREATE TABLE unauthorized (id TEXT); ROLLBACK","sqlstate":"42501"}}
+{"timestamp":1793928498,"event":"query.failed","severity":"warn","fields":{"connection_id":2,"error":"sql error: authorization denied: permission denied for schema public","query":"CREATE TABLE unauthorized (id TEXT)","sqlstate":"42501"}}
+{"timestamp":1793928498,"event":"query.failed","severity":"warn","fields":{"connection_id":2,"error":"sql error: authorization denied: permission denied for schema public","query":"CREATE VIEW unauthorized_view AS SELECT id FROM bot_tasks","sqlstate":"42501"}}
+{"timestamp":1793928498,"event":"query.failed","severity":"warn","fields":{"connection_id":2,"error":"sql error: authorization denied: permission denied for schema public","query":"CREATE SEQUENCE unauthorized_seq","sqlstate":"42501"}}
+{"timestamp":1793928498,"event":"query.failed","severity":"warn","fields":{"connection_id":2,"error":"sql error: authorization denied: permission denied for schema public","query":"CREATE FUNCTION unauthorized_fn() RETURNS INT LANGUAGE SQL AS $$[REDACTED]$$","sqlstate":"42501"}}
+{"timestamp":1793928499,"event":"connection.closed","severity":"info","fields":{"connection_id":1}}
+test segmented_query_survives_pauses_longer_than_the_poll_timeout ... ok
+{"timestamp":1793928499,"event":"connection.closed","severity":"info","fields":{"connection_id":1}}
+{"timestamp":1793928499,"event":"connection.closed","severity":"info","fields":{"connection_id":2}}
+test revoked_public_schema_create_refuses_runtime_ddl_over_wire ... ok
+{"timestamp":1793928500,"event":"server.listening","severity":"info","fields":{"address":"127.0.0.1:36605"}}
+bicdb pgwire listening on 127.0.0.1:36605 — effective limits: --max-connections=100 --max-pending-accepts=100 --max-active-queries=24 (reads 24 / writes 24) --max-queued-queries=96 (reads 96 / writes 96). Defaults are host-sized; set these explicitly for production.
+{"timestamp":1793928500,"event":"server.limits","severity":"info","fields":{"address":"127.0.0.1:36605","max_active_queries":24,"max_active_reads":24,"max_active_writes":24,"max_connections":100,"max_pending_accepts":100,"max_queued_queries":96,"max_queued_reads":96,"max_queued_writes":96}}
+{"timestamp":1793928500,"event":"connection.opened","severity":"info","fields":{"connection_id":1,"database":"bicdb","peer_addr":"127.0.0.1:58322","tls":false,"user":"bicdb"}}
+{"timestamp":1793928500,"event":"query.failed","severity":"warn","fields":{"connection_id":1,"error":"canceling statement due to user request","query":"SELECT id FROM vector_cancel ORDER BY embedding <=> '[REDACTED]' LIMIT [REDACTED];","sqlstate":"57014"}}
+{"timestamp":1793928500,"event":"connection.closed","severity":"info","fields":{"connection_id":1}}
+test cancel_request_interrupts_vector_ordering_and_short_query_recovers ... ok
+{"timestamp":1793928503,"event":"connection.closed","severity":"info","fields":{"connection_id":1}}
+test copy_from_stdin_keeps_one_local_rls_identity_boundary_across_batches ... ok
+
+test result: ok. 181 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.46s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 1073537064, "test_executables_processed": 1, "target_free_before": 9617498112, "target_free_after": 10691035136, "ram_cache_bytes": 22629319359}
+Fresh focused and wire gates completed
+
+ehr-bicdb-insight-focused-insight_union_projection.log
+running 4 tests
+test array_text_cast_keeps_nondefault_subscripts_for_rollback_copy ... ok
+test unaliased_literals_keep_postgresql_names_through_ctes_and_union_wildcards ... ok
+test array_text_cast_preserves_null_in_record_join_and_aggregate_paths ... ok
+test insight_table_function_preserves_literal_values_and_declared_names ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+
+ehr-bicdb-insight-focused-jsonb_srf.log
+running 12 tests
+test jsonb_array_element_functions_preserve_postgres_null_and_text_semantics ... ok
+test jsonb_set_functions_are_strict_and_reject_the_wrong_json_shape ... ok
+test jsonb_each_and_typed_record_functions_match_postgres ... ok
+test jsonb_array_element_functions_expand_no_from_projections ... ok
+test jsonb_object_keys_matches_postgres_order_in_from_and_projection_forms ... ok
+test jsonb_text_elements_support_cognee_scalar_alias_filters_and_aggregation ... ok
+test lateral_derived_jsonb_metadata_survives_an_empty_left_input ... ok
+test jsonb_table_functions_are_implicitly_lateral_and_support_explicit_join_kinds ... ok
+test carrier_element_gallery_lateral_derived_query_matches_declared_and_derived_elements ... ok
+test cognee_jsonb_tag_selection_and_removal_flow_preserves_edge_cases ... ok
+test json_coalesce_fallbacks_preserve_values_inside_json_constructors ... ok
+test routine_json_fallbacks_infer_aggregate_types_over_derived_sources ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+
+
+ehr-bicdb-insight-focused-lateral_routine_sources.log
+running 2 tests
+test lateral_sql_routines_bind_each_left_row_and_preserve_qualified_output_types ... ok
+test lateral_sql_routines_keep_definer_identity_and_execute_refusals_for_empty_sources ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s
+
+
+ehr-bicdb-insight-focused-recursive_query_stack.log
+running 2 tests
+test postgres_correlated_predicate_fits_protocol_worker_stack ... ok
+test oracle_correlated_predicate_fits_protocol_worker_stack ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s
+
+
+ehr-bicdb-insight-focused-rls_boolean_depth.log
+running 1 test
+test deeply_nested_role_policies_preserve_tenant_scope_and_null_semantics ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+
+
+ehr-bicdb-insight-focused-routine_expression_stack.log
+running 1 test
+test nested_identity_helpers_fit_an_ordinary_protocol_worker_stack ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+
+ehr-bicdb-insight-focused-routine_owner_execution_identity.log
+running 4 tests
+test an_ownerless_routine_is_still_only_reassignable_by_a_superuser ... ok
+test an_owned_definer_routine_still_runs_as_its_owner ... ok
+test an_ownerless_definer_routine_still_works_for_an_authorized_caller ... ok
+test an_ownerless_definer_routine_does_not_run_as_bootstrap ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+
+ehr-bicdb-insight-focused-routine_privilege_lists.log
+running 7 tests
+test multi_function_grants_cannot_bypass_ownership ... ok
+test anonymous_block_cannot_self_grant_someone_elses_functions ... ok
+test missing_later_function_does_not_grant_an_earlier_function ... ok
+test anonymous_block_invalid_later_target_cannot_partially_grant ... ok
+test anonymous_block_function_list_grants_apply_every_target ... ok
+test a_function_grant_at_the_start_of_a_batch_does_not_swallow_later_statements ... ok
+test multi_function_grants_and_revokes_cover_every_target_in_a_batch ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+
+ehr-bicdb-insight-focused-select_row_locks.log
+running 6 tests
+test blocking_row_wait_honors_cancellation_and_releases_transaction_locks_on_rollback ... ok
+test explicit_lateral_function_lock_targets_are_refused_without_weakening_base_privileges ... ok
+test lateral_table_functions_preserve_base_row_locks_and_skip_locked_limits ... ok
+test row_locks_skip_contended_rows_before_limit_and_follow_savepoints ... ok
+test row_locks_contend_with_mutations_and_enforce_privileges ... ok
+test row_locks_do_not_lock_another_roles_rls_hidden_rows ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s
+
+
+ehr-bicdb-insight-focused-streaming_aggregates.log
+running 3 tests
+test spot_values_are_the_expected_constants ... ok
+test streamed_aggregates_match_the_materializing_oracle_embedded ... ok
+test streamed_aggregates_match_the_materializing_oracle_paged ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.07s
+
+
+ehr-bicdb-insight-focused-type_consistency.log
+running 8 tests
+test parameter_types_follow_postgres_common_type_selection ... ok
+test typed_result_views_preserve_expression_types_without_changing_sql_value ... ok
+test query_result_types_survive_empty_catalog_reflection_results ... ok
+test table_unnest_joins_preserve_result_and_delete_parameter_types ... ok
+test parameter_types_follow_schema_assignment_and_expression_context ... ok
+test prepared_array_types_follow_every_context_used_by_cognee ... ok
+test stored_function_parameter_types_follow_the_declared_signature_without_running_the_body ... ok
+test registry_catalog_attribute_and_planner_types_agree_exhaustively ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s

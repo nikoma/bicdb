@@ -571,7 +571,13 @@ impl<'db> SqlEngine<'db> {
         let table = relation_name(name)?;
         if let Some(args) = args {
             if is_generate_series_table_function(&table) {
-                return estimate_generate_series_rows(args);
+                return match estimate_generate_series_rows(args) {
+                    // Routine variables and correlated inputs resolve at
+                    // execution. Do not evaluate dynamic/volatile expressions
+                    // during cardinality estimation.
+                    Err(SqlError::Unsupported(_)) => Ok(usize::MAX / 2),
+                    result => result,
+                };
             }
             if is_one_row_catalog_table_function(&table) {
                 validate_zero_arg_table_function(&table, args)?;
@@ -4070,7 +4076,20 @@ impl<'db> SqlEngine<'db> {
                 .unwrap_or(&[]),
             &source_columns,
         )?;
-        if let Some((kind, values)) = generate_series_timestamp_args(args)? {
+        let expressions = table_function_expr_args(args)?;
+        let values = expressions
+            .iter()
+            .map(|expr| self.eval_dynamic_bound_expr(expr))
+            .collect::<Result<Vec<_>>>()?;
+        let types = expressions
+            .iter()
+            .take(2)
+            .map(|expr| self.infer_env_expr_type(expr, &[]))
+            .collect::<Vec<_>>();
+        if values.len() == 3
+            && GenerateSeriesKind::resolve(&types, &values[0]) != GenerateSeriesKind::Integer
+        {
+            let kind = GenerateSeriesKind::resolve(&types, &values[0]);
             let series = generate_series_timestamp_values(kind, &values, |count| {
                 if count % 1024 == 0 {
                     self.check_cancellation()?;
@@ -4087,7 +4106,7 @@ impl<'db> SqlEngine<'db> {
                 columns: aliased_row_output_columns(&alias_name, &columns),
             });
         }
-        let Some((start, _stop, step, row_count)) = generate_series_bounds(args)? else {
+        let Some((start, _stop, step, row_count)) = generate_series_value_bounds(&values)? else {
             let output_columns = aliased_row_output_columns(&alias_name, &columns);
             return Ok(RowSet {
                 rows: Vec::new(),

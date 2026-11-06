@@ -1,0 +1,121 @@
+{
+  "schema_version": "monitoring.v1",
+  "code": "heart-failure-weight",
+  "title": "Heart failure weight monitoring",
+  "description": "Daily morning weight and symptom check. DRAFT: every threshold below is a SYNTHETIC placeholder for software testing and must be replaced and approved by a clinician before use with patients.",
+  "governance": {
+    "synthetic": true,
+    "clinical_approval_required": true,
+    "source_references": [],
+    "notes": "Synthetic thresholds for engine verification only. Not derived from a guideline."
+  },
+  "eligibility": {
+    "diagnoses_any": [{ "system": "http://hl7.org/fhir/sid/icd-10", "code_prefix": "I50" }],
+    "min_age_years": 18,
+    "medication_context": "On a diuretic regimen managed by the care team.",
+    "exclusions": ["Unable to weigh at home"]
+  },
+  "parameters": [],
+  "evaluation": { "schedule_every_hours": 24 },
+  "measurements": [
+    { "id": "body_weight", "label": "Body weight", "observation_code": "29463-7", "type": "quantity", "kind": "event", "unit": "kg", "category": "vital_sign",
+      "conversions": [ { "from_unit": "lb", "factor": 0.45359237 }, { "from_unit": "[lb_av]", "factor": 0.45359237 } ] },
+    { "id": "breathless", "label": "More breathless than usual", "observation_code": "wn-hf-breathless", "type": "boolean", "kind": "event", "category": "symptom" },
+    { "id": "ankle_swelling", "label": "Ankle swelling (0 none to 3 severe)", "observation_code": "wn-hf-ankle-swelling", "type": "scale", "kind": "event", "category": "symptom" }
+  ],
+  "targets": [
+    { "id": "gain_kg_3d", "label": "Weight gain over 3 days before review", "default": 2, "unit": "kg", "individualizable": true, "min": 0.5, "max": 5 },
+    { "id": "gain_from_dry_weight_kg", "label": "Gain above dry weight before review", "default": 3, "unit": "kg", "individualizable": true, "min": 0.5, "max": 10 }
+  ],
+  "forms": [
+    {
+      "id": "morning_check",
+      "form_code": "hf-morning-check",
+      "title": "Morning weight check",
+      "questionnaire": {
+        "item": [
+          { "linkId": "weight", "text": "Your weight this morning, after using the toilet and before breakfast (kg)", "type": "decimal", "required": true },
+          { "linkId": "breathless", "text": "Are you more short of breath than usual?", "type": "boolean", "required": true },
+          { "linkId": "ankles", "text": "Ankle swelling today: 0 none, 1 mild, 2 moderate, 3 severe", "type": "integer", "required": true }
+        ]
+      },
+      "mappings": [
+        { "link_id": "weight", "measurement": "body_weight" },
+        { "link_id": "breathless", "measurement": "breathless" },
+        { "link_id": "ankles", "measurement": "ankle_swelling" }
+      ]
+    }
+  ],
+  "schedules": [
+    {
+      "id": "morning",
+      "form": "morning_check",
+      "title": "Morning weight check",
+      "recurrence": { "every": 1, "unit": "day" },
+      "due_time": "09:00",
+      "open_hours_before_due": 4,
+      "grace_hours": 3,
+      "late_acceptance_hours": 24,
+      "reminders": { "channel": "in_app", "hours_relative_to_due": [0, 2] },
+      "missed": {
+        "after_consecutive": 2,
+        "finding": { "code": "hf-weight-missed", "title": "Two morning weight checks missed", "severity": "moderate", "urgency": "routine" },
+        "route": { "target": "role", "role": "nurse", "priority": "routine", "due_hours": 24, "task_category": "patient_outreach" }
+      }
+    }
+  ],
+  "rules": [
+    {
+      "id": "weight_gain_3d",
+      "version": 1,
+      "evaluate_on": ["submission", "schedule"],
+      "explanation": "Latest weight minus the lowest weight of the last 3 days exceeds the target.",
+      "when": { "op": "gt",
+        "left": { "sub": [ { "agg": "latest", "measurement": "body_weight", "window": { "days": 1 } }, { "agg": "min", "measurement": "body_weight", "window": { "days": 3 } } ] },
+        "right": { "target": "gain_kg_3d" } },
+      "sufficiency": { "measurements": ["body_weight"], "window": { "days": 3 }, "min_reports": 2 },
+      "finding": { "code": "hf-weight-gain-3d", "title": "Rapid weight gain over 3 days", "severity": "high", "urgency": "urgent" },
+      "route": { "target": "enrollment_owner", "priority": "urgent", "due_hours": 8,
+                 "escalation": { "after_hours": 8, "to_role": "clinical_triage", "raise_urgency": true, "max_levels": 2 } },
+      "patient_guidance": { "code": "hf-weight-gain", "level": "advice",
+        "text": "Your weight has gone up quickly. Contact your care team today during opening hours; do not change your medicines unless your plan tells you to. If you are very short of breath or have chest pain, call your local emergency number." }
+    },
+    {
+      "id": "above_dry_weight",
+      "version": 1,
+      "evaluate_on": ["submission", "schedule"],
+      "explanation": "Latest weight is more than the target above the dry weight recorded at enrollment (change from baseline).",
+      "when": { "op": "gt",
+        "left": { "sub": [ { "agg": "latest", "measurement": "body_weight", "window": { "days": 2 } }, { "baseline": "body_weight" } ] },
+        "right": { "target": "gain_from_dry_weight_kg" } },
+      "finding": { "code": "hf-above-dry-weight", "title": "Weight above dry weight", "severity": "moderate", "urgency": "routine" },
+      "route": { "target": "enrollment_owner", "priority": "routine", "due_hours": 24 }
+    },
+    {
+      "id": "breathless_with_gain",
+      "version": 1,
+      "evaluate_on": ["submission"],
+      "explanation": "More breathless than usual together with more than 1 kg gain over 3 days.",
+      "when": { "all": [
+        { "op": "eq", "left": { "agg": "latest", "measurement": "breathless", "window": { "days": 1 } }, "right": { "const": 1 } },
+        { "op": "gt", "left": { "sub": [ { "agg": "latest", "measurement": "body_weight", "window": { "days": 1 } }, { "agg": "min", "measurement": "body_weight", "window": { "days": 3 } } ] }, "right": { "const": 1 } }
+      ] },
+      "finding": { "code": "hf-breathless-gain", "title": "Breathlessness with weight gain", "severity": "high", "urgency": "urgent" },
+      "route": { "target": "enrollment_owner", "priority": "urgent", "due_hours": 4,
+                 "escalation": { "after_hours": 4, "to_role": "clinical_triage", "raise_urgency": true, "max_levels": 2 } }
+    }
+  ],
+  "display": {
+    "sections": [
+      { "id": "weight", "title": "Weight", "cards": [
+        { "id": "latest", "label": "Latest weight", "value": { "agg": "latest", "measurement": "body_weight", "window": { "days": 7 } }, "unit": "kg" },
+        { "id": "change3", "label": "Change over 3 days", "value": { "sub": [ { "agg": "latest", "measurement": "body_weight", "window": { "days": 1 } }, { "agg": "min", "measurement": "body_weight", "window": { "days": 3 } } ] }, "target": "gain_kg_3d", "unit": "kg" },
+        { "id": "vs_dry", "label": "Above dry weight", "value": { "sub": [ { "agg": "latest", "measurement": "body_weight", "window": { "days": 2 } }, { "baseline": "body_weight" } ] }, "target": "gain_from_dry_weight_kg", "unit": "kg" }
+      ], "charts": [ { "id": "weight_chart", "title": "Weight (30 days)", "measurements": ["body_weight"], "days": 30 } ] },
+      { "id": "symptoms", "title": "Symptoms", "cards": [
+        { "id": "breathless_days", "label": "Days more breathless (7 days)", "value": { "agg": "count", "measurement": "breathless", "window": { "days": 7 }, "where": { "op": "eq", "value": 1 } }, "unit": "days" },
+        { "id": "ankles", "label": "Latest ankle swelling", "value": { "agg": "latest", "measurement": "ankle_swelling", "window": { "days": 3 } } }
+      ], "charts": [ { "id": "ankle_chart", "title": "Ankle swelling", "measurements": ["ankle_swelling"], "days": 30 } ] }
+    ]
+  }
+}

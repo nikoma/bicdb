@@ -3641,20 +3641,30 @@ pub(crate) fn generate_series_bounds(
     args: &TableFunctionArgs,
 ) -> Result<Option<(i64, i64, i64, usize)>> {
     let args = table_function_expr_args(args)?;
+    let values = args
+        .iter()
+        .map(eval_constant_expr)
+        .collect::<Result<Vec<_>>>()?;
+    generate_series_value_bounds(&values)
+}
+
+pub(crate) fn generate_series_value_bounds(
+    args: &[SqlValue],
+) -> Result<Option<(i64, i64, i64, usize)>> {
     if !(2..=3).contains(&args.len()) {
         return Err(SqlError::InvalidSql(format!(
             "generate_series expects 2 or 3 arguments, got {}",
             args.len()
         )));
     }
-    let Some(start) = generate_series_i64_arg(&args[0])? else {
+    let Some(start) = generate_series_i64_value(&args[0])? else {
         return Ok(None);
     };
-    let Some(stop) = generate_series_i64_arg(&args[1])? else {
+    let Some(stop) = generate_series_i64_value(&args[1])? else {
         return Ok(None);
     };
     let step = if let Some(expr) = args.get(2) {
-        let Some(step) = generate_series_i64_arg(expr)? else {
+        let Some(step) = generate_series_i64_value(expr)? else {
             return Ok(None);
         };
         step
@@ -3670,12 +3680,11 @@ pub(crate) fn generate_series_bounds(
     Ok(Some((start, stop, step, rows)))
 }
 
-pub(crate) fn generate_series_i64_arg(expr: &Expr) -> Result<Option<i64>> {
-    let value = eval_constant_expr(expr)?;
+fn generate_series_i64_value(value: &SqlValue) -> Result<Option<i64>> {
     if matches!(value, SqlValue::Null) {
         return Ok(None);
     }
-    sql_value_i64(&value).map(Some).ok_or_else(|| {
+    sql_value_i64(value).map(Some).ok_or_else(|| {
         SqlError::InvalidSql(format!(
             "generate_series argument must be an integer-compatible value, got {}",
             value.to_cell()

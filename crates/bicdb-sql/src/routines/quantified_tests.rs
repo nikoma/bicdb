@@ -96,6 +96,31 @@ fn routine_quantified_subquery_uses_routine_parameters_and_checks_column_count()
 }
 
 #[test]
+fn routine_series_arguments_resolve_from_the_frame_without_planning_side_effects() {
+    let source = r#"CREATE SEQUENCE series_probe_sequence;
+        CREATE FUNCTION series_probe(stop integer) RETURNS integer LANGUAGE plpgsql AS $$
+            BEGIN RETURN (SELECT count(*)::integer FROM generate_series(nextval('series_probe_sequence'),stop) n); END $$"#;
+    assert_eq!(
+        scalar(
+            source,
+            "SELECT series_probe(3) + currval('series_probe_sequence')::integer"
+        )
+        .unwrap(),
+        SqlValue::Int(4)
+    );
+    let source = r#"CREATE FUNCTION series_dates(lo timestamp, hi timestamp, step interval) RETURNS integer LANGUAGE plpgsql AS $$
+        BEGIN RETURN (SELECT count(*)::integer FROM generate_series(lo,hi,step) n); END $$"#;
+    assert_eq!(
+        scalar(
+            source,
+            "SELECT series_dates('2026-11-01'::timestamp,'2026-11-03'::timestamp,interval '1 day')"
+        )
+        .unwrap(),
+        SqlValue::Int(3)
+    );
+}
+
+#[test]
 fn routine_quantified_ordinary_text_is_not_a_catalog_vector() {
     let source = r#"CREATE FUNCTION vector_match(x oid, items oidvector) RETURNS boolean LANGUAGE plpgsql AS $$
         BEGIN RETURN x = ANY(items); END $$"#;
@@ -111,5 +136,60 @@ fn routine_quantified_ordinary_text_is_not_a_catalog_vector() {
         "SELECT invalid_array(NULL)",
     ] {
         assert_eq!(scalar(source, query).unwrap_err().sqlstate(), "42809");
+    }
+}
+
+#[test]
+fn routine_monitoring_validator_accepts_actual_application_config_and_rejects_unknown_measurement()
+{
+    let ddl = include_str!("../../tests/fixtures/ehr-monitoring-validator.sql");
+    let config: JsonValue = serde_json::from_str(include_str!(
+        "../../tests/fixtures/ehr-monitoring-config.json"
+    ))
+    .unwrap();
+    let validate = |config: &JsonValue| {
+        let text = serde_json::to_string(config).unwrap().replace('\'', "''");
+        scalar(
+            ddl,
+            &format!("SELECT monitoring_validate_config('{text}'::jsonb)"),
+        )
+    };
+    let SqlValue::Json(result) = validate(&config).unwrap() else {
+        panic!("JSON validator response required")
+    };
+    assert_eq!(
+        result["valid"],
+        JsonValue::Bool(true),
+        "{}",
+        result["errors"]
+    );
+    let mut invalid = config.clone();
+    invalid["forms"][0]["mappings"][0]["measurement"] =
+        JsonValue::String("unknown_measurement".into());
+    let SqlValue::Json(result) = validate(&invalid).unwrap() else {
+        panic!("JSON validator response required")
+    };
+    assert_eq!(result["valid"], JsonValue::Bool(false));
+    assert!(result["errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|value| value.as_str().unwrap().contains("unknown measurement")));
+    for (description, expected) in [
+        ("a".repeat(135000), true),
+        ("é".repeat(135000), false),
+        ("a".repeat(270000), false),
+    ] {
+        let mut sized = config.clone();
+        sized["description"] = JsonValue::String(description);
+        let SqlValue::Json(result) = validate(&sized).unwrap() else {
+            panic!("JSON validator response required")
+        };
+        assert_eq!(
+            result["valid"],
+            JsonValue::Bool(expected),
+            "{}",
+            result["errors"]
+        );
     }
 }

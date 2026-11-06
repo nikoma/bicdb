@@ -1,0 +1,9 @@
+{
+  "source_application_revision": "7f11114aa6241d4dd195dad64271cd4576afc5bc",
+  "pending_operator_migration": "0217_monitoring_config_payload_size.sql",
+  "files": {
+    "migrations/0179_monitoring_engine.sql": "5471f845d94e458a53d345c7a4d89dba46da9b2aca9034085a9513c27a933646",
+    "migrations/0217_monitoring_config_payload_size.sql": "771b2664bb1396f2fee55ef7511b2661d9a828b1e5acc3101d87836823bcca88",
+    "config/monitoring/heart-failure-weight.v1.json": "26260f67a68074af45d442a3f2d4f6f95a68b88bd1c2f4589572e8a9b5d9748a"
+  }
+}

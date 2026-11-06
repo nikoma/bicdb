@@ -1093,3 +1093,15 @@ projections. Native readback and index integrity pass; monitoring runs with an
 explicit grant as a non-superuser. This is a qualified storage/schema baseline
 on the recorded revisions, not full application, authentication, production or
 programme qualification. Application tests and UI workflows remain required.
+
+
+## Savepoint recovery and statement query contexts
+
+The [transaction and query-context checkpoint](evidence/oracle-savepoints-query-contexts-2026-11-06/README.md)
+qualifies Oracle-preview invalid savepoints across active and idle boundaries,
+quoted PostgreSQL savepoint names, runtime LIKE escape diagnostics and bounded
+DELETE subquery scans. Independent PostgreSQL controls and exact artifact/check
+revision provenance are retained. The paged baseline is ready for unchanged
+original application retests; full application acceptance remains open. National
+LIKE and general escape expressions require separate executable contracts, as
+shown by the preserved source observations.

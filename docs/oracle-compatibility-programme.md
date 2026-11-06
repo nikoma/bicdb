@@ -17,6 +17,13 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [fixed-day index and driver-savepoint checkpoint](evidence/sql-timestamp-day-indexes-2026-11-06/README.md)
+qualifies physical timestamp day keys, SQL equality/range plans and PostgreSQL-driver
+RELEASE name resolution, with three Oracle and three independent PostgreSQL source
+cases. An older-reader refusal and a failing older-target CLI control are checked.
+The pristine original-schema import and complete application acceptance remain
+separate gates; this checkpoint does not complete either.
+
 The [full-FK foundation checkpoint](evidence/idempiere-full-fk-foundation-2026-11-05/README.md)
 passes all 89 selected original application tests, with zero failures/errors/skips,
 verified Oracle-provider/PostgreSQL-driver origins and clean JVM/database exits.

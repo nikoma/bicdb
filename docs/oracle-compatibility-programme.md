@@ -24,6 +24,12 @@ cases. An older-reader refusal and a failing older-target CLI control are checke
 The pristine original-schema import and complete application acceptance remain
 separate gates; this checkpoint does not complete either.
 
+The [pristine-schema installation checkpoint](evidence/idempiere-pristine-schema-progress-2026-11-06/README.md)
+completes all 268 logical indexes and 62 standalone-routine installation/catalog
+checks on the original-source target. At that checkpoint, source-ordered views,
+foreign keys, post-assembly value reconciliation, routine execution/ownership and
+original application tests on the pristine baseline remained separate gates.
+
 The [full-FK foundation checkpoint](evidence/idempiere-full-fk-foundation-2026-11-05/README.md)
 passes all 89 selected original application tests, with zero failures/errors/skips,
 verified Oracle-provider/PostgreSQL-driver origins and clean JVM/database exits.

@@ -1081,7 +1081,7 @@ pub(crate) fn current_integrity_record(
     tx: Option<&Transaction>,
     table: &str,
     id: &str,
-) -> Result<Option<Record>> {
+) -> Result<Option<Arc<Record>>> {
     let committed = db.get_unchecked(table, id)?;
     Ok(match tx {
         Some(tx) => tx.overlay_pending_write(table, id, committed),

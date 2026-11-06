@@ -80,3 +80,7 @@ export, and compares every captured definition and line count with independent
 bound dictionary queries. It checks both trigger statuses and complete fixture
 cleanup. Without the configured owner it is reported as skipped, not passed.
 This is a source-export acceptance test; it does not run those objects on BicDB.
+
+The [live Oracle source-capture record](evidence/oracle-stored-source-capture-2026-11-05/README.md)
+qualifies an empty-owner fixture with compiled package/type bodies and both
+trigger states. Source capture and target execution remain separate gates.

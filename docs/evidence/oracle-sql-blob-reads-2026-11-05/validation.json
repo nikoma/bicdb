@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "native_source_commit": "130f85ea37792830051ca077275b217c95d0f53f",
+  "native_binary_sha256": "0b84d97fe1876a1128816a8442a8c0d87793218980942281a3fc6bcf47325112",
+  "build_returncode": 0,
+  "native_tools": {
+    "total": 122,
+    "passed": 119,
+    "failed": 0,
+    "skipped": 3
+  },
+  "focused_sql_tests": {
+    "passed": 4,
+    "failed": 0
+  },
+  "sql_library": {
+    "passed": 717,
+    "failed": 0,
+    "ignored": 4
+  },
+  "step_log_sha256": {
+    "build": "e47bcaf4cabd4c688d4dce5abbca7756c82743d1a921e95f136c33b532bec883",
+    "native-tools": "f7cca73e65d5c325af31703d82c5dfec6114adef97731033f5f4db893ab2aa4d",
+    "sql-lob-tests": "df2be9271c90c3787f2e41491d704e3e83501e5a7e47b2011e961de9cf9c9a22",
+    "sql-lib": "ea2d57efeddff7f0971aaaee5fd7c66f66c236a05cb5d115be34f4be24a03f9a"
+  },
+  "live_oracle_comparison_qualified": true,
+  "application_qualified": false,
+  "goal_complete": false,
+  "reference_comparison_sha256": "b45654397d86d0f878bd9c2fce7256a6727806d698b66212822440a3ccc11ff6"
+}

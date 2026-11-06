@@ -119,3 +119,7 @@ accepted deployment or qualify the remaining LOB/DDL lifecycle.
 
 The [legacy BLOB migration guide](oracle-blob-migration.md) documents the public
 importer phase, read-only preflight, resumable target-value checks and limits.
+
+The [SQL metric execution record](evidence/oracle-sql-blob-reads-2026-11-05/README.md)
+includes the six-case live Oracle comparison, native transport/restart fixtures,
+static inference and independent PostgreSQL function controls.

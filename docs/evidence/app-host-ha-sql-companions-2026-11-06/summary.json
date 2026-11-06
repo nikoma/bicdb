@@ -1,0 +1,41 @@
+{
+  "status": "NATIVE_HA_SQL_AND_COMPANION_REGRESSIONS_VERIFIED",
+  "implementation_commit": "618fec07061b41e6769f6fb46d35fe95d5c9540f",
+  "production_deployed": false,
+  "tests": {
+    "app_host_package": {
+      "passed": 58,
+      "ignored": 4
+    },
+    "embedded_native_ha": {
+      "passed": 6,
+      "ignored": 0
+    },
+    "explicit_private_uid_isolation": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "app_host_ha_with_default_sql_features": {
+      "passed": 2,
+      "ignored": 0
+    }
+  },
+  "causal_control": {
+    "without_replicated_sql_attachment": "EXPECTED_FAILURE",
+    "source_restored": true,
+    "with_attachment": "PASS"
+  },
+  "production_ehr_ha": "NOT_QUALIFIED",
+  "open": [
+    "Full actual EHR package HA qualification",
+    "Protected real-data migration and recovery",
+    "Additional physical production hosts and redundant HTTPS ingress"
+  ],
+  "logs": {
+    "app-host.log": "3b72812455d7b1d61eb624a0c6c362369879cf2b8709978fa656b6791cb73902",
+    "private-isolation.log": "8cb6a3fe7d6ec74f2487bfcc74657a32243ffafcc69575cd470f190576d16f98",
+    "unified-sql-ha.log": "85420a5ee0bf39018775f73926a3d73c64a03bb561d16e914b315c5cad5efd0d",
+    "without-sql-attachment.log": "d78f8ca6e5a91b292bd00ec9401575973c05ace49ea3f7f072282a0a045cd37e",
+    "embedded-ha.log": "7ddda6b43b42a0819a8d21d8ed9d93528dc69d9a030d4911e0b37a21a186b9b6"
+  }
+}

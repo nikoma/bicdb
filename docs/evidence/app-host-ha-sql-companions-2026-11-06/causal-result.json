@@ -1,0 +1,6 @@
+{
+  "test": "authenticated_sql_acknowledgements_and_stateless_companions_survive_host_loss",
+  "source_sha256": "5ba89770f9607c5f9247f44f8b47e03854f2f7e16f52b87f53e893959615df05",
+  "without_fix_exit": 101,
+  "source_restored": true
+}

@@ -33,8 +33,11 @@ final class OracleSavepointProbe {
                 connection.rollback(expired);
                 throw new AssertionError("expired JDBC savepoint succeeded");
             } catch (SQLException error) {
-                check("expired_jdbc_savepoint_diagnostic", "3B001".equals(error.getSQLState())
-                        && error.getMessage().contains("ORA-01086"));
+                if (!"3B001".equals(error.getSQLState()) || !error.getMessage().contains("ORA-01086")) {
+                    throw new AssertionError("expired JDBC savepoint: state=" + error.getSQLState()
+                            + ", vendor=" + error.getErrorCode() + ", message=" + error.getMessage(), error);
+                }
+                check("expired_jdbc_savepoint_diagnostic", true);
             }
             Savepoint retained = connection.setSavepoint("mixed \" name");
             try (Statement statement = connection.createStatement()) {

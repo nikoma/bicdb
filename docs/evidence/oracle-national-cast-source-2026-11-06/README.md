@@ -53,3 +53,7 @@ python3 examples/oracle/reference/like_escape_contract.py \
 
 Use `--contract national-casts` for the distinct direct-value contract. A raw-unit
 observation must never be presented as successful direct-text decoding.
+
+The subsequent [Oracle JDBC source control](../oracle-national-cast-jdbc-source-2026-11-06/README.md)
+observes both string getters preserving the lone surrogate. This is separate
+from the Python driver attempt and does not qualify BicDB transport.

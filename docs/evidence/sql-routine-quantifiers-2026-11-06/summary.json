@@ -1,0 +1,28 @@
+{
+  "source_commit": "67ff6c5c79574508f98c579c769b5b25cf4e2d0b",
+  "before_control": {
+    "passed": 43,
+    "failed": 8
+  },
+  "focused_after_outlining": {
+    "passed": 52,
+    "failed": 0
+  },
+  "sql_library": {
+    "passed": 757,
+    "failed": 0,
+    "ignored": 4,
+    "seconds": 160.73
+  },
+  "full_application_validator_stack_bytes": 2097152,
+  "test_stack_limit_increased": false,
+  "production_deployed": false,
+  "physical_ehr_ha_accepted": false,
+  "logs": {
+    "ehr-bicdb-67ff6c5-sql-library.txt": "99bb6e3740a1805115a4db6daff5a8ed30efe6be83bbb6d34a5c91b1616dcc99",
+    "ehr-bicdb-quantified-after-v3.txt": "5edaa39951d8a812cb0308b26c61674f41bd729a4377f1f815907cff779dfba0",
+    "ehr-bicdb-quantified-after-v4.txt": "d1940eafcb5aba0dd2cda9a136c421e1193d748ada1658fe8354e7dc8246c832",
+    "ehr-bicdb-quantified-after-v5.txt": "e4642286bacaedf279f06d8f0460d95e12ff5413887f39cde3a970054cca2a1f",
+    "ehr-bicdb-quantified-before-v2.txt": "6b74c40ab5b96abbc90aff4bda16e016428619582dcca1890866ca73992573c6"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "profile": "PostgreSQL 16",
+  "method": "Observed constants-only parameterized SELECTs inside read-only transactions; each transaction rolled back; no patient rows queried",
+  "query": "SELECT ($1::jsonb)::numeric::text AS value",
+  "cases": [
+    {
+      "input": "0",
+      "value": "0"
+    },
+    {
+      "input": "2.50",
+      "value": "2.50"
+    },
+    {
+      "input": "null",
+      "sqlstate": "22023",
+      "error": "cannot cast jsonb null to type numeric"
+    },
+    {
+      "input": "\"0\"",
+      "sqlstate": "22023",
+      "error": "cannot cast jsonb string to type numeric"
+    },
+    {
+      "input": "true",
+      "sqlstate": "22023",
+      "error": "cannot cast jsonb boolean to type numeric"
+    },
+    {
+      "input": "[]",
+      "sqlstate": "22023",
+      "error": "cannot cast jsonb array to type numeric"
+    }
+  ]
+}

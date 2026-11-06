@@ -110,6 +110,16 @@ class MissingSavepointCases:
         connection.execute('ROLLBACK TO SAVEPOINT "Point"')
         self.assertEqual(connection.execute('SELECT id FROM retained_rows').fetchall(), [])
         connection.execute('COMMIT')
+        if self.profile == 'postgres':
+            connection.execute('BEGIN')
+            connection.execute('SAVEPOINT "Mixed Point"')
+            connection.execute('INSERT INTO retained_rows VALUES(5)')
+            connection.execute('ROLLBACK WORK TO SAVEPOINT "Mixed Point"')
+            self.assertEqual(connection.execute('SELECT id FROM retained_rows').fetchall(), [])
+            connection.execute('INSERT INTO retained_rows VALUES(6)')
+            connection.execute('ROLLBACK TRANSACTION TO "Mixed Point"')
+            self.assertEqual(connection.execute('SELECT id FROM retained_rows').fetchall(), [])
+            connection.execute('ROLLBACK')
 
 
 @unittest.skipUnless(os.environ.get('BICDB_ORACLE_SERVER'), 'set BICDB_ORACLE_SERVER')

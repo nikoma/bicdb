@@ -1205,7 +1205,7 @@ pub(crate) enum SavepointCommand {
 
 pub(crate) fn parse_savepoint_command(sql: &str, normalized: &str) -> Option<SavepointCommand> {
     if !(normalized.starts_with("savepoint ")
-        || normalized.starts_with("rollback to ")
+        || normalized.starts_with("rollback ")
         || normalized.starts_with("release "))
     {
         return None;
@@ -3624,6 +3624,15 @@ mod query_text_fast_path_tests {
             parse_savepoint_command("release savepoint sp1", "release savepoint sp1"),
             Some(SavepointCommand::Release(name)) if name == "sp1"
         ));
+        for sql in [
+            "ROLLBACK WORK TO SAVEPOINT \"Mixed Point\"",
+            "ROLLBACK TRANSACTION TO \"Mixed Point\"",
+        ] {
+            assert!(matches!(
+                parse_savepoint_command(sql, &normalize_sql(sql)),
+                Some(SavepointCommand::RollbackTo(name)) if name == "Mixed Point"
+            ));
+        }
         assert!(parse_savepoint_command("rollback", "rollback").is_none());
         assert!(parse_savepoint_command("select 1", "select 1").is_none());
         assert!(contains_advisory_lock_function(

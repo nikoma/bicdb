@@ -27,3 +27,7 @@ Run the focused publication checks without a database:
 python3 -m unittest discover -s examples/oracle/idempiere \
   -p test_report_publication.py -v
 ```
+
+The [bounded publication evidence](evidence/oracle-migration-journal-publication-2026-11-06/README.md)
+records the six regression controls, their failing prior implementation and the
+broader importer-suite result with exact skips.

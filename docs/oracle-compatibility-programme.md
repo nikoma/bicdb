@@ -49,6 +49,14 @@ Orphan reconciliation, routine/view execution and rights, full original
 application acceptance and recovery remain open. This equality is bounded by
 the supported export codec and does not establish live change capture.
 
+The [pristine orphan reconciliation checkpoint](evidence/idempiere-pristine-orphan-reconciliation-2026-11-06/README.md)
+then matches all 3,826 relationship counts to the saved Oracle reference: every
+count is zero. Complete catalog and 888-table fingerprint rechecks pass, alongside
+repeated 915-table source-value equality and 160-view label/type-family checks.
+Each phase and the final clean database shutdown exit zero. This closes that
+pristine saved-source baseline gate; original application tests/workflows,
+routine rights, exact view descriptors/values and recovery remain separate gates.
+
 The [full-FK foundation checkpoint](evidence/idempiere-full-fk-foundation-2026-11-05/README.md)
 passes all 89 selected original application tests, with zero failures/errors/skips,
 verified Oracle-provider/PostgreSQL-driver origins and clean JVM/database exits.

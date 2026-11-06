@@ -52,7 +52,8 @@ def observe(factory):
                         source = error.args[0]
                         code = getattr(source, 'code', None)
                         item.update(oracle_error_code=code, oracle_full_code=getattr(source, 'full_code', None))
-                        if not isinstance(code, int) or code >= 12500:
+                        if (not isinstance(code, int) or code <= 0 or code >= 12500
+                                or not str(item['oracle_full_code']).startswith('ORA-')):
                             report['cases'].append(item)
                             raise
                     report['cases'].append(item)

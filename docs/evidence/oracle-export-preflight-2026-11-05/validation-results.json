@@ -1,0 +1,46 @@
+{
+  "format": 1,
+  "export_preflight_source_commit": "a7b9bf4df3c434a3d09fc86c7629786bd6193daf",
+  "export_preflight_tests": {
+    "passed": 5,
+    "failed": 0
+  },
+  "migration_unit_tests": {
+    "passed": 14,
+    "failed": 0
+  },
+  "previous_exporter_negative_regression": {
+    "expected_failure": true,
+    "unsupported_subcases": 8
+  },
+  "supported_application_projections": {
+    "tables_checked": 915,
+    "all_supported_projections_unchanged": true,
+    "source_row_data_queried": false,
+    "application_qualified": false
+  },
+  "native_candidate": {
+    "source_commit": "b9845721893047621c2215a97cd190c0c3ede025",
+    "binary_sha256": "317cf94b595ea7b4dd4a15d849a2f77365e6cca51e1c4ab49a1a33c1d4b07e0b",
+    "build_returncode": 0,
+    "validation": {
+      "tests_run": 85,
+      "passed": 83,
+      "skipped": 2,
+      "failed": 0,
+      "skipped_reason": "Oracle-only reference fixtures unavailable while the reference service reserves memory for target installation"
+    },
+    "cpu_affinity_count": 1,
+    "cargo_build_jobs": 1
+  },
+  "build_resources": {
+    "status": "completed",
+    "returncode": 0,
+    "peak_group_rss_bytes": 4956946432,
+    "minimum_observed_available_bytes": 15113646080,
+    "minimum_available_gib": 14.0
+  },
+  "native_candidate_deployed_to_accepted_application": false,
+  "application_qualified": false,
+  "github_workflows_changed_or_dispatched": false
+}

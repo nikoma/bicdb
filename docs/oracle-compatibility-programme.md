@@ -17,6 +17,13 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [temporal export preflight](evidence/oracle-export-preflight-2026-11-05/README.md)
+rejects precision beyond the microsecond codec and local-zone declarations before
+row files are created. All 915 supported application projections are unchanged.
+Broader temporal support remains open. The same checkpoint records a separately
+built current engine candidate; diagnostic binaries and accepted deployment
+remain distinct.
+
 The [Oracle export reference checkpoint](evidence/oracle-export-reference-2026-11-05/README.md)
 replays all 915 tables and 185,471 rows, verifies their complete multisets, and
 counts all 3,826 source relationships on Oracle: zero unmatched references in

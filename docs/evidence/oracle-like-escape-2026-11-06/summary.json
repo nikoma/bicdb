@@ -1,0 +1,70 @@
+{
+  "format": 1,
+  "implementation_source_commit": "15621541afefaf60810900985d81a1643ebb940f",
+  "backend_sha256": "1fcdc7ec63ad1993354c06fe48c693be7ff7244746121d7c8b5077ad9f22f61e",
+  "checks": [
+    {
+      "name": "format",
+      "returncode": 0
+    },
+    {
+      "name": "escape-grammar",
+      "returncode": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "build",
+      "returncode": 0
+    },
+    {
+      "name": "native-like-escape",
+      "returncode": 0,
+      "reported": 6,
+      "passed": 6,
+      "skipped": 0
+    },
+    {
+      "name": "sql-library",
+      "returncode": 0,
+      "passed": 735,
+      "failed": 0,
+      "ignored": 4
+    },
+    {
+      "name": "native-tools",
+      "returncode": 0,
+      "reported": 239,
+      "passed": 235,
+      "skipped": 4
+    },
+    {
+      "name": "protocol",
+      "returncode": 0,
+      "passed": 183,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "oracle-hr",
+      "returncode": 0,
+      "passed": 48,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "authorization",
+      "returncode": 0,
+      "passed": 44,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "application_retest_qualified": false,
+  "live_oracle_comparison_qualified": false,
+  "full_like_semantics_qualified": false,
+  "full_application_qualified": false,
+  "full_oracle_programme_qualified": false,
+  "production_qualified": false
+}

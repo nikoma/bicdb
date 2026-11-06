@@ -19,10 +19,12 @@ mod primary_key_updates;
 mod privilege_projection;
 mod raw_ddl_analyze;
 mod raw_index_fts;
+mod read_only;
 mod row_assignments;
 mod row_triggers;
 mod set_functions;
 mod transaction_defaults;
+pub use read_only::parse_transaction_read_only;
 pub(crate) mod txn_update;
 // Glue import: bring every crate-root item (including the root's private
 // imports and the other split modules' re-exports) into scope so the moved
@@ -2826,6 +2828,7 @@ impl<'db> SqlSession<'db> {
         columns: &[String],
         rows: Vec<Vec<Option<String>>>,
     ) -> Result<usize> {
+        self.require_transaction_write()?;
         self.with_implicit_guc_statement(|session| {
             session.with_statement_transaction(|session| {
                 session.copy_insert_rows_inner(table, columns, rows)
@@ -2937,7 +2940,19 @@ impl<'db> SqlSession<'db> {
         let atomic = self.tx.is_some() && oracle::preview_routine_language_enabled(self.db_ref())?;
         let execute = |session: &mut Self| {
             session.with_implicit_guc_statement(|session| {
-                let mut result = session.execute_profiled(sql)?;
+                let mut result = if session.transaction_read_only() {
+                    let statements = parse_statements(sql).map_err(|_| read_only::violation())?;
+                    if statements.len() > 1 {
+                        session.execute_statement_list(&statements)?
+                    } else {
+                        if let Some(statement) = statements.first() {
+                            session.ensure_read_only_statement(statement)?;
+                        }
+                        session.execute_profiled(sql)?
+                    }
+                } else {
+                    session.execute_profiled(sql)?
+                };
                 session.apply_bytea_output(&mut result);
                 Ok(result)
             })
@@ -3613,6 +3628,7 @@ impl<'db> SqlSession<'db> {
     }
 
     fn execute_parsed_statement_in_sql(&mut self, statement: &Statement) -> Result<SqlResult> {
+        self.ensure_read_only_statement(statement)?;
         // Earlier statements in a batch can change temporal output settings.
         let _temporal_scope = self.temporal_scope();
         self.db_ref().check_recovery_state()?;
@@ -3648,6 +3664,17 @@ impl<'db> SqlSession<'db> {
                 }
                 self.tx = Some(self.begin_session_transaction()?);
                 self.set_transaction_isolation_label(self.default_transaction_isolation()?)?;
+                let read_only = modes
+                    .iter()
+                    .find_map(|mode| match mode {
+                        TransactionMode::AccessMode(TransactionAccessMode::ReadOnly) => Some(true),
+                        TransactionMode::AccessMode(TransactionAccessMode::ReadWrite) => {
+                            Some(false)
+                        }
+                        _ => None,
+                    })
+                    .unwrap_or_else(|| self.transaction_read_only());
+                self.set_transaction_read_only_label(read_only)?;
                 self.apply_transaction_modes(modes)?;
                 Ok(SqlResult::command("BEGIN"))
             }
@@ -4528,6 +4555,38 @@ impl<'db> SqlSession<'db> {
     fn apply_transaction_modes(&mut self, modes: &[TransactionMode]) -> Result<()> {
         let oracle_preview = oracle::preview_routine_language_enabled(self.db_ref())?;
         validate_profile_transaction_modes(modes, oracle_preview)?;
+        if let Some(read_only) = modes.iter().find_map(|mode| match mode {
+            TransactionMode::AccessMode(TransactionAccessMode::ReadOnly) => Some(true),
+            TransactionMode::AccessMode(TransactionAccessMode::ReadWrite) => Some(false),
+            _ => None,
+        }) {
+            if (self.tx.is_none() && !oracle_preview) || !self.savepoints.is_empty() {
+                return Err(SqlError::data_exception(
+                    "25001",
+                    "transaction access mode requires an active top-level transaction",
+                    None,
+                ));
+            }
+            if !read_only && self.transaction_read_only() {
+                return Err(SqlError::data_exception(
+                    "25001",
+                    "cannot relax an active read-only transaction",
+                    None,
+                ));
+            }
+            if self
+                .tx
+                .as_ref()
+                .is_some_and(|tx| tx.write_len() != 0 || tx.lock_len() != 0)
+            {
+                return Err(SqlError::data_exception(
+                    "25001",
+                    "transaction access mode must be set before writes or row locks",
+                    None,
+                ));
+            }
+            self.set_transaction_read_only_label(read_only)?;
+        }
         let level = modes.iter().find_map(|mode| match mode {
             TransactionMode::IsolationLevel(level) => Some(level),
             _ => None,
@@ -5083,6 +5142,7 @@ impl<'db> SqlSession<'db> {
                 "server_version_num",
                 "bicdb.sql_profile",
                 "transaction_isolation",
+                "transaction_read_only",
             ];
             Arc::make_mut(&mut self.session_gucs).retain(|key, _| {
                 preserved.contains(&key.as_str())
@@ -5101,6 +5161,11 @@ impl<'db> SqlSession<'db> {
             normalize_object_name(raw)
         };
         let targets = GucAssignmentTargets::setting(&setting);
+        if setting == read_only::SETTING {
+            return Err(SqlError::Unsupported(
+                "transaction access mode must be changed with SET TRANSACTION".into(),
+            ));
+        }
         if setting == "bicdb.sql_profile" {
             return Err(SqlError::Unsupported(
                 "bicdb.sql_profile is fixed at database open and connection startup".to_string(),

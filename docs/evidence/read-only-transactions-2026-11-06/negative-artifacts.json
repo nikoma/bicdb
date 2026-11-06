@@ -1,0 +1,21 @@
+{
+  "status": "NEGATIVE_CONTROL_FAILED_AS_EXPECTED",
+  "source_base": "5e5fecc3ca279f2e3ea3e37af0c244e11bbb69ea",
+  "sql_tests_failed": 6,
+  "wire_tests_failed": 1,
+  "sha256": {
+    "/root/ehr-bicdb-readonly-negative-exact.log": "c54b38b0523381da3b02b886bec6face3c2ab3bb6d895c3ee857cfca3b0d13ce",
+    "/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rlib": "f1be1c9ffb7f19cf13a2e18787e2cbc88fef34b5caea17c52d0762914102ad7c",
+    "/root/ehr-bicdb-migration-20261104/target/debug/deps/read_only_transactions-f408086503f246b3": "539f928ddfd3fc77e8d4c144e7cc9510d7da3a475c2435516f4357c930fca9b8",
+    "/root/ehr-bicdb-readonly-wire-negative.log": "a44ccaa970bb3cdf16c89c074b06c417219085b5aeb058754560a82554f6f87f",
+    "/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_pgwire-9999b11e7bdd75ff.rlib": "475bdc7d0fc6db7c80c0dae0cc0153335df49f4cf37e19adf5a46b028c1bc3b6",
+    "/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-e1734658a5102c00.rlib": "b8a03ac8746e758dabc80556adae1fe079bc24d89a2a42795e48f007ba573056",
+    "/root/ehr-bicdb-migration-20261104/target/debug/deps/read_only_transactions-49f7deea31276ebf": "b40f26df6768d2641477564e1f1b1a6e52e15b910f251d4eb08cb23c89605309",
+    "/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/src/session.rs": "1f4b4ef47093758c973bdfde3e2dac5a0b6768bcefa88426bf7e919fc458cace",
+    "/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/src/engine.rs": "901ceed4b44c8d38df236cd8e9b9258f8b8b3953c37c3424ad7779d0e9b7e433",
+    "/root/ehr-bicdb-migration-20261104/crates/bicdb-pgwire/src/lib.rs": "8bf16a03a0b2be7a4e945a748e6afa350d33a8bb00afe8c0a3c1f6c3d65f08f4",
+    "/root/ehr-bicdb-migration-20261104/crates/bicdb-pgwire/src/sql_parsing.rs": "694f1ba4cf62240ad06d6bb3ace011f995c9d44879be96002a2bf1e3b53db7ce",
+    "/root/ehr-bicdb-migration-20261104/crates/bicdb-sql/tests/read_only_transactions.rs": "f993ddea90571c2daaaee569790c4c2086f8506bc72f7886cae6f1bfa1258d19",
+    "/root/ehr-bicdb-migration-20261104/crates/bicdb-pgwire/tests/read_only_transactions.rs": "abe3ef8650835785b9a55080fbc7f7df53fda5d448dffad9ed614d220655419e"
+  }
+}

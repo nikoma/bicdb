@@ -4550,6 +4550,11 @@ fn execute_server_sql_with_options_normalized(
         if transaction_control == Some(Some(TransactionControl::Begin)) {
             let result = begin_buffered_transaction(server, state);
             if result.is_ok() {
+                if let Some(read_only) = bicdb_sql::parse_transaction_read_only(sql)? {
+                    state
+                        .session_state
+                        .set_transaction_read_only_label(read_only)?;
+                }
                 if let Some(isolation) = bicdb_sql::parse_transaction_isolation_for_profile(
                     sql,
                     &server.config.sql_profile,

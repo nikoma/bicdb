@@ -4365,7 +4365,13 @@ impl<'db> SqlEngine<'db> {
             // Client libraries route read-write sessions with these.
             "show transaction_read_only" | "show default_transaction_read_only" => {
                 let name = normalized.trim_start_matches("show ").to_string();
-                let read_only = if self.db.is_read_only_standby() {
+                let read_only = if self.db.is_read_only_standby()
+                    || (name == "transaction_read_only"
+                        && self
+                            .session_gucs
+                            .get("transaction_read_only")
+                            .is_some_and(|value| value == "on"))
+                {
                     "on"
                 } else {
                     "off"

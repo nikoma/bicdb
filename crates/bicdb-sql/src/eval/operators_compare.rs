@@ -2501,7 +2501,11 @@ pub(crate) fn eval_like_values(
     let escape = match escape_char {
         None => Some('\\'),
         Some(value) => {
-            let value = literal_to_value(value)?.to_cell();
+            let value = literal_to_value(value)?;
+            if matches!(value, SqlValue::Null) {
+                return Ok(None);
+            }
+            let value = value.to_cell();
             if value.chars().count() > 1 {
                 return Err(SqlError::data_exception(
                     "22025",

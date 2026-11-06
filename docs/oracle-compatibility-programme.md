@@ -30,6 +30,12 @@ observations from a failed direct-text decoding attempt. Lossless runtime values
 assignment/CAST rules, PostgreSQL-driver transport and application qualification
 remain open.
 
+The [national JDBC code-unit source checkpoint](evidence/oracle-national-cast-jdbc-source-2026-11-06/README.md)
+then confirms that both Oracle JDBC string getters preserve the observed lone
+surrogate, with native national type metadata. This closes that source-driver
+observation dependency; BicDB's lossless values, storage, selected PostgreSQL-driver
+codec and complete national-character behavior remain unqualified.
+
 The [correlated EXISTS candidate-probe checkpoint](evidence/sql-correlated-exists-probes-2026-11-06/README.md)
 qualifies bounded statement-local candidate maps and primary-key list lookups,
 with independent PostgreSQL/Oracle-preview result, NULL, duplicate and rollback

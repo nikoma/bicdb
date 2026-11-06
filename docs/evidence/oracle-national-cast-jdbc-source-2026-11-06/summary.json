@@ -1,0 +1,25 @@
+{
+  "format": 1,
+  "scope": "read-only Oracle JDBC source observations",
+  "source_version": "Oracle AI Database 26ai Free Release 23.26.3.0.0 - Develop, Learn, and Run for Free\nVersion 23.26.3.0.0",
+  "driver_version": "23.26.0.0.0",
+  "driver_sha256": "75214109f0e10b36ac2c763a50d31c923f1495453553d8d15e1cee662b69bdda",
+  "observer_sha256": "9d4412f1ae8f8835f757b2c456a9f29500a73ccf3f72241a1992a957d2962d54",
+  "observations_sha256": "02e154e6d15cd2a56adc5c9c20187a516764c45c19b8923da6000281d8674fb1",
+  "reference_properties": {
+    "oracle.jdbc.defaultNChar": "true",
+    "oracle.jdbc.V8Compatible": "true"
+  },
+  "source_cases": 8,
+  "serialization_controls_passed": 8,
+  "serialization_controls_reference_database_used": false,
+  "read_only_transaction": true,
+  "original_application_objects_modified": false,
+  "container_restored": true,
+  "oracle_jdbc_source_getters_preserve_observed_lone_surrogate": true,
+  "selected_postgres_driver_codec_qualified": false,
+  "bicdb_runtime_qualified": false,
+  "application_qualified": false,
+  "production_qualified": false,
+  "oracle_programme_complete": false
+}

@@ -1,0 +1,28 @@
+{
+  "format": 1,
+  "tool_source_commit": "ed51464560b7043b152c0c871c4c328a84f4d868",
+  "oracle_server_version": "23.26.3.0.0",
+  "source_manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+  "dependency_report_sha256": "56603424ea35571a54cffa522b4377a9ddf7683ce098c512263987c67f238d7d",
+  "routine_definitions_matched": 62,
+  "view_definitions_matched": 160,
+  "captured_static_dependencies": 1291,
+  "ordered_views": 160,
+  "view_order_differs_from_manifest": true,
+  "code_identities_verified": true,
+  "source_ddl_quiesced_confirmed": true,
+  "source_data_or_code_modified": false,
+  "container_originally_running": false,
+  "container_restored": true,
+  "returncode": 0,
+  "resource": {
+    "status": "completed",
+    "minimum_observed_host_available_bytes": 18263191552,
+    "peak_client_process_group_rss_bytes": 163274752,
+    "oracle_container_memory_limit_bytes": 4294967296
+  },
+  "target_installation_using_this_order_qualified": false,
+  "target_view_types_qualified": false,
+  "dynamic_dependencies_qualified": false,
+  "application_qualified": false
+}

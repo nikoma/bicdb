@@ -1777,13 +1777,14 @@ impl<'db> SqlEngine<'db> {
             .with_shared_routine_vars(self.routine_vars.clone())
             .with_cancellation(self.cancellation.clone());
         let result = engine.execute_query(query);
-        if let (Some(parent), Some(novel), Some(mut used)) =
-            (self.outer_row.as_ref(), novel, engine.outer_row.take())
-        {
+        if let (Some(novel), Some(mut used)) = (novel, engine.outer_row.take()) {
             used.truncate_probes(base_probes);
             *self.outer_extension_cache.borrow_mut() = Some(OuterExtensionCache {
-                parent: parent as *const OuterSlotRow as usize,
-                parent_len: parent.value_count(),
+                parent: self
+                    .outer_row
+                    .as_ref()
+                    .map(|parent| parent as *const OuterSlotRow as usize),
+                parent_len: self.outer_row.as_ref().map_or(0, OuterSlotRow::value_count),
                 columns: columns.to_vec(),
                 novel,
                 row: used,
@@ -1803,13 +1804,12 @@ impl<'db> SqlEngine<'db> {
         columns: &[String],
         row: &[SqlValue],
     ) -> (OuterSlotRow, Option<std::rc::Rc<[usize]>>) {
-        let Some(parent) = self.outer_row.as_ref() else {
-            return (OuterSlotRow::from_slot(columns, row), None);
-        };
-        let identity = parent as *const OuterSlotRow as usize;
+        let parent = self.outer_row.as_ref();
+        let identity = parent.map(|parent| parent as *const OuterSlotRow as usize);
+        let parent_len = parent.map_or(0, OuterSlotRow::value_count);
         if let Some(mut cached) = self.outer_extension_cache.borrow_mut().take() {
             if cached.parent == identity
-                && cached.parent_len == parent.value_count()
+                && cached.parent_len == parent_len
                 && cached.columns.as_slice() == columns
             {
                 cached
@@ -1818,8 +1818,16 @@ impl<'db> SqlEngine<'db> {
                 return (cached.row, Some(cached.novel));
             }
         }
-        let novel = merge_novel_right_ordinals(parent.columns(), columns);
-        (parent.extend(columns, row), Some(novel))
+        if let Some(parent) = parent {
+            let novel = merge_novel_right_ordinals(parent.columns(), columns);
+            (parent.extend(columns, row), Some(novel))
+        } else {
+            // Top-level correlated predicates have no prior outer row. They
+            // still share a column layout across input rows: reuse its lookup
+            // and refill every value rather than rebuilding aliases per row.
+            let novel: Rc<[usize]> = (0..columns.len()).collect::<Vec<_>>().into();
+            (OuterSlotRow::from_slot(columns, row), Some(novel))
+        }
     }
 
     pub(crate) fn execute_correlated_slot_subquery_values(

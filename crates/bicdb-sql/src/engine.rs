@@ -5694,8 +5694,9 @@ fn locator_strategy_memo(
 #[derive(Debug)]
 pub(crate) struct OuterExtensionCache {
     /// Identity and length of the engine's `outer_row` the extension was
-    /// built from (the engine never replaces its `outer_row`).
-    parent: usize,
+    /// built from (the engine never replaces its `outer_row`). None denotes
+    /// a top-level input row without a pre-existing outer prefix.
+    parent: Option<usize>,
     parent_len: usize,
     columns: Vec<String>,
     /// Indexes into the current row of the columns `extend` appended.

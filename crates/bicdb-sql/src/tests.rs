@@ -8708,3 +8708,58 @@ fn delete_correlated_subqueries_keep_outer_row_reads() {
         vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(3)]]
     );
 }
+
+#[test]
+fn correlated_row_contexts_refill_nested_aliases_and_nulls() {
+    for profile in [oracle::POSTGRES_PROFILE, oracle::ORACLE_PREVIEW_PROFILE] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        oracle::ensure_database_profile(&mut db, profile).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        let execute = |session: &mut SqlSession<'_>, source: &str| {
+            let sql = if profile == oracle::POSTGRES_PROFILE {
+                source.to_string()
+            } else {
+                oracle::lower_session_sql(session.db_ref(), source, profile, None, "bicdb").unwrap()
+            };
+            session.execute(&sql).unwrap()
+        };
+        execute(
+            &mut session,
+            "CREATE TABLE outer_values(id INTEGER PRIMARY KEY,v INTEGER)",
+        );
+        execute(
+            &mut session,
+            "INSERT INTO outer_values VALUES(1,10),(2,NULL),(3,30),(4,10)",
+        );
+        let from = if profile == oracle::POSTGRES_PROFILE {
+            ""
+        } else {
+            " FROM DUAL"
+        };
+        let result = execute(&mut session, &format!(
+            "SELECT t.id,(SELECT t.v{from}),(SELECT (SELECT t.id+t.v{from}){from}) FROM outer_values t ORDER BY t.id"
+        ));
+        assert_eq!(
+            result.rows,
+            vec![
+                vec![SqlValue::Int(1), SqlValue::Int(10), SqlValue::Int(11)],
+                vec![SqlValue::Int(2), SqlValue::Null, SqlValue::Null],
+                vec![SqlValue::Int(3), SqlValue::Int(30), SqlValue::Int(33)],
+                vec![SqlValue::Int(4), SqlValue::Int(10), SqlValue::Int(14)],
+            ],
+            "{profile}"
+        );
+        // Reversing the projected column order changes layout, and a later
+        // statement must refill values from current transaction-visible data.
+        execute(&mut session, "UPDATE outer_values SET v=40 WHERE id=4");
+        assert_eq!(
+            execute(
+                &mut session,
+                &format!("SELECT t.v,(SELECT t.id{from}) FROM outer_values t WHERE t.id=4")
+            )
+            .rows,
+            vec![vec![SqlValue::Int(40), SqlValue::Int(4)]]
+        );
+    }
+}

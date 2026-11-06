@@ -2552,9 +2552,43 @@ fn folded_text_equality_prefix(
     {
         return None;
     }
-    let IndexValue::String(value) = equality_value(selection, inner).ok()?? else {
-        return None;
-    };
+    fn unnest(mut expr: &Expr) -> &Expr {
+        while let Expr::Nested(inner) = expr {
+            expr = inner;
+        }
+        expr
+    }
+    let value = and_terms(selection).into_iter().find_map(|term| {
+        let Expr::BinaryOp {
+            left,
+            op: BinaryOperator::Eq,
+            right,
+        } = unnest(term)
+        else {
+            return None;
+        };
+        for (column_expr, bound) in [(left, right), (right, left)] {
+            let column_expr = unnest(column_expr);
+            // The older index-field parser erases CAST and COLLATE. That is
+            // not an implication proof: CAST(label AS varchar(2))='ab' can
+            // match 'abc', and a query-level collation can change equality.
+            if !matches!(
+                column_expr,
+                Expr::Identifier(_) | Expr::CompoundIdentifier(_)
+            ) || !index_field_from_expr(column_expr)
+                .is_ok_and(|candidate| index_field_matches(&candidate, inner))
+            {
+                continue;
+            }
+            let Expr::Value(bound) = unnest(bound) else {
+                continue;
+            };
+            if let Value::SingleQuotedString(value) = &bound.value {
+                return Some(value.clone());
+            }
+        }
+        None
+    })?;
     // Match the core index extractor's Unicode conversion, including keys
     // which expand to multiple characters. No arbitrary SQL is evaluated.
     Some(IndexValue::String(if upper {

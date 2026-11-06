@@ -8278,12 +8278,15 @@ fn folded_text_equality_declines_padding_collation_and_nonconjunctions() {
     let mut db = BicDb::open(dir.path()).unwrap();
     let mut session = SqlSession::new(&mut db);
     session.execute("CREATE TABLE folded_fallback(id int PRIMARY KEY, padded char(5), collated text COLLATE \"C\", label text)").unwrap();
-    session.execute("INSERT INTO folded_fallback VALUES (1,'ab','ab','ab'),(2,'AB','AB','AB'),(3,NULL,NULL,NULL)").unwrap();
+    session.execute("INSERT INTO folded_fallback VALUES (1,'ab','ab','ab'),(2,'AB','AB','AB'),(3,NULL,NULL,NULL),(4,'abc','abc','abc')").unwrap();
     let queries = [
         "SELECT id FROM folded_fallback WHERE padded='ab' ORDER BY id",
         "SELECT id FROM folded_fallback WHERE collated='ab' ORDER BY id",
         "SELECT id FROM folded_fallback WHERE label='ab' OR label IS NULL ORDER BY id",
         "SELECT id FROM folded_fallback WHERE label IS NULL ORDER BY id",
+        "SELECT id FROM folded_fallback WHERE CAST(label AS varchar(2))='ab' ORDER BY id",
+        "SELECT id FROM folded_fallback WHERE label COLLATE \"C\"='ab' ORDER BY id",
+        "SELECT id FROM folded_fallback WHERE label=('ab' COLLATE \"C\") ORDER BY id",
     ];
     let expected: Vec<_> = queries
         .iter()

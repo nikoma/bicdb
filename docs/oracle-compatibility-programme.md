@@ -1075,3 +1075,10 @@ adds contextual suffix parsing, identifier preservation and Oracle-preview
 default escaping with independent PostgreSQL controls. Original application
 retesting, explicit NULL escape semantics, full error/collation behavior and
 source-instance comparisons remain separate gates.
+
+The [original zoom-provider retest](evidence/idempiere-original-zoom-escape-2026-11-06/README.md)
+passes its unchanged original invocation with verified source, class and runtime
+origins. This resolves the observed ESCAPE parsing error for that class; the
+retest is excluded from distinct invocation totals. NULL-escape reference
+semantics, other retained failures and full application qualification remain
+open.

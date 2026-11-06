@@ -1850,7 +1850,7 @@ impl<'db> SqlEngine<'db> {
         }
         Ok(Some(eval_tuple_in_rows_truth(
             &value,
-            Rc::unwrap_or_clone(result).rows,
+            result.rows.iter(),
             negated,
         )?))
     }
@@ -3372,8 +3372,8 @@ fn eval_quantified_subquery_truth(
 }
 
 /// Per-engine memo of uncorrelated row-expression subquery results. Entries
-/// live only while an `execute_query` call on the engine is running, so a
-/// result never outlives the statement that computed it. Entries are keyed by
+/// live only while a query or DML predicate scope on the engine is running,
+/// so a result never outlives the statement that computed it. Entries are keyed by
 /// the subquery's address and the outer row's column layout (which decides how
 /// names resolve); a cached result is also checked against a copy of the
 /// subquery, so a reused address can never return another query's result.
@@ -3401,7 +3401,20 @@ enum MemoLookup {
 /// Bounds the memo; past it, further subqueries simply run per row.
 const SUBQUERY_MEMO_MAX_ENTRIES: usize = 64;
 
+pub(crate) struct SubqueryMemoScope<'a>(&'a SubqueryMemo);
+
+impl Drop for SubqueryMemoScope<'_> {
+    fn drop(&mut self) {
+        self.0.leave();
+    }
+}
+
 impl SubqueryMemo {
+    pub(crate) fn scope(&self) -> SubqueryMemoScope<'_> {
+        self.enter();
+        SubqueryMemoScope(self)
+    }
+
     pub(crate) fn enter(&self) {
         self.depth.set(self.depth.get() + 1);
     }

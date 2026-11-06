@@ -1972,6 +1972,7 @@ impl<'db> SqlSession<'db> {
                 for using_row in &using_rows.rows {
                     let using_outer_row = OuterSlotRow::from_slot(&using_rows.columns, using_row);
                     let row_engine = build_row_engine(Some(using_outer_row));
+                    let _subqueries = row_engine.subquery_memo.scope();
                     let (candidate_records, from_key_lookup) = if let Some(ids) = row_engine
                         .indexed_record_ids_for_table_selection(
                             &table,
@@ -2066,6 +2067,10 @@ impl<'db> SqlSession<'db> {
                 }
             } else {
                 let row_engine = build_row_engine(None);
+                // Candidate filtering observes one statement snapshot. Retain
+                // only subqueries proved independent of the current row;
+                // the scope ends before deletion/trigger writes begin.
+                let _subqueries = row_engine.subquery_memo.scope();
                 let (candidate_records, from_key_lookup) = if let Some(ids) = row_engine
                     .indexed_record_ids_for_table_selection(
                         &table,

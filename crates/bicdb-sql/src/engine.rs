@@ -4665,10 +4665,8 @@ impl<'db> SqlEngine<'db> {
 
     pub(crate) fn execute_query(&self, query: &Query) -> Result<SqlResult> {
         self.db_ref().check_recovery_state()?;
-        self.subquery_memo.enter();
-        let result = self.execute_query_unscoped(query);
-        self.subquery_memo.leave();
-        result
+        let _subqueries = self.subquery_memo.scope();
+        self.execute_query_unscoped(query)
     }
 
     fn execute_query_unscoped(&self, query: &Query) -> Result<SqlResult> {

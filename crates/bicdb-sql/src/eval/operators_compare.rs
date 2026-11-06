@@ -998,14 +998,18 @@ where
     }
 }
 
-pub(crate) fn eval_tuple_in_rows_truth(
+pub(crate) fn eval_tuple_in_rows_truth<I, R>(
     value: &[SqlValue],
-    rows: Vec<Vec<SqlValue>>,
+    rows: I,
     negated: bool,
-) -> Result<Option<bool>> {
+) -> Result<Option<bool>>
+where
+    I: IntoIterator<Item = R>,
+    R: AsRef<[SqlValue]>,
+{
     let mut saw_null = false;
     for row in rows {
-        match compare_tuple_values(value, &BinaryOperator::Eq, &row)? {
+        match compare_tuple_values(value, &BinaryOperator::Eq, row.as_ref())? {
             Some(true) => return Ok(Some(!negated)),
             Some(false) => {}
             None => saw_null = true,

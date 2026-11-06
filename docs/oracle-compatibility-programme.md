@@ -30,6 +30,12 @@ checks on the original-source target. At that checkpoint, source-ordered views,
 foreign keys, post-assembly value reconciliation, routine execution/ownership and
 original application tests on the pristine baseline remained separate gates.
 
+The [pristine view metadata checkpoint](evidence/idempiere-pristine-view-metadata-2026-11-06/README.md)
+checks all 160 original-source view projections: 11,983 labels and broad type
+families match through Parse/Describe without executing rows. Independent native
+PostgreSQL and Oracle-preview controls pass. Exact descriptors, values, routine
+rights and full application/schema acceptance remain separate gates.
+
 The [full-FK foundation checkpoint](evidence/idempiere-full-fk-foundation-2026-11-05/README.md)
 passes all 89 selected original application tests, with zero failures/errors/skips,
 verified Oracle-provider/PostgreSQL-driver origins and clean JVM/database exits.

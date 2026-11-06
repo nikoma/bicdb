@@ -1,0 +1,45 @@
+{
+  "format": 1,
+  "status": "pristine_view_projection_metadata_verified",
+  "source_manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+  "binary_source_commit": "5e5fecc3ca279f2e3ea3e37af0c244e11bbb69ea",
+  "binary_sha256": "1cd37fe086195a867f46e359d532c4d4f70a720d335ebb69e4307f05121f0860",
+  "verifier_source_commit": "ec4794f7505c4de876c464c82aeb31f52e495b57",
+  "verifier_sha256": "b7dc5d224d77de0e9cd7538468febeade0421416485afa017579ff3bfd3cec5b",
+  "detailed_report_sha256": "ca51f8fee78a8aa1f71362b279d2c842f0067132340cd018fc3711e52b8f8e83",
+  "view_install_report_sha256": "7c2d09b74502b72cd65be15935e2c22fd5cfe50e42a7750f3f745c96aefcd410",
+  "views": 160,
+  "projected_columns": 11983,
+  "source_type_counts": {
+    "NUMBER": 6140,
+    "CHAR": 2543,
+    "DATE": 1104,
+    "VARCHAR2": 2196
+  },
+  "protocol_oid_counts": {
+    "23": 27,
+    "1700": 6110,
+    "1042": 2537,
+    "1114": 1104,
+    "1043": 2151,
+    "25": 51,
+    "20": 3
+  },
+  "labels_matched": true,
+  "broad_type_families_matched": true,
+  "view_definitions_unchanged": true,
+  "protocol": "PostgreSQL Parse and Describe; no Execute messages",
+  "focused_contract_tests": {
+    "passed": 6,
+    "skipped": 0,
+    "default_postgres_native_passed": 1,
+    "oracle_preview_native_passed": 1
+  },
+  "precision_scale_width_nullability_qualified": false,
+  "view_values_qualified": false,
+  "view_execution_qualified": false,
+  "ownership_mapping_qualified": false,
+  "full_schema_qualified": false,
+  "application_qualified": false,
+  "goal_complete": false
+}

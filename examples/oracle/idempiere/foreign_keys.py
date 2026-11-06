@@ -289,21 +289,21 @@ def migrate(args):
                     print('foreign-keys: checking target enforcement capabilities', flush=True)
                     probe_support(cursor, schema)
                     report['capability_verified'] = True
-                # The exact completed prefix was already checked against the
-                # complete catalog above, before any probe or source DDL. With
-                # writers/schema changes quiesced, rereading each of those keys
-                # adds no validation. Pending and unjournaled entries still get
-                # individual readback, including after every new installation.
+                # Preflight checked all existing source relationships against
+                # the complete catalog, including unjournaled installations.
+                # With writers/schema changes quiesced, reuse that inventory
+                # for presence checks. Each new DDL still needs catalog readback.
                 completed_prefix = len(report['completed'])
                 for index, item in enumerate(plan):
                     if args.check_only or index < completed_prefix:
                         continue
-                    actual = current_constraint(cursor, state, item)
+                    actual = state['constraints'].get((item['table'], item['name']))
                     if actual is None:
                         cursor.execute(ddl(schema, item), prepare=False)
                         actual = current_constraint(cursor, state, item)
                     if actual is None or not matches(actual, item):
                         raise ValueError('installed foreign key differs from source declaration')
+                    state['constraints'][(item['table'], item['name'])] = actual
                     if index >= len(report['completed']):
                         report['completed'].append(item)
                     if (index + 1) % 32 == 0:

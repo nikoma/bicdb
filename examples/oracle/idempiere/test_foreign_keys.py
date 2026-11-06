@@ -198,10 +198,32 @@ class ForeignKeyMigrationIntegrationTests(unittest.TestCase):
         with self.conn.cursor() as c:c.execute('ALTER TABLE '+target.quote(m['source_schema'])+'."C" DROP CONSTRAINT '+target.quote(plan[0]['name']))
         with self.assertRaisesRegex(ValueError,'completed target foreign key'):self.migrate(args)
 
+    def test_new_installation_readback_mismatch_is_not_checkpointed_and_can_resume(self):
+        m,args=self.setup_schema();plan=target.declarations(m)
+        args.check_only=False;args.writers_quiesced=True
+        readback=target.current_constraint
+        def wrong_validation(cursor,state,item):
+            actual=readback(cursor,state,item)
+            return dict(actual,validated=not actual['validated']) if actual is not None else None
+        with patch.object(target,'current_constraint',side_effect=wrong_validation):
+            with self.assertRaisesRegex(ValueError,'installed foreign key differs'):
+                self.migrate(args)
+        report=json.loads(args.report.read_text())
+        self.assertFalse(report['success']);self.assertFalse(report['migration_completed'])
+        self.assertEqual(report['completed'],[])
+        # The DDL committed, but the client refused to certify its wrong
+        # readback. A fresh preflight must verify it before resume adoption.
+        with self.conn.cursor() as cursor:
+            state=target.catalog(cursor,m['source_schema'])
+        self.assertTrue(target.matches(state['constraints'][(plan[0]['table'],plan[0]['name'])],plan[0]))
+        args.resume=True;report=self.migrate(args)
+        self.assertTrue(report['success']);self.assertEqual(report['completed'],plan)
+        self.assertTrue(all(value['before']==value['after'] for value in report['table_fingerprints'].values()))
+
     def test_resume_uses_whole_catalog_validation_and_reads_back_pending_installs(self):
         import psycopg
         m,args=self.setup_schema();plan=target.declarations(m)
-        args.check_only=False;args.writers_quiesced=True;self.migrate(args);args.resume=True
+        args.check_only=False;args.writers_quiesced=True
         statements=[];real_connect=psycopg.connect
         class Cursor:
             def __init__(self,real):self.real=real
@@ -222,17 +244,21 @@ class ForeignKeyMigrationIntegrationTests(unittest.TestCase):
             with patch.object(psycopg,'connect',side_effect=lambda *a,**kw:Connection(real_connect(*a,**kw))):
                 return self.migrate(args)
         result=run();self.assertEqual(result['completed'],plan)
+        point_reads=[q for q in statements if q.startswith(target.CONSTRAINT_SELECT) and 'WHERE "conrelid"=' in q]
+        self.assertEqual(len(point_reads),3,'fresh missing keys need one post-install readback each')
+        args.resume=True
+        result=run();self.assertEqual(result['completed'],plan)
         scans=[q for q in statements if q.startswith(target.CONSTRAINT_SELECT)]
         self.assertEqual(len(scans),1,'completed prefixes must use the complete catalog inventory')
         self.assertIn('WHERE "connamespace"=',scans[0])
         # Simulate an interrupted journal with one pending key missing and one
-        # installed but unjournaled. Both still require individual readback.
+        # installed but unjournaled. Preflight verifies the latter; new DDL needs readback.
         result['completed']=result['completed'][:1];args.report.write_text(json.dumps(result))
         with self.conn.cursor() as c:
             c.execute('ALTER TABLE '+target.quote(m['source_schema'])+'.'+target.quote(plan[1]['table'])+' DROP CONSTRAINT '+target.quote(plan[1]['name']))
         result=run();self.assertEqual(result['completed'],plan)
         point_reads=[q for q in statements if q.startswith(target.CONSTRAINT_SELECT) and 'WHERE "conrelid"=' in q]
-        self.assertEqual(len(point_reads),3,'missing keys need pre/post readback; unjournaled existing keys need verification')
+        self.assertEqual(len(point_reads),1,'only the missing key needs post-install readback; preflight verified the existing key')
         self.assertIn(target.ddl(m['source_schema'],plan[1]),statements)
         self.assertTrue(all(value['before']==value['after'] for value in result['table_fingerprints'].values()))
         # A completed definition changed before resume must still stop the run.

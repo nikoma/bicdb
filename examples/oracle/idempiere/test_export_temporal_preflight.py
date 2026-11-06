@@ -37,7 +37,8 @@ class ExportTemporalPreflightTests(unittest.TestCase):
             def __enter__(self):return self
             def __exit__(self, *args):pass
             def execute(self, sql):
-                if sql == 'SET TRANSACTION READ ONLY':self.rows = []
+                if sql.startswith("SELECT SYS_CONTEXT('USERENV','SESSION_USER')"):self.rows = [('SOURCE','SOURCE')]
+                elif sql == 'SET TRANSACTION READ ONLY':self.rows = []
                 elif sql.startswith('SELECT current_scn'):self.rows = [(1,)]
                 elif sql.startswith('SELECT object_type'):self.rows = [('TABLE', 'T', 'VALID')]
                 elif sql.startswith('SELECT table_name FROM'):self.rows = [('T',)]
@@ -51,6 +52,7 @@ class ExportTemporalPreflightTests(unittest.TestCase):
             def __enter__(self):return self
             def __exit__(self, *args):pass
             def cursor(self):return Cursor()
+            def rollback(self): pass
         driver = SimpleNamespace(defaults=SimpleNamespace(), connect=lambda **kwargs: Connection())
         with tempfile.TemporaryDirectory() as name:
             root = Path(name);password = root/'password';password.write_text('fixture')

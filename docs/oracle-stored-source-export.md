@@ -13,6 +13,25 @@ python examples/oracle/idempiere/export_reference.py \
   --directory /private/new-export
 ```
 
+The exporter records Oracle's reported `SESSION_USER` as `source_schema`,
+preserving quoted owner spelling instead of uppercasing the configuration's
+login string. `source_identity` records the authenticated owner, initial default
+schema and selected read schema. On its new private connection, the exporter
+selects the authenticated owner as `CURRENT_SCHEMA`, ends the preparation
+transaction and starts its read-only snapshot. Oracle distinguishes the default
+schema from the session user; changing the default does not grant privileges.
+[Oracle session context](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/SYS_CONTEXT.html),
+[default schema behavior](https://docs.oracle.com/en/database/oracle/oracle-database/12.2/sqlrf/ALTER-SESSION.html).
+
+Dictionary reads name the `SYS.USER_*` views explicitly, and row reads qualify
+the authenticated owner. A same-named application table cannot replace a
+catalog view during capture. The observed SCN read requires access to
+`SYS.V_$DATABASE` and remains diagnostic metadata, not a CDC resume position.
+The read-only snapshot covers subsequent catalog and row queries; schema writers
+must still be stopped as described below. Older exports without
+`source_identity` remain readable but do not establish these owner checks.
+This capture metadata does not qualify native Oracle owner/privilege semantics.
+
 Both `catalog.json` and the completed `manifest.json` contain:
 
 | Field | Captured categories |

@@ -27,10 +27,10 @@ class StoredSourceTests(unittest.TestCase):
         owner = self
         class Cursor:
             def execute(self, sql):
-                if 'FROM user_source' in sql:
+                if 'FROM SYS.user_source' in sql:
                     kinds = re.findall(r"'([^']+)'", sql)
                     self.rows = [row for row in owner.rows if row[1] in kinds]
-                elif 'FROM user_triggers' in sql: self.rows = owner.statuses
+                elif 'FROM SYS.user_triggers' in sql: self.rows = owner.statuses
                 else: raise AssertionError(sql)
             def __iter__(self): return iter(self.rows)
         return Cursor()
@@ -109,13 +109,14 @@ class StoredSourceTests(unittest.TestCase):
             def __exit__(self, *args): pass
             def execute(self, sql, **kwargs):
                 self.rows = []
-                if sql.startswith('SELECT current_scn'): self.rows = [(1,)]
+                if sql.startswith("SELECT SYS_CONTEXT('USERENV','SESSION_USER')"): self.rows = [('SOURCE','SOURCE')]
+                elif sql.startswith('SELECT current_scn'): self.rows = [(1,)]
                 elif sql.startswith('SELECT object_type'): self.rows = [(o['kind'],o['name'],o['status']) for o in owner.objects]
-                elif 'FROM user_source' in sql:
+                elif 'FROM SYS.user_source' in sql:
                     kinds = re.findall(r"'([^']+)'", sql)
                     rows = owner.rows[:-1] if missing else owner.rows
                     self.rows = [row for row in rows if row[1] in kinds]
-                elif 'FROM user_triggers' in sql: self.rows = owner.statuses
+                elif 'FROM SYS.user_triggers' in sql: self.rows = owner.statuses
             def fetchone(self): return self.rows[0]
             def __iter__(self): return iter(self.rows)
         class Connection:
@@ -124,6 +125,7 @@ class StoredSourceTests(unittest.TestCase):
             def __enter__(self): return self
             def __exit__(self, *args): pass
             def cursor(self): return Cursor()
+            def rollback(self): pass
         driver = SimpleNamespace(defaults=SimpleNamespace(), connect=lambda **kwargs: Connection())
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)

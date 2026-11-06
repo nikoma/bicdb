@@ -40,3 +40,28 @@ bundle inventory; a successful initializer does not establish that every service
 starts or that business workflows pass. The [bounded initialization record](evidence/idempiere-runtime-installation-2026-11-05/README.md)
 distinguishes those gates. The accepted application runtime has not been changed
 by these initialization experiments.
+
+
+## Private application-home resources
+
+The product's OSGi bundles and application-home resources are separate inputs.
+Some original workflows resolve files under `IDEMPIERE_HOME`, including the
+server-feature `data/import` directory. Prepare a new private home from the
+pinned original checkout before running those workflows:
+
+```bash
+python3 examples/oracle/idempiere/prepare_runtime_resources.py \
+  --upstream /path/to/idempiere \
+  --upstream-commit da0730aec42f3e9f5f671e81a70ff71e24d5e534 \
+  --home /tmp/idempiere-private-home \
+  --report /tmp/idempiere-private-resources.json
+```
+
+Use `-DIDEMPIERE_HOME=/tmp/idempiere-private-home` for the test JVM while
+retaining the prepared OSGi installation, configuration and bundle locations.
+The home must not exist. The report must be new and outside the checkout and
+home. The tool checks tracked resource content, copies it exactly, rejects
+symlinks/special files and verifies source/target hashes. It excludes generated
+untracked seed archives, so it does not initialize or replace a database. Review
+the [qualification scope](evidence/idempiere-private-runtime-resources-2026-11-06/README.md)
+separately from original application acceptance.

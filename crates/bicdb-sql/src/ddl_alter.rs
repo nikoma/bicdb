@@ -3768,8 +3768,38 @@ pub(crate) fn parse_raw_alter_view_owner(sql: &str) -> Result<Option<(String, St
             trailing.trim()
         )));
     }
-    let (_, view) = identifier_schema_and_name(&view);
+    // Keep the complete relation identity, including quoted dots/quotes and
+    // the namespace encoding used by CREATE VIEW and ordinary relation reads.
+    let view = parse_relation_identifier(&view)?;
     Ok(Some((view, role_spec_name(&owner))))
+}
+
+#[cfg(test)]
+mod view_owner_identity_tests {
+    use super::*;
+
+    #[test]
+    fn view_owner_targets_use_the_same_namespace_identity_as_relations() {
+        for (source, parts) in [
+            ("public.demo", vec!["public", "demo"]),
+            (
+                "\"Non.Public\".\"V\"\"Name\"",
+                vec!["Non.Public", "V\"Name"],
+            ),
+            ("\"View.With.Dot\"", vec!["public", "View.With.Dot"]),
+        ] {
+            let (actual, owner) =
+                parse_raw_alter_view_owner(&format!("ALTER VIEW {source} OWNER TO app_owner"))
+                    .unwrap()
+                    .unwrap();
+            let expected = relation_name_from_parts(
+                &parts.into_iter().map(str::to_string).collect::<Vec<_>>(),
+            )
+            .unwrap();
+            assert_eq!(actual, expected, "{source}");
+            assert_eq!(owner, "app_owner");
+        }
+    }
 }
 
 pub(crate) fn normalize_pg_dump_range_zero_options(sql: &str) -> Result<Option<String>> {
@@ -4138,15 +4168,19 @@ pub(crate) fn normalize_sequence_name(sequence: &str) -> Result<String> {
     if sequence.starts_with("__bicdb_s_") {
         return Ok(sequence.to_string());
     }
+    parse_relation_identifier(sequence)
+}
+
+fn parse_relation_identifier(identifier: &str) -> Result<String> {
     let mut parser = Parser::new(&PostgreSqlDialect {})
-        .try_with_sql(sequence)
+        .try_with_sql(identifier)
         .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
     let name = parser
         .parse_object_name(false)
         .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
     if parser.peek_token().token != sqlparser::tokenizer::Token::EOF {
         return Err(SqlError::InvalidSql(
-            "unexpected suffix in sequence name".into(),
+            "unexpected suffix in relation name".into(),
         ));
     }
     relation_name(&name)

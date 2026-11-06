@@ -135,6 +135,11 @@ keys. It explicitly records foreign keys, other indexes, types, routines, views
 and application execution as outstanding. The data phase validates and freezes
 each source row file before COPY, requires an empty uncompleted target table,
 and commits its per-table COPY/count checks before advancing the journal.
+Before connecting as the intended application role, apply the explicit
+[schema and relation-owner mapping](../../../docs/oracle-relation-owner-migration.md).
+Schema selection grants no access to objects imported by a different role.
+Routine rights, grants and other object kinds remain separate migration policies.
+
 `--resume` checks the journal's manifest digest, profile, endpoint and completed
 prefix, plus completed table columns/counts. It prints a recheck count every 32
 completed tables and at the end of that prefix, after the applicable metadata,

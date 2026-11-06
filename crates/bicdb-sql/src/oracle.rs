@@ -521,7 +521,9 @@ fn lower_profile_sql_in_namespace(
             "Oracle front end requires an Oracle SQL profile",
         ));
     }
-    if postgres_catalog_read(sql) {
+    if postgres_catalog_read(sql)
+        || (profile == ORACLE_PREVIEW_PROFILE && postgres_owner_administration(sql))
+    {
         return Ok(sql.to_string());
     }
     let lowered = lower_oracle_sql(db, sql, profile == ORACLE_PREVIEW_PROFILE, namespace).map_err(
@@ -606,6 +608,78 @@ fn postgres_catalog_read(sql: &str) -> bool {
     found && result.is_continue()
 }
 
+// PostgreSQL clients also provision target roles and map imported ownership.
+// These are native administration statements, not Oracle identifiers. Keep
+// their parsed command boundary instead of reserving ROLE/OWNER/LOGIN in SQL
+// expressions or rewriting the registered role name. Execution still uses the
+// ordinary ownership, role-membership and privilege checks.
+fn postgres_owner_administration(sql: &str) -> bool {
+    let first = sql.split_whitespace().next().unwrap_or_default();
+    if !["CREATE", "ALTER", "DROP", "GRANT", "REVOKE"]
+        .iter()
+        .any(|word| first.eq_ignore_ascii_case(word))
+    {
+        return false;
+    }
+    if is_role_membership_ddl(sql)
+        || parse_raw_alter_schema_owner(sql).is_ok_and(|value| value.is_some())
+        || parse_raw_alter_view_owner(sql).is_ok_and(|value| value.is_some())
+    {
+        return true;
+    }
+    let Ok(statements) = parse_statements(sql) else {
+        return false;
+    };
+    let [statement] = statements.as_slice() else {
+        return false;
+    };
+    match statement {
+        Statement::CreateRole(_) | Statement::AlterRole { .. } => true,
+        Statement::Drop { object_type, .. } => {
+            matches!(object_type, ObjectType::Role | ObjectType::User)
+        }
+        Statement::AlterTable(table) => {
+            !table.operations.is_empty()
+                && table
+                    .operations
+                    .iter()
+                    .all(|operation| matches!(operation, AlterTableOperation::OwnerTo { .. }))
+        }
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod owner_administration_boundary_tests {
+    use super::*;
+
+    #[test]
+    fn only_native_role_and_owner_commands_select_the_boundary() {
+        for sql in [
+            "CREATE ROLE app_owner LOGIN NOSUPERUSER",
+            "ALTER ROLE app_owner NOLOGIN",
+            "DROP ROLE app_owner",
+            "GRANT app_owner TO app_login",
+            "ALTER SCHEMA \"Source Q\" OWNER TO app_owner",
+            "ALTER TABLE \"Source Q\".\"T\" OWNER TO app_owner",
+            "ALTER VIEW \"Source Q\".\"V\" OWNER TO app_owner",
+        ] {
+            assert!(postgres_owner_administration(sql), "{sql}");
+        }
+        for sql in [
+            "SELECT 'CREATE ROLE app_owner'",
+            "SELECT role,owner,login FROM source_rows",
+            "CREATE TABLE source_rows (role NUMBER,owner NUMBER)",
+            "GRANT SELECT ON source_rows TO app_owner",
+            "ALTER TABLE source_rows ADD COLUMN owner NUMBER",
+            "CREATE ROLE app_owner; SELECT 1",
+            "ALTER VIEW v OWNER TO app_owner; SELECT 1",
+        ] {
+            assert!(!postgres_owner_administration(sql), "{sql}");
+        }
+    }
+}
+
 pub fn lower_session_sql(
     db: &BicDb,
     sql: &str,
@@ -620,7 +694,7 @@ pub fn lower_session_sql(
     // whose application statements use Oracle syntax. Preserve those native
     // identifiers/operators; literals or mixed application queries do not
     // select this boundary.
-    if postgres_catalog_read(sql) {
+    if postgres_catalog_read(sql) || postgres_owner_administration(sql) {
         return Ok(sql.to_string());
     }
     let schema = preview_schema(db, search_path, user)?.unwrap_or_else(default_schema_name);

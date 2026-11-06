@@ -180,10 +180,12 @@ impl SqlEngine<'_> {
             handle.free_page_extents_while(pages, bytes, || operation.check().is_ok())?;
         operation.check()?;
         let inventory = inventory.ok_or_else(|| {
-            SqlError::BicDb(BicDbError::QueryBudgetExceeded {
-                resource: "storage_inventory_pages_or_read_bytes",
-                limit: pages,
-            })
+            SqlError::ResourceLimit {
+                sqlstate: "54000",
+                message: format!(
+                    "complete storage inventory exceeds configured admission limits ({pages} pages, {bytes} read bytes)"
+                ),
+            }
         })?;
         let mut rows = Vec::new();
         for extent in inventory.extents {

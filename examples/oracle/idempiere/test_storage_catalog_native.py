@@ -125,9 +125,9 @@ class StorageCatalogNativeTests(unittest.TestCase):
             c.execute('SELECT * FROM '+NATIVE+' WHERE 1=0')
             self.assertEqual([d.name for d in c.description], LABELS)
 
-    def test_inventory_reports_real_free_runs_and_refuses_partial_budget_results(self):
+    def check_inventory(self, profile):
         import psycopg
-        f = self.fixture('postgres')
+        f = self.fixture(profile)
         with f.conn.cursor() as c:
             c.execute('CREATE TABLE churn (id INTEGER PRIMARY KEY, body TEXT)')
             for start in range(0, 400, 50):
@@ -155,9 +155,8 @@ class StorageCatalogNativeTests(unittest.TestCase):
                 report = json.loads(report)
             self.assertEqual(sum(row[4] for row in runs), report['paged']['free_pages'])
             c.execute("SET bicdb.storage_inventory_max_read_bytes='1'")
-            with self.assertRaises(psycopg.Error) as raised:
+            with self.assertRaises(psycopg.errors.ProgramLimitExceeded):
                 c.execute('SELECT * FROM '+NATIVE)
-            self.assertIsNotNone(raised.exception.sqlstate)
             c.execute('RESET bicdb.storage_inventory_max_read_bytes')
             c.execute('SELECT count(*) FROM '+NATIVE)
             self.assertGreater(c.fetchone()[0], 0)
@@ -179,6 +178,12 @@ class StorageCatalogNativeTests(unittest.TestCase):
             self.assertEqual(sum(row[4] for row in runs), report['paged']['free_pages'])
             c.execute('SELECT count(*) FROM churn')
             self.assertEqual(c.fetchone(), (70,))
+
+    def test_postgres_inventory_reports_free_runs_and_refuses_partial_results(self):
+        self.check_inventory('postgres')
+
+    def test_oracle_inventory_reports_free_runs_and_refuses_partial_results(self):
+        self.check_inventory('oracle-preview-v1')
 
 
 if __name__ == '__main__':

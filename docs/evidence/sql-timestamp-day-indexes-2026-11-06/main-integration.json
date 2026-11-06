@@ -1,0 +1,52 @@
+{
+  "format": 1,
+  "source_commit": "e9a81d70c5e5e2f4556440fbe7099c147a379886",
+  "qualified_native_source_commit": "6a85543d74f8a0e38253ed92c39a442f140c6d36",
+  "incoming_main_commit": "f66844f",
+  "steps": [
+    {
+      "name": "day-index-sql",
+      "returncode": 0,
+      "log_sha256": "babf252144adb408cfd8178043ea39a85ec935998551f1651ccfc602ec964ba1",
+      "rust_test_targets": [
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "transport-savepoints",
+      "returncode": 0,
+      "log_sha256": "6de12fe09cc375cec5ca3f91995b2e4957465ba05e61521c56d5d817448acd6d",
+      "rust_test_targets": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "incoming-routine-and-ddl",
+      "returncode": 0,
+      "log_sha256": "a8ede2831b4aa6ee00aa2d270a08b50c3a740abc528480e090090e7c65a57185",
+      "rust_test_targets": [
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    }
+  ],
+  "success": true,
+  "native_binary_rebuilt": false,
+  "application_qualified": false
+}

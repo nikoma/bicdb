@@ -64,3 +64,12 @@ describe the Oracle and PostgreSQL CLI invocations and connection configuration.
 A native savepoint transport check uses `test_savepoint_recovery_native.py` in
 the [application tooling](../../../examples/oracle/idempiere/README.md), with
 `BICDB_ORACLE_SERVER` selecting a built compatibility-example executable.
+
+## Subsequent main integration
+
+Main gained an independent routine LIKE/ILIKE context fix during qualification.
+The [integration record](main-integration.json) identifies the merged source and
+its passing day-index (3), savepoint (2), DDL batch (3) and routine-pattern (2)
+checks. The full native/source record above remains tied to its exact earlier
+source and frozen binary. These focused integration results do not relabel that
+binary as a build of the later main source or establish an application upgrade.

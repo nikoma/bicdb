@@ -535,3 +535,28 @@ mod redo_tests {
         }
     }
 }
+
+// Storage-mode copy recreates physical row ownership while preserving the
+// complete logical collection contract, including empty vector dimensions and
+// below-SQL mutation grants. Call only after trusted rows have been copied.
+impl BicDb {
+    pub(crate) fn restore_migrated_collection_contract(
+        &mut self,
+        source: &CollectionMeta,
+    ) -> Result<()> {
+        self.ensure_writable("restore migrated collection contract")?;
+        if source.flashback.is_some() {
+            return Err(BicDbError::FormatCompatibility(
+                "flashback collection contract requires history/SCN migration".into(),
+            ));
+        }
+        let target = self.collection_state_mut(&source.name)?;
+        let mut copied = source.clone();
+        copied.storage_name = target.meta.storage_name.clone();
+        copied.renamed_from = None;
+        target.meta = copied;
+        self.persist_catalog()?;
+        self.schema_compatibility.invalidate();
+        Ok(())
+    }
+}

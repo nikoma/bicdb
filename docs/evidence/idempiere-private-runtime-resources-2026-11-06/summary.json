@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "qualification_source_commit": "b1bcd3bb966ae5b1720bf134b5faeaf51b66d75c",
+  "delivery_source_commit": "76c9636bc479896aaf91daec93d5eca963106908",
+  "delivered_file_contents_identical_to_qualified_source": true,
+  "helper_file_sha256": {
+    "examples/oracle/idempiere/prepare_runtime_resources.py": "a6342a9ab6519b243825d41be253bd5afe00d73059815655a134ce7016c778a2",
+    "examples/oracle/idempiere/test_prepare_runtime_resources.py": "8855983dbde6551fea49fe727a99c8bf362f8ce776b0f2690b49bc34c59afe84"
+  },
+  "unit_tests_passed": 6,
+  "pinned_upstream_commit": "da0730aec42f3e9f5f671e81a70ff71e24d5e534",
+  "original_resource_files_verified": 171,
+  "original_accounting_resource_sha256": "9fe1bdd4f05530752ea5a58739e776fcacf0c0aacadb32549cf5bbe6b14c4b62",
+  "resource_report_sha256": "7ec055ffc944f4c038414a733447e213f1739fea9f7283e0c1d84b6fad48fb7b",
+  "upstream_test_classes_changed": false,
+  "upstream_resources_unchanged": true,
+  "generated_seed_archives_copied": false,
+  "application_retest_qualified": false,
+  "full_application_qualified": false
+}

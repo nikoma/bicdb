@@ -1,6 +1,38 @@
 //! Explicit preview text rules; native PostgreSQL operators remain independent.
 use super::*;
 
+/// Preserve ESCAPE only where the expression parser identifies a LIKE suffix.
+/// The same nonreserved word still folds as an ordinary Oracle identifier in
+/// declarations, projections, pattern operands and qualified column names.
+pub(super) fn escape_positions(source: &[Token]) -> BTreeSet<usize> {
+    use sqlparser::dialect::{Dialect, Precedence};
+    let mut positions = BTreeSet::new();
+    if !source.iter().any(|token| word(token, "ESCAPE")) {
+        return positions;
+    }
+    let dialect = OracleDialect {};
+    for (index, token) in source.iter().enumerate() {
+        if !word(token, "LIKE") || (index > 0 && source[index - 1] == Token::Period) {
+            continue;
+        }
+        let mut parser = Parser::new(&dialect).with_tokens(source[index + 1..].to_vec());
+        if parser
+            .parse_subexpr(dialect.prec_value(Precedence::Like))
+            .is_ok()
+        {
+            // sqlparser reports the last consumed token, not the next one.
+            let suffix = index + 2 + parser.get_current_index();
+            if source
+                .get(suffix)
+                .is_some_and(|token| word(token, "ESCAPE"))
+            {
+                positions.insert(suffix);
+            }
+        }
+    }
+    positions
+}
+
 pub(crate) fn is_pattern_function(function: &sqlparser::ast::Function) -> bool {
     matches!(function.name.0.as_slice(), [part] if part.as_ident().is_some_and(|name|
         name.quote_style.is_none() && matches!(name.value.to_ascii_lowercase().as_str(), "regexp_substr" | "regexp_replace")))
@@ -52,6 +84,14 @@ pub(crate) fn convert_text_arguments(
 
 pub(crate) fn lower_expression(expr: &mut Expr) -> Result<()> {
     match expr {
+        Expr::Like { escape_char, .. } if escape_char.is_none() => {
+            // Oracle has no implicit escape character. The native PostgreSQL
+            // evaluator uses an empty explicit escape to disable its default
+            // backslash. Inject only after source empty strings became NULL;
+            // repeated lowering leaves the execution-local sentinel intact.
+            *escape_char = Some(sqlparser::ast::Value::SingleQuotedString(String::new()).into());
+        }
+
         Expr::Trim {
             expr: source,
             trim_where,
@@ -748,5 +788,40 @@ mod tests {
         let mut db = BicDb::open(root.path()).unwrap();
         ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
         assert!(SqlSession::new(&mut db).execute("CREATE FUNCTION future_compiler() RETURNS INTEGER LANGUAGE bicdb_oracle_preview_v30 AS $$BEGIN RETURN 7;END;$$").is_err());
+    }
+}
+
+#[cfg(test)]
+mod escape_grammar_tests {
+    use super::*;
+
+    #[test]
+    fn escape_suffixes_are_contextual_and_keep_identifier_operands() {
+        for profile in [ORACLE_HR_PROFILE, ORACLE_PREVIEW_PROFILE] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open(root.path()).unwrap();
+            ensure_database_profile(&mut db, profile).unwrap();
+            let mut session = SqlSession::new(&mut db);
+            for statement in [
+                "CREATE TABLE escape_words(escape VARCHAR2(30), label VARCHAR2(30))",
+                "INSERT INTO escape_words VALUES('I|_%','I_name')",
+                "INSERT INTO escape_words VALUES('T|_%','Text')",
+            ] {
+                let lowered =
+                    lower_session_sql(session.db_ref(), statement, profile, None, "bicdb").unwrap();
+                session.execute(&lowered).unwrap();
+            }
+            for (query, expected) in [
+                ("SELECT label FROM escape_words WHERE label LIKE 'I|_%' ESCAPE '|'", "I_name"),
+                ("SELECT label FROM escape_words WHERE label NOT LIKE 'I|_%' ESCAPE '|'", "Text"),
+                ("SELECT label FROM escape_words WHERE label LIKE escape ESCAPE '|'", "I_name"),
+                ("SELECT label FROM escape_words t WHERE t.label LIKE t.escape ESCAPE '|'", "I_name"),
+                ("SELECT label FROM escape_words WHERE label LIKE (SUBSTR('I',1,1)||'|_%') ESCAPE '|'", "I_name"),
+                ("SELECT escape FROM escape_words WHERE label='I_name'", "I|_%"),
+            ] {
+                let lowered = lower_session_sql(session.db_ref(), query, profile, None, "bicdb").unwrap();
+                assert_eq!(session.execute(&lowered).unwrap().rows, vec![vec![SqlValue::String(expected.into())]], "{query}: {lowered}");
+            }
+        }
     }
 }

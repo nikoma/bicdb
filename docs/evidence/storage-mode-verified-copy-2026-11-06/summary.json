@@ -1,0 +1,67 @@
+{
+  "format": 1,
+  "implementation_source_commit": "e5babd1b1372c2bc1664e83764b00943f77b68f7",
+  "cli_sha256": "d52a56e420b1349374d848f78304263cebea600e5801abc3d96cd05751740b43",
+  "tests": [
+    {
+      "name": "core-migration",
+      "passed": 5,
+      "ignored": 0,
+      "source_commit": "e5babd1b1372c2bc1664e83764b00943f77b68f7"
+    },
+    {
+      "name": "store_migrate_mode_cli",
+      "passed": 1,
+      "ignored": 0,
+      "source_commit": "e5babd1b1372c2bc1664e83764b00943f77b68f7"
+    },
+    {
+      "name": "user_password_env",
+      "passed": 4,
+      "ignored": 0,
+      "source_commit": "e5babd1b1372c2bc1664e83764b00943f77b68f7"
+    },
+    {
+      "name": "backup_online_cli",
+      "passed": 1,
+      "ignored": 0,
+      "source_commit": "e5babd1b1372c2bc1664e83764b00943f77b68f7",
+      "log": "/tmp/bicdb-storage-mode-copy-validation-nl_t2ygs/cli-regressions-after-pressure.log"
+    },
+    {
+      "name": "cell_mode_cli",
+      "passed": 3,
+      "ignored": 0,
+      "source_commit": "e5babd1b1372c2bc1664e83764b00943f77b68f7",
+      "log": "/tmp/bicdb-storage-mode-copy-validation-nl_t2ygs/cli-regressions-after-pressure.log"
+    },
+    {
+      "name": "export_cli",
+      "passed": 4,
+      "ignored": 0,
+      "source_commit": "e5babd1b1372c2bc1664e83764b00943f77b68f7",
+      "log": "/tmp/bicdb-storage-mode-copy-validation-nl_t2ygs/cli-regressions-after-pressure.log"
+    },
+    {
+      "name": "operator_cli",
+      "passed": 2,
+      "ignored": 0,
+      "source_commit": "e5babd1b1372c2bc1664e83764b00943f77b68f7",
+      "log": "/tmp/bicdb-storage-mode-copy-validation-nl_t2ygs/cli-regressions-after-pressure.log"
+    }
+  ],
+  "total_passed": 20,
+  "format_check_passed": true,
+  "initial_failed_core_source": "8cf3ceb35a013d4ad5ca9d6ef383b245ac89e05e",
+  "initial_failed_core_result": "4 passed, 1 protected-row authorization error; fixed using existing unchecked reads inside the exclusive offline copy",
+  "interrupted_validation_attempts": 2,
+  "interrupted_validation_reason": "host full memory PSI exceeded the 1 percent guard threshold; partial completed suites retained with exact revision",
+  "unfinished_unrelated_suites": [
+    "store_migrate_meta_cli second test",
+    "store_segment_cli not reached"
+  ],
+  "prior_unexecuted_command": "paged_recovery_cli requires separate bench feature; command rejected before CLI tests ran",
+  "application_paged_copy_qualified": false,
+  "application_qualified": false,
+  "full_oracle_programme_qualified": false
+}

@@ -86,6 +86,7 @@ fn embedded_memory_migrates_to_server_paged_with_data_and_indexes() {
     assert_eq!(report.target_mode, "server_paged");
     assert_eq!(report.collections, 2);
     assert_eq!(report.records, rows as u64 + 1);
+    assert_eq!(report.verified_records, report.records);
     assert_eq!(report.indexes, 2);
 
     // The source is untouched and still embedded_memory.
@@ -188,4 +189,94 @@ fn migration_refuses_unsafe_targets() {
         DEFAULT_MIGRATION_BATCH
     )
     .is_err());
+}
+
+#[test]
+fn round_trip_preserves_renamed_rows_and_collection_security_contracts() {
+    use bicdb_core::{CollectionPolicy, MutationPolicy};
+    let root = tempfile::tempdir().unwrap();
+    let source = root.path().join("source");
+    seed_source(&source, 17);
+    let mut db = BicDb::open(&source).unwrap();
+    db.rename_collection("landings", "renamed").unwrap();
+    db.set_mutation_policy(
+        "audit",
+        MutationPolicy {
+            append_only: true,
+            grants_required: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    db.set_collection_policy("audit", CollectionPolicy::tenant_field("tenant"))
+        .unwrap();
+    db.set_collection_mesh_sync_enabled("renamed", true)
+        .unwrap();
+    let expected = db.verification_manifest().unwrap().tables;
+    db.close().unwrap();
+    let paged = root.path().join("paged");
+    let first = migrate_storage_mode(&source, &paged, StorageMode::ServerPaged, 3).unwrap();
+    assert_eq!(first.records, 18);
+    assert_eq!(first.verified_records, 18);
+    let returned = root.path().join("returned");
+    let second = migrate_storage_mode(&paged, &returned, StorageMode::EmbeddedMemory, 2).unwrap();
+    assert_eq!(second.source_mode, "server_paged");
+    assert_eq!(second.verified_records, 18);
+    let db = BicDb::open(&returned).unwrap();
+    assert_eq!(expected, db.verification_manifest().unwrap().tables);
+    let audit = db
+        .collections()
+        .into_iter()
+        .find(|meta| meta.name == "audit")
+        .unwrap();
+    assert!(audit.mutation_policy.unwrap().append_only);
+    assert_eq!(audit.policy.unwrap().tenant_field, "tenant");
+    let renamed = db
+        .collections()
+        .into_iter()
+        .find(|meta| meta.name == "renamed")
+        .unwrap();
+    assert!(renamed.mesh_sync_enabled);
+    assert_eq!(db.index_definitions().len(), 2);
+}
+
+#[test]
+fn migration_refuses_live_source_and_does_not_claim_flashback_history_copy() {
+    let root = tempfile::tempdir().unwrap();
+    let source = root.path().join("source");
+    seed_source(&source, 2);
+    let mut db = BicDb::open(&source).unwrap();
+    let target = root.path().join("target");
+    assert!(migrate_storage_mode(&source, &target, StorageMode::ServerPaged, 1).is_err());
+    assert!(!target.exists());
+    db.enable_flashback("audit", 3600).unwrap();
+    db.close().unwrap();
+    let error = migrate_storage_mode(&source, &target, StorageMode::ServerPaged, 1).unwrap_err();
+    assert!(error.to_string().contains("history/SCN"));
+    assert!(!target.exists());
+}
+
+#[test]
+fn empty_vector_dimension_survives_copy() {
+    let root = tempfile::tempdir().unwrap();
+    let source = root.path().join("source");
+    let mut db = BicDb::open(&source).unwrap();
+    db.create_collection("vectors").unwrap();
+    db.insert(
+        "vectors",
+        Record::new("first").with_vector(vec![1.0, 2.0, 3.0]),
+    )
+    .unwrap();
+    db.delete("vectors", "first").unwrap();
+    assert_eq!(db.collections()[0].vector_dim, Some(3));
+    db.close().unwrap();
+    let target = root.path().join("target");
+    let report = migrate_storage_mode(&source, &target, StorageMode::ServerPaged, 1).unwrap();
+    assert_eq!(report.verified_records, 0);
+    let db = BicDb::open_with_config(
+        &target,
+        DbConfig::default().with_storage_mode(StorageMode::ServerPaged),
+    )
+    .unwrap();
+    assert_eq!(db.collections()[0].vector_dim, Some(3));
 }

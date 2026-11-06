@@ -1056,3 +1056,29 @@ adds bounded mutable values from `Connection.createBlob()` and real
 write/bind/free/read checks over PostgreSQL JDBC. This completes the client
 construction API for the documented scope, not writable persistent locators
 or full application compatibility.
+
+
+## Verified storage-mode copy prerequisite
+
+The [offline copy checkpoint](evidence/storage-mode-verified-copy-2026-11-06/README.md)
+adds durable readback verification, both migration directions and collection
+contract preservation. The application baseline remains unqualified on paged
+storage until its own values, owners, relationships, views, monitoring and
+application gates pass. Active flashback history requires an explicit SCN
+transfer contract and is refused by this copy operation.
+
+
+## Pattern grammar and default escaping
+
+The [LIKE ESCAPE checkpoint](evidence/oracle-like-escape-2026-11-06/README.md)
+adds contextual suffix parsing, identifier preservation and Oracle-preview
+default escaping with independent PostgreSQL controls. Original application
+retesting, explicit NULL escape semantics, full error/collation behavior and
+source-instance comparisons remain separate gates.
+
+The [original zoom-provider retest](evidence/idempiere-original-zoom-escape-2026-11-06/README.md)
+passes its unchanged original invocation with verified source, class and runtime
+origins. This resolves the observed ESCAPE parsing error for that class; the
+retest is excluded from distinct invocation totals. NULL-escape reference
+semantics, other retained failures and full application qualification remain
+open.

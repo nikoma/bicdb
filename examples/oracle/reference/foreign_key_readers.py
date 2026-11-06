@@ -9,7 +9,9 @@ from row_lock_waits import main as comparison_main
 
 
 CASES = [('immediate_children',False,False),('deferred_children',True,False),
-         ('unique_parent_nonkey_update',False,True),('savepoint_releases_reference',True,False)]
+         ('unique_parent_nonkey_update',False,True),('savepoint_releases_reference',True,False),
+         ('deferred_parent_key_move',True,False),('referenced_parent_move_rejected',False,False),
+         ('referenced_key_swap',False,False)]
 
 
 def observe(factory):
@@ -40,7 +42,38 @@ def observe(factory):
                     writers.append(two)
                     one.autocommit = two.autocommit = False
                     with one.cursor() as first,two.cursor() as second:
-                        if label == 'savepoint_releases_reference':
+                        if label == 'deferred_parent_key_move':
+                            first.execute(f'INSERT INTO {child} VALUES(1,1)')
+                            first.execute(f'UPDATE {parent} SET id=2 WHERE id=1')
+                            first.execute(f'UPDATE {child} SET parent_id=2 WHERE id=1')
+                            one.commit()
+                            cursor.execute(f'SELECT p.id,c.parent_id FROM {parent} p JOIN {child} c ON p.id=c.parent_id')
+                            actual=[int(value) for value in cursor.fetchone()]
+                            expected=[2,2]
+                        elif label == 'referenced_parent_move_rejected':
+                            cursor.execute(f'INSERT INTO {child} VALUES(1,1)')
+                            try:
+                                cursor.execute(f'UPDATE {parent} SET id=2 WHERE id=1')
+                            except Exception as error:
+                                code=getattr(error.args[0],'code',None) if error.args else None
+                                state=getattr(error,'sqlstate',None)
+                                assert (native and code==2292) or (not native and state=='23503')
+                                item['expected_rejection']=True
+                            else:
+                                raise AssertionError('committed reference was not protected')
+                            cursor.execute(f'SELECT p.id,c.parent_id FROM {parent} p JOIN {child} c ON p.id=c.parent_id')
+                            actual=[int(value) for value in cursor.fetchone()]
+                            expected=[1,1]
+                        elif label == 'referenced_key_swap':
+                            cursor.execute(f'INSERT INTO {parent} VALUES(2,8,20)')
+                            cursor.execute(f'INSERT INTO {child} VALUES(1,1)')
+                            cursor.execute(f'UPDATE {parent} SET id=3-id')
+                            cursor.execute(f'SELECT marker FROM {parent} WHERE id=1')
+                            actual=[int(cursor.fetchone()[0])]
+                            cursor.execute(f'SELECT parent_id FROM {child} WHERE id=1')
+                            actual.append(int(cursor.fetchone()[0]))
+                            expected=[8,1]
+                        elif label == 'savepoint_releases_reference':
                             first.execute('SAVEPOINT before_child')
                             first.execute(f'INSERT INTO {child} VALUES(1,1)')
                             first.execute('ROLLBACK TO before_child')
@@ -86,10 +119,10 @@ def run(source_factory,target_factory):
     cases=[dict(id=a['id'],source=a,bicdb=b,matched=a['id']==b['id'] and a['qualified'] and b['qualified'])
            for a,b in zip(source['cases'],target['cases'],strict=True)]
     cleanup=source['cleanup_errors']+target['cleanup_errors']
-    source_ok=source['driver_kind']=='oracle' and len(source['cases'])==4 and all(x['qualified'] for x in source['cases'])
+    source_ok=source['driver_kind']=='oracle' and len(source['cases'])==len(CASES) and all(x['qualified'] for x in source['cases'])
     return dict(format=1,cases=cases,total=len(cases),matched=sum(x['matched'] for x in cases),
                 source_qualified=source_ok,cleanup_errors=cleanup,
-                success=source_ok and len(cases)==4 and all(x['matched'] for x in cases) and not cleanup,
+                success=source_ok and len(cases)==len(CASES) and all(x['matched'] for x in cases) and not cleanup,
                 application_qualified=False)
 
 

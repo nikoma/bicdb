@@ -11,7 +11,7 @@ fn seeded(profile: &str, timing: &str) -> (tempfile::TempDir, BicDb) {
     )
     .unwrap();
     oracle::ensure_database_profile(&mut db, profile).unwrap();
-    SqlSession::new(&mut db).execute(&format!("CREATE TABLE parents(id INTEGER PRIMARY KEY,label INTEGER,code INTEGER UNIQUE); CREATE TABLE children(id INTEGER PRIMARY KEY,pid INTEGER,CONSTRAINT child_fk FOREIGN KEY(pid) REFERENCES parents(id) {timing}); INSERT INTO parents VALUES(1,0,10)")).unwrap();
+    SqlSession::new(&mut db).execute(&format!("CREATE TABLE parents(id INTEGER PRIMARY KEY,label INTEGER,code INTEGER UNIQUE); CREATE TABLE children(id INTEGER PRIMARY KEY,pid INTEGER,CONSTRAINT child_fk FOREIGN KEY(pid) REFERENCES parents(id) {timing}); CREATE TABLE unique_children(id INTEGER PRIMARY KEY,code INTEGER REFERENCES parents(code)); INSERT INTO parents VALUES(1,0,10)")).unwrap();
     (root, db)
 }
 
@@ -75,7 +75,6 @@ fn nonkey_parent_updates_and_unique_parent_references_do_not_exclude_child_write
     for profile in PROFILES {
         let (_root, db) = seeded(profile, "");
         let mut one = SqlSession::new_shared(&db);
-        one.execute("CREATE TABLE unique_children(id INTEGER PRIMARY KEY,code INTEGER REFERENCES parents(code))").unwrap();
         let mut two = SqlSession::new_shared(&db);
         let mut parent = SqlSession::new_shared(&db);
         one.execute("BEGIN; INSERT INTO unique_children VALUES(1,10)")
@@ -140,6 +139,89 @@ fn deferred_point_checks_follow_final_child_identity_and_discard_deleted_rows() 
         child.execute("ROLLBACK").unwrap();
         assert_eq!(
             child.execute("SELECT pid FROM children").unwrap().rows,
+            vec![vec![SqlValue::Int(1)]],
+            "{profile}"
+        );
+    }
+}
+
+#[test]
+fn deferred_parent_key_moves_and_child_followup_preserve_references() {
+    for profile in PROFILES {
+        let (_root, db) = seeded(profile, "DEFERRABLE INITIALLY DEFERRED");
+        let mut sql = SqlSession::new_shared(&db);
+        sql.execute("BEGIN; INSERT INTO children VALUES(1,1); UPDATE parents SET id=2 WHERE id=1; UPDATE children SET pid=2 WHERE id=1; COMMIT").unwrap();
+        assert_eq!(
+            sql.execute("SELECT p.id,c.pid FROM parents p JOIN children c ON p.id=c.pid")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(2), SqlValue::Int(2)]],
+            "{profile}"
+        );
+    }
+}
+
+#[test]
+fn committed_references_reject_parent_key_moves_without_losing_rows() {
+    for profile in PROFILES {
+        let (_root, db) = seeded(profile, "");
+        let mut sql = SqlSession::new_shared(&db);
+        sql.execute("INSERT INTO children VALUES(1,1)").unwrap();
+        assert_eq!(
+            sql.execute("UPDATE parents SET id=2 WHERE id=1")
+                .unwrap_err()
+                .sqlstate(),
+            "23503",
+            "{profile}"
+        );
+        assert_eq!(
+            sql.execute("SELECT p.id,c.pid FROM parents p JOIN children c ON p.id=c.pid")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(1), SqlValue::Int(1)]],
+            "{profile}"
+        );
+    }
+}
+
+#[test]
+fn parent_key_cascade_updates_nonkey_child_references() {
+    let (_root, mut db) = seeded(oracle::POSTGRES_PROFILE, "");
+    SqlSession::new(&mut db).execute("ALTER TABLE children DROP CONSTRAINT child_fk; ALTER TABLE children ADD CONSTRAINT child_fk FOREIGN KEY(pid) REFERENCES parents(id) ON UPDATE CASCADE; INSERT INTO children VALUES(1,1)").unwrap();
+    let mut sql = SqlSession::new_shared(&db);
+    sql.execute("UPDATE parents SET id=2 WHERE id=1").unwrap();
+    assert_eq!(
+        sql.execute("SELECT p.id,c.pid FROM parents p JOIN children c ON p.id=c.pid")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(2), SqlValue::Int(2)]]
+    );
+}
+
+#[test]
+fn no_action_observes_the_final_key_set_with_profile_specific_uniqueness() {
+    for profile in PROFILES {
+        let (_root, db) = seeded(profile, "");
+        let mut sql = SqlSession::new_shared(&db);
+        sql.execute("INSERT INTO parents VALUES(2,8,20); INSERT INTO children VALUES(1,1)")
+            .unwrap();
+        let moved = sql.execute("UPDATE parents SET id=3-id");
+        let label = if profile == oracle::POSTGRES_PROFILE {
+            assert_eq!(moved.unwrap_err().sqlstate(), "23505");
+            0
+        } else {
+            moved.unwrap();
+            8
+        };
+        assert_eq!(
+            sql.execute("SELECT label FROM parents WHERE id=1")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(label)]],
+            "{profile}"
+        );
+        assert_eq!(
+            sql.execute("SELECT pid FROM children").unwrap().rows,
             vec![vec![SqlValue::Int(1)]],
             "{profile}"
         );

@@ -4703,6 +4703,35 @@ impl RoutineFrame {
         Ok(())
     }
 
+    /// A query FOR target can be a scalar, or a record receiving the whole row.
+    /// Do not infer that distinction from the value: both start as NULL, and a
+    /// JSON scalar may itself contain an object. Undeclared implicit loop records
+    /// (including Oracle cursor records) retain the existing record behavior.
+    pub(crate) fn query_loop_target_is_scalar(&self, name: &str) -> bool {
+        fn is_row_type(kind: &UserTypeColumnSchema) -> bool {
+            if kind.array {
+                return false;
+            }
+            match &kind.kind {
+                UserTypeKind::Composite { .. } => true,
+                UserTypeKind::Domain { base_user_type, .. } => {
+                    base_user_type.as_deref().is_some_and(is_row_type)
+                }
+                _ => false,
+            }
+        }
+        let key = normalized_object_name_ref(name);
+        if let Some(kind) = self.registered_assignment_types.get(key.as_ref()) {
+            return !is_row_type(kind);
+        }
+        self.assignment_types
+            .get(key.as_ref())
+            .is_some_and(|schema| {
+                !matches!(schema.pg_type.as_str(), "record" | "trigger" | "void")
+                    && pg_type_oid_by_name(&schema.pg_type).is_some()
+            })
+    }
+
     /// User-visible assignment checks the declared type before changing a slot.
     /// Internal values such as FOUND continue to use the raw frame setters.
     pub(crate) fn assign(&mut self, name: &str, value: SqlValue) -> Result<()> {

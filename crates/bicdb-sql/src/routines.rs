@@ -18,6 +18,8 @@ mod node_ownership;
 pub(crate) mod parameterized_cursors;
 mod procedural_case;
 #[cfg(test)]
+mod query_loop_tests;
+#[cfg(test)]
 mod type_identity_tests;
 
 pub(crate) fn routine_record_value(columns: &[String], row: &[SqlValue]) -> SqlValue {

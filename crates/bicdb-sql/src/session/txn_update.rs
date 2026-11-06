@@ -4564,9 +4564,16 @@ impl<'db> SqlSession<'db> {
                 }
             }
         }
+        let scalar_target = frame.query_loop_target_is_scalar(target);
         for row in result.rows {
             self.cancellation.check()?;
-            frame.set(target, routine_record_value(&result.columns, &row));
+            if scalar_target {
+                // A single scalar target receives the first column, subject to
+                // its declared type and constraints, just like an INTO target.
+                frame.assign(target, row.into_iter().next().unwrap_or(SqlValue::Null))?;
+            } else {
+                frame.set(target, routine_record_value(&result.columns, &row));
+            }
             match self.execute_routine_statements(frame, body)? {
                 RoutineControl::Continue | RoutineControl::NextIteration => {}
                 RoutineControl::ExitLoop => break,

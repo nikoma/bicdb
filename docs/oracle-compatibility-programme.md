@@ -1047,3 +1047,12 @@ read-only allocator inventory foundation has page-manager regression coverage;
 Oracle view resolution, descriptors, monitoring grants and source/application
 qualification remain open. Host filesystem free space and fabricated empty
 results are not substitutes for reusable database extents.
+
+
+## JDBC client-created binary values
+
+The [client-created BLOB checkpoint](evidence/oracle-jdbc-created-blobs-2026-11-06/README.md)
+adds bounded mutable values from `Connection.createBlob()` and real
+write/bind/free/read checks over PostgreSQL JDBC. This completes the client
+construction API for the documented scope, not writable persistent locators
+or full application compatibility.

@@ -1203,23 +1203,51 @@ pub(crate) enum SavepointCommand {
     Release(String),
 }
 
-pub(crate) fn parse_savepoint_command(normalized: &str) -> Option<SavepointCommand> {
+pub(crate) fn parse_savepoint_command(sql: &str) -> Option<SavepointCommand> {
+    let normalized = normalize_executable_sql(sql);
     if !(normalized.starts_with("savepoint ")
         || normalized.starts_with("rollback to ")
         || normalized.starts_with("release "))
     {
         return None;
     }
-    let parts = normalized.split_whitespace().collect::<Vec<_>>();
-    match parts.as_slice() {
-        ["savepoint", name] => Some(SavepointCommand::Create((*name).to_string())),
-        ["rollback", "to", name] => Some(SavepointCommand::RollbackTo((*name).to_string())),
-        ["rollback", "to", "savepoint", name] => {
-            Some(SavepointCommand::RollbackTo((*name).to_string()))
-        }
-        ["release", name] => Some(SavepointCommand::Release((*name).to_string())),
-        ["release", "savepoint", name] => Some(SavepointCommand::Release((*name).to_string())),
-        _ => None,
+    let statements = Parser::parse_sql(&PostgreSqlDialect {}, sql).ok()?;
+    let command = match statements.as_slice() {
+        [sqlparser::ast::Statement::Savepoint { name }] => (0, name),
+        [sqlparser::ast::Statement::Rollback {
+            savepoint: Some(name),
+            ..
+        }] => (1, name),
+        [sqlparser::ast::Statement::ReleaseSavepoint { name }] => (2, name),
+        _ => return None,
+    };
+    // Oracle source names have already been folded/quoted by profile lowering.
+    // Transport identifiers must retain quoted case, spaces and escaped quotes.
+    let name = if command.1.quote_style.is_some() {
+        command.1.value.clone()
+    } else {
+        command.1.value.to_lowercase()
+    };
+    Some(match command.0 {
+        0 => SavepointCommand::Create(name),
+        1 => SavepointCommand::RollbackTo(name),
+        _ => SavepointCommand::Release(name),
+    })
+}
+
+fn missing_transport_savepoint(
+    server: &Arc<PgWireServer>,
+    state: &mut ConnectionState,
+    name: String,
+) -> PgWireError {
+    if server.config.sql_profile == bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE {
+        // Lookup failed before any write, lock or savepoint state was changed.
+        // Preserve Oracle statement recovery without clearing an existing
+        // unrecovered transaction failure. PostgreSQL keeps its abort behavior.
+        state.oracle_error_recovered = true;
+        bicdb_sql::oracle::invalid_savepoint_error(&name).into()
+    } else {
+        SqlError::InvalidSavepoint { name }.into()
     }
 }
 
@@ -1267,7 +1295,7 @@ pub(crate) fn execute_savepoint_command(
                 .iter()
                 .rposition(|savepoint| savepoint.name == name)
             else {
-                return Err(SqlError::InvalidSavepoint { name }.into());
+                return Err(missing_transport_savepoint(server, state, name));
             };
             let statement_len = state.savepoints[position].statement_len;
             let ddl_undo_len = state.savepoints[position].ddl_undo_len;
@@ -1303,7 +1331,7 @@ pub(crate) fn execute_savepoint_command(
                 .iter()
                 .rposition(|savepoint| savepoint.name == name)
             else {
-                return Err(SqlError::InvalidSavepoint { name }.into());
+                return Err(missing_transport_savepoint(server, state, name));
             };
             state.savepoints.truncate(position);
             Ok(SqlResult::command("RELEASE"))

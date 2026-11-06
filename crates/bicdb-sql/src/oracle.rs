@@ -55,6 +55,16 @@ mod transport_savepoints;
 pub const ORACLE_HR_PROFILE: &str = "oracle-hr-v1";
 pub const ORACLE_PREVIEW_PROFILE: &str = "oracle-preview-v1";
 pub const POSTGRES_PROFILE: &str = "postgres";
+
+/// Oracle savepoint diagnostics over the selected PostgreSQL transport.
+pub fn invalid_savepoint_error(name: &str) -> SqlError {
+    errors::database_error(
+        -1086,
+        "3B001",
+        &format!("savepoint '{name}' never established in this session or is invalid"),
+    )
+}
+
 pub(crate) const PROFILE_COLLECTION: &str = "__bicdb_sql_compatibility";
 
 fn metadata_v2() -> JsonValue {

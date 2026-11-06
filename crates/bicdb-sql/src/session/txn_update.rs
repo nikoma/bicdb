@@ -2702,6 +2702,96 @@ impl<'db> SqlSession<'db> {
                     SqlError::Unsupported(format!("unsupported value expression {expr}"))
                 })
             }
+            Expr::Like { .. } | Expr::ILike { .. } => self.eval_session_like_expr(expr),
+            Expr::Function(function) if is_sequence_function(function)? => {
+                self.eval_sequence_function(function)
+            }
+            Expr::Function(function) if is_set_config_function(function)? => {
+                self.eval_set_config_function(function)
+            }
+            Expr::Function(function)
+                if matches!(function.args, FunctionArguments::Subquery(_))
+                    && object_name_lowercase(&function.name)? == "array" =>
+            {
+                let FunctionArguments::Subquery(query) = &function.args else {
+                    unreachable!()
+                };
+                let result = self.execute_query(query)?;
+                Ok(array_value(subquery_values(result)?))
+            }
+            Expr::Function(function) => self.eval_session_function_expr(expr, function),
+            Expr::Cast {
+                expr, data_type, ..
+            } => self.eval_session_cast_expr(expr, data_type),
+            Expr::Position { .. }
+            | Expr::Substring { .. }
+            | Expr::Trim { .. }
+            | Expr::Overlay { .. } => self.eval_session_text_expr(expr),
+            Expr::InList { .. } | Expr::Between { .. } => self.eval_session_membership_expr(expr),
+            Expr::AnyOp { .. } | Expr::AllOp { .. } => self.eval_session_quantified_expr(expr),
+            Expr::BinaryOp { .. } => self.eval_session_binary_expr(expr),
+            Expr::IsDistinctFrom(_, _)
+            | Expr::IsNotDistinctFrom(_, _)
+            | Expr::IsNull(_)
+            | Expr::IsNotNull(_) => self.eval_session_comparison_expr(expr),
+            Expr::UnaryOp { op, expr } if op.to_string().eq_ignore_ascii_case("NOT") => {
+                Ok(sql_not(sql_value_truth(self.eval_session_expr(expr)?)?)
+                    .map(SqlValue::Bool)
+                    .unwrap_or(SqlValue::Null))
+            }
+            Expr::UnaryOp {
+                op: UnaryOperator::Minus,
+                expr,
+            } => {
+                let value = self.eval_session_expr(expr)?;
+                let kind = self.routine_unary_operand_type(expr);
+                eval_unary_minus_typed_value(value, kind.as_deref())
+            }
+            Expr::UnaryOp {
+                op: UnaryOperator::Plus,
+                expr,
+            } => {
+                let value = self.eval_session_expr(expr)?;
+                let kind = self.routine_unary_operand_type(expr);
+                eval_unary_plus_typed_value(value, kind.as_deref())
+            }
+            Expr::UnaryOp { op, expr }
+                if matches!(
+                    op,
+                    UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
+                ) || is_geometric_unary_operator(op) =>
+            {
+                eval_unary_bit_not_expr_value(op, expr, self.eval_session_expr(expr)?, None)
+            }
+            Expr::Extract { field, expr, .. } => {
+                eval_extract_value(field, self.eval_session_expr(expr)?)
+            }
+            Expr::Tuple(_) | Expr::Array(_) => self.eval_session_collection_expr(expr),
+            Expr::CompoundFieldAccess { root, access_chain } => eval_access_chain_expr(
+                root,
+                access_chain,
+                projected_expr_pg_type_with_db(self.db_ref(), root).as_deref() == Some("jsonb"),
+                |expr| self.eval_session_expr(expr),
+            ),
+            Expr::Interval(interval) => {
+                interval_literal_value(interval, |expr| self.eval_session_expr(expr))
+            }
+            Expr::Subquery(_) | Expr::InSubquery { .. } | Expr::Exists { .. } => {
+                self.eval_session_query_expr(expr)
+            }
+            Expr::Collate { expr, collation } => {
+                normalize_column_collation(collation)?;
+                self.eval_session_expr(expr)
+            }
+            Expr::Case { .. } => self.eval_session_case_expr(expr),
+            _ => eval_constant_expr(expr),
+        }
+    }
+
+    // Outlined arms keep the recursive evaluator small on ordinary worker stacks.
+    #[inline(never)]
+    fn eval_session_like_expr(&mut self, expr: &Expr) -> Result<SqlValue> {
+        match expr {
             Expr::Like {
                 negated,
                 any,
@@ -2733,41 +2823,13 @@ impl<'db> SqlSession<'db> {
                 .map(SqlValue::Bool)
                 .unwrap_or(SqlValue::Null))
             }
-            Expr::Function(function) if is_sequence_function(function)? => {
-                self.eval_sequence_function(function)
-            }
-            Expr::Function(function) if is_set_config_function(function)? => {
-                self.eval_set_config_function(function)
-            }
-            Expr::Function(function)
-                if matches!(function.args, FunctionArguments::Subquery(_))
-                    && object_name_lowercase(&function.name)? == "array" =>
-            {
-                let FunctionArguments::Subquery(query) = &function.args else {
-                    unreachable!()
-                };
-                let result = self.execute_query(query)?;
-                Ok(array_value(subquery_values(result)?))
-            }
-            Expr::Function(function) => self.eval_session_function_expr(expr, function),
-            Expr::Cast {
-                expr, data_type, ..
-            } => {
-                if let Some(source) = regclass_display_cast_source(expr, data_type) {
-                    let value = self.eval_session_expr(source)?;
-                    return regclass_text_value(self.db_ref(), value);
-                }
-                if let Some(source) = regtype_text_cast_source(expr, data_type)? {
-                    let value = self.eval_session_expr(source)?;
-                    return regtype_text_value(self.db_ref(), value);
-                }
-                if let Some(source) = regclass_text_cast_source(expr, data_type)? {
-                    let value = self.eval_session_expr(source)?;
-                    return regclass_text_value(self.db_ref(), value);
-                }
-                let value = self.eval_session_expr(expr)?;
-                cast_expr_value_with_db(self.db_ref(), value, expr, data_type, None)
-            }
+            _ => unreachable!("like expression required"),
+        }
+    }
+
+    #[inline(never)]
+    fn eval_session_text_expr(&mut self, expr: &Expr) -> Result<SqlValue> {
+        match expr {
             Expr::Position { expr, r#in } => eval_position_typed_value(
                 self.eval_session_expr(expr)?,
                 self.eval_session_expr(r#in)?,
@@ -2827,6 +2889,13 @@ impl<'db> SqlSession<'db> {
                     bytea,
                 )
             }
+            _ => unreachable!("text expression required"),
+        }
+    }
+
+    #[inline(never)]
+    fn eval_session_membership_expr(&mut self, expr: &Expr) -> Result<SqlValue> {
+        match expr {
             Expr::InList {
                 expr,
                 list,
@@ -2862,57 +2931,13 @@ impl<'db> SqlSession<'db> {
             )?
             .map(SqlValue::Bool)
             .unwrap_or(SqlValue::Null)),
-            Expr::AnyOp {
-                left,
-                compare_op,
-                right,
-                ..
-            }
-            | Expr::AllOp {
-                left,
-                compare_op,
-                right,
-            } => {
-                let all = matches!(expr, Expr::AllOp { .. });
-                let left_value = self.eval_session_expr(left)?;
-                let mut operand = right.as_ref();
-                while let Expr::Nested(inner) = operand {
-                    operand = inner;
-                }
-                let truth = if let Expr::Subquery(query) = operand {
-                    let result = self.execute_query(query)?;
-                    if result.columns.len() != 1 {
-                        return Err(SqlError::InvalidSql("subquery has too many columns".into()));
-                    }
-                    eval_quantified_values_truth(
-                        &left_value,
-                        compare_op,
-                        result.rows.iter().filter_map(|row| row.first()),
-                        all,
-                    )?
-                } else {
-                    let right_type = self.routine_unary_operand_type(right);
-                    if right_type.as_deref().is_some_and(|kind| {
-                        pg_type_oid_by_name(kind).is_some()
-                            && !kind.ends_with("[]")
-                            && !matches!(kind, "int2vector" | "oidvector")
-                    }) {
-                        return Err(SqlError::data_exception(
-                            "42809",
-                            "op ANY/ALL (array) requires array on right side",
-                            None,
-                        ));
-                    }
-                    let right_value = self.eval_session_expr(right)?;
-                    eval_quantified_truth(
-                        left_value,
-                        compare_op,
-                        quantified_operand_value(right_value, right_type.as_deref())?,
-                        all,
-                    )?
-                };
-                Ok(truth.map(SqlValue::Bool).unwrap_or(SqlValue::Null))
-            }
+            _ => unreachable!("membership expression required"),
+        }
+    }
+
+    #[inline(never)]
+    fn eval_session_binary_expr(&mut self, expr: &Expr) -> Result<SqlValue> {
+        match expr {
             Expr::BinaryOp {
                 left,
                 op: BinaryOperator::And,
@@ -2968,6 +2993,13 @@ impl<'db> SqlSession<'db> {
                     )
                 }
             }
+            _ => unreachable!("binary expression required"),
+        }
+    }
+
+    #[inline(never)]
+    fn eval_session_comparison_expr(&mut self, expr: &Expr) -> Result<SqlValue> {
+        match expr {
             Expr::IsDistinctFrom(left, right) => {
                 let mut eval = |expr: &Expr| self.eval_session_expr(expr);
                 if let Some(not_distinct) = eval_tuple_not_distinct(left, right, &mut eval)? {
@@ -2994,38 +3026,13 @@ impl<'db> SqlSession<'db> {
             Expr::IsNotNull(expr) => Ok(SqlValue::Bool(value_is_not_null_predicate(
                 &self.eval_session_expr(expr)?,
             ))),
-            Expr::UnaryOp { op, expr } if op.to_string().eq_ignore_ascii_case("NOT") => {
-                Ok(sql_not(sql_value_truth(self.eval_session_expr(expr)?)?)
-                    .map(SqlValue::Bool)
-                    .unwrap_or(SqlValue::Null))
-            }
-            Expr::UnaryOp {
-                op: UnaryOperator::Minus,
-                expr,
-            } => {
-                let value = self.eval_session_expr(expr)?;
-                let kind = self.routine_unary_operand_type(expr);
-                eval_unary_minus_typed_value(value, kind.as_deref())
-            }
-            Expr::UnaryOp {
-                op: UnaryOperator::Plus,
-                expr,
-            } => {
-                let value = self.eval_session_expr(expr)?;
-                let kind = self.routine_unary_operand_type(expr);
-                eval_unary_plus_typed_value(value, kind.as_deref())
-            }
-            Expr::UnaryOp { op, expr }
-                if matches!(
-                    op,
-                    UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
-                ) || is_geometric_unary_operator(op) =>
-            {
-                eval_unary_bit_not_expr_value(op, expr, self.eval_session_expr(expr)?, None)
-            }
-            Expr::Extract { field, expr, .. } => {
-                eval_extract_value(field, self.eval_session_expr(expr)?)
-            }
+            _ => unreachable!("comparison expression required"),
+        }
+    }
+
+    #[inline(never)]
+    fn eval_session_collection_expr(&mut self, expr: &Expr) -> Result<SqlValue> {
+        match expr {
             Expr::Tuple(exprs) => {
                 let values = exprs
                     .iter()
@@ -3047,15 +3054,13 @@ impl<'db> SqlSession<'db> {
                         .collect::<Result<Vec<_>>>()?,
                 )
             }
-            Expr::CompoundFieldAccess { root, access_chain } => eval_access_chain_expr(
-                root,
-                access_chain,
-                projected_expr_pg_type_with_db(self.db_ref(), root).as_deref() == Some("jsonb"),
-                |expr| self.eval_session_expr(expr),
-            ),
-            Expr::Interval(interval) => {
-                interval_literal_value(interval, |expr| self.eval_session_expr(expr))
-            }
+            _ => unreachable!("collection expression required"),
+        }
+    }
+
+    #[inline(never)]
+    fn eval_session_query_expr(&mut self, expr: &Expr) -> Result<SqlValue> {
+        match expr {
             Expr::Subquery(query) => self.execute_scalar_subquery(query),
             Expr::InSubquery {
                 expr,
@@ -3098,10 +3103,13 @@ impl<'db> SqlSession<'db> {
                 let result = self.execute_query(subquery)?;
                 Ok(SqlValue::Bool(result.rows.is_empty() == *negated))
             }
-            Expr::Collate { expr, collation } => {
-                normalize_column_collation(collation)?;
-                self.eval_session_expr(expr)
-            }
+            _ => unreachable!("query expression required"),
+        }
+    }
+
+    #[inline(never)]
+    fn eval_session_case_expr(&mut self, expr: &Expr) -> Result<SqlValue> {
+        match expr {
             Expr::Case {
                 operand,
                 conditions,
@@ -3140,7 +3148,84 @@ impl<'db> SqlSession<'db> {
                     .map(|result| self.eval_session_expr(result))
                     .unwrap_or(Ok(SqlValue::Null))
             }
-            _ => eval_constant_expr(expr),
+            _ => unreachable!("case expression required"),
+        }
+    }
+
+    // Keep query/cast temporaries off the recursive operator evaluation stack.
+    #[inline(never)]
+    fn eval_session_cast_expr(&mut self, expr: &Expr, data_type: &DataType) -> Result<SqlValue> {
+        if let Some(source) = regclass_display_cast_source(expr, data_type) {
+            let value = self.eval_session_expr(source)?;
+            return regclass_text_value(self.db_ref(), value);
+        }
+        if let Some(source) = regtype_text_cast_source(expr, data_type)? {
+            let value = self.eval_session_expr(source)?;
+            return regtype_text_value(self.db_ref(), value);
+        }
+        if let Some(source) = regclass_text_cast_source(expr, data_type)? {
+            let value = self.eval_session_expr(source)?;
+            return regclass_text_value(self.db_ref(), value);
+        }
+        let value = self.eval_session_expr(expr)?;
+        cast_expr_value_with_db(self.db_ref(), value, expr, data_type, None)
+    }
+
+    #[inline(never)]
+    fn eval_session_quantified_expr(&mut self, expr: &Expr) -> Result<SqlValue> {
+        match expr {
+            Expr::AnyOp {
+                left,
+                compare_op,
+                right,
+                ..
+            }
+            | Expr::AllOp {
+                left,
+                compare_op,
+                right,
+            } => {
+                let all = matches!(expr, Expr::AllOp { .. });
+                let left_value = self.eval_session_expr(left)?;
+                let mut operand = right.as_ref();
+                while let Expr::Nested(inner) = operand {
+                    operand = inner;
+                }
+                let truth = if let Expr::Subquery(query) = operand {
+                    let result = self.execute_query(query)?;
+                    if result.columns.len() != 1 {
+                        return Err(SqlError::InvalidSql("subquery has too many columns".into()));
+                    }
+                    eval_quantified_values_truth(
+                        &left_value,
+                        compare_op,
+                        result.rows.iter().filter_map(|row| row.first()),
+                        all,
+                    )?
+                } else {
+                    let right_type = self.routine_unary_operand_type(right);
+                    if right_type.as_deref().is_some_and(|kind| {
+                        pg_type_oid_by_name(kind).is_some()
+                            && !kind.ends_with("[]")
+                            && !matches!(kind, "int2vector" | "oidvector")
+                    }) {
+                        return Err(SqlError::data_exception(
+                            "42809",
+                            "op ANY/ALL (array) requires array on right side",
+                            None,
+                        ));
+                    }
+                    let right_value = self.eval_session_expr(right)?;
+                    eval_quantified_truth(
+                        left_value,
+                        compare_op,
+                        quantified_operand_value(right_value, right_type.as_deref())?,
+                        all,
+                    )?
+                };
+                Ok(truth.map(SqlValue::Bool).unwrap_or(SqlValue::Null))
+            }
+            _ => unreachable!("quantified expression required"),
         }
     }
 

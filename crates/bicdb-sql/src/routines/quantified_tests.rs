@@ -96,17 +96,30 @@ fn routine_quantified_subquery_uses_routine_parameters_and_checks_column_count()
 }
 
 #[test]
-fn routine_series_arguments_resolve_from_the_frame_without_planning_side_effects() {
-    let source = r#"CREATE SEQUENCE series_probe_sequence;
+fn routine_series_arguments_resolve_from_the_frame_and_preserve_read_only_row_calls() {
+    let source = r#"CREATE TABLE series_probe_calls(id integer PRIMARY KEY, n integer);
+        INSERT INTO series_probe_calls VALUES(1,0);
+        CREATE FUNCTION series_probe_tick() RETURNS integer LANGUAGE plpgsql AS $$
+            BEGIN UPDATE series_probe_calls SET n=n+1 WHERE id=1; RETURN 1; END $$;
         CREATE FUNCTION series_probe(stop integer) RETURNS integer LANGUAGE plpgsql AS $$
-            BEGIN RETURN (SELECT count(*)::integer FROM generate_series(nextval('series_probe_sequence'),stop) n); END $$"#;
+            DECLARE total integer; calls integer;
+            BEGIN
+                SELECT count(*)::integer INTO total FROM generate_series(series_probe_tick(),stop) n;
+                SELECT n INTO calls FROM series_probe_calls WHERE id=1;
+                RETURN total * 10 + calls;
+            END $$"#;
+    let directory = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(directory.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute(source).unwrap();
+    let error = session.execute("SELECT series_probe(3)").unwrap_err();
+    assert!(matches!(error,SqlError::Unsupported(ref text) if text.contains("can only read data")));
     assert_eq!(
-        scalar(
-            source,
-            "SELECT series_probe(3) + currval('series_probe_sequence')::integer"
-        )
-        .unwrap(),
-        SqlValue::Int(4)
+        session
+            .execute("SELECT n FROM series_probe_calls WHERE id=1")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(0)]]
     );
     let source = r#"CREATE FUNCTION series_dates(lo timestamp, hi timestamp, step interval) RETURNS integer LANGUAGE plpgsql AS $$
         BEGIN RETURN (SELECT count(*)::integer FROM generate_series(lo,hi,step) n); END $$"#;
@@ -118,6 +131,30 @@ fn routine_series_arguments_resolve_from_the_frame_without_planning_side_effects
         .unwrap(),
         SqlValue::Int(3)
     );
+}
+
+#[test]
+fn routine_jsonb_numeric_cast_preserves_exact_numbers_and_rejects_other_json_kinds() {
+    let source = r#"CREATE FUNCTION json_numeric(value jsonb) RETURNS numeric LANGUAGE plpgsql AS $$
+        BEGIN RETURN value::numeric; END $$"#;
+    for value in ["0", "2.50", "-1.25", "9007199254740993.125"] {
+        assert_eq!(
+            scalar(
+                source,
+                &format!("SELECT json_numeric('{value}'::jsonb)::text")
+            )
+            .unwrap(),
+            SqlValue::String(value.into())
+        );
+    }
+    for value in ["null", "\"0\"", "true", "[]", "{}"] {
+        assert_eq!(
+            scalar(source, &format!("SELECT json_numeric('{value}'::jsonb)"))
+                .unwrap_err()
+                .sqlstate(),
+            "22023"
+        );
+    }
 }
 
 #[test]
@@ -142,54 +179,64 @@ fn routine_quantified_ordinary_text_is_not_a_catalog_vector() {
 #[test]
 fn routine_monitoring_validator_accepts_actual_application_config_and_rejects_unknown_measurement()
 {
-    let ddl = include_str!("../../tests/fixtures/ehr-monitoring-validator.sql");
-    let config: JsonValue = serde_json::from_str(include_str!(
-        "../../tests/fixtures/ehr-monitoring-config.json"
-    ))
-    .unwrap();
-    let validate = |config: &JsonValue| {
-        let text = serde_json::to_string(config).unwrap().replace('\'', "''");
-        scalar(
-            ddl,
-            &format!("SELECT monitoring_validate_config('{text}'::jsonb)"),
-        )
-    };
-    let SqlValue::Json(result) = validate(&config).unwrap() else {
-        panic!("JSON validator response required")
-    };
-    assert_eq!(
-        result["valid"],
-        JsonValue::Bool(true),
-        "{}",
-        result["errors"]
-    );
-    let mut invalid = config.clone();
-    invalid["forms"][0]["mappings"][0]["measurement"] =
-        JsonValue::String("unknown_measurement".into());
-    let SqlValue::Json(result) = validate(&invalid).unwrap() else {
-        panic!("JSON validator response required")
-    };
-    assert_eq!(result["valid"], JsonValue::Bool(false));
-    assert!(result["errors"]
-        .as_array()
+    // Exercise the complete real validator on an ordinary protocol worker stack,
+    // independent of a developer's RUST_MIN_STACK test configuration.
+    std::thread::Builder::new()
+        .name("ehr-monitoring-validator-stack".into())
+        .stack_size(2 * 1024 * 1024)
+        .spawn(|| {
+            let ddl = include_str!("../../tests/fixtures/ehr-monitoring-validator.sql");
+            let config: JsonValue = serde_json::from_str(include_str!(
+                "../../tests/fixtures/ehr-monitoring-config.json"
+            ))
+            .unwrap();
+            let validate = |config: &JsonValue| {
+                let text = serde_json::to_string(config).unwrap().replace('\'', "''");
+                scalar(
+                    ddl,
+                    &format!("SELECT monitoring_validate_config('{text}'::jsonb)"),
+                )
+            };
+            let SqlValue::Json(result) = validate(&config).unwrap() else {
+                panic!("JSON validator response required")
+            };
+            assert_eq!(
+                result["valid"],
+                JsonValue::Bool(true),
+                "{}",
+                result["errors"]
+            );
+            let mut invalid = config.clone();
+            invalid["forms"][0]["mappings"][0]["measurement"] =
+                JsonValue::String("unknown_measurement".into());
+            let SqlValue::Json(result) = validate(&invalid).unwrap() else {
+                panic!("JSON validator response required")
+            };
+            assert_eq!(result["valid"], JsonValue::Bool(false));
+            assert!(result["errors"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|value| value.as_str().unwrap().contains("unknown measurement")));
+            for (description, expected) in [
+                ("a".repeat(135000), true),
+                ("é".repeat(135000), false),
+                ("a".repeat(270000), false),
+            ] {
+                let mut sized = config.clone();
+                sized["description"] = JsonValue::String(description);
+                let SqlValue::Json(result) = validate(&sized).unwrap() else {
+                    panic!("JSON validator response required")
+                };
+                assert_eq!(
+                    result["valid"],
+                    JsonValue::Bool(expected),
+                    "{}",
+                    result["errors"]
+                );
+            }
+        })
         .unwrap()
-        .iter()
-        .any(|value| value.as_str().unwrap().contains("unknown measurement")));
-    for (description, expected) in [
-        ("a".repeat(135000), true),
-        ("é".repeat(135000), false),
-        ("a".repeat(270000), false),
-    ] {
-        let mut sized = config.clone();
-        sized["description"] = JsonValue::String(description);
-        let SqlValue::Json(result) = validate(&sized).unwrap() else {
-            panic!("JSON validator response required")
-        };
-        assert_eq!(
-            result["valid"],
-            JsonValue::Bool(expected),
-            "{}",
-            result["errors"]
-        );
-    }
+        .join()
+        .unwrap();
 }

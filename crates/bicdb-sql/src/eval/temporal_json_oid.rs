@@ -536,32 +536,7 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
             enforce_integer_range(value, pg_type).map(SqlValue::Int)
         }
         "float4" | "float8" => cast_value_to_float(value, pg_type),
-        "numeric" => match value {
-            SqlValue::Int(value) => Ok(SqlValue::String(value.to_string())),
-            SqlValue::String(value) => PgNumeric::from_postgres_text(&value)
-                .map(|value| SqlValue::String(value.to_decimal_text()))
-                .map_err(|error| match error {
-                    PgCanonicalValueError::NumericOverflow => {
-                        SqlError::numeric_value_out_of_range("value overflows numeric format")
-                    }
-                    _ => SqlError::InvalidTextRepresentation(format!(
-                        "invalid input syntax for type numeric: \"{value}\""
-                    )),
-                }),
-            SqlValue::Float(value) => Ok(SqlValue::String(if value.is_nan() {
-                "NaN".to_string()
-            } else if value == f64::INFINITY {
-                "Infinity".to_string()
-            } else if value == f64::NEG_INFINITY {
-                "-Infinity".to_string()
-            } else {
-                canonical_float_decimal(value)?
-            })),
-            other => Err(SqlError::InvalidTextRepresentation(format!(
-                "cannot cast {} to numeric",
-                other.to_cell()
-            ))),
-        },
+        "numeric" => cast_value_to_numeric(value),
         "money" => {
             let text = match value {
                 SqlValue::Int(value) => value.to_string(),
@@ -3837,4 +3812,59 @@ fn time_after_date_prefix(text: &str) -> Option<PgTime> {
         let cut = rest.rfind(['+', '-'])?;
         PgTime::from_postgres_text(&rest[..cut]).ok()
     })
+}
+
+#[inline(never)]
+fn cast_value_to_numeric(value: SqlValue) -> Result<SqlValue> {
+    match value {
+        SqlValue::Json(value) => {
+            if let JsonValue::Number(number) = value.as_ref() {
+                // Preserve arbitrary-precision JSON numbers instead of
+                // rounding clinical thresholds through f64.
+                parse_numeric_value(&number.to_string())
+            } else {
+                let kind = match value.as_ref() {
+                    JsonValue::Null => "null",
+                    JsonValue::Bool(_) => "boolean",
+                    JsonValue::String(_) => "string",
+                    JsonValue::Array(_) => "array",
+                    JsonValue::Object(_) => "object",
+                    JsonValue::Number(_) => unreachable!(),
+                };
+                Err(SqlError::data_exception(
+                    "22023",
+                    format!("cannot cast jsonb {kind} to type numeric"),
+                    None,
+                ))
+            }
+        }
+        SqlValue::Int(value) => Ok(SqlValue::String(value.to_string())),
+        SqlValue::String(value) => parse_numeric_value(&value),
+        SqlValue::Float(value) => Ok(SqlValue::String(if value.is_nan() {
+            "NaN".to_string()
+        } else if value == f64::INFINITY {
+            "Infinity".to_string()
+        } else if value == f64::NEG_INFINITY {
+            "-Infinity".to_string()
+        } else {
+            canonical_float_decimal(value)?
+        })),
+        other => Err(SqlError::InvalidTextRepresentation(format!(
+            "cannot cast {} to numeric",
+            other.to_cell()
+        ))),
+    }
+}
+
+fn parse_numeric_value(value: &str) -> Result<SqlValue> {
+    PgNumeric::from_postgres_text(value)
+        .map(|value| SqlValue::String(value.to_decimal_text()))
+        .map_err(|error| match error {
+            PgCanonicalValueError::NumericOverflow => {
+                SqlError::numeric_value_out_of_range("value overflows numeric format")
+            }
+            _ => SqlError::InvalidTextRepresentation(format!(
+                "invalid input syntax for type numeric: \"{value}\""
+            )),
+        })
 }

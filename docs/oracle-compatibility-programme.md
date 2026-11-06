@@ -36,6 +36,12 @@ families match through Parse/Describe without executing rows. Independent native
 PostgreSQL and Oracle-preview controls pass. Exact descriptors, values, routine
 rights and full application/schema acceptance remain separate gates.
 
+The [pristine FK migration checkpoint](evidence/idempiere-pristine-foreign-keys-2026-11-06/README.md)
+completes all 3,826 source-declared relationships and before/after value
+fingerprints for 888 affected tables. Validation, deferment and delete actions
+are preserved. Full source-value equality, orphan reconciliation and original
+application acceptance on this baseline remain separate gates.
+
 The [full-FK foundation checkpoint](evidence/idempiere-full-fk-foundation-2026-11-05/README.md)
 passes all 89 selected original application tests, with zero failures/errors/skips,
 verified Oracle-provider/PostgreSQL-driver origins and clean JVM/database exits.

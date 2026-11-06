@@ -1,0 +1,36 @@
+{
+  "format": 1,
+  "status": "pristine_source_declared_fk_migration_verified",
+  "source_manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+  "migration_report_sha256": "f2ff686f44c078c37d0a1a8861e8fa88446e9c1bc2f0207b9b623e85ad1969d9",
+  "completed_declarations_sha256": "5d46fcd4d2750f0f22c26261fe3de6eb75dafed965bcc4ecad1b12534adbbdad",
+  "tool_source_commit": "2312aceb00b4f26451fc25e521233ff25026eb0f",
+  "tool_files_sha256": {
+    "foreign_keys.py": "1ac987f1014ecab75484e0138f95a11444b93a41897ad8c3e0b3e2294349e890",
+    "import_bicdb.py": "99a982c4a07dfc4518804752dcc493ae017a13e99d73d076cb9a8ba4eb71182f",
+    "temporal_types.py": "b4e616fce52b81e3b6437b566f0b8a82fa1aa44ca1e759c097a26bdb5bb2d7a6"
+  },
+  "native_binary_source_commit": "5e5fecc3ca279f2e3ea3e37af0c244e11bbb69ea",
+  "native_binary_sha256": "1cd37fe086195a867f46e359d532c4d4f70a720d335ebb69e4307f05121f0860",
+  "relationships": 3826,
+  "validated": 912,
+  "not_validated": 2914,
+  "deferrable": 3826,
+  "initially_deferred": 3826,
+  "delete_actions": {
+    "CASCADE": 447,
+    "NO ACTION": 3209,
+    "SET NULL": 170
+  },
+  "affected_tables": 888,
+  "affected_target_rows": 181367,
+  "all_affected_table_values_preserved": true,
+  "capability_probe_passed": true,
+  "migration_success": true,
+  "source_and_target_value_equality_qualified": false,
+  "orphan_inventory_qualified": false,
+  "application_qualified": false,
+  "ownership_mapping_qualified": false,
+  "production_qualified": false,
+  "goal_complete": false
+}

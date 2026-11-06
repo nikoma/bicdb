@@ -40,6 +40,43 @@ identity contract. SQL cannot address the private owner or compatibility-profile
 collections, including through a superuser connection. Trusted native access
 still requires its own application boundary.
 
+## Read-only SQL metrics
+
+In the Oracle preview profile, `DBMS_LOB.GETLENGTH` and `DBMS_LOB.ISTEMPORARY`
+accept directly resolved logical BLOB columns in ordinary SQL projections and
+predicates. `SYS.DBMS_LOB` and the named `lob_loc` argument are supported:
+
+```sql
+SELECT id,
+       SYS.DBMS_LOB.GETLENGTH(lob_loc => payload),
+       DBMS_LOB.ISTEMPORARY(payload)
+FROM documents
+WHERE DBMS_LOB.GETLENGTH(payload) > 0;
+```
+
+GETLENGTH measures bytes for these BLOB operands. An empty BLOB has length zero;
+NULL returns NULL. ISTEMPORARY returns zero for a stored BLOB and NULL for NULL.
+The PostgreSQL transport describes both scalar results as BIGINT, including
+queries with no result rows. Reads consume the statement-visible value, so they
+do not acquire writable locators or relax the separate persistent routine
+acquisition/lock rules.
+
+Lowering requires persisted `oracle_blob_v2` column provenance. Legacy binary
+columns need explicit migration first. Ordinary BYTEA, character values, and
+untyped NULL do not become logical BLOBs by matching their bytes or syntax.
+Complex expression/view lineage, CLOB/BFILE semantics, streaming reads and the
+remaining package APIs require further implementation and qualification. Window
+or aggregate decorations on these scalar calls are rejected. PostgreSQL-profile
+user functions named `"DBMS_LOB"."GETLENGTH"` retain ordinary function semantics.
+
+The native fixtures cover COPY/value verification, NULL/empty/nonempty values,
+prepared result metadata, transaction/savepoint visibility, clean restart, and
+an independent PostgreSQL function control. The separate
+[source comparison fixture](../examples/oracle/reference/sql_blob_reads.py)
+creates nonce-owned tables and compares six SQL/transaction cases with Oracle.
+Its presence is not evidence that the live source comparison passed; use a
+recorded successful comparison before claiming reference qualification.
+
 ## Migration and remaining integration
 
 No column-name heuristic turns legacy BYTEA into a BLOB. An explicit

@@ -647,6 +647,7 @@ pub fn lower_session_sql(
     namespaces::qualify_with_calls(&mut statements, &schema);
     collections::lower_constructors(db, &mut statements, Some(&schema))?;
     date_trunc::rewrite(db, &mut statements)?;
+    lobs::lower_sql_scalars(db, &mut statements)?;
     routine_arithmetic::lower_sql_builtins(db, &mut statements, None)?;
     date_trunc::rewrite(db, &mut statements)?;
     lower_query_locks(db, &mut statements)?;

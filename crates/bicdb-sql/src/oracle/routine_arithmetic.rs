@@ -412,6 +412,10 @@ impl Resolve<'_> {
                     ) => return Kind::Raw,
                     Some(
                         "bicdb_oracle_current_sqlcode"
+                        | "bicdb_oracle_sql_blob_getlength"
+                        | "bicdb_oracle_sql_blob_istemporary"
+                        | "pg_catalog.bicdb_oracle_sql_blob_getlength"
+                        | "pg_catalog.bicdb_oracle_sql_blob_istemporary"
                         | "bicdb_oracle_blob_getlength"
                         | "bicdb_oracle_blob_istemporary"
                         | "bicdb_oracle_national_length"

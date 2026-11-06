@@ -624,6 +624,7 @@ fn postgres_owner_administration(sql: &str) -> bool {
     if is_role_membership_ddl(sql)
         || parse_raw_alter_schema_owner(sql).is_ok_and(|value| value.is_some())
         || parse_raw_alter_view_owner(sql).is_ok_and(|value| value.is_some())
+        || parse_raw_alter_procedure_owner(sql).is_ok_and(|value| value.is_some())
     {
         return true;
     }
@@ -645,6 +646,10 @@ fn postgres_owner_administration(sql: &str) -> bool {
                     .iter()
                     .all(|operation| matches!(operation, AlterTableOperation::OwnerTo { .. }))
         }
+        Statement::AlterFunction(function) => {
+            function.kind == AlterFunctionKind::Function
+                && matches!(function.operation, AlterFunctionOperation::OwnerTo(_))
+        }
         _ => false,
     }
 }
@@ -663,6 +668,8 @@ mod owner_administration_boundary_tests {
             "ALTER SCHEMA \"Source Q\" OWNER TO app_owner",
             "ALTER TABLE \"Source Q\".\"T\" OWNER TO app_owner",
             "ALTER VIEW \"Source Q\".\"V\" OWNER TO app_owner",
+            "ALTER FUNCTION \"Source Q\".\"F\"(integer) OWNER TO app_owner",
+            "ALTER PROCEDURE \"Source Q\".\"P\"(integer) OWNER TO app_owner",
         ] {
             assert!(postgres_owner_administration(sql), "{sql}");
         }
@@ -674,6 +681,10 @@ mod owner_administration_boundary_tests {
             "ALTER TABLE source_rows ADD COLUMN owner NUMBER",
             "CREATE ROLE app_owner; SELECT 1",
             "ALTER VIEW v OWNER TO app_owner; SELECT 1",
+            "ALTER FUNCTION f(integer) OWNER TO app_owner; SELECT 1",
+            "ALTER PROCEDURE p(integer) OWNER TO app_owner; SELECT 1",
+            "ALTER FUNCTION f(integer) RESET ALL",
+            "ALTER PROCEDURE p(integer) RENAME TO q",
         ] {
             assert!(!postgres_owner_administration(sql), "{sql}");
         }

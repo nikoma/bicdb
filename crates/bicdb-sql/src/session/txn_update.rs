@@ -2526,7 +2526,7 @@ impl<'db> SqlSession<'db> {
             let arguments = function_arg_list(function);
             let types = arguments
                 .iter()
-                .map(|arg| projected_expr_pg_type_with_db(self.db_ref(), arg))
+                .map(|arg| self.routine_unary_operand_type(arg))
                 .collect::<Vec<_>>();
             let common_type = select_common_pg_type(self.db_ref(), &types, "COALESCE")?;
             for argument in arguments.iter() {
@@ -2551,7 +2551,7 @@ impl<'db> SqlSession<'db> {
         }
         let arg_types = arg_exprs
             .iter()
-            .map(|arg| projected_expr_pg_type_with_db(self.db_ref(), arg))
+            .map(|arg| self.routine_unary_operand_type(arg))
             .collect::<Vec<_>>();
         if is_row_constructor(function) {
             return Ok(anonymous_record_value(

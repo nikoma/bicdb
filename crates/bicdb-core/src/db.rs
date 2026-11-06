@@ -44,6 +44,7 @@ pub use flashback::{
 mod fts_build;
 mod fts_query;
 mod index_build;
+mod integrity_reservations;
 mod pitr_maintenance;
 mod row_lock_waiters;
 mod spatial_paged;
@@ -15812,18 +15813,28 @@ impl Transaction {
     /// Callers must reserve before checking current committed state, rather
     /// than relying on their potentially older transaction snapshot.
     pub fn reserve_integrity_key(&self, constraint: &str, key: &str) -> Result<()> {
+        self.reserve_integrity_key_mode(constraint, key, integrity_reservations::Mode::Exclusive)
+    }
+
+    /// Reserve a referenced constraint key without excluding other readers.
+    /// Exclusive reservations still conflict. Savepoint rollback and transaction
+    /// completion release this reservation using the same lifecycle as row locks.
+    pub fn reserve_integrity_key_shared(&self, constraint: &str, key: &str) -> Result<()> {
+        self.reserve_integrity_key_mode(constraint, key, integrity_reservations::Mode::Shared)
+    }
+
+    fn reserve_integrity_key_mode(
+        &self,
+        constraint: &str,
+        key: &str,
+        mode: integrity_reservations::Mode,
+    ) -> Result<()> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
-        self.db_ref().lock_tx_record_with_attempts(
-            self.id,
-            &format!("\0bicdb:constraint:{constraint}"),
-            key,
-            0,
-            false,
-            false,
-            &self.locked_keys,
-        )
+        self.write_locks
+            .integrity
+            .reserve(self.id, constraint, key, mode, &self.locked_keys)
     }
 
     /// Snapshot-visible collection scan authorized by a [`SecurityContext`].
@@ -17569,6 +17580,9 @@ fn release_owned_write_locks(
     // O(the transaction's locks), preserving disjoint-commit concurrency while
     // also covering pre-write locks that never reached `Transaction::writes`.
     for key in keys {
+        if write_locks.integrity.release(tx_id, key) {
+            continue;
+        }
         let shard_idx = write_locks.shard_idx(key);
         let mut shard = write_locks.shards[shard_idx].lock();
         match shard.remove(key) {

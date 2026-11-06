@@ -5255,7 +5255,7 @@ impl<'db> SqlSession<'db> {
         // A snapshot-only check lets them both commit, leaving an orphan.
         for (_, _, _, referred_columns, _) in &inbound_constraints {
             for record in records {
-                reserve_foreign_key(
+                reserve_foreign_key_mutation(
                     self.tx.as_ref(),
                     schema,
                     referred_columns,
@@ -5529,7 +5529,7 @@ impl<'db> SqlSession<'db> {
                     &old,
                     &new,
                 )? {
-                    reserve_foreign_key(
+                    reserve_foreign_key_mutation(
                         self.tx.as_ref(),
                         schema,
                         &constraint.referred_columns,

@@ -1094,7 +1094,7 @@ pub(crate) fn current_integrity_records(
     Ok(existing)
 }
 
-pub(crate) fn reserve_foreign_key(
+pub(crate) fn reserve_foreign_key_mutation(
     tx: Option<&Transaction>,
     parent: &TableSchema,
     columns: &[String],
@@ -1107,6 +1107,23 @@ pub(crate) fn reserve_foreign_key(
         );
         let key = serde_json::to_string(&typed_column_key_label(parent, columns, values)?)?;
         tx.reserve_integrity_key(&scope, &key)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn reserve_foreign_key(
+    tx: Option<&Transaction>,
+    parent: &TableSchema,
+    columns: &[String],
+    values: &[SqlValue],
+) -> Result<()> {
+    if let Some(tx) = tx {
+        let scope = format!(
+            "foreign-key:{}",
+            serde_json::to_string(&(&parent.name, columns))?
+        );
+        let key = serde_json::to_string(&typed_column_key_label(parent, columns, values)?)?;
+        tx.reserve_integrity_key_shared(&scope, &key)?;
     }
     Ok(())
 }

@@ -2735,6 +2735,18 @@ impl PagedStore {
             .free_page_extents(max_pages, max_read_bytes)
     }
 
+    /// Cooperatively admitted read-only allocator inventory.
+    pub fn free_page_extents_while(
+        &self,
+        max_pages: u64,
+        max_read_bytes: u64,
+        continue_scan: impl FnMut() -> bool,
+    ) -> Result<Option<crate::FreePageExtents>> {
+        self.pool
+            .store()
+            .free_page_extents_while(max_pages, max_read_bytes, continue_scan)
+    }
+
     pub fn vacuum(&self, max_pages: usize) -> Result<VacuumReport> {
         self.vacuum_step(
             VacuumCursor::default(),

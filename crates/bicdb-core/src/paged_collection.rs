@@ -261,6 +261,18 @@ impl PagedRecords {
             .map_err(page_error)
     }
 
+    /// Cooperatively admitted read-only allocator inventory.
+    pub fn free_page_extents_while(
+        &self,
+        max_pages: u64,
+        max_read_bytes: u64,
+        continue_scan: impl FnMut() -> bool,
+    ) -> Result<Option<bicdb_page::FreePageExtents>> {
+        self.store
+            .free_page_extents_while(max_pages, max_read_bytes, continue_scan)
+            .map_err(page_error)
+    }
+
     pub(crate) fn page_size(&self) -> u32 {
         self.store.page_size()
     }

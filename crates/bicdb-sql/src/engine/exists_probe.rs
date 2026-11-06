@@ -256,8 +256,6 @@ fn numeric_correlation(
                         let outer_oid = outer_type
                             .as_deref()
                             .and_then(|kind| pg_type_oid_by_name(kind));
-                        #[cfg(test)]
-                        eprintln!("CORRELATION {:?} -> {:?}", outside, outer_type);
                         let inner_oid = pg_type_oid_by_name(&column.pg_type);
                         let numeric = |oid| matches!(oid, Some(20 | 21 | 23 | 1700));
                         let character = |oid| matches!(oid, Some(25 | 1042 | 1043));
@@ -295,13 +293,6 @@ impl SqlEngine<'_> {
         query: &Query,
         env: &[RelationColumns],
     ) -> Result<Option<Query>> {
-        #[cfg(test)]
-        eprintln!(
-            "PROBE enabled={} outer={} env={:?}",
-            self.exists_probe_memo.enabled.get(),
-            self.outer_row.is_some(),
-            env
-        );
         if !self.exists_probe_memo.enabled.get() || self.outer_row.is_some() {
             return Ok(None);
         }
@@ -322,8 +313,6 @@ impl SqlEngine<'_> {
                 let plan = self
                     .build_exists_candidate_probe(context, query, env)?
                     .map(Rc::new);
-                #[cfg(test)]
-                eprintln!("BUILT {}", plan.is_some());
                 self.exists_probe_memo
                     .entries
                     .borrow_mut()

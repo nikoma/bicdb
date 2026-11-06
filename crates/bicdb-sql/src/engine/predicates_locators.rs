@@ -1350,6 +1350,11 @@ impl<'db> SqlEngine<'db> {
         {
             return Ok(Some(RecordLocators::Rowids(Vec::new())));
         }
+        if let Some(schema) = schema {
+            if let Some(ids) = self.primary_key_list_record_ids(table, alias, schema, selection)? {
+                return Ok(Some(RecordLocators::Pks(ids)));
+            }
+        }
         let strategy = self.locator_strategy_cached(table, alias, schema, selection)?;
         let located = self.execute_locator_strategy(table, alias, schema, selection, &strategy)?;
         if located.is_some() {
@@ -3104,6 +3109,64 @@ impl<'db> SqlEngine<'db> {
         Ok(true)
     }
 
+    /// Expand a bounded constant IN list through the ordinary exact-key
+    /// planner. Typed identities, privileges and pending-row reads retain the
+    /// same paths as individual equality lookups; the caller still filters
+    /// every fetched row using the complete original predicate.
+    fn primary_key_list_record_ids(
+        &self,
+        table: &str,
+        alias: &str,
+        schema: &TableSchema,
+        selection: &Expr,
+    ) -> Result<Option<Vec<String>>> {
+        let primary = primary_key_columns_for_schema(schema);
+        let [column] = primary.as_slice() else {
+            return Ok(None);
+        };
+        for term in and_terms(selection) {
+            let Expr::InList {
+                expr,
+                list,
+                negated: false,
+            } = unwrap_nested_expr(term)
+            else {
+                continue;
+            };
+            if list.is_empty()
+                || list.len() > 256
+                || !self.expr_matches_table_column(expr, table, alias, Some(schema), column)?
+            {
+                continue;
+            }
+            // A mixed or nonconstant list belongs to the ordinary evaluator.
+            if list.iter().any(|value| eval_constant_expr(value).is_err()) {
+                continue;
+            }
+            let mut ids = Vec::new();
+            for value in list {
+                if matches!(eval_constant_expr(value)?, SqlValue::Null) {
+                    continue;
+                }
+                let equality = Expr::BinaryOp {
+                    left: expr.clone(),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(value.clone()),
+                };
+                let Some((_, found)) = self
+                    .primary_key_record_ids_for_table_selection(table, alias, schema, &equality)?
+                else {
+                    return Ok(None);
+                };
+                ids.extend(found);
+            }
+            ids.sort_unstable();
+            ids.dedup();
+            return Ok(Some(ids));
+        }
+        Ok(None)
+    }
+
     pub(crate) fn primary_key_record_ids_for_table_selection(
         &self,
         table: &str,
@@ -3111,6 +3174,9 @@ impl<'db> SqlEngine<'db> {
         schema: &TableSchema,
         selection: &Expr,
     ) -> Result<Option<(usize, Vec<String>)>> {
+        if let Some(ids) = self.primary_key_list_record_ids(table, alias, schema, selection)? {
+            return Ok(Some((usize::MAX, ids)));
+        }
         let access = self.primary_key_access_for_selection(table, alias, schema, selection)?;
         if let Some(PrimaryKeyAccess::Exact { record_id, values }) = access.as_ref() {
             if primary_key_requires_typed_identity(schema) {
@@ -3168,6 +3234,9 @@ impl<'db> SqlEngine<'db> {
         schema: &TableSchema,
         selection: &Expr,
     ) -> Result<Option<(usize, RecordLocators)>> {
+        if let Some(ids) = self.primary_key_list_record_ids(table, alias, schema, selection)? {
+            return Ok(Some((usize::MAX, RecordLocators::Pks(ids))));
+        }
         let access = self.primary_key_access_for_selection(table, alias, schema, selection)?;
         if let Some(PrimaryKeyAccess::Exact { record_id, values }) = access.as_ref() {
             if primary_key_requires_typed_identity(schema) {

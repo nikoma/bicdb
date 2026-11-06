@@ -605,6 +605,93 @@ mod tests {
         metadata_protocol_progress_with_queued_writer("oracle-preview-v1");
     }
 
+    fn literal_session_settings_progress_with_queued_writer(profile: &str) {
+        let directory = tempfile::tempdir().unwrap();
+        let server = PgWireServer::open(
+            directory.path(),
+            PgWireConfig {
+                sql_profile: profile.into(),
+                fsync: false,
+                write_timeout: Duration::from_secs(10),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        // No shared write slot is available. Session settings still need no
+        // durable writer and must let an existing reader finish its work.
+        server.shared_write_credit.store(-64, Ordering::Relaxed);
+        server.shared_write_probe.store(1, Ordering::Relaxed);
+        std::thread::scope(|scope| {
+            let (start_tx, start_rx) = std::sync::mpsc::channel();
+            let (done_tx, done_rx) = std::sync::mpsc::channel();
+            let reader = server.db.read();
+            let writer_server = Arc::clone(&server);
+            let writer = scope.spawn(move || drop(writer_server.db.write()));
+            let deadline = Instant::now() + Duration::from_secs(2);
+            let queued = loop {
+                if server.db.try_read().is_none() {
+                    break true;
+                }
+                if Instant::now() >= deadline {
+                    break false;
+                }
+                std::thread::sleep(Duration::from_millis(1));
+            };
+            let worker_server = Arc::clone(&server);
+            let worker = scope.spawn(move || {
+                let mut state = ConnectionState::new(1, "bicdb".into(), None);
+                start_rx.recv().unwrap();
+                for sql in [
+                    "SET application_name = 'concurrent-client'",
+                    "SET app.label = 'session-value'",
+                    "SET TIME ZONE 'UTC'",
+                ] {
+                    execute_server_sql(&worker_server, &mut state, sql).unwrap();
+                }
+                assert!(!state.in_transaction && state.tx.is_none());
+                assert_eq!(
+                    state
+                        .session_state
+                        .session_gucs()
+                        .get("application_name")
+                        .map(String::as_str),
+                    Some("concurrent-client")
+                );
+                assert_eq!(
+                    state
+                        .session_state
+                        .session_gucs()
+                        .get("app.label")
+                        .map(String::as_str),
+                    Some("session-value")
+                );
+                done_tx.send(()).unwrap();
+            });
+            start_tx.send(()).unwrap();
+            let progressed = done_rx.recv_timeout(Duration::from_secs(1));
+            // Always release before assertions so the old path fails without
+            // leaving either thread blocked or holding the database open.
+            drop(reader);
+            writer.join().unwrap();
+            worker.join().unwrap();
+            assert!(queued, "writer queue was not established");
+            assert!(
+                progressed.is_ok(),
+                "{profile}: literal session SET waited behind a database writer"
+            );
+        });
+    }
+
+    #[test]
+    fn postgres_literal_session_settings_progress_with_queued_writer() {
+        literal_session_settings_progress_with_queued_writer("postgres");
+    }
+
+    #[test]
+    fn oracle_literal_session_settings_progress_with_queued_writer() {
+        literal_session_settings_progress_with_queued_writer("oracle-preview-v1");
+    }
+
     fn automatic_test_supervisor() -> ClusterSupervisor {
         BalancedDistributionHostService::default()
             .supervisor()

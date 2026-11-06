@@ -1,0 +1,127 @@
+{
+  "format": 1,
+  "implementation_source_commit": "62a1e076fb836d7dd033e09bb1060cffd04eafbd",
+  "backend_sha256": "f5e1ac0314dcbb29211c25a40198c3fa746957a215a9c7d83629169b1b6e1557",
+  "checks": [
+    {
+      "name": "format",
+      "returncode": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "execution_source_commit": "62a1e076fb836d7dd033e09bb1060cffd04eafbd",
+      "reused_for_unchanged_code": false
+    },
+    {
+      "name": "probe-focus",
+      "returncode": 0,
+      "log_sha256": "daa25487ce0ecbec09d563ce8fd12e44262e480bfd29eb71758d1ba5d0f7a1ca",
+      "execution_source_commit": "62a1e076fb836d7dd033e09bb1060cffd04eafbd",
+      "reused_for_unchanged_code": false
+    },
+    {
+      "name": "key-list-focus",
+      "returncode": 0,
+      "log_sha256": "7f52e21e16867292b9b1aa9c0dea51f83b68886bfe82fa2456654074dee3412f",
+      "execution_source_commit": "62a1e076fb836d7dd033e09bb1060cffd04eafbd",
+      "reused_for_unchanged_code": false
+    },
+    {
+      "name": "sql-library",
+      "returncode": 0,
+      "log_sha256": "9d716160b84c09fa78f8ddd7aebcae15daa362a3cab56b6d59845381ee362dbc",
+      "execution_source_commit": "62a1e076fb836d7dd033e09bb1060cffd04eafbd",
+      "reused_for_unchanged_code": false
+    },
+    {
+      "name": "build",
+      "returncode": 0,
+      "log_sha256": "5de5f3acc912b6d3e2398c203dd9b11603abeb27a97502326d9a957cd9cfb0bd",
+      "execution_source_commit": "62a1e076fb836d7dd033e09bb1060cffd04eafbd",
+      "reused_for_unchanged_code": false
+    },
+    {
+      "name": "native-tools",
+      "returncode": 0,
+      "log_sha256": "7bf3a78b272b5fb73b7ec9aa81385e0f15ac322f5e20a78b752246a4478fd62c",
+      "execution_source_commit": "62a1e076fb836d7dd033e09bb1060cffd04eafbd",
+      "reused_for_unchanged_code": false
+    },
+    {
+      "name": "protocol",
+      "returncode": 0,
+      "log_sha256": "5768e3ddd363782f3edebc75a1969f8d17d5b66bfa62ef7d7dfd1d6f4c0d2533",
+      "execution_source_commit": "62a1e076fb836d7dd033e09bb1060cffd04eafbd",
+      "reused_for_unchanged_code": false
+    },
+    {
+      "name": "oracle-hr",
+      "returncode": 0,
+      "log_sha256": "e10792eb911fcc8a8732542cd66121e6c4fbe406d2e25b2d8e2046ea8156635c",
+      "execution_source_commit": "62a1e076fb836d7dd033e09bb1060cffd04eafbd",
+      "reused_for_unchanged_code": false
+    },
+    {
+      "name": "authorization",
+      "returncode": 0,
+      "log_sha256": "89d70107606340023cc86bc49d38326214a325376b8bdfc340441de9a1535f77",
+      "execution_source_commit": "62a1e076fb836d7dd033e09bb1060cffd04eafbd",
+      "reused_for_unchanged_code": false
+    },
+    {
+      "name": "jdbc-probe",
+      "returncode": 0,
+      "log_sha256": "ca574251fec7d2399b77c6b414684e7ae1d14af2fc9972536ead94c5b0124246",
+      "execution_source_commit": "62a1e076fb836d7dd033e09bb1060cffd04eafbd",
+      "reused_for_unchanged_code": false
+    }
+  ],
+  "results": {
+    "sql_library": {
+      "passed": 742,
+      "ignored": 4,
+      "failed": 0
+    },
+    "native_tools": {
+      "passed": 257,
+      "skipped": 4,
+      "failed": 0
+    },
+    "protocol": {
+      "passed": 183,
+      "failed": 0
+    },
+    "oracle_integration": {
+      "passed": 48,
+      "failed": 0
+    },
+    "authorization_json": {
+      "passed": 44,
+      "failed": 0
+    },
+    "jdbc_unit": {
+      "passed": 25,
+      "failed": 0
+    },
+    "jdbc_live": {
+      "extended": 83,
+      "simple": 83,
+      "extendedCacheEverything": 83,
+      "postgres_profile_rejection": 1,
+      "failed": 0
+    }
+  },
+  "adapter_identity": {
+    "format": 1,
+    "staged_sdk_sha256": "8d0d10b01a5b6caf7cf6528372c46e1f95998e799b87ff43509946d5c343b6d5",
+    "probe_sdk_sha256": "5a54489b786e8024f82f279141ff4b37044b4a8e20f7c0606620cf9e660246d1",
+    "production_class_count": 10,
+    "production_class_bytes_equal": true,
+    "resources_compared": [
+      "META-INF/services/java.sql.Driver"
+    ]
+  },
+  "application_qualified": false,
+  "production_qualified": false,
+  "release_published": false,
+  "deployment_verified": false,
+  "oracle_programme_complete": false
+}

@@ -3178,6 +3178,7 @@ impl<'db> SqlEngine<'db> {
             )
             .with_session_gucs(Arc::new(session_gucs))
             .with_shared_routine_vars(frame.materialized_values())
+            .with_routine_slots(Some(frame.slot_binding()))
             .with_cancellation(self.cancellation.clone()),
         );
         let mut result = None;

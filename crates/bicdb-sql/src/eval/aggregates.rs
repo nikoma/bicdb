@@ -1721,7 +1721,8 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             "power" | "pow" | "sqrt" | "cbrt" | "exp" | "ln" | "log" => {
                 return Some("float8".to_string())
             }
-            "bicdb_oracle_blob_getlength" | "bicdb_oracle_blob_istemporary" => {
+            "bicdb_oracle_blob_getlength" | "bicdb_oracle_blob_istemporary"
+            | "bicdb_oracle_sql_blob_getlength" | "bicdb_oracle_sql_blob_istemporary" => {
                 return Some("int8".into())
             }
             "bicdb_oracle_hextoraw" | "bicdb_oracle_empty_blob" | "bicdb_oracle_blob_from_raw" => {

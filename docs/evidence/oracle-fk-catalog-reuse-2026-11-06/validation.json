@@ -1,0 +1,42 @@
+{
+  "format": 1,
+  "code_commit": "b6dd73a0a6a220294d278cd037216dc9102d40a3",
+  "baseline_code_commit": "aab556a7227f43002269250478d5091761bc6f33",
+  "native_binary_source_commit": "5e5fecc3ca279f2e3ea3e37af0c244e11bbb69ea",
+  "native_binary_sha256": "1cd37fe086195a867f46e359d532c4d4f70a720d335ebb69e4307f05121f0860",
+  "source_files_sha256": {
+    "foreign_keys.py": "1ac987f1014ecab75484e0138f95a11444b93a41897ad8c3e0b3e2294349e890",
+    "test_foreign_keys.py": "0cfc50e35dd1713414394668873c980b69d30d26cc0de67c9bae53e253d3e8fe"
+  },
+  "tests": {
+    "passed": 15,
+    "pure": 5,
+    "native": 10,
+    "failed": 0,
+    "skipped": 0
+  },
+  "negative_control": {
+    "expected_counter_failure": true,
+    "old_fresh_point_reads": 6,
+    "required_fresh_point_reads": 3,
+    "log_sha256": "20d1ac74989b236b928a43e4deaf5b28676673255564ad37bd0f7ef1d5989a0f"
+  },
+  "query_counts": {
+    "fresh_three_keys_point_reads": 3,
+    "complete_three_key_prefix_constraint_queries": 1,
+    "partial_resume_one_missing_one_unjournaled_point_reads": 1
+  },
+  "post_install_mismatch_not_checkpointed": true,
+  "restart_and_resume_verified": true,
+  "source_states_and_fingerprints_preserved": true,
+  "positive_log_sha256": "1060e9c69dcaa792423253038c412b7e022e248de8a04f918b2d41cf4c2364d8",
+  "resource_guard": {
+    "status": "completed",
+    "peak_group_rss_bytes": 177635328,
+    "minimum_observed_available_bytes": 20670169088
+  },
+  "full_application_qualified": false,
+  "production_performance_qualified": false,
+  "active_pristine_import_hotpatched": false,
+  "goal_complete": false
+}

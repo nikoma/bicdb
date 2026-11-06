@@ -140,3 +140,9 @@ counting. It does not repair legacy rows or qualify source-data equality.
 See the [reference reservation contract](foreign-key-reservations.md) for the
 separate child-reference and parent-key-mutation concurrency rules. Installation
 and orphan-count success do not qualify all transaction schedules.
+
+The [catalog-reuse qualification](evidence/oracle-fk-catalog-reuse-2026-11-06/README.md)
+records traced fresh/resumed query counts, a negative counter control and a
+post-install mismatch/resume control. All 15 pure/native migration checks pass;
+these focused results do not establish production throughput or full application
+acceptance.

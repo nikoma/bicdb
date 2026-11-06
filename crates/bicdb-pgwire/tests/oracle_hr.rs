@@ -354,8 +354,17 @@ async fn fixed_number_pictures_keep_profile_rules_for_prepared_parameters() {
         }
         let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
         let connection = tokio::spawn(connection);
+        // Preserve the fractional input in the source dialect. Bare Oracle
+        // NUMERIC defaults to (38,0); this test exercises number pictures.
+        let number_type = if profile == "postgres" {
+            "NUMERIC"
+        } else {
+            "NUMBER"
+        };
         let statement = client
-            .prepare("SELECT TO_CHAR(CAST(CAST($1 AS TEXT) AS NUMERIC),CAST($2 AS TEXT))")
+            .prepare(&format!(
+                "SELECT TO_CHAR(CAST(CAST($1 AS TEXT) AS {number_type}),CAST($2 AS TEXT))"
+            ))
             .await
             .unwrap();
         assert_eq!(
@@ -1011,8 +1020,13 @@ async fn anchored_types_keep_owner_precision_and_driver_types_after_reopen() {
             };
             for name in ["selected_anchor", "owner_anchor", "return_anchor"] {
                 let native_unconstrained_return = profile == "postgres" && name == "return_anchor";
+                let number_type = if profile == "postgres" {
+                    "NUMERIC"
+                } else {
+                    "NUMBER"
+                };
                 let sql = format!(
-                    r#"SELECT CAST("left_scope".{name}(CAST(CAST($1 AS VARCHAR) AS NUMERIC)) AS VARCHAR(40)){suffix}"#
+                    r#"SELECT CAST("left_scope".{name}(CAST(CAST($1 AS VARCHAR) AS {number_type})) AS VARCHAR(40)){suffix}"#
                 );
                 let statement = client.prepare(&sql).await.unwrap();
                 assert_eq!(statement.columns()[0].type_(), &Type::VARCHAR);

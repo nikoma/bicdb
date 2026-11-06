@@ -64,6 +64,37 @@ class MissingSavepointCases:
             connection.execute('COMMIT')
             self.assertEqual(connection.execute('SELECT id FROM retained_rows').fetchall(), [(2,)])
 
+    def test_missing_release_keeps_oracle_rows_and_outer_rollback(self):
+        import psycopg
+        connection = self.fixture()
+        connection.execute('BEGIN')
+        connection.execute('INSERT INTO retained_rows VALUES(1)')
+        self.missing(connection, 'RELEASE SAVEPOINT missing')
+        if self.profile == 'postgres':
+            with self.assertRaises(psycopg.errors.InFailedSqlTransaction):
+                connection.execute('SELECT id FROM retained_rows')
+        else:
+            self.assertEqual(connection.execute('SELECT id FROM retained_rows').fetchall(), [(1,)])
+        connection.execute('ROLLBACK')
+        self.assertEqual(connection.execute('SELECT id FROM retained_rows').fetchall(), [])
+
+    def test_missing_lookup_does_not_heal_an_unrecovered_transport_failure(self):
+        import psycopg
+        connection = self.fixture()
+        connection.execute('BEGIN')
+        connection.execute('INSERT INTO retained_rows VALUES(1)')
+        connection.execute('SAVEPOINT retained')
+        with self.assertRaises(psycopg.Error):
+            connection.execute('SELECT 1 +')
+        self.assertEqual(connection.info.transaction_status.name, 'INERROR')
+        self.missing(connection, 'ROLLBACK TO SAVEPOINT missing')
+        self.assertEqual(connection.info.transaction_status.name, 'INERROR')
+        with self.assertRaises(psycopg.errors.InFailedSqlTransaction):
+            connection.execute('SELECT id FROM retained_rows')
+        connection.execute('ROLLBACK TO SAVEPOINT retained')
+        self.assertEqual(connection.execute('SELECT id FROM retained_rows').fetchall(), [(1,)])
+        connection.execute('ROLLBACK')
+
     def test_quoted_names_keep_case_spaces_and_escaped_quotes(self):
         connection = self.fixture()
         connection.execute('BEGIN')

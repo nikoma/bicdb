@@ -7,8 +7,12 @@ import uuid
 from row_lock_waits import main as comparison_main
 
 
-def observe(factory):
-    report = dict(cases=[], cleanup_errors=[])
+def observe(factory, dialect='oracle'):
+    if dialect not in {'oracle', 'postgres'}:
+        raise ValueError('expected oracle or postgres reference dialect')
+    day = 'TRUNC(seen)' if dialect == 'oracle' else "date_trunc('day',seen)"
+    rounded = 'TRUNC(CAST(seen AS TIMESTAMP(0)))' if dialect == 'oracle' else "date_trunc('day',CAST(seen AS TIMESTAMP(0)))"
+    report = dict(dialect=dialect, cases=[], cleanup_errors=[])
     with factory() as connection:
         connection.autocommit = True
         oracle = type(connection).__module__.startswith('oracledb')
@@ -23,7 +27,7 @@ def observe(factory):
                     created = True
                     cursor.execute(f"INSERT INTO {table} VALUES(1,TIMESTAMP '1999-12-31 23:59:59.999999')")
                     cursor.execute(f"INSERT INTO {table} VALUES(2,TIMESTAMP '1999-12-31 00:00:01')")
-                    predicate = "TRUNC(seen)=TIMESTAMP '1999-12-31 00:00:00'"
+                    predicate = f"{day}=TIMESTAMP '1999-12-31 00:00:00'"
                     def ids():
                         cursor.execute(f'SELECT id FROM {table} WHERE {predicate} ORDER BY id')
                         return [int(row[0]) for row in cursor.fetchall()]
@@ -36,9 +40,9 @@ def observe(factory):
                             raise
                         return False
                     if case == 'nonunique_backfill_and_mutation':
-                        cursor.execute(f'CREATE INDEX {index} ON {table}(TRUNC(seen))')
+                        cursor.execute(f'CREATE INDEX {index} ON {table}({day})')
                         actual = [ids()]
-                        cursor.execute(f"SELECT id FROM {table} WHERE TRUNC(CAST(seen AS TIMESTAMP(0)))=TIMESTAMP '2000-01-01 00:00:00' ORDER BY id")
+                        cursor.execute(f"SELECT id FROM {table} WHERE {rounded}=TIMESTAMP '2000-01-01 00:00:00' ORDER BY id")
                         actual.append([int(row[0]) for row in cursor.fetchall()])
                         cursor.execute(f"UPDATE {table} SET seen=TIMESTAMP '2000-01-01 01:00:00' WHERE id=2")
                         actual.append(ids())
@@ -46,16 +50,16 @@ def observe(factory):
                         actual.append(ids())
                         expected = [[1, 2], [1], [1], []]
                     elif case == 'unique_backfill_conflict':
-                        rejected = duplicate(f'CREATE UNIQUE INDEX {index} ON {table}(TRUNC(seen))', build=True)
+                        rejected = duplicate(f'CREATE UNIQUE INDEX {index} ON {table}({day})', build=True)
                         cursor.execute(f'DELETE FROM {table} WHERE id=2')
-                        cursor.execute(f'CREATE UNIQUE INDEX {index} ON {table}(TRUNC(seen))')
+                        cursor.execute(f'CREATE UNIQUE INDEX {index} ON {table}({day})')
                         actual = [rejected, ids()]
                         expected = [True, [1]]
                     else:
                         cursor.execute(f'DELETE FROM {table} WHERE id=2')
                         cursor.execute(f'INSERT INTO {table} VALUES(2,NULL)')
                         cursor.execute(f'INSERT INTO {table} VALUES(3,NULL)')
-                        cursor.execute(f'CREATE UNIQUE INDEX {index} ON {table}(TRUNC(seen))')
+                        cursor.execute(f'CREATE UNIQUE INDEX {index} ON {table}({day})')
                         rejected = duplicate(f"INSERT INTO {table} VALUES(4,TIMESTAMP '1999-12-31 10:00:00')")
                         connection.autocommit = False
                         cursor.execute('SAVEPOINT before_day_move')
@@ -71,7 +75,7 @@ def observe(factory):
                         ready = cursor.fetchone() == ('VALID',)
                     else:
                         cursor.execute('SELECT i.indisvalid,i.indisready FROM pg_catalog.pg_index i '
-                                       'JOIN pg_catalog.pg_class c ON c.oid=i.indexrelid WHERE c.relname=%s', [index])
+                                       'JOIN pg_catalog.pg_class c ON c.oid=i.indexrelid WHERE c.relname=%s', [index if dialect == 'oracle' else index.lower()])
                         ready = cursor.fetchone() == (True, True)
                     item.update(actual=actual, expected=expected, executable_index=ready,
                                 qualified=actual == expected and ready)
@@ -86,12 +90,20 @@ def observe(factory):
     return report
 
 
-def run(source_factory, target_factory):
-    source, target = observe(source_factory), observe(target_factory)
+def compare(source_factory, target_factory, dialect):
+    source, target = observe(source_factory, dialect), observe(target_factory, dialect)
     return dict(source=source, target=target,
                 success=not source['cleanup_errors'] and not target['cleanup_errors']
                 and all(item['qualified'] for result in [source, target] for item in result['cases']),
                 application_qualified=False)
+
+
+def run(source_factory, target_factory):
+    return compare(source_factory, target_factory, 'oracle')
+
+
+def run_postgres(source_factory, target_factory):
+    return compare(source_factory, target_factory, 'postgres')
 
 
 if __name__ == '__main__': comparison_main(run)

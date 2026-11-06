@@ -3531,9 +3531,18 @@ pub(super) fn subquery_is_memoizable(db: &BicDb, query: &Query) -> bool {
     impl Visitor for Check<'_> {
         type Break = ();
         fn pre_visit_query(&mut self, query: &Query) -> ControlFlow<()> {
-            if query.locks.is_empty() {
+            if query.locks.is_empty()
+                && matches!(
+                    query.body.as_ref(),
+                    SetExpr::Select(_)
+                        | SetExpr::Values(_)
+                        | SetExpr::Query(_)
+                        | SetExpr::SetOperation { .. }
+                )
+            {
                 ControlFlow::Continue(())
             } else {
+                // A nested data-modifying CTE is not a read-only init plan.
                 ControlFlow::Break(())
             }
         }
@@ -3552,6 +3561,21 @@ pub(super) fn subquery_is_memoizable(db: &BicDb, query: &Query) -> bool {
                 }
                 | TableFactor::Function { name, .. } => self.function(name),
                 TableFactor::TableFunction { .. } => ControlFlow::Break(()),
+                TableFactor::Table {
+                    name, args: None, ..
+                } => {
+                    let Ok(name) = relation_name(name) else {
+                        return ControlFlow::Break(());
+                    };
+                    let resolved = resolve_session_relation_name_if_exists(self.db, &name);
+                    // View bodies may hide volatile or writing functions.
+                    // Decline until their full expanded plan is proved safe.
+                    if matches!(load_view(self.db, &resolved), Ok(None)) {
+                        ControlFlow::Continue(())
+                    } else {
+                        ControlFlow::Break(())
+                    }
+                }
                 _ => ControlFlow::Continue(()),
             }
         }

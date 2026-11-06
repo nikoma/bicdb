@@ -2450,6 +2450,10 @@ impl<'db> SqlSession<'db> {
     ) -> Result<()> {
         for (object_type, name) in objects {
             match object_type {
+                PrivilegeObjectType::Table if oracle::storage_catalog::is_relation(name) => self
+                    .require_superuser_for_admin_operation(
+                        "grant or revoke storage monitoring access",
+                    )?,
                 PrivilegeObjectType::Table => self.require_relation_ownership(name, action)?,
                 PrivilegeObjectType::Sequence => {
                     if let Some(sequence) = load_sequence(self.db_ref(), name)? {
@@ -2559,6 +2563,17 @@ impl<'db> SqlSession<'db> {
                 .collect(),
         };
         let targets = grant_targets(self.db_ref(), objects)?;
+        if targets
+            .iter()
+            .any(|(_, name)| oracle::storage_catalog::is_relation(name))
+            && privileges
+                .iter()
+                .any(|(name, column)| name != "SELECT" || column.is_some())
+        {
+            return Err(SqlError::Unsupported(
+                "storage inventory supports whole-view SELECT grants only".into(),
+            ));
+        }
         // Validate the entire column list before changing any grants.
         for (_, table) in &targets {
             for (_, column) in &privileges {

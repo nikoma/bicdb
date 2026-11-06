@@ -2908,6 +2908,9 @@ pub(crate) fn grant_targets(
                     Ok(name) => name,
                     Err(error) => return Some(Err(error)),
                 };
+                if oracle::storage_catalog::is_relation(&name) {
+                    return Some(Ok((PrivilegeObjectType::Table, name)));
+                }
                 if !relation_exists(db, &name) {
                     // System catalog views are readable by every role, as in
                     // PostgreSQL where they are granted to PUBLIC; a grant on
@@ -3038,7 +3041,8 @@ fn exact_view_name_exists(db: &BicDb, name: &str) -> bool {
     let Ok(Some(record)) = db.get(VIEW_COLLECTION, name) else {
         return false;
     };
-    serde_json::from_value::<ViewSchema>(record.metadata.clone()).is_ok_and(|view| view.name == name)
+    serde_json::from_value::<ViewSchema>(record.metadata.clone())
+        .is_ok_and(|view| view.name == name)
 }
 
 pub(crate) fn resolve_relation_name_memoized(db: &BicDb, name: &str) -> Option<String> {
@@ -3608,6 +3612,13 @@ fn role_has_table_privilege_uncached(
     table: &str,
     privilege: &str,
 ) -> Result<bool> {
+    if oracle::storage_catalog::is_relation(table) {
+        return if privilege.eq_ignore_ascii_case("SELECT") {
+            oracle::storage_catalog::can_select(db, &normalize_role_name(role))
+        } else {
+            Ok(false)
+        };
+    }
     let role = normalize_role_name(role);
     let table = if let Some(resolved) = resolve_relation_name_memoized(db, table) {
         resolved

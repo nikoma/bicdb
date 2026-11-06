@@ -44,6 +44,7 @@ mod rownum;
 pub(crate) mod session_context;
 mod source_tokens;
 mod sql_concat;
+pub(crate) mod storage_catalog;
 pub(crate) mod syntax;
 pub(crate) mod temporal_columns;
 pub(crate) mod text_patterns;
@@ -635,6 +636,8 @@ fn postgres_owner_administration(sql: &str) -> bool {
         return false;
     };
     match statement {
+        Statement::Grant(grant) => storage_catalog::native_privilege_objects(&grant.objects),
+        Statement::Revoke(revoke) => storage_catalog::native_privilege_objects(&revoke.objects),
         Statement::Set(sqlparser::ast::Set::SetRole { .. }) => true,
         Statement::Reset(reset) => matches!(
             &reset.reset,
@@ -744,6 +747,7 @@ pub fn lower_session_sql(
     }
     let mut statements = parse_statements(&lowered)?;
     output::lower_calls(&mut statements)?;
+    storage_catalog::lower(db, &mut statements, &schema)?;
     namespaces::qualify_with_calls(&mut statements, &schema);
     collections::lower_constructors(db, &mut statements, Some(&schema))?;
     date_trunc::rewrite(db, &mut statements)?;

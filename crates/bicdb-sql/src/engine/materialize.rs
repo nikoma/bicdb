@@ -676,6 +676,9 @@ impl<'db> SqlEngine<'db> {
         if table == "bicdb_projections" {
             return self.projection_status_rows();
         }
+        if oracle::storage_catalog::is_relation(table) {
+            return self.storage_free_space_rows();
+        }
         let stripped = table.strip_prefix("pg_catalog.").unwrap_or(table);
         if stripped == "pg_locks" {
             if let Some(runtime) = &self.runtime {

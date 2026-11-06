@@ -4212,8 +4212,11 @@ impl<'db> SqlEngine<'db> {
         let alias_name = table_alias
             .map(|alias| alias.name.value.clone())
             .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(table).to_string());
-        let source_rows =
-            self.filter_virtual_rows_for_role(table, virtual_rows(self.db_ref(), table)?)?;
+        let source_rows = if oracle::storage_catalog::is_relation(table) {
+            self.storage_free_space_rows()?
+        } else {
+            self.filter_virtual_rows_for_role(table, virtual_rows(self.db_ref(), table)?)?
+        };
         let mut source_columns = virtual_table_columns(table).unwrap_or_else(|| {
             source_rows
                 .iter()

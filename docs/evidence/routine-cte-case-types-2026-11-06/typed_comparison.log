@@ -1,0 +1,9 @@
+running 5 tests
+test exclusion_equality_uses_the_declared_type ... ok
+test indexed_range_ordering_matches_postgresql_bound_and_empty_semantics ... ok
+test numeric_primary_and_unique_keys_use_postgres_equality_across_reopen ... ok
+test relational_operators_share_typed_numeric_semantics ... ok
+test foreign_keys_use_parent_types_for_validation_and_cascade ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s
+

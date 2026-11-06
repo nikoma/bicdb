@@ -1,0 +1,9 @@
+running 5 tests
+test array_casts_apply_element_modifiers_and_preserve_nulls_and_bounds ... ok
+test failed_array_assignment_preserves_the_previous_element ... ok
+test routine_numeric_assignments_apply_declared_scale ... ok
+test integer_array_assignment_preserves_integer_arithmetic_and_decimal_amounts ... ok
+test routine_assignments_enforce_integer_range_before_later_writes ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+

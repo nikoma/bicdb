@@ -1,0 +1,6 @@
+running 2 tests
+test lateral_sql_routines_bind_each_left_row_and_preserve_qualified_output_types ... ok
+test lateral_sql_routines_keep_definer_identity_and_execute_refusals_for_empty_sources ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.84s
+

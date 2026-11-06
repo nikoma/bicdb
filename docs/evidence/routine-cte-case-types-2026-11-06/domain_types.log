@@ -1,0 +1,9 @@
+running 5 tests
+test named_domain_not_null_constraints_follow_postgres_lifecycle ... ok
+test domains_can_build_on_enums_and_other_domains ... ok
+test domains_enforce_base_typmods_defaults_checks_arrays_and_catalogs ... ok
+test alter_domain_manages_defaults_nullability_and_check_lifecycle ... ok
+test domain_postgres_syntax_collation_drop_tag_and_transaction_undo ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.01s
+

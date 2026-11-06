@@ -66,8 +66,55 @@ For an older export whose live source has changed, use the
 counts from that exact saved dataset. Matching counts alone still do not prove
 that the complete BicDB target values equal the export.
 
-The output is saved after bounded batches and on ordinary failure. This command
-does not resume a partial count inventory; rerunning starts a new read-only
+## Compare with the saved-export Oracle reference
+
+After both inventories complete, compare their reports offline:
+
+```sh
+python examples/oracle/idempiere/compare_orphan_inventories.py \
+  --snapshot /private/export \
+  --reference-report /private/oracle-reference.json \
+  --target-report /private/foreign-key-orphans.json \
+  --report /private/orphan-comparison.json
+```
+
+The comparator requires the same manifest digest and source schema, every
+declared relationship exactly once, and identical complete relationship
+definitions. Entry ordering can differ. Counts must be nonnegative integers;
+booleans and fractional counts are rejected. The reference must attest complete
+saved-export row verification for every table and successful temporary-object
+cleanup. The target must attest a completed quiesced inventory with unchanged
+fingerprints for every affected table. Validated relationships must have zero
+orphans. Equal nonzero counts on unvalidated relationships can match, but still
+require an operator's explicit legacy-data policy.
+
+`comparison_completed` records that both reports passed these structural gates
+and every count was compared. `counts_match` and `success` require all counts to
+agree; differences are retained with their declarations and both counts, and
+the command exits nonzero. Invalid or incomplete inputs leave an unsuccessful
+report, including when replacing an older successful comparison. The output
+cannot overwrite the manifest or either input report. Input SHA-256 digests are
+recorded, and the source inventories remain unchanged.
+
+This validates producer reports; it does not query either database, authenticate
+report authors, establish their freshness, acquire a writer lease, or prove
+full-row data equality. Keep both databases quiesced throughout the underlying
+inventory procedure and retain report provenance. `data_compared_to_source`,
+`live_source_compared`, and `application_qualified` stay false. An Oracle replay
+is a reference for the saved export, not a comparison against today's live
+source. Run the full [source-value verification](oracle-source-value-verification.md)
+as a separate gate.
+
+Eight offline regression tests cover matching legacy counts, mismatches,
+incomplete/changed reports, duplicate declarations, invalid counts, missing
+reference table verification, cleanup failures, malformed target fingerprints,
+input overwrite protection, and stale-success invalidation. The retained real
+Oracle replay report passes the reference-side checks for all 3,826
+relationships. The full application-target comparison remains pending until
+source foreign-key installation and target inventory finish.
+
+The inventory output is saved after bounded batches and on ordinary failure.
+The inventory command does not resume a partial count; rerunning starts a new read-only
 inventory against the same completed migration baseline. It refuses to use the
 source manifest or migration journal as its output path. If an explicit,
 separately approved data repair occurs, rerun the migration verification phase

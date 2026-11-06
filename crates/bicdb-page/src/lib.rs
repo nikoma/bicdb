@@ -58,10 +58,10 @@ pub use heap::{HeapFile, HeapOptions, HeapScan, HeapSnapshot};
 pub use lock::DirectoryLock;
 pub use manager::{
     convert_extent_layout, repair_interrupted_relayout, ExtentMigrationReport, FaultInjection,
-    FreeListTruncateReport, HolePunchReport, PageClassIoSnapshot, PageIoLatencyMetrics,
-    PageIoLatencySnapshot, PageIoMetrics, PageIoSnapshot, PageStore, PageStoreOptions,
-    PageTypeIoSnapshot, TailReclaimLimits, TailReclaimReport, MAX_TAIL_RECLAIM_IO_BYTES,
-    MAX_TAIL_RECLAIM_PAGE_VISITS, PAGE_IO_LATENCY_BUCKET_COUNT,
+    FreeListTruncateReport, FreePageExtent, FreePageExtents, HolePunchReport, PageClassIoSnapshot,
+    PageIoLatencyMetrics, PageIoLatencySnapshot, PageIoMetrics, PageIoSnapshot, PageStore,
+    PageStoreOptions, PageTypeIoSnapshot, TailReclaimLimits, TailReclaimReport,
+    MAX_TAIL_RECLAIM_IO_BYTES, MAX_TAIL_RECLAIM_PAGE_VISITS, PAGE_IO_LATENCY_BUCKET_COUNT,
     PAGE_IO_LATENCY_BUCKET_UPPER_BOUNDS_NANOS,
 };
 pub use mvcc::{Snapshot, TransactionTable, TxStatus, VersionHeader, Xid, VERSION_HEADER_BYTES};

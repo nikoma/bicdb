@@ -40,6 +40,23 @@ const SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC: [u8; 8] = *b"BICDBPG4";
 /// superblock page fits in segment 0 at any page size.
 pub const MIN_EXTENT_BYTES: u64 = 1024 * 1024;
 
+/// A contiguous run of reusable logical pages, not filesystem free space or
+/// physical bytes beyond the allocator's published logical file length.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FreePageExtent {
+    pub start_page: PageId,
+    pub pages: u64,
+}
+
+/// One allocator-consistent, read-only inventory of reusable page runs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FreePageExtents {
+    pub page_size: u32,
+    pub page_count: u64,
+    pub free_pages: u64,
+    pub extents: Vec<FreePageExtent>,
+}
+
 /// One [`PageStore::advance_extent_migration`] step.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ExtentMigrationReport {
@@ -1639,6 +1656,93 @@ impl PageStore {
         }
         members.sort_unstable();
         Ok(Some(members))
+    }
+
+    /// Inventory reusable logical page runs under the allocator metadata lock.
+    ///
+    /// Both visit and logical-read-byte budgets are checked before allocation
+    /// or I/O. `None` means the complete inventory exceeds admission; it never
+    /// returns a partial successful inventory. Corrupt chains fail closed.
+    /// Allocation/free cannot change membership during the walk. No pages,
+    /// superblock fields, free-list links or file lengths are modified.
+    pub fn free_page_extents(
+        &self,
+        max_pages: u64,
+        max_read_bytes: u64,
+    ) -> Result<Option<FreePageExtents>> {
+        let meta = self.meta.lock();
+        validate_free_list_metadata(&meta)?;
+        if meta.free_page_count > max_pages
+            || meta
+                .free_page_count
+                .checked_mul(u64::from(self.page_size))
+                .is_none_or(|bytes| bytes > max_read_bytes)
+        {
+            return Ok(None);
+        }
+        let count = usize::try_from(meta.free_page_count)
+            .map_err(|_| free_list_corruption(&meta, "free-page count exceeds address space"))?;
+        let mut pages = Vec::new();
+        pages
+            .try_reserve_exact(count)
+            .map_err(|_| PageError::InvalidMaintenanceLimits {
+                reason: "free-page extent inventory allocation failed".into(),
+            })?;
+        let mut cursor = meta.free_list_head;
+        while cursor != 0 {
+            if cursor >= meta.page_count || pages.len() >= count {
+                return Err(free_list_corruption(
+                    &meta,
+                    "free-page inventory exceeds logical bounds or advertised count",
+                ));
+            }
+            let header = self.read_header(cursor)?;
+            if header.page_type != PageType::Free {
+                return Err(free_list_corruption(
+                    &meta,
+                    "free-page inventory encountered an allocated page",
+                ));
+            }
+            pages.push(cursor);
+            cursor = header.next_page;
+        }
+        if pages.len() != count {
+            return Err(free_list_corruption(
+                &meta,
+                "free-page inventory is shorter than advertised",
+            ));
+        }
+        pages.sort_unstable();
+        let mut extents: Vec<FreePageExtent> = Vec::new();
+        extents
+            .try_reserve_exact(count)
+            .map_err(|_| PageError::InvalidMaintenanceLimits {
+                reason: "free-page extent inventory allocation failed".into(),
+            })?;
+        for page in pages {
+            if let Some(last) = extents.last_mut() {
+                if page < last.start_page + last.pages {
+                    return Err(free_list_corruption(
+                        &meta,
+                        "duplicate page in free-page inventory",
+                    ));
+                }
+                if page == last.start_page + last.pages {
+                    last.pages += 1;
+                    continue;
+                }
+            }
+            extents.push(FreePageExtent {
+                start_page: page,
+                pages: 1,
+            });
+        }
+        Ok(Some(FreePageExtents {
+            page_size: self.page_size,
+            page_count: meta.page_count,
+            free_pages: meta.free_page_count,
+            extents,
+        }))
     }
 
     /// Truncate the file's trailing run of FREE pages.
@@ -3693,5 +3797,189 @@ mod tests {
                 "page_size {page_size}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod free_extent_snapshot_tests {
+    use super::*;
+    use std::sync::Arc;
+
+    fn open(path: &Path, extent: u64) -> PageStore {
+        PageStore::open(
+            path,
+            PageStoreOptions::default()
+                .with_fsync(false)
+                .with_extent_bytes(extent),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn free_extent_snapshot_new_store_is_empty_and_budget_refusal_reads_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pages");
+        let store = open(&path, 0);
+        let empty = store.free_page_extents(0, 0).unwrap().unwrap();
+        assert_eq!((empty.page_count, empty.free_pages), (1, 0));
+        assert!(empty.extents.is_empty());
+        let page = store.allocate(PageType::Heap).unwrap();
+        store.free(page).unwrap();
+        let before = std::fs::read(&path).unwrap();
+        let reads = store.metrics.snapshot().reads;
+        assert!(store.free_page_extents(0, u64::MAX).unwrap().is_none());
+        assert!(store
+            .free_page_extents(1, u64::from(store.page_size()) - 1)
+            .unwrap()
+            .is_none());
+        assert_eq!(store.metrics.snapshot().reads, reads);
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+
+    #[test]
+    fn free_extent_snapshot_coalesces_logical_runs_and_preserves_reuse_and_reopen() {
+        for extent in [0, MIN_EXTENT_BYTES] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("pages");
+            let store = open(&path, extent);
+            let ids: Vec<_> = (0..9)
+                .map(|_| store.allocate(PageType::Heap).unwrap())
+                .collect();
+            for i in [1, 5, 2, 6, 7] {
+                store.free(ids[i]).unwrap();
+            }
+            let head = store.free_list_head();
+            let size = store.file_size_bytes().unwrap();
+            let writes = store.metrics.snapshot().writes;
+            let snapshot = store
+                .free_page_extents(5, 5 * u64::from(store.page_size()))
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                snapshot.extents,
+                vec![
+                    FreePageExtent {
+                        start_page: ids[1],
+                        pages: 2
+                    },
+                    FreePageExtent {
+                        start_page: ids[5],
+                        pages: 3
+                    }
+                ]
+            );
+            assert_eq!((snapshot.free_pages, snapshot.page_count), (5, 10));
+            assert_eq!(store.file_size_bytes().unwrap(), size);
+            assert_eq!(store.metrics.snapshot().writes, writes);
+            store.flush().unwrap();
+            drop(store);
+            let store = open(&path, extent);
+            assert_eq!(
+                store
+                    .free_page_extents(5, 5 * u64::from(store.page_size()))
+                    .unwrap()
+                    .unwrap(),
+                snapshot
+            );
+            assert_eq!(store.allocate(PageType::BTreeLeaf).unwrap(), head);
+            let after = store
+                .free_page_extents(4, 4 * u64::from(store.page_size()))
+                .unwrap()
+                .unwrap();
+            assert_eq!(after.free_pages, 4);
+            assert!(!after
+                .extents
+                .iter()
+                .any(|e| head >= e.start_page && head < e.start_page + e.pages));
+        }
+    }
+
+    #[test]
+    fn free_extent_snapshot_rejects_cycles_range_and_type_corruption_without_repair() {
+        for fault in ["cycle", "range", "type"] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("pages");
+            let store = open(&path, 0);
+            let page = store.allocate(PageType::Heap).unwrap();
+            store.free(page).unwrap();
+            let mut bytes = vec![0; store.page_size() as usize];
+            let mut header = store.read_page(page, &mut bytes).unwrap();
+            match fault {
+                "cycle" => header.next_page = page,
+                "range" => header.next_page = store.page_count(),
+                "type" => header.page_type = PageType::Heap,
+                _ => unreachable!(),
+            }
+            header.encode(&mut bytes);
+            store.write_page(page, &mut bytes).unwrap();
+            let before = std::fs::read(&path).unwrap();
+            assert!(matches!(
+                store.free_page_extents(10, 10 * u64::from(store.page_size())),
+                Err(PageError::FreeListCorruption { .. })
+            ));
+            assert_eq!(std::fs::read(&path).unwrap(), before);
+            assert_eq!(store.free_page_count(), 1);
+        }
+    }
+
+    #[test]
+    fn free_extent_snapshot_refuses_inconsistent_counts_without_mutation() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = open(&dir.path().join("pages"), 0);
+        let a = store.allocate(PageType::Heap).unwrap();
+        store.allocate(PageType::Heap).unwrap();
+        store.free(a).unwrap();
+        store.meta.lock().free_page_count = 2;
+        assert!(matches!(
+            store.free_page_extents(2, 2 * u64::from(store.page_size())),
+            Err(PageError::FreeListCorruption { .. })
+        ));
+        assert_eq!(store.free_page_count(), 2);
+        let page_count = store.page_count();
+        store.meta.lock().free_page_count = page_count;
+        assert!(matches!(
+            store.free_page_extents(10, u64::MAX),
+            Err(PageError::FreeListCorruption { .. })
+        ));
+    }
+
+    #[test]
+    fn free_extent_snapshot_is_consistent_during_allocator_reuse() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Arc::new(open(&dir.path().join("pages"), 0));
+        let page = store.allocate(PageType::Heap).unwrap();
+        store.free(page).unwrap();
+        let writer = store.clone();
+        let worker = std::thread::spawn(move || {
+            for _ in 0..200 {
+                let page = writer.allocate(PageType::Heap).unwrap();
+                std::thread::yield_now();
+                writer.free(page).unwrap();
+            }
+        });
+        for _ in 0..200 {
+            let sample = store
+                .free_page_extents(2, 2 * u64::from(store.page_size()))
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                sample.extents.iter().map(|e| e.pages).sum::<u64>(),
+                sample.free_pages
+            );
+            assert!(sample.free_pages <= 1);
+            assert!(sample
+                .extents
+                .iter()
+                .all(|e| e.start_page > 0 && e.start_page + e.pages <= sample.page_count));
+        }
+        worker.join().unwrap();
+        assert_eq!(
+            store
+                .free_page_extents(2, 2 * u64::from(store.page_size()))
+                .unwrap()
+                .unwrap()
+                .free_pages,
+            1
+        );
     }
 }

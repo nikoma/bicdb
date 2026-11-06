@@ -3611,7 +3611,7 @@ mod memo_eligibility_tests {
                 false,
             ),
         ] {
-            let statements = parse_statements(source).unwrap();
+            let statements = Parser::parse_sql(&PostgreSqlDialect {}, source).unwrap();
             let Statement::Query(query) = &statements[0] else {
                 panic!("expected query")
             };

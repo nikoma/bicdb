@@ -31,6 +31,15 @@ separately: rolling back an upgrade restores a shared reservation acquired
 before the savepoint rather than discarding its protection. Repeated acquisition
 of a mode does not add duplicate rollback events.
 
+The core write-only `truncate_writes` API retains all integrity reservations
+conservatively while any buffered write survives; a constraint key has no
+mapping back to one row. Removing all writes releases those reservations.
+Callers requiring exact savepoint release must use rollback marks, which retain
+both write and acquisition boundaries. `release_read_locks_since` rejects an
+integrity-reservation suffix atomically, including when there are no writes;
+that API releases record-read locks only. These distinctions prevent cleanup
+from silently removing protection for effects the transaction still retains.
+
 A conflicting reservation currently returns a retryable transaction conflict
 (SQLSTATE `40001`). This is a bounded integrity contract, not complete Oracle or
 PostgreSQL lock-wait equivalence. Waiting for uncommitted parent creation,
@@ -51,3 +60,9 @@ The [2026-11-05 qualification checkpoint](evidence/oracle-foreign-key-reservatio
 records executed native, protocol and independent Oracle comparisons, including
 candidate identity and remaining boundaries. Full application and production
 acceptance remain separate gates.
+
+The [core cleanup checkpoint](evidence/transaction-integrity-truncation-2026-11-05/README.md)
+qualifies write-only truncation and read-lock suffix rejection with the same
+standalone input before/after the fix, focused regressions, broader native
+checks and independent Oracle comparisons. This does not qualify the separate
+full application, production resource or saturated admission contracts.

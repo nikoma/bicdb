@@ -16771,10 +16771,13 @@ impl Transaction {
             }
             if locked.order[mark.lock_len..]
                 .iter()
-                .any(|(collection, id)| self.last_pending_write(collection, id).is_some())
+                .any(|key| {
+                    integrity_reservations::is_event(key)
+                        || self.last_pending_write(&key.0, &key.1).is_some()
+                })
             {
                 return Err(BicDbError::TransactionConflict(
-                    "cannot release locks protecting buffered writes".into(),
+                    "cannot release integrity reservations or locks protecting buffered writes".into(),
                 ));
             }
             locked.split_off(mark.lock_len)
@@ -16817,6 +16820,10 @@ impl Transaction {
             == Some(self.id)
     }
 
+    /// Drop a write suffix and release record locks without surviving writes.
+    /// Constraint reservations have no row identity: retain them conservatively
+    /// while any write survives. Use a rollback mark when the exact acquisition
+    /// boundary must also be restored.
     pub fn truncate_writes(&mut self, len: usize) -> Result<()> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
@@ -16834,7 +16841,10 @@ impl Transaction {
         let released = self
             .locked_keys
             .get_mut()
-            .extract(|key| !retained.contains(key));
+            .extract(|key| {
+                !retained.contains(key)
+                    && (retained.is_empty() || !integrity_reservations::is_event(key))
+            });
         release_owned_write_locks(&self.write_locks, self.id, &released);
         Ok(())
     }

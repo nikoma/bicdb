@@ -1,0 +1,223 @@
+{
+  "format": 1,
+  "source_commit": "550e2d67a22776b7c5011c6de728e7301d095887",
+  "binary_sha256": "d814d798edb16bfbfa48f926b27c2a899fec5c9c905893eabd29af32e019e4b0",
+  "fixture_source_commit": "550e2d67a22776b7c5011c6de728e7301d095887",
+  "fixture_sha256": {
+    "row_lock_waits.py": "2bf9c9d2a635391ddfdb0fd7527cb16cdef4cbb26f8fa011730aec36c0a782f7",
+    "foreign_key_readers.py": "d5a716da0168de75881e6b2442f0e1d8b9d05ba59546bfe74fb7a087fbd30b4a"
+  },
+  "comparison": {
+    "format": 1,
+    "cases": [
+      {
+        "id": "immediate_children",
+        "source": {
+          "id": "immediate_children",
+          "actual": [
+            2,
+            0
+          ],
+          "expected": [
+            2,
+            0
+          ],
+          "qualified": true
+        },
+        "bicdb": {
+          "id": "immediate_children",
+          "actual": [
+            2,
+            0
+          ],
+          "expected": [
+            2,
+            0
+          ],
+          "qualified": true
+        },
+        "matched": true
+      },
+      {
+        "id": "deferred_children",
+        "source": {
+          "id": "deferred_children",
+          "actual": [
+            2,
+            0
+          ],
+          "expected": [
+            2,
+            0
+          ],
+          "qualified": true
+        },
+        "bicdb": {
+          "id": "deferred_children",
+          "actual": [
+            2,
+            0
+          ],
+          "expected": [
+            2,
+            0
+          ],
+          "qualified": true
+        },
+        "matched": true
+      },
+      {
+        "id": "unique_parent_nonkey_update",
+        "source": {
+          "id": "unique_parent_nonkey_update",
+          "actual": [
+            2,
+            7
+          ],
+          "expected": [
+            2,
+            7
+          ],
+          "qualified": true
+        },
+        "bicdb": {
+          "id": "unique_parent_nonkey_update",
+          "actual": [
+            2,
+            7
+          ],
+          "expected": [
+            2,
+            7
+          ],
+          "qualified": true
+        },
+        "matched": true
+      },
+      {
+        "id": "savepoint_releases_reference",
+        "source": {
+          "id": "savepoint_releases_reference",
+          "actual": [
+            0,
+            0
+          ],
+          "expected": [
+            0,
+            0
+          ],
+          "qualified": true
+        },
+        "bicdb": {
+          "id": "savepoint_releases_reference",
+          "actual": [
+            0,
+            0
+          ],
+          "expected": [
+            0,
+            0
+          ],
+          "qualified": true
+        },
+        "matched": true
+      },
+      {
+        "id": "deferred_parent_key_move",
+        "source": {
+          "id": "deferred_parent_key_move",
+          "actual": [
+            2,
+            2
+          ],
+          "expected": [
+            2,
+            2
+          ],
+          "qualified": true
+        },
+        "bicdb": {
+          "id": "deferred_parent_key_move",
+          "actual": [
+            2,
+            2
+          ],
+          "expected": [
+            2,
+            2
+          ],
+          "qualified": true
+        },
+        "matched": true
+      },
+      {
+        "id": "referenced_parent_move_rejected",
+        "source": {
+          "id": "referenced_parent_move_rejected",
+          "expected_rejection": true,
+          "actual": [
+            1,
+            1
+          ],
+          "expected": [
+            1,
+            1
+          ],
+          "qualified": true
+        },
+        "bicdb": {
+          "id": "referenced_parent_move_rejected",
+          "expected_rejection": true,
+          "actual": [
+            1,
+            1
+          ],
+          "expected": [
+            1,
+            1
+          ],
+          "qualified": true
+        },
+        "matched": true
+      },
+      {
+        "id": "referenced_key_swap",
+        "source": {
+          "id": "referenced_key_swap",
+          "actual": [
+            8,
+            1
+          ],
+          "expected": [
+            8,
+            1
+          ],
+          "qualified": true
+        },
+        "bicdb": {
+          "id": "referenced_key_swap",
+          "actual": [
+            8,
+            1
+          ],
+          "expected": [
+            8,
+            1
+          ],
+          "qualified": true
+        },
+        "matched": true
+      }
+    ],
+    "total": 7,
+    "matched": 7,
+    "source_qualified": true,
+    "cleanup_errors": [],
+    "success": true,
+    "application_qualified": false
+  },
+  "database_returncode": 0,
+  "database_removed": true,
+  "success": true,
+  "application_qualified": false
+}

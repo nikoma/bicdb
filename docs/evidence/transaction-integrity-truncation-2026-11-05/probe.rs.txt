@@ -1,0 +1,22 @@
+use bicdb_core::{BicDb, DbConfig, Record};
+fn main() {
+    let path = std::env::args().nth(1).expect("owned database path");
+    let mut db = BicDb::open_with_config(&path, DbConfig::default().with_fsync(false)).unwrap();
+    db.create_collection("records").unwrap();
+    let mut owner = db.begin_transaction().unwrap();
+    owner.reserve_integrity_key_shared("parent:pk", "1").unwrap();
+    owner.reserve_integrity_key("records:unique", "u1").unwrap();
+    owner.insert("records", Record::new("c1")).unwrap();
+    let before = owner.write_len();
+    owner.truncate_writes(before).unwrap();
+    assert_eq!(owner.write_len(), before);
+    let contender = db.begin_transaction().unwrap();
+    let reference_protected = contender.reserve_integrity_key("parent:pk", "1").is_err();
+    let unique_protected = contender.reserve_integrity_key("records:unique", "u1").is_err();
+    println!("retained_write_count={before} reference_protected={reference_protected} unique_protected={unique_protected}");
+    contender.rollback().unwrap();
+    owner.rollback().unwrap();
+    drop(db);
+    std::fs::remove_dir_all(&path).unwrap();
+    if !reference_protected || !unique_protected { std::process::exit(42); }
+}

@@ -6,6 +6,10 @@ use super::*;
 const EXCLUSIVE_PREFIX: &str = "\0bicdb:constraint:";
 const SHARED_PREFIX: &str = "\0bicdb:constraint-shared:";
 
+pub(super) fn is_event(key: &RecordLockKey) -> bool {
+    key.0.starts_with(EXCLUSIVE_PREFIX) || key.0.starts_with(SHARED_PREFIX)
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(super) enum Mode {
     Shared,

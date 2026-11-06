@@ -1,0 +1,96 @@
+{
+  "format": 1,
+  "status": "interrupted_not_application_qualified",
+  "engine_source_commit": "dc6e3c5a1f9943ec9cb63abf7157ed1d58281986",
+  "native_main_commit": "8b2bfae217cca282e07efd5123ddee9a360a7b93",
+  "native_binary_sha256": "b8828534f9a2dd20540dc87cf9c1975dff36697ef58ed88ddadcc65d2fbe90aa",
+  "baseline": "separate copy of exercised full source-FK application database",
+  "source_foreign_keys_installed": 3826,
+  "planned_tests": 64,
+  "completed_tests": 42,
+  "passed": 35,
+  "failed": 7,
+  "errors": 0,
+  "skipped_in_completed_classes": 0,
+  "unreported_tests": 22,
+  "completed_class_reports": [
+    {
+      "name": "org.idempiere.test.model.PaymentTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "org.idempiere.test.model.PurchaseOrderTest",
+      "tests": "16",
+      "failures": "6",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "org.idempiere.test.model.AllocationTest",
+      "tests": "19",
+      "failures": "1",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "org.idempiere.test.model.BankStatementTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    }
+  ],
+  "completed_class_and_driver_origins": [
+    {
+      "class_name": "org.compiere.db.DB_Oracle",
+      "source_sha256": "330a951360185f9acc875e98985255bda467adac447d1a866ae0a7f210026288",
+      "matched": true
+    },
+    {
+      "class_name": "org.bicdb.jdbc.oracle.OracleDriver",
+      "source_sha256": "9102b2ad40e5f9f1366e9d1a126556ec240c5e8423df5c30e02590506a3333ac",
+      "matched": true
+    },
+    {
+      "class_name": "org.postgresql.Driver",
+      "source_sha256": "2a32a9dcbc42d67a50ad3a0de5efd102c8d2be46720045f2cbd6689f160ab7c7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.model.PaymentTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.model.PurchaseOrderTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.model.AllocationTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.model.BankStatementTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    }
+  ],
+  "original_assertions_and_bytecode_preserved": true,
+  "resource": {
+    "status": "aborted_low_memory",
+    "guard_command_returncode": 125,
+    "minimum_available_gib": 14,
+    "peak_process_group_rss_bytes": 4324089856,
+    "minimum_observed_host_available_bytes": 14609907712
+  },
+  "jvm_and_database_pids_absent_after_interruption": true,
+  "clean_process_exit_qualified": false,
+  "source_vendor_balance_controls_observed": true,
+  "vendor_balance_root_cause_verified": false,
+  "application_qualified": false
+}

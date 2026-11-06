@@ -1,0 +1,127 @@
+{
+  "format": 1,
+  "status": "original_pristine_routine_mapped_foundation_89_verified",
+  "engine_source_commit": "a4d766d3f7fd92e15ff22beb214b285a70f76d27",
+  "native_binary_sha256": "23da439894484eef3409ab6c3444df9e97c5256737bab9e91760b24d7f6d2c9f",
+  "test_jar_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+  "test_assertions_or_bytecode_changed": false,
+  "tests": 89,
+  "passed": 89,
+  "errors": 0,
+  "failures": 0,
+  "skipped": 0,
+  "classes": {
+    "org.idempiere.test.base.POTest": {
+      "tests": 53,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    },
+    "org.idempiere.test.base.POInsertSQLTest": {
+      "tests": 20,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    },
+    "org.idempiere.test.model.InvoiceCustomerTest": {
+      "tests": 9,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    },
+    "org.idempiere.test.base.InvoiceTest": {
+      "tests": 2,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    },
+    "org.idempiere.test.base.InOutTest": {
+      "tests": 5,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "selected_runtime_class_origins": [
+    {
+      "class_name": "org.compiere.db.DB_Oracle",
+      "source_sha256": "330a951360185f9acc875e98985255bda467adac447d1a866ae0a7f210026288",
+      "matched": true
+    },
+    {
+      "class_name": "org.bicdb.jdbc.oracle.OracleDriver",
+      "source_sha256": "9102b2ad40e5f9f1366e9d1a126556ec240c5e8423df5c30e02590506a3333ac",
+      "matched": true
+    },
+    {
+      "class_name": "org.postgresql.Driver",
+      "source_sha256": "2a32a9dcbc42d67a50ad3a0de5efd102c8d2be46720045f2cbd6689f160ab7c7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.InvoiceTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.model.InvoiceCustomerTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.InOutTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.POTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.POInsertSQLTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    }
+  ],
+  "expected_counts_matched": true,
+  "all_selected_classes_reported": true,
+  "selected_test_runtime_packaging_qualified": true,
+  "external_network_isolated": true,
+  "baseline_report_sha256": "ebd109d58a0be463e882817f5eb7d034c58236173553987a8f7b6df3869ff294",
+  "retained_evidence_sha256": {
+    "batch": "9a6bcc1917fc4511be85df3349921e1edf0636aa715b9014388cba48eca3529e",
+    "run": "5664f37a500536612e2581f24ca621235544bf0010441e792883096d95f5bf0d",
+    "xml": {
+      "TEST-org.idempiere.test.base.POTest.xml": "cbb125f220e169d23ed43c4f38fa90f3ec0bfb1b2e503df3be7fb58bf19c7288",
+      "TEST-org.idempiere.test.base.POInsertSQLTest.xml": "b5d92bd58abfba9f852c8830b94d56e7652e04e5a16c019298ba20922fc921c3",
+      "TEST-org.idempiere.test.model.InvoiceCustomerTest.xml": "d21ae45f3fb9c66a78aa975d5814b637c013fe8068a1bb87930bcfec4a45d58e",
+      "TEST-org.idempiere.test.base.InvoiceTest.xml": "d0639ef034a4c615fe282531147446e6dc5b5ab9963fd7748b0c21091024ac03",
+      "TEST-org.idempiere.test.base.InOutTest.xml": "6d345aa6948c11dac0f095bbc225c7505773167107dafe7763651af2f5655f9d"
+    }
+  },
+  "blob_columns_reconciled_before_jvm": 16,
+  "blob_reconciliation_preserved_definitions_and_table_fingerprints": true,
+  "shutdown": [
+    {
+      "role": "test_jvm",
+      "returncode": 0
+    },
+    {
+      "role": "database",
+      "returncode": 0
+    }
+  ],
+  "passed_disposable_database_reclaimed_bytes": 589471744,
+  "logs_and_pristine_baseline_preserved": true,
+  "resource_observation": {
+    "peak_group_rss_bytes": 4816826368,
+    "minimum_observed_available_bytes": 22865555456,
+    "maximum_observed_memory_full_avg10": 0
+  },
+  "background_storage_catalog_query_qualified": false,
+  "full_application_qualified": false,
+  "production_qualified": false,
+  "oracle_conformance_claimed": false,
+  "goal_complete": false
+}

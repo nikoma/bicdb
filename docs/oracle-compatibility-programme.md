@@ -89,6 +89,13 @@ stored-definition preservation, and shuts down cleanly. Unchanged original
 application tests use separate clones. Full routine execution, security,
 application behavior and recovery remain unqualified.
 
+The [unchanged original pristine foundation checkpoint](evidence/idempiere-original-pristine-foundation-2026-11-06/README.md)
+then passes all 89 selected tests, with zero errors, failures or skips. Runtime
+class origins and original source/class hashes match; the JVM and database exit
+zero and the closed disposable database is cleaned up. Business/remaining
+classes, background storage monitoring, complete UI/workflows, security and
+recovery remain separate gates.
+
 The [full-FK foundation checkpoint](evidence/idempiere-full-fk-foundation-2026-11-05/README.md)
 passes all 89 selected original application tests, with zero failures/errors/skips,
 verified Oracle-provider/PostgreSQL-driver origins and clean JVM/database exits.

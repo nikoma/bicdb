@@ -5160,7 +5160,10 @@ impl<'db> SqlSession<'db> {
         // Keep dotted GUC names whole; normalize_object_name would strip the
         // qualifier ("app.tenant" -> "tenant").
         let setting = if raw.contains('.') {
-            raw.trim_matches('"').to_ascii_lowercase()
+            // A parsed statement can render app.option as "app"."option".
+            // Decode identifier components before joining the GUC key; merely
+            // trimming the outer quotes leaves embedded quote separators.
+            sql_identifier_parts(raw)?.join(".").to_ascii_lowercase()
         } else {
             normalize_object_name(raw)
         };

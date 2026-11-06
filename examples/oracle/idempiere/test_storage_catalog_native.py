@@ -175,12 +175,16 @@ class StorageCatalogNativeTests(unittest.TestCase):
                 Decimal('.01'), rounding=ROUND_HALF_UP)*100)
             self.assertEqual((blocks, largest),
                              (sum(row[4] for row in runs),max(row[4] for row in runs)))
-            c.execute("SET bicdb.storage_inventory_max_read_bytes='1'")
-            with self.assertRaises(psycopg.errors.ProgramLimitExceeded):
-                c.execute('SELECT * FROM '+NATIVE)
-            c.execute('RESET bicdb.storage_inventory_max_read_bytes')
-            c.execute('SELECT count(*) FROM '+NATIVE)
-            self.assertGreater(c.fetchone()[0], 0)
+            for reset in ['RESET bicdb.storage_inventory_max_read_bytes',
+                          'RESET "bicdb"."storage_inventory_max_read_bytes"',
+                          'RESET "bicdb.storage_inventory_max_read_bytes"']:
+                with self.subTest(reset=reset):
+                    c.execute("SET bicdb.storage_inventory_max_read_bytes='1'")
+                    with self.assertRaises(psycopg.errors.ProgramLimitExceeded):
+                        c.execute('SELECT * FROM '+NATIVE)
+                    c.execute(reset)
+                    c.execute('SELECT count(*) FROM '+NATIVE)
+                    self.assertGreater(c.fetchone()[0], 0)
             values = ','.join("(%d,'%s')" % (i, 'y'*2000) for i in range(500,550))
             c.execute('INSERT INTO churn VALUES '+values)
             c.execute('SELECT COALESCE(SUM("BLOCKS"),0) FROM '+NATIVE)

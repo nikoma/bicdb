@@ -86,6 +86,14 @@ NATIONAL_CONTEXT_PLANS = [
 ]
 
 
+def semantic_error(code, full_code):
+    # ORA-12704 (character set mismatch), for example, is a semantic
+    # observation, not a transport failure merely because it exceeds 12500.
+    return (isinstance(code, int) and code > 0 and str(full_code).startswith('ORA-')
+            and code not in {28, 1013, 1017, 1033, 1034, 1089, 1090, 2396, 3113, 3114, 3135}
+            and not 12100 <= code < 12300 and not 12500 <= code < 12700)
+
+
 def observe(factory, *, contract='ordinary'):
     import oracledb
     if contract not in {'ordinary', 'national'}:
@@ -125,8 +133,7 @@ def observe(factory, *, contract='ordinary'):
                         source = error.args[0]
                         code = getattr(source, 'code', None)
                         item.update(oracle_error_code=code, oracle_full_code=getattr(source, 'full_code', None))
-                        if (not isinstance(code, int) or code <= 0 or code >= 12500
-                                or not str(item['oracle_full_code']).startswith('ORA-')):
+                        if not semantic_error(code, item['oracle_full_code']):
                             report['cases'].append(item)
                             raise
                     report['cases'].append(item)
@@ -140,8 +147,7 @@ def observe(factory, *, contract='ordinary'):
                         source = error.args[0]
                         code = getattr(source, 'code', None)
                         item.update(oracle_error_code=code, oracle_full_code=getattr(source, 'full_code', None))
-                        if (not isinstance(code, int) or code <= 0 or code >= 12500
-                                or not str(item['oracle_full_code']).startswith('ORA-')):
+                        if not semantic_error(code, item['oracle_full_code']):
                             report['predicate_contexts'].append(item)
                             raise
                     report['predicate_contexts'].append(item)

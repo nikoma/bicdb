@@ -387,6 +387,7 @@ impl SqlSession<'_> {
         let [statement] = statements.as_mut_slice() else {
             return Err(unsupported("dynamic SQL requires exactly one statement"));
         };
+        namespaces::qualify_quoted_functions(self.db_ref(), statement, namespace)?;
         super::storage_catalog::lower(self.db_ref(), statement, namespace)?;
         namespaces::qualify_with_calls(statement, namespace);
         if !matches!(

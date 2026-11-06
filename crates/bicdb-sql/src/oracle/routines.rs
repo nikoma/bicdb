@@ -52,6 +52,7 @@ fn bind_relations<T: sqlparser::ast::VisitMut>(
         super::syntax::rewrite(db, node, Some(schema))?;
     }
     if let Some(db) = db {
+        namespaces::qualify_quoted_functions(db, node, schema)?;
         super::storage_catalog::lower(db, node, schema)?;
     }
     if calls {

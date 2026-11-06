@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 import re
+import tempfile
 from pathlib import Path
 
 
@@ -193,11 +194,13 @@ def row_hash(row):
                                    separators=(',', ':')).encode()).digest()
 
 
-def source_row_hashes(snapshot, table):
+def source_row_hashes(snapshot, table, *, copy_to=None):
     """Validate the exact bytes, projection and row count of one exported file."""
     columns = table['columns']
     count = table['rows']
-    if not columns or len(columns) != len(set(columns)):
+    if (not isinstance(columns, list) or not columns or
+            any(not isinstance(column, str) or not column for column in columns) or
+            len(columns) != len(set(columns))):
         raise ValueError('invalid snapshot table projection')
     if isinstance(count, bool) or not isinstance(count, int) or count < 0:
         raise ValueError('invalid snapshot table row count')
@@ -211,12 +214,36 @@ def source_row_hashes(snapshot, table):
             if not isinstance(values, list) or len(values) != len(columns):
                 raise ValueError('snapshot row width differs from table projection')
             expected.append(row_hash([decode(value) for value in values]))
+            if copy_to is not None:
+                copy_to.write(line)
     if digest.hexdigest() != table['sha256']:
         raise ValueError('snapshot row file digest mismatch')
     if len(expected) != count:
         raise ValueError('snapshot row count differs from table manifest')
     expected.sort()
     return expected
+
+
+def copy_table(connection, cursor, snapshot, schema, table):
+    # Keep one private on-disk copy of the bytes checked by the shared validator.
+    # Reopening the exported path after hashing would permit a different file to
+    # be consumed by COPY. Do not open target COPY until all source checks pass.
+    with tempfile.TemporaryFile(mode='w+b') as frozen:
+        source_row_hashes(snapshot, table, copy_to=frozen)
+        frozen.seek(0)
+        relation = quote(schema) + '.' + quote(table['name'])
+        columns = ','.join(quote(name) for name in table['columns'])
+        with connection.transaction():
+            cursor.execute('SELECT COUNT(*) FROM ' + relation)
+            if cursor.fetchone() != (0,):
+                raise ValueError('data import requires an empty uncompleted target table')
+            with cursor.copy('COPY ' + relation + '(' + columns + ') FROM STDIN') as copy:
+                for line in frozen:
+                    copy.write_row([decode(value) for value in json.loads(line)])
+            cursor.execute('SELECT COUNT(*) FROM ' + relation)
+            if cursor.fetchone() != (table['rows'],):
+                raise ValueError('target row count differs')
+        # The caller advances its journal only after the COPY transaction commits.
 
 
 def verify_values(cursor, snapshot, schema, table):
@@ -359,24 +386,7 @@ def main():
                         digest = verify_values(cursor, args.snapshot, schema, table)
                         report.setdefault('value_digests', {})[name] = digest
                     else:
-                        path = args.snapshot / table['file']
-                        if path.resolve().parent != args.snapshot.resolve():
-                            raise ValueError('snapshot row file must be directly inside its snapshot')
-                        with path.open('rb') as source:
-                            if hashlib.file_digest(source, 'sha256').hexdigest() != table['sha256']:
-                                raise ValueError('snapshot row file digest mismatch')
-                        columns = ','.join(quote(name) for name in table['columns'])
-                        sql = 'COPY ' + quote(schema) + '.' + quote(name) + '(' + columns + ') FROM STDIN'
-                        count = 0
-                        with cursor.copy(sql) as copy, path.open() as source:
-                            for line in source:
-                                row = json.loads(line)
-                                if len(row) != len(table['columns']): raise ValueError('snapshot row width differs')
-                                copy.write_row([decode(value) for value in row])
-                                count += 1
-                        if count != table['rows']: raise ValueError('snapshot row count differs')
-                        cursor.execute('SELECT COUNT(*) FROM ' + quote(schema) + '.' + quote(name))
-                        if int(cursor.fetchone()[0]) != count: raise ValueError('target row count differs')
+                        copy_table(connection, cursor, args.snapshot, schema, table)
                     report['completed'].append(name)
                     save_report(args.report, report)
         report['success'] = True

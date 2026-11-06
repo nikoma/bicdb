@@ -5,6 +5,36 @@ row multiset with the target over the PostgreSQL driver. It verifies data
 separately from schema installation, target-value preservation during DDL,
 orphan counts and application workflows.
 
+## Data loading before verification
+
+The `data` phase validates each source table before opening target COPY. It
+checks the source digest, array row shape, unique nonempty column-name list,
+declared nonnegative integer row count and supported exact value encodings.
+It freezes those same validated bytes in a private temporary file and reads
+COPY input from that file. Replacing or modifying the exported path after
+validation cannot substitute different COPY values. The temporary file is
+closed after that table, including on failure; temporary disk capacity for the
+largest individual source file is needed. Per-table row hashes are also retained
+for the shared validator's sorting, rather than holding a second decoded copy
+of the entire export in memory.
+
+An uncompleted target table must be empty. COPY, the target row-count check and
+deferred constraint checks run in a per-table transaction. Statement or commit
+failure rolls that transaction back; the importer advances the table journal
+only after commit succeeds. It does not append to existing unjournaled data or
+silently delete, adopt or repair it. If a process stops after database commit
+but before journal replacement, the nonempty unjournaled table requires
+investigation before retrying. The filesystem journal and database commit are
+not one atomic operation.
+
+Run the loader with application and schema writers stopped. These checks do not
+acquire a distributed writer lease or make the whole import one transaction.
+Source-file hashing binds input to the selected manifest; it does not authenticate
+the export author or establish Oracle snapshot consistency. Keep source export
+provenance and immutable backups. Loading and full source-value verification
+remain separate phases: the independent `verify` phase must still compare the
+stored target values, including any database conversion effects.
+
 ## Run before application writers
 
 Keep target application, importer and schema writers stopped. This phase uses

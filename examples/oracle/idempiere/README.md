@@ -128,7 +128,9 @@ python3 examples/oracle/idempiere/import_bicdb.py \
 
 The importer preserves logical column properties, checks and primary/unique
 keys. It explicitly records foreign keys, other indexes, types, routines, views
-and application execution as outstanding. COPY loads each table atomically.
+and application execution as outstanding. The data phase validates and freezes
+each source row file before COPY, requires an empty uncompleted target table,
+and commits its per-table COPY/count checks before advancing the journal.
 `--resume` checks the journal's manifest digest, profile, endpoint and completed
 prefix, plus completed table columns/counts. The journal is a development resume
 mechanism; it does not certify an unmodified target or make import atomic across

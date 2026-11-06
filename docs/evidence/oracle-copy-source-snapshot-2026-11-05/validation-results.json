@@ -1,0 +1,48 @@
+{
+  "format": 1,
+  "engine_source_commit": "b9845721893047621c2215a97cd190c0c3ede025",
+  "binary_sha256": "317cf94b595ea7b4dd4a15d849a2f77365e6cca51e1c4ab49a1a33c1d4b07e0b",
+  "copy_acceptance": {
+    "passed": 6,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "native_profiles": [
+      "oracle-preview-v1",
+      "postgres"
+    ],
+    "oracle_data_cli_success_and_failed_journals_checked": true,
+    "source_path_changed_during_copy_checked": true,
+    "deferred_commit_failure_and_retry_checked": true,
+    "clean_restart_checked": true
+  },
+  "existing_value_tests": {
+    "passed": 14,
+    "failed": 0,
+    "skipped": 0
+  },
+  "source_export_validation": {
+    "format": 1,
+    "status": "completed",
+    "manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+    "files_checked": 915,
+    "rows_checked": 185471,
+    "largest_private_file_bytes": 19241566,
+    "database_started": false,
+    "target_data_equality_qualified": false
+  },
+  "native_guard": {
+    "peak_group_rss_bytes": 169308160,
+    "minimum_observed_available_bytes": 19125960704,
+    "minimum_available_gib": 14.0
+  },
+  "source_guard": {
+    "peak_group_rss_bytes": 93917184,
+    "minimum_observed_available_bytes": 19069202432
+  },
+  "full_application_target_imported": false,
+  "application_qualified": false,
+  "accepted_application_updated": false,
+  "engine_changed": false,
+  "github_workflows_changed_or_dispatched": false
+}

@@ -198,6 +198,49 @@ class ForeignKeyMigrationIntegrationTests(unittest.TestCase):
         with self.conn.cursor() as c:c.execute('ALTER TABLE '+target.quote(m['source_schema'])+'."C" DROP CONSTRAINT '+target.quote(plan[0]['name']))
         with self.assertRaisesRegex(ValueError,'completed target foreign key'):self.migrate(args)
 
+    def test_resume_uses_whole_catalog_validation_and_reads_back_pending_installs(self):
+        import psycopg
+        m,args=self.setup_schema();plan=target.declarations(m)
+        args.check_only=False;args.writers_quiesced=True;self.migrate(args);args.resume=True
+        statements=[];real_connect=psycopg.connect
+        class Cursor:
+            def __init__(self,real):self.real=real
+            def __getattr__(self,name):return getattr(self.real,name)
+            def __enter__(self):self.real.__enter__();return self
+            def __exit__(self,*args):return self.real.__exit__(*args)
+            def __iter__(self):return iter(self.real)
+            def execute(self,sql,*args,**kwargs):
+                statements.append(sql);return self.real.execute(sql,*args,**kwargs)
+        class Connection:
+            def __init__(self,real):self.real=real
+            def __getattr__(self,name):return getattr(self.real,name)
+            def __enter__(self):self.real.__enter__();return self
+            def __exit__(self,*args):return self.real.__exit__(*args)
+            def cursor(self,*args,**kwargs):return Cursor(self.real.cursor(*args,**kwargs))
+        def run():
+            statements.clear()
+            with patch.object(psycopg,'connect',side_effect=lambda *a,**kw:Connection(real_connect(*a,**kw))):
+                return self.migrate(args)
+        result=run();self.assertEqual(result['completed'],plan)
+        scans=[q for q in statements if q.startswith(target.CONSTRAINT_SELECT)]
+        self.assertEqual(len(scans),1,'completed prefixes must use the complete catalog inventory')
+        self.assertIn('WHERE "connamespace"=',scans[0])
+        # Simulate an interrupted journal with one pending key missing and one
+        # installed but unjournaled. Both still require individual readback.
+        result['completed']=result['completed'][:1];args.report.write_text(json.dumps(result))
+        with self.conn.cursor() as c:
+            c.execute('ALTER TABLE '+target.quote(m['source_schema'])+'.'+target.quote(plan[1]['table'])+' DROP CONSTRAINT '+target.quote(plan[1]['name']))
+        result=run();self.assertEqual(result['completed'],plan)
+        point_reads=[q for q in statements if q.startswith(target.CONSTRAINT_SELECT) and 'WHERE "conrelid"=' in q]
+        self.assertEqual(len(point_reads),3,'missing keys need pre/post readback; unjournaled existing keys need verification')
+        self.assertIn(target.ddl(m['source_schema'],plan[1]),statements)
+        self.assertTrue(all(value['before']==value['after'] for value in result['table_fingerprints'].values()))
+        # A completed definition changed before resume must still stop the run.
+        with self.conn.cursor() as c:
+            c.execute('ALTER TABLE '+target.quote(m['source_schema'])+'.'+target.quote(plan[0]['table'])+' DROP CONSTRAINT '+target.quote(plan[0]['name']))
+        with self.assertRaisesRegex(ValueError,'completed target foreign key'):run()
+        self.assertFalse(any(q.startswith('ALTER TABLE') for q in statements))
+
     def test_mismatched_existing_relationship_is_refused_without_replacement(self):
         m,args=self.setup_schema();item=target.declarations(m)[0]
         with self.conn.cursor() as c:c.execute(target.ddl(m['source_schema'],dict(item,delete_rule='NO ACTION')))

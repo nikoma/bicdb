@@ -289,8 +289,14 @@ def migrate(args):
                     print('foreign-keys: checking target enforcement capabilities', flush=True)
                     probe_support(cursor, schema)
                     report['capability_verified'] = True
+                # The exact completed prefix was already checked against the
+                # complete catalog above, before any probe or source DDL. With
+                # writers/schema changes quiesced, rereading each of those keys
+                # adds no validation. Pending and unjournaled entries still get
+                # individual readback, including after every new installation.
+                completed_prefix = len(report['completed'])
                 for index, item in enumerate(plan):
-                    if args.check_only:
+                    if args.check_only or index < completed_prefix:
                         continue
                     actual = current_constraint(cursor, state, item)
                     if actual is None:

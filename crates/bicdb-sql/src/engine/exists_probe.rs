@@ -192,6 +192,7 @@ fn numeric_correlation(
     schema: &TableSchema,
     context: &BoundRowContext,
     engine: &SqlEngine<'_>,
+    env: &[RelationColumns],
 ) -> Option<(Expr, usize)> {
     fn inner<'a>(
         expression: &'a Expr,
@@ -224,6 +225,7 @@ fn numeric_correlation(
         schema: &TableSchema,
         context: &BoundRowContext,
         engine: &SqlEngine<'_>,
+        env: &[RelationColumns],
         key: &mut Option<(Expr, usize)>,
     ) -> Option<()> {
         match unwrap_nested_expr(expression) {
@@ -232,8 +234,8 @@ fn numeric_correlation(
                 op: BinaryOperator::And,
                 right,
             } => {
-                collect(left, qualifier, schema, context, engine, key)?;
-                collect(right, qualifier, schema, context, engine, key)
+                collect(left, qualifier, schema, context, engine, env, key)?;
+                collect(right, qualifier, schema, context, engine, env, key)
             }
             Expr::BinaryOp {
                 left,
@@ -248,7 +250,9 @@ fn numeric_correlation(
                         inner(candidate, qualifier, schema),
                         outer(outside, qualifier, schema, context),
                     ) {
-                        let outer_type = engine.row_expr_pg_type(outside, context);
+                        let outer_type = engine
+                            .infer_env_expr_type(outside, env)
+                            .or_else(|| (*engine.row_expr_pg_type(outside, context)).clone());
                         let outer_oid = outer_type
                             .as_deref()
                             .and_then(|kind| pg_type_oid_by_name(kind));
@@ -272,7 +276,9 @@ fn numeric_correlation(
         }
     }
     let mut key = None;
-    collect(expression, qualifier, schema, context, engine, &mut key)?;
+    collect(
+        expression, qualifier, schema, context, engine, env, &mut key,
+    )?;
     key
 }
 
@@ -285,6 +291,7 @@ impl SqlEngine<'_> {
         row: &SlotRow,
         context: &BoundRowContext,
         query: &Query,
+        env: &[RelationColumns],
     ) -> Result<Option<Query>> {
         if !self.exists_probe_memo.enabled.get() || self.outer_row.is_some() {
             return Ok(None);
@@ -304,7 +311,7 @@ impl SqlEngine<'_> {
                     return Ok(None);
                 }
                 let plan = self
-                    .build_exists_candidate_probe(context, query)?
+                    .build_exists_candidate_probe(context, query, env)?
                     .map(Rc::new);
                 self.exists_probe_memo
                     .entries
@@ -372,6 +379,7 @@ impl SqlEngine<'_> {
         &self,
         context: &BoundRowContext,
         query: &Query,
+        env: &[RelationColumns],
     ) -> Result<Option<CandidateProbe>> {
         if query.with.is_some()
             || query.for_clause.is_some()
@@ -465,7 +473,7 @@ impl SqlEngine<'_> {
             return Ok(None);
         };
         let Some((key_expr, outer_slot)) =
-            numeric_correlation(selection, &qualifier, &schema, context, self)
+            numeric_correlation(selection, &qualifier, &schema, context, self, env)
         else {
             return Ok(None);
         };

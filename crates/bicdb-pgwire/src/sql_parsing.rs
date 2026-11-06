@@ -1203,8 +1203,7 @@ pub(crate) enum SavepointCommand {
     Release(String),
 }
 
-pub(crate) fn parse_savepoint_command(sql: &str) -> Option<SavepointCommand> {
-    let normalized = normalize_executable_sql(sql);
+pub(crate) fn parse_savepoint_command(sql: &str, normalized: &str) -> Option<SavepointCommand> {
     if !(normalized.starts_with("savepoint ")
         || normalized.starts_with("rollback to ")
         || normalized.starts_with("release "))
@@ -3614,19 +3613,19 @@ mod query_text_fast_path_tests {
     #[test]
     fn savepoint_and_advisory_probes_keep_their_answers() {
         assert!(matches!(
-            parse_savepoint_command("savepoint sp1"),
+            parse_savepoint_command("savepoint sp1", "savepoint sp1"),
             Some(SavepointCommand::Create(name)) if name == "sp1"
         ));
         assert!(matches!(
-            parse_savepoint_command("rollback to savepoint sp1"),
+            parse_savepoint_command("rollback to savepoint sp1", "rollback to savepoint sp1"),
             Some(SavepointCommand::RollbackTo(name)) if name == "sp1"
         ));
         assert!(matches!(
-            parse_savepoint_command("release savepoint sp1"),
+            parse_savepoint_command("release savepoint sp1", "release savepoint sp1"),
             Some(SavepointCommand::Release(name)) if name == "sp1"
         ));
-        assert!(parse_savepoint_command("rollback").is_none());
-        assert!(parse_savepoint_command("select 1").is_none());
+        assert!(parse_savepoint_command("rollback", "rollback").is_none());
+        assert!(parse_savepoint_command("select 1", "select 1").is_none());
         assert!(contains_advisory_lock_function(
             "SELECT PG_ADVISORY_LOCK(1)"
         ));

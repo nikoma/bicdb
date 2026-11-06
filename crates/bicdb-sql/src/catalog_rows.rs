@@ -4098,10 +4098,14 @@ pub(crate) fn pg_roles_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>
     Ok(list_roles(db)?
         .into_iter()
         .map(|role| {
+            // Authorization treats the bootstrap administrator as superuser
+            // even without a stored role record. Report the same identity to
+            // clients deciding whether a role is suitable for an application.
+            let superuser = role.name == BOOTSTRAP_ROLE_NAME || role.superuser;
             virtual_row([
                 ("oid", SqlValue::Int(role_oid(&role.name))),
                 ("rolname", SqlValue::String(role.name)),
-                ("rolsuper", SqlValue::Bool(role.superuser)),
+                ("rolsuper", SqlValue::Bool(superuser)),
                 ("rolinherit", SqlValue::Bool(role.inherit)),
                 ("rolcreaterole", SqlValue::Bool(role.create_role)),
                 ("rolcreatedb", SqlValue::Bool(role.create_db)),
@@ -4127,11 +4131,12 @@ pub(crate) fn pg_user_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>
         .into_iter()
         .filter(|role| role.can_login)
         .map(|role| {
+            let superuser = role.name == BOOTSTRAP_ROLE_NAME || role.superuser;
             virtual_row([
                 ("usename", SqlValue::String(role.name.clone())),
                 ("usesysid", SqlValue::Int(role_oid(&role.name))),
                 ("usecreatedb", SqlValue::Bool(role.create_db)),
-                ("usesuper", SqlValue::Bool(role.superuser)),
+                ("usesuper", SqlValue::Bool(superuser)),
                 ("userepl", SqlValue::Bool(role.replication)),
                 ("usebypassrls", SqlValue::Bool(role.bypass_rls)),
                 ("passwd", SqlValue::String("********".to_string())),

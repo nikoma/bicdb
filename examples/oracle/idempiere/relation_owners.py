@@ -79,6 +79,7 @@ def migrate(args):
                   writer_lease_acquired=False, source_relations=len(plan),
                   routine_ownership_qualified=False, sequence_ownership_qualified=False,
                   type_ownership_qualified=False, data_compared_to_source=False,
+                  role_privilege_closure_qualified=False,
                   application_qualified=False)
     can_write = False
     import psycopg
@@ -97,8 +98,15 @@ def migrate(args):
                 cursor.execute('SELECT "rolsuper" FROM "pg_catalog"."pg_roles" WHERE "rolname"=%s', (owner,))
                 if cursor.fetchall() != [(False,)]:
                     raise ValueError('target owner must be an existing dedicated non-superuser role')
-                cursor.execute('SELECT CURRENT_USER')
-                migration_role, = cursor.fetchone()
+                # This is PostgreSQL driver/catalog administration, so discover
+                # the registered effective role through the native catalog
+                # boundary rather than treating it as an Oracle expression.
+                cursor.execute('SELECT CURRENT_USER FROM "pg_catalog"."pg_roles" '
+                               'WHERE "rolname"=CURRENT_USER')
+                identities = cursor.fetchall()
+                if len(identities) != 1:
+                    raise ValueError('migration role must have one registered catalog identity')
+                migration_role, = identities[0]
                 report['migration_role'] = migration_role
                 before = catalog(cursor, schema)
                 validate_catalog(before, plan, {migration_role, owner})

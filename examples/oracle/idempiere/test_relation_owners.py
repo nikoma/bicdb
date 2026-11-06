@@ -117,17 +117,45 @@ class RelationOwnerNativeTests(unittest.TestCase):
     def test_oracle_mapping_survives_restart_and_preserves_isolation(self):
         self.check_profile('oracle-preview-v1')
 
+    def check_role_catalog(self, profile):
+        f, args, schema = self.fixture(profile)
+        with f.conn.cursor() as c:
+            c.execute('SELECT "rolname","rolsuper" FROM "pg_catalog"."pg_roles" '
+                      'WHERE "rolname" IN (%s,%s,%s) ORDER BY "rolname"',
+                      ('bicdb','app_owner','other_owner'))
+            self.assertEqual(c.fetchall(), [('app_owner',False),('bicdb',True),('other_owner',False)])
+            c.execute('SELECT "usesuper" FROM "pg_catalog"."pg_user" WHERE "usename"=%s', ('bicdb',))
+            self.assertEqual(c.fetchall(), [(True,)])
+
+    def test_default_postgres_catalog_reports_effective_bootstrap_superuser(self):
+        self.check_role_catalog('postgres')
+
+    def test_oracle_catalog_reports_effective_bootstrap_superuser(self):
+        self.check_role_catalog('oracle-preview-v1')
+
     def test_missing_or_superuser_target_is_refused_before_any_ownership_change(self):
         f, args, schema = self.fixture()
         with f.conn.cursor() as c:
+            c.execute('CREATE ROLE admin_owner SUPERUSER NOLOGIN')
             before = target.catalog(c, schema)
-        for owner in ['missing_owner', 'bicdb']:
+        for owner in ['missing_owner', 'bicdb', 'admin_owner']:
             args.target_owner = owner
             with self.subTest(owner=owner), self.assertRaisesRegex(ValueError, 'non-superuser'):
                 self.migrate(f, args)
             self.assertFalse(args.report.exists())
             with f.conn.cursor() as c:
                 self.assertEqual(target.catalog(c, schema), before)
+
+    def test_unregistered_migration_role_is_refused_before_any_ownership_change(self):
+        f, args, schema = self.fixture()
+        with patch.dict(os.environ, BICDB_OWNER_TEST_DSN=f.dsn.replace('user=bicdb', 'user=unregistered')):
+            with self.assertRaisesRegex(ValueError, 'registered catalog identity'):
+                target.migrate(args)
+        self.assertFalse(args.report.exists())
+        with f.conn.cursor() as c:
+            actual = target.catalog(c, schema)
+            self.assertEqual(actual['schema_owner'], 'bicdb')
+            self.assertTrue(all(item['owner']=='bicdb' for item in actual['relations'].values()))
 
     def test_other_owner_or_unexported_relation_is_refused_before_any_change(self):
         f, args, schema = self.fixture()

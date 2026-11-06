@@ -263,11 +263,39 @@ view queries. The report contains generated SQL and source/generated hashes;
 treat it with the same confidentiality as the source snapshot. It refuses to
 overwrite an existing report and does not connect to a database or execute SQL.
 
-This is input validation, not an installer or a dependency resolver. It does not
+This command performs input validation. It does not
 prove compilation, execution, view values, ownership, privileges, or application
 compatibility. Packages, triggers, types, grants, and dependency ordering require
 separate migration and qualification. Review these gates before applying code;
 do not replace missing dependencies with placeholder routines.
+
+For a quiesced development target, install standalone routines and views with
+separate journals:
+
+```sh
+python3 examples/oracle/idempiere/import_bicdb.py \
+  --snapshot /path/to/snapshot --phase routines \
+  --writers-quiesced --report /path/to/routines.json
+python3 examples/oracle/idempiere/import_bicdb.py \
+  --snapshot /path/to/snapshot --phase views \
+  --writers-quiesced --report /path/to/views.json
+```
+
+Add `--resume` to validate completed catalog definitions before retrying pending
+objects. The importer refuses unjournaled existing objects, changed definitions,
+different snapshots or connection identities, ambiguous routines, and routine
+names colliding across namespaces. A crash between DDL and its journal write
+requires explicit reconciliation; the tool does not silently adopt that object.
+Do not delete a journal to retry against an already populated target.
+
+Failed definitions retry only while another definition makes progress. This
+does not qualify dependency resolution: the preview can accept a view whose
+dependencies do not yet exist and retain unresolved column types. Install in
+reviewed dependency order and independently compare source and target metadata
+and values. `success` records DDL acceptance and journal checks, not type or
+execution equivalence. `WITH READ ONLY` is emitted when present in the export;
+servers that do not support it fail rather than dropping the restriction. The
+original iDempiere export used here has no views with that flag.
 
 ## Explicit JDBC transport preparation
 

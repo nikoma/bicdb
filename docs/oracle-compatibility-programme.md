@@ -1082,3 +1082,14 @@ origins. This resolves the observed ESCAPE parsing error for that class; the
 retest is excluded from distinct invocation totals. NULL-escape reference
 semantics, other retained failures and full application qualification remain
 open.
+
+
+## Paged original-schema baseline
+
+The [paged schema qualification](evidence/idempiere-paged-schema-qualification-2026-11-06/README.md)
+passes all 915 source tables and 185,471 rows, 3,826 foreign-key declarations and
+source-comparable zero orphan counts, copied ownership/definitions and 160 view
+projections. Native readback and index integrity pass; monitoring runs with an
+explicit grant as a non-superuser. This is a qualified storage/schema baseline
+on the recorded revisions, not full application, authentication, production or
+programme qualification. Application tests and UI workflows remain required.

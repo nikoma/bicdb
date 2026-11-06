@@ -17,18 +17,26 @@ class LikeEscapeCases:
 
     def test_explicit_escapes_bind_parameters_and_nonreserved_identifiers(self):
         connection = self.fixture()
+        # Source 23.26.3 AL32UTF8/BINARY rejects the multibyte explicit
+        # escape. PostgreSQL accepts one Unicode character independently.
         cases = [
-            ("SELECT label FROM pattern_rows WHERE label LIKE 'I|_%' ESCAPE '|'", ('I_name',)),
-            ("SELECT label FROM pattern_rows WHERE label NOT LIKE 'I|_%' ESCAPE '|' AND label NOT LIKE 'x§%%' ESCAPE '§'", ('Text',)),
-            ("SELECT label FROM pattern_rows WHERE label LIKE escape ESCAPE '|'", ('I_name',)),
-            ("SELECT label FROM pattern_rows t WHERE t.label LIKE t.escape ESCAPE '|'", ('I_name',)),
-            ("SELECT label FROM pattern_rows WHERE label LIKE (SUBSTR('I',1,1)||'|_%') ESCAPE '|'", ('I_name',)),
-            ("SELECT escape FROM pattern_rows WHERE label='I_name'", ('I|_%',)),
-            ("SELECT label FROM pattern_rows WHERE label LIKE 'x§%%' ESCAPE '§'", ('x%tail',)),
+            ("SELECT label FROM pattern_rows WHERE label LIKE 'I|_%' ESCAPE '|'", ('I_name',), None),
+            ("SELECT label FROM pattern_rows WHERE label NOT LIKE 'I|_%' ESCAPE '|' AND label NOT LIKE 'x§%%' ESCAPE '§'", ('Text',), 1425),
+            ("SELECT label FROM pattern_rows WHERE label LIKE escape ESCAPE '|'", ('I_name',), None),
+            ("SELECT label FROM pattern_rows t WHERE t.label LIKE t.escape ESCAPE '|'", ('I_name',), None),
+            ("SELECT label FROM pattern_rows WHERE label LIKE (SUBSTR('I',1,1)||'|_%') ESCAPE '|'", ('I_name',), None),
+            ("SELECT escape FROM pattern_rows WHERE label='I_name'", ('I|_%',), None),
+            ("SELECT label FROM pattern_rows WHERE label LIKE 'x§%%' ESCAPE '§'", ('x%tail',), 1425),
         ]
-        for sql, expected in cases:
+        for sql, expected, oracle_error in cases:
             with self.subTest(sql=sql):
-                self.assertEqual(connection.execute(sql).fetchall(), [expected])
+                if self.profile == 'oracle-preview-v1' and oracle_error is not None:
+                    import psycopg
+                    with self.assertRaises(psycopg.errors.InvalidEscapeSequence) as caught:
+                        connection.execute(sql)
+                    self.assertIn('ORA-%05d' % oracle_error, str(caught.exception))
+                else:
+                    self.assertEqual(connection.execute(sql).fetchall(), [expected])
         self.assertEqual(connection.execute("SELECT label FROM pattern_rows WHERE label LIKE %s ESCAPE '|'", ('I|_%',)).fetchall(), [('I_name',)])
 
     def test_default_escape_keeps_postgres_and_oracle_rules_independent(self):

@@ -4654,7 +4654,7 @@ fn execute_server_sql_with_options_normalized(
                 }
             }
             Ok(result)
-        } else if let Some(command) = parse_savepoint_command(normalized) {
+        } else if let Some(command) = parse_savepoint_command(sql, normalized) {
             execute_savepoint_command(server, state, command)
         } else if state.failed_transaction {
             Err(PgWireError::InFailedTransaction)

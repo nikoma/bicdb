@@ -8618,3 +8618,148 @@ fn typed_primary_key_extrema_and_ranges_use_logical_values() {
         &SqlValue::String("100000000000000000000000000003".into())
     ));
 }
+
+#[test]
+fn delete_uncorrelated_tuple_subqueries_use_a_statement_scope() {
+    for profile in [oracle::POSTGRES_PROFILE, oracle::ORACLE_PREVIEW_PROFILE] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        oracle::ensure_database_profile(&mut db, profile).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        let execute = |session: &mut SqlSession<'_>, source: &str| {
+            let sql = if profile == oracle::POSTGRES_PROFILE {
+                source.to_string()
+            } else {
+                oracle::lower_session_sql(session.db_ref(), source, profile, None, "bicdb").unwrap()
+            };
+            session.execute(&sql)
+        };
+        execute(
+            &mut session,
+            "CREATE TABLE repeated_rows(id INTEGER PRIMARY KEY,bucket INTEGER,label VARCHAR(8))",
+        )
+        .unwrap();
+        let values = (0..96)
+            .map(|i| format!("({i},{},'same')", i / 2))
+            .collect::<Vec<_>>()
+            .join(",");
+        execute(
+            &mut session,
+            &format!("INSERT INTO repeated_rows VALUES {values}"),
+        )
+        .unwrap();
+        SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().push(SqlProfileStats::default()));
+        execute(&mut session, "DELETE FROM repeated_rows a WHERE (bucket,label) IN (SELECT bucket,label FROM repeated_rows b GROUP BY bucket,label HAVING COUNT(*)>1) AND id NOT IN (SELECT MIN(id) FROM repeated_rows c GROUP BY bucket,label)").unwrap();
+        let stats = SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().pop().unwrap());
+        assert!(
+            stats.full_scan_count <= 3,
+            "{profile}: repeated aggregate scans: {}",
+            stats.full_scan_count
+        );
+        assert!(
+            stats.rows_materialized <= 96 * 3,
+            "{profile}: materialized {} rows",
+            stats.rows_materialized
+        );
+        let remaining = execute(&mut session, "SELECT id FROM repeated_rows ORDER BY id").unwrap();
+        assert_eq!(
+            remaining.rows,
+            (0..96)
+                .step_by(2)
+                .map(|id| vec![SqlValue::Int(id)])
+                .collect::<Vec<_>>()
+        );
+        // A new statement must observe current data, not a prior init-plan result.
+        execute(
+            &mut session,
+            "INSERT INTO repeated_rows VALUES(97,0,'same')",
+        )
+        .unwrap();
+        execute(&mut session, "DELETE FROM repeated_rows a WHERE (bucket,label) IN (SELECT bucket,label FROM repeated_rows b GROUP BY bucket,label HAVING COUNT(*)>1) AND id NOT IN (SELECT MIN(id) FROM repeated_rows c GROUP BY bucket,label)").unwrap();
+        assert_eq!(
+            execute(
+                &mut session,
+                "SELECT COUNT(*) FROM repeated_rows WHERE id=97"
+            )
+            .unwrap()
+            .rows,
+            vec![vec![SqlValue::Int(0)]]
+        );
+    }
+}
+
+#[test]
+fn delete_correlated_subqueries_keep_outer_row_reads() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in ["CREATE TABLE correlated_delete_rows(id INTEGER PRIMARY KEY,bucket INTEGER)",
+                "CREATE TABLE correlated_delete_keys(bucket INTEGER)",
+                "INSERT INTO correlated_delete_rows VALUES(1,20),(2,10),(3,20)",
+                "INSERT INTO correlated_delete_keys VALUES(10)",
+                "DELETE FROM correlated_delete_rows a WHERE EXISTS(SELECT 1 FROM correlated_delete_keys k WHERE k.bucket=a.bucket)"] {
+        session.execute(sql).unwrap();
+    }
+    assert_eq!(
+        session
+            .execute("SELECT id FROM correlated_delete_rows ORDER BY id")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(3)]]
+    );
+}
+
+#[test]
+fn correlated_row_contexts_refill_nested_aliases_and_nulls() {
+    for profile in [oracle::POSTGRES_PROFILE, oracle::ORACLE_PREVIEW_PROFILE] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        oracle::ensure_database_profile(&mut db, profile).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        let execute = |session: &mut SqlSession<'_>, source: &str| {
+            let sql = if profile == oracle::POSTGRES_PROFILE {
+                source.to_string()
+            } else {
+                oracle::lower_session_sql(session.db_ref(), source, profile, None, "bicdb").unwrap()
+            };
+            session.execute(&sql).unwrap()
+        };
+        execute(
+            &mut session,
+            "CREATE TABLE outer_values(id INTEGER PRIMARY KEY,v INTEGER)",
+        );
+        execute(
+            &mut session,
+            "INSERT INTO outer_values VALUES(1,10),(2,NULL),(3,30),(4,10)",
+        );
+        let from = if profile == oracle::POSTGRES_PROFILE {
+            ""
+        } else {
+            " FROM DUAL"
+        };
+        let result = execute(&mut session, &format!(
+            "SELECT t.id,(SELECT t.v{from}),(SELECT (SELECT t.id+t.v{from}){from}) FROM outer_values t ORDER BY t.id"
+        ));
+        assert_eq!(
+            result.rows,
+            vec![
+                vec![SqlValue::Int(1), SqlValue::Int(10), SqlValue::Int(11)],
+                vec![SqlValue::Int(2), SqlValue::Null, SqlValue::Null],
+                vec![SqlValue::Int(3), SqlValue::Int(30), SqlValue::Int(33)],
+                vec![SqlValue::Int(4), SqlValue::Int(10), SqlValue::Int(14)],
+            ],
+            "{profile}"
+        );
+        // A later statement with different projected order must read current
+        // transaction-visible data, including the updated correlated value.
+        execute(&mut session, "UPDATE outer_values SET v=40 WHERE id=4");
+        assert_eq!(
+            execute(
+                &mut session,
+                &format!("SELECT t.v,(SELECT t.id{from}) FROM outer_values t WHERE t.id=4")
+            )
+            .rows,
+            vec![vec![SqlValue::Int(40), SqlValue::Int(4)]]
+        );
+    }
+}

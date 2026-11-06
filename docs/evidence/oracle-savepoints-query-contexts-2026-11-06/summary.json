@@ -1,0 +1,352 @@
+{
+  "format": 1,
+  "implementation_source_commit": "20bfbc5dbcb0ce1086266a09c4321be2e15b90ff",
+  "backend_sha256": "0f6771627caab64657e97cafbd8320df30d10fa8e4013d3da2d293f9e6e0af4c",
+  "postgres_jdbc_version": "42.7.8",
+  "postgres_jdbc_sha256": "2a32a9dcbc42d67a50ad3a0de5efd102c8d2be46720045f2cbd6689f160ab7c7",
+  "probe_adapter_sha256": "5a54489b786e8024f82f279141ff4b37044b4a8e20f7c0606620cf9e660246d1",
+  "adapter_production_source_commit": "a46572f983cf4ab5ccf19529e24104b7f7efd1a4",
+  "staged_adapter_sha256": "8d0d10b01a5b6caf7cf6528372c46e1f95998e799b87ff43509946d5c343b6d5",
+  "staged_and_probe_production_class_bytes_equal": true,
+  "checks": [
+    {
+      "name": "format",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "execution_source_commit": "20bfbc5dbcb0ce1086266a09c4321be2e15b90ff",
+      "reused_for_unchanged_code": false
+    },
+    {
+      "name": "savepoint-parser",
+      "log_sha256": "056573b4225e1a93d50d6ec4afb84627cd499c9c5f9b10a2aa04130461b69fa2",
+      "execution_source_commit": "20bfbc5dbcb0ce1086266a09c4321be2e15b90ff",
+      "reused_for_unchanged_code": false,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "delete-scope",
+      "log_sha256": "f93182cd1b3fc41b68973f939c40a23d1369d620ed26d445b7c8b69651e6e80f",
+      "execution_source_commit": "8d2cfcf1bd97f356ce0f8d20194a5fb0e1937c8e",
+      "reused_for_unchanged_code": true,
+      "passed": 15,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "correlated-contexts",
+      "log_sha256": "740d65c0cf40c766029391ba3fa6ff388d899665479258375a9ff9fa18ffd695",
+      "execution_source_commit": "8d2cfcf1bd97f356ce0f8d20194a5fb0e1937c8e",
+      "reused_for_unchanged_code": true,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "memo-eligibility",
+      "log_sha256": "054a45e3d0efab6c8e5ae6ad2093d43229d73a4414cbf6f94df710e8632b55bd",
+      "execution_source_commit": "8d2cfcf1bd97f356ce0f8d20194a5fb0e1937c8e",
+      "reused_for_unchanged_code": true,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "build",
+      "log_sha256": "b7042597fe983ff5a4f3b9e0547996403a4ccd87c0aa938e4a16b3c19c6ca668",
+      "execution_source_commit": "20bfbc5dbcb0ce1086266a09c4321be2e15b90ff",
+      "reused_for_unchanged_code": false
+    },
+    {
+      "name": "native-savepoint-errors",
+      "log_sha256": "2fea0bc01a21eea4c4b373104f4f1f0834b850aaac13db9071cfee49409e3af2",
+      "execution_source_commit": "20bfbc5dbcb0ce1086266a09c4321be2e15b90ff",
+      "reused_for_unchanged_code": false,
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "native-delete-scope",
+      "log_sha256": "d0a1984d8f8b07f1abf46a56fc1a9682a4115be4e28ab253c86b7c480551242d",
+      "execution_source_commit": "20bfbc5dbcb0ce1086266a09c4321be2e15b90ff",
+      "reused_for_unchanged_code": false,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "native-null-escape",
+      "log_sha256": "f70e4476fc48562438e8285ec634dd47d37f4099ccc8ed3639c2b7670f23907d",
+      "execution_source_commit": "20bfbc5dbcb0ce1086266a09c4321be2e15b90ff",
+      "reused_for_unchanged_code": false,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "sql-library",
+      "log_sha256": "06a020695a3885f80534c62d35bea5e9548f09326741a467e59bd988caa816d4",
+      "execution_source_commit": "a1d48f099692ef4255d59fb446c2ce2f3ffc30df",
+      "reused_for_unchanged_code": true,
+      "passed": 739,
+      "failed": 0,
+      "ignored": 4
+    },
+    {
+      "name": "native-tools",
+      "log_sha256": "f8bcb8203078ddea577ef0d52922a0e801da3b811e2efafff73c5b933d5ca2b1",
+      "execution_source_commit": "20bfbc5dbcb0ce1086266a09c4321be2e15b90ff",
+      "reused_for_unchanged_code": false,
+      "passed": 257,
+      "failed": 0,
+      "skipped": 4
+    },
+    {
+      "name": "protocol",
+      "log_sha256": "3ceaee79f3dce4e2fc99efc96ce62c7c4d7f7d73262e11f0d370e5a1599b021d",
+      "execution_source_commit": "20bfbc5dbcb0ce1086266a09c4321be2e15b90ff",
+      "reused_for_unchanged_code": false,
+      "passed": 183,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "oracle-hr",
+      "log_sha256": "7ca5438dda4ad0f655a4440888d6aad4dd086b498d2eaac9b48bc44d2a9eb047",
+      "execution_source_commit": "20bfbc5dbcb0ce1086266a09c4321be2e15b90ff",
+      "reused_for_unchanged_code": false,
+      "passed": 48,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "authorization",
+      "log_sha256": "0a0239ac1b6609f04f6534d29160c1567ce85894354b692c5fee508c8df75094",
+      "execution_source_commit": "8221e4ebf03a29d123b34ee6c8d3248771bb5fe6",
+      "reused_for_unchanged_code": true,
+      "passed": 44,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "jdbc-probe",
+      "log_sha256": "5830d17dc1ee370563df14831416c3817171da85406c7169272dc770ad3158d9",
+      "execution_source_commit": "20bfbc5dbcb0ce1086266a09c4321be2e15b90ff",
+      "reused_for_unchanged_code": false
+    }
+  ],
+  "jdbc_unit_tests": 25,
+  "jdbc_probe_checks": 250,
+  "jdbc_modes": [
+    {
+      "mode": "extended",
+      "profile": "oracle-preview-v1",
+      "checks": 83,
+      "cleanup_complete": true
+    },
+    {
+      "mode": "simple",
+      "profile": "oracle-preview-v1",
+      "checks": 83,
+      "cleanup_complete": true
+    },
+    {
+      "mode": "extendedCacheEverything",
+      "profile": "oracle-preview-v1",
+      "checks": 83,
+      "cleanup_complete": true
+    },
+    {
+      "mode": "postgres_profile",
+      "profile": "postgres",
+      "checks": 1,
+      "cleanup_complete": true
+    }
+  ],
+  "source_savepoint_observer": {
+    "source_commit": "7e4ba02",
+    "source_version": "23.26.3.0.0",
+    "matched": 4,
+    "total": 4,
+    "original_objects_mutated": false,
+    "connection_closed": true,
+    "cleanup_errors": [],
+    "cases": [
+      {
+        "id": "missing_retains_transaction",
+        "repeat": 0,
+        "actual": {
+          "error_code": 1086,
+          "retained": [
+            1,
+            2
+          ],
+          "later_write": [
+            1,
+            2,
+            3
+          ],
+          "rollback_to_valid": [
+            1
+          ]
+        },
+        "expected": {
+          "error_code": 1086,
+          "retained": [
+            1,
+            2
+          ],
+          "later_write": [
+            1,
+            2,
+            3
+          ],
+          "rollback_to_valid": [
+            1
+          ]
+        },
+        "matched": true
+      },
+      {
+        "id": "expired_allows_new_work",
+        "repeat": 0,
+        "actual": {
+          "error_code": 1086,
+          "later_write": [
+            1,
+            4
+          ]
+        },
+        "expected": {
+          "error_code": 1086,
+          "later_write": [
+            1,
+            4
+          ]
+        },
+        "matched": true
+      },
+      {
+        "id": "missing_retains_transaction",
+        "repeat": 1,
+        "actual": {
+          "error_code": 1086,
+          "retained": [
+            1,
+            2
+          ],
+          "later_write": [
+            1,
+            2,
+            3
+          ],
+          "rollback_to_valid": [
+            1
+          ]
+        },
+        "expected": {
+          "error_code": 1086,
+          "retained": [
+            1,
+            2
+          ],
+          "later_write": [
+            1,
+            2,
+            3
+          ],
+          "rollback_to_valid": [
+            1
+          ]
+        },
+        "matched": true
+      },
+      {
+        "id": "expired_allows_new_work",
+        "repeat": 1,
+        "actual": {
+          "error_code": 1086,
+          "later_write": [
+            1,
+            4
+          ]
+        },
+        "expected": {
+          "error_code": 1086,
+          "later_write": [
+            1,
+            4
+          ]
+        },
+        "matched": true
+      }
+    ]
+  },
+  "original_reference_controller_status": "failed",
+  "original_controller_extra_like_assumption_failed": true,
+  "independent_like_followup_completed": true,
+  "like_reference": {
+    "source_commit": "a621b690594c52ff80abd535891fe56da2c784f2",
+    "source_version": "23.26.3.0.0",
+    "cases_observed": 22,
+    "predicate_contexts_observed": 5,
+    "database_nls": {
+      "NLS_NCHAR_CHARACTERSET": "AL16UTF16",
+      "NLS_CHARACTERSET": "AL32UTF8"
+    },
+    "session_nls": {
+      "NLS_SORT": "BINARY",
+      "NLS_COMP": "BINARY",
+      "NLS_LENGTH_SEMANTICS": "BYTE"
+    },
+    "all_reference_cases_implemented": false
+  },
+  "delete_plan_control": {
+    "baseline_backend_source_commit": "15621541afefaf60810900985d81a1643ebb940f",
+    "measured_backend_source_commit": "8d2cfcf1bd97f356ce0f8d20194a5fb0e1937c8e",
+    "sql_implementation_unchanged_between_measurement_and_qualified_backend": true,
+    "cases": [
+      {
+        "profile": "postgres",
+        "input_rows": 16,
+        "deleted_rows": 8,
+        "before_full_scans": 33,
+        "after_full_scans": 3,
+        "after_rows_materialized": 48
+      },
+      {
+        "profile": "postgres",
+        "input_rows": 64,
+        "deleted_rows": 32,
+        "before_full_scans": 129,
+        "after_full_scans": 3,
+        "after_rows_materialized": 192
+      },
+      {
+        "profile": "oracle-preview-v1",
+        "input_rows": 16,
+        "deleted_rows": 8,
+        "before_full_scans": 33,
+        "after_full_scans": 3,
+        "after_rows_materialized": 48
+      },
+      {
+        "profile": "oracle-preview-v1",
+        "input_rows": 64,
+        "deleted_rows": 32,
+        "before_full_scans": 129,
+        "after_full_scans": 3,
+        "after_rows_materialized": 192
+      }
+    ],
+    "production_performance_qualified": false
+  },
+  "earlier_failures_and_resource_interruptions_retained": true,
+  "original_application_tests_changed": false,
+  "full_application_qualified": false,
+  "production_qualified": false,
+  "full_oracle_programme_qualified": false,
+  "release_published": false,
+  "deployment_verified": false
+}

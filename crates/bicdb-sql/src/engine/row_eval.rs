@@ -1777,13 +1777,14 @@ impl<'db> SqlEngine<'db> {
             .with_shared_routine_vars(self.routine_vars.clone())
             .with_cancellation(self.cancellation.clone());
         let result = engine.execute_query(query);
-        if let (Some(parent), Some(novel), Some(mut used)) =
-            (self.outer_row.as_ref(), novel, engine.outer_row.take())
-        {
+        if let (Some(novel), Some(mut used)) = (novel, engine.outer_row.take()) {
             used.truncate_probes(base_probes);
             *self.outer_extension_cache.borrow_mut() = Some(OuterExtensionCache {
-                parent: parent as *const OuterSlotRow as usize,
-                parent_len: parent.value_count(),
+                parent: self
+                    .outer_row
+                    .as_ref()
+                    .map(|parent| parent as *const OuterSlotRow as usize),
+                parent_len: self.outer_row.as_ref().map_or(0, OuterSlotRow::value_count),
                 columns: columns.to_vec(),
                 novel,
                 row: used,
@@ -1803,13 +1804,12 @@ impl<'db> SqlEngine<'db> {
         columns: &[String],
         row: &[SqlValue],
     ) -> (OuterSlotRow, Option<std::rc::Rc<[usize]>>) {
-        let Some(parent) = self.outer_row.as_ref() else {
-            return (OuterSlotRow::from_slot(columns, row), None);
-        };
-        let identity = parent as *const OuterSlotRow as usize;
+        let parent = self.outer_row.as_ref();
+        let identity = parent.map(|parent| parent as *const OuterSlotRow as usize);
+        let parent_len = parent.map_or(0, OuterSlotRow::value_count);
         if let Some(mut cached) = self.outer_extension_cache.borrow_mut().take() {
             if cached.parent == identity
-                && cached.parent_len == parent.value_count()
+                && cached.parent_len == parent_len
                 && cached.columns.as_slice() == columns
             {
                 cached
@@ -1818,8 +1818,16 @@ impl<'db> SqlEngine<'db> {
                 return (cached.row, Some(cached.novel));
             }
         }
-        let novel = merge_novel_right_ordinals(parent.columns(), columns);
-        (parent.extend(columns, row), Some(novel))
+        if let Some(parent) = parent {
+            let novel = merge_novel_right_ordinals(parent.columns(), columns);
+            (parent.extend(columns, row), Some(novel))
+        } else {
+            // Top-level correlated predicates have no prior outer row. They
+            // still share a column layout across input rows: reuse its lookup
+            // and refill every value rather than rebuilding aliases per row.
+            let novel: Rc<[usize]> = (0..columns.len()).collect::<Vec<_>>().into();
+            (OuterSlotRow::from_slot(columns, row), Some(novel))
+        }
     }
 
     pub(crate) fn execute_correlated_slot_subquery_values(
@@ -1850,7 +1858,7 @@ impl<'db> SqlEngine<'db> {
         }
         Ok(Some(eval_tuple_in_rows_truth(
             &value,
-            Rc::unwrap_or_clone(result).rows,
+            result.rows.iter(),
             negated,
         )?))
     }
@@ -3372,8 +3380,8 @@ fn eval_quantified_subquery_truth(
 }
 
 /// Per-engine memo of uncorrelated row-expression subquery results. Entries
-/// live only while an `execute_query` call on the engine is running, so a
-/// result never outlives the statement that computed it. Entries are keyed by
+/// live only while a query or DML predicate scope on the engine is running,
+/// so a result never outlives the statement that computed it. Entries are keyed by
 /// the subquery's address and the outer row's column layout (which decides how
 /// names resolve); a cached result is also checked against a copy of the
 /// subquery, so a reused address can never return another query's result.
@@ -3401,7 +3409,20 @@ enum MemoLookup {
 /// Bounds the memo; past it, further subqueries simply run per row.
 const SUBQUERY_MEMO_MAX_ENTRIES: usize = 64;
 
+pub(crate) struct SubqueryMemoScope<'a>(&'a SubqueryMemo);
+
+impl Drop for SubqueryMemoScope<'_> {
+    fn drop(&mut self) {
+        self.0.leave();
+    }
+}
+
 impl SubqueryMemo {
+    pub(crate) fn scope(&self) -> SubqueryMemoScope<'_> {
+        self.enter();
+        SubqueryMemoScope(self)
+    }
+
     pub(crate) fn enter(&self) {
         self.depth.set(self.depth.get() + 1);
     }
@@ -3518,9 +3539,18 @@ pub(super) fn subquery_is_memoizable(db: &BicDb, query: &Query) -> bool {
     impl Visitor for Check<'_> {
         type Break = ();
         fn pre_visit_query(&mut self, query: &Query) -> ControlFlow<()> {
-            if query.locks.is_empty() {
+            if query.locks.is_empty()
+                && matches!(
+                    query.body.as_ref(),
+                    SetExpr::Select(_)
+                        | SetExpr::Values(_)
+                        | SetExpr::Query(_)
+                        | SetExpr::SetOperation { .. }
+                )
+            {
                 ControlFlow::Continue(())
             } else {
+                // A nested data-modifying CTE is not a read-only init plan.
                 ControlFlow::Break(())
             }
         }
@@ -3539,9 +3569,61 @@ pub(super) fn subquery_is_memoizable(db: &BicDb, query: &Query) -> bool {
                 }
                 | TableFactor::Function { name, .. } => self.function(name),
                 TableFactor::TableFunction { .. } => ControlFlow::Break(()),
+                TableFactor::Table {
+                    name, args: None, ..
+                } => {
+                    let Ok(name) = relation_name(name) else {
+                        return ControlFlow::Break(());
+                    };
+                    let resolved = resolve_session_relation_name_if_exists(self.db, &name);
+                    // View bodies may hide volatile or writing functions.
+                    // Decline until their full expanded plan is proved safe.
+                    if matches!(load_view(self.db, &resolved), Ok(None)) {
+                        ControlFlow::Continue(())
+                    } else {
+                        ControlFlow::Break(())
+                    }
+                }
                 _ => ControlFlow::Continue(()),
             }
         }
     }
     query.visit(&mut Check { db }).is_continue()
+}
+
+#[cfg(test)]
+mod memo_eligibility_tests {
+    use super::*;
+
+    #[test]
+    fn row_subquery_memo_declines_hidden_effects_and_modifying_ctes() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        {
+            let mut session = SqlSession::new(&mut db);
+            session
+                .execute("CREATE TABLE memo_source(id INTEGER)")
+                .unwrap();
+            session.execute("CREATE SEQUENCE memo_sequence").unwrap();
+            session
+                .execute("CREATE VIEW memo_view AS SELECT nextval('memo_sequence') AS n")
+                .unwrap();
+        }
+        for (source, expected) in [
+            ("SELECT MAX(id) FROM memo_source", true),
+            ("SELECT nextval('memo_sequence')", false),
+            ("SELECT n FROM memo_view", false),
+            ("SELECT id FROM memo_source FOR UPDATE", false),
+            (
+                "WITH changed AS (DELETE FROM memo_source RETURNING id) SELECT id FROM changed",
+                false,
+            ),
+        ] {
+            let statements = Parser::parse_sql(&PostgreSqlDialect {}, source).unwrap();
+            let Statement::Query(query) = &statements[0] else {
+                panic!("expected query")
+            };
+            assert_eq!(subquery_is_memoizable(&db, query), expected, "{source}");
+        }
+    }
 }

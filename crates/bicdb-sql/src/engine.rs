@@ -4665,10 +4665,8 @@ impl<'db> SqlEngine<'db> {
 
     pub(crate) fn execute_query(&self, query: &Query) -> Result<SqlResult> {
         self.db_ref().check_recovery_state()?;
-        self.subquery_memo.enter();
-        let result = self.execute_query_unscoped(query);
-        self.subquery_memo.leave();
-        result
+        let _subqueries = self.subquery_memo.scope();
+        self.execute_query_unscoped(query)
     }
 
     fn execute_query_unscoped(&self, query: &Query) -> Result<SqlResult> {
@@ -5696,8 +5694,9 @@ fn locator_strategy_memo(
 #[derive(Debug)]
 pub(crate) struct OuterExtensionCache {
     /// Identity and length of the engine's `outer_row` the extension was
-    /// built from (the engine never replaces its `outer_row`).
-    parent: usize,
+    /// built from (the engine never replaces its `outer_row`). None denotes
+    /// a top-level input row without a pre-existing outer prefix.
+    parent: Option<usize>,
     parent_len: usize,
     columns: Vec<String>,
     /// Indexes into the current row of the columns `extend` appended.

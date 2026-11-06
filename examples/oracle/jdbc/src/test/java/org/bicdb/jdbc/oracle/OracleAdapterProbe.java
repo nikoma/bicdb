@@ -61,6 +61,7 @@ public final class OracleAdapterProbe {
         String table = "BICDB_JDBC_" + UUID.randomUUID().toString().replace("-", "");
         try (Connection connection = DriverManager.getConnection(args[0], properties)) {
             checks += OracleBlobProbe.run(connection);
+            checks += OracleSavepointProbe.run(connection);
             check("connection_wrapper_identity", connection.unwrap(Connection.class) == connection
                     && connection.isWrapperFor(org.postgresql.PGConnection.class));
             check("metadata_connection_identity", connection.getMetaData().getConnection() == connection);

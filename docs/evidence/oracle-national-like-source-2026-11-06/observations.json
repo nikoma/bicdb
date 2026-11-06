@@ -1,0 +1,565 @@
+{
+  "format": 1,
+  "reference": "oracle",
+  "contract": "national",
+  "original_application_objects_modified": false,
+  "cases": [
+    {
+      "id": "ordinary_bmp_0",
+      "sql": "SELECT CASE WHEN ('\u00e9' LIKE '_') THEN 1 WHEN NOT ('\u00e9' LIKE '_') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_bmp_1",
+      "sql": "SELECT CASE WHEN ('\u00e9' LIKE '__') THEN 1 WHEN NOT ('\u00e9' LIKE '__') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 0
+    },
+    {
+      "id": "ordinary_bmp_2",
+      "sql": "SELECT CASE WHEN ('\u00e9' LIKE '%') THEN 1 WHEN NOT ('\u00e9' LIKE '%') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_bmp_3",
+      "sql": "SELECT CASE WHEN ('\u00e9' LIKE '_%') THEN 1 WHEN NOT ('\u00e9' LIKE '_%') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_bmp_4",
+      "sql": "SELECT CASE WHEN ('\u00e9' LIKE '%_') THEN 1 WHEN NOT ('\u00e9' LIKE '%_') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_bmp_5",
+      "sql": "SELECT CASE WHEN ('\u00e9' LIKE '\u00e9') THEN 1 WHEN NOT ('\u00e9' LIKE '\u00e9') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_supplementary_0",
+      "sql": "SELECT CASE WHEN ('\ud83d\ude00' LIKE '_') THEN 1 WHEN NOT ('\ud83d\ude00' LIKE '_') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_supplementary_1",
+      "sql": "SELECT CASE WHEN ('\ud83d\ude00' LIKE '__') THEN 1 WHEN NOT ('\ud83d\ude00' LIKE '__') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 0
+    },
+    {
+      "id": "ordinary_supplementary_2",
+      "sql": "SELECT CASE WHEN ('\ud83d\ude00' LIKE '%') THEN 1 WHEN NOT ('\ud83d\ude00' LIKE '%') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_supplementary_3",
+      "sql": "SELECT CASE WHEN ('\ud83d\ude00' LIKE '_%') THEN 1 WHEN NOT ('\ud83d\ude00' LIKE '_%') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_supplementary_4",
+      "sql": "SELECT CASE WHEN ('\ud83d\ude00' LIKE '%_') THEN 1 WHEN NOT ('\ud83d\ude00' LIKE '%_') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_supplementary_5",
+      "sql": "SELECT CASE WHEN ('\ud83d\ude00' LIKE '\ud83d\ude00') THEN 1 WHEN NOT ('\ud83d\ude00' LIKE '\ud83d\ude00') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_composite_0",
+      "sql": "SELECT CASE WHEN ('e\u0301' LIKE '_') THEN 1 WHEN NOT ('e\u0301' LIKE '_') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 0
+    },
+    {
+      "id": "ordinary_composite_1",
+      "sql": "SELECT CASE WHEN ('e\u0301' LIKE '__') THEN 1 WHEN NOT ('e\u0301' LIKE '__') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_composite_2",
+      "sql": "SELECT CASE WHEN ('e\u0301' LIKE '%') THEN 1 WHEN NOT ('e\u0301' LIKE '%') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_composite_3",
+      "sql": "SELECT CASE WHEN ('e\u0301' LIKE '_%') THEN 1 WHEN NOT ('e\u0301' LIKE '_%') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_composite_4",
+      "sql": "SELECT CASE WHEN ('e\u0301' LIKE '%_') THEN 1 WHEN NOT ('e\u0301' LIKE '%_') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_composite_5",
+      "sql": "SELECT CASE WHEN ('e\u0301' LIKE 'e\u0301') THEN 1 WHEN NOT ('e\u0301' LIKE 'e\u0301') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_mixed_pattern_1",
+      "sql": "SELECT CASE WHEN ('\ud83d\ude00' LIKE N'_') THEN 1 WHEN NOT ('\ud83d\ude00' LIKE N'_') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_mixed_pattern_2",
+      "sql": "SELECT CASE WHEN ('\ud83d\ude00' LIKE N'__') THEN 1 WHEN NOT ('\ud83d\ude00' LIKE N'__') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 0
+    },
+    {
+      "id": "ordinary_escape_ascii_p0_e0",
+      "sql": "SELECT CASE WHEN ('x%tail' LIKE 'x|%%' ESCAPE '|') THEN 1 WHEN NOT ('x%tail' LIKE 'x|%%' ESCAPE '|') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_escape_latin_p0_e0",
+      "sql": "SELECT CASE WHEN ('x%tail' LIKE 'x\u00a7%%' ESCAPE '\u00a7') THEN 1 WHEN NOT ('x%tail' LIKE 'x\u00a7%%' ESCAPE '\u00a7') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "ordinary_escape_han_p0_e0",
+      "sql": "SELECT CASE WHEN ('x%tail' LIKE 'x\u754c%%' ESCAPE '\u754c') THEN 1 WHEN NOT ('x%tail' LIKE 'x\u754c%%' ESCAPE '\u754c') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "ordinary_escape_supplementary_p0_e0",
+      "sql": "SELECT CASE WHEN ('x%tail' LIKE 'x\ud83d\ude00%%' ESCAPE '\ud83d\ude00') THEN 1 WHEN NOT ('x%tail' LIKE 'x\ud83d\ude00%%' ESCAPE '\ud83d\ude00') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "ordinary_escape_ascii_p0_e1",
+      "sql": "SELECT CASE WHEN ('x%tail' LIKE 'x|%%' ESCAPE N'|') THEN 1 WHEN NOT ('x%tail' LIKE 'x|%%' ESCAPE N'|') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_escape_latin_p0_e1",
+      "sql": "SELECT CASE WHEN ('x%tail' LIKE 'x\u00a7%%' ESCAPE N'\u00a7') THEN 1 WHEN NOT ('x%tail' LIKE 'x\u00a7%%' ESCAPE N'\u00a7') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "ordinary_escape_han_p0_e1",
+      "sql": "SELECT CASE WHEN ('x%tail' LIKE 'x\u754c%%' ESCAPE N'\u754c') THEN 1 WHEN NOT ('x%tail' LIKE 'x\u754c%%' ESCAPE N'\u754c') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "ordinary_escape_supplementary_p0_e1",
+      "sql": "SELECT CASE WHEN ('x%tail' LIKE 'x\ud83d\ude00%%' ESCAPE N'\ud83d\ude00') THEN 1 WHEN NOT ('x%tail' LIKE 'x\ud83d\ude00%%' ESCAPE N'\ud83d\ude00') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "ordinary_escape_ascii_p1_e0",
+      "sql": "SELECT CASE WHEN ('x%tail' LIKE N'x|%%' ESCAPE '|') THEN 1 WHEN NOT ('x%tail' LIKE N'x|%%' ESCAPE '|') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_escape_latin_p1_e0",
+      "sql": "SELECT CASE WHEN ('x%tail' LIKE N'x\u00a7%%' ESCAPE '\u00a7') THEN 1 WHEN NOT ('x%tail' LIKE N'x\u00a7%%' ESCAPE '\u00a7') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "ordinary_escape_han_p1_e0",
+      "sql": "SELECT CASE WHEN ('x%tail' LIKE N'x\u754c%%' ESCAPE '\u754c') THEN 1 WHEN NOT ('x%tail' LIKE N'x\u754c%%' ESCAPE '\u754c') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "ordinary_escape_supplementary_p1_e0",
+      "sql": "SELECT CASE WHEN ('x%tail' LIKE N'x\ud83d\ude00%%' ESCAPE '\ud83d\ude00') THEN 1 WHEN NOT ('x%tail' LIKE N'x\ud83d\ude00%%' ESCAPE '\ud83d\ude00') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "ordinary_escape_ascii_p1_e1",
+      "sql": "SELECT CASE WHEN ('x%tail' LIKE N'x|%%' ESCAPE N'|') THEN 1 WHEN NOT ('x%tail' LIKE N'x|%%' ESCAPE N'|') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_escape_latin_p1_e1",
+      "sql": "SELECT CASE WHEN ('x%tail' LIKE N'x\u00a7%%' ESCAPE N'\u00a7') THEN 1 WHEN NOT ('x%tail' LIKE N'x\u00a7%%' ESCAPE N'\u00a7') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "ordinary_escape_han_p1_e1",
+      "sql": "SELECT CASE WHEN ('x%tail' LIKE N'x\u754c%%' ESCAPE N'\u754c') THEN 1 WHEN NOT ('x%tail' LIKE N'x\u754c%%' ESCAPE N'\u754c') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "ordinary_escape_supplementary_p1_e1",
+      "sql": "SELECT CASE WHEN ('x%tail' LIKE N'x\ud83d\ude00%%' ESCAPE N'\ud83d\ude00') THEN 1 WHEN NOT ('x%tail' LIKE N'x\ud83d\ude00%%' ESCAPE N'\ud83d\ude00') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "national_bmp_0",
+      "sql": "SELECT CASE WHEN (N'\u00e9' LIKE N'_') THEN 1 WHEN NOT (N'\u00e9' LIKE N'_') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_bmp_1",
+      "sql": "SELECT CASE WHEN (N'\u00e9' LIKE N'__') THEN 1 WHEN NOT (N'\u00e9' LIKE N'__') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 0
+    },
+    {
+      "id": "national_bmp_2",
+      "sql": "SELECT CASE WHEN (N'\u00e9' LIKE N'%') THEN 1 WHEN NOT (N'\u00e9' LIKE N'%') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_bmp_3",
+      "sql": "SELECT CASE WHEN (N'\u00e9' LIKE N'_%') THEN 1 WHEN NOT (N'\u00e9' LIKE N'_%') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_bmp_4",
+      "sql": "SELECT CASE WHEN (N'\u00e9' LIKE N'%_') THEN 1 WHEN NOT (N'\u00e9' LIKE N'%_') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_bmp_5",
+      "sql": "SELECT CASE WHEN (N'\u00e9' LIKE N'\u00e9') THEN 1 WHEN NOT (N'\u00e9' LIKE N'\u00e9') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_supplementary_0",
+      "sql": "SELECT CASE WHEN (N'\ud83d\ude00' LIKE N'_') THEN 1 WHEN NOT (N'\ud83d\ude00' LIKE N'_') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 0
+    },
+    {
+      "id": "national_supplementary_1",
+      "sql": "SELECT CASE WHEN (N'\ud83d\ude00' LIKE N'__') THEN 1 WHEN NOT (N'\ud83d\ude00' LIKE N'__') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_supplementary_2",
+      "sql": "SELECT CASE WHEN (N'\ud83d\ude00' LIKE N'%') THEN 1 WHEN NOT (N'\ud83d\ude00' LIKE N'%') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_supplementary_3",
+      "sql": "SELECT CASE WHEN (N'\ud83d\ude00' LIKE N'_%') THEN 1 WHEN NOT (N'\ud83d\ude00' LIKE N'_%') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_supplementary_4",
+      "sql": "SELECT CASE WHEN (N'\ud83d\ude00' LIKE N'%_') THEN 1 WHEN NOT (N'\ud83d\ude00' LIKE N'%_') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_supplementary_5",
+      "sql": "SELECT CASE WHEN (N'\ud83d\ude00' LIKE N'\ud83d\ude00') THEN 1 WHEN NOT (N'\ud83d\ude00' LIKE N'\ud83d\ude00') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_composite_0",
+      "sql": "SELECT CASE WHEN (N'e\u0301' LIKE N'_') THEN 1 WHEN NOT (N'e\u0301' LIKE N'_') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 0
+    },
+    {
+      "id": "national_composite_1",
+      "sql": "SELECT CASE WHEN (N'e\u0301' LIKE N'__') THEN 1 WHEN NOT (N'e\u0301' LIKE N'__') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_composite_2",
+      "sql": "SELECT CASE WHEN (N'e\u0301' LIKE N'%') THEN 1 WHEN NOT (N'e\u0301' LIKE N'%') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_composite_3",
+      "sql": "SELECT CASE WHEN (N'e\u0301' LIKE N'_%') THEN 1 WHEN NOT (N'e\u0301' LIKE N'_%') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_composite_4",
+      "sql": "SELECT CASE WHEN (N'e\u0301' LIKE N'%_') THEN 1 WHEN NOT (N'e\u0301' LIKE N'%_') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_composite_5",
+      "sql": "SELECT CASE WHEN (N'e\u0301' LIKE N'e\u0301') THEN 1 WHEN NOT (N'e\u0301' LIKE N'e\u0301') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_mixed_pattern_1",
+      "sql": "SELECT CASE WHEN (N'\ud83d\ude00' LIKE '_') THEN 1 WHEN NOT (N'\ud83d\ude00' LIKE '_') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 0
+    },
+    {
+      "id": "national_mixed_pattern_2",
+      "sql": "SELECT CASE WHEN (N'\ud83d\ude00' LIKE '__') THEN 1 WHEN NOT (N'\ud83d\ude00' LIKE '__') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_escape_ascii_p0_e0",
+      "sql": "SELECT CASE WHEN (N'x%tail' LIKE 'x|%%' ESCAPE '|') THEN 1 WHEN NOT (N'x%tail' LIKE 'x|%%' ESCAPE '|') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_escape_latin_p0_e0",
+      "sql": "SELECT CASE WHEN (N'x%tail' LIKE 'x\u00a7%%' ESCAPE '\u00a7') THEN 1 WHEN NOT (N'x%tail' LIKE 'x\u00a7%%' ESCAPE '\u00a7') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_escape_han_p0_e0",
+      "sql": "SELECT CASE WHEN (N'x%tail' LIKE 'x\u754c%%' ESCAPE '\u754c') THEN 1 WHEN NOT (N'x%tail' LIKE 'x\u754c%%' ESCAPE '\u754c') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_escape_supplementary_p0_e0",
+      "sql": "SELECT CASE WHEN (N'x%tail' LIKE 'x\ud83d\ude00%%' ESCAPE '\ud83d\ude00') THEN 1 WHEN NOT (N'x%tail' LIKE 'x\ud83d\ude00%%' ESCAPE '\ud83d\ude00') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "national_escape_ascii_p0_e1",
+      "sql": "SELECT CASE WHEN (N'x%tail' LIKE 'x|%%' ESCAPE N'|') THEN 1 WHEN NOT (N'x%tail' LIKE 'x|%%' ESCAPE N'|') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_escape_latin_p0_e1",
+      "sql": "SELECT CASE WHEN (N'x%tail' LIKE 'x\u00a7%%' ESCAPE N'\u00a7') THEN 1 WHEN NOT (N'x%tail' LIKE 'x\u00a7%%' ESCAPE N'\u00a7') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_escape_han_p0_e1",
+      "sql": "SELECT CASE WHEN (N'x%tail' LIKE 'x\u754c%%' ESCAPE N'\u754c') THEN 1 WHEN NOT (N'x%tail' LIKE 'x\u754c%%' ESCAPE N'\u754c') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_escape_supplementary_p0_e1",
+      "sql": "SELECT CASE WHEN (N'x%tail' LIKE 'x\ud83d\ude00%%' ESCAPE N'\ud83d\ude00') THEN 1 WHEN NOT (N'x%tail' LIKE 'x\ud83d\ude00%%' ESCAPE N'\ud83d\ude00') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "national_escape_ascii_p1_e0",
+      "sql": "SELECT CASE WHEN (N'x%tail' LIKE N'x|%%' ESCAPE '|') THEN 1 WHEN NOT (N'x%tail' LIKE N'x|%%' ESCAPE '|') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_escape_latin_p1_e0",
+      "sql": "SELECT CASE WHEN (N'x%tail' LIKE N'x\u00a7%%' ESCAPE '\u00a7') THEN 1 WHEN NOT (N'x%tail' LIKE N'x\u00a7%%' ESCAPE '\u00a7') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_escape_han_p1_e0",
+      "sql": "SELECT CASE WHEN (N'x%tail' LIKE N'x\u754c%%' ESCAPE '\u754c') THEN 1 WHEN NOT (N'x%tail' LIKE N'x\u754c%%' ESCAPE '\u754c') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_escape_supplementary_p1_e0",
+      "sql": "SELECT CASE WHEN (N'x%tail' LIKE N'x\ud83d\ude00%%' ESCAPE '\ud83d\ude00') THEN 1 WHEN NOT (N'x%tail' LIKE N'x\ud83d\ude00%%' ESCAPE '\ud83d\ude00') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "national_escape_ascii_p1_e1",
+      "sql": "SELECT CASE WHEN (N'x%tail' LIKE N'x|%%' ESCAPE N'|') THEN 1 WHEN NOT (N'x%tail' LIKE N'x|%%' ESCAPE N'|') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_escape_latin_p1_e1",
+      "sql": "SELECT CASE WHEN (N'x%tail' LIKE N'x\u00a7%%' ESCAPE N'\u00a7') THEN 1 WHEN NOT (N'x%tail' LIKE N'x\u00a7%%' ESCAPE N'\u00a7') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_escape_han_p1_e1",
+      "sql": "SELECT CASE WHEN (N'x%tail' LIKE N'x\u754c%%' ESCAPE N'\u754c') THEN 1 WHEN NOT (N'x%tail' LIKE N'x\u754c%%' ESCAPE N'\u754c') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_escape_supplementary_p1_e1",
+      "sql": "SELECT CASE WHEN (N'x%tail' LIKE N'x\ud83d\ude00%%' ESCAPE N'\ud83d\ude00') THEN 1 WHEN NOT (N'x%tail' LIKE N'x\ud83d\ude00%%' ESCAPE N'\ud83d\ude00') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "national_null_escape",
+      "sql": "SELECT CASE WHEN (N'abc' LIKE N'abc' ESCAPE NULL) THEN 1 WHEN NOT (N'abc' LIKE N'abc' ESCAPE NULL) THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "national_empty_escape",
+      "sql": "SELECT CASE WHEN (N'abc' LIKE N'abc' ESCAPE N'') THEN 1 WHEN NOT (N'abc' LIKE N'abc' ESCAPE N'') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "national_null_source",
+      "sql": "SELECT CASE WHEN (CAST(NULL AS NVARCHAR2(8)) LIKE N'abc' ESCAPE N'\u00a7') THEN 1 WHEN NOT (CAST(NULL AS NVARCHAR2(8)) LIKE N'abc' ESCAPE N'\u00a7') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 2
+    },
+    {
+      "id": "national_null_pattern",
+      "sql": "SELECT CASE WHEN (N'abc' LIKE CAST(NULL AS NVARCHAR2(8))) THEN 1 WHEN NOT (N'abc' LIKE CAST(NULL AS NVARCHAR2(8))) THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 2
+    },
+    {
+      "id": "national_fixed_source_no_padding_pattern",
+      "sql": "SELECT CASE WHEN (CAST(N'A' AS NCHAR(3)) LIKE N'A') THEN 1 WHEN NOT (CAST(N'A' AS NCHAR(3)) LIKE N'A') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 0
+    },
+    {
+      "id": "national_fixed_source_wildcard_padding",
+      "sql": "SELECT CASE WHEN (CAST(N'A' AS NCHAR(3)) LIKE N'A__') THEN 1 WHEN NOT (CAST(N'A' AS NCHAR(3)) LIKE N'A__') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "ordinary_fixed_source_national_pattern",
+      "sql": "SELECT CASE WHEN (CAST('A' AS CHAR(3)) LIKE N'A__') THEN 1 WHEN NOT (CAST('A' AS CHAR(3)) LIKE N'A__') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_fixed_pattern",
+      "sql": "SELECT CASE WHEN (N'A' LIKE CAST(N'A' AS NCHAR(3))) THEN 1 WHEN NOT (N'A' LIKE CAST(N'A' AS NCHAR(3))) THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 0
+    },
+    {
+      "id": "national_cast_single_escape",
+      "sql": "SELECT CASE WHEN (N'x%tail' LIKE N'x\u00a7%%' ESCAPE CAST(N'\u00a7' AS NCHAR(1))) THEN 1 WHEN NOT (N'x%tail' LIKE N'x\u00a7%%' ESCAPE CAST(N'\u00a7' AS NCHAR(1))) THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "national_cast_padded_escape",
+      "sql": "SELECT CASE WHEN (N'x%tail' LIKE N'x\u00a7%%' ESCAPE CAST(N'\u00a7' AS NCHAR(2))) THEN 1 WHEN NOT (N'x%tail' LIKE N'x\u00a7%%' ESCAPE CAST(N'\u00a7' AS NCHAR(2))) THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    }
+  ],
+  "observation_completed": true,
+  "implementation_qualified": false,
+  "application_qualified": false,
+  "source_version": "23.26.3.0.0",
+  "database_nls": {
+    "NLS_NCHAR_CHARACTERSET": "AL16UTF16",
+    "NLS_CHARACTERSET": "AL32UTF8"
+  },
+  "session_nls": {
+    "NLS_SORT": "BINARY",
+    "NLS_COMP": "BINARY",
+    "NLS_LENGTH_SEMANTICS": "BYTE"
+  },
+  "unicode_encoding_control": {
+    "literal_length": 1,
+    "literal_byte_length": 2,
+    "literal_dump": "Typ=96 Len=2 CharacterSet=AL32UTF8: c2,a7",
+    "bind_length": 1,
+    "bind_byte_length": 2,
+    "bind_dump": "Typ=1 Len=2 CharacterSet=AL32UTF8: c2,a7"
+  },
+  "reference_driver_version": "26.1.0",
+  "reference_driver_thin_mode": true,
+  "predicate_contexts": [
+    {
+      "id": "national_null_input",
+      "sql": "SELECT COUNT(*) FROM (SELECT CAST(NULL AS NVARCHAR2(8)) AS v FROM DUAL) WHERE v LIKE N'abc' ESCAPE N'\u00a7'",
+      "binds": {},
+      "rows": [
+        [
+          0
+        ]
+      ]
+    },
+    {
+      "id": "national_empty_input",
+      "sql": "SELECT COUNT(*) FROM (SELECT CAST('abc' AS NVARCHAR2(8)) AS v FROM DUAL WHERE 1=0) WHERE v LIKE N'abc' ESCAPE NULL",
+      "binds": {},
+      "rows": [
+        [
+          0
+        ]
+      ]
+    }
+  ],
+  "connection_closed": true
+}

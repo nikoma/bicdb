@@ -1,0 +1,21 @@
+{
+  "format": 1,
+  "observer_source_commit": "f879005f2c4e4c0122ed024f9894135c039c9afa",
+  "observer_sha256": "b251333cd1a8906508dc3ff718a4e6b95fc05d62b9be8549642dfc1876abb688",
+  "observations_sha256": "fe937b04903f2a69adce52d9a86528dc63cae8f39d03b9c27ce62a8a4ba1ddaf",
+  "source_version": "23.26.3.0.0",
+  "source_predicates": 82,
+  "source_contexts": 2,
+  "source_observation_completed": true,
+  "original_application_objects_modified": false,
+  "source_container_restored": true,
+  "semantic_error_counts": {
+    "1425": 19
+  },
+  "observer_unit_tests": 7,
+  "observer_unit_tests_use_fake_driver": true,
+  "engine_implementation_qualified": false,
+  "application_qualified": false,
+  "production_qualified": false,
+  "programme_complete": false
+}

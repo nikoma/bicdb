@@ -17,6 +17,12 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [national LIKE source-observation checkpoint](evidence/oracle-national-like-source-2026-11-06/README.md)
+records 82 Oracle predicates and two contexts, including mixed character families,
+UTF-16 units, escapes and padding. Its retained v29 control exposes an existing
+national matching gap. Source evidence is complete for this corpus; runtime,
+durable national column provenance and application qualification remain open.
+
 The [correlated EXISTS candidate-probe checkpoint](evidence/sql-correlated-exists-probes-2026-11-06/README.md)
 qualifies bounded statement-local candidate maps and primary-key list lookups,
 with independent PostgreSQL/Oracle-preview result, NULL, duplicate and rollback

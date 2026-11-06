@@ -3582,3 +3582,40 @@ pub(super) fn subquery_is_memoizable(db: &BicDb, query: &Query) -> bool {
     }
     query.visit(&mut Check { db }).is_continue()
 }
+
+#[cfg(test)]
+mod memo_eligibility_tests {
+    use super::*;
+
+    #[test]
+    fn row_subquery_memo_declines_hidden_effects_and_modifying_ctes() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        {
+            let mut session = SqlSession::new(&mut db);
+            session
+                .execute("CREATE TABLE memo_source(id INTEGER)")
+                .unwrap();
+            session.execute("CREATE SEQUENCE memo_sequence").unwrap();
+            session
+                .execute("CREATE VIEW memo_view AS SELECT nextval('memo_sequence') AS n")
+                .unwrap();
+        }
+        for (source, expected) in [
+            ("SELECT MAX(id) FROM memo_source", true),
+            ("SELECT nextval('memo_sequence')", false),
+            ("SELECT n FROM memo_view", false),
+            ("SELECT id FROM memo_source FOR UPDATE", false),
+            (
+                "WITH changed AS (DELETE FROM memo_source RETURNING id) SELECT id FROM changed",
+                false,
+            ),
+        ] {
+            let statements = parse_statements(source).unwrap();
+            let Statement::Query(query) = &statements[0] else {
+                panic!("expected query")
+            };
+            assert_eq!(subquery_is_memoizable(&db, query), expected, "{source}");
+        }
+    }
+}

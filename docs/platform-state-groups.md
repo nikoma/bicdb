@@ -82,8 +82,10 @@ and local replication listener.
 
 HTTP `endpoint` values are separate, unique HTTPS origins reachable by clients
 and compute workers. Operators provide HTTPS termination and certificates
-trusted by those clients; the native replication CA is not an HTTP trust-store
-setting. Keep management credentials the same across state hosts, and provision
+trusted by those clients. State-host forwarding additionally trusts the group
+CA and presents that host's node certificate for private peer mutual TLS.
+Clients and remote workers still need their own HTTP trust configuration.
+Keep management credentials the same across state hosts, and provision
 each host's own TLS key and certificate pins. Protect configuration and secret
 files with owner-only permissions.
 
@@ -99,6 +101,34 @@ that outlasts writer authority fails safely and can require a deployment retry.
 After a replication acknowledgement timeout, the operation can already be
 durable. Retry application effects with their idempotency key. Jobs remain at
 least once; external services need their own idempotency mechanism.
+
+## Authenticated local SQL and stateless companions
+
+An operator-owned `apps/NAME/sql-listener.json` can attach a loopback SQL
+listener to a replicated application. It must be mode 0600, supervisor-owned,
+and require authentication. The listener uses the exact embedded HA server,
+including its lease, synchronous acknowledgements, role changes and shutdown;
+it does not create a second writer. Promotion, demotion and snapshot bootstrap
+close old sessions and reopen the listener. Clients must reconnect and retry
+indeterminate writes using application idempotency rules. Seed the required
+SQL login profiles and private delegation policy on every member separately.
+
+A state group may declare `"companions": ["portal", "mail"]`. These are local
+stateless `node_http` releases that follow the owner's execution authority.
+Their desired deployment records and immutable packages live in the owner's
+replicated catalog, so successors recover their exact code without an upload.
+Companions cannot own migrations, SQL listeners, synchronization, event bindings
+or remote placement, and cannot use native internal database/job capabilities.
+Provide their private environment and process identities on each member. Their
+local scratch database is not durable application storage. Each companion has
+exactly one owner; duplicate or overlapping allocations are refused.
+
+`GET /ready/NAME` is a local, status-only readiness probe. For a state owner it
+requires enabled, running, healthy execution for that application and every
+configured companion, plus SQL listener health when configured. It never
+forwards to a primary: standbys and isolated old writers return 503. Use this
+probe for writer-selecting ingress, keeping management and SQL private. `/health`
+remains host liveness. Readiness does not replace end-to-end application checks.
 
 ## Remote execution
 

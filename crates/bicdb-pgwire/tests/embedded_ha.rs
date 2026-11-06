@@ -107,6 +107,29 @@ fn wait(mut condition: impl FnMut() -> bool) {
 }
 
 #[test]
+fn protocol_attachment_requires_authentication_and_reuses_the_ha_server() {
+    let root = tempfile::tempdir().unwrap();
+    let ports = [port()];
+    let unauthenticated = open(root.path(), 0, &ports, false);
+    assert!(unauthenticated.authenticated_protocol_server().is_err());
+    unauthenticated.shutdown(Duration::from_secs(2)).unwrap();
+    drop(unauthenticated);
+    let mut configuration = config(0, &ports, false);
+    configuration.require_auth = true;
+    let host = EmbeddedHaDatabase::open(root.path().join("n0"), configuration, DbConfig::default())
+        .unwrap();
+    let first = host.authenticated_protocol_server().unwrap();
+    let second = host.authenticated_protocol_server().unwrap();
+    assert!(std::sync::Arc::ptr_eq(&first, &second));
+    assert!(first.config().require_auth);
+    first.request_shutdown();
+    assert!(!host.writer_lease().active());
+    drop(first);
+    drop(second);
+    host.shutdown(Duration::from_secs(2)).unwrap();
+}
+
+#[test]
 fn shutdown_cancels_incomplete_peers_and_releases_the_replication_listener() {
     use std::io::{Read, Write};
     let root = tempfile::tempdir().unwrap();

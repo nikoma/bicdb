@@ -199,6 +199,20 @@ impl Process {
             let _ = fs::remove_dir_all(work);
         }
     }
+
+    /// Signal the still-unreaped process group immediately when authority is
+    /// revoked. Cleanup may run on the blocking pool, but fencing cannot wait
+    /// for that pool to become available. The leader PID stays reserved until
+    /// stop() reaps it, so repeating the signal cannot target a reused PID.
+    pub(crate) fn revoke(&self) {
+        #[cfg(target_os = "linux")]
+        if !self.stopped {
+            unsafe {
+                libc::kill(-(self.child.id() as i32), libc::SIGKILL);
+                libc::kill(self.child.id() as i32, libc::SIGKILL);
+            }
+        }
+    }
 }
 
 impl Drop for Process {

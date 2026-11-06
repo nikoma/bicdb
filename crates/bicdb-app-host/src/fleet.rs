@@ -245,8 +245,9 @@ pub enum Execution {
 
 impl Execution {
     pub(crate) fn revoke(&self) {
-        if let Self::Remote(remote, _) = self {
-            remote.alive.store(false, Ordering::Release);
+        match self {
+            Self::Local(process, _) => process.revoke(),
+            Self::Remote(remote, _) => remote.alive.store(false, Ordering::Release),
         }
     }
     pub fn route(&self) -> (String, reqwest::Client, Option<String>, String) {

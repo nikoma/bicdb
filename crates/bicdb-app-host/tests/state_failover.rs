@@ -772,6 +772,9 @@ fn sql_companion_failover(partition: bool) {
             503,
             "the isolated writer cannot remain in ingress"
         );
+        let retired_pid = before_pid.as_u64().unwrap() as i32;
+        group.wait(|| unsafe { libc::kill(retired_pid, 0) } == -1);
+
         let status = group.status(0).unwrap();
         for app in status.as_array().unwrap() {
             assert_eq!(app["running"], false);
@@ -794,6 +797,11 @@ fn sql_companion_failover(partition: bool) {
     });
     let former = connect(0, "alice");
     let bob = connect(primary, "bob");
+    group.wait(|| {
+        runtime
+            .block_on(former.query("SELECT value FROM durable_rows WHERE id='after'", &[]))
+            .is_ok_and(|rows| rows.len() == 1 && rows[0].get::<_, String>(0) == "successor")
+    });
     runtime.block_on(async {
         let error = former
             .execute(
@@ -823,8 +831,12 @@ fn sql_companion_failover(partition: bool) {
         );
     });
     group.kill(primary);
-    let second = (0..3).find(|i| *i != primary && *i != 0).unwrap();
-    group.wait(|| writer(&group, second));
+    let mut second = None;
+    group.wait(|| {
+        second = (0..3).find(|i| *i != primary && writer(&group, *i));
+        second.is_some()
+    });
+    let second = second.unwrap();
     group.wait(|| response(&group, second).is_some_and(|r| r["version"] == 2));
     let final_client = connect(second, "alice");
     assert_eq!(

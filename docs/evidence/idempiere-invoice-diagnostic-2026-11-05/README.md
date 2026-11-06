@@ -30,8 +30,12 @@ This copy predates complete source foreign-key installation. Repeat the class
 on the completed FK schema before final application acceptance. Broader invoice
 posting/reversal and the entire application remain separate requirements.
 
-Workflow audit `Update return 0` diagnostics require investigation/reference
-comparison; green business assertions do not certify audit or rollback behavior.
+The [savepoint investigation](../idempiere-savepoint-recovery-2026-11-05/README.md)
+locates explicit update-then-insert recovery in the original workflow code and
+the corresponding rollback/reinsertion sequence in the SQL trace. A separate
+native test verifies the general transaction rule in both profiles. Full audit
+content and reference-application equivalence remain unqualified; green business
+assertions alone do not certify them.
 The runtime also logs an unselected original provider singleton warning. Actual
 selected provider classes were attested; clean packaging remains an operational
 gate. Neither warning was suppressed. No GitHub workflows were changed or

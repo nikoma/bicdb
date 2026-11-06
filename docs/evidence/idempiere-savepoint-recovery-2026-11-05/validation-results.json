@@ -1,0 +1,26 @@
+{
+  "format": 1,
+  "engine_source_commit": "b9845721893047621c2215a97cd190c0c3ede025",
+  "binary_sha256": "317cf94b595ea7b4dd4a15d849a2f77365e6cca51e1c4ab49a1a33c1d4b07e0b",
+  "upstream_activity_source_sha256": "3eb7f39d70712dca0b14e29cd396e32b194a8d48f0d64726a072bd39470873f4",
+  "private_redacted_query_trace_sha256": "4db1ec7e1339f168bb7696dd8539a175ab427c3fcc09ea43a7a1bf68710bfbb3",
+  "native_regression": {
+    "module": "test_savepoint_recovery_native",
+    "profiles": ["oracle-preview-v1", "postgres"],
+    "passed": 2,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "clean_database_restart_checked": true,
+    "affected_update_and_insert_counts_checked": true
+  },
+  "upstream_explicit_reinsertion_path_found": true,
+  "application_trace_contains_rollback_update_reinsertion_sequence": true,
+  "trace_values_and_keys_redacted": true,
+  "original_oracle_application_comparison_run": false,
+  "audit_contents_qualified": false,
+  "application_qualified": false,
+  "accepted_application_updated": false,
+  "engine_changed": false,
+  "github_workflows_changed_or_dispatched": false
+}

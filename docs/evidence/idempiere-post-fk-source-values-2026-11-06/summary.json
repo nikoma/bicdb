@@ -1,0 +1,21 @@
+{
+  "format": 1,
+  "status": "post_fk_export_value_equality_verified",
+  "tables": 915,
+  "source_rows": 185471,
+  "source_manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+  "verification_report_sha256": "f63c53543affb58d28ab51ed3fa04ee35d9dae0586aed5f9267b96f409450d69",
+  "table_value_digests_sha256": "3ab87b9469c201b71f337f3bc9875f6245c49f22f33640774296fb5c465cf307",
+  "tool_source_commit": "2312aceb00b4f26451fc25e521233ff25026eb0f",
+  "engine_source_commit": "5e5fecc3ca279f2e3ea3e37af0c244e11bbb69ea",
+  "binary_sha256": "1cd37fe086195a867f46e359d532c4d4f70a720d335ebb69e4307f05121f0860",
+  "verification_returncode": 0,
+  "orphan_inventory_qualified": false,
+  "application_qualified": false,
+  "goal_complete": false,
+  "source_and_target_exported_value_equality_qualified": true,
+  "production_qualified": false,
+  "ownership_mapping_qualified": false,
+  "live_change_capture_qualified": false,
+  "source_row_files_reauthenticated_for_publication": true
+}

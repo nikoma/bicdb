@@ -42,6 +42,13 @@ fingerprints for 888 affected tables. Validation, deferment and delete actions
 are preserved. Full source-value equality, orphan reconciliation and original
 application acceptance on this baseline remain separate gates.
 
+The [post-FK source-value checkpoint](evidence/idempiere-post-fk-source-values-2026-11-06/README.md)
+subsequently verifies all 915 tables and 185,471 rows against the retained Oracle
+export, with matching complete value multisets and a zero verification exit.
+Orphan reconciliation, routine/view execution and rights, full original
+application acceptance and recovery remain open. This equality is bounded by
+the supported export codec and does not establish live change capture.
+
 The [full-FK foundation checkpoint](evidence/idempiere-full-fk-foundation-2026-11-05/README.md)
 passes all 89 selected original application tests, with zero failures/errors/skips,
 verified Oracle-provider/PostgreSQL-driver origins and clean JVM/database exits.

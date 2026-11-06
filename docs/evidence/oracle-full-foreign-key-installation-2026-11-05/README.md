@@ -68,3 +68,21 @@ or crash-recovery qualification. Logs and the disposable database remain for
 diagnosis. No assertions were removed or relaxed. All **89 original tests**
 remain required on a fresh completed-schema copy, followed by pristine data and
 broader application/recovery gates.
+
+## Runtime repetition after the shared-reference fix
+
+The [qualified engine fixes](../oracle-foreign-key-reservations-2026-11-05/README.md)
+were repeated on another isolated copy of the completed FK schema. The
+[new interrupted-run record](shared-reference-runtime-interruption.json)
+contains three completed original JUnit reports: **InOutTest 5/5, InvoiceTest
+2/2 and POInsertSQLTest 20/20**, with zero failures, errors or skips. All 16 BLOB
+columns were reconciled first, preserving table fingerprints and the 62 routine
+and 160 view definitions. The class-load log matches the original pinned test
+JAR, selected Oracle provider, BicDB adapter and PostgreSQL driver.
+
+The host memory guard interrupted the run during POTest when available RAM fell
+below its 14 GiB floor. The remaining 62 assertions are unqualified; this is
+**27 completed tests, not an 89-test pass**. Every owned process was subsequently
+observed stopped, but clean shutdown and exit statuses are not established by
+this forced interruption. Broader packaging, long-running resource behavior,
+fresh source-value import and full application/recovery acceptance remain open.

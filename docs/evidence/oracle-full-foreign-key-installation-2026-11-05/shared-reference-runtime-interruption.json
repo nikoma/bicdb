@@ -1,0 +1,108 @@
+{
+  "format": 1,
+  "status": "interrupted_by_memory_guard",
+  "native_main_commit": "13e36c7e4d52ba136f2bed041dee5ec26c666e5f",
+  "native_binary_sha256": "d012884a404dd4fea72cf1e29f0a964d57740b04b83ede2a4c7a7dd000f9737e",
+  "test_jar_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+  "completed_reports": [
+    {
+      "name": "org.idempiere.test.base.InOutTest",
+      "tests": "5",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "report_sha256": "bce726d94fc6d09750956510ab18c69a60cc8ab06687daeafa8f6bfda02ca016"
+    },
+    {
+      "name": "org.idempiere.test.base.InvoiceTest",
+      "tests": "2",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "report_sha256": "ee489d2c41cf29fe0be977314017abfc9048fc0020eb37cf88f5d28701340b77"
+    },
+    {
+      "name": "org.idempiere.test.base.POInsertSQLTest",
+      "tests": "20",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "report_sha256": "fc33a59ff83c9afdb146242b7e8ea1ad4826a82d5e94a62eeb8e0c0e13c40478"
+    }
+  ],
+  "selected_tests_completed": 27,
+  "selected_tests_expected": 89,
+  "selected_classes_expected": [
+    "org.idempiere.test.base.InvoiceTest",
+    "org.idempiere.test.model.InvoiceCustomerTest",
+    "org.idempiere.test.base.InOutTest",
+    "org.idempiere.test.base.POTest",
+    "org.idempiere.test.base.POInsertSQLTest"
+  ],
+  "runtime_class_origins": [
+    {
+      "class_name": "org.compiere.db.DB_Oracle",
+      "source_sha256": "330a951360185f9acc875e98985255bda467adac447d1a866ae0a7f210026288",
+      "matched": true
+    },
+    {
+      "class_name": "org.bicdb.jdbc.oracle.OracleDriver",
+      "source_sha256": "9102b2ad40e5f9f1366e9d1a126556ec240c5e8423df5c30e02590506a3333ac",
+      "matched": true
+    },
+    {
+      "class_name": "org.postgresql.Driver",
+      "source_sha256": "2a32a9dcbc42d67a50ad3a0de5efd102c8d2be46720045f2cbd6689f160ab7c7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.InvoiceTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.model.InvoiceCustomerTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.InOutTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.POTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.POInsertSQLTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    }
+  ],
+  "blob_reconciliation": {
+    "success": true,
+    "reconciled_columns": 16,
+    "definitions_preserved": true,
+    "full_target_table_fingerprints_preserved": true
+  },
+  "resource_interruption": {
+    "available_memory_floor_gib": 14,
+    "minimum_observed_available_bytes": 14319546368,
+    "peak_owned_group_rss_bytes": 5970628608,
+    "guard_status": "aborted_low_memory"
+  },
+  "all_owned_processes_observed_stopped": true,
+  "exit_statuses_unavailable_after_guard_termination": true,
+  "clean_shutdown_qualified": false,
+  "full_batch_passed": false,
+  "application_qualified": false,
+  "production_qualified": false,
+  "goal_complete": false,
+  "log_sha256": {
+    "jvm.log": "ee6f0955bf4e9aa6ba7e3d0182281459cd032c55fdd0bcbf88f8193c977f96d6",
+    "class-load.log": "268ce95dc8741098307570eb653850aa9bd37f4bb2904f2500a36d07b2e7c6ae",
+    "database.log": "caa6a07cc31ddb02c7e30f4f0bea7804c0852eb6310c210603e88244ebe65eac"
+  }
+}

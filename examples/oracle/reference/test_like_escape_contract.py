@@ -104,6 +104,27 @@ class LikeObservationTests(unittest.TestCase):
         self.assertFalse(result['implementation_qualified'])
         self.assertTrue(connection.closed)
 
+    def test_cast_contract_is_independent_of_pattern_contract(self):
+        connection = Connection()
+        result = contract.observe(lambda: connection, contract='national-casts')
+        self.assertEqual(len(result['cases']), 24)
+        self.assertEqual(len(result['predicate_contexts']), 15)
+        self.assertTrue(result['observation_completed'])
+        self.assertFalse(result['implementation_qualified'])
+        self.assertTrue(connection.closed)
+
+    def test_raw_unit_contract_does_not_claim_direct_text_decoding(self):
+        plans = contract.national_cast_unit_contexts()
+        self.assertEqual(len(plans), 15)
+        self.assertEqual(sum(sql.startswith('SELECT DUMP(') for _, sql, _ in plans), 13)
+        self.assertTrue(all(sql.startswith('SELECT CAST(') for _, sql, _ in contract.NATIONAL_CAST_CONTEXT_PLANS[:13]))
+        connection = Connection()
+        result = contract.observe(lambda: connection, contract='national-cast-units')
+        self.assertEqual(result['contract'], 'national-cast-units')
+        self.assertEqual(len(result['predicate_contexts']), 15)
+        self.assertTrue(result['observation_completed'])
+        self.assertFalse(result['implementation_qualified'])
+
     def test_character_set_mismatch_is_recorded_as_semantic_evidence(self):
         connection = Connection((12704, 'ORA-12704'))
         result = contract.observe(lambda: connection, contract='national')

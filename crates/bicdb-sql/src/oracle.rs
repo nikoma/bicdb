@@ -615,7 +615,7 @@ fn postgres_catalog_read(sql: &str) -> bool {
 // ordinary ownership, role-membership and privilege checks.
 fn postgres_owner_administration(sql: &str) -> bool {
     let first = sql.split_whitespace().next().unwrap_or_default();
-    if !["CREATE", "ALTER", "DROP", "GRANT", "REVOKE"]
+    if !["CREATE", "ALTER", "DROP", "GRANT", "REVOKE", "SET", "RESET"]
         .iter()
         .any(|word| first.eq_ignore_ascii_case(word))
     {
@@ -635,6 +635,12 @@ fn postgres_owner_administration(sql: &str) -> bool {
         return false;
     };
     match statement {
+        Statement::Set(sqlparser::ast::Set::SetRole { .. }) => true,
+        Statement::Reset(reset) => matches!(
+            &reset.reset,
+            sqlparser::ast::Reset::ConfigurationParameter(name)
+                if name.0.len() == 1 && name.to_string().eq_ignore_ascii_case("role")
+        ),
         Statement::CreateRole(_) | Statement::AlterRole { .. } => true,
         Statement::Drop { object_type, .. } => {
             matches!(object_type, ObjectType::Role | ObjectType::User)
@@ -665,6 +671,9 @@ mod owner_administration_boundary_tests {
             "ALTER ROLE app_owner NOLOGIN",
             "DROP ROLE app_owner",
             "GRANT app_owner TO app_login",
+            "SET ROLE app_owner",
+            "SET LOCAL ROLE app_owner",
+            "RESET ROLE",
             "ALTER SCHEMA \"Source Q\" OWNER TO app_owner",
             "ALTER TABLE \"Source Q\".\"T\" OWNER TO app_owner",
             "ALTER VIEW \"Source Q\".\"V\" OWNER TO app_owner",
@@ -685,6 +694,10 @@ mod owner_administration_boundary_tests {
             "ALTER PROCEDURE p(integer) OWNER TO app_owner; SELECT 1",
             "ALTER FUNCTION f(integer) RESET ALL",
             "ALTER PROCEDURE p(integer) RENAME TO q",
+            "SET ROLE app_owner; SELECT 1",
+            "RESET ROLE; SELECT 1",
+            "SET owner TO 1",
+            "RESET owner",
         ] {
             assert!(!postgres_owner_administration(sql), "{sql}");
         }

@@ -1,4 +1,5 @@
 """Native stored-code import, dependency ordering, restart, and drift rejection."""
+import hashlib
 import json
 import os
 from types import SimpleNamespace
@@ -20,14 +21,24 @@ class SchemaCodeNative(unittest.TestCase):
         fixture.conn.execute('INSERT INTO "SOURCE"."T" VALUES(7)')
         manifest = dict(source_schema='SOURCE', routines=[dict(name='ADD_ONE', kind='FUNCTION',
             ddl='CREATE OR REPLACE FUNCTION ADD_ONE(x NUMBER) RETURN NUMBER AS BEGIN RETURN x+1; END;')],
-            views=[dict(name='V_PARENT', query='SELECT X FROM T', read_only='N'),
-                   dict(name='V_CHILD', query='SELECT X FROM V_PARENT', read_only='N')],
+            views=[dict(name='V_CHILD', query='SELECT X FROM V_PARENT', read_only='N'),
+                   dict(name='V_PARENT', query='SELECT X FROM T', read_only='N')],
             columns=[dict(table=name, name='X', position=1) for name in ['V_CHILD', 'V_PARENT']])
         (fixture.root/'manifest.json').write_text(json.dumps(manifest))
+        # A synthetic source-dictionary report isolates destination ordering.
+        # Live Oracle dictionary capture is a separate integration qualification.
+        dependencies = dict(format=1, source_schema='SOURCE', code_identities_verified=True,
+            source_ddl_quiesced_confirmed=True, static_view_dependency_order_captured=True,
+            schema_manifest_sha256=hashlib.sha256((fixture.root/'manifest.json').read_bytes()).hexdigest(),
+            view_order=['V_PARENT', 'V_CHILD'], dependencies=[dict(name='V_CHILD', kind='VIEW',
+                referenced_owner='SOURCE', referenced_name='V_PARENT', referenced_kind='VIEW',
+                link=None, dependency_kind='HARD')])
+        (fixture.root/'dependencies.json').write_text(json.dumps(dependencies))
         def migrate(phase, resume=False):
             args = SimpleNamespace(snapshot=fixture.root, report=fixture.root/(phase+'.json'),
                                    phase=phase, resume=resume, writers_quiesced=True,
-                                   pg_dsn_env='BICDB_CODE_TEST_DSN')
+                                   pg_dsn_env='BICDB_CODE_TEST_DSN',
+                                   dependency_report=fixture.root/'dependencies.json' if phase == 'views' else None)
             with patch.dict(os.environ, BICDB_CODE_TEST_DSN=fixture.dsn):
                 return install_schema_code.migrate(args)
         self.assertEqual(migrate('routines'), 0)

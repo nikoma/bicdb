@@ -283,7 +283,10 @@ def main():
     parser.add_argument('--source-string-size', choices=['STANDARD'], help='qualified source environment for character-types')
     parser.add_argument('--check-only', action='store_true', help='read-only character-types/blob-types/foreign-keys preflight without probe DDL or ALTER')
     parser.add_argument('--writers-quiesced', action='store_true', help='confirm target writers and schema changes are stopped for BLOB, foreign-key, or stored-code installation')
+    parser.add_argument('--dependency-report', type=Path, help='source-verified static view dependency report for --phase views')
     args = parser.parse_args()
+    if args.dependency_report and args.phase != 'views':
+        parser.error('--dependency-report requires --phase views')
     if args.phase in {'routines', 'views'}:
         if args.check_only or args.source_character_set or args.source_string_size:
             parser.error('stored-code phases do not accept character environment or check-only options')

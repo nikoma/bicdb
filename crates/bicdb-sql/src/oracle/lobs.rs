@@ -158,7 +158,7 @@ pub(super) fn lower_sql_scalars(db: &BicDb, statements: &mut Vec<Statement>) -> 
                         .get(origin.attribute_number as usize - 1)
                         .cloned()
                 })
-                .is_some_and(|column| is_modifier(column.type_modifier.as_ref()));
+                .is_some_and(|column| super::lob_storage::is_column(&column));
             self.origins.insert(key, value);
             value
         }

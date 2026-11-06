@@ -1,0 +1,45 @@
+{
+  "format": 1,
+  "scope": "fresh saved-export table/data import and complete row-value verification",
+  "engine_source_commit": "dc6e3c5a1f9943ec9cb63abf7157ed1d58281986",
+  "native_main_commit": "8b2bfae217cca282e07efd5123ddee9a360a7b93",
+  "binary_sha256": "b8828534f9a2dd20540dc87cf9c1975dff36697ef58ed88ddadcc65d2fbe90aa",
+  "tool_source_commit": "38130c72d4d5e698e23b4510df6ed3e3e3e3df19",
+  "source_manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+  "verified_tables": 915,
+  "verified_source_rows": 185471,
+  "phase_reports": [
+    {
+      "phase": "tables",
+      "returncode": 0,
+      "sha256": "052a955aa29b8f84d565b30b17d59e097c00b3e5aceb4181c492921afac52364",
+      "completed_tables": 915
+    },
+    {
+      "phase": "data",
+      "returncode": 0,
+      "sha256": "1657c5df689c4b6fd512ba0c3e1d913eb4bdf4c161239ea6d6e3bf4c0acbb3ed",
+      "completed_tables": 915
+    },
+    {
+      "phase": "verify",
+      "returncode": 0,
+      "sha256": "60ec87c47752155afe2308691142b181fcb05cc14b41cb67b15ecffb48641dfd",
+      "completed_tables": 915
+    }
+  ],
+  "database_returncode": 0,
+  "processes_stopped": true,
+  "external_network_isolated": true,
+  "primary_database_used_for_test_mutations": false,
+  "comparison": "per-table row multiset hashes, retaining duplicate multiplicities",
+  "live_source_compared_in_this_run": false,
+  "full_schema_code_qualified": false,
+  "application_qualified": false,
+  "resource": {
+    "status": "completed",
+    "returncode": 0,
+    "peak_group_rss_bytes": 2713866240,
+    "minimum_observed_available_bytes": 20526325760
+  }
+}

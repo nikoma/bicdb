@@ -740,7 +740,13 @@ pub fn lower_session_sql(
         return Ok(sql.to_string());
     }
     let schema = preview_schema(db, search_path, user)?.unwrap_or_else(default_schema_name);
-    let lowered = lower_profile_sql_in_namespace(db, sql, profile, Some(&schema))?;
+    let scoped = namespaces::bind_source_quoted_functions(db, sql, &schema)?;
+    let lowered = lower_profile_sql_in_namespace(
+        db,
+        scoped.as_deref().unwrap_or(sql),
+        profile,
+        Some(&schema),
+    )?;
     if let Some(command) = foreign_keys::timing_sql(&lowered, Some(&schema))? {
         return Ok(command);
     }
@@ -761,7 +767,6 @@ pub fn lower_session_sql(
         return procedures::render(function);
     }
     let mut statements = parse_statements(&lowered)?;
-    namespaces::qualify_quoted_functions(db, &mut statements, &schema, sql)?;
     output::lower_calls(&mut statements)?;
     storage_catalog::lower(db, &mut statements, &schema)?;
     namespaces::qualify_with_calls(&mut statements, &schema);

@@ -3,40 +3,25 @@ use super::*;
 
 /// Bind exact quoted local routine names before native scalar dispatch can
 /// mistake them for builtins. Routine EXECUTE checks still run in the host.
-pub(super) fn qualify_quoted_functions<T: sqlparser::ast::VisitMut>(
+pub(super) fn bind_source_quoted_functions(
     db: &BicDb,
-    node: &mut T,
-    schema: &str,
     source: &str,
-) -> Result<()> {
-    // Canonical lowering also quotes originally unquoted routine names.
-    // Resolve only calls that were explicitly quoted in the submitted SQL;
-    // legacy unqualified routine lookup must keep its existing contract.
+    schema: &str,
+) -> Result<Option<String>> {
+    // Bind the original AST, before canonical lowering quotes ordinary names.
+    // Never infer a source quote merely from a canonicalized identifier.
     if !source.contains('"') {
-        return Ok(());
+        return Ok(None);
     }
-    let Ok(original) = Parser::parse_sql(&OracleDialect {}, source) else {
-        // Do not guess provenance for extended grammar or stored legacy SQL.
-        return Ok(());
+    let Ok(mut original) = Parser::parse_sql(&OracleDialect {}, source) else {
+        // Extended grammar and stored legacy SQL need retained source-token
+        // provenance before this binding can be qualified for those contexts.
+        return Ok(None);
     };
-    let mut quoted = BTreeSet::new();
-    let _ = sqlparser::ast::visit_expressions(&original, |expr| {
-        if let Expr::Function(function) = expr {
-            if let [part] = function.name.0.as_slice() {
-                if let Some(ident) = part.as_ident().filter(|ident| ident.quote_style.is_some()) {
-                    quoted.insert(ident.value.clone());
-                }
-            }
-        }
-        ControlFlow::<()>::Continue(())
-    });
-    if quoted.is_empty() {
-        return Ok(());
-    }
     struct Resolve<'a> {
         db: &'a BicDb,
         schema: &'a str,
-        quoted: &'a BTreeSet<String>,
+        changed: bool,
     }
     impl sqlparser::ast::VisitorMut for Resolve<'_> {
         type Break = SqlError;
@@ -50,9 +35,6 @@ pub(super) fn qualify_quoted_functions<T: sqlparser::ast::VisitMut>(
             let Some(ident) = part.as_ident().filter(|ident| ident.quote_style.is_some()) else {
                 return ControlFlow::Continue(());
             };
-            if !self.quoted.contains(&ident.value) {
-                return ControlFlow::Continue(());
-            }
             let routine = match load_routine(self.db, RoutineKind::Function, &ident.value) {
                 Ok(Some(routine)) => routine,
                 Ok(None) => return ControlFlow::Continue(()),
@@ -77,18 +59,23 @@ pub(super) fn qualify_quoted_functions<T: sqlparser::ast::VisitMut>(
                 0,
                 sqlparser::ast::ObjectNamePart::Identifier(Ident::with_quote('"', self.schema)),
             );
+            self.changed = true;
             ControlFlow::Continue(())
         }
     }
-    match sqlparser::ast::VisitMut::visit(
-        node,
-        &mut Resolve {
-            db,
-            schema,
-            quoted: &quoted,
-        },
-    ) {
-        ControlFlow::Continue(()) => Ok(()),
+    let mut resolve = Resolve {
+        db,
+        schema,
+        changed: false,
+    };
+    match sqlparser::ast::VisitMut::visit(&mut original, &mut resolve) {
+        ControlFlow::Continue(()) => Ok(resolve.changed.then(|| {
+            original
+                .iter()
+                .map(render_sql)
+                .collect::<Vec<_>>()
+                .join("; ")
+        })),
         ControlFlow::Break(error) => Err(error),
     }
 }

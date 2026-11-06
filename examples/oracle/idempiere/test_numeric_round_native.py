@@ -44,6 +44,9 @@ class NumericRoundNativeTests(unittest.TestCase):
                       'BEGIN RETURN 77; END;', prepare=False)
             c.execute('SELECT "round"(1,2) FROM DUAL')
             self.assertEqual(c.fetchone(), (77,))
+            c.execute('SELECT "round"(%s,%s),ROUND(CAST(15.193 AS NUMERIC),1) FROM DUAL',
+                      (1,2), prepare=True)
+            self.assertEqual(c.fetchone(), (77,Decimal('15.2')))
             c.execute('SELECT ROUND(SQRT(2),2) FROM DUAL')
             self.assertEqual(c.fetchone(), (Decimal('1.41'),))
             c.execute('DROP FUNCTION "round"', prepare=False)

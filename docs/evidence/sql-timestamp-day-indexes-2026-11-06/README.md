@@ -59,8 +59,8 @@ CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo test -p bicdb-sql --lib session::ti
 CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo test -p bicdb-sql --lib oracle::transport_savepoints:: -- --test-threads=1
 ```
 
-The [reference instructions](../../../../examples/oracle/reference/README.md)
+The [reference instructions](../../../examples/oracle/reference/README.md)
 describe the Oracle and PostgreSQL CLI invocations and connection configuration.
 A native savepoint transport check uses `test_savepoint_recovery_native.py` in
-the [application tooling](../../../../examples/oracle/idempiere/README.md), with
+the [application tooling](../../../examples/oracle/idempiere/README.md), with
 `BICDB_ORACLE_SERVER` selecting a built compatibility-example executable.

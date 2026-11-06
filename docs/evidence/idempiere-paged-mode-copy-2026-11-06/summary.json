@@ -1,0 +1,21 @@
+{
+  "format": 1,
+  "cli_source_commit": "e5babd1b1372c2bc1664e83764b00943f77b68f7",
+  "cli_sha256": "d52a56e420b1349374d848f78304263cebea600e5801abc3d96cd05751740b43",
+  "storage_mode": "server_paged",
+  "native_collections": 923,
+  "native_records": 188817,
+  "native_indexes": 2087,
+  "mode_copy_exit_code": 0,
+  "native_reopened_record_collection_and_index_verification_passed": true,
+  "protected_baseline_file_contents_unchanged": true,
+  "protected_baseline_file_manifest_sha256": "994f41f3484906f6bf8e2e919d426834c576bef453131003e20d85e8a85cbac0",
+  "mode_copy_stdout_sha256": "07e36657b11d60b7df089c54a81ee026eda44f0658cb3d05db2e8f9bb2504bb2",
+  "source_export_manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+  "source_baseline_record_sha256": "ebd109d58a0be463e882817f5eb7d034c58236173553987a8f7b6df3869ff294",
+  "additional_integrity_check_status": "resource_interrupted_and_queued_for_continuation",
+  "paged_schema_source_values_qualified": false,
+  "paged_application_qualified": false,
+  "full_oracle_programme_qualified": false,
+  "production_qualified": false
+}

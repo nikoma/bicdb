@@ -19,10 +19,18 @@ fingerprints establish that installing relationships preserved that target's
 values; they do not establish equality with the original Oracle export. No rows
 were repaired to obtain this installation result.
 
-Full target orphan counts and comparison with the independent
-[Oracle replay](../oracle-export-reference-2026-11-05/README.md), pristine source
-value equality, original application business tests with every relationship
-installed, and recovery/cutover remain separate gates. In particular, this
+The subsequent [read-only inventory](orphan-inventory-summary.json) counted all
+**3,826 relationships with zero orphan references**, repeated matching before/after
+fingerprints for all **888 participating tables**, and preserved the 62 routines
+and 160 views. The database again shut down cleanly. The offline
+[comparison record](orphan-comparison.json) matches all 3,826 counts to the
+independent [Oracle replay](../oracle-export-reference-2026-11-05/README.md),
+with no mismatches. Reference and target reports are tied to the same source
+manifest and retain their individual digests.
+
+Matching orphan counts does not establish complete row-value equality. Pristine
+source value equality, original application business tests with every
+relationship installed, and recovery/cutover remain separate gates. In particular, this
 checkpoint does not turn NOT VALIDATED relationships into validated ones or
 qualify the entire application. The candidate is separate from the accepted
 application deployment. No production qualification or Oracle certification is

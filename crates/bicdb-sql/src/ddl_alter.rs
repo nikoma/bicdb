@@ -3733,6 +3733,28 @@ pub fn parse_database_ddl(sql: &str) -> Result<Option<DatabaseDdl>> {
     Ok(None)
 }
 
+/// The parser has an ALTER FUNCTION AST but no ALTER PROCEDURE AST. Reuse its
+/// signature/owner grammar for this single procedure operation; never accept
+/// a trailing statement or turn other procedure actions into function DDL.
+pub(crate) fn parse_raw_alter_procedure_owner(sql: &str) -> Result<Option<AlterFunction>> {
+    let statement = trim_sql_statement(sql);
+    let Some(rest) = strip_prefix_ci(statement, "ALTER PROCEDURE ") else {
+        return Ok(None);
+    };
+    let statements = parse_statements(&format!("ALTER FUNCTION {rest}"))?;
+    let [Statement::AlterFunction(function)] = statements.as_slice() else {
+        return Err(SqlError::InvalidSql(
+            "ALTER PROCEDURE requires one statement".into(),
+        ));
+    };
+    if !matches!(function.operation, AlterFunctionOperation::OwnerTo(_)) {
+        return Err(SqlError::Unsupported(
+            "only ALTER PROCEDURE OWNER TO is supported".into(),
+        ));
+    }
+    Ok(Some(function.clone()))
+}
+
 pub(crate) fn parse_raw_alter_schema_owner(sql: &str) -> Result<Option<(String, String)>> {
     let statement = trim_sql_statement(sql);
     let Some(rest) = strip_prefix_ci(statement, "ALTER SCHEMA ") else {

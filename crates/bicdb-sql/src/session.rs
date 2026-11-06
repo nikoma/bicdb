@@ -3202,6 +3202,10 @@ impl<'db> SqlSession<'db> {
             return Ok(result);
         }
 
+        if let Some(function) = parse_raw_alter_procedure_owner(sql)? {
+            return self.execute_alter_routine(&function, RoutineKind::Procedure);
+        }
+
         if let Some(result) = self.execute_raw_pg_dump_range_type(sql)? {
             return Ok(result);
         }

@@ -88,14 +88,31 @@ impl<'db> SqlSession<'db> {
             ));
         }
 
+        self.execute_alter_routine(alter_function, RoutineKind::Function)
+    }
+
+    pub(crate) fn execute_alter_routine(
+        &mut self,
+        alter_function: &AlterFunction,
+        kind: RoutineKind,
+    ) -> Result<SqlResult> {
+        let object = match kind {
+            RoutineKind::Function => "function",
+            RoutineKind::Procedure => "procedure",
+        };
         // Routines are stored under their normalized qualified name
-        // (`carrier_private.search_x`), not the schema-isolated relation
-        // encoding — resolving through `relation_name` mangled every
-        // non-public function into `__bicdb_s_...` and "did not exist".
+        // separately from the schema-isolated relation encoding. Resolve the
+        // namespace and input signature before changing any metadata.
         let name = normalize_object_name(&object_name(&alter_function.function.name)?);
-        let Some(mut routine) = load_routine(self.db_ref(), RoutineKind::Function, &name)? else {
-            return Err(SqlError::InvalidSql(format!(
-                "function \"{name}\" does not exist"
+        let Some(mut routine) = self.owned_routine_for_ddl(
+            kind,
+            &alter_function.function.name,
+            alter_function.function.args.as_deref(),
+            "alter it",
+        )?
+        else {
+            return Err(SqlError::undefined_function(format!(
+                "{object} \"{name}\" does not exist"
             )));
         };
 
@@ -110,7 +127,7 @@ impl<'db> SqlSession<'db> {
                         .is_some_and(|role| role.superuser);
                 if !routine.owner().eq_ignore_ascii_case(&current_user) && !superuser {
                     return Err(SqlError::BicDb(BicDbError::Authorization(format!(
-                        "must be owner of function {name}"
+                        "must be owner of {object} {name}"
                     ))));
                 }
                 let owner = match owner {
@@ -123,22 +140,28 @@ impl<'db> SqlSession<'db> {
                     && !settable_role_closure(self.db_ref(), &current_user)?.contains(&owner)
                 {
                     return Err(SqlError::BicDb(BicDbError::Authorization(format!(
-                        "permission denied to change function owner to \"{owner}\""
+                        "permission denied to change {object} owner to \"{owner}\""
                     ))));
                 }
                 routine.owner = Some(owner);
                 self.save_session_routine(&routine)?;
-                Ok(SqlResult::command("ALTER FUNCTION"))
+                Ok(SqlResult::command(format!(
+                    "ALTER {}",
+                    object.to_ascii_uppercase()
+                )))
             }
             AlterFunctionOperation::Actions { actions, .. }
                 if actions
                     .iter()
                     .all(|action| matches!(action, AlterFunctionAction::Reset(_))) =>
             {
-                Ok(SqlResult::command("ALTER FUNCTION"))
+                Ok(SqlResult::command(format!(
+                    "ALTER {}",
+                    object.to_ascii_uppercase()
+                )))
             }
             operation => Err(SqlError::Unsupported(format!(
-                "ALTER FUNCTION {operation} is not supported"
+                "ALTER {object} {operation} is not supported"
             ))),
         }
     }
@@ -524,11 +547,12 @@ impl<'db> SqlSession<'db> {
         Ok(SqlResult::command("CREATE TRIGGER"))
     }
 
-    fn owned_routine_for_drop(
+    fn owned_routine_for_ddl(
         &self,
         kind: RoutineKind,
         name_ast: &ObjectName,
         signature: Option<&[sqlparser::ast::OperateFunctionArg]>,
+        action: &str,
     ) -> Result<Option<RoutineSchema>> {
         let (schema, name) = routine_schema_and_name(&object_name(name_ast)?);
         let routine = load_routine(self.db_ref(), kind, &name)?.filter(|routine| {
@@ -542,7 +566,7 @@ impl<'db> SqlSession<'db> {
             name_ast.0.len() == 1 || routine_schema_name(routine) == schema
         });
         if let (Some(routine), Some(signature)) = (&routine, signature) {
-            // DROP an obsolete overload must not delete the current routine
+            // DDL naming an obsolete overload must not alter the current routine
             // merely because its name matches. Identity uses input argument
             // types, not parameter names, defaults, OUT slots or typmods.
             let declared = parse_routine_params(&routine.args)?;
@@ -576,7 +600,7 @@ impl<'db> SqlSession<'db> {
                 RoutineKind::Function => "function",
                 RoutineKind::Procedure => "procedure",
             };
-            self.require_object_ownership(routine.owner(), &format!("{object} {name}"), "drop it")?;
+            self.require_object_ownership(routine.owner(), &format!("{object} {name}"), action)?;
         }
         Ok(routine)
     }
@@ -592,10 +616,11 @@ impl<'db> SqlSession<'db> {
         for desc in &drop_function.func_desc {
             // Match CREATE's routine keys; table relation encoding is separate.
             let name = normalize_object_name(&object_name(&desc.name)?);
-            let Some(routine) = self.owned_routine_for_drop(
+            let Some(routine) = self.owned_routine_for_ddl(
                 RoutineKind::Function,
                 &desc.name,
                 desc.args.as_deref(),
+                "drop it",
             )?
             else {
                 if drop_function.if_exists {
@@ -634,11 +659,15 @@ impl<'db> SqlSession<'db> {
     ) -> Result<SqlResult> {
         for desc in proc_desc {
             let name = normalize_object_name(&object_name(&desc.name)?);
-            let existed =
-                match self.owned_routine_for_drop(RoutineKind::Procedure, &desc.name, None)? {
-                    Some(routine) => self.delete_session_routine(&routine)?,
-                    None => false,
-                };
+            let existed = match self.owned_routine_for_ddl(
+                RoutineKind::Procedure,
+                &desc.name,
+                None,
+                "drop it",
+            )? {
+                Some(routine) => self.delete_session_routine(&routine)?,
+                None => false,
+            };
             if !existed && !if_exists {
                 return Err(SqlError::InvalidSql(format!(
                     "procedure \"{name}\" does not exist"

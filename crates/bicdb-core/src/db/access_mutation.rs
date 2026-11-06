@@ -889,6 +889,11 @@ impl BicDb {
         self.collections.len()
     }
 
+    /// Exact metadata existence lookup without cloning the collection catalog.
+    pub fn has_collection(&self, collection: &str) -> bool {
+        self.collections.contains_key(collection)
+    }
+
     /// Number of executable indexes currently resident. O(1); used by caches
     /// to notice index creation/removal.
     pub fn index_catalog_len(&self) -> usize {

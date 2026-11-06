@@ -45,6 +45,10 @@ public final class OracleConnections {
             if (objectMethod(proxy, method, args)) return objectResult(proxy, method, args);
             if (method.getName().equals("unwrap") && ((Class<?>) args[0]).isInstance(proxy)) return proxy;
             if (method.getName().equals("isWrapperFor") && ((Class<?>) args[0]).isInstance(proxy)) return true;
+            if (method.getName().equals("createBlob")) {
+                if (delegate.isClosed()) throw new SQLException("Connection is closed", "08003");
+                return new OracleCreatedBlob();
+            }
             Object result;
             boolean anonymous = false;
             if (method.getName().equals("prepareStatement")) {

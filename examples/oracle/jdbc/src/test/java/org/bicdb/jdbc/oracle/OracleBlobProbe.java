@@ -32,7 +32,7 @@ final class OracleBlobProbe {
                 created = true;
             }
             try (PreparedStatement insert = connection.prepareStatement("INSERT INTO " + table + " VALUES(?,?)")) {
-                for (int variant = 0; variant < 8; variant++) {
+                for (int variant = 0; variant < 10; variant++) {
                     insert.setInt(1, variant);
                     switch (variant) {
                         case 0: insert.setBlob(2, new ByteArrayInputStream(bytes)); break;
@@ -42,13 +42,21 @@ final class OracleBlobProbe {
                         case 4: insert.setObject(2, new SerialBlob(bytes), Types.BLOB); break;
                         case 5: insert.setObject(2, new SerialBlob(bytes), JDBCType.BLOB); break;
                         case 6: insert.setBlob(2, new SerialBlob(new byte[0])); break;
-                        default: insert.setNull(2, Types.BLOB);
+                        case 7: insert.setNull(2, Types.BLOB); break;
+                        default:
+                            Blob createdBlob = connection.createBlob();
+                            if (variant == 8) createdBlob.setBytes(1, bytes);
+                            else try (java.io.OutputStream output = createdBlob.setBinaryStream(1)) { output.write(bytes); }
+                            insert.setBlob(2, createdBlob);
+                            check("created_blob_bind_" + variant, insert.executeUpdate() == 1); checks++;
+                            createdBlob.free();
+                            continue;
                     }
                     check("blob_bind_variant_" + variant, insert.executeUpdate() == 1); checks++;
                 }
             }
             try (PreparedStatement read = connection.prepareStatement("SELECT payload FROM " + table + " WHERE key_value=?")) {
-                for (int variant = 0; variant < 8; variant++) {
+                for (int variant = 0; variant < 10; variant++) {
                     read.setInt(1, variant);
                     try (ResultSet rows = read.executeQuery()) {
                         if (!rows.next()) throw new AssertionError("missing BLOB row " + variant);

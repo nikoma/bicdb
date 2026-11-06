@@ -21,6 +21,28 @@ again. A commit, feature branch, draft PR, or built binary alone is not completi
   Report unavailable CI separately from tests that actually ran and failed.
 
 
+## Batch fixes before broad validation
+
+Group related fixes into a coherent implementation batch before running broad
+test suites. While the batch is evolving, use focused regressions and relevant
+compile checks to get fast feedback on each semantic rule. Use failures from
+running application tests to identify related fixes rather than restarting the
+whole validation cycle after every small edit.
+
+- Run the required broad suites after the batch stabilizes, then resolve any
+  failures before merging. Batching does not weaken the completion gates above.
+- Reuse completed checks while their relevant code and dependencies remain
+  unchanged. Repeat broad checks when new changes invalidate their coverage,
+  failures appear, or an unresolved concern requires them.
+- Record the source revision and scope of each result. Distinguish focused
+  checks, broad regression suites and application acceptance; do not report an
+  earlier revision's passing suite as a test of changed code.
+- Keep PostgreSQL and Oracle regressions independent where behavior differs.
+  Preserve failing evidence and original application assertions.
+- Let useful application runs finish collecting evidence. Coordinate heavy
+  builds with those runs and the memory policy below instead of repeatedly
+  interrupting them for isolated validation cycles.
+
 ## Keep build artifacts bounded
 
 Clean up artifacts produced by your work after validation batches. Remove

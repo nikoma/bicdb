@@ -1,0 +1,162 @@
+{
+  "format": 1,
+  "backend_source_commit": "a97545fc25234c89a4361e0dbfe8c98a02cb3e94",
+  "backend_sha256": "59179f2a0cb4a8d3f765c306ed523a81c1647e061156d82a4bacd98e03b68fba",
+  "adapter_source_commit": "3db8c5d885c34bd3c7c3d5ddd33e77fcaeb35f58",
+  "adapter_sha256": "f50dc5f0a1ecc2a03011a46343e10bdaedd89eafa469ed2a81271b17b16f1ce4",
+  "provider_sha256": "9045e6772e40f5ad85e8dd238ca6614de8fca3876b274915913b51bbed201980",
+  "original_test_jar_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+  "source_and_class_hashes_checked": true,
+  "selected_runtime_class_origins": [
+    {
+      "class_name": "org.compiere.db.DB_Oracle",
+      "source_sha256": "9045e6772e40f5ad85e8dd238ca6614de8fca3876b274915913b51bbed201980",
+      "matched": true
+    },
+    {
+      "class_name": "org.bicdb.jdbc.oracle.OracleDriver",
+      "source_sha256": "f50dc5f0a1ecc2a03011a46343e10bdaedd89eafa469ed2a81271b17b16f1ce4",
+      "matched": true
+    },
+    {
+      "class_name": "org.postgresql.Driver",
+      "source_sha256": "2a32a9dcbc42d67a50ad3a0de5efd102c8d2be46720045f2cbd6689f160ab7c7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.EnvTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.GenericPaymentExportTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.GenericZoomProviderTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.GetBOMFunctionsTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.InitialClientSetupTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.JfreeChartBuilderTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.JsonFieldTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.KeyNamePairTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    }
+  ],
+  "class_results": [
+    {
+      "class_name": "org.idempiere.test.base.EnvTest",
+      "tests": 70,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "4ccab7ede53ce60bc6ec0c6708dd282559da3dd32223955061bb2b8519e6b4e9",
+      "source_sha256": "c776c3ddbf35e80b37a944a9606f590b0a44ca88976f113cd2f779d3b539562d",
+      "class_sha256": "80530b24f322a1f6fe4d162db9040c42348dbf90b94cf6bc0780234781f78819"
+    },
+    {
+      "class_name": "org.idempiere.test.base.GenericPaymentExportTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "b0988e61130471dfb6bbd46c9448de62a089fe656bd6f97e9603ccff1a84c706",
+      "source_sha256": "ce9800c1c6d04308e6fb4b07a486f20adfb2cf466bbdedd08ce85ffd24da429d",
+      "class_sha256": "45d362f83129d01dafdbab5ad3b4bc038f2d029f8a7f10c5d155096ba0c264e9"
+    },
+    {
+      "class_name": "org.idempiere.test.base.GenericZoomProviderTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 1,
+      "skipped": 0,
+      "xml_sha256": "f8aa92664b504c8f7a0f095813cdfa36f9d1491064dfbec371c96902a8e52088",
+      "source_sha256": "fa686f99b7803971fdd74581e7571529414b30bfae9a735e856c8b7c8855145b",
+      "class_sha256": "56958043b08cd4e9ccc0b031392646696d318ef89665241f872b5c451b49b3a7"
+    },
+    {
+      "class_name": "org.idempiere.test.base.GetBOMFunctionsTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "c5a5314c98fdc16dcec6a77604832fdf0339bed32610c54a00429fc15a3362b1",
+      "source_sha256": "a7160b2d4a145a1cdb6f8816675a917a3f7f2605e43d8e794498415140888301",
+      "class_sha256": "a4feff3fe5762baa1930c6401f1547d722438cc28941712ee2ec93293fb2610c"
+    },
+    {
+      "class_name": "org.idempiere.test.base.InitialClientSetupTest",
+      "tests": 1,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "b0624fc0ecfdd46d3174f1451e9be1a8129e8cd840251d833fbe81845e6d34b9",
+      "source_sha256": "1462868001ce6dcd9c05d6a5b9c22a1585e47c0571b4cb7a93e146268c36ea9e",
+      "class_sha256": "d5eaaeba16eebe8fa98c46a2b5c1cd3c9432cd6821b89f9a22c24fe6509308e0"
+    },
+    {
+      "class_name": "org.idempiere.test.base.JfreeChartBuilderTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "736d9e437f0ef95771b796e2ca3908fd6997944f7cda67d56434251293bd2fdc",
+      "source_sha256": "389c1f336084cfa5e365f1b7643a4b55a0ddd08ca2924b9bfc304d70dfed301f",
+      "class_sha256": "64d4502aa264a8e641bf064067848960e184588d9d59044c5bf3e838b60de433"
+    },
+    {
+      "class_name": "org.idempiere.test.base.JsonFieldTest",
+      "tests": 1,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "03292b54e1d15ecbe8dcefaf950e713a5ee87906bc458d5e856de7e7ba33b311",
+      "source_sha256": "1131a9e026146d0947baa6cae64c34382a31c3ca5897d39f966c1a8b545d8436",
+      "class_sha256": "4daf618598255ab5598c8a6dc113ede9c56d9c683a1a4c3448177acb4dd8b8f1"
+    },
+    {
+      "class_name": "org.idempiere.test.base.KeyNamePairTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "8c5373abc86ee4b75dada4185489ddc22561886e944adc610e90d0182bbb47ac",
+      "source_sha256": "8a85a9158531d091288f5d1d735e36c1254352757b58f90be1c36a74ba614323",
+      "class_sha256": "8d69b672a091512ae3bcab41f21f17ba4e2bbd49ab834ead97820fb98721a290"
+    }
+  ],
+  "tests": 90,
+  "failures": 2,
+  "errors": 1,
+  "skipped": 0,
+  "passed": 87,
+  "test_assertions_or_bytecode_changed": false,
+  "jvm_exit_code": 255,
+  "database_exit_code": 0,
+  "processes_stopped": true,
+  "failed_database_preserved": true,
+  "application_qualified": false,
+  "production_qualified": false,
+  "full_oracle_programme_qualified": false
+}

@@ -1,0 +1,522 @@
+{
+  "format": 1,
+  "engine_source_commit": "5e5fecc3ca279f2e3ea3e37af0c244e11bbb69ea",
+  "tool_source_commit": "5e5fecc3ca279f2e3ea3e37af0c244e11bbb69ea",
+  "native_binary_sha256": "1cd37fe086195a867f46e359d532c4d4f70a720d335ebb69e4307f05121f0860",
+  "native_build_kind": "system allocator oracle_server compatibility example",
+  "native_checks": [
+    {
+      "name": "build",
+      "returncode": 0,
+      "log_sha256": "5b47ffdda3249ac26c4aa45a7484e47048fd511f5c4bd9f58abd8e8849b42623"
+    },
+    {
+      "name": "native-tools",
+      "returncode": 0,
+      "log_sha256": "15ffb318fffda582e44cf8c759fd1b3ae6544d49f949c379d5412153e4027d97",
+      "python_tests": {
+        "total": 157,
+        "passed": 154,
+        "skipped": 3,
+        "failed": 0
+      }
+    }
+  ],
+  "inherited_full_regression_source": "6a85543d74f8a0e38253ed92c39a442f140c6d36",
+  "focused_main_integration_source": "e9a81d70c5e5e2f4556440fbe7099c147a379886",
+  "source_manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+  "source_schema_table_count": 915,
+  "prior_saved_export_rows": 185471,
+  "index_phase": {
+    "returncode": 0,
+    "completed": 268,
+    "all_catalog_definitions_revalidated": true,
+    "all_executable": true,
+    "phase_report_sha256": "06417ee0e2ec262bc35fe1e07b2568b0ba8dfc5d1e7b4e071ae4dad06c6f9f02"
+  },
+  "routine_phase": {
+    "returncode": 0,
+    "completed": 62,
+    "phase_report_sha256": "e27cf8bfd3d6bd53a872a7f43060448452055180a6edc75fbeb4e16af3ea4f5d",
+    "execution_qualified": false,
+    "ownership_mapping_qualified": false
+  },
+  "references": {
+    "oracle_version": "23.26.3.0.0",
+    "postgres_version": 180004,
+    "cli_returncodes": {
+      "oracle": 0,
+      "postgres": 0,
+      "postgres-negative-old-target": 1
+    },
+    "comparisons": {
+      "oracle": {
+        "source": {
+          "dialect": "oracle",
+          "cases": [
+            {
+              "id": "nonunique_backfill_and_mutation",
+              "qualified": true,
+              "actual": [
+                [
+                  1,
+                  2
+                ],
+                [
+                  1
+                ],
+                [
+                  1
+                ],
+                []
+              ],
+              "expected": [
+                [
+                  1,
+                  2
+                ],
+                [
+                  1
+                ],
+                [
+                  1
+                ],
+                []
+              ],
+              "executable_index": true
+            },
+            {
+              "id": "unique_backfill_conflict",
+              "qualified": true,
+              "actual": [
+                true,
+                [
+                  1
+                ]
+              ],
+              "expected": [
+                true,
+                [
+                  1
+                ]
+              ],
+              "executable_index": true
+            },
+            {
+              "id": "unique_nulls_and_rollback",
+              "qualified": true,
+              "actual": [
+                true,
+                2,
+                [
+                  1
+                ]
+              ],
+              "expected": [
+                true,
+                2,
+                [
+                  1
+                ]
+              ],
+              "executable_index": true
+            }
+          ],
+          "cleanup_errors": []
+        },
+        "target": {
+          "dialect": "oracle",
+          "cases": [
+            {
+              "id": "nonunique_backfill_and_mutation",
+              "qualified": true,
+              "actual": [
+                [
+                  1,
+                  2
+                ],
+                [
+                  1
+                ],
+                [
+                  1
+                ],
+                []
+              ],
+              "expected": [
+                [
+                  1,
+                  2
+                ],
+                [
+                  1
+                ],
+                [
+                  1
+                ],
+                []
+              ],
+              "executable_index": true
+            },
+            {
+              "id": "unique_backfill_conflict",
+              "qualified": true,
+              "actual": [
+                true,
+                [
+                  1
+                ]
+              ],
+              "expected": [
+                true,
+                [
+                  1
+                ]
+              ],
+              "executable_index": true
+            },
+            {
+              "id": "unique_nulls_and_rollback",
+              "qualified": true,
+              "actual": [
+                true,
+                2,
+                [
+                  1
+                ]
+              ],
+              "expected": [
+                true,
+                2,
+                [
+                  1
+                ]
+              ],
+              "executable_index": true
+            }
+          ],
+          "cleanup_errors": []
+        },
+        "total": 3,
+        "matched": 3,
+        "success": true,
+        "application_qualified": false,
+        "target_sql_profile": "oracle-preview-v1",
+        "reference": "oracle",
+        "oracle_disable_oob": false
+      },
+      "postgres": {
+        "source": {
+          "dialect": "postgres",
+          "cases": [
+            {
+              "id": "nonunique_backfill_and_mutation",
+              "qualified": true,
+              "actual": [
+                [
+                  1,
+                  2
+                ],
+                [
+                  1
+                ],
+                [
+                  1
+                ],
+                []
+              ],
+              "expected": [
+                [
+                  1,
+                  2
+                ],
+                [
+                  1
+                ],
+                [
+                  1
+                ],
+                []
+              ],
+              "executable_index": true
+            },
+            {
+              "id": "unique_backfill_conflict",
+              "qualified": true,
+              "actual": [
+                true,
+                [
+                  1
+                ]
+              ],
+              "expected": [
+                true,
+                [
+                  1
+                ]
+              ],
+              "executable_index": true
+            },
+            {
+              "id": "unique_nulls_and_rollback",
+              "qualified": true,
+              "actual": [
+                true,
+                2,
+                [
+                  1
+                ]
+              ],
+              "expected": [
+                true,
+                2,
+                [
+                  1
+                ]
+              ],
+              "executable_index": true
+            }
+          ],
+          "cleanup_errors": []
+        },
+        "target": {
+          "dialect": "postgres",
+          "cases": [
+            {
+              "id": "nonunique_backfill_and_mutation",
+              "qualified": true,
+              "actual": [
+                [
+                  1,
+                  2
+                ],
+                [
+                  1
+                ],
+                [
+                  1
+                ],
+                []
+              ],
+              "expected": [
+                [
+                  1,
+                  2
+                ],
+                [
+                  1
+                ],
+                [
+                  1
+                ],
+                []
+              ],
+              "executable_index": true
+            },
+            {
+              "id": "unique_backfill_conflict",
+              "qualified": true,
+              "actual": [
+                true,
+                [
+                  1
+                ]
+              ],
+              "expected": [
+                true,
+                [
+                  1
+                ]
+              ],
+              "executable_index": true
+            },
+            {
+              "id": "unique_nulls_and_rollback",
+              "qualified": true,
+              "actual": [
+                true,
+                2,
+                [
+                  1
+                ]
+              ],
+              "expected": [
+                true,
+                2,
+                [
+                  1
+                ]
+              ],
+              "executable_index": true
+            }
+          ],
+          "cleanup_errors": []
+        },
+        "total": 3,
+        "matched": 3,
+        "success": true,
+        "application_qualified": false,
+        "target_sql_profile": "postgres",
+        "reference": "postgres"
+      }
+    },
+    "negative_control": {
+      "source": {
+        "dialect": "postgres",
+        "cases": [
+          {
+            "id": "nonunique_backfill_and_mutation",
+            "qualified": true,
+            "actual": [
+              [
+                1,
+                2
+              ],
+              [
+                1
+              ],
+              [
+                1
+              ],
+              []
+            ],
+            "expected": [
+              [
+                1,
+                2
+              ],
+              [
+                1
+              ],
+              [
+                1
+              ],
+              []
+            ],
+            "executable_index": true
+          },
+          {
+            "id": "unique_backfill_conflict",
+            "qualified": true,
+            "actual": [
+              true,
+              [
+                1
+              ]
+            ],
+            "expected": [
+              true,
+              [
+                1
+              ]
+            ],
+            "executable_index": true
+          },
+          {
+            "id": "unique_nulls_and_rollback",
+            "qualified": true,
+            "actual": [
+              true,
+              2,
+              [
+                1
+              ]
+            ],
+            "expected": [
+              true,
+              2,
+              [
+                1
+              ]
+            ],
+            "executable_index": true
+          }
+        ],
+        "cleanup_errors": []
+      },
+      "target": {
+        "dialect": "postgres",
+        "cases": [
+          {
+            "id": "nonunique_backfill_and_mutation",
+            "qualified": false,
+            "actual": [
+              [
+                1,
+                2
+              ],
+              [
+                1
+              ],
+              [
+                1
+              ],
+              []
+            ],
+            "expected": [
+              [
+                1,
+                2
+              ],
+              [
+                1
+              ],
+              [
+                1
+              ],
+              []
+            ],
+            "executable_index": false
+          },
+          {
+            "id": "unique_backfill_conflict",
+            "qualified": false,
+            "error_type": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported SQL: unsupported field expression date_trunc('day', seen)"
+          },
+          {
+            "id": "unique_nulls_and_rollback",
+            "qualified": false,
+            "error_type": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported SQL: unsupported field expression date_trunc('day', seen)"
+          }
+        ],
+        "cleanup_errors": []
+      },
+      "total": 3,
+      "matched": 0,
+      "success": false,
+      "application_qualified": false,
+      "target_sql_profile": "postgres",
+      "reference": "postgres"
+    },
+    "older_reader": {
+      "source_commit": "dc6e3c5a1f9943ec9cb63abf7157ed1d58281986",
+      "binary_sha256": "b8828534f9a2dd20540dc87cf9c1975dff36697ef58ed88ddadcc65d2fbe90aa",
+      "returncode": 1,
+      "refused": true
+    },
+    "cleanup_errors": [],
+    "oracle_owner_dropped": true,
+    "oracle_container_restored": true,
+    "postgres_container_removed": true,
+    "temporary_databases_removed": true
+  },
+  "remaining": [
+    "finish 160 source-ordered views",
+    "install and verify all 3826 foreign keys with source validation/deferment state",
+    "compare all foreign-key orphan counts against the Oracle saved-export reference",
+    "repeat all 915 source-table value digests after complete schema assembly",
+    "verify source view labels and broad protocol type families",
+    "qualify view values and full type modifiers",
+    "qualify original routine execution and schema ownership/security",
+    "repeat original application tests on isolated copies of this pristine baseline",
+    "complete application workflows, restart/recovery and production gates",
+    "remaining Oracle compatibility programme workstreams"
+  ],
+  "application_qualified": false,
+  "full_schema_qualified": false,
+  "goal_complete": false
+}

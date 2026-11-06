@@ -34,8 +34,10 @@ def observe(factory):
                     cursor.execute(f'CREATE TABLE {child}(id INTEGER PRIMARY KEY,parent_id INTEGER REFERENCES {parent}({referred}){timing})')
                     created.append(child)
                     cursor.execute(f'INSERT INTO {parent} VALUES(1,0,10)')
-                    one,two = factory(),factory()
-                    writers.extend([one,two])
+                    one = factory()
+                    writers.append(one)
+                    two = factory()
+                    writers.append(two)
                     one.autocommit = two.autocommit = False
                     with one.cursor() as first,two.cursor() as second:
                         if label == 'savepoint_releases_reference':

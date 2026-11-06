@@ -17,6 +17,15 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [shared-reference checkpoint](evidence/oracle-foreign-key-reservations-2026-11-05/README.md)
+qualifies concurrent child references, parent-key mutation exclusion and bounded
+referenced primary-key updates against Oracle. Deferred checks use final child
+identity instead of repeated full-table scans. Independent PostgreSQL behavior
+and the full protocol suite pass; COPY also passes all 19 filtered tests on one
+CPU after removing nested query admission. General one-slot lock-wait progress,
+broader key moves, full application acceptance and production qualification
+remain separate gates.
+
 The [original invoice-class diagnostic](evidence/idempiere-invoice-diagnostic-2026-11-05/README.md)
 passes 2/2 original tests on the current native candidate: discount calculation
 and credit-stop rejection followed by successful completion. Oracle provider and

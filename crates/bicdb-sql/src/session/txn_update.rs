@@ -5255,7 +5255,7 @@ impl<'db> SqlSession<'db> {
         // A snapshot-only check lets them both commit, leaving an orphan.
         for (_, _, _, referred_columns, _) in &inbound_constraints {
             for record in records {
-                reserve_foreign_key(
+                reserve_foreign_key_mutation(
                     self.tx.as_ref(),
                     schema,
                     referred_columns,
@@ -5529,7 +5529,7 @@ impl<'db> SqlSession<'db> {
                     &old,
                     &new,
                 )? {
-                    reserve_foreign_key(
+                    reserve_foreign_key_mutation(
                         self.tx.as_ref(),
                         schema,
                         &constraint.referred_columns,
@@ -5571,13 +5571,23 @@ impl<'db> SqlSession<'db> {
                     .iter()
                     .any(|(old_key, _)| *old_key == child_key)
                 {
-                    if constraint.on_update == ForeignKeyAction::NoAction
-                        && self.defer_inbound_foreign_key(
+                    if constraint.on_update == ForeignKeyAction::NoAction {
+                        if self.defer_inbound_foreign_key(
                             &constraint.child_schema,
                             &constraint.name,
                             &child,
-                        )?
-                    {
+                        )? {
+                            continue;
+                        }
+                        // NO ACTION observes the completed statement. Another
+                        // moved parent may still provide this referenced key.
+                        let foreign_key = constraint.child_schema.constraints.iter().find(|item| {
+                            matches!(item, ConstraintSchema::ForeignKey { name, .. } if name == &constraint.name)
+                        }).ok_or_else(|| SqlError::InvalidSql("inbound foreign key declaration disappeared".into()))?;
+                        validate_foreign_key_constraint_immediate(
+                            self.db_ref(), self.tx.as_ref(), &constraint.child_schema.name,
+                            &constraint.child_schema, &child, foreign_key,
+                        )?;
                         continue;
                     }
                     return Err(foreign_key_violation(

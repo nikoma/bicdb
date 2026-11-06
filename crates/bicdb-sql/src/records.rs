@@ -1073,6 +1073,22 @@ fn json_unique_existing_records(
     current_integrity_records(db, tx, table)
 }
 
+/// One current committed row with this transaction's final write overlaid.
+/// Integrity hooks carry the row identity; scanning its whole collection would
+/// make deferred validation quadratic in the number of changed child rows.
+pub(crate) fn current_integrity_record(
+    db: &BicDb,
+    tx: Option<&Transaction>,
+    table: &str,
+    id: &str,
+) -> Result<Option<Arc<Record>>> {
+    let committed = db.get_unchecked(table, id)?;
+    Ok(match tx {
+        Some(tx) => tx.overlay_pending_write(table, id, committed),
+        None => committed,
+    })
+}
+
 pub(crate) fn current_integrity_records(
     db: &BicDb,
     tx: Option<&Transaction>,
@@ -1094,7 +1110,7 @@ pub(crate) fn current_integrity_records(
     Ok(existing)
 }
 
-pub(crate) fn reserve_foreign_key(
+pub(crate) fn reserve_foreign_key_mutation(
     tx: Option<&Transaction>,
     parent: &TableSchema,
     columns: &[String],
@@ -1107,6 +1123,23 @@ pub(crate) fn reserve_foreign_key(
         );
         let key = serde_json::to_string(&typed_column_key_label(parent, columns, values)?)?;
         tx.reserve_integrity_key(&scope, &key)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn reserve_foreign_key(
+    tx: Option<&Transaction>,
+    parent: &TableSchema,
+    columns: &[String],
+    values: &[SqlValue],
+) -> Result<()> {
+    if let Some(tx) = tx {
+        let scope = format!(
+            "foreign-key:{}",
+            serde_json::to_string(&(&parent.name, columns))?
+        );
+        let key = serde_json::to_string(&typed_column_key_label(parent, columns, values)?)?;
+        tx.reserve_integrity_key_shared(&scope, &key)?;
     }
     Ok(())
 }

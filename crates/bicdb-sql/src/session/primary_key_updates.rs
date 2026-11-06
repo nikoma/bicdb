@@ -23,18 +23,10 @@ impl SqlSession<'_> {
                 "UPDATE of a primary key {why} is not supported"
             )))
         };
-        // These require full parent-key/trigger and projection semantics. A
-        // physical move must never masquerade as DELETE/INSERT SQL operations.
+        // Projection and trigger forms require additional UPDATE semantics.
+        // A physical move must never masquerade as DELETE/INSERT SQL operations.
         if update.from.is_some() || update.returning.is_some() {
             return refuse("with FROM or RETURNING");
-        }
-        if list_schemas_shared(self.db_ref())?.iter().any(|other| {
-            other.constraints.iter().any(|constraint| {
-                matches!(constraint, ConstraintSchema::ForeignKey { foreign_table, .. }
-                    if foreign_table == table)
-            })
-        }) {
-            return refuse("that foreign keys refer to");
         }
         if list_triggers(self.db_ref())?
             .iter()
@@ -275,6 +267,7 @@ impl SqlSession<'_> {
                 pairs.iter().map(|(before, after)| (before, after.clone())),
             )?;
         }
+        self.apply_foreign_key_parent_update_batch(table, schema, &pairs)?;
         self.publish_extension_database_events(
             table,
             DatabaseOperation::Update,
@@ -688,7 +681,7 @@ mod tests {
                 )
                 .unwrap_err()
                 .sqlstate(),
-                "0A000"
+                "23503"
             );
         }
     }

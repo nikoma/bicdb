@@ -1691,7 +1691,9 @@ pub(crate) fn finish_copy_in_inner(
     state: &mut ConnectionState,
 ) -> Result<usize> {
     ensure_server_writable(server)?;
-    let _permit = server.acquire_query(QueryKind::Write)?;
+    // Metadata discovery and BEGIN/COMMIT acquire their own query permits.
+    // Admit each insertion batch below rather than holding a permit while
+    // waiting for another one: a single-slot server must make progress too.
     let deadline = (!server.config.query_timeout.is_zero())
         .then(|| Instant::now() + server.config.query_timeout);
     let cancellation = CancellationToken::new(state.cancel_token.clone(), deadline);
@@ -1893,8 +1895,10 @@ pub(crate) fn append_copy_insert_statements(
     state.tx_write_tables.insert(relation.to_string());
     // Defaults and trigger bodies can allocate sequences or change catalogs.
     // Keep COPY's existing exclusive batch execution, but retain one transaction
-    // across batches. Admission is acquired before taking connection state.
+    // across batches. Query admission is per batch, before taking connection
+    // state, and is released before subsequent transaction-control SQL.
     ensure_server_writable(server)?;
+    let _permit = server.acquire_query(QueryKind::Write)?;
     let admission = server.try_admit_write()?;
     let mut db = server.write_db_with_admission(&admission)?;
     let Some(tx) = state.tx.take() else {

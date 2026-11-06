@@ -44,6 +44,7 @@ type QueueShard = Mutex<FxHashMap<RecordLockKey, Queue>>;
 #[derive(Debug)]
 pub(super) struct RowLockTable {
     inner: ShardedMutexMap<RecordLockKey, TransactionId>,
+    pub(super) integrity: integrity_reservations::Table,
     queues: OnceLock<Box<[QueueShard]>>,
 }
 
@@ -58,6 +59,7 @@ impl RowLockTable {
     pub(super) fn with_shards(count: usize) -> Self {
         Self {
             inner: ShardedMutexMap::with_shards(count),
+            integrity: integrity_reservations::Table::with_shards(count),
             queues: OnceLock::new(),
         }
     }

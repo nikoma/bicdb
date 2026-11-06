@@ -81,7 +81,7 @@ and 160 view definitions. The class-load log matches the original pinned test
 JAR, selected Oracle provider, BicDB adapter and PostgreSQL driver.
 
 The host memory guard interrupted the run during POTest when available RAM fell
-below its 14 GiB floor. The remaining 62 assertions are unqualified; this is
+below its 14 GiB floor. The remaining 62 tests are unqualified; this is
 **27 completed tests, not an 89-test pass**. Every owned process was subsequently
 observed stopped, but clean shutdown and exit statuses are not established by
 this forced interruption. Broader packaging, long-running resource behavior,

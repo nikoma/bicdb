@@ -26,6 +26,12 @@ fn qualify(profile: &str) {
     )
     .unwrap();
     run(&mut sql,profile,"INSERT INTO calendar_rows VALUES(1,TIMESTAMP '1999-12-31 23:59:59.999999'),(2,TIMESTAMP '2000-01-01 12:00:00'),(3,NULL)").unwrap();
+    run(
+        &mut sql,
+        profile,
+        "INSERT INTO calendar_rows VALUES(6,TIMESTAMP '2000-01-02 12:00:00')",
+    )
+    .unwrap();
     // Give the planner a selective predicate: a three-row table can correctly
     // cost a sequential scan below an index probe.
     for day in 0..64 {

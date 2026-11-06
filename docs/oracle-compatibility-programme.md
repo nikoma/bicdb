@@ -123,6 +123,14 @@ separately versioned batches to 252 passes and one retained vendor-invoice
 failure across 253 reported invocations. The other 1,211 planned invocations,
 complete application behavior and broader programme remain unverified.
 
+The [next original application batch](evidence/idempiere-original-pristine-remaining02-2026-11-06/README.md)
+reports 60 passes and one attachment error across 61 invocations. The BLOB-save
+path exposes the general restriction on locking tables without declared primary
+keys; the failed database is preserved. All source/class hashes, eleven runtime
+origins and XML counts match. Across the separately versioned batches, 312 of
+314 reported invocations pass; one assertion failure and one error remain.
+Another 1,150 planned invocations and full application qualification remain open.
+
 The [full-FK foundation checkpoint](evidence/idempiere-full-fk-foundation-2026-11-05/README.md)
 passes all 89 selected original application tests, with zero failures/errors/skips,
 verified Oracle-provider/PostgreSQL-driver origins and clean JVM/database exits.

@@ -1,0 +1,154 @@
+{
+  "format": 1,
+  "source_commit": "675973280789ef2b414c935d26054178c04a88b5",
+  "binary_sha256": "d8c4f026d86b905f95fcc8240a0b3dca759ad609d3e33a1c396dd40a2d8019e6",
+  "original_test_jar_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+  "original_source_and_class_hashes_checked": true,
+  "selected_runtime_class_origins": [
+    {
+      "class_name": "org.compiere.db.DB_Oracle",
+      "source_sha256": "330a951360185f9acc875e98985255bda467adac447d1a866ae0a7f210026288",
+      "matched": true
+    },
+    {
+      "class_name": "org.bicdb.jdbc.oracle.OracleDriver",
+      "source_sha256": "9102b2ad40e5f9f1366e9d1a126556ec240c5e8423df5c30e02590506a3333ac",
+      "matched": true
+    },
+    {
+      "class_name": "org.postgresql.Driver",
+      "source_sha256": "2a32a9dcbc42d67a50ad3a0de5efd102c8d2be46720045f2cbd6689f160ab7c7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.adwindow.GridTabVOTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.adwindow.GridTableTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.adwindow.GridWindowTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.AcessSQLParserTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.AmtInWordsTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.AttachmentProviderTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.CLoggerTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.Convert_PostgreSQLTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    }
+  ],
+  "class_results": [
+    {
+      "class_name": "org.idempiere.test.adwindow.GridTabVOTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "a71209e14f58723b008dc988ebc85f98f3debee870896ce718757a8e3846a59a"
+    },
+    {
+      "class_name": "org.idempiere.test.adwindow.GridTableTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "6aee2c486b7792620661f30191ae9d1cfd242d88d3d64ab59438fde7c0055dc1"
+    },
+    {
+      "class_name": "org.idempiere.test.adwindow.GridWindowTest",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "7b72c1f8d17bc3e8d4e9a8972728c5b949a6b234aa94303eefca2c0bab10afed"
+    },
+    {
+      "class_name": "org.idempiere.test.base.AcessSQLParserTest",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "ecec9c3e7b05be8dcbbc56e4c355f755f7341a21be33c8d3336e49d8b4d80258"
+    },
+    {
+      "class_name": "org.idempiere.test.base.AmtInWordsTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "71e9567281040b67ab14a65035cc0e625442ae90807a941842a4aab304dec43a"
+    },
+    {
+      "class_name": "org.idempiere.test.base.AttachmentProviderTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 1,
+      "skipped": 0,
+      "xml_sha256": "e8a86305bcd2b3b3f9000ff7c215282191b6d82abd63ab37bea8fd8b27625237"
+    },
+    {
+      "class_name": "org.idempiere.test.base.CLoggerTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "6a2cf7a760fee6c4916f0f4a9a82d246f56fd3b66233f62b69255868c02708ef"
+    },
+    {
+      "class_name": "org.idempiere.test.base.Convert_PostgreSQLTest",
+      "tests": 25,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "511442d65e5f0fa45cd6e8c0c55bb111b675c63e3fe830e41be323f8f9a12bc9"
+    }
+  ],
+  "tests": 61,
+  "passed": 60,
+  "failures": 0,
+  "errors": 1,
+  "skipped": 0,
+  "test_jvm_exit": 255,
+  "database_exit": 0,
+  "processes_stopped": true,
+  "failed_database_preserved": true,
+  "test_assertions_or_bytecode_changed": false,
+  "application_qualified": false,
+  "full_oracle_programme_qualified": false,
+  "production_qualified": false,
+  "failing_case": "AttachmentProviderTest.testDBLargeObjectProvider",
+  "observed_error": "DeleteError during cleanup; earlier save reports SQLSTATE 0A000: row locking currently requires a primary key",
+  "root_cause_fix_verified": false,
+  "combined_results_across_explicit_revisions": {
+    "tests": 314,
+    "passed": 312,
+    "failures": 1,
+    "errors": 1,
+    "remaining_planned_invocations_unverified": 1150
+  },
+  "retained_business_failure": "AllocationTest.testAllocateVendorInvoice"
+}

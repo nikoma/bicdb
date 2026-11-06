@@ -4732,6 +4732,23 @@ impl RoutineFrame {
             })
     }
 
+    pub(crate) fn query_loop_target_is_text(&self, name: &str) -> bool {
+        let key = normalized_object_name_ref(name);
+        let data_type = self
+            .registered_assignment_types
+            .get(key.as_ref())
+            .map(UserTypeColumnSchema::information_schema_scalar_data_type)
+            .or_else(|| {
+                self.assignment_types
+                    .get(key.as_ref())
+                    .map(|schema| information_schema_builtin_data_type(&schema.pg_type))
+            });
+        matches!(
+            data_type.as_deref(),
+            Some("text" | "character varying" | "character" | "name")
+        )
+    }
+
     /// User-visible assignment checks the declared type before changing a slot.
     /// Internal values such as FOUND continue to use the raw frame setters.
     pub(crate) fn assign(&mut self, name: &str, value: SqlValue) -> Result<()> {

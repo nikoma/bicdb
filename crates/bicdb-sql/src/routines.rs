@@ -18,6 +18,8 @@ mod node_ownership;
 pub(crate) mod parameterized_cursors;
 mod procedural_case;
 #[cfg(test)]
+mod quantified_tests;
+#[cfg(test)]
 mod query_loop_tests;
 #[cfg(test)]
 mod type_identity_tests;

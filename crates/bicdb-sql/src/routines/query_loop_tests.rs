@@ -127,3 +127,31 @@ fn routine_query_loop_assigns_and_checks_registered_scalar_domain() {
         "23514"
     );
 }
+
+#[test]
+fn routine_query_loop_preserves_oid_alias_identity_and_text_display() {
+    let source = r#"CREATE TABLE query_loop_oid_target (id integer);
+        CREATE DOMAIN loop_relation AS regclass;
+        CREATE DOMAIN loop_text AS text;
+        CREATE FUNCTION loop_oid() RETURNS boolean LANGUAGE plpgsql AS $$
+            DECLARE item regclass; domain_item loop_relation; label loop_text; record_value record;
+            BEGIN
+                FOR item IN SELECT 'query_loop_oid_target'::regclass LOOP
+                    IF item::oid <> 'query_loop_oid_target'::regclass::oid THEN RETURN false; END IF;
+                END LOOP;
+                FOR domain_item IN SELECT 'query_loop_oid_target'::regclass LOOP
+                    IF domain_item::oid <> item::oid THEN RETURN false; END IF;
+                END LOOP;
+                FOR label IN SELECT 'query_loop_oid_target'::regclass LOOP
+                    IF label <> 'query_loop_oid_target' THEN RETURN false; END IF;
+                END LOOP;
+                FOR record_value IN SELECT 'query_loop_oid_target'::regclass AS relation_name LOOP
+                    IF record_value.relation_name <> label THEN RETURN false; END IF;
+                END LOOP;
+                RETURN true;
+            END $$"#;
+    assert_eq!(
+        call(source, "SELECT loop_oid()").unwrap().rows,
+        vec![vec![SqlValue::Bool(true)]]
+    );
+}

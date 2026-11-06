@@ -2862,6 +2862,57 @@ impl<'db> SqlSession<'db> {
             )?
             .map(SqlValue::Bool)
             .unwrap_or(SqlValue::Null)),
+            Expr::AnyOp {
+                left,
+                compare_op,
+                right,
+                ..
+            }
+            | Expr::AllOp {
+                left,
+                compare_op,
+                right,
+            } => {
+                let all = matches!(expr, Expr::AllOp { .. });
+                let left_value = self.eval_session_expr(left)?;
+                let mut operand = right.as_ref();
+                while let Expr::Nested(inner) = operand {
+                    operand = inner;
+                }
+                let truth = if let Expr::Subquery(query) = operand {
+                    let result = self.execute_query(query)?;
+                    if result.columns.len() != 1 {
+                        return Err(SqlError::InvalidSql("subquery has too many columns".into()));
+                    }
+                    eval_quantified_values_truth(
+                        &left_value,
+                        compare_op,
+                        result.rows.iter().filter_map(|row| row.first()),
+                        all,
+                    )?
+                } else {
+                    let right_type = self.routine_unary_operand_type(right);
+                    if right_type.as_deref().is_some_and(|kind| {
+                        pg_type_oid_by_name(kind).is_some()
+                            && !kind.ends_with("[]")
+                            && !matches!(kind, "int2vector" | "oidvector")
+                    }) {
+                        return Err(SqlError::data_exception(
+                            "42809",
+                            "op ANY/ALL (array) requires array on right side",
+                            None,
+                        ));
+                    }
+                    let right_value = self.eval_session_expr(right)?;
+                    eval_quantified_truth(
+                        left_value,
+                        compare_op,
+                        quantified_operand_value(right_value, right_type.as_deref())?,
+                        all,
+                    )?
+                };
+                Ok(truth.map(SqlValue::Bool).unwrap_or(SqlValue::Null))
+            }
             Expr::BinaryOp {
                 left,
                 op: BinaryOperator::And,
@@ -4535,6 +4586,8 @@ impl<'db> SqlSession<'db> {
         body: &[RoutineStmt],
     ) -> Result<RoutineControl> {
         let mut result = self.execute_routine_query(frame, query)?;
+        let scalar_target = frame.query_loop_target_is_scalar(target);
+        let display_aliases = !scalar_target || frame.query_loop_target_is_text(target);
         // A `regclass`-typed column carries the relation OID as its value —
         // the pgwire layer renders the name only at display time. A loop
         // variable is display-adjacent (`EXECUTE format('... %s', rec.name)`
@@ -4545,8 +4598,10 @@ impl<'db> SqlSession<'db> {
             .iter()
             .enumerate()
             .filter(|(_, ty)| {
-                ty.as_deref()
-                    .is_some_and(|ty| matches!(ty, "regclass" | "regproc" | "regprocedure"))
+                display_aliases
+                    && ty
+                        .as_deref()
+                        .is_some_and(|ty| matches!(ty, "regclass" | "regproc" | "regprocedure"))
             })
             .map(|(idx, _)| idx)
             .collect();
@@ -4564,7 +4619,6 @@ impl<'db> SqlSession<'db> {
                 }
             }
         }
-        let scalar_target = frame.query_loop_target_is_scalar(target);
         for row in result.rows {
             self.cancellation.check()?;
             if scalar_target {

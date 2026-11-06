@@ -20,7 +20,7 @@ final class OracleBlobs {
 
     static boolean bind(PreparedStatement statement, Method method, Object[] args) throws SQLException {
         String name = method.getName();
-        if (args == null || args.length < 2) return false;
+        if (args == null || args.length < 2 || !(args[0] instanceof Integer)) return false;
         int parameter;
         if (name.equals("setNull") && args[1].equals(Types.BLOB)) {
             statement.setNull((Integer) args[0], Types.BINARY);

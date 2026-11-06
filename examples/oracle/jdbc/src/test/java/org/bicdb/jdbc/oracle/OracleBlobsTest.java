@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.sql.Blob;
+import java.sql.CallableStatement;
 import java.sql.JDBCType;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -82,6 +83,13 @@ final class OracleBlobsTest {
         assertFalse(b.bind("setBytes", new Class<?>[] {int.class, byte[].class}, 1, new byte[0]));
         assertFalse(b.bind("setObject", new Class<?>[] {int.class, Object.class, int.class}, 1, "text", Types.VARCHAR));
         assertFalse(b.bind("setNull", new Class<?>[] {int.class, int.class}, 1, Types.INTEGER));
+        assertTrue(b.names.isEmpty());
+    }
+
+    @Test void namedCallableBindingsKeepTheirExistingDriverBoundary() throws Exception {
+        Bindings b = new Bindings();
+        Method method = CallableStatement.class.getMethod("setBlob", String.class, Blob.class);
+        assertFalse(OracleBlobs.bind(b.statement, method, new Object[] {"p_blob", new SerialBlob(new byte[] {1})}));
         assertTrue(b.names.isEmpty());
     }
 

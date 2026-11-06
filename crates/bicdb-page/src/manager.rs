@@ -3842,10 +3842,18 @@ mod free_extent_snapshot_tests {
             let dir = tempfile::tempdir().unwrap();
             let path = dir.path().join("pages");
             let store = open(&path, extent);
-            let ids: Vec<_> = (0..9)
+            // The segmented case crosses a physical segment boundary while
+            // remaining one contiguous run in logical page coordinates.
+            let base = if extent == 0 {
+                5
+            } else {
+                store.extent_pages() as usize - 3
+            };
+            let total = base + 4;
+            let ids: Vec<_> = (0..total)
                 .map(|_| store.allocate(PageType::Heap).unwrap())
                 .collect();
-            for i in [1, 5, 2, 6, 7] {
+            for i in [1, base, 2, base + 1, base + 2] {
                 store.free(ids[i]).unwrap();
             }
             let head = store.free_list_head();
@@ -3863,12 +3871,15 @@ mod free_extent_snapshot_tests {
                         pages: 2
                     },
                     FreePageExtent {
-                        start_page: ids[5],
+                        start_page: ids[base],
                         pages: 3
                     }
                 ]
             );
-            assert_eq!((snapshot.free_pages, snapshot.page_count), (5, 10));
+            assert_eq!(
+                (snapshot.free_pages, snapshot.page_count),
+                (5, (total + 1) as u64)
+            );
             assert_eq!(store.file_size_bytes().unwrap(), size);
             assert_eq!(store.metrics.snapshot().writes, writes);
             store.flush().unwrap();

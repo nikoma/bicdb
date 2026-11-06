@@ -846,6 +846,44 @@ fn sql_companion_failover(partition: bool) {
             .len(),
         4
     );
+    let operation = |name: &str, operation: &str| {
+        group
+            .client
+            .post(format!("{}/v1/apps/{name}/{operation}", group.base(second)))
+            .bearer_auth(TOKEN)
+            .send()
+            .unwrap()
+    };
+    assert!(operation("counter", "stop").status().is_success());
+    group.wait(|| {
+        group.status(second).is_some_and(|apps| {
+            apps.as_array()
+                .unwrap()
+                .iter()
+                .all(|a| a["running"] == false)
+        })
+    });
+    assert_eq!(ready(&group, second), 503);
+    assert_eq!(
+        operation("companion", "start").status(),
+        400,
+        "a stopped owner cannot start a companion"
+    );
+    assert_eq!(
+        group
+            .client
+            .post(format!("{}/v1/apps", group.base(second)))
+            .bearer_auth(TOKEN)
+            .json(&companion(3))
+            .send()
+            .unwrap()
+            .status(),
+        400,
+        "refuse before replacing the last valid companion deployment"
+    );
+    assert!(operation("counter", "start").status().is_success());
+    group.wait(|| ready(&group, second) == 200);
+    assert_eq!(response(&group, second).unwrap()["version"], 2);
 }
 
 #[test]

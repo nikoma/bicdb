@@ -234,6 +234,23 @@ impl Platform {
         Ok(())
     }
 
+    fn require_companion_owner(&self, name: &str) -> Result<()> {
+        if let Some(owner) = self.companions.get(name) {
+            let app = self
+                .applications
+                .lock()
+                .get(owner)
+                .cloned()
+                .context("state companion owner has not been deployed")?;
+            app.require_authority()?;
+            ensure!(
+                app.deployment.lock().enabled && app.process.lock().is_some(),
+                "state companion owner must be enabled and running"
+            );
+        }
+        Ok(())
+    }
+
     fn create_app(&self, deployment: Deployment, release: Release) -> Result<Arc<Application>> {
         self.validate_event_binding(&release)?;
         self.validate_companion(&release)?;
@@ -364,6 +381,7 @@ impl Platform {
 
     fn launch(&self, app: &Application, release: &Release, digest: &str) -> Result<Execution> {
         app.require_authority()?;
+        self.require_companion_owner(&release.manifest.name)?;
         self.refresh_peer_grants(app)?;
         let name = &release.manifest.name;
         let app_dir = self.store.app_dir(name)?;
@@ -481,6 +499,7 @@ impl Platform {
         self.validate_event_binding(&release)?;
         self.validate_isolation(&release)?;
         self.validate_companion(&release)?;
+        self.require_companion_owner(&release.manifest.name)?;
         ensure!(
             self.replicas.is_empty() || self.execution_replica(&release.manifest.name).is_some(),
             "application lacks an operator state allocation"

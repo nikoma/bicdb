@@ -122,7 +122,12 @@ impl SqlListener {
         let task = thread::Builder::new()
             .name("bic-application-sql".into())
             .spawn(move || {
-                if bicdb_pgwire::serve_existing_listener(serving, listener).is_err() {
+                let failed =
+                    bicdb_pgwire::serve_existing_listener(serving.clone(), listener).is_err();
+                // A lost SQL service must fence and reopen its shared HA host,
+                // rather than leave live guests using a permanently dead port.
+                serving.request_shutdown();
+                if failed {
                     eprintln!("application SQL listener stopped with an error");
                 }
             })?;

@@ -96,6 +96,14 @@ zero and the closed disposable database is cleaned up. Business/remaining
 classes, background storage monitoring, complete UI/workflows, security and
 recovery remain separate gates.
 
+The [unchanged original pristine business checkpoint](evidence/idempiere-original-pristine-business-2026-11-06/README.md)
+then completes all 64 selected invocations: 63 pass and one vendor-invoice
+balance assertion fails, with no errors or skips. All 22 sales-order tests pass.
+Original source/bytecode and eight runtime origins are checked, and the failed
+database is preserved after clean shutdown. Price-list selection is under
+investigation; the Oracle order comparison, remaining batches and full
+application qualification remain open.
+
 The [full-FK foundation checkpoint](evidence/idempiere-full-fk-foundation-2026-11-05/README.md)
 passes all 89 selected original application tests, with zero failures/errors/skips,
 verified Oracle-provider/PostgreSQL-driver origins and clean JVM/database exits.

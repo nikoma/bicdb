@@ -1,0 +1,109 @@
+{
+  "format": 1,
+  "source_commit": "a4d766d3f7fd92e15ff22beb214b285a70f76d27",
+  "binary_sha256": "23da439894484eef3409ab6c3444df9e97c5256737bab9e91760b24d7f6d2c9f",
+  "original_test_jar_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+  "original_source_and_class_hashes_checked": true,
+  "selected_runtime_class_origins": [
+    {
+      "class_name": "org.compiere.db.DB_Oracle",
+      "source_sha256": "330a951360185f9acc875e98985255bda467adac447d1a866ae0a7f210026288",
+      "matched": true
+    },
+    {
+      "class_name": "org.bicdb.jdbc.oracle.OracleDriver",
+      "source_sha256": "9102b2ad40e5f9f1366e9d1a126556ec240c5e8423df5c30e02590506a3333ac",
+      "matched": true
+    },
+    {
+      "class_name": "org.postgresql.Driver",
+      "source_sha256": "2a32a9dcbc42d67a50ad3a0de5efd102c8d2be46720045f2cbd6689f160ab7c7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.model.SalesOrderTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.model.PurchaseOrderTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.model.BankStatementTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.model.PaymentTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.model.AllocationTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    }
+  ],
+  "expected_test_counts_matched": true,
+  "selected_classes_all_reported": true,
+  "processes_stopped": true,
+  "test_jvm_exit": 255,
+  "database_exit": 0,
+  "tests": 64,
+  "passed": 63,
+  "failures": 1,
+  "errors": 0,
+  "skipped": 0,
+  "class_results": [
+    {
+      "file": "TEST-org.idempiere.test.model.AllocationTest.xml",
+      "name": "org.idempiere.test.model.AllocationTest",
+      "tests": "19",
+      "errors": "0",
+      "failures": "1",
+      "skipped": "0"
+    },
+    {
+      "file": "TEST-org.idempiere.test.model.BankStatementTest.xml",
+      "name": "org.idempiere.test.model.BankStatementTest",
+      "tests": "3",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0"
+    },
+    {
+      "file": "TEST-org.idempiere.test.model.PaymentTest.xml",
+      "name": "org.idempiere.test.model.PaymentTest",
+      "tests": "4",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0"
+    },
+    {
+      "file": "TEST-org.idempiere.test.model.PurchaseOrderTest.xml",
+      "name": "org.idempiere.test.model.PurchaseOrderTest",
+      "tests": "16",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0"
+    },
+    {
+      "file": "TEST-org.idempiere.test.model.SalesOrderTest.xml",
+      "name": "org.idempiere.test.model.SalesOrderTest",
+      "tests": "22",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0"
+    }
+  ],
+  "failing_case": "AllocationTest.testAllocateVendorInvoice",
+  "failing_assertion_line": 361,
+  "foundation_tests_previously_passed": 89,
+  "source_oracle_order_comparison_pending": true,
+  "test_assertions_or_bytecode_changed": false,
+  "application_qualified": false,
+  "full_oracle_programme_qualified": false,
+  "production_qualified": false
+}

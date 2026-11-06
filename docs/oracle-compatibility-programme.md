@@ -67,6 +67,13 @@ protocol and migration-tool suites pass within their stated scope. Mapping the
 complete pristine application target, its original test rerun, routine rights
 and the remaining programme gates are still separate work.
 
+The [relation-mapped pristine baseline checkpoint](evidence/idempiere-pristine-owner-baseline-2026-11-06/README.md)
+subsequently verifies ownership for the namespace and all 1,075 relations, then
+repeats source-value, FK, orphan and view-metadata checks. Its unchanged original
+89-test application batch completes with 40 passed, 42 errors and 7 failures.
+JSON-predicate and imported-routine execution permissions are observed blockers;
+complete application behavior remains unqualified.
+
 The [full-FK foundation checkpoint](evidence/idempiere-full-fk-foundation-2026-11-05/README.md)
 passes all 89 selected original application tests, with zero failures/errors/skips,
 verified Oracle-provider/PostgreSQL-driver origins and clean JVM/database exits.

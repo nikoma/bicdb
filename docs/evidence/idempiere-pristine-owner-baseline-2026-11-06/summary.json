@@ -1,0 +1,52 @@
+{
+  "format": 1,
+  "status": "relation_mapped_saved_source_baseline_verified_application_tests_failed",
+  "engine_source_commit": "51cfb588721113d828e787be0648669b5e441c64",
+  "native_binary_sha256": "9dc481dca8f802e21e01e0a7d3073bbb112b6024a9989c4b67b6bc938fc148d8",
+  "tool_source_commit": "51cfb588721113d828e787be0648669b5e441c64",
+  "manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+  "retained_report_sha256": {
+    "relation-owners": "fd2f9f4fbb25cce207e3dfd5073183fb5466208ada9a7a5f9922665b36cc9c6f",
+    "foreign-keys": "f2ff686f44c078c37d0a1a8861e8fa88446e9c1bc2f0207b9b623e85ad1969d9",
+    "verify": "f63c53543affb58d28ab51ed3fa04ee35d9dae0586aed5f9267b96f409450d69",
+    "foreign-key-orphans": "1cefa780226e8e60e2a5c63980fb0a1b2cecc6c81cd8df4ba98ce43912486287",
+    "orphan-comparison": "17b30a0bd0fc4ac6b712a967c104a0b09cbed25a688b45da6790a41e8364c807",
+    "view-metadata": "ca51f8fee78a8aa1f71362b279d2c842f0067132340cd018fc3711e52b8f8e83"
+  },
+  "baseline_report_sha256": "88eb851a8a401356a5ad644b3b282cb8d8f247ba2642ed5b299110fe2f966518",
+  "checks": {
+    "namespace_owners": 1,
+    "table_owners": 915,
+    "view_owners": 160,
+    "source_tables": 915,
+    "source_rows": 185471,
+    "foreign_keys": 3826,
+    "fingerprint_tables": 888,
+    "source_orphan_counts_matched": 3826,
+    "all_orphan_counts_zero": true,
+    "view_labels_and_broad_type_families_verified": true,
+    "stored_definitions_preserved_except_explicit_relation_owner": true,
+    "application_role_one_nonempty_table_count_verified": true,
+    "clean_database_shutdown": true
+  },
+  "original_foundation_batch": {
+    "tests": 89,
+    "errors": 42,
+    "failures": 7,
+    "skipped": 0,
+    "passed": 40,
+    "original_assertions_and_bytecode_preserved": true,
+    "json_predicate_permission_errors": 27,
+    "imported_routine_execution_permission_errors_observed": true,
+    "database_shutdown_exit": 0,
+    "test_jvm_exit": 255
+  },
+  "routine_ownership_qualified": false,
+  "routine_execution_qualified": false,
+  "authentication_qualified": false,
+  "exact_view_descriptors_and_values_qualified": false,
+  "full_application_qualified": false,
+  "production_qualified": false,
+  "oracle_conformance_claimed": false,
+  "goal_complete": false
+}

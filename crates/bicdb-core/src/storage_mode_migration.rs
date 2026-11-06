@@ -122,10 +122,13 @@ pub fn migrate_storage_mode(
 
         // Ids come back sorted, so the copy is in primary-key order: bounded
         // memory on the read side and a compact WAL on the write side.
-        let ids = source_db.scan_collection_record_ids_with_prefix(&meta.name, "")?;
+        // This offline administrative copy holds both directory locks and
+        // preserves the source security contract on the target; it must copy
+        // protected rows too, without granting SQL/application access.
+        let ids = source_db.scan_collection_record_ids_with_prefix_unchecked(&meta.name, "")?;
         let mut pending: Vec<Record> = Vec::with_capacity(batch.min(ids.len()));
         for id in &ids {
-            let record = source_db.get(&meta.name, id)?.ok_or_else(|| {
+            let record = source_db.get_unchecked(&meta.name, id)?.ok_or_else(|| {
                 BicDbError::FormatCompatibility(format!(
                     "source record disappeared from exclusively locked collection `{}`",
                     meta.name

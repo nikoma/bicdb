@@ -966,6 +966,7 @@ impl PgWireServer {
             cancel_tokens: Mutex::new(HashMap::new()),
             last_cancel: Mutex::new(None),
             shutdown: AtomicBool::new(false),
+            ha_background_started: AtomicBool::new(false),
             database_background_started: AtomicBool::new(false),
             host_background_started: AtomicBool::new(false),
             host_services: Mutex::new(Vec::new()),

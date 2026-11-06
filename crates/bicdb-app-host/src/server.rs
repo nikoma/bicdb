@@ -43,6 +43,7 @@ pub struct Application {
     database: DatabaseHandle,
     sql_listener: Mutex<Option<crate::sql_listener::SqlListener>>,
     replica: Option<Arc<Replica>>,
+    execution_replica: Option<Arc<Replica>>,
     process: Mutex<Option<Execution>>,
     release: Mutex<Release>,
     token: Mutex<String>,
@@ -72,6 +73,7 @@ pub struct Platform {
     client: reqwest::Client,
     recovering: AtomicBool,
     replicas: BTreeMap<String, Arc<Replica>>,
+    companions: BTreeMap<String, String>,
     event_cluster: Mutex<Option<Arc<crate::events::Host>>>,
 }
 
@@ -137,22 +139,31 @@ impl Platform {
         }
         let config = state_config.map(crate::state::Config::read).transpose()?;
         let mut replicas = BTreeMap::new();
+        let mut companions = BTreeMap::new();
         if let Some(config) = config {
+            for (owner, group) in &config.applications {
+                for companion in &group.companions {
+                    companions.insert(companion.clone(), owner.clone());
+                }
+            }
             for deployment in store.deployments()? {
                 ensure!(
-                    config.applications.contains_key(&deployment.application),
+                    config.applications.contains_key(&deployment.application)
+                        || companions.contains_key(&deployment.application),
                     "existing application {} lacks a state allocation",
                     deployment.application
                 );
                 ensure!(
-                    store
-                        .load_release(&deployment.application, &deployment.release)?
-                        .manifest
-                        .sync
-                        .is_empty()
-                        || config.applications[&deployment.application]
-                            .edge_sync_key_file
-                            .is_some(),
+                    companions.contains_key(&deployment.application)
+                        || store
+                            .load_release(&deployment.application, &deployment.release)?
+                            .manifest
+                            .sync
+                            .is_empty()
+                        || config
+                            .applications
+                            .get(&deployment.application)
+                            .is_some_and(|group| group.edge_sync_key_file.is_some()),
                     "replicated edge synchronization requires edge_sync_key_file"
                 );
             }
@@ -173,6 +184,7 @@ impl Platform {
             client,
             recovering: AtomicBool::new(true),
             replicas,
+            companions,
             event_cluster: Mutex::new(None),
         }))
     }
@@ -201,9 +213,39 @@ impl Platform {
         Ok(())
     }
 
+    fn execution_replica(&self, name: &str) -> Option<Arc<Replica>> {
+        self.replicas
+            .get(name)
+            .or_else(|| {
+                self.companions
+                    .get(name)
+                    .and_then(|owner| self.replicas.get(owner))
+            })
+            .cloned()
+    }
+
+    fn validate_companion(&self, release: &Release) -> Result<()> {
+        if self.companions.contains_key(&release.manifest.name) {
+            ensure!(release.manifest.runtime == crate::manifest::Runtime::NodeHttp
+                && release.manifest.migrations.is_empty() && release.manifest.sync.is_empty()
+                && release.manifest.placement.is_none() && !release.manifest.bindings.events,
+                "state companions must be local stateless HTTP processes without migrations or synchronization");
+        }
+        Ok(())
+    }
+
     fn create_app(&self, deployment: Deployment, release: Release) -> Result<Arc<Application>> {
         self.validate_event_binding(&release)?;
+        self.validate_companion(&release)?;
+        let execution_replica = self.execution_replica(&deployment.application);
         let replica = self.replicas.get(&deployment.application).cloned();
+        if execution_replica.is_some() && replica.is_none() {
+            ensure!(
+                crate::sql_listener::configuration(&self.store.app_dir(&deployment.application)?)?
+                    .is_none(),
+                "stateless companions cannot own an SQL listener"
+            );
+        }
         let database = match &replica {
             Some(replica) => replica.database.clone(),
             None => DatabaseHandle::new(Database::open(
@@ -256,6 +298,7 @@ impl Platform {
             database,
             sql_listener: Mutex::new(sql_listener),
             replica,
+            execution_replica,
             process: Mutex::new(None),
             release: Mutex::new(release),
             token: Mutex::new(fresh_token()),
@@ -409,7 +452,7 @@ impl Platform {
 
     fn recover(&self) -> Result<()> {
         for deployment in self.store.deployments()? {
-            if self.replicas.contains_key(&deployment.application) {
+            if self.execution_replica(&deployment.application).is_some() {
                 continue;
             }
             let release = self
@@ -437,11 +480,12 @@ impl Platform {
         release.validate()?;
         self.validate_event_binding(&release)?;
         self.validate_isolation(&release)?;
+        self.validate_companion(&release)?;
         ensure!(
-            self.replicas.is_empty() || self.replicas.contains_key(&release.manifest.name),
+            self.replicas.is_empty() || self.execution_replica(&release.manifest.name).is_some(),
             "application lacks an operator state allocation"
         );
-        if let Some(replica) = self.replicas.get(&release.manifest.name) {
+        if let Some(replica) = self.execution_replica(&release.manifest.name) {
             ensure!(
                 replica.authoritative(),
                 "state writer authority is unavailable"
@@ -529,7 +573,12 @@ impl Platform {
         releases: &[&Release],
     ) -> Result<()> {
         app.require_authority()?;
-        if app.replica.is_some() {
+        if let Some(owner) = self.companions.get(&deployment.application) {
+            self.replicas[owner]
+                .database
+                .lock()?
+                .publish_companion_deployment(deployment, releases)?;
+        } else if app.replica.is_some() {
             app.database
                 .lock()?
                 .publish_deployment(deployment, releases)?;
@@ -549,7 +598,7 @@ impl Application {
         *self.release.lock() = release;
     }
     fn authoritative(&self) -> bool {
-        self.replica
+        self.execution_replica
             .as_ref()
             .is_none_or(|replica| replica.authoritative())
     }
@@ -572,6 +621,7 @@ impl Application {
 pub fn router(platform: Arc<Platform>) -> Router {
     Router::new()
         .route("/health", get(health))
+        .route("/ready/:name", get(readiness))
         .route("/v1/apps", get(list).post(deploy))
         .route("/v1/apps/:name/:operation", post(operation))
         .route("/v1/apps/:name/logs", get(logs))
@@ -627,6 +677,53 @@ async fn health(State(platform): State<Arc<Platform>>) -> impl IntoResponse {
     }
 }
 
+// Local readiness deliberately bypasses state forwarding. A load balancer must
+// never mistake a follower that can proxy requests for the current SQL writer.
+async fn readiness(
+    State(platform): State<Arc<Platform>>,
+    RoutePath(name): RoutePath<String>,
+) -> StatusCode {
+    let mut names = vec![name.clone()];
+    if let Some(replica) = platform.replicas.get(&name) {
+        names.extend(replica.group.companions.iter().cloned());
+    }
+    for name in names {
+        let Ok(app) = platform.app(&name) else {
+            return StatusCode::SERVICE_UNAVAILABLE;
+        };
+        if app.require_authority().is_err()
+            || !app.deployment.lock().enabled
+            || app.snapshotting.load(Ordering::Acquire)
+            || app.error.lock().is_some()
+        {
+            return StatusCode::SERVICE_UNAVAILABLE;
+        }
+        let Some((endpoint, client, worker_token, token)) =
+            app.process.lock().as_ref().map(Execution::route)
+        else {
+            return StatusCode::SERVICE_UNAVAILABLE;
+        };
+        let path = if app.release.lock().manifest.runtime == crate::manifest::Runtime::Node {
+            "/__bic/ready"
+        } else {
+            "/health"
+        };
+        let mut request = client
+            .get(format!("{endpoint}{path}"))
+            .timeout(Duration::from_secs(2));
+        if let Some(token) = worker_token {
+            request = request.header("x-bic-worker-token", token);
+        }
+        if !app.operator_isolated.load(Ordering::Acquire) {
+            request = request.header("x-bic-internal-token", token);
+        }
+        if !request.send().await.is_ok_and(|r| r.status().is_success()) || !app.authoritative() {
+            return StatusCode::SERVICE_UNAVAILABLE;
+        }
+    }
+    StatusCode::OK
+}
+
 async fn list(State(platform): State<Arc<Platform>>, headers: HeaderMap) -> ApiResult<Json<Value>> {
     platform.admin_auth(&headers)?;
     let applications: Vec<_> = platform.applications.lock().values().cloned().collect();
@@ -639,7 +736,7 @@ async fn list(State(platform): State<Arc<Platform>>, headers: HeaderMap) -> ApiR
             let worker = slot.as_ref().and_then(Execution::worker).map(str::to_owned);
             drop(slot);
             let error = app.error.lock().clone();
-            json!({"application":deployment.application, "deployment": deployment, "running": running, "worker": worker, "error": error, "state":app.replica.as_ref().map(|replica| state_lifecycle::status(replica))})
+            json!({"application":deployment.application, "deployment": deployment, "running": running, "worker": worker, "error": error, "state":app.execution_replica.as_ref().map(|replica| state_lifecycle::status(replica))})
         })
         .collect();
     for (name, replica) in &platform.replicas {
@@ -1060,7 +1157,7 @@ async fn supervise(platform: Arc<Platform>) {
         tokio::time::sleep(Duration::from_millis(500)).await;
         let apps: Vec<_> = platform.applications.lock().values().cloned().collect();
         for app in apps {
-            if app.replica.is_some() {
+            if app.execution_replica.is_some() {
                 continue;
             }
             let Ok(_gate) = app.gate.try_read() else {
@@ -1114,6 +1211,9 @@ async fn jobs(platform: Arc<Platform>) {
         tokio::time::sleep(Duration::from_millis(250)).await;
         let apps: Vec<_> = platform.applications.lock().values().cloned().collect();
         for app in apps {
+            if app.execution_replica.is_some() && app.replica.is_none() {
+                continue;
+            }
             if !app.authoritative() || !app.deployment.lock().enabled {
                 continue;
             }
@@ -1606,7 +1706,8 @@ async fn authenticate(
             Err(error) => return error.into_response(),
         };
         let allowed = if path.starts_with("/internal/") {
-            !app.operator_isolated.load(Ordering::Acquire)
+            !(app.execution_replica.is_some() && app.replica.is_none())
+                && !app.operator_isolated.load(Ordering::Acquire)
                 && authorized(request.headers(), &app.token.lock())
         } else {
             app.peers

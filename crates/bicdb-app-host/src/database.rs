@@ -112,7 +112,15 @@ impl Database {
             PgWireConfig {
                 fsync: true,
                 high_availability: Some(ha),
-                ..Default::default()
+                ..crate::sql_listener::configuration(
+                    path.parent()
+                        .context("state database has no application directory")?,
+                )?
+                .map(|(_, config)| config)
+                .unwrap_or_else(|| PgWireConfig {
+                    require_auth: true,
+                    ..Default::default()
+                })
             },
             DbConfig::default().with_fsync(true).with_audit_events(true),
             move |db| {
@@ -150,6 +158,14 @@ impl Database {
             sync: BTreeMap::new(),
         };
         Ok(database)
+    }
+
+    pub(crate) fn authenticated_protocol_server(&self) -> Result<Arc<bicdb_pgwire::PgWireServer>> {
+        Ok(self
+            .native
+            .as_ref()
+            .context("application SQL listener requires its replicated database")?
+            .authenticated_protocol_server()?)
     }
 
     pub fn writer_lease(&self) -> Option<HaWriterLease> {

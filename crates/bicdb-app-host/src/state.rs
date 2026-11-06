@@ -31,6 +31,9 @@ pub struct Group {
     pub node_id: String,
     pub initial_primary: String,
     pub nodes: BTreeMap<String, Node>,
+    /// Stateless local HTTP processes fenced and routed with this state owner.
+    #[serde(default)]
+    pub companions: Vec<String>,
     pub tls: Option<Tls>,
     /// Same operator-held 32-byte hex key on each physical state host.
     pub edge_sync_key_file: Option<PathBuf>,
@@ -79,6 +82,20 @@ impl Config {
                 && config.applications.len() <= 128,
             "invalid state configuration"
         );
+        let mut allocated = BTreeSet::new();
+        for (application, group) in &config.applications {
+            ensure!(
+                allocated.insert(application.clone()),
+                "duplicate state application allocation"
+            );
+            ensure!(group.companions.len() <= 64, "too many state companions");
+            for companion in &group.companions {
+                ensure!(
+                    crate::manifest::valid_name(companion) && allocated.insert(companion.clone()),
+                    "invalid or duplicate state companion allocation"
+                );
+            }
+        }
         let mut listeners = BTreeSet::new();
         let mut clusters = BTreeSet::new();
         for (application, group) in &mut config.applications {
@@ -115,6 +132,23 @@ impl Config {
 }
 
 impl Group {
+    fn forwarding_client(&self) -> Result<reqwest::Client> {
+        let mut client = reqwest::Client::builder()
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(Duration::from_secs(2));
+        if let Some(tls) = &self.tls {
+            client = client.add_root_certificate(reqwest::Certificate::from_pem(&read_bounded(
+                &tls.ca,
+                1024 * 1024,
+            )?)?);
+            let mut pem = read_bounded(&tls.certificate, 1024 * 1024)?;
+            pem.extend_from_slice(&read_bounded(&tls.key, 1024 * 1024)?);
+            client = client.identity(reqwest::Identity::from_pem(&pem)?);
+        }
+        Ok(client.build()?)
+    }
+
     pub fn validate(&self) -> Result<()> {
         ensure!(
             crate::manifest::valid_name(&self.cluster_id)
@@ -280,6 +314,7 @@ impl DatabaseHandle {
 
 pub(crate) struct Replica {
     pub group: Group,
+    pub client: reqwest::Client,
     pub database: DatabaseHandle,
     pub path: PathBuf,
     pub lease: Mutex<Option<HaWriterLease>>,
@@ -288,10 +323,12 @@ pub(crate) struct Replica {
 }
 impl Replica {
     pub fn open(group: Group, path: PathBuf) -> Result<Arc<Self>> {
+        let client = group.forwarding_client()?;
         let database = Database::open_replicated(&path, group.replication()?)?;
         let lease = database.writer_lease();
         Ok(Arc::new(Self {
             group,
+            client,
             database: DatabaseHandle::new(database),
             path,
             lease: Mutex::new(lease),

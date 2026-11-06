@@ -50,3 +50,39 @@ fn state_configuration_requires_a_unique_majority_and_pinned_transport() {
     }
     unpinned.validate().unwrap();
 }
+
+#[test]
+fn stateless_companions_have_one_unambiguous_state_owner() {
+    use std::os::unix::fs::PermissionsExt;
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.json");
+    let original = json!({"cluster_id":"test","node_id":"n1","initial_primary":"n1","dev_localhost_plaintext":true,"nodes":{
+        "n1":{"replication":"127.0.0.1:5941","endpoint":"http://127.0.0.1:8788"},
+        "n2":{"replication":"127.0.0.1:5942","endpoint":"http://127.0.0.1:8789"},
+        "n3":{"replication":"127.0.0.1:5943","endpoint":"http://127.0.0.1:8790"}}});
+    for (companions, valid) in [
+        (json!([]), true),
+        (json!(["portal", "mail"]), true),
+        (json!(["owner"]), false),
+        (json!(["portal", "portal"]), false),
+        (json!(["../secret"]), false),
+    ] {
+        let mut group = original.clone();
+        group["companions"] = companions;
+        std::fs::write(
+            &path,
+            json!({"format":1,"applications":{"owner":group}}).to_string(),
+        )
+        .unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        assert_eq!(bicdb_app_host::state::Config::read(&path).is_ok(), valid);
+    }
+    let mut owner = original.clone();
+    owner["companions"] = json!(["portal"]);
+    std::fs::write(
+        &path,
+        json!({"format":1,"applications":{"owner":owner,"portal":original}}).to_string(),
+    )
+    .unwrap();
+    assert!(bicdb_app_host::state::Config::read(&path).is_err());
+}

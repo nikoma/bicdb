@@ -53,8 +53,17 @@ impl Group {
         Self::start_options(remote, live_partition, existing, false)
     }
     fn start_options(remote: bool, live_partition: bool, existing: bool, edge: bool) -> Self {
+        Self::start_configuration(remote, live_partition, existing, edge, false)
+    }
+    fn start_configuration(
+        remote: bool,
+        live_partition: bool,
+        existing: bool,
+        edge: bool,
+        sql: bool,
+    ) -> Self {
         let root = tempfile::tempdir().unwrap();
-        let listeners: Vec<_> = (0..16)
+        let listeners: Vec<_> = (0..19)
             .map(|_| TcpListener::bind("127.0.0.1:0").unwrap())
             .collect();
         let ports: Vec<_> = listeners
@@ -71,6 +80,28 @@ impl Group {
             "separate-worker-management-token-0000000000000000",
         );
         for index in 0..3 {
+            if sql {
+                let app = root.path().join(format!("n{index}/apps/counter"));
+                fs::create_dir_all(app.join("database/data")).unwrap();
+                if index == 0 {
+                    let mut db = bicdb_core::BicDb::open(app.join("database/data")).unwrap();
+                    bicdb_sql::SqlSession::new(&mut db).execute("CREATE ROLE alice LOGIN; CREATE ROLE bob LOGIN; CREATE TABLE durable_rows(id TEXT PRIMARY KEY, tenant TEXT NOT NULL, value TEXT NOT NULL); INSERT INTO durable_rows VALUES('other','tenant-b','private'); ALTER TABLE durable_rows ENABLE ROW LEVEL SECURITY; ALTER TABLE durable_rows FORCE ROW LEVEL SECURITY; CREATE POLICY tenant ON durable_rows USING(tenant=current_setting('carrier.current_tenant',true)) WITH CHECK(tenant=current_setting('carrier.current_tenant',true)); GRANT SELECT,INSERT,UPDATE ON durable_rows TO alice,bob").unwrap();
+                }
+                for (user, tenant) in [("alice", "tenant-a"), ("bob", "tenant-b")] {
+                    bicdb_pgwire::create_user_with_identity(
+                        app.join("database/data"),
+                        user,
+                        "fixture-password",
+                        bicdb_pgwire::PgWireUserIdentity::new(user, tenant),
+                    )
+                    .unwrap();
+                }
+                secret(
+                    &app.join("sql-listener.json"),
+                    &json!({"format":1,"listen":format!("127.0.0.1:{}",ports[16+index])})
+                        .to_string(),
+                );
+            }
             let mut nodes = nodes.clone();
             if live_partition {
                 for peer in 0..3 {
@@ -83,7 +114,8 @@ impl Group {
             secret(&root.path().join(format!("state-{index}.json")), &json!({"format":1,"applications":{"counter":{
                 "cluster_id":"application-test", "node_id":format!("n{index}"), "initial_primary":"n0", "nodes":nodes,
                 "dev_localhost_plaintext":true,"failover_timeout_ms":5000,"synchronous_timeout_ms":10000,
-                "edge_sync_key_file":if edge {Some("edge-sync.key")} else {None}
+                "edge_sync_key_file":if edge {Some("edge-sync.key")} else {None},
+                "companions":if sql {vec!["companion"]} else {vec![]}
             }}}).to_string());
         }
         secret(&root.path().join("fleet.json"), &json!({"format":1,"workers":{"worker":{"endpoint":format!("http://127.0.0.1:{}",ports[6]),"token_file":"worker.token","region":"test","capacity":1,"isolation":"process"}}}).to_string());
@@ -184,6 +216,7 @@ impl Group {
     fn start_node(&mut self, index: usize, remote: bool) {
         self.reservations[index].take();
         self.reservations[index + 3].take();
+        self.reservations[index + 16].take();
         let mut command = Command::new(env!("CARGO_BIN_EXE_bic"));
         command
             .arg("--data")
@@ -559,6 +592,258 @@ fn an_existing_standalone_catalog_enrolls_without_losing_data_or_receipts() {
         group.post(1, "increment", "after-upgrade"),
         json!({"value":2})
     );
+}
+
+fn sql_companion_failover(partition: bool) {
+    let mut group = Group::start_configuration(false, partition, false, false, true);
+    let owner = Release::read(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/platform/counter/bic.json"),
+    )
+    .unwrap();
+    group.deploy(0, &owner);
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .unwrap();
+    let sql_ports = group.ports[16..19].to_vec();
+    let connect = |index: usize, user: &str| {
+        let (client, connection) = runtime
+            .block_on(
+                tokio_postgres::Config::new()
+                    .host("127.0.0.1")
+                    .port(sql_ports[index])
+                    .user(user)
+                    .password("fixture-password")
+                    .dbname("bicdb")
+                    .connect(tokio_postgres::NoTls),
+            )
+            .unwrap();
+        runtime.spawn(async move {
+            let _ = connection.await;
+        });
+        client
+    };
+    let ready = |group: &Group, index| {
+        group
+            .client
+            .get(format!("{}/ready/counter", group.base(index)))
+            .send()
+            .unwrap()
+            .status()
+    };
+    assert_eq!(
+        ready(&group, 0),
+        503,
+        "the missing companion prevents admission"
+    );
+    assert_eq!(
+        ready(&group, 1),
+        503,
+        "standby readiness is local, not forwarded"
+    );
+    let old = connect(0, "alice");
+    runtime.block_on(async {
+        assert!(old
+            .query("SELECT id FROM durable_rows", &[])
+            .await
+            .unwrap()
+            .is_empty());
+        assert!(old
+            .batch_execute("SET carrier.current_tenant='tenant-b'")
+            .await
+            .is_err());
+        old.execute(
+            "INSERT INTO durable_rows VALUES($1,$2,$3)",
+            &[&"extended", &"tenant-a", &"acknowledged"],
+        )
+        .await
+        .unwrap();
+        old.batch_execute(
+            "BEGIN; INSERT INTO durable_rows VALUES('transaction','tenant-a','committed'); COMMIT",
+        )
+        .await
+        .unwrap();
+        use futures_util::SinkExt;
+        let copy = old
+            .copy_in::<_, &[u8]>("COPY durable_rows (id,tenant,value) FROM STDIN")
+            .await
+            .unwrap();
+        futures_util::pin_mut!(copy);
+        copy.send(&b"copied\ttenant-a\tcopy-acknowledged\n"[..])
+            .await
+            .unwrap();
+        assert_eq!(copy.finish().await.unwrap(), 1);
+    });
+    let companion = |version| {
+        let source = format!("import {{createServer}} from 'node:http'; createServer((req,res)=>{{res.setHeader('content-type','application/json');res.end(JSON.stringify({{version:{version},pid:process.pid}}));}}).listen(Number(process.env.PORT),'127.0.0.1');");
+        serde_json::from_value::<Release>(json!({"manifest":{"format":1,"name":"companion","version":format!("{version}"),"runtime":"node_http","entrypoint":"app.mjs","files":["app.mjs"]},"files":{"app.mjs":base64::engine::general_purpose::STANDARD.encode(source)}})).unwrap()
+    };
+    for version in [1, 2] {
+        group.deploy(2, &companion(version));
+    }
+    let response = |group: &Group, index| {
+        group
+            .client
+            .get(format!("{}/apps/companion", group.base(index)))
+            .send()
+            .ok()?
+            .error_for_status()
+            .ok()?
+            .json::<Value>()
+            .ok()
+    };
+    group.wait(|| response(&group, 1).is_some_and(|r| r["version"] == 2));
+    let before_pid = response(&group, 0).unwrap()["pid"].clone();
+    group.wait(|| ready(&group, 0) == 200);
+    assert_eq!(ready(&group, 2), 503);
+
+    let mut invalid = companion(3);
+    invalid.manifest.migrations.push("app.mjs".into());
+    assert_eq!(
+        group
+            .client
+            .post(format!("{}/v1/apps", group.base(0)))
+            .bearer_auth(TOKEN)
+            .json(&invalid)
+            .send()
+            .unwrap()
+            .status(),
+        400
+    );
+    if let Some(network) = &group.network {
+        network.isolate();
+    } else {
+        group.kill(0);
+    }
+    let writer = |group: &Group, index| {
+        group.status(index).is_some_and(|apps| {
+            apps.as_array().unwrap().iter().any(|a| {
+                a["application"] == "counter"
+                    && a["state"]["writer"] == true
+                    && a["running"] == true
+            })
+        })
+    };
+    let mut primary = None;
+    group.wait(|| {
+        primary = (1..3).find(|i| writer(&group, *i));
+        primary.is_some()
+    });
+    let primary = primary.unwrap();
+    group.wait(|| {
+        response(&group, primary).is_some_and(|r| r["version"] == 2 && r["pid"] != before_pid)
+    });
+    group.wait(|| ready(&group, primary) == 200);
+    let successor = connect(primary, "alice");
+    runtime.block_on(async {
+        let rows = successor
+            .query("SELECT id,value FROM durable_rows ORDER BY id", &[])
+            .await
+            .unwrap();
+        assert_eq!(
+            rows.iter()
+                .map(|r| (r.get::<_, String>(0), r.get::<_, String>(1)))
+                .collect::<Vec<_>>(),
+            vec![
+                ("copied".into(), "copy-acknowledged".into()),
+                ("extended".into(), "acknowledged".into()),
+                ("transaction".into(), "committed".into())
+            ]
+        );
+        successor
+            .execute(
+                "INSERT INTO durable_rows VALUES('after','tenant-a','successor')",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert!(old
+            .execute(
+                "INSERT INTO durable_rows VALUES('split-brain','tenant-a','forbidden')",
+                &[]
+            )
+            .await
+            .is_err());
+    });
+    if let Some(network) = &group.network {
+        assert_eq!(
+            ready(&group, 0),
+            503,
+            "the isolated writer cannot remain in ingress"
+        );
+        let status = group.status(0).unwrap();
+        for app in status.as_array().unwrap() {
+            assert_eq!(app["running"], false);
+            assert_eq!(app["state"]["writer"], false);
+        }
+        network.heal();
+    } else {
+        group.start_node(0, false);
+    }
+    group.wait(|| response(&group, 0).is_some_and(|r| r["version"] == 2));
+    group.wait(|| {
+        group.status(0).is_some_and(|apps| {
+            apps.as_array().unwrap().len() == 2
+                && apps
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|a| a["running"] == false)
+        })
+    });
+    let former = connect(0, "alice");
+    let bob = connect(primary, "bob");
+    runtime.block_on(async {
+        let error = former
+            .execute(
+                "INSERT INTO durable_rows VALUES('standby','tenant-a','forbidden')",
+                &[],
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.code(),
+            Some(&tokio_postgres::error::SqlState::READ_ONLY_SQL_TRANSACTION)
+        );
+        assert_eq!(
+            former
+                .query_one("SELECT value FROM durable_rows WHERE id='after'", &[])
+                .await
+                .unwrap()
+                .get::<_, String>(0),
+            "successor"
+        );
+        assert_eq!(
+            bob.query("SELECT id FROM durable_rows", &[])
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+    });
+    group.kill(primary);
+    let second = (0..3).find(|i| *i != primary && *i != 0).unwrap();
+    group.wait(|| writer(&group, second));
+    group.wait(|| response(&group, second).is_some_and(|r| r["version"] == 2));
+    let final_client = connect(second, "alice");
+    assert_eq!(
+        runtime
+            .block_on(final_client.query("SELECT id FROM durable_rows", &[]))
+            .unwrap()
+            .len(),
+        4
+    );
+}
+
+#[test]
+fn authenticated_sql_acknowledgements_and_stateless_companions_survive_host_loss() {
+    sql_companion_failover(false);
+}
+
+#[test]
+fn authenticated_sql_and_companion_processes_fence_an_isolated_writer() {
+    sql_companion_failover(true);
 }
 
 fn edge_failover(live_partition: bool) {

@@ -297,6 +297,12 @@ pub(crate) fn start(server: Arc<PgWireServer>, config: HaServerConfig) -> Result
         .database_replication()
         .validate()
         .map_err(PgWireError::from)?;
+    // Embedded hosts start replication before attaching an optional SQL
+    // listener. Both entry points share this exact server and must not bind
+    // a second replication service or create another write authority.
+    if server.ha_background_started.swap(true, Ordering::SeqCst) {
+        return Ok(());
+    }
     let runtime = Arc::new(HaRuntime {
         last_heard: Mutex::new(Instant::now()),
         connections: Mutex::new(std::collections::BTreeMap::new()),

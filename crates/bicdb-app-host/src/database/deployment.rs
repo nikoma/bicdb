@@ -17,6 +17,14 @@ fn write(session: &mut SqlSession<'_>, sql: &str) -> Result<()> {
 
 impl Database {
     pub(crate) fn deployment(&self) -> Result<Option<Deployment>> {
+        self.named_deployment("current")
+    }
+
+    pub(crate) fn companion_deployment(&self, application: &str) -> Result<Option<Deployment>> {
+        self.named_deployment(&format!("companion:{application}"))
+    }
+
+    fn named_deployment(&self, key: &str) -> Result<Option<Deployment>> {
         let db = self.db.read();
         if !db
             .collections()
@@ -27,7 +35,8 @@ impl Database {
         }
         let rows = SqlSession::new_shared(&db)
             .execute(&format!(
-                "SELECT payload FROM {DEPLOYMENT} WHERE id = 'current'"
+                "SELECT payload FROM {DEPLOYMENT} WHERE id = {}",
+                quote(key)
             ))?
             .rows;
         rows.first()
@@ -63,7 +72,29 @@ impl Database {
         deployment: &Deployment,
         releases: &[&Release],
     ) -> Result<()> {
+        self.publish_named_deployment("current", deployment, releases)
+    }
+
+    pub(crate) fn publish_companion_deployment(
+        &mut self,
+        deployment: &Deployment,
+        releases: &[&Release],
+    ) -> Result<()> {
+        self.publish_named_deployment(
+            &format!("companion:{}", deployment.application),
+            deployment,
+            releases,
+        )
+    }
+
+    fn publish_named_deployment(
+        &mut self,
+        key: &str,
+        deployment: &Deployment,
+        releases: &[&Release],
+    ) -> Result<()> {
         self.ensure_authority()?;
+        let key = quote(key);
         let result = (|| -> Result<()> {
             for (table, columns) in [
                 (RELEASES, "digest TEXT PRIMARY KEY, payload TEXT NOT NULL"),
@@ -118,18 +149,18 @@ impl Database {
             }
             let payload = quote(&serde_json::to_string(deployment)?);
             if session
-                .execute(&format!("SELECT id FROM {DEPLOYMENT} WHERE id = 'current'"))?
+                .execute(&format!("SELECT id FROM {DEPLOYMENT} WHERE id = {key}"))?
                 .rows
                 .is_empty()
             {
                 write(
                     &mut session,
-                    &format!("INSERT INTO {DEPLOYMENT} VALUES ('current', {payload})"),
+                    &format!("INSERT INTO {DEPLOYMENT} VALUES ({key}, {payload})"),
                 )?;
             } else {
                 write(
                     &mut session,
-                    &format!("UPDATE {DEPLOYMENT} SET payload = {payload} WHERE id = 'current'"),
+                    &format!("UPDATE {DEPLOYMENT} SET payload = {payload} WHERE id = {key}"),
                 )?;
             }
             Ok(())

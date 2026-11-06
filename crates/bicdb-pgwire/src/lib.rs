@@ -1059,6 +1059,7 @@ pub struct PgWireServer {
     replica_read_watermark: Mutex<Option<Instant>>,
     last_cancel: Mutex<Option<CancelMetadata>>,
     shutdown: AtomicBool,
+    ha_background_started: AtomicBool,
     database_background_started: AtomicBool,
     host_background_started: AtomicBool,
     /// Optional host-level services installed by the embedding binary before

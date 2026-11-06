@@ -31,80 +31,93 @@ pub struct SqlListener {
     task: Option<thread::JoinHandle<()>>,
     address: SocketAddr,
 }
+pub(crate) fn configuration(app_dir: &Path) -> Result<Option<(SocketAddr, PgWireConfig)>> {
+    let path = app_dir.join(CONFIG_FILE);
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    let file = match options.open(&path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    let metadata = file.metadata()?;
+    ensure!(
+        metadata.is_file() && !metadata.file_type().is_symlink(),
+        "SQL listener configuration must be a regular file"
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        ensure!(
+            metadata.permissions().mode() & 0o077 == 0,
+            "SQL listener configuration must have mode 0600"
+        );
+        ensure!(
+            metadata.uid() == unsafe { libc::geteuid() },
+            "SQL listener configuration must belong to the supervisor's user"
+        );
+    }
+    let mut bytes = Vec::new();
+    file.take(16 * 1024 + 1).read_to_end(&mut bytes)?;
+    ensure!(
+        bytes.len() <= 16 * 1024,
+        "SQL listener configuration is too large"
+    );
+    let configuration: Configuration = serde_json::from_slice(&bytes)?;
+    ensure!(
+        configuration.format == 1,
+        "unsupported SQL listener configuration"
+    );
+    ensure!(
+        configuration.listen.ip().is_loopback(),
+        "application SQL listeners must bind to loopback"
+    );
+    ensure!(
+        (1..=512).contains(&configuration.max_connections),
+        "invalid SQL connection limit"
+    );
+    Ok(Some((
+        configuration.listen,
+        PgWireConfig {
+            host: configuration.listen.ip().to_string(),
+            port: configuration.listen.port(),
+            require_auth: true,
+            fsync: true,
+            max_connections: configuration.max_connections,
+            max_connections_per_ip: configuration.max_connections,
+            shutdown_grace_period: Duration::from_secs(2),
+            ..Default::default()
+        },
+    )))
+}
+
 impl SqlListener {
     pub fn open(app_dir: &Path, database: &Database, replicated: bool) -> Result<Option<Self>> {
-        let path = app_dir.join(CONFIG_FILE);
-        let mut options = std::fs::OpenOptions::new();
-        options.read(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
-        }
-        let file = match options.open(&path) {
-            Ok(file) => file,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(error.into()),
+        let Some((listen, config)) = configuration(app_dir)? else {
+            return Ok(None);
         };
-        let metadata = file.metadata()?;
-        ensure!(
-            metadata.is_file() && !metadata.file_type().is_symlink(),
-            "SQL listener configuration must be a regular file"
-        );
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::{MetadataExt, PermissionsExt};
-            ensure!(
-                metadata.permissions().mode() & 0o077 == 0,
-                "SQL listener configuration must have mode 0600"
-            );
-            ensure!(
-                metadata.uid() == unsafe { libc::geteuid() },
-                "SQL listener configuration must belong to the supervisor's user"
-            );
-        }
-        let mut bytes = Vec::new();
-        file.take(16 * 1024 + 1).read_to_end(&mut bytes)?;
-        ensure!(
-            bytes.len() <= 16 * 1024,
-            "SQL listener configuration is too large"
-        );
-        let configuration: Configuration = serde_json::from_slice(&bytes)?;
-        ensure!(
-            configuration.format == 1,
-            "unsupported SQL listener configuration"
-        );
-        ensure!(
-            configuration.listen.ip().is_loopback(),
-            "application SQL listeners must bind to loopback"
-        );
-        ensure!(
-            (1..=512).contains(&configuration.max_connections),
-            "invalid SQL connection limit"
-        );
-        // Replicated databases can be replaced during recovery. Refuse this
-        // binding until the listener follows that exact writer lifecycle.
-        ensure!(
-            !replicated,
-            "application SQL listener does not yet support replicated state groups"
-        );
-        let listener =
-            TcpListener::bind(configuration.listen).context("bind application SQL listener")?;
+        let listener = TcpListener::bind(listen).context("bind application SQL listener")?;
         let address = listener.local_addr()?;
-        let server = PgWireServer::open_with_shared(
-            app_dir.join("database/data"),
-            PgWireConfig {
-                host: address.ip().to_string(),
-                port: address.port(),
-                require_auth: true,
-                fsync: true,
-                max_connections: configuration.max_connections,
-                max_connections_per_ip: configuration.max_connections,
-                shutdown_grace_period: Duration::from_secs(2),
-                ..Default::default()
-            },
-            database.db.clone(),
-        )?;
+        let server = if replicated {
+            let server = database.authenticated_protocol_server()?;
+            ensure!(
+                server.config().max_connections == config.max_connections
+                    && server.config().max_connections_per_ip == config.max_connections_per_ip,
+                "restart the state replica after changing SQL listener limits"
+            );
+            server
+        } else {
+            PgWireServer::open_with_shared(
+                app_dir.join("database/data"),
+                config,
+                database.db.clone(),
+            )?
+        };
         let serving = server.clone();
         let task = thread::Builder::new()
             .name("bic-application-sql".into())

@@ -62,9 +62,22 @@ fn reconcile(platform: &Platform, name: &str) -> Result<()> {
     {
         if let Some(app) = &existing {
             retire(app);
+            // Sessions must release the old server/database before snapshots or
+            // promotion reopen it. Native shutdown already fences their writes.
+            app.sql_listener.lock().take();
         }
     }
     replica.refresh()?;
+    if let Some(app) = &existing {
+        let mut listener = app.sql_listener.lock();
+        if listener.is_none() {
+            *listener = crate::sql_listener::SqlListener::open(
+                &platform.store.app_dir(name)?,
+                &*app.database.lock()?,
+                true,
+            )?;
+        }
+    }
     let mut desired = replica.database.lock()?.deployment()?;
     if desired.is_none()
         && replica.authoritative()
@@ -139,6 +152,8 @@ fn reconcile(platform: &Platform, name: &str) -> Result<()> {
     };
     if !replica.authoritative() || !desired.enabled {
         retire(&app);
+        retire_companions(platform, replica);
+        reconcile_companions(platform, replica, desired.enabled)?;
         return Ok(());
     }
     platform.refresh_peer_grants(&app)?;
@@ -156,6 +171,117 @@ fn reconcile(platform: &Platform, name: &str) -> Result<()> {
         app.require_authority()?;
         *app.process.lock() = Some(execution);
         *app.error.lock() = None;
+    }
+    reconcile_companions(platform, replica, true)?;
+    Ok(())
+}
+
+fn retire_companions(platform: &Platform, replica: &Replica) {
+    for name in &replica.group.companions {
+        if let Some(app) = platform.applications.lock().get(name).cloned() {
+            retire(&app);
+        }
+    }
+}
+
+// Stateless companions retain their public releases and desired state in the
+// owner's quorum database. A new leader can therefore restore the same code
+// and start its local clients only after that exact SQL writer is available.
+fn reconcile_companions(platform: &Platform, replica: &Replica, owner_enabled: bool) -> Result<()> {
+    for name in &replica.group.companions {
+        let mut desired = replica.database.lock()?.companion_deployment(name)?;
+        if desired.is_none()
+            && replica.authoritative()
+            && replica.group.node_id == replica.group.initial_primary
+        {
+            if let Some(cached) = platform
+                .store
+                .deployments()?
+                .into_iter()
+                .find(|d| &d.application == name)
+            {
+                let release = platform.store.load_release(name, &cached.release)?;
+                platform.validate_companion(&release)?;
+                let previous = cached
+                    .previous
+                    .as_ref()
+                    .map(|hash| platform.store.load_release(name, hash))
+                    .transpose()?;
+                let mut releases = vec![&release];
+                if let Some(previous) = &previous {
+                    releases.push(previous);
+                }
+                replica
+                    .database
+                    .lock()?
+                    .publish_companion_deployment(&cached, &releases)?;
+                desired = Some(cached);
+            }
+        }
+        let Some(desired) = desired else {
+            continue;
+        };
+        ensure!(
+            &desired.application == name && desired.generation > 0,
+            "invalid companion deployment identity"
+        );
+        let existing = platform.applications.lock().get(name).cloned();
+        let changed = existing
+            .as_ref()
+            .is_none_or(|app| *app.deployment.lock() != desired);
+        let app = if changed {
+            if let Some(app) = &existing {
+                retire(app);
+            }
+            let database = replica.database.lock()?;
+            let release = database.deployment_release(&desired.release)?;
+            platform.validate_companion(&release)?;
+            ensure!(
+                &release.manifest.name == name,
+                "companion release belongs to another application"
+            );
+            platform.store.save_release(&release)?;
+            if let Some(previous) = &desired.previous {
+                platform
+                    .store
+                    .save_release(&database.deployment_release(previous)?)?;
+            }
+            drop(database);
+            platform.store.save_deployment(&desired)?;
+            let app = match existing {
+                Some(app) => {
+                    *app.deployment.lock() = desired.clone();
+                    app.set_release(release);
+                    app
+                }
+                None => platform.create_app(desired.clone(), release)?,
+            };
+            platform
+                .applications
+                .lock()
+                .insert(name.clone(), app.clone());
+            app
+        } else {
+            existing.unwrap()
+        };
+        if !replica.authoritative() || !owner_enabled || !desired.enabled {
+            retire(&app);
+            continue;
+        }
+        let needs_execution = app
+            .process
+            .lock()
+            .as_mut()
+            .is_none_or(|process| process.exited().unwrap_or(true));
+        if needs_execution {
+            retire(&app);
+            let release = app.release.lock().clone();
+            app.database.lock()?.prepare(&release)?;
+            let execution = platform.launch(&app, &release, &desired.release)?;
+            app.require_authority()?;
+            *app.process.lock() = Some(execution);
+            *app.error.lock() = None;
+        }
     }
     Ok(())
 }
@@ -175,7 +301,7 @@ pub(super) async fn fence(platform: Arc<Platform>) {
             .applications
             .lock()
             .values()
-            .filter(|app| app.replica.is_some())
+            .filter(|app| app.execution_replica.is_some())
             .cloned()
             .collect();
         for app in apps {
@@ -229,7 +355,7 @@ pub(super) async fn route(platform: &Platform, mut request: Request) -> ApiResul
     } else {
         None
     };
-    let Some(replica) = name.and_then(|name| platform.replicas.get(&name)) else {
+    let Some(replica) = name.and_then(|name| platform.execution_replica(&name)) else {
         return Ok(Routed::Local(request));
     };
     if replica.authoritative() {
@@ -257,7 +383,7 @@ pub(super) async fn route(platform: &Platform, mut request: Request) -> ApiResul
             )
         })?
         .map_err(|_| ApiError(StatusCode::PAYLOAD_TOO_LARGE, "request too large".into()))?;
-    let mut upstream = platform.client.request(
+    let mut upstream = replica.client.request(
         parts.method,
         format!(
             "{endpoint}{}",

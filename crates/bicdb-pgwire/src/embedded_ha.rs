@@ -113,6 +113,18 @@ impl EmbeddedHaDatabase {
         Ok(())
     }
 
+    /// Serve authenticated protocol clients through the exact HA admission,
+    /// synchronous acknowledgement and shutdown lifecycle used by this host.
+    /// A second shared server would not share those fences or quorum state.
+    pub fn authenticated_protocol_server(&self) -> Result<Arc<PgWireServer>> {
+        if !self.server.config.require_auth {
+            return Err(PgWireError::Server(
+                "embedded SQL access requires mandatory authentication".into(),
+            ));
+        }
+        Ok(self.server.clone())
+    }
+
     pub fn writer_lease(&self) -> HaWriterLease {
         HaWriterLease {
             server: Arc::downgrade(&self.server),

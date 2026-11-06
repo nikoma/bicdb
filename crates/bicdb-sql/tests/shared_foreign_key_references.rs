@@ -117,3 +117,31 @@ fn savepoint_rollback_releases_only_new_reference_reservations() {
         );
     }
 }
+
+#[test]
+fn deferred_point_checks_follow_final_child_identity_and_discard_deleted_rows() {
+    for profile in PROFILES {
+        let (_root, db) = seeded(profile, "DEFERRABLE INITIALLY DEFERRED");
+        let mut child = SqlSession::new_shared(&db);
+        child.execute("BEGIN; INSERT INTO children VALUES(1,999); DELETE FROM children WHERE id=1; INSERT INTO children VALUES(2,1); UPDATE children SET id=3 WHERE id=2; COMMIT").unwrap();
+        assert_eq!(
+            child.execute("SELECT id,pid FROM children").unwrap().rows,
+            vec![vec![SqlValue::Int(3), SqlValue::Int(1)]],
+            "{profile}"
+        );
+        child
+            .execute("BEGIN; UPDATE children SET pid=999 WHERE id=3")
+            .unwrap();
+        assert_eq!(
+            child.execute("COMMIT").unwrap_err().sqlstate(),
+            "23503",
+            "{profile}"
+        );
+        child.execute("ROLLBACK").unwrap();
+        assert_eq!(
+            child.execute("SELECT pid FROM children").unwrap().rows,
+            vec![vec![SqlValue::Int(1)]],
+            "{profile}"
+        );
+    }
+}

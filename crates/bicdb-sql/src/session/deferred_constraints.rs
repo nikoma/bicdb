@@ -242,9 +242,7 @@ pub(crate) fn validate_foreign_key_hook(
         return Ok(true);
     };
     let Some(constraint) = schema.constraints.iter().find(|constraint| matches!(constraint, ConstraintSchema::ForeignKey { constraint_id, .. } if constraint_id == &check.constraint_id)) else { return Ok(true); };
-    let record = current_integrity_records(db, tx, &schema.name)?
-        .into_iter()
-        .find(|record| record.id == check.record_id);
+    let record = current_integrity_record(db, tx, &schema.name, &check.record_id)?;
     if let Some(record) = record {
         validate_foreign_key_constraint_immediate(
             db,

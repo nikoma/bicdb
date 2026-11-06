@@ -1073,6 +1073,22 @@ fn json_unique_existing_records(
     current_integrity_records(db, tx, table)
 }
 
+/// One current committed row with this transaction's final write overlaid.
+/// Integrity hooks carry the row identity; scanning its whole collection would
+/// make deferred validation quadratic in the number of changed child rows.
+pub(crate) fn current_integrity_record(
+    db: &BicDb,
+    tx: Option<&Transaction>,
+    table: &str,
+    id: &str,
+) -> Result<Option<Record>> {
+    let committed = db.get_unchecked(table, id)?;
+    Ok(match tx {
+        Some(tx) => tx.overlay_pending_write(table, id, committed),
+        None => committed,
+    })
+}
+
 pub(crate) fn current_integrity_records(
     db: &BicDb,
     tx: Option<&Transaction>,

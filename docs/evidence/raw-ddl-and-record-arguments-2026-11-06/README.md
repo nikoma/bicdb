@@ -19,7 +19,7 @@ pre-existing ignored tests. Eight focused integration suites and the pgwire unit
 suite passed; exact counts and commands are in qualification.json and logs.
 
 Validation used source base 978e6dd; subsequent main changes through f13ccb0
-were Oracle examples and documentation, with no Rust changes. Builds ran with
+and a9bc1e8 were Oracle examples and documentation, with no Rust changes. Builds ran with
 incremental compilation disabled and active RAM/disk headroom monitoring.
 Completed test executables were hashed and retired, preserving reusable build
 libraries and frozen runnable candidates. This is engine validation, not evidence

@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parent
+STORED_SOURCE_KINDS = ('FUNCTION', 'PROCEDURE', 'TYPE', 'TYPE BODY', 'PACKAGE', 'PACKAGE BODY', 'TRIGGER')
 
 
 def cell(value):
@@ -58,6 +59,58 @@ def decode_reference_row(row, columns):
         elif column['type'] in {'BLOB', 'CLOB'} and values[i] is not None and hasattr(values[i], 'read'):
             values[i] = values[i].read()
     return values
+
+
+def stored_source(cursor, objects):
+    """Capture supported stored-source categories without silently omitting bodies."""
+    expected = [(obj['kind'], obj['name']) for obj in objects if obj['kind'] in STORED_SOURCE_KINDS]
+    expected_set = set(expected)
+    if len(expected) != len(expected_set):
+        raise ValueError('duplicate stored object identity in source catalog')
+    if any(not isinstance(name, str) or not name for kind, name in expected):
+        raise ValueError('stored source object names must be nonempty identifiers')
+    if any((kind.removesuffix(' BODY'), name) not in expected_set
+           for kind, name in expected if kind in {'PACKAGE BODY', 'TYPE BODY'}):
+        raise ValueError('stored source body has no catalog declaration')
+    kinds = ','.join("'"+kind+"'" for kind in STORED_SOURCE_KINDS)
+    cursor.execute('SELECT name,type,line,text FROM user_source WHERE type IN ('+kinds+') ORDER BY type,name,line')
+    definitions = {}
+    for name, kind, line, text in cursor:
+        if (kind, name) not in expected_set:
+            raise ValueError('stored source has no matching catalog object')
+        lines = definitions.setdefault((kind, name), [])
+        if (isinstance(line, bool) or not isinstance(line, (int, decimal.Decimal)) or
+                (isinstance(line, decimal.Decimal) and not line.is_finite()) or
+                line != len(lines)+1):
+            raise ValueError('stored source line numbers must form a complete ordered sequence')
+        if text is not None and not isinstance(text, str):
+            raise ValueError('stored source text must be character data')
+        lines.append('\n' if text is None else text)
+    if set(definitions) != expected_set:
+        raise ValueError('stored source is missing catalog definitions')
+    cursor.execute('SELECT trigger_name,status FROM user_triggers ORDER BY trigger_name')
+    statuses = {}
+    for name, status in cursor:
+        if name in statuses or status not in {'ENABLED', 'DISABLED'}:
+            raise ValueError('invalid or duplicate source trigger status')
+        statuses[name] = status
+    if set(statuses) != {name for kind, name in expected if kind == 'TRIGGER'}:
+        raise ValueError('trigger status catalog differs from stored source objects')
+    groups = dict(routines=[], types=[], type_bodies=[], packages=[], triggers=[])
+    for (kind, name), lines in sorted(definitions.items()):
+        if not any(line.strip() for line in lines):
+            raise ValueError('stored source definition is empty')
+        ddl = 'CREATE OR REPLACE ' + ''.join(lines)
+        item = dict(kind=kind, name=name, ddl=ddl, source_line_count=len(lines),
+                    ddl_sha256=hashlib.sha256(ddl.encode('utf-8')).hexdigest())
+        if kind == 'TRIGGER': item['status'] = statuses[name]
+        group = {'TYPE': 'types', 'TYPE BODY': 'type_bodies', 'PACKAGE': 'packages',
+                 'PACKAGE BODY': 'packages', 'TRIGGER': 'triggers'}.get(kind, 'routines')
+        groups[group].append(item)
+    groups['stored_source_encoding'] = dict(version=1, kinds=list(STORED_SOURCE_KINDS),
+        object_coverage_verified=True, line_numbers_verified=True, trigger_enabled_state_captured=True,
+        wrapped_source_unwrapped=False, execution_qualified=False)
+    return groups
 
 
 def export(config_path, directory):
@@ -122,17 +175,13 @@ def export(config_path, directory):
             cursor.execute('SELECT view_name,text,read_only FROM user_views ORDER BY view_name')
             for name, definition, read_only in cursor:
                 views.append(dict(name=name, query=definition, read_only=read_only))
-            cursor.execute("SELECT name,type,line,text FROM user_source WHERE type IN ('FUNCTION','PROCEDURE','TYPE') ORDER BY type,name,line")
-            definitions = {}
-            for name, kind, line, text in cursor:
-                definitions.setdefault((kind, name), []).append(text)
-            for (kind, name), lines in definitions.items():
-                (types if kind == 'TYPE' else routines).append(dict(kind=kind, name=name, ddl='CREATE OR REPLACE ' + ''.join(lines)))
+            source = stored_source(cursor, objects)
+            routines, types = source['routines'], source['types']
             # Publish the catalog first, so schema implementation can progress
             # independently while the consistent row export is still running.
             catalog = dict(format=1, source_schema=config['user'].upper(), objects=objects,
                            columns=columns, constraints=constraints, indexes=indexes,
-                           routines=routines, views=views, types=types)
+                           views=views, **source)
             (directory / 'catalog.json').write_text(json.dumps(catalog, indent=2, default=str) + '\n')
             for table in table_names:
                 filename = f'table-{len(tables):04d}.jsonl'
@@ -162,12 +211,14 @@ def export(config_path, directory):
                         source_schema=config['user'].upper(), started_at=started,
                         snapshot='Oracle read-only transaction', observed_scn=observed_scn,
                         cdc_resume_position=False, objects=objects, tables=tables, columns=columns,
-                        constraints=constraints, indexes=indexes, routines=routines, views=views, types=types,
+                        constraints=constraints, indexes=indexes, views=views, **source,
                         adaptations=['logical schema is represented by catalog metadata; physical storage is not copied',
                                      'foreign keys include source validation/deferment state for explicit migration'])
     (directory / 'manifest.json').write_text(json.dumps(manifest, indent=2, default=str) + '\n')
     summary = dict(tables=len(tables), rows=sum(t['rows'] for t in tables), views=len(views),
                    routines=len(routines), types=len(types), indexes=len(indexes),
+                   package_definitions=len(source['packages']), type_bodies=len(source['type_bodies']),
+                   triggers=len(source['triggers']),
                    oracle_database_version=manifest['oracle_database_version'], invalid_objects=0)
     print(json.dumps(summary, indent=2))
     return summary

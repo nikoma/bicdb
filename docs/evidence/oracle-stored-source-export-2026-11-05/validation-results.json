@@ -1,0 +1,17 @@
+{
+  "format": 1,
+  "stored_source_kinds": ["FUNCTION", "PROCEDURE", "TYPE", "TYPE BODY", "PACKAGE", "PACKAGE BODY", "TRIGGER"],
+  "offline_stored_source_tests": {"passed": 8, "failed": 0, "errors": 0, "skipped": 0},
+  "existing_temporal_export_tests": {"passed": 5, "failed": 0, "errors": 0, "skipped": 0},
+  "existing_migration_value_tests": {"passed": 14, "failed": 0, "errors": 0, "skipped": 0},
+  "live_oracle_source_acceptance": {"passed": 0, "failed": 0, "skipped": 1, "dependency": "ORACLE_SOURCE_CAPTURE_CONFIG naming an empty disposable owner with required privileges"},
+  "legacy_ddl_reconstruction_control": {"routines": 62, "types": 1, "ddl_strings_identical": 63, "live_dictionary_query": false},
+  "live_oracle_capture_qualified": false,
+  "package_execution_qualified": false,
+  "trigger_execution_qualified": false,
+  "object_method_execution_qualified": false,
+  "application_qualified": false,
+  "engine_changed": false,
+  "accepted_application_updated": false,
+  "github_workflows_changed_or_dispatched": false
+}

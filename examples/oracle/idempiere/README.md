@@ -100,9 +100,13 @@ schema objects or application workflows. The original seed is preserved separate
 Use a private working directory outside the repository. `prepare_seed.py`
 verifies pinned archive and dump lengths and SHA-256 hashes, and reuses only
 verified existing files. `export_reference.py` connects as a dedicated application
-schema owner, opens a read-only transaction, exports complete logical catalogs
+schema owner, opens a read-only transaction, exports supported logical catalogs
 and row files, and hashes each row file. Its observed SCN is diagnostic information,
 not a CDC or cutover guarantee. No passwords are emitted in the report.
+The [stored-source contract](../../../docs/oracle-stored-source-export.md) covers
+standalone routines, package specs/bodies, type declarations/bodies and trigger
+definitions with enabled state. Exporting definitions does not qualify their
+execution on BicDB.
 
 The reference connection JSON contains `host`, `port`, `service_name`, `user` and
 `password_file`; the password is read from that private file. Install python-oracledb

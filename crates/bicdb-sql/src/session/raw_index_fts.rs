@@ -834,6 +834,7 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_query(&mut self, query: &Query) -> Result<SqlResult> {
+        self.ensure_read_only_query(query)?;
         if self.oracle_autonomous && query_has_row_locks(query) {
             // A locking read starts an Oracle transaction even if SELECT INTO
             // subsequently raises NO_DATA_FOUND and its handler catches it.

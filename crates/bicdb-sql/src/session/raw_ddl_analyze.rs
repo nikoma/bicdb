@@ -742,6 +742,11 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn apply_setting_value(&mut self, setting: String, value: SqlValue) -> Result<()> {
+        if setting == super::read_only::SETTING {
+            return Err(SqlError::Unsupported(
+                "transaction access mode must be changed with SET TRANSACTION".into(),
+            ));
+        }
         if setting == "bicdb.sql_profile" {
             return Err(SqlError::Unsupported(
                 "bicdb.sql_profile is fixed at database open and connection startup".to_string(),
@@ -1015,6 +1020,7 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_statement(&mut self, statement: &Statement) -> Result<SqlResult> {
+        self.ensure_read_only_statement(statement)?;
         if matches!(statement, Statement::Merge(_)) {
             return self
                 .with_statement_transaction(|session| session.execute_statement_inner(statement));

@@ -32,3 +32,8 @@ SQL behavior, application workflows, an Oracle migration or production use.
 The [pinned application inventory](evidence/idempiere-upstream-test-inventory-2026-11-05/README.md)
 provides a reproducible starting point for tracking remaining application classes
 alongside business workflows and recovery/cutover checks.
+
+The [original method-source check](evidence/idempiere-method-source-count-2026-11-06/README.md)
+measured 24 argument sets for the pinned bundle's single parameterized method.
+That gives 1,464 planned invocations from 1,441 directly annotated methods;
+actual framework discovery and successful execution remain separate gates.

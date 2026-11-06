@@ -1172,7 +1172,11 @@ pub(crate) fn begin_buffered_transaction(
             tx.set_snapshot_isolation(true, state.last_commit_seq)?;
             tx.set_statement_write_conflict_check(true)?;
         }
+        let read_only = state.session_state.transaction_read_only();
         state.session_state.begin_transaction();
+        state
+            .session_state
+            .set_transaction_read_only_label(read_only)?;
         state
             .session_state
             .set_transaction_isolation_label(isolation)?;

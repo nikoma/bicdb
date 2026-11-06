@@ -1,0 +1,55 @@
+{
+  "status": "SOURCE_QUALIFIED_NOT_DEPLOYED",
+  "upstream_base": "4bb612e1ffe3c280915703c9c2cdde2105ab1d68",
+  "logs": {
+    "negative-sql": {
+      "raw_sha256": "c54b38b0523381da3b02b886bec6face3c2ab3bb6d895c3ee857cfca3b0d13ce",
+      "test_results": [
+        "test result: FAILED. 0 passed; 6 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s"
+      ],
+      "command": null
+    },
+    "negative-wire": {
+      "raw_sha256": "a44ccaa970bb3cdf16c89c074b06c417219085b5aeb058754560a82554f6f87f",
+      "test_results": [
+        "test result: FAILED{\"timestamp\":1793953257,\"event\":\"connection.closed\",\"severity\":\"info\",\"fields\":{\"connection_id\":2}}. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out"
+      ],
+      "command": null
+    },
+    "sql-final": {
+      "raw_sha256": "9798c2b044bb16df65231c7c3f7a6adcc22364d5156e31f4bc424f8feec78d32",
+      "test_results": [
+        "test result: ok. 722 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 27.97s",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s"
+      ],
+      "command": null
+    },
+    "protocol-final": {
+      "raw_sha256": "25141bc27ca72bc6782d6efee2dccf1928c72d971dd1717a619543c3df2fd6df",
+      "test_results": [
+        "test result: ok. 183 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.35s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s"
+      ],
+      "command": null
+    },
+    "initial-memory-regression": {
+      "raw_sha256": "4d8a920b0df665e34a7c30f0098ca75c1d4976beef4a2ef15d3aa0d2e0c12f50",
+      "test_results": [
+        "test result: FAILED. 182 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.16s"
+      ],
+      "command": null
+    }
+  },
+  "source_sha256": {
+    "crates/bicdb-pgwire/src/lib.rs": "39b109c13f9ede272b21cb8608fbb245ef1bd601886b3eeafb9fb5d1107c4042",
+    "crates/bicdb-pgwire/src/sql_parsing.rs": "a317ee4ee03e3162edfeb631d4ac5a4ba6c2391f5f664994d573179da36f347d",
+    "crates/bicdb-sql/src/engine.rs": "31f45428749d1384e7e51b9fa12264ae1316fa8c0ea91972f6c2550784b000b3",
+    "crates/bicdb-sql/src/session.rs": "4a6ab00522c39deecbae14ce5bd5b1ce42852652a5efeb8b3d2be862e4594e69",
+    "crates/bicdb-sql/src/session/raw_ddl_analyze.rs": "c5b352976b7fc652821060e9780b0f14395d253c16dba17640803a1172f05e79",
+    "crates/bicdb-sql/src/session/raw_index_fts.rs": "53b392a62f47bc57356d23cb08f707b79553ffdfcd134c03d273d523f3c603f6",
+    "crates/bicdb-sql/src/session/txn_update.rs": "2379672e7cf1ceb41fdb00a62e53dc0fc7611114d016778ab3eb2c8595031b3f",
+    "crates/bicdb-sql/src/session/read_only.rs": "5807c1699554498a96d333675b96ecc3fd45ed57bbc100d677f324a5b779b524",
+    "crates/bicdb-sql/tests/read_only_transactions.rs": "f993ddea90571c2daaaee569790c4c2086f8506bc72f7886cae6f1bfa1258d19",
+    "crates/bicdb-pgwire/tests/read_only_transactions.rs": "abe3ef8650835785b9a55080fbc7f7df53fda5d448dffad9ed614d220655419e"
+  }
+}

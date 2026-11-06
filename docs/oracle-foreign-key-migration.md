@@ -100,6 +100,13 @@ python examples/oracle/idempiere/import_bicdb.py \
   --writers-quiesced --resume
 ```
 
+Completed declarations are validated against the complete initial catalog
+inventory before probes or new DDL. The installation loop starts after that
+validated prefix, avoiding another individual catalog query for every completed
+key. Pending or unjournaled entries retain individual checks and each newly
+installed relationship is read back. These rules require the same quiesced
+writers/schema changes and unchanged row fingerprints as the rest of resume.
+
 A matching relationship installed just before a journal write can be adopted on
 resume. A missing or changed relationship already recorded as completed is an
 error. Source/endpoint journal mismatches leave the prior journal untouched.

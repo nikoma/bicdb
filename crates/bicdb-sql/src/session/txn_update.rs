@@ -5100,6 +5100,7 @@ impl<'db> SqlSession<'db> {
         privileges: &[&str],
         change: impl FnOnce(&mut SequenceSchema) -> (Result<T>, bool),
     ) -> Result<T> {
+        self.require_transaction_write()?;
         self.cancellation.check()?;
         let mut sequence = load_sequence_required(self.db_ref(), sequence_name)?;
         self.require_sequence_privilege(&sequence, privileges)?;

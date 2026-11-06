@@ -84,6 +84,14 @@ pub(crate) fn convert_text_arguments(
 
 pub(crate) fn lower_expression(expr: &mut Expr) -> Result<()> {
     match expr {
+        Expr::Like { escape_char, .. } if escape_char.is_none() => {
+            // Oracle has no implicit escape character. The native PostgreSQL
+            // evaluator uses an empty explicit escape to disable its default
+            // backslash. Inject only after source empty strings became NULL;
+            // repeated lowering leaves the execution-local sentinel intact.
+            *escape_char = Some(sqlparser::ast::Value::SingleQuotedString(String::new()).into());
+        }
+
         Expr::Trim {
             expr: source,
             trim_where,

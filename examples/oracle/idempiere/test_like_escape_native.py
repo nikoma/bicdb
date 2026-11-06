@@ -31,6 +31,17 @@ class LikeEscapeCases:
                 self.assertEqual(connection.execute(sql).fetchall(), [expected])
         self.assertEqual(connection.execute("SELECT label FROM pattern_rows WHERE label LIKE %s ESCAPE '|'", ('I|_%',)).fetchall(), [('I_name',)])
 
+    def test_default_escape_keeps_postgres_and_oracle_rules_independent(self):
+        connection = self.fixture()
+        query = "SELECT CASE WHEN %s LIKE %s THEN 1 ELSE 0 END"
+        self.assertEqual(connection.execute(query, ('a_b', r'a\_b')).fetchall(),
+                         [(1 if self.profile == 'postgres' else 0,)])
+        explicit = r"SELECT CASE WHEN 'a_b' LIKE 'a\_b' ESCAPE '\' THEN 1 ELSE 0 END"
+        self.assertEqual(connection.execute(explicit).fetchall(), [(1,)])
+        self.assertEqual(connection.execute("SELECT CASE WHEN %s NOT LIKE %s THEN 1 ELSE 0 END",
+                                            ('a_b', r'a\_b')).fetchall(),
+                         [(0 if self.profile == 'postgres' else 1,)])
+
     def test_nested_patterns_comments_and_literals_preserve_grammar(self):
         connection = self.fixture()
         self.assertEqual(connection.execute("SELECT label FROM pattern_rows WHERE label LIKE (CASE WHEN 'a_b' LIKE 'a|_b' ESCAPE '|' THEN 'I|_%' ELSE 'none' END) /* ESCAPE is syntax here */ ESCAPE '|' AND 'ESCAPE'='ESCAPE'").fetchall(), [('I_name',)])

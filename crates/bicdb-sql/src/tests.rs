@@ -8838,3 +8838,56 @@ fn exists_candidate_probes_bound_unindexed_multi_column_correlation() {
         execute(&mut session, "ROLLBACK").unwrap();
     }
 }
+
+#[test]
+fn primary_key_lists_preserve_numeric_identity_and_pending_changes() {
+    for kind in ["INTEGER", "NUMERIC(30,4)"] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session
+            .execute(&format!(
+                "CREATE TABLE list_keys(id {kind} PRIMARY KEY, label TEXT)"
+            ))
+            .unwrap();
+        session
+            .execute("INSERT INTO list_keys VALUES(1,'one'),(2,'two'),(3,'three')")
+            .unwrap();
+        let query =
+            "SELECT k.label FROM list_keys k WHERE k.id IN(1.0000,2,2,NULL,99) ORDER BY k.id";
+        assert_eq!(
+            session.execute(query).unwrap().rows,
+            vec![
+                vec![SqlValue::String("one".into())],
+                vec![SqlValue::String("two".into())]
+            ]
+        );
+        session.execute("BEGIN").unwrap();
+        session.execute("DELETE FROM list_keys WHERE id=1").unwrap();
+        session
+            .execute("INSERT INTO list_keys VALUES(99,'pending')")
+            .unwrap();
+        assert_eq!(
+            session.execute(query).unwrap().rows,
+            vec![
+                vec![SqlValue::String("two".into())],
+                vec![SqlValue::String("pending".into())]
+            ]
+        );
+        assert!(session
+            .execute("SELECT * FROM list_keys WHERE id IN(NULL)")
+            .unwrap()
+            .rows
+            .is_empty());
+        session.execute("ROLLBACK").unwrap();
+        assert_eq!(session.execute(query).unwrap().rows.len(), 2);
+        assert_eq!(
+            session
+                .execute("SELECT * FROM list_keys WHERE id NOT IN(1,NULL)")
+                .unwrap()
+                .rows
+                .len(),
+            0
+        );
+    }
+}

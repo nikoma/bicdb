@@ -23,6 +23,7 @@ pub(crate) struct ExistsProbeMemo {
 struct ProbeEntry {
     query: Box<Query>,
     columns: Vec<String>,
+    env: Vec<RelationColumns>,
     plan: Option<Rc<CandidateProbe>>,
 }
 
@@ -302,7 +303,16 @@ impl SqlEngine<'_> {
             .entries
             .borrow()
             .iter()
-            .find(|entry| entry.query.as_ref() == query && entry.columns == columns)
+            .find(|entry| {
+                entry.query.as_ref() == query
+                    && entry.columns == columns
+                    && entry.env.len() == env.len()
+                    && entry.env.iter().zip(env).all(|(left, right)| {
+                        left.alias == right.alias
+                            && left.row_type == right.row_type
+                            && left.columns == right.columns
+                    })
+            })
             .map(|entry| entry.plan.clone());
         let plan = match cached {
             Some(plan) => plan,
@@ -319,6 +329,7 @@ impl SqlEngine<'_> {
                     .push(ProbeEntry {
                         query: Box::new(query.clone()),
                         columns: columns.to_vec(),
+                        env: env.to_vec(),
                         plan: plan.clone(),
                     });
                 plan
@@ -538,5 +549,46 @@ impl SqlEngine<'_> {
             primary_key,
             keys,
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exists_candidate_probes_decline_hidden_effects_and_row_policies() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        {
+            let mut session = SqlSession::new(&mut db);
+            session
+                .execute("CREATE TABLE probe_source(id INTEGER PRIMARY KEY)")
+                .unwrap();
+            session
+                .execute("CREATE TABLE probe_protected(id INTEGER PRIMARY KEY)")
+                .unwrap();
+            session
+                .execute("ALTER TABLE probe_protected ENABLE ROW LEVEL SECURITY")
+                .unwrap();
+            session.execute("CREATE SEQUENCE probe_sequence").unwrap();
+            session
+                .execute("CREATE VIEW probe_view AS SELECT nextval('probe_sequence') AS id")
+                .unwrap();
+        }
+        for (sql, expected) in [
+            ("SELECT * FROM probe_source r WHERE EXISTS(SELECT * FROM probe_source c WHERE c.id=r.id)", true),
+            ("SELECT * FROM probe_source", false),
+            ("SELECT nextval('probe_sequence') FROM probe_source r WHERE EXISTS(SELECT * FROM probe_source c WHERE c.id=r.id)", false),
+            ("SELECT * FROM probe_source r WHERE EXISTS(SELECT * FROM probe_view c WHERE c.id=r.id)", false),
+            ("SELECT * FROM probe_source r WHERE EXISTS(SELECT * FROM probe_protected c WHERE c.id=r.id)", false),
+            ("SELECT * FROM probe_protected r WHERE EXISTS(SELECT * FROM probe_source c WHERE c.id=r.id)", false),
+            ("SELECT * FROM probe_source r WHERE EXISTS(SELECT * FROM probe_source c WHERE c.id=r.id FOR UPDATE)", false),
+            ("WITH changed AS (DELETE FROM probe_source RETURNING id) SELECT * FROM probe_source r WHERE EXISTS(SELECT * FROM changed c WHERE c.id=r.id)", false),
+        ] {
+            let statements = Parser::parse_sql(&PostgreSqlDialect {}, sql).unwrap();
+            let Statement::Query(query) = &statements[0] else { panic!("expected query"); };
+            assert_eq!(probe_query_safe(&db, query), expected, "{sql}");
+        }
     }
 }

@@ -1,0 +1,41 @@
+{
+  "format": 1,
+  "tool_source_commit": "e47ec112232b793143dbc4dccf6b448679c545a6",
+  "tool_file_sha256": {
+    "examples/oracle/idempiere/foreign_keys.py": "11cec236be08f1d61272d77bf1601de41677085d2c76a24d17c61f33f3864aab",
+    "examples/oracle/idempiere/test_foreign_keys.py": "a0c97c7157199fdaa3de598bcdb7bf42bba0eaba4227acddab8b9e7a53c69b34"
+  },
+  "before_source_commit": "ec7c862d4cd40cdd4dcaeef1e3c8d7d416899468",
+  "native_binary_source_commit": "5e5fecc3ca279f2e3ea3e37af0c244e11bbb69ea",
+  "native_binary_sha256": "1cd37fe086195a867f46e359d532c4d4f70a720d335ebb69e4307f05121f0860",
+  "before": {
+    "tests": 1,
+    "failures": 1,
+    "full_catalog_and_individual_constraint_reads": 4,
+    "expected_reads": 1,
+    "log_sha256": "a4809ee8313522359282fd2826ea773a1ff05ccc7d019c521758a3ec3596a3a4"
+  },
+  "after": {
+    "tests": 14,
+    "passed": 14,
+    "failures": 0,
+    "skipped": 0,
+    "full_catalog_constraint_reads_for_completed_prefix": 1,
+    "individual_reads_for_completed_prefix": 0,
+    "pending_missing_and_unjournaled_key_reads": 3,
+    "changed_completed_definition_refused": true,
+    "row_fingerprints_preserved": true,
+    "log_sha256": "a83df12fd624ea5801ab36bced47474589a15a3daf7c1849f6595be729ed631b"
+  },
+  "resource_guard": {
+    "status": "completed",
+    "peak_group_rss_bytes": 177373184,
+    "minimum_required_available_gib": 17.0,
+    "minimum_observed_available_bytes": 21003890688,
+    "compiler_rebuild": false
+  },
+  "running_pristine_migration_changed": false,
+  "production_performance_qualified": false,
+  "application_qualified": false,
+  "goal_complete": false
+}

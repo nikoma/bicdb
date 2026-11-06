@@ -251,6 +251,16 @@ impl PagedRecords {
         &self.store
     }
 
+    pub fn free_page_extents(
+        &self,
+        max_pages: u64,
+        max_read_bytes: u64,
+    ) -> Result<Option<bicdb_page::FreePageExtents>> {
+        self.store
+            .free_page_extents(max_pages, max_read_bytes)
+            .map_err(page_error)
+    }
+
     pub(crate) fn page_size(&self) -> u32 {
         self.store.page_size()
     }

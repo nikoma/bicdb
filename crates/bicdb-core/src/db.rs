@@ -3441,6 +3441,18 @@ pub struct PagedStorageOpsHandle {
 }
 
 impl PagedStorageOpsHandle {
+    /// Explicitly admitted allocator inventory, unlike the scrape-safe scalar
+    /// snapshot. `None` means insufficient budget, never an empty inventory.
+    /// Obtain this capability with `BicDb::paged_storage_ops_handle`; absence
+    /// of the capability separately identifies non-paged storage.
+    pub fn free_page_extents(
+        &self,
+        max_pages: u64,
+        max_read_bytes: u64,
+    ) -> Result<Option<bicdb_page::FreePageExtents>> {
+        self.paged.free_page_extents(max_pages, max_read_bytes)
+    }
+
     /// Online, checkpoint-consistent backup; see
     /// [`BicDb::create_online_backup`] for the artifact contract.
     ///

@@ -10,6 +10,17 @@ use base64::Engine;
 use bicdb_app_host::manifest::Release;
 use serde_json::{json, Value};
 
+fn test_binary() -> std::path::PathBuf {
+    let binary = std::env::var_os("BICDB_TEST_SUPERVISOR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| env!("CARGO_BIN_EXE_bic").into());
+    assert!(
+        binary.is_absolute(),
+        "causal supervisor override must be an absolute frozen binary"
+    );
+    binary
+}
+
 const TOKEN: &str = "native-state-test-management-token-0000000000000000";
 #[path = "support/state_network.rs"]
 mod state_network;
@@ -136,7 +147,7 @@ impl Group {
             reservations,
         };
         if existing {
-            let mut command = Command::new(env!("CARGO_BIN_EXE_bic"));
+            let mut command = Command::new(test_binary());
             command
                 .arg("--data")
                 .arg(group.root.path().join("n0"))
@@ -163,7 +174,7 @@ impl Group {
             group.kill(0);
         }
         if remote {
-            let mut command = Command::new(env!("CARGO_BIN_EXE_bic"));
+            let mut command = Command::new(test_binary());
             command
                 .arg("--data")
                 .arg(group.root.path().join("worker"))
@@ -217,7 +228,7 @@ impl Group {
         self.reservations[index].take();
         self.reservations[index + 3].take();
         self.reservations[index + 16].take();
-        let mut command = Command::new(env!("CARGO_BIN_EXE_bic"));
+        let mut command = Command::new(test_binary());
         command
             .arg("--data")
             .arg(self.root.path().join(format!("n{index}")))
@@ -302,7 +313,7 @@ impl Group {
             .client
             .post(format!("{}/v1/apps", self.base(index)))
             .bearer_auth(TOKEN)
-            .timeout(Duration::from_secs(30))
+            .timeout(Duration::from_secs(120))
             .json(release)
             .send()
             .unwrap();
@@ -469,7 +480,7 @@ fn scenario(remote: bool, live_partition: bool) {
         let key = group.root.path().join("backup.key");
         secret(&key, passphrase);
         let recovered = group.root.path().join("recovered");
-        let output = Command::new(env!("CARGO_BIN_EXE_bic"))
+        let output = Command::new(test_binary())
             .arg("--data")
             .arg(&recovered)
             .arg("restore")
@@ -594,7 +605,7 @@ fn an_existing_standalone_catalog_enrolls_without_losing_data_or_receipts() {
     );
 }
 
-fn sql_companion_failover(partition: bool) {
+fn sql_companion_failover(partition: bool, large: bool) {
     let mut group = Group::start_configuration(false, partition, false, false, true);
     let owner = Release::read(
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/platform/counter/bic.json"),
@@ -675,9 +686,28 @@ fn sql_companion_failover(partition: bool) {
             .unwrap();
         assert_eq!(copy.finish().await.unwrap(), 1);
     });
+    let padding = large.then(|| {
+        let mut value = 0x873fd62au32;
+        let bytes: Vec<u8> = (0..20 * 1024 * 1024)
+            .map(|_| {
+                value ^= value << 13;
+                value ^= value >> 17;
+                value ^= value << 5;
+                value as u8
+            })
+            .collect();
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    });
     let companion = |version| {
         let source = format!("import {{createServer}} from 'node:http'; createServer((req,res)=>{{res.setHeader('content-type','application/json');res.end(JSON.stringify({{version:{version},pid:process.pid}}));}}).listen(Number(process.env.PORT),'127.0.0.1');");
-        serde_json::from_value::<Release>(json!({"manifest":{"format":1,"name":"companion","version":format!("{version}"),"runtime":"node_http","entrypoint":"app.mjs","files":["app.mjs"]},"files":{"app.mjs":base64::engine::general_purpose::STANDARD.encode(source)}})).unwrap()
+        let mut release=serde_json::from_value::<Release>(json!({"manifest":{"format":1,"name":"companion","version":format!("{version}"),"runtime":"node_http","entrypoint":"app.mjs","files":["app.mjs"]},"files":{"app.mjs":base64::engine::general_purpose::STANDARD.encode(source)}})).unwrap();
+        if version > 1 {
+            if let Some(padding) = &padding {
+                release.manifest.files.push("padding.bin".into());
+                release.files.insert("padding.bin".into(), padding.clone());
+            }
+        }
+        release
     };
     for version in [1, 2] {
         group.deploy(2, &companion(version));
@@ -888,18 +918,53 @@ fn sql_companion_failover(partition: bool) {
 
 #[test]
 fn authenticated_sql_acknowledgements_and_stateless_companions_survive_host_loss() {
-    sql_companion_failover(false);
+    sql_companion_failover(false, false);
 }
 
 #[test]
 fn authenticated_sql_and_companion_processes_fence_an_isolated_writer() {
-    sql_companion_failover(true);
+    sql_companion_failover(true, false);
+}
+
+#[test]
+fn large_public_packages_remain_quorum_durable_and_recover_without_an_upload() {
+    sql_companion_failover(false, true);
+}
+
+#[test]
+fn an_indeterminate_quorum_commit_returns_service_unavailable() {
+    let group = Group::start(false, true, false);
+    let mut release = Release::read(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/platform/counter/bic.json"),
+    )
+    .unwrap();
+    group.deploy(0, &release);
+    group.network.as_ref().unwrap().isolate();
+    release.manifest.version = "unconfirmed".into();
+    let response = group
+        .client
+        .post(format!("{}/v1/apps", group.base(0)))
+        .bearer_auth(TOKEN)
+        .json(&release)
+        .timeout(Duration::from_secs(30))
+        .send()
+        .unwrap();
+    let status = response.status();
+    let body = response.text().unwrap();
+    assert!(
+        body.contains("durable on the primary but was not confirmed"),
+        "{body}"
+    );
+    assert_eq!(
+        status, 503,
+        "indeterminate replication is not a bad client request"
+    );
 }
 
 fn edge_failover(live_partition: bool) {
     let mut group = Group::start_options(false, live_partition, false, true);
     let edge = format!("http://127.0.0.1:{}", group.ports[6]);
-    let mut command = Command::new(env!("CARGO_BIN_EXE_bic"));
+    let mut command = Command::new(test_binary());
     command
         .arg("--data")
         .arg(group.root.path().join("edge"))

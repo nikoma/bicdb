@@ -23,6 +23,13 @@ UTF-16 units, escapes and padding. Its retained v29 control exposes an existing
 national matching gap. Source evidence is complete for this corpus; runtime,
 durable national column provenance and application qualification remain open.
 
+The [national CAST source-observation checkpoint](evidence/oracle-national-cast-source-2026-11-06/README.md)
+records bounded string truncation, numeric overflow, NLS-sensitive conversions
+and raw AL16UTF16 units, including a lone surrogate. It separates raw-unit
+observations from a failed direct-text decoding attempt. Lossless runtime values,
+assignment/CAST rules, PostgreSQL-driver transport and application qualification
+remain open.
+
 The [correlated EXISTS candidate-probe checkpoint](evidence/sql-correlated-exists-probes-2026-11-06/README.md)
 qualifies bounded statement-local candidate maps and primary-key list lookups,
 with independent PostgreSQL/Oracle-preview result, NULL, duplicate and rollback

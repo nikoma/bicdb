@@ -1,0 +1,13 @@
+{
+  "format": 1,
+  "status": "failed",
+  "container_started": true,
+  "container_restored": true,
+  "original_application_objects_modified": false,
+  "observation_completed": false,
+  "tool_source_commit": "dfcae14",
+  "tool_sha256": "a5e6635f12c7be56d7e2e52a077caad05550d80a1b17f9be8136de90aa80e59d",
+  "container_originally_running": false,
+  "error_type": "UnicodeDecodeError",
+  "detail": "'utf-16-be' codec can't decode bytes in position 0-1: unexpected end of data"
+}

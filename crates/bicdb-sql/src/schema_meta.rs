@@ -3014,16 +3014,16 @@ pub(crate) fn resolve_session_relation_name_if_exists(db: &BicDb, name: &str) ->
 /// Relation lookup is exact so a quoted mixed-case name remains distinct from
 /// its unquoted, lowercase spelling.
 ///
-/// The uncached path builds and
-/// sorts the ENTIRE catalog name list (cloning every CollectionMeta and loading
-/// every view record) per lookup, which ran once or more per statement and
-/// profiled at ~5% of transactional-workload CPU. Entries are validated against the schema/view
-/// catalog generations plus the raw collection count, so any DDL (including
-/// legacy document-API collection creation) invalidates stale names.
+/// Cold lookups probe only the requested collection/view and its supported
+/// public-name alias. Entries use schema/view generations, collection count and
+/// exact collection presence; a document-API drop/create with an unchanged count
+/// must also invalidate positive and negative name results.
 pub(crate) struct RelationNameMemoEntry {
     pub(crate) schema_generation: u64,
     pub(crate) view_generation: u64,
     pub(crate) collection_count: usize,
+    pub(crate) direct_collection_present: bool,
+    pub(crate) legacy_collection_present: bool,
     pub(crate) resolved: Option<String>,
 }
 
@@ -3041,27 +3041,40 @@ pub(crate) fn resolve_relation_name_memoized(db: &BicDb, name: &str) -> Option<S
     let schema_generation = db.collection_generation(SCHEMA_COLLECTION);
     let view_generation = db.collection_generation(VIEW_COLLECTION);
     let collection_count = db.collection_count();
+    let direct_collection_present = db.has_collection(name);
+    let legacy = legacy_public_relation_name(name);
+    let legacy_collection_present = legacy
+        .as_deref()
+        .is_some_and(|name| db.has_collection(name));
     let key = (db_key, name.to_string());
     let hit = RELATION_NAME_MEMO.with(|memo| {
         memo.borrow().get(&key).and_then(|entry| {
             (entry.schema_generation == schema_generation
                 && entry.view_generation == view_generation
-                && entry.collection_count == collection_count)
+                && entry.collection_count == collection_count
+                && entry.direct_collection_present == direct_collection_present
+                && entry.legacy_collection_present == legacy_collection_present)
                 .then(|| entry.resolved.clone())
         })
     });
     if let Some(resolved) = hit {
         return resolved;
     }
-    let names = catalog_table_names(db);
-    let resolved = names
-        .iter()
-        .find(|table| table.as_str() == name)
-        .cloned()
-        .or_else(|| {
-            let legacy = legacy_public_relation_name(name)?;
-            names.iter().find(|table| **table == legacy).cloned()
-        });
+    // Cold lookups must not deserialize every unrelated view body. Use the
+    // same exact storage identities and internal-name exclusions as the full
+    // catalog, then the existing public-name compatibility fallback.
+    let resolved = if (direct_collection_present && !is_internal_sql_collection(name))
+        || graph_virtual_table_names().contains(&name)
+    {
+        Some(name.to_string())
+    } else if let Ok(Some(view)) = load_view(db, name) {
+        Some(view.name)
+    } else {
+        legacy.filter(|legacy| {
+            (legacy_collection_present && !is_internal_sql_collection(legacy))
+                || graph_virtual_table_names().contains(&legacy.as_str())
+        })
+    };
     RELATION_NAME_MEMO.with(|memo| {
         let mut memo = memo.borrow_mut();
         if memo.len() >= RELATION_NAME_MEMO_CAP {
@@ -3073,6 +3086,8 @@ pub(crate) fn resolve_relation_name_memoized(db: &BicDb, name: &str) -> Option<S
                 schema_generation,
                 view_generation,
                 collection_count,
+                direct_collection_present,
+                legacy_collection_present,
                 resolved: resolved.clone(),
             },
         );
@@ -4237,6 +4252,8 @@ pub(crate) fn load_view(db: &BicDb, view: &str) -> Result<Option<ViewSchema>> {
 }
 
 pub(crate) fn list_views(db: &BicDb) -> Result<Vec<ViewSchema>> {
+    #[cfg(test)]
+    VIEW_CATALOG_ENUMERATIONS.with(|count| count.set(count.get() + 1));
     let records = match db.scan_collection(VIEW_COLLECTION) {
         Ok(records) => records,
         Err(BicDbError::CollectionNotFound(_)) => return Ok(Vec::new()),
@@ -4248,6 +4265,150 @@ pub(crate) fn list_views(db: &BicDb) -> Result<Vec<ViewSchema>> {
         .collect::<Result<Vec<_>>>()?;
     views.sort_by(|left, right| left.name.cmp(&right.name));
     Ok(views)
+}
+
+#[cfg(test)]
+thread_local! {
+    static VIEW_CATALOG_ENUMERATIONS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+mod point_relation_lookup_tests {
+    use super::*;
+
+    fn database(root: &std::path::Path) -> BicDb {
+        BicDb::open_with_config(root, bicdb_core::DbConfig::default().with_fsync(false)).unwrap()
+    }
+
+    #[test]
+    fn cold_point_lookups_do_not_enumerate_unrelated_view_definitions() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = database(root.path());
+        {
+            let mut sql = SqlSession::new(&mut db);
+            for index in 0..16 {
+                sql.execute(&format!("CREATE TABLE point_table_{index} (id INT)"))
+                    .unwrap();
+            }
+            for index in 0..8 {
+                sql.execute(&format!(
+                    "CREATE VIEW point_view_{index} AS SELECT '{}' AS value",
+                    "x".repeat(4096)
+                ))
+                .unwrap();
+            }
+        }
+        RELATION_NAME_MEMO.with(|memo| memo.borrow_mut().clear());
+        VIEW_CATALOG_ENUMERATIONS.with(|count| count.set(0));
+        for index in 0..16 {
+            let name = format!("point_table_{index}");
+            assert_eq!(resolve_relation_name_memoized(&db, &name), Some(name));
+        }
+        assert_eq!(
+            resolve_relation_name_memoized(&db, "point_view_3"),
+            Some("point_view_3".into())
+        );
+        assert_eq!(
+            resolve_relation_name_memoized(&db, "missing_relation"),
+            None
+        );
+        assert_eq!(resolve_relation_name_memoized(&db, SCHEMA_COLLECTION), None);
+        for graph in graph_virtual_table_names() {
+            assert_eq!(
+                resolve_relation_name_memoized(&db, graph),
+                Some(graph.to_string())
+            );
+        }
+        VIEW_CATALOG_ENUMERATIONS.with(|count| {
+            assert_eq!(
+                count.get(),
+                0,
+                "point existence resolution must not enumerate all view bodies"
+            )
+        });
+    }
+
+    #[test]
+    fn raw_drop_create_with_the_same_collection_count_refreshes_cached_names() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = database(root.path());
+        db.create_collection("old_raw").unwrap();
+        assert_eq!(
+            resolve_relation_name_memoized(&db, "old_raw"),
+            Some("old_raw".into())
+        );
+        assert_eq!(resolve_relation_name_memoized(&db, "new_raw"), None);
+        let count = db.collection_count();
+        db.drop_collection("old_raw").unwrap();
+        db.create_collection("new_raw").unwrap();
+        assert_eq!(db.collection_count(), count);
+        assert_eq!(resolve_relation_name_memoized(&db, "old_raw"), None);
+        assert_eq!(
+            resolve_relation_name_memoized(&db, "new_raw"),
+            Some("new_raw".into())
+        );
+    }
+
+    #[test]
+    fn exact_quoted_names_namespaces_and_public_view_aliases_stay_distinct() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = database(root.path());
+        {
+            let mut sql = SqlSession::new(&mut db);
+            sql.execute("CREATE SCHEMA \"Private.Q\"").unwrap();
+            sql.execute("CREATE TABLE \"Private.Q\".\"T\"\"Name\" (id INT)")
+                .unwrap();
+            sql.execute("CREATE TABLE \"MixedName\" (id INT)").unwrap();
+            sql.execute("CREATE VIEW \"Legacy.View\" AS SELECT 1 AS value")
+                .unwrap();
+        }
+        let private = relation_name_from_parts(&["Private.Q".into(), "T\"Name".into()]).unwrap();
+        assert_eq!(
+            resolve_relation_name_memoized(&db, &private),
+            Some(private.clone())
+        );
+        assert_eq!(
+            resolve_relation_name_memoized(&db, "MixedName"),
+            Some("MixedName".into())
+        );
+        assert_eq!(resolve_relation_name_memoized(&db, "mixedname"), None);
+        let canonical = relation_name_from_parts(&["public".into(), "Legacy.View".into()]).unwrap();
+        let mut legacy = load_view(&db, &canonical).unwrap().unwrap();
+        legacy.name = "Legacy.View".into();
+        save_view(&mut db, &legacy).unwrap();
+        assert_eq!(
+            resolve_relation_name_memoized(&db, &canonical),
+            Some(canonical.clone())
+        );
+        delete_view(&mut db, &canonical).unwrap();
+        assert_eq!(
+            resolve_relation_name_memoized(&db, &canonical),
+            Some("Legacy.View".into())
+        );
+    }
+
+    #[test]
+    fn transactional_view_drop_and_rollback_refresh_positive_and_negative_results() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = database(root.path());
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("CREATE VIEW point_rollback_view AS SELECT 1 AS value")
+            .unwrap();
+        assert_eq!(
+            resolve_relation_name_memoized(sql.db_ref(), "point_rollback_view"),
+            Some("point_rollback_view".into())
+        );
+        sql.execute("BEGIN; DROP VIEW point_rollback_view").unwrap();
+        assert_eq!(
+            resolve_relation_name_memoized(sql.db_ref(), "point_rollback_view"),
+            None
+        );
+        sql.execute("ROLLBACK").unwrap();
+        assert_eq!(
+            resolve_relation_name_memoized(sql.db_ref(), "point_rollback_view"),
+            Some("point_rollback_view".into())
+        );
+    }
 }
 
 pub(crate) fn save_view(db: &mut BicDb, view: &ViewSchema) -> Result<()> {

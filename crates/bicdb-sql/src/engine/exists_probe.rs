@@ -66,6 +66,18 @@ impl ExistsProbeMemo {
 /// No outer callbacks or hidden row policies may change a scanned table while
 /// its statement-local candidate index is being reused. Keep unsupported trees
 /// on the ordinary evaluator, including views, functions and modifying CTEs.
+fn cast_may_hide_callbacks(kind: &DataType) -> bool {
+    match kind {
+        DataType::Custom(..) => true,
+        DataType::Array(
+            sqlparser::ast::ArrayElemTypeDef::AngleBracket(element)
+            | sqlparser::ast::ArrayElemTypeDef::SquareBracket(element, _)
+            | sqlparser::ast::ArrayElemTypeDef::Parenthesis(element),
+        ) => cast_may_hide_callbacks(element),
+        _ => false,
+    }
+}
+
 pub(super) fn probe_query_safe(db: &BicDb, query: &Query) -> bool {
     struct HasExists;
     impl Visitor for HasExists {
@@ -107,6 +119,18 @@ pub(super) fn probe_query_safe(db: &BicDb, query: &Query) -> bool {
             }
         }
         fn pre_visit_expr(&mut self, expression: &Expr) -> ControlFlow<()> {
+            // Domain casts and custom operators can invoke callbacks whose
+            // effects are absent from this expression's function-call nodes.
+            if matches!(
+                expression,
+                Expr::BinaryOp {
+                    op: BinaryOperator::Custom(_) | BinaryOperator::PGCustomBinaryOperator(_),
+                    ..
+                }
+            ) || matches!(expression, Expr::Cast { data_type, .. } if cast_may_hide_callbacks(data_type))
+            {
+                return ControlFlow::Break(());
+            }
             if let Expr::Function(function) = expression {
                 let Ok(name) = object_name_lowercase(&function.name) else {
                     return ControlFlow::Break(());
@@ -205,7 +229,7 @@ fn numeric_correlation(
         if !(owner.is_empty() || owner == qualifier || owner == &qualifier[qualifier.len() - 1..]) {
             return None;
         }
-        schema.column(column)
+        schema.column(column).filter(|column| !column.hidden)
     }
     // Residual filters stay on the original subquery. Only admit expressions
     // whose evaluation cannot introduce conversion/collation/function errors:
@@ -600,6 +624,11 @@ mod tests {
         for (sql, expected) in [
             ("SELECT * FROM probe_source r WHERE EXISTS(SELECT * FROM probe_source c WHERE c.id=r.id)", true),
             ("SELECT * FROM probe_source", false),
+            ("SELECT CAST(r.id AS INTEGER) FROM probe_source r WHERE EXISTS(SELECT * FROM probe_source c WHERE c.id=r.id)", true),
+            ("SELECT CAST(r.id AS callback_domain) FROM probe_source r WHERE EXISTS(SELECT * FROM probe_source c WHERE c.id=r.id)", false),
+            ("SELECT CAST(ARRAY[r.id] AS callback_domain[]) FROM probe_source r WHERE EXISTS(SELECT * FROM probe_source c WHERE c.id=r.id)", false),
+            ("SELECT * FROM probe_source r WHERE r.id OPERATOR(public.##) 1 AND EXISTS(SELECT * FROM probe_source c WHERE c.id=r.id)", false),
+
             ("SELECT nextval('probe_sequence') FROM probe_source r WHERE EXISTS(SELECT * FROM probe_source c WHERE c.id=r.id)", false),
             ("SELECT * FROM probe_source r WHERE EXISTS(SELECT * FROM probe_view c WHERE c.id=r.id)", false),
             ("SELECT * FROM probe_source r WHERE EXISTS(SELECT * FROM probe_protected c WHERE c.id=r.id)", false),
@@ -611,5 +640,45 @@ mod tests {
             let Statement::Query(query) = &statements[0] else { panic!("expected query"); };
             assert_eq!(probe_query_safe(&db, query), expected, "{sql}");
         }
+    }
+    #[test]
+    fn exists_candidate_probes_decline_hidden_residual_columns() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        {
+            let mut session = SqlSession::new(&mut db);
+            session.execute("CREATE TABLE hidden_probe_rows(id INTEGER PRIMARY KEY,period INTEGER,label TEXT)").unwrap();
+            session
+                .execute("INSERT INTO hidden_probe_rows VALUES(1,1,'present')")
+                .unwrap();
+        }
+        let mut schema = load_schema(&db, "hidden_probe_rows").unwrap().unwrap();
+        schema
+            .columns
+            .iter_mut()
+            .find(|column| column.name == "label")
+            .unwrap()
+            .hidden = true;
+        save_schema(&mut db, &schema).unwrap();
+        let statements = Parser::parse_sql(
+            &PostgreSqlDialect {},
+            "SELECT * FROM hidden_probe_rows c WHERE c.period=r.period AND c.label IS NOT NULL",
+        )
+        .unwrap();
+        let Statement::Query(query) = &statements[0] else {
+            panic!("query");
+        };
+        let engine = SqlEngine::new(&db);
+        let columns = vec!["r.period".to_string()];
+        let (_scope, context) = engine.bound_row_context(&columns);
+        let env = vec![RelationColumns {
+            alias: "r".into(),
+            row_type: None,
+            columns: vec![("period".into(), Some("int4".into()))],
+        }];
+        assert!(engine
+            .build_exists_candidate_probe(&context, query, &env)
+            .unwrap()
+            .is_none());
     }
 }

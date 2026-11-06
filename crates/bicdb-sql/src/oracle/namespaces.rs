@@ -1,6 +1,85 @@
 //! Shared relation qualification for preview sessions and stored function SQL.
 use super::*;
 
+/// Bind exact quoted local routine names before native scalar dispatch can
+/// mistake them for builtins. Routine EXECUTE checks still run in the host.
+pub(super) fn bind_source_quoted_functions(
+    db: &BicDb,
+    source: &str,
+    schema: &str,
+) -> Result<Option<String>> {
+    // Bind the original AST, before canonical lowering quotes ordinary names.
+    // Never infer a source quote merely from a canonicalized identifier.
+    if !source.contains('"') {
+        return Ok(None);
+    }
+    let Ok(mut original) = Parser::parse_sql(&OracleDialect {}, source) else {
+        // Extended grammar and stored legacy SQL need retained source-token
+        // provenance before this binding can be qualified for those contexts.
+        return Ok(None);
+    };
+    struct Resolve<'a> {
+        db: &'a BicDb,
+        schema: &'a str,
+        changed: bool,
+    }
+    impl sqlparser::ast::VisitorMut for Resolve<'_> {
+        type Break = SqlError;
+        fn pre_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<SqlError> {
+            let Expr::Function(function) = expr else {
+                return ControlFlow::Continue(());
+            };
+            let [part] = function.name.0.as_slice() else {
+                return ControlFlow::Continue(());
+            };
+            let Some(ident) = part.as_ident().filter(|ident| ident.quote_style.is_some()) else {
+                return ControlFlow::Continue(());
+            };
+            let routine = match load_routine(self.db, RoutineKind::Function, &ident.value) {
+                Ok(Some(routine)) => routine,
+                Ok(None) => return ControlFlow::Continue(()),
+                Err(error) => return ControlFlow::Break(error),
+            };
+            let declarations = match parse_statements(&routine.definition) {
+                Ok(declarations) => declarations,
+                Err(error) => return ControlFlow::Break(error),
+            };
+            let [Statement::CreateFunction(declaration)] = declarations.as_slice() else {
+                return ControlFlow::Continue(());
+            };
+            if object_name_parts(&declaration.name).last() != Some(&ident.value) {
+                return ControlFlow::Continue(());
+            }
+            if routine_schema_name(&routine) != self.schema {
+                return ControlFlow::Break(SqlError::undefined_function(
+                    "quoted routine is not defined in the current schema",
+                ));
+            }
+            function.name.0.insert(
+                0,
+                sqlparser::ast::ObjectNamePart::Identifier(Ident::with_quote('"', self.schema)),
+            );
+            self.changed = true;
+            ControlFlow::Continue(())
+        }
+    }
+    let mut resolve = Resolve {
+        db,
+        schema,
+        changed: false,
+    };
+    match sqlparser::ast::VisitMut::visit(&mut original, &mut resolve) {
+        ControlFlow::Continue(()) => Ok(resolve.changed.then(|| {
+            original
+                .iter()
+                .map(render_sql)
+                .collect::<Vec<_>>()
+                .join("; ")
+        })),
+        ControlFlow::Break(error) => Err(error),
+    }
+}
+
 pub(super) fn qualify<T: sqlparser::ast::VisitMut>(node: &mut T, schema: &str) {
     qualify_impl(node, schema, false)
 }

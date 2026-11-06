@@ -1670,7 +1670,30 @@ impl PageStore {
         max_pages: u64,
         max_read_bytes: u64,
     ) -> Result<Option<FreePageExtents>> {
-        let meta = self.meta.lock();
+        self.free_page_extents_while(max_pages, max_read_bytes, || true)
+    }
+
+    /// Like `free_page_extents`, with cooperative cancellation/admission while
+    /// waiting for the allocator and between page reads. A declined scan
+    /// returns no partial inventory and performs no allocator mutation. The
+    /// callback must not reenter this store's allocator or metadata methods.
+    pub fn free_page_extents_while(
+        &self,
+        max_pages: u64,
+        max_read_bytes: u64,
+        mut continue_scan: impl FnMut() -> bool,
+    ) -> Result<Option<FreePageExtents>> {
+        let meta = loop {
+            if !continue_scan() {
+                return Ok(None);
+            }
+            if let Some(meta) = self.meta.try_lock_for(Duration::from_millis(10)) {
+                break meta;
+            }
+        };
+        if !continue_scan() {
+            return Ok(None);
+        }
         validate_free_list_metadata(&meta)?;
         if meta.free_page_count > max_pages
             || meta
@@ -1690,6 +1713,9 @@ impl PageStore {
             })?;
         let mut cursor = meta.free_list_head;
         while cursor != 0 {
+            if !continue_scan() {
+                return Ok(None);
+            }
             if cursor >= meta.page_count || pages.len() >= count {
                 return Err(free_list_corruption(
                     &meta,
@@ -1712,6 +1738,9 @@ impl PageStore {
                 "free-page inventory is shorter than advertised",
             ));
         }
+        if !continue_scan() {
+            return Ok(None);
+        }
         pages.sort_unstable();
         let mut extents: Vec<FreePageExtent> = Vec::new();
         extents
@@ -1719,7 +1748,10 @@ impl PageStore {
             .map_err(|_| PageError::InvalidMaintenanceLimits {
                 reason: "free-page extent inventory allocation failed".into(),
             })?;
-        for page in pages {
+        for (index, page) in pages.into_iter().enumerate() {
+            if index % 1024 == 0 && !continue_scan() {
+                return Ok(None);
+            }
             if let Some(last) = extents.last_mut() {
                 if page < last.start_page + last.pages {
                     return Err(free_list_corruption(
@@ -3991,6 +4023,75 @@ mod free_extent_snapshot_tests {
                 .unwrap()
                 .free_pages,
             1
+        );
+    }
+
+    #[test]
+    fn free_extent_snapshot_cancellation_discards_partial_reads_without_mutation() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pages");
+        let store = open(&path, 0);
+        let ids: Vec<_> = (0..6)
+            .map(|_| store.allocate(PageType::Heap).unwrap())
+            .collect();
+        for page in ids {
+            store.free(page).unwrap();
+        }
+        let before = std::fs::read(&path).unwrap();
+        let reads = store.metrics.snapshot().reads;
+        assert!(store
+            .free_page_extents_while(6, 6 * u64::from(store.page_size()), || false)
+            .unwrap()
+            .is_none());
+        assert_eq!(store.metrics.snapshot().reads, reads);
+        assert!(store
+            .free_page_extents_while(6, 6 * u64::from(store.page_size()), || store
+                .metrics
+                .snapshot()
+                .reads
+                - reads
+                < 2)
+            .unwrap()
+            .is_none());
+        assert!(store.metrics.snapshot().reads > reads);
+        assert!(store.metrics.snapshot().reads - reads < 6);
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        assert_eq!(store.free_page_count(), 6);
+        assert_eq!(
+            store
+                .free_page_extents(6, 6 * u64::from(store.page_size()))
+                .unwrap()
+                .unwrap()
+                .free_pages,
+            6
+        );
+    }
+
+    #[test]
+    fn free_extent_snapshot_cancels_while_waiting_for_allocator_admission() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Arc::new(open(&dir.path().join("pages"), 0));
+        let held = store.clone();
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let holder = std::thread::spawn(move || {
+            let _lock = held.meta.lock();
+            ready_tx.send(()).unwrap();
+            let _ = release_rx.recv_timeout(Duration::from_secs(2));
+        });
+        ready_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        let mut checks = 0;
+        let result = store.free_page_extents_while(0, 0, || {
+            checks += 1;
+            checks < 3
+        });
+        let _ = release_tx.send(());
+        holder.join().unwrap();
+        assert!(result.unwrap().is_none());
+        assert_eq!(checks, 3);
+        assert_eq!(
+            store.free_page_extents(0, 0).unwrap().unwrap().free_pages,
+            0
         );
     }
 }

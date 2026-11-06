@@ -2723,6 +2723,30 @@ impl PagedStore {
         self.pool.store().punch_free_pages_bounded(max_pages)
     }
 
+    /// Read the allocator's complete reusable-page inventory, or decline it
+    /// before I/O when the caller's admission envelope is insufficient.
+    pub fn free_page_extents(
+        &self,
+        max_pages: u64,
+        max_read_bytes: u64,
+    ) -> Result<Option<crate::FreePageExtents>> {
+        self.pool
+            .store()
+            .free_page_extents(max_pages, max_read_bytes)
+    }
+
+    /// Cooperatively admitted read-only allocator inventory.
+    pub fn free_page_extents_while(
+        &self,
+        max_pages: u64,
+        max_read_bytes: u64,
+        continue_scan: impl FnMut() -> bool,
+    ) -> Result<Option<crate::FreePageExtents>> {
+        self.pool
+            .store()
+            .free_page_extents_while(max_pages, max_read_bytes, continue_scan)
+    }
+
     pub fn vacuum(&self, max_pages: usize) -> Result<VacuumReport> {
         self.vacuum_step(
             VacuumCursor::default(),

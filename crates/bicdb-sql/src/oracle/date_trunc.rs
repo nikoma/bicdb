@@ -61,6 +61,7 @@ pub(super) fn lower(db: &BicDb, sql: &str, oids: Option<&[i32]>) -> Result<Strin
         return Ok(sql.to_string());
     }
     if !sql.to_ascii_lowercase().contains("trunc")
+        && !sql.to_ascii_lowercase().contains("round")
         && !sql.to_ascii_lowercase().contains("add_months")
         && !sql.contains(['+', '-', '/'])
     {
@@ -355,6 +356,54 @@ fn rewrite_with_parameters(
                 }
             }
             if let Expr::Function(function) = expr {
+                let plain_round = function.name.0.len() == 1
+                    && function.name.0[0].as_ident().is_some_and(|ident| {
+                        ident.quote_style.is_none() && ident.value.eq_ignore_ascii_case("round")
+                    })
+                    && !function.uses_odbc_syntax
+                    && function.parameters == FunctionArguments::None
+                    && function.filter.is_none()
+                    && function.null_treatment.is_none()
+                    && function.over.is_none()
+                    && function.within_group.is_empty()
+                    && matches!(&function.args, FunctionArguments::List(args)
+                        if args.duplicate_treatment.is_none() && args.clauses.is_empty()
+                            && args.args.iter().all(|arg| matches!(arg, FunctionArg::Unnamed(FunctionArgExpr::Expr(_)))));
+                if plain_round {
+                    let args = function_args(function);
+                    if let [arg, scale] = args.as_slice() {
+                        let already_numeric = matches!(arg, Expr::Cast { data_type, .. }
+                            if routine_type_schema(data_type).is_ok_and(|t| t.pg_type == "numeric"));
+                        if !already_numeric
+                            && (matches!(
+                                self.input_type(arg).as_deref(),
+                                Some(
+                                    "numeric"
+                                        | "int2"
+                                        | "int4"
+                                        | "int8"
+                                        | "float4"
+                                        | "float8"
+                                        | "text"
+                                        | "varchar"
+                                        | "bpchar"
+                                )
+                            ) || matches!(arg, Expr::Value(value) if matches!(value.value, Value::Null)))
+                        {
+                            // Oracle ROUND(n, scale) returns NUMBER even when
+                            // n is floating point. PostgreSQL's two-argument
+                            // overload instead requires numeric input.
+                            match expression(&format!(
+                                "bicdb_oracle_number_round({},{scale})",
+                                exact_numeric_operand_sql(arg)
+                            )) {
+                                Ok(lowered) => *expr = lowered,
+                                Err(error) => return ControlFlow::Break(error),
+                            }
+                            return ControlFlow::Continue(());
+                        }
+                    }
+                }
                 if object_name_lowercase(&function.name).is_ok_and(|n| n == "trunc") {
                     let args = function_args(function);
                     if let Some(arg) = args.first() {

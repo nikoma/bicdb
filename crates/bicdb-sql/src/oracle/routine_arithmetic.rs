@@ -503,6 +503,7 @@ impl Resolve<'_> {
                         | "bicdb_oracle_number_divide"
                         | "bicdb_oracle_number_arithmetic"
                         | "bicdb_oracle_number_trunc"
+                        | "bicdb_oracle_number_round"
                         | "bicdb_oracle_plsql_number_trunc",
                     ) => return Kind::Number,
                     Some("trunc") => {

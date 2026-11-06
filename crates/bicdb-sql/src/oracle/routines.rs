@@ -51,6 +51,9 @@ fn bind_relations<T: sqlparser::ast::VisitMut>(
         let db = db.ok_or_else(|| unsupported("Oracle grammar binding requires a catalog"))?;
         super::syntax::rewrite(db, node, Some(schema))?;
     }
+    if let Some(db) = db {
+        super::storage_catalog::lower(db, node, schema)?;
+    }
     if calls {
         namespaces::qualify_with_calls(node, schema);
     } else {

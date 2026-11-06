@@ -44,6 +44,7 @@ mod rownum;
 pub(crate) mod session_context;
 mod source_tokens;
 mod sql_concat;
+pub(crate) mod storage_catalog;
 pub(crate) mod syntax;
 pub(crate) mod temporal_columns;
 pub(crate) mod text_patterns;
@@ -614,6 +615,17 @@ fn postgres_catalog_read(sql: &str) -> bool {
 // expressions or rewriting the registered role name. Execution still uses the
 // ordinary ownership, role-membership and privilege checks.
 fn postgres_owner_administration(sql: &str) -> bool {
+    let trimmed = sql.trim();
+    if trimmed
+        .strip_suffix(';')
+        .unwrap_or(trimmed)
+        .trim()
+        .eq_ignore_ascii_case("VACUUM")
+    {
+        // Native store maintenance keeps its administrator gate even when
+        // the client has opted into Oracle application SQL semantics.
+        return true;
+    }
     let first = sql.split_whitespace().next().unwrap_or_default();
     if !["CREATE", "ALTER", "DROP", "GRANT", "REVOKE", "SET", "RESET"]
         .iter()
@@ -635,6 +647,8 @@ fn postgres_owner_administration(sql: &str) -> bool {
         return false;
     };
     match statement {
+        Statement::Grant(grant) => storage_catalog::native_privilege_objects(&grant.objects),
+        Statement::Revoke(revoke) => storage_catalog::native_privilege_objects(&revoke.objects),
         Statement::Set(sqlparser::ast::Set::SetRole { .. }) => true,
         Statement::Reset(reset) => matches!(
             &reset.reset,
@@ -665,7 +679,7 @@ mod owner_administration_boundary_tests {
     use super::*;
 
     #[test]
-    fn only_native_role_and_owner_commands_select_the_boundary() {
+    fn only_native_role_owner_and_plain_maintenance_commands_select_the_boundary() {
         for sql in [
             "CREATE ROLE app_owner LOGIN NOSUPERUSER",
             "ALTER ROLE app_owner NOLOGIN",
@@ -674,6 +688,8 @@ mod owner_administration_boundary_tests {
             "SET ROLE app_owner",
             "SET LOCAL ROLE app_owner",
             "RESET ROLE",
+            "VACUUM",
+            " vacuum; ",
             "ALTER SCHEMA \"Source Q\" OWNER TO app_owner",
             "ALTER TABLE \"Source Q\".\"T\" OWNER TO app_owner",
             "ALTER VIEW \"Source Q\".\"V\" OWNER TO app_owner",
@@ -698,6 +714,8 @@ mod owner_administration_boundary_tests {
             "RESET ROLE; SELECT 1",
             "SET owner TO 1",
             "RESET owner",
+            "VACUUM FULL",
+            "VACUUM; SELECT 1",
         ] {
             assert!(!postgres_owner_administration(sql), "{sql}");
         }
@@ -722,7 +740,13 @@ pub fn lower_session_sql(
         return Ok(sql.to_string());
     }
     let schema = preview_schema(db, search_path, user)?.unwrap_or_else(default_schema_name);
-    let lowered = lower_profile_sql_in_namespace(db, sql, profile, Some(&schema))?;
+    let scoped = namespaces::bind_source_quoted_functions(db, sql, &schema)?;
+    let lowered = lower_profile_sql_in_namespace(
+        db,
+        scoped.as_deref().unwrap_or(sql),
+        profile,
+        Some(&schema),
+    )?;
     if let Some(command) = foreign_keys::timing_sql(&lowered, Some(&schema))? {
         return Ok(command);
     }
@@ -744,6 +768,7 @@ pub fn lower_session_sql(
     }
     let mut statements = parse_statements(&lowered)?;
     output::lower_calls(&mut statements)?;
+    storage_catalog::lower(db, &mut statements, &schema)?;
     namespaces::qualify_with_calls(&mut statements, &schema);
     collections::lower_constructors(db, &mut statements, Some(&schema))?;
     date_trunc::rewrite(db, &mut statements)?;

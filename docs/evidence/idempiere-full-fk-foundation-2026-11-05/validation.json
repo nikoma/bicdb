@@ -1,0 +1,142 @@
+{
+  "format": 1,
+  "native_main_commit": "8b2bfae217cca282e07efd5123ddee9a360a7b93",
+  "native_source_commit": "dc6e3c5a1f9943ec9cb63abf7157ed1d58281986",
+  "native_binary_sha256": "b8828534f9a2dd20540dc87cf9c1975dff36697ef58ed88ddadcc65d2fbe90aa",
+  "selected_test_reports": [
+    {
+      "name": "org.idempiere.test.base.InOutTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "report_sha256": "c34d6a8fe3048e55f6b91041da83b0ecc9bc5b07274c18ce96d6498f47aada74"
+    },
+    {
+      "name": "org.idempiere.test.base.InvoiceTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "report_sha256": "958d69224964778a8b6946bb05f6d2f30f79fa1f98c2bbca4a5779f508519d77"
+    },
+    {
+      "name": "org.idempiere.test.base.POInsertSQLTest",
+      "tests": "20",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "report_sha256": "473719731f683111f071e44429d78c69427a4c9b724e5ef54b65d8382bea2074"
+    },
+    {
+      "name": "org.idempiere.test.base.POTest",
+      "tests": "53",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "report_sha256": "010421c575672c26aba4ee5a962b061da2ae21a1bed25624c896f98847711c8a"
+    },
+    {
+      "name": "org.idempiere.test.model.InvoiceCustomerTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "report_sha256": "a6ef03d566ce535ac3ffc7fd3a6fb7598c9389f66da6898aef13b4ae910c450e"
+    }
+  ],
+  "tests_passed": 89,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "expected_test_counts_matched": true,
+  "selected_runtime_class_origins": [
+    {
+      "class_name": "org.compiere.db.DB_Oracle",
+      "source_sha256": "330a951360185f9acc875e98985255bda467adac447d1a866ae0a7f210026288",
+      "matched": true
+    },
+    {
+      "class_name": "org.bicdb.jdbc.oracle.OracleDriver",
+      "source_sha256": "9102b2ad40e5f9f1366e9d1a126556ec240c5e8423df5c30e02590506a3333ac",
+      "matched": true
+    },
+    {
+      "class_name": "org.postgresql.Driver",
+      "source_sha256": "2a32a9dcbc42d67a50ad3a0de5efd102c8d2be46720045f2cbd6689f160ab7c7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.InvoiceTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.model.InvoiceCustomerTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.InOutTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.POTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.POInsertSQLTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    }
+  ],
+  "selected_test_runtime_packaging_qualified": true,
+  "full_application_packaging_qualified": false,
+  "source_declared_relationships_in_parent_baseline": 3826,
+  "blob_reconciliation_before_tests": {
+    "success": true,
+    "reconciled_columns": 16,
+    "definitions_before": {
+      "routines": 62,
+      "views": 160
+    },
+    "definitions_preserved": true,
+    "public_migration_report_sha256": "0eecbfa7fbe53d6cfee50d17ca906a2365915c8ef8cbf7f0cb2cc68747fb6ec5",
+    "full_target_table_fingerprints_preserved": true,
+    "public_importer_sha256": "e468eea1adddf72ff6be8ea2e22718b3bb8db45dec3eb69a4b360076e83a547f",
+    "application_qualified": false
+  },
+  "native_allocator_environment": {
+    "MALLOC_ARENA_MAX": "2"
+  },
+  "jvm_returncode": 0,
+  "shutdown_results": [
+    {
+      "role": "test_jvm",
+      "returncode": 0
+    },
+    {
+      "role": "database",
+      "returncode": 0
+    }
+  ],
+  "all_processes_stopped": true,
+  "resource_guard": {
+    "status": "completed",
+    "returncode": 0,
+    "start_available_gib": 21.5,
+    "minimum_available_gib": 14.0,
+    "peak_group_rss_bytes": 4540694528,
+    "minimum_observed_available_bytes": 18413969408
+  },
+  "log_sha256": {
+    "jvm.log": "f446c512f687444c34efa5a804464a45d688bd65b63c69b7ed6d595f3bce9fd6",
+    "class-load.log": "901a31efc8ea1c6ae48c47523fd2671e8abbbeb39813eaf367d5037839e28803",
+    "database.log": "2c52f33561f56d93e44c5a5eb37f277889da843a2c682b5e03cf8c1f52010c34"
+  },
+  "application_qualified": false,
+  "production_qualified": false,
+  "goal_complete": false
+}

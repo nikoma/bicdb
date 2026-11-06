@@ -17,6 +17,12 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [full-FK foundation checkpoint](evidence/idempiere-full-fk-foundation-2026-11-05/README.md)
+passes all 89 selected original application tests, with zero failures/errors/skips,
+verified Oracle-provider/PostgreSQL-driver origins and clean JVM/database exits.
+It closes that selected batch on the completed FK baseline; pristine data/schema,
+remaining application tests/workflows and recovery/production gates remain open.
+
 The [shared-reference checkpoint](evidence/oracle-foreign-key-reservations-2026-11-05/README.md)
 qualifies concurrent child references, parent-key mutation exclusion and bounded
 referenced primary-key updates against Oracle. Deferred checks use final child

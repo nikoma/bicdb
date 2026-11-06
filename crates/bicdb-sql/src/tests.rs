@@ -8891,3 +8891,90 @@ fn primary_key_lists_preserve_numeric_identity_and_pending_changes() {
         );
     }
 }
+
+#[test]
+fn exists_candidate_probes_keep_safe_residual_disjunctions_and_pending_changes() {
+    for profile in [oracle::POSTGRES_PROFILE, oracle::ORACLE_PREVIEW_PROFILE] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            bicdb_core::DbConfig::default().with_fsync(false),
+        )
+        .unwrap();
+        oracle::ensure_database_profile(&mut db, profile).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        let execute = |session: &mut SqlSession<'_>, sql: &str| {
+            let sql = if profile == oracle::POSTGRES_PROFILE {
+                sql.to_string()
+            } else {
+                oracle::lower_session_sql(session.db_ref(), sql, profile, None, "bicdb").unwrap()
+            };
+            session.execute(&sql)
+        };
+        for sql in [
+            "CREATE TABLE residual_requests(id INTEGER PRIMARY KEY,period INTEGER)".to_string(),
+            "CREATE TABLE residual_controls(id INTEGER PRIMARY KEY,period INTEGER,enabled VARCHAR(1),note VARCHAR(8))".to_string(),
+            format!("INSERT INTO residual_requests VALUES {}",(1..=32).map(|i|format!("({i},{i})")).chain(["(33,NULL)".into(),"(34,1)".into()]).collect::<Vec<_>>().join(",")),
+            format!("INSERT INTO residual_controls VALUES {}",(1..=64).map(|i| {
+                let period=(i+1)/2;
+                let enabled=if i==6 {"NULL"} else if period%2==0 {"'Y'"} else {"'N'"};
+                let note=if period%5==0 {"'present'"} else {"NULL"};
+                format!("({i},{period},{enabled},{note})")
+            }).collect::<Vec<_>>().join(",")),
+        ] {execute(&mut session,&sql).unwrap();}
+        let expected = (1..=32)
+            .filter(|i| i % 2 != 0 && i % 5 != 0)
+            .chain([33, 34])
+            .map(|id| vec![SqlValue::Int(id)])
+            .collect::<Vec<_>>();
+        for predicate in [
+            "c.period=r.period AND (c.enabled='Y' OR c.note IS NOT NULL)",
+            "(c.enabled='Y' OR c.note IS NOT NULL) AND c.period=r.period",
+            "c.period=r.period AND NOT(c.enabled='N' AND c.note IS NULL)",
+        ] {
+            let query=format!("SELECT r.id FROM residual_requests r WHERE NOT EXISTS(SELECT * FROM residual_controls c WHERE {predicate}) AND r.id NOT IN(SELECT r.id FROM residual_requests r WHERE r.id<0) ORDER BY r.id");
+            SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().push(SqlProfileStats::default()));
+            let result = execute(&mut session, &query);
+            let stats = SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().pop().unwrap());
+            assert_eq!(result.unwrap().rows, expected, "{profile}: {predicate}");
+            assert!(
+                stats.full_scan_count <= 3,
+                "{profile}: {predicate}: {} scans",
+                stats.full_scan_count
+            );
+            execute(&mut session, "BEGIN").unwrap();
+            execute(&mut session, "SAVEPOINT residual_before_update").unwrap();
+            execute(
+                &mut session,
+                "UPDATE residual_controls SET enabled='Y' WHERE id=1",
+            )
+            .unwrap();
+            assert_eq!(
+                execute(&mut session, &query).unwrap().rows.len(),
+                expected.len() - 2
+            );
+            execute(&mut session, "ROLLBACK TO SAVEPOINT residual_before_update").unwrap();
+            assert_eq!(execute(&mut session, &query).unwrap().rows, expected);
+            execute(&mut session, "ROLLBACK").unwrap();
+        }
+    }
+}
+
+#[test]
+fn exists_candidate_probes_decline_fallible_residual_conversions() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE TABLE fallible_requests(id INTEGER PRIMARY KEY,period INTEGER)",
+        "CREATE TABLE fallible_controls(id INTEGER PRIMARY KEY,period INTEGER,label TEXT)",
+        "INSERT INTO fallible_requests VALUES(1,1)",
+        "INSERT INTO fallible_controls VALUES(1,2,'bad')",
+    ] {
+        session.execute(sql).unwrap();
+    }
+    // The residual is evaluated before the nonmatching equality. Adding a
+    // candidate key filter must not hide its original conversion error.
+    let error=session.execute("SELECT r.id FROM fallible_requests r WHERE EXISTS(SELECT * FROM fallible_controls c WHERE CAST(c.label AS INTEGER)>0 AND c.period=r.period)").unwrap_err();
+    assert_eq!(error.sqlstate(), "22P02");
+}

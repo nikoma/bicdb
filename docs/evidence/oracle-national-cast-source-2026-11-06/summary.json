@@ -1,0 +1,25 @@
+{
+  "format": 1,
+  "scope": "read-only Oracle source observations; no BicDB runtime qualification",
+  "source_version": "23.26.3.0.0",
+  "reference_driver_version": "26.1.0",
+  "reference_driver_thin_mode": true,
+  "observer_source_commit": "53fb9a4",
+  "observer_sha256": "ac8ef81cb6422b797a7470f9d9ca1f2aa678564f205a626a7f0ff8f4d25ffc09",
+  "observations_sha256": "9d30d3904da5a47f6f6794ec86ad5a249248c2e4b4c353b5206ef52d8ce4774d",
+  "predicate_cases": 24,
+  "contexts": 15,
+  "dump_projection_contexts": 13,
+  "direct_text_transport_qualified": false,
+  "implementation_qualified": false,
+  "application_qualified": false,
+  "original_application_objects_modified": false,
+  "container_restored": true,
+  "direct_text_attempt_sha256": "f9a67974f7e92a9b9e06320b0ee46d54ff7a645c17b9d58a25344a4d17c912b9",
+  "observer_unit_checks": {
+    "passed": 9,
+    "failed": 0,
+    "fake_driver": true,
+    "runtime_qualification": false
+  }
+}

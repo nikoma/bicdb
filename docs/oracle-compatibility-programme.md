@@ -23,11 +23,25 @@ UTF-16 units, escapes and padding. Its retained v29 control exposes an existing
 national matching gap. Source evidence is complete for this corpus; runtime,
 durable national column provenance and application qualification remain open.
 
+The [national CAST source-observation checkpoint](evidence/oracle-national-cast-source-2026-11-06/README.md)
+records bounded string truncation, numeric overflow, NLS-sensitive conversions
+and raw AL16UTF16 units, including a lone surrogate. It separates raw-unit
+observations from a failed direct-text decoding attempt. Lossless runtime values,
+assignment/CAST rules, PostgreSQL-driver transport and application qualification
+remain open.
+
 The [correlated EXISTS candidate-probe checkpoint](evidence/sql-correlated-exists-probes-2026-11-06/README.md)
 qualifies bounded statement-local candidate maps and primary-key list lookups,
 with independent PostgreSQL/Oracle-preview result, NULL, duplicate and rollback
 controls. The full regression batch passes; original application retests and
 production workload qualification remain separate gates.
+
+The [safe residual EXISTS checkpoint](evidence/sql-correlated-exists-residuals-2026-11-06/README.md)
+extends candidate eligibility to bounded, non-fallible inner boolean filters.
+Independent PostgreSQL/Oracle-preview native controls preserve results and reduce
+26 full scans to at most three. The broader batch passes; the earlier original
+client-setup run was interrupted after real writer timeouts and must be retried.
+No complete application or production qualification is claimed.
 
 The [fixed-day index and driver-savepoint checkpoint](evidence/sql-timestamp-day-indexes-2026-11-06/README.md)
 qualifies physical timestamp day keys, SQL equality/range plans and PostgreSQL-driver

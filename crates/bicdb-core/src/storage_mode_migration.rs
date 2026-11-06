@@ -13,7 +13,10 @@
 //! real fix is the demand-paged engine with its bounded buffer pool. This
 //! module is that escape hatch: a **copy** into a freshly created database in
 //! the target mode, which respects the fence instead of defeating it. The
-//! source is opened read-only and never mutated.
+//! source is opened under its recorded mode with the ordinary recovery path.
+//! No logical source rows are changed, but opening/closing may checkpoint or
+//! upgrade physical metadata. Use an offline copy if the original must remain
+//! byte-for-byte unchanged.
 //!
 //! Memory: the source engine's own mode dictates its residency, so migrating
 //! *out of* `embedded_memory` needs enough RAM to open the source. Records are
@@ -39,6 +42,8 @@ pub struct StorageModeMigrationReport {
     pub indexes: usize,
     pub source_mode: String,
     pub target_mode: String,
+    /// Full logical record readback after closing and reopening the target.
+    pub verified_records: u64,
 }
 
 /// Copy `source` into a new database at `target` running `target_mode`.
@@ -86,9 +91,19 @@ pub fn migrate_storage_mode(
     }
     let source_mode = recorded.as_str().to_string();
 
-    // Open the source under whatever engine owns it (the fence decides), and
-    // never write to it.
-    let source_db = BicDb::open(source)?;
+    // Recovery must use the owning engine in either migration direction.
+    let source_db =
+        BicDb::open_with_config(source, DbConfig::default().with_storage_mode(recorded))?;
+    if source_db
+        .collections()
+        .iter()
+        .any(|meta| meta.flashback.is_some())
+    {
+        return Err(BicDbError::FormatCompatibility(
+            "storage-mode migration of flashback history requires a history/SCN migration contract"
+                .into(),
+        ));
+    }
 
     let mut target_db = BicDb::open_with_config(
         target,
@@ -102,22 +117,23 @@ pub fn migrate_storage_mode(
     };
 
     for meta in source_db.collections() {
-        target_db.create_collection_with_mode(&meta.name, meta.mode)?;
-        if let Some(policy) = meta.policy.clone() {
-            target_db.set_collection_policy(&meta.name, policy)?;
-        }
+        target_db.create_collection_with_mode(&meta.name, meta.mode.clone())?;
         report.collections += 1;
 
         // Ids come back sorted, so the copy is in primary-key order: bounded
         // memory on the read side and a compact WAL on the write side.
-        let ids = source_db.scan_collection_record_ids_with_prefix(&meta.name, "")?;
+        // This offline administrative copy holds both directory locks and
+        // preserves the source security contract on the target; it must copy
+        // protected rows too, without granting SQL/application access.
+        let ids = source_db.scan_collection_record_ids_with_prefix_unchecked(&meta.name, "")?;
         let mut pending: Vec<Record> = Vec::with_capacity(batch.min(ids.len()));
         for id in &ids {
-            let Some(record) = source_db.get(&meta.name, id)? else {
-                // Concurrently removed under a non-exclusive source: the copy
-                // is a point-in-time snapshot, so skipping is correct.
-                continue;
-            };
+            let record = source_db.get_unchecked(&meta.name, id)?.ok_or_else(|| {
+                BicDbError::FormatCompatibility(format!(
+                    "source record disappeared from exclusively locked collection `{}`",
+                    meta.name
+                ))
+            })?;
             pending.push(record.as_ref().clone());
             if pending.len() >= batch {
                 report.records += pending.len() as u64;
@@ -128,6 +144,10 @@ pub fn migrate_storage_mode(
             report.records += pending.len() as u64;
             target_db.bulk_load_insert(&meta.name, pending.drain(..))?;
         }
+        // Install the complete logical collection contract after trusted copy.
+        // Physical names belong to the new target; a prior rename is not an
+        // instruction to reopen an old segment path in that target.
+        target_db.restore_migrated_collection_contract(&meta)?;
     }
 
     // Indexes last: building them over the landed rows beats maintaining them
@@ -145,5 +165,54 @@ pub fn migrate_storage_mode(
     }
 
     target_db.close()?;
+    // Read the durable result, rather than trusting only in-memory copy counters.
+    let reopened =
+        BicDb::open_with_config(target, DbConfig::default().with_storage_mode(target_mode))?;
+    let expected = source_db.verification_manifest()?;
+    let actual = reopened.verification_manifest()?;
+    if expected.tables != actual.tables {
+        return Err(BicDbError::FormatCompatibility(
+            "migrated database record readback differs from source; preserve both directories"
+                .into(),
+        ));
+    }
+    let actual_collections = reopened.collections();
+    for meta in source_db.collections() {
+        let mut expected = meta;
+        let mut actual = actual_collections
+            .iter()
+            .find(|meta| meta.name == expected.name)
+            .ok_or_else(|| {
+                BicDbError::FormatCompatibility("migrated collection is missing".into())
+            })?
+            .clone();
+        expected.storage_name = None;
+        actual.storage_name = None;
+        expected.renamed_from = None;
+        actual.renamed_from = None;
+        if expected != actual {
+            return Err(BicDbError::FormatCompatibility(format!(
+                "migrated collection contract differs for `{}`",
+                expected.name
+            )));
+        }
+    }
+    let mut expected_indexes = source_db.index_definitions();
+    let mut actual_indexes = reopened.index_definitions();
+    expected_indexes.sort_by(|a, b| a.name.cmp(&b.name));
+    actual_indexes.sort_by(|a, b| a.name.cmp(&b.name));
+    if expected_indexes != actual_indexes
+        || reopened
+            .verify_indexes_consistently()?
+            .iter()
+            .any(|index| !index.valid)
+    {
+        return Err(BicDbError::FormatCompatibility(
+            "migrated indexes differ from source definitions or target rows".into(),
+        ));
+    }
+    report.verified_records = actual.tables.values().map(|table| table.rows).sum();
+    reopened.close()?;
+    source_db.close()?;
     Ok(report)
 }

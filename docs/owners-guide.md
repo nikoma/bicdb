@@ -209,6 +209,14 @@ physical layout metadata. Treat a storage-mode migration like any other major
 maintenance event: read the dry-run output, take and verify a backup, stop
 writers where required, provide headroom, and run integrity checks afterward.
 
+`bicdb store migrate-mode SOURCE NEW_TARGET --mode server_paged` performs an
+offline logical copy and verifies the reopened target's records, collection
+contracts and secondary indexes. Use a cold source clone if physical source
+files must remain unchanged: normal opening can recover/checkpoint metadata.
+Active flashback history needs a separate migration contract and is refused.
+See the [verification scope and evidence](evidence/storage-mode-verified-copy-2026-11-06/README.md)
+before treating the result as an application cutover or full backup.
+
 Never infer a mode by looking for one filename and never hand-edit mode
 metadata. Ask the CLI:
 

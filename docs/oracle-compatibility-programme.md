@@ -1056,3 +1056,13 @@ adds bounded mutable values from `Connection.createBlob()` and real
 write/bind/free/read checks over PostgreSQL JDBC. This completes the client
 construction API for the documented scope, not writable persistent locators
 or full application compatibility.
+
+
+## Verified storage-mode copy prerequisite
+
+The [offline copy checkpoint](evidence/storage-mode-verified-copy-2026-11-06/README.md)
+adds durable readback verification, both migration directions and collection
+contract preservation. The application baseline remains unqualified on paged
+storage until its own values, owners, relationships, views, monitoring and
+application gates pass. Active flashback history requires an explicit SCN
+transfer contract and is refused by this copy operation.

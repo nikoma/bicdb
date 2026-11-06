@@ -3507,7 +3507,11 @@ impl<'db> SqlEngine<'db> {
             "bicdb_oracle_blob_getlength"
             | "bicdb_oracle_blob_istemporary"
             | "bicdb_oracle_sql_blob_getlength"
-            | "bicdb_oracle_sql_blob_istemporary" => Some("int8".into()),
+            | "bicdb_oracle_sql_blob_istemporary"
+            | "pg_catalog.bicdb_oracle_blob_getlength"
+            | "pg_catalog.bicdb_oracle_blob_istemporary"
+            | "pg_catalog.bicdb_oracle_sql_blob_getlength"
+            | "pg_catalog.bicdb_oracle_sql_blob_istemporary" => Some("int8".into()),
             "bicdb_oracle_empty_blob"
             | "bicdb_oracle_blob_from_raw"
             | "bicdb_oracle_hextoraw"

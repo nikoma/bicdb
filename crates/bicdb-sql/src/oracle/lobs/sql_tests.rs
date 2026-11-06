@@ -174,16 +174,10 @@ fn postgres_qualified_user_functions_are_not_oracle_package_calls() {
     let mut session = SqlSession::new(&mut db);
     session.execute("CREATE SCHEMA \"DBMS_LOB\"").unwrap();
     session.execute("CREATE FUNCTION \"DBMS_LOB\".\"GETLENGTH\"(b BYTEA) RETURNS INTEGER LANGUAGE SQL AS $$SELECT octet_length(b)+5$$").unwrap();
-    let sql = lower_session_sql(
-        session.db_ref(),
-        "SELECT \"DBMS_LOB\".\"GETLENGTH\"(decode('AB','hex'))",
-        POSTGRES_PROFILE,
-        None,
-        "bicdb",
-    )
-    .unwrap();
+    let sql = "SELECT \"DBMS_LOB\".\"GETLENGTH\"(decode('AB','hex'))";
+    assert!(lower_session_sql(session.db_ref(), sql, POSTGRES_PROFILE, None, "bicdb").is_err());
     assert_eq!(
-        session.execute(&sql).unwrap().rows,
+        session.execute(sql).unwrap().rows,
         vec![vec![SqlValue::Int(6)]]
     );
 }

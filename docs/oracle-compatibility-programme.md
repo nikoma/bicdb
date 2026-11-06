@@ -29,6 +29,13 @@ with independent PostgreSQL/Oracle-preview result, NULL, duplicate and rollback
 controls. The full regression batch passes; original application retests and
 production workload qualification remain separate gates.
 
+The [safe residual EXISTS checkpoint](evidence/sql-correlated-exists-residuals-2026-11-06/README.md)
+extends candidate eligibility to bounded, non-fallible inner boolean filters.
+Independent PostgreSQL/Oracle-preview native controls preserve results and reduce
+26 full scans to at most three. The broader batch passes; the earlier original
+client-setup run was interrupted after real writer timeouts and must be retried.
+No complete application or production qualification is claimed.
+
 The [fixed-day index and driver-savepoint checkpoint](evidence/sql-timestamp-day-indexes-2026-11-06/README.md)
 qualifies physical timestamp day keys, SQL equality/range plans and PostgreSQL-driver
 RELEASE name resolution, with three Oracle and three independent PostgreSQL source

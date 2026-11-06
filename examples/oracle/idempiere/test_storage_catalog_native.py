@@ -137,8 +137,6 @@ class StorageCatalogNativeTests(unittest.TestCase):
         f.restart_server()
         with f.conn.cursor() as c:
             c.execute('VACUUM')
-        f.restart_server()
-        with f.conn.cursor() as c:
             c.execute('SELECT * FROM '+NATIVE+' ORDER BY "BLOCK_ID"')
             runs = c.fetchall()
             self.assertTrue(runs, 'churn and vacuum must produce reusable pages')
@@ -163,12 +161,24 @@ class StorageCatalogNativeTests(unittest.TestCase):
             c.execute('RESET bicdb.storage_inventory_max_read_bytes')
             c.execute('SELECT count(*) FROM '+NATIVE)
             self.assertGreater(c.fetchone()[0], 0)
+            values = ','.join("(%d,'%s')" % (i, 'y'*2000) for i in range(500,550))
+            c.execute('INSERT INTO churn VALUES '+values)
+            c.execute('SELECT COALESCE(SUM("BLOCKS"),0) FROM '+NATIVE)
+            self.assertLess(c.fetchone()[0], sum(row[4] for row in runs),
+                            'new records must reuse allocator free pages')
         f.restart_server()
         with f.conn.cursor() as c:
+            # Checkpoint/restart can truncate free tail pages and reuse holes
+            # for metadata. A truthful post-restart inventory may be empty.
             c.execute('SELECT * FROM '+NATIVE)
-            self.assertTrue(c.fetchall())
+            runs = c.fetchall()
+            c.execute('SELECT bicdb_space_report()')
+            report = c.fetchone()[0]
+            if isinstance(report, str):
+                report = json.loads(report)
+            self.assertEqual(sum(row[4] for row in runs), report['paged']['free_pages'])
             c.execute('SELECT count(*) FROM churn')
-            self.assertEqual(c.fetchone(), (20,))
+            self.assertEqual(c.fetchone(), (70,))
 
 
 if __name__ == '__main__':

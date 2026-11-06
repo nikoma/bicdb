@@ -42,3 +42,29 @@ commands and writer-quiescence contract. The earlier
 records the independent native fixtures and PostgreSQL regression coverage;
 this installation checkpoint adds full relationship-count evidence rather than
 claiming a new engine test run.
+
+## Full-schema runtime diagnostic
+
+A subsequent original application batch used a private copy of this completed
+schema, explicitly isolated launcher installation and the previously built
+application candidate. All 16 source BLOB columns were reconciled first. The
+[partial runtime record](runtime-diagnostic.json) retains **27 reported tests:
+22 passed and five failed**, with no reported errors or skips. The original
+20-test insert class passed; four shipment assertions and one invoice assertion
+failed after process-instance inserts returned transaction conflicts.
+
+The run also reached a slow commit in an original change-log test. A JVM thread
+dump showed the caller waiting for commit while the native process continued
+consuming CPU. Source inspection identified exclusive reservations shared by
+independent child references and a full child-table scan for each deferred
+foreign-key hook. General concurrency and direct-child-lookup fixes require
+native/profile regression validation and a new application run.
+
+The operator interrupted this disposable attempt after identifying those
+issues. The harness eventually killed its JVM and database after their graceful
+shutdown deadlines; both returned -9. This is an interrupted validation with
+real recorded assertion failures, not a completed 89-test batch, clean shutdown
+or crash-recovery qualification. Logs and the disposable database remain for
+diagnosis. No assertions were removed or relaxed. All **89 original tests**
+remain required on a fresh completed-schema copy, followed by pristine data and
+broader application/recovery gates.

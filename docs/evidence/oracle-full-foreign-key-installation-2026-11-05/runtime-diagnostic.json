@@ -1,0 +1,58 @@
+{
+  "format": 1,
+  "native_source_commit": "b9845721893047621c2215a97cd190c0c3ede025",
+  "native_binary_sha256": "317cf94b595ea7b4dd4a15d849a2f77365e6cca51e1c4ab49a1a33c1d4b07e0b",
+  "source_foreign_keys": 3826,
+  "private_copy_of_completed_schema": true,
+  "primary_database_used_for_test_mutations": false,
+  "explicit_private_launcher_installation": true,
+  "blob_columns_reconciled": 16,
+  "reported_suites": [
+    {
+      "name": "org.idempiere.test.base.InOutTest",
+      "tests": 5,
+      "failures": 4,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "b9e63ca02248bfd067cd99da3202daa38781a528f770b84bf0156735763771e6"
+    },
+    {
+      "name": "org.idempiere.test.base.InvoiceTest",
+      "tests": 2,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "7fcb994371b36a93e658950a2342ac6dd975b35054f6326758edd6904ea40e84"
+    },
+    {
+      "name": "org.idempiere.test.base.POInsertSQLTest",
+      "tests": 20,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "f410ba1aa591c4eb118355eef41a414fc9c3373d7ea93ebd4bf7c3037befe576"
+    }
+  ],
+  "reported_tests": 27,
+  "reported_passes": 22,
+  "reported_failures": 5,
+  "reported_errors": 0,
+  "reported_skips": 0,
+  "required_full_batch_tests": 89,
+  "full_batch_completed": false,
+  "stop_reason": "Operator interrupted after actionable reference-reservation conflicts and quadratic deferred child-table scans were identified; remaining assertions require a fresh complete rerun",
+  "shutdown_results": [
+    {
+      "role": "test_jvm",
+      "returncode": -9
+    },
+    {
+      "role": "database",
+      "returncode": -9
+    }
+  ],
+  "processes_stopped": true,
+  "clean_shutdown_verified": false,
+  "application_qualified": false,
+  "goal_complete": false
+}

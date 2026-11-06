@@ -64,3 +64,41 @@ edition-specific dependencies must be identified separately. See the
 Reports contain source paths and object names. Review those identifiers before
 publishing an inventory of a private application. The tool does not print source
 literals or tokenizer error text, which may contain sensitive source content.
+
+## Review first-row selection and tied ordering
+
+Inventory application calls that consume only the first row, including JDBC
+`ResultSet.next()`, scalar query helpers, pagination and cursor loops that stop
+early. An `ORDER BY` clause can still leave the selected row unspecified when
+several eligible records have identical sort keys. The lexical scanner does not
+detect this dependency or prove that ordering keys are unique.
+
+For example, this query does not choose a particular identifier when multiple
+active records have the same default flag:
+
+```sql
+SELECT choice_id FROM choices
+WHERE is_active = 'Y'
+ORDER BY is_default DESC;
+```
+
+If the business rule prefers the lowest identifier among equal flags, express
+that rule explicitly with `ORDER BY is_default DESC, choice_id ASC`, using a
+unique identifier. If selection depends on a customer's configured choice,
+resolve that configuration first; an arbitrary identifier is not a substitute
+for the business rule. Review null placement and collation as well.
+
+Capture the complete eligible rows, bind values, effective role and query text
+on both systems. Compare unordered results as multisets and compare ordered
+results according to their declared keys. A different first row among tied
+values is evidence of a portability dependency; it does not by itself prove a
+sort, conversion or arithmetic defect. Oracle's
+[ordering guidance](https://asktom.oracle.com/ords/f?p=100%3A11%3A%3A%3A%3A%3AP11_QUESTION_ID%3A9527481800346557177)
+also requires deterministic keys for predictable row selection.
+
+Keep a failing original application test and its source/target observations in
+the acceptance record while investigating. Changing data defaults, adding an
+undocumented engine tie-breaker, or repeatedly rerunning until a preferred row
+appears does not qualify the original workload. Any approved application change
+needs its own provenance and a separate acceptance run; it must not be reported
+as an unchanged-application result.

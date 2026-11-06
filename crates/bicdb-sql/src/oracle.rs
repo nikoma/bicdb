@@ -1645,6 +1645,7 @@ fn canonical_tokens_with_routine_types(
     } else {
         BTreeSet::new()
     };
+    let escape_syntax = text_patterns::escape_positions(source);
     let mut privilege_command = false;
     let hierarchical = preview
         && source
@@ -1698,6 +1699,11 @@ fn canonical_tokens_with_routine_types(
             && (i == 0 || source[i - 1] != Token::Period)
         {
             pieces.push(render_token(t).to_ascii_uppercase());
+            i += 1;
+            continue;
+        }
+        if escape_syntax.contains(&i) {
+            pieces.push("ESCAPE".into());
             i += 1;
             continue;
         }

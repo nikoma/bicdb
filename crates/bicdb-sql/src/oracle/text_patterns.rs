@@ -820,7 +820,7 @@ mod escape_grammar_tests {
                 ("SELECT escape FROM escape_words WHERE label='I_name'", "I|_%"),
             ] {
                 let lowered = lower_session_sql(session.db_ref(), query, profile, None, "bicdb").unwrap();
-                assert_eq!(session.execute(&lowered).unwrap().rows, vec![vec![SqlValue::Text(expected.into())]], "{query}: {lowered}");
+                assert_eq!(session.execute(&lowered).unwrap().rows, vec![vec![SqlValue::String(expected.into())]], "{query}: {lowered}");
             }
         }
     }

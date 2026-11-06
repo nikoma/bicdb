@@ -345,6 +345,7 @@ equality and application qualification.
 
 The [full foreign-key installation checkpoint](../../../docs/evidence/oracle-full-foreign-key-installation-2026-11-05/README.md)
 records all 3,826 relationships installed on an exercised native target, with
-888 participating-table fingerprints and stored definitions preserved. Complete
-orphan comparison, pristine source value equality and full application acceptance
-remain separate gates.
+888 participating-table fingerprints and stored definitions preserved. Its full
+read-only orphan inventory found zero unmatched references and matched all 3,826
+counts against the independent Oracle replay. Pristine source value equality and
+full application acceptance remain separate gates.

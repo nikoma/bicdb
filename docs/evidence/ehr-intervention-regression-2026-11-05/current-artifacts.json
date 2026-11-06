@@ -1,0 +1,26 @@
+[
+  {
+    "name": "intervention_regression",
+    "fresh": false,
+    "profile": {
+      "opt_level": "0",
+      "debuginfo": 2,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": true
+    },
+    "sha256": "db6a0379562986218802011694c4d07a08e643ed395cb770ab8007d046bad625"
+  },
+  {
+    "name": "bicdb_sql",
+    "fresh": false,
+    "profile": {
+      "opt_level": "0",
+      "debuginfo": 2,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": true
+    },
+    "sha256": "ad4432428dc7ee7f0d1a3ff5e8317f64b0f94076e0f75f9c437195ae757efe14"
+  }
+]

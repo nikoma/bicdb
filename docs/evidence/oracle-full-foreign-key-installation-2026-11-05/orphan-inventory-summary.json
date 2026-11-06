@@ -1,0 +1,24 @@
+{
+  "format": 1,
+  "inventory_completed": true,
+  "relationships_counted": 3826,
+  "relationships_with_orphans": 0,
+  "orphan_relationship_references": 0,
+  "fingerprinted_tables": 888,
+  "all_before_after_fingerprints_equal": true,
+  "definitions_preserved": {
+    "routines": 62,
+    "views": 160
+  },
+  "database_shutdown_returncode": 0,
+  "source_orphan_counts_compared": true,
+  "all_source_target_counts_match": true,
+  "inventory_report_sha256": "c2173fdaaba8c29c661954abe6c900524cc5620e3835a18f2d3e56202192303f",
+  "comparison_report_sha256": "f2f6d636887cab36c945366bb8c20d53ae91364200cbeb078621a6918b107efe",
+  "public_tool_sha256": "2c1a3f1826e625e6705054b256a76d5e7a06beebf26f35e5229a3e3ec3d73230",
+  "tool_source_commit": "6176c47daabc15664e58f9900a7220148e9a4219",
+  "data_compared_to_source": false,
+  "live_source_compared": false,
+  "application_qualified": false,
+  "goal_complete": false
+}

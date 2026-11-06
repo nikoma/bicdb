@@ -1,0 +1,64 @@
+
+running 4 tests
+test regression_slope_ignores_incomplete_pairs_filters_and_distinct_pairs ... ok
+test regression_slope_handles_record_join_and_bound_group_paths ... ok
+test regression_slope_validates_types_arity_and_nonfinite_values ... ok
+test intervention_grouped_stats_inside_sql_function_return_both_sides ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s
+
+running 2 tests
+test empty_ungrouped_aggregates_return_one_postgresql_shaped_row ... ok
+test empty_join_aggregates_are_ungrouped_while_grouped_aggregates_stay_empty ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+
+running 3 tests
+test spot_values_are_the_expected_constants ... ok
+test streamed_aggregates_match_the_materializing_oracle_embedded ... ok
+test streamed_aggregates_match_the_materializing_oracle_paged ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.15s
+
+running 8 tests
+test typed_result_views_preserve_expression_types_without_changing_sql_value ... ok
+test query_result_types_survive_empty_catalog_reflection_results ... ok
+test parameter_types_follow_postgres_common_type_selection ... ok
+test table_unnest_joins_preserve_result_and_delete_parameter_types ... ok
+test parameter_types_follow_schema_assignment_and_expression_context ... ok
+test prepared_array_types_follow_every_context_used_by_cognee ... ok
+test stored_function_parameter_types_follow_the_declared_signature_without_running_the_body ... ok
+test registry_catalog_attribute_and_planner_types_agree_exhaustively ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+
+running 12 tests
+test jsonb_array_element_functions_expand_no_from_projections ... ok
+test jsonb_set_functions_are_strict_and_reject_the_wrong_json_shape ... ok
+test jsonb_each_and_typed_record_functions_match_postgres ... ok
+test jsonb_array_element_functions_preserve_postgres_null_and_text_semantics ... ok
+test jsonb_text_elements_support_cognee_scalar_alias_filters_and_aggregation ... ok
+test jsonb_object_keys_matches_postgres_order_in_from_and_projection_forms ... ok
+test lateral_derived_jsonb_metadata_survives_an_empty_left_input ... ok
+test jsonb_table_functions_are_implicitly_lateral_and_support_explicit_join_kinds ... ok
+test carrier_element_gallery_lateral_derived_query_matches_declared_and_derived_elements ... ok
+test cognee_jsonb_tag_selection_and_removal_flow_preserves_edge_cases ... ok
+test routine_json_fallbacks_infer_aggregate_types_over_derived_sources ... ok
+test json_coalesce_fallbacks_preserve_values_inside_json_constructors ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+
+running 3 tests
+test sql_out_parameters_form_a_single_row_source ... ok
+test date_parameter_arithmetic_retains_its_type_through_timestamp_casts ... ok
+test nested_command_in_json_runs_once_after_dispatch_warms ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+
+running 4 tests
+test array_text_cast_keeps_nondefault_subscripts_for_rollback_copy ... ok
+test unaliased_literals_keep_postgresql_names_through_ctes_and_union_wildcards ... ok
+test array_text_cast_preserves_null_in_record_join_and_aggregate_paths ... ok
+test insight_table_function_preserves_literal_values_and_declared_names ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s

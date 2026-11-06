@@ -1,0 +1,16 @@
+{
+  "format": 1,
+  "phase": "foreign-key-orphan-comparison",
+  "success": true,
+  "comparison_completed": true,
+  "counts_match": true,
+  "compared_relationships": 3826,
+  "mismatches": [],
+  "data_compared_to_source": false,
+  "live_source_compared": false,
+  "application_qualified": false,
+  "manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+  "source_schema": "IDEMPIERE_QUAL",
+  "reference_report_sha256": "183a08e4135c45bdecbf944d90aac5b2d4f7230fd5df3219b403875834459c6f",
+  "target_report_sha256": "c2173fdaaba8c29c661954abe6c900524cc5620e3835a18f2d3e56202192303f"
+}

@@ -1,0 +1,30 @@
+
+running 4 tests
+test regression_slope_handles_record_join_and_bound_group_paths ... FAILED
+test regression_slope_validates_types_arity_and_nonfinite_values ... FAILED
+test regression_slope_ignores_incomplete_pairs_filters_and_distinct_pairs ... FAILED
+test intervention_grouped_stats_inside_sql_function_return_both_sides ... FAILED
+
+failures:
+
+failures:
+    intervention_grouped_stats_inside_sql_function_return_both_sides
+    regression_slope_handles_record_join_and_bound_group_paths
+    regression_slope_ignores_incomplete_pairs_filters_and_distinct_pairs
+    regression_slope_validates_types_arity_and_nonfinite_values
+
+test result: FAILED. 0 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+
+
+thread 'regression_slope_handles_record_join_and_bound_group_paths' (2825493) panicked at /root/ehr-bicdb-intervention-regression.rs:27:34:
+called `Result::unwrap()` on an `Err` value: Unsupported("function regr_slope is not supported without FROM")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'regression_slope_validates_types_arity_and_nonfinite_values' (2825495) panicked at /root/ehr-bicdb-intervention-regression.rs:89:9:
+SELECT regr_slope(label,id) FROM typed_values WHERE false
+
+thread 'regression_slope_ignores_incomplete_pairs_filters_and_distinct_pairs' (2825494) panicked at /root/ehr-bicdb-intervention-regression.rs:41:124:
+called `Result::unwrap()` on an `Err` value: Unsupported("function regr_slope is not supported without FROM")
+
+thread 'intervention_grouped_stats_inside_sql_function_return_both_sides' (2825492) panicked at /root/ehr-bicdb-intervention-regression.rs:68:10:
+called `Result::unwrap()` on an `Err` value: Unsupported("aggregate SELECT cannot mix raw fields and aggregates without GROUP BY")

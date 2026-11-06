@@ -234,9 +234,11 @@ impl<'db> SqlEngine<'db> {
                         .as_deref()
                         .and_then(|result| self.constant_expr_pg_type(result)),
                 );
-                branch_types.extend(conditions.iter().map(|condition| {
-                    projected_expr_pg_type_with_db(self.db_ref(), &condition.result)
-                }));
+                branch_types.extend(
+                    conditions
+                        .iter()
+                        .map(|condition| self.constant_expr_pg_type(&condition.result)),
+                );
                 select_common_pg_type(self.db_ref(), &branch_types, "CASE")?;
                 let operand_value = operand
                     .as_deref()
@@ -251,8 +253,7 @@ impl<'db> SqlEngine<'db> {
                                 .as_deref()
                                 .and_then(|expr| self.constant_expr_pg_type(expr))
                                 .as_deref(),
-                            projected_expr_pg_type_with_db(self.db_ref(), &condition.condition)
-                                .as_deref(),
+                            self.constant_expr_pg_type(&condition.condition).as_deref(),
                         )?
                     } else {
                         sql_value_truth(self.eval_select_constant_expr(&condition.condition)?)?
@@ -430,8 +431,7 @@ impl<'db> SqlEngine<'db> {
                 self.eval_select_constant_expr(expr)?,
                 self.eval_select_constant_expr(r#in)?,
                 self.constant_expr_pg_type(expr).as_deref() == Some("bytea")
-                    || projected_expr_pg_type_with_db(self.db_ref(), r#in).as_deref()
-                        == Some("bytea"),
+                    || self.constant_expr_pg_type(r#in).as_deref() == Some("bytea"),
             ),
             Expr::Trim {
                 trim_where,

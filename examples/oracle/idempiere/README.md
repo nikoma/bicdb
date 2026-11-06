@@ -319,6 +319,25 @@ external schemas, dynamic SQL, routine dependency cycles, privileges, and target
 view types still require independent qualification. Keep the dependency report
 private: it contains source object names and relationships.
 
+Check view labels and broad protocol type families after installation, while
+view DDL is quiesced:
+
+```sh
+python3 examples/oracle/idempiere/verify_view_metadata.py \
+  --snapshot /path/to/snapshot --view-ddl-quiesced \
+  --report /private/view-projections.json
+```
+
+This uses PostgreSQL Parse/Describe without sending Execute, so it does not
+evaluate view rows or invoke functions through row execution. It detects
+unresolved text projections for source numeric/date columns and reports each
+view separately. The current source families supported by this check are
+`NUMBER`, `CHAR`, `VARCHAR2`, and `DATE`; unknown families fail before connection.
+Approximate floating-point metadata is not accepted for arbitrary `NUMBER`.
+Passing this check does not establish precision, scale, character width/padding,
+nullability, values, privileges, or executable business behavior. Reports include
+source object/column names and should be kept private.
+
 ## Explicit JDBC transport preparation
 
 `prepare_provider.py --checkout EXTERNAL_CHECKOUT --report PRIVATE_REPORT.json`

@@ -957,10 +957,18 @@ impl<'db> SqlEngine<'db> {
                 self.eval_slot_row_truth(row, context, expr)?.is_some(),
             )),
             Expr::Exists { subquery, negated } => {
-                let exists = !self
-                    .execute_correlated_slot_query(row, context, subquery)?
-                    .rows
-                    .is_empty();
+                let exists =
+                    if let Some(candidate) = self.exists_candidate_query(row, context, subquery)? {
+                        !self
+                            .run_slot_subquery(row, context, &candidate, None)?
+                            .rows
+                            .is_empty()
+                    } else {
+                        !self
+                            .execute_correlated_slot_query(row, context, subquery)?
+                            .rows
+                            .is_empty()
+                    };
                 Ok(Some(if *negated { !exists } else { exists }))
             }
             Expr::Subquery(query) => {

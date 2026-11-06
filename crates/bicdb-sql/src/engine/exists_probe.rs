@@ -1,0 +1,519 @@
+//! Statement-local candidate indexes for pure correlated equality EXISTS.
+//! The original subquery still executes with a necessary primary-key filter:
+//! projection, type comparisons, privileges and transaction visibility retain
+//! the ordinary execution path. No application-specific identifiers are used.
+use super::*;
+use sqlparser::ast::{LimitClause, Visit, Visitor};
+use std::cell::Cell;
+use std::ops::ControlFlow;
+
+const MAX_PROBE_ENTRIES: usize = 4;
+const MAX_PROBE_ROWS: usize = 65_536;
+const MAX_BUCKET_KEYS: usize = 256;
+const MAX_PROBE_BYTES: usize = 8 * 1024 * 1024;
+
+#[derive(Debug, Default)]
+pub(crate) struct ExistsProbeMemo {
+    depth: Cell<usize>,
+    enabled: Cell<bool>,
+    entries: RefCell<Vec<ProbeEntry>>,
+}
+
+#[derive(Debug)]
+struct ProbeEntry {
+    query: Box<Query>,
+    columns: Vec<String>,
+    plan: Option<Rc<CandidateProbe>>,
+}
+
+#[derive(Debug)]
+struct CandidateProbe {
+    outer_slot: usize,
+    primary_key: Expr,
+    keys: BTreeMap<String, Vec<SqlValue>>,
+}
+
+pub(super) struct ProbeScope<'a> {
+    memo: &'a ExistsProbeMemo,
+    previous: bool,
+}
+
+impl Drop for ProbeScope<'_> {
+    fn drop(&mut self) {
+        let depth = self.memo.depth.get().saturating_sub(1);
+        self.memo.depth.set(depth);
+        self.memo.enabled.set(self.previous);
+        if depth == 0 {
+            self.memo.entries.borrow_mut().clear();
+        }
+    }
+}
+
+impl ExistsProbeMemo {
+    pub(super) fn scope(&self, enabled: bool) -> ProbeScope<'_> {
+        let previous = self.enabled.get();
+        let depth = self.depth.get();
+        self.enabled.set(enabled && (depth == 0 || previous));
+        self.depth.set(depth + 1);
+        ProbeScope {
+            memo: self,
+            previous,
+        }
+    }
+}
+
+/// No outer callbacks or hidden row policies may change a scanned table while
+/// its statement-local candidate index is being reused. Keep unsupported trees
+/// on the ordinary evaluator, including views, functions and modifying CTEs.
+pub(super) fn probe_query_safe(db: &BicDb, query: &Query) -> bool {
+    if !super::row_eval::subquery_is_memoizable(db, query) {
+        return false;
+    }
+    struct Check<'a>(&'a BicDb);
+    impl Visitor for Check<'_> {
+        type Break = ();
+        fn pre_visit_query(&mut self, query: &Query) -> ControlFlow<()> {
+            if query.for_clause.is_some()
+                || query.settings.is_some()
+                || query.format_clause.is_some()
+                || !query.pipe_operators.is_empty()
+            {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        }
+        fn pre_visit_select(&mut self, select: &Select) -> ControlFlow<()> {
+            if select.into.is_some() {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        }
+        fn pre_visit_expr(&mut self, expression: &Expr) -> ControlFlow<()> {
+            if let Expr::Function(function) = expression {
+                let Ok(name) = object_name_lowercase(&function.name) else {
+                    return ControlFlow::Break(());
+                };
+                if !matches!(
+                    name.as_ref(),
+                    "count"
+                        | "min"
+                        | "max"
+                        | "sum"
+                        | "avg"
+                        | "pg_catalog.count"
+                        | "pg_catalog.min"
+                        | "pg_catalog.max"
+                        | "pg_catalog.sum"
+                        | "pg_catalog.avg"
+                ) {
+                    return ControlFlow::Break(());
+                }
+            }
+            ControlFlow::Continue(())
+        }
+        fn pre_visit_table_factor(&mut self, factor: &TableFactor) -> ControlFlow<()> {
+            if let TableFactor::Table {
+                name,
+                args: None,
+                sample: None,
+                version: None,
+                ..
+            } = factor
+            {
+                let Ok(name) = relation_name(name) else {
+                    return ControlFlow::Break(());
+                };
+                let resolved = resolve_session_relation_name_if_exists(self.0, &name);
+                if matches!(load_schema(self.0, &resolved), Ok(Some(schema)) if !schema.rls_enabled && schema.policies.is_empty())
+                {
+                    return ControlFlow::Continue(());
+                }
+            } else if !matches!(factor, TableFactor::Table { .. }) {
+                return ControlFlow::Continue(());
+            }
+            ControlFlow::Break(())
+        }
+    }
+    query.visit(&mut Check(db)).is_continue()
+}
+
+fn bounded_numeric(column: &ColumnSchema) -> bool {
+    match pg_type_oid_by_name(&column.pg_type) {
+        Some(20 | 21 | 23) => true,
+        Some(1700) => matches!(
+            column.type_modifier,
+            Some(PgTypeModifier::Numeric {
+                precision: 1..=38,
+                scale: -38..=38
+            })
+        ),
+        _ => false,
+    }
+}
+
+fn numeric_key(db: &BicDb, value: &SqlValue) -> Option<String> {
+    match value {
+        SqlValue::Int(_) | SqlValue::String(_) => {
+            pg_typed_index_label_for_db(db, "numeric", value).ok()
+        }
+        _ => None,
+    }
+}
+
+fn parts(expr: &Expr) -> Option<Vec<String>> {
+    let names = match unwrap_nested_expr(expr) {
+        Expr::Identifier(name) => vec![ident_value(name)],
+        Expr::CompoundIdentifier(names) => names.iter().map(ident_value).collect(),
+        _ => return None,
+    };
+    (!names.iter().any(|name| name.contains('.'))).then_some(names)
+}
+
+fn numeric_correlation(
+    expression: &Expr,
+    qualifier: &[String],
+    schema: &TableSchema,
+    context: &BoundRowContext,
+    engine: &SqlEngine<'_>,
+) -> Option<(Expr, usize)> {
+    fn inner<'a>(
+        expression: &'a Expr,
+        qualifier: &[String],
+        schema: &'a TableSchema,
+    ) -> Option<&'a ColumnSchema> {
+        let names = parts(expression)?;
+        let (column, owner) = names.split_last()?;
+        if !(owner.is_empty() || owner == qualifier || owner == &qualifier[qualifier.len() - 1..]) {
+            return None;
+        }
+        schema.column(column)
+    }
+    fn outer(
+        expression: &Expr,
+        qualifier: &[String],
+        schema: &TableSchema,
+        context: &BoundRowContext,
+    ) -> Option<usize> {
+        // The same unqualified name belongs to the inner scope first.
+        let names = parts(expression)?;
+        if inner(expression, qualifier, schema).is_some() {
+            return None;
+        }
+        context.row_lookup.slot_for_key(&names.join("."))
+    }
+    fn collect(
+        expression: &Expr,
+        qualifier: &[String],
+        schema: &TableSchema,
+        context: &BoundRowContext,
+        engine: &SqlEngine<'_>,
+        key: &mut Option<(Expr, usize)>,
+    ) -> Option<()> {
+        match unwrap_nested_expr(expression) {
+            Expr::BinaryOp {
+                left,
+                op: BinaryOperator::And,
+                right,
+            } => {
+                collect(left, qualifier, schema, context, engine, key)?;
+                collect(right, qualifier, schema, context, engine, key)
+            }
+            Expr::BinaryOp {
+                left,
+                op: BinaryOperator::Eq,
+                right,
+            } => {
+                for (candidate, outside) in [
+                    (left.as_ref(), right.as_ref()),
+                    (right.as_ref(), left.as_ref()),
+                ] {
+                    if let (Some(column), Some(slot)) = (
+                        inner(candidate, qualifier, schema),
+                        outer(outside, qualifier, schema, context),
+                    ) {
+                        let outer_type = engine.row_expr_pg_type(outside, context);
+                        let outer_oid = outer_type
+                            .as_deref()
+                            .and_then(|kind| pg_type_oid_by_name(kind));
+                        let inner_oid = pg_type_oid_by_name(&column.pg_type);
+                        let numeric = |oid| matches!(oid, Some(20 | 21 | 23 | 1700));
+                        let character = |oid| matches!(oid, Some(25 | 1042 | 1043));
+                        if !((numeric(inner_oid) && numeric(outer_oid))
+                            || (character(inner_oid) && character(outer_oid)))
+                        {
+                            return None;
+                        }
+                        if key.is_none() && bounded_numeric(column) {
+                            *key = Some((candidate.clone(), slot));
+                        }
+                        return Some(());
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+    let mut key = None;
+    collect(expression, qualifier, schema, context, engine, &mut key)?;
+    key
+}
+
+impl SqlEngine<'_> {
+    /// Returns an equivalent subquery restricted to candidate primary keys, or
+    /// declines. Numeric canonicalization may include extra candidates; the
+    /// original equality predicates remain responsible for the final result.
+    pub(super) fn exists_candidate_query(
+        &self,
+        row: &SlotRow,
+        context: &BoundRowContext,
+        query: &Query,
+    ) -> Result<Option<Query>> {
+        if !self.exists_probe_memo.enabled.get() || self.outer_row.is_some() {
+            return Ok(None);
+        }
+        let columns = context.row_lookup.columns();
+        let cached = self
+            .exists_probe_memo
+            .entries
+            .borrow()
+            .iter()
+            .find(|entry| entry.query.as_ref() == query && entry.columns == columns)
+            .map(|entry| entry.plan.clone());
+        let plan = match cached {
+            Some(plan) => plan,
+            None => {
+                if self.exists_probe_memo.entries.borrow().len() >= MAX_PROBE_ENTRIES {
+                    return Ok(None);
+                }
+                let plan = self
+                    .build_exists_candidate_probe(context, query)?
+                    .map(Rc::new);
+                self.exists_probe_memo
+                    .entries
+                    .borrow_mut()
+                    .push(ProbeEntry {
+                        query: Box::new(query.clone()),
+                        columns: columns.to_vec(),
+                        plan: plan.clone(),
+                    });
+                plan
+            }
+        };
+        let Some(plan) = plan else {
+            return Ok(None);
+        };
+        let Some(value) = row.get(plan.outer_slot) else {
+            return Ok(None);
+        };
+        let keys = if matches!(value, SqlValue::Null) {
+            &[][..]
+        } else {
+            let Some(key) = numeric_key(self.db_ref(), value) else {
+                return Ok(None);
+            };
+            plan.keys.get(&key).map(Vec::as_slice).unwrap_or(&[])
+        };
+        if keys.len() > MAX_BUCKET_KEYS {
+            return Ok(None);
+        }
+        let mut limited = query.clone();
+        let SetExpr::Select(select) = limited.body.as_mut() else {
+            return Ok(None);
+        };
+        let list = if keys.is_empty() {
+            vec![Expr::Value(Value::Null.into())]
+        } else {
+            keys.iter()
+                .map(|value| match value {
+                    SqlValue::Int(value) => {
+                        Expr::Value(Value::Number(value.to_string(), false).into())
+                    }
+                    _ => Expr::Value(Value::SingleQuotedString(value.to_cell()).into()),
+                })
+                .collect()
+        };
+        // Even an empty candidate set executes the original projection and
+        // relation authorization path; it is never an authorization shortcut.
+        let filter = Expr::InList {
+            expr: Box::new(plan.primary_key.clone()),
+            list,
+            negated: false,
+        };
+        let Some(original) = select.selection.take() else {
+            return Ok(None);
+        };
+        select.selection = Some(Expr::BinaryOp {
+            left: Box::new(Expr::Nested(Box::new(original))),
+            op: BinaryOperator::And,
+            right: Box::new(filter),
+        });
+        Ok(Some(limited))
+    }
+
+    fn build_exists_candidate_probe(
+        &self,
+        context: &BoundRowContext,
+        query: &Query,
+    ) -> Result<Option<CandidateProbe>> {
+        if query.with.is_some()
+            || query.for_clause.is_some()
+            || query.settings.is_some()
+            || query.format_clause.is_some()
+            || !query.pipe_operators.is_empty()
+            || query.limit_clause.is_some()
+            || query.fetch.is_some()
+            || !query.locks.is_empty()
+        {
+            return Ok(None);
+        }
+        let SetExpr::Select(select) = query.body.as_ref() else {
+            return Ok(None);
+        };
+        if select.top.is_some()
+            || select.into.is_some()
+            || select.exclude.is_some()
+            || select.prewhere.is_some()
+            || select.qualify.is_some()
+            || select.value_table_mode.is_some()
+            || select.select_modifiers.is_some()
+            || !select.lateral_views.is_empty()
+            || !select.connect_by.is_empty()
+            || !select.named_window.is_empty()
+            || !select.cluster_by.is_empty()
+            || !select.distribute_by.is_empty()
+            || !select.sort_by.is_empty()
+            || !select.optimizer_hints.is_empty()
+        {
+            return Ok(None);
+        }
+        if select.from.len() != 1
+            || !select.from[0].joins.is_empty()
+            || select.distinct.is_some()
+            || select.having.is_some()
+            || !matches!(&select.group_by, GroupByExpr::Expressions(values, modifiers) if values.is_empty() && modifiers.is_empty())
+        {
+            return Ok(None);
+        }
+        let TableFactor::Table {
+            name,
+            alias,
+            args: None,
+            sample: None,
+            version: None,
+            partitions,
+            with_hints,
+            with_ordinality: false,
+            json_path: None,
+            index_hints,
+        } = &select.from[0].relation
+        else {
+            return Ok(None);
+        };
+        if !partitions.is_empty()
+            || !with_hints.is_empty()
+            || !index_hints.is_empty()
+            || alias
+                .as_ref()
+                .is_some_and(|alias| !alias.columns.is_empty())
+        {
+            return Ok(None);
+        }
+        let name_string = relation_name(name)?;
+        let resolved = resolve_session_relation_name_if_exists(self.db_ref(), &name_string);
+        let Some(schema) = load_schema(self.db_ref(), &resolved)? else {
+            return Ok(None);
+        };
+        if schema.rls_enabled || !schema.policies.is_empty() {
+            return Ok(None);
+        }
+        let primary_names = primary_key_columns_for_schema(&schema);
+        let [primary_name] = primary_names.as_slice() else {
+            return Ok(None);
+        };
+        let Some(primary) = schema
+            .column(primary_name)
+            .filter(|column| !column.hidden && bounded_numeric(column))
+        else {
+            return Ok(None);
+        };
+        let qualifier = alias
+            .as_ref()
+            .map(|alias| vec![ident_value(&alias.name)])
+            .unwrap_or_else(|| object_name_parts(name));
+        if qualifier.is_empty() {
+            return Ok(None);
+        }
+        let Some(selection) = select.selection.as_ref() else {
+            return Ok(None);
+        };
+        let Some((key_expr, outer_slot)) =
+            numeric_correlation(selection, &qualifier, &schema, context, self)
+        else {
+            return Ok(None);
+        };
+        let mut primary_parts = qualifier
+            .iter()
+            .map(|name| Ident::with_quote('"', name))
+            .collect::<Vec<_>>();
+        primary_parts.push(Ident::with_quote('"', &primary.name));
+        let primary_key = Expr::CompoundIdentifier(primary_parts);
+        let mut scan = query.clone();
+        let SetExpr::Select(projection) = scan.body.as_mut() else {
+            return Ok(None);
+        };
+        projection.projection = vec![
+            SelectItem::UnnamedExpr(key_expr),
+            SelectItem::UnnamedExpr(primary_key.clone()),
+        ];
+        projection.selection = None;
+        scan.order_by = None;
+        scan.limit_clause = Some(LimitClause::LimitOffset {
+            limit: Some(Expr::Value(
+                Value::Number((MAX_PROBE_ROWS + 1).to_string(), false).into(),
+            )),
+            offset: None,
+            limit_by: Vec::new(),
+        });
+        let result = match self.execute_query(&scan) {
+            Ok(result) => result,
+            Err(_) => {
+                self.check_cancellation()?;
+                return Ok(None);
+            }
+        };
+        if result.rows.len() > MAX_PROBE_ROWS
+            || sql_result_memory_estimate(&result) > MAX_PROBE_BYTES
+        {
+            return Ok(None);
+        }
+        let mut keys = BTreeMap::<String, Vec<SqlValue>>::new();
+        let mut bytes = 0usize;
+        for (index, values) in result.rows.into_iter().enumerate() {
+            if index % 1024 == 0 {
+                self.check_cancellation()?;
+            }
+            let [value, primary] = values.as_slice() else {
+                return Ok(None);
+            };
+            if matches!(value, SqlValue::Null) {
+                continue;
+            }
+            let Some(key) = numeric_key(self.db_ref(), value) else {
+                return Ok(None);
+            };
+            bytes = bytes.saturating_add(key.len() + sql_value_memory_estimate(primary) + 128);
+            if bytes > MAX_PROBE_BYTES {
+                return Ok(None);
+            }
+            keys.entry(key).or_default().push(primary.clone());
+        }
+        Ok(Some(CandidateProbe {
+            outer_slot,
+            primary_key,
+            keys,
+        }))
+    }
+}

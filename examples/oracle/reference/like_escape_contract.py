@@ -44,9 +44,55 @@ CONTEXT_PLANS = [
 ]
 
 
-def observe(factory):
+def national_plans():
+    """Read-only character-family probes; expected values come from the source."""
+    def literal(value, national):
+        return ('N' if national else '') + "'" + value.replace("'", "''") + "'"
+    plans = []
+    for national in [False, True]:
+        family = 'national' if national else 'ordinary'
+        for label, value in [('bmp', 'é'), ('supplementary', '😀'), ('composite', 'e\u0301')]:
+            for number, pattern in enumerate(['_', '__', '%', '_%', '%_', value]):
+                plans.append((f'{family}_{label}_{number}',
+                              literal(value, national)+' LIKE '+literal(pattern, national), {}))
+        for pattern in ['_', '__']:
+            plans.append((f'{family}_mixed_pattern_{len(pattern)}',
+                          literal('😀', national)+' LIKE '+literal(pattern, not national), {}))
+        for pattern_national in [False, True]:
+            for escape_national in [False, True]:
+                for label, escape in [('ascii', '|'), ('latin', '§'), ('han', '界'), ('supplementary', '😀')]:
+                    plans.append((f'{family}_escape_{label}_p{int(pattern_national)}_e{int(escape_national)}',
+                                  literal('x%tail', national)+' LIKE '
+                                  +literal('x'+escape+'%%', pattern_national)+' ESCAPE '
+                                  +literal(escape, escape_national), {}))
+    plans.extend([
+        ('national_null_escape', "N'abc' LIKE N'abc' ESCAPE NULL", {}),
+        ('national_empty_escape', "N'abc' LIKE N'abc' ESCAPE N''", {}),
+        ('national_null_source', "CAST(NULL AS NVARCHAR2(8)) LIKE N'abc' ESCAPE N'§'", {}),
+        ('national_null_pattern', "N'abc' LIKE CAST(NULL AS NVARCHAR2(8))", {}),
+        ('national_fixed_source_no_padding_pattern', "CAST(N'A' AS NCHAR(3)) LIKE N'A'", {}),
+        ('national_fixed_source_wildcard_padding', "CAST(N'A' AS NCHAR(3)) LIKE N'A__'", {}),
+        ('ordinary_fixed_source_national_pattern', "CAST('A' AS CHAR(3)) LIKE N'A__'", {}),
+        ('national_fixed_pattern', "N'A' LIKE CAST(N'A' AS NCHAR(3))", {}),
+        ('national_cast_single_escape', "N'x%tail' LIKE N'x§%%' ESCAPE CAST(N'§' AS NCHAR(1))", {}),
+        ('national_cast_padded_escape', "N'x%tail' LIKE N'x§%%' ESCAPE CAST(N'§' AS NCHAR(2))", {}),
+    ])
+    return plans
+
+
+NATIONAL_CONTEXT_PLANS = [
+    ('national_null_input', "SELECT COUNT(*) FROM (SELECT CAST(NULL AS NVARCHAR2(8)) AS v FROM DUAL) WHERE v LIKE N'abc' ESCAPE N'§'", {}),
+    ('national_empty_input', "SELECT COUNT(*) FROM (SELECT CAST('abc' AS NVARCHAR2(8)) AS v FROM DUAL WHERE 1=0) WHERE v LIKE N'abc' ESCAPE NULL", {}),
+]
+
+
+def observe(factory, *, contract='ordinary'):
     import oracledb
-    report = dict(format=1, reference='oracle', original_application_objects_modified=False,
+    if contract not in {'ordinary', 'national'}:
+        raise ValueError('unknown LIKE observation contract')
+    plans = PLANS if contract == 'ordinary' else national_plans()
+    contexts = CONTEXT_PLANS if contract == 'ordinary' else NATIONAL_CONTEXT_PLANS
+    report = dict(format=1, reference='oracle', contract=contract, original_application_objects_modified=False,
                   cases=[], observation_completed=False, implementation_qualified=False,
                   application_qualified=False)
     with factory() as connection:
@@ -69,7 +115,7 @@ def observe(factory):
                      'bind_length', 'bind_byte_length', 'bind_dump'], cursor.fetchone()))
                 report['reference_driver_version'] = oracledb.__version__
                 report['reference_driver_thin_mode'] = oracledb.is_thin_mode()
-                for name, predicate, binds in PLANS:
+                for name, predicate, binds in plans:
                     sql = 'SELECT CASE WHEN (' + predicate + ') THEN 1 WHEN NOT (' + predicate + ') THEN 0 ELSE 2 END FROM DUAL'
                     item = dict(id=name, sql=sql, binds=binds)
                     try:
@@ -85,7 +131,7 @@ def observe(factory):
                             raise
                     report['cases'].append(item)
                 report['predicate_contexts'] = []
-                for name, sql, binds in CONTEXT_PLANS:
+                for name, sql, binds in contexts:
                     item = dict(id=name, sql=sql, binds=binds)
                     try:
                         cursor.execute(sql, binds or None)
@@ -101,8 +147,8 @@ def observe(factory):
                     report['predicate_contexts'].append(item)
         finally:
             connection.rollback()
-    report['observation_completed'] = (len(report['cases']) == len(PLANS)
-                                       and len(report['predicate_contexts']) == len(CONTEXT_PLANS))
+    report['observation_completed'] = (len(report['cases']) == len(plans)
+                                       and len(report['predicate_contexts']) == len(contexts))
     report['connection_closed'] = True
     return report
 
@@ -111,6 +157,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--oracle-config', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--contract', choices=['ordinary', 'national'], default='ordinary')
     args = parser.parse_args()
     import oracledb
     config = json.loads(args.oracle_config.read_text())
@@ -122,7 +169,7 @@ def main():
     def factory():
         return oracledb.connect(user=config['user'], password=password.read_text().strip(),
                                 host=config['host'], port=config['port'], service_name=config['service_name'])
-    report = observe(factory)
+    report = observe(factory, contract=args.contract)
     args.output.write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(dict(observation_completed=report['observation_completed'], cases=len(report['cases']))))
     return 0 if report['observation_completed'] else 1

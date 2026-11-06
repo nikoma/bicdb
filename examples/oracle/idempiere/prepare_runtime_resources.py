@@ -18,7 +18,7 @@ RESOURCE_DIRECTORIES = ('data', 'utils.unix', 'utils.windows')
 MAX_RESOURCE_BYTES = 128 * 1024 * 1024
 
 
-def inventory(upstream):
+def inventory(upstream, allowed=None):
     upstream = Path(upstream).resolve()
     feature = upstream / FEATURE
     if not (feature / 'data').is_dir():
@@ -35,27 +35,32 @@ def inventory(upstream):
                 raise ValueError('application resources must be regular files/directories')
             if stat.S_ISDIR(mode):
                 continue
+            relative = path.relative_to(upstream).as_posix()
+            if allowed is not None and relative not in allowed:
+                continue
             total += path.stat().st_size
             if total > MAX_RESOURCE_BYTES or len(files) >= 20000:
                 raise ValueError('application resource copy exceeds its bounded inventory')
-            files[path.relative_to(upstream).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+            files[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
     return files
 
 
-def prepare(upstream, home):
+def prepare(upstream, home, resource_files=None):
     upstream, home = Path(upstream).resolve(), Path(home).resolve()
     if home == upstream or upstream in home.parents or home in upstream.parents:
         raise ValueError('private application home must be separate from upstream')
     if home.exists():
         raise ValueError('private application home must be new')
-    before = inventory(upstream)
+    before = inventory(upstream, resource_files)
+    if resource_files is not None and set(before) != resource_files:
+        raise ValueError('tracked resource files are missing')
     home.mkdir(parents=True)
-    for name in RESOURCE_DIRECTORIES:
-        source = upstream / FEATURE / name
-        if source.exists():
-            shutil.copytree(source, home / FEATURE / name)
+    for relative in before:
+        destination = home / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(upstream / relative, destination)
     after = inventory(home)
-    if before != after or inventory(upstream) != before:
+    if before != after or inventory(upstream, resource_files) != before:
         raise ValueError('resource copy differs from upstream; preserve both inputs for inspection')
     return dict(format=1, resource_files=before, file_count=len(before),
                 copied_resources_verified=True, upstream_resources_unchanged=True,
@@ -77,14 +82,15 @@ def main():
     relative = [FEATURE + '/' + name for name in RESOURCE_DIRECTORIES]
     subprocess.run(['git', 'diff', '--quiet', 'HEAD', '--', *relative], cwd=upstream, check=True)
     tracked = set(subprocess.check_output(['git', 'ls-files', '-z', '--', *relative], cwd=upstream).decode().split('\0')) - {''}
-    if set(inventory(upstream)) != tracked:
+    if set(inventory(upstream, tracked)) != tracked:
         parser.error('resource inventory differs from the tracked upstream files')
     report = args.report.resolve()
     if report.exists() or report == upstream or upstream in report.parents:
         parser.error('report must be new and outside the upstream checkout')
     if report == args.home.resolve() or args.home.resolve() in report.parents:
         parser.error('report must be outside the new application home')
-    result = prepare(upstream, args.home)
+    result = prepare(upstream, args.home, tracked)
+    result['only_tracked_upstream_resources_copied'] = True
     result['upstream_commit'] = commit
     report.write_text(json.dumps(result, indent=2) + '\n')
 

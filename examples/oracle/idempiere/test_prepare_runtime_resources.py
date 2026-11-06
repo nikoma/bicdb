@@ -28,6 +28,16 @@ class RuntimeResourceTests(unittest.TestCase):
         (home / FEATURE / 'data/import/original.csv').write_text('local')
         self.assertEqual(original, inventory(self.upstream))
 
+    def test_selected_tracked_resources_exclude_generated_seed_archives(self):
+        tracked = set(inventory(self.upstream))
+        generated = self.data / 'generated.jar'
+        generated.write_bytes(b'generated database archive')
+        home = self.root / 'home'
+        result = prepare(self.upstream, home, tracked)
+        self.assertEqual(result['file_count'], 1)
+        self.assertFalse((home / generated.relative_to(self.upstream)).exists())
+        self.assertEqual(generated.read_bytes(), b'generated database archive')
+
     def test_existing_destination_is_preserved(self):
         home = self.root / 'home'
         home.mkdir()

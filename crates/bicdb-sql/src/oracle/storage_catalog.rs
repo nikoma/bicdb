@@ -191,11 +191,15 @@ impl SqlEngine<'_> {
         for extent in inventory.extents {
             self.check_cancellation()?;
             let integer = |value: u64| {
-                i64::try_from(value).map(SqlValue::Int).map_err(|_| {
+                let value = i64::try_from(value).map_err(|_| {
                     SqlError::numeric_value_out_of_range(
                         "native storage extent exceeds signed file-offset range",
                     )
-                })
+                })?;
+                // NUMBER/numeric uses the exact decimal carrier throughout
+                // the engine. An Int carrier would silently select integer
+                // division and the wrong aggregate/arithmetic overloads.
+                Ok::<_, SqlError>(SqlValue::String(value.to_string()))
             };
             let bytes = extent
                 .pages
@@ -205,11 +209,11 @@ impl SqlEngine<'_> {
                 })?;
             rows.push(virtual_row([
                 ("TABLESPACE_NAME", SqlValue::String("BICDB_PAGED".into())),
-                ("FILE_ID", SqlValue::Int(1)),
+                ("FILE_ID", integer(1)?),
                 ("BLOCK_ID", integer(extent.start_page)?),
                 ("BYTES", integer(bytes)?),
                 ("BLOCKS", integer(extent.pages)?),
-                ("RELATIVE_FNO", SqlValue::Int(1)),
+                ("RELATIVE_FNO", integer(1)?),
             ]));
         }
         Ok(rows)

@@ -154,6 +154,19 @@ class StorageCatalogNativeTests(unittest.TestCase):
             if isinstance(report, str):
                 report = json.loads(report)
             self.assertEqual(sum(row[4] for row in runs), report['paged']['free_pages'])
+            # Declared numeric columns must retain decimal arithmetic inside
+            # aggregates, rather than merely advertise numeric wire OIDs.
+            from decimal import Decimal, ROUND_HALF_UP
+            c.execute('SELECT SUM("BYTES")/1024/1024, '
+                      'ROUND(MAX("BYTES")/SUM("BYTES"),2)*100, '
+                      'SUM("BLOCKS"), MAX("BLOCKS") FROM '+NATIVE)
+            free_mb, ratio, blocks, largest = c.fetchone()
+            total_bytes = sum(row[3] for row in runs)
+            self.assertEqual(free_mb, total_bytes/Decimal(1024)/1024)
+            self.assertEqual(ratio, (max(row[3] for row in runs)/total_bytes).quantize(
+                Decimal('.01'), rounding=ROUND_HALF_UP)*100)
+            self.assertEqual((blocks, largest),
+                             (sum(row[4] for row in runs),max(row[4] for row in runs)))
             c.execute("SET bicdb.storage_inventory_max_read_bytes='1'")
             with self.assertRaises(psycopg.errors.ProgramLimitExceeded):
                 c.execute('SELECT * FROM '+NATIVE)

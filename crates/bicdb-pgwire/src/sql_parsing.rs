@@ -1261,10 +1261,16 @@ pub(crate) fn execute_savepoint_command(
                 return Err(PgWireError::InFailedTransaction);
             }
             if !state.in_transaction {
-                return Err(SqlError::InvalidTransactionState {
-                    message: "SAVEPOINT can only be used in transaction blocks".to_string(),
+                if server.config.sql_profile == bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE {
+                    // Oracle SAVEPOINT can establish an otherwise idle
+                    // transaction; PostgreSQL retains its explicit-block rule.
+                    begin_buffered_transaction(server, state)?;
+                } else {
+                    return Err(SqlError::InvalidTransactionState {
+                        message: "SAVEPOINT can only be used in transaction blocks".to_string(),
+                    }
+                    .into());
                 }
-                .into());
             }
             state.savepoints.push(SavepointMark {
                 name,
@@ -1283,6 +1289,9 @@ pub(crate) fn execute_savepoint_command(
         }
         SavepointCommand::RollbackTo(name) => {
             if !state.in_transaction {
+                if server.config.sql_profile == bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE {
+                    return Err(missing_transport_savepoint(server, state, name));
+                }
                 return Err(SqlError::InvalidTransactionState {
                     message: "ROLLBACK TO SAVEPOINT can only be used in transaction blocks"
                         .to_string(),
@@ -1320,6 +1329,9 @@ pub(crate) fn execute_savepoint_command(
                 return Err(PgWireError::InFailedTransaction);
             }
             if !state.in_transaction {
+                if server.config.sql_profile == bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE {
+                    return Err(missing_transport_savepoint(server, state, name));
+                }
                 return Err(SqlError::InvalidTransactionState {
                     message: "RELEASE SAVEPOINT can only be used in transaction blocks".to_string(),
                 }

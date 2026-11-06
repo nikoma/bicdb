@@ -25,6 +25,30 @@ class MissingSavepointCases:
             detail = json.loads(caught.exception.diag.message_detail)
             self.assertEqual(detail['oracle_error_stack'][0]['code'], -1086)
 
+    def test_idle_savepoint_boundary_keeps_profile_specific_transaction_rules(self):
+        import psycopg
+        connection = self.fixture()
+        for command in ['ROLLBACK TO SAVEPOINT expired', 'RELEASE SAVEPOINT expired']:
+            if self.profile == 'postgres':
+                with self.assertRaises(psycopg.errors.NoActiveSqlTransaction):
+                    connection.execute(command)
+            else:
+                self.missing(connection, command)
+            self.assertEqual(connection.info.transaction_status.name, 'IDLE')
+        if self.profile == 'postgres':
+            with self.assertRaises(psycopg.errors.NoActiveSqlTransaction):
+                connection.execute('SAVEPOINT idle_mark')
+            self.assertEqual(connection.info.transaction_status.name, 'IDLE')
+        else:
+            connection.execute('SAVEPOINT idle_mark')
+            self.assertEqual(connection.info.transaction_status.name, 'INTRANS')
+            connection.execute('INSERT INTO retained_rows VALUES(9)')
+            connection.execute('ROLLBACK TO SAVEPOINT idle_mark')
+            self.assertEqual(connection.execute('SELECT id FROM retained_rows').fetchall(), [])
+            connection.execute('COMMIT')
+            self.missing(connection, 'ROLLBACK TO SAVEPOINT idle_mark')
+            self.assertEqual(connection.info.transaction_status.name, 'IDLE')
+
     def test_missing_rollback_preserves_rows_and_existing_savepoints(self):
         import psycopg
         connection = self.fixture()

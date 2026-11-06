@@ -1,0 +1,26 @@
+{
+  "status": "BOUNDED_PACKAGE_AND_TRUTHFUL_QUORUM_REGRESSIONS_VERIFIED",
+  "implementation_commit": "65901d1",
+  "tests": {
+    "passed": 63,
+    "failed": 0,
+    "ignored": 4
+  },
+  "causal_before": {
+    "source_commit": "d69b5daf9d073b0d5739685bbbf37bda4244e470",
+    "supervisor_sha256": "5b193aaeaf1b74afbe55d0759ec2316a5e3f5bced5ce89ded1e6eaeb0877d759",
+    "large_package": "EXPECTED_FAILURE",
+    "quorum_http_status": "EXPECTED_FAILURE"
+  },
+  "causal_after": {
+    "large_package": "PASS",
+    "quorum_http_status": "PASS"
+  },
+  "production_deployed": false,
+  "actual_ehr_ha": "REQUIRES_REQUALIFICATION",
+  "logs": {
+    "app-host.log": "c7cef11e6fd8807b21c09cf83d71d8d3103059f9edd32da613c892dbf39dd21c",
+    "quorum-status-before.log": "21f13126f63fe68ff0b83f6525b106786e57acf08a29a6608a7a4f91a825669f",
+    "large-package-before.log": "2cb3f97eae2aa83972cd58e2b2db0b38d90473822ab13d52e5ab5674a5635504"
+  }
+}

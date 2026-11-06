@@ -9,6 +9,12 @@ acknowledgement.
 
 The database stores immutable release packages, desired deployment state,
 migration receipts, transaction receipts, SQL data and job delivery state.
+Large immutable packages use bounded, individually quorum-confirmed pieces;
+a verified header is published after the complete package is durable. Old JSON
+packages remain readable. Upgrade every state host before publishing chunked
+packages, since old supervisors cannot interpret that header. Unconfirmed
+locally durable management writes return HTTP 503 and require an idempotent
+operator retry; they are never automatically replayed.
 Local unpacked files and `deployment.json` are verified caches. A successor
 recovers the active and previous packages from its database without another
 upload. Activation publishes an inactive deployment before migrations and an

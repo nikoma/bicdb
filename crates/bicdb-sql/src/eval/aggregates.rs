@@ -4,8 +4,132 @@ use super::*;
 #[allow(unused_imports)]
 use crate::*;
 
+/// PostgreSQL's two-input least-squares slope. Both expressions must be non-null
+/// in a pair; centering the accumulators avoids cancellation for epoch/day axes.
+#[derive(Clone, Debug)]
+pub(crate) struct RegressionSlope {
+    y: Expr,
+    x: Expr,
+    distinct: bool,
+    filter: Option<Expr>,
+}
+
+pub(crate) fn is_regression_slope(function: &Function) -> bool {
+    matches!(
+        object_name(&function.name)
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+            .as_str(),
+        "regr_slope" | "pg_catalog.regr_slope"
+    )
+}
+
+impl RegressionSlope {
+    pub(crate) fn from_function(function: &Function) -> Result<Self> {
+        let args = function_arg_list(function);
+        if args.len() != 2 || !function.within_group.is_empty() {
+            return Err(SqlError::undefined_function(
+                "regr_slope requires two numeric arguments",
+            ));
+        }
+        Ok(Self {
+            y: args.get(0).unwrap().clone(),
+            x: args.get(1).unwrap().clone(),
+            distinct: function_args_are_distinct(function),
+            filter: function.filter.as_deref().cloned(),
+        })
+    }
+
+    pub(crate) fn validate_types(
+        &self,
+        mut lookup: impl FnMut(&Expr) -> Option<String>,
+    ) -> Result<()> {
+        for expr in [&self.y, &self.x] {
+            if lookup(expr).is_some_and(|ty| {
+                !matches!(
+                    ty.as_str(),
+                    "int2" | "int4" | "int8" | "float4" | "float8" | "numeric"
+                )
+            }) {
+                return Err(SqlError::undefined_function(
+                    "regr_slope requires two numeric arguments",
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn evaluate<T>(
+        &self,
+        rows: &[T],
+        mut eval: impl FnMut(&T, &Expr) -> Result<SqlValue>,
+    ) -> Result<SqlValue> {
+        let mut seen = BTreeSet::new();
+        let (mut n, mut mean_x, mut mean_y, mut sxx, mut sxy) =
+            (0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64);
+        for row in rows {
+            if let Some(filter) = &self.filter {
+                if !matches!(sql_value_truth(eval(row, filter)?)?, Some(true)) {
+                    continue;
+                }
+            }
+            let y = eval(row, &self.y)?;
+            let x = eval(row, &self.x)?;
+            if matches!(y, SqlValue::Null) || matches!(x, SqlValue::Null) {
+                continue;
+            }
+            // PostgreSQL resolves both arguments to float8 before DISTINCT.
+            let SqlValue::Float(y) = cast_value_to_float(y, "float8")? else {
+                unreachable!()
+            };
+            let SqlValue::Float(x) = cast_value_to_float(x, "float8")? else {
+                unreachable!()
+            };
+            if self.distinct
+                && !seen.insert((
+                    sql_value_distinct_key(&SqlValue::Float(y)),
+                    sql_value_distinct_key(&SqlValue::Float(x)),
+                ))
+            {
+                continue;
+            }
+            n += 1.0;
+            if n == 1.0 {
+                mean_x = x;
+                mean_y = y;
+                if !x.is_finite() {
+                    sxx = f64::NAN;
+                }
+                if !x.is_finite() || !y.is_finite() {
+                    sxy = f64::NAN;
+                }
+                continue;
+            }
+            let dx = x - mean_x;
+            let dy = y - mean_y;
+            mean_x += dx / n;
+            mean_y += dy / n;
+            let next_sxx = sxx + dx * (x - mean_x);
+            let next_sxy = sxy + dx * (y - mean_y);
+            if (next_sxx.is_infinite() && sxx.is_finite() && x.is_finite())
+                || (next_sxy.is_infinite() && sxy.is_finite() && x.is_finite() && y.is_finite())
+            {
+                return Err(float_arithmetic_out_of_range("overflow"));
+            }
+            sxx = next_sxx;
+            sxy = next_sxy;
+        }
+        if n == 0.0 || sxx == 0.0 {
+            Ok(SqlValue::Null)
+        } else {
+            Ok(SqlValue::Float(sxy / sxx))
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) enum Aggregate {
+    RegressionSlope(RegressionSlope),
     CountAll,
     CountField(FieldRef, bool),
     Sum(FieldRef, bool, bool),
@@ -71,6 +195,11 @@ impl Aggregate {
         }
         if let Some(aggregate) = OrderedSetAggregate::from_function(function)? {
             return Ok(Self::OrderedSet(aggregate));
+        }
+        if is_regression_slope(function) {
+            let aggregate = RegressionSlope::from_function(function)?;
+            aggregate.validate_types(|expr| projected_expr_pg_type(expr, schema))?;
+            return Ok(Self::RegressionSlope(aggregate));
         }
         let distinct = function_args_are_distinct(function);
         match name.as_str() {
@@ -229,6 +358,7 @@ impl Aggregate {
     pub(crate) fn column_name(&self) -> String {
         match self {
             Self::OrderedSet(aggregate) => aggregate.column_name(),
+            Self::RegressionSlope(_) => "regr_slope".to_string(),
             Self::CountAll | Self::CountField(_, _) => "count".to_string(),
             Self::Sum(_, _, _) => "sum".to_string(),
             Self::Avg(_, _) => "avg".to_string(),
@@ -308,6 +438,9 @@ impl Aggregate {
                     values.push(eval_value(record, &aggregate.order.expr)?);
                 }
                 aggregate.finish(values, fraction)
+            }
+            Self::RegressionSlope(aggregate) => {
+                aggregate.evaluate(records, |record, expr| eval_value(record, expr))
             }
             Self::CountAll => Ok(SqlValue::Int(records.len() as i64)),
             Self::CountField(field, distinct) => {
@@ -957,6 +1090,7 @@ pub(crate) fn aggregate_result_pg_type(
                 .as_ref()
                 .and_then(|fraction| projected_expr_pg_type(fraction, schema)),
         ),
+        Aggregate::RegressionSlope(_) => Some("float8".to_string()),
         Aggregate::CountAll | Aggregate::CountField(_, _) => Some("int8".to_string()),
         Aggregate::Min(field, _) | Aggregate::Max(field, _) => field_pg_type(field, schema),
         Aggregate::BoolAnd(_, _) | Aggregate::BoolOr(_, _) => Some("bool".to_string()),
@@ -3751,7 +3885,8 @@ pub(crate) fn non_negative_integer_error() -> SqlError {
 pub(crate) fn is_collecting_aggregate(aggregate: &Aggregate) -> bool {
     matches!(
         aggregate,
-        Aggregate::StringAgg { .. }
+        Aggregate::RegressionSlope(_)
+            | Aggregate::StringAgg { .. }
             | Aggregate::ArrayAgg { .. }
             | Aggregate::OrderedSet(_)
             | Aggregate::RangeAgg { .. }

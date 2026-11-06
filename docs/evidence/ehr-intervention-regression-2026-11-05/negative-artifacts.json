@@ -1,0 +1,24 @@
+{
+  "source_sha256": "8169be5200545db6427fb24b641aca26b19dd8732d169b474858ca9ed6f082a7",
+  "libraries": {
+    "serde_json": {
+      "path": "/root/ehr-bicdb-migration-20261104/target/debug/deps/libserde_json-d0159097ba085745.rlib",
+      "sha256": "f08311e9d2ef3dfd83fd7d9b4c8956c9cfc2fbeef735a7241c8bc809d83928ee"
+    },
+    "tempfile": {
+      "path": "/root/ehr-bicdb-migration-20261104/target/debug/deps/libtempfile-d6e515804a6b9f3d.rlib",
+      "sha256": "6ccf3713e904ae5a65c13fb0f5390873c0adaecba9881a3a037b85d09fefc84a"
+    },
+    "bicdb_core": {
+      "path": "/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_core-e1cae22f7e8b0024.rlib",
+      "sha256": "cedf647d1623f111bd007e67d69b6d9d216f860f3cf921b96cf59dc1cf2fb266"
+    },
+    "bicdb_sql": {
+      "path": "/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-16d707efcbe1e8fc.rlib",
+      "sha256": "a6ac3bbd52fc0d9f37e4ccd3b3424e6e92be67d40f0de760109393dacf6ef85b"
+    }
+  },
+  "binary_sha256": "4769e9525497b8b501841fc8a3220d35d4dcadf90039bafb2752f08f108cdfc9",
+  "compiler": "rustc 1.96.0",
+  "build_exit": 0
+}

@@ -132,6 +132,51 @@ fn prepared_json_parameters_keep_their_types_without_query_casts() {
 }
 
 #[tokio::test]
+async fn regression_slope_describes_float8_and_returns_binary_nullable_results() {
+    let root = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = PgWireServer::open(root.path(), PgWireConfig::default()).unwrap();
+    let serving = server.clone();
+    let thread = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
+    let (client, connection) = tokio_postgres::Config::new()
+        .host("127.0.0.1")
+        .port(address.port())
+        .user("bicdb")
+        .dbname("bicdb")
+        .connect(tokio_postgres::NoTls)
+        .await
+        .unwrap();
+    let task = tokio::spawn(async move {
+        let _ = connection.await;
+    });
+    client.batch_execute("CREATE TABLE regression_values(id int PRIMARY KEY,y numeric,x float8);INSERT INTO regression_values VALUES(1,10,1),(2,12,2),(3,14,3)").await.unwrap();
+    for query in [
+        "SELECT regr_slope(y,x) FROM regression_values",
+        "SELECT pg_catalog.regr_slope(y,x) FROM regression_values WHERE false",
+    ] {
+        let statement = client.prepare(query).await.unwrap();
+        assert_eq!(
+            statement.columns()[0].type_(),
+            &tokio_postgres::types::Type::FLOAT8
+        );
+        let row = client.query_one(&statement, &[]).await.unwrap();
+        assert_eq!(
+            row.get::<_, Option<f64>>(0),
+            if query.contains("false") {
+                None
+            } else {
+                Some(2.0)
+            }
+        );
+    }
+    drop(client);
+    server.request_shutdown();
+    task.await.unwrap();
+    thread.join().unwrap().unwrap();
+}
+
+#[tokio::test]
 async fn startup_custom_setting_reaches_stored_functions_without_changing_identity() {
     let root = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

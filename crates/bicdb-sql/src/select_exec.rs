@@ -1920,6 +1920,7 @@ pub(crate) fn select_item_contains_volatile_function(item: &SelectItem) -> bool 
 
 #[derive(Clone, Debug)]
 pub(crate) enum RowAggregate {
+    RegressionSlope(RegressionSlope),
     CountAll,
     CountExpr(Expr, bool),
     Sum(Expr, bool),
@@ -1980,6 +1981,11 @@ impl RowAggregate {
         }
         if let Some(aggregate) = OrderedSetAggregate::from_function(function)? {
             return Ok(Self::OrderedSet(aggregate));
+        }
+        if is_regression_slope(function) {
+            return Ok(Self::RegressionSlope(RegressionSlope::from_function(
+                function,
+            )?));
         }
         let distinct = function_args_are_distinct(function);
         match name.as_str() {
@@ -2101,6 +2107,7 @@ impl RowAggregate {
     pub(crate) fn column_name(&self) -> String {
         match self {
             Self::OrderedSet(aggregate) => aggregate.column_name(),
+            Self::RegressionSlope(_) => "regr_slope".to_string(),
             Self::CountAll | Self::CountExpr(_, _) => "count".to_string(),
             Self::Sum(_, _) => "sum".to_string(),
             Self::Avg(_, _) => "avg".to_string(),
@@ -2169,6 +2176,20 @@ impl RowAggregate {
     ) -> Result<SqlValue> {
         match self {
             Self::OrderedSet(aggregate) => row_ordered_set_value(engine, rows, columns, aggregate),
+            Self::RegressionSlope(aggregate) => {
+                aggregate.validate_types(|expr| {
+                    row_columns_expr_pg_type(
+                        engine.db_ref(),
+                        expr,
+                        columns.iter().map(String::as_str),
+                    )
+                })?;
+                let (_, context) = engine.bound_row_context(columns);
+                aggregate.evaluate(rows, |row, expr| {
+                    engine.check_cancellation()?;
+                    engine.eval_slot_row_value(row, &context, expr)
+                })
+            }
             Self::CountAll => Ok(SqlValue::Int(rows.len() as i64)),
             Self::CountExpr(expr, distinct) => {
                 row_aggregate_count(engine, rows, columns, expr, *distinct).map(SqlValue::Int)
@@ -2308,6 +2329,19 @@ impl RowAggregate {
         match self {
             Self::OrderedSet(aggregate) => {
                 row_ordered_set_value(engine, rows, context.column_keys(), aggregate)
+            }
+            Self::RegressionSlope(aggregate) => {
+                aggregate.validate_types(|expr| {
+                    row_columns_expr_pg_type(
+                        engine.db_ref(),
+                        expr,
+                        context.column_keys().iter().map(String::as_str),
+                    )
+                })?;
+                aggregate.evaluate(rows, |row, expr| {
+                    engine.check_cancellation()?;
+                    engine.eval_slot_row_value(row, context, expr)
+                })
             }
             Self::CountAll => Ok(SqlValue::Int(rows.len() as i64)),
             Self::CountExpr(expr, distinct) => {

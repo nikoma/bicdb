@@ -1,0 +1,81 @@
+{
+  "format": 1,
+  "status": "native_routine_owner_json_constraint_and_point_lookup_checks_verified",
+  "engine_source_commit": "a4d766d3f7fd92e15ff22beb214b285a70f76d27",
+  "tool_source_commit": "a4d766d3f7fd92e15ff22beb214b285a70f76d27",
+  "delivery_main_commit": "14ad3e1172ec3009fac65a90037ba547e5117251",
+  "native_binary_sha256": "23da439894484eef3409ab6c3444df9e97c5256737bab9e91760b24d7f6d2c9f",
+  "checks": {
+    "sql-library": {
+      "passed": 728,
+      "ignored": 4
+    },
+    "authorization-and-json": {
+      "passed": 44,
+      "ignored": 0
+    },
+    "protocol": {
+      "passed": 183,
+      "ignored": 0
+    },
+    "oracle-hr": {
+      "passed": 48,
+      "ignored": 0
+    },
+    "native-json": {
+      "total": 2,
+      "passed": 2,
+      "skipped": 0
+    },
+    "native-routine-owner": {
+      "total": 2,
+      "passed": 2,
+      "skipped": 0
+    },
+    "native-routine-migration": {
+      "total": 7,
+      "passed": 7,
+      "skipped": 0
+    },
+    "native-point-lookup": {
+      "total": 2,
+      "passed": 2,
+      "skipped": 0
+    },
+    "native-tools": {
+      "total": 208,
+      "passed": 204,
+      "skipped": 4
+    }
+  },
+  "focused_checks_are_subsets_of_full_migration_tools": true,
+  "skipped_external_reference_tests": [
+    "test_quoted_owner_and_catalog_shadow_survive_default_schema_change (test_export_owner_identity_oracle.ExportOwnerIdentityOracleTests.test_quoted_owner_and_catalog_shadow_survive_default_schema_change)",
+    "test_compiled_package_type_bodies_and_enabled_disabled_triggers (test_export_stored_source_oracle.StoredSourceOracleTests.test_compiled_package_type_bodies_and_enabled_disabled_triggers)",
+    "test_binary_lobs_character_units_and_precise_values_round_trip (test_replay_oracle_reference.OracleReplayIntegrationTests.test_binary_lobs_character_units_and_precise_values_round_trip)",
+    "test_saved_orphans_are_replayed_and_removed (test_replay_oracle_reference.OracleReplayIntegrationTests.test_saved_orphans_are_replayed_and_removed)"
+  ],
+  "ignored_sql_tests": [
+    "test adaptive::host::tests::bench_host_vs_oracle_read_path",
+    "test adaptive::lower::tests::bench_control_flow_interpreter_vs_wasm",
+    "test adaptive::lower::tests::bench_proc_with_sql_interpreter_vs_wasm",
+    "test catalog_rows::constraint_oid_tests::constraint_oid_snapshot_benchmark"
+  ],
+  "resource_observation": {
+    "compiler_jobs": 1,
+    "incremental_compilation": false,
+    "startup_headroom_gib": 20.5,
+    "minimum_headroom_gib": 14.5,
+    "peak_group_rss_bytes": 5703991296,
+    "minimum_observed_available_bytes": 22254686208,
+    "maximum_observed_memory_full_avg10": 0
+  },
+  "full_export_routine_ownership_qualified": false,
+  "full_export_routine_execution_qualified": false,
+  "application_after_routine_mapping_qualified": false,
+  "source_privilege_equivalence_qualified": false,
+  "role_privilege_closure_qualified": false,
+  "production_qualified": false,
+  "oracle_conformance_claimed": false,
+  "goal_complete": false
+}

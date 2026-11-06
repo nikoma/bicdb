@@ -60,3 +60,8 @@ definer/invoker rights, application behavior and recovery need separate policies
 and qualification. Run source-value, constraint and view-definition checks again
 after mapping. Earlier stored-code journals record their original owners and
 must not be silently rewritten to hide the intentional ownership change.
+
+For functions and procedures, use the separate
+[routine-owner migration phase](oracle-routine-owner-migration.md). It has its
+own preflight, transaction and definition-preservation checks; relation-owner
+success does not imply routine-owner success.

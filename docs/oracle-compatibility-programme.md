@@ -74,6 +74,14 @@ repeats source-value, FK, orphan and view-metadata checks. Its unchanged origina
 JSON-predicate and imported-routine execution permissions are observed blockers;
 complete application behavior remains unqualified.
 
+The [routine-owner, JSON-constraint and relation-lookup checkpoint](evidence/oracle-routine-owners-2026-11-06/README.md)
+adds checked native function/procedure owner changes, an explicit routine-owner
+migration phase, ordinary-role JSON predicate evaluation and point relation
+metadata lookup. Independent profile controls and broader SQL/protocol checks
+pass. Full-export owner/data qualification and unchanged original application
+reruns remain separate gates; the earlier application failure counts are not
+relabelled as passing.
+
 The [full-FK foundation checkpoint](evidence/idempiere-full-fk-foundation-2026-11-05/README.md)
 passes all 89 selected original application tests, with zero failures/errors/skips,
 verified Oracle-provider/PostgreSQL-driver origins and clean JVM/database exits.

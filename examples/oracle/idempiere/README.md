@@ -66,13 +66,14 @@ URL alone is insufficient. A transport/provider integration must preserve Oracle
 SQL selection while implementing PostgreSQL binding and connection behavior.
 The external provider preparation and transport probe now implement the explicit
 PostgreSQL transport option. The preview's application-schema binding and
-Oracle column-lock translation also pass focused tests. The actual product
-serves `/webui/` over loopback HTTP, and its Oracle sequence-lock query executes
-on BicDB. Session initialization and credential lookup now execute, and the actual UI
-accepts the public seed credentials and reaches desktop initialization. The
-observed desktop blocker is the missing `AD_UserDef_Form` table from an unapplied
-release migration. Full desktop startup and business workflows remain unqualified. A served HTML page or an
-accepted password does not establish a usable application.
+Oracle column-lock translation also pass focused tests. Earlier product runs served `/webui/` over loopback HTTP, executed the Oracle
+sequence-lock query, accepted public seed credentials and reached desktop
+initialization. Those observations came from an earlier development database;
+they do not establish a currently running service or complete application behavior.
+The later release-migrated source snapshot and pristine ownership/data checks
+are tracked in the [compatibility programme](../../../docs/oracle-compatibility-programme.md).
+Its original application tests remain a separate acceptance gate. A served HTML
+page or an accepted password does not establish a usable application.
 
 The pinned seed in [seed.json](seed.json) is an Oracle Data Pump export. The
 reference installation must include Data Pump; Oracle Free Lite does not. A

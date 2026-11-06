@@ -20,7 +20,8 @@ pub(super) fn escape_positions(source: &[Token]) -> BTreeSet<usize> {
             .parse_subexpr(dialect.prec_value(Precedence::Like))
             .is_ok()
         {
-            let suffix = index + 1 + parser.get_current_index();
+            // sqlparser reports the last consumed token, not the next one.
+            let suffix = index + 2 + parser.get_current_index();
             if source
                 .get(suffix)
                 .is_some_and(|token| word(token, "ESCAPE"))

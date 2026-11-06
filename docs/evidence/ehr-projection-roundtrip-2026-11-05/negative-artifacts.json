@@ -1,0 +1,16 @@
+{
+  "source_sha256": "0d11b64f25f61b712fce7f3d40ef8bb162eef48b3c2790382fb2cd1361f208b0",
+  "libraries": {
+    "bicdb_core": {
+      "path": "/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_core-e1cae22f7e8b0024.rlib",
+      "sha256": "cedf647d1623f111bd007e67d69b6d9d216f860f3cf921b96cf59dc1cf2fb266"
+    },
+    "bicdb_sql": {
+      "path": "/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-16d707efcbe1e8fc.rlib",
+      "sha256": "a6ac3bbd52fc0d9f37e4ccd3b3424e6e92be67d40f0de760109393dacf6ef85b"
+    }
+  },
+  "binary_sha256": "6bfd720b412d2538ab5770c2c0d88230b1f70c1bc42a57f3689d974caccfbc05",
+  "compiler": "rustc 1.96.0",
+  "build_exit": 0
+}

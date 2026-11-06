@@ -1822,7 +1822,7 @@ impl Projection {
                 SelectItem::UnnamedExpr(expr) => {
                     let field = schema_projected_field(FieldRef::from_expr(expr)?, schema);
                     validate_projected_field(&field, schema)?;
-                    columns.push(field.name());
+                    columns.push(row_expr_column_name(expr));
                     fields.push(ProjectedRecordField::bind(field, schema));
                 }
                 SelectItem::ExprWithAlias { expr, alias } => {
@@ -2254,7 +2254,10 @@ impl FieldRef {
                 .as_deref()
                 .and_then(|pg_type| pg_type.strip_suffix("[]"))
             {
-                return postgres_array_text_value(
+                if matches!(value, SqlValue::Null) {
+                    return Ok(SqlValue::Null);
+                }
+                return postgres_array_cast_text_value(
                     &value,
                     self.declared_array_delimiter()
                         .or_else(|| pg_type_delimiter(element_type))

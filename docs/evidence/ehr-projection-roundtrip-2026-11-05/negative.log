@@ -1,0 +1,32 @@
+
+running 4 tests
+test unaliased_literals_keep_postgresql_names_through_ctes_and_union_wildcards ... FAILED
+test array_text_cast_keeps_nondefault_subscripts_for_rollback_copy ... FAILED
+test array_text_cast_preserves_null_in_record_join_and_aggregate_paths ... FAILED
+test insight_table_function_preserves_literal_values_and_declared_names ... FAILED
+
+failures:
+
+failures:
+    array_text_cast_keeps_nondefault_subscripts_for_rollback_copy
+    array_text_cast_preserves_null_in_record_join_and_aggregate_paths
+    insight_table_function_preserves_literal_values_and_declared_names
+    unaliased_literals_keep_postgresql_names_through_ctes_and_union_wildcards
+
+test result: FAILED. 0 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+
+
+thread 'unaliased_literals_keep_postgresql_names_through_ctes_and_union_wildcards' (2657408) panicked at /root/ehr-bicdb-insight-union-projection.rs:11:41:
+called `Result::unwrap()` on an `Err` value: UndefinedColumn { table: "wildcard projection", column: "all_changes.'patientmedication.medication_name'" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'array_text_cast_keeps_nondefault_subscripts_for_rollback_copy' (2657404) panicked at /root/ehr-bicdb-insight-union-projection.rs:90:5:
+assertion `left == right` failed
+  left: [[String("{one,two}")]]
+ right: [[String("[0:1]={one,two}")]]
+
+thread 'array_text_cast_preserves_null_in_record_join_and_aggregate_paths' (2657405) panicked at /root/ehr-bicdb-insight-union-projection.rs:66:10:
+called `Result::unwrap()` on an `Err` value: InvalidTextRepresentation("invalid input syntax for array: \"\"")
+
+thread 'insight_table_function_preserves_literal_values_and_declared_names' (2657406) panicked at /root/ehr-bicdb-insight-union-projection.rs:47:10:
+called `Result::unwrap()` on an `Err` value: UndefinedColumn { table: "wildcard projection", column: "all_changes.patientmedication.medication_name" }

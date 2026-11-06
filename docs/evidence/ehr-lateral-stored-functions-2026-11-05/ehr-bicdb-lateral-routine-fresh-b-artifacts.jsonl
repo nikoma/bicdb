@@ -1,0 +1,6 @@
+{"test": "deferred_foreign_keys", "binary": "deferred_foreign_keys-b6cc11aeae4b6f49", "current_routine_fix": true, "sha256": "a57e63656b13ebb3dfb04c82e8adf50fbe31a8a3e5199cf1d424b834d7f381fe"}
+{"test": "empty_aggregates", "binary": "empty_aggregates-238fd764a9dcd766", "current_routine_fix": true, "sha256": "01cb399614f2f5745879c99ad5bc94092b598aec607ff5abcefe2d7809cb8b31"}
+{"test": "streaming_aggregates", "binary": "streaming_aggregates-14e4be3bea9e14f3", "current_routine_fix": true, "sha256": "6936dee2bd4cb6722b90a72241b8c49a4653c7289760b1eaa0e23a59eb05c8ac"}
+{"test": "recursive_query_stack", "binary": "recursive_query_stack-f0190611b9a3cfb8", "current_routine_fix": true, "sha256": "c984eb8d35011509fab60997d9c80a655eaa24bce0f84eed18274159bd40c1cc"}
+{"test": "routine_expression_stack", "binary": "routine_expression_stack-f617b485a011a411", "current_routine_fix": true, "sha256": "ac7b1d4d8f491e2cbc7f34c7930b9f8bfaedb20c797c724351ed12dcf27f23e1"}
+{"test": "select_row_locks", "binary": "select_row_locks-d7c27083b376a1a3", "current_routine_fix": true, "sha256": "d60554058137914a796e4328a1d3cacf1b3c958b7a44a53aba3848f30066edfc"}

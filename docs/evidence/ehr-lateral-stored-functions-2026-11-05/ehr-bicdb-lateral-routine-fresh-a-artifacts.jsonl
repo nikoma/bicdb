@@ -1,0 +1,6 @@
+{"test": "carrier_hub_compat", "binary": "carrier_hub_compat-f9f0263f7a127878", "current_routine_fix": true, "sha256": "0d20f715a24cd8bbeb204ef51573ef3e90d33c54e0f8b6109af7704f0bbd89d5"}
+{"test": "jsonb_srf", "binary": "jsonb_srf-b14e5c99f131b7e7", "current_routine_fix": true, "sha256": "e050d7a3f99f0f2c949ad93bdb9264bd51ef461f468f069d0039c4810ce8f917"}
+{"test": "ehr_routine_results", "binary": "ehr_routine_results-94518c16f1431f68", "current_routine_fix": true, "sha256": "96579cd2c5c5e78152c6db5d4433a89c52b394653f13f4c2c0500375c38079f5"}
+{"test": "lateral_routine_sources", "binary": "lateral_routine_sources-7570e3174efc7510", "current_routine_fix": true, "sha256": "01bbd418c43c7814e935e15cd135720044f7efe098d78faa4912d64aab874198"}
+{"test": "type_consistency", "binary": "type_consistency-bb77ecbf0eb7db07", "current_routine_fix": true, "sha256": "525cacf4c877be15f3a310cba6581b0ed7c320b9a04ef552c7febcaaa49ffeff"}
+{"test": "domain_types", "binary": "domain_types-6cb69356ed810663", "current_routine_fix": true, "sha256": "775db4ed3bde633812c1fddeb255eda8e08cfcda856278a12637fa3415fb3a2f"}

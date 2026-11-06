@@ -1,0 +1,184 @@
+test nested_command_in_json_runs_once_after_dispatch_warms ... ok
+test sql_out_parameters_form_a_single_row_source ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.63s
+
+     Running tests/jsonb_srf.rs (target/debug/deps/jsonb_srf-b14e5c99f131b7e7)
+
+running 12 tests
+test carrier_element_gallery_lateral_derived_query_matches_declared_and_derived_elements ... ok
+test cognee_jsonb_tag_selection_and_removal_flow_preserves_edge_cases ... ok
+test jsonb_array_element_functions_expand_no_from_projections ... ok
+test jsonb_array_element_functions_preserve_postgres_null_and_text_semantics ... ok
+test jsonb_each_and_typed_record_functions_match_postgres ... ok
+test json_coalesce_fallbacks_preserve_values_inside_json_constructors ... ok
+test jsonb_object_keys_matches_postgres_order_in_from_and_projection_forms ... ok
+test jsonb_set_functions_are_strict_and_reject_the_wrong_json_shape ... ok
+test jsonb_text_elements_support_cognee_scalar_alias_filters_and_aggregation ... ok
+test jsonb_table_functions_are_implicitly_lateral_and_support_explicit_join_kinds ... ok
+test lateral_derived_jsonb_metadata_survives_an_empty_left_input ... ok
+test routine_json_fallbacks_infer_aggregate_types_over_derived_sources ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.49s
+
+     Running tests/lateral_routine_sources.rs (target/debug/deps/lateral_routine_sources-7570e3174efc7510)
+
+running 2 tests
+test lateral_sql_routines_bind_each_left_row_and_preserve_qualified_output_types ... ok
+test lateral_sql_routines_keep_definer_identity_and_execute_refusals_for_empty_sources ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.83s
+
+     Running tests/type_consistency.rs (target/debug/deps/type_consistency-bb77ecbf0eb7db07)
+
+running 8 tests
+test parameter_types_follow_postgres_common_type_selection ... ok
+test parameter_types_follow_schema_assignment_and_expression_context ... ok
+test prepared_array_types_follow_every_context_used_by_cognee ... ok
+test query_result_types_survive_empty_catalog_reflection_results ... ok
+test stored_function_parameter_types_follow_the_declared_signature_without_running_the_body ... ok
+test registry_catalog_attribute_and_planner_types_agree_exhaustively ... ok
+test typed_result_views_preserve_expression_types_without_changing_sql_value ... ok
+test table_unnest_joins_preserve_result_and_delete_parameter_types ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.99s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 5567397576, "test_executables_processed": 6, "target_free_before": 15632531456, "target_free_after": 21199933440, "ram_cache_bytes": 22629319359}
+
+     Running tests/empty_aggregates.rs (target/debug/deps/empty_aggregates-238fd764a9dcd766)
+
+running 2 tests
+test empty_ungrouped_aggregates_return_one_postgresql_shaped_row ... ok
+test empty_join_aggregates_are_ungrouped_while_grouped_aggregates_stay_empty ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+
+     Running tests/recursive_query_stack.rs (target/debug/deps/recursive_query_stack-f0190611b9a3cfb8)
+
+running 2 tests
+test postgres_correlated_predicate_fits_protocol_worker_stack ... ok
+test oracle_correlated_predicate_fits_protocol_worker_stack ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.78s
+
+     Running tests/routine_expression_stack.rs (target/debug/deps/routine_expression_stack-f617b485a011a411)
+
+running 1 test
+test nested_identity_helpers_fit_an_ordinary_protocol_worker_stack ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+     Running tests/select_row_locks.rs (target/debug/deps/select_row_locks-d7c27083b376a1a3)
+
+running 6 tests
+test explicit_lateral_function_lock_targets_are_refused_without_weakening_base_privileges ... ok
+test blocking_row_wait_honors_cancellation_and_releases_transaction_locks_on_rollback ... ok
+test lateral_table_functions_preserve_base_row_locks_and_skip_locked_limits ... ok
+test row_locks_contend_with_mutations_and_enforce_privileges ... ok
+test row_locks_do_not_lock_another_roles_rls_hidden_rows ... ok
+test row_locks_skip_contended_rows_before_limit_and_follow_savepoints ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.38s
+
+     Running tests/streaming_aggregates.rs (target/debug/deps/streaming_aggregates-14e4be3bea9e14f3)
+
+running 3 tests
+test spot_values_are_the_expected_constants ... ok
+test streamed_aggregates_match_the_materializing_oracle_embedded ... ok
+test streamed_aggregates_match_the_materializing_oracle_paged ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.17s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 5567221496, "test_executables_processed": 6, "target_free_before": 13520089088, "target_free_after": 19087306752, "ram_cache_bytes": 22629319359}
+test anonymous_records_match_postgresql_text_type_json_and_comparison_semantics ... ok
+test anonymous_records_preserve_null_empty_quoting_and_nested_values ... ok
+test named_composite_arrays_preserve_typed_elements_and_subscripts ... ok
+test named_composite_alter_rejects_dependent_type_changes_and_rolls_back ... ok
+test named_composite_drop_respects_nested_dependencies_and_cascade ... ok
+test named_composite_attributes_evolve_existing_scalar_array_and_nested_values ... ok
+test named_composite_rename_preserves_oids_and_updates_nested_definitions ... ok
+test named_composite_types_create_cast_store_and_report_catalogs ... ok
+test table_row_type_oids_survive_reopen_and_disappear_with_the_table ... ok
+test table_row_type_oids_dependencies_and_renames_survive_reopen ... ok
+test table_row_types_keep_constraints_at_table_boundaries ... ok
+test table_rows_are_first_class_composite_values ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.19s
+
+     Running tests/rls_boolean_depth.rs (target/debug/deps/rls_boolean_depth-5536201b9ca7bb37)
+
+running 1 test
+test deeply_nested_role_policies_preserve_tenant_scope_and_null_semantics ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+
+     Running tests/routine_owner_execution_identity.rs (target/debug/deps/routine_owner_execution_identity-58b2634dac6b91e9)
+
+running 4 tests
+test an_owned_definer_routine_still_runs_as_its_owner ... ok
+test an_ownerless_definer_routine_does_not_run_as_bootstrap ... ok
+test an_ownerless_routine_is_still_only_reassignable_by_a_superuser ... ok
+test an_ownerless_definer_routine_still_works_for_an_authorized_caller ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+     Running tests/routine_privilege_lists.rs (target/debug/deps/routine_privilege_lists-f0af676a94c6d1bc)
+
+running 7 tests
+test anonymous_block_cannot_self_grant_someone_elses_functions ... ok
+test a_function_grant_at_the_start_of_a_batch_does_not_swallow_later_statements ... ok
+test anonymous_block_function_list_grants_apply_every_target ... ok
+test anonymous_block_invalid_later_target_cannot_partially_grant ... ok
+test missing_later_function_does_not_grant_an_earlier_function ... ok
+test multi_function_grants_and_revokes_cover_every_target_in_a_batch ... ok
+test multi_function_grants_cannot_bypass_ownership ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.98s
+
+{"orphan_cache_bytes_removed": 0, "interrupted_bytes_removed": 0, "test_debug_bytes_removed": 4638831248, "test_executables_processed": 5, "target_free_before": 12691021824, "target_free_after": 17329856512, "ram_cache_bytes": 22629319359}
+test require_tls_rejects_plain_startup_and_closes_connection ... ok
+test restricted_role_uuid_acl_join_preserves_binary_uuid_contract ... ok
+test result_column_oids_come_from_schema_and_expression_not_value_width ... ok
+test result_column_oids_are_consistent_across_query_shapes ... ok
+test row_description_matches_postgres_column_origin_and_type_metadata ... ok
+test schema_qualified_function_lists_apply_over_a_transactional_wire_session ... ok
+test scram_auth_accepts_valid_user ... ok
+test revoked_public_schema_create_refuses_runtime_ddl_over_wire ... ok
+test scram_auth_rejects_bad_password_and_closes_connection ... ok
+test scram_auth_rejects_channel_binding_client_first ... ok
+test server_query_timeout_and_unsupported_sql_return_errors ... ok
+test server_runtime_handles_multiple_clients_and_status_tables ... ok
+test simple_query_current_schemas_returns_pg_array_text ... ok
+test simple_query_protocol_returns_select_1_and_collection_count ... ok
+test simple_query_sql_prepare_accepts_typed_set_returning_function_alias ... ok
+test simple_query_sql_prepare_execute_and_deallocate_are_supported ... ok
+test snapshot_functions_use_postgres_oids_and_binary_encoding ... ok
+test sqlx_text_and_binary_type_client_gauntlet ... ok
+test standby_server_exposes_ha_status_and_rejects_writes ... ok
+test startup_configuration_snapshot_requires_current_superuser_for_simple_and_prepared_queries ... ok
+test startup_custom_setting_reaches_stored_functions_without_changing_identity ... ok
+test segmented_query_survives_pauses_longer_than_the_poll_timeout ... ok
+test suspended_cursor_does_not_starve_short_query ... ok
+test table_row_type_oids_and_codecs_survive_rename_and_reopen ... ok
+test timestamp_binary_results_preserve_epoch_offsets_and_infinities ... ok
+test timezone_status_tracks_session_and_transaction_changes_before_rows ... ok
+test tls_config_accepts_postgres_ssl_request ... ok
+test tokio_postgres_advisory_lock_wait_honors_query_timeout ... ok
+test text_format_binds_preserve_numeric_looking_character_keys ... ok
+test tokio_postgres_advisory_locks_match_postgres_connection_semantics ... ok
+test tokio_postgres_basic_orm_client_gauntlet ... ok
+test tokio_postgres_nested_advisory_locks_are_visible_in_pg_locks ... ok
+test tokio_postgres_preserves_quoted_relation_owner_identity ... ok
+test tokio_postgres_parameterized_insert_returning_describes_portal ... ok
+test tokio_postgres_row_locks_survive_protocol_messages_and_skip_before_limit ... ok
+test tokio_postgres_runs_cognee_jsonb_srf_query_with_text_array_parameter ... ok
+test tokio_postgres_uncast_parameter_reports_parameter_description ... ok
+test user_defined_ranges_use_persisted_oids_and_native_binary_frames ... ok
+test uuid_functions_have_postgresql_binary_metadata_and_values ... ok
+test uuidv7_has_uuid_metadata_and_binary_encoding ... ok
+test tokio_postgres_runs_asyncpg_jit_and_recursive_type_discovery_contract ... ok
+test xml_wire_binary_and_copy_paths_validate_and_canonicalize ... ok
+
+test result: ok. 181 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 63.89s
+
+All fresh linked integration and wire gates passed

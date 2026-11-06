@@ -54,3 +54,13 @@ Builds use at most two compiler jobs, no incremental compilation and an active
 The fixes still require a rebuilt native EHR candidate and a fresh full hosted
 clinical run. Production remains on PostgreSQL; no clinical migration or cutover
 is claimed by these engine tests.
+
+Validation correction (November 5): subsequent artifact inspection found that
+our debug stripping advanced executable timestamps, allowing Cargo to reuse
+some older linked integration executables. The focused integration counts above
+are retained as historical output but are withdrawn as revision qualification.
+They are superseded by the explicitly relinked 130 focused and 181 wire tests in
+../ehr-lateral-stored-functions-2026-11-05/. The 713-test SQL unit binary was
+freshly compiled. Causal regression controls and hashed native candidate runs
+remain separate evidence. Cleanup now restores original executable timestamps;
+the replacement gates audit every linked binary for the new implementation.

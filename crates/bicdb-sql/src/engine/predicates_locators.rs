@@ -604,6 +604,28 @@ impl<'db> SqlEngine<'db> {
         if let Some(call) = json_set_returning_call(relation)? {
             return self.json_set_function_row_set(&call);
         }
+        if let TableFactor::Function {
+            name,
+            alias,
+            args,
+            with_ordinality,
+            ..
+        } = relation
+        {
+            let table = normalize_object_name(&object_name(name)?);
+            let arguments = TableFunctionArgs {
+                args: args.clone(),
+                settings: None,
+            };
+            if let Some(rows) = self.stored_routine_table_function_row_set(
+                &table,
+                alias.as_ref(),
+                &arguments,
+                *with_ordinality,
+            )? {
+                return Ok(rows);
+            }
+        }
         if let TableFactor::NestedJoin {
             table_with_joins,
             alias,
@@ -4294,6 +4316,8 @@ impl<'db> SqlEngine<'db> {
                 self.security_context.clone(),
             )
             .with_session_gucs(Arc::new(session_gucs))
+            // Only declared arguments cross into a SQL function body.
+            .with_outer_slot_row(OuterSlotRow::from_slot(&[], &[]))
             .with_shared_routine_vars(frame.materialized_values())
             .with_cancellation(self.cancellation.clone()),
         );
@@ -4311,10 +4335,9 @@ impl<'db> SqlEngine<'db> {
         // The relation's columns are the declared `RETURNS TABLE` columns, by
         // position; the body's own select-list names (`coalesce`, `p`) never
         // leak out. Otherwise `SELECT x FROM f()` read a missing column.
-        if let Some(declared) = super::materialize::declared_table_function_columns(
-            self.db_ref(),
-            table.rsplit('.').next().unwrap_or(table),
-        ) {
+        if let Some(declared) =
+            super::materialize::declared_table_function_columns(self.db_ref(), table)
+        {
             if declared.len() == result.columns.len() {
                 result.columns = declared.into_iter().map(|(name, _)| name).collect();
             }
@@ -4397,6 +4420,74 @@ impl<'db> SqlEngine<'db> {
                     return self.apply_lateral_json_set_function_join(
                         left,
                         &call,
+                        kind,
+                        effective_constraint,
+                    );
+                }
+            }
+            let stored_call = match &join.relation {
+                TableFactor::Table {
+                    name,
+                    alias,
+                    args: Some(args),
+                    with_ordinality,
+                    ..
+                } => Some((name, alias.as_ref(), &args.args, *with_ordinality)),
+                TableFactor::Function {
+                    name,
+                    alias,
+                    args,
+                    with_ordinality,
+                    ..
+                } => Some((name, alias.as_ref(), args, *with_ordinality)),
+                _ => None,
+            };
+            if let Some((name, alias, args, with_ordinality)) = stored_call {
+                let table = normalize_object_name(&object_name(name)?);
+                if resolve_routine_cached(self.db_ref(), RoutineKind::Function, &table)?.is_some() {
+                    if with_ordinality {
+                        return Err(SqlError::Unsupported(format!(
+                            "{table} WITH ORDINALITY is not supported"
+                        )));
+                    }
+                    let role = current_user_from_gucs(&self.session_gucs);
+                    // Check even an empty left input; Describe must not execute
+                    // the body, and an empty relation cannot bypass EXECUTE.
+                    if !role_can_execute_routine(self.db_ref(), &role, &table)? {
+                        return Err(SqlError::BicDb(BicDbError::Authorization(format!(
+                            "permission denied for function {table}"
+                        ))));
+                    }
+                    // Serialize only authored AST arguments, never row values.
+                    // Parse once per join, then reuse the existing correlated
+                    // query executor to bind each prior row before the call.
+                    let sql = format!(
+                        "SELECT * FROM {name}({})",
+                        args.iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    );
+                    let mut statements = Parser::parse_sql(&PostgreSqlDialect {}, &sql)
+                        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+                    let Statement::Query(query) = statements.remove(0) else {
+                        unreachable!("authored table-function SELECT")
+                    };
+                    if let SetExpr::Select(select) = query.body.as_ref() {
+                        self.row_set_columns_from_table_factor_without_rows(
+                            &select.from[0].relation,
+                        )?;
+                    }
+                    let fallback_alias = TableAlias {
+                        explicit: false,
+                        name: Ident::new(relation_default_alias(name)),
+                        columns: Vec::new(),
+                        at: None,
+                    };
+                    return self.apply_lateral_derived_table_join(
+                        left,
+                        &query,
+                        Some(alias.unwrap_or(&fallback_alias)),
                         kind,
                         effective_constraint,
                     );

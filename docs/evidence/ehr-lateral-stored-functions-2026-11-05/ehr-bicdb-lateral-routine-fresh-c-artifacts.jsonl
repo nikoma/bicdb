@@ -1,0 +1,5 @@
+{"test": "rls_boolean_depth", "binary": "rls_boolean_depth-5536201b9ca7bb37", "current_routine_fix": true, "sha256": "873213e7e0eb14c2421ac58aee910c0fb5a910763c15d8c2eee78745150437a8"}
+{"test": "routine_owner_execution_identity", "binary": "routine_owner_execution_identity-58b2634dac6b91e9", "current_routine_fix": true, "sha256": "f4fdf35d3df867b68aa3bcbda89174b2064ab816a8514504b30bf1379631f2a7"}
+{"test": "base_types", "binary": "base_types-ee2a4852842b0054", "current_routine_fix": true, "sha256": "c042a2ebd6f37e51164d0524fd1fc72b62787c707f7c9bd20371b6ce468dc377"}
+{"test": "composite_types", "binary": "composite_types-375371d399b46faf", "current_routine_fix": true, "sha256": "990522805ab67414b665201b6646973bfe30b4ad7cff9ccf3661f59074cb0479"}
+{"test": "routine_privilege_lists", "binary": "routine_privilege_lists-f0af676a94c6d1bc", "current_routine_fix": true, "sha256": "3eac6b58e737b3bff359134f934bbbe50475c6f67330ee522f00ee02a1e175ca"}

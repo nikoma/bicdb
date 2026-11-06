@@ -2624,14 +2624,20 @@ impl<'db> SqlEngine<'db> {
                 args: Some(_),
                 with_ordinality: false,
                 ..
+            }
+            | TableFactor::Function {
+                name,
+                alias,
+                with_ordinality: false,
+                ..
             } => {
                 // A catalog function declared `RETURNS TABLE (...)`: its result
                 // columns are part of its signature. Describing from them never
                 // runs the body, which may raise on the NULL arguments Describe
                 // would otherwise bind (Carrier's guarded table functions do).
-                let routine = relation_name(name).ok()?;
+                let routine = normalize_object_name(&object_name(name).ok()?);
                 let short = routine.rsplit('.').next().unwrap_or(&routine).to_string();
-                let columns = declared_table_function_columns(self.db_ref(), &short)?;
+                let columns = declared_table_function_columns(self.db_ref(), &routine)?;
                 let alias_name = alias
                     .as_ref()
                     .map(|alias| alias.name.value.clone())

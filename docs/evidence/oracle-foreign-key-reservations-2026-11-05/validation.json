@@ -1,0 +1,180 @@
+{
+  "format": 1,
+  "native_source_commit": "e5da566a7f2d049fef0bf3cb3cdbbf27f5196dc1",
+  "native_binary_sha256": "d012884a404dd4fea72cf1e29f0a964d57740b04b83ede2a4c7a7dd000f9737e",
+  "steps": [
+    {
+      "name": "build",
+      "returncode": 0,
+      "log_sha256": "d501f6b1d2d13f05395408a7ded95eab57addedb6cf3560a5b5123335101739c"
+    },
+    {
+      "name": "sql-foreign-keys",
+      "returncode": 0,
+      "log_sha256": "2186e4bb7cae925c21bee06df5228213a19226bc0e03c2f092cd2fb3c6639e36",
+      "rust_test_targets": [
+        {
+          "passed": 20,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "core-reservations",
+      "returncode": 0,
+      "log_sha256": "39f6640ace648fe8b7335945f8ae4cca550456418c68aa2a8e4149388a8a9d8b",
+      "rust_test_targets": [
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "core-locks",
+      "returncode": 0,
+      "log_sha256": "cfc2cf17ae8ebe6a3c0ba91f469532217f4f14228bc9719f089a4664086f2a0b",
+      "rust_test_targets": [
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "core-waiters",
+      "returncode": 0,
+      "log_sha256": "559738d508b002ebd9b31b32eac1ccb81d56cfdc7b62358957beb90eaa163709",
+      "rust_test_targets": [
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "core-receipts",
+      "returncode": 0,
+      "log_sha256": "2363f120dc21751c7b59ee0cabbc35fdbcb4d871a2bceb093dd9565b5ad355b5",
+      "rust_test_targets": [
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "sql-library",
+      "returncode": 0,
+      "log_sha256": "1df6654505dd86835d8731687d1cfbbcd000ab6e517838f4f209183bee1a541d",
+      "rust_test_targets": [
+        {
+          "passed": 717,
+          "failed": 0,
+          "ignored": 4
+        }
+      ]
+    },
+    {
+      "name": "pgwire-protocol",
+      "returncode": 0,
+      "log_sha256": "179d319c80a2a8d38736c444bc5c494292c42287f85c576138e4ad20b3bcdb5a",
+      "rust_test_targets": [
+        {
+          "passed": 183,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "native-tools",
+      "returncode": 0,
+      "log_sha256": "6731f4c9774a01f22d4289d089ef3a7c3381257dce36c4dbe5d22f3ce7ef5d00",
+      "python_tests": {
+        "total": 122,
+        "passed": 119,
+        "skipped": 3,
+        "failed": 0
+      }
+    }
+  ],
+  "oracle_profile_protocol": [
+    [
+      48,
+      0,
+      0
+    ]
+  ],
+  "pinned_copy_suite": {
+    "cpu_count": 1,
+    "passed": 19,
+    "failed": 0,
+    "log_sha256": "7371e4a8a34bc5b7092f9dff578e4d09814773143118415ea39b68cc228e5d8e"
+  },
+  "live_oracle_version": "23.26.3.0.0",
+  "live_oracle_cases_matched": 7,
+  "prior_attempt": {
+    "interrupted": true,
+    "observed_failed_tests": [
+      "boolean_copy_accepts_postgresql_prefixes_and_rejects_ambiguous_input",
+      "bytea_copy_csv_roundtrips_exact_bytes_over_wire",
+      "concurrent_selects_use_shared_read_locks",
+      "copy_arrays_roundtrip_quoted_elements_bounds_and_restart",
+      "copy_from_stdin_batches_total_payload_past_connection_memory_limit",
+      "copy_from_stdin_keeps_one_local_rls_identity_boundary_across_batches",
+      "copy_from_stdin_keeps_the_schema_qualifier",
+      "copy_geometric_arrays_roundtrip_with_postgresql_delimiters",
+      "copy_single_column_empty_records_preserve_text_csv_and_empty_headers",
+      "copy_trigger_rejection_rolls_back_all_replayed_batches",
+      "extended_query_binary_date_roundtrips_boundaries_and_rejects_invalid_days",
+      "extended_query_binary_time_applies_typmod_and_rejects_out_of_range_values",
+      "extended_query_registered_base_types_keep_custom_oids_and_binary_codecs",
+      "integer_range_errors_are_consistent_across_query_bind_and_copy",
+      "json_has_postgresql_oid_and_exact_binary_text_encoding",
+      "pgwire_autocommit_select_function_waits_without_blocking_row_owner_commit",
+      "pgwire_copy_done_persistent_guc_overage_closes_without_complete_or_ready",
+      "pgwire_read_committed_updates_wait_for_the_row_owner_and_serialize"
+    ],
+    "complete_test_run": false,
+    "scope": "Original test harness pinned runtime admission defaults to one CPU. COPY had an independently reproduced nested-admission defect, fixed and tested here. General single-slot transaction-progress behavior remains unqualified."
+  },
+  "application_qualified": false,
+  "production_qualified": false,
+  "goal_complete": false
+}

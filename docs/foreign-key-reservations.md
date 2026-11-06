@@ -46,3 +46,8 @@ completion, savepoint upgrade rollback, immediate/deferred child insertion,
 unique-key parents, non-key parent updates and retained parent-mutation
 protection. These test definitions require execution results before acceptance;
 their existence alone does not qualify an application or production workload.
+
+The [2026-11-05 qualification checkpoint](evidence/oracle-foreign-key-reservations-2026-11-05/README.md)
+records executed native, protocol and independent Oracle comparisons, including
+candidate identity and remaining boundaries. Full application and production
+acceptance remain separate gates.

@@ -42,6 +42,8 @@ class NullEscapeCases:
             self.assertEqual(connection.execute(query, (None,)).fetchall(), [(2,)])
         else:
             self.assert_invalid_oracle_escape(connection, query, (None,))
+            self.assert_invalid_oracle_escape(connection, query, ('',))
+            self.assert_invalid_oracle_escape(connection, query, ('xx',))
         self.assertEqual(connection.execute(query, ('|',)).fetchall(), [(1,)])
         empty = "SELECT CASE WHEN 'abc' LIKE 'abc' ESCAPE '' THEN 1 ELSE 2 END"
         if self.profile == 'postgres':
@@ -50,6 +52,13 @@ class NullEscapeCases:
             self.assert_invalid_oracle_escape(connection, empty)
             for predicate in ["NULL LIKE 'abc' ESCAPE NULL", "NULL LIKE 'abc' ESCAPE 'xx'", "'abc' LIKE NULL ESCAPE 'xx'", "'abc' LIKE 'abc' ESCAPE 'xx'"]:
                 self.assert_invalid_oracle_escape(connection, 'SELECT 1 WHERE '+predicate)
+            for pattern in ['abc|', 'abc|x']:
+                with self.assertRaises(Exception) as caught:
+                    connection.execute("SELECT 1 WHERE 'abc' LIKE %s ESCAPE '|'", (pattern,))
+                self.assertEqual(caught.exception.sqlstate, '22025')
+                self.assertIn('ORA-01424', str(caught.exception))
+            for source, pattern, escape in [('a_b', 'a%_b', '%'), ('a%b', 'a_%b', '_')]:
+                self.assertEqual(connection.execute("SELECT CASE WHEN %s LIKE %s ESCAPE %s THEN 1 ELSE 0 END", (source, pattern, escape)).fetchall(), [(1,)])
 
 
 @unittest.skipUnless(os.environ.get('BICDB_ORACLE_SERVER'), 'set BICDB_ORACLE_SERVER')

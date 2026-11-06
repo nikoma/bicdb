@@ -561,6 +561,7 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
         "bicdb_oracle_collection_is_empty" => {
             return oracle::collections::multisets::is_empty(args).map(Some)
         }
+        "bicdb_oracle_like" => return oracle::text_patterns::like(args).map(Some),
         "bicdb_oracle_trim" => return oracle::text_patterns::trim(args).map(Some),
         "bicdb_oracle_regexp_substr" => {
             return oracle::text_patterns::regexp_substr(args).map(Some)

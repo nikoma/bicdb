@@ -57,6 +57,7 @@ pub(crate) fn convert_text_arguments(
             };
             let indices: &[usize] = match name.as_ref() {
                 "bicdb_oracle_trim" | "pg_catalog.bicdb_oracle_trim" => &[0, 1],
+                "bicdb_oracle_like" | "pg_catalog.bicdb_oracle_like" => &[0, 1, 2],
                 "bicdb_oracle_regexp_substr" | "pg_catalog.bicdb_oracle_regexp_substr" => {
                     &[0, 1, 4]
                 }
@@ -85,26 +86,31 @@ pub(crate) fn convert_text_arguments(
 pub(crate) fn lower_expression(expr: &mut Expr) -> Result<()> {
     match expr {
         Expr::Like {
-            escape_char: Some(value),
+            expr: source,
+            pattern,
+            escape_char,
+            negated,
+            any,
             ..
-        } if matches!(&value.value, sqlparser::ast::Value::Null)
-            || matches!(&value.value, sqlparser::ast::Value::SingleQuotedString(text) if text.chars().count() > 1) =>
-        {
-            // Validate source literals before execution, including predicates
-            // with NULL operands. Source empty strings have already become
-            // NULL here. The empty execution sentinel below remains distinct.
-            return Err(errors::database_error(
-                -1425,
-                "22025",
-                "escape character must be character string of length 1",
-            ));
-        }
-        Expr::Like { escape_char, .. } if escape_char.is_none() => {
-            // Oracle has no implicit escape character. The native PostgreSQL
-            // evaluator uses an empty explicit escape to disable its default
-            // backslash. Inject only after source empty strings became NULL;
-            // repeated lowering leaves the execution-local sentinel intact.
-            *escape_char = Some(sqlparser::ast::Value::SingleQuotedString(String::new()).into());
+        } => {
+            if *any {
+                return Err(unsupported(
+                    "Oracle LIKE ANY requires a separate quantified-pattern contract",
+                ));
+            }
+            // Preserve whether ESCAPE was specified. Runtime validation is
+            // required because extended-query binds are not literals during
+            // profile lowering. Two arguments mean no implicit escape.
+            let escape = escape_char
+                .as_ref()
+                .map_or(String::new(), |value| format!(", {value}"));
+            *expr = expression(&format!(
+                "{}CAST(pg_catalog.bicdb_oracle_like({}, {}{}) AS BOOLEAN)",
+                if *negated { "NOT " } else { "" },
+                render_sql(source.as_ref()),
+                render_sql(pattern.as_ref()),
+                escape,
+            ))?;
         }
 
         Expr::Trim {
@@ -165,6 +171,56 @@ pub(crate) fn lower_expression(expr: &mut Expr) -> Result<()> {
         _ => {}
     }
     Ok(())
+}
+
+/// Binary, case-sensitive preview LIKE. Validate ESCAPE before NULL operands;
+/// the PostgreSQL evaluator retains its independent escape/strictness rules.
+pub(crate) fn like(args: &[SqlValue]) -> Result<SqlValue> {
+    if !(2..=3).contains(&args.len()) {
+        return Err(unsupported(
+            "internal LIKE helper requires two or three arguments",
+        ));
+    }
+    let escape = if let Some(value) = args.get(2) {
+        let text = value.to_cell();
+        if matches!(value, SqlValue::Null) || text.chars().count() != 1 {
+            return Err(errors::database_error(
+                -1425,
+                "22025",
+                "escape character must be character string of length 1",
+            ));
+        }
+        text.chars().next()
+    } else {
+        None
+    };
+    if matches!(args[0], SqlValue::Null) || matches!(args[1], SqlValue::Null) {
+        return Ok(SqlValue::Null);
+    }
+    let source = args[0].to_cell();
+    let pattern = args[1].to_cell();
+    if source.is_empty() || pattern.is_empty() {
+        return Ok(SqlValue::Null);
+    }
+    if let Some(escape) = escape {
+        let mut chars = pattern.chars();
+        while let Some(character) = chars.next() {
+            if character == escape
+                && !matches!(chars.next(), Some(next) if next == escape || next == '%' || next == '_')
+            {
+                return Err(errors::database_error(
+                    -1424,
+                    "22025",
+                    "missing or illegal character following the escape character",
+                ));
+            }
+        }
+    }
+    Ok(SqlValue::Bool(like_match_chars(
+        &source.chars().collect::<Vec<_>>(),
+        &pattern.chars().collect::<Vec<_>>(),
+        escape,
+    )))
 }
 
 pub(crate) fn trim(args: &[SqlValue]) -> Result<SqlValue> {

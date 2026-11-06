@@ -853,6 +853,7 @@ fn lower_decode(db: &BicDb, sql: &str, oids: Option<&[i32]>) -> Result<String> {
         "to_char",
         "bicdb_oracle_national_value",
         "bicdb_oracle_trim",
+        "bicdb_oracle_like",
         "bicdb_oracle_regexp_substr",
         "bicdb_oracle_regexp_replace",
     ]

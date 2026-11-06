@@ -12,6 +12,7 @@ import decimal
 import hashlib
 import json
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).resolve().parent
 
@@ -32,9 +33,16 @@ def quote(name):
     return '"' + name.replace('"', '""') + '"'
 
 
+def require_temporal_encoding(column):
+    kind = column['type']
+    if kind.startswith('TIMESTAMP') and re.fullmatch(r'TIMESTAMP(?:\([0-6]\))?(?: WITH TIME ZONE)?', kind) is None:
+        raise ValueError('timestamp declaration exceeds the export codec contract: ' + kind)
+
+
 def value_projection(columns):
     projection = []
     for column in columns:
+        require_temporal_encoding(column)
         name = quote(column['name'])
         if column['type'].endswith('WITH TIME ZONE'):
             projection.append("TO_CHAR(" + name + ", 'YYYY-MM-DD HH24:MI:SS.FF6 TZH:TZM') AS " + name)
@@ -84,6 +92,12 @@ def export(config_path, directory):
             cursor.execute("SELECT table_name,column_name,column_id,data_type,data_length,data_precision,data_scale,char_used,char_length,nullable,data_default,virtual_column FROM user_tab_cols WHERE hidden_column='NO' ORDER BY table_name,column_id")
             for row in cursor:
                 columns.append(dict(zip(['table','name','position','type','bytes','precision','scale','character_unit','characters','nullable','default','virtual'], row)))
+            # Validate all exported base-table timestamps before creating row
+            # files. FF6 and Python datetime cannot preserve submicroseconds;
+            # local-zone timestamps also need a distinct encoding contract.
+            base_tables = set(table_names)
+            for column in columns:
+                if column['table'] in base_tables:require_temporal_encoding(column)
             cursor.execute("SELECT table_name,constraint_name,constraint_type,status,validated,deferrable,deferred,r_owner,r_constraint_name,delete_rule,search_condition,index_name FROM user_constraints ORDER BY table_name,constraint_name")
             for row in cursor:
                 constraints.append(dict(zip(['table','name','kind','status','validated','deferrable','deferred','referenced_owner','referenced_constraint','delete_rule','condition','index'], row)))
@@ -142,7 +156,9 @@ def export(config_path, directory):
                 if len(tables) % 100 == 0:
                     print(f'Exported {len(tables)}/{len(table_names)} tables', flush=True)
         manifest = dict(format=1, application='iDempiere 13', oracle_database_version=con.version,
-                        value_encoding=dict(version=2, timestamp_with_time_zone='offset-preserved', lob_empty_values='preserved'),
+                        value_encoding=dict(version=2, timestamp_with_time_zone='offset-preserved', lob_empty_values='preserved',
+                                            timestamp_fractional_precision_max=6,
+                                            time_zone_region_identity_preserved=False, local_time_zone_supported=False),
                         source_schema=config['user'].upper(), started_at=started,
                         snapshot='Oracle read-only transaction', observed_scn=observed_scn,
                         cdc_resume_position=False, objects=objects, tables=tables, columns=columns,

@@ -52,6 +52,16 @@ independently. This checkpoint covers the supported temporal precision and
 numeric offsets; named time-zone identities and broader temporal declarations
 remain outside its qualification.
 
+The exporter now checks all base-table timestamp declarations before publishing
+catalog or row files. Precision 7–9 and `WITH LOCAL TIME ZONE` fail explicitly,
+so the microsecond codec cannot silently shorten those values. Supported base
+projections remain unchanged; view-only declarations are handled by the separate
+view migration workstream. Oracle supports fractional precision through 9, as
+described in [Oracle Data Types](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Data-Types.html).
+Full precision-9, local-zone and named-zone support remains an open programme
+requirement; rejecting them here is a bounded export contract, not completion of
+that support.
+
 ## Cleanup and interruption recovery
 
 Each attempt uses a fresh nonce namespace. Its report records every possible

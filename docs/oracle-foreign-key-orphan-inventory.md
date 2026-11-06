@@ -162,3 +162,8 @@ The [qualification record](evidence/oracle-foreign-key-orphans-2026-11-05/README
 separates native migration-target tests from independent Oracle/PostgreSQL
 query fixtures. Small fixtures do not establish the source application's orphan
 counts, whole-workload performance, online consistency or production readiness.
+
+The [resume qualification](evidence/oracle-orphan-inventory-resume-2026-11-06/README.md)
+adds native restart/CLI recovery, exact-prefix rejection and completed-resume
+catalog/data checks. It retains source-equality and full application acceptance
+as separate gates.

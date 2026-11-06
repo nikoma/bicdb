@@ -1,0 +1,56 @@
+{
+  "format": 1,
+  "code_commit": "0b460116f20327ba51e96fb62573fb898006ed84",
+  "native_binary_source_commit": "5e5fecc3ca279f2e3ea3e37af0c244e11bbb69ea",
+  "native_binary_sha256": "1cd37fe086195a867f46e359d532c4d4f70a720d335ebb69e4307f05121f0860",
+  "focused_tests": {
+    "passed": 21,
+    "pure": 8,
+    "native": 13,
+    "failed": 0,
+    "skipped": 0
+  },
+  "full_importer_suite": {
+    "total": 178,
+    "passed": 174,
+    "skipped": 4,
+    "failed": 0,
+    "skipped_checks": [
+      "test_quoted_owner_and_catalog_shadow_survive_default_schema_change (test_export_owner_identity_oracle.ExportOwnerIdentityOracleTests.test_quoted_owner_and_catalog_shadow_survive_default_schema_change) ... skipped 'set ORACLE_EXPORT_IDENTITY_CONFIG for an empty quoted Oracle owner'",
+      "test_compiled_package_type_bodies_and_enabled_disabled_triggers (test_export_stored_source_oracle.StoredSourceOracleTests.test_compiled_package_type_bodies_and_enabled_disabled_triggers) ... skipped 'set ORACLE_SOURCE_CAPTURE_CONFIG for an empty disposable Oracle owner'",
+      "test_binary_lobs_character_units_and_precise_values_round_trip (test_replay_oracle_reference.OracleReplayIntegrationTests.test_binary_lobs_character_units_and_precise_values_round_trip) ... skipped 'set BICDB_ORACLE_REFERENCE_CONFIG for isolated Oracle replay'",
+      "test_saved_orphans_are_replayed_and_removed (test_replay_oracle_reference.OracleReplayIntegrationTests.test_saved_orphans_are_replayed_and_removed) ... skipped 'set BICDB_ORACLE_REFERENCE_CONFIG for isolated Oracle replay'"
+    ]
+  },
+  "negative_control": {
+    "expected_failed_assertion": "3 != 2: prior implementation recounted the completed prefix",
+    "baseline_tests": 14,
+    "expected_failures": 1
+  },
+  "restart_pending_count_queries": 2,
+  "retained_count_prefix": 1,
+  "total_fixture_relationships": 3,
+  "cli_resume_verified": true,
+  "completed_resume_rechecks_rows_and_catalog": true,
+  "identity_mismatch_preserves_input_journal": true,
+  "source_or_target_changes_refused": true,
+  "malformed_counts_and_prefixes_refused": true,
+  "source_files_sha256": {
+    "foreign_key_orphans.py": "46409cc1fc7cc4fbb9f49900531fb522aff8d727d3730a886aecf2822a8747d4",
+    "test_foreign_key_orphans.py": "11e06f7945144abb2b42f083b80509bae2c25c384561cede86f174a0fc4f211f"
+  },
+  "logs_sha256": {
+    "bicdb-orphan-resume-before.log": "a791b752557db55b064c94224ee961d78ff0e3f9377334aadeeea25b2fc26a23",
+    "bicdb-orphan-resume-after.log": "364cb1e6c402e9aace404b956a9d2906f955b879a259b1f762a4f6288cbffee2",
+    "bicdb-orphan-resume-suite.log": "62a47911ac40ce8fcc6bed344aea2aa517640e2ec7777d234a666ed7b5624c74"
+  },
+  "resource_guard": {
+    "status": "completed",
+    "peak_group_rss_bytes": 211804160,
+    "minimum_observed_available_bytes": 21091553280
+  },
+  "writer_lease_acquired": false,
+  "source_data_equality_qualified": false,
+  "full_application_qualified": false,
+  "goal_complete": false
+}

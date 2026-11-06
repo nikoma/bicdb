@@ -87,6 +87,7 @@ impl From<anyhow::Error> for ApiError {
             || message.contains("state replica has no active writer authority")
             || message.contains("application state is reopening")
             || message.contains("application SQL listener is unavailable")
+            || message.contains("is durable on the primary but was not confirmed")
         {
             StatusCode::SERVICE_UNAVAILABLE
         } else {

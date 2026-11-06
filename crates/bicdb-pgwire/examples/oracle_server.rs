@@ -17,14 +17,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .next()
         .map(|value| value.parse::<usize>())
         .transpose()?;
+    let storage_mode = args.next();
     if max_active_queries.is_some_and(|limit| limit == 0 || limit > 256)
         || max_connections.is_some_and(|limit| limit == 0 || limit > 1000)
         || args.next().is_some()
+        || storage_mode
+            .as_deref()
+            .is_some_and(|mode| !matches!(mode, "embedded_memory" | "server_paged"))
         || (profile != bicdb_sql::oracle::POSTGRES_PROFILE
             && !bicdb_sql::oracle::is_oracle_profile(&profile))
     {
         return Err(
-            "expected: oracle_server PATH PORT [oracle-preview-v1|oracle-hr-v1|postgres] [MAX_CONNECTIONS(1..1000)] [MAX_ACTIVE_QUERIES(1..256)]".into(),
+            "expected: oracle_server PATH PORT [oracle-preview-v1|oracle-hr-v1|postgres] [MAX_CONNECTIONS(1..1000)] [MAX_ACTIVE_QUERIES(1..256)] [embedded_memory|server_paged]".into(),
         );
     }
     let mut config = PgWireConfig {
@@ -47,6 +51,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.max_active_queries = limit;
         config.max_active_reads = limit;
         config.max_active_writes = limit;
+    }
+    // An explicit development-fixture mode initializes through the ordinary
+    // core API. Existing stores must match it; this never migrates a database.
+    // Without the argument, the server keeps detecting the persisted mode.
+    if let Some(mode) = storage_mode {
+        let db = bicdb_core::BicDb::open_with_config(
+            &path,
+            bicdb_core::DbConfig::default()
+                .with_storage_mode(bicdb_core::StorageMode::from_name(&mode)),
+        )?;
+        drop(db);
     }
     let server = PgWireServer::open(path, config)?;
     let stop = server.clone();

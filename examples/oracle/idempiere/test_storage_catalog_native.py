@@ -1,5 +1,6 @@
 """Real free-extent inventory, access control and dictionary name resolution."""
 import os
+import subprocess
 import unittest
 
 import test_foreign_keys as fixtures
@@ -8,11 +9,19 @@ NATIVE = '"pg_catalog"."bicdb_oracle_free_space"'
 LABELS = ['TABLESPACE_NAME', 'FILE_ID', 'BLOCK_ID', 'BYTES', 'BLOCKS', 'RELATIVE_FNO']
 
 
+class PagedFixture(fixtures.ForeignKeyMigrationIntegrationTests):
+    def start_server(self):
+        self.child = subprocess.Popen(
+            [os.environ['BICDB_ORACLE_SERVER'], str(self.root/'db'), str(self.port),
+             self.profile, '8', '4', 'server_paged'],
+            stdout=self.log, stderr=subprocess.STDOUT)
+
+
 @unittest.skipUnless(os.environ.get('BICDB_ORACLE_SERVER'),
                      'set BICDB_ORACLE_SERVER for native storage catalog checks')
 class StorageCatalogNativeTests(unittest.TestCase):
     def fixture(self, profile):
-        f = fixtures.ForeignKeyMigrationIntegrationTests(methodName='runTest')
+        f = PagedFixture(methodName='runTest')
         f.profile = profile
         self.addCleanup(lambda: self.assertTrue(f.doCleanups(), 'storage fixture cleanup failed'))
         f.setUp()
@@ -44,7 +53,8 @@ class StorageCatalogNativeTests(unittest.TestCase):
                         'SELECT a.* FROM '+NATIVE+' a JOIN '+NATIVE+' b ON a."BLOCK_ID"=b."BLOCK_ID"']:
                 with self.subTest(sql=sql), self.assertRaises(psycopg.errors.InsufficientPrivilege):
                     c.execute(sql, prepare=False)
-            with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+            # The relation is a view, not a callable catalog function.
+            with self.assertRaises(psycopg.errors.FeatureNotSupported):
                 c.execute('SELECT * FROM '+NATIVE+'()', prepare=False)
             # A monitor cannot self-grant visibility of the storage inventory.
             with self.assertRaises(psycopg.errors.InsufficientPrivilege):
@@ -126,9 +136,11 @@ class StorageCatalogNativeTests(unittest.TestCase):
                 values = ','.join("(%d,'%s')" % (i, 'x'*2000) for i in range(start,start+50))
                 c.execute('INSERT INTO churn VALUES '+values)
             c.execute('DELETE FROM churn WHERE id<380')
-            c.execute('CHECKPOINT')
+        f.restart_server()
+        with f.conn.cursor() as c:
             c.execute('VACUUM')
-            c.execute('CHECKPOINT')
+        f.restart_server()
+        with f.conn.cursor() as c:
             c.execute('SELECT * FROM '+NATIVE+' ORDER BY "BLOCK_ID"')
             runs = c.fetchall()
             self.assertTrue(runs, 'churn and vacuum must produce reusable pages')

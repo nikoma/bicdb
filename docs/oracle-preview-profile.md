@@ -373,8 +373,9 @@ accepts mixed-case FOR keywords and whitespace or comments between END and LOOP.
 Shared SQL parsing accepts native PostgreSQL FOR UPDATE/SHARE target lists without
 changing their relation-target meaning; Oracle OF items select columns whose
 owning tables are resolved using the catalog. NOWAIT/SKIP LOCKED modifiers are
-preserved. Existing row-locking restrictions, including the primary-key
-requirement, still apply. Recreate original Oracle definitions to select the new
+preserved. [Physical heap-row locking](evidence/sql-heap-row-locks-2026-11-06/README.md)
+also supports base tables without declared primary keys. Other row-locking
+restrictions still apply. Recreate original Oracle definitions to select the new
 compiler; native PostgreSQL routines do not inherit the Oracle grammar scope.
 An older reader rejects version-13 calls with 0A000. No storage-format transition
 is introduced by this compiler marker.

@@ -1,0 +1,97 @@
+{
+  "format": 1,
+  "source_commit": "a97545fc25234c89a4361e0dbfe8c98a02cb3e94",
+  "binary_sha256": "59179f2a0cb4a8d3f765c306ed523a81c1647e061156d82a4bacd98e03b68fba",
+  "cli_binary_sha256": "0f8e4b9a8b5a1979a7afea3b5b0b27a88c93d2d4051645a893e7be368d83eb2f",
+  "checks": [
+    {
+      "name": "privilege-boundary",
+      "source_commit": "a97545fc25234c89a4361e0dbfe8c98a02cb3e94",
+      "returncode": 0,
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "build",
+      "source_commit": "a97545fc25234c89a4361e0dbfe8c98a02cb3e94",
+      "returncode": 0
+    },
+    {
+      "name": "native-heap-locks",
+      "source_commit": "a97545fc25234c89a4361e0dbfe8c98a02cb3e94",
+      "returncode": 0,
+      "tests": 8,
+      "passed": 8,
+      "skipped": 0
+    },
+    {
+      "name": "sql-library",
+      "source_commit": "a97545fc25234c89a4361e0dbfe8c98a02cb3e94",
+      "returncode": 0,
+      "passed": 734,
+      "failed": 0,
+      "ignored": 4
+    },
+    {
+      "name": "native-tools",
+      "source_commit": "a97545fc25234c89a4361e0dbfe8c98a02cb3e94",
+      "returncode": 0,
+      "tests": 227,
+      "passed": 223,
+      "skipped": 4
+    },
+    {
+      "name": "protocol",
+      "source_commit": "a97545fc25234c89a4361e0dbfe8c98a02cb3e94",
+      "returncode": 0,
+      "passed": 183,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "oracle-hr",
+      "source_commit": "a97545fc25234c89a4361e0dbfe8c98a02cb3e94",
+      "returncode": 0,
+      "passed": 48,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "authorization",
+      "source_commit": "a97545fc25234c89a4361e0dbfe8c98a02cb3e94",
+      "returncode": 0,
+      "passed": 44,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "build-cli",
+      "source_commit": "a97545fc25234c89a4361e0dbfe8c98a02cb3e94",
+      "returncode": 0
+    }
+  ],
+  "native_heap_fixture_storage_mode": "embedded_memory",
+  "source_schema_inventory": {
+    "source_manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+    "source_tables": 915,
+    "source_tables_with_primary_key": 900,
+    "source_tables_without_primary_key": 15
+  },
+  "resource_guard": {
+    "status": "completed",
+    "returncode": 0,
+    "peak_group_rss_bytes": 5514625024,
+    "minimum_observed_available_bytes": 22738563072,
+    "maximum_observed_memory_full_avg10": 0.32
+  },
+  "source_oracle_heap_lock_reference_executed": false,
+  "upstream_application_tests_rerun": false,
+  "application_qualified": false,
+  "full_oracle_programme_qualified": false,
+  "production_qualified": false,
+  "cleanup": {
+    "reclaimed_allocated_bytes": 1048743936,
+    "qualified_binaries_logs_and_dependency_artifacts_preserved": true
+  }
+}

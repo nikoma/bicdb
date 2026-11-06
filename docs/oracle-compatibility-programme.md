@@ -139,6 +139,16 @@ tools, Oracle wire and authorization checks pass with exact revision provenance
 and documented skips. This does not rerun full application acceptance or close
 the retained vendor-invoice and attachment errors.
 
+The [physical heap-row locking checkpoint](evidence/sql-heap-row-locks-2026-11-06/README.md)
+removes the declared-primary-key prerequisite for base-table locking reads.
+Eight independent PostgreSQL/Oracle-preview controls exercise duplicate rows,
+transaction visibility, savepoints, joins and authorization. Broad SQL, protocol,
+Oracle wire and native-tool checks pass. Native policy administration uses exact
+quoted targets; Oracle VPD and broader privileges remain separate contracts.
+The original attachment failure still needs a fresh application-class run before
+it can be considered resolved. Full application and paged-baseline acceptance
+remain open.
+
 The [full-FK foundation checkpoint](evidence/idempiere-full-fk-foundation-2026-11-05/README.md)
 passes all 89 selected original application tests, with zero failures/errors/skips,
 verified Oracle-provider/PostgreSQL-driver origins and clean JVM/database exits.

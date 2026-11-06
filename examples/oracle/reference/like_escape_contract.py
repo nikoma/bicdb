@@ -33,6 +33,17 @@ PLANS = [
 ]
 
 
+# Keep expression and filtering observations separate: constant folding or
+# invalid-escape validation may differ before a row predicate is evaluated.
+CONTEXT_PLANS = [
+    ('where_literal_null', "SELECT COUNT(*) FROM (SELECT 'abc' AS v FROM DUAL UNION ALL SELECT NULL FROM DUAL) WHERE v LIKE 'abc' ESCAPE NULL", {}),
+    ('where_bound_null', "SELECT COUNT(*) FROM (SELECT 'abc' AS v FROM DUAL UNION ALL SELECT NULL FROM DUAL) WHERE v LIKE 'abc' ESCAPE :e", {'e': None}),
+    ('where_literal_empty', "SELECT COUNT(*) FROM (SELECT 'abc' AS v FROM DUAL) WHERE v LIKE 'abc' ESCAPE ''", {}),
+    ('where_null_source', "SELECT COUNT(*) FROM (SELECT CAST(NULL AS VARCHAR2(8)) AS v FROM DUAL) WHERE v LIKE 'abc' ESCAPE :e", {'e': None}),
+    ('where_no_rows', "SELECT COUNT(*) FROM (SELECT 'abc' AS v FROM DUAL WHERE 1=0) WHERE v LIKE 'abc' ESCAPE NULL", {}),
+]
+
+
 def observe(factory):
     import oracledb
     report = dict(format=1, reference='oracle', original_application_objects_modified=False,
@@ -73,9 +84,25 @@ def observe(factory):
                             report['cases'].append(item)
                             raise
                     report['cases'].append(item)
+                report['predicate_contexts'] = []
+                for name, sql, binds in CONTEXT_PLANS:
+                    item = dict(id=name, sql=sql, binds=binds)
+                    try:
+                        cursor.execute(sql, binds or None)
+                        item['rows'] = [list(row) for row in cursor.fetchall()]
+                    except oracledb.Error as error:
+                        source = error.args[0]
+                        code = getattr(source, 'code', None)
+                        item.update(oracle_error_code=code, oracle_full_code=getattr(source, 'full_code', None))
+                        if (not isinstance(code, int) or code <= 0 or code >= 12500
+                                or not str(item['oracle_full_code']).startswith('ORA-')):
+                            report['predicate_contexts'].append(item)
+                            raise
+                    report['predicate_contexts'].append(item)
         finally:
             connection.rollback()
-    report['observation_completed'] = len(report['cases']) == len(PLANS)
+    report['observation_completed'] = (len(report['cases']) == len(PLANS)
+                                       and len(report['predicate_contexts']) == len(CONTEXT_PLANS))
     report['connection_closed'] = True
     return report
 

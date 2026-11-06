@@ -2595,12 +2595,13 @@ pub(super) fn folded_text_equality_prefix(
         }
         None
     })?;
-    // Match the core index extractor's Unicode conversion, including keys
-    // which expand to multiple characters. No arbitrary SQL is evaluated.
+    // Match the durable core key extractor, which currently converts ASCII
+    // letters only. Using Unicode conversion here would miss existing keys
+    // such as Straße. This inference does not change SQL function semantics.
     Some(IndexValue::String(if upper {
-        value.to_uppercase()
+        value.to_ascii_uppercase()
     } else {
-        value.to_lowercase()
+        value.to_ascii_lowercase()
     }))
 }
 

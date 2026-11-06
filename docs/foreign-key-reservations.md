@@ -12,6 +12,12 @@ reference. Updating an unrelated parent column does not acquire an exclusive
 reference reservation. Unique and exclusion constraint reservations remain
 exclusive; sharing a reference does not permit duplicate unique keys.
 
+Plain primary-key updates on untriggered parent tables now use the parent-key
+validation path too. Deferred child follow-up updates, immediate reference
+rejection, and final-key-set NO ACTION checks are covered by the regression
+cases. UPDATE FROM/RETURNING, trigger-bearing parent key moves and cascades that
+must change a child's physical primary key still need separate key-move work.
+
 Both PostgreSQL and Oracle preview profiles use this integrity rule. The key
 identity includes the parent relation and ordered referenced columns, with
 values normalized using the parent's declared types. Primary-key and unique-key

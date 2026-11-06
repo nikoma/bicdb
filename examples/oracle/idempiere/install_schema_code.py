@@ -91,6 +91,17 @@ def migrate(args):
     content = (args.snapshot / 'manifest.json').read_bytes()
     plan = code_plan(json.loads(content))
     items = plan[args.phase]
+    dependency_digest = None
+    if getattr(args, 'dependency_report', None):
+        if args.phase != 'views':
+            raise ValueError('dependency reports are only supported for views')
+        from schema_dependencies import ordered_views
+        dependency_content = args.dependency_report.read_bytes()
+        order = ordered_views(json.loads(content), json.loads(dependency_content),
+                              hashlib.sha256(content).hexdigest())
+        by_name = {item['name']: item for item in items}
+        items = [by_name[name] for name in order]
+        dependency_digest = hashlib.sha256(dependency_content).hexdigest()
     report = dict(format=1, phase=args.phase, profile='oracle-preview-v1',
                   schema_manifest_sha256=hashlib.sha256(content).hexdigest(),
                   input_definitions={item['name']: item['ddl_sha256'] for item in items},
@@ -99,9 +110,10 @@ def migrate(args):
                   routine_execution_qualified=False, view_values_qualified=False,
                   ownership_mapping_qualified=False, application_qualified=False,
                   writers_quiesced_confirmed=True)
+    report['source_dependency_report_sha256'] = dependency_digest
     if args.resume:
         previous = json.loads(args.report.read_text())
-        for key in ['format', 'phase', 'profile', 'schema_manifest_sha256', 'input_definitions']:
+        for key in ['format', 'phase', 'profile', 'schema_manifest_sha256', 'input_definitions', 'source_dependency_report_sha256']:
             if previous.get(key) != report[key]:
                 raise ValueError('stored-code journal differs from snapshot, adapter, or phase')
         report = previous

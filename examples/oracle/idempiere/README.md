@@ -297,6 +297,28 @@ execution equivalence. `WITH READ ONLY` is emitted when present in the export;
 servers that do not support it fail rather than dropping the restriction. The
 original iDempiere export used here has no views with that flag.
 
+To capture a source-backed order, connect as the original schema owner while
+source DDL is quiesced:
+
+```sh
+python3 examples/oracle/idempiere/schema_dependencies.py \
+  --snapshot /path/to/snapshot --oracle-config /private/source-connection.json \
+  --source-ddl-quiesced --report /private/view-dependencies.json
+python3 examples/oracle/idempiere/import_bicdb.py \
+  --snapshot /path/to/snapshot --phase views --writers-quiesced \
+  --dependency-report /private/view-dependencies.json --report /private/views.json
+```
+
+The source connection uses the exporter's JSON configuration format and a
+password file. Capture refuses routine or view source differing from the saved
+snapshot, cyclic view dependencies, missing same-schema view dependencies, and
+remote view links. The installer binds the report to the snapshot hash, checks
+its order against captured edges, and records its hash for resume validation.
+This orders same-schema views using Oracle's static dictionary dependencies;
+external schemas, dynamic SQL, routine dependency cycles, privileges, and target
+view types still require independent qualification. Keep the dependency report
+private: it contains source object names and relationships.
+
 ## Explicit JDBC transport preparation
 
 `prepare_provider.py --checkout EXTERNAL_CHECKOUT --report PRIVATE_REPORT.json`

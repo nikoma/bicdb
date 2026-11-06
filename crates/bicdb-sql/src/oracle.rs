@@ -47,6 +47,8 @@ mod sql_concat;
 pub(crate) mod syntax;
 pub(crate) mod temporal_columns;
 pub(crate) mod text_patterns;
+#[cfg(test)]
+mod transport_savepoints;
 
 pub const ORACLE_HR_PROFILE: &str = "oracle-hr-v1";
 pub const ORACLE_PREVIEW_PROFILE: &str = "oracle-preview-v1";
@@ -935,6 +937,16 @@ fn lower_oracle_sql(
             return Ok(statements[0].to_string());
         }
         return Err(unsupported("expected one DEALLOCATE statement"));
+    }
+    // JDBC savepoints use PostgreSQL's transport grammar, including RELEASE
+    // (which Oracle SQL itself does not provide). Preserve opaque driver names
+    // and validate the exact command before Oracle identifier folding.
+    if word(&source[0], "RELEASE") {
+        let statements = parse_statements(sql)?;
+        if let [Statement::ReleaseSavepoint { .. }] = statements.as_slice() {
+            return Ok(join(&source));
+        }
+        return Err(unsupported("expected one RELEASE SAVEPOINT statement"));
     }
     // Transaction modes belong to the PG transport grammar. Keep their tokens
     // contextual rather than reserving ISOLATION/LEVEL as Oracle identifiers.

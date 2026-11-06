@@ -68,6 +68,11 @@ also bind unqualified targets to that application schema. Explicit namespaces
 retain their selection. PostgreSQL driver `DEALLOCATE` commands preserve native
 prepared-statement identifiers, including quoted mixed-case names; these names
 are independent of Oracle application-name folding.
+The selected PostgreSQL-driver transport also accepts `RELEASE SAVEPOINT` using
+PostgreSQL savepoint semantics. Releasing retains pending writes and leaves the
+outer transaction rollbackable. Quoted and driver-generated names keep their
+exact spelling. This is driver transport handling, separate from Oracle SQL
+application syntax; it does not add `RELEASE` as a globally reserved identifier.
 When an ordinary column and a row alias share a name, type inference prefers
 the scalar column, matching row evaluation and preserving driver scalar types.
 PostgreSQL protocol Describe also resolves explicit, fully typed FROM

@@ -37,6 +37,15 @@ class NumericRoundNativeTests(unittest.TestCase):
                       'BEGIN RETURN 77; END;', prepare=False)
             c.execute('SELECT "round"(1,2) FROM DUAL')
             self.assertEqual(c.fetchone(), (77,))
+            c.execute('SELECT ROUND(SQRT(2),2) FROM DUAL')
+            self.assertEqual(c.fetchone(), (Decimal('1.41'),))
+            c.execute('DROP FUNCTION "round"', prepare=False)
+            c.execute('CREATE SCHEMA "other_round_scope"')
+            c.execute('CREATE FUNCTION "other_round_scope"."round"(n IN NUMBER,p IN NUMBER) '
+                      'RETURN NUMBER IS BEGIN RETURN 88; END;', prepare=False)
+            import psycopg
+            with self.assertRaises(psycopg.errors.UndefinedFunction):
+                c.execute('SELECT "round"(1,2) FROM DUAL')
 
     def test_postgres_round_keeps_explicit_numeric_coercion_and_float_overload_rejection(self):
         import psycopg
@@ -50,6 +59,10 @@ class NumericRoundNativeTests(unittest.TestCase):
             # field parity for the existing unsupported-overload path.
             with self.assertRaises(psycopg.Error):
                 c.execute('SELECT ROUND(SQRT(2),2)', prepare=True)
+            c.execute('CREATE FUNCTION "public"."round"(n numeric,p integer) '
+                      'RETURNS integer LANGUAGE sql AS $$ SELECT 77 $$', prepare=False)
+            c.execute('SELECT "public"."round"(1,2)')
+            self.assertEqual(c.fetchone(), (77,))
 
 
 if __name__ == '__main__':

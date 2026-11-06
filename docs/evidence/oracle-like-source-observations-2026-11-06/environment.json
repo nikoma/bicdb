@@ -1,0 +1,234 @@
+{
+  "format": 1,
+  "reference": "oracle",
+  "original_application_objects_modified": false,
+  "cases": [
+    {
+      "id": "default_backslash",
+      "sql": "SELECT CASE WHEN ('a_b' LIKE 'a\\_b') THEN 1 WHEN NOT ('a_b' LIKE 'a\\_b') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 0
+    },
+    {
+      "id": "explicit_backslash",
+      "sql": "SELECT CASE WHEN ('a_b' LIKE 'a\\_b' ESCAPE '\\') THEN 1 WHEN NOT ('a_b' LIKE 'a\\_b' ESCAPE '\\') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "explicit_pipe",
+      "sql": "SELECT CASE WHEN ('I_name' LIKE 'I|_%' ESCAPE '|') THEN 1 WHEN NOT ('I_name' LIKE 'I|_%' ESCAPE '|') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "explicit_unicode",
+      "sql": "SELECT CASE WHEN ('x%tail' LIKE 'x\u00a7%%' ESCAPE '\u00a7') THEN 1 WHEN NOT ('x%tail' LIKE 'x\u00a7%%' ESCAPE '\u00a7') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "bound_unicode_escape",
+      "sql": "SELECT CASE WHEN ('x%tail' LIKE :pattern ESCAPE :escape) THEN 1 WHEN NOT ('x%tail' LIKE :pattern ESCAPE :escape) THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {
+        "pattern": "x\u00a7%%",
+        "escape": "\u00a7"
+      },
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "national_unicode_escape",
+      "sql": "SELECT CASE WHEN (N'x%tail' LIKE N'x\u00a7%%' ESCAPE N'\u00a7') THEN 1 WHEN NOT (N'x%tail' LIKE N'x\u00a7%%' ESCAPE N'\u00a7') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "unistr_unicode_escape",
+      "sql": "SELECT CASE WHEN ('x%tail' LIKE 'x'||UNISTR('\\00A7')||'%%' ESCAPE UNISTR('\\00A7')) THEN 1 WHEN NOT ('x%tail' LIKE 'x'||UNISTR('\\00A7')||'%%' ESCAPE UNISTR('\\00A7')) THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "literal_null_escape",
+      "sql": "SELECT CASE WHEN ('abc' LIKE 'abc' ESCAPE NULL) THEN 1 WHEN NOT ('abc' LIKE 'abc' ESCAPE NULL) THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "literal_empty_escape",
+      "sql": "SELECT CASE WHEN ('abc' LIKE 'abc' ESCAPE '') THEN 1 WHEN NOT ('abc' LIKE 'abc' ESCAPE '') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "varchar_null_escape",
+      "sql": "SELECT CASE WHEN ('abc' LIKE 'abc' ESCAPE CAST(NULL AS VARCHAR2(1))) THEN 1 WHEN NOT ('abc' LIKE 'abc' ESCAPE CAST(NULL AS VARCHAR2(1))) THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "char_null_escape",
+      "sql": "SELECT CASE WHEN ('abc' LIKE 'abc' ESCAPE CAST(NULL AS CHAR(1))) THEN 1 WHEN NOT ('abc' LIKE 'abc' ESCAPE CAST(NULL AS CHAR(1))) THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "bind_null_escape",
+      "sql": "SELECT CASE WHEN ('abc' LIKE 'abc' ESCAPE :p_escape) THEN 1 WHEN NOT ('abc' LIKE 'abc' ESCAPE :p_escape) THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {
+        "p_escape": null
+      },
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "bind_empty_escape",
+      "sql": "SELECT CASE WHEN ('abc' LIKE 'abc' ESCAPE :p_escape) THEN 1 WHEN NOT ('abc' LIKE 'abc' ESCAPE :p_escape) THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {
+        "p_escape": ""
+      },
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "bind_pipe_escape",
+      "sql": "SELECT CASE WHEN ('a_b' LIKE 'a|_b' ESCAPE :p_escape) THEN 1 WHEN NOT ('a_b' LIKE 'a|_b' ESCAPE :p_escape) THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {
+        "p_escape": "|"
+      },
+      "truth": 1
+    },
+    {
+      "id": "null_source_null_escape",
+      "sql": "SELECT CASE WHEN (CAST(NULL AS VARCHAR2(8)) LIKE 'abc' ESCAPE NULL) THEN 1 WHEN NOT (CAST(NULL AS VARCHAR2(8)) LIKE 'abc' ESCAPE NULL) THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "null_source_long_escape",
+      "sql": "SELECT CASE WHEN (CAST(NULL AS VARCHAR2(8)) LIKE 'abc' ESCAPE 'xx') THEN 1 WHEN NOT (CAST(NULL AS VARCHAR2(8)) LIKE 'abc' ESCAPE 'xx') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "null_pattern_long_escape",
+      "sql": "SELECT CASE WHEN ('abc' LIKE CAST(NULL AS VARCHAR2(8)) ESCAPE 'xx') THEN 1 WHEN NOT ('abc' LIKE CAST(NULL AS VARCHAR2(8)) ESCAPE 'xx') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "long_escape",
+      "sql": "SELECT CASE WHEN ('abc' LIKE 'abc' ESCAPE 'xx') THEN 1 WHEN NOT ('abc' LIKE 'abc' ESCAPE 'xx') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "trailing_escape",
+      "sql": "SELECT CASE WHEN ('abc' LIKE 'abc|' ESCAPE '|') THEN 1 WHEN NOT ('abc' LIKE 'abc|' ESCAPE '|') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1424,
+      "oracle_full_code": "ORA-01424"
+    },
+    {
+      "id": "invalid_escape_pair",
+      "sql": "SELECT CASE WHEN ('abcx' LIKE 'abc|x' ESCAPE '|') THEN 1 WHEN NOT ('abcx' LIKE 'abc|x' ESCAPE '|') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "oracle_error_code": 1424,
+      "oracle_full_code": "ORA-01424"
+    },
+    {
+      "id": "percent_escape",
+      "sql": "SELECT CASE WHEN ('a_b' LIKE 'a%_b' ESCAPE '%') THEN 1 WHEN NOT ('a_b' LIKE 'a%_b' ESCAPE '%') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    },
+    {
+      "id": "underscore_escape",
+      "sql": "SELECT CASE WHEN ('a%b' LIKE 'a_%b' ESCAPE '_') THEN 1 WHEN NOT ('a%b' LIKE 'a_%b' ESCAPE '_') THEN 0 ELSE 2 END FROM DUAL",
+      "binds": {},
+      "truth": 1
+    }
+  ],
+  "observation_completed": true,
+  "implementation_qualified": false,
+  "application_qualified": false,
+  "source_version": "23.26.3.0.0",
+  "database_nls": {
+    "NLS_NCHAR_CHARACTERSET": "AL16UTF16",
+    "NLS_CHARACTERSET": "AL32UTF8"
+  },
+  "session_nls": {
+    "NLS_SORT": "BINARY",
+    "NLS_COMP": "BINARY",
+    "NLS_LENGTH_SEMANTICS": "BYTE"
+  },
+  "unicode_encoding_control": {
+    "literal_length": 1,
+    "literal_byte_length": 2,
+    "literal_dump": "Typ=96 Len=2 CharacterSet=AL32UTF8: c2,a7",
+    "bind_length": 1,
+    "bind_byte_length": 2,
+    "bind_dump": "Typ=1 Len=2 CharacterSet=AL32UTF8: c2,a7"
+  },
+  "reference_driver_version": "26.1.0",
+  "reference_driver_thin_mode": true,
+  "predicate_contexts": [
+    {
+      "id": "where_literal_null",
+      "sql": "SELECT COUNT(*) FROM (SELECT 'abc' AS v FROM DUAL UNION ALL SELECT NULL FROM DUAL) WHERE v LIKE 'abc' ESCAPE NULL",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "where_bound_null",
+      "sql": "SELECT COUNT(*) FROM (SELECT 'abc' AS v FROM DUAL UNION ALL SELECT NULL FROM DUAL) WHERE v LIKE 'abc' ESCAPE :e",
+      "binds": {
+        "e": null
+      },
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "where_literal_empty",
+      "sql": "SELECT COUNT(*) FROM (SELECT 'abc' AS v FROM DUAL) WHERE v LIKE 'abc' ESCAPE ''",
+      "binds": {},
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "where_null_source",
+      "sql": "SELECT COUNT(*) FROM (SELECT CAST(NULL AS VARCHAR2(8)) AS v FROM DUAL) WHERE v LIKE 'abc' ESCAPE :e",
+      "binds": {
+        "e": null
+      },
+      "oracle_error_code": 1425,
+      "oracle_full_code": "ORA-01425"
+    },
+    {
+      "id": "where_no_rows",
+      "sql": "SELECT COUNT(*) FROM (SELECT 'abc' AS v FROM DUAL WHERE 1=0) WHERE v LIKE 'abc' ESCAPE NULL",
+      "binds": {},
+      "rows": [
+        [
+          0
+        ]
+      ]
+    }
+  ],
+  "connection_closed": true,
+  "tool_source_commit": "a621b690594c52ff80abd535891fe56da2c784f2",
+  "tool_sha256": "80514f97849376240f1b544aa330e8db9d5b49a38521ed4acd6d0fdb1a9d92be",
+  "container_restored": true
+}

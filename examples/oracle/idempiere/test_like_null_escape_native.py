@@ -45,6 +45,11 @@ class NullEscapeCases:
             self.assert_invalid_oracle_escape(connection, query, ('',))
             self.assert_invalid_oracle_escape(connection, query, ('xx',))
         self.assertEqual(connection.execute(query, ('|',)).fetchall(), [(1,)])
+        unicode_escape = "SELECT CASE WHEN 'x%tail' LIKE %s ESCAPE %s THEN 1 ELSE 0 END"
+        if self.profile == 'postgres':
+            self.assertEqual(connection.execute(unicode_escape, ('x§%%', '§')).fetchall(), [(1,)])
+        else:
+            self.assert_invalid_oracle_escape(connection, unicode_escape, ('x§%%', '§'))
         empty = "SELECT CASE WHEN 'abc' LIKE 'abc' ESCAPE '' THEN 1 ELSE 2 END"
         if self.profile == 'postgres':
             self.assertEqual(connection.execute(empty).fetchall(), [(1,)])
@@ -52,6 +57,8 @@ class NullEscapeCases:
             self.assert_invalid_oracle_escape(connection, empty)
             for predicate in ["NULL LIKE 'abc' ESCAPE NULL", "NULL LIKE 'abc' ESCAPE 'xx'", "'abc' LIKE NULL ESCAPE 'xx'", "'abc' LIKE 'abc' ESCAPE 'xx'"]:
                 self.assert_invalid_oracle_escape(connection, 'SELECT 1 WHERE '+predicate)
+            connection.execute('CREATE TABLE empty_escape_input(label VARCHAR(30))')
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM empty_escape_input WHERE label LIKE 'abc' ESCAPE NULL").fetchall(), [(0,)])
             for pattern in ['abc|', 'abc|x']:
                 with self.assertRaises(Exception) as caught:
                     connection.execute("SELECT 1 WHERE 'abc' LIKE %s ESCAPE '|'", (pattern,))

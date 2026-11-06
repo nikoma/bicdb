@@ -21,3 +21,17 @@ describes NULL operands as producing UNKNOWN. The recorded source behavior
 therefore needs version and expression-context qualification. Additional row
 filter, empty-input and encoding controls are required before extending these
 CASE observations to all source statements.
+
+The [follow-up environment and context record](environment.json) adds source
+NLS metadata, literal/bind byte dumps, three Unicode variants and five filtering
+contexts. It confirms AL32UTF8, AL16UTF16, BINARY comparison and BYTE length
+defaults. The ordinary literal and bound `§` values are each one character and
+two UTF-8 bytes; their explicit escapes return ORA-01425. The national-literal
+variant matches. Row predicates with explicit NULL/empty escapes return
+ORA-01425, including a NULL input row; an empty input relation returns count
+zero. The reference service was again restored to stopped state.
+
+These observations justify separate ordinary and national execution contracts
+for this source version. They do not qualify BicDB's new helper or implement
+national LIKE, arbitrary collations, LIKEC, LIKE2 or LIKE4. The typed lowering
+continues to reject national text patterns until that contract is implemented.

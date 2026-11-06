@@ -183,7 +183,10 @@ pub(crate) fn like(args: &[SqlValue]) -> Result<SqlValue> {
     }
     let escape = if let Some(value) = args.get(2) {
         let text = value.to_cell();
-        if matches!(value, SqlValue::Null) || text.chars().count() != 1 {
+        // The STANDARD AL32UTF8/BINARY reference rejects a multibyte
+        // database-character escape. National-character inputs are declined
+        // by typed lowering until their distinct UTF16 contract is provided.
+        if matches!(value, SqlValue::Null) || text.len() != 1 {
             return Err(errors::database_error(
                 -1425,
                 "22025",

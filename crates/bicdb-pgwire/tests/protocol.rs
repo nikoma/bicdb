@@ -3079,16 +3079,36 @@ fn copy_to_stdout_csv_exports_rows_over_wire() {
 
 #[test]
 fn bytea_copy_csv_roundtrips_exact_bytes_over_wire() {
+    assert_bytea_copy_csv_roundtrip(PgWireConfig::default());
+}
+
+#[test]
+fn bytea_copy_csv_roundtrips_with_one_query_slot() {
+    assert_bytea_copy_csv_roundtrip(PgWireConfig {
+        max_active_queries: 1,
+        max_active_reads: 1,
+        max_active_writes: 1,
+        overload_timeout: Duration::from_millis(250),
+        ..PgWireConfig::default()
+    });
+}
+
+fn assert_bytea_copy_csv_roundtrip(config: PgWireConfig) {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
-    let path = dir.path().to_path_buf();
+    let maximum_queries = config.max_active_queries;
+    let database = PgWireServer::open(dir.path(), config).unwrap();
+    let server_database = database.clone();
     let server = thread::spawn(move || {
         let (stream, _) = listener.accept().unwrap();
-        bicdb_pgwire::handle_client(stream, path).unwrap();
+        bicdb_pgwire::handle_client_with_server(stream, address, server_database).unwrap();
     });
 
     let mut client = TcpStream::connect(address).unwrap();
+    client
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
     startup(&mut client);
     read_until_ready(&mut client);
 
@@ -3108,7 +3128,9 @@ fn bytea_copy_csv_roundtrips_exact_bytes_over_wire() {
         b"nul-high,\\x00ff415c\nescape,\\001\\\\A\n",
     );
     send_message(&mut client, b'c', &[]);
-    assert_eq!(read_tags_until_ready(&mut client).1, b'I');
+    let (tags, status) = read_tags_until_ready(&mut client);
+    assert!(!tags.contains(&b'E'), "COPY returned an error: {tags:?}");
+    assert_eq!(status, b'I');
 
     send_query(
         &mut client,
@@ -3145,6 +3167,7 @@ fn bytea_copy_csv_roundtrips_exact_bytes_over_wire() {
 
     client.write_all(b"X\0\0\0\x04").unwrap();
     server.join().unwrap();
+    assert!(database.stats_snapshot().peak_active_queries <= maximum_queries);
 }
 
 #[test]
@@ -10836,6 +10859,7 @@ fn concurrent_selects_use_shared_read_locks() {
     let config = PgWireConfig {
         max_connections: 16,
         max_active_queries: 16,
+        max_active_reads: 16,
         ..PgWireConfig::default()
     };
     let server = PgWireServer::open(dir.path(), config).unwrap();

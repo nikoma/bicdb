@@ -31,6 +31,12 @@ class StorageCatalogNativeTests(unittest.TestCase):
                 admin.execute('CREATE ROLE '+role+' LOGIN NOSUPERUSER')
             admin.execute('CREATE TABLE "private_records" ("ID" INTEGER)')
             admin.execute('INSERT INTO "private_records" VALUES (7)')
+            admin.execute('SET ROLE monitor_reader', prepare=False)
+            try:
+                with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+                    admin.execute('SELECT * FROM '+NATIVE)
+            finally:
+                admin.execute('RESET ROLE', prepare=False)
         with self.connect(f, 'monitor_reader') as reader, reader.cursor() as c:
             for sql in ['SELECT * FROM '+NATIVE,
                         'SELECT * FROM '+NATIVE+' WHERE 1=0',
@@ -38,6 +44,8 @@ class StorageCatalogNativeTests(unittest.TestCase):
                         'SELECT a.* FROM '+NATIVE+' a JOIN '+NATIVE+' b ON a."BLOCK_ID"=b."BLOCK_ID"']:
                 with self.subTest(sql=sql), self.assertRaises(psycopg.errors.InsufficientPrivilege):
                     c.execute(sql, prepare=False)
+            with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+                c.execute('SELECT * FROM '+NATIVE+'()', prepare=False)
             # A monitor cannot self-grant visibility of the storage inventory.
             with self.assertRaises(psycopg.errors.InsufficientPrivilege):
                 c.execute('GRANT SELECT ON '+NATIVE+' TO monitor_reader', prepare=False)

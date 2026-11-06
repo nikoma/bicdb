@@ -70,8 +70,8 @@ prepared-statement identifiers, including quoted mixed-case names; these names
 are independent of Oracle application-name folding.
 The selected PostgreSQL-driver transport also accepts `RELEASE SAVEPOINT` using
 PostgreSQL savepoint semantics. Releasing retains pending writes and leaves the
-outer transaction rollbackable. Quoted and driver-generated names keep their
-exact spelling. This is driver transport handling, separate from Oracle SQL
+outer transaction rollbackable. Quoted driver-generated names keep their exact spelling; unquoted names
+use the same Oracle folding as `SAVEPOINT` and `ROLLBACK TO`. This is driver transport handling, separate from Oracle SQL
 application syntax; it does not add `RELEASE` as a globally reserved identifier.
 When an ordinary column and a row alias share a name, type inference prefers
 the scalar column, matching row evaluation and preserving driver scalar types.

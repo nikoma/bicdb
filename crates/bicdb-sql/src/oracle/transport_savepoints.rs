@@ -49,6 +49,21 @@ fn driver_release_savepoint_preserves_writes_and_outer_rollback_in_each_profile(
                 .rows,
             vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(2)]]
         );
+        // Application-authored unquoted names must resolve consistently across
+        // SAVEPOINT, ROLLBACK TO and the PostgreSQL-driver RELEASE extension.
+        for statement in [
+            "BEGIN",
+            "SAVEPOINT App_Mixed",
+            "INSERT INTO driver_rows VALUES(30)",
+            "ROLLBACK TO SAVEPOINT app_mixed",
+            "RELEASE SAVEPOINT APP_MIXED",
+            "SAVEPOINT app_released",
+            "INSERT INTO driver_rows VALUES(31)",
+            "RELEASE SAVEPOINT App_Released",
+            "ROLLBACK",
+        ] {
+            execute(&mut sql, profile, statement).unwrap();
+        }
         for statement in [
             "BEGIN",
             r#"SAVEPOINT "JDBC_outer""#,

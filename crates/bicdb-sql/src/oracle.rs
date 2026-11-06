@@ -939,12 +939,21 @@ fn lower_oracle_sql(
         return Err(unsupported("expected one DEALLOCATE statement"));
     }
     // JDBC savepoints use PostgreSQL's transport grammar, including RELEASE
-    // (which Oracle SQL itself does not provide). Preserve opaque driver names
-    // and validate the exact command before Oracle identifier folding.
+    // (which Oracle SQL itself does not provide). Resolve names exactly as
+    // SAVEPOINT and ROLLBACK TO do: Oracle-fold unquoted names, preserve quoted
+    // driver names. RELEASE itself must not become a reserved application word.
     if word(&source[0], "RELEASE") {
         let statements = parse_statements(sql)?;
-        if let [Statement::ReleaseSavepoint { .. }] = statements.as_slice() {
-            return Ok(join(&source));
+        if let [Statement::ReleaseSavepoint { name }] = statements.as_slice() {
+            let value = if name.quote_style.is_some() {
+                name.value.clone()
+            } else {
+                name.value.to_uppercase()
+            };
+            return Ok(format!(
+                "RELEASE SAVEPOINT \"{}\"",
+                value.replace('"', "\"\"")
+            ));
         }
         return Err(unsupported("expected one RELEASE SAVEPOINT statement"));
     }

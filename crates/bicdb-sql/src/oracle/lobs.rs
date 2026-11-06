@@ -2,6 +2,8 @@
 use super::*;
 mod history;
 mod persistent;
+#[cfg(test)]
+mod sql_tests;
 pub(crate) use history::State;
 
 thread_local! { static ENABLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
@@ -87,6 +89,141 @@ pub(crate) fn package_operation(function: &Function) -> Option<String> {
     {
         ["DBMS_LOB", name] | ["SYS", "DBMS_LOB", name] => Some((*name).to_string()),
         _ => None,
+    }
+}
+
+/// SQL reads consume the value in the statement's visible row. They acquire no
+/// writable locator and must not relax the routine locator-acquisition rules.
+pub(super) fn lower_sql_scalars(db: &BicDb, statements: &mut Vec<Statement>) -> Result<()> {
+    let mut needed = false;
+    let _ = visit_expressions_mut(statements, |expr| {
+        if let Expr::Function(function) = expr {
+            needed |= package_operation(function)
+                .is_some_and(|name| matches!(name.as_str(), "GETLENGTH" | "ISTEMPORARY"));
+        }
+        ControlFlow::<()>::Continue(())
+    });
+    if !needed {
+        return Ok(());
+    }
+    struct Lower<'a> {
+        db: &'a BicDb,
+        queries: Vec<Query>,
+        origins: BTreeMap<(i32, i16), bool>,
+    }
+    impl Lower<'_> {
+        fn blob_input(&mut self, input: &Expr) -> bool {
+            let input = match input {
+                Expr::Nested(inner) => return self.blob_input(inner),
+                other => other,
+            };
+            if let Expr::Function(function) = input {
+                if object_name_lowercase(&function.name).ok().as_deref()
+                    == Some("bicdb_oracle_empty_blob")
+                {
+                    return true;
+                }
+            }
+            let Some(mut query) = self.queries.last().cloned() else {
+                return false;
+            };
+            let SetExpr::Select(select) = query.body.as_mut() else {
+                return false;
+            };
+            select.projection = vec![SelectItem::UnnamedExpr(input.clone())];
+            query.locks.clear();
+            let Ok(Some(metadata)) =
+                infer_query_result_column_metadata(self.db, &query.to_string())
+            else {
+                return false;
+            };
+            let [origin] = metadata.as_slice() else {
+                return false;
+            };
+            if origin.table_oid == 0 || origin.attribute_number <= 0 {
+                return false;
+            }
+            let key = (origin.table_oid, origin.attribute_number);
+            if let Some(value) = self.origins.get(&key) {
+                return *value;
+            }
+            let oids = table_oids(self.db);
+            let value = oids
+                .iter()
+                .find(|(_, oid)| **oid as i32 == origin.table_oid)
+                .and_then(|(name, _)| load_schema(self.db, name).ok().flatten())
+                .and_then(|schema| {
+                    schema
+                        .columns
+                        .get(origin.attribute_number as usize - 1)
+                        .cloned()
+                })
+                .is_some_and(|column| is_modifier(column.type_modifier.as_ref()));
+            self.origins.insert(key, value);
+            value
+        }
+    }
+    impl sqlparser::ast::VisitorMut for Lower<'_> {
+        type Break = Box<SqlError>;
+        fn pre_visit_query(&mut self, query: &mut Query) -> ControlFlow<Self::Break> {
+            self.queries.push(query.clone());
+            ControlFlow::Continue(())
+        }
+        fn post_visit_query(&mut self, _: &mut Query) -> ControlFlow<Self::Break> {
+            self.queries.pop();
+            ControlFlow::Continue(())
+        }
+        fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<Self::Break> {
+            let Expr::Function(function) = expr else {
+                return ControlFlow::Continue(());
+            };
+            let Some(operation) = package_operation(function)
+                .filter(|name| matches!(name.as_str(), "GETLENGTH" | "ISTEMPORARY"))
+            else {
+                return ControlFlow::Continue(());
+            };
+            let lowered = (|| -> Result<Expr> {
+                if function.uses_odbc_syntax
+                    || !matches!(function.parameters, FunctionArguments::None)
+                    || function.filter.is_some()
+                    || function.over.is_some()
+                    || function.null_treatment.is_some()
+                    || !function.within_group.is_empty()
+                {
+                    return Err(unsupported("LOB scalar requires an ordinary function call"));
+                }
+                let params = parse_routine_params(&["lob_loc bytea".into()])?;
+                let inputs = procedure_actual_arguments(function, &params, false)?;
+                let input = inputs[0].ok_or_else(|| unsupported("missing LOB scalar argument"))?;
+                if !self.blob_input(input) {
+                    return Err(unsupported(
+                        "SQL LOB scalar requires logical BLOB provenance",
+                    ));
+                }
+                expression(&format!(
+                    "pg_catalog.bicdb_oracle_sql_blob_{}({input})",
+                    operation.to_ascii_lowercase()
+                ))
+            })();
+            match lowered {
+                Ok(value) => {
+                    *expr = value;
+                    ControlFlow::Continue(())
+                }
+                Err(error) => ControlFlow::Break(Box::new(error)),
+            }
+        }
+    }
+    match sqlparser::ast::VisitMut::visit(
+        statements,
+        &mut Lower {
+            db,
+            queries: Vec::new(),
+            origins: BTreeMap::new(),
+        },
+    ) {
+        ControlFlow::Continue(()) => Ok(()),
+        ControlFlow::Break(error) => Err(*error),
     }
 }
 
@@ -343,6 +480,25 @@ pub(crate) fn from_raw(value: SqlValue) -> Result<SqlValue> {
 
 pub(crate) fn scalar(name: &str, args: &[SqlValue]) -> Result<Option<SqlValue>> {
     match name {
+        "bicdb_oracle_sql_blob_getlength" | "bicdb_oracle_sql_blob_istemporary" => {
+            let [value] = args else {
+                return Err(unsupported("LOB scalar requires one argument"));
+            };
+            match value {
+                SqlValue::Null => Ok(Some(SqlValue::Null)),
+                SqlValue::OracleLob(value) => {
+                    Ok(Some(SqlValue::Int(if name.ends_with("getlength") {
+                        i64::try_from(value.read_bytes()?.len())
+                            .map_err(|_| unsupported("LOB length exceeds int8 transport"))?
+                    } else {
+                        i64::from(value.is_temporary())
+                    })))
+                }
+                _ => Err(unsupported(
+                    "SQL LOB scalar requires a logical BLOB operand",
+                )),
+            }
+        }
         "bicdb_oracle_empty_blob" => {
             if !args.is_empty() {
                 return Err(unsupported("EMPTY_BLOB takes no arguments"));

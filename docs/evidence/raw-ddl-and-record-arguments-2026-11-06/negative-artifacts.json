@@ -1,0 +1,12 @@
+{
+  "sources": {
+    "engine/materialize.rs": "ab3882dd61824750acdb503d3bce583d267d46e8d4a7bd22c80c429095956d04",
+    "session/domain_types.rs": "e5951f8e4ae297f41e3f1402941636b4b7e6024ed9873ea03f308ddc57f2a504",
+    "virtual_tables.rs": "a2935d2cf06429867b98bb37be8be93b3ea0491582afe1cea1cdd1bef8bcc103",
+    "schema_meta.rs": "795806a2ecdf353c3bf97ead6f191c0fe3fcb30cba22e02f2ec86111fa9e7379"
+  },
+  "artifacts": {
+    "/root/ehr-bicdb-migration-20261104/target/debug/deps/libbicdb_sql-d676b473e1c9f0b6.rlib": "8fd6b62a431c8bad49bcaaabe469aaf9f004e0c28a851439326f89c7dd134174",
+    "/root/ehr-bicdb-migration-20261104/target/debug/deps/raw_ddl_batches-aa44d029c06636ce": "8324dd20b9f0edf4097dc9494987827c1bdf6f059692a6fecf3124d568ee3d26"
+  }
+}

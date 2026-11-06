@@ -4972,8 +4972,8 @@ pub(crate) fn assign_routine_targets(
     assign_routine_targets_with_columns(frame, targets, &[], row.cloned())
 }
 
-/// Column-aware INTO assignment. One target receiving a multi-column row is a
-/// row variable (`record` / `table%ROWTYPE`): it gets a JSON object keyed by
+/// Column-aware INTO assignment. A declared record, including a one-column
+/// record, or one target receiving a multi-column row gets a JSON object keyed by
 /// the result's column names, so `rowvar.field` afterwards resolves through
 /// the same dotted-path lookup NEW/OLD use. Multiple targets stay positional
 /// scalars, exactly as before.
@@ -4986,7 +4986,12 @@ pub(crate) fn assign_routine_targets_with_columns(
     if row.is_none() && plpgsql_into_no_data_enabled() {
         return Err(SqlError::NoDataFound);
     }
-    if targets.len() == 1 && columns.len() > 1 {
+    let declared_record = targets.len() == 1
+        && frame
+            .assignment_types
+            .get(&normalize_object_name(&targets[0]))
+            .is_some_and(|schema| schema.pg_type.eq_ignore_ascii_case("record"));
+    if targets.len() == 1 && (columns.len() > 1 || (declared_record && !columns.is_empty())) {
         let value = match row.as_ref() {
             Some(row) => SqlValue::Json(
                 JsonValue::Object(

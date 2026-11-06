@@ -4486,6 +4486,11 @@ pub(crate) fn split_raw_multi_grantee_revoke(sql: &str) -> Result<Option<Vec<Str
     if !lower.starts_with("revoke ") {
         return Ok(None);
     }
+    // A later statement may contain FROM and commas in routine signatures.
+    // Those tokens do not belong to this statement's grantee list.
+    if split_sql_statements(trimmed).len() != 1 {
+        return Ok(None);
+    }
     let Some(from_index) = lower.rfind(" from ") else {
         return Ok(None);
     };

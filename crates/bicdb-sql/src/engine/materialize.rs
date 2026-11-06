@@ -222,6 +222,11 @@ impl<'db> SqlEngine<'db> {
                 .ok_or_else(|| {
                     SqlError::Unsupported(format!("unsupported SELECT expression {expr}"))
                 }),
+            Expr::CompoundIdentifier(parts) => routine_var_from_parts(
+                &self.routine_vars,
+                &parts.iter().map(ident_value).collect::<Vec<_>>(),
+            )?
+            .ok_or_else(|| SqlError::Unsupported(format!("unsupported SELECT expression {expr}"))),
             Expr::Case {
                 operand,
                 conditions,

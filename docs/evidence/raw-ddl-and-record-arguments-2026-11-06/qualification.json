@@ -1,0 +1,93 @@
+{
+  "status": "VERIFIED",
+  "tests": [
+    {
+      "label": "causal-negative",
+      "exit": 101,
+      "result": [
+        "test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s"
+      ],
+      "log_sha256": "3f229f36c324ec8449031445c9930d585481e57842cf00448c3e88dc323affbb"
+    },
+    {
+      "label": "causal-positive",
+      "exit": 0,
+      "result": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s"
+      ],
+      "log_sha256": "167e2e71eeaa8465b4b245ed73c2c2d682c060697948e6917a0d1dbd6cd57cdc"
+    },
+    {
+      "label": "raw_ddl_authorization",
+      "exit": 0,
+      "result": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s"
+      ],
+      "log_sha256": "0d252fdef13fc2b5e9cb150083450f298ffd236f07a13a74ca54cf9896a21526"
+    },
+    {
+      "label": "routine_privilege_lists",
+      "exit": 0,
+      "result": [
+        "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s"
+      ],
+      "log_sha256": "95affcc8c56466dc0e595d20b34603f5846d5ddac2dca8ca1fb9471438e0f7bc"
+    },
+    {
+      "label": "routine_assignment_types",
+      "exit": 0,
+      "result": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s"
+      ],
+      "log_sha256": "7f821dee1dd9241299ed6e8a7c4a3352a7a460fdda97c9c9beb4f28dd43e9f76"
+    },
+    {
+      "label": "ehr_routine_results",
+      "exit": 0,
+      "result": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s"
+      ],
+      "log_sha256": "dfc36fcfa61e7e8f2c3f49610d976d9610df4f80cca747d446cf4b8b83465ac9"
+    },
+    {
+      "label": "routine_expression_stack",
+      "exit": 0,
+      "result": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s"
+      ],
+      "log_sha256": "1c889b2e30648016210e980797da2afd939ebb67adc42fded8b3820d7c1f067c"
+    },
+    {
+      "label": "lateral_routine_sources",
+      "exit": 0,
+      "result": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.85s"
+      ],
+      "log_sha256": "d18397661774b12685ff4bdeca9f62f0c701de57c5453e6a1c2de47acff605fa"
+    },
+    {
+      "label": "record_conflicts_sql",
+      "exit": 0,
+      "result": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s"
+      ],
+      "log_sha256": "5bea2b05712c453b128fda2a38048f5622fb4336b0e26625d7e9abdc3cb2a96f"
+    },
+    {
+      "label": "routine_cte_case_types",
+      "exit": 0,
+      "result": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.74s"
+      ],
+      "log_sha256": "1c853a92cd553e39d62a318882361f4bffe10e48edb8cf0a32c833b14717c94b"
+    },
+    {
+      "label": "wire",
+      "exit": 0,
+      "result": [
+        "test result: ok. 132 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.42s"
+      ],
+      "log_sha256": "ee1caa46f663fd8d24323099650ac694e348e3f7a94758ffc58548e01176fed4"
+    }
+  ]
+}

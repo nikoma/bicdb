@@ -2145,6 +2145,12 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_raw_do_ddl(&mut self, sql: &str) -> Result<Option<SqlResult>> {
+        let (head, _) = trim_leading_sql_comments_with_offset(sql.trim());
+        if strip_prefix_ci(head, "DO ").is_some() && split_sql_statements(head).len() != 1 {
+            // Anonymous-block recognizers own one statement. Let the batch
+            // dispatcher preserve the block and execute its following SQL.
+            return Ok(None);
+        }
         let normalized = normalize_sql(sql);
         if normalized.starts_with("do $carrier_revoke_relations$")
             && normalized.contains("from pg_catalog.pg_class as class")

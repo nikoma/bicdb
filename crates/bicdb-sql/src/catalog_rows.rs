@@ -7655,6 +7655,7 @@ pub(crate) fn index_field_attnum(
         | IndexField::Lower(_)
         | IndexField::Upper(_)
         | IndexField::Trim(_)
+        | IndexField::TimestampDay(_)
         | IndexField::Coalesce { .. }
         | IndexField::FirstNonNull(_) => None,
     }

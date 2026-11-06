@@ -3054,6 +3054,34 @@ impl<'db> SqlSession<'db> {
                 return Ok(SqlResult::command("CREATE INDEX"));
             }
         };
+        // A legacy scalar envelope without an ordered key cannot be silently
+        // indexed as NULL. Require explicit type reconciliation before build.
+        fn has_timestamp_day(field: &IndexField) -> bool {
+            match field {
+                IndexField::TimestampDay(_) => true,
+                IndexField::Lower(inner)
+                | IndexField::Upper(inner)
+                | IndexField::Trim(inner)
+                | IndexField::Coalesce { field: inner, .. } => has_timestamp_day(inner),
+                IndexField::FirstNonNull(fields) => fields.iter().any(has_timestamp_day),
+                _ => false,
+            }
+        }
+        if fields.iter().any(has_timestamp_day) {
+            let records = match self.tx.as_ref() {
+                Some(tx) => tx.scan_collection(&table).map_err(SqlError::from)?,
+                None => self
+                    .db_ref()
+                    .scan_collection(&table)
+                    .map_err(SqlError::from)?,
+            };
+            if records
+                .iter()
+                .any(|record| !bicdb_core::timestamp_day_index_inputs_supported(record, &fields))
+            {
+                return Err(SqlError::Unsupported("timestamp day index requires canonical ordered storage keys; reconcile source column types first".into()));
+            }
+        }
         // A partial index (`WHERE predicate`) only holds the rows the predicate is true for. A UNIQUE
         // one must enforce exactly that, so an untranslatable predicate is refused for it; a plain
         // partial index may index every row instead (same query results, larger index).

@@ -4661,6 +4661,9 @@ pub enum IndexField {
     /// fallback: the first non-NULL field, or NULL when every field is NULL
     /// (so a NULLS DISTINCT unique index does not constrain that row).
     FirstNonNull(Vec<IndexField>),
+    /// Midnight floor of a canonical timestamp-without-time-zone key.
+    /// SQL admits only timestamp inputs using the ordered scalar codec.
+    TimestampDay(Box<IndexField>),
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -6178,6 +6181,13 @@ impl IndexState {
     }
 
     fn validate_btree_record_mutations(&self, mutations: &[IndexRecordMutation]) -> Result<()> {
+        if index_fields_have_timestamp_day(&self.definition.fields) {
+            for mutation in mutations {
+                if let Some(record) = mutation.new_record.record()? {
+                    validate_timestamp_day_index_inputs(record, &self.definition.fields)?;
+                }
+            }
+        }
         if !self.definition.unique {
             return Ok(());
         }
@@ -8989,6 +8999,7 @@ impl IndexRecordMutation {
                 IndexField::Lower(inner)
                 | IndexField::Upper(inner)
                 | IndexField::Trim(inner)
+                | IndexField::TimestampDay(inner)
                 | IndexField::Coalesce { field: inner, .. } => base_column(inner),
                 // Several base columns: treat any change as relevant.
                 IndexField::FirstNonNull(_) => None,
@@ -16769,15 +16780,13 @@ impl Transaction {
                     "read-lock mark is no longer valid".into(),
                 ));
             }
-            if locked.order[mark.lock_len..]
-                .iter()
-                .any(|key| {
-                    integrity_reservations::is_event(key)
-                        || self.last_pending_write(&key.0, &key.1).is_some()
-                })
-            {
+            if locked.order[mark.lock_len..].iter().any(|key| {
+                integrity_reservations::is_event(key)
+                    || self.last_pending_write(&key.0, &key.1).is_some()
+            }) {
                 return Err(BicDbError::TransactionConflict(
-                    "cannot release integrity reservations or locks protecting buffered writes".into(),
+                    "cannot release integrity reservations or locks protecting buffered writes"
+                        .into(),
                 ));
             }
             locked.split_off(mark.lock_len)
@@ -16838,13 +16847,10 @@ impl Transaction {
             .iter()
             .map(|write| (write.collection.clone(), write.record_id.clone()))
             .collect::<FxHashSet<_>>();
-        let released = self
-            .locked_keys
-            .get_mut()
-            .extract(|key| {
-                !retained.contains(key)
-                    && (retained.is_empty() || !integrity_reservations::is_event(key))
-            });
+        let released = self.locked_keys.get_mut().extract(|key| {
+            !retained.contains(key)
+                && (retained.is_empty() || !integrity_reservations::is_event(key))
+        });
         release_owned_write_locks(&self.write_locks, self.id, &released);
         Ok(())
     }
@@ -21333,6 +21339,11 @@ fn index_state_record_count(state: &IndexState) -> usize {
 }
 
 fn validate_index_definition(definition: &IndexDefinition) -> Result<()> {
+    if index_fields_have_timestamp_day(&definition.fields) && definition.kind != IndexKind::BTree {
+        return Err(BicDbError::Index(
+            "timestamp day expressions require B-tree indexes".into(),
+        ));
+    }
     if definition.nulls_not_distinct && (!definition.unique || definition.kind != IndexKind::BTree)
     {
         return Err(BicDbError::Index(
@@ -21518,6 +21529,7 @@ fn validate_secure_index_field(
         IndexField::Lower(inner)
         | IndexField::Upper(inner)
         | IndexField::Trim(inner)
+        | IndexField::TimestampDay(inner)
         | IndexField::Coalesce { field: inner, .. } => {
             validate_secure_index_field(collection, unique, policy, inner)
         }
@@ -21533,6 +21545,7 @@ fn index_field_contains_geometry(field: &IndexField) -> bool {
         IndexField::Lower(inner)
         | IndexField::Upper(inner)
         | IndexField::Trim(inner)
+        | IndexField::TimestampDay(inner)
         | IndexField::Coalesce { field: inner, .. } => index_field_contains_geometry(inner),
         IndexField::FirstNonNull(fields) => fields.iter().any(index_field_contains_geometry),
         IndexField::Id | IndexField::Timestamp | IndexField::MetadataPath(_) => false,
@@ -21563,6 +21576,7 @@ fn validate_index_field(index: &str, field: &IndexField) -> Result<()> {
         IndexField::Lower(inner)
         | IndexField::Upper(inner)
         | IndexField::Trim(inner)
+        | IndexField::TimestampDay(inner)
         | IndexField::Coalesce { field: inner, .. } => validate_index_field(index, inner)?,
         IndexField::FirstNonNull(fields) => {
             if fields.len() < 2 {
@@ -21796,6 +21810,10 @@ fn image_cells_index_key(
                 }
                 first
             }
+            IndexField::TimestampDay(inner) => {
+                timestamp_day_index_value(&field_value(stored, cells, inner)?)
+                    .unwrap_or(IndexValue::Null)
+            }
             IndexField::Upper(inner) => match field_value(stored, cells, inner)? {
                 IndexValue::Null => IndexValue::Null,
                 value => IndexValue::String(index_value_text(&value).to_ascii_uppercase()),
@@ -21902,6 +21920,10 @@ fn stored_index_key(stored: &StoredRecord, fields: &[IndexField]) -> Option<Vec<
                 }
                 first
             }
+            IndexField::TimestampDay(inner) => {
+                timestamp_day_index_value(&field_value(stored, cells, inner)?)
+                    .unwrap_or(IndexValue::Null)
+            }
             IndexField::Upper(inner) => match field_value(stored, cells, inner)? {
                 IndexValue::Null => IndexValue::Null,
                 value => IndexValue::String(index_value_text(&value).to_ascii_uppercase()),
@@ -21949,6 +21971,12 @@ fn record_index_field_json(record: &Record, field: &IndexField) -> Value {
             .map(|inner| record_index_field_json(record, inner))
             .find(|value| !value.is_null())
             .unwrap_or(Value::Null),
+        IndexField::TimestampDay(inner) => {
+            match timestamp_day_index_value(&record_index_field_value(record, inner)) {
+                Some(IndexValue::String(value)) => Value::String(value),
+                _ => Value::Null,
+            }
+        }
         IndexField::Upper(inner) => match record_index_field_json(record, inner) {
             Value::Null => Value::Null,
             value => Value::String(predicate_value_text(&value).to_ascii_uppercase()),
@@ -22133,6 +22161,7 @@ pub fn index_predicate_matches(record: &Record, predicate: &IndexPredicate) -> R
 }
 
 fn record_matches_index_predicate(record: &Record, definition: &IndexDefinition) -> Result<bool> {
+    validate_timestamp_day_index_inputs(record, &definition.fields)?;
     record_matches_index_predicate_parts(record, &definition.name, definition.predicate.as_ref())
 }
 
@@ -22339,6 +22368,90 @@ fn decode_index_field(encoded: &[u8], field_idx: usize) -> IndexValue {
     decode_index_value_at(encoded, pos).0
 }
 
+/// Apply a day floor to the SQL timestamp ordered-key codec. The key's
+/// finite payload is signed microseconds from 2000-01-01, with the sign bit
+/// flipped for lexical ordering. Preserve infinities and SQL NULL.
+/// `None` identifies an unsupported codec; callers must not publish a SQL
+/// expression index over those values.
+pub fn timestamp_day_index_value(value: &IndexValue) -> Option<IndexValue> {
+    if matches!(value, IndexValue::Null) {
+        return Some(IndexValue::Null);
+    }
+    let IndexValue::String(label) = value else {
+        return None;
+    };
+    let key = hex::decode(label.strip_prefix("\0bicdb:typed:")?).ok()?;
+    let output = match key.as_slice() {
+        [1, 0] | [1, 2] => key.clone(),
+        [1, 1, payload @ ..] if payload.len() == 8 => {
+            let encoded = u64::from_be_bytes(payload.try_into().ok()?);
+            let micros = (encoded ^ (1_u64 << 63)) as i64;
+            let floor = micros
+                .div_euclid(86_400_000_000)
+                .checked_mul(86_400_000_000)?;
+            let mut output = vec![1, 1];
+            output.extend_from_slice(&((floor as u64) ^ (1_u64 << 63)).to_be_bytes());
+            output
+        }
+        _ => return None,
+    };
+    Some(IndexValue::String(format!(
+        "\0bicdb:typed:{}",
+        hex::encode(output)
+    )))
+}
+
+fn index_fields_have_timestamp_day(fields: &[IndexField]) -> bool {
+    fields.iter().any(|field| match field {
+        IndexField::TimestampDay(_) => true,
+        IndexField::Lower(inner)
+        | IndexField::Upper(inner)
+        | IndexField::Trim(inner)
+        | IndexField::Coalesce { field: inner, .. } => {
+            index_fields_have_timestamp_day(std::slice::from_ref(inner))
+        }
+        IndexField::FirstNonNull(fields) => index_fields_have_timestamp_day(fields),
+        _ => false,
+    })
+}
+
+fn validate_timestamp_day_index_inputs(record: &Record, fields: &[IndexField]) -> Result<()> {
+    if index_fields_have_timestamp_day(fields)
+        && !timestamp_day_index_inputs_supported(record, fields)
+    {
+        return Err(BicDbError::Index(
+            "timestamp day expression requires a canonical timestamp ordered key".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Check ordered timestamp codec prerequisites before an SQL index build.
+pub fn timestamp_day_index_inputs_supported(record: &Record, fields: &[IndexField]) -> bool {
+    fields.iter().all(|field| match field {
+        IndexField::TimestampDay(inner) => {
+            let input = record_index_field_json(record, inner);
+            let timestamp_codec = matches!(inner.as_ref(), IndexField::TimestampDay(_))
+                || input.is_null()
+                || input.get("$bicdb_typed").is_some_and(|scalar| {
+                    scalar.get("version").and_then(Value::as_u64) == Some(1)
+                        && scalar.get("pg_type").and_then(Value::as_str) == Some("timestamp")
+                });
+            timestamp_codec
+                && timestamp_day_index_inputs_supported(record, std::slice::from_ref(inner))
+                && timestamp_day_index_value(&record_index_field_value(record, inner)).is_some()
+        }
+        IndexField::Lower(inner)
+        | IndexField::Upper(inner)
+        | IndexField::Trim(inner)
+        | IndexField::Coalesce { field: inner, .. } => {
+            timestamp_day_index_inputs_supported(record, std::slice::from_ref(inner))
+        }
+        IndexField::FirstNonNull(fields) => timestamp_day_index_inputs_supported(record, fields),
+        _ => true,
+    })
+}
+
 fn record_index_field_value(record: &Record, field: &IndexField) -> IndexValue {
     match field {
         IndexField::Id => IndexValue::String(record.id.clone()),
@@ -22371,6 +22484,10 @@ fn record_index_field_value(record: &Record, field: &IndexField) -> IndexValue {
             .map(|inner| record_index_field_value(record, inner))
             .find(|value| !matches!(value, IndexValue::Null))
             .unwrap_or(IndexValue::Null),
+        IndexField::TimestampDay(inner) => {
+            timestamp_day_index_value(&record_index_field_value(record, inner))
+                .unwrap_or(IndexValue::Null)
+        }
         IndexField::Upper(inner) => match record_index_field_value(record, inner) {
             IndexValue::Null => IndexValue::Null,
             value => IndexValue::String(index_value_text(&value).to_ascii_uppercase()),
@@ -24167,6 +24284,9 @@ fn index_field_stats_name(field: &IndexField) -> String {
                 .collect::<Vec<_>>()
                 .join(",")
         ),
+        IndexField::TimestampDay(inner) => {
+            format!("timestamp_day({})", index_field_stats_name(inner))
+        }
         IndexField::Upper(inner) => format!("upper({})", index_field_stats_name(inner)),
         IndexField::Lower(inner) => format!("lower({})", index_field_stats_name(inner)),
         IndexField::Trim(inner) => format!("trim({})", index_field_stats_name(inner)),
@@ -24968,6 +25088,7 @@ fn spatial_field_name(field: &IndexField) -> String {
                 .collect::<Vec<_>>()
                 .join(",")
         ),
+        IndexField::TimestampDay(inner) => format!("timestamp_day({})", spatial_field_name(inner)),
         IndexField::Upper(inner) => format!("upper({})", spatial_field_name(inner)),
         IndexField::Lower(inner) => format!("lower({})", spatial_field_name(inner)),
         IndexField::Trim(inner) => format!("trim({})", spatial_field_name(inner)),

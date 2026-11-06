@@ -15,6 +15,7 @@ pub(crate) fn index_field_is_expression(field: &IndexField) -> bool {
         IndexField::Lower(_)
             | IndexField::Upper(_)
             | IndexField::Trim(_)
+            | IndexField::TimestampDay(_)
             | IndexField::Coalesce { .. }
             | IndexField::FirstNonNull(_)
     )
@@ -2887,7 +2888,10 @@ fn coalesce_index_field(
         Some(schema) => index_field_pg_type(schema, &field),
         None if matches!(
             field,
-            IndexField::Lower(_) | IndexField::Upper(_) | IndexField::Trim(_)
+            IndexField::Lower(_)
+                | IndexField::Upper(_)
+                | IndexField::Trim(_)
+                | IndexField::TimestampDay(_)
         ) =>
         {
             Some("text".into())
@@ -2992,6 +2996,58 @@ pub(crate) fn index_field_from_expr_for_schema(
     expr: &Expr,
 ) -> Result<IndexField> {
     match expr {
+        Expr::Function(function)
+            if object_name_lowercase(&function.name).is_ok_and(|name| {
+                matches!(
+                    name,
+                    "date_trunc" | "pg_catalog.date_trunc" | "bicdb_oracle_trunc_date"
+                )
+            }) =>
+        {
+            let args = positional_function_args(&function.args).ok_or_else(|| {
+                SqlError::Unsupported("timestamp day index requires positional arguments".into())
+            })?;
+            let literal_is = |expr: &Expr, expected: &str| matches!(expr, Expr::Value(value) if matches!(&value.value, Value::SingleQuotedString(value) if value.eq_ignore_ascii_case(expected)));
+            let input = if function_name_is(function, "date_trunc") {
+                match args.as_slice() {
+                    [unit, input] if literal_is(unit, "day") => *input,
+                    _ => {
+                        return Err(SqlError::Unsupported(
+                            "only fixed day timestamp truncation is indexable".into(),
+                        ))
+                    }
+                }
+            } else {
+                match args.as_slice() {
+                    [input] => *input,
+                    [input, unit] if literal_is(unit, "DD") => *input,
+                    _ => {
+                        return Err(SqlError::Unsupported(
+                            "only fixed day datetime TRUNC is indexable".into(),
+                        ))
+                    }
+                }
+            };
+            // A precision-changing cast can round across midnight. Do not
+            // erase it into the source column's key representation.
+            let mut has_cast = false;
+            let _ = sqlparser::ast::visit_expressions(input, |expr| {
+                has_cast |= matches!(expr, Expr::Cast { .. });
+                ControlFlow::<()>::Continue(())
+            });
+            if has_cast {
+                return Err(SqlError::Unsupported(
+                    "timestamp day index does not erase input casts".into(),
+                ));
+            }
+            let field = index_field_from_expr_for_schema(schema, input)?;
+            if index_field_pg_type(schema, &field).as_deref() != Some("timestamp") {
+                return Err(SqlError::Unsupported(
+                    "day expression index requires timestamp without time zone".into(),
+                ));
+            }
+            return Ok(IndexField::TimestampDay(Box::new(field)));
+        }
         Expr::Function(function) if function_name_is(function, "coalesce") => {
             return coalesce_index_field(expr, function, Some(schema))
                 .or_else(|error| first_non_null_index_field(schema, function).ok_or(error))
@@ -3948,6 +4004,9 @@ pub(crate) fn canonical_index_field_for_schema(
             value,
             index_value,
         },
+        IndexField::TimestampDay(inner) => {
+            IndexField::TimestampDay(Box::new(canonical_index_field_for_schema(schema, *inner)))
+        }
         IndexField::Upper(inner) => {
             IndexField::Upper(Box::new(canonical_index_field_for_schema(schema, *inner)))
         }
@@ -5419,6 +5478,7 @@ pub(crate) fn index_field_matches(left: &IndexField, right: &IndexField) -> bool
         ) => lv == rv && li == ri && index_field_matches(left, right),
         (IndexField::Upper(left), IndexField::Upper(right))
         | (IndexField::Lower(left), IndexField::Lower(right))
+        | (IndexField::TimestampDay(left), IndexField::TimestampDay(right))
         | (IndexField::Trim(left), IndexField::Trim(right)) => index_field_matches(left, right),
         (IndexField::FirstNonNull(left), IndexField::FirstNonNull(right)) => {
             left.len() == right.len()

@@ -1897,6 +1897,7 @@ pub(crate) fn index_field_pg_type(schema: &TableSchema, field: &IndexField) -> O
             .column(schema.primary_key())
             .map(|column| column.pg_type.clone()),
         IndexField::Timestamp => Some("int8".to_string()),
+        IndexField::TimestampDay(_) => Some("timestamp".to_string()),
         IndexField::Geometry => None,
         IndexField::MetadataPath(path) if path.len() == 1 => {
             schema.column(&path[0]).map(|column| column.pg_type.clone())
@@ -2084,6 +2085,21 @@ pub(crate) fn record_index_field_sql_value(
             .map(|inner| record_index_field_sql_value(record, inner, schema))
             .find(|value| !matches!(value, SqlValue::Null))
             .unwrap_or(SqlValue::Null),
+        IndexField::TimestampDay(inner) => {
+            let value = record_index_field_sql_value(record, inner, schema);
+            if value == SqlValue::Null {
+                return SqlValue::Null;
+            }
+            match PgTimestamp::from_postgres_text(&value.to_cell(), false) {
+                Ok(PgTimestamp::Finite(micros)) => micros
+                    .div_euclid(86_400_000_000)
+                    .checked_mul(86_400_000_000)
+                    .map(|value| SqlValue::String(PgTimestamp::Finite(value).to_iso_text(false)))
+                    .unwrap_or(SqlValue::Null),
+                Ok(value) => SqlValue::String(value.to_iso_text(false)),
+                Err(_) => SqlValue::Null,
+            }
+        }
         IndexField::Upper(inner) => match record_index_field_sql_value(record, inner, schema) {
             SqlValue::Null => SqlValue::Null,
             value => SqlValue::String(value.to_cell().to_ascii_uppercase()),

@@ -430,6 +430,19 @@ qualified user functions retain their existing behavior. Alternate NLS calendars
 timezone conversion, BC boundary conformance and Oracle-specific error codes
 remain unqualified; other calendar functions remain separate work.
 
+Fixed-day B-tree expression indexes use canonical timestamp-without-time-zone
+keys for `TRUNC(column)` / `TRUNC(column, 'DD')` and PostgreSQL
+`date_trunc('day', column)`. They floor negative as well as positive epoch values
+to midnight, preserve NULLs and timestamp infinities, and maintain keys through
+writes, rollback, and reopen. Index construction rejects unsupported storage
+envelopes; reconcile legacy column types before retrying. Numeric TRUNC, zoned
+timestamps, other format masks, and precision-changing input casts do not use
+this physical transform. A predicate that rounds its input before truncating
+must retain that cast and cannot probe an index on the unrounded expression.
+This implementation scope does not establish production build cost,
+concurrent index creation, general function indexing, or complete temporal
+conformance.
+
 The [routine datetime evidence](evidence/oracle-routine-datetime-2026-11-01/README.md)
 records version-1 values and its original application namespace failure. The
 [static namespace evidence](evidence/oracle-routine-namespaces-2026-11-01/README.md)

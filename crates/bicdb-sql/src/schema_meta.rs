@@ -3038,7 +3038,7 @@ fn exact_view_name_exists(db: &BicDb, name: &str) -> bool {
     let Ok(Some(record)) = db.get(VIEW_COLLECTION, name) else {
         return false;
     };
-    serde_json::from_value::<ViewSchema>(record.metadata).is_ok_and(|view| view.name == name)
+    serde_json::from_value::<ViewSchema>(record.metadata.clone()).is_ok_and(|view| view.name == name)
 }
 
 pub(crate) fn resolve_relation_name_memoized(db: &BicDb, name: &str) -> Option<String> {

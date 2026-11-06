@@ -1,0 +1,29 @@
+{
+  "format": 1,
+  "launcher_sha256": "28aaab5d9779244be3f4f2bbf65126db56f8c90eabeea00ee16736012fdad888",
+  "framework_sha256": "80b275d58379723b291ea650249cc3809c8f10b34f78aaf988132cd6d434ab4e",
+  "original_provider_sha256": "c0243078dc8114a54a3280acaebdb74a30ad47e40ef0a3039e43aabc7970bd4e",
+  "staged_provider_sha256": "330a951360185f9acc875e98985255bda467adac447d1a866ae0a7f210026288",
+  "provider_symbolic_name": "org.compiere.db.oracle.provider",
+  "original_provider_version": "13.0.0.202611011311",
+  "staged_provider_version": "13.0.0.20261105_jdbc_9102b2ad",
+  "launcher_initialization_and_retained_inventory": [
+    {"mode": "shared-installation", "initialization_returncode": 0, "inspection_returncode": 0, "original_provider_bundles": 1, "staged_provider_bundles": 1},
+    {"mode": "shared-installation-no-cascading", "initialization_returncode": 0, "inspection_returncode": 0, "original_provider_bundles": 1, "staged_provider_bundles": 1},
+    {"mode": "private-installation", "initialization_returncode": 0, "inspection_returncode": 0, "original_provider_bundles": 0, "staged_provider_bundles": 1, "public_helper_used": true}
+  ],
+  "helper_tests": {"passed": 5, "failed": 0, "errors": 0, "skipped": 0},
+  "start_level": 1,
+  "maximum_jvm_heap_mib": 256,
+  "initialization_peak_group_rss_bytes": 495423488,
+  "inspection_peak_group_rss_bytes": 129507328,
+  "external_network_isolated": true,
+  "application_started_by_probes": false,
+  "database_started_by_probes": false,
+  "full_application_packaging_qualified": false,
+  "application_qualified": false,
+  "accepted_application_updated": false,
+  "engine_changed": false,
+  "customer_invoice_attempt": {"status": "interrupted_by_memory_guard", "completed_junit_result": false, "discarded_private_database_file_bytes": 568130956, "full_fk_retry_required": true},
+  "github_workflows_changed_or_dispatched": false
+}

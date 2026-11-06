@@ -260,6 +260,13 @@ provider with a fresh OSGi bundle version: replacing a JAR while retaining an
 already resolved version can leave the old provider class active. Verify actual
 class origins when qualifying an installation.
 
+Use a private launcher installation as well as a private configuration when
+qualifying a staged provider. A configuration override alone can retain both the
+original and staged provider bundles. The [runtime installation guide](../../../docs/oracle-idempiere-runtime-installation.md)
+describes explicit `-install`/`-configuration` arguments and the bounded launcher
+initialization evidence. This does not replace application tests or class-origin
+verification.
+
 Rebuild the application after preparation. The resulting provider needs the
 PostgreSQL JDBC bundle as well as its existing dependencies. The local Linux
 reference build used Java 17, the pinned Maven wrapper, a Linux-only target

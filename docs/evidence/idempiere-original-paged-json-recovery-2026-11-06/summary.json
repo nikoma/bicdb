@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "backend_source_commit": "20bfbc5dbcb0ce1086266a09c4321be2e15b90ff",
+  "backend_sha256": "0f6771627caab64657e97cafbd8320df30d10fa8e4013d3da2d293f9e6e0af4c",
+  "adapter_source_commit": "a46572f983cf4ab5ccf19529e24104b7f7efd1a4",
+  "adapter_sha256": "8d0d10b01a5b6caf7cf6528372c46e1f95998e799b87ff43509946d5c343b6d5",
+  "provider_sha256": "8059fd7ec50db8a17fe706ef29793a150496fd5ff56e7cf23ae3b0587a51e7cf",
+  "upstream_source_commit": "da0730aec42f3e9f5f671e81a70ff71e24d5e534",
+  "original_test_jar_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+  "original_classes": [
+    {
+      "name": "org.idempiere.test.base.JsonFieldTest",
+      "direct_test_methods": 1,
+      "expected_invocations": 1,
+      "class_sha256": "4daf618598255ab5598c8a6dc113ede9c56d9c683a1a4c3448177acb4dd8b8f1",
+      "source_sha256": "1131a9e026146d0947baa6cae64c34382a31c3ca5897d39f966c1a8b545d8436"
+    }
+  ],
+  "source_and_class_hashes_checked": true,
+  "runtime_origins": [
+    {
+      "class_name": "org.compiere.db.DB_Oracle",
+      "source_sha256": "8059fd7ec50db8a17fe706ef29793a150496fd5ff56e7cf23ae3b0587a51e7cf",
+      "matched": true
+    },
+    {
+      "class_name": "org.bicdb.jdbc.oracle.OracleDriver",
+      "source_sha256": "8d0d10b01a5b6caf7cf6528372c46e1f95998e799b87ff43509946d5c343b6d5",
+      "matched": true
+    },
+    {
+      "class_name": "org.postgresql.Driver",
+      "source_sha256": "2a32a9dcbc42d67a50ad3a0de5efd102c8d2be46720045f2cbd6689f160ab7c7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.JsonFieldTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    }
+  ],
+  "xml_sha256": "e15e11930505a1d23437bb3805cb944c98521a169f0a5b2a7fb327037f8e7b2a",
+  "tests": 1,
+  "passed": 1,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "storage_mode": "server_paged",
+  "qualified_original_schema_baseline_used": true,
+  "private_source_resources_prepared": true,
+  "jvm_exit_code": 0,
+  "database_exit_code": 0,
+  "processes_stopped": true,
+  "test_assertions_or_bytecode_changed": false,
+  "retest_excluded_from_distinct_invocation_totals": true,
+  "prior_failed_results_preserved": true,
+  "passed_database_reclaimed_allocated_bytes": 1030189056,
+  "full_application_qualified": false,
+  "production_qualified": false,
+  "full_oracle_programme_qualified": false
+}

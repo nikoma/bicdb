@@ -1105,3 +1105,11 @@ revision provenance are retained. The paged baseline is ready for unchanged
 original application retests; full application acceptance remains open. National
 LIKE and general escape expressions require separate executable contracts, as
 shown by the preserved source observations.
+
+
+The [unchanged original JSON retest](evidence/idempiere-original-paged-json-recovery-2026-11-06/README.md)
+passes on the qualified paged baseline, including valid saves after the expected
+invalid-JSON failure and migration-script generation. Source/class/runtime origins
+and clean shutdown are verified. This retest closes that selected class's observed
+recovery failure without increasing distinct invocation totals; complete
+application and programme qualification remain open.

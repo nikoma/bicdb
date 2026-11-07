@@ -915,7 +915,25 @@ pub(crate) fn compare_values_with_types(
     if numeric_comparison_types(left_type, right_type) {
         return compare_numeric_values(left, op, right);
     }
+    if numeric_against_untyped(left_type, right_type) {
+        // The untyped side (a derived-table column, say) has a real type
+        // the row cannot name. Only a numeric operand compares with NUMERIC
+        // without a cast; anything that does not parse keeps the old path.
+        if let Ok(truth) = compare_numeric_values(left, op, right) {
+            return Ok(truth);
+        }
+    }
     compare_values(left, op, right)
+}
+
+/// Exactly one operand type is resolved, and it is NUMERIC.
+pub(crate) fn numeric_against_untyped(left: Option<&str>, right: Option<&str>) -> bool {
+    match (left, right) {
+        (Some(known), None) | (None, Some(known)) => {
+            numeric_combine_pg_type(Some(known), None).as_deref() == Some("numeric")
+        }
+        _ => false,
+    }
 }
 
 pub(crate) fn eval_tuple_comparison<F>(
@@ -1178,6 +1196,11 @@ pub(crate) fn simple_case_values_equal(
     }
     if numeric_comparison_types(left_type, right_type) {
         return Ok(pg_typed_compare("numeric", left, right)? == Ordering::Equal);
+    }
+    if numeric_against_untyped(left_type, right_type) {
+        if let Ok(ordering) = pg_typed_compare("numeric", left, right) {
+            return Ok(ordering == Ordering::Equal);
+        }
     }
     Ok(values_equal(left, right))
 }

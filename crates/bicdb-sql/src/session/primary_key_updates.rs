@@ -384,6 +384,51 @@ mod tests {
     }
 
     #[test]
+    fn numeric_comparisons_ignore_decimal_spelling_in_every_row_shape() {
+        for profile in ["postgres", "oracle-preview-v1"] {
+            let (_root, mut db) = database(profile);
+            let mut session = SqlSession::new(&mut db);
+            for sql in [
+                r#"CREATE TABLE "Amounts"("Id" INTEGER PRIMARY KEY,"Amt" NUMERIC(10),"Code" VARCHAR(10))"#,
+                r#"CREATE TABLE "Scaled"("Id" INTEGER PRIMARY KEY,"Amt" NUMERIC(10,2))"#,
+                r#"INSERT INTO "Amounts" VALUES(1,100,'007')"#,
+                r#"INSERT INTO "Scaled" VALUES(1,100)"#,
+            ] {
+                run(&mut session, profile, sql).unwrap_or_else(|e| panic!("{profile} {sql}: {e}"));
+            }
+            let one = vec![vec![SqlValue::Int(1)]];
+            for sql in [
+                r#"SELECT a."Id" FROM "Amounts" a WHERE a."Amt"=100.000"#,
+                r#"SELECT a."Id" FROM "Amounts" a WHERE a."Amt">=100.000 AND a."Amt"<=100.0"#,
+                r#"SELECT a."Id" FROM "Amounts" a WHERE NOT (a."Amt"<>100.0)"#,
+                r#"SELECT a."Id" FROM "Amounts" a WHERE a."Amt" IN (100.0, 7)"#,
+                r#"SELECT "Id" FROM "Amounts" WHERE "Amt" IN (100.0, 7)"#,
+                r#"SELECT CASE WHEN a."Amt"=100.0 THEN 1 ELSE 0 END FROM "Amounts" a"#,
+                r#"SELECT CASE a."Amt" WHEN 100.0 THEN 1 ELSE 0 END FROM "Amounts" a"#,
+                r#"SELECT COUNT(*) FROM "Amounts" GROUP BY "Amt" HAVING MAX("Amt")=100.0"#,
+                r#"SELECT s."Id" FROM (SELECT "Id","Amt" AS "Q" FROM "Scaled") s WHERE s."Q"=100.0"#,
+                r#"SELECT a."Id" FROM "Amounts" a WHERE EXISTS (SELECT 1 FROM "Scaled" s WHERE s."Amt"=a."Amt" AND s."Amt"=100.0)"#,
+            ] {
+                assert_eq!(
+                    run(&mut session, profile, sql).unwrap_or_else(|e| panic!("{profile} {sql}: {e}")).rows,
+                    one,
+                    "{profile}: {sql}"
+                );
+            }
+            // Text keeps text equality: '007' is not '7'.
+            for sql in [
+                r#"SELECT a."Id" FROM "Amounts" a WHERE a."Code"='7'"#,
+                r#"SELECT a."Id" FROM "Amounts" a WHERE a."Code" IN ('7')"#,
+            ] {
+                assert!(
+                    run(&mut session, profile, sql).unwrap().rows.is_empty(),
+                    "{profile}: {sql}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn typed_exact_key_probe_sees_same_transaction_rows_without_scanning() {
         for profile in ["postgres", "oracle-preview-v1"] {
             let (_root, mut db) = database(profile);

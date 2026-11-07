@@ -19,6 +19,9 @@ The regression checks commit, uniqueness failure, explicit rollback, absence of
 orphan index definitions, refusal on a populated collection and cold reopen.
 
 Three protocol regressions exercise async queries, synchronous queries and COPY.
+The first COPY fixture used unsupported pg_sleep inside a SQL trigger and
+failed before exercising idle accounting; that failure is not causal evidence.
+The corrected trigger uses clock_timestamp in a bounded, cancelable SQL loop.
 Execution/reply time must not consume the subsequent idle allowance. The actual
 old CLI completed pg_sleep(1.5) with a one-second idle budget, then disconnected
 before a follow-up after 400 ms. Idle policy and query deadlines are unchanged.
@@ -38,6 +41,15 @@ list. The integration test covers both existing numeric blocks and string-key
 blocks/tails, interleaved writes/deletes and reopen. The worker regression
 observes partial real folding and requires an actual foreground write to proceed
 before the entire fold finishes.
+
+The integration also exposed a pre-existing numeric-segment layering bug:
+folding away the last posting removed every paged override and allowed the old
+immutable segment to answer again. Empty terms now retain a valid zero-row
+numeric block and zero-frequency dictionary row in the same paged transaction.
+Existing readers already understand these encodings; exact, prefix and ranked
+paths stay on the authoritative paged layer. Reinsertions restore term counts
+correctly. The causal control reproduces the deleted match at batch 20; the
+corrected test covers disappearance, prefix lookup, restart and reinsertion.
 
 Qualification is in progress. Retained intermediate failures are not passes.
 Source merge, frozen runtime, EHR acceptance and physical HA activation are

@@ -11570,6 +11570,7 @@ fn idle_budget_after_work(sync: bool, copy: bool) {
         dir.path(),
         PgWireConfig {
             idle_timeout: Duration::from_secs(1),
+            query_timeout: Duration::from_secs(5),
             shutdown_grace_period: Duration::from_millis(500),
             ..Default::default()
         },
@@ -11591,8 +11592,9 @@ fn idle_budget_after_work(sync: bool, copy: bool) {
     startup(&mut client);
     read_until_ready(&mut client);
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let work_started = std::time::Instant::now();
         if copy {
-            send_query(&mut client, "CREATE TABLE slow_copy(value INT); CREATE FUNCTION pause_copy() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_sleep(1.5); RETURN NEW; END $$; CREATE TRIGGER pause_copy BEFORE INSERT ON slow_copy FOR EACH ROW EXECUTE FUNCTION pause_copy(); BEGIN");
+            send_query(&mut client, "CREATE TABLE slow_copy(value INT); CREATE FUNCTION pause_copy() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE until_time TIMESTAMPTZ; BEGIN until_time := clock_timestamp() + INTERVAL '1.5 seconds'; WHILE clock_timestamp() < until_time LOOP PERFORM 1; END LOOP; RETURN NEW; END $$; CREATE TRIGGER pause_copy BEFORE INSERT ON slow_copy FOR EACH ROW EXECUTE FUNCTION pause_copy(); BEGIN");
             assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
             send_query(&mut client, "COPY slow_copy FROM STDIN");
             assert_eq!(read_message(&mut client).0, b'G');
@@ -11603,6 +11605,10 @@ fn idle_budget_after_work(sync: bool, copy: bool) {
             send_query(&mut client, "SELECT pg_sleep(1.5)");
             assert_eq!(read_query_rows(&mut client), vec![vec![String::new()]]);
         }
+        assert!(
+            work_started.elapsed() >= Duration::from_millis(1400),
+            "the fixture must actually execute longer than the idle limit"
+        );
         // Longer than the 250-ms transport poll but below the actual idle limit.
         thread::sleep(Duration::from_millis(400));
         if copy {

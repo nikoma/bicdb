@@ -410,7 +410,9 @@ mod tests {
                 r#"SELECT a."Id" FROM "Amounts" a WHERE EXISTS (SELECT 1 FROM "Scaled" s WHERE s."Amt"=a."Amt" AND s."Amt"=100.0)"#,
             ] {
                 assert_eq!(
-                    run(&mut session, profile, sql).unwrap_or_else(|e| panic!("{profile} {sql}: {e}")).rows,
+                    run(&mut session, profile, sql)
+                        .unwrap_or_else(|e| panic!("{profile} {sql}: {e}"))
+                        .rows,
                     one,
                     "{profile}: {sql}"
                 );

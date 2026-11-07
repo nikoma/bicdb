@@ -1857,10 +1857,8 @@ impl BoundExprScope {
                     // this scope cannot type (a row column), the untyped
                     // comparison would compare `2` and `2.000` as text; the
                     // row evaluator resolves the column's declared type.
-                    let numeric = numeric_comparison_types(
-                        left_type.as_deref(),
-                        right_type.as_deref(),
-                    );
+                    let numeric =
+                        numeric_comparison_types(left_type.as_deref(), right_type.as_deref());
                     if !numeric
                         && (left_type.as_deref() == Some("numeric") && right_type.is_none()
                             || right_type.as_deref() == Some("numeric") && left_type.is_none())

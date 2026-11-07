@@ -1338,7 +1338,7 @@ impl InsertValuesTemplate {
                     "23502",
                     format!(
                         "null value in column \"{}\" of relation \"{}\" violates not-null constraint",
-                        column.name, table
+                        column.name, catalog_display_name(table)
                     ),
                     Some(table.to_string()),
                     Some(column.name.clone()),
@@ -1371,7 +1371,7 @@ impl InsertValuesTemplate {
                     "23502",
                     format!(
                         "null value in column \"{}\" of relation \"{}\" violates not-null constraint",
-                        column.name, table
+                        column.name, catalog_display_name(table)
                     ),
                     Some(table.to_string()),
                     Some(column.name.clone()),

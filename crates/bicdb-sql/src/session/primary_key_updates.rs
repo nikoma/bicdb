@@ -172,7 +172,7 @@ impl SqlSession<'_> {
                 if matches!(fields.get(column), Some(SqlValue::Null)) {
                     return Err(constraint_violation(
                         "23502",
-                        format!("null value in column \"{column}\" of relation \"{table}\" violates not-null constraint"),
+                        format!("null value in column \"{column}\" of relation \"{}\" violates not-null constraint", catalog_display_name(table)),
                         Some(table.into()), Some(column.clone()),
                         Some(not_null_constraint_name(table, column)),
                     ));

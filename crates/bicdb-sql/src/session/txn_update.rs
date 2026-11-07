@@ -6650,7 +6650,7 @@ impl<'db> SqlSession<'db> {
                         "23502",
                         format!(
                             "null value in column \"{}\" of relation \"{}\" violates not-null constraint",
-                            column_schema.name, table
+                            column_schema.name, catalog_display_name(table)
                         ),
                         Some(table.to_string()),
                         Some(column_schema.name.clone()),

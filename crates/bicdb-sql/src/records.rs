@@ -508,7 +508,8 @@ fn validate_record_columns(table: &str, schema: &TableSchema, record: &Record) -
                 "23502",
                 format!(
                     "null value in column \"{}\" of relation \"{}\" violates not-null constraint",
-                    column.name, table
+                    column.name,
+                    catalog_display_name(table)
                 ),
                 Some(table.to_string()),
                 Some(column.name.clone()),
@@ -555,7 +556,8 @@ pub(crate) fn validate_not_null(table: &str, schema: &TableSchema, record: &Reco
                 "23502",
                 format!(
                     "null value in column \"{}\" of relation \"{}\" violates not-null constraint",
-                    column.name, table
+                    column.name,
+                    catalog_display_name(table)
                 ),
                 Some(table.to_string()),
                 Some(column.name.clone()),

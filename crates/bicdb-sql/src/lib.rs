@@ -3016,6 +3016,9 @@ struct TableSchema {
     partitioning: Option<PartitioningSchema>,
     #[serde(default)]
     partition_of: Option<PartitionOfSchema>,
+    /// Oracle logical partitioning (see `oracle::partitioning`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    oracle_partitioning: Option<oracle::partitioning::Partitioning>,
 }
 
 /// A logical SQL column projected over an existing BicDB collection for an
@@ -5247,6 +5250,7 @@ pub fn ensure_embedded_table_schema(
         owner: Some(current_role_name()),
         partitioning: None,
         partition_of: None,
+        oracle_partitioning: None,
     });
     let mut changed = previous.is_none();
     for requested in columns {

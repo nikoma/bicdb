@@ -1139,6 +1139,33 @@ impl<'db> SqlSession<'db> {
                     schema.rls_enabled = true;
                     schema_dirty = true;
                 }
+                AlterTableOperation::SetOptionsParens { options }
+                    if matches!(options.as_slice(), [SqlOption::KeyValue { key, .. }]
+                        if key.value.eq_ignore_ascii_case(oracle::partitioning::OPTION)) =>
+                {
+                    // Lowered Oracle `MODIFY PARTITION BY`; not a native option.
+                    if !oracle::preview_routine_language_enabled(self.db_ref())? {
+                        return Err(SqlError::Unsupported(format!(
+                            "table option {} requires the Oracle preview profile",
+                            oracle::partitioning::OPTION
+                        )));
+                    }
+                    let [SqlOption::KeyValue { value, .. }] = options.as_slice() else {
+                        unreachable!()
+                    };
+                    let Expr::Value(ValueWithSpan {
+                        value: Value::SingleQuotedString(metadata),
+                        ..
+                    }) = value
+                    else {
+                        return Err(SqlError::InvalidSql(
+                            "partitioning metadata must be a string".into(),
+                        ));
+                    };
+                    self.capture_table_state_undo(&table, &schema)?;
+                    oracle::partitioning::apply_option(&mut schema, metadata)?;
+                    schema_dirty = true;
+                }
                 AlterTableOperation::DisableRowLevelSecurity => {
                     // The enabled and forced flags are independent, matching
                     // pg_class.relrowsecurity / relforcerowsecurity.

@@ -4402,6 +4402,7 @@ fn schema_bound_row_materialization_preserves_record_fields() {
         owner: None,
         partitioning: None,
         partition_of: None,
+        oracle_partitioning: None,
     };
     let record = Record::new("42")
         .with_metadata(json!({
@@ -4477,6 +4478,7 @@ fn select_projection_binds_schema_columns_to_direct_record_slots() {
         owner: None,
         partitioning: None,
         partition_of: None,
+        oracle_partitioning: None,
     };
     let query = parse_single_query(
         "SELECT row_key AS projected_key, payload_value

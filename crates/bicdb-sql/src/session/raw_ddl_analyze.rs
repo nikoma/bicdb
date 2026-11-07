@@ -524,6 +524,7 @@ impl<'db> SqlSession<'db> {
             owner: Some(current_user_from_gucs(&self.session_gucs)),
             partitioning: definition.partitioning,
             partition_of: None,
+            oracle_partitioning: None,
         })?;
         Ok(())
     }
@@ -607,6 +608,7 @@ impl<'db> SqlSession<'db> {
                 },
                 bound: partition.bound,
             }),
+            oracle_partitioning: None,
         })?;
         Ok(())
     }

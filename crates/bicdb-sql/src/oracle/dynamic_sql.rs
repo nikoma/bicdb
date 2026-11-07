@@ -388,6 +388,7 @@ impl SqlSession<'_> {
             return Err(unsupported("dynamic SQL requires exactly one statement"));
         };
         super::storage_catalog::lower(self.db_ref(), statement, namespace)?;
+        super::partitioning::lower_views(self.db_ref(), statement, namespace)?;
         namespaces::qualify_with_calls(statement, namespace);
         if !matches!(
             statement,

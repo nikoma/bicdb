@@ -36,6 +36,7 @@ mod nvl;
 mod nvl2;
 mod outer_joins;
 pub(crate) mod output;
+pub(crate) mod partitioning;
 pub(crate) mod procedures;
 pub(crate) mod raw_values;
 pub(crate) mod routine_arithmetic;
@@ -859,6 +860,10 @@ pub fn lower_session_sql(
     // unconstrained NUMERIC carrier, and before pgwire renders bind values.
     let numeric_source = numeric_casts::source_cast_defaults(sql);
     let sql = numeric_source.as_deref().unwrap_or(sql);
+    let partition_ddl = partitioning::lower_ddl(sql)?;
+    let sql = partition_ddl.as_deref().unwrap_or(sql);
+    let interval_identifiers = quote_interval_identifiers(sql);
+    let sql = interval_identifiers.as_deref().unwrap_or(sql);
     let schema = preview_schema(db, search_path, user)?.unwrap_or_else(default_schema_name);
     let scoped = namespaces::bind_source_quoted_functions(db, sql, &schema)?;
     let lowered = lower_profile_sql_in_namespace(
@@ -889,6 +894,7 @@ pub fn lower_session_sql(
     let mut statements = parse_statements(&lowered)?;
     output::lower_calls(&mut statements)?;
     storage_catalog::lower(db, &mut statements, &schema)?;
+    partitioning::lower_views(db, &mut statements, &schema)?;
     namespaces::qualify_with_calls(&mut statements, &schema);
     collections::lower_constructors(db, &mut statements, Some(&schema))?;
     date_trunc::rewrite(db, &mut statements)?;
@@ -901,6 +907,45 @@ pub fn lower_session_sql(
         .map(render_sql)
         .collect::<Vec<_>>()
         .join("; "))
+}
+
+/// `INTERVAL` is non-reserved in Oracle: only `INTERVAL '<literal>' ...`
+/// starts an interval literal, so an unquoted INTERVAL followed by anything
+/// else names a column (`SELECT Interval FROM User_Part_Tables`). Quote such
+/// uses as the upper-case identifier the Oracle lowering would produce.
+fn quote_interval_identifiers(sql: &str) -> Option<String> {
+    if !sql.to_ascii_uppercase().contains("INTERVAL") {
+        return None;
+    }
+    let dialect = sqlparser::dialect::GenericDialect {};
+    let tokens = sqlparser::tokenizer::Tokenizer::new(&dialect, sql)
+        .tokenize()
+        .ok()?;
+    let mut changed = false;
+    let mut out = String::with_capacity(sql.len() + 8);
+    for (index, token) in tokens.iter().enumerate() {
+        if let Token::Word(word) = token {
+            if word.quote_style.is_none() && word.value.eq_ignore_ascii_case("INTERVAL") {
+                let next = tokens[index + 1..]
+                    .iter()
+                    .find(|token| !matches!(token, Token::Whitespace(_)));
+                if !matches!(
+                    next,
+                    Some(
+                        Token::SingleQuotedString(_)
+                            | Token::NationalStringLiteral(_)
+                            | Token::LParen
+                    )
+                ) {
+                    out.push_str("\"INTERVAL\"");
+                    changed = true;
+                    continue;
+                }
+            }
+        }
+        out.push_str(&token.to_string());
+    }
+    changed.then_some(out)
 }
 
 fn lower_decode(db: &BicDb, sql: &str, oids: Option<&[i32]>) -> Result<String> {

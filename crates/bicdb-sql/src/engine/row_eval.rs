@@ -633,7 +633,13 @@ impl<'db> SqlEngine<'db> {
                             pg_typed_compare("pg_lsn", &left, &right)?,
                         )));
                     }
-                    compare_values(&left, op, &right)
+                    compare_values_with_types(
+                        left_type.as_deref(),
+                        right_type.as_deref(),
+                        &left,
+                        op,
+                        &right,
+                    )
                 }
                 BinaryOperator::PGLikeMatch
                 | BinaryOperator::PGILikeMatch
@@ -802,9 +808,19 @@ impl<'db> SqlEngine<'db> {
                     .iter()
                     .map(|candidate| self.eval_slot_row_value(row, context, candidate))
                     .collect::<Result<Vec<_>>>()?;
-                let matched = candidates
-                    .iter()
-                    .any(|candidate| values_equal(&value, candidate));
+                let value_type = self.row_expr_pg_type(expr, context);
+                let mut matched = false;
+                for (candidate_expr, candidate) in list.iter().zip(&candidates) {
+                    if simple_case_values_equal(
+                        &value,
+                        candidate,
+                        value_type.as_deref(),
+                        self.row_expr_pg_type(candidate_expr, context).as_deref(),
+                    )? {
+                        matched = true;
+                        break;
+                    }
+                }
                 if matched {
                     Ok(Some(!*negated))
                 } else if matches!(value, SqlValue::Null)
@@ -1984,7 +2000,13 @@ impl<'db> SqlEngine<'db> {
                             pg_typed_compare("pg_lsn", &left, &right)?,
                         )));
                     }
-                    compare_values(&left, op, &right)
+                    compare_values_with_types(
+                        left_type.as_deref(),
+                        right_type.as_deref(),
+                        &left,
+                        op,
+                        &right,
+                    )
                 }
                 _ => {
                     let Some(value) = self
@@ -2220,7 +2242,13 @@ impl<'db> SqlEngine<'db> {
                             pg_typed_compare("pg_lsn", &left, &right)?,
                         )));
                     }
-                    compare_values(&left, op, &right)
+                    compare_values_with_types(
+                        left_type.as_deref(),
+                        right_type.as_deref(),
+                        &left,
+                        op,
+                        &right,
+                    )
                 }
                 BinaryOperator::PGLikeMatch
                 | BinaryOperator::PGILikeMatch
@@ -2441,12 +2469,26 @@ impl<'db> SqlEngine<'db> {
                     return Ok(truth);
                 }
                 let value = self.eval_row_value(row, expr)?;
-                let matched = list
-                    .iter()
-                    .map(|candidate| self.eval_row_value(row, candidate))
-                    .collect::<Result<Vec<_>>>()?
-                    .iter()
-                    .any(|candidate| values_equal(&value, candidate));
+                let value_type =
+                    row_columns_expr_pg_type(self.db_ref(), expr, row.keys().map(String::as_str));
+                let mut matched = false;
+                for candidate_expr in list {
+                    let candidate = self.eval_row_value(row, candidate_expr)?;
+                    let candidate_type = row_columns_expr_pg_type(
+                        self.db_ref(),
+                        candidate_expr,
+                        row.keys().map(String::as_str),
+                    );
+                    if simple_case_values_equal(
+                        &value,
+                        &candidate,
+                        value_type.as_deref(),
+                        candidate_type.as_deref(),
+                    )? {
+                        matched = true;
+                        break;
+                    }
+                }
                 if matched {
                     Ok(Some(!*negated))
                 } else if matches!(value, SqlValue::Null)

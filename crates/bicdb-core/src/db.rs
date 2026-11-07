@@ -16100,6 +16100,17 @@ impl Transaction {
         self.scan_collection_record_ids_with_prefix_unchecked(collection, id_prefix)
     }
 
+    /// Snapshot-visible point read with no policy or protection gate,
+    /// including this transaction's own uncommitted writes. For locator
+    /// planning only: callers fetch the rows through policy-filtered paths.
+    pub fn get_visible_record_unchecked(
+        &self,
+        collection: &str,
+        id: &str,
+    ) -> Result<Option<Arc<Record>>> {
+        self.get_visible_unchecked(collection, id)
+    }
+
     /// Prefix id scan with no policy or protection gate; see
     /// [`BicDb::scan_collection_record_ids_with_prefix_unchecked`].
     pub fn scan_collection_record_ids_with_prefix_unchecked(

@@ -612,6 +612,9 @@ pub(crate) enum BoundExpr {
         right: Box<BoundExpr>,
         left_type: Option<String>,
         right_type: Option<String>,
+        /// Both operands resolve to types whose combination is NUMERIC:
+        /// compare by value, so `2` equals `2.000`.
+        numeric: bool,
     },
     And(Box<BoundExpr>, Box<BoundExpr>),
     Or(Box<BoundExpr>, Box<BoundExpr>),
@@ -1850,12 +1853,27 @@ impl BoundExprScope {
                         }
                         left_type = right_type.clone();
                     }
+                    // NUMERIC travels as decimal text. Against an operand
+                    // this scope cannot type (a row column), the untyped
+                    // comparison would compare `2` and `2.000` as text; the
+                    // row evaluator resolves the column's declared type.
+                    let numeric = numeric_comparison_types(
+                        left_type.as_deref(),
+                        right_type.as_deref(),
+                    );
+                    if !numeric
+                        && (left_type.as_deref() == Some("numeric") && right_type.is_none()
+                            || right_type.as_deref() == Some("numeric") && left_type.is_none())
+                    {
+                        return None;
+                    }
                     Some(BoundExpr::Compare {
                         left: Box::new(self.bind_in(left, ctx)?),
                         op: op.clone(),
                         right: Box::new(self.bind_in(right, ctx)?),
                         left_type,
                         right_type,
+                        numeric,
                     })
                 }
                 BinaryOperator::Arrow | BinaryOperator::LongArrow => None,
@@ -2385,9 +2403,13 @@ impl BoundExpr {
                 right,
                 left_type,
                 right_type,
+                numeric,
             } => {
                 let left = left.eval_borrowed(frame)?;
                 let right = right.eval_borrowed(frame)?;
+                if *numeric {
+                    return compare_numeric_values(left.as_ref(), op, right.as_ref());
+                }
                 // Unknown slot types are not unknown literals. Use temporal
                 // promotion here only when both operand types are resolved.
                 if left_type.is_some() && right_type.is_some() {

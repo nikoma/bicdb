@@ -3189,7 +3189,7 @@ impl<'db> SqlEngine<'db> {
                 // Locator planning: probes id existence only; the rows those
                 // ids resolve to are fetched through the policy-filtered
                 // record paths.
-                if self.db_ref().get_unchecked(table, record_id)?.is_some() {
+                if self.primary_key_record_id_exists_unchecked(table, record_id)? {
                     return Ok(Some((usize::MAX, vec![record_id.clone()])));
                 }
                 return Ok(Some((
@@ -3249,7 +3249,7 @@ impl<'db> SqlEngine<'db> {
                 // Locator planning: probes id existence only; the rows those
                 // ids resolve to are fetched through the policy-filtered
                 // record paths.
-                if self.db_ref().get_unchecked(table, record_id)?.is_some() {
+                if self.primary_key_record_id_exists_unchecked(table, record_id)? {
                     return Ok(Some((
                         usize::MAX,
                         RecordLocators::Pks(vec![record_id.clone()]),

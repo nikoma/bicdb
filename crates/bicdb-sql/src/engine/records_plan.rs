@@ -719,6 +719,28 @@ impl<'db> SqlEngine<'db> {
             .find(|index| index.name == index_name || index.name.eq_ignore_ascii_case(index_name))
     }
 
+    /// Whether an exact typed record id names a row this statement can see,
+    /// including rows written earlier in the enclosing transaction. A miss
+    /// falls back to a full typed-identity scan, so probing only committed
+    /// state turned every lookup of a same-transaction row into a table scan
+    /// (once per outer row under a correlated subquery).
+    pub(crate) fn primary_key_record_id_exists_unchecked(
+        &self,
+        table: &str,
+        record_id: &str,
+    ) -> Result<bool> {
+        if self.db_ref().get_unchecked(table, record_id)?.is_some() {
+            return Ok(true);
+        }
+        match self.tx {
+            Some(tx) => Ok(tx
+                .get_visible_record_unchecked(table, record_id)
+                .map_err(SqlError::from)?
+                .is_some()),
+            None => Ok(false),
+        }
+    }
+
     pub(crate) fn scan_record_ids_with_prefix(
         &self,
         collection: &str,

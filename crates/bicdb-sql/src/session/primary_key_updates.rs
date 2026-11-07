@@ -384,6 +384,52 @@ mod tests {
     }
 
     #[test]
+    fn typed_exact_key_probe_sees_same_transaction_rows_without_scanning() {
+        for profile in ["postgres", "oracle-preview-v1"] {
+            let (_root, mut db) = database(profile);
+            let mut session = SqlSession::new(&mut db);
+            for sql in [
+                r#"CREATE TABLE "Parents"("P" NUMERIC(10) PRIMARY KEY,"Name" VARCHAR(20))"#,
+                r#"CREATE TABLE "Children"("C" NUMERIC(10) PRIMARY KEY,"P" NUMERIC(10))"#,
+                r#"INSERT INTO "Parents" VALUES(1,'one')"#,
+                r#"INSERT INTO "Parents" VALUES(2,'two')"#,
+                r#"INSERT INTO "Parents" VALUES(3,'three')"#,
+                r#"INSERT INTO "Children" VALUES(10,1)"#,
+                "BEGIN",
+                r#"INSERT INTO "Children" VALUES(20,2)"#,
+            ] {
+                run(&mut session, profile, sql).unwrap_or_else(|e| panic!("{profile} {sql}: {e}"));
+            }
+            let query = r#"SELECT "Name" FROM "Parents" p WHERE EXISTS (SELECT 1 FROM "Children" c WHERE c."P"=p."P" AND c."C"=20)"#;
+            crate::SQL_PROFILE_STACK
+                .with(|stack| stack.borrow_mut().push(crate::SqlProfileStats::default()));
+            let rows = run(&mut session, profile, query).map(|result| result.rows);
+            let stats = crate::SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().pop().unwrap());
+            assert_eq!(
+                rows.unwrap(),
+                vec![vec![SqlValue::String("two".to_string())]],
+                "{profile}"
+            );
+            assert_eq!(
+                stats.record_id_prefix_scans, 0,
+                "{profile}: an exact typed key written in this transaction must not scan"
+            );
+            // Exact keys equal by type but spelled differently still match.
+            let spelled = r#"SELECT "Name" FROM "Parents" p WHERE EXISTS (SELECT 1 FROM "Children" c WHERE c."P"=p."P" AND c."C"=20.000)"#;
+            assert_eq!(
+                run(&mut session, profile, spelled).unwrap().rows,
+                vec![vec![SqlValue::String("two".to_string())]],
+                "{profile}"
+            );
+            run(&mut session, profile, "ROLLBACK").unwrap();
+            assert!(
+                run(&mut session, profile, query).unwrap().rows.is_empty(),
+                "{profile}: rolled-back key must not be visible"
+            );
+        }
+    }
+
+    #[test]
     fn key_move_qualified_names_preserve_types_aliases_and_other_schemas() {
         for profile in ["postgres", "oracle-preview-v1"] {
             let (root, mut db) = database(profile);

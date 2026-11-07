@@ -727,6 +727,124 @@ mod tests {
         literal_session_settings_progress_with_queued_writer("oracle-preview-v1");
     }
 
+    fn literal_session_setting_scopes(profile: &str) {
+        let directory = tempfile::tempdir().unwrap();
+        let server = PgWireServer::open(
+            directory.path(),
+            PgWireConfig {
+                sql_profile: profile.into(),
+                fsync: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let mut state = ConnectionState::new(1, "bicdb".into(), None);
+        execute_server_sql(&server, &mut state, "SET app.label = 'base'").unwrap();
+        execute_server_sql(&server, &mut state, "SET LOCAL app.label = 'outside-local'").unwrap();
+        assert!(!state.in_transaction && state.tx.is_none());
+        assert_eq!(
+            execute_server_sql(&server, &mut state, "SELECT current_setting('app.label')")
+                .unwrap()
+                .rows[0][0]
+                .to_cell(),
+            "base"
+        );
+        execute_server_sql(&server, &mut state, "BEGIN").unwrap();
+        execute_server_sql(&server, &mut state, "SET app.label = 'rolled-back'").unwrap();
+        execute_server_sql(&server, &mut state, "ROLLBACK").unwrap();
+        assert_eq!(
+            execute_server_sql(&server, &mut state, "SELECT current_setting('app.label')")
+                .unwrap()
+                .rows[0][0]
+                .to_cell(),
+            "base"
+        );
+        execute_server_sql(&server, &mut state, "BEGIN").unwrap();
+        execute_server_sql(
+            &server,
+            &mut state,
+            "SET LOCAL app.label = 'transaction-local'",
+        )
+        .unwrap();
+        execute_server_sql(&server, &mut state, "COMMIT").unwrap();
+        assert_eq!(
+            execute_server_sql(&server, &mut state, "SELECT current_setting('app.label')")
+                .unwrap()
+                .rows[0][0]
+                .to_cell(),
+            "base"
+        );
+    }
+
+    #[test]
+    fn postgres_literal_session_setting_scopes_are_preserved() {
+        literal_session_setting_scopes("postgres");
+    }
+
+    #[test]
+    fn oracle_literal_session_setting_scopes_are_preserved() {
+        literal_session_setting_scopes("oracle-preview-v1");
+    }
+
+    fn literal_session_setting_on_standby(profile: &str) {
+        let directory = tempfile::tempdir().unwrap();
+        let primary = directory.path().join("primary");
+        let standby = directory.path().join("standby");
+        let config = PgWireConfig {
+            sql_profile: profile.into(),
+            fsync: false,
+            ..Default::default()
+        };
+        {
+            let server = PgWireServer::open(&primary, config.clone()).unwrap();
+            let mut state = ConnectionState::new(1, "bicdb".into(), None);
+            execute_server_sql(
+                &server,
+                &mut state,
+                "CREATE TABLE setting_rows(id INTEGER PRIMARY KEY)",
+            )
+            .unwrap();
+            server.flush().unwrap();
+        }
+        BicDb::configure_standby_from(&standby, &primary).unwrap();
+        let server = PgWireServer::open(&standby, config).unwrap();
+        assert!(server.db.read().is_read_only_standby());
+        let mut state = ConnectionState::new(1, "bicdb".into(), None);
+        execute_server_sql(
+            &server,
+            &mut state,
+            "SET application_name = 'standby-client'",
+        )
+        .unwrap();
+        assert_eq!(
+            execute_server_sql(
+                &server,
+                &mut state,
+                "SELECT current_setting('application_name')"
+            )
+            .unwrap()
+            .rows[0][0]
+                .to_cell(),
+            "standby-client"
+        );
+        assert!(
+            execute_server_sql(&server, &mut state, "INSERT INTO setting_rows VALUES(1)")
+                .unwrap_err()
+                .to_string()
+                .contains("read-only standby")
+        );
+    }
+
+    #[test]
+    fn postgres_literal_session_setting_can_change_on_standby() {
+        literal_session_setting_on_standby("postgres");
+    }
+
+    #[test]
+    fn oracle_literal_session_setting_can_change_on_standby() {
+        literal_session_setting_on_standby("oracle-preview-v1");
+    }
+
     fn automatic_test_supervisor() -> ClusterSupervisor {
         BalancedDistributionHostService::default()
             .supervisor()

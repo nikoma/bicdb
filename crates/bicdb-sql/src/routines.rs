@@ -1030,6 +1030,31 @@ pub(crate) fn parse_plpgsql_body(
     Ok((declarations, statements, exception_handlers))
 }
 
+fn strip_plpgsql_compiler_directives(mut body: &str) -> Result<&str> {
+    loop {
+        body = trim_leading_sql_comments_with_offset(body).0;
+        let Some(option) = body.strip_prefix('#') else {
+            return Ok(body);
+        };
+        let (line, remaining) = option.split_once('\n').unwrap_or((option, ""));
+        let mut words = line.split_whitespace();
+        let name = words.next().unwrap_or("");
+        let mode = words.next().unwrap_or("");
+        // Query expressions already resolve row columns before routine locals.
+        // Consume the matching explicit mode before parsing DECLARE; otherwise
+        // the header becomes a bogus declaration and loses the first local.
+        if !name.eq_ignore_ascii_case("variable_conflict")
+            || !mode.eq_ignore_ascii_case("use_column")
+            || words.next().is_some()
+        {
+            return Err(SqlError::UnsupportedPlpgsqlFeature(format!(
+                "compiler directive #{name} {mode} is not implemented; only #variable_conflict use_column is supported"
+            )));
+        }
+        body = remaining;
+    }
+}
+
 fn parse_plpgsql_block(
     body: &str,
 ) -> Result<(
@@ -1037,7 +1062,7 @@ fn parse_plpgsql_block(
     Vec<RoutineStmt>,
     Vec<RoutineExceptionHandler>,
 )> {
-    let body = trim_sql_statement(body);
+    let body = strip_plpgsql_compiler_directives(trim_sql_statement(body))?;
     let Some(begin_idx) = find_top_level_keyword(body, "BEGIN") else {
         return Err(SqlError::UnsupportedPlpgsqlFeature(
             "routine body must contain a BEGIN block".to_string(),

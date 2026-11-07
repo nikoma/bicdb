@@ -1972,6 +1972,25 @@ impl<'db> SqlEngine<'db> {
     ) -> Result<Vec<(BinaryOperator, Expr)>> {
         let mut bounds = Vec::new();
         for term in and_terms(selection) {
+            // `x BETWEEN low AND high` is exactly `x >= low AND x <= high`
+            // (NOT BETWEEN is not a range). The caller re-applies the whole
+            // WHERE, so the probe only needs to be a superset.
+            if let Expr::Between {
+                expr,
+                negated: false,
+                low,
+                high,
+            } = term
+            {
+                if self.expr_matches_table_index_field(expr, table, alias, schema, field)?
+                    && !self.expr_references_table(low, table, alias, schema)?
+                    && !self.expr_references_table(high, table, alias, schema)?
+                {
+                    bounds.push((BinaryOperator::GtEq, (**low).clone()));
+                    bounds.push((BinaryOperator::LtEq, (**high).clone()));
+                }
+                continue;
+            }
             let Expr::BinaryOp { left, op, right } = term else {
                 continue;
             };
@@ -3601,72 +3620,26 @@ impl<'db> SqlEngine<'db> {
         let mut upper = None;
         let mut matched = false;
         let mut has_null_bound = false;
-        for term in and_terms(selection) {
-            let Expr::BinaryOp { left, op, right } = term else {
+        // One source of range terms (comparisons and BETWEEN, operands
+        // normalized so the column is on the left) for both the located and
+        // the evaluated planners.
+        for (op, expr) in self.dynamic_range_bound_exprs(selection, table, alias, schema, field)? {
+            if !self.expr_is_bound_without_table_row(&expr)? {
                 continue;
+            }
+            let value = self.eval_dynamic_bound_expr(&expr)?;
+            let value = if let Some(schema) = schema {
+                let value =
+                    typed_index_predicate_value(schema, field, index_value_from_sql(value)?)?;
+                if !index_range_probe_is_compatible(schema, field, &value) {
+                    return Ok(None);
+                }
+                sql_value_from_index_value(&value)
+            } else {
+                value
             };
-            if !matches!(
-                op,
-                BinaryOperator::Gt
-                    | BinaryOperator::GtEq
-                    | BinaryOperator::Lt
-                    | BinaryOperator::LtEq
-            ) {
-                continue;
-            }
-            if self.expr_matches_table_index_field(left, table, alias, schema, field)? {
-                if self.expr_references_table(right, table, alias, schema)?
-                    || !self.expr_is_bound_without_table_row(right)?
-                {
-                    continue;
-                }
-                let value = self.eval_dynamic_bound_expr(right)?;
-                let value = if let Some(schema) = schema {
-                    let value =
-                        typed_index_predicate_value(schema, field, index_value_from_sql(value)?)?;
-                    if !index_range_probe_is_compatible(schema, field, &value) {
-                        return Ok(None);
-                    }
-                    sql_value_from_index_value(&value)
-                } else {
-                    value
-                };
-                update_dynamic_range_bound(
-                    op.clone(),
-                    value,
-                    &mut lower,
-                    &mut upper,
-                    &mut has_null_bound,
-                )?;
-                matched = true;
-                continue;
-            }
-            if self.expr_matches_table_index_field(right, table, alias, schema, field)? {
-                if self.expr_references_table(left, table, alias, schema)?
-                    || !self.expr_is_bound_without_table_row(left)?
-                {
-                    continue;
-                }
-                let value = self.eval_dynamic_bound_expr(left)?;
-                let value = if let Some(schema) = schema {
-                    let value =
-                        typed_index_predicate_value(schema, field, index_value_from_sql(value)?)?;
-                    if !index_range_probe_is_compatible(schema, field, &value) {
-                        return Ok(None);
-                    }
-                    sql_value_from_index_value(&value)
-                } else {
-                    value
-                };
-                update_dynamic_range_bound(
-                    reverse_comparison(op),
-                    value,
-                    &mut lower,
-                    &mut upper,
-                    &mut has_null_bound,
-                )?;
-                matched = true;
-            }
+            update_dynamic_range_bound(op, value, &mut lower, &mut upper, &mut has_null_bound)?;
+            matched = true;
         }
         Ok(matched.then_some((lower, upper, has_null_bound)))
     }

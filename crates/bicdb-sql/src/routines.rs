@@ -1581,6 +1581,43 @@ fn matching_routine_end(
     Err(SqlError::UnsupportedPlpgsqlFeature(error.to_string()))
 }
 
+// These fragments are single lexical units even when they contain quotes,
+// assignment operators, unmatched parentheses, or statement separators.
+fn skip_routine_comment_or_dollar_quote(sql: &str, start: usize) -> Option<usize> {
+    let bytes = sql.as_bytes();
+    if bytes.get(start..start + 2) == Some(b"--") {
+        return Some(sql[start..].find('\n').map_or(sql.len(), |n| start + n + 1));
+    }
+    if bytes.get(start..start + 2) == Some(b"/*") {
+        let mut at = start + 2;
+        let mut depth = 1usize;
+        while at < bytes.len() && depth > 0 {
+            if bytes.get(at..at + 2) == Some(b"/*") {
+                depth += 1;
+                at += 2;
+            } else if bytes.get(at..at + 2) == Some(b"*/") {
+                depth -= 1;
+                at += 2;
+            } else {
+                at += 1;
+            }
+        }
+        return Some(at);
+    }
+    if bytes.get(start) == Some(&b'$') && (start == 0 || !is_sql_identifier_byte(bytes[start - 1]))
+    {
+        if let Some(delimiter) = dollar_quote_delimiter(&sql[start..]) {
+            let content = start + delimiter.len();
+            return Some(
+                sql[content..]
+                    .find(&delimiter)
+                    .map_or(sql.len(), |n| content + n + delimiter.len()),
+            );
+        }
+    }
+    None
+}
+
 pub(crate) fn find_top_level_statement_semicolon(value: &str) -> Option<usize> {
     let bytes = value.as_bytes();
     let mut idx = 0usize;
@@ -1604,6 +1641,10 @@ pub(crate) fn find_top_level_statement_semicolon(value: &str) -> Option<usize> {
                 double_quoted = false;
             }
             idx += 1;
+            continue;
+        }
+        if let Some(end) = skip_routine_comment_or_dollar_quote(value, idx) {
+            idx = end;
             continue;
         }
         match bytes[idx] {
@@ -2520,6 +2561,10 @@ pub(crate) fn find_top_level_operator(sql: &str, operator: &str) -> Option<usize
                 double_quoted = false;
             }
             idx += 1;
+            continue;
+        }
+        if let Some(end) = skip_routine_comment_or_dollar_quote(sql, idx) {
+            idx = end;
             continue;
         }
         match bytes[idx] {

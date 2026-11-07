@@ -1,0 +1,95 @@
+{
+  "format": 1,
+  "scope": "PGJDBC dependency metadata contracts; no live database",
+  "published_fixture_source_commit": "83cd56d71a77cad1dc817436530ac88875c8212a",
+  "development_execution_source_commit": "426f244d7bcb8a6c5a056097908e44dd03b34a6f",
+  "fixture_sha256": "2d488ca58e56f8751827238df5d94d0ca2c0fa9ca1d9442367043088aa7b6d9a",
+  "postgres_jdbc_version": "42.7.8",
+  "postgres_jdbc_sha256": "2a32a9dcbc42d67a50ad3a0de5efd102c8d2be46720045f2cbd6689f160ab7c7",
+  "test_scope": {
+    "checkpoint_checks_passed": 30,
+    "existing_sdk_checks": 25,
+    "metadata_contract_checks": 5,
+    "development_execution_total": 40,
+    "unmerged_primitive_checks_excluded": 10,
+    "failed": 0,
+    "skipped": 0
+  },
+  "check_adoption": {
+    "published_sdk_and_test_sources_byte_equal": true,
+    "pom_byte_equal": true,
+    "published_existing_production_classes": 10,
+    "existing_production_classes_byte_equal_staged_sdk": true,
+    "fresh_report_directory": true,
+    "test_fork_heap_mib": 320
+  },
+  "reports": [
+    {
+      "name": "org.bicdb.jdbc.oracle.OracleBlobsTest",
+      "tests": 9,
+      "report_sha256": "3bdacba74e9df1d9eaf44c8787be6733d80f7ba4d8e70339837a42525de84370",
+      "testcases": [
+        "binarySnapshotsPreserveValuesAndRejectUnpersistedWrites",
+        "streamOverloadsKeepTheirLengthsAndCallerOwnedStreams",
+        "unrelatedSettersStayOnTheOrdinaryDriverPath",
+        "namedCallableBindingsKeepTheirExistingDriverBoundary",
+        "negativeStreamLengthsDoNotReplaceExistingParameters",
+        "nullEmptyAndOtherColumnTypesAreNotConfused",
+        "oversizedBlobObjectsFailBeforeReadingOrBinding",
+        "blobObjectsAndTypedObjectOverloadsBindBinaryValues",
+        "nullAndEmptyBlobBindingsRemainDifferent"
+      ]
+    },
+    {
+      "name": "org.bicdb.jdbc.oracle.OracleCreatedBlobTest",
+      "tests": 6,
+      "report_sha256": "5614441c5eb495a9004a366154de48688fb91aa7a60bb7e9ed341fd7fdc6d82f",
+      "testcases": [
+        "createsIndependentEmptyValuesAndRejectsClosedConnection",
+        "capacityLimitRejectsBeforeChangingExistingValue",
+        "appendsOverwritesSlicesAndReturnsCopies",
+        "outputWritesGrowAndClosedOrFreedStreamsFail",
+        "invalidRangesAndOverflowFailWithoutMutation",
+        "searchesBinaryPatternsWithOverlappingPrefixes"
+      ]
+    },
+    {
+      "name": "org.bicdb.jdbc.oracle.OracleNationalTypeRegistrationTest",
+      "tests": 5,
+      "report_sha256": "84383fe7459b7e577e03e7afa00b47e01058f4d894591d794323d90dae6a5ce5",
+      "testcases": [
+        "registeredOidsIdentifyResultAndParameterFamilies",
+        "bulkCatalogCachingCannotOverwriteRegisteredOidFamilies",
+        "normalJavaArrayMappingsArePreserved",
+        "sameNamedUserEnumCannotAcquireTheRegisteredNationalType",
+        "ordinaryTextDoesNotBecomeNationalFromItsColumnLabel"
+      ]
+    },
+    {
+      "name": "org.bicdb.jdbc.oracle.OracleSqlTest",
+      "tests": 10,
+      "report_sha256": "a94ed8938680d49943872d36fcbaf195f63d00b795f84a2ba5ef3a4164db4872",
+      "testcases": [
+        "commentsAndIdentifiersDoNotCreateInputsOrBlockEnd",
+        "unparameterizedSubmissionsKeepQuestionMarks",
+        "jdbcEscapesAreProcessedWithinTheSingleSubmission",
+        "ordinaryStatementsKeepTheStockDriverPath",
+        "oracleBackslashesDoNotHideFollowingParameters",
+        "malformedCandidateLiteralsFailBeforeSubmission",
+        "quoteKindsProtectQuestionMarksAndEndKeywords",
+        "trailingLineCommentsDoNotConsumeTheTemporaryEnvelope",
+        "explicitDriverDoesNotClaimPostgresqlUrls",
+        "allInternalSemicolonsAndInputPositionsSurvive"
+      ]
+    }
+  ],
+  "maven_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "catalog_transport_simulated": true,
+  "real_pgjdbc_metadata_objects": true,
+  "production_sdk_changed": false,
+  "server_wire_types_registered": false,
+  "live_protocol_test": false,
+  "national_runtime_qualified": false,
+  "application_qualified": false,
+  "oracle_programme_complete": false
+}

@@ -1297,9 +1297,18 @@ impl<'db> SqlEngine<'db> {
                 RecordLocators::Pks(pks) => self
                     .records_for_pks_with_schema(table, &pks, schema)
                     .map(Some),
-                RecordLocators::Rowids(rowids) => self
-                    .records_for_rowids_with_schema(table, &rowids, schema)
-                    .map(Some),
+                RecordLocators::Rowids(rowids) => {
+                    // RowIds follow insertion order; the id path and table
+                    // scans yield record-id order. Keep one order so rows
+                    // that tie under ORDER BY do not depend on the access
+                    // path the planner picked.
+                    let mut records =
+                        self.records_for_rowids_with_schema(table, &rowids, schema)?;
+                    if !records.is_sorted_by(|left, right| left.id <= right.id) {
+                        records.sort_unstable_by(|left, right| left.id.cmp(&right.id));
+                    }
+                    Ok(Some(records))
+                }
             };
         }
         let Some(ids) =
@@ -6521,10 +6530,19 @@ impl<'db> SqlEngine<'db> {
                         None => self.db_ref().get_stored_by_rowids(table, &rowids),
                     }
                     .map_err(SqlError::from)?;
-                    stored
+                    let mut visible = stored
                         .into_iter()
                         .map(|stored| stored.map(VisibleRow::Stored))
-                        .collect()
+                        .collect::<Vec<_>>();
+                    // Same record-id order as the pk path and table scans; see
+                    // `indexed_records_for_table_selection`.
+                    fn id(row: &Option<VisibleRow>) -> Option<&str> {
+                        row.as_ref().map(VisibleRow::id)
+                    }
+                    if !visible.is_sorted_by(|left, right| id(left) <= id(right)) {
+                        visible.sort_by(|left, right| id(left).cmp(&id(right)));
+                    }
+                    visible
                 }
             }
         };

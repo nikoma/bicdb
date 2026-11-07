@@ -431,6 +431,48 @@ mod tests {
     }
 
     #[test]
+    fn ordered_ties_do_not_depend_on_whether_an_index_served_the_filter() {
+        for profile in ["postgres", "oracle-preview-v1"] {
+            for indexed in [false, true] {
+                let (_root, mut db) = database(profile);
+                let mut session = SqlSession::new(&mut db);
+                run(&mut session, profile, r#"CREATE TABLE "Lists"("Id" NUMERIC(10) PRIMARY KEY,"Client" NUMERIC(10),"Flag" CHAR(1))"#).unwrap();
+                if indexed {
+                    run(
+                        &mut session,
+                        profile,
+                        r#"CREATE INDEX "Lists_Client" ON "Lists"("Client")"#,
+                    )
+                    .unwrap();
+                }
+                // Inserted out of key order, so insertion order differs from key order.
+                for id in [200000, 102, 150] {
+                    run(
+                        &mut session,
+                        profile,
+                        &format!(r#"INSERT INTO "Lists" VALUES({id},11,'N')"#),
+                    )
+                    .unwrap();
+                }
+                let rows = run(
+                    &mut session,
+                    profile,
+                    r#"SELECT "Id" FROM "Lists" WHERE "Client"=11 ORDER BY "Flag" DESC"#,
+                )
+                .unwrap()
+                .rows;
+                assert_eq!(
+                    rows,
+                    ["102", "150", "200000"]
+                        .map(|id| vec![SqlValue::String(id.into())])
+                        .to_vec(),
+                    "{profile} indexed={indexed}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn typed_exact_key_probe_sees_same_transaction_rows_without_scanning() {
         for profile in ["postgres", "oracle-preview-v1"] {
             let (_root, mut db) = database(profile);

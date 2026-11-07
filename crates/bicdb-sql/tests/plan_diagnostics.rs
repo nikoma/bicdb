@@ -150,12 +150,14 @@ fn locator_hybrid_gate_nominates_shorter_candidates_and_probes_decide() {
     let mut db = BicDb::open(root.path()).unwrap();
     let mut session = SqlSession::new(&mut db);
     // (region, status) is unselective for status 0 (about 4,000 rows per
-    // region) while customer is about 1,000 rows; status 7 is rare (200 rows,
-    // all in region 0), so there the long prefix is the selective one.
+    // region) while customer is about 1,000 rows. Region 1 and status 1 are
+    // each common, but together they are rare (200 rows): per-column
+    // statistics cannot see that correlation, so there the shorter customer
+    // index is nominated and loses on its exact probe.
     session
         .execute(
             "CREATE TABLE h (id int4 PRIMARY KEY, region int4, status int4, customer int4);
-             INSERT INTO h SELECT g, g % 5, CASE WHEN g % 100 = 0 THEN 7 ELSE 0 END, g % 20
+             INSERT INTO h SELECT g, g % 5, CASE WHEN g % 5 = 0 OR g % 100 = 1 THEN 1 ELSE 0 END, g % 20
                FROM generate_series(1, 20000) g;
              CREATE INDEX h_region_status ON h (region, status);
              CREATE INDEX h_customer ON h (customer);",
@@ -188,7 +190,7 @@ fn locator_hybrid_gate_nominates_shorter_candidates_and_probes_decide() {
         )
     };
     let trap = "SELECT id FROM h WHERE region = 2 AND status = 0 AND customer = 7";
-    let control = "SELECT id FROM h WHERE region = 0 AND status = 7 AND customer = 0";
+    let control = "SELECT id FROM h WHERE region = 1 AND status = 1 AND customer = 1";
     // Without statistics the gate has nothing to compare: the rule stands.
     let (rule_rows, rule_choice, overridden, timed) = chosen(&mut session, trap, Some(true));
     assert_eq!(rule_choice, "IndexLookup(h_region_status/2)");
@@ -209,11 +211,11 @@ fn locator_hybrid_gate_nominates_shorter_candidates_and_probes_decide() {
         ("IndexLookup(h_customer/1)", (true, true))
     );
     assert_eq!(rows, rule_rows);
-    // Control: the estimates are the same as in the trap (composite
-    // estimates ignore bound values), so the shorter index is nominated too,
-    // but the long prefix's exact probe is the smaller one and keeps the win.
+    // Control: nominated on the same estimates as the trap, but the long
+    // prefix's exact probe is the smaller one and keeps the win.
     let (control_off, _, _, _) = chosen(&mut session, control, Some(false));
     let (control_on, choice, overridden, _) = chosen(&mut session, control, Some(true));
+    assert_eq!(control_on.len(), 200);
     assert_eq!(
         (choice.as_str(), overridden),
         ("IndexLookup(h_region_status/2)", (true, false))

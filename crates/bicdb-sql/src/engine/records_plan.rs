@@ -2202,6 +2202,16 @@ impl<'db> SqlEngine<'db> {
         collection: &str,
         alias: &str,
     ) -> Result<Option<ExecutedAccess>> {
+        // Paged storage: a full-scan plan may be answered by a streaming
+        // route before any index chooser runs.
+        if self.db_ref().record_batch_streaming_possible(collection)
+            && self.select_would_stream(from, select, query)
+        {
+            return Ok(Some(ExecutedAccess {
+                chooser: "streaming",
+                signature: crate::plan_diagnostics::PlanSignature::full_scan(),
+            }));
+        }
         if let Some(bounded) = self.bounded_ordered_index_plan(from, select, query)? {
             return Ok(Some(ExecutedAccess {
                 chooser: "bounded-ordered",

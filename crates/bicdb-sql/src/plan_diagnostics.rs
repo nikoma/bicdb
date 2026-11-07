@@ -127,6 +127,25 @@ struct State {
 
 thread_local! {
     static STATE: RefCell<Option<State>> = const { RefCell::new(None) };
+    static STREAMING_DRY_RUN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Run `f` (the streaming routes, from EXPLAIN) with streamed scans in dry-run
+/// mode: they report whether they would stream and read no rows.
+pub(crate) fn with_streaming_dry_run<R>(f: impl FnOnce() -> R) -> R {
+    struct Restore(bool);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            STREAMING_DRY_RUN.with(|flag| flag.set(self.0));
+        }
+    }
+    let _restore = Restore(STREAMING_DRY_RUN.with(|flag| flag.replace(true)));
+    f()
+}
+
+#[inline]
+pub(crate) fn streaming_dry_run() -> bool {
+    STREAMING_DRY_RUN.with(|flag| flag.get())
 }
 
 /// Run `f` with planner diagnostics active on this thread and return its

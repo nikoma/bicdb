@@ -1,6 +1,7 @@
-//! An integer column compared with a non-integral numeric literal compares
-//! exactly (the integer is promoted to numeric), as in PostgreSQL: the literal
-//! is never rounded to the column type.
+//! An integer column compared with a decimal literal compares exactly (the
+//! integer is promoted to numeric), as in PostgreSQL, with or without an index:
+//! a fractional literal is never rounded to the column type, and an integral
+//! one (`3.0`, `3e0`) matches the integer it equals.
 
 use bicdb_core::BicDb;
 use bicdb_sql::{SqlSession, SqlValue};
@@ -41,10 +42,23 @@ fn integer_columns_compare_exactly(reopen: bool, indexed: bool) {
         db = BicDb::open(root.path()).unwrap();
     }
     let mut session = SqlSession::new(&mut db);
+    // Primary-key lookups take their own path.
+    for (predicate, expected) in [
+        ("id = 2.0", &[2][..]),
+        ("id = 2.5", &[][..]),
+        ("id IN (1.0, 4)", &[1, 4][..]),
+    ] {
+        let sql = format!("SELECT id FROM m WHERE {predicate}");
+        assert_eq!(ids(&mut session, &sql), expected, "{sql}");
+    }
     for column in ["i", "s", "b"] {
-        let cases: [(&str, &[i64]); 14] = [
+        let cases: [(&str, &[i64]); 18] = [
             ("{c} > 2.6", &[2]),
             ("{c} < 2.4", &[1, 4]),
+            ("{c} = 3e0", &[2]),
+            ("{c} = 3.00", &[2]),
+            ("{c} = -3.0", &[4]),
+            ("{c} IN (2.0, 2.5)", &[1]),
             ("{c} = 2.5", &[]),
             ("{c} <> 2.5", &[1, 2, 4]),
             ("{c} > 2.5", &[2]),
@@ -83,4 +97,9 @@ fn indexed_integer_columns_compare_exactly_with_fractional_literals() {
 #[test]
 fn integer_columns_compare_exactly_with_fractional_literals_after_reopen() {
     integer_columns_compare_exactly(true, false);
+}
+
+#[test]
+fn indexed_integer_columns_compare_exactly_after_reopen() {
+    integer_columns_compare_exactly(true, true);
 }

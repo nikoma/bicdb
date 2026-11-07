@@ -66,10 +66,12 @@ pub struct CandidateTrace {
 /// One single-table access-path decision.
 #[derive(Clone, Debug)]
 pub struct DecisionTrace {
-    /// Which chooser decided: `"planner"` (the cost-based `plan_query`, also
-    /// what EXPLAIN reports) or `"locator"` (the rule-based index locator the
-    /// row-set executor uses: most matched index columns wins, ties broken by
-    /// probing; a full scan only when no index matches).
+    /// Which chooser decided: `"planner"` (the cost-based `plan_query`),
+    /// `"locator"` (the rule-based index locator the row-set executor uses:
+    /// most matched index columns wins, ties broken by probing; a full scan
+    /// only when no index matches), or `"pending-writes"` (the record-id
+    /// chooser used while the table has uncommitted writes in the
+    /// transaction; same rule, but it probes every candidate).
     pub chooser: &'static str,
     /// Table identifier (schema metadata, not data).
     pub collection: String,
@@ -92,6 +94,17 @@ pub struct DecisionTrace {
     /// Rows that survived the WHERE re-check, when the executing path counts
     /// them. `None` if not observed.
     pub rows_matched: Option<usize>,
+    /// Wall time spent making this decision (planning, and for the locator
+    /// the index probes it ran to choose), in microseconds.
+    pub decision_micros: Option<u64>,
+    /// Locator only: time spent probing tied candidates that were then NOT
+    /// used, in microseconds: pure optimization overhead.
+    pub wasted_probe_micros: Option<u64>,
+    /// Locator only: the statistics-guided hybrid nominated a shorter
+    /// candidate for an exact probe.
+    pub hybrid_nominated: bool,
+    /// Locator only: the nominee's probe won, replacing the rule's choice.
+    pub hybrid_override: bool,
 }
 
 /// Options for one diagnostics scope.
@@ -102,6 +115,9 @@ pub struct DiagnosticsOptions {
     /// Turn the deterministic contradiction detector off (for differential
     /// testing and for measuring its effect).
     pub disable_contradiction_detection: bool,
+    /// Override the locator hybrid gate (`BICDB_LOCATOR_HYBRID`) for this
+    /// scope: `Some(true)` on, `Some(false)` off, `None` follow the gate.
+    pub locator_hybrid: Option<bool>,
 }
 
 struct State {
@@ -111,6 +127,25 @@ struct State {
 
 thread_local! {
     static STATE: RefCell<Option<State>> = const { RefCell::new(None) };
+    static STREAMING_DRY_RUN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Run `f` (the streaming routes, from EXPLAIN) with streamed scans in dry-run
+/// mode: they report whether they would stream and read no rows.
+pub(crate) fn with_streaming_dry_run<R>(f: impl FnOnce() -> R) -> R {
+    struct Restore(bool);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            STREAMING_DRY_RUN.with(|flag| flag.set(self.0));
+        }
+    }
+    let _restore = Restore(STREAMING_DRY_RUN.with(|flag| flag.replace(true)));
+    f()
+}
+
+#[inline]
+pub(crate) fn streaming_dry_run() -> bool {
+    STREAMING_DRY_RUN.with(|flag| flag.get())
 }
 
 /// Run `f` with planner diagnostics active on this thread and return its
@@ -147,6 +182,20 @@ pub fn with_plan_diagnostics<R>(
     (result, decisions)
 }
 
+/// Run `f` under an internal capture scope that inherits the current scope's
+/// options, returning the decisions it made. Used by EXPLAIN to learn the
+/// executing route's choice from the same code that executes it.
+pub(crate) fn capture<R>(f: impl FnOnce() -> R) -> (R, Vec<DecisionTrace>) {
+    let options = STATE.with(|state| {
+        state
+            .borrow()
+            .as_ref()
+            .map(|state| state.options.clone())
+            .unwrap_or_default()
+    });
+    with_plan_diagnostics(options, f)
+}
+
 #[inline]
 pub(crate) fn active() -> bool {
     STATE.with(|state| state.borrow().is_some())
@@ -179,11 +228,13 @@ pub(crate) fn signature_of(kind: &PlanKind) -> PlanSignature {
             index_name, prefix, ..
         } => ("IndexPrefixOrderedScan", Some(index_name), prefix.len()),
         PlanKind::SpatialIndexScan { index_name, .. } => ("SpatialIndexScan", Some(index_name), 0),
-        PlanKind::GeometricIndexScan { index_name, .. } => {
-            ("GeometricIndexScan", Some(index_name), 0)
+        // The user-visible index name (what EXPLAIN prints), not the
+        // per-column internal storage name.
+        PlanKind::GeometricIndexScan { display_name, .. } => {
+            ("GeometricIndexScan", Some(display_name), 0)
         }
-        PlanKind::GeometricKnnIndexScan { index_name, .. } => {
-            ("GeometricKnnIndexScan", Some(index_name), 0)
+        PlanKind::GeometricKnnIndexScan { display_name, .. } => {
+            ("GeometricKnnIndexScan", Some(display_name), 0)
         }
         PlanKind::FullTextIndexScan { index_name, .. } => {
             ("FullTextIndexScan", Some(index_name), 0)
@@ -238,6 +289,10 @@ pub(crate) fn choose_and_record(
             contradiction,
             rows_fetched: None,
             rows_matched: None,
+            decision_micros: None,
+            wasted_probe_micros: None,
+            hybrid_nominated: false,
+            hybrid_override: false,
         });
         chosen
     })
@@ -263,6 +318,36 @@ pub(crate) fn record_locator_decision(
     forced: bool,
     rows_fetched: Option<usize>,
 ) {
+    record_decision_with(
+        "locator",
+        collection,
+        candidates,
+        chosen,
+        forced,
+        rows_fetched,
+    );
+}
+
+/// Record a decision of another rule-based chooser (e.g. `"pending-writes"`,
+/// the record-id path used while the table has uncommitted writes).
+pub(crate) fn record_decision_for(
+    chooser: &'static str,
+    collection: &str,
+    candidates: Vec<PlanSignature>,
+    chosen: &PlanSignature,
+    rows_fetched: Option<usize>,
+) {
+    record_decision_with(chooser, collection, candidates, chosen, false, rows_fetched);
+}
+
+fn record_decision_with(
+    chooser: &'static str,
+    collection: &str,
+    candidates: Vec<PlanSignature>,
+    chosen: &PlanSignature,
+    forced: bool,
+    rows_fetched: Option<usize>,
+) {
     STATE.with(|state| {
         let mut state = state.borrow_mut();
         let Some(state) = state.as_mut() else {
@@ -273,7 +358,7 @@ pub(crate) fn record_locator_decision(
             .position(|candidate| candidate == chosen)
             .unwrap_or(0);
         state.decisions.push(DecisionTrace {
-            chooser: "locator",
+            chooser,
             collection: collection.to_string(),
             total_rows: 0,
             has_statistics: false,
@@ -290,8 +375,35 @@ pub(crate) fn record_locator_decision(
             contradiction: false,
             rows_fetched,
             rows_matched: None,
+            decision_micros: None,
+            wasted_probe_micros: None,
+            hybrid_nominated: false,
+            hybrid_override: false,
         });
     });
+}
+
+/// Annotate the most recent decision (timings, hybrid flag).
+pub(crate) fn annotate_last_decision(update: impl FnOnce(&mut DecisionTrace)) {
+    STATE.with(|state| {
+        if let Some(decision) = state
+            .borrow_mut()
+            .as_mut()
+            .and_then(|state| state.decisions.last_mut())
+        {
+            update(decision);
+        }
+    });
+}
+
+/// The scope's override of the locator hybrid gate, if any.
+pub(crate) fn locator_hybrid_override() -> Option<bool> {
+    STATE.with(|state| {
+        state
+            .borrow()
+            .as_ref()
+            .and_then(|state| state.options.locator_hybrid)
+    })
 }
 
 /// Record that the executed chooser answered a provably contradictory WHERE

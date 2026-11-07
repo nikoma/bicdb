@@ -1121,7 +1121,11 @@ impl<'db> SqlEngine<'db> {
             records
         } else {
             sql_profile_full_scan();
-            self.scan_records(&table)?
+            let records = self.scan_records(&table)?;
+            if crate::plan_diagnostics::active() {
+                crate::plan_diagnostics::record_rows_fetched(records.len());
+            }
+            records
         };
         sql_profile_records_materialized(&source_records);
         let schema = load_schema_shared(self.db_ref(), &table)?;
@@ -1276,6 +1280,121 @@ impl<'db> SqlEngine<'db> {
     }
 
     pub(crate) fn indexed_records_for_table_selection(
+        &self,
+        table: &str,
+        alias: &str,
+        schema: Option<&TableSchema>,
+        selection: Option<&Expr>,
+    ) -> Result<Option<Vec<Arc<Record>>>> {
+        if let Some(records) =
+            self.btree_indexed_records_for_table_selection(table, alias, schema, selection)?
+        {
+            return Ok(Some(records));
+        }
+        self.non_btree_index_records(table, alias, schema, selection)
+    }
+
+    /// Non-B-tree index access (GIN jsonb/array, GiST geometric, spatial) for
+    /// the row-set executor once the B-tree locator declined.
+    /// Without this the row-set path scanned the whole table even though the
+    /// planner (and EXPLAIN) chose the index. The caller re-applies the full
+    /// WHERE, so each candidate only needs to be a superset, which is the same
+    /// contract the planner's execution of these plans relies on.
+    fn non_btree_index_records(
+        &self,
+        table: &str,
+        alias: &str,
+        schema: Option<&TableSchema>,
+        selection: Option<&Expr>,
+    ) -> Result<Option<Vec<Arc<Record>>>> {
+        let Some(selection) = selection else {
+            return Ok(None);
+        };
+        let indexes = sql_index_definitions_for_collection(self.db_ref(), table);
+        if indexes.iter().all(|index| index.kind == IndexKind::BTree) {
+            return Ok(None);
+        }
+        let record = |kind: &'static str, index: &str, rows: usize| {
+            if crate::plan_diagnostics::active() {
+                let signature = crate::plan_diagnostics::PlanSignature {
+                    kind,
+                    index: Some(index.to_string()),
+                    prefix_len: 0,
+                };
+                crate::plan_diagnostics::record_decision_for(
+                    "row-set-index",
+                    table,
+                    vec![signature.clone()],
+                    &signature,
+                    Some(rows),
+                );
+            }
+        };
+        let mut candidates = Vec::new();
+        self.add_spatial_index_candidates(selection, &indexes, &mut candidates)?;
+        if let Some(schema) = schema {
+            self.add_geometric_index_candidates(
+                table,
+                alias,
+                schema,
+                selection,
+                &indexes,
+                &mut candidates,
+            )?;
+        }
+        if let Some(plan) = candidates.into_iter().min_by(|left, right| {
+            left.estimated_cost
+                .partial_cmp(&right.estimated_cost)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        }) {
+            let signature = crate::plan_diagnostics::signature_of(&plan.kind);
+            let records = self.load_records_for_plan(table, &plan)?;
+            record(
+                signature.kind,
+                signature.index.as_deref().unwrap_or_default(),
+                records.len(),
+            );
+            return Ok(Some(records));
+        }
+        // The GIN helpers decline on their own when the table has pending
+        // writes in this transaction (their candidate sets are committed-only).
+        for (kind, found) in [
+            (
+                "ArrayIndexScan",
+                self.array_index_candidate(table, alias, schema, selection)?,
+            ),
+            (
+                "JsonbIndexScan",
+                self.jsonb_index_candidate(table, alias, schema, selection)?,
+            ),
+        ] {
+            let Some((index_name, candidate)) = found else {
+                continue;
+            };
+            if self.tx.is_some_and(|tx| tx.has_pending_writes(table)) {
+                return Ok(None);
+            }
+            let ids = if kind == "ArrayIndexScan" {
+                self.array_candidate_ids(&index_name, &candidate)?
+            } else {
+                self.jsonb_candidate_ids(&index_name, &candidate)?
+            };
+            let records = self.records_for_ids_with_schema(
+                table,
+                &ids.into_iter().collect::<Vec<_>>(),
+                schema,
+            )?;
+            record(kind, &index_name, records.len());
+            return Ok(Some(records));
+        }
+        // Full-text search is deliberately absent: it has dedicated execution
+        // paths (ranking, interrupted-build handling) outside the row-set
+        // executor, and the row path's scan is the oracle they are tested
+        // against.
+        Ok(None)
+    }
+
+    fn btree_indexed_records_for_table_selection(
         &self,
         table: &str,
         alias: &str,
@@ -1747,6 +1866,7 @@ impl<'db> SqlEngine<'db> {
             prefix: Vec<IndexValue>,
             range: Option<(Option<IndexValue>, Option<IndexValue>, bool)>,
         }
+        let decision_started = crate::plan_diagnostics::active().then(std::time::Instant::now);
         let mut pk_matched: Option<usize> = None;
         // Executed early only when the pre-check says the pk is exact (the
         // common point-lookup case): its result is then final.
@@ -1891,6 +2011,7 @@ impl<'db> SqlEngine<'db> {
             signatures.push(crate::plan_diagnostics::PlanSignature::full_scan());
             signatures
         });
+        let mut forced_applied = false;
         if let Some(signatures) = &traced_signatures {
             if let Some(forced) = crate::plan_diagnostics::forced_signature()
                 .filter(|forced| signatures.contains(forced))
@@ -1909,12 +2030,70 @@ impl<'db> SqlEngine<'db> {
                     .iter()
                     .position(|(matched, candidate)| signature_of(*matched, candidate) == forced)
                 {
+                    forced_applied = true;
                     let (matched, candidate) = candidates.swap_remove(position);
                     // Re-enter the selection below with only the forced
                     // candidate and no primary-key competitor.
                     candidates = vec![(matched, candidate)];
                     pk_matched = None;
                     pk_result = None;
+                }
+            }
+        }
+        // Internal, default-off statistics-guided hybrid (see
+        // `locator_hybrid_ratio`): the rule discards candidates with fewer
+        // matched columns WITHOUT probing them; with ANALYZE statistics, one
+        // of those is NOMINATED when its estimated rows are `ratio` times
+        // smaller than the best tied winner's. Estimates only nominate: the
+        // nominee is probed alongside the tied winners and the smallest exact
+        // row-id count wins. Composite estimates ignore the bound values, so
+        // they cannot tell an unselective long prefix from a selective one;
+        // the exact probes can.
+        let mut hybrid_override = false;
+        let mut nominated: Option<usize> = None;
+        if !forced_applied {
+            if let (Some(ratio), Some(stats)) = (
+                locator_hybrid_ratio(),
+                self.db_ref().table_statistics(table),
+            ) {
+                let estimate = |candidate: &SecondaryCandidate<'_>| -> Option<usize> {
+                    match &candidate.range {
+                        None => estimate_index_lookup_rows(
+                            &candidate.plan.definition,
+                            &candidate.prefix,
+                            Some(stats),
+                        ),
+                        Some((lower, upper, _)) if candidate.prefix.is_empty() => {
+                            estimate_index_range_rows(
+                                candidate.plan.fields.first()?,
+                                lower.as_ref(),
+                                upper.as_ref(),
+                                Some(stats),
+                            )
+                        }
+                        Some(_) => None,
+                    }
+                };
+                let top = candidates.iter().map(|(matched, _)| *matched).max();
+                if let Some(top) = top.filter(|top| pk_matched.is_none_or(|pk| pk < *top)) {
+                    let tied_best = candidates
+                        .iter()
+                        .filter(|(matched, _)| *matched == top)
+                        .filter_map(|(_, candidate)| estimate(candidate))
+                        .min();
+                    let shorter_best = candidates
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, (matched, _))| *matched < top)
+                        .filter_map(|(position, (_, candidate))| {
+                            estimate(candidate).map(|rows| (rows, position))
+                        })
+                        .min();
+                    if let (Some(tied), Some((rows, position))) = (tied_best, shorter_best) {
+                        if (rows as f64) * ratio <= tied as f64 {
+                            nominated = Some(position);
+                        }
+                    }
                 }
             }
         }
@@ -1940,6 +2119,8 @@ impl<'db> SqlEngine<'db> {
             && crate::plan_diagnostics::forced_signature()
                 .is_some_and(|forced| signature_of(candidates[0].0, &candidates[0].1) == forced);
         let mut best_signature: Option<crate::plan_diagnostics::PlanSignature> = None;
+        let mut total_probe_micros = 0u64;
+        let mut best_probe_micros = 0u64;
         let mut best: Option<(usize, RecordLocators)> = None;
         if let (Some(schema), Some(pk)) = (schema, pk_matched) {
             if pk >= max_matched {
@@ -1967,13 +2148,15 @@ impl<'db> SqlEngine<'db> {
                 }
             }
         }
-        for (matched_columns, candidate) in candidates {
-            if matched_columns < max_matched {
+        for (position, (matched_columns, candidate)) in candidates.into_iter().enumerate() {
+            let is_nominee = nominated == Some(position);
+            if matched_columns < max_matched && !is_nominee {
                 continue;
             }
             let candidate_signature = traced_signatures
                 .as_ref()
                 .map(|_| signature_of(matched_columns, &candidate));
+            let probe_started = decision_started.map(|_| std::time::Instant::now());
             let rowids = match candidate.range {
                 Some((lower, upper, has_null_bound)) => {
                     if has_null_bound {
@@ -2011,12 +2194,22 @@ impl<'db> SqlEngine<'db> {
                     .to_vec(),
             };
             let replace = best.as_ref().is_none_or(|(best_prefix_len, best_loc)| {
-                matched_columns > *best_prefix_len
-                    || (matched_columns == *best_prefix_len && rowids.len() < best_loc.len())
+                if nominated.is_some() {
+                    rowids.len() < best_loc.len()
+                } else {
+                    matched_columns > *best_prefix_len
+                        || (matched_columns == *best_prefix_len && rowids.len() < best_loc.len())
+                }
             });
+            let probe_micros = probe_started
+                .map(|started| started.elapsed().as_micros() as u64)
+                .unwrap_or(0);
+            total_probe_micros += probe_micros;
             if replace {
                 best = Some((matched_columns, RecordLocators::Rowids(rowids)));
                 best_signature = candidate_signature;
+                best_probe_micros = probe_micros;
+                hybrid_override = is_nominee;
             }
         }
         if let Some(signatures) = traced_signatures {
@@ -2029,6 +2222,14 @@ impl<'db> SqlEngine<'db> {
                 forced_index,
                 best.as_ref().map(|(_, locators)| locators.len()),
             );
+            crate::plan_diagnostics::annotate_last_decision(|decision| {
+                decision.decision_micros =
+                    decision_started.map(|started| started.elapsed().as_micros() as u64);
+                decision.wasted_probe_micros =
+                    Some(total_probe_micros.saturating_sub(best_probe_micros));
+                decision.hybrid_nominated = nominated.is_some();
+                decision.hybrid_override = hybrid_override;
+            });
         }
         Ok(best.map(|(_, locators)| locators))
     }
@@ -2492,6 +2693,19 @@ impl<'db> SqlEngine<'db> {
         strategy: &LocatorStrategy,
         mut best: Option<(usize, Vec<String>)>,
     ) -> Result<Option<Vec<String>>> {
+        // Opt-in research diagnostics: value-free trace of this chooser.
+        let diagnostics = crate::plan_diagnostics::active();
+        let mut traced: Vec<crate::plan_diagnostics::PlanSignature> = Vec::new();
+        let mut best_signature =
+            best.as_ref()
+                .map(|(matched, _)| crate::plan_diagnostics::PlanSignature {
+                    kind: "PrimaryKeyLocator",
+                    index: None,
+                    prefix_len: *matched,
+                });
+        if let Some(signature) = &best_signature {
+            traced.push(signature.clone());
+        }
         'plans: for plan in &strategy.indexes {
             sql_profile_index_catalog_entry_considered();
             let mut prefix = Vec::with_capacity(plan.prefix_exprs.len());
@@ -2581,10 +2795,21 @@ impl<'db> SqlEngine<'db> {
                     )?
                     .to_vec()
                 };
+                let signature = diagnostics.then(|| crate::plan_diagnostics::PlanSignature {
+                    kind: "IndexRange",
+                    index: Some(plan.name.clone()),
+                    prefix_len: matched_columns,
+                });
                 let replace = best.as_ref().is_none_or(|(best_prefix_len, best_ids)| {
                     matched_columns > *best_prefix_len
                         || (matched_columns == *best_prefix_len && ids.len() < best_ids.len())
                 });
+                if let Some(signature) = signature {
+                    traced.push(signature.clone());
+                    if replace {
+                        best_signature = Some(signature);
+                    }
+                }
                 if replace {
                     best = Some((matched_columns, ids));
                 }
@@ -2599,14 +2824,37 @@ impl<'db> SqlEngine<'db> {
                         self.lookup_index_cached(&plan.name, prefix.as_slice())?,
                     )?
                     .to_vec();
+                let signature = diagnostics.then(|| crate::plan_diagnostics::PlanSignature {
+                    kind: "IndexLookup",
+                    index: Some(plan.name.clone()),
+                    prefix_len: prefix.len(),
+                });
                 let replace = best.as_ref().is_none_or(|(best_prefix_len, best_ids)| {
                     prefix.len() > *best_prefix_len
                         || (prefix.len() == *best_prefix_len && ids.len() < best_ids.len())
                 });
+                if let Some(signature) = signature {
+                    traced.push(signature.clone());
+                    if replace {
+                        best_signature = Some(signature);
+                    }
+                }
                 if replace {
                     best = Some((prefix.len(), ids));
                 }
             }
+        }
+        if diagnostics {
+            traced.push(crate::plan_diagnostics::PlanSignature::full_scan());
+            let chosen =
+                best_signature.unwrap_or_else(crate::plan_diagnostics::PlanSignature::full_scan);
+            crate::plan_diagnostics::record_decision_for(
+                "pending-writes",
+                table,
+                traced,
+                &chosen,
+                best.as_ref().map(|(_, ids)| ids.len()),
+            );
         }
         Ok(best.map(|(_, ids)| ids))
     }

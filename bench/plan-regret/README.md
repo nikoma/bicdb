@@ -64,3 +64,12 @@ types hold only plan kinds, index identifiers, prefix lengths and row counts;
 they cannot hold literal values, parameters, keys or row contents. Forcing
 only selects among candidates the engine already generated, and every path
 re-applies the full WHERE clause. The harness checks this on every forced run.
+
+## Storage modes
+
+`--storage memory` (default) measures memory-resident storage; the second condition flushes CPU
+caches. `--storage paged` measures server-paged storage: the dataset is reopened after loading, so
+rows come from pages, and the second condition is **cold**. Each cold run closes the database,
+drops its files (only) from the OS page cache with `dd iflag=nocache count=0`, and reopens it.
+`--data-root` must be on a real disk for this, not tmpfs. Each statement runs in a fresh session
+that carries the catalog cache, as the pgwire server does.

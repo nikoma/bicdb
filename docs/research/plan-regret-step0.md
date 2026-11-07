@@ -121,6 +121,57 @@ the result does not depend on *k* in that range. A naive hybrid that ranks *all*
 estimate, overriding the tie probes too, is worse on realistic data: narrow 2.6% with 5
 catastrophic, wide 5.8% with 7. Exact probes beat estimates wherever the rule already has them.
 
+## Follow-up: the hybrid in the engine, measured end to end
+
+The hybrid is implemented in the locator behind an internal, default-off gate
+(`BICDB_LOCATOR_HYBRID`, ratio `BICDB_LOCATOR_HYBRID_RATIO`, default 2; #31). The forced-candidate
+scores above leave out the chooser's own probe cost, so this run times the **unforced** statement,
+as a client sees it. It also records planner, decision and wasted-probe time separately.
+
+**Validation on held-out data (`challenge2`).** This dataset uses a different index layout
+(`(status, region)`, `(created_day, status)`), fresh values, a second trap shape and a control
+template. In the control, region and status are each common, but together rare, so the long prefix
+is the selective one. The ratio was not retuned.
+
+The first form of the hybrid let the estimate override the rule outright. It fixed the traps, but
+regressed the control from 9.0% to 30.1% regret. A composite estimate is the minimum of the
+per-column most-common-value counts, capped at rows ÷ distinct keys. It cannot see correlation
+between columns, so for this control it looks exactly like the trap.
+
+The shipped form fixes that: **estimates nominate, exact probes decide.** The nominee is probed
+alongside the tied winners, and the smallest row-id count wins. Probes only collect row IDs; the
+expensive record fetch happens afterwards.
+
+End to end, on the merged code (560 queries; the noise figure is the median of MAD ÷ median, 1.1% warm):
+
+| test split | rule total | hybrid total | >10× rule → hybrid | worst query, rule → hybrid |
+|---|---:|---:|---:|---:|
+| warm | 17,887 ms | 17,822 ms | 11 → **0** | 29.6× → 4.7× |
+| flushed | 18,012 ms | 17,826 ms | 10 → **0** | 20.3× → 4.0× |
+
+| template (all queries, warm) | nominated | overridden | hybrid vs. rule time |
+|---|---:|---:|---:|
+| `trap_longer_prefix` | 30 | 29 | −72.9% |
+| `c2_status_region_customer` (held out) | 25 | 25 | −61.9% |
+| `c2_control_rare_status` (held out) | 22 | 6 | +1.4% |
+| every realistic template | 0 | 0 | within noise |
+
+The worst hybrid query (4.7×) is a tie the rule handles the same way (`trap_tied_huge_probe`).
+
+**Where the time goes** (unforced, warm): the rule's decision, including its probes, has a p50 of
+14 µs and a p95 of 0.58 ms, about 0.19% of end-to-end time. Probes that are then discarded take
+about 0.13%. Planner time is 0. Before #31, the planner ran twice per ordinary SELECT and its result
+was discarded: 37 µs p50, 0.06%. The streaming fast paths now check the cheap disqualifiers first.
+
+**Paged storage.** EXPLAIN there was wrong on 8 of 13 shapes. Whenever the planner chose a full scan,
+that scan streamed. EXPLAIN now runs the streaming routes in a dry-run mode, so it uses execution's
+own eligibility checks. Truth tests for paged storage are vacuous unless the fixture is reopened and
+uses only durable index kinds, because otherwise nothing streams.
+
+**Not yet measured:** cold paged storage. The harness supports it (`--storage paged`: the cold
+condition closes the database, evicts its files from the OS page cache and reopens). The hybrid
+stays default-off until that run is done.
+
 ## Is the 0.1% evidence of an excellent chooser, or of an easy benchmark?
 
 Both, and the data says which part is which:

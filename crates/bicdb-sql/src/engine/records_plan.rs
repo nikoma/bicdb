@@ -757,6 +757,31 @@ impl<'db> SqlEngine<'db> {
         }
     }
 
+    /// Record-id candidates of `collection` within `(lower, upper)` in id
+    /// order, read from one seek of the id key space; see
+    /// [`bicdb_core::Transaction::scan_collection_record_key_candidates_in_range_unchecked`].
+    /// Locator planning only: every id resolves through the visible-row path.
+    pub(crate) fn record_key_candidates_in_range(
+        &self,
+        collection: &str,
+        lower: std::ops::Bound<&str>,
+        upper: std::ops::Bound<&str>,
+        descending: bool,
+        limit: usize,
+    ) -> Result<(Vec<String>, bool)> {
+        match self.tx {
+            Some(tx) => tx.scan_collection_record_key_candidates_in_range_unchecked(
+                collection, lower, upper, descending, limit,
+            ),
+            None => self
+                .db_ref()
+                .scan_collection_record_key_candidates_in_range_unchecked(
+                    collection, lower, upper, descending, limit,
+                ),
+        }
+        .map_err(SqlError::from)
+    }
+
     pub(crate) fn load_ann_records_if_enabled(
         &self,
         collection: &str,
@@ -955,6 +980,63 @@ impl<'db> SqlEngine<'db> {
             }
         }
         sql_profile_index_lookup();
+        if extreme_idx == 0 && primary_key_record_id_orders_like_values(schema) {
+            // The key lives only in the record id, and those ids sort like the
+            // key: the extreme is the first visible id from that end. The
+            // fallback below enumerates and fetches every row, which on a
+            // reopened server-paged table is a walk of the whole heap.
+            const EXTREME_CANDIDATE_BATCH: usize = 64;
+            let mut resume_after: Option<String> = None;
+            let mut best = SqlValue::Null;
+            'candidates: loop {
+                self.check_cancellation()?;
+                let past = match resume_after.as_deref() {
+                    Some(id) => std::ops::Bound::Excluded(id),
+                    None => std::ops::Bound::Unbounded,
+                };
+                let (lower, upper) = if greatest {
+                    (std::ops::Bound::Unbounded, past)
+                } else {
+                    (past, std::ops::Bound::Unbounded)
+                };
+                let (ids, complete) = self.record_key_candidates_in_range(
+                    collection,
+                    lower,
+                    upper,
+                    greatest,
+                    EXTREME_CANDIDATE_BATCH,
+                )?;
+                for id in &ids {
+                    // Resolves visibility: a deleted or invisible key is skipped.
+                    let Some(values) = self.primary_key_values_for_record_id(
+                        collection,
+                        schema,
+                        &primary_key_columns,
+                        id,
+                    )?
+                    else {
+                        continue;
+                    };
+                    if let Some(value) = values
+                        .into_iter()
+                        .next()
+                        .filter(|value| !matches!(value, SqlValue::Null))
+                    {
+                        best = value;
+                        break 'candidates;
+                    }
+                }
+                match ids.last() {
+                    Some(last) if !complete => resume_after = Some(last.clone()),
+                    _ => break,
+                }
+            }
+            let column_name = alias_name.unwrap_or_else(|| aggregate.column_name());
+            let column_types = vec![aggregate_result_pg_type(&aggregate, Some(schema))];
+            return Ok(Some(
+                SqlResult::new(vec![column_name], vec![vec![best]]).with_column_types(column_types),
+            ));
+        }
         let id_prefix = if prefix_values.is_empty() {
             String::new()
         } else {
@@ -1397,6 +1479,13 @@ impl<'db> SqlEngine<'db> {
                 if let Some(candidate) = self.primary_key_filter_candidate(
                     collection, alias, schema, selection, total_rows,
                 )? {
+                    candidates.push(candidate);
+                }
+            }
+            if let Some(schema) = schema.as_ref() {
+                if let Some(candidate) = self
+                    .primary_key_record_id_range_candidate(collection, alias, schema, selection)?
+                {
                     candidates.push(candidate);
                 }
             }
@@ -2349,6 +2438,36 @@ impl<'db> SqlEngine<'db> {
                     estimated_cost: 1.0 + estimated_rows as f64 * 0.25,
                 }
             }
+        }))
+    }
+
+    /// A range over a single primary key whose record ids sort like its
+    /// values (`primary_key_record_id_orders_like_values`), as the record ids
+    /// in that range. Such a key's `_pkey` index is unreadable, so no index
+    /// candidate covers the range and the planner fell back to a full scan
+    /// (which on a reopened server-paged table walks the whole heap). The ids
+    /// come from one seek of the id key space; the predicate is re-applied to
+    /// the rows they resolve to.
+    pub(crate) fn primary_key_record_id_range_candidate(
+        &self,
+        table: &str,
+        alias: &str,
+        schema: &TableSchema,
+        selection: &Expr,
+    ) -> Result<Option<QueryPlan>> {
+        if self.security_context.is_some() || !primary_key_record_id_orders_like_values(schema) {
+            return Ok(None);
+        }
+        let Some((_, record_ids)) =
+            self.primary_key_range_record_ids_for_table_selection(table, alias, schema, selection)?
+        else {
+            return Ok(None);
+        };
+        let estimated_rows = record_ids.len();
+        Ok(Some(QueryPlan {
+            kind: PlanKind::PrimaryKeyInLookup { record_ids },
+            estimated_rows,
+            estimated_cost: 1.0 + estimated_rows as f64 * 0.25,
         }))
     }
 

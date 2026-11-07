@@ -886,6 +886,112 @@ impl PagedRecords {
             }))
     }
 
+    /// At most `limit` record ids of a collection within `(lower, upper)`,
+    /// in byte order (descending when `descending`), with one seek instead of
+    /// a corpus walk. Record keys embed the id in byte order, so a key range
+    /// is an id range.
+    ///
+    /// Ascending reads the keys alone and, like [`Self::scan_ids`], may yield
+    /// an id whose versions are all gone. Descending walks visible rows (the
+    /// leaves are forward-linked only, so the reverse cursor resolves heads).
+    /// Either way the ids are locator candidates: callers resolve each one
+    /// through their visible-row path before using it.
+    pub fn scan_ids_in_range(
+        &self,
+        snapshot: &Snapshot,
+        collection: &str,
+        lower: std::ops::Bound<&str>,
+        upper: std::ops::Bound<&str>,
+        descending: bool,
+        limit: usize,
+    ) -> Result<Vec<String>> {
+        use std::ops::Bound;
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
+        let prefix = collection_prefix(collection);
+        let mut ids = Vec::new();
+        if limit == 0 {
+            return Ok(ids);
+        }
+        let id_of = |key: &[u8]| {
+            String::from_utf8(key[prefix.len()..].to_vec())
+                .map_err(|_| BicDbError::PagedStorage("record key id is not utf-8".to_string()))
+        };
+        if descending {
+            let bound = match upper {
+                // Keys below `id\0` are exactly the keys `<= id`.
+                Bound::Included(id) => {
+                    let mut key = record_key(collection, id);
+                    key.push(0);
+                    key
+                }
+                Bound::Excluded(id) => record_key(collection, id),
+                // Ids are UTF-8, so no record key of this collection holds 0xFF.
+                Bound::Unbounded => {
+                    let mut key = prefix.clone();
+                    key.push(0xFF);
+                    key
+                }
+            };
+            for entry in self
+                .store
+                .scan_rev_below(snapshot, Some(bound.as_slice()))
+                .map_err(page_error)?
+            {
+                let (key, _) = entry.map_err(page_error)?;
+                if !key.starts_with(&prefix) {
+                    break;
+                }
+                let id = id_of(&key)?;
+                let below_lower = match lower {
+                    Bound::Included(lower) => id.as_str() < lower,
+                    Bound::Excluded(lower) => id.as_str() <= lower,
+                    Bound::Unbounded => false,
+                };
+                if below_lower {
+                    break;
+                }
+                ids.push(id);
+                if ids.len() == limit {
+                    break;
+                }
+            }
+            return Ok(ids);
+        }
+        let (start, skip_exact) = match lower {
+            Bound::Included(id) => (record_key(collection, id), None),
+            Bound::Excluded(id) => (record_key(collection, id), Some(id)),
+            Bound::Unbounded => (prefix.clone(), None),
+        };
+        for key in self
+            .store
+            .scan_keys_from(snapshot, &start)
+            .map_err(page_error)?
+        {
+            let key = key.map_err(page_error)?;
+            if !key.starts_with(&prefix) {
+                break;
+            }
+            let id = id_of(&key)?;
+            if skip_exact == Some(id.as_str()) {
+                continue;
+            }
+            let above_upper = match upper {
+                Bound::Included(upper) => id.as_str() > upper,
+                Bound::Excluded(upper) => id.as_str() >= upper,
+                Bound::Unbounded => false,
+            };
+            if above_upper {
+                break;
+            }
+            ids.push(id);
+            if ids.len() == limit {
+                break;
+            }
+        }
+        Ok(ids)
+    }
+
     /// Visit a collection's rows in bounded batches, as of `snapshot`.
     ///
     /// Each batch is a fresh key-range scan resumed just past the previous

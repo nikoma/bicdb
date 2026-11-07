@@ -16,6 +16,8 @@ pub(crate) use recycle_bin::is_recycle_bin_name;
 pub use recycle_bin::RECYCLE_BIN_COLLECTION;
 pub(crate) mod functions_insert;
 mod join_lookup_tests;
+#[cfg(test)]
+mod primary_key_range_tests;
 mod primary_key_updates;
 mod privilege_projection;
 mod raw_ddl_analyze;

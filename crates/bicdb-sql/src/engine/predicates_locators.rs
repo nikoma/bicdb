@@ -1824,6 +1824,18 @@ impl<'db> SqlEngine<'db> {
                 prefix_len += 1;
             }
             if let Some(range_column) = primary_key_columns.get(prefix_len) {
+                if prefix_len == 0 && primary_key_record_id_orders_like_values(schema) {
+                    // A range over a key whose record ids sort like it is a
+                    // record-id range (see
+                    // `primary_key_range_record_ids_for_table_selection`).
+                    let field = IndexField::MetadataPath(vec![range_column.clone()]);
+                    if self
+                        .dynamic_range_bounds(selection, table, alias, Some(schema), &field)?
+                        .is_some()
+                    {
+                        return Ok(Some(1));
+                    }
+                }
                 if !primary_key_requires_typed_identity(schema)
                     && readable_primary_key_index_for_schema(self.db_ref(), schema).is_some()
                 {
@@ -3894,6 +3906,47 @@ impl<'db> SqlEngine<'db> {
                 }
                 return Ok(Some((range_idx + 1, ids)));
             }
+        }
+        if range_idx == 0 && primary_key_record_id_orders_like_values(schema) {
+            // The key lives only in the record id (its `_pkey` index is
+            // unreadable), but the ids are order-preserving labels: the
+            // range bounds, put through the same typed label as the ids, are
+            // an id range read from one seek. The fallback below enumerates
+            // every id and fetches every row — on a reopened server-paged
+            // table that walks the whole heap for a 20-row range. Bounds are
+            // inclusive and ids may be stale keys; callers resolve each row
+            // and re-apply the predicate, as for any index range.
+            let Some((lower, upper, has_null_bound)) =
+                self.dynamic_range_bounds(selection, table, alias, Some(schema), &field)?
+            else {
+                return Ok(None);
+            };
+            if has_null_bound {
+                return Ok(Some((1, Vec::new())));
+            }
+            fn label_bound(bound: &Option<IndexValue>) -> Option<std::ops::Bound<&str>> {
+                match bound {
+                    None => Some(std::ops::Bound::Unbounded),
+                    Some(IndexValue::String(label)) => {
+                        Some(std::ops::Bound::Included(label.as_str()))
+                    }
+                    Some(_) => None,
+                }
+            }
+            if let (Some(lower), Some(upper)) = (label_bound(&lower), label_bound(&upper)) {
+                let (ids, _) =
+                    self.record_key_candidates_in_range(table, lower, upper, false, usize::MAX)?;
+                if sql_trace_flags().plan {
+                    eprintln!(
+                        "bicdb_trace_plan primary_key_range source=record_id_range table={} ids={}",
+                        table,
+                        ids.len()
+                    );
+                }
+                return Ok(Some((1, ids)));
+            }
+            // Not a typed label: the bound cannot be compared with the ids.
+            return Ok(None);
         }
         let Some((lower, upper, has_null_bound)) =
             self.dynamic_sql_range_bounds(selection, table, alias, Some(schema), &field)?

@@ -5520,6 +5520,35 @@ fn prefix_upper_bound(prefix: &[u8]) -> Option<Vec<u8>> {
 /// Byte length of the FIRST field in an `encode_index_key` byte string. The
 /// encoding is self-delimiting (see `encode_index_value`): a tag byte then a
 /// fixed- or variable-width body. Used to value-shard on the leading field only.
+fn record_id_in_range(id: &str, lower: Bound<&str>, upper: Bound<&str>) -> bool {
+    let above_lower = match lower {
+        Bound::Included(lower) => id >= lower,
+        Bound::Excluded(lower) => id > lower,
+        Bound::Unbounded => true,
+    };
+    let below_upper = match upper {
+        Bound::Included(upper) => id <= upper,
+        Bound::Excluded(upper) => id < upper,
+        Bound::Unbounded => true,
+    };
+    above_lower && below_upper
+}
+
+/// Sorted ids filtered to `(lower, upper)`, in the requested direction.
+fn record_ids_in_range_ordered(
+    mut ids: Vec<String>,
+    lower: Bound<&str>,
+    upper: Bound<&str>,
+    descending: bool,
+) -> Vec<String> {
+    ids.retain(|id| record_id_in_range(id, lower, upper));
+    ids.sort_unstable();
+    if descending {
+        ids.reverse();
+    }
+    ids
+}
+
 fn index_first_field_len(key: &[u8]) -> usize {
     match key.first() {
         None => 0,
@@ -16213,6 +16242,77 @@ impl Transaction {
             }
         }
         Ok(ids.into_iter().collect())
+    }
+
+    /// Record-id locator candidates within `(lower, upper)`, in id order
+    /// (descending when `descending`), at this transaction's pinned paged
+    /// snapshot plus touched and pending keys. Like
+    /// [`Self::scan_collection_record_key_candidates_with_prefix_unchecked`]
+    /// this is a superset: resolve each candidate through transaction
+    /// visibility and authorization before returning or counting a row.
+    ///
+    /// A lazy paged collection reads at most `limit` page-store keys from one
+    /// seek, so a bounded id range costs the range, not the table. Returns
+    /// `(ids, complete)`: when `complete` is false the ids are exactly the
+    /// candidates up to the last one returned, and the caller resumes past it.
+    pub fn scan_collection_record_key_candidates_in_range_unchecked(
+        &self,
+        collection: &str,
+        lower: Bound<&str>,
+        upper: Bound<&str>,
+        descending: bool,
+        limit: usize,
+    ) -> Result<(Vec<String>, bool)> {
+        let db = self.db_ref();
+        db.ensure_collection(collection)?;
+        let state = db.collection_state(collection)?;
+        if !state.paged_lazy {
+            drop(state);
+            let ids = self.scan_collection_record_ids_with_prefix_unchecked(collection, "")?;
+            return Ok((
+                record_ids_in_range_ordered(ids, lower, upper, descending),
+                true,
+            ));
+        }
+        let limit = limit.max(1);
+        let mut paged_ids = Vec::new();
+        if let (Some(snapshot), Some(paged)) = (&self.paged_snapshot, &db.paged_records) {
+            paged_ids =
+                paged.scan_ids_in_range(snapshot, collection, lower, upper, descending, limit)?;
+        }
+        let complete = paged_ids.len() < limit;
+        let boundary = (!complete).then(|| paged_ids.last().cloned()).flatten();
+        let mut ids = paged_ids.into_iter().collect::<BTreeSet<_>>();
+        for shard in state.read_all() {
+            for versions in shard.versions.values() {
+                if let Some(id) = versions.first().map(|version| &version.record.id) {
+                    if record_id_in_range(id, lower, upper) {
+                        ids.insert(id.clone());
+                    }
+                }
+            }
+        }
+        for write in self.pending_writes_for_collection(collection) {
+            if record_id_in_range(&write.record_id, lower, upper) {
+                ids.insert(write.record_id.clone());
+            }
+        }
+        // Past the last page-store key read, page-store candidates are unknown:
+        // keep only the exact prefix the caller can resume after.
+        if let Some(boundary) = boundary {
+            ids.retain(|id| {
+                if descending {
+                    id >= &boundary
+                } else {
+                    id <= &boundary
+                }
+            });
+        }
+        let mut ids = ids.into_iter().collect::<Vec<_>>();
+        if descending {
+            ids.reverse();
+        }
+        Ok((ids, complete))
     }
 
     /// Key-only locator candidates at this transaction's pinned paged snapshot,

@@ -1686,6 +1686,28 @@ pub(crate) fn primary_key_label_is_canonical(schema: &TableSchema) -> bool {
     })
 }
 
+/// Whether a single-column primary key's record ids sort like its values, so
+/// a key range (or the least/greatest key) is a record-id range of the
+/// collection. The record id of such a key is its typed label, which is the
+/// hex of the order-preserving index key (`column_typed_index_label`); hex
+/// keeps byte order and the canonical label maps equal values to one id.
+/// Plain text/integer ids (`to_cell`) do not sort like their values, and
+/// collated or user-defined types keep the record-id fallback.
+pub(crate) fn primary_key_record_id_orders_like_values(schema: &TableSchema) -> bool {
+    let columns = primary_key_columns_for_schema(schema);
+    let [column] = columns.as_slice() else {
+        return false;
+    };
+    schema.column(column).is_some_and(|column| {
+        column.user_type.is_none()
+            && column.collation.is_none()
+            && matches!(
+                column.pg_type.as_str(),
+                "numeric" | "date" | "timestamp" | "timestamptz"
+            )
+    })
+}
+
 pub(crate) fn pg_type_requires_typed_identity(pg_type: &str) -> bool {
     pg_type.ends_with("[]")
         || !matches!(

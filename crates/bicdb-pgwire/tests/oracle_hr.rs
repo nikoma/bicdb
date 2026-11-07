@@ -3646,16 +3646,22 @@ async fn concurrent_locked_counter_allocation_never_fails_and_never_repeats() {
             )
             .await
             .unwrap();
+        // Oracle locks named columns' rows; PostgreSQL names relations.
+        let lock_target = if profile == "postgres" {
+            "counters"
+        } else {
+            "next_value"
+        };
         let workers = (0..8).map(|_| {
             let config = config.clone();
             tokio::spawn(async move {
                 let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
                 let connection = tokio::spawn(async move { connection.await.unwrap() });
                 let lock = client
-                    .prepare(
+                    .prepare(&format!(
                         "SELECT next_value, id FROM counters AS counters \
-                         WHERE name = $1 AND id > 0 FOR UPDATE OF counters",
-                    )
+                         WHERE name = $1 AND id > 0 FOR UPDATE OF {lock_target}"
+                    ))
                     .await
                     .unwrap();
                 let bump = client

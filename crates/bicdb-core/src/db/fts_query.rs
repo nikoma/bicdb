@@ -2349,6 +2349,74 @@ impl BicDb {
         Ok(self.rowids_to_pks(&collection, &rowids))
     }
 
+    /// Every `(value of field `field`, primary key)` pair of a B-tree index,
+    /// read from the index entries alone: no record is fetched or decoded.
+    /// The field need not lead the key. Returns `None` once the index holds
+    /// more than `limit` entries. Same committed state as [`Self::lookup_index`];
+    /// callers merge their own transaction's pending writes.
+    pub fn index_field_entries(
+        &self,
+        name: &str,
+        field: usize,
+        limit: usize,
+    ) -> Result<Option<Vec<(IndexValue, String)>>> {
+        let state = self
+            .indexes
+            .get(name)
+            .ok_or_else(|| BicDbError::Index(format!("index `{name}` not found")))?
+            .read();
+        if state.definition.kind != IndexKind::BTree || field >= state.definition.fields.len() {
+            return Err(BicDbError::Index(format!(
+                "invalid field entry scan for index `{name}`"
+            )));
+        }
+        let mut entries = Vec::new();
+        if state.paged_read_through {
+            let paged = self
+                .paged_records
+                .as_ref()
+                .ok_or_else(|| BicDbError::Index(format!("index `{name}` lost its page store")))?;
+            let snapshot = paged.latest_snapshot();
+            for entry in paged.scan_index(&snapshot, name)? {
+                if entries.len() >= limit {
+                    return Ok(None);
+                }
+                let (encoded, pk) = entry?;
+                entries.push((decode_index_field(&encoded, field), pk));
+            }
+            index_trace::record_scan(&index_trace::RANGE, entries.len());
+            return Ok(Some(entries));
+        }
+        let mut keyed = Vec::new();
+        let mut overflow = false;
+        state.store.scan_from(&[], &mut |encoded_key, key_ids| {
+            let value = decode_index_field(encoded_key, field);
+            for rowid in key_ids {
+                if keyed.len() >= limit {
+                    overflow = true;
+                    return false;
+                }
+                keyed.push((value.clone(), rowid));
+            }
+            true
+        });
+        if overflow {
+            return Ok(None);
+        }
+        let collection = state.definition.collection.clone();
+        for (value, rowid) in keyed {
+            // A rowid without a live row is a dead entry: no row to report.
+            if let Some(pk) = self
+                .rowids_to_pks(&collection, std::slice::from_ref(&rowid))
+                .pop()
+            {
+                entries.push((value, pk));
+            }
+        }
+        index_trace::record_scan(&index_trace::RANGE, entries.len());
+        Ok(Some(entries))
+    }
+
     pub fn range_index_with_prefix(
         &self,
         name: &str,

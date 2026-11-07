@@ -453,3 +453,185 @@ fn typed_composite_key_prefix_lookups_read_only_matching_rows() {
         run(&mut session, profile, "ROLLBACK").unwrap();
     }
 }
+
+/// A correlated NOT EXISTS whose correlation column is only a non-leading
+/// column of a composite index (`fld(ad_tab_id, ad_column_id)`): its
+/// statement-local candidate set used to come from a scan of the inner
+/// table, which in server-paged storage decodes every wide row (~0.8 s on a
+/// 21k-row table, for 74 outer rows). The candidates now come from the
+/// index entries alone, and only the inner rows whose column occurs among
+/// the outer values are read.
+#[test]
+fn correlated_not_exists_on_non_leading_index_column_reads_index_not_table() {
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let root = tempfile::tempdir().unwrap();
+        let config = bicdb_core::DbConfig::default()
+            .with_fsync(false)
+            .with_storage_mode(bicdb_core::StorageMode::ServerPaged);
+        let key = if profile == "postgres" {
+            "NUMERIC(10)"
+        } else {
+            "NUMBER(10)"
+        };
+        // Outer item `i` of format 1 (i <= 40) or 2: its column, whether it
+        // is active, and its sequence (descending in `i`).
+        let item_column = |i: i64| -> Option<i64> {
+            match i {
+                5 | 13 => None,
+                39 | 40 => Some(9000 + i),
+                41.. => Some((i - 40) * 3),
+                _ => Some(i),
+            }
+        };
+        // Inner field of column `c` on tab `t` is protected when encrypted
+        // (c % 7 == 0 on tab 2) or obscured (c % 11 == 0 on tab 3).
+        let protected = |c: i64| c % 7 == 0 || c % 11 == 0;
+        {
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            crate::oracle::ensure_database_profile(&mut db, profile).unwrap();
+            let mut session = SqlSession::new(&mut db);
+            for sql in [
+                format!(
+                    "CREATE TABLE pfi (ad_printformatitem_id {key} PRIMARY KEY, \
+                     ad_printformat_id {key}, ad_column_id {key}, isactive CHAR(1), seqno {key})"
+                ),
+                "CREATE INDEX pfi_format ON pfi (ad_printformat_id)".to_string(),
+                format!(
+                    "CREATE TABLE fld (ad_field_id {key} PRIMARY KEY, ad_tab_id {key}, \
+                     ad_column_id {key}, isencrypted CHAR(1), obscuretype VARCHAR(3), \
+                     description VARCHAR(400))"
+                ),
+                "CREATE UNIQUE INDEX fld_column ON fld (ad_tab_id, ad_column_id)".to_string(),
+            ] {
+                run(&mut session, profile, &sql).unwrap();
+            }
+            let wide = "x".repeat(300);
+            for c in 1..=600i64 {
+                for t in 1..=3i64 {
+                    let encrypted = if t == 2 && c % 7 == 0 { "Y" } else { "N" };
+                    let obscure = if t == 3 && c % 11 == 0 { "'M'" } else { "NULL" };
+                    run(
+                        &mut session,
+                        profile,
+                        &format!(
+                            "INSERT INTO fld VALUES ({}, {t}, {c}, '{encrypted}', {obscure}, '{wide}')",
+                            t * 1000 + c
+                        ),
+                    )
+                    .unwrap();
+                }
+            }
+            // Protected fields without a column: a NULL never correlates.
+            for f in 1..=20i64 {
+                run(
+                    &mut session,
+                    profile,
+                    &format!(
+                        "INSERT INTO fld VALUES ({}, {}, NULL, 'Y', 'M', '{wide}')",
+                        5000 + f,
+                        4 + f
+                    ),
+                )
+                .unwrap();
+            }
+            for i in 1..=60i64 {
+                let format = if i <= 40 { 1 } else { 2 };
+                let column = item_column(i).map_or("NULL".to_string(), |c| c.to_string());
+                let active = if i == 20 { "N" } else { "Y" };
+                run(
+                    &mut session,
+                    profile,
+                    &format!(
+                        "INSERT INTO pfi VALUES ({i}, {format}, {column}, '{active}', {})",
+                        100 - i
+                    ),
+                )
+                .unwrap();
+            }
+            drop(session);
+            db.close().unwrap();
+        }
+        // Reopen so every table is lazy, as in a long-lived database.
+        let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+        crate::oracle::ensure_database_profile(&mut db, profile).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        // (rows, records fetched by id, whole-table record scans) of the
+        // second of two runs (the first also loads once-per-database memos).
+        let reads = |session: &mut SqlSession<'_>, sql: &str| {
+            profiled(session, profile, sql);
+            crate::reset_sql_record_storage_get_calls();
+            let scans_before = bicdb_core::paged_record_scans_on_this_thread();
+            let gets_before = bicdb_core::paged_record_gets_on_this_thread();
+            let (rows, _) = profiled(session, profile, sql);
+            let scans = bicdb_core::paged_record_scans_on_this_thread() - scans_before;
+            let gets = bicdb_core::paged_record_gets_on_this_thread() - gets_before;
+            (
+                rows,
+                crate::sql_record_storage_get_calls().max(gets as usize),
+                scans,
+            )
+        };
+        let not_exists = "SELECT pfi.ad_printformatitem_id FROM pfi \
+             WHERE pfi.ad_printformat_id = 1 AND pfi.isactive = 'Y' \
+             AND NOT EXISTS (SELECT * FROM fld f WHERE pfi.ad_column_id = f.ad_column_id \
+             AND (f.isencrypted = 'Y' OR f.obscuretype IS NOT NULL)) ORDER BY seqno";
+        let application = "SELECT pfi.ad_printformatitem_id FROM pfi \
+             WHERE pfi.ad_printformat_id = 1 AND pfi.isactive = 'Y' \
+             AND NOT EXISTS (SELECT * FROM fld f WHERE pfi.ad_column_id = f.ad_column_id \
+             AND (f.isencrypted = 'Y' OR f.obscuretype IS NOT NULL)) \
+             AND ad_column_id NOT IN (SELECT pfi.ad_column_id FROM pfi \
+             WHERE pfi.ad_printformat_id = 2 AND pfi.ad_column_id IS NOT NULL) ORDER BY seqno";
+        let expected = |exclude_format_2: bool| -> Vec<Vec<String>> {
+            let format_2 = (41..=60).filter_map(item_column).collect::<Vec<_>>();
+            (1..=40i64)
+                .rev()
+                .filter(|&i| i != 20)
+                .filter(|&i| item_column(i).is_none_or(|c| !protected(c) || c > 600))
+                // NULL NOT IN a non-empty set is NULL: not selected.
+                .filter(|&i| {
+                    !exclude_format_2 || item_column(i).is_some_and(|c| !format_2.contains(&c))
+                })
+                .map(|i| vec![i.to_string()])
+                .collect()
+        };
+        for (sql, exclude_format_2) in [(not_exists, false), (application, true)] {
+            let (rows, records, scans) = reads(&mut session, sql);
+            assert_eq!(rows, expected(exclude_format_2), "{profile}: {sql}");
+            assert_eq!(
+                scans, 0,
+                "{profile}: the NOT EXISTS candidates scanned the inner table"
+            );
+            // 40 outer items reach at most 3 fields each.
+            assert!(
+                records < 400,
+                "{profile}: {sql} read {records} records of a 1820-row table"
+            );
+        }
+        // Buffered writes to the inner table keep the scanned candidates,
+        // and the results follow the transaction's own writes: column 1
+        // gains an encrypted field, column 14 loses its only one.
+        run(&mut session, profile, "BEGIN").unwrap();
+        run(
+            &mut session,
+            profile,
+            "UPDATE fld SET isencrypted = 'Y' WHERE ad_field_id = 1001",
+        )
+        .unwrap();
+        run(
+            &mut session,
+            profile,
+            "UPDATE fld SET ad_column_id = 700 WHERE ad_field_id = 2014",
+        )
+        .unwrap();
+        let (rows, _, _) = reads(&mut session, not_exists);
+        let mut changed = expected(false);
+        changed.retain(|row| row[0] != "1");
+        changed.push(vec!["14".to_string()]);
+        changed.sort_by_key(|row| std::cmp::Reverse(row[0].parse::<i64>().unwrap()));
+        assert_eq!(rows, changed, "{profile}: pending writes");
+        run(&mut session, profile, "ROLLBACK").unwrap();
+        let (rows, _, scans) = reads(&mut session, not_exists);
+        assert_eq!(rows, expected(false), "{profile}: after rollback");
+        assert_eq!(scans, 0, "{profile}: after rollback");
+    }
+}

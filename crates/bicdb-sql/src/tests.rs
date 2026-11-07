@@ -1,6 +1,59 @@
 use super::*;
 
 #[test]
+fn current_catalog_reads_connected_database_and_retains_name_descriptor() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    SqlSession::new(&mut db)
+        .execute("CREATE TABLE catalog_context_rows(id INTEGER, \"CURRENT_CATALOG\" TEXT); INSERT INTO catalog_context_rows VALUES(1,'column value'),(2,'second value')")
+        .unwrap();
+    for database in ["tenant_one", "OtherCatalog"] {
+        let gucs = Arc::new(HashMap::from([(
+            "database".to_string(),
+            database.to_string(),
+        )]));
+        let engine = SqlEngine::new(&db).with_session_gucs(gucs);
+        for sql in [
+            "SELECT CURRENT_CATALOG",
+            "SELECT (current_catalog) AS connected_catalog",
+            "SELECT CURRENT_CATALOG FROM catalog_context_rows WHERE id=1 AND CURRENT_CATALOG=current_database()",
+            "SELECT CASE WHEN id=1 THEN CURRENT_CATALOG ELSE current_database() END AS connected_catalog FROM catalog_context_rows WHERE id=1",
+        ] {
+            let result = engine.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+            assert_eq!(result.rows, vec![vec![SqlValue::String(database.into())]], "{sql}");
+            if !sql.contains("CASE") {
+                assert_eq!(result.column_types, vec![Some("name".into())], "{sql}");
+            }
+        }
+        assert_eq!(
+            engine
+                .execute("SELECT pg_typeof(current_catalog)::text")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::String("name".into())]]
+        );
+        let bare = engine.execute("SELECT CURRENT_CATALOG").unwrap();
+        assert_eq!(bare.columns, vec!["current_catalog"]);
+        let quoted = engine
+            .execute("SELECT \"CURRENT_CATALOG\" FROM catalog_context_rows WHERE id=1")
+            .unwrap();
+        assert_eq!(
+            quoted.rows,
+            vec![vec![SqlValue::String("column value".into())]]
+        );
+        assert_eq!(quoted.column_types, vec![Some("text".into())]);
+        assert!(engine.execute("SELECT \"CURRENT_CATALOG\"").is_err());
+    }
+    assert_eq!(
+        SqlEngine::new(&db)
+            .execute("SELECT CURRENT_CATALOG")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String("bicdb".into())]]
+    );
+}
+
+#[test]
 fn catalog_oid_null_prunes_correlated_catalogue_work() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(dir.path()).unwrap();

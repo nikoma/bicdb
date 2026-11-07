@@ -1446,7 +1446,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         if ident.quote_style.is_none()
             && matches!(
                 ident.value.to_ascii_lowercase().as_str(),
-                "current_user" | "current_role" | "session_user" | "user"
+                "current_catalog" | "current_user" | "current_role" | "session_user" | "user"
             )
         {
             return Some("name".to_string());

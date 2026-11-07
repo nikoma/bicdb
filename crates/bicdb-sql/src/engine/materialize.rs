@@ -3022,7 +3022,11 @@ impl<'db> SqlEngine<'db> {
                 if ident.quote_style.is_none()
                     && matches!(
                         ident.value.to_ascii_lowercase().as_str(),
-                        "current_user" | "current_role" | "session_user" | "user"
+                        "current_catalog"
+                            | "current_user"
+                            | "current_role"
+                            | "session_user"
+                            | "user"
                     ) =>
             {
                 Some("name".to_string())

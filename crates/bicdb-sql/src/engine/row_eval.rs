@@ -1043,9 +1043,9 @@ impl<'db> SqlEngine<'db> {
     // like PostgreSQL they resolve to the session identity, never to columns.
     pub(crate) fn session_identity_value(&self, name: &str) -> Option<SqlValue> {
         match name.to_ascii_lowercase().as_str() {
-            "current_database" => Some(SqlValue::String(current_database_from_gucs(
-                &self.session_gucs,
-            ))),
+            "current_catalog" | "current_database" => Some(SqlValue::String(
+                current_database_from_gucs(&self.session_gucs),
+            )),
             "current_user" | "current_role" => {
                 Some(SqlValue::String(current_user_from_gucs(&self.session_gucs)))
             }

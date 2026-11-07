@@ -228,7 +228,11 @@ pub(crate) fn eval_value(record: &Record, expr: &Expr) -> Result<SqlValue> {
         Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("current_date") => {
             Ok(SqlValue::String(unix_now_date_string()))
         }
-        Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("current_database") => {
+        Expr::Identifier(ident)
+            if ident.quote_style.is_none()
+                && (ident.value.eq_ignore_ascii_case("current_catalog")
+                    || ident.value.eq_ignore_ascii_case("current_database")) =>
+        {
             Ok(SqlValue::String("bicdb".to_string()))
         }
         Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("current_schema") => {
@@ -499,7 +503,11 @@ pub(crate) fn eval_constant_expr(expr: &Expr) -> Result<SqlValue> {
         Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("current_date") => {
             Ok(SqlValue::String(unix_now_date_string()))
         }
-        Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("current_database") => {
+        Expr::Identifier(ident)
+            if ident.quote_style.is_none()
+                && (ident.value.eq_ignore_ascii_case("current_catalog")
+                    || ident.value.eq_ignore_ascii_case("current_database")) =>
+        {
             Ok(SqlValue::String("bicdb".to_string()))
         }
         Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("current_schema") => {

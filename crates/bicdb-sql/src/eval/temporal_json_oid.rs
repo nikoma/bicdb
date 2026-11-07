@@ -1541,6 +1541,12 @@ pub(crate) fn is_valid_numeric_text(value: &str) -> bool {
 
 pub(crate) fn select_expr_column_name(expr: &Expr) -> String {
     match expr {
+        Expr::Identifier(ident)
+            if ident.quote_style.is_none()
+                && ident.value.eq_ignore_ascii_case("current_catalog") =>
+        {
+            "current_catalog".to_string()
+        }
         Expr::Identifier(ident) => ident.value.clone(),
         Expr::CompoundFieldAccess { access_chain, .. } => access_chain
             .last()

@@ -5565,7 +5565,7 @@ pub(crate) fn range_bounds(
             high,
         } = term
         {
-            let Ok(term_field) = index_field_from_expr(expr) else {
+            let Ok(term_field) = predicate_index_field_from_expr(expr) else {
                 continue;
             };
             if !index_field_matches(&term_field, field) {
@@ -5829,14 +5829,14 @@ pub(crate) fn comparison_term(
     ) {
         return Ok(None);
     }
-    if let Ok(field) = index_field_from_expr(left) {
+    if let Ok(field) = predicate_index_field_from_expr(left) {
         return Ok(Some((
             field,
             op.clone(),
             index_value_from_sql(eval_constant_expr(right)?)?,
         )));
     }
-    if let Ok(field) = index_field_from_expr(right) {
+    if let Ok(field) = predicate_index_field_from_expr(right) {
         return Ok(Some((
             field,
             reverse_comparison(op),
@@ -5977,10 +5977,37 @@ pub(crate) fn first_order_field(query: &Query) -> Result<Option<(IndexField, boo
     if VectorOrder::from_expr(&order.expr)?.is_some() {
         return Ok(None);
     }
-    let Ok(field) = index_field_from_expr(&order.expr) else {
+    let Ok(field) = predicate_index_field_from_expr(&order.expr) else {
         return Ok(None);
     };
     Ok(Some((field, order.options.asc == Some(false))))
+}
+
+/// `index_field_from_expr` for a WHERE operand or ORDER BY key matched
+/// against an existing index. That parser serves index *definitions* and
+/// erases every CAST and COLLATE, which is not an implication proof for a
+/// predicate: `CAST(name AS VARCHAR(3)) = 'AD_'` matches 'AD_Table', and
+/// `CAST(amount AS NUMERIC(5,0)) = 2` matches 1.50, yet a probe of the uncast
+/// key finds neither; a COLLATE can change equality and order. This
+/// schema-free matcher cannot tell a lossless cast from a lossy one, so it
+/// declines every cast and collation on the indexed side. The schema-aware
+/// lookup matcher (`normalize_table_lookup_field_expr`) still admits the
+/// casts it proves lossless.
+pub(crate) fn predicate_index_field_from_expr(expr: &Expr) -> Result<IndexField> {
+    let mut converted = false;
+    let _ = sqlparser::ast::visit_expressions(expr, |node| {
+        if matches!(node, Expr::Cast { .. } | Expr::Collate { .. }) {
+            converted = true;
+            return ControlFlow::Break(());
+        }
+        ControlFlow::Continue(())
+    });
+    if converted {
+        return Err(SqlError::Unsupported(
+            "a cast or collation of an indexed field is not an index lookup".to_string(),
+        ));
+    }
+    index_field_from_expr(expr)
 }
 
 pub(crate) fn ann_vector_order(query: &Query) -> Result<Option<(VectorOrder, usize)>> {

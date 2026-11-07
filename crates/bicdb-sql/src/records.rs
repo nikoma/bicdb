@@ -842,7 +842,27 @@ pub(crate) fn validate_unique_constraints_for_update(
         if changed_records.is_empty() {
             continue;
         }
-        validate_unique_arbiter_records(db, tx, table, schema, &arbiter, &changed_records, true)?;
+        // Oracle checks unique constraints when the statement ends: a stored
+        // key whose row this statement moves to another key is no conflict
+        // (the new keys are checked against each other).
+        let vacated = if oracle::preview_routine_language_enabled(db)? {
+            changed_records
+                .iter()
+                .map(|record| record.id.clone())
+                .collect()
+        } else {
+            BTreeSet::new()
+        };
+        validate_unique_arbiter_records_vacating(
+            db,
+            tx,
+            table,
+            schema,
+            &arbiter,
+            &changed_records,
+            true,
+            &vacated,
+        )?;
     }
     Ok(())
 }
@@ -1155,6 +1175,34 @@ pub(crate) fn validate_unique_arbiter_records(
     records: &[Record],
     allow_existing_same_id: bool,
 ) -> Result<()> {
+    validate_unique_arbiter_records_vacating(
+        db,
+        tx,
+        table,
+        schema,
+        arbiter,
+        records,
+        allow_existing_same_id,
+        &BTreeSet::new(),
+    )
+}
+
+/// `validate_unique_arbiter_records` where the stored keys of the `vacated`
+/// rows no longer count (they are being rewritten to the keys in `records`).
+#[allow(clippy::too_many_arguments)]
+fn validate_unique_arbiter_records_vacating(
+    db: &BicDb,
+    tx: Option<&Transaction>,
+    table: &str,
+    schema: &TableSchema,
+    arbiter: &UniqueConflictArbiter,
+    records: &[Record],
+    allow_existing_same_id: bool,
+    vacated: &BTreeSet<String>,
+) -> Result<()> {
+    let conflicts = |id: &String, record: &Record| {
+        (!allow_existing_same_id || id != &record.id) && !vacated.contains(id)
+    };
     let mut seen = BTreeMap::<Vec<String>, String>::new();
     for record in records {
         let key_values = unique_key_values(record, schema, &arbiter.key);
@@ -1210,10 +1258,10 @@ pub(crate) fn validate_unique_arbiter_records(
                 continue;
             }
             let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
-            if existing.get(&key).is_some_and(|ids| {
-                ids.iter()
-                    .any(|id| !allow_existing_same_id || id != &record.id)
-            }) {
+            if existing
+                .get(&key)
+                .is_some_and(|ids| ids.iter().any(|id| conflicts(id, record)))
+            {
                 return Err(unique_violation(schema, &arbiter.name));
             }
         }
@@ -1248,18 +1296,15 @@ pub(crate) fn validate_unique_arbiter_records(
             table,
             db.lookup_index_exact(index_name, &index_values)?,
         );
-        if ids
-            .iter()
-            .any(|id| !allow_existing_same_id || id != &record.id)
-        {
+        if ids.iter().any(|id| conflicts(id, record)) {
             return Err(unique_violation(schema, &arbiter.name));
         }
         // Committed index entries cannot see this transaction's earlier writes.
         let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
-        if pending_keys.get(&key).is_some_and(|ids| {
-            ids.iter()
-                .any(|id| !allow_existing_same_id || id != &record.id)
-        }) {
+        if pending_keys
+            .get(&key)
+            .is_some_and(|ids| ids.iter().any(|id| conflicts(id, record)))
+        {
             return Err(unique_violation(schema, &arbiter.name));
         }
     }

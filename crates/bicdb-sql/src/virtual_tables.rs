@@ -5557,6 +5557,28 @@ pub(crate) fn range_bounds(
     let mut upper = None;
     let mut matched = false;
     for term in and_terms(selection) {
+        // `x BETWEEN low AND high` == `x >= low AND x <= high`.
+        if let Expr::Between {
+            expr,
+            negated: false,
+            low,
+            high,
+        } = term
+        {
+            let Ok(term_field) = index_field_from_expr(expr) else {
+                continue;
+            };
+            if !index_field_matches(&term_field, field) {
+                continue;
+            }
+            let (Ok(low), Ok(high)) = (eval_constant_expr(low), eval_constant_expr(high)) else {
+                continue;
+            };
+            lower = Some(index_value_from_sql(low)?);
+            upper = Some(index_value_from_sql(high)?);
+            matched = true;
+            continue;
+        }
         let Some((term_field, op, value)) = comparison_term(term)? else {
             continue;
         };

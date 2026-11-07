@@ -2403,7 +2403,15 @@ pub(crate) fn routine_target_names(targets: &str) -> Result<Vec<String>> {
 
 pub(crate) fn parse_routine_expr(expr: &str) -> Result<Expr> {
     let sql = format!("SELECT {expr}");
-    let statements = parse_statements(&sql)?;
+    let statements = parse_statements(&sql)?
+        .into_iter()
+        .map(|statement| {
+            // Procedural expressions need the same named-argument mapping as
+            // query/DML expressions. Otherwise make_interval(days => n) loses
+            // its argument in scalar dispatch and silently becomes zero.
+            order_by_ordinal::rewrite_dml_call_forms(&statement).unwrap_or(statement)
+        })
+        .collect::<Vec<_>>();
     let [Statement::Query(query)] = statements.as_slice() else {
         return Err(SqlError::InvalidSql(format!(
             "invalid routine expression {expr}"

@@ -53,6 +53,18 @@ use crate::CancellationToken;
 /// Bounds the memory a single record read may allocate.
 const MAX_RECORD_BYTES: usize = 64 * 1024 * 1024;
 
+thread_local! {
+    static LIVE_COUNT_WALKS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Exact visibility-checked row-count walks ([`PagedRecords::count_live`])
+/// started on the calling thread. Each walk reads every live row's heap
+/// chain, so it is O(rows); query planning must never need one. Thread-local
+/// so a test can measure its own statements while other tests run.
+pub fn paged_live_count_walks_on_this_thread() -> u64 {
+    LIVE_COUNT_WALKS.with(|walks| walks.get())
+}
+
 /// Durable record storage over the paged engine.
 #[derive(Debug)]
 pub struct PagedRecords {
@@ -1064,6 +1076,7 @@ impl PagedRecords {
         collection: &str,
         cancellation: &CancellationToken,
     ) -> Result<usize> {
+        LIVE_COUNT_WALKS.with(|walks| walks.set(walks.get() + 1));
         let physical = self.physical_collection(collection);
         let collection: &str = &physical;
         let prefix = collection_prefix(collection);

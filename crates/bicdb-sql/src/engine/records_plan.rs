@@ -742,6 +742,8 @@ impl<'db> SqlEngine<'db> {
         table: &str,
         record_id: &str,
     ) -> Result<bool> {
+        #[cfg(test)]
+        SQL_PRIMARY_KEY_EXISTENCE_PROBES.with(|calls| *calls.borrow_mut() += 1);
         if self.db_ref().get_unchecked(table, record_id)?.is_some() {
             return Ok(true);
         }
@@ -2059,20 +2061,35 @@ impl<'db> SqlEngine<'db> {
         {
             let mut prefix = Vec::new();
             for field in &index.fields {
-                let value = if matches!(field, IndexField::TimestampDay(_)) {
+                let value = if matches!(
+                    field,
+                    IndexField::TimestampDay(_) | IndexField::Upper(_) | IndexField::Lower(_)
+                ) {
                     // The static path needs the same schema-aware expression
-                    // identity as dynamic joins. Do not execute arbitrary
-                    // functions to obtain a planning-time bound.
-                    self.dynamic_equality_field_expr(
-                        selection,
-                        collection,
-                        alias,
-                        schema.as_ref(),
-                        field,
-                    )?
-                    .and_then(|bound| eval_constant_expr(bound).ok())
-                    .map(index_value_from_sql)
-                    .transpose()?
+                    // identity as dynamic joins and the row locator: the
+                    // syntactic `equality_value` erases CAST and COLLATE and
+                    // reads `t.col` as a nested path, so it neither proves a
+                    // `upper(CAST(col AS varchar(3)))` key nor finds
+                    // `upper(t.col)`. Do not execute arbitrary functions to
+                    // obtain a planning-time bound.
+                    match self
+                        .dynamic_equality_field_expr(
+                            selection,
+                            collection,
+                            alias,
+                            schema.as_ref(),
+                            field,
+                        )?
+                        .and_then(|bound| eval_constant_expr(bound).ok())
+                        .filter(|value| case_mapped_probe_value_is_text(Some(field), value))
+                    {
+                        Some(value) => Some(index_value_from_sql(value)?),
+                        None => schema.as_ref().and_then(|schema| {
+                            folded_text_equality_prefix(
+                                self, schema, selection, collection, alias, field,
+                            )
+                        }),
+                    }
                 } else {
                     equality_value(selection, field)?.or_else(|| {
                         schema.as_ref().and_then(|schema| {
@@ -2141,7 +2158,10 @@ impl<'db> SqlEngine<'db> {
             let [field] = index.fields.as_slice() else {
                 continue;
             };
-            let bounds = if matches!(field, IndexField::TimestampDay(_)) {
+            let bounds = if matches!(
+                field,
+                IndexField::TimestampDay(_) | IndexField::Upper(_) | IndexField::Lower(_)
+            ) {
                 let mut lower = None;
                 let mut upper = None;
                 for (operator, expression) in self.dynamic_range_bound_exprs(
@@ -2154,7 +2174,9 @@ impl<'db> SqlEngine<'db> {
                     let Ok(value) = eval_constant_expr(&expression) else {
                         continue;
                     };
-                    if matches!(value, SqlValue::Null) {
+                    if matches!(value, SqlValue::Null)
+                        || !case_mapped_probe_value_is_text(Some(field), &value)
+                    {
                         continue;
                     }
                     let value = index_value_from_sql(value)?;

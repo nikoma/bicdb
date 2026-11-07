@@ -303,16 +303,22 @@ fn typed_composite_key_prefix_lookups_read_only_matching_rows() {
         let mut db = BicDb::open_with_config(root.path(), config).unwrap();
         crate::oracle::ensure_database_profile(&mut db, profile).unwrap();
         let mut session = SqlSession::new(&mut db);
-        // (rows, records fetched by id, whole-table record scans). A
-        // prefix id scan in server-paged storage is a record scan that
-        // decodes every row, so key lookups must report none.
+        // (rows, records fetched by id, whole-table record scans) of one
+        // statement. A prefix id scan in server-paged
+        // storage is a record scan that decodes every row, so key lookups
+        // must report none. Each statement runs twice and the second run is
+        // measured: the first statement after the reopen also loads
+        // once-per-database catalog memos (the schema list behind the
+        // relation-OID memo is one record scan of the schema catalog), which
+        // is not part of a lookup. A per-lookup scan repeats on every run.
         let reads = |session: &mut SqlSession<'_>, sql: &str| {
-            crate::reset_sql_record_storage_get_calls();
             let walks_before = bicdb_core::paged_live_count_walks_on_this_thread();
+            profiled(session, profile, sql);
+            crate::reset_sql_record_storage_get_calls();
             let scans_before = bicdb_core::paged_record_scans_on_this_thread();
             let (rows, _) = profiled(session, profile, sql);
-            let walks = bicdb_core::paged_live_count_walks_on_this_thread() - walks_before;
             let scans = bicdb_core::paged_record_scans_on_this_thread() - scans_before;
+            let walks = bicdb_core::paged_live_count_walks_on_this_thread() - walks_before;
             assert_eq!(walks, 0, "{profile}: {sql} walked a table to count rows");
             (rows, crate::sql_record_storage_get_calls(), scans)
         };
@@ -345,22 +351,13 @@ fn typed_composite_key_prefix_lookups_read_only_matching_rows() {
                 vec![],
             ),
         ] {
-            // Point reads of the statement without its key (`pk IS NULL`
-            // reads no row): catalog and schema reads, not the lookup.
-            let table = if sql.contains("FROM col") { "col" } else { "element_trl" };
-            let baseline_sql = format!("SELECT 1 FROM {table} WHERE ad_element_id IS NULL AND 1 = 0");
-            let gets_before = bicdb_core::paged_record_gets_on_this_thread();
-            reads(&mut session, &baseline_sql);
-            let baseline = bicdb_core::paged_record_gets_on_this_thread() - gets_before;
-            let gets_before = bicdb_core::paged_record_gets_on_this_thread();
+            let probes_before = crate::sql_primary_key_existence_probes();
             let (rows, records, scans) = reads(&mut session, sql);
-            let gets = bicdb_core::paged_record_gets_on_this_thread() - gets_before;
-            // One decoded read for the row it returns; the located id used
-            // to be probed with a second full decode first.
-            assert!(
-                gets <= baseline + 1,
-                "{profile}: {sql} decoded {gets} records (statement baseline {baseline})"
-            );
+            // Both runs of the statement: a canonical typed key is its own
+            // locator. Probing it first decoded the whole record only to
+            // drop it before the fetch decoded it again.
+            let probes = crate::sql_primary_key_existence_probes() - probes_before;
+            assert_eq!(probes, 0, "{profile}: {sql} probed its key with a decode");
             let expected: Vec<Vec<String>> = expected
                 .into_iter()
                 .map(|row: Vec<&str>| row.into_iter().map(str::to_string).collect())

@@ -16163,6 +16163,47 @@ impl Transaction {
         Ok(ids.into_iter().collect())
     }
 
+    /// Key-only locator candidates at this transaction's pinned paged snapshot,
+    /// plus touched and pending keys. This is deliberately a superset: resolve
+    /// each candidate through transaction visibility and authorization before
+    /// returning/counting a row. No paged row payload is deserialized here.
+    pub fn scan_collection_record_key_candidates_with_prefix_unchecked(
+        &self,
+        collection: &str,
+        id_prefix: &str,
+    ) -> Result<Vec<String>> {
+        let db = self.db_ref();
+        db.ensure_collection(collection)?;
+        let state = db.collection_state(collection)?;
+        if !state.paged_lazy {
+            return self.scan_collection_record_ids_with_prefix_unchecked(collection, id_prefix);
+        }
+        let mut ids = BTreeSet::new();
+        if let (Some(snapshot), Some(paged)) = (&self.paged_snapshot, &db.paged_records) {
+            for id in paged.scan_ids(snapshot, collection)? {
+                let id = id?;
+                if id.starts_with(id_prefix) {
+                    ids.insert(id);
+                }
+            }
+        }
+        for shard in state.read_all() {
+            for versions in shard.versions.values() {
+                if let Some(id) = versions.first().map(|version| &version.record.id) {
+                    if id.starts_with(id_prefix) {
+                        ids.insert(id.clone());
+                    }
+                }
+            }
+        }
+        for write in self.pending_writes_for_collection(collection) {
+            if write.record_id.starts_with(id_prefix) {
+                ids.insert(write.record_id.clone());
+            }
+        }
+        Ok(ids.into_iter().collect())
+    }
+
     pub fn pending_record_ids_for_collection(&self, collection: &str) -> Vec<String> {
         let mut ids: Vec<String> = self
             .write_index

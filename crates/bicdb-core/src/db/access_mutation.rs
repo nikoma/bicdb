@@ -461,6 +461,30 @@ impl BicDb {
         self.scan_collection_record_ids_with_prefix_unchecked(collection, id_prefix)
     }
 
+    /// Key-only candidate scan for bounded locator planning. In paged mode it
+    /// never reads/deserializes row payloads. Deleted keys may be included:
+    /// callers must resolve candidates through their authorized visible-row
+    /// path before exposing a result or counting a key towards a row limit.
+    pub fn scan_collection_record_key_candidates_with_prefix_unchecked(
+        &self,
+        collection: &str,
+        id_prefix: &str,
+    ) -> Result<Vec<String>> {
+        if let Some(paged) = &self.paged_records {
+            drop(self.collection_state(collection)?);
+            let snapshot = paged.latest_snapshot();
+            return paged
+                .scan_ids(&snapshot, collection)?
+                .filter_map(|id| match id {
+                    Ok(id) if id.starts_with(id_prefix) => Some(Ok(id)),
+                    Ok(_) => None,
+                    Err(error) => Some(Err(error)),
+                })
+                .collect();
+        }
+        self.scan_collection_record_ids_with_prefix_unchecked(collection, id_prefix)
+    }
+
     /// Prefix id scan with no policy or protection gate, for locator planning
     /// whose ids resolve to rows only through policy-filtered record paths.
     pub fn scan_collection_record_ids_with_prefix_unchecked(

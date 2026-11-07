@@ -279,6 +279,36 @@ impl<'db> SqlSession<'db> {
         })
     }
 
+    // Keep the temporary AST off the recursive table-function execution frame.
+    #[inline(never)]
+    fn execute_comma_set_function_query(
+        &mut self,
+        query: &Query,
+        ctes: BTreeMap<String, CteResult>,
+    ) -> Result<Option<SqlResult>> {
+        let mut normalized = query.clone();
+        let SetExpr::Select(select) = normalized.body.as_mut() else {
+            unreachable!("comma normalization requires SELECT")
+        };
+        let mut sources = std::mem::take(&mut select.from).into_iter();
+        let mut first = sources.next().unwrap();
+        first.joins.extend(sources.map(|source| Join {
+            relation: source.relation,
+            global: false,
+            join_operator: JoinOperator::CrossJoin(JoinConstraint::None),
+        }));
+        select.from = vec![first];
+        // These addresses belong to a temporary query, not stored routine IR.
+        // Keep the already materialized CTEs in this session's call context.
+        let _scope = crate::eval::suspend_expr_type_scope();
+        let previous_ir = self.current_routine_ir.take();
+        let previous_owned = std::mem::replace(&mut self.ir_owned_statement, false);
+        let result = self.try_execute_set_function_query(&normalized, ctes);
+        self.ir_owned_statement = previous_owned;
+        self.current_routine_ir = previous_ir;
+        result
+    }
+
     pub(crate) fn try_execute_set_function_query(
         &mut self,
         query: &Query,
@@ -287,6 +317,14 @@ impl<'db> SqlSession<'db> {
         let SetExpr::Select(select) = query.body.as_ref() else {
             return Ok(None);
         };
+        if select.from.len() > 1
+            && select.from[1..]
+                .iter()
+                .all(|source| source.joins.is_empty())
+            && self.query_has_plpgsql_set_functions(query)?
+        {
+            return self.execute_comma_set_function_query(query, ctes);
+        }
         let [from] = select.from.as_slice() else {
             return Ok(None);
         };

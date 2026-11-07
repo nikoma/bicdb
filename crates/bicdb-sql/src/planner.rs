@@ -3355,8 +3355,20 @@ pub(crate) fn normalize_table_lookup_field_expr(
         Expr::Cast {
             expr: inner,
             data_type,
+            array,
+            format,
             ..
         } => {
+            // `pg_type_from_data_type` drops length, precision and scale
+            // (`VARCHAR(3)`, `NUMERIC(5,2)` and `TIMESTAMP(0)` all map to
+            // their bare type with no modifier), so a type match alone does
+            // not prove the cast keeps every value: `CAST(c AS VARCHAR(3)) =
+            // 'ab_'` matches 'ab_cd', which a probe of the uncast key for
+            // 'ab_' misses. Decline every cast that spells a type modifier or
+            // a format.
+            if *array || format.is_some() || cast_target_has_type_modifier(data_type) {
+                return None;
+            }
             let normalized = normalize_table_lookup_field_expr(inner, table, alias, schema)?;
             let Expr::Identifier(ident) = &normalized else {
                 let schema = schema?;
@@ -3488,6 +3500,15 @@ pub(crate) fn case_mapped_text_column_is_exact(column: &ColumnSchema) -> bool {
             None | Some(PgTypeModifier::Character { .. })
                 | Some(PgTypeModifier::OracleCharacterV1 { fixed: false, .. })
         )
+}
+
+/// Whether a cast target spells a length, precision, scale or other type
+/// modifier (`VARCHAR(3)`, `NUMERIC(10,2)`, `TIMESTAMP(0)`, `VARCHAR2(40)`,
+/// `CHARACTER VARYING(3)[]`). Conservative: any parenthesized part of the
+/// rendered type counts, so a modifier that happens to be lossless only
+/// costs an index probe, never a row.
+fn cast_target_has_type_modifier(data_type: &DataType) -> bool {
+    data_type.to_string().contains('(')
 }
 
 fn lookup_cast_preserves_equality(column_type: &str, user_type: bool, target: &str) -> bool {

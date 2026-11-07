@@ -1,0 +1,109 @@
+{
+  "format": 1,
+  "source_commit": "4a0b7647eb49a8baa500e80dae304bb7f085c337",
+  "backend_sha256": "1a98229c8878338492a7f0f9d3e130b10f672e55c2ea42500f8bb13281dd8a70",
+  "before_control": {
+    "source_commit": "c063f2fb052b15516c6ca316f27122e471d56760",
+    "expected_failures": 2,
+    "returncode": 101,
+    "log_sha256": "ee903476ad39d1a795b35f0a0d5cc3fa92eb67ae481879c6fe7128e21981cb22",
+    "baseline_executable_sha256": "f4ab6a11758f9e0f83d374e913d773c90f48db4963866208a7206590ee2d22ab",
+    "verified_decompressed_bytes_equal": true
+  },
+  "focused_after": {
+    "source_commit": "4a0b7647eb49a8baa500e80dae304bb7f085c337",
+    "counts": {
+      "passed": 7,
+      "failed": 0
+    },
+    "log_sha256": "0287be5951baf414527745e0a982feb897c55c4013c38ff3bbeeb18a7bb2b4b4"
+  },
+  "checks": {
+    "format": {
+      "returncode": 0,
+      "original_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "pgwire-library": {
+      "returncode": 0,
+      "original_log_sha256": "9242ec093314053438d25e94db57786ab010279d06e3af1ef765a642faca6763",
+      "passed": 139,
+      "failed": 0,
+      "ignored": 0,
+      "suites": 1
+    },
+    "build": {
+      "returncode": 0,
+      "original_log_sha256": "90692da3139ac9faf7b5d7d3e7a72562a6afea580fdb242dbe172174e62b027a"
+    },
+    "protocol": {
+      "returncode": 0,
+      "original_log_sha256": "cf83d9bbca01c8a8a600744ae8f876738b12188e0378fe9b692d3053c2476b73",
+      "passed": 183,
+      "failed": 0,
+      "ignored": 0,
+      "suites": 1
+    },
+    "oracle-hr": {
+      "returncode": 0,
+      "original_log_sha256": "275aa39722a3c949decbe21196bffb95ce5aeddf647cbefcb635dc18366b8e0c",
+      "passed": 48,
+      "failed": 0,
+      "ignored": 0,
+      "suites": 1
+    },
+    "native-tools": {
+      "returncode": 0,
+      "original_log_sha256": "b0b05d012b6fb8e9d94907b2eb0964b3c95ffaf54a49e31dc8c418c3239bc79f",
+      "passed": 259,
+      "skipped": 4,
+      "discovered": 263
+    },
+    "jdbc-probe": {
+      "returncode": 0,
+      "original_log_sha256": "39077bdba92c26fde502a9513bfc671e412bb9cc878e698bf8aab71e07377bf7",
+      "passed": 250,
+      "probe_record_sha256": "f8411bc69689b22de1193226475814698a92f1a1fb9802edc1eb98c6ee348b2d",
+      "provider_preparation_tests_passed": 4
+    },
+    "authorization": {
+      "returncode": 0,
+      "original_log_sha256": "710ccd9dd38168d35314b3a37aae68fc7e33cb41e65ec2bd341244e1150669b4",
+      "passed": 44,
+      "failed": 0,
+      "ignored": 0,
+      "suites": 6
+    }
+  },
+  "reused_sql_library": {
+    "source_commit": "3c2c40d639716d9b7d07547f2cadd358e4cf4d0c",
+    "log_sha256": "5da6468a7489d390c4b54f5ade30654c3b501c841732dd4a861a250208aebfaf",
+    "passed": 760,
+    "ignored": 4,
+    "failed": 0,
+    "sql_core_and_dependency_inputs_unchanged": true
+  },
+  "reused_jdbc_units": {
+    "checkpoint": "docs/evidence/jdbc-national-type-identity-2026-11-06/summary.json",
+    "passed": 30,
+    "production_adapter_sources_unchanged": true
+  },
+  "reused_jdbc_probe_classes": {
+    "source_commit": "4861c5d8aefc2edee2aa435a7bd981c0302e7a7a",
+    "adapter_sha256": "2b380ef7ef88b663bb63a913ed704ed59870beb12a75cfaa264bb4c57ab6206a",
+    "live_probe_sources_unchanged": true
+  },
+  "production_class_bytes_equal_staged_sdk": true,
+  "resource_interruption": {
+    "phase": "initial authorization compilation",
+    "test_run_completed": false,
+    "reason": "configured host memory headroom floor",
+    "completed_checks_reused": true,
+    "remaining_checks_resumed_and_completed": true,
+    "authorization_dependency_graph": "selected bicdb-pgwire and bicdb-sql together; unchanged authorization tests executed on production dependency features"
+  },
+  "implementation_regression_batch_completed": true,
+  "application_qualified": false,
+  "production_qualified": false,
+  "release_published": false,
+  "deployment_verified": false
+}

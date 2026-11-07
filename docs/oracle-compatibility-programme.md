@@ -48,6 +48,13 @@ with independent PostgreSQL/Oracle-preview result, NULL, duplicate and rollback
 controls. The full regression batch passes; original application retests and
 production workload qualification remain separate gates.
 
+The [literal session-setting checkpoint](evidence/pgwire-literal-session-settings-2026-11-06/README.md)
+qualifies single literal SET assignments without durable-writer admission, with
+separate PostgreSQL and Oracle-preview queued-writer, transaction-scope and
+read-only-standby controls. Settings still use ordinary SQL session validation
+and authorization. An actively held exclusive database guard still serializes
+access; this does not establish general latency or full application acceptance.
+
 The [safe residual EXISTS checkpoint](evidence/sql-correlated-exists-residuals-2026-11-06/README.md)
 extends candidate eligibility to bounded, non-fallible inner boolean filters.
 Independent PostgreSQL/Oracle-preview native controls preserve results and reduce

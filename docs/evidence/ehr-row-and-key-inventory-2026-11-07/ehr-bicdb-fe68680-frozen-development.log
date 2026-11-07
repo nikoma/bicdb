@@ -1,0 +1,60 @@
+{
+  "source_commit": "fe68680104b8f1bc4bc43b1ca581c0020edaa0db",
+  "source_manifest_sha256": "b79afd8f5f518d893976490e9b90255e12bc73994fe3b7f4a50b6f321f82d29a",
+  "profile": "development unified graph; bicdb-core and bicdb-sql opt-level=0; final debug information stripped",
+  "engine_profiles": {
+    "bicdb_core": {
+      "opt_level": "0",
+      "debuginfo": 0,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": false
+    },
+    "bicdb_sql": {
+      "opt_level": "0",
+      "debuginfo": 0,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": false
+    }
+  },
+  "binary_profiles": {
+    "bicdb": {
+      "opt_level": "0",
+      "debuginfo": 0,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": false
+    },
+    "bic": {
+      "opt_level": "0",
+      "debuginfo": 0,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": false
+    }
+  },
+  "engine_features": {
+    "bicdb_core": [
+      "compression",
+      "default",
+      "embeddings",
+      "lua",
+      "mmap",
+      "osm-import",
+      "tls-replication"
+    ],
+    "bicdb_sql": [
+      "adaptive-procs",
+      "default",
+      "extension-host"
+    ]
+  },
+  "feature_graph": "unified CLI and supervisor build",
+  "production_qualified": false,
+  "created_at": "2026-11-07T07:35:31.797550+00:00",
+  "binaries": {
+    "bicdb": "0ff397c7ada995552e0910630459b417da88fd2783ceed28d3b5429aff7574fc",
+    "bic": "c7e8e694e07b279daf72f248bbc4df87f800511c3539ef02b626a8e97c970ba1"
+  }
+}

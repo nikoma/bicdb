@@ -1,0 +1,25 @@
+monitoring evaluation applied {
+  job_name: 'process_monitoring_enrollment',
+  enrollment_id: '9cdb8cf5-a563-4809-aed6-333dde351b11',
+  evaluation_id: 'de45e0f1-e969-41ea-a543-18ed523ec6e6',
+  trigger_kind: 'activation',
+  refreshed_findings: 0,
+  raised_findings: 0
+}
+monitoring enrollment processed {
+  job_name: 'process_monitoring_enrollment',
+  enrollment_id: '9cdb8cf5-a563-4809-aed6-333dde351b11',
+  created_occurrences: 2,
+  completed_occurrences: 0,
+  transitioned: 0,
+  closed_check_ins: 0,
+  escalated: 0,
+  evaluated: true
+}
+due reminders dispatched {
+  action_name: 'dispatch_due_reminders_for_org',
+  org_id: '4ce749f6-03c1-41f8-8a7b-95aef097b29a',
+  processed_count: 1,
+  trigger: 'monitoring'
+}
+{"report":"/tmp/ehr-monitoring-claim-diagnostic-uGSZtl/report.json","synthetic_only":true,"production_admitted":false,"failed_authored_sql":[],"queue":[{"status":"retrying","attempts":"2","max_attempts":"5","next_run_at":"2026-11-07T05:50:21.367Z","last_transition_at":"2026-11-07T05:49:21.367Z","now":"2026-11-07T07:35:43.414Z"}],"enrollments":[{"status":"active","next_run_at":"2026-11-07T05:48:45.322Z","last_processed_at":null}],"synthetic_job_clock_adjusted":true,"job_claimed":true,"processed":true}

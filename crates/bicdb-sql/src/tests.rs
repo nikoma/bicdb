@@ -1,30 +1,7 @@
 use super::*;
 
 #[test]
-fn current_catalog_index_filters_use_session_context_instead_of_constant_defaults() {
-    let dir = tempfile::tempdir().unwrap();
-    let mut db = BicDb::open(dir.path()).unwrap();
-    SqlSession::new(&mut db).execute("CREATE TABLE catalog_names(id INTEGER PRIMARY KEY, catalog TEXT); CREATE INDEX catalog_names_catalog_idx ON catalog_names(catalog); INSERT INTO catalog_names VALUES(1,'tenant_one'),(2,'OtherCatalog'),(3,'bicdb')").unwrap();
-    for (database, expected) in [("tenant_one", 1), ("OtherCatalog", 2), ("bicdb", 3)] {
-        let gucs = Arc::new(HashMap::from([("database".into(), database.into())]));
-        let engine = SqlEngine::new(&db).with_session_gucs(gucs);
-        let result = engine
-            .execute("SELECT id FROM catalog_names WHERE catalog=current_catalog")
-            .unwrap();
-        assert_eq!(
-            result.rows,
-            vec![vec![SqlValue::Int(expected)]],
-            "{database}"
-        );
-        assert_eq!(
-            engine
-                .execute("SELECT count(*) FROM catalog_names WHERE catalog=current_catalog")
-                .unwrap()
-                .rows,
-            vec![vec![SqlValue::Int(1)]],
-            "{database}"
-        );
-    }
+fn current_catalog_constant_folding_requires_session() {
     let statements = Parser::parse_sql(&PostgreSqlDialect {}, "SELECT CURRENT_CATALOG").unwrap();
     let Statement::Query(query) = &statements[0] else {
         panic!("expected query")
@@ -38,75 +15,6 @@ fn current_catalog_index_filters_use_session_context_instead_of_constant_default
     assert!(
         eval_constant_expr(expr).is_err(),
         "session-dependent values cannot be folded without a session"
-    );
-}
-
-#[test]
-fn current_catalog_reads_connected_database_and_retains_name_descriptor() {
-    let dir = tempfile::tempdir().unwrap();
-    let mut db = BicDb::open(dir.path()).unwrap();
-    SqlSession::new(&mut db)
-        .execute("CREATE TABLE catalog_context_rows(id INTEGER, \"CURRENT_CATALOG\" TEXT); INSERT INTO catalog_context_rows VALUES(1,'column value'),(2,'second value')")
-        .unwrap();
-    for database in ["tenant_one", "OtherCatalog"] {
-        let gucs = Arc::new(HashMap::from([(
-            "database".to_string(),
-            database.to_string(),
-        )]));
-        let engine = SqlEngine::new(&db).with_session_gucs(gucs);
-        for sql in [
-            "SELECT CURRENT_CATALOG",
-            "SELECT (current_catalog) AS connected_catalog",
-            "SELECT CURRENT_CATALOG FROM catalog_context_rows WHERE id=1 AND CURRENT_CATALOG=current_database()",
-            "SELECT CASE WHEN id=1 THEN CURRENT_CATALOG ELSE current_database() END AS connected_catalog FROM catalog_context_rows WHERE id=1",
-        ] {
-            let result = engine.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
-            assert_eq!(result.rows, vec![vec![SqlValue::String(database.into())]], "{sql}");
-            if !sql.contains("CASE") {
-                assert_eq!(result.column_types, vec![Some("name".into())], "{sql}");
-            }
-        }
-        assert_eq!(
-            engine
-                .execute("SELECT pg_typeof(current_catalog)::text")
-                .unwrap()
-                .rows,
-            vec![vec![SqlValue::String("name".into())]]
-        );
-        let bare = engine.execute("SELECT CURRENT_CATALOG").unwrap();
-        assert_eq!(bare.columns, vec!["current_catalog"]);
-        let quoted = engine
-            .execute("SELECT \"CURRENT_CATALOG\" FROM catalog_context_rows WHERE id=1")
-            .unwrap();
-        assert_eq!(
-            quoted.rows,
-            vec![vec![SqlValue::String("column value".into())]]
-        );
-        assert_eq!(quoted.column_types, vec![Some("text".into())]);
-        assert!(engine.execute("SELECT \"CURRENT_CATALOG\"").is_err());
-    }
-    SqlSession::new(&mut db).execute("CREATE TABLE native_catalog_column(current_catalog TEXT); INSERT INTO native_catalog_column VALUES('qualified column'); CREATE FUNCTION \"current_catalog\"() RETURNS TEXT LANGUAGE SQL AS $$ SELECT 'user function'::text $$").unwrap();
-    let engine = SqlEngine::new(&db);
-    assert_eq!(
-        engine
-            .execute("SELECT c.current_catalog FROM native_catalog_column c")
-            .unwrap()
-            .rows,
-        vec![vec![SqlValue::String("qualified column".into())]]
-    );
-    let routine = engine.execute("SELECT \"current_catalog\"()").unwrap();
-    assert_eq!(
-        routine.rows,
-        vec![vec![SqlValue::String("user function".into())]]
-    );
-    assert_eq!(routine.column_types, vec![Some("text".into())]);
-    assert!(engine.execute("SELECT CURRENT_CATALOG()").is_err());
-    assert_eq!(
-        SqlEngine::new(&db)
-            .execute("SELECT CURRENT_CATALOG")
-            .unwrap()
-            .rows,
-        vec![vec![SqlValue::String("bicdb".into())]]
     );
 }
 

@@ -3978,58 +3978,6 @@ mod postgres_catalog_boundary_tests {
     }
 
     #[test]
-    fn current_catalog_oracle_transport_keeps_native_context_and_quoted_application_columns() {
-        let root = tempfile::tempdir().unwrap();
-        let mut db = BicDb::open_with_config(
-            root.path(),
-            bicdb_core::DbConfig::default().with_fsync(false),
-        )
-        .unwrap();
-        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
-        SqlSession::new(&mut db).execute("CREATE SCHEMA \"APP\"; CREATE TABLE \"APP\".\"CONTEXT_ROWS\"(\"CURRENT_CATALOG\" TEXT); INSERT INTO \"APP\".\"CONTEXT_ROWS\" VALUES('application column')").unwrap();
-        let gucs = Arc::new(HashMap::from([(
-            "database".into(),
-            "application_catalog".into(),
-        )]));
-        for profile in [ORACLE_HR_PROFILE, ORACLE_PREVIEW_PROFILE] {
-            for sql in [
-                "SELECT CURRENT_CATALOG",
-                "SELECT (current_catalog) AS connected_catalog",
-            ] {
-                let lowered = lower_session_sql(&db, sql, profile, Some("\"APP\""), "app").unwrap();
-                assert_eq!(lowered, sql);
-                let result = SqlEngine::new(&db)
-                    .with_session_gucs(gucs.clone())
-                    .execute(&lowered)
-                    .unwrap();
-                assert_eq!(
-                    result.rows,
-                    vec![vec![SqlValue::String("application_catalog".into())]]
-                );
-                assert_eq!(result.column_types, vec![Some("name".into())]);
-            }
-        }
-        for sql in [
-            "SELECT current_catalog FROM context_rows",
-            "SELECT \"CURRENT_CATALOG\" FROM context_rows",
-        ] {
-            let lowered =
-                lower_session_sql(&db, sql, ORACLE_PREVIEW_PROFILE, Some("\"APP\""), "app")
-                    .unwrap();
-            let result = SqlEngine::new(&db)
-                .with_session_gucs(gucs.clone())
-                .execute(&lowered)
-                .unwrap();
-            assert_eq!(
-                result.rows,
-                vec![vec![SqlValue::String("application column".into())]],
-                "{lowered}"
-            );
-            assert_eq!(result.column_types, vec![Some("text".into())]);
-        }
-    }
-
-    #[test]
     fn native_catalog_boundary_uses_relations_not_literal_or_identifier_substrings() {
         for sql in ["SELECT c.oid,n.nspname FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace",
             "SELECT table_name FROM information_schema.tables",

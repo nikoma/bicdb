@@ -1,0 +1,7 @@
+{
+  "status": "FAILED_NOT_ADMITTED",
+  "production_admitted": false,
+  "source_commit": "3705f134f6fdc1953470799945876e345baac102",
+  "error_type": "AssertionError",
+  "error": "('idle-after', 101)"
+}

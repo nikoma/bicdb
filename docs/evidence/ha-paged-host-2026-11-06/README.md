@@ -51,7 +51,36 @@ paths stay on the authoritative paged layer. Reinsertions restore term counts
 correctly. The causal control reproduces the deleted match at batch 20; the
 corrected test covers disappearance, prefix lookup, restart and reinsertion.
 
-Qualification is in progress. Retained intermediate failures are not passes.
+The coherent source batch is qualified at `82a1ad0`, including the latest
+literal-session-setting changes from main. Its 1,407 source inputs were checked
+against the manifest before and after the batch. `cargo fmt --all --check` passes.
+The relevant broad checks pass:
+
+- 761 SQL library tests (four existing ignored cases).
+- 452 core library tests (three explicit benchmarks ignored; a nested child
+  probe is included, not counted again).
+- 40 paged/index/transaction integration tests across five targets.
+- 47 application-host tests across seven targets; its one root/UID isolation
+  case is then run explicitly and passes, giving 48 executed checks.
+- 187 protocol and 140 pgwire library tests.
+
+The new regressions also fail semantically under the retained code controls;
+compilation errors are never counted as regression proof. The source mode
+controls fail four/one tests, the fresh-table index control fails one, whole-fold
+and deleted-segment controls each fail one, the old fold worker fails the
+foreground-write test, and the final idle controls fail all three tests before
+the fix and pass all three afterward. The final COPY fixture asserts actual
+work exceeds 1.4 seconds, below its five-second query timeout and above its
+one-second idle limit.
+
+`qualification/v6` deliberately retains an intermediate overall failure caused
+by the unsupported initial COPY trigger. It includes passing mode/fold checks,
+but is not a passing complete batch. `qualification/v7` contains the corrected
+idle proof and the complete passing broad batch. Earlier fresh-table failures
+are retained separately. See `summary.json` for exact counts and hashes.
+
+The source gate does not qualify a frozen executable or the EHR deployment.
+Retained intermediate failures are not passes.
 Source merge, frozen runtime, EHR acceptance and physical HA activation are
 separate gates; DigitalOcean currently refuses the two additional hosts because
 the production account is locked.

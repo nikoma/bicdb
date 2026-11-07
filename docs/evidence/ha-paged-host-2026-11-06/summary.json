@@ -1,0 +1,94 @@
+{
+  "source_commit": "82a1ad0197837f4dd0209b8759c9f32cf55dc646",
+  "source_manifest_sha256": "9b9e4b82422a1ffadf80a8a350a3437108a7d517b7d1c5126348ad7bc65721c5",
+  "production_qualified": false,
+  "physical_ha_deployed": false,
+  "format_check_exit_code": 0,
+  "broad_checks": {
+    "core-index-regressions": {
+      "passed": 40,
+      "failed": 0,
+      "ignored": 0,
+      "suites": 5,
+      "log_sha256": "603d05e7082765a80dd1266e0bd2ad525e8d16eb82793c9d794b495c17580793"
+    },
+    "sql-library": {
+      "passed": 761,
+      "failed": 0,
+      "ignored": 4,
+      "suites": 1,
+      "log_sha256": "96fe55893171e78d96fc58ffec0289d63c443ff4e894e20adf7cb7499fcb7f8c"
+    },
+    "core-library": {
+      "passed": 452,
+      "failed": 0,
+      "ignored": 3,
+      "suites": 1,
+      "log_sha256": "d211ea61d6b7b35d97bf515054adeadeb7114bc07e93fcd2d4d7081e5c95948a"
+    },
+    "app-host": {
+      "passed": 47,
+      "failed": 0,
+      "ignored": 1,
+      "suites": 7,
+      "log_sha256": "67b86960eb61138402b858f6afc9cb9b707497ac87f3d2fcd31fe9ab743f89a9"
+    },
+    "protocol": {
+      "passed": 187,
+      "failed": 0,
+      "ignored": 0,
+      "suites": 1,
+      "log_sha256": "8ecb11621d63f5c7cbdf65a88caabc8986db62bc6d9e508647d5f2619e4f7a0f"
+    },
+    "pgwire-library": {
+      "passed": 140,
+      "failed": 0,
+      "ignored": 0,
+      "suites": 1,
+      "log_sha256": "403d3a97c9e1ac4c5c97b3d87f4aecfa86712c136ebe08ed9ecc885ce51370ae"
+    },
+    "private-runtime-isolation-explicit": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "suites": 1,
+      "log_sha256": "a6d599b73f4f76b439fa0f35f4fa8d2c97d774e71df88b292da295d5d0f7439b"
+    }
+  },
+  "causal_controls": {
+    "persisted_paged_application_mode": {
+      "before_failed": 4,
+      "after_passed": 4
+    },
+    "pgwire_staged_bootstrap": {
+      "before_failed": 1,
+      "after_passed": 1
+    },
+    "mode_picker_without_installing_bootstrap": {
+      "before_failed": 1,
+      "after_passed_in_paged_batch": true
+    },
+    "new_table_transactional_indexes": {
+      "before_failed": 1,
+      "after_passed": 1
+    },
+    "whole_index_fold": {
+      "before_failed": 1,
+      "bounded_after_passed": 1
+    },
+    "deleted_segment_term": {
+      "before_failed": 1,
+      "bounded_after_passed": 1
+    },
+    "foreground_write_during_automatic_fold": {
+      "before_failed": 1,
+      "after_passed": 1
+    },
+    "busy_time_excluded_from_idle": {
+      "before_failed": 3,
+      "after_passed": 3,
+      "long_copy_elapsed_time_asserted": true
+    }
+  },
+  "intermediate_failures_retained": true
+}

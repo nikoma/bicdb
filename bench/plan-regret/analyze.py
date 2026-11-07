@@ -4,17 +4,25 @@
 Input: measurements.jsonl written by `cargo run -p bicdb-bench --bin plan-regret`.
 Output: report.md + summary.json next to the input.
 
+BicDB has two single-table access-path choosers. The row-set executor that
+runs ordinary SELECTs uses a rule-based index locator (most matched index
+columns wins, ties broken by probing, full scan only when no index matches);
+the cost-based `plan_query` drives EXPLAIN and a few streaming paths. The
+harness forces the candidates of the chooser that actually executed.
+
 Policies compared on every query (all scored against the SAME measured
 latencies of the forced candidates):
 
-  heuristic   planner choice without ANALYZE statistics (BicDB today)
-  fitted      per-index fitted selectivity constants (fit on the TRAIN split)
-              plugged into the planner's own no-statistics cost formulas
-  calibrated  fitted constants + per-plan-kind latency coefficients fit on TRAIN
-              (latency ~ a_kind + b_kind * rows_fetched) -- the strongest
-              non-neural baseline a model would have to beat
-  analyze     planner choice after a fresh ANALYZE
-  oracle      fastest measured legal candidate
+  rule            the executed chooser's own choice (BicDB today)
+  heuristic       the cost-based planner's choice without ANALYZE statistics,
+                  mapped onto the executed candidates (what EXPLAIN claims)
+  fitted          per-index fitted selectivity constants (fit on the TRAIN
+                  split) plugged into the planner's no-statistics cost formulas
+  calibrated      fitted constants + per-plan-kind latency coefficients fit on
+                  TRAIN (latency ~ a_kind + b_kind * rows_fetched) -- the
+                  strongest non-neural baseline a model would have to beat
+  analyze         the cost-based planner's choice after a fresh ANALYZE
+  oracle          fastest measured legal candidate
 
 Fitted/calibrated policies are only scored on the TEST split; every report
 table that compares them uses the test split for all policies.
@@ -79,7 +87,7 @@ def fit_selectivities(train):
         total = record["rows"]
         for m in record["measurements"]:
             sig = m["signature"]
-            if sig["kind"] in ("IndexLookup", "IndexRange") and m["rows_fetched"] is not None:
+            if executed_kind(label(sig)) in ("IndexLookup", "IndexRange") and m["rows_fetched"] is not None:
                 samples[(record["dataset"], label(sig))].append(max(m["rows_fetched"], 1) / total)
     return {key: geo_mean(values) for key, values in samples.items()}
 
@@ -92,7 +100,7 @@ def fit_latency(train, condition):
             if m["rows_fetched"] is None or not m["semantics_ok"]:
                 continue
             ms = m[f"{condition}_ms"]
-            points[(record["dataset"], m["signature"]["kind"])].append((m["rows_fetched"], ms))
+            points[(record["dataset"], executed_kind(label(m["signature"])))].append((m["rows_fetched"], ms))
     models = {}
     for key, pts in points.items():
         xs = [x for x, _ in pts]
@@ -110,39 +118,69 @@ def fit_latency(train, condition):
 
 def fitted_rows(record, sig, selectivities, nostats_rows):
     key = (record["dataset"], label(sig))
-    if sig["kind"] == "FullScan":
+    if executed_kind(label(sig)) == "FullScan":
         return record["rows"]
     if key in selectivities:
         return max(1, round(selectivities[key] * record["rows"]))
     return nostats_rows
 
 
+def map_planner_label(record, sig):
+    """Map a planner signature onto the executed chooser's candidate label."""
+    if record["executed_chooser"] == "planner":
+        return label(sig)
+    kind, index, prefix = sig["kind"], sig["index"], sig["prefix_len"]
+    if kind == "FullScan":
+        return "FullScan(/0)"
+    if kind == "IndexLookup":
+        return f"IndexLookup({index}/{prefix})"
+    if kind == "IndexRange":
+        return f"IndexRange({index}/1)"
+    return None
+
+
+def planner_rows_estimate(record, source, executed_label):
+    """The planner's row estimate for the candidate that maps to `executed_label`."""
+    decision = record.get(source)
+    if not decision:
+        return None
+    for cand in decision["candidates"]:
+        if map_planner_label(record, cand["signature"]) == executed_label:
+            return cand["estimated_rows"]
+    return None
+
+
+def executed_kind(lbl):
+    return lbl.split("(")[0]
+
+
 def choose(record, policy, selectivities=None, latency_models=None):
     measured = {label(m["signature"]): m for m in record["measurements"]}
-    if policy == "heuristic":
-        return label(record["nostats"]["chosen"])
-    if policy == "analyze":
-        return label(record["stats"]["chosen"])
-    if policy == "oracle":
-        raise ValueError("oracle is condition-specific")
+    if policy == "rule":
+        return label(record["executed"]["chosen"])
+    if policy in ("heuristic", "analyze"):
+        decision = record.get("nostats" if policy == "heuristic" else "stats")
+        if not decision:
+            return label(record["executed"]["chosen"])
+        return map_planner_label(record, decision["chosen"])
     best, best_cost = None, math.inf
-    for cand in record["nostats"]["candidates"]:
-        sig = cand["signature"]
-        if label(sig) not in measured:
-            continue
-        rows = fitted_rows(record, sig, selectivities, cand["estimated_rows"])
+    for lbl, m in measured.items():
+        kind = executed_kind(lbl)
+        sig = m["signature"]
+        planner_est = planner_rows_estimate(record, "nostats", lbl)
+        default_rows = planner_est if planner_est is not None else record["rows"]
+        rows = fitted_rows(record, sig, selectivities, default_rows)
         if policy == "fitted":
-            cost = nostats_cost(sig["kind"], rows, record["rows"], cand["estimated_cost"])
+            cost = nostats_cost(kind, rows, record["rows"], 1.0 + rows * 0.10)
         else:  # calibrated
-            a, b = latency_models.get((record["dataset"], sig["kind"]), (None, None))
+            a, b = latency_models.get((record["dataset"], kind), (None, None))
             if a is None:
-                cost = nostats_cost(sig["kind"], rows, record["rows"], cand["estimated_cost"])
-                cost *= 1e6  # unknown kind: never preferred over a calibrated one
+                cost = math.inf
             else:
                 cost = a + b * rows
         if cost < best_cost:
-            best, best_cost = label(sig), cost
-    return best or label(record["nostats"]["chosen"])
+            best, best_cost = lbl, cost
+    return best or label(record["executed"]["chosen"])
 
 
 def latency(record, chosen, condition):
@@ -193,22 +231,34 @@ def policy_metrics(records, condition, chooser):
 
 
 def cardinality_errors(records, selectivities):
-    """q-error of per-candidate row estimates vs rows actually fetched, plus
-    the full-table output-cardinality estimate vs the true result size."""
+    """q-error of the cost-based planner's per-candidate row estimates (and of
+    fitted constants) against the rows the corresponding executed access path
+    actually fetched, plus the planner's output-cardinality estimate (its
+    full-scan row estimate) against the true result size."""
     out = defaultdict(list)
     for record in records:
-        measured = {label(m["signature"]): m for m in record["measurements"]}
-        for source in ("nostats", "stats"):
-            for cand in record[source]["candidates"]:
-                sig = cand["signature"]
-                m = measured.get(label(sig))
-                if sig["kind"] in ("IndexLookup", "IndexRange") and m and m["rows_fetched"] is not None:
-                    out[f"{source}:index_access"].append(q_error(cand["estimated_rows"], m["rows_fetched"]))
-                    if source == "nostats" and selectivities is not None:
-                        est = fitted_rows(record, sig, selectivities, cand["estimated_rows"])
-                        out["fitted:index_access"].append(q_error(est, m["rows_fetched"]))
-                if sig["kind"] == "FullScan" and record["template"] != "status_order_limit":
-                    out[f"{source}:query_output"].append(q_error(cand["estimated_rows"], record["result_rows"]))
+        for m in record["measurements"]:
+            lbl = label(m["signature"])
+            if executed_kind(lbl) not in ("IndexLookup", "IndexRange") or m["rows_fetched"] is None:
+                continue
+            for source in ("nostats", "stats"):
+                est = planner_rows_estimate(record, source, lbl)
+                if est is not None:
+                    out[f"planner_{source}:index_access"].append(q_error(est, m["rows_fetched"]))
+            if selectivities is not None:
+                planner_est = planner_rows_estimate(record, "nostats", lbl)
+                est = fitted_rows(record, m["signature"], selectivities,
+                                  planner_est if planner_est is not None else record["rows"])
+                out["fitted:index_access"].append(q_error(est, m["rows_fetched"]))
+        if record["template"] != "status_order_limit":
+            for source in ("nostats", "stats"):
+                decision = record.get(source)
+                if not decision:
+                    continue
+                for cand in decision["candidates"]:
+                    if cand["signature"]["kind"] == "FullScan":
+                        out[f"planner_{source}:query_output"].append(
+                            q_error(cand["estimated_rows"], record["result_rows"]))
     return {
         key: {
             "n": len(v),
@@ -261,7 +311,7 @@ def main():
     ]
     natural_mismatch = [
         (r["dataset"], r["query_id"]) for r in records
-        if not (r["natural_result_matches"] and r["stats_natural_result_matches"])
+        if not (r["natural_result_matches"] and r["stats_natural_result_matches"] and r["reference_forced"])
     ]
 
     rng = random.Random(7)
@@ -295,6 +345,7 @@ def main():
     for condition in CONDITIONS:
         models = fit_latency(train, condition)
         choosers = {
+            "rule": lambda r: choose(r, "rule"),
             "heuristic": lambda r: choose(r, "heuristic"),
             "fitted": lambda r: choose(r, "fitted", selectivities),
             "calibrated": lambda r, m=models: choose(r, "calibrated", selectivities, m),
@@ -306,7 +357,7 @@ def main():
         }
         summary["policies"][condition + "_all_queries"] = {
             name: policy_metrics(records, condition, choosers[name])
-            for name in ("heuristic", "analyze", "oracle")
+            for name in ("rule", "heuristic", "analyze", "oracle")
         }
         for ds, rs in sorted(by_dataset.items()):
             ds_test = [r for r in test if r["dataset"] == ds]
@@ -318,11 +369,26 @@ def main():
             templates[r["template"]].append(r)
         summary["per_template_heuristic_regret"][condition] = {
             t: {
+                "rule": policy_metrics(rs, condition, choosers["rule"]),
                 "heuristic": policy_metrics(rs, condition, choosers["heuristic"]),
                 "analyze": policy_metrics(rs, condition, choosers["analyze"]),
             }
             for t, rs in sorted(templates.items())
         }
+    summary["executed_chooser_counts"] = dict(
+        sorted(defaultdict(int, {}).items()))
+    counts = defaultdict(int)
+    for r in records:
+        counts[r["executed_chooser"]] += 1
+    summary["executed_chooser_counts"] = dict(counts)
+    rule_changed = sum(label(r["executed"]["chosen"]) != label(r["executed_after_analyze"]["chosen"]) for r in records)
+    summary["rule_choice_changed_by_analyze"] = rule_changed
+    unmapped = defaultdict(int)
+    for r in records:
+        for source in ("nostats", "stats"):
+            if r.get(source) and map_planner_label(r, r[source]["chosen"]) not in {label(m["signature"]) for m in r["measurements"]}:
+                unmapped[source] += 1
+    summary["planner_choice_not_executable"] = dict(unmapped)
     plan_ms = [r["plan_only_ms"] for r in records]
     stats_plan_ms = [r["stats_plan_only_ms"] for r in records]
     oracle_ms = [oracle(r, "warm")[1] for r in records]
@@ -340,6 +406,9 @@ def main():
 
     lines = [f"# Plan-regret Step 0 report\n", f"Source: `{path}` — {len(records)} queries "
              f"({len(train)} train / {len(test)} test).\n"]
+    lines.append(f"Executed chooser: {summary['executed_chooser_counts']}; rule choice changed by ANALYZE: "
+                 f"{summary['rule_choice_changed_by_analyze']}; planner choices with no executable counterpart: "
+                 f"{summary['planner_choice_not_executable']}.\n")
     lines.append(f"Semantic mismatches (forced plan ≠ full-scan result): **{len(bad_semantics)}**; "
                  f"candidates that could not be forced: **{len(unforced)}**; "
                  f"natural-plan mismatches: **{len(natural_mismatch)}**.\n")
@@ -354,20 +423,20 @@ def main():
                 f"{fmt(m['max_query_regret'])}× | {m['over_2x']} | {m['catastrophic_over_10x']} |"
             )
     lines.append("\n## Per dataset — warm, test split (workload regret % / >10× count)\n")
-    lines.append("| dataset | heuristic | fitted | calibrated | analyze |")
-    lines.append("|---|---:|---:|---:|---:|")
+    lines.append("| dataset | rule | heuristic | fitted | calibrated | analyze |")
+    lines.append("|---|---:|---:|---:|---:|---:|")
     for ds, conds in summary["per_dataset"].items():
         m = conds["warm"]
         cells = [f"{fmt(m[p]['workload_regret_pct'], 1)}% / {m[p]['catastrophic_over_10x']}"
-                 for p in ("heuristic", "fitted", "calibrated", "analyze")]
+                 for p in ("rule", "heuristic", "fitted", "calibrated", "analyze")]
         lines.append(f"| {ds} | " + " | ".join(cells) + " |")
     lines.append("\n## Per template — warm, all queries (workload regret %, >10×)\n")
-    lines.append("| template | n | heuristic | analyze |")
-    lines.append("|---|---:|---:|---:|")
+    lines.append("| template | n | rule | heuristic | analyze |")
+    lines.append("|---|---:|---:|---:|---:|")
     for t, m in summary["per_template_heuristic_regret"]["warm"].items():
-        h, a = m["heuristic"], m["analyze"]
-        lines.append(f"| {t} | {h['queries']} | {fmt(h['workload_regret_pct'], 1)}% ({h['catastrophic_over_10x']}) | "
-                     f"{fmt(a['workload_regret_pct'], 1)}% ({a['catastrophic_over_10x']}) |")
+        cells = [f"{fmt(m[p]['workload_regret_pct'], 1)}% ({m[p]['catastrophic_over_10x']})"
+                 for p in ("rule", "heuristic", "analyze")]
+        lines.append(f"| {t} | {m['rule']['queries']} | " + " | ".join(cells) + " |")
     lines.append("\n## Cardinality estimation q-error (test split)\n")
     lines.append("| estimator:target | n | median | p90 | p95 | max | share >10× |")
     lines.append("|---|---:|---:|---:|---:|---:|---:|")

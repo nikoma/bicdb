@@ -20,7 +20,7 @@ fn ids(session: &mut SqlSession<'_>, sql: &str) -> Vec<i64> {
     ids
 }
 
-fn integer_columns_compare_exactly(reopen: bool) {
+fn integer_columns_compare_exactly(reopen: bool, indexed: bool) {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();
     SqlSession::new(&mut db)
@@ -29,13 +29,22 @@ fn integer_columns_compare_exactly(reopen: bool) {
              INSERT INTO m VALUES (1, 2, 2, 2), (2, 3, 3, 3), (3, NULL, NULL, NULL), (4, -3, -3, -3);",
         )
         .unwrap();
+    if indexed {
+        SqlSession::new(&mut db)
+            .execute(
+                "CREATE INDEX m_i ON m (i); CREATE INDEX m_s ON m (s); CREATE INDEX m_b ON m (b);",
+            )
+            .unwrap();
+    }
     if reopen {
         drop(db);
         db = BicDb::open(root.path()).unwrap();
     }
     let mut session = SqlSession::new(&mut db);
     for column in ["i", "s", "b"] {
-        let cases: [(&str, &[i64]); 12] = [
+        let cases: [(&str, &[i64]); 14] = [
+            ("{c} > 2.6", &[2]),
+            ("{c} < 2.4", &[1, 4]),
             ("{c} = 2.5", &[]),
             ("{c} <> 2.5", &[1, 2, 4]),
             ("{c} > 2.5", &[2]),
@@ -63,10 +72,15 @@ fn integer_columns_compare_exactly(reopen: bool) {
 
 #[test]
 fn integer_columns_compare_exactly_with_fractional_literals() {
-    integer_columns_compare_exactly(false);
+    integer_columns_compare_exactly(false, false);
+}
+
+#[test]
+fn indexed_integer_columns_compare_exactly_with_fractional_literals() {
+    integer_columns_compare_exactly(false, true);
 }
 
 #[test]
 fn integer_columns_compare_exactly_with_fractional_literals_after_reopen() {
-    integer_columns_compare_exactly(true);
+    integer_columns_compare_exactly(true, false);
 }

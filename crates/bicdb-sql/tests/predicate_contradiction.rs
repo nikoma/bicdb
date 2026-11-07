@@ -28,7 +28,11 @@ const SETUP: &str = "
         (7, 30, 30, 30, 30, 30.00, 30.0, 'f');
 ";
 
-fn rows(session: &mut SqlSession<'_>, sql: &str, detect: bool) -> (Vec<Vec<String>>, Vec<DecisionTrace>) {
+fn rows(
+    session: &mut SqlSession<'_>,
+    sql: &str,
+    detect: bool,
+) -> (Vec<Vec<String>>, Vec<DecisionTrace>) {
     let options = DiagnosticsOptions {
         disable_contradiction_detection: !detect,
         ..DiagnosticsOptions::default()
@@ -58,12 +62,35 @@ fn check(session: &mut SqlSession<'_>, predicate: &str) -> bool {
     assert_eq!(optimized, baseline, "result changed for: {predicate}");
     let detected = detected(&decisions);
     if detected {
-        assert!(optimized.is_empty(), "contradiction returned rows: {predicate}");
+        assert!(
+            optimized.is_empty(),
+            "contradiction returned rows: {predicate}"
+        );
         let fetched = decisions
             .iter()
             .filter_map(|decision| decision.rows_fetched)
             .sum::<usize>();
         assert_eq!(fetched, 0, "contradiction still fetched rows: {predicate}");
+        // The executed chooser itself must have answered with the proof (a
+        // declined locator would mean a full scan).
+        let locator = decisions
+            .iter()
+            .filter(|decision| decision.chooser == "locator")
+            .collect::<Vec<_>>();
+        if locator.is_empty() {
+            // Planner-executed path: the empty plan must have run.
+            assert!(
+                decisions
+                    .iter()
+                    .any(|decision| decision.contradiction && decision.rows_fetched == Some(0)),
+                "executed path did not use the proof for {predicate}: {decisions:?}"
+            );
+        } else {
+            assert!(
+                locator.iter().all(|decision| decision.contradiction),
+                "executed path did not use the proof for {predicate}: {decisions:?}"
+            );
+        }
     }
     detected
 }
@@ -145,7 +172,10 @@ fn satisfiable_or_unprovable_predicates_are_left_alone() {
         "i > abs(-60) AND i < 30",
         "i > CAST(60 AS int4) AND i < 30",
     ] {
-        assert!(!check(&mut session, predicate), "unexpectedly detected: {predicate}");
+        assert!(
+            !check(&mut session, predicate),
+            "unexpectedly detected: {predicate}"
+        );
     }
 }
 
@@ -154,10 +184,18 @@ fn contradiction_semantics_hold_for_aggregates_and_dml() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();
     let mut session = session_with_data(&mut db);
-    let (count, decisions) = rows(&mut session, "SELECT count(*) FROM c WHERE i > 60 AND i < 30", true);
+    let (count, decisions) = rows(
+        &mut session,
+        "SELECT count(*) FROM c WHERE i > 60 AND i < 30",
+        true,
+    );
     assert_eq!(count, vec![vec!["0".to_string()]]);
     assert!(detected(&decisions));
-    let (sum, _) = rows(&mut session, "SELECT sum(i) FROM c WHERE i > 60 AND i < 30", true);
+    let (sum, _) = rows(
+        &mut session,
+        "SELECT sum(i) FROM c WHERE i > 60 AND i < 30",
+        true,
+    );
     assert_eq!(sum, vec![vec!["".to_string()]]);
     session
         .execute("UPDATE c SET t = 'changed' WHERE i > 60 AND i < 30")
@@ -171,38 +209,62 @@ fn contradiction_semantics_hold_for_aggregates_and_dml() {
 }
 
 #[test]
-fn bound_parameters_never_change_results() {
-    // Host-bound `$n` parameters run through the bound-expression path, which
-    // does not consult the single-table planner, so detection must neither
-    // fire nor alter results there; literal-bound predicates are covered above.
+fn bound_parameters_participate_only_when_bound_to_supported_values() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();
     {
         let mut session = SqlSession::new(&mut db);
         session.execute(SETUP).unwrap();
     }
-    let cases: [(&str, Vec<SqlValue>); 5] = [
-        ("i > $1 AND i < $2", vec![SqlValue::Int(60), SqlValue::Int(30)]),
-        ("i > $1 AND i < $2", vec![SqlValue::Int(29), SqlValue::Int(61)]),
-        ("i = $1", vec![SqlValue::Null]),
-        ("f > $1 AND f < $2", vec![SqlValue::Float(1.5), SqlValue::Float(1.0)]),
-        ("i > $1 AND i < $2", vec![SqlValue::Float(60.0), SqlValue::Int(30)]),
+    let cases: [(&str, Vec<SqlValue>, bool); 6] = [
+        (
+            "i > $1 AND i < $2",
+            vec![SqlValue::Int(60), SqlValue::Int(30)],
+            true,
+        ),
+        (
+            "i > $1 AND i < $2",
+            vec![SqlValue::Int(29), SqlValue::Int(61)],
+            false,
+        ),
+        ("i = $1", vec![SqlValue::Null], true),
+        (
+            "f > $1 AND f < $2",
+            vec![SqlValue::Float(1.5), SqlValue::Float(1.0)],
+            true,
+        ),
+        // A double parameter on an integer column is left to the evaluator.
+        (
+            "i > $1 AND i < $2",
+            vec![SqlValue::Float(60.0), SqlValue::Int(30)],
+            false,
+        ),
+        // Text parameters are never reasoned about.
+        (
+            "i > $1 AND i < $2",
+            vec![SqlValue::String("60".into()), SqlValue::Int(30)],
+            false,
+        ),
     ];
-    for (predicate, parameters) in cases {
+    for (predicate, parameters, expect_detected) in cases {
         let sql = format!("SELECT id FROM c WHERE {predicate}");
         let mut run = |detect: bool| {
-            let mut session = SqlSession::new(&mut db).with_positional_parameters(parameters.clone());
+            let mut session =
+                SqlSession::new(&mut db).with_positional_parameters(parameters.clone());
             rows(&mut session, &sql, detect)
         };
         let (baseline, _) = run(false);
         let (optimized, decisions) = run(true);
-        assert_eq!(optimized, baseline, "result changed for: {predicate} {parameters:?}");
-        assert!(!detected(&decisions), "{predicate} {parameters:?}: {decisions:?}");
+        assert_eq!(
+            optimized, baseline,
+            "result changed for: {predicate} {parameters:?}"
+        );
+        assert_eq!(
+            detected(&decisions),
+            expect_detected,
+            "detection mismatch for: {predicate} {parameters:?}; decisions: {decisions:?}"
+        );
     }
-    // The literal-bound equivalents are detected.
-    let mut session = SqlSession::new(&mut db);
-    assert!(check(&mut session, "i > 60 AND i < 30"));
-    assert!(!check(&mut session, "i > 29 AND i < 61"));
 }
 
 #[test]
@@ -213,9 +275,14 @@ fn diagnostics_are_inert_without_a_scope_and_record_no_values() {
     // Without a scope nothing is recorded and plans are unchanged.
     session.execute("SELECT id FROM c WHERE i = 5").unwrap();
     let (_, decisions) = with_plan_diagnostics(DiagnosticsOptions::default(), || {
-        session.execute("SELECT id FROM c WHERE i = 424242").unwrap()
+        session
+            .execute("SELECT id FROM c WHERE i = 424242")
+            .unwrap()
     });
     let rendered = format!("{decisions:?}");
     assert!(!decisions.is_empty());
-    assert!(!rendered.contains("424242"), "trace leaked a literal: {rendered}");
+    assert!(
+        !rendered.contains("424242"),
+        "trace leaked a literal: {rendered}"
+    );
 }

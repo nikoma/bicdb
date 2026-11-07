@@ -560,8 +560,7 @@ fn unsatisfiable_in<T: Ord + Clone>(
                 }
             }
             Atom::InSet(members) => {
-                let Some(members) = members.iter().map(&convert).collect::<Option<Vec<T>>>()
-                else {
+                let Some(members) = members.iter().map(&convert).collect::<Option<Vec<T>>>() else {
                     return false;
                 };
                 intersect(&mut allowed, members);
@@ -631,9 +630,12 @@ mod tests {
     use sqlparser::parser::Parser;
 
     fn parse_where(sql: &str) -> Expr {
-        let statement = Parser::parse_sql(&PostgreSqlDialect {}, &format!("SELECT 1 FROM t WHERE {sql}"))
-            .expect("parse")
-            .remove(0);
+        let statement = Parser::parse_sql(
+            &PostgreSqlDialect {},
+            &format!("SELECT 1 FROM t WHERE {sql}"),
+        )
+        .expect("parse")
+        .remove(0);
         let sqlparser::ast::Statement::Query(query) = statement else {
             panic!("not a query")
         };
@@ -784,7 +786,10 @@ mod tests {
             ("$1", ConstValue::Number(NumberConst::from_i64(60))),
             ("$2", ConstValue::Number(NumberConst::from_i64(30))),
             ("$3", ConstValue::Null),
-            ("$4", ConstValue::Number(NumberConst::from_f64(2.0).unwrap())),
+            (
+                "$4",
+                ConstValue::Number(NumberConst::from_f64(2.0).unwrap()),
+            ),
         ];
         assert!(unsat_with("i > $1 AND i < $2", &params));
         assert!(!unsat_with("i > $2 AND i < $1", &params));

@@ -1846,14 +1846,87 @@ impl<'db> SqlEngine<'db> {
                 ));
             }
         }
+        // Opt-in research diagnostics (inert unless an embedding caller
+        // installed a scope): trace the rule-based choice, or force one legal
+        // alternative. Forcing a full scan declines to locate, so the caller
+        // scans and re-applies the whole WHERE, exactly as when no index
+        // matches.
+        let diagnostics = crate::plan_diagnostics::active();
+        let signature_of = |matched: usize, candidate: &SecondaryCandidate<'_>| {
+            crate::plan_diagnostics::PlanSignature {
+                kind: if candidate.range.is_some() {
+                    "IndexRange"
+                } else {
+                    "IndexLookup"
+                },
+                index: Some(candidate.plan.name.clone()),
+                prefix_len: matched,
+            }
+        };
+        let traced_signatures = diagnostics.then(|| {
+            let mut signatures = candidates
+                .iter()
+                .map(|(matched, candidate)| signature_of(*matched, candidate))
+                .collect::<Vec<_>>();
+            if let Some(pk) = pk_matched {
+                signatures.push(crate::plan_diagnostics::PlanSignature {
+                    kind: "PrimaryKeyLocator",
+                    index: None,
+                    prefix_len: pk,
+                });
+            }
+            signatures.push(crate::plan_diagnostics::PlanSignature::full_scan());
+            signatures
+        });
+        if let Some(signatures) = &traced_signatures {
+            if let Some(forced) = crate::plan_diagnostics::forced_signature()
+                .filter(|forced| signatures.contains(forced))
+            {
+                if forced.kind == "FullScan" {
+                    crate::plan_diagnostics::record_locator_decision(
+                        table,
+                        signatures.clone(),
+                        &forced,
+                        true,
+                        None,
+                    );
+                    return Ok(None);
+                }
+                if let Some(position) = candidates
+                    .iter()
+                    .position(|(matched, candidate)| signature_of(*matched, candidate) == forced)
+                {
+                    let (matched, candidate) = candidates.swap_remove(position);
+                    // Re-enter the selection below with only the forced
+                    // candidate and no primary-key competitor.
+                    candidates = vec![(matched, candidate)];
+                    pk_matched = None;
+                    pk_result = None;
+                }
+            }
+        }
         let max_matched = candidates
             .iter()
             .map(|(matched, _)| *matched)
             .chain(pk_matched)
             .max();
         let Some(max_matched) = max_matched else {
+            if let Some(signatures) = traced_signatures {
+                crate::plan_diagnostics::record_locator_decision(
+                    table,
+                    signatures,
+                    &crate::plan_diagnostics::PlanSignature::full_scan(),
+                    false,
+                    None,
+                );
+            }
             return Ok(None);
         };
+        let forced_index = traced_signatures.is_some()
+            && candidates.len() == 1
+            && crate::plan_diagnostics::forced_signature()
+                .is_some_and(|forced| signature_of(candidates[0].0, &candidates[0].1) == forced);
+        let mut best_signature: Option<crate::plan_diagnostics::PlanSignature> = None;
         let mut best: Option<(usize, RecordLocators)> = None;
         if let (Some(schema), Some(pk)) = (schema, pk_matched) {
             if pk >= max_matched {
@@ -1872,12 +1945,22 @@ impl<'db> SqlEngine<'db> {
                         }
                     }
                 }
+                if best.is_some() {
+                    best_signature = Some(crate::plan_diagnostics::PlanSignature {
+                        kind: "PrimaryKeyLocator",
+                        index: None,
+                        prefix_len: pk,
+                    });
+                }
             }
         }
         for (matched_columns, candidate) in candidates {
             if matched_columns < max_matched {
                 continue;
             }
+            let candidate_signature = traced_signatures
+                .as_ref()
+                .map(|_| signature_of(matched_columns, &candidate));
             let rowids = match candidate.range {
                 Some((lower, upper, has_null_bound)) => {
                     if has_null_bound {
@@ -1920,7 +2003,19 @@ impl<'db> SqlEngine<'db> {
             });
             if replace {
                 best = Some((matched_columns, RecordLocators::Rowids(rowids)));
+                best_signature = candidate_signature;
             }
+        }
+        if let Some(signatures) = traced_signatures {
+            let chosen =
+                best_signature.unwrap_or_else(crate::plan_diagnostics::PlanSignature::full_scan);
+            crate::plan_diagnostics::record_locator_decision(
+                table,
+                signatures,
+                &chosen,
+                forced_index,
+                best.as_ref().map(|(_, locators)| locators.len()),
+            );
         }
         Ok(best.map(|(_, locators)| locators))
     }
@@ -2001,6 +2096,30 @@ impl<'db> SqlEngine<'db> {
         Ok(bounds)
     }
 
+    /// Deterministic contradiction proof for the row-set executor's WHERE
+    /// (see `predicate_contradiction`): a proven-unsatisfiable conjunction is
+    /// answered with no rows, exactly like a literal `FALSE` conjunct.
+    fn selection_contradiction_proven(
+        &self,
+        table: &str,
+        alias: &str,
+        schema: Option<&TableSchema>,
+        selection: &Expr,
+    ) -> bool {
+        let Some(schema) = schema else {
+            return false;
+        };
+        if crate::plan_diagnostics::contradiction_detection_disabled()
+            || !self.selection_is_contradictory(alias, schema, selection)
+        {
+            return false;
+        }
+        if crate::plan_diagnostics::active() {
+            crate::plan_diagnostics::record_locator_contradiction(table);
+        }
+        true
+    }
+
     pub(crate) fn indexed_record_locators_for_table_selection(
         &self,
         table: &str,
@@ -2011,6 +2130,9 @@ impl<'db> SqlEngine<'db> {
         let Some(selection) = selection else {
             return Ok(None);
         };
+        if self.selection_contradiction_proven(table, alias, schema, selection) {
+            return Ok(Some(RecordLocators::Rowids(Vec::new())));
+        }
         if let Some(schema) = schema {
             if let Some((index_name, candidate)) =
                 self.trigram_index_candidate(table, alias, schema, selection)?
@@ -2196,7 +2318,9 @@ impl<'db> SqlEngine<'db> {
         };
         #[cfg(test)]
         SQL_INDEXED_SELECTION_PLAN_CALLS.with(|calls| *calls.borrow_mut() += 1);
-        if self.selection_has_null_equality_for_table(table, alias, schema, selection)? {
+        if self.selection_contradiction_proven(table, alias, schema, selection)
+            || self.selection_has_null_equality_for_table(table, alias, schema, selection)?
+        {
             return Ok(Some(Vec::new()));
         }
         // The record-id path serves statements with pending writes on the

@@ -112,7 +112,8 @@ struct Config {
 fn parse_args() -> Result<Config> {
     let mut out = PathBuf::from("plan-regret-out");
     let mut data_root = std::env::temp_dir();
-    let mut datasets = "narrow:100000:16:64,narrow-large:400000:16:64,wide:100000:1200:2400".to_string();
+    let mut datasets =
+        "narrow:100000:16:64,narrow-large:400000:16:64,wide:100000:1200:2400".to_string();
     let mut queries = 300usize;
     let mut reps = 5usize;
     let mut seed = 20261106u64;
@@ -310,7 +311,7 @@ fn generate_queries(dataset: &Dataset, count: usize, rng: &mut Rng) -> Vec<Query
                 7 => Query {
                     template: "status_order_limit",
                     sql: format!(
-                        "{projection} WHERE status = {status} ORDER BY created_day LIMIT 10"
+                        "{projection} WHERE status = {status} ORDER BY created_day, id LIMIT 10"
                     ),
                 },
                 _ => Query {
@@ -338,20 +339,36 @@ fn result_fingerprint(result: &SqlResult) -> (usize, u64) {
     (result.rows.len(), sum)
 }
 
-/// The decision whose access path actually executed (the last one that
-/// fetched rows), falling back to the last decision.
+/// The decision whose access path actually executed: the row-set executor's
+/// rule-based locator when it ran, else the planner decision that fetched
+/// rows, else the last planner decision.
 fn executed_decision(decisions: &[DecisionTrace]) -> Option<&DecisionTrace> {
     decisions
         .iter()
         .rev()
-        .find(|decision| decision.rows_fetched.is_some())
+        .find(|decision| decision.chooser == "locator")
+        .or_else(|| {
+            decisions
+                .iter()
+                .rev()
+                .find(|decision| decision.rows_fetched.is_some())
+        })
         .or_else(|| decisions.last())
+}
+
+/// The last cost-based planner decision (what EXPLAIN reports).
+fn planner_decision(decisions: &[DecisionTrace]) -> Option<&DecisionTrace> {
+    decisions
+        .iter()
+        .rev()
+        .find(|decision| decision.chooser == "planner")
 }
 
 struct Run {
     elapsed_ms: f64,
     fingerprint: (usize, u64),
     decision: Option<DecisionTrace>,
+    planner: Option<DecisionTrace>,
     forced: bool,
 }
 
@@ -365,13 +382,26 @@ fn run_once(session: &mut SqlSession<'_>, sql: &str, force: Option<&PlanSignatur
     let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
     let result = result.with_context(|| format!("executing {sql}"))?;
     let decision = executed_decision(&decisions).cloned();
-    // Forced only if every decision honored the force (multi-pass paths plan
-    // more than once).
-    let forced = force.is_some() && !decisions.is_empty() && decisions.iter().all(|d| d.forced);
+    let planner = planner_decision(&decisions).cloned();
+    // Forced when the executing chooser honored the force: every locator
+    // decision when the locator ran (it may run more than once), otherwise
+    // every planner decision.
+    let executing = if decisions.iter().any(|d| d.chooser == "locator") {
+        "locator"
+    } else {
+        "planner"
+    };
+    let forced = force.is_some()
+        && decisions
+            .iter()
+            .filter(|d| d.chooser == executing)
+            .all(|d| d.forced)
+        && decisions.iter().any(|d| d.chooser == executing);
     Ok(Run {
         elapsed_ms,
         fingerprint: result_fingerprint(&result),
         decision,
+        planner,
         forced,
     })
 }
@@ -440,6 +470,7 @@ fn measure_candidates(
     sql: &str,
     signatures: &[PlanSignature],
     reference: (usize, u64),
+    total_rows: usize,
     reps: usize,
     rng: &mut Rng,
     flusher: &mut CacheFlusher,
@@ -454,6 +485,9 @@ fn measure_candidates(
         if let Some(decision) = &run.decision {
             measurement.rows_fetched = decision.rows_fetched;
             measurement.rows_matched = decision.rows_matched;
+        }
+        if signature.kind == "FullScan" && measurement.rows_fetched.is_none() {
+            measurement.rows_fetched = Some(total_rows);
         }
     }
     let mut conditions = CONDITIONS.to_vec();
@@ -493,9 +527,11 @@ fn signature_json(signature: &PlanSignature) -> Value {
 }
 
 fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Result<()> {
-    let dir = config
-        .data_root
-        .join(format!("plan-regret-{}-{}", dataset.name, std::process::id()));
+    let dir = config.data_root.join(format!(
+        "plan-regret-{}-{}",
+        dataset.name,
+        std::process::id()
+    ));
     if dir.exists() {
         std::fs::remove_dir_all(&dir)?;
     }
@@ -532,19 +568,20 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
             let reference_run =
                 run_once(&mut session, &query.sql, Some(&PlanSignature::full_scan()))?;
             references[qi] = reference_run.fingerprint;
-            let signatures = decision
+            let mut signatures = decision
                 .candidates
                 .iter()
                 .map(|candidate| candidate.signature.clone())
-                .collect::<BTreeSet<_>>()
-                .into_iter()
-                .collect::<Vec<_>>();
+                .collect::<BTreeSet<_>>();
+            signatures.insert(PlanSignature::full_scan());
+            let signatures = signatures.into_iter().collect::<Vec<_>>();
             let plan_ms = time_plan_only(&mut session, &query.sql, 5)?;
             measured[qi] = measure_candidates(
                 &mut session,
                 &query.sql,
                 &signatures,
                 references[qi],
+                dataset.rows,
                 config.reps,
                 &mut rng,
                 &mut flusher,
@@ -558,8 +595,11 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
                 "sql": query.sql,
                 "result_rows": references[qi].0,
                 "natural_result_matches": natural.fingerprint == references[qi],
+                "reference_forced": reference_run.forced,
                 "plan_only_ms": plan_ms,
-                "nostats": decision_json(&decision),
+                "executed_chooser": decision.chooser,
+                "executed": decision_json(&decision),
+                "nostats": natural.planner.as_ref().map(decision_json),
             });
             if done % 25 == 0 {
                 eprintln!("[{}] phase A {}/{}", dataset.name, done, queries.len());
@@ -574,12 +614,18 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
             let query = &queries[qi];
             let natural = run_once(&mut session, &query.sql, None)?;
             let Some(decision) = natural.decision.clone() else {
-                bail!("no planning decision recorded after ANALYZE for {}", query.sql);
+                bail!(
+                    "no planning decision recorded after ANALYZE for {}",
+                    query.sql
+                );
             };
             let missing = decision
                 .candidates
                 .iter()
                 .map(|candidate| candidate.signature.clone())
+                .chain(std::iter::once(
+                    decision.candidates[decision.chosen].signature.clone(),
+                ))
                 .filter(|signature| !measured[qi].contains_key(signature))
                 .collect::<BTreeSet<_>>()
                 .into_iter()
@@ -590,6 +636,7 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
                     &query.sql,
                     &missing,
                     references[qi],
+                    dataset.rows,
                     config.reps,
                     &mut rng,
                     &mut flusher,
@@ -598,7 +645,11 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
             }
             let plan_ms = time_plan_only(&mut session, &query.sql, 5)?;
             let record = records[qi].as_object_mut().expect("record");
-            record.insert("stats".into(), decision_json(&decision));
+            record.insert("executed_after_analyze".into(), decision_json(&decision));
+            record.insert(
+                "stats".into(),
+                json!(natural.planner.as_ref().map(decision_json)),
+            );
             record.insert("stats_plan_only_ms".into(), json!(plan_ms));
             record.insert(
                 "stats_natural_result_matches".into(),
@@ -642,6 +693,9 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
 
 fn decision_json(decision: &DecisionTrace) -> Value {
     json!({
+        "chooser": decision.chooser,
+        "forced": decision.forced,
+        "rows_fetched": decision.rows_fetched,
         "total_rows": decision.total_rows,
         "has_statistics": decision.has_statistics,
         "chosen": signature_json(&decision.candidates[decision.chosen].signature),
@@ -668,7 +722,10 @@ fn main() -> Result<()> {
         })).collect::<Vec<_>>(),
         "git_rev": std::env::var("PLAN_REGRET_GIT_REV").ok(),
     });
-    std::fs::write(config.out.join("meta.json"), serde_json::to_string_pretty(&meta)?)?;
+    std::fs::write(
+        config.out.join("meta.json"),
+        serde_json::to_string_pretty(&meta)?,
+    )?;
     for dataset in &config.datasets {
         run_dataset(&config, dataset, &mut out)?;
     }

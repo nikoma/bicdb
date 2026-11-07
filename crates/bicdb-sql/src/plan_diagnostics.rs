@@ -63,9 +63,14 @@ pub struct CandidateTrace {
     pub estimated_cost: f64,
 }
 
-/// One single-table planning decision.
+/// One single-table access-path decision.
 #[derive(Clone, Debug)]
 pub struct DecisionTrace {
+    /// Which chooser decided: `"planner"` (the cost-based `plan_query`, also
+    /// what EXPLAIN reports) or `"locator"` (the rule-based index locator the
+    /// row-set executor uses: most matched index columns wins, ties broken by
+    /// probing; a full scan only when no index matches).
+    pub chooser: &'static str,
     /// Table identifier (schema metadata, not data).
     pub collection: String,
     /// Planner's total-row estimate for the table.
@@ -169,15 +174,11 @@ pub(crate) fn signature_of(kind: &PlanKind) -> PlanSignature {
             ("IndexLookup", Some(index_name), prefix.len())
         }
         PlanKind::IndexRange { index_name, .. } => ("IndexRange", Some(index_name), 0),
-        PlanKind::OrderedIndexScan { index_name, .. } => {
-            ("OrderedIndexScan", Some(index_name), 0)
-        }
+        PlanKind::OrderedIndexScan { index_name, .. } => ("OrderedIndexScan", Some(index_name), 0),
         PlanKind::IndexPrefixOrderedScan {
             index_name, prefix, ..
         } => ("IndexPrefixOrderedScan", Some(index_name), prefix.len()),
-        PlanKind::SpatialIndexScan { index_name, .. } => {
-            ("SpatialIndexScan", Some(index_name), 0)
-        }
+        PlanKind::SpatialIndexScan { index_name, .. } => ("SpatialIndexScan", Some(index_name), 0),
         PlanKind::GeometricIndexScan { index_name, .. } => {
             ("GeometricIndexScan", Some(index_name), 0)
         }
@@ -227,6 +228,7 @@ pub(crate) fn choose_and_record(
         });
         let chosen = forced_index.unwrap_or(0);
         state.decisions.push(DecisionTrace {
+            chooser: "planner",
             collection: collection.to_string(),
             total_rows,
             has_statistics,
@@ -239,6 +241,86 @@ pub(crate) fn choose_and_record(
         });
         chosen
     })
+}
+
+/// The forced signature, when a diagnostics scope with one is active.
+pub(crate) fn forced_signature() -> Option<PlanSignature> {
+    STATE.with(|state| {
+        state
+            .borrow()
+            .as_ref()
+            .and_then(|state| state.options.force.clone())
+    })
+}
+
+/// Record a rule-based locator decision. `candidates` are value-free
+/// signatures; for this chooser `estimated_rows`/`estimated_cost` are unused
+/// (zero) and `prefix_len` is the number of matched index columns.
+pub(crate) fn record_locator_decision(
+    collection: &str,
+    candidates: Vec<PlanSignature>,
+    chosen: &PlanSignature,
+    forced: bool,
+    rows_fetched: Option<usize>,
+) {
+    STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        let Some(state) = state.as_mut() else {
+            return;
+        };
+        let chosen = candidates
+            .iter()
+            .position(|candidate| candidate == chosen)
+            .unwrap_or(0);
+        state.decisions.push(DecisionTrace {
+            chooser: "locator",
+            collection: collection.to_string(),
+            total_rows: 0,
+            has_statistics: false,
+            candidates: candidates
+                .into_iter()
+                .map(|signature| CandidateTrace {
+                    signature,
+                    estimated_rows: 0,
+                    estimated_cost: 0.0,
+                })
+                .collect(),
+            chosen,
+            forced,
+            contradiction: false,
+            rows_fetched,
+            rows_matched: None,
+        });
+    });
+}
+
+/// Record that the executed chooser answered a provably contradictory WHERE
+/// with an empty access path.
+pub(crate) fn record_locator_contradiction(collection: &str) {
+    record_locator_decision(
+        collection,
+        vec![PlanSignature {
+            kind: "Contradiction",
+            index: None,
+            prefix_len: 0,
+        }],
+        &PlanSignature {
+            kind: "Contradiction",
+            index: None,
+            prefix_len: 0,
+        },
+        false,
+        Some(0),
+    );
+    STATE.with(|state| {
+        if let Some(decision) = state
+            .borrow_mut()
+            .as_mut()
+            .and_then(|state| state.decisions.last_mut())
+        {
+            decision.contradiction = true;
+        }
+    });
 }
 
 /// Attribute rows fetched by an executed access path to the latest decision.

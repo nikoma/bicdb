@@ -1523,15 +1523,14 @@ impl<'db> SqlEngine<'db> {
 
     /// Deterministic contradiction proof for a single-table WHERE clause; see
     /// `predicate_contradiction` for the soundness rules.
-    fn selection_is_contradictory(
+    pub(crate) fn selection_is_contradictory(
         &self,
         alias: &str,
         schema: &TableSchema,
         selection: &Expr,
     ) -> bool {
         use crate::predicate_contradiction::{
-            conjunction_is_unsatisfiable, literal_constant, ColumnRef, ConstValue,
-            NumberConst,
+            conjunction_is_unsatisfiable, literal_constant, ColumnRef, ConstValue, NumberConst,
         };
         let column = |mut expr: &Expr| -> Option<ColumnRef> {
             while let Expr::Nested(inner) = expr {

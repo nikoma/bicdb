@@ -862,6 +862,8 @@ pub fn lower_session_sql(
     let sql = numeric_source.as_deref().unwrap_or(sql);
     let partition_ddl = partitioning::lower_ddl(sql)?;
     let sql = partition_ddl.as_deref().unwrap_or(sql);
+    let drop_options = foreign_keys::drop_cascade_constraints(sql);
+    let sql = drop_options.as_deref().unwrap_or(sql);
     let interval_identifiers = quote_interval_identifiers(sql);
     let sql = interval_identifiers.as_deref().unwrap_or(sql);
     let schema = preview_schema(db, search_path, user)?.unwrap_or_else(default_schema_name);

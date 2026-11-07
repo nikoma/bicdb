@@ -605,6 +605,246 @@ mod tests {
         metadata_protocol_progress_with_queued_writer("oracle-preview-v1");
     }
 
+    #[test]
+    fn literal_session_setting_classifier_excludes_callbacks_and_transactions() {
+        for sql in [
+            "SET \"APPLICATION_NAME\" = 'client'",
+            "SET SESSION application_name TO 'client'",
+            "SET LOCAL app.label = 'local'",
+            "SET search_path TO public, pg_catalog",
+            "SET TIME ZONE 'UTC'",
+            "SET app.number = -1",
+            "SET application_name = DEFAULT",
+        ] {
+            assert!(
+                is_literal_session_setting_sql(sql),
+                "literal setting rejected: {sql}"
+            );
+        }
+        for sql in [
+            "SELECT set_config('app.label','value',false)",
+            "SET ROLE reader",
+            "SET SESSION AUTHORIZATION reader",
+            "SET TRANSACTION READ ONLY",
+            "SET CONSTRAINTS ALL DEFERRED",
+            "SET app.label = user_function()",
+            "SET app.label = CAST('value' AS user_domain)",
+            "SET app.label = (SELECT user_function())",
+            "SET app.number = 1 + 2",
+            "SET app.label = 'value'; SELECT user_function()",
+        ] {
+            assert!(
+                !is_literal_session_setting_sql(sql),
+                "unsafe setting accepted: {sql}"
+            );
+        }
+    }
+
+    fn literal_session_settings_progress_with_queued_writer(profile: &str) {
+        let directory = tempfile::tempdir().unwrap();
+        let server = PgWireServer::open(
+            directory.path(),
+            PgWireConfig {
+                sql_profile: profile.into(),
+                fsync: false,
+                write_timeout: Duration::from_secs(10),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        // No shared write slot is available. Session settings still need no
+        // durable writer and must let an existing reader finish its work.
+        server.shared_write_credit.store(-64, Ordering::Relaxed);
+        server.shared_write_probe.store(1, Ordering::Relaxed);
+        std::thread::scope(|scope| {
+            let (start_tx, start_rx) = std::sync::mpsc::channel();
+            let (done_tx, done_rx) = std::sync::mpsc::channel();
+            let reader = server.db.read();
+            let writer_server = Arc::clone(&server);
+            let writer = scope.spawn(move || drop(writer_server.db.write()));
+            let deadline = Instant::now() + Duration::from_secs(2);
+            let queued = loop {
+                if server.db.try_read().is_none() {
+                    break true;
+                }
+                if Instant::now() >= deadline {
+                    break false;
+                }
+                std::thread::sleep(Duration::from_millis(1));
+            };
+            let worker_server = Arc::clone(&server);
+            let worker = scope.spawn(move || {
+                let mut state = ConnectionState::new(1, "bicdb".into(), None);
+                start_rx.recv().unwrap();
+                for sql in [
+                    "SET application_name = 'concurrent-client'",
+                    "SET app.label = 'session-value'",
+                    "SET TIME ZONE 'UTC'",
+                ] {
+                    execute_server_sql(&worker_server, &mut state, sql).unwrap();
+                }
+                assert!(!state.in_transaction && state.tx.is_none());
+                assert_eq!(
+                    state
+                        .session_state
+                        .session_gucs()
+                        .get("application_name")
+                        .map(String::as_str),
+                    Some("concurrent-client")
+                );
+                assert_eq!(
+                    state
+                        .session_state
+                        .session_gucs()
+                        .get("app.label")
+                        .map(String::as_str),
+                    Some("session-value")
+                );
+                done_tx.send(()).unwrap();
+            });
+            start_tx.send(()).unwrap();
+            let progressed = done_rx.recv_timeout(Duration::from_secs(1));
+            // Always release before assertions so the old path fails without
+            // leaving either thread blocked or holding the database open.
+            drop(reader);
+            writer.join().unwrap();
+            worker.join().unwrap();
+            assert!(queued, "writer queue was not established");
+            assert!(
+                progressed.is_ok(),
+                "{profile}: literal session SET waited behind a database writer"
+            );
+        });
+    }
+
+    #[test]
+    fn postgres_literal_session_settings_progress_with_queued_writer() {
+        literal_session_settings_progress_with_queued_writer("postgres");
+    }
+
+    #[test]
+    fn oracle_literal_session_settings_progress_with_queued_writer() {
+        literal_session_settings_progress_with_queued_writer("oracle-preview-v1");
+    }
+
+    fn literal_session_setting_scopes(profile: &str) {
+        let directory = tempfile::tempdir().unwrap();
+        let server = PgWireServer::open(
+            directory.path(),
+            PgWireConfig {
+                sql_profile: profile.into(),
+                fsync: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let mut state = ConnectionState::new(1, "bicdb".into(), None);
+        execute_server_sql(&server, &mut state, "SET app.label = 'base'").unwrap();
+        execute_server_sql(&server, &mut state, "SET LOCAL app.label = 'outside-local'").unwrap();
+        assert!(!state.in_transaction && state.tx.is_none());
+        assert_eq!(
+            execute_server_sql(&server, &mut state, "SELECT current_setting('app.label')")
+                .unwrap()
+                .rows[0][0]
+                .to_cell(),
+            "base"
+        );
+        execute_server_sql(&server, &mut state, "BEGIN").unwrap();
+        execute_server_sql(&server, &mut state, "SET app.label = 'rolled-back'").unwrap();
+        execute_server_sql(&server, &mut state, "ROLLBACK").unwrap();
+        assert_eq!(
+            execute_server_sql(&server, &mut state, "SELECT current_setting('app.label')")
+                .unwrap()
+                .rows[0][0]
+                .to_cell(),
+            "base"
+        );
+        execute_server_sql(&server, &mut state, "BEGIN").unwrap();
+        execute_server_sql(
+            &server,
+            &mut state,
+            "SET LOCAL app.label = 'transaction-local'",
+        )
+        .unwrap();
+        execute_server_sql(&server, &mut state, "COMMIT").unwrap();
+        assert_eq!(
+            execute_server_sql(&server, &mut state, "SELECT current_setting('app.label')")
+                .unwrap()
+                .rows[0][0]
+                .to_cell(),
+            "base"
+        );
+    }
+
+    #[test]
+    fn postgres_literal_session_setting_scopes_are_preserved() {
+        literal_session_setting_scopes("postgres");
+    }
+
+    #[test]
+    fn oracle_literal_session_setting_scopes_are_preserved() {
+        literal_session_setting_scopes("oracle-preview-v1");
+    }
+
+    fn literal_session_setting_on_standby(profile: &str) {
+        let directory = tempfile::tempdir().unwrap();
+        let primary = directory.path().join("primary");
+        let standby = directory.path().join("standby");
+        let config = PgWireConfig {
+            sql_profile: profile.into(),
+            fsync: false,
+            ..Default::default()
+        };
+        {
+            let server = PgWireServer::open(&primary, config.clone()).unwrap();
+            let mut state = ConnectionState::new(1, "bicdb".into(), None);
+            execute_server_sql(
+                &server,
+                &mut state,
+                "CREATE TABLE setting_rows(id INTEGER PRIMARY KEY)",
+            )
+            .unwrap();
+            server.flush().unwrap();
+        }
+        BicDb::configure_standby_from(&standby, &primary).unwrap();
+        let server = PgWireServer::open(&standby, config).unwrap();
+        assert!(server.db.read().is_read_only_standby());
+        let mut state = ConnectionState::new(1, "bicdb".into(), None);
+        execute_server_sql(
+            &server,
+            &mut state,
+            "SET application_name = 'standby-client'",
+        )
+        .unwrap();
+        assert_eq!(
+            execute_server_sql(
+                &server,
+                &mut state,
+                "SELECT current_setting('application_name')"
+            )
+            .unwrap()
+            .rows[0][0]
+                .to_cell(),
+            "standby-client"
+        );
+        assert!(
+            execute_server_sql(&server, &mut state, "INSERT INTO setting_rows VALUES(1)")
+                .unwrap_err()
+                .to_string()
+                .contains("read-only standby")
+        );
+    }
+
+    #[test]
+    fn postgres_literal_session_setting_can_change_on_standby() {
+        literal_session_setting_on_standby("postgres");
+    }
+
+    #[test]
+    fn oracle_literal_session_setting_can_change_on_standby() {
+        literal_session_setting_on_standby("oracle-preview-v1");
+    }
+
     fn automatic_test_supervisor() -> ClusterSupervisor {
         BalancedDistributionHostService::default()
             .supervisor()

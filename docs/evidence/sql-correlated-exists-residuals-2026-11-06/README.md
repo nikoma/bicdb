@@ -27,8 +27,21 @@ An original client-setup run with the earlier backend completed 384 period-contr
 inserts, then reached a print-format query containing an inner disjunction.
 Repeated 30-second database-writer timeouts made that run operationally invalid;
 it was explicitly interrupted, its database/logs were retained, and no natural
-JUnit pass or failure is claimed. The original application must be retried on
-this implementation. No upstream assertion or application class was changed.
+JUnit pass or failure is claimed.
+
+A subsequent run on this implementation completed all nine corresponding
+print-format queries in 3,984–4,351 ms each, returned 368 rows across those
+queries, and recorded 736 print-item INSERT statement events after completing all
+384 period-control INSERT statement events. No database-writer timeout was observed in that run.
+The [application-query evidence](client-setup-query-progress.json) records exact
+backend, upstream source, original test-bytecode and loaded-driver identities,
+as well as individual completed query-event hashes. Insert-event counts do not
+prove that the application's final transactions committed. The host memory
+guard interrupted the run before the original JUnit result; this is query
+progress evidence, not a passing client-setup test or full application
+qualification. The diagnostic database was retained. No upstream assertion or
+application seed was changed. A fresh application acceptance run remains
+required.
 
 See [the check provenance](summary.json) for source revisions, backend and log
 hashes, exact check counts and the previous-backend control. Full application

@@ -4000,7 +4000,11 @@ fn execute_server_db_sql_for_state_inner(
     // guaranteed progress. DDL / non-transactional statements still error out of
     // the shared attempt and take the exclusive path.
     const MAX_SHARED_COMMIT_ATTEMPTS: u32 = 8;
-    for _attempt in 0..MAX_SHARED_COMMIT_ATTEMPTS {
+    // Only exhausted conflict retries are contention; statements that need
+    // exclusive access (DDL) or a closed gate must not debit the gate.
+    let mut conflicts_exhausted = false;
+    for attempt in 0..MAX_SHARED_COMMIT_ATTEMPTS {
+        conflicts_exhausted = attempt + 1 == MAX_SHARED_COMMIT_ATTEMPTS;
         // Plain SELECTs must never be throttled by the write gate. A SELECT
         // can still invoke a writing PL/pgSQL function, though, so execute it
         // with deferred commit and only enter write admission when the session
@@ -4013,6 +4017,7 @@ fn execute_server_db_sql_for_state_inner(
         } else {
             let Some(slot) = server.try_acquire_shared_write() else {
                 trace_write_escalation("shared-write gate closed", sql);
+                conflicts_exhausted = false;
                 break;
             };
             Some(slot)
@@ -4082,6 +4087,7 @@ fn execute_server_db_sql_for_state_inner(
             if let Err(error) = &result {
                 trace_write_escalation(&error.to_string(), sql);
             }
+            conflicts_exhausted = false;
             break;
         };
         let Some(tx) = pending else {
@@ -4195,10 +4201,9 @@ fn execute_server_db_sql_for_state_inner(
     // Every shared retry was exhausted (or the gate was already closed): this is
     // genuine sustained contention, so debit the gate ONCE to throttle the shared
     // slot count, then fall back to the exclusive path for guaranteed progress.
-    if !read_only_candidate {
+    if !read_only_candidate && conflicts_exhausted {
         server.note_shared_commit(true);
     }
-    trace_write_escalation("exclusive fallback", sql);
 
     // Exclusive fallback.
     ensure_server_writable(server)?;

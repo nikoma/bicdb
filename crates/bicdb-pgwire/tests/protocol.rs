@@ -10602,6 +10602,15 @@ fn pgwire_autocommit_dml_waits_for_row_owner_without_stalling_other_sessions() {
                 "{profile} {sql}"
             );
         }
+        // Statements that need exclusive access are not write contention:
+        // they must not route later DML onto the exclusive path.
+        for index in 0..40 {
+            send_query(
+                &mut owner,
+                &format!("CREATE TABLE ddl_{index} (id INTEGER);"),
+            );
+            assert_eq!(read_query_rows_with_status(&mut owner).1, b'I', "{profile}");
+        }
         send_query(&mut owner, "BEGIN;");
         assert_eq!(read_query_rows_with_status(&mut owner).1, b'T');
         send_query(&mut owner, "UPDATE counters SET v = 1 WHERE id = 1;");

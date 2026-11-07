@@ -82,6 +82,9 @@ public final class OracleAdapterProbe {
                     && connection.isWrapperFor(org.postgresql.PGConnection.class));
             check("metadata_connection_identity", connection.getMetaData().getConnection() == connection);
             check("metadata_unwrap_connection_identity", connection.getMetaData().unwrap(java.sql.DatabaseMetaData.class).getConnection() == connection);
+            check("metadata_upper_case_identifier_folding", connection.getMetaData().storesUpperCaseIdentifiers()
+                    && !connection.getMetaData().storesLowerCaseIdentifiers()
+                    && !connection.getMetaData().storesMixedCaseIdentifiers());
             boolean created = false;
             try {
                 try (Statement statement = connection.createStatement()) {

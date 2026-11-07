@@ -2620,12 +2620,12 @@ pub(crate) fn equi_join_key_exprs<'a>(
                 op: BinaryOperator::Eq,
                 right,
             } => {
-                if predicate_references_only_columns(left, left_columns)
-                    && predicate_references_only_columns(right, right_columns)
+                if join_key_references_only_columns(left, left_columns)
+                    && join_key_references_only_columns(right, right_columns)
                 {
                     Some((left, right))
-                } else if predicate_references_only_columns(left, right_columns)
-                    && predicate_references_only_columns(right, left_columns)
+                } else if join_key_references_only_columns(left, right_columns)
+                    && join_key_references_only_columns(right, left_columns)
                 {
                     Some((right, left))
                 } else {
@@ -2637,6 +2637,22 @@ pub(crate) fn equi_join_key_exprs<'a>(
         }
     }
     find_key(expr, &left_column_set, &right_column_set)
+}
+
+/// Whether a join key reads only `columns`. Beyond the predicate column
+/// references this admits subscripts of qualified array columns, the
+/// `pka.attnum = con.confkey[pos.n]` keys of driver foreign-key metadata,
+/// which otherwise left those joins to a nested loop over every attribute.
+fn join_key_references_only_columns(expr: &Expr, columns: &BTreeSet<String>) -> bool {
+    if !matches!(unwrap_nested_expr(expr), Expr::CompoundFieldAccess { .. }) {
+        return predicate_references_only_columns(expr, columns);
+    }
+    qualified_predicate_references(expr).is_some_and(|references| {
+        !references.is_empty()
+            && references
+                .iter()
+                .all(|reference| qualified_reference_in(reference, columns))
+    })
 }
 
 pub(crate) fn join_constraint_can_eval_with_outer_row(

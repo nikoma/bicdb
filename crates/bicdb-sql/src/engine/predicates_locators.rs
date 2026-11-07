@@ -5254,23 +5254,9 @@ impl<'db> SqlEngine<'db> {
                     JoinConstraint::On(expr)
                         if matches!(unwrap_nested_expr(expr), Expr::BinaryOp { op: BinaryOperator::Eq, .. })
                 );
-            fn integer_column_key(expr: &Expr, set: &RowSet) -> bool {
-                let parts = match unwrap_nested_expr(expr) {
-                    Expr::Identifier(ident) => vec![ident.value.clone()],
-                    Expr::CompoundIdentifier(parts) => {
-                        parts.iter().map(|ident| ident.value.clone()).collect()
-                    }
-                    _ => return false,
-                };
-                set.rows.iter().all(|row| {
-                    matches!(
-                        slot_row_value_from_parts(&set.columns, row, &parts),
-                        SqlValue::Int(_) | SqlValue::Null
-                    )
-                })
-            }
             if simple_equality
-                || (integer_column_key(left_key, &left) && integer_column_key(right_key, &right))
+                || (self.join_key_values_are_integers(left_key, &left)
+                    && self.join_key_values_are_integers(right_key, &right))
             {
                 return self.apply_inner_hash_join(
                     left,
@@ -5295,6 +5281,8 @@ impl<'db> SqlEngine<'db> {
         let mut matched_right = vec![false; right.rows.len()];
         let null_left = null_slot_row_for_columns(&left.columns);
         let null_right = null_slot_row_for_columns(&right.columns);
+        let prepared =
+            self.prepare_join_constraint(&left.columns, &right.columns, effective_constraint);
 
         for (left_idx, left_row) in left.rows.iter().enumerate() {
             if left_idx % 128 == 0 {
@@ -5305,7 +5293,8 @@ impl<'db> SqlEngine<'db> {
                 if right_idx % 1024 == 0 {
                     self.check_cancellation()?;
                 }
-                if self.join_constraint_matches(
+                if self.prepared_join_constraint_matches(
+                    &prepared,
                     left_row,
                     &left.columns,
                     right_row,
@@ -6249,6 +6238,43 @@ impl<'db> SqlEngine<'db> {
         Ok(estimate)
     }
 
+    /// Whether a join key is an integer (or NULL) on every row of its side.
+    /// Integer keys hash exactly, so a hash join over them finds every pair
+    /// the nested loop would; the full constraint is still checked for each
+    /// candidate. A key computed from columns (`con.conkey[pos.n]`) counts
+    /// when its values are integers; a key that fails to evaluate on some row
+    /// is left to the nested loop, which reports that error in its own order.
+    pub(crate) fn join_key_values_are_integers(&self, key: &Expr, set: &RowSet) -> bool {
+        let is_integer = |value: &SqlValue| matches!(value, SqlValue::Int(_) | SqlValue::Null);
+        let parts = match unwrap_nested_expr(key) {
+            Expr::Identifier(ident) => Some(vec![ident.value.clone()]),
+            Expr::CompoundIdentifier(parts) => {
+                Some(parts.iter().map(|ident| ident.value.clone()).collect())
+            }
+            _ => None,
+        };
+        if let Some(parts) = parts {
+            return set
+                .rows
+                .iter()
+                .all(|row| is_integer(&slot_row_value_from_parts(&set.columns, row, &parts)));
+        }
+        let (scope, context) = self.bound_row_context(&set.columns);
+        let bound = scope.bind(key);
+        set.rows.iter().all(|row| {
+            let value = match &bound {
+                Some(bound) => bound.eval(&BoundExprFrame {
+                    user_calls: &[],
+                    db: self.db_ref(),
+                    columns: BoundExprColumns::Values(row),
+                    vars: &context.var_values,
+                }),
+                None => self.eval_slot_row_value(row, &context, key),
+            };
+            value.is_ok_and(|value| is_integer(&value))
+        })
+    }
+
     pub(crate) fn apply_inner_hash_join(
         &self,
         left: RowSet,
@@ -6292,6 +6318,7 @@ impl<'db> SqlEngine<'db> {
 
         let mut rows = Vec::new();
         let mut candidate_pairs = 0_usize;
+        let prepared = self.prepare_join_constraint(&left.columns, &right.columns, constraint);
         let (left_scope, left_context) = self.bound_row_context(&left.columns);
         let left_key_bound = left_scope.bind(left_key);
         for (left_idx, left_row) in left.rows.iter().enumerate() {
@@ -6331,7 +6358,8 @@ impl<'db> SqlEngine<'db> {
                         })
                     );
                 if typed_equality_is_complete
-                    || self.join_constraint_matches(
+                    || self.prepared_join_constraint_matches(
+                        &prepared,
                         left_row,
                         &left.columns,
                         right_row,

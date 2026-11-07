@@ -2296,8 +2296,53 @@ pub(crate) fn pg_extension_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlVa
     Ok(rows)
 }
 
+type PgDependRows = std::sync::Arc<Vec<BTreeMap<String, SqlValue>>>;
+
+thread_local! {
+    // db -> (catalog stamp, pg_depend rows). Building the rows derives every
+    // table's constraint rows (tens of thousands on an ERP schema) and sorts
+    // them by text keys; driver foreign-key metadata joins pg_depend in every
+    // call.
+    static PG_DEPEND_ROWS_MEMO: std::cell::RefCell<rustc_hash::FxHashMap<u64, ((u64, u64, u64, u64, u64, u64, usize), PgDependRows)>> =
+        std::cell::RefCell::new(rustc_hash::FxHashMap::default());
+}
+
+/// `pg_depend` rows, rebuilt only when the catalogs they derive from change:
+/// schemas (tables, constraints, policies), views (relation OIDs), user
+/// types, routines and executable indexes (foreign-key index OIDs).
 pub(crate) fn pg_depend_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     validate_constraint_catalog_oids(db)?;
+    let key = db.instance_id();
+    let stamp = (
+        db.collection_generation(SCHEMA_COLLECTION),
+        db.collection_generation(VIEW_COLLECTION),
+        db.collection_generation(USER_TYPE_COLLECTION),
+        db.collection_generation(USER_TYPE_OID_COLLECTION),
+        db.collection_generation(ROUTINE_COLLECTION),
+        db.index_generation(),
+        db.collection_count(),
+    );
+    let hit = PG_DEPEND_ROWS_MEMO.with(|memo| {
+        memo.borrow()
+            .get(&key)
+            .filter(|(cached, _)| *cached == stamp)
+            .map(|(_, rows)| std::sync::Arc::clone(rows))
+    });
+    if let Some(rows) = hit {
+        return Ok(rows.as_ref().clone());
+    }
+    let rows = std::sync::Arc::new(pg_depend_rows_uncached(db)?);
+    PG_DEPEND_ROWS_MEMO.with(|memo| {
+        let mut memo = memo.borrow_mut();
+        if memo.len() >= 64 {
+            memo.clear();
+        }
+        memo.insert(key, (stamp, std::sync::Arc::clone(&rows)));
+    });
+    Ok(rows.as_ref().clone())
+}
+
+fn pg_depend_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     let mut rows = [
         (PG_PROC_CATALOG_OID, PLPGSQL_CALL_HANDLER_OID),
         (PG_PROC_CATALOG_OID, PLPGSQL_INLINE_HANDLER_OID),
@@ -7570,7 +7615,10 @@ pub(crate) fn catalog_indexes(schemas: &[TableSchema], db: &BicDb) -> Vec<Catalo
                     collations: index.collations.clone(),
                     operator_classes: index.operator_classes.clone(),
                     exclusion: false,
-                    predicate: None,
+                    // A partial index keeps its predicate however its keys
+                    // are stored (`pg_index.indpred`, the driver's
+                    // FILTER_CONDITION).
+                    predicate: index.predicate.clone(),
                 });
                 continue;
             }

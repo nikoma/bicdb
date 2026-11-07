@@ -4284,9 +4284,50 @@ pub(crate) fn load_view(db: &BicDb, view: &str) -> Result<Option<ViewSchema>> {
     }
 }
 
-pub(crate) fn list_views(db: &BicDb) -> Result<Vec<ViewSchema>> {
+type ViewList = std::sync::Arc<Vec<ViewSchema>>;
+
+thread_local! {
+    // db -> (view catalog stamp, views). Every pg_class read listed the views
+    // three times and decoded each stored definition again; on a catalog with
+    // a few hundred views that was most of a driver metadata call.
+    static VIEW_LIST_MEMO: std::cell::RefCell<rustc_hash::FxHashMap<u64, ((u64, usize), ViewList)>> =
+        std::cell::RefCell::new(rustc_hash::FxHashMap::default());
+}
+
+/// The view definitions, decoded once per change of the view catalog.
+pub(crate) fn list_views_shared(db: &BicDb) -> Result<ViewList> {
     #[cfg(test)]
     VIEW_CATALOG_ENUMERATIONS.with(|count| count.set(count.get() + 1));
+    let key = db.instance_id();
+    let stamp = (
+        db.collection_generation(VIEW_COLLECTION),
+        db.collection_count(),
+    );
+    let hit = VIEW_LIST_MEMO.with(|memo| {
+        memo.borrow()
+            .get(&key)
+            .filter(|(cached, _)| *cached == stamp)
+            .map(|(_, views)| std::sync::Arc::clone(views))
+    });
+    if let Some(views) = hit {
+        return Ok(views);
+    }
+    let views = std::sync::Arc::new(list_views_uncached(db)?);
+    VIEW_LIST_MEMO.with(|memo| {
+        let mut memo = memo.borrow_mut();
+        if memo.len() >= 64 {
+            memo.clear();
+        }
+        memo.insert(key, (stamp, std::sync::Arc::clone(&views)));
+    });
+    Ok(views)
+}
+
+pub(crate) fn list_views(db: &BicDb) -> Result<Vec<ViewSchema>> {
+    Ok(list_views_shared(db)?.as_ref().clone())
+}
+
+fn list_views_uncached(db: &BicDb) -> Result<Vec<ViewSchema>> {
     let records = match db.scan_collection(VIEW_COLLECTION) {
         Ok(records) => records,
         Err(BicDbError::CollectionNotFound(_)) => return Ok(Vec::new()),

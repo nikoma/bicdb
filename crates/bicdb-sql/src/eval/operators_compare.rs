@@ -2246,10 +2246,13 @@ where
             return eval_string_subscript_value(text, subscript, eval);
         }
     }
+    // int2vector and oidvector (`pg_index.indkey`, `indoption`, `proargtypes`)
+    // subscript from 0, as their PostgreSQL array lower bound is 0.
     let value = match value {
-        SqlValue::String(text) => array_value(
+        SqlValue::String(text) => array_value_with_lower_bounds(
             pg_int_vector_values(&text)
                 .expect("non-vector strings returned through string subscripting"),
+            vec![0],
         ),
         value => value,
     };

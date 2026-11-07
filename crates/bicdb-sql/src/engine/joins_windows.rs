@@ -842,6 +842,63 @@ impl<'db> SqlEngine<'db> {
         }
     }
 
+    pub(crate) fn prepare_join_constraint(
+        &self,
+        left_columns: &[String],
+        right_columns: &[String],
+        constraint: &JoinConstraint,
+    ) -> PreparedJoinConstraint {
+        let JoinConstraint::On(expr) = constraint else {
+            return PreparedJoinConstraint { bound: None };
+        };
+        let columns = merge_row_set_columns(left_columns.to_vec(), right_columns.to_vec());
+        let (scope, context) = self.bound_row_context(&columns);
+        PreparedJoinConstraint {
+            bound: scope.bind(expr).map(|bound| {
+                (
+                    bound,
+                    context,
+                    merged_slot_sources(left_columns, right_columns),
+                )
+            }),
+        }
+    }
+
+    /// `join_constraint_matches` with the binding prepared once per join.
+    pub(crate) fn prepared_join_constraint_matches(
+        &self,
+        prepared: &PreparedJoinConstraint,
+        left: &SlotRow,
+        left_columns: &[String],
+        right: &SlotRow,
+        right_columns: &[String],
+        constraint: &JoinConstraint,
+    ) -> Result<bool> {
+        let Some((bound, context, sources)) = prepared.bound.as_ref() else {
+            return self.join_constraint_matches(
+                left,
+                left_columns,
+                right,
+                right_columns,
+                constraint,
+            );
+        };
+        #[cfg(test)]
+        SQL_JOIN_CONSTRAINT_EVAL_CALLS.with(|calls| *calls.borrow_mut() += 1);
+        Ok(bound
+            .eval_truth(&BoundExprFrame {
+                user_calls: &[],
+                db: self.db_ref(),
+                columns: BoundExprColumns::Joined {
+                    left,
+                    right,
+                    sources,
+                },
+                vars: &context.var_values,
+            })?
+            .unwrap_or(false))
+    }
+
     pub(crate) fn project_row_select(
         &self,
         projection: &[SelectItem],
@@ -984,7 +1041,7 @@ impl<'db> SqlEngine<'db> {
                                 None => self.eval_slot_row_value(row, &context, argument),
                             })
                             .collect::<Result<Vec<_>>>()?;
-                        expanded_sets.push(array_projection_set_values(call.function, arguments)?);
+                        expanded_sets.push(call.values(arguments)?);
                         base_row.push(SqlValue::Null);
                     }
                 }
@@ -1012,14 +1069,15 @@ impl<'db> SqlEngine<'db> {
             .filter(|types| types.len() == columns.len())
             .unwrap_or_else(|| vec![None; columns.len()]);
         for (set_index, output_index) in set_function_output_indices.into_iter().enumerate() {
-            column_types[output_index] = match calls[set_index].function {
-                ArrayProjectionSetReturningFunction::GenerateSubscripts => Some("int4".to_string()),
-                ArrayProjectionSetReturningFunction::PgSnapshotXip => Some("xid8".to_string()),
-                ArrayProjectionSetReturningFunction::TxidSnapshotXip => Some("int8".to_string()),
-                ArrayProjectionSetReturningFunction::Unnest => column_types[output_index].clone(),
-                ArrayProjectionSetReturningFunction::GenerateSeries(_) => {
-                    generate_series_projection_pg_type(&calls[set_index])
+            let call = &calls[set_index];
+            column_types[output_index] = match (call.function, call.field.as_ref()) {
+                (ArrayProjectionSetReturningFunction::Unnest, None) => {
+                    column_types[output_index].clone()
                 }
+                (_, None) => call.output_pg_type(),
+                (_, Some(_)) => call
+                    .output_pg_type()
+                    .or_else(|| column_types[output_index].clone()),
             };
         }
         Ok(SqlResult::new(columns, result_rows).with_column_types(column_types))

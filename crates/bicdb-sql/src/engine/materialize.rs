@@ -49,21 +49,9 @@ impl<'db> SqlEngine<'db> {
                     .iter()
                     .map(|argument| self.eval_select_constant_expr(argument))
                     .collect::<Result<Vec<_>>>()?;
-                expanded_sets.push(array_projection_set_values(call.function, arguments)?);
+                expanded_sets.push(call.values(arguments)?);
                 output_indices.push(projection_index);
-                column_types.push(match call.function {
-                    ArrayProjectionSetReturningFunction::GenerateSubscripts => {
-                        Some("int4".to_string())
-                    }
-                    ArrayProjectionSetReturningFunction::PgSnapshotXip => Some("xid8".to_string()),
-                    ArrayProjectionSetReturningFunction::TxidSnapshotXip => {
-                        Some("int8".to_string())
-                    }
-                    ArrayProjectionSetReturningFunction::Unnest => None,
-                    ArrayProjectionSetReturningFunction::GenerateSeries(_) => {
-                        generate_series_projection_pg_type(call)
-                    }
-                });
+                column_types.push(call.output_pg_type());
                 base_row.push(SqlValue::Null);
             } else {
                 column_types.push(projected_expr_pg_type(expr, None));

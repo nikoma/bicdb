@@ -204,6 +204,7 @@ fn bind_namespace_statements(
             | RoutineStmt::Null
             | RoutineStmt::FetchCursor { .. }
             | RoutineStmt::CloseCursor { .. }
+            | RoutineStmt::ReturnNext
             | RoutineStmt::Return(None) => {}
         }
     }
@@ -482,6 +483,7 @@ fn lower_statements(statements: &mut [RoutineStmt], types: &Types) {
             | RoutineStmt::FetchCursor { .. }
             | RoutineStmt::CloseCursor { .. }
             | RoutineStmt::ReturnQuery(_)
+            | RoutineStmt::ReturnNext
             | RoutineStmt::Return(None) => {}
         }
     }

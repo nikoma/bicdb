@@ -2766,6 +2766,10 @@ impl<'db> SqlSession<'db> {
             Expr::Extract { field, expr, .. } => {
                 eval_extract_value(field, self.eval_session_expr(expr)?)
             }
+            Expr::AtTimeZone {
+                timestamp,
+                time_zone,
+            } => self.eval_session_time_zone_expr(timestamp, time_zone),
             Expr::Tuple(_) | Expr::Array(_) => self.eval_session_collection_expr(expr),
             Expr::CompoundFieldAccess { root, access_chain } => eval_access_chain_expr(
                 root,
@@ -2786,6 +2790,18 @@ impl<'db> SqlSession<'db> {
             Expr::Case { .. } => self.eval_session_case_expr(expr),
             _ => eval_constant_expr(expr),
         }
+    }
+
+    #[inline(never)]
+    fn eval_session_time_zone_expr(
+        &mut self,
+        timestamp: &Expr,
+        time_zone: &Expr,
+    ) -> Result<SqlValue> {
+        let value = self.eval_session_expr(timestamp)?;
+        let zone = self.eval_session_expr(time_zone)?;
+        let source_type = self.routine_unary_operand_type(timestamp);
+        eval_at_time_zone_value(value, zone, source_type.as_deref())
     }
 
     // Outlined arms keep the recursive evaluator small on ordinary worker stacks.

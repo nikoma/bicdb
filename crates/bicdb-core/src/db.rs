@@ -15064,11 +15064,8 @@ impl Transaction {
             Err(error) => return Err(error),
         }
         if self.last_pending_write(collection, id).is_none() {
-            let state = db.collection_state(collection)?;
-            let shard = state.shard(id).read();
-            let changed = shard.rowid_of(id).is_none_or(|rowid| {
-                version_chain_max_tx(&shard.versions, rowid) > self.applied_snapshot
-            });
+            let changed = Self::latest_committed_record_sequence(db, collection, id)?
+                .is_none_or(|version| version > self.applied_snapshot);
             if changed {
                 return Err(BicDbError::TransactionConflict(format!(
                     "row changed since locking query snapshot: {collection}:{id}"
@@ -15152,11 +15149,7 @@ impl Transaction {
             )?;
         }
         if self.last_pending_write(collection, id).is_none() {
-            let state = db.collection_state(collection)?;
-            let shard = state.shard(id).read();
-            let max_tx = shard
-                .rowid_of(id)
-                .map(|rowid| version_chain_max_tx(&shard.versions, rowid));
+            let max_tx = Self::latest_committed_record_sequence(db, collection, id)?;
             if max_tx.is_none_or(|max_tx| max_tx > self.applied_snapshot) {
                 if self.isolation == TransactionIsolation::ReadCommitted {
                     // The lock pins the row from here on: this transaction now
@@ -17232,6 +17225,33 @@ impl Transaction {
         Ok(())
     }
 
+    /// Called only after the caller holds the row lock. An untouched paged row
+    /// has no resident version chain: the durable baseline is version zero,
+    /// not a missing row. Once touched, the resident chain (including tombstones)
+    /// remains authoritative, exactly as for snapshot-visible point reads.
+    fn latest_committed_record_sequence(
+        db: &BicDb,
+        collection: &str,
+        id: &str,
+    ) -> Result<Option<u64>> {
+        let state = db.collection_state(collection)?;
+        let shard = state.shard(id).read();
+        if let Some(rowid) = shard.rowid_of(id) {
+            if !state.paged_lazy || shard.versions.contains_key(&rowid) {
+                return Ok(Some(version_chain_max_tx(&shard.versions, rowid)));
+            }
+        }
+        drop(shard);
+        if state.paged_lazy {
+            if let Some(paged) = &db.paged_records {
+                return Ok(paged
+                    .get(&paged.latest_snapshot(), collection, id)?
+                    .map(|_| 0));
+            }
+        }
+        Ok(None)
+    }
+
     pub fn read_committed_update_record(
         &mut self,
         collection: &str,
@@ -17280,12 +17300,9 @@ impl Transaction {
         }
         db.ensure_collection(collection)?;
         db.lock_tx_record_for_read_committed_update(tx_id, collection, id, &self.locked_keys)?;
-        let state = db.collection_state(collection)?;
-        let shard = state.shard(id).read();
-        let Some(rowid) = shard.rowid_of(id) else {
+        let Some(max_tx) = Self::latest_committed_record_sequence(db, collection, id)? else {
             return Ok(Some((None, 0)));
         };
-        let max_tx = version_chain_max_tx(&shard.versions, rowid);
         if max_tx <= self.applied_snapshot {
             // Fresh row: everything at or below the un-floored APPLIED
             // watermark was physically applied before this transaction began,
@@ -17298,9 +17315,11 @@ impl Transaction {
             // statement read the row, so the candidate could predate it.
             return Ok(None);
         }
+        let state = db.collection_state(collection)?;
+        let shard = state.shard(id).read();
         let latest = shard
-            .records
-            .get(&rowid)
+            .rowid_of(id)
+            .and_then(|rowid| shard.records.get(&rowid))
             .map(|entry| entry.record.to_record())
             .transpose()?;
         Ok(Some((latest, max_tx)))
@@ -17353,18 +17372,17 @@ impl Transaction {
         } else {
             db.lock_tx_record_for_read_committed_update(tx_id, collection, id, &self.locked_keys)?;
         }
-        let state = db.collection_state(collection)?;
-        let shard = state.shard(id).read();
-        let Some(rowid) = shard.rowid_of(id) else {
+        let Some(max_tx) = Self::latest_committed_record_sequence(db, collection, id)? else {
             return Ok(Some((None, 0)));
         };
-        let max_tx = version_chain_max_tx(&shard.versions, rowid);
         if max_tx <= self.applied_snapshot {
             return Ok(None);
         }
+        let state = db.collection_state(collection)?;
+        let shard = state.shard(id).read();
         let latest = shard
-            .records
-            .get(&rowid)
+            .rowid_of(id)
+            .and_then(|rowid| shard.records.get(&rowid))
             .map(|entry| Arc::clone(&entry.record));
         Ok(Some((latest, max_tx)))
     }
@@ -17417,20 +17435,19 @@ impl Transaction {
         }
         db.ensure_collection(collection)?;
         db.lock_tx_record_for_read_committed_update(tx_id, collection, id, &self.locked_keys)?;
-        let state = db.collection_state(collection)?;
-        let shard = state.shard(id).read();
-        let Some(rowid) = shard.rowid_of(id) else {
+        let Some(max_tx) = Self::latest_committed_record_sequence(db, collection, id)? else {
             return Ok(None);
         };
-        let max_tx = version_chain_max_tx(&shard.versions, rowid);
         // See read_committed_update_record: freshness is judged against the
         // un-floored applied watermark, never the floored snapshot.
         if max_tx <= self.applied_snapshot {
             return Ok(None);
         }
+        let state = db.collection_state(collection)?;
+        let shard = state.shard(id).read();
         let latest = shard
-            .records
-            .get(&rowid)
+            .rowid_of(id)
+            .and_then(|rowid| shard.records.get(&rowid))
             .map(|entry| entry.record.to_record())
             .transpose()?;
         Ok(Some((latest, max_tx)))

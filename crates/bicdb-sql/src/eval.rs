@@ -223,6 +223,21 @@ pub(crate) fn pg_typeof_result(
         .unwrap_or(SqlValue::Null)
 }
 
+/// sqlparser represents PostgreSQL CURRENT_CATALOG as a keyword function.
+/// A quoted user function, qualified column, or actual function call is a
+/// different expression, even when its identifier has the same spelling.
+pub(crate) fn is_current_catalog_keyword(function: &Function) -> bool {
+    matches!(function.name.0.as_slice(), [part] if part.as_ident().is_some_and(|ident|
+        ident.quote_style.is_none() && ident.value.eq_ignore_ascii_case("current_catalog")))
+        && matches!(function.args, sqlparser::ast::FunctionArguments::None)
+        && matches!(function.parameters, sqlparser::ast::FunctionArguments::None)
+        && function.filter.is_none()
+        && function.over.is_none()
+        && function.null_treatment.is_none()
+        && function.within_group.is_empty()
+        && !function.uses_odbc_syntax
+}
+
 pub(crate) fn eval_value(record: &Record, expr: &Expr) -> Result<SqlValue> {
     match expr {
         Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("current_date") => {
@@ -397,6 +412,9 @@ pub(crate) fn eval_value(record: &Record, expr: &Expr) -> Result<SqlValue> {
 }
 
 pub(crate) fn eval_record_function_value(record: &Record, function: &Function) -> Result<SqlValue> {
+    if is_current_catalog_keyword(function) {
+        return Ok(SqlValue::String("bicdb".to_string()));
+    }
     let name = object_name(&function.name)?.to_ascii_lowercase();
     if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
         let arguments = function_arg_list(function);
@@ -751,6 +769,9 @@ pub(crate) fn eval_builtin_function_value(function: &Function) -> Result<SqlValu
 }
 
 pub(crate) fn eval_constant_function_value(function: &Function) -> Result<SqlValue> {
+    if is_current_catalog_keyword(function) {
+        return Ok(SqlValue::String("bicdb".to_string()));
+    }
     let name = object_name(&function.name)?.to_ascii_lowercase();
     if matches!(
         name.as_str(),

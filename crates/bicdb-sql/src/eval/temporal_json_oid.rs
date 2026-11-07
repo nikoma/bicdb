@@ -1574,6 +1574,9 @@ pub(crate) fn select_expr_column_name(expr: &Expr) -> String {
                 "?column?".to_string()
             }
         }
+        Expr::Function(function) if is_current_catalog_keyword(function) => {
+            "current_catalog".into()
+        }
         Expr::Function(function) => object_name(&function.name)
             .map(|name| postgres_xml_function_column_name(&name))
             .unwrap_or_else(|_| "?column?".to_string()),

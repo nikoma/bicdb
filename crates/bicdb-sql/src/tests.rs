@@ -44,6 +44,22 @@ fn current_catalog_reads_connected_database_and_retains_name_descriptor() {
         assert_eq!(quoted.column_types, vec![Some("text".into())]);
         assert!(engine.execute("SELECT \"CURRENT_CATALOG\"").is_err());
     }
+    SqlSession::new(&mut db).execute("CREATE TABLE native_catalog_column(current_catalog TEXT); INSERT INTO native_catalog_column VALUES('qualified column'); CREATE FUNCTION \"current_catalog\"() RETURNS TEXT LANGUAGE SQL AS $$ SELECT 'user function'::text $$").unwrap();
+    let engine = SqlEngine::new(&db);
+    assert_eq!(
+        engine
+            .execute("SELECT c.current_catalog FROM native_catalog_column c")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String("qualified column".into())]]
+    );
+    let routine = engine.execute("SELECT \"current_catalog\"()").unwrap();
+    assert_eq!(
+        routine.rows,
+        vec![vec![SqlValue::String("user function".into())]]
+    );
+    assert_eq!(routine.column_types, vec![Some("text".into())]);
+    assert!(engine.execute("SELECT CURRENT_CATALOG()").is_err());
     assert_eq!(
         SqlEngine::new(&db)
             .execute("SELECT CURRENT_CATALOG")

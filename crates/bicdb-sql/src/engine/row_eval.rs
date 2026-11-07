@@ -98,7 +98,7 @@ fn qualified_session_keyword_column_parts(
     if parts.len() < 2
         || !matches!(
             parts.last().map(String::as_str),
-            Some("current_user" | "current_role" | "session_user" | "user")
+            Some("current_catalog" | "current_user" | "current_role" | "session_user" | "user")
         )
     {
         return None;
@@ -1516,6 +1516,11 @@ impl<'db> SqlEngine<'db> {
         context: &BoundRowContext,
         function: &Function,
     ) -> Result<SqlValue> {
+        if is_current_catalog_keyword(function) {
+            return Ok(SqlValue::String(current_database_from_gucs(
+                &self.session_gucs,
+            )));
+        }
         if function.over.is_some() {
             return context
                 .row_lookup
@@ -3010,6 +3015,11 @@ impl<'db> SqlEngine<'db> {
         row: &SqlRow,
         function: &Function,
     ) -> Result<SqlValue> {
+        if is_current_catalog_keyword(function) {
+            return Ok(SqlValue::String(current_database_from_gucs(
+                &self.session_gucs,
+            )));
+        }
         let name = object_name(&function.name)?.to_ascii_lowercase();
         if let Some(parts) = qualified_session_keyword_column_parts(function, &name) {
             if let Some(value) = row_value_from_parts_opt(row, &parts) {

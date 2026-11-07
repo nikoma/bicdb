@@ -639,6 +639,7 @@ fn postgres_catalog_context_read(sql: &str) -> bool {
             Expr::Identifier(ident) => {
                 ident.quote_style.is_none() && ident.value.eq_ignore_ascii_case("current_catalog")
             }
+            Expr::Function(function) => is_current_catalog_keyword(function),
             Expr::Nested(inner) => catalog_context(inner),
             _ => false,
         }
@@ -3956,6 +3957,8 @@ mod postgres_catalog_boundary_tests {
         }
         for sql in [
             "SELECT \"CURRENT_CATALOG\"",
+            "SELECT \"current_catalog\"()",
+            "SELECT current_catalog()",
             "SELECT current_catalog FROM app_rows",
             "SELECT app.current_catalog",
             "SELECT 'current_catalog'",

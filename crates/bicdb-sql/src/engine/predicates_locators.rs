@@ -595,9 +595,14 @@ impl<'db> SqlEngine<'db> {
         if is_virtual_table(&table) || load_sequence(self.db_ref(), &table)?.is_some() {
             return Ok(1);
         }
-        Ok(self
-            .db_ref()
-            .collection_record_count_cancellable(&table, &self.cancellation)?)
+        // Join ordering only compares magnitudes, so it takes the cheap
+        // planner estimate. The exact count is a visibility-checked walk of
+        // every row of a lazy server-paged table (every table after a reopen),
+        // and the join-order memo is keyed by the statement's literals, so each
+        // new key value paid a full walk of the larger relation before a
+        // single key lookup ran.
+        self.cancellation.check()?;
+        Ok(self.db_ref().estimated_record_count(&table)?)
     }
 
     pub(crate) fn row_set_from_table_factor_with_selection(

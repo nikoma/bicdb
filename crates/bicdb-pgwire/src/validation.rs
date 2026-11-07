@@ -605,6 +605,41 @@ mod tests {
         metadata_protocol_progress_with_queued_writer("oracle-preview-v1");
     }
 
+    #[test]
+    fn literal_session_setting_classifier_excludes_callbacks_and_transactions() {
+        for sql in [
+            "SET \"APPLICATION_NAME\" = 'client'",
+            "SET SESSION application_name TO 'client'",
+            "SET LOCAL app.label = 'local'",
+            "SET search_path TO public, pg_catalog",
+            "SET TIME ZONE 'UTC'",
+            "SET app.number = -1",
+            "SET application_name = DEFAULT",
+        ] {
+            assert!(
+                is_literal_session_setting_sql(sql),
+                "literal setting rejected: {sql}"
+            );
+        }
+        for sql in [
+            "SELECT set_config('app.label','value',false)",
+            "SET ROLE reader",
+            "SET SESSION AUTHORIZATION reader",
+            "SET TRANSACTION READ ONLY",
+            "SET CONSTRAINTS ALL DEFERRED",
+            "SET app.label = user_function()",
+            "SET app.label = CAST('value' AS user_domain)",
+            "SET app.label = (SELECT user_function())",
+            "SET app.number = 1 + 2",
+            "SET app.label = 'value'; SELECT user_function()",
+        ] {
+            assert!(
+                !is_literal_session_setting_sql(sql),
+                "unsafe setting accepted: {sql}"
+            );
+        }
+    }
+
     fn literal_session_settings_progress_with_queued_writer(profile: &str) {
         let directory = tempfile::tempdir().unwrap();
         let server = PgWireServer::open(

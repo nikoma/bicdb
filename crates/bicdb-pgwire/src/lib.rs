@@ -3912,6 +3912,22 @@ fn execute_server_db_sql_for_state_inner(
     normalized: &str,
     cancellation: &CancellationToken,
 ) -> Result<SqlResult> {
+    if normalized.starts_with("set ") && is_literal_session_setting_sql(sql) {
+        // A connection's literal setting changes need neither a durable writer
+        // nor an implicit database transaction. Recursive shared access lets
+        // them progress while an existing reader holds up a queued writer.
+        // Execute through the session so authorization, validation and scoped
+        // GUC behavior remain authoritative.
+        let db = server.read_db_for_transaction_progress()?;
+        let mut session =
+            with_connection_guc_state(sql_session_shared_for_server(server, &db), server, state)
+                .with_catalog_cache(std::mem::take(&mut state.catalog_cache))
+                .with_cancellation(cancellation.clone());
+        let result = session.execute(sql).map_err(PgWireError::from);
+        capture_connection_guc_state(state, &session);
+        state.catalog_cache = session.into_catalog_cache();
+        return result;
+    }
     let read_only_candidate = is_read_only_sql_for_shared_execution_normalized(normalized);
     if !read_only_candidate {
         ensure_server_writable(server)?;

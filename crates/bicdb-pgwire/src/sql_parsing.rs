@@ -1436,6 +1436,44 @@ pub(crate) fn is_server_status_query_normalized(normalized: &str) -> bool {
     )
 }
 
+/// Literal session assignments cannot execute database callbacks. Keep casts,
+/// functions, transaction commands and statement batches on their usual paths.
+pub(crate) fn is_literal_session_setting_sql(sql: &str) -> bool {
+    use sqlparser::ast::Set as SetCommand;
+    fn literal(expression: &Expr) -> bool {
+        match expression {
+            Expr::Value(_) | Expr::Identifier(_) => true,
+            Expr::Nested(inner) => literal(inner),
+            Expr::UnaryOp {
+                op: sqlparser::ast::UnaryOperator::Plus | sqlparser::ast::UnaryOperator::Minus,
+                expr,
+            } => {
+                matches!(expr.as_ref(), Expr::Value(value) if matches!(value.value, Value::Number(..)))
+            }
+            _ => false,
+        }
+    }
+    let Ok(statements) = Parser::parse_sql(&PostgreSqlDialect {}, sql) else {
+        return false;
+    };
+    let [Statement::Set(setting)] = statements.as_slice() else {
+        return false;
+    };
+    match setting {
+        SetCommand::SingleAssignment { values, .. } => {
+            !values.is_empty() && values.iter().all(literal)
+        }
+        SetCommand::MultipleAssignments { assignments } => {
+            !assignments.is_empty()
+                && assignments
+                    .iter()
+                    .all(|assignment| literal(&assignment.value))
+        }
+        SetCommand::SetTimeZone { value, .. } => literal(value),
+        _ => false,
+    }
+}
+
 pub(crate) fn is_read_only_sql_for_shared_execution(sql: &str) -> bool {
     is_read_only_sql_for_shared_execution_normalized(&normalize_executable_sql(sql))
 }

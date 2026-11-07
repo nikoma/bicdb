@@ -4870,26 +4870,7 @@ impl<'db> SqlEngine<'db> {
                 return Ok(result);
             }
         }
-        if !from.joins.is_empty()
-            || has_group_by(select)?
-            || select
-                .selection
-                .as_ref()
-                .is_some_and(expr_needs_row_evaluator)
-            || select
-                .projection
-                .iter()
-                .any(select_item_needs_row_evaluator)
-            || select
-                .projection
-                .iter()
-                .any(|item| select_item_is_whole_row_reference(item, &from.relation))
-            || query
-                .order_by
-                .as_ref()
-                .is_some_and(order_by_needs_row_evaluator)
-            || !matches!(from.relation, TableFactor::Table { args: None, .. })
-        {
+        if select_needs_general_row_path(from, select, query)? {
             // The general row path materializes its whole input. Before taking
             // it, try streaming: the only condition above that the streaming
             // path cannot handle is *not* a row-evaluator selection — it
@@ -4911,27 +4892,8 @@ impl<'db> SqlEngine<'db> {
             if let Ok(Some(result)) = self.try_ranked_fts_topk(from, select, query) {
                 return Ok(result);
             }
-            if let Ok(Some(result)) = self.try_streaming_row_query(from, select, query) {
+            if let Some(result) = self.try_general_path_streaming_routes(from, select, query)? {
                 return Ok(result);
-            }
-            // ORDER BY declines the projection streamer above, but the
-            // external sort evaluates the same row predicates — a
-            // row-evaluator WHERE with a sortable ORDER BY still streams.
-            match self.try_streaming_external_sort_query(from, select, query) {
-                Ok(Some(result)) => return Ok(result),
-                Err(error) if error.is_resource_limit() || error.is_query_interruption() => {
-                    return Err(error);
-                }
-                Ok(None) | Err(_) => {}
-            }
-            // Grouped aggregates spill through the same sorter and fold
-            // adjacent groups during the merge.
-            match self.try_streaming_group_by(from, select, query) {
-                Ok(Some(result)) => return Ok(result),
-                Err(error) if error.is_resource_limit() || error.is_query_interruption() => {
-                    return Err(error);
-                }
-                Ok(None) | Err(_) => {}
             }
             return self.execute_row_query(select, query);
         }
@@ -5606,6 +5568,61 @@ pub(crate) fn fts_budget_abort(error: &bicdb_core::BicDbError) -> bool {
             | bicdb_core::BicDbError::QueryCanceled
             | bicdb_core::BicDbError::QueryTimedOut
     )
+}
+
+/// Whether a single-table SELECT leaves the indexed fast path for the
+/// general (materializing) row path, which first tries the streaming routes.
+/// Shared by execution and by EXPLAIN's streaming dry run.
+pub(crate) fn select_needs_general_row_path(
+    from: &TableWithJoins,
+    select: &Select,
+    query: &Query,
+) -> Result<bool> {
+    Ok(!from.joins.is_empty()
+        || has_group_by(select)?
+        || select
+            .selection
+            .as_ref()
+            .is_some_and(expr_needs_row_evaluator)
+        || select
+            .projection
+            .iter()
+            .any(select_item_needs_row_evaluator)
+        || select
+            .projection
+            .iter()
+            .any(|item| select_item_is_whole_row_reference(item, &from.relation))
+        || query
+            .order_by
+            .as_ref()
+            .is_some_and(order_by_needs_row_evaluator)
+        || !matches!(from.relation, TableFactor::Table { args: None, .. }))
+}
+
+/// Internal, default-off gate for the statistics-guided locator hybrid: with
+/// ANALYZE statistics, a B-tree candidate with FEWER matched columns than the
+/// rule's winners (one the rule would discard without probing) is nominated
+/// when its estimated rows are `BICDB_LOCATOR_HYBRID_RATIO` (default 2) times
+/// smaller than the best tied winner's estimate. The nominee is then probed
+/// with the winners and the smallest exact row-id count wins.
+pub(crate) fn locator_hybrid_ratio() -> Option<f64> {
+    static GATE: OnceLock<Option<f64>> = OnceLock::new();
+    let configured = *GATE.get_or_init(|| {
+        let on = std::env::var("BICDB_LOCATOR_HYBRID")
+            .map(|value| matches!(value.as_str(), "1" | "on" | "true" | "yes"))
+            .unwrap_or(false);
+        let ratio = std::env::var("BICDB_LOCATOR_HYBRID_RATIO")
+            .ok()
+            .and_then(|value| value.parse::<f64>().ok())
+            .filter(|ratio| ratio.is_finite() && *ratio >= 1.0)
+            .unwrap_or(2.0);
+        on.then_some(ratio)
+    });
+    match crate::plan_diagnostics::locator_hybrid_override() {
+        Some(true) => Some(configured.unwrap_or(2.0)),
+        Some(false) => None,
+        None => configured,
+    }
 }
 
 pub(crate) fn locator_plans_enabled() -> bool {

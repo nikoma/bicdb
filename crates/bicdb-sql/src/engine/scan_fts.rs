@@ -670,64 +670,56 @@ impl<'db> SqlEngine<'db> {
             crate::external_sort::ExternalSorter::for_db(self.db_ref(), self.cancellation.clone());
         let mut sql_error: Option<SqlError> = None;
         let mut seen = 0usize;
-        let streamed = self.db_ref().for_each_record_batch_cancellable(
-            &collection,
-            STREAMING_SCAN_BATCH,
-            &self.cancellation,
-            |batch| {
-                for record in batch {
-                    seen += 1;
-                    if seen % 1024 == 0 {
-                        if let Err(error) = self.check_cancellation() {
-                            sql_error = Some(error);
-                            return Ok(false);
-                        }
-                    }
-                    let record = Arc::new(record);
-                    if let Some(selection) = &select.selection {
-                        let keep =
-                            row_from_record(&collection, &alias_name, schema.as_ref(), &record)
-                                .and_then(|row| {
-                                    self.eval_row_truth_typed(&row, selection, &predicate_env)
-                                });
-                        match keep {
-                            Ok(verdict) => {
-                                if !verdict.unwrap_or(false) {
-                                    continue;
-                                }
-                            }
-                            Err(error) => {
-                                sql_error = Some(error);
-                                return Ok(false);
-                            }
-                        }
-                    }
-                    let pushed = (|| -> Result<()> {
-                        let row = projection.row(&record)?;
-                        let mut key = Vec::new();
-                        for (value, pg_type) in row.iter().zip(&key_types) {
-                            let bytes = if matches!(value, SqlValue::Null) {
-                                None
-                            } else {
-                                Some(pg_typed_index_key_for_db(self.db_ref(), pg_type, value)?)
-                            };
-                            crate::external_sort::push_normalized_component(
-                                &mut key,
-                                bytes.as_deref(),
-                                false,
-                                false,
-                            );
-                        }
-                        sorter.push(key, row)
-                    })();
-                    if let Err(error) = pushed {
+        let streamed = self.stream_record_batches(&collection, |batch| {
+            for record in batch {
+                seen += 1;
+                if seen % 1024 == 0 {
+                    if let Err(error) = self.check_cancellation() {
                         sql_error = Some(error);
                         return Ok(false);
                     }
                 }
-                Ok(true)
-            },
-        )?;
+                let record = Arc::new(record);
+                if let Some(selection) = &select.selection {
+                    let keep = row_from_record(&collection, &alias_name, schema.as_ref(), &record)
+                        .and_then(|row| self.eval_row_truth_typed(&row, selection, &predicate_env));
+                    match keep {
+                        Ok(verdict) => {
+                            if !verdict.unwrap_or(false) {
+                                continue;
+                            }
+                        }
+                        Err(error) => {
+                            sql_error = Some(error);
+                            return Ok(false);
+                        }
+                    }
+                }
+                let pushed = (|| -> Result<()> {
+                    let row = projection.row(&record)?;
+                    let mut key = Vec::new();
+                    for (value, pg_type) in row.iter().zip(&key_types) {
+                        let bytes = if matches!(value, SqlValue::Null) {
+                            None
+                        } else {
+                            Some(pg_typed_index_key_for_db(self.db_ref(), pg_type, value)?)
+                        };
+                        crate::external_sort::push_normalized_component(
+                            &mut key,
+                            bytes.as_deref(),
+                            false,
+                            false,
+                        );
+                    }
+                    sorter.push(key, row)
+                })();
+                if let Err(error) = pushed {
+                    sql_error = Some(error);
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        })?;
         if let Some(error) = sql_error {
             if error.is_resource_limit() || error.is_query_interruption() {
                 return Err(error);
@@ -942,74 +934,66 @@ impl<'db> SqlEngine<'db> {
             crate::external_sort::ExternalSorter::for_db(self.db_ref(), self.cancellation.clone());
         let mut sql_error: Option<SqlError> = None;
         let mut seen = 0usize;
-        let streamed = self.db_ref().for_each_record_batch_cancellable(
-            &collection,
-            STREAMING_SCAN_BATCH,
-            &self.cancellation,
-            |batch| {
-                for record in batch {
-                    seen += 1;
-                    if seen % 1024 == 0 {
-                        if let Err(error) = self.check_cancellation() {
-                            sql_error = Some(error);
-                            return Ok(false);
-                        }
-                    }
-                    let record = Arc::new(record);
-                    if let Some(selection) = &select.selection {
-                        let keep =
-                            row_from_record(&collection, &alias_name, schema.as_ref(), &record)
-                                .and_then(|row| {
-                                    self.eval_row_truth_typed(&row, selection, &predicate_env)
-                                });
-                        match keep {
-                            Ok(verdict) => {
-                                if !verdict.unwrap_or(false) {
-                                    continue;
-                                }
-                            }
-                            Err(error) => {
-                                sql_error = Some(error);
-                                return Ok(false);
-                            }
-                        }
-                    }
-                    let pushed = (|| -> Result<()> {
-                        let mut key = Vec::new();
-                        let mut spilled = Vec::with_capacity(group_fields.len() + fold_slots);
-                        for (field, pg_type) in &group_fields {
-                            let value = field.value(&record)?;
-                            let bytes = if matches!(value, SqlValue::Null) {
-                                None
-                            } else {
-                                Some(pg_typed_index_key_for_db(self.db_ref(), pg_type, &value)?)
-                            };
-                            crate::external_sort::push_normalized_component(
-                                &mut key,
-                                bytes.as_deref(),
-                                false,
-                                false,
-                            );
-                            spilled.push(value);
-                        }
-                        for item in &items {
-                            if let Item::Fold { fold, field, .. } = item {
-                                spilled.push(match fold {
-                                    StreamingFoldKind::CountAll => SqlValue::Int(1),
-                                    _ => field.value(&record)?,
-                                });
-                            }
-                        }
-                        sorter.push(key, spilled)
-                    })();
-                    if let Err(error) = pushed {
+        let streamed = self.stream_record_batches(&collection, |batch| {
+            for record in batch {
+                seen += 1;
+                if seen % 1024 == 0 {
+                    if let Err(error) = self.check_cancellation() {
                         sql_error = Some(error);
                         return Ok(false);
                     }
                 }
-                Ok(true)
-            },
-        )?;
+                let record = Arc::new(record);
+                if let Some(selection) = &select.selection {
+                    let keep = row_from_record(&collection, &alias_name, schema.as_ref(), &record)
+                        .and_then(|row| self.eval_row_truth_typed(&row, selection, &predicate_env));
+                    match keep {
+                        Ok(verdict) => {
+                            if !verdict.unwrap_or(false) {
+                                continue;
+                            }
+                        }
+                        Err(error) => {
+                            sql_error = Some(error);
+                            return Ok(false);
+                        }
+                    }
+                }
+                let pushed = (|| -> Result<()> {
+                    let mut key = Vec::new();
+                    let mut spilled = Vec::with_capacity(group_fields.len() + fold_slots);
+                    for (field, pg_type) in &group_fields {
+                        let value = field.value(&record)?;
+                        let bytes = if matches!(value, SqlValue::Null) {
+                            None
+                        } else {
+                            Some(pg_typed_index_key_for_db(self.db_ref(), pg_type, &value)?)
+                        };
+                        crate::external_sort::push_normalized_component(
+                            &mut key,
+                            bytes.as_deref(),
+                            false,
+                            false,
+                        );
+                        spilled.push(value);
+                    }
+                    for item in &items {
+                        if let Item::Fold { fold, field, .. } = item {
+                            spilled.push(match fold {
+                                StreamingFoldKind::CountAll => SqlValue::Int(1),
+                                _ => field.value(&record)?,
+                            });
+                        }
+                    }
+                    sorter.push(key, spilled)
+                })();
+                if let Err(error) = pushed {
+                    sql_error = Some(error);
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        })?;
         if let Some(error) = sql_error {
             if error.is_resource_limit() || error.is_query_interruption() {
                 return Err(error);
@@ -2586,6 +2570,17 @@ impl<'db> SqlEngine<'db> {
             return Ok(None);
         }
         let schema = load_schema(self.db_ref(), &collection)?;
+        // As in `try_streaming_row_query`: skip planning when the external
+        // sort could not stream anyway.
+        if self.security_context.is_some()
+            || self.tx.is_some()
+            || schema
+                .as_ref()
+                .is_some_and(|schema| schema.rls_enabled || schema.rls_forced)
+            || !self.db_ref().record_batch_streaming_possible(&collection)
+        {
+            return Ok(None);
+        }
         let plan = self.plan_query(&collection, &alias_name, select, query)?;
         self.try_streaming_external_sort(
             &collection,
@@ -2714,67 +2709,60 @@ impl<'db> SqlEngine<'db> {
             crate::external_sort::ExternalSorter::for_db(self.db_ref(), self.cancellation.clone());
         let mut sql_error: Option<SqlError> = None;
         let mut seen = 0usize;
-        let streamed = self.db_ref().for_each_record_batch_cancellable(
-            collection,
-            STREAMING_SCAN_BATCH,
-            &self.cancellation,
-            |batch| {
-                for record in batch {
-                    seen += 1;
-                    if seen % 1024 == 0 {
-                        if let Err(error) = self.check_cancellation() {
-                            sql_error = Some(error);
-                            return Ok(false);
-                        }
-                    }
-                    let record = Arc::new(record);
-                    if let Some(selection) = &select.selection {
-                        let keep =
-                            row_from_record(collection, alias, schema, &record).and_then(|row| {
-                                self.eval_row_truth_typed(&row, selection, &predicate_env)
-                            });
-                        match keep {
-                            Ok(verdict) => {
-                                if !verdict.unwrap_or(false) {
-                                    continue;
-                                }
-                            }
-                            Err(error) => {
-                                sql_error = Some(error);
-                                return Ok(false);
-                            }
-                        }
-                    }
-                    let pushed = (|| -> Result<()> {
-                        let mut key = Vec::new();
-                        for driver in &drivers {
-                            let value = driver.field.value(&record)?;
-                            let bytes = if matches!(value, SqlValue::Null) {
-                                None
-                            } else {
-                                Some(pg_typed_index_key_for_db(
-                                    self.db_ref(),
-                                    &driver.pg_type,
-                                    &value,
-                                )?)
-                            };
-                            crate::external_sort::push_normalized_component(
-                                &mut key,
-                                bytes.as_deref(),
-                                driver.descending,
-                                driver.nulls_first,
-                            );
-                        }
-                        sorter.push(key, projection.row(&record)?)
-                    })();
-                    if let Err(error) = pushed {
+        let streamed = self.stream_record_batches(collection, |batch| {
+            for record in batch {
+                seen += 1;
+                if seen % 1024 == 0 {
+                    if let Err(error) = self.check_cancellation() {
                         sql_error = Some(error);
                         return Ok(false);
                     }
                 }
-                Ok(true)
-            },
-        )?;
+                let record = Arc::new(record);
+                if let Some(selection) = &select.selection {
+                    let keep = row_from_record(collection, alias, schema, &record)
+                        .and_then(|row| self.eval_row_truth_typed(&row, selection, &predicate_env));
+                    match keep {
+                        Ok(verdict) => {
+                            if !verdict.unwrap_or(false) {
+                                continue;
+                            }
+                        }
+                        Err(error) => {
+                            sql_error = Some(error);
+                            return Ok(false);
+                        }
+                    }
+                }
+                let pushed = (|| -> Result<()> {
+                    let mut key = Vec::new();
+                    for driver in &drivers {
+                        let value = driver.field.value(&record)?;
+                        let bytes = if matches!(value, SqlValue::Null) {
+                            None
+                        } else {
+                            Some(pg_typed_index_key_for_db(
+                                self.db_ref(),
+                                &driver.pg_type,
+                                &value,
+                            )?)
+                        };
+                        crate::external_sort::push_normalized_component(
+                            &mut key,
+                            bytes.as_deref(),
+                            driver.descending,
+                            driver.nulls_first,
+                        );
+                    }
+                    sorter.push(key, projection.row(&record)?)
+                })();
+                if let Err(error) = pushed {
+                    sql_error = Some(error);
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        })?;
         if let Some(error) = sql_error {
             if error.is_resource_limit() || error.is_query_interruption() {
                 return Err(error);
@@ -2959,136 +2947,126 @@ impl<'db> SqlEngine<'db> {
         let predicate_env = self.from_relation_columns(&select.from).unwrap_or_default();
         let mut sql_error: Option<SqlError> = None;
         let mut seen = 0usize;
-        let streamed = self.db_ref().for_each_record_batch_cancellable(
-            &collection,
-            STREAMING_SCAN_BATCH,
-            &self.cancellation,
-            |batch| {
-                let mut matching: Vec<Record> = Vec::new();
-                for record in batch {
-                    seen += 1;
-                    if seen % 1024 == 0 {
-                        if let Err(error) = self.check_cancellation() {
-                            sql_error = Some(error);
-                            return Ok(false);
-                        }
-                    }
-                    if let Some(selection) = &select.selection {
-                        let record = Arc::new(record);
-                        let keep =
-                            row_from_record(&collection, &alias_name, schema.as_ref(), &record)
-                                .and_then(|row| {
-                                    self.eval_row_truth_typed(&row, selection, &predicate_env)
-                                });
-                        match keep {
-                            Ok(verdict) => {
-                                if !verdict.unwrap_or(false) {
-                                    continue;
-                                }
-                            }
-                            Err(error) => {
-                                sql_error = Some(error);
-                                return Ok(false);
-                            }
-                        }
-                        matching.push(
-                            Arc::try_unwrap(record).unwrap_or_else(|record| (*record).clone()),
-                        );
-                    } else {
-                        matching.push(record);
-                    }
-                }
-                if matching.is_empty() {
-                    return Ok(true);
-                }
-                for (fold, _, _) in &mut folds {
-                    let folded: Result<()> = (|| {
-                        match fold {
-                            Fold::CountAll(count) => *count += matching.len() as i64,
-                            Fold::CountField(field, count) => {
-                                *count +=
-                                    crate::eval::record_aggregate_count(&matching, field, false)?
-                                        as i64;
-                            }
-                            Fold::Sum {
-                                field,
-                                money,
-                                partial,
-                            } => {
-                                let values = crate::eval::record_aggregate_values(
-                                    &matching, field, false, false,
-                                )?;
-                                let chained = partial.take().into_iter().chain(values.into_iter());
-                                let sum = if *money {
-                                    crate::eval::sum_money_aggregate_values(
-                                        chained.collect::<Vec<_>>(),
-                                    )?
-                                } else {
-                                    crate::eval::sum_aggregate_values(chained)?
-                                };
-                                if !matches!(sum, SqlValue::Null) {
-                                    *partial = Some(sum);
-                                }
-                            }
-                            Fold::Extreme {
-                                field,
-                                pg_type,
-                                greatest,
-                                best,
-                            } => {
-                                let batch_best = crate::eval::extreme_record_value(
-                                    &matching,
-                                    field,
-                                    pg_type.as_deref(),
-                                    *greatest,
-                                )?;
-                                let running = std::mem::replace(best, SqlValue::Null);
-                                *best = crate::eval::combine_extreme_value(
-                                    running,
-                                    batch_best,
-                                    pg_type.as_deref(),
-                                    *greatest,
-                                )?;
-                            }
-                            Fold::Bool { field, and, state } => {
-                                let batch = crate::eval::bool_aggregate_values(
-                                    crate::eval::record_aggregate_values(
-                                        &matching, field, false, false,
-                                    )?,
-                                    *and,
-                                )?;
-                                if let SqlValue::Bool(batch) = batch {
-                                    *state = Some(match state {
-                                        Some(previous) => {
-                                            if *and {
-                                                *previous && batch
-                                            } else {
-                                                *previous || batch
-                                            }
-                                        }
-                                        None => batch,
-                                    });
-                                }
-                            }
-                            Fold::Avg { field, state } => {
-                                let values = crate::eval::record_aggregate_values(
-                                    &matching, field, false, false,
-                                )?;
-                                for value in values {
-                                    state.fold_value(value)?;
-                                }
-                            }
-                        }
-                        Ok(())
-                    })();
-                    if let Err(error) = folded {
+        let streamed = self.stream_record_batches(&collection, |batch| {
+            let mut matching: Vec<Record> = Vec::new();
+            for record in batch {
+                seen += 1;
+                if seen % 1024 == 0 {
+                    if let Err(error) = self.check_cancellation() {
                         sql_error = Some(error);
                         return Ok(false);
                     }
                 }
-                Ok(true)
-            },
-        )?;
+                if let Some(selection) = &select.selection {
+                    let record = Arc::new(record);
+                    let keep = row_from_record(&collection, &alias_name, schema.as_ref(), &record)
+                        .and_then(|row| self.eval_row_truth_typed(&row, selection, &predicate_env));
+                    match keep {
+                        Ok(verdict) => {
+                            if !verdict.unwrap_or(false) {
+                                continue;
+                            }
+                        }
+                        Err(error) => {
+                            sql_error = Some(error);
+                            return Ok(false);
+                        }
+                    }
+                    matching
+                        .push(Arc::try_unwrap(record).unwrap_or_else(|record| (*record).clone()));
+                } else {
+                    matching.push(record);
+                }
+            }
+            if matching.is_empty() {
+                return Ok(true);
+            }
+            for (fold, _, _) in &mut folds {
+                let folded: Result<()> = (|| {
+                    match fold {
+                        Fold::CountAll(count) => *count += matching.len() as i64,
+                        Fold::CountField(field, count) => {
+                            *count += crate::eval::record_aggregate_count(&matching, field, false)?
+                                as i64;
+                        }
+                        Fold::Sum {
+                            field,
+                            money,
+                            partial,
+                        } => {
+                            let values = crate::eval::record_aggregate_values(
+                                &matching, field, false, false,
+                            )?;
+                            let chained = partial.take().into_iter().chain(values.into_iter());
+                            let sum = if *money {
+                                crate::eval::sum_money_aggregate_values(
+                                    chained.collect::<Vec<_>>(),
+                                )?
+                            } else {
+                                crate::eval::sum_aggregate_values(chained)?
+                            };
+                            if !matches!(sum, SqlValue::Null) {
+                                *partial = Some(sum);
+                            }
+                        }
+                        Fold::Extreme {
+                            field,
+                            pg_type,
+                            greatest,
+                            best,
+                        } => {
+                            let batch_best = crate::eval::extreme_record_value(
+                                &matching,
+                                field,
+                                pg_type.as_deref(),
+                                *greatest,
+                            )?;
+                            let running = std::mem::replace(best, SqlValue::Null);
+                            *best = crate::eval::combine_extreme_value(
+                                running,
+                                batch_best,
+                                pg_type.as_deref(),
+                                *greatest,
+                            )?;
+                        }
+                        Fold::Bool { field, and, state } => {
+                            let batch = crate::eval::bool_aggregate_values(
+                                crate::eval::record_aggregate_values(
+                                    &matching, field, false, false,
+                                )?,
+                                *and,
+                            )?;
+                            if let SqlValue::Bool(batch) = batch {
+                                *state = Some(match state {
+                                    Some(previous) => {
+                                        if *and {
+                                            *previous && batch
+                                        } else {
+                                            *previous || batch
+                                        }
+                                    }
+                                    None => batch,
+                                });
+                            }
+                        }
+                        Fold::Avg { field, state } => {
+                            let values = crate::eval::record_aggregate_values(
+                                &matching, field, false, false,
+                            )?;
+                            for value in values {
+                                state.fold_value(value)?;
+                            }
+                        }
+                    }
+                    Ok(())
+                })();
+                if let Err(error) = folded {
+                    sql_error = Some(error);
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        })?;
         if sql_error.is_some() || !streamed {
             return Ok(None);
         }
@@ -3119,6 +3097,124 @@ impl<'db> SqlEngine<'db> {
     ///
     /// Returning `None` always falls back to a path that is already correct, so
     /// a shape this does not understand can never lose rows.
+    /// The streaming attempts of the general row path, in execution order:
+    /// projection, external sort, grouped aggregates. Best-effort: a decline
+    /// or an ordinary error returns `None` so the materializing path runs;
+    /// resource limits and interruptions propagate.
+    pub(crate) fn try_general_path_streaming_routes(
+        &self,
+        from: &TableWithJoins,
+        select: &Select,
+        query: &Query,
+    ) -> Result<Option<SqlResult>> {
+        if let Ok(Some(result)) = self.try_streaming_row_query(from, select, query) {
+            return Ok(Some(result));
+        }
+        // ORDER BY declines the projection streamer above, but the external
+        // sort evaluates the same row predicates: a row-evaluator WHERE with a
+        // sortable ORDER BY still streams.
+        let attempts: [&dyn Fn() -> Result<Option<SqlResult>>; 2] = [
+            &|| self.try_streaming_external_sort_query(from, select, query),
+            // Grouped aggregates spill through the same sorter and fold
+            // adjacent groups during the merge.
+            &|| self.try_streaming_group_by(from, select, query),
+        ];
+        for attempt in attempts {
+            match attempt() {
+                Ok(Some(result)) => return Ok(Some(result)),
+                Err(error) if error.is_resource_limit() || error.is_query_interruption() => {
+                    return Err(error);
+                }
+                Ok(None) | Err(_) => {}
+            }
+        }
+        Ok(None)
+    }
+
+    /// EXPLAIN: whether execution would answer this single-table SELECT with
+    /// a streamed full scan. Runs the same streaming routes, in the same
+    /// order as `execute_select`, in dry-run mode (no rows are read).
+    /// Routes that run before streaming and do not scan (count, full-text
+    /// and indexed-extreme fast paths, the plan cache) are not modelled.
+    pub(crate) fn select_would_stream(
+        &self,
+        from: &TableWithJoins,
+        select: &Select,
+        query: &Query,
+    ) -> bool {
+        let (_, decisions) = crate::plan_diagnostics::capture(|| {
+            crate::plan_diagnostics::with_streaming_dry_run(|| -> Result<()> {
+                if select.distinct.is_some() {
+                    let _ = self.try_streaming_distinct(from, select, query);
+                    return Ok(());
+                }
+                if let Ok(Some(_)) = self.try_streaming_simple_aggregates(from, select, query) {
+                    return Ok(());
+                }
+                if select_needs_general_row_path(from, select, query)? {
+                    let _ = self.try_general_path_streaming_routes(from, select, query);
+                }
+                Ok(())
+            })
+        });
+        decisions
+            .iter()
+            .any(|decision| decision.chooser == "streaming")
+    }
+
+    /// The one funnel every streamed full scan goes through. With planner
+    /// diagnostics active it records a `streaming` FullScan decision (and the
+    /// rows it fetched), so traces and EXPLAIN attribute the scan to the route
+    /// that ran it. Under an EXPLAIN dry run it reports whether it WOULD
+    /// stream and visits no rows, so EXPLAIN learns the routing from the same
+    /// eligibility checks execution uses instead of a copy of them.
+    pub(crate) fn stream_record_batches(
+        &self,
+        collection: &str,
+        mut visit: impl FnMut(Vec<Record>) -> bicdb_core::Result<bool>,
+    ) -> bicdb_core::Result<bool> {
+        let record = |rows_fetched: Option<usize>| {
+            let full_scan = crate::plan_diagnostics::PlanSignature::full_scan();
+            crate::plan_diagnostics::record_decision_for(
+                "streaming",
+                collection,
+                vec![full_scan.clone()],
+                &full_scan,
+                rows_fetched,
+            );
+        };
+        if crate::plan_diagnostics::streaming_dry_run() {
+            self.cancellation.check()?;
+            let possible = self.db_ref().record_batch_streaming_possible(collection);
+            if possible {
+                record(None);
+            }
+            return Ok(possible);
+        }
+        if !crate::plan_diagnostics::active() {
+            return self.db_ref().for_each_record_batch_cancellable(
+                collection,
+                STREAMING_SCAN_BATCH,
+                &self.cancellation,
+                visit,
+            );
+        }
+        let mut fetched = 0usize;
+        let streamed = self.db_ref().for_each_record_batch_cancellable(
+            collection,
+            STREAMING_SCAN_BATCH,
+            &self.cancellation,
+            |batch| {
+                fetched += batch.len();
+                visit(batch)
+            },
+        )?;
+        if streamed {
+            record(Some(fetched));
+        }
+        Ok(streamed)
+    }
+
     pub(crate) fn try_streaming_row_query(
         &self,
         from: &TableWithJoins,
@@ -3167,6 +3263,20 @@ impl<'db> SqlEngine<'db> {
             return Ok(None);
         }
         let schema = load_schema(self.db_ref(), &collection)?;
+        // Cheap disqualifiers first: the streamer below only acts on a full-scan
+        // plan it is allowed to stream, so planning is wasted work when it
+        // cannot stream at all (memory-resident storage, an open transaction,
+        // a security context or row-level security), which is every ordinary
+        // SELECT in the default storage mode.
+        if self.security_context.is_some()
+            || self.tx.is_some()
+            || schema
+                .as_ref()
+                .is_some_and(|schema| schema.rls_enabled || schema.rls_forced)
+            || !self.db_ref().record_batch_streaming_possible(&collection)
+        {
+            return Ok(None);
+        }
         let plan = self.plan_query(&collection, &alias_name, select, query)?;
         self.try_streaming_projection(
             &collection,
@@ -3233,56 +3343,49 @@ impl<'db> SqlEngine<'db> {
         // travel out of band and are re-raised below rather than being
         // flattened into a storage error.
         let mut sql_error: Option<SqlError> = None;
-        let streamed = self.db_ref().for_each_record_batch_cancellable(
-            collection,
-            STREAMING_SCAN_BATCH,
-            &self.cancellation,
-            |batch| {
-                for record in batch {
-                    seen += 1;
-                    if seen % 1024 == 0 {
-                        if let Err(error) = self.check_cancellation() {
-                            sql_error = Some(error);
-                            return Ok(false);
-                        }
+        let streamed = self.stream_record_batches(collection, |batch| {
+            for record in batch {
+                seen += 1;
+                if seen % 1024 == 0 {
+                    if let Err(error) = self.check_cancellation() {
+                        sql_error = Some(error);
+                        return Ok(false);
                     }
-                    let record = Arc::new(record);
-                    if let Some(selection) = &select.selection {
-                        let keep =
-                            row_from_record(collection, alias, schema, &record).and_then(|row| {
-                                self.eval_row_truth_typed(&row, selection, &predicate_env)
-                            });
-                        match keep {
-                            Ok(verdict) => {
-                                if !verdict.unwrap_or(false) {
-                                    continue;
-                                }
-                            }
-                            Err(error) => {
-                                sql_error = Some(error);
-                                return Ok(false);
+                }
+                let record = Arc::new(record);
+                if let Some(selection) = &select.selection {
+                    let keep = row_from_record(collection, alias, schema, &record)
+                        .and_then(|row| self.eval_row_truth_typed(&row, selection, &predicate_env));
+                    match keep {
+                        Ok(verdict) => {
+                            if !verdict.unwrap_or(false) {
+                                continue;
                             }
                         }
-                    }
-                    matched += 1;
-                    if skipped < offset {
-                        skipped += 1;
-                        continue;
-                    }
-                    match projection.row(&record) {
-                        Ok(row) => rows.push(row),
                         Err(error) => {
                             sql_error = Some(error);
                             return Ok(false);
                         }
                     }
-                    if limit.is_some_and(|limit| rows.len() >= limit) {
+                }
+                matched += 1;
+                if skipped < offset {
+                    skipped += 1;
+                    continue;
+                }
+                match projection.row(&record) {
+                    Ok(row) => rows.push(row),
+                    Err(error) => {
+                        sql_error = Some(error);
                         return Ok(false);
                     }
                 }
-                Ok(true)
-            },
-        )?;
+                if limit.is_some_and(|limit| rows.len() >= limit) {
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        })?;
         // An error here means this path could not evaluate the query — most
         // often a predicate the row evaluator handles and this one does not
         // (subqueries, correlated outer references, LATERAL). Abandon the
@@ -3302,7 +3405,6 @@ impl<'db> SqlEngine<'db> {
             return Ok(None);
         }
         if crate::plan_diagnostics::active() {
-            crate::plan_diagnostics::record_rows_fetched(seen);
             crate::plan_diagnostics::record_rows_matched(matched);
         }
         sql_profile_full_scan();

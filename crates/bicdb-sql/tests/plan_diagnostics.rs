@@ -143,3 +143,82 @@ fn diagnostics_are_off_by_default() {
     });
     assert!(!inner.1.is_empty(), "inner scope records its own decisions");
 }
+
+#[test]
+fn locator_hybrid_gate_nominates_shorter_candidates_and_probes_decide() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    // (region, status) is unselective for status 0 (about 4,000 rows per
+    // region) while customer is about 1,000 rows. Region 1 and status 1 are
+    // each common, but together they are rare (200 rows): per-column
+    // statistics cannot see that correlation, so there the shorter customer
+    // index is nominated and loses on its exact probe.
+    session
+        .execute(
+            "CREATE TABLE h (id int4 PRIMARY KEY, region int4, status int4, customer int4);
+             INSERT INTO h SELECT g, g % 5, CASE WHEN g % 5 = 0 OR g % 100 = 1 THEN 1 ELSE 0 END, g % 20
+               FROM generate_series(1, 20000) g;
+             CREATE INDEX h_region_status ON h (region, status);
+             CREATE INDEX h_customer ON h (customer);",
+        )
+        .unwrap();
+    let chosen = |session: &mut SqlSession<'_>, sql: &str, hybrid: Option<bool>| {
+        let options = DiagnosticsOptions {
+            locator_hybrid: hybrid,
+            ..DiagnosticsOptions::default()
+        };
+        let (result, decisions) = with_plan_diagnostics(options, || session.execute(sql));
+        let mut rows = result
+            .unwrap()
+            .rows
+            .into_iter()
+            .map(|row| row[0].to_cell())
+            .collect::<Vec<_>>();
+        rows.sort();
+        let locator = decisions
+            .iter()
+            .rev()
+            .find(|decision| decision.chooser == "locator")
+            .expect("locator decision")
+            .clone();
+        (
+            rows,
+            locator.candidates[locator.chosen].signature.label(),
+            (locator.hybrid_nominated, locator.hybrid_override),
+            locator.decision_micros.is_some(),
+        )
+    };
+    let trap = "SELECT id FROM h WHERE region = 2 AND status = 0 AND customer = 7";
+    let control = "SELECT id FROM h WHERE region = 1 AND status = 1 AND customer = 1";
+    // Without statistics the gate has nothing to compare: the rule stands.
+    let (rule_rows, rule_choice, overridden, timed) = chosen(&mut session, trap, Some(true));
+    assert_eq!(rule_choice, "IndexLookup(h_region_status/2)");
+    assert!(overridden == (false, false) && timed);
+    session.execute("ANALYZE h").unwrap();
+    // Default (gate unset in tests) and explicit off: the rule.
+    let (rows, choice, overridden, _) = chosen(&mut session, trap, None);
+    assert_eq!(
+        (choice.as_str(), overridden),
+        ("IndexLookup(h_region_status/2)", (false, false))
+    );
+    assert_eq!(rows, rule_rows);
+    // On: the value-blind composite estimate nominates the shorter index;
+    // its exact probe is smaller, so it wins, with the same rows.
+    let (rows, choice, overridden, _) = chosen(&mut session, trap, Some(true));
+    assert_eq!(
+        (choice.as_str(), overridden),
+        ("IndexLookup(h_customer/1)", (true, true))
+    );
+    assert_eq!(rows, rule_rows);
+    // Control: nominated on the same estimates as the trap, but the long
+    // prefix's exact probe is the smaller one and keeps the win.
+    let (control_off, _, _, _) = chosen(&mut session, control, Some(false));
+    let (control_on, choice, overridden, _) = chosen(&mut session, control, Some(true));
+    assert_eq!(control_on.len(), 200);
+    assert_eq!(
+        (choice.as_str(), overridden),
+        ("IndexLookup(h_region_status/2)", (true, false))
+    );
+    assert_eq!(control_on, control_off);
+}

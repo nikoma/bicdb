@@ -1739,6 +1739,22 @@ impl BicDb {
     }
 
     /// Cancellation-aware form of [`Self::for_each_record_batch`].
+    /// Whether [`Self::for_each_record_batch_cancellable`] could stream this
+    /// collection now; when false it would return `Ok(false)` immediately
+    /// (memory-resident storage, or session-local versions shadowing the page
+    /// store). A cheap pre-check so callers can skip work only streaming uses.
+    pub fn record_batch_streaming_possible(&self, collection: &str) -> bool {
+        let Ok(state) = self.collection_state(collection) else {
+            return false;
+        };
+        state.paged_lazy
+            && self.paged_records.is_some()
+            && state
+                .read_all()
+                .iter()
+                .all(|shard| shard.versions.is_empty())
+    }
+
     pub fn for_each_record_batch_cancellable(
         &self,
         collection: &str,

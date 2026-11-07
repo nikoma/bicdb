@@ -1308,6 +1308,7 @@ impl<'db> SqlEngine<'db> {
         select: &Select,
         query: &Query,
     ) -> Result<QueryPlan> {
+        let planning_started = crate::plan_diagnostics::active().then(std::time::Instant::now);
         let stats = self.db_ref().table_statistics(collection);
         // Row-count estimate for costing. Without ANALYZE stats (the common case —
         // e.g. some external workloads never run ANALYZE), fall back to the collection's cheap
@@ -1526,6 +1527,10 @@ impl<'db> SqlEngine<'db> {
                 contradiction,
                 &candidates,
             );
+            crate::plan_diagnostics::annotate_last_decision(|decision| {
+                decision.decision_micros =
+                    planning_started.map(|started| started.elapsed().as_micros() as u64);
+            });
             return Ok(candidates
                 .into_iter()
                 .nth(chosen)
@@ -2197,6 +2202,16 @@ impl<'db> SqlEngine<'db> {
         collection: &str,
         alias: &str,
     ) -> Result<Option<ExecutedAccess>> {
+        // Paged storage: a full-scan plan may be answered by a streaming
+        // route before any index chooser runs.
+        if self.db_ref().record_batch_streaming_possible(collection)
+            && self.select_would_stream(from, select, query)
+        {
+            return Ok(Some(ExecutedAccess {
+                chooser: "streaming",
+                signature: crate::plan_diagnostics::PlanSignature::full_scan(),
+            }));
+        }
         if let Some(bounded) = self.bounded_ordered_index_plan(from, select, query)? {
             return Ok(Some(ExecutedAccess {
                 chooser: "bounded-ordered",

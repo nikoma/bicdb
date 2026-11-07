@@ -5,7 +5,7 @@
 //! statement really executes (opt-in `plan_diagnostics` trace), with and
 //! without ANALYZE statistics, and inside a transaction with pending writes.
 
-use bicdb_core::BicDb;
+use bicdb_core::{BicDb, DbConfig, StorageMode};
 use bicdb_sql::plan_diagnostics::{with_plan_diagnostics, DecisionTrace, DiagnosticsOptions};
 use bicdb_sql::SqlSession;
 
@@ -149,6 +149,88 @@ fn explain_reports_the_executed_access_path() {
     SqlSession::new(&mut db).execute("ANALYZE t").unwrap();
     mismatches.extend(check_all(&mut db, "after ANALYZE", false));
     mismatches.extend(check_all(&mut db, "pending writes", true));
+    assert!(
+        mismatches.is_empty(),
+        "{} EXPLAIN/execution mismatches:\n{}",
+        mismatches.len(),
+        mismatches.join("\n")
+    );
+}
+
+const PAGED_SHAPES: &[&str] = &[
+    "SELECT id, c FROM t WHERE a = 3",
+    "SELECT id FROM t WHERE a = 3 AND b = 2",
+    "SELECT id FROM t WHERE a = 0",
+    "SELECT id FROM t WHERE a >= 0",
+    "SELECT id FROM t WHERE a > 7",
+    "SELECT id FROM t WHERE d BETWEEN 10 AND 20",
+    "SELECT id FROM t WHERE d > 10",
+    "SELECT id FROM t WHERE c = 'x5'",
+    "SELECT count(*) FROM t WHERE a = 0",
+    "SELECT id FROM t WHERE a = 3 ORDER BY b LIMIT 5",
+    "SELECT id FROM t WHERE a = 0 ORDER BY c",
+    "SELECT id FROM t ORDER BY c",
+    "SELECT id FROM t WHERE a = 3 OR d = 2",
+];
+
+#[test]
+fn explain_reports_the_executed_access_path_in_paged_storage() {
+    // Paged storage adds the streaming routes: when the cost-based planner
+    // picks a full scan, a lazily paged collection streams record batches
+    // instead of going through the row-set locator. Lazy paging needs a
+    // fresh open and only durable index kinds (B-tree here).
+    let root = tempfile::tempdir().unwrap();
+    let config = || {
+        DbConfig::default()
+            .with_fsync(false)
+            .with_storage_mode(StorageMode::ServerPaged)
+    };
+    {
+        let mut db = BicDb::open_with_config(root.path(), config()).unwrap();
+        SqlSession::new(&mut db)
+            .execute(
+                "CREATE TABLE t (id int4 PRIMARY KEY, a int4, b int4, c text, d int4);
+                 INSERT INTO t SELECT g, CASE WHEN g % 10 < 8 THEN 0 ELSE g % 10 END, g % 7, 'x' || g, g
+                   FROM generate_series(1, 6000) g;
+                 CREATE INDEX t_a ON t (a);
+                 CREATE INDEX t_ab ON t (a, b);
+                 CREATE INDEX t_d ON t (d);
+                 ANALYZE t;",
+            )
+            .unwrap();
+        db.close().unwrap();
+    }
+    let mut db = BicDb::open_with_config(root.path(), config()).unwrap();
+    assert!(
+        db.record_batch_streaming_possible("t"),
+        "fixture must exercise the streaming routes"
+    );
+    let mut mismatches = Vec::new();
+    for sql in PAGED_SHAPES {
+        let mut session = SqlSession::new(&mut db);
+        let (kind, index, lines) = explained(&mut session, sql);
+        let (result, decisions) =
+            with_plan_diagnostics(DiagnosticsOptions::default(), || session.execute(sql));
+        result.unwrap_or_else(|error| panic!("{sql}: {error}"));
+        println!(
+            "{sql:<48} EXPLAIN {kind} {index:?} | trace {:?}",
+            decisions
+                .iter()
+                .map(|d| format!(
+                    "{}:{}{}",
+                    d.chooser,
+                    d.candidates[d.chosen].signature.label(),
+                    if d.rows_fetched.is_some() { "*" } else { "" }
+                ))
+                .collect::<Vec<_>>()
+        );
+        match executed(&decisions) {
+            Some(actual) if actual == (kind.clone(), index.clone()) => {}
+            actual => mismatches.push(format!(
+                "[paged] {sql}\n    EXPLAIN says {kind} {index:?} ({lines:?})\n    executed    {actual:?}\n    trace {decisions:?}"
+            )),
+        }
+    }
     assert!(
         mismatches.is_empty(),
         "{} EXPLAIN/execution mismatches:\n{}",

@@ -94,6 +94,17 @@ pub struct DecisionTrace {
     /// Rows that survived the WHERE re-check, when the executing path counts
     /// them. `None` if not observed.
     pub rows_matched: Option<usize>,
+    /// Wall time spent making this decision (planning, and for the locator
+    /// the index probes it ran to choose), in microseconds.
+    pub decision_micros: Option<u64>,
+    /// Locator only: time spent probing tied candidates that were then NOT
+    /// used, in microseconds: pure optimization overhead.
+    pub wasted_probe_micros: Option<u64>,
+    /// Locator only: the statistics-guided hybrid nominated a shorter
+    /// candidate for an exact probe.
+    pub hybrid_nominated: bool,
+    /// Locator only: the nominee's probe won, replacing the rule's choice.
+    pub hybrid_override: bool,
 }
 
 /// Options for one diagnostics scope.
@@ -104,6 +115,9 @@ pub struct DiagnosticsOptions {
     /// Turn the deterministic contradiction detector off (for differential
     /// testing and for measuring its effect).
     pub disable_contradiction_detection: bool,
+    /// Override the locator hybrid gate (`BICDB_LOCATOR_HYBRID`) for this
+    /// scope: `Some(true)` on, `Some(false)` off, `None` follow the gate.
+    pub locator_hybrid: Option<bool>,
 }
 
 struct State {
@@ -113,6 +127,25 @@ struct State {
 
 thread_local! {
     static STATE: RefCell<Option<State>> = const { RefCell::new(None) };
+    static STREAMING_DRY_RUN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Run `f` (the streaming routes, from EXPLAIN) with streamed scans in dry-run
+/// mode: they report whether they would stream and read no rows.
+pub(crate) fn with_streaming_dry_run<R>(f: impl FnOnce() -> R) -> R {
+    struct Restore(bool);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            STREAMING_DRY_RUN.with(|flag| flag.set(self.0));
+        }
+    }
+    let _restore = Restore(STREAMING_DRY_RUN.with(|flag| flag.replace(true)));
+    f()
+}
+
+#[inline]
+pub(crate) fn streaming_dry_run() -> bool {
+    STREAMING_DRY_RUN.with(|flag| flag.get())
 }
 
 /// Run `f` with planner diagnostics active on this thread and return its
@@ -256,6 +289,10 @@ pub(crate) fn choose_and_record(
             contradiction,
             rows_fetched: None,
             rows_matched: None,
+            decision_micros: None,
+            wasted_probe_micros: None,
+            hybrid_nominated: false,
+            hybrid_override: false,
         });
         chosen
     })
@@ -338,8 +375,35 @@ fn record_decision_with(
             contradiction: false,
             rows_fetched,
             rows_matched: None,
+            decision_micros: None,
+            wasted_probe_micros: None,
+            hybrid_nominated: false,
+            hybrid_override: false,
         });
     });
+}
+
+/// Annotate the most recent decision (timings, hybrid flag).
+pub(crate) fn annotate_last_decision(update: impl FnOnce(&mut DecisionTrace)) {
+    STATE.with(|state| {
+        if let Some(decision) = state
+            .borrow_mut()
+            .as_mut()
+            .and_then(|state| state.decisions.last_mut())
+        {
+            update(decision);
+        }
+    });
+}
+
+/// The scope's override of the locator hybrid gate, if any.
+pub(crate) fn locator_hybrid_override() -> Option<bool> {
+    STATE.with(|state| {
+        state
+            .borrow()
+            .as_ref()
+            .and_then(|state| state.options.locator_hybrid)
+    })
 }
 
 /// Record that the executed chooser answered a provably contradictory WHERE

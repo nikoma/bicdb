@@ -303,16 +303,21 @@ fn typed_composite_key_prefix_lookups_read_only_matching_rows() {
         let mut db = BicDb::open_with_config(root.path(), config).unwrap();
         crate::oracle::ensure_database_profile(&mut db, profile).unwrap();
         let mut session = SqlSession::new(&mut db);
+        // (rows, records fetched by id, whole-table record scans). A
+        // prefix id scan in server-paged storage is a record scan that
+        // decodes every row, so key lookups must report none.
         let reads = |session: &mut SqlSession<'_>, sql: &str| {
             crate::reset_sql_record_storage_get_calls();
             let walks_before = bicdb_core::paged_live_count_walks_on_this_thread();
+            let scans_before = bicdb_core::paged_record_scans_on_this_thread();
             let (rows, _) = profiled(session, profile, sql);
             let walks = bicdb_core::paged_live_count_walks_on_this_thread() - walks_before;
+            let scans = bicdb_core::paged_record_scans_on_this_thread() - scans_before;
             assert_eq!(walks, 0, "{profile}: {sql} walked a table to count rows");
-            (rows, crate::sql_record_storage_get_calls())
+            (rows, crate::sql_record_storage_get_calls(), scans)
         };
 
-        let (rows, records) = reads(
+        let (rows, records, scans) = reads(
             &mut session,
             "SELECT ad_language, printname FROM item_trl WHERE ad_printformatitem_id = 7 ORDER BY ad_language",
         );
@@ -325,26 +330,75 @@ fn typed_composite_key_prefix_lookups_read_only_matching_rows() {
             records < 20,
             "{profile}: a leading-key lookup read {records} records of a 2000-row table"
         );
+        assert_eq!(scans, 0, "{profile}: a leading-key lookup scanned a table");
+        // Exact typed keys (one- and two-column) are located without a probe
+        // that decoded the record before it was fetched.
+        for (sql, expected) in [
+            ("SELECT ad_element_id FROM col WHERE ad_column_id = 42", vec![vec!["42"]]),
+            (
+                "SELECT printname FROM element_trl WHERE ad_element_id = 42 AND ad_language = 'es_CO'",
+                vec![vec!["E42 es_CO"]],
+            ),
+            ("SELECT ad_element_id FROM col WHERE ad_column_id = 4242", vec![]),
+            (
+                "SELECT printname FROM element_trl WHERE ad_element_id = 42 AND ad_language = 'fr_FR'",
+                vec![],
+            ),
+        ] {
+            // Point reads of the statement without its key (`pk IS NULL`
+            // reads no row): catalog and schema reads, not the lookup.
+            let table = if sql.contains("FROM col") { "col" } else { "element_trl" };
+            let baseline_sql = format!("SELECT 1 FROM {table} WHERE ad_element_id IS NULL AND 1 = 0");
+            let gets_before = bicdb_core::paged_record_gets_on_this_thread();
+            reads(&mut session, &baseline_sql);
+            let baseline = bicdb_core::paged_record_gets_on_this_thread() - gets_before;
+            let gets_before = bicdb_core::paged_record_gets_on_this_thread();
+            let (rows, records, scans) = reads(&mut session, sql);
+            let gets = bicdb_core::paged_record_gets_on_this_thread() - gets_before;
+            // One decoded read for the row it returns; the located id used
+            // to be probed with a second full decode first.
+            assert!(
+                gets <= baseline + 1,
+                "{profile}: {sql} decoded {gets} records (statement baseline {baseline})"
+            );
+            let expected: Vec<Vec<String>> = expected
+                .into_iter()
+                .map(|row: Vec<&str>| row.into_iter().map(str::to_string).collect())
+                .collect();
+            assert_eq!(rows, expected, "{profile}: {sql}");
+            assert!(records <= 2, "{profile}: {sql} read {records} records");
+            assert_eq!(scans, 0, "{profile}: {sql} scanned a table");
+        }
 
         run(&mut session, profile, "BEGIN").unwrap();
         // The application statement: a by-key UPDATE of every language row
         // of one item, a SET subquery and an EXISTS that reach the
         // translation through a comma join, and an EXISTS on its client.
-        let update = "UPDATE item_trl SET printname = (SELECT e.printname FROM element_trl e, col c \
+        let keyed_update = "UPDATE item_trl SET printname = (SELECT e.printname FROM element_trl e, col c \
              WHERE e.ad_language = item_trl.ad_language AND e.ad_element_id = c.ad_element_id \
              AND c.ad_column_id = 42) \
              WHERE ad_printformatitem_id = 7 \
              AND EXISTS (SELECT * FROM element_trl e, col c WHERE e.ad_language = item_trl.ad_language \
              AND e.ad_element_id = c.ad_element_id AND c.ad_column_id = 42 \
-             AND item_trl.ad_printformatitem_id = 7) \
-             AND EXISTS (SELECT * FROM client WHERE ad_client_id = item_trl.ad_client_id \
-             AND ismultilingualdocument = 'Y')";
-        let (_, records) = reads(&mut session, update);
+             AND item_trl.ad_printformatitem_id = 7)";
+        let update = format!(
+            "{keyed_update} AND EXISTS (SELECT * FROM client \
+             WHERE ad_client_id = item_trl.ad_client_id AND ismultilingualdocument = 'Y')"
+        );
+        let (_, records, scans) = reads(&mut session, &update);
         assert!(
             records < 60,
             "{profile}: updating 2 rows by key read {records} records"
         );
-        let (rows, _) = reads(
+        // Only the client EXISTS's statement-local candidate index reads its
+        // (two-row) table whole; the key lookups scan nothing.
+        assert!(
+            scans <= 1,
+            "{profile}: updating 2 rows by key ran {scans} table scans"
+        );
+        let (_, _, scans) = reads(&mut session, keyed_update);
+        assert_eq!(scans, 0, "{profile}: the by-key UPDATE scanned a table");
+        let (rows, _, _) = reads(
             &mut session,
             "SELECT ad_language, printname FROM item_trl WHERE ad_printformatitem_id = 7 ORDER BY ad_language",
         );
@@ -355,7 +409,7 @@ fn typed_composite_key_prefix_lookups_read_only_matching_rows() {
         );
         // Untouched neighbours keep their value; a key that matches nothing
         // and a non-integral key still find nothing.
-        let (rows, _) = reads(
+        let (rows, _, _) = reads(
             &mut session,
             "SELECT printname FROM item_trl WHERE ad_printformatitem_id = 8 ORDER BY ad_language",
         );
@@ -364,12 +418,37 @@ fn typed_composite_key_prefix_lookups_read_only_matching_rows() {
             "SELECT printname FROM item_trl WHERE ad_printformatitem_id = 5000",
             "SELECT printname FROM item_trl WHERE ad_printformatitem_id = 7.5",
         ] {
-            let (rows, records) = reads(&mut session, sql);
+            let (rows, records, scans) = reads(&mut session, sql);
             assert!(rows.is_empty(), "{profile}: {sql}");
             assert!(records < 20, "{profile}: {sql} read {records} records");
+            assert_eq!(scans, 0, "{profile}: {sql} scanned a table");
         }
+        // Key-range candidates may include a row deleted in this transaction
+        // (or an inserted one): visibility still decides.
+        run(
+            &mut session,
+            profile,
+            "DELETE FROM item_trl WHERE ad_printformatitem_id = 9 AND ad_language = 'de_DE'",
+        )
+        .unwrap();
+        run(
+            &mut session,
+            profile,
+            "INSERT INTO item_trl VALUES (9, 'fr_FR', 0, 'new')",
+        )
+        .unwrap();
+        let (rows, _, scans) = reads(
+            &mut session,
+            "SELECT ad_language, printname FROM item_trl WHERE ad_printformatitem_id = 9 ORDER BY ad_language",
+        );
+        assert_eq!(
+            rows,
+            vec![vec!["es_CO", "old"], vec!["fr_FR", "new"]],
+            "{profile}"
+        );
+        assert_eq!(scans, 0, "{profile}: a leading-key lookup scanned a table");
         // Equal NUMERIC spellings share the canonical prefix.
-        let (rows, _) = reads(
+        let (rows, _, _) = reads(
             &mut session,
             "SELECT count(*) FROM item_trl WHERE ad_printformatitem_id = 7.000",
         );

@@ -7,6 +7,19 @@ use crate::engine::predicates_locators::{
 #[allow(unused_imports)]
 use crate::*;
 
+/// The least string greater than every string that starts with `prefix`
+/// (exclusive upper bound of the prefix's id range), or `None` when the last
+/// character is not ASCII. Composite-key prefixes end in `,`.
+fn record_id_prefix_successor(prefix: &str) -> Option<String> {
+    let mut end = prefix.to_string();
+    let last = end.pop()?;
+    if !last.is_ascii() || last == '\x7f' {
+        return None;
+    }
+    end.push((last as u8 + 1) as char);
+    Some(end)
+}
+
 impl<'db> SqlEngine<'db> {
     pub(crate) fn execute_set_query(&self, query: &Query) -> Result<SqlResult> {
         let mut result = self.execute_set_expr(query.body.as_ref())?;
@@ -1203,7 +1216,27 @@ impl<'db> SqlEngine<'db> {
             (None, true) => "",
             (None, false) => record_id_prefix,
         };
-        let ids = self.scan_record_ids_with_prefix(table, physical_prefix)?;
+        // The canonical prefix is a contiguous record-id range, read as keys
+        // from one seek. The prefix id scan still walks (and, in server-paged
+        // storage, deserializes) every row of the table to filter by id; the
+        // range candidates are a superset (deleted keys may appear) and every
+        // one is resolved and re-checked below.
+        let ids = match canonical_prefix
+            .as_deref()
+            .and_then(|prefix| record_id_prefix_successor(prefix).map(|end| (prefix, end)))
+        {
+            Some((prefix, end)) => {
+                self.record_key_candidates_in_range(
+                    table,
+                    std::ops::Bound::Included(prefix),
+                    std::ops::Bound::Excluded(end.as_str()),
+                    false,
+                    usize::MAX,
+                )?
+                .0
+            }
+            None => self.scan_record_ids_with_prefix(table, physical_prefix)?,
+        };
         if !typed_prefix {
             return Ok(Rc::from(ids));
         }

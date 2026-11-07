@@ -1,0 +1,17 @@
+{
+  "status": "FULL_CATALOG_VALUES_RECONCILED_NOT_ADMITTED",
+  "source_rows": 133537,
+  "native_rows": 133537,
+  "exact_values_match": true,
+  "native_peak_rss_mib": 907,
+  "minimum_available_mib": 4275,
+  "elapsed_native_ms": 641430,
+  "connect_elapsed_ms": 48395,
+  "finished_at": "2026-11-07T07:12:50.047Z",
+  "production_cutover": false,
+  "live_database_changed": false,
+  "bicdb_source_commit": "fc63926ca22a9b32aa52420a7642223ed2d3a251",
+  "debug_read_only_diagnostic": true,
+  "full_clinical_import_accepted": false,
+  "patient_values_or_keys_exported": false
+}

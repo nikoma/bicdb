@@ -1,0 +1,11 @@
+{
+  "prior_source_commit": "fc63926ca22a9b32aa52420a7642223ed2d3a251",
+  "current_source_commit": "fe68680104b8f1bc4bc43b1ca581c0020edaa0db",
+  "identical_files": 270,
+  "hashes_identical": true,
+  "scope": "Core and paged storage source and root Cargo manifests/lock",
+  "reused_core_library_passed": 452,
+  "reused_core_library_ignored": 3,
+  "reused_core_transaction_integration_passed": 24,
+  "sql_results_reused": false
+}

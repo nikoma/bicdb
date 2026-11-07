@@ -1919,6 +1919,19 @@ where
 {
     let types = types.unwrap_or_else(|| exprs.map(|expr| projected_expr_pg_type(expr, schema)));
     let [value_type, low_type, high_type] = types;
+    // An untyped string-literal bound is an `unknown` literal in PostgreSQL
+    // and takes the tested value's type, exactly as it does in `x >= '..'`.
+    // Without this, `inet_col BETWEEN '1.0.0.0' AND '9.255.255.255'` compared
+    // as text and returned 10.0.0.2.
+    let resolve = |bound_type: Option<String>, bound: &Expr| {
+        if bound_type.is_none() && is_untyped_string_literal(bound) {
+            value_type.clone()
+        } else {
+            bound_type
+        }
+    };
+    let low_type = resolve(low_type, exprs[1]);
+    let high_type = resolve(high_type, exprs[2]);
     let mut value = eval(exprs[0])?;
     let low = eval(exprs[1])?;
     let lower = compare_expr_values_resolved(
@@ -1947,6 +1960,14 @@ where
         [value_type, high_type],
     )?;
     Ok(sql_and(lower, upper).map(|matched| if negated { !matched } else { matched }))
+}
+
+fn is_untyped_string_literal(expr: &Expr) -> bool {
+    match expr {
+        Expr::Nested(inner) => is_untyped_string_literal(inner),
+        Expr::Value(value) => matches!(value.value, Value::SingleQuotedString(_)),
+        _ => false,
+    }
 }
 
 pub(crate) fn quantified_operand_value(value: SqlValue, pg_type: Option<&str>) -> Result<SqlValue> {

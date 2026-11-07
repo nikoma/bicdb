@@ -2582,7 +2582,9 @@ impl<'db> SqlSession<'db> {
         }
         if matches!(name.as_ref(), "txid_current" | "pg_catalog.txid_current") {
             require_arg_count("txid_current", &args, 0)?;
-            let transaction_id = if let Some(tx) = &self.tx {
+            // Per-row routine hosts borrow the caller's transaction. Reading
+            // its identity does not start a new transaction or authorize writes.
+            let transaction_id = if let Some(tx) = self.read_tx() {
                 tx.id().0
             } else {
                 // A standalone SELECT still has an implicit PostgreSQL

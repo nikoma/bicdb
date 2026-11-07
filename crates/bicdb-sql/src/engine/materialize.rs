@@ -1939,6 +1939,11 @@ impl<'db> SqlEngine<'db> {
         let Some(relations) = self.from_relation_columns(std::slice::from_ref(from)) else {
             return Ok(row_columns.to_vec());
         };
+        let Some(relations) =
+            Self::wildcard_relation_columns(std::slice::from_ref(from), &relations)
+        else {
+            return Ok(row_columns.to_vec());
+        };
         let sources = relations
             .iter()
             .flat_map(|relation| {
@@ -1952,6 +1957,46 @@ impl<'db> SqlEngine<'db> {
             .into_iter()
             .map(|index| row_columns[index].clone())
             .collect())
+    }
+
+    /// Scalar JSON function aliases are expression bindings, not additional
+    /// output columns. Keep those bindings for type inference while expanding
+    /// wildcards from the function's actual declared result shape.
+    fn wildcard_relation_columns(
+        from: &[TableWithJoins],
+        relations: &[RelationColumns],
+    ) -> Option<Vec<RelationColumns>> {
+        fn visit(factor: &TableFactor, relations: &mut [RelationColumns]) -> Option<()> {
+            if let Some(call) = json_set_returning_call(factor).ok().flatten() {
+                let (alias, columns) = json_set_function_columns(&call).ok()?;
+                for relation in relations.iter_mut() {
+                    if relation.alias.eq_ignore_ascii_case(&alias) {
+                        relation.columns.retain(|(name, _)| {
+                            columns
+                                .iter()
+                                .any(|column| column.eq_ignore_ascii_case(name))
+                        });
+                    }
+                }
+            } else if let TableFactor::NestedJoin {
+                table_with_joins, ..
+            } = factor
+            {
+                visit(&table_with_joins.relation, relations)?;
+                for join in &table_with_joins.joins {
+                    visit(&join.relation, relations)?;
+                }
+            }
+            Some(())
+        }
+        let mut relations = relations.to_vec();
+        for table in from {
+            visit(&table.relation, &mut relations)?;
+            for join in &table.joins {
+                visit(&join.relation, &mut relations)?;
+            }
+        }
+        Some(relations)
     }
 
     /// Output columns (name + logical type) of a SELECT, used both for the
@@ -1982,6 +2027,7 @@ impl<'db> SqlEngine<'db> {
                 .collect();
         }
         let env = self.from_relation_columns(&select.from)?;
+        let wildcard_env = Self::wildcard_relation_columns(&select.from, &env)?;
         let hide_flashback_pseudo = flashback::select_has_flashback_versions(select);
         let wildcard_visible =
             |name: &str| !(hide_flashback_pseudo && flashback::is_flashback_pseudo_column(name));
@@ -1989,7 +2035,7 @@ impl<'db> SqlEngine<'db> {
         for item in &select.projection {
             match item {
                 SelectItem::Wildcard(_) => {
-                    for relation in &env {
+                    for relation in &wildcard_env {
                         for (name, ty) in &relation.columns {
                             if wildcard_visible(name) {
                                 out.push((name.clone(), ty.clone()));
@@ -1998,7 +2044,7 @@ impl<'db> SqlEngine<'db> {
                     }
                 }
                 SelectItem::QualifiedWildcard(qualifier, _) => {
-                    let relation = self.qualified_wildcard_relation(qualifier, &env)?;
+                    let relation = self.qualified_wildcard_relation(qualifier, &wildcard_env)?;
                     for (name, ty) in &relation.columns {
                         if wildcard_visible(name) {
                             out.push((name.clone(), ty.clone()));

@@ -1125,11 +1125,13 @@ fn roles_grants_and_privilege_functions_reflect_metadata() {
              WHERE rolname = current_user",
         )
         .unwrap();
+    // The bootstrap role is superuser by construction and the role catalogs
+    // report it that way, as PostgreSQL does for its bootstrap superuser.
     assert_eq!(
         current_role.rows,
         vec![vec![
             SqlValue::String("bicdb".to_string()),
-            SqlValue::Bool(false),
+            SqlValue::Bool(true),
             SqlValue::Bool(false),
         ]]
     );

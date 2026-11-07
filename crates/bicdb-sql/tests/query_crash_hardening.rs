@@ -186,3 +186,26 @@ fn non_finite_geometric_bounds_do_not_panic() {
         .unwrap();
     assert_eq!(result.rows.len(), 1);
 }
+
+#[test]
+fn deeply_nested_jsonpath_filters_and_operands_are_refused_not_fatal() {
+    // Recursion through filters, method arguments and operator operands must
+    // be charged to the nesting budget, not only parenthesized expressions.
+    let (_directory, mut db) = session_db();
+    let depth = 50_000;
+    for bomb in [
+        format!("$ {}@{}", "? (@ ".repeat(depth), ")".repeat(depth)),
+        format!("{}1{}", "$.a.double(".repeat(depth), ")".repeat(depth)),
+        format!("{}\"x\"", "\"x\" starts with ".repeat(depth)),
+        format!("{}1", "1 + ".repeat(depth)),
+        format!("{}1", "- ".repeat(depth)),
+    ] {
+        let sql = format!("SELECT jsonb_path_exists('{{}}'::jsonb, '{bomb}')");
+        assert!(survives(&mut db, &sql));
+    }
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute("SELECT jsonb_path_exists('{\"a\":[1,2]}'::jsonb, '$.a[*] ? (@ > 1 && (@ < 3))')")
+        .unwrap();
+    assert_eq!(result.rows[0][0].to_cell(), "true");
+}

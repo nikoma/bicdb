@@ -1,0 +1,6 @@
+{
+  "status": "SOURCE_REGRESSIONS_VERIFIED_NOT_ADMITTED",
+  "production_admitted": false,
+  "source_commit": "fe68680104b8f1bc4bc43b1ca581c0020edaa0db",
+  "scope": "SQL routines, administrative UUID inventory, protocol identity; production admission remains pending"
+}

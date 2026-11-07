@@ -449,19 +449,27 @@ fn executed_decision(decisions: &[DecisionTrace]) -> Option<&DecisionTrace> {
         .or_else(|| decisions.last())
 }
 
-/// The last cost-based planner decision (what EXPLAIN reports).
-fn planner_decision(decisions: &[DecisionTrace]) -> Option<&DecisionTrace> {
-    decisions
-        .iter()
+/// The cost-based planner's decision for `sql`, taken from EXPLAIN: ordinary
+/// SELECTs in memory-resident storage no longer invoke the planner at all, so
+/// it does not appear in their execution trace.
+fn explain_planner_decision(
+    session: &mut SqlSession<'_>,
+    sql: &str,
+) -> Result<Option<DecisionTrace>> {
+    let explain = format!("EXPLAIN {sql}");
+    let (result, decisions) =
+        with_plan_diagnostics(DiagnosticsOptions::default(), || session.execute(&explain));
+    result.with_context(|| format!("explaining {sql}"))?;
+    Ok(decisions
+        .into_iter()
         .rev()
-        .find(|decision| decision.chooser == "planner")
+        .find(|decision| decision.chooser == "planner"))
 }
 
 struct Run {
     elapsed_ms: f64,
     fingerprint: (usize, u64),
     decision: Option<DecisionTrace>,
-    planner: Option<DecisionTrace>,
     forced: bool,
     decisions: Vec<DecisionTrace>,
 }
@@ -486,7 +494,6 @@ fn run_with(
     let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
     let result = result.with_context(|| format!("executing {sql}"))?;
     let decision = executed_decision(&decisions).cloned();
-    let planner = planner_decision(&decisions).cloned();
     // Forced when the executing chooser honored the force: every locator
     // decision when the locator ran (it may run more than once), otherwise
     // every planner decision.
@@ -505,7 +512,6 @@ fn run_with(
         elapsed_ms,
         fingerprint: result_fingerprint(&result),
         decision,
-        planner,
         forced,
         decisions,
     })
@@ -791,7 +797,9 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
                 "plan_only_ms": plan_ms,
                 "executed_chooser": decision.chooser,
                 "executed": decision_json(&decision),
-                "nostats": natural.planner.as_ref().map(decision_json),
+                "nostats": explain_planner_decision(&mut session, &query.sql)?
+                    .as_ref()
+                    .map(decision_json),
             });
             if done % 25 == 0 {
                 eprintln!("[{}] phase A {}/{}", dataset.name, done, queries.len());
@@ -880,7 +888,9 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
             record.insert("executed_after_analyze".into(), decision_json(&decision));
             record.insert(
                 "stats".into(),
-                json!(natural.planner.as_ref().map(decision_json)),
+                json!(explain_planner_decision(&mut session, &query.sql)?
+                    .as_ref()
+                    .map(decision_json)),
             );
             record.insert("stats_plan_only_ms".into(), json!(plan_ms));
             record.insert(

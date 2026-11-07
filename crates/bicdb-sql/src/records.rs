@@ -2204,11 +2204,11 @@ pub(crate) fn record_index_field_sql_value(
         }
         IndexField::Upper(inner) => match record_index_field_sql_value(record, inner, schema) {
             SqlValue::Null => SqlValue::Null,
-            value => SqlValue::String(value.to_cell().to_ascii_uppercase()),
+            value => SqlValue::String(bicdb_core::index_key_upper(&value.to_cell())),
         },
         IndexField::Lower(inner) => match record_index_field_sql_value(record, inner, schema) {
             SqlValue::Null => SqlValue::Null,
-            value => SqlValue::String(value.to_cell().to_ascii_lowercase()),
+            value => SqlValue::String(bicdb_core::index_key_lower(&value.to_cell())),
         },
         IndexField::Trim(inner) => match record_index_field_sql_value(record, inner, schema) {
             SqlValue::Null => SqlValue::Null,

@@ -3416,8 +3416,78 @@ pub(crate) fn normalize_table_lookup_field_expr(
             let field = index_field_from_expr_for_schema(schema, &normalized).ok()?;
             matches!(field, IndexField::TimestampDay(_)).then_some(normalized)
         }
+        Expr::Function(function)
+            if object_name_lowercase(&function.name).is_ok_and(|name| {
+                matches!(
+                    name.as_ref(),
+                    "upper" | "pg_catalog.upper" | "lower" | "pg_catalog.lower"
+                )
+            }) =>
+        {
+            case_mapped_lookup_field_expr(function, table, alias, schema?)
+        }
         _ => normalize_table_field_expr(expr, table, alias, schema),
     }
+}
+
+/// `upper(col)` / `lower(col)` as an index lookup field. An `Upper`/`Lower`
+/// index key is `bicdb_core::index_key_upper`/`index_key_lower` of the stored
+/// text, and SQL `upper`/`lower` evaluate with those same functions, so the
+/// SQL value of the other side of `upper(col) = $1` is exactly the key of
+/// every matching row. That identity holds only for the column's stored
+/// text itself: a lossy cast, a COLLATE, blank-padded CHAR (whose `upper`
+/// result drops the padding the stored key keeps) or a user type each need
+/// their own proof and are declined, leaving the predicate to the scan.
+fn case_mapped_lookup_field_expr(
+    function: &Function,
+    table: &str,
+    alias: &str,
+    schema: &TableSchema,
+) -> Option<Expr> {
+    if function.over.is_some()
+        || function.filter.is_some()
+        || !function.within_group.is_empty()
+        || function.null_treatment.is_some()
+        || function.parameters != FunctionArguments::None
+    {
+        return None;
+    }
+    let FunctionArguments::List(list) = &function.args else {
+        return None;
+    };
+    if list.duplicate_treatment.is_some() || !list.clauses.is_empty() {
+        return None;
+    }
+    let [FunctionArg::Unnamed(FunctionArgExpr::Expr(arg))] = list.args.as_slice() else {
+        return None;
+    };
+    let bound = normalize_table_lookup_field_expr(arg, table, alias, Some(schema))?;
+    let Expr::Identifier(ident) = &bound else {
+        return None;
+    };
+    if !case_mapped_text_column_is_exact(schema.column(&ident.value)?) {
+        return None;
+    }
+    let mut normalized = function.clone();
+    let FunctionArguments::List(list) = &mut normalized.args else {
+        return None;
+    };
+    list.args = vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(bound))];
+    Some(Expr::Function(normalized))
+}
+
+/// Whether `upper(column)` / `lower(column)` in SQL is the case-mapped stored
+/// text of `column`, byte for byte: unpadded character types under the
+/// default equality, with no locale collation or user-defined type.
+pub(crate) fn case_mapped_text_column_is_exact(column: &ColumnSchema) -> bool {
+    matches!(column.pg_type.as_str(), "text" | "varchar")
+        && column.user_type.is_none()
+        && column.collation.is_none()
+        && matches!(
+            column.type_modifier,
+            None | Some(PgTypeModifier::Character { .. })
+                | Some(PgTypeModifier::OracleCharacterV1 { fixed: false, .. })
+        )
 }
 
 fn lookup_cast_preserves_equality(column_type: &str, user_type: bool, target: &str) -> bool {

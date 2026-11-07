@@ -2975,18 +2975,9 @@ pub(super) fn folded_text_equality_prefix(
     let [name] = path.as_slice() else {
         return None;
     };
-    let column = schema.column(name)?;
     // Padded characters, user-defined equality, and locale collations need
     // their own implication proof. Do not infer raw string bounds for them.
-    if !matches!(column.pg_type.as_str(), "text" | "varchar")
-        || column.user_type.is_some()
-        || column.collation.is_some()
-        || !matches!(
-            column.type_modifier,
-            None | Some(PgTypeModifier::Character { .. })
-                | Some(PgTypeModifier::OracleCharacterV1 { fixed: false, .. })
-        )
-    {
+    if !case_mapped_text_column_is_exact(schema.column(name)?) {
         return None;
     }
     fn unnest(mut expr: &Expr) -> &Expr {
@@ -3027,13 +3018,12 @@ pub(super) fn folded_text_equality_prefix(
         }
         None
     })?;
-    // Match the durable core key extractor, which currently converts ASCII
-    // letters only. Using Unicode conversion here would miss existing keys
-    // such as Straße. This inference does not change SQL function semantics.
+    // The durable core key extractor itself, so the bound is the key of
+    // every row whose text equals `value` (see `bicdb_core::index_key_upper`).
     Some(IndexValue::String(if upper {
-        value.to_ascii_uppercase()
+        bicdb_core::index_key_upper(&value)
     } else {
-        value.to_ascii_lowercase()
+        bicdb_core::index_key_lower(&value)
     }))
 }
 

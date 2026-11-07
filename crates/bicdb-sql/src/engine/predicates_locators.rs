@@ -2023,6 +2023,9 @@ impl<'db> SqlEngine<'db> {
                     prefix_complete = false;
                     break;
                 }
+                if !case_mapped_probe_value_is_text(plan.fields.get(field_idx), &value) {
+                    continue 'plans;
+                }
                 match index_value_from_sql(value) {
                     Ok(value) => {
                         let value = if let (Some(schema), Some(field)) =
@@ -2828,7 +2831,9 @@ impl<'db> SqlEngine<'db> {
                     continue 'plans;
                 }
                 let value = self.eval_dynamic_bound_expr(expr)?;
-                if matches!(value, SqlValue::Null) {
+                if matches!(value, SqlValue::Null)
+                    || !case_mapped_probe_value_is_text(plan.fields.get(field_idx), &value)
+                {
                     continue 'plans;
                 }
                 let value = index_value_from_sql(value)?;
@@ -4132,7 +4137,9 @@ impl<'db> SqlEngine<'db> {
                     continue;
                 }
                 let value = self.eval_dynamic_bound_expr(right)?;
-                if matches!(value, SqlValue::Null) {
+                if matches!(value, SqlValue::Null)
+                    || !case_mapped_probe_value_is_text(Some(field), &value)
+                {
                     continue;
                 }
                 let value = index_value_from_sql(value)?;
@@ -4150,7 +4157,9 @@ impl<'db> SqlEngine<'db> {
                     continue;
                 }
                 let value = self.eval_dynamic_bound_expr(left)?;
-                if matches!(value, SqlValue::Null) {
+                if matches!(value, SqlValue::Null)
+                    || !case_mapped_probe_value_is_text(Some(field), &value)
+                {
                     continue;
                 }
                 let value = index_value_from_sql(value)?;
@@ -6500,6 +6509,13 @@ impl<'db> SqlEngine<'db> {
     ) -> Result<Option<Vec<PreparedDynamicBoundExpr>>> {
         let mut prefix = Vec::new();
         for field in fields {
+            // A join probe evaluates its bound per outer row and treats the
+            // result as the answer, without the text check single-table
+            // probes make (`case_mapped_probe_value_is_text`). Keep
+            // `upper(col)`/`lower(col)` keys out of join probes.
+            if matches!(field, IndexField::Upper(_) | IndexField::Lower(_)) {
+                break;
+            }
             let Some(bound) =
                 self.dynamic_equality_bound_expr(selection, table, alias, schema, field, scope)?
             else {

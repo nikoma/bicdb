@@ -32,9 +32,20 @@ struct CandidateProbe {
     outer_slot: usize,
     primary_key: Expr,
     keys: BTreeMap<String, Vec<SqlValue>>,
+    /// The original subquery has run once with an empty candidate set, so
+    /// its relation and projection authorization held for this statement.
+    empty_verified: Cell<bool>,
 }
 
-pub(super) struct ProbeScope<'a> {
+/// How a correlated EXISTS is answered from its statement-local candidates.
+pub(super) enum ExistsCandidate {
+    /// The original subquery restricted to candidate primary keys.
+    Query(Query),
+    /// No inner row can satisfy the correlation and filters: EXISTS is false.
+    Absent,
+}
+
+pub(crate) struct ProbeScope<'a> {
     memo: &'a ExistsProbeMemo,
     previous: bool,
 }
@@ -75,6 +86,68 @@ fn cast_may_hide_callbacks(kind: &DataType) -> bool {
             | sqlparser::ast::ArrayElemTypeDef::Parenthesis(element),
         ) => cast_may_hide_callbacks(element),
         _ => false,
+    }
+}
+
+impl SqlEngine<'_> {
+    /// Statement-local EXISTS candidates for an UPDATE or DELETE predicate.
+    /// The candidate index is built once per statement, so it is only reused
+    /// when no subquery reads the table the statement modifies.
+    pub(crate) fn dml_predicate_probe_scope(
+        &self,
+        table: &str,
+        selection: Option<&Expr>,
+    ) -> ProbeScope<'_> {
+        thread_local! {
+            static TEMPLATE: Option<Box<Query>> = match parse_statements("SELECT 1") {
+                Ok(mut statements) => match statements.pop() {
+                    Some(Statement::Query(query)) => Some(query),
+                    _ => None,
+                },
+                Err(_) => None,
+            };
+        }
+        struct HasExists;
+        impl Visitor for HasExists {
+            type Break = ();
+            fn pre_visit_expr(&mut self, expression: &Expr) -> ControlFlow<()> {
+                if matches!(expression, Expr::Exists { .. }) {
+                    ControlFlow::Break(())
+                } else {
+                    ControlFlow::Continue(())
+                }
+            }
+        }
+        let safe = self.outer_row.is_none()
+            && selection.is_some_and(|selection| {
+                if selection.visit(&mut HasExists).is_continue() {
+                    return false;
+                }
+                let Some(mut query) = TEMPLATE.with(Clone::clone) else {
+                    return false;
+                };
+                let SetExpr::Select(select) = query.body.as_mut() else {
+                    return false;
+                };
+                select.selection = Some(selection.clone());
+                struct ReadsTarget<'a>(&'a str);
+                impl Visitor for ReadsTarget<'_> {
+                    type Break = ();
+                    fn pre_visit_table_factor(&mut self, factor: &TableFactor) -> ControlFlow<()> {
+                        match factor {
+                            TableFactor::Table { name, .. }
+                                if relation_name(name).map_or(true, |name| name == self.0) =>
+                            {
+                                ControlFlow::Break(())
+                            }
+                            _ => ControlFlow::Continue(()),
+                        }
+                    }
+                }
+                probe_query_safe(self.db_ref(), &query)
+                    && query.visit(&mut ReadsTarget(table)).is_continue()
+            });
+        self.exists_probe_memo.scope(safe)
     }
 }
 
@@ -218,7 +291,7 @@ fn numeric_correlation(
     context: &BoundRowContext,
     engine: &SqlEngine<'_>,
     env: &[RelationColumns],
-) -> Option<(Expr, usize)> {
+) -> Option<(Expr, usize, Vec<Expr>)> {
     fn inner<'a>(
         expression: &'a Expr,
         qualifier: &[String],
@@ -240,6 +313,8 @@ fn numeric_correlation(
                 safe_residual(left, qualifier, schema) && safe_residual(right, qualifier, schema),
             Expr::UnaryOp { op: UnaryOperator::Not, expr } => safe_residual(expr, qualifier, schema),
             Expr::IsNull(expr) | Expr::IsNotNull(expr) => inner(expr, qualifier, schema).is_some(),
+            Expr::BinaryOp { left, op: BinaryOperator::Eq | BinaryOperator::NotEq, right }
+                if numeric_literal_comparison(left, right, qualifier, schema) => true,
             Expr::BinaryOp { left, op: BinaryOperator::Eq | BinaryOperator::NotEq, right } => {
                 [(left.as_ref(), right.as_ref()), (right.as_ref(), left.as_ref())].into_iter().any(|(column, value)| {
                     inner(column, qualifier, schema).is_some_and(|column|
@@ -248,9 +323,40 @@ fn numeric_correlation(
                         && matches!(unwrap_nested_expr(value), Expr::Value(value) if matches!(value.value, Value::SingleQuotedString(_) | Value::Null)))
                 })
             }
+            Expr::BinaryOp {
+                left,
+                op:
+                    BinaryOperator::Lt
+                    | BinaryOperator::LtEq
+                    | BinaryOperator::Gt
+                    | BinaryOperator::GtEq,
+                right,
+            } if numeric_literal_comparison(left, right, qualifier, schema) => true,
             Expr::Value(value) => matches!(value.value, Value::Boolean(_) | Value::Null),
             _ => false,
         }
+    }
+    // A numeric column against a numeric literal cannot raise a conversion
+    // error, so evaluating it on more rows than the original is harmless.
+    fn numeric_literal_comparison(
+        left: &Expr,
+        right: &Expr,
+        qualifier: &[String],
+        schema: &TableSchema,
+    ) -> bool {
+        [(left, right), (right, left)]
+            .into_iter()
+            .any(|(column, value)| {
+                inner(column, qualifier, schema).is_some_and(|column| {
+                    column.user_type.is_none()
+                        && matches!(
+                            pg_type_oid_by_name(&column.pg_type),
+                            Some(20 | 21 | 23 | 1700)
+                        )
+                        && matches!(unwrap_nested_expr(value), Expr::Value(value)
+                        if matches!(value.value, Value::Number(_, _) | Value::Null))
+                })
+            })
     }
     fn outer(
         expression: &Expr,
@@ -273,6 +379,7 @@ fn numeric_correlation(
         engine: &SqlEngine<'_>,
         env: &[RelationColumns],
         key: &mut Option<(Expr, usize)>,
+        residuals: &mut Vec<Expr>,
     ) -> Option<()> {
         match unwrap_nested_expr(expression) {
             Expr::BinaryOp {
@@ -280,8 +387,12 @@ fn numeric_correlation(
                 op: BinaryOperator::And,
                 right,
             } => {
-                collect(left, qualifier, schema, context, engine, env, key)?;
-                collect(right, qualifier, schema, context, engine, env, key)
+                collect(
+                    left, qualifier, schema, context, engine, env, key, residuals,
+                )?;
+                collect(
+                    right, qualifier, schema, context, engine, env, key, residuals,
+                )
             }
             Expr::BinaryOp {
                 left,
@@ -316,16 +427,26 @@ fn numeric_correlation(
                         return Some(());
                     }
                 }
-                safe_residual(expression, qualifier, schema).then_some(())
+                safe_residual(expression, qualifier, schema)
+                    .then(|| residuals.push(expression.clone()))
             }
-            _ => safe_residual(expression, qualifier, schema).then_some(()),
+            _ => safe_residual(expression, qualifier, schema)
+                .then(|| residuals.push(expression.clone())),
         }
     }
     let mut key = None;
+    let mut residuals = Vec::new();
     collect(
-        expression, qualifier, schema, context, engine, env, &mut key,
+        expression,
+        qualifier,
+        schema,
+        context,
+        engine,
+        env,
+        &mut key,
+        &mut residuals,
     )?;
-    key
+    key.map(|(expr, slot)| (expr, slot, residuals))
 }
 
 impl SqlEngine<'_> {
@@ -338,7 +459,7 @@ impl SqlEngine<'_> {
         context: &BoundRowContext,
         query: &Query,
         env: &[RelationColumns],
-    ) -> Result<Option<Query>> {
+    ) -> Result<Option<ExistsCandidate>> {
         if !self.exists_probe_memo.enabled.get() || self.outer_row.is_some() {
             return Ok(None);
         }
@@ -397,6 +518,11 @@ impl SqlEngine<'_> {
         if keys.len() > MAX_BUCKET_KEYS {
             return Ok(None);
         }
+        if keys.is_empty() && plan.empty_verified.get() {
+            return Ok(Some(ExistsCandidate::Absent));
+        }
+        plan.empty_verified
+            .set(plan.empty_verified.get() || keys.is_empty());
         let mut limited = query.clone();
         let SetExpr::Select(select) = limited.body.as_mut() else {
             return Ok(None);
@@ -428,7 +554,7 @@ impl SqlEngine<'_> {
             op: BinaryOperator::And,
             right: Box::new(filter),
         });
-        Ok(Some(limited))
+        Ok(Some(ExistsCandidate::Query(limited)))
     }
 
     fn build_exists_candidate_probe(
@@ -528,7 +654,7 @@ impl SqlEngine<'_> {
         let Some(selection) = select.selection.as_ref() else {
             return Ok(None);
         };
-        let Some((key_expr, outer_slot)) =
+        let Some((key_expr, outer_slot, residuals)) =
             numeric_correlation(selection, &qualifier, &schema, context, self, env)
         else {
             return Ok(None);
@@ -547,7 +673,13 @@ impl SqlEngine<'_> {
             SelectItem::UnnamedExpr(key_expr),
             SelectItem::UnnamedExpr(primary_key.clone()),
         ];
-        projection.selection = None;
+        // Infallible residual filters narrow the candidates to keys some
+        // qualifying inner row has; correlated equalities stay per row.
+        projection.selection = residuals.into_iter().reduce(|left, right| Expr::BinaryOp {
+            left: Box::new(Expr::Nested(Box::new(left))),
+            op: BinaryOperator::And,
+            right: Box::new(Expr::Nested(Box::new(right))),
+        });
         scan.order_by = None;
         scan.limit_clause = Some(LimitClause::LimitOffset {
             limit: Some(Expr::Value(
@@ -593,6 +725,7 @@ impl SqlEngine<'_> {
             outer_slot,
             primary_key,
             keys,
+            empty_verified: Cell::new(false),
         }))
     }
 }

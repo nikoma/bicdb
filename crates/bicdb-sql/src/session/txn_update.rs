@@ -1676,6 +1676,7 @@ impl<'db> SqlSession<'db> {
             false
         };
         let row_engine = self.sql_engine_with_ctes(ctes.clone());
+        let _exists_probes = row_engine.dml_predicate_probe_scope(table, selection);
         let cell_fields = schema
             .filter(|schema| {
                 row_engine

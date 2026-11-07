@@ -473,6 +473,73 @@ mod tests {
     }
 
     #[test]
+    fn update_with_correlated_exists_uses_statement_candidates() {
+        for profile in ["postgres", "oracle-preview-v1"] {
+            let (_root, mut db) = database(profile);
+            let mut session = SqlSession::new(&mut db);
+            for sql in [
+                r#"CREATE TABLE "Cols"("ColId" NUMERIC(10) PRIMARY KEY,"ElemId" NUMERIC(10))"#,
+                r#"CREATE TABLE "Items"("ItemId" NUMERIC(10) PRIMARY KEY,"ColId" NUMERIC(10),"Central" CHAR(1),"Name" VARCHAR(20))"#,
+            ] {
+                run(&mut session, profile, sql).unwrap();
+            }
+            for id in 1..=300 {
+                run(
+                    &mut session,
+                    profile,
+                    &format!(r#"INSERT INTO "Cols" VALUES({id},{})"#, id % 10),
+                )
+                .unwrap();
+                run(
+                    &mut session,
+                    profile,
+                    &format!(
+                        r#"INSERT INTO "Items" VALUES({id},{id},'{}','old')"#,
+                        if id % 2 == 0 { "Y" } else { "N" }
+                    ),
+                )
+                .unwrap();
+            }
+            crate::SQL_PROFILE_STACK
+                .with(|stack| stack.borrow_mut().push(crate::SqlProfileStats::default()));
+            let updated = run(
+                &mut session,
+                profile,
+                r#"UPDATE "Items" SET "Name"='new' WHERE "Central"='Y' AND EXISTS (SELECT * FROM "Cols" c WHERE c."ColId"="Items"."ColId" AND c."ElemId"=4)"#,
+            )
+            .unwrap();
+            let stats = crate::SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().pop().unwrap());
+            // Even ids with id % 10 == 4: 4, 14, ..., 294.
+            assert_eq!(updated.command_complete_tag(), "UPDATE 30", "{profile}");
+            assert_eq!(
+                run(
+                    &mut session,
+                    profile,
+                    r#"SELECT COUNT(*) FROM "Items" WHERE "Name"='new'"#
+                )
+                .unwrap()
+                .rows,
+                vec![vec![SqlValue::Int(30)]],
+                "{profile}"
+            );
+            // Candidate rows whose key has no qualifying inner row are answered
+            // from the statement's candidate set, not by running the subquery.
+            assert!(
+                stats.index_lookup_count < 60,
+                "{profile}: {} subquery lookups for 150 candidate rows",
+                stats.index_lookup_count
+            );
+            let negated = run(
+                &mut session,
+                profile,
+                r#"SELECT COUNT(*) FROM "Items" WHERE "Central"='Y' AND NOT EXISTS (SELECT 1 FROM "Cols" c WHERE c."ColId"="Items"."ColId" AND c."ElemId"=4)"#,
+            )
+            .unwrap();
+            assert_eq!(negated.rows, vec![vec![SqlValue::Int(120)]], "{profile}");
+        }
+    }
+
+    #[test]
     fn typed_exact_key_probe_sees_same_transaction_rows_without_scanning() {
         for profile in ["postgres", "oracle-preview-v1"] {
             let (_root, mut db) = database(profile);

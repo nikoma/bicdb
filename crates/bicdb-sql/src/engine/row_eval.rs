@@ -407,10 +407,13 @@ impl<'db> SqlEngine<'db> {
             Expr::Exists { subquery, negated } => {
                 let candidate = self.exists_candidate_query(row, context, subquery, env)?;
                 let exists = if let Some(candidate) = candidate {
-                    !self
-                        .run_slot_subquery(row, context, &candidate, None)?
-                        .rows
-                        .is_empty()
+                    match candidate {
+                        ExistsCandidate::Absent => false,
+                        ExistsCandidate::Query(candidate) => !self
+                            .run_slot_subquery(row, context, &candidate, None)?
+                            .rows
+                            .is_empty(),
+                    }
                 } else {
                     !self
                         .execute_correlated_slot_query(row, context, subquery)?
@@ -1009,10 +1012,13 @@ impl<'db> SqlEngine<'db> {
                 let exists = if let Some(candidate) =
                     self.exists_candidate_query(row, context, subquery, &[])?
                 {
-                    !self
-                        .run_slot_subquery(row, context, &candidate, None)?
-                        .rows
-                        .is_empty()
+                    match candidate {
+                        ExistsCandidate::Absent => false,
+                        ExistsCandidate::Query(candidate) => !self
+                            .run_slot_subquery(row, context, &candidate, None)?
+                            .rows
+                            .is_empty(),
+                    }
                 } else {
                     !self
                         .execute_correlated_slot_query(row, context, subquery)?

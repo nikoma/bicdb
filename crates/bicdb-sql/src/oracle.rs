@@ -909,9 +909,9 @@ pub fn lower_session_sql(
         .join("; "))
 }
 
-/// `INTERVAL` is non-reserved in Oracle: only `INTERVAL '<literal>' ...`
-/// starts an interval literal, so an unquoted INTERVAL followed by anything
-/// else names a column (`SELECT Interval FROM User_Part_Tables`). Quote such
+/// `INTERVAL` is non-reserved in Oracle: only `INTERVAL '<literal>' ...` and
+/// the `INTERVAL DAY|YEAR ...` type keep the keyword, so an unquoted INTERVAL
+/// followed by anything else names a column (`SELECT Interval FROM User_Part_Tables`). Quote such
 /// uses as the upper-case identifier the Oracle lowering would produce.
 fn quote_interval_identifiers(sql: &str) -> Option<String> {
     if !sql.to_ascii_uppercase().contains("INTERVAL") {
@@ -929,14 +929,21 @@ fn quote_interval_identifiers(sql: &str) -> Option<String> {
                 let next = tokens[index + 1..]
                     .iter()
                     .find(|token| !matches!(token, Token::Whitespace(_)));
-                if !matches!(
-                    next,
-                    Some(
-                        Token::SingleQuotedString(_)
-                            | Token::NationalStringLiteral(_)
-                            | Token::LParen
+                let qualifier = matches!(next, Some(Token::Word(word))
+                    if word.quote_style.is_none()
+                        && ["DAY", "YEAR", "MONTH", "HOUR", "MINUTE", "SECOND"]
+                            .iter()
+                            .any(|unit| word.value.eq_ignore_ascii_case(unit)));
+                if !qualifier
+                    && !matches!(
+                        next,
+                        Some(
+                            Token::SingleQuotedString(_)
+                                | Token::NationalStringLiteral(_)
+                                | Token::LParen
+                        )
                     )
-                ) {
+                {
                     out.push_str("\"INTERVAL\"");
                     changed = true;
                     continue;

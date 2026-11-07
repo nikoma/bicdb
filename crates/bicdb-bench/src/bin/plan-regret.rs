@@ -24,11 +24,11 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
-use bicdb_core::{BicDb, DbConfig};
+use bicdb_core::{BicDb, DbConfig, StorageMode};
 use bicdb_sql::plan_diagnostics::{
     with_plan_diagnostics, DecisionTrace, DiagnosticsOptions, PlanSignature,
 };
-use bicdb_sql::{SqlResult, SqlSession};
+use bicdb_sql::{SqlResult, SqlSession, SqlSessionCatalogCache};
 use serde_json::{json, Value};
 
 // ---------------------------------------------------------------- RNG
@@ -107,6 +107,10 @@ struct Config {
     reps: usize,
     seed: u64,
     flush_bytes: usize,
+    /// Server-paged storage; the second condition is then COLD (close,
+    /// evict the data files from the OS page cache, reopen) instead of
+    /// CPU-cache flushed.
+    paged: bool,
 }
 
 fn parse_args() -> Result<Config> {
@@ -118,6 +122,7 @@ fn parse_args() -> Result<Config> {
     let mut reps = 5usize;
     let mut seed = 20261106u64;
     let mut flush_mb = 256usize;
+    let mut paged = false;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         let mut value = || args.next().with_context(|| format!("{arg} needs a value"));
@@ -129,10 +134,17 @@ fn parse_args() -> Result<Config> {
             "--reps" => reps = value()?.parse()?,
             "--seed" => seed = value()?.parse()?,
             "--flush-mb" => flush_mb = value()?.parse()?,
+            "--storage" => {
+                paged = match value()?.as_str() {
+                    "memory" => false,
+                    "paged" => true,
+                    other => bail!("--storage must be memory or paged, got {other}"),
+                }
+            }
             "-h" | "--help" => {
                 println!(
                     "plan-regret [--out DIR] [--data-root DIR] [--datasets name:rows:note_min:note_max,...]\n\
-                     \t[--queries N] [--reps R] [--seed S] [--flush-mb MB]"
+                     \t[--queries N] [--reps R] [--seed S] [--flush-mb MB] [--storage memory|paged]"
                 );
                 std::process::exit(0);
             }
@@ -162,6 +174,7 @@ fn parse_args() -> Result<Config> {
         reps,
         seed,
         flush_bytes: flush_mb << 20,
+        paged,
     })
 }
 
@@ -449,29 +462,36 @@ fn executed_decision(decisions: &[DecisionTrace]) -> Option<&DecisionTrace> {
         .or_else(|| decisions.last())
 }
 
-/// The last cost-based planner decision (what EXPLAIN reports).
-fn planner_decision(decisions: &[DecisionTrace]) -> Option<&DecisionTrace> {
-    decisions
-        .iter()
+/// The cost-based planner's decision for `sql`, taken from EXPLAIN: ordinary
+/// SELECTs in memory-resident storage no longer invoke the planner at all, so
+/// it does not appear in their execution trace.
+fn explain_planner_decision(bench: &mut Bench, sql: &str) -> Result<Option<DecisionTrace>> {
+    let explain = format!("EXPLAIN {sql}");
+    let mut session = bench.session();
+    let (result, decisions) =
+        with_plan_diagnostics(DiagnosticsOptions::default(), || session.execute(&explain));
+    bench.catalog = session.into_catalog_cache();
+    result.with_context(|| format!("explaining {sql}"))?;
+    Ok(decisions
+        .into_iter()
         .rev()
-        .find(|decision| decision.chooser == "planner")
+        .find(|decision| decision.chooser == "planner"))
 }
 
 struct Run {
     elapsed_ms: f64,
     fingerprint: (usize, u64),
     decision: Option<DecisionTrace>,
-    planner: Option<DecisionTrace>,
     forced: bool,
     decisions: Vec<DecisionTrace>,
 }
 
-fn run_once(session: &mut SqlSession<'_>, sql: &str, force: Option<&PlanSignature>) -> Result<Run> {
-    run_with(session, sql, force, Some(false))
+fn run_once(bench: &mut Bench, sql: &str, force: Option<&PlanSignature>) -> Result<Run> {
+    run_with(bench, sql, force, Some(false))
 }
 
 fn run_with(
-    session: &mut SqlSession<'_>,
+    bench: &mut Bench,
     sql: &str,
     force: Option<&PlanSignature>,
     hybrid: Option<bool>,
@@ -481,12 +501,13 @@ fn run_with(
         locator_hybrid: hybrid,
         ..DiagnosticsOptions::default()
     };
+    let mut session = bench.session();
     let started = Instant::now();
     let (result, decisions) = with_plan_diagnostics(options, || session.execute(sql));
     let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
+    bench.catalog = session.into_catalog_cache();
     let result = result.with_context(|| format!("executing {sql}"))?;
     let decision = executed_decision(&decisions).cloned();
-    let planner = planner_decision(&decisions).cloned();
     // Forced when the executing chooser honored the force: every locator
     // decision when the locator ran (it may run more than once), otherwise
     // every planner decision.
@@ -505,21 +526,113 @@ fn run_with(
         elapsed_ms,
         fingerprint: result_fingerprint(&result),
         decision,
-        planner,
         forced,
         decisions,
     })
 }
 
-fn time_plan_only(session: &mut SqlSession<'_>, sql: &str, reps: usize) -> Result<f64> {
+fn time_plan_only(bench: &mut Bench, sql: &str, reps: usize) -> Result<f64> {
     let explain = format!("EXPLAIN {sql}");
     let mut samples = Vec::with_capacity(reps);
     for _ in 0..reps {
+        let mut session = bench.session();
         let started = Instant::now();
-        session.execute(&explain)?;
+        let result = session.execute(&explain);
         samples.push(started.elapsed().as_secs_f64() * 1000.0);
+        bench.catalog = session.into_catalog_cache();
+        result?;
     }
     Ok(median(&mut samples))
+}
+
+/// The database under test. Every statement runs in a fresh session that
+/// carries the catalog cache, as the pgwire server does.
+struct Bench {
+    dir: PathBuf,
+    paged: bool,
+    db: Option<BicDb>,
+    catalog: SqlSessionCatalogCache,
+}
+
+impl Bench {
+    fn config(paged: bool) -> DbConfig {
+        let config = DbConfig::default().with_fsync(false);
+        if paged {
+            config.with_storage_mode(StorageMode::ServerPaged)
+        } else {
+            config
+        }
+    }
+
+    fn open(dir: &std::path::Path, paged: bool) -> Result<Self> {
+        Ok(Self {
+            dir: dir.to_path_buf(),
+            paged,
+            db: Some(BicDb::open_with_config(dir, Self::config(paged))?),
+            catalog: SqlSessionCatalogCache::default(),
+        })
+    }
+
+    fn session(&mut self) -> SqlSession<'_> {
+        let catalog = std::mem::take(&mut self.catalog);
+        SqlSession::new(self.db.as_mut().expect("database open")).with_catalog_cache(catalog)
+    }
+
+    // After a statement: `bench.catalog = session.into_catalog_cache();`
+    // (a method taking `&mut self` would conflict with the session's borrow).
+
+    /// Close and reopen: drops the buffer pool, the engine's lookup caches
+    /// and the session catalog cache.
+    fn reopen(&mut self) -> Result<()> {
+        if let Some(db) = self.db.take() {
+            db.close()?;
+        }
+        self.catalog = SqlSessionCatalogCache::default();
+        if self.paged {
+            evict_from_os_cache(&self.dir)?;
+        }
+        self.db = Some(BicDb::open_with_config(
+            &self.dir,
+            Self::config(self.paged),
+        )?);
+        Ok(())
+    }
+
+    /// Prepare the second measurement condition for the next run.
+    fn make_cold(&mut self, flusher: &mut CacheFlusher) -> Result<()> {
+        if self.paged {
+            self.reopen()
+        } else {
+            flusher.flush();
+            Ok(())
+        }
+    }
+}
+
+/// Drop this database's files (only) from the OS page cache, so reads go to
+/// the device. GNU dd's nocache flag with count=0 advises the kernel to drop
+/// the whole file; this touches no other process's cached data.
+fn evict_from_os_cache(dir: &std::path::Path) -> Result<()> {
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(path) = stack.pop() {
+        for entry in std::fs::read_dir(&path)? {
+            let entry = entry?;
+            let file_type = entry.file_type()?;
+            if file_type.is_dir() {
+                stack.push(entry.path());
+            } else if file_type.is_file() {
+                let status = std::process::Command::new("dd")
+                    .arg(format!("if={}", entry.path().display()))
+                    .args(["iflag=nocache", "count=0", "status=none"])
+                    .status()
+                    .context("running dd to evict a data file from the page cache")?;
+                if !status.success() {
+                    bail!("dd nocache failed for {}", entry.path().display());
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 struct CacheFlusher {
@@ -571,7 +684,7 @@ struct CandidateMeasurement {
 const CONDITIONS: [&str; 2] = ["warm", "flushed"];
 
 fn measure_candidates(
-    session: &mut SqlSession<'_>,
+    bench: &mut Bench,
     sql: &str,
     signatures: &[PlanSignature],
     reference: (usize, u64),
@@ -583,7 +696,7 @@ fn measure_candidates(
     let mut out: BTreeMap<PlanSignature, CandidateMeasurement> = BTreeMap::new();
     // Untimed warm-up + semantics check for every candidate.
     for signature in signatures {
-        let run = run_once(session, sql, Some(signature))?;
+        let run = run_once(bench, sql, Some(signature))?;
         let measurement = out.entry(signature.clone()).or_default();
         measurement.semantics_ok = run.fingerprint == reference;
         measurement.forced_ok = run.forced;
@@ -603,9 +716,9 @@ fn measure_candidates(
             rng.shuffle(&mut order);
             for signature in &order {
                 if condition == "flushed" {
-                    flusher.flush();
+                    bench.make_cold(flusher)?;
                 }
-                let run = run_once(session, sql, Some(signature))?;
+                let run = run_once(bench, sql, Some(signature))?;
                 let measurement = out.get_mut(signature).expect("measured");
                 if run.fingerprint != reference {
                     measurement.semantics_ok = false;
@@ -627,7 +740,7 @@ fn measure_candidates(
 /// and execution of its choice. Reports the decision-time split per run.
 #[allow(clippy::too_many_arguments)]
 fn measure_natural(
-    session: &mut SqlSession<'_>,
+    bench: &mut Bench,
     sql: &str,
     reference: (usize, u64),
     hybrid: bool,
@@ -635,7 +748,7 @@ fn measure_natural(
     rng: &mut Rng,
     flusher: &mut CacheFlusher,
 ) -> Result<Value> {
-    run_with(session, sql, None, Some(hybrid))?;
+    run_with(bench, sql, None, Some(hybrid))?;
     let mut warm = Vec::new();
     let mut flushed = Vec::new();
     let mut locator_us = Vec::new();
@@ -648,9 +761,9 @@ fn measure_natural(
     for condition in conditions {
         for _ in 0..reps {
             if condition == "flushed" {
-                flusher.flush();
+                bench.make_cold(flusher)?;
             }
-            let run = run_with(session, sql, None, Some(hybrid))?;
+            let run = run_with(bench, sql, None, Some(hybrid))?;
             semantics_ok &= run.fingerprint == reference;
             if condition == "warm" {
                 warm.push(run.elapsed_ms);
@@ -719,16 +832,29 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
     }
     std::fs::create_dir_all(&dir)?;
     let result = (|| -> Result<()> {
-        let mut db = BicDb::open_with_config(&dir, DbConfig::default().with_fsync(false))?;
-        let mut session = SqlSession::new(&mut db);
         let started = Instant::now();
-        build_dataset(&mut session, dataset, config.seed ^ 0xD47A)?;
+        let mut bench = Bench::open(&dir, config.paged)?;
+        {
+            let mut session = SqlSession::new(bench.db.as_mut().expect("open"));
+            build_dataset(&mut session, dataset, config.seed ^ 0xD47A)?;
+        }
+        // Paged storage serves rows from pages only after a fresh open
+        // (before that they are resident from the load).
+        if config.paged {
+            bench.reopen()?;
+        }
         eprintln!(
-            "[{}] built {} rows in {:.1}s",
+            "[{}] built {} rows in {:.1}s ({})",
             dataset.name,
             dataset.rows,
-            started.elapsed().as_secs_f64()
+            started.elapsed().as_secs_f64(),
+            if config.paged {
+                "server-paged, cold = reopen + evict files"
+            } else {
+                "memory-resident"
+            }
         );
+        let bench = &mut bench;
 
         let mut rng = Rng(config.seed ^ dataset.rows as u64);
         let queries = generate_queries(dataset, config.queries, &mut rng);
@@ -743,12 +869,11 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
         let mut references = vec![(0usize, 0u64); queries.len()];
         for (done, &qi) in order.iter().enumerate() {
             let query = &queries[qi];
-            let natural = run_once(&mut session, &query.sql, None)?;
+            let natural = run_once(bench, &query.sql, None)?;
             let Some(decision) = natural.decision.clone() else {
                 bail!("no planning decision recorded for {}", query.sql);
             };
-            let reference_run =
-                run_once(&mut session, &query.sql, Some(&PlanSignature::full_scan()))?;
+            let reference_run = run_once(bench, &query.sql, Some(&PlanSignature::full_scan()))?;
             references[qi] = reference_run.fingerprint;
             let mut signatures = decision
                 .candidates
@@ -757,9 +882,9 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
                 .collect::<BTreeSet<_>>();
             signatures.insert(PlanSignature::full_scan());
             let signatures = signatures.into_iter().collect::<Vec<_>>();
-            let plan_ms = time_plan_only(&mut session, &query.sql, 5)?;
+            let plan_ms = time_plan_only(bench, &query.sql, 5)?;
             measured[qi] = measure_candidates(
-                &mut session,
+                bench,
                 &query.sql,
                 &signatures,
                 references[qi],
@@ -769,7 +894,7 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
                 &mut flusher,
             )?;
             let natural_nostats = measure_natural(
-                &mut session,
+                bench,
                 &query.sql,
                 references[qi],
                 false,
@@ -791,7 +916,9 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
                 "plan_only_ms": plan_ms,
                 "executed_chooser": decision.chooser,
                 "executed": decision_json(&decision),
-                "nostats": natural.planner.as_ref().map(decision_json),
+                "nostats": explain_planner_decision(bench, &query.sql)?
+                    .as_ref()
+                    .map(decision_json),
             });
             if done % 25 == 0 {
                 eprintln!("[{}] phase A {}/{}", dataset.name, done, queries.len());
@@ -800,11 +927,19 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
 
         // Phase B: fresh ANALYZE statistics.
         let started = Instant::now();
-        session.execute("ANALYZE orders")?;
+        {
+            let mut session = bench.session();
+            let result = session.execute("ANALYZE orders");
+            bench.catalog = session.into_catalog_cache();
+            result?;
+        }
+        if config.paged {
+            bench.reopen()?;
+        }
         let analyze_ms = started.elapsed().as_secs_f64() * 1000.0;
         for (done, &qi) in order.iter().enumerate() {
             let query = &queries[qi];
-            let natural = run_once(&mut session, &query.sql, None)?;
+            let natural = run_once(bench, &query.sql, None)?;
             let Some(decision) = natural.decision.clone() else {
                 bail!(
                     "no planning decision recorded after ANALYZE for {}",
@@ -824,7 +959,7 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
                 .collect::<Vec<_>>();
             if !missing.is_empty() {
                 let extra = measure_candidates(
-                    &mut session,
+                    bench,
                     &query.sql,
                     &missing,
                     references[qi],
@@ -836,7 +971,7 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
                 measured[qi].extend(extra);
             }
             let natural_stats = measure_natural(
-                &mut session,
+                bench,
                 &query.sql,
                 references[qi],
                 false,
@@ -845,7 +980,7 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
                 &mut flusher,
             )?;
             let natural_hybrid = measure_natural(
-                &mut session,
+                bench,
                 &query.sql,
                 references[qi],
                 true,
@@ -854,14 +989,14 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
                 &mut flusher,
             )?;
             // Make sure the hybrid's choice also has a forced measurement.
-            let hybrid_run = run_with(&mut session, &query.sql, None, Some(true))?;
+            let hybrid_run = run_with(bench, &query.sql, None, Some(true))?;
             if let Some(hybrid_decision) = &hybrid_run.decision {
                 let signature = hybrid_decision.candidates[hybrid_decision.chosen]
                     .signature
                     .clone();
                 if !measured[qi].contains_key(&signature) {
                     let extra = measure_candidates(
-                        &mut session,
+                        bench,
                         &query.sql,
                         &[signature],
                         references[qi],
@@ -873,14 +1008,16 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
                     measured[qi].extend(extra);
                 }
             }
-            let plan_ms = time_plan_only(&mut session, &query.sql, 5)?;
+            let plan_ms = time_plan_only(bench, &query.sql, 5)?;
             let record = records[qi].as_object_mut().expect("record");
             record.insert("natural_stats".into(), natural_stats);
             record.insert("natural_hybrid".into(), natural_hybrid);
             record.insert("executed_after_analyze".into(), decision_json(&decision));
             record.insert(
                 "stats".into(),
-                json!(natural.planner.as_ref().map(decision_json)),
+                json!(explain_planner_decision(bench, &query.sql)?
+                    .as_ref()
+                    .map(decision_json)),
             );
             record.insert("stats_plan_only_ms".into(), json!(plan_ms));
             record.insert(
@@ -949,6 +1086,8 @@ fn main() -> Result<()> {
         "queries_per_dataset": config.queries,
         "reps": config.reps,
         "flush_bytes": config.flush_bytes,
+        "storage": if config.paged { "server-paged" } else { "memory" },
+        "second_condition": if config.paged { "cold: close, evict data files from OS page cache, reopen" } else { "CPU caches flushed" },
         "datasets": config.datasets.iter().map(|d| json!({
             "name": d.name, "rows": d.rows, "note_min": d.note_min, "note_max": d.note_max,
         })).collect::<Vec<_>>(),

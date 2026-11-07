@@ -12,7 +12,7 @@ mod bounded_primary_key;
 pub(crate) mod column_check;
 mod exists_probe;
 pub(crate) mod flashback;
-use exists_probe::ExistsProbeMemo;
+use exists_probe::{ExistsCandidate, ExistsProbeMemo};
 mod hierarchy;
 mod joins_windows;
 pub(crate) mod materialize;

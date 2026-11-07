@@ -2,6 +2,16 @@
 //! independent concurrent waits by the same transaction are reference counted.
 use super::*;
 
+/// Live SQL row-lock waits in this process. A waiter holds a shared database
+/// guard, so a host queueing an exclusive writer behind it would block the
+/// owner's COMMIT; hosts consult this before parking such a writer.
+static LIVE_ROW_LOCK_WAITS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Whether any statement is currently waiting for a row lock.
+pub fn row_lock_waits_active() -> bool {
+    LIVE_ROW_LOCK_WAITS.load(std::sync::atomic::Ordering::Relaxed) > 0
+}
+
 #[derive(Debug, Default)]
 pub(super) struct WaitForGraph {
     edges: Mutex<FxHashMap<TransactionId, smallvec::SmallVec<[TransactionId; 1]>>>,
@@ -44,6 +54,7 @@ impl WaitForGraph {
             }
         }
         edges.entry(waiter).or_default().push(owner);
+        LIVE_ROW_LOCK_WAITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Some(WaitEdge {
             graph: self,
             waiter,
@@ -54,6 +65,7 @@ impl WaitForGraph {
 
 impl Drop for WaitEdge<'_> {
     fn drop(&mut self) {
+        LIVE_ROW_LOCK_WAITS.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
         let mut edges = self.graph.edges.lock();
         if let Some(owners) = edges.get_mut(&self.waiter) {
             if let Some(index) = owners.iter().position(|owner| *owner == self.owner) {

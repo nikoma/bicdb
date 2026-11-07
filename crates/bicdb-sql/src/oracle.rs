@@ -36,6 +36,7 @@ mod nvl;
 mod nvl2;
 mod outer_joins;
 pub(crate) mod output;
+pub(crate) mod partitioning;
 pub(crate) mod procedures;
 pub(crate) mod raw_values;
 pub(crate) mod routine_arithmetic;
@@ -534,6 +535,7 @@ fn lower_profile_sql_in_namespace(
         ));
     }
     if postgres_catalog_read(sql)
+        || postgres_catalog_context_read(sql)
         || (profile == ORACLE_PREVIEW_PROFILE && postgres_owner_administration(sql))
     {
         return Ok(sql.to_string());
@@ -618,6 +620,64 @@ fn postgres_catalog_read(sql: &str) -> bool {
         std::ops::ControlFlow::Continue(())
     });
     found && result.is_continue()
+}
+
+/// PostgreSQL drivers inspect the connected catalog independently of the
+/// application's SQL dialect. Preserve a relation-free catalog-context read as
+/// native SQL. A quoted identifier, application relation, statement batch, or
+/// other expression must still pass through the selected application profile.
+/// This is a transport extension, not an Oracle SQL compatibility claim.
+fn postgres_catalog_context_read(sql: &str) -> bool {
+    if !sql
+        .as_bytes()
+        .windows(b"current_catalog".len())
+        .any(|part| part.eq_ignore_ascii_case(b"current_catalog"))
+    {
+        return false;
+    }
+    fn catalog_context(expr: &Expr) -> bool {
+        match expr {
+            Expr::Identifier(ident) => {
+                ident.quote_style.is_none() && ident.value.eq_ignore_ascii_case("current_catalog")
+            }
+            Expr::Function(function) => is_current_catalog_keyword(function),
+            Expr::Nested(inner) => catalog_context(inner),
+            _ => false,
+        }
+    }
+    let Ok(statements) = Parser::parse_sql(&PostgreSqlDialect {}, sql) else {
+        return false;
+    };
+    let [Statement::Query(query)] = statements.as_slice() else {
+        return false;
+    };
+    // Reject every query clause except the projection. Comparing against the
+    // same parsed query with a default SELECT prevents new parser fields from
+    // accidentally widening the native-dialect boundary.
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return false;
+    };
+    if select.projection.is_empty()
+        || !select.projection.iter().all(|item| match item {
+            SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
+                catalog_context(expr)
+            }
+            _ => false,
+        })
+    {
+        return false;
+    }
+    let Ok(mut plain) = Parser::parse_sql(&PostgreSqlDialect {}, "SELECT CURRENT_CATALOG") else {
+        return false;
+    };
+    let Statement::Query(plain_query) = &mut plain[0] else {
+        return false;
+    };
+    let SetExpr::Select(plain_select) = plain_query.body.as_mut() else {
+        return false;
+    };
+    plain_select.projection = select.projection.clone();
+    plain_query.as_ref() == query.as_ref()
 }
 
 // PostgreSQL clients also provision target roles and map imported ownership.
@@ -790,13 +850,20 @@ pub fn lower_session_sql(
     // whose application statements use Oracle syntax. Preserve those native
     // identifiers/operators; literals or mixed application queries do not
     // select this boundary.
-    if postgres_catalog_read(sql) || postgres_owner_administration(sql) {
+    if postgres_catalog_read(sql)
+        || postgres_catalog_context_read(sql)
+        || postgres_owner_administration(sql)
+    {
         return Ok(sql.to_string());
     }
     // Apply source-only type defaults before NUMBER is lowered to the native
     // unconstrained NUMERIC carrier, and before pgwire renders bind values.
     let numeric_source = numeric_casts::source_cast_defaults(sql);
     let sql = numeric_source.as_deref().unwrap_or(sql);
+    let partition_ddl = partitioning::lower_ddl(sql)?;
+    let sql = partition_ddl.as_deref().unwrap_or(sql);
+    let interval_identifiers = quote_interval_identifiers(sql);
+    let sql = interval_identifiers.as_deref().unwrap_or(sql);
     let schema = preview_schema(db, search_path, user)?.unwrap_or_else(default_schema_name);
     let scoped = namespaces::bind_source_quoted_functions(db, sql, &schema)?;
     let lowered = lower_profile_sql_in_namespace(
@@ -827,6 +894,7 @@ pub fn lower_session_sql(
     let mut statements = parse_statements(&lowered)?;
     output::lower_calls(&mut statements)?;
     storage_catalog::lower(db, &mut statements, &schema)?;
+    partitioning::lower_views(db, &mut statements, &schema)?;
     namespaces::qualify_with_calls(&mut statements, &schema);
     collections::lower_constructors(db, &mut statements, Some(&schema))?;
     date_trunc::rewrite(db, &mut statements)?;
@@ -839,6 +907,52 @@ pub fn lower_session_sql(
         .map(render_sql)
         .collect::<Vec<_>>()
         .join("; "))
+}
+
+/// `INTERVAL` is non-reserved in Oracle: only `INTERVAL '<literal>' ...` and
+/// the `INTERVAL DAY|YEAR ...` type keep the keyword, so an unquoted INTERVAL
+/// followed by anything else names a column (`SELECT Interval FROM User_Part_Tables`). Quote such
+/// uses as the upper-case identifier the Oracle lowering would produce.
+fn quote_interval_identifiers(sql: &str) -> Option<String> {
+    if !sql.to_ascii_uppercase().contains("INTERVAL") {
+        return None;
+    }
+    let dialect = sqlparser::dialect::GenericDialect {};
+    let tokens = sqlparser::tokenizer::Tokenizer::new(&dialect, sql)
+        .tokenize()
+        .ok()?;
+    let mut changed = false;
+    let mut out = String::with_capacity(sql.len() + 8);
+    for (index, token) in tokens.iter().enumerate() {
+        if let Token::Word(word) = token {
+            if word.quote_style.is_none() && word.value.eq_ignore_ascii_case("INTERVAL") {
+                let next = tokens[index + 1..]
+                    .iter()
+                    .find(|token| !matches!(token, Token::Whitespace(_)));
+                let qualifier = matches!(next, Some(Token::Word(word))
+                    if word.quote_style.is_none()
+                        && ["DAY", "YEAR", "MONTH", "HOUR", "MINUTE", "SECOND"]
+                            .iter()
+                            .any(|unit| word.value.eq_ignore_ascii_case(unit)));
+                if !qualifier
+                    && !matches!(
+                        next,
+                        Some(
+                            Token::SingleQuotedString(_)
+                                | Token::NationalStringLiteral(_)
+                                | Token::LParen
+                        )
+                    )
+                {
+                    out.push_str("\"INTERVAL\"");
+                    changed = true;
+                    continue;
+                }
+            }
+        }
+        out.push_str(&token.to_string());
+    }
+    changed.then_some(out)
 }
 
 fn lower_decode(db: &BicDb, sql: &str, oids: Option<&[i32]>) -> Result<String> {
@@ -3884,6 +3998,37 @@ mod tests {
 #[cfg(test)]
 mod postgres_catalog_boundary_tests {
     use super::*;
+    #[test]
+    fn current_catalog_transport_boundary_requires_relation_free_context_projection() {
+        for sql in [
+            "SELECT CURRENT_CATALOG",
+            "select (current_catalog) as connected_catalog;",
+            "SELECT CURRENT_CATALOG, CURRENT_CATALOG AS \"Other\"",
+        ] {
+            assert!(postgres_catalog_context_read(sql), "{sql}");
+        }
+        for sql in [
+            "SELECT \"CURRENT_CATALOG\"",
+            "SELECT \"current_catalog\"()",
+            "SELECT current_catalog()",
+            "SELECT current_catalog FROM app_rows",
+            "SELECT app.current_catalog",
+            "SELECT 'current_catalog'",
+            "SELECT current_catalog, application_function()",
+            "SELECT current_catalog WHERE true",
+            "SELECT current_catalog ORDER BY 1",
+            "SELECT current_catalog LIMIT 1",
+            "SELECT current_catalog INTO app_rows",
+            "SELECT current_catalog FOR UPDATE",
+            "SELECT current_catalog UNION SELECT current_catalog",
+            "WITH t AS (SELECT 1) SELECT current_catalog",
+            "SELECT current_catalog; SELECT 1",
+            "DELETE FROM app_rows RETURNING current_catalog",
+        ] {
+            assert!(!postgres_catalog_context_read(sql), "{sql}");
+        }
+    }
+
     #[test]
     fn native_catalog_boundary_uses_relations_not_literal_or_identifier_substrings() {
         for sql in ["SELECT c.oid,n.nspname FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace",

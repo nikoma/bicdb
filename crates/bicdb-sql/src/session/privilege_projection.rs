@@ -483,6 +483,7 @@ impl<'db> SqlSession<'db> {
             owner: Some(current_user_from_gucs(&self.session_gucs)),
             partitioning,
             partition_of: None,
+            oracle_partitioning: None,
         };
         self.save_session_schema(&schema)?;
         if let Some(definition) = primary_key_index_definition_for_schema(&schema) {

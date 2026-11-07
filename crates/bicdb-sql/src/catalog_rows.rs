@@ -7083,6 +7083,7 @@ pub(crate) fn catalog_view_schema(db: &BicDb, view: ViewSchema) -> Result<TableS
         owner: view.owner,
         partitioning: None,
         partition_of: None,
+        oracle_partitioning: None,
     })
 }
 pub(crate) fn relation_schemas(db: &BicDb) -> Result<Vec<TableSchema>> {

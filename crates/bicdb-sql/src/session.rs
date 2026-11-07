@@ -23,6 +23,8 @@ mod read_only;
 mod row_assignments;
 mod row_triggers;
 mod set_functions;
+#[cfg(test)]
+mod subquery_scope_tests;
 mod transaction_defaults;
 pub use read_only::parse_transaction_read_only;
 pub(crate) mod txn_update;
@@ -2537,11 +2539,19 @@ impl<'db> SqlSession<'db> {
             .snapshot_floor
             .max(crate::statement_context::latest_independent_commit());
         let mut tx = self.db_ref().begin_transaction_after(floor)?;
+        tx.set_blocking_row_waits(self.blocking_row_wait_token());
         if isolation == "serializable" {
             tx.set_snapshot_isolation(true, floor)?;
             tx.set_statement_write_conflict_check(true)?;
         }
         Ok(tx)
+    }
+
+    /// DML waits for a row's owner (as SQL locking reads do) only on shared
+    /// sessions: the owner commits through a shared guard, so a wait under an
+    /// exclusive guard could never be released.
+    pub(crate) fn blocking_row_wait_token(&self) -> Option<CancellationToken> {
+        (!self.exclusive).then(|| self.cancellation.clone())
     }
 
     /// The transaction this session reads through: its own, or for a per-row
@@ -2936,6 +2946,9 @@ impl<'db> SqlSession<'db> {
         // Statement-scoped only: CREATE/DROP INDEX between statements must
         // not be answered from a stale arbiter.
         self.conflict_arbiter_memo.borrow_mut().take();
+        if let Some(tx) = self.tx.as_ref() {
+            tx.set_blocking_row_waits(self.blocking_row_wait_token());
+        }
         let effects = crate::statement_context::StatementScope::enter();
         let atomic = self.tx.is_some() && oracle::preview_routine_language_enabled(self.db_ref())?;
         let execute = |session: &mut Self| {

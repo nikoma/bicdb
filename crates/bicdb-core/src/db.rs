@@ -73,6 +73,7 @@ pub use transaction_receipts::{
     TransactionWriteRollback,
 };
 pub use transaction_suspension::TransactionSuspension;
+pub use wait_graph::row_lock_waits_active;
 
 use petgraph::algo::{astar, dijkstra};
 use petgraph::graph::{DiGraph, NodeIndex};
@@ -8573,6 +8574,12 @@ pub struct Transaction {
     /// O(rows^2) — 100 -> 195 -> 813 us/row across 50k/100k/200k in a single
     /// bulk load, with no indexes, no audit and no projections involved.
     locked_keys: Mutex<LockedKeys>,
+    /// When set, DML row locks held by another transaction are waited for
+    /// (cancellably, with cycle detection) like SQL locking reads, instead of
+    /// the bounded age-based policy. Only callers that do not hold an
+    /// exclusive database guard may install it: the owner must be able to
+    /// reach COMMIT while this transaction waits.
+    blocking_row_waits: Mutex<Option<crate::CancellationToken>>,
     // Own handle to the active-snapshot registry so drop can deregister this
     // transaction's snapshot (unblocking version-chain GC) without touching `db`.
     active_snapshots: Arc<ActiveSnapshots>,
@@ -15123,7 +15130,8 @@ impl Transaction {
             )));
         }
         let db = self.db_ref();
-        if let Some(cancellation) = cancellation {
+        let installed = self.blocking_row_waits.lock().clone();
+        if let Some(cancellation) = cancellation.or(installed.as_ref()) {
             db.lock_tx_record_cancellable(
                 self.id,
                 collection,
@@ -15937,7 +15945,7 @@ impl Transaction {
             if id.is_empty() {
                 return Err(BicDbError::EmptyRecordId);
             }
-            db.lock_tx_record_for_read_committed_update(tx_id, collection, id, &self.locked_keys)?;
+            self.lock_row_for_write(tx_id, collection, id, true)?;
         }
         Ok(())
     }
@@ -16091,6 +16099,50 @@ impl Transaction {
         self.db_ref()
             .ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
         self.scan_collection_record_ids_with_prefix_unchecked(collection, id_prefix)
+    }
+
+    /// Install (or clear) the cancellation that makes DML row-lock conflicts
+    /// wait for the owner; see `blocking_row_waits`.
+    pub fn set_blocking_row_waits(&self, cancellation: Option<crate::CancellationToken>) {
+        *self.blocking_row_waits.lock() = cancellation;
+    }
+
+    fn lock_row_for_write(
+        &self,
+        tx_id: TransactionId,
+        collection: &str,
+        id: &str,
+        read_committed: bool,
+    ) -> Result<()> {
+        let db = self.db_ref();
+        let blocking = self.blocking_row_waits.lock().clone();
+        match blocking {
+            Some(cancellation) => db.lock_tx_record_cancellable(
+                tx_id,
+                collection,
+                id,
+                &self.locked_keys,
+                &cancellation,
+            ),
+            None if read_committed => db.lock_tx_record_for_read_committed_update(
+                tx_id,
+                collection,
+                id,
+                &self.locked_keys,
+            ),
+            None => db.lock_tx_record(tx_id, collection, id, &self.locked_keys),
+        }
+    }
+
+    /// Snapshot-visible point read with no policy or protection gate,
+    /// including this transaction's own uncommitted writes. For locator
+    /// planning only: callers fetch the rows through policy-filtered paths.
+    pub fn get_visible_record_unchecked(
+        &self,
+        collection: &str,
+        id: &str,
+    ) -> Result<Option<Arc<Record>>> {
+        self.get_visible_unchecked(collection, id)
     }
 
     /// Prefix id scan with no policy or protection gate; see
@@ -16607,7 +16659,7 @@ impl Transaction {
             if id.is_empty() {
                 return Err(BicDbError::EmptyRecordId);
             }
-            db.lock_tx_record(tx_id, collection, &id, &self.locked_keys)?;
+            self.lock_row_for_write(tx_id, collection, &id, false)?;
             let statement_snapshot =
                 self.conflict_snapshot_for_write(collection, &id, statement_snapshot);
             writes.push(TxWrite {
@@ -17009,7 +17061,7 @@ impl Transaction {
                 }
                 let record_id = record.id.clone();
                 validate_record(collection, &record, &mut next_dim)?;
-                db.lock_tx_record(tx_id, collection, &record_id, &self.locked_keys)?;
+                self.lock_row_for_write(tx_id, collection, &record_id, false)?;
                 let statement_snapshot =
                     self.conflict_snapshot_for_write(collection, &record_id, statement_snapshot);
                 writes.push(TxWrite {
@@ -17192,7 +17244,7 @@ impl Transaction {
                     &mut next_dim,
                 )?;
                 if repair.is_none() && !optimistic_inserts {
-                    db.lock_tx_record(tx_id, collection, &record_id, &self.locked_keys)?;
+                    self.lock_row_for_write(tx_id, collection, &record_id, false)?;
                 }
                 let statement_snapshot =
                     self.conflict_snapshot_for_write(collection, &record_id, statement_snapshot);
@@ -17243,7 +17295,7 @@ impl Transaction {
                 let record_id = record.id.clone();
                 validate_record(collection, &record, &mut next_dim)?;
                 if repair.is_none() {
-                    db.lock_tx_record(tx_id, collection, &record_id, &self.locked_keys)?;
+                    self.lock_row_for_write(tx_id, collection, &record_id, false)?;
                 }
                 let statement_snapshot =
                     self.conflict_snapshot_for_write(collection, &record_id, statement_snapshot);
@@ -17340,7 +17392,7 @@ impl Transaction {
             None => db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?,
         }
         db.ensure_collection(collection)?;
-        db.lock_tx_record_for_read_committed_update(tx_id, collection, id, &self.locked_keys)?;
+        self.lock_row_for_write(tx_id, collection, id, true)?;
         let Some(max_tx) = Self::latest_committed_record_sequence(db, collection, id)? else {
             return Ok(Some((None, 0)));
         };
@@ -17411,7 +17463,7 @@ impl Transaction {
         if reservation {
             db.lock_tx_first_record_for_reservation(tx_id, collection, id, &self.locked_keys)?;
         } else {
-            db.lock_tx_record_for_read_committed_update(tx_id, collection, id, &self.locked_keys)?;
+            self.lock_row_for_write(tx_id, collection, id, true)?;
         }
         let Some(max_tx) = Self::latest_committed_record_sequence(db, collection, id)? else {
             return Ok(Some((None, 0)));
@@ -17475,7 +17527,7 @@ impl Transaction {
             None => db.ensure_unprotected_legacy_access(collection, SecureOperation::Delete)?,
         }
         db.ensure_collection(collection)?;
-        db.lock_tx_record_for_read_committed_update(tx_id, collection, id, &self.locked_keys)?;
+        self.lock_row_for_write(tx_id, collection, id, true)?;
         let Some(max_tx) = Self::latest_committed_record_sequence(db, collection, id)? else {
             return Ok(None);
         };

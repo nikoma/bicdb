@@ -98,7 +98,7 @@ fn qualified_session_keyword_column_parts(
     if parts.len() < 2
         || !matches!(
             parts.last().map(String::as_str),
-            Some("current_user" | "current_role" | "session_user" | "user")
+            Some("current_catalog" | "current_user" | "current_role" | "session_user" | "user")
         )
     {
         return None;
@@ -407,10 +407,13 @@ impl<'db> SqlEngine<'db> {
             Expr::Exists { subquery, negated } => {
                 let candidate = self.exists_candidate_query(row, context, subquery, env)?;
                 let exists = if let Some(candidate) = candidate {
-                    !self
-                        .run_slot_subquery(row, context, &candidate, None)?
-                        .rows
-                        .is_empty()
+                    match candidate {
+                        ExistsCandidate::Absent => false,
+                        ExistsCandidate::Query(candidate) => !self
+                            .run_slot_subquery(row, context, &candidate, None)?
+                            .rows
+                            .is_empty(),
+                    }
                 } else {
                     !self
                         .execute_correlated_slot_query(row, context, subquery)?
@@ -633,7 +636,13 @@ impl<'db> SqlEngine<'db> {
                             pg_typed_compare("pg_lsn", &left, &right)?,
                         )));
                     }
-                    compare_values(&left, op, &right)
+                    compare_values_with_types(
+                        left_type.as_deref(),
+                        right_type.as_deref(),
+                        &left,
+                        op,
+                        &right,
+                    )
                 }
                 BinaryOperator::PGLikeMatch
                 | BinaryOperator::PGILikeMatch
@@ -802,9 +811,19 @@ impl<'db> SqlEngine<'db> {
                     .iter()
                     .map(|candidate| self.eval_slot_row_value(row, context, candidate))
                     .collect::<Result<Vec<_>>>()?;
-                let matched = candidates
-                    .iter()
-                    .any(|candidate| values_equal(&value, candidate));
+                let value_type = self.row_expr_pg_type(expr, context);
+                let mut matched = false;
+                for (candidate_expr, candidate) in list.iter().zip(&candidates) {
+                    if simple_case_values_equal(
+                        &value,
+                        candidate,
+                        value_type.as_deref(),
+                        self.row_expr_pg_type(candidate_expr, context).as_deref(),
+                    )? {
+                        matched = true;
+                        break;
+                    }
+                }
                 if matched {
                     Ok(Some(!*negated))
                 } else if matches!(value, SqlValue::Null)
@@ -993,10 +1012,13 @@ impl<'db> SqlEngine<'db> {
                 let exists = if let Some(candidate) =
                     self.exists_candidate_query(row, context, subquery, &[])?
                 {
-                    !self
-                        .run_slot_subquery(row, context, &candidate, None)?
-                        .rows
-                        .is_empty()
+                    match candidate {
+                        ExistsCandidate::Absent => false,
+                        ExistsCandidate::Query(candidate) => !self
+                            .run_slot_subquery(row, context, &candidate, None)?
+                            .rows
+                            .is_empty(),
+                    }
                 } else {
                     !self
                         .execute_correlated_slot_query(row, context, subquery)?
@@ -1043,9 +1065,9 @@ impl<'db> SqlEngine<'db> {
     // like PostgreSQL they resolve to the session identity, never to columns.
     pub(crate) fn session_identity_value(&self, name: &str) -> Option<SqlValue> {
         match name.to_ascii_lowercase().as_str() {
-            "current_database" => Some(SqlValue::String(current_database_from_gucs(
-                &self.session_gucs,
-            ))),
+            "current_catalog" | "current_database" => Some(SqlValue::String(
+                current_database_from_gucs(&self.session_gucs),
+            )),
             "current_user" | "current_role" => {
                 Some(SqlValue::String(current_user_from_gucs(&self.session_gucs)))
             }
@@ -1516,6 +1538,11 @@ impl<'db> SqlEngine<'db> {
         context: &BoundRowContext,
         function: &Function,
     ) -> Result<SqlValue> {
+        if is_current_catalog_keyword(function) {
+            return Ok(SqlValue::String(current_database_from_gucs(
+                &self.session_gucs,
+            )));
+        }
         if function.over.is_some() {
             return context
                 .row_lookup
@@ -1984,7 +2011,13 @@ impl<'db> SqlEngine<'db> {
                             pg_typed_compare("pg_lsn", &left, &right)?,
                         )));
                     }
-                    compare_values(&left, op, &right)
+                    compare_values_with_types(
+                        left_type.as_deref(),
+                        right_type.as_deref(),
+                        &left,
+                        op,
+                        &right,
+                    )
                 }
                 _ => {
                     let Some(value) = self
@@ -2220,7 +2253,13 @@ impl<'db> SqlEngine<'db> {
                             pg_typed_compare("pg_lsn", &left, &right)?,
                         )));
                     }
-                    compare_values(&left, op, &right)
+                    compare_values_with_types(
+                        left_type.as_deref(),
+                        right_type.as_deref(),
+                        &left,
+                        op,
+                        &right,
+                    )
                 }
                 BinaryOperator::PGLikeMatch
                 | BinaryOperator::PGILikeMatch
@@ -2441,12 +2480,26 @@ impl<'db> SqlEngine<'db> {
                     return Ok(truth);
                 }
                 let value = self.eval_row_value(row, expr)?;
-                let matched = list
-                    .iter()
-                    .map(|candidate| self.eval_row_value(row, candidate))
-                    .collect::<Result<Vec<_>>>()?
-                    .iter()
-                    .any(|candidate| values_equal(&value, candidate));
+                let value_type =
+                    row_columns_expr_pg_type(self.db_ref(), expr, row.keys().map(String::as_str));
+                let mut matched = false;
+                for candidate_expr in list {
+                    let candidate = self.eval_row_value(row, candidate_expr)?;
+                    let candidate_type = row_columns_expr_pg_type(
+                        self.db_ref(),
+                        candidate_expr,
+                        row.keys().map(String::as_str),
+                    );
+                    if simple_case_values_equal(
+                        &value,
+                        &candidate,
+                        value_type.as_deref(),
+                        candidate_type.as_deref(),
+                    )? {
+                        matched = true;
+                        break;
+                    }
+                }
                 if matched {
                     Ok(Some(!*negated))
                 } else if matches!(value, SqlValue::Null)
@@ -3010,6 +3063,11 @@ impl<'db> SqlEngine<'db> {
         row: &SqlRow,
         function: &Function,
     ) -> Result<SqlValue> {
+        if is_current_catalog_keyword(function) {
+            return Ok(SqlValue::String(current_database_from_gucs(
+                &self.session_gucs,
+            )));
+        }
         let name = object_name(&function.name)?.to_ascii_lowercase();
         if let Some(parts) = qualified_session_keyword_column_parts(function, &name) {
             if let Some(value) = row_value_from_parts_opt(row, &parts) {

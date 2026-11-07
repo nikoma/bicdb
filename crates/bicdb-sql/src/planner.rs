@@ -222,6 +222,34 @@ impl SlotRowLookup {
         &self.cols.columns
     }
 
+    /// Whether the qualified reference `parts` would reach this layout only
+    /// through the trailing-column fallback of `value_from_parts`, landing on
+    /// a column that a different relation qualifies. `m.c` names relation
+    /// `m`; read against an outer scope it must not bind `o.c`.
+    pub(crate) fn binds_foreign_qualifier(&self, parts: &[String]) -> bool {
+        if parts.len() < 2 {
+            return false;
+        }
+        let qualifier = &parts[parts.len() - 2];
+        if self.cols.qualifier(qualifier).is_some()
+            || self.slot_for_key(&parts.join(".")).is_some()
+            || self
+                .slot_for_key(&format!("{}.{}", parts[0], parts[1]))
+                .is_some()
+            || self.slot_for_key(&parts[0]).is_some()
+        {
+            return false;
+        }
+        let Some(slot) = self.slot_for_key(&parts[parts.len() - 1]) else {
+            return false;
+        };
+        let Some((prefix, _)) = self.columns()[slot].rsplit_once('.') else {
+            return false;
+        };
+        let own = prefix.rsplit('.').next().unwrap_or(prefix);
+        !own.eq_ignore_ascii_case(qualifier)
+    }
+
     /// The slot `value_for_key` reads for `key`, if any.
     pub(crate) fn slot_for_key(&self, key: &str) -> Option<usize> {
         if let Some(id) = self
@@ -493,7 +521,13 @@ impl OuterSlotRow {
         }
     }
 
+    /// A qualified name binds here only to a column of the relation it
+    /// names (see `binds_foreign_qualifier`); it reads nothing otherwise, so
+    /// it neither returns a value nor marks the row read.
     pub(crate) fn value_from_parts(&self, parts: &[String]) -> Option<SqlValue> {
+        if self.lookup.binds_foreign_qualifier(parts) {
+            return None;
+        }
         let value = self.lookup.value_from_parts(&self.values, parts);
         if !self.probes.is_empty() {
             self.mark_parts(parts, value.is_some());
@@ -612,6 +646,9 @@ pub(crate) enum BoundExpr {
         right: Box<BoundExpr>,
         left_type: Option<String>,
         right_type: Option<String>,
+        /// Both operands resolve to types whose combination is NUMERIC:
+        /// compare by value, so `2` equals `2.000`.
+        numeric: bool,
     },
     And(Box<BoundExpr>, Box<BoundExpr>),
     Or(Box<BoundExpr>, Box<BoundExpr>),
@@ -1335,7 +1372,7 @@ impl InsertValuesTemplate {
                     "23502",
                     format!(
                         "null value in column \"{}\" of relation \"{}\" violates not-null constraint",
-                        column.name, table
+                        column.name, catalog_display_name(table)
                     ),
                     Some(table.to_string()),
                     Some(column.name.clone()),
@@ -1368,7 +1405,7 @@ impl InsertValuesTemplate {
                     "23502",
                     format!(
                         "null value in column \"{}\" of relation \"{}\" violates not-null constraint",
-                        column.name, table
+                        column.name, catalog_display_name(table)
                     ),
                     Some(table.to_string()),
                     Some(column.name.clone()),
@@ -1629,6 +1666,28 @@ impl BoundExprScope {
         self
     }
 
+    /// Whether `expr` reads an input column of this scope, whose declared
+    /// type the scope does not know.
+    pub(crate) fn references_row_column(&self, expr: &Expr) -> bool {
+        match expr {
+            Expr::Identifier(ident) => matches!(
+                self.bind_identifier(&[ident_value(ident)]),
+                Some(BoundExpr::Column(_))
+            ),
+            Expr::CompoundIdentifier(idents) => matches!(
+                self.bind_identifier(&idents.iter().map(ident_value).collect::<Vec<_>>()),
+                Some(BoundExpr::Column(_))
+            ),
+            Expr::Nested(inner)
+            | Expr::UnaryOp { expr: inner, .. }
+            | Expr::Cast { expr: inner, .. } => self.references_row_column(inner),
+            Expr::BinaryOp { left, right, .. } => {
+                self.references_row_column(left) || self.references_row_column(right)
+            }
+            _ => false,
+        }
+    }
+
     pub(crate) fn known_expr_type(&self, expr: &Expr) -> Option<String> {
         match expr {
             Expr::Identifier(ident) => match self.bind_identifier(&[ident_value(ident)])? {
@@ -1850,12 +1909,29 @@ impl BoundExprScope {
                         }
                         left_type = right_type.clone();
                     }
+                    // NUMERIC travels as decimal text. Against an operand
+                    // this scope cannot type (a row column), the untyped
+                    // comparison would compare `2` and `2.000` as text; the
+                    // row evaluator resolves the column's declared type.
+                    let numeric =
+                        numeric_comparison_types(left_type.as_deref(), right_type.as_deref());
+                    if !numeric
+                        && (left_type.as_deref() == Some("numeric")
+                            && right_type.is_none()
+                            && self.references_row_column(right)
+                            || right_type.as_deref() == Some("numeric")
+                                && left_type.is_none()
+                                && self.references_row_column(left))
+                    {
+                        return None;
+                    }
                     Some(BoundExpr::Compare {
                         left: Box::new(self.bind_in(left, ctx)?),
                         op: op.clone(),
                         right: Box::new(self.bind_in(right, ctx)?),
                         left_type,
                         right_type,
+                        numeric,
                     })
                 }
                 BinaryOperator::Arrow | BinaryOperator::LongArrow => None,
@@ -2385,9 +2461,13 @@ impl BoundExpr {
                 right,
                 left_type,
                 right_type,
+                numeric,
             } => {
                 let left = left.eval_borrowed(frame)?;
                 let right = right.eval_borrowed(frame)?;
+                if *numeric {
+                    return compare_numeric_values(left.as_ref(), op, right.as_ref());
+                }
                 // Unknown slot types are not unknown literals. Use temporal
                 // promotion here only when both operand types are resolved.
                 if left_type.is_some() && right_type.is_some() {

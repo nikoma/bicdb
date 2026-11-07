@@ -256,3 +256,29 @@ fn postgres_qualified_index_storage_names_do_not_leak_into_diagnostics() {
 fn oracle_qualified_index_storage_names_do_not_leak_into_diagnostics() {
     qualified_index_identity(oracle::ORACLE_PREVIEW_PROFILE);
 }
+
+#[test]
+fn schema_qualified_relations_are_named_logically_in_error_messages() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = bicdb_core::BicDb::open_with_config(
+        root.path(),
+        bicdb_core::DbConfig::default().with_fsync(false),
+    )
+    .unwrap();
+    let mut session = bicdb_sql::SqlSession::new(&mut db);
+    session
+        .execute("CREATE SCHEMA app; CREATE TABLE app.windows (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+        .unwrap();
+    for (sql, expected) in [
+        (
+            "INSERT INTO app.windows (id) VALUES (1)",
+            "relation \"windows\"",
+        ),
+        ("DROP TABLE app.missing_table", "missing_table"),
+        ("SELECT * FROM app.missing_table", "missing_table"),
+    ] {
+        let message = session.execute(sql).unwrap_err().to_string();
+        assert!(message.contains(expected), "{sql}: {message}");
+        assert!(!message.contains("__bicdb_s_"), "{sql}: {message}");
+    }
+}

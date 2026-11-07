@@ -1,6 +1,24 @@
 use super::*;
 
 #[test]
+fn current_catalog_constant_folding_requires_session() {
+    let statements = Parser::parse_sql(&PostgreSqlDialect {}, "SELECT CURRENT_CATALOG").unwrap();
+    let Statement::Query(query) = &statements[0] else {
+        panic!("expected query")
+    };
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        panic!("expected SELECT")
+    };
+    let SelectItem::UnnamedExpr(expr) = &select.projection[0] else {
+        panic!("expected expression")
+    };
+    assert!(
+        eval_constant_expr(expr).is_err(),
+        "session-dependent values cannot be folded without a session"
+    );
+}
+
+#[test]
 fn server_paged_identity_trigger_and_row_lock_survive_cold_reopen() {
     use bicdb_core::{DbConfig, StorageMode};
     let root = tempfile::tempdir().unwrap();
@@ -4455,6 +4473,7 @@ fn schema_bound_row_materialization_preserves_record_fields() {
         owner: None,
         partitioning: None,
         partition_of: None,
+        oracle_partitioning: None,
     };
     let record = Record::new("42")
         .with_metadata(json!({
@@ -4530,6 +4549,7 @@ fn select_projection_binds_schema_columns_to_direct_record_slots() {
         owner: None,
         partitioning: None,
         partition_of: None,
+        oracle_partitioning: None,
     };
     let query = parse_single_query(
         "SELECT row_key AS projected_key, payload_value

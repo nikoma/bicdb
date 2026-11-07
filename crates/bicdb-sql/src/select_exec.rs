@@ -3628,7 +3628,7 @@ pub(crate) fn single_function_expr(function: &Function) -> Result<Expr> {
 pub(crate) const PROJECTION_RELATION_PREFIX: &str = "bicdb_projection.";
 
 pub(crate) fn is_virtual_table(table: &str) -> bool {
-    if oracle::storage_catalog::is_relation(table) {
+    if oracle::storage_catalog::is_relation(table) || oracle::partitioning::is_relation(table) {
         return true;
     }
     if table.starts_with(PROJECTION_RELATION_PREFIX) || table == "bicdb_projections" {
@@ -3816,6 +3816,9 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         return Err(SqlError::BicDb(BicDbError::Authorization(
             "storage inventory requires a session identity".into(),
         )));
+    }
+    if oracle::partitioning::is_relation(table) {
+        return oracle::partitioning::rows(db, table);
     }
     let table = table.strip_prefix("pg_catalog.").unwrap_or(table);
     let mut rows = match table {
@@ -4032,6 +4035,9 @@ fn pg_default_acl_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
 }
 
 pub(crate) fn virtual_table_columns(table: &str) -> Option<Vec<String>> {
+    if let Some(columns) = oracle::partitioning::columns(table) {
+        return Some(columns.into_iter().map(|(name, _)| name).collect());
+    }
     if oracle::storage_catalog::is_relation(table) {
         return Some(
             oracle::storage_catalog::COLUMNS
@@ -5052,6 +5058,9 @@ pub(crate) fn virtual_table_columns(table: &str) -> Option<Vec<String>> {
 }
 
 pub(crate) fn virtual_table_column_types(table: &str) -> Option<Vec<(String, Option<String>)>> {
+    if let Some(columns) = oracle::partitioning::columns(table) {
+        return Some(columns);
+    }
     if oracle::storage_catalog::is_relation(table) {
         return Some(
             oracle::storage_catalog::COLUMNS

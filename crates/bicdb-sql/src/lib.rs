@@ -1872,9 +1872,20 @@ pub enum UniqueViolationOrigin {
     IndexBuild,
 }
 
+/// Core errors as SQL clients see them: a missing schema-qualified relation is
+/// named by its logical name rather than its physical storage name.
+fn display_bicdb_error(error: &BicDbError) -> String {
+    match error {
+        BicDbError::CollectionNotFound(name) => {
+            format!("collection not found: {}", catalog_display_name(name))
+        }
+        error => error.to_string(),
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum SqlError {
-    #[error(transparent)]
+    #[error("{}", display_bicdb_error(.0))]
     BicDb(#[from] BicDbError),
 
     #[error("json error: {0}")]
@@ -1911,7 +1922,7 @@ pub enum SqlError {
     #[error("query returned no rows")]
     NoDataFound,
 
-    #[error("collection not found: {0}")]
+    #[error("collection not found: {}", catalog_display_name(.0))]
     InvalidCollection(String),
 
     #[error("column \"{column}\" of relation \"{table}\" does not exist")]
@@ -3020,6 +3031,9 @@ struct TableSchema {
     partitioning: Option<PartitioningSchema>,
     #[serde(default)]
     partition_of: Option<PartitionOfSchema>,
+    /// Oracle logical partitioning (see `oracle::partitioning`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    oracle_partitioning: Option<oracle::partitioning::Partitioning>,
 }
 
 /// A logical SQL column projected over an existing BicDB collection for an
@@ -5253,6 +5267,7 @@ pub fn ensure_embedded_table_schema(
         owner: Some(current_role_name()),
         partitioning: None,
         partition_of: None,
+        oracle_partitioning: None,
     });
     let mut changed = previous.is_none();
     for requested in columns {

@@ -2421,6 +2421,11 @@ impl<'db> SqlSession<'db> {
         record: &Record,
         function: &Function,
     ) -> Result<Option<SqlValue>> {
+        if is_current_catalog_keyword(function) {
+            return Ok(Some(SqlValue::String(current_database_from_gucs(
+                &self.session_gucs,
+            ))));
+        }
         let name = object_name(&function.name)?.to_ascii_lowercase();
         if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
             let arguments = function_arg_list(function);

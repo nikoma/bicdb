@@ -491,15 +491,27 @@ impl BicDb {
             let record_id = tx.writes[idx].record_id.clone();
             // Generous budget: a statement-time locker holds for the rest of
             // its procedure (~ms); event-driven waits keep the cost bounded.
-            self.lock_tx_record_with_attempts(
-                tx.id,
-                &collection,
-                &record_id,
-                4096,
-                true,
-                false,
-                &tx.locked_keys,
-            )?;
+            // A transaction that waits for row owners (see
+            // `blocking_row_waits`) waits for this one as well.
+            let blocking = tx.blocking_row_waits.lock().clone();
+            match blocking {
+                Some(cancellation) => self.lock_tx_record_cancellable(
+                    tx.id,
+                    &collection,
+                    &record_id,
+                    &tx.locked_keys,
+                    &cancellation,
+                )?,
+                None => self.lock_tx_record_with_attempts(
+                    tx.id,
+                    &collection,
+                    &record_id,
+                    4096,
+                    true,
+                    false,
+                    &tx.locked_keys,
+                )?,
+            }
             let latest = {
                 let state = self.collection_state(&collection)?;
                 let shard = state.shard(&record_id).read();

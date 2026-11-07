@@ -939,6 +939,83 @@ fn cluster_shares_transactional_roles_but_isolates_user_types() {
 }
 
 #[test]
+fn current_catalog_keeps_name_oid_in_simple_and_prepared_protocols() {
+    for profile in ["postgres", "oracle-hr-v1", "oracle-preview-v1"] {
+        let dir = tempfile::tempdir().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = PgWireServer::open(
+            dir.path(),
+            PgWireConfig {
+                sql_profile: profile.into(),
+                fsync: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let serving = server.clone();
+        let task = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
+        let mut client = TcpStream::connect(address).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(15)))
+            .unwrap();
+        send_startup_version_with_options(
+            &mut client,
+            196_608,
+            true,
+            &[("options", &format!("-c bicdb.sql_profile={profile}"))],
+        );
+        read_until_ready(&mut client);
+        let read_catalog = |client: &mut TcpStream, format: i16| {
+            let mut fields = Vec::new();
+            let mut rows = Vec::new();
+            loop {
+                let (tag, payload) = read_message(client);
+                match tag {
+                    b'T' => fields = parse_row_description_fields(&payload),
+                    b'D' => rows.push(parse_data_row(&payload)),
+                    b'E' => panic!("{profile}: {}", String::from_utf8_lossy(&payload)),
+                    b'Z' => break,
+                    _ => {}
+                }
+            }
+            assert_eq!(
+                fields,
+                vec![RowDescriptionField::new(
+                    "current_catalog",
+                    0,
+                    0,
+                    19,
+                    64,
+                    -1,
+                    format
+                )],
+                "{profile}"
+            );
+            assert_eq!(rows, vec![vec!["bicdb".to_string()]], "{profile}");
+        };
+        send_query(&mut client, "SELECT CURRENT_CATALOG");
+        read_catalog(&mut client, 0);
+        send_parse(
+            &mut client,
+            "catalog_context",
+            "SELECT CURRENT_CATALOG",
+            &[],
+        );
+        for format in [0, 1] {
+            send_bind_binary(&mut client, "", "catalog_context", &[], &[format]);
+            send_describe_portal(&mut client, "");
+            send_execute(&mut client, "");
+            send_sync(&mut client);
+            read_catalog(&mut client, format);
+        }
+        client.write_all(b"X\0\0\0\x04").unwrap();
+        server.request_shutdown();
+        task.join().unwrap().unwrap();
+    }
+}
+
+#[test]
 fn timezone_status_tracks_session_and_transaction_changes_before_rows() {
     for profile in ["postgres", "oracle-preview-v1"] {
         let dir = tempfile::tempdir().unwrap();
@@ -10526,6 +10603,113 @@ fn pgwire_read_committed_updates_wait_for_the_row_owner_and_serialize() {
     second.write_all(b"X\0\0\0\x04").unwrap();
     server.request_shutdown();
     server_thread.join().unwrap().unwrap();
+}
+
+#[test]
+fn pgwire_autocommit_dml_waits_for_row_owner_without_stalling_other_sessions() {
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let dir = tempfile::tempdir().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = PgWireServer::open(
+            dir.path(),
+            PgWireConfig {
+                sql_profile: profile.into(),
+                fsync: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let serving = server.clone();
+        let task = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
+        let connect = || {
+            let mut client = TcpStream::connect(address).unwrap();
+            send_startup_version_with_options(
+                &mut client,
+                196_608,
+                true,
+                &[("options", &format!("-c bicdb.sql_profile={profile}"))],
+            );
+            read_startup_parameters_until_ready(&mut client);
+            client
+        };
+        let mut owner = connect();
+        let mut other = connect();
+        for sql in [
+            "CREATE TABLE counters (id INTEGER PRIMARY KEY, v INTEGER);",
+            "INSERT INTO counters VALUES (1, 0);",
+            "INSERT INTO counters VALUES (2, 0);",
+        ] {
+            send_query(&mut owner, sql);
+            assert_eq!(
+                read_query_rows_with_status(&mut owner).1,
+                b'I',
+                "{profile} {sql}"
+            );
+        }
+        // Statements that need exclusive access are not write contention:
+        // they must not route later DML onto the exclusive path.
+        for index in 0..40 {
+            send_query(
+                &mut owner,
+                &format!("CREATE TABLE ddl_{index} (id INTEGER);"),
+            );
+            assert_eq!(read_query_rows_with_status(&mut owner).1, b'I', "{profile}");
+        }
+        send_query(&mut owner, "BEGIN;");
+        assert_eq!(read_query_rows_with_status(&mut owner).1, b'T');
+        send_query(&mut owner, "UPDATE counters SET v = 1 WHERE id = 1;");
+        assert_eq!(read_query_rows_with_status(&mut owner).1, b'T');
+
+        let waiters = [10, 100].map(|delta| {
+            let mut waiter = connect();
+            thread::spawn(move || {
+                send_query(
+                    &mut waiter,
+                    &format!("UPDATE counters SET v = v + {delta} WHERE id = 1;"),
+                );
+                let status = read_query_rows_with_status(&mut waiter).1;
+                (waiter, status)
+            })
+        });
+        thread::sleep(Duration::from_millis(300));
+        assert!(
+            waiters.iter().all(|waiter| !waiter.is_finished()),
+            "{profile}: autocommit updates of an owned row must wait for its owner"
+        );
+        // Other sessions keep reading and writing other rows meanwhile.
+        let started = std::time::Instant::now();
+        send_query(&mut other, "UPDATE counters SET v = v + 1 WHERE id = 2;");
+        assert_eq!(read_query_rows_with_status(&mut other).1, b'I');
+        send_query(&mut other, "SELECT v FROM counters WHERE id = 2;");
+        assert_eq!(
+            read_query_rows_with_status(&mut other).0,
+            vec![vec!["1".to_string()]]
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "{profile}: unrelated work stalled behind a row wait: {:?}",
+            started.elapsed()
+        );
+
+        send_query(&mut owner, "COMMIT;");
+        assert_eq!(read_query_rows_with_status(&mut owner).1, b'I');
+        for waiter in waiters {
+            let (mut waiter, status) = waiter.join().unwrap();
+            assert_eq!(status, b'I', "{profile}");
+            waiter.write_all(b"X\0\0\0\x04").unwrap();
+        }
+        send_query(&mut other, "SELECT v FROM counters WHERE id = 1;");
+        assert_eq!(
+            read_query_rows_with_status(&mut other).0,
+            vec![vec!["111".to_string()]],
+            "{profile}: both waiting updates apply after the owner's"
+        );
+        owner.write_all(b"X\0\0\0\x04").unwrap();
+        other.write_all(b"X\0\0\0\x04").unwrap();
+        server.request_shutdown();
+        task.join().unwrap().unwrap();
+    }
 }
 
 #[test]

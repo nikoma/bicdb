@@ -508,7 +508,8 @@ fn validate_record_columns(table: &str, schema: &TableSchema, record: &Record) -
                 "23502",
                 format!(
                     "null value in column \"{}\" of relation \"{}\" violates not-null constraint",
-                    column.name, table
+                    column.name,
+                    catalog_display_name(table)
                 ),
                 Some(table.to_string()),
                 Some(column.name.clone()),
@@ -555,7 +556,8 @@ pub(crate) fn validate_not_null(table: &str, schema: &TableSchema, record: &Reco
                 "23502",
                 format!(
                     "null value in column \"{}\" of relation \"{}\" violates not-null constraint",
-                    column.name, table
+                    column.name,
+                    catalog_display_name(table)
                 ),
                 Some(table.to_string()),
                 Some(column.name.clone()),
@@ -1618,6 +1620,25 @@ pub(crate) fn primary_key_prefix_requires_typed_identity(
 pub(crate) fn primary_key_requires_typed_identity(schema: &TableSchema) -> bool {
     let columns = primary_key_columns_for_schema(schema);
     primary_key_prefix_requires_typed_identity(schema, columns.len())
+}
+
+/// Whether equal primary-key values always produce the same record id, so an
+/// exact-key miss is definitive. Typed labels are canonical index keys for
+/// NUMERIC and date/time values (`20` and `20.000` share one); padded
+/// characters, floats, intervals, collations and user types can compare equal
+/// across different labels and keep the scanning fallback.
+pub(crate) fn primary_key_label_is_canonical(schema: &TableSchema) -> bool {
+    primary_key_columns_for_schema(schema).iter().all(|name| {
+        schema.column(name).is_some_and(|column| {
+            column.user_type.is_none()
+                && column.collation.is_none()
+                && (!pg_type_requires_typed_identity(&column.pg_type)
+                    || matches!(
+                        column.pg_type.as_str(),
+                        "numeric" | "date" | "timestamp" | "timestamptz"
+                    ))
+        })
+    })
 }
 
 pub(crate) fn pg_type_requires_typed_identity(pg_type: &str) -> bool {

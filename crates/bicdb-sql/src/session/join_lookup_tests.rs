@@ -225,3 +225,155 @@ fn key_joins_on_reopened_paged_tables_do_not_count_rows_per_plan() {
         }
     }
 }
+
+/// A composite key whose leading column is NUMERIC/NUMBER has typed record
+/// ids. A lookup by the leading column alone (the target of a by-key UPDATE,
+/// or a translation row reached from its parent) used to scan every record id
+/// of the table and parse every record to compare the prefix, once per
+/// lookup and once per outer row under correlated subqueries (~460 ms per
+/// statement on a 3k-row translation table). The canonical typed prefix is a
+/// physical record-id prefix: only the matching rows are read.
+#[test]
+fn typed_composite_key_prefix_lookups_read_only_matching_rows() {
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let root = tempfile::tempdir().unwrap();
+        let config = bicdb_core::DbConfig::default()
+            .with_fsync(false)
+            .with_storage_mode(bicdb_core::StorageMode::ServerPaged);
+        let (key, text) = if profile == "postgres" {
+            ("NUMERIC", "VARCHAR")
+        } else {
+            ("NUMBER", "VARCHAR")
+        };
+        {
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            crate::oracle::ensure_database_profile(&mut db, profile).unwrap();
+            let mut session = SqlSession::new(&mut db);
+            for sql in [
+                format!("CREATE TABLE col (ad_column_id {key} PRIMARY KEY, ad_element_id {key})"),
+                format!(
+                    "CREATE TABLE element_trl (ad_element_id {key}, ad_language {text}(6), \
+                     printname {text}(60), PRIMARY KEY (ad_element_id, ad_language))"
+                ),
+                format!(
+                    "CREATE TABLE client (ad_client_id {key} PRIMARY KEY, ismultilingualdocument CHAR(1))"
+                ),
+                format!(
+                    "CREATE TABLE item_trl (ad_printformatitem_id {key}, ad_language {text}(6), \
+                     ad_client_id {key}, printname {text}(60), \
+                     PRIMARY KEY (ad_printformatitem_id, ad_language))"
+                ),
+                "INSERT INTO client VALUES (0, 'Y')".to_string(),
+                "INSERT INTO client VALUES (11, 'N')".to_string(),
+            ] {
+                run(&mut session, profile, &sql).unwrap();
+            }
+            for c in 1..=500 {
+                run(
+                    &mut session,
+                    profile,
+                    &format!("INSERT INTO col VALUES ({c}, {c})"),
+                )
+                .unwrap();
+                for language in ["de_DE", "es_CO"] {
+                    run(
+                        &mut session,
+                        profile,
+                        &format!(
+                            "INSERT INTO element_trl VALUES ({c}, '{language}', 'E{c} {language}')"
+                        ),
+                    )
+                    .unwrap();
+                }
+            }
+            for item in 1..=1000 {
+                for language in ["de_DE", "es_CO"] {
+                    run(
+                        &mut session,
+                        profile,
+                        &format!("INSERT INTO item_trl VALUES ({item}, '{language}', 0, 'old')"),
+                    )
+                    .unwrap();
+                }
+            }
+            drop(session);
+            db.close().unwrap();
+        }
+        // Reopen so every table is lazy, as in a long-lived database.
+        let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+        crate::oracle::ensure_database_profile(&mut db, profile).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        let reads = |session: &mut SqlSession<'_>, sql: &str| {
+            crate::reset_sql_record_storage_get_calls();
+            let walks_before = bicdb_core::paged_live_count_walks_on_this_thread();
+            let (rows, _) = profiled(session, profile, sql);
+            let walks = bicdb_core::paged_live_count_walks_on_this_thread() - walks_before;
+            assert_eq!(walks, 0, "{profile}: {sql} walked a table to count rows");
+            (rows, crate::sql_record_storage_get_calls())
+        };
+
+        let (rows, records) = reads(
+            &mut session,
+            "SELECT ad_language, printname FROM item_trl WHERE ad_printformatitem_id = 7 ORDER BY ad_language",
+        );
+        assert_eq!(
+            rows,
+            vec![vec!["de_DE", "old"], vec!["es_CO", "old"]],
+            "{profile}"
+        );
+        assert!(
+            records < 20,
+            "{profile}: a leading-key lookup read {records} records of a 2000-row table"
+        );
+
+        run(&mut session, profile, "BEGIN").unwrap();
+        // The application statement: a by-key UPDATE of every language row
+        // of one item, a SET subquery and an EXISTS that reach the
+        // translation through a comma join, and an EXISTS on its client.
+        let update = "UPDATE item_trl SET printname = (SELECT e.printname FROM element_trl e, col c \
+             WHERE e.ad_language = item_trl.ad_language AND e.ad_element_id = c.ad_element_id \
+             AND c.ad_column_id = 42) \
+             WHERE ad_printformatitem_id = 7 \
+             AND EXISTS (SELECT * FROM element_trl e, col c WHERE e.ad_language = item_trl.ad_language \
+             AND e.ad_element_id = c.ad_element_id AND c.ad_column_id = 42 \
+             AND item_trl.ad_printformatitem_id = 7) \
+             AND EXISTS (SELECT * FROM client WHERE ad_client_id = item_trl.ad_client_id \
+             AND ismultilingualdocument = 'Y')";
+        let (_, records) = reads(&mut session, update);
+        assert!(
+            records < 60,
+            "{profile}: updating 2 rows by key read {records} records"
+        );
+        let (rows, _) = reads(
+            &mut session,
+            "SELECT ad_language, printname FROM item_trl WHERE ad_printformatitem_id = 7 ORDER BY ad_language",
+        );
+        assert_eq!(
+            rows,
+            vec![vec!["de_DE", "E42 de_DE"], vec!["es_CO", "E42 es_CO"]],
+            "{profile}"
+        );
+        // Untouched neighbours keep their value; a key that matches nothing
+        // and a non-integral key still find nothing.
+        let (rows, _) = reads(
+            &mut session,
+            "SELECT printname FROM item_trl WHERE ad_printformatitem_id = 8 ORDER BY ad_language",
+        );
+        assert_eq!(rows, vec![vec!["old"], vec!["old"]], "{profile}");
+        for sql in [
+            "SELECT printname FROM item_trl WHERE ad_printformatitem_id = 5000",
+            "SELECT printname FROM item_trl WHERE ad_printformatitem_id = 7.5",
+        ] {
+            let (rows, records) = reads(&mut session, sql);
+            assert!(rows.is_empty(), "{profile}: {sql}");
+            assert!(records < 20, "{profile}: {sql} read {records} records");
+        }
+        // Equal NUMERIC spellings share the canonical prefix.
+        let (rows, _) = reads(
+            &mut session,
+            "SELECT count(*) FROM item_trl WHERE ad_printformatitem_id = 7.000",
+        );
+        assert_eq!(rows, vec![vec!["2"]], "{profile}");
+        run(&mut session, profile, "ROLLBACK").unwrap();
+    }
+}

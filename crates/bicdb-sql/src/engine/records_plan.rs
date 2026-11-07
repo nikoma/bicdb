@@ -1187,7 +1187,22 @@ impl<'db> SqlEngine<'db> {
         }
         sql_profile_record_id_prefix_scan();
         let typed_prefix = primary_key_prefix_requires_typed_identity(schema, prefix_values.len());
-        let physical_prefix = if typed_prefix { "" } else { record_id_prefix };
+        // A typed key prefix (e.g. the NUMERIC leading column of a composite
+        // key) used to scan every record id of the table and parse every
+        // record to compare the prefix: one table walk per lookup, and per
+        // outer row under a correlated subquery. When the prefix columns have
+        // canonical labels, equal values encode to the same leading record-id
+        // cells, so the physical prefix (computed the way record ids are,
+        // after the column cast) already holds every candidate; the typed
+        // comparison below still re-checks each of them.
+        let canonical_prefix = typed_prefix
+            .then(|| self.canonical_typed_record_id_prefix(schema, prefix_values))
+            .flatten();
+        let physical_prefix = match (&canonical_prefix, typed_prefix) {
+            (Some(prefix), _) => prefix.as_str(),
+            (None, true) => "",
+            (None, false) => record_id_prefix,
+        };
         let ids = self.scan_record_ids_with_prefix(table, physical_prefix)?;
         if !typed_prefix {
             return Ok(Rc::from(ids));
@@ -1208,6 +1223,37 @@ impl<'db> SqlEngine<'db> {
             }
         }
         Ok(Rc::from(matched))
+    }
+
+    /// The physical record-id prefix shared by every row whose leading key
+    /// columns equal `prefix_values`, or `None` when it is not definitive (a
+    /// non-canonical label, a NULL, a value that does not cast to the column
+    /// type) and the caller must keep the full-table fallback.
+    fn canonical_typed_record_id_prefix(
+        &self,
+        schema: &TableSchema,
+        prefix_values: &[SqlValue],
+    ) -> Option<String> {
+        let primary_key_columns = primary_key_columns_for_schema(schema);
+        // A full key is an exact lookup, not a prefix; a one-column record
+        // id is a bare cell with no composite framing to prefix.
+        if schema.has_hidden_primary_key()
+            || prefix_values.is_empty()
+            || primary_key_columns.len() < 2
+            || prefix_values.len() >= primary_key_columns.len()
+            || !primary_key_prefix_label_is_canonical(schema, prefix_values.len())
+        {
+            return None;
+        }
+        let mut cast = Vec::with_capacity(prefix_values.len());
+        for (column, value) in primary_key_columns.iter().zip(prefix_values) {
+            if matches!(value, SqlValue::Null) {
+                return None;
+            }
+            let column_schema = schema.column(column)?;
+            cast.push(cast_value_to_column_type(value.clone(), column_schema).ok()?);
+        }
+        composite_record_id_prefix_from_values(schema, &primary_key_columns, &cast).ok()
     }
 
     pub(crate) fn primary_key_expr_index(

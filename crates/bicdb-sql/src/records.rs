@@ -1673,17 +1673,31 @@ pub(crate) fn primary_key_requires_typed_identity(schema: &TableSchema) -> bool 
 /// characters, floats, intervals, collations and user types can compare equal
 /// across different labels and keep the scanning fallback.
 pub(crate) fn primary_key_label_is_canonical(schema: &TableSchema) -> bool {
-    primary_key_columns_for_schema(schema).iter().all(|name| {
-        schema.column(name).is_some_and(|column| {
-            column.user_type.is_none()
-                && column.collation.is_none()
-                && (!pg_type_requires_typed_identity(&column.pg_type)
-                    || matches!(
-                        column.pg_type.as_str(),
-                        "numeric" | "date" | "timestamp" | "timestamptz"
-                    ))
+    let columns = primary_key_columns_for_schema(schema);
+    primary_key_prefix_label_is_canonical(schema, columns.len())
+}
+
+/// [`primary_key_label_is_canonical`] for the leading `prefix_columns` key
+/// columns: equal values of each of them always encode to the same record-id
+/// cell, so the record ids of every row with an equal key prefix share one
+/// physical record-id prefix.
+pub(crate) fn primary_key_prefix_label_is_canonical(
+    schema: &TableSchema,
+    prefix_columns: usize,
+) -> bool {
+    let columns = primary_key_columns_for_schema(schema);
+    prefix_columns <= columns.len()
+        && columns.iter().take(prefix_columns).all(|name| {
+            schema.column(name).is_some_and(|column| {
+                column.user_type.is_none()
+                    && column.collation.is_none()
+                    && (!pg_type_requires_typed_identity(&column.pg_type)
+                        || matches!(
+                            column.pg_type.as_str(),
+                            "numeric" | "date" | "timestamp" | "timestamptz"
+                        ))
+            })
         })
-    })
 }
 
 /// Whether a single-column primary key's record ids sort like its values, so

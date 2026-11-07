@@ -222,6 +222,34 @@ impl SlotRowLookup {
         &self.cols.columns
     }
 
+    /// Whether the qualified reference `parts` would reach this layout only
+    /// through the trailing-column fallback of `value_from_parts`, landing on
+    /// a column that a different relation qualifies. `m.c` names relation
+    /// `m`; read against an outer scope it must not bind `o.c`.
+    pub(crate) fn binds_foreign_qualifier(&self, parts: &[String]) -> bool {
+        if parts.len() < 2 {
+            return false;
+        }
+        let qualifier = &parts[parts.len() - 2];
+        if self.cols.qualifier(qualifier).is_some()
+            || self.slot_for_key(&parts.join(".")).is_some()
+            || self
+                .slot_for_key(&format!("{}.{}", parts[0], parts[1]))
+                .is_some()
+            || self.slot_for_key(&parts[0]).is_some()
+        {
+            return false;
+        }
+        let Some(slot) = self.slot_for_key(&parts[parts.len() - 1]) else {
+            return false;
+        };
+        let Some((prefix, _)) = self.columns()[slot].rsplit_once('.') else {
+            return false;
+        };
+        let own = prefix.rsplit('.').next().unwrap_or(prefix);
+        !own.eq_ignore_ascii_case(qualifier)
+    }
+
     /// The slot `value_for_key` reads for `key`, if any.
     pub(crate) fn slot_for_key(&self, key: &str) -> Option<usize> {
         if let Some(id) = self
@@ -493,7 +521,13 @@ impl OuterSlotRow {
         }
     }
 
+    /// A qualified name binds here only to a column of the relation it
+    /// names (see `binds_foreign_qualifier`); it reads nothing otherwise, so
+    /// it neither returns a value nor marks the row read.
     pub(crate) fn value_from_parts(&self, parts: &[String]) -> Option<SqlValue> {
+        if self.lookup.binds_foreign_qualifier(parts) {
+            return None;
+        }
         let value = self.lookup.value_from_parts(&self.values, parts);
         if !self.probes.is_empty() {
             self.mark_parts(parts, value.is_some());

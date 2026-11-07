@@ -23,6 +23,8 @@ mod read_only;
 mod row_assignments;
 mod row_triggers;
 mod set_functions;
+#[cfg(test)]
+mod subquery_scope_tests;
 mod transaction_defaults;
 pub use read_only::parse_transaction_read_only;
 pub(crate) mod txn_update;

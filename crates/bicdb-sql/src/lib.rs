@@ -223,6 +223,8 @@ pub(crate) use row_types::{
 };
 mod engine;
 mod external_sort;
+pub mod plan_diagnostics;
+mod predicate_contradiction;
 pub use engine::*;
 pub mod extension_catalog;
 pub use extension_catalog::*;

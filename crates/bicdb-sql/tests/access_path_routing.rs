@@ -62,7 +62,9 @@ fn routing_table() {
         println!("{sql:<52} | engine     | {}", describe(&decisions));
         let mut session = SqlSession::new(&mut db);
         session.execute("BEGIN").unwrap();
-        session.execute("INSERT INTO t VALUES (100000, 3, 3, 'new')").unwrap();
+        session
+            .execute("INSERT INTO t VALUES (100000, 3, 3, 'new')")
+            .unwrap();
         let (result, decisions) =
             with_plan_diagnostics(DiagnosticsOptions::default(), || session.execute(sql));
         result.unwrap();

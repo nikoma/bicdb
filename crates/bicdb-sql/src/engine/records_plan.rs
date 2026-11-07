@@ -1322,8 +1322,15 @@ impl<'db> SqlEngine<'db> {
         full_scan.estimated_cost = total_rows as f64;
         let mut candidates = vec![full_scan];
 
+        let mut contradiction = false;
         if let Some(selection) = &select.selection {
-            if crate::engine::predicates_locators::selection_has_false_term(selection) {
+            contradiction = !crate::plan_diagnostics::contradiction_detection_disabled()
+                && schema.as_ref().is_some_and(|schema| {
+                    self.selection_is_contradictory(alias, schema, selection)
+                });
+            if contradiction
+                || crate::engine::predicates_locators::selection_has_false_term(selection)
+            {
                 candidates.push(QueryPlan {
                     kind: PlanKind::PrimaryKeyInLookup {
                         record_ids: Vec::new(),
@@ -1495,10 +1502,82 @@ impl<'db> SqlEngine<'db> {
                 .unwrap_or(Ordering::Equal)
                 .then_with(|| left.estimated_rows.cmp(&right.estimated_rows))
         });
+        if crate::plan_diagnostics::active() {
+            let chosen = crate::plan_diagnostics::choose_and_record(
+                collection,
+                total_rows,
+                stats.is_some(),
+                contradiction,
+                &candidates,
+            );
+            return Ok(candidates
+                .into_iter()
+                .nth(chosen)
+                .unwrap_or_else(QueryPlan::full_scan));
+        }
         Ok(candidates
             .into_iter()
             .next()
             .unwrap_or_else(QueryPlan::full_scan))
+    }
+
+    /// Deterministic contradiction proof for a single-table WHERE clause; see
+    /// `predicate_contradiction` for the soundness rules.
+    pub(crate) fn selection_is_contradictory(
+        &self,
+        alias: &str,
+        schema: &TableSchema,
+        selection: &Expr,
+    ) -> bool {
+        use crate::predicate_contradiction::{
+            conjunction_is_unsatisfiable, literal_constant, ColumnRef, ConstValue, NumberConst,
+        };
+        let column = |mut expr: &Expr| -> Option<ColumnRef> {
+            while let Expr::Nested(inner) = expr {
+                expr = inner;
+            }
+            let ident = match expr {
+                Expr::Identifier(ident) => ident,
+                Expr::CompoundIdentifier(parts) => match parts.as_slice() {
+                    [qualifier, ident]
+                        if (qualifier.quote_style.is_none()
+                            && qualifier.value.eq_ignore_ascii_case(alias))
+                            || qualifier.value == alias =>
+                    {
+                        ident
+                    }
+                    _ => return None,
+                },
+                _ => return None,
+            };
+            let mut matches = schema.columns.iter().filter(|column| {
+                !column.hidden
+                    && if ident.quote_style.is_some() {
+                        column.name == ident.value
+                    } else {
+                        column.name.eq_ignore_ascii_case(&ident.value)
+                    }
+            });
+            let column = matches.next()?;
+            if matches.next().is_some() {
+                return None;
+            }
+            contradiction_domain(column).map(|domain| ColumnRef {
+                key: column.name.clone(),
+                domain,
+            })
+        };
+        let routine_vars = &self.routine_vars;
+        let parameter = |name: &str| -> Option<ConstValue> {
+            match routine_var_from_name(routine_vars, name)? {
+                SqlValue::Null => Some(ConstValue::Null),
+                SqlValue::Int(value) => Some(ConstValue::Number(NumberConst::from_i64(value))),
+                SqlValue::Float(value) => NumberConst::from_f64(value).map(ConstValue::Number),
+                _ => None,
+            }
+        };
+        let constant = |expr: &Expr| literal_constant(expr, &parameter);
+        conjunction_is_unsatisfiable(selection, &column, &constant)
     }
 
     pub(crate) fn estimate_range_predicate_rows(
@@ -2714,4 +2793,22 @@ fn cte_references_own_name(query: &Query, name: &str) -> bool {
         }
     })
     .is_break()
+}
+
+/// Comparison domain for contradiction detection: plain numeric columns only.
+fn contradiction_domain(
+    column: &ColumnSchema,
+) -> Option<crate::predicate_contradiction::NumericDomain> {
+    use crate::predicate_contradiction::NumericDomain;
+    if column.user_type.is_some() || column.array_ndims != 0 {
+        return None;
+    }
+    Some(match column.pg_type.to_ascii_lowercase().as_str() {
+        "int2" | "smallint" => NumericDomain::Integer(16),
+        "int4" | "int" | "integer" => NumericDomain::Integer(32),
+        "int8" | "bigint" => NumericDomain::Integer(64),
+        "numeric" | "decimal" if column.type_modifier.is_none() => NumericDomain::Exact,
+        "float8" | "double precision" => NumericDomain::Float,
+        _ => return None,
+    })
 }

@@ -5105,6 +5105,9 @@ impl<'db> SqlEngine<'db> {
             }
             records = filtered;
         }
+        if crate::plan_diagnostics::active() {
+            crate::plan_diagnostics::record_rows_matched(records.len());
+        }
         self.check_cancellation()?;
 
         if has_aggregates(&select.projection) {

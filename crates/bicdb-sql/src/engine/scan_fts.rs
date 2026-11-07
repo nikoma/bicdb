@@ -3228,6 +3228,7 @@ impl<'db> SqlEngine<'db> {
         let mut rows: Vec<Vec<SqlValue>> = Vec::new();
         let mut skipped = 0usize;
         let mut seen = 0usize;
+        let mut matched = 0usize;
         // The storage callback speaks `bicdb_core`'s error type, so SQL errors
         // travel out of band and are re-raised below rather than being
         // flattened into a storage error.
@@ -3263,6 +3264,7 @@ impl<'db> SqlEngine<'db> {
                             }
                         }
                     }
+                    matched += 1;
                     if skipped < offset {
                         skipped += 1;
                         continue;
@@ -3298,6 +3300,10 @@ impl<'db> SqlEngine<'db> {
         // has no side effects; the cost is a partial scan repeated.
         if sql_error.is_some() || !streamed {
             return Ok(None);
+        }
+        if crate::plan_diagnostics::active() {
+            crate::plan_diagnostics::record_rows_fetched(seen);
+            crate::plan_diagnostics::record_rows_matched(matched);
         }
         sql_profile_full_scan();
         let column_types = projection.column_types();
@@ -3495,6 +3501,9 @@ impl<'db> SqlEngine<'db> {
             }
         }?;
         sql_profile_records_materialized(&records);
+        if crate::plan_diagnostics::active() {
+            crate::plan_diagnostics::record_rows_fetched(records.len());
+        }
         Ok(records)
     }
 

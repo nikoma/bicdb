@@ -1,0 +1,20 @@
+[
+  {
+    "case": "literal",
+    "exit": 0,
+    "stdout": "{\n  \"columns\": [\n    \"?column?\"\n  ],\n  \"rows\": [\n    [\n      \"2026-11-07 04:33:58.937967\"\n    ]\n  ],\n  \"column_types\": [\n    \"timestamp\"\n  ]\n}\n",
+    "stderr": ""
+  },
+  {
+    "case": "routine",
+    "exit": 1,
+    "stdout": "",
+    "stderr": "Error: unsupported SQL: unsupported constant expression z\n"
+  },
+  {
+    "case": "trigger",
+    "exit": 1,
+    "stdout": "",
+    "stderr": "Error: unsupported SQL: unsupported constant expression NEW.zone (the analytics engine also failed: This feature is not implemented: The context currently only supports a single SQL statement)\n"
+  }
+]

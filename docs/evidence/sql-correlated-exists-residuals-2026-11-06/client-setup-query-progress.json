@@ -1,0 +1,99 @@
+{
+  "format": 1,
+  "backend_source_commit": "4861c5d8aefc2edee2aa435a7bd981c0302e7a7a",
+  "backend_sha256": "72a0c0e1ab1d3df2420f41efa54c13566827b3642811ad45549c705e8b8e1aef",
+  "upstream_source_commit": "da0730aec42f3e9f5f671e81a70ff71e24d5e534",
+  "original_test_jar_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+  "original_test_source_sha256": "1462868001ce6dcd9c05d6a5b9c22a1585e47c0571b4cb7a93e146268c36ea9e",
+  "original_test_class_sha256": "d5eaaeba16eebe8fa98c46a2b5c1cd3c9432cd6821b89f9a22c24fe6509308e0",
+  "original_assertions_or_seed_changed": false,
+  "runtime_class_origins": [
+    {
+      "class_name": "org.idempiere.test.base.InitialClientSetupTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    },
+    {
+      "class_name": "org.compiere.db.DB_Oracle",
+      "source_sha256": "8059fd7ec50db8a17fe706ef29793a150496fd5ff56e7cf23ae3b0587a51e7cf",
+      "matched": true
+    },
+    {
+      "class_name": "org.bicdb.jdbc.oracle.OracleDriver",
+      "source_sha256": "8d0d10b01a5b6caf7cf6528372c46e1f95998e799b87ff43509946d5c343b6d5",
+      "matched": true
+    },
+    {
+      "class_name": "org.postgresql.Driver",
+      "source_sha256": "2a32a9dcbc42d67a50ad3a0de5efd102c8d2be46720045f2cbd6689f160ab7c7",
+      "matched": true
+    }
+  ],
+  "completed_period_control_insert_events": 384,
+  "completed_print_item_insert_events": 736,
+  "completed_residual_print_queries": [
+    {
+      "elapsed_ms": 4051,
+      "rows": 72,
+      "event_sha256": "ba16aebdabee7eae129c9f0f30fb641748bce71db57648ccec2353256925056b",
+      "redacted_query_sha256": "5f2ad787a1f2b969148f74e3180521c24cca74108884de3a62b7e694b9f76362"
+    },
+    {
+      "elapsed_ms": 4096,
+      "rows": 44,
+      "event_sha256": "28ad2c5868dde58433404fd2b4157a02aeb5f45b7ecb28c8f688c21088be2bde",
+      "redacted_query_sha256": "5f2ad787a1f2b969148f74e3180521c24cca74108884de3a62b7e694b9f76362"
+    },
+    {
+      "elapsed_ms": 4071,
+      "rows": 54,
+      "event_sha256": "ec532c03753d322459f934f3d96fc11c7e559c8efc5ad8c5220bf053a5b627fe",
+      "redacted_query_sha256": "5f2ad787a1f2b969148f74e3180521c24cca74108884de3a62b7e694b9f76362"
+    },
+    {
+      "elapsed_ms": 4046,
+      "rows": 47,
+      "event_sha256": "0bae238288d6c622425892d86fe61083d411142e0a815bacc56c43de86f5a77c",
+      "redacted_query_sha256": "5f2ad787a1f2b969148f74e3180521c24cca74108884de3a62b7e694b9f76362"
+    },
+    {
+      "elapsed_ms": 4351,
+      "rows": 47,
+      "event_sha256": "21eac354255af74e6d6a51f1870b78fa90a94258a9eefd1a058ac7586e6b7f3f",
+      "redacted_query_sha256": "5f2ad787a1f2b969148f74e3180521c24cca74108884de3a62b7e694b9f76362"
+    },
+    {
+      "elapsed_ms": 4155,
+      "rows": 37,
+      "event_sha256": "cc61bc65612036b4bd438712ba38e9a714ee2124049ee6326d80456d2bc4846b",
+      "redacted_query_sha256": "5f2ad787a1f2b969148f74e3180521c24cca74108884de3a62b7e694b9f76362"
+    },
+    {
+      "elapsed_ms": 4116,
+      "rows": 25,
+      "event_sha256": "2a2772c27de429efe2edc619bcbf5f9be0c7538307dcdf5f2c7d10f094c960d4",
+      "redacted_query_sha256": "5f2ad787a1f2b969148f74e3180521c24cca74108884de3a62b7e694b9f76362"
+    },
+    {
+      "elapsed_ms": 4032,
+      "rows": 17,
+      "event_sha256": "7b61683cc7d65b66493e39e8367e97f4798af8bdaef0ea9431f609d2a1033aae",
+      "redacted_query_sha256": "5f2ad787a1f2b969148f74e3180521c24cca74108884de3a62b7e694b9f76362"
+    },
+    {
+      "elapsed_ms": 3984,
+      "rows": 25,
+      "event_sha256": "bf333a4b5eaa54f2ad389efed9634892074ab05e8691dc875f24358007db6711",
+      "redacted_query_sha256": "5f2ad787a1f2b969148f74e3180521c24cca74108884de3a62b7e694b9f76362"
+    }
+  ],
+  "writer_timeout_events": 0,
+  "run_interrupted_by_resource_guard": true,
+  "junit_completed": false,
+  "junit_pass_claimed": false,
+  "natural_junit_failure_claimed": false,
+  "diagnostic_database_preserved": true,
+  "application_qualified": false,
+  "production_qualified": false,
+  "original_test_source_bytes_match_upstream_pin": true
+}

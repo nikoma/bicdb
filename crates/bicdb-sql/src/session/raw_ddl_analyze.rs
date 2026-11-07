@@ -1045,7 +1045,12 @@ impl<'db> SqlSession<'db> {
         if matches!(
             statement,
             Statement::Insert(_) | Statement::Update(_) | Statement::Delete(_)
-        ) && (self.tx.is_some() || self.mutation_needs_atomic_effects(statement)?)
+        ) && (self.tx.is_some()
+            // A shared session cannot write outside a transaction: run the
+            // statement in one, so its row locks wait on the shared path and
+            // the caller commits it, instead of escalating to exclusive access.
+            || !self.exclusive
+            || self.mutation_needs_atomic_effects(statement)?)
         {
             return self
                 .with_statement_transaction(|session| session.execute_statement_inner(statement));

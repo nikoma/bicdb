@@ -4033,6 +4033,19 @@ fn execute_server_db_sql_for_state_inner(
             }
             return result.map_err(PgWireError::from);
         }
+        // A row-lock or snapshot conflict raised while executing is retried
+        // here with a fresh snapshot: DML waits for row owners on this shared
+        // path, whereas the exclusive path would hold the global guard the
+        // owner needs to reach COMMIT.
+        if matches!(
+            result,
+            Err(SqlError::BicDb(BicDbError::TransactionConflict(_)))
+        ) {
+            if let Some(tx) = pending {
+                tx.rollback()?;
+            }
+            continue;
+        }
         // Needs exclusive access (DDL / non-transactional) or hit a genuine SQL
         // error: hand off to the exclusive path, which re-runs and surfaces it.
         let Ok(res) = result else {

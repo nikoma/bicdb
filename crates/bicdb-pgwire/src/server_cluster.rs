@@ -1705,9 +1705,19 @@ impl PgWireServer {
                 thread::yield_now();
             }
         }
-        let elapsed = wait_started.elapsed();
-        let remaining = self.config.write_timeout.saturating_sub(elapsed);
-        match self.db.try_write_for(remaining) {
+        // Poll rather than park: a parked writer is queued ahead of new
+        // readers by the writer-fair lock, so one statement waiting for a row
+        // owner under a read guard would stall every new reader (including
+        // the owner's COMMIT) until this writer timed out.
+        let deadline = wait_started + self.config.write_timeout;
+        let mut acquired = None;
+        while acquired.is_none() && Instant::now() < deadline {
+            acquired = self.db.try_write();
+            if acquired.is_none() {
+                thread::sleep(Duration::from_micros(500));
+            }
+        }
+        match acquired {
             Some(guard) => {
                 let wait_ns = duration_nanos_u64(wait_started.elapsed());
                 self.record_db_lock_wait(DbLockKind::Write, wait_ns);

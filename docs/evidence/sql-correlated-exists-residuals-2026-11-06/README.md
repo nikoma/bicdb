@@ -40,8 +40,9 @@ prove that the application's final transactions committed. The host memory
 guard interrupted the run before the original JUnit result; this is query
 progress evidence, not a passing client-setup test or full application
 qualification. The diagnostic database was retained. No upstream assertion or
-application seed was changed. A fresh application acceptance run remains
-required.
+application seed was changed. A later [original client-setup run](../idempiere-initial-client-setup-2026-11-06/README.md)
+subsequently passes with clean shutdown and no writer timeouts. Full application
+acceptance remains separate.
 
 See [the check provenance](summary.json) for source revisions, backend and log
 hashes, exact check counts and the previous-backend control. Full application

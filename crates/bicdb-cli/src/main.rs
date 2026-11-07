@@ -11642,7 +11642,7 @@ fn run_sql_command(
     output: OutputMode,
     slow_query: SlowQueryOptions,
 ) -> Result<()> {
-    let mut db = BicDb::open(&path)?;
+    let mut db = open_db_with_key_args(&path, None, None)?;
 
     if let Some(query) = query {
         execute_sql_command(&mut db, &query, output, &slow_query)?;

@@ -14,6 +14,8 @@ pub(crate) use merge::UpdateMatchPolicy;
 pub(crate) mod recycle_bin;
 pub(crate) use recycle_bin::is_recycle_bin_name;
 pub use recycle_bin::RECYCLE_BIN_COLLECTION;
+#[cfg(test)]
+mod catalog_join_tests;
 pub(crate) mod functions_insert;
 mod join_lookup_tests;
 #[cfg(test)]

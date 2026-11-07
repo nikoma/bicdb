@@ -2378,6 +2378,13 @@ impl<'db> SqlEngine<'db> {
             return Ok(None);
         };
         Ok(Some(match access {
+            PrimaryKeyAccess::Never => QueryPlan {
+                kind: PlanKind::PrimaryKeyInLookup {
+                    record_ids: Vec::new(),
+                },
+                estimated_rows: 0,
+                estimated_cost: 0.0,
+            },
             PrimaryKeyAccess::Exact { record_id, values } => {
                 if primary_key_requires_typed_identity(schema) {
                     QueryPlan {
@@ -2643,12 +2650,16 @@ impl<'db> SqlEngine<'db> {
             };
             bound_values.push(value);
         }
+        // `pk = NULL` is never TRUE. Declining here sent the statement to a
+        // full scan that evaluated the NULL comparison against every row; a
+        // literal NULL was caught earlier, but a scalar subquery that finds
+        // no row is only evaluated here.
         if bound_values
             .iter()
             .flatten()
             .any(|value| matches!(value, SqlValue::Null))
         {
-            return Ok(None);
+            return Ok(Some(PrimaryKeyAccess::Never));
         }
         if bound_values.iter().all(Option::is_some) {
             let values = bound_values

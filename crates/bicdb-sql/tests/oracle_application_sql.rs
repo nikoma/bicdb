@@ -306,3 +306,93 @@ END;",
     let none = sql.replace("invoice_id=7", "invoice_id=8");
     assert_eq!(texts(run(&mut db, &none).unwrap()), vec![vec!["0", "0"]]);
 }
+
+/// An unqualified foreign-key target names a table in the application
+/// schema, like every other relation reference. It was left unqualified, so
+/// table-level and ALTER-added keys failed the REFERENCES gate against a
+/// nonexistent public relation ("permission denied for table parent_t") and
+/// column-level keys could not find the target to expand its primary key.
+#[test]
+fn unqualified_foreign_key_targets_resolve_in_the_application_schema() {
+    let (_root, mut db) = app_database();
+    run(
+        &mut db,
+        "CREATE TABLE parent_t (id NUMBER(10) PRIMARY KEY, uu VARCHAR2(36) UNIQUE)",
+    )
+    .unwrap();
+    run(&mut db, "INSERT INTO parent_t (id, uu) VALUES (1, 'a')").unwrap();
+    run(
+        &mut db,
+        "CREATE TABLE child_t (id NUMBER(10) PRIMARY KEY, parent_id NUMBER(10), \
+         CONSTRAINT fk FOREIGN KEY (parent_id) REFERENCES parent_t (id))",
+    )
+    .unwrap();
+    run(
+        &mut db,
+        "CREATE TABLE column_child (id NUMBER(10) PRIMARY KEY, parent_id NUMBER(10) REFERENCES parent_t)",
+    )
+    .unwrap();
+    run(
+        &mut db,
+        "CREATE TABLE altered_child (id NUMBER(10) PRIMARY KEY, parent_id NUMBER(10))",
+    )
+    .unwrap();
+    run(
+        &mut db,
+        "ALTER TABLE \"APP\".\"ALTERED_CHILD\" ADD CONSTRAINT \"ALTERED_FK\" FOREIGN KEY (\"PARENT_ID\") \
+         REFERENCES \"PARENT_T\"(\"ID\") ON DELETE SET NULL DEFERRABLE INITIALLY DEFERRED",
+    )
+    .unwrap();
+    for table in ["child_t", "column_child"] {
+        run(
+            &mut db,
+            &format!("INSERT INTO {table} (id, parent_id) VALUES (1, 1)"),
+        )
+        .unwrap();
+        assert!(
+            run(
+                &mut db,
+                &format!("INSERT INTO {table} (id, parent_id) VALUES (2, 99)")
+            )
+            .is_err(),
+            "{table} must enforce its key against APP.PARENT_T"
+        );
+    }
+    // The ALTER-added key acts on APP.PARENT_T: deleting the parent row
+    // applies its ON DELETE SET NULL.
+    run(&mut db, "INSERT INTO parent_t (id, uu) VALUES (2, 'b')").unwrap();
+    run(
+        &mut db,
+        "INSERT INTO altered_child (id, parent_id) VALUES (1, 2)",
+    )
+    .unwrap();
+    run(&mut db, "DELETE FROM parent_t WHERE id = 2").unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT parent_id FROM altered_child WHERE id = 1").unwrap()),
+        vec![vec!["<null>".to_string()]]
+    );
+}
+
+/// A missing relation in the application schema is reported as missing. With
+/// a WHERE clause the privilege gate re-parsed the already schema-encoded
+/// physical name as SQL and failed with the reserved `__bicdb_s_` prefix
+/// error instead (seen for unsupported dictionary views such as
+/// USER_TAB_COLUMNS).
+#[test]
+fn missing_application_relations_are_not_reported_as_reserved_names() {
+    let (_root, mut db) = app_database();
+    for (relation, sql) in [
+        (
+            "user_tab_columns",
+            "SELECT column_name FROM user_tab_columns WHERE table_name = 'AD_REF_TABLE'",
+        ),
+        ("no_such_table", "SELECT x FROM no_such_table WHERE y = 'A'"),
+    ] {
+        let error = run(&mut db, sql).unwrap_err().to_string();
+        assert!(!error.contains("__bicdb_s_"), "{sql}: {error}");
+        assert!(
+            error.to_ascii_lowercase().contains(relation),
+            "{sql}: {error}"
+        );
+    }
+}

@@ -5236,3 +5236,91 @@ mod case_preserving_slot_tests {
         );
     }
 }
+
+/// The `alias.column` references a predicate reads, for relations whose
+/// columns are known only by name (catalog relations, views, CTEs, table
+/// functions — anything without a stored `TableSchema`). `None` when the
+/// predicate holds anything whose inputs cannot be read off syntactically:
+/// an unqualified name (its owner is ambiguous without a schema), a function
+/// call, a subquery. Callers only ever treat `None` as "not a join term".
+pub(crate) fn qualified_predicate_references(expr: &Expr) -> Option<Vec<String>> {
+    fn collect(expr: &Expr, out: &mut Vec<String>) -> bool {
+        match expr {
+            Expr::CompoundIdentifier(idents) if idents.len() >= 2 => {
+                let [qualifier, column] = &idents[idents.len() - 2..] else {
+                    return false;
+                };
+                out.push(format!("{}.{}", qualifier.value, column.value));
+                true
+            }
+            // `alias.array_column[index]`
+            Expr::CompoundFieldAccess { root, access_chain } => {
+                let (Expr::Identifier(qualifier), Some(AccessExpr::Dot(Expr::Identifier(column)))) =
+                    (root.as_ref(), access_chain.first())
+                else {
+                    return false;
+                };
+                out.push(format!("{}.{}", qualifier.value, column.value));
+                access_chain[1..].iter().all(|access| match access {
+                    AccessExpr::Subscript(Subscript::Index { index }) => collect(index, out),
+                    _ => false,
+                })
+            }
+            Expr::BinaryOp { left, right, .. } => collect(left, out) && collect(right, out),
+            Expr::UnaryOp { expr, .. }
+            | Expr::Nested(expr)
+            | Expr::Cast { expr, .. }
+            | Expr::IsNull(expr)
+            | Expr::IsNotNull(expr)
+            | Expr::IsTrue(expr)
+            | Expr::IsNotTrue(expr)
+            | Expr::IsFalse(expr)
+            | Expr::IsNotFalse(expr) => collect(expr, out),
+            Expr::InList { expr, list, .. } => {
+                collect(expr, out) && list.iter().all(|item| collect(item, out))
+            }
+            Expr::Between {
+                expr, low, high, ..
+            } => collect(expr, out) && collect(low, out) && collect(high, out),
+            Expr::Value(_) | Expr::TypedString(_) => true,
+            _ => false,
+        }
+    }
+    let mut references = Vec::new();
+    collect(expr, &mut references).then_some(references)
+}
+
+/// Whether a qualified `alias.column` reference names one of `columns`.
+pub(crate) fn qualified_reference_in(reference: &str, columns: &BTreeSet<String>) -> bool {
+    columns
+        .iter()
+        .any(|column| column.eq_ignore_ascii_case(reference))
+}
+
+/// A FROM item the comma-join planner may move: a plain relation, or a table
+/// function whose arguments read no row (`generate_series(1, 32) pos(n)`),
+/// which therefore cannot depend on what precedes it. Correlated table
+/// functions and time-travel relations keep their position.
+pub(crate) fn cross_join_reorderable_table_factor(relation: &TableFactor) -> bool {
+    if simple_reorderable_table_factor(relation) {
+        return true;
+    }
+    let TableFactor::Table {
+        args: Some(args),
+        with_ordinality: false,
+        ..
+    } = relation
+    else {
+        return false;
+    };
+    if args.settings.is_some() {
+        return false;
+    }
+    if !matches!(crate::engine::flashback::flashback_request(args), Ok(None)) {
+        return false;
+    }
+    args.args.iter().all(|arg| match arg {
+        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => row_independent_expr(expr),
+        _ => false,
+    })
+}

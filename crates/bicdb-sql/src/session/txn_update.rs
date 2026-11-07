@@ -5514,7 +5514,7 @@ impl<'db> SqlSession<'db> {
         }
         Err(SqlError::BicDb(BicDbError::Authorization(format!(
             "permission denied for table {}",
-            unqualified_relation(table)
+            relation_name_for_message(table)
         ))))
     }
 

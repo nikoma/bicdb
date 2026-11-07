@@ -3206,6 +3206,10 @@ pub(crate) enum JsonbIndexCandidate {
 
 #[derive(Clone, Debug)]
 pub(crate) enum PrimaryKeyAccess {
+    /// A primary-key equality conjunct is bound to NULL (`pk = (SELECT ..)`
+    /// whose subquery found no row): the WHERE clause is never TRUE, so no
+    /// row can qualify and nothing needs to be read.
+    Never,
     Exact {
         record_id: String,
         values: Vec<SqlValue>,

@@ -502,6 +502,7 @@ impl SqlEngine<'_> {
                         selection,
                     )? {
                         Some(PrimaryKeyAccess::Exact { record_id, .. }) => Some(vec![record_id]),
+                        Some(PrimaryKeyAccess::Never) => Some(Vec::new()),
                         _ => None,
                     }
                 }

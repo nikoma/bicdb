@@ -1410,7 +1410,7 @@ fn lower_oracle_sql(
             && source.iter().take(3).any(|t| word(t, "TABLE")),
         namespace,
     )?;
-    expand_references(db, &mut canonical)?;
+    expand_references(db, &mut canonical, namespace)?;
     if canonical.len() > 3 && word(&canonical[0], "CREATE") && word(&canonical[1], "SEQUENCE") {
         fn rank(t: &Token) -> Option<usize> {
             [
@@ -1478,7 +1478,7 @@ fn lower_oracle_sql(
     lower_native(db, &join(&canonical), preview, namespace)
 }
 
-fn expand_references(db: &BicDb, source: &mut Vec<Token>) -> Result<()> {
+fn expand_references(db: &BicDb, source: &mut Vec<Token>, namespace: Option<&str>) -> Result<()> {
     let mut insertions = Vec::new();
     for i in 0..source.len() {
         if !word(&source[i], "REFERENCES") {
@@ -1491,7 +1491,7 @@ fn expand_references(db: &BicDb, source: &mut Vec<Token>) -> Result<()> {
         if source.get(end) == Some(&Token::LParen) {
             continue;
         }
-        let identifiers = source[i + 1..end]
+        let mut identifiers = source[i + 1..end]
             .iter()
             .filter_map(|token| match token {
                 Token::Word(word) => Some(match word.quote_style {
@@ -1501,6 +1501,11 @@ fn expand_references(db: &BicDb, source: &mut Vec<Token>) -> Result<()> {
                 _ => None,
             })
             .collect::<Vec<_>>();
+        // An unqualified target names a table in the application schema,
+        // exactly as the namespace binder later qualifies the statement.
+        if let (Some(schema), 1) = (namespace, identifiers.len()) {
+            identifiers.insert(0, Ident::with_quote('"', schema));
+        }
         let name = relation_name(&ObjectName::from(identifiers))?;
         let schema = load_schema(db, &name)?
             .ok_or_else(|| unsupported(format!("unknown referenced relation {name}")))?;

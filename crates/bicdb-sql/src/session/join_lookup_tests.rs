@@ -104,6 +104,18 @@ fn keyed_reference_lookup_joins_use_primary_keys_only() {
         );
         assert_eq!(rows, vec![vec!["C70"]], "{profile}");
         assert_eq!(scans, 0, "{profile}: a key from a scalar subquery scanned");
+        // A subquery that finds no row binds the key to NULL: `pk = NULL` is
+        // never TRUE, so nothing is read (this used to scan all of `col`).
+        let (rows, scans) = profiled(
+            &mut session,
+            profile,
+            "SELECT ck.columnname FROM col ck WHERE ck.ad_column_id = (SELECT ad_key FROM ref_table WHERE ad_reference_id = 9999)",
+        );
+        assert!(rows.is_empty(), "{profile}");
+        assert_eq!(
+            scans, 0,
+            "{profile}: a NULL key from a scalar subquery scanned"
+        );
         let (rows, scans) = profiled(&mut session, profile, &query(9999));
         assert!(rows.is_empty(), "{profile}");
         assert_eq!(scans, 0, "{profile}: a missing reference scanned a table");

@@ -3622,6 +3622,11 @@ fn role_has_table_privilege_uncached(
     let role = normalize_role_name(role);
     let table = if let Some(resolved) = resolve_relation_name_memoized(db, table) {
         resolved
+    } else if crate::eval::rewrite_helpers::logical_relation_name(table).is_some() {
+        // Already the physical name of a schema-isolated relation that does
+        // not exist. Re-encoding it as a SQL identifier failed with the
+        // reserved-prefix error instead of reporting the missing relation.
+        table.to_string()
     } else {
         let parts = sql_identifier_parts(table)?;
         let name = relation_name_from_parts(&parts)?;
@@ -4246,6 +4251,15 @@ pub(crate) fn sql_value_text(value: &SqlValue) -> Option<String> {
         SqlValue::String(value) => Some(value.clone()),
         SqlValue::Int(value) => Some(value.to_string()),
         _ => None,
+    }
+}
+
+/// [`unqualified_relation`] for error messages: they name the SQL relation,
+/// never its schema-isolated storage name (`__bicdb_s_<digest>_<hex>`).
+pub(crate) fn relation_name_for_message(name: &str) -> String {
+    match crate::eval::rewrite_helpers::logical_relation_name(name) {
+        Some(logical) => unqualified_relation(&logical),
+        None => unqualified_relation(name),
     }
 }
 

@@ -1621,7 +1621,11 @@ impl<'db> SqlEngine<'db> {
             }
             let mut range_bounds = Vec::new();
             let mut filters = Vec::new();
-            if let Some(field) = index.fields.get(prefix_exprs.len()) {
+            // Only ordered access methods can answer a range: a hash index
+            // (stored physically as an ordered tree) serves equality only,
+            // as in PostgreSQL and as the cost-based planner already treats it.
+            let ordered = schema.is_none_or(|schema| index_supports_ordering(schema, &index.name));
+            if let Some(field) = index.fields.get(prefix_exprs.len()).filter(|_| ordered) {
                 range_bounds =
                     self.dynamic_range_bound_exprs(selection, table, alias, schema, field)?;
                 if !range_bounds.is_empty() {
@@ -2077,7 +2081,9 @@ impl<'db> SqlEngine<'db> {
                 };
                 prefix.push(value);
             }
-            if let Some(field) = index.fields.get(prefix.len()) {
+            if let Some(field) = index.fields.get(prefix.len()).filter(|_| {
+                schema.is_none_or(|schema| index_supports_ordering(schema, &index.name))
+            }) {
                 if let Some((lower, upper, has_null_bound)) =
                     self.dynamic_range_bounds(selection, table, alias, schema, field)?
                 {
@@ -2271,7 +2277,9 @@ impl<'db> SqlEngine<'db> {
                 };
                 prefix.push(value);
             }
-            if let Some(field) = index.fields.get(prefix.len()) {
+            if let Some(field) = index.fields.get(prefix.len()).filter(|_| {
+                schema.is_none_or(|schema| index_supports_ordering(schema, &index.name))
+            }) {
                 if let Some((lower, upper, has_null_bound)) =
                     self.dynamic_range_bounds(selection, table, alias, schema, field)?
                 {

@@ -108,7 +108,7 @@ fn between_on_an_indexed_column_plans_an_index_range() {
     setup(&mut db);
     let mut session = SqlSession::new(&mut db);
     let explained = plan(&mut session, "SELECT id FROM r WHERE d BETWEEN 10 AND 12");
-    assert!(explained.contains("IndexRange r_d"), "{explained}");
+    assert!(explained.contains("IndexRangeScan r_d"), "{explained}");
     let explained = plan(
         &mut session,
         "SELECT id FROM r WHERE d NOT BETWEEN 10 AND 12",

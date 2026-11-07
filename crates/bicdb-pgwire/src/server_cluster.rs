@@ -1709,12 +1709,24 @@ impl PgWireServer {
         // readers by the writer-fair lock, so one statement waiting for a row
         // owner under a read guard would stall every new reader (including
         // the owner's COMMIT) until this writer timed out.
+        // Park in short slices so steady readers cannot starve this writer,
+        // but only poll while any statement waits for a row lock.
         let deadline = wait_started + self.config.write_timeout;
         let mut acquired = None;
-        while acquired.is_none() && Instant::now() < deadline {
-            acquired = self.db.try_write();
-            if acquired.is_none() {
-                thread::sleep(Duration::from_micros(500));
+        while acquired.is_none() {
+            let now = Instant::now();
+            if now >= deadline {
+                break;
+            }
+            if bicdb_core::row_lock_waits_active() {
+                acquired = self.db.try_write();
+                if acquired.is_none() {
+                    thread::sleep(Duration::from_micros(500));
+                }
+            } else {
+                acquired = self
+                    .db
+                    .try_write_for((deadline - now).min(Duration::from_millis(50)));
             }
         }
         match acquired {

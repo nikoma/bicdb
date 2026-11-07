@@ -2704,7 +2704,8 @@ fn handle_frontend_message(
                 state.failed_queries += 1;
                 server.failed_queries.fetch_add(1, Ordering::SeqCst);
                 state.discard_until_sync = true;
-                log_failed_query(server, state, None, &error);
+                let sql = describe_payload_sql(&payload, state);
+                log_failed_query(server, state, sql.as_deref(), &error);
                 error_response_for_error(stream, &error)?;
                 if error.closes_connection() {
                     return Ok(false);
@@ -2838,6 +2839,34 @@ fn handle_frontend_message(
         }
     }
     Ok(true)
+}
+
+/// Diagnostic (env `BICDB_TRACE_WRITE_ESCALATION=1`): why a statement left the
+/// shared write path for exclusive database access.
+fn trace_write_escalation(reason: &str, sql: &str) {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if *ENABLED.get_or_init(|| std::env::var_os("BICDB_TRACE_WRITE_ESCALATION").is_some()) {
+        let head: String = sql.chars().take(200).collect();
+        eprintln!("write escalation: {reason}: {head}");
+    }
+}
+
+/// Source SQL of the statement or portal a Describe message names.
+fn describe_payload_sql(payload: &[u8], state: &ConnectionState) -> Option<String> {
+    let (kind, rest) = payload.split_first()?;
+    let end = rest.iter().position(|byte| *byte == 0)?;
+    let name = std::str::from_utf8(&rest[..end]).ok()?;
+    match kind {
+        b'S' => state
+            .prepared
+            .get(name)
+            .map(|statement| statement.sql.clone()),
+        b'P' => state
+            .portals
+            .get(name)
+            .map(|portal| portal.source_sql.clone()),
+        _ => None,
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -3983,6 +4012,7 @@ fn execute_server_db_sql_for_state_inner(
             None
         } else {
             let Some(slot) = server.try_acquire_shared_write() else {
+                trace_write_escalation("shared-write gate closed", sql);
                 break;
             };
             Some(slot)
@@ -4049,6 +4079,9 @@ fn execute_server_db_sql_for_state_inner(
         // Needs exclusive access (DDL / non-transactional) or hit a genuine SQL
         // error: hand off to the exclusive path, which re-runs and surfaces it.
         let Ok(res) = result else {
+            if let Err(error) = &result {
+                trace_write_escalation(&error.to_string(), sql);
+            }
             break;
         };
         let Some(tx) = pending else {
@@ -4165,6 +4198,7 @@ fn execute_server_db_sql_for_state_inner(
     if !read_only_candidate {
         server.note_shared_commit(true);
     }
+    trace_write_escalation("exclusive fallback", sql);
 
     // Exclusive fallback.
     ensure_server_writable(server)?;

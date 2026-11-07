@@ -2160,17 +2160,23 @@ async fn oracle_column_lock_targets_the_owning_join_alias() {
     two.batch_execute("UPDATE parent_rows SET value='changed' WHERE k=1")
         .await
         .unwrap();
-    let error = two
-        .batch_execute("UPDATE child_rows SET value='blocked' WHERE k=1")
-        .await
-        .unwrap_err();
-    assert_eq!(
-        error.as_db_error().unwrap().code(),
-        &tokio_postgres::error::SqlState::T_R_SERIALIZATION_FAILURE
+    // Updating the locked child waits for its owner, as in Oracle, and
+    // proceeds once the owner ends its transaction.
+    let blocked = tokio::spawn(async move {
+        two.batch_execute("UPDATE child_rows SET value='released' WHERE k=1")
+            .await
+            .map(|()| two)
+    });
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    assert!(
+        !blocked.is_finished(),
+        "an update of a FOR UPDATE row must wait for the lock owner"
     );
     one.batch_execute("ROLLBACK").await.unwrap();
-    two.batch_execute("UPDATE child_rows SET value='released' WHERE k=1")
+    let two = tokio::time::timeout(std::time::Duration::from_secs(10), blocked)
         .await
+        .expect("the waiting update completes after the owner rolls back")
+        .unwrap()
         .unwrap();
     assert!(one
         .query(

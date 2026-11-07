@@ -73,6 +73,7 @@ pub use transaction_receipts::{
     TransactionWriteRollback,
 };
 pub use transaction_suspension::TransactionSuspension;
+pub use wait_graph::row_lock_waits_active;
 
 use petgraph::algo::{astar, dijkstra};
 use petgraph::graph::{DiGraph, NodeIndex};

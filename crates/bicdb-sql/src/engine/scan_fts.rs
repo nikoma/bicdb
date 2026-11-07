@@ -2586,6 +2586,17 @@ impl<'db> SqlEngine<'db> {
             return Ok(None);
         }
         let schema = load_schema(self.db_ref(), &collection)?;
+        // As in `try_streaming_row_query`: skip planning when the external
+        // sort could not stream anyway.
+        if self.security_context.is_some()
+            || self.tx.is_some()
+            || schema
+                .as_ref()
+                .is_some_and(|schema| schema.rls_enabled || schema.rls_forced)
+            || !self.db_ref().record_batch_streaming_possible(&collection)
+        {
+            return Ok(None);
+        }
         let plan = self.plan_query(&collection, &alias_name, select, query)?;
         self.try_streaming_external_sort(
             &collection,
@@ -3167,6 +3178,20 @@ impl<'db> SqlEngine<'db> {
             return Ok(None);
         }
         let schema = load_schema(self.db_ref(), &collection)?;
+        // Cheap disqualifiers first: the streamer below only acts on a full-scan
+        // plan it is allowed to stream, so planning is wasted work when it
+        // cannot stream at all (memory-resident storage, an open transaction,
+        // a security context or row-level security), which is every ordinary
+        // SELECT in the default storage mode.
+        if self.security_context.is_some()
+            || self.tx.is_some()
+            || schema
+                .as_ref()
+                .is_some_and(|schema| schema.rls_enabled || schema.rls_forced)
+            || !self.db_ref().record_batch_streaming_possible(&collection)
+        {
+            return Ok(None);
+        }
         let plan = self.plan_query(&collection, &alias_name, select, query)?;
         self.try_streaming_projection(
             &collection,

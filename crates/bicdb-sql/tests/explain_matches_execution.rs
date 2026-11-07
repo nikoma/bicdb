@@ -5,7 +5,7 @@
 //! statement really executes (opt-in `plan_diagnostics` trace), with and
 //! without ANALYZE statistics, and inside a transaction with pending writes.
 
-use bicdb_core::BicDb;
+use bicdb_core::{BicDb, DbConfig, StorageMode};
 use bicdb_sql::plan_diagnostics::{with_plan_diagnostics, DecisionTrace, DiagnosticsOptions};
 use bicdb_sql::SqlSession;
 
@@ -149,6 +149,31 @@ fn explain_reports_the_executed_access_path() {
     SqlSession::new(&mut db).execute("ANALYZE t").unwrap();
     mismatches.extend(check_all(&mut db, "after ANALYZE", false));
     mismatches.extend(check_all(&mut db, "pending writes", true));
+    assert!(
+        mismatches.is_empty(),
+        "{} EXPLAIN/execution mismatches:\n{}",
+        mismatches.len(),
+        mismatches.join("\n")
+    );
+}
+
+#[test]
+fn explain_reports_the_executed_access_path_in_paged_storage() {
+    // Paged storage adds the streaming routes (a full-scan plan streams
+    // record batches instead of materializing).
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open_with_config(
+        root.path(),
+        DbConfig::default()
+            .with_fsync(false)
+            .with_storage_mode(StorageMode::ServerPaged),
+    )
+    .unwrap();
+    setup(&mut db);
+    let mut mismatches = check_all(&mut db, "paged, no stats", false);
+    SqlSession::new(&mut db).execute("ANALYZE t").unwrap();
+    mismatches.extend(check_all(&mut db, "paged, after ANALYZE", false));
+    mismatches.extend(check_all(&mut db, "paged, pending writes", true));
     assert!(
         mismatches.is_empty(),
         "{} EXPLAIN/execution mismatches:\n{}",

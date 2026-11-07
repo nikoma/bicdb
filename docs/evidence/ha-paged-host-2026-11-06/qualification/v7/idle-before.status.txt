@@ -1,0 +1,45 @@
+{"timestamp":1794013378,"event":"server.listening","severity":"info","fields":{"address":"127.0.0.1:41247"}}
+bicdb pgwire listening on 127.0.0.1:41247 — effective limits: --max-connections=100 --max-pending-accepts=100 --max-active-queries=24 (reads 24 / writes 24) --max-queued-queries=96 (reads 96 / writes 96). Defaults are host-sized; set these explicitly for production.
+{"timestamp":1794013378,"event":"server.limits","severity":"info","fields":{"address":"127.0.0.1:41247","max_active_queries":24,"max_active_reads":24,"max_active_writes":24,"max_connections":100,"max_pending_accepts":100,"max_queued_queries":96,"max_queued_reads":96,"max_queued_writes":96}}
+{"timestamp":1794013378,"event":"connection.opened","severity":"info","fields":{"connection_id":1,"database":"bicdb","peer_addr":"127.0.0.1:47098","tls":false,"user":"bicdb"}}
+{"timestamp":1794013380,"event":"connection.closed","severity":"info","fields":{"connection_id":1}}
+
+thread 'idle_timeout_excludes_async_query_execution' (3465739) panicked at crates/bicdb-pgwire/tests/protocol.rs:12294:10:
+called `Result::unwrap()` on an `Err` value: Os { code: 32, kind: BrokenPipe, message: "Broken pipe" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'idle_timeout_excludes_async_query_execution' (3465739) panicked at crates/bicdb-pgwire/tests/protocol.rs:11626:13:
+called `Result::unwrap()` on an `Err` value: Any { .. }
+
+---- idle_timeout_excludes_copy_execution_before_commit stdout ----
+{"timestamp":1794013380,"event":"server.listening","severity":"info","fields":{"address":"127.0.0.1:33453"}}
+bicdb pgwire listening on 127.0.0.1:33453 — effective limits: --max-connections=100 --max-pending-accepts=100 --max-active-queries=24 (reads 24 / writes 24) --max-queued-queries=96 (reads 96 / writes 96). Defaults are host-sized; set these explicitly for production.
+{"timestamp":1794013380,"event":"server.limits","severity":"info","fields":{"address":"127.0.0.1:33453","max_active_queries":24,"max_active_reads":24,"max_active_writes":24,"max_connections":100,"max_pending_accepts":100,"max_queued_queries":96,"max_queued_reads":96,"max_queued_writes":96}}
+{"timestamp":1794013380,"event":"connection.opened","severity":"info","fields":{"connection_id":1,"database":"bicdb","peer_addr":"127.0.0.1:34114","tls":false,"user":"bicdb"}}
+{"timestamp":1794013382,"event":"connection.closed","severity":"info","fields":{"connection_id":1}}
+
+thread 'idle_timeout_excludes_copy_execution_before_commit' (3466022) panicked at crates/bicdb-pgwire/tests/protocol.rs:12294:10:
+called `Result::unwrap()` on an `Err` value: Os { code: 32, kind: BrokenPipe, message: "Broken pipe" }
+
+thread 'idle_timeout_excludes_copy_execution_before_commit' (3466022) panicked at crates/bicdb-pgwire/tests/protocol.rs:11626:13:
+called `Result::unwrap()` on an `Err` value: Any { .. }
+
+---- idle_timeout_excludes_sync_query_execution stdout ----
+{"timestamp":1794013382,"event":"connection.opened","severity":"info","fields":{"connection_id":1,"database":"bicdb","peer_addr":"127.0.0.1:54706","tls":false,"user":"bicdb"}}
+{"timestamp":1794013384,"event":"connection.closed","severity":"info","fields":{"connection_id":1}}
+
+thread 'idle_timeout_excludes_sync_query_execution' (3466190) panicked at crates/bicdb-pgwire/tests/protocol.rs:12294:10:
+called `Result::unwrap()` on an `Err` value: Os { code: 32, kind: BrokenPipe, message: "Broken pipe" }
+
+thread 'idle_timeout_excludes_sync_query_execution' (3466190) panicked at crates/bicdb-pgwire/tests/protocol.rs:11626:13:
+called `Result::unwrap()` on an `Err` value: Any { .. }
+
+
+failures:
+    idle_timeout_excludes_async_query_execution
+    idle_timeout_excludes_copy_execution_before_commit
+    idle_timeout_excludes_sync_query_execution
+
+test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 184 filtered out; finished in 6.38s
+
+error: test failed, to rerun pass `-p bicdb-pgwire --test protocol`

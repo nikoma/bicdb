@@ -1,0 +1,45 @@
+
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.32s
+
+     Running tests/recovery.rs (target/debug/deps/recovery-2d0028fd2517e4f7)
+
+running 2 tests
+test format_one_recovery_images_migrate_pending_local_broker_jobs ... ok
+test server_paged_recovery_restores_inactive_application_data_and_pending_jobs ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.09s
+
+     Running tests/replicated_state.rs (target/debug/deps/replicated_state-993b7e7bceb379d1)
+
+running 4 tests
+test native_failover_preserves_migrations_outbox_job_leases_and_effect_receipts ... ok
+test server_paged_native_failover_preserves_migrations_jobs_and_effect_receipts ... ok
+test server_paged_native_open_keeps_the_persisted_engine ... ok
+test unmigrated_legacy_jobs_are_rejected_before_any_state_listener_starts ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 26.96s
+
+     Running tests/sql_listener.rs (target/debug/deps/sql_listener-a7a39479505375f4)
+
+running 2 tests
+test listener_uses_the_same_writer_and_enforces_authenticated_identity_and_durable_rls ... ok
+test sql_listeners_require_explicit_private_local_operator_configuration ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.25s
+
+     Running tests/state_failover.rs (target/debug/deps/state_failover-b861a5c61856b02d)
+
+running 10 tests
+test a_live_isolated_writer_retires_compute_before_rejoining_as_a_standby ... ok
+test an_existing_standalone_catalog_enrolls_without_losing_data_or_receipts ... ok
+test an_http_reachable_isolated_writer_cannot_export_unacknowledged_edge_history ... ok
+test an_indeterminate_quorum_commit_returns_service_unavailable ... ok
+test authenticated_sql_acknowledgements_and_stateless_companions_survive_host_loss ... ok
+test authenticated_sql_and_companion_processes_fence_an_isolated_writer ... ok
+test deployment_catalog_routes_and_jobs_follow_the_native_state_primary ... ok
+test large_public_packages_remain_quorum_durable_and_recover_without_an_upload ... ok
+test remote_compute_uses_a_pinned_successor_state_origin ... ok
+test signed_edge_sync_and_peer_revocation_survive_state_failover ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 306.92s
+

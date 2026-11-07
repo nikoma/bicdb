@@ -10,49 +10,56 @@
       "failed": 0,
       "ignored": 0,
       "suites": 5,
-      "log_sha256": "603d05e7082765a80dd1266e0bd2ad525e8d16eb82793c9d794b495c17580793"
+      "log_sha256": "603d05e7082765a80dd1266e0bd2ad525e8d16eb82793c9d794b495c17580793",
+      "log_file": "qualification/v7/core-index-regressions.txt"
     },
     "sql-library": {
       "passed": 761,
       "failed": 0,
       "ignored": 4,
       "suites": 1,
-      "log_sha256": "96fe55893171e78d96fc58ffec0289d63c443ff4e894e20adf7cb7499fcb7f8c"
+      "log_sha256": "96fe55893171e78d96fc58ffec0289d63c443ff4e894e20adf7cb7499fcb7f8c",
+      "log_file": "qualification/v7/sql-library.txt"
     },
     "core-library": {
       "passed": 452,
       "failed": 0,
       "ignored": 3,
       "suites": 1,
-      "log_sha256": "d211ea61d6b7b35d97bf515054adeadeb7114bc07e93fcd2d4d7081e5c95948a"
+      "log_sha256": "d211ea61d6b7b35d97bf515054adeadeb7114bc07e93fcd2d4d7081e5c95948a",
+      "log_file": "qualification/v7/core-library.txt"
     },
     "app-host": {
       "passed": 47,
       "failed": 0,
       "ignored": 1,
       "suites": 7,
-      "log_sha256": "67b86960eb61138402b858f6afc9cb9b707497ac87f3d2fcd31fe9ab743f89a9"
+      "log_sha256": "67b86960eb61138402b858f6afc9cb9b707497ac87f3d2fcd31fe9ab743f89a9",
+      "log_file": "qualification/v7/app-host.txt"
     },
     "protocol": {
       "passed": 187,
       "failed": 0,
       "ignored": 0,
       "suites": 1,
-      "log_sha256": "8ecb11621d63f5c7cbdf65a88caabc8986db62bc6d9e508647d5f2619e4f7a0f"
+      "log_sha256": "8ecb11621d63f5c7cbdf65a88caabc8986db62bc6d9e508647d5f2619e4f7a0f",
+      "log_file": "qualification/v7/protocol.txt"
     },
     "pgwire-library": {
       "passed": 140,
       "failed": 0,
       "ignored": 0,
       "suites": 1,
-      "log_sha256": "403d3a97c9e1ac4c5c97b3d87f4aecfa86712c136ebe08ed9ecc885ce51370ae"
+      "log_sha256": "403d3a97c9e1ac4c5c97b3d87f4aecfa86712c136ebe08ed9ecc885ce51370ae",
+      "log_file": "qualification/v7/pgwire-library.txt"
     },
     "private-runtime-isolation-explicit": {
       "passed": 1,
       "failed": 0,
       "ignored": 0,
       "suites": 1,
-      "log_sha256": "a6d599b73f4f76b439fa0f35f4fa8d2c97d774e71df88b292da295d5d0f7439b"
+      "log_sha256": "a6d599b73f4f76b439fa0f35f4fa8d2c97d774e71df88b292da295d5d0f7439b",
+      "log_file": "qualification/v7/private-runtime-isolation-explicit.txt"
     }
   },
   "causal_controls": {

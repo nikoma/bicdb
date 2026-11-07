@@ -1,0 +1,45 @@
+test checkpoint_for_resume_is_a_durable_barrier ... ok
+test churn_with_periodic_folds_shadows_the_embedded_oracle ... ok
+test create_index_backfills_rows_that_predate_it ... ok
+test declared_raw_text_fields_are_tokenized_natively_with_positions ... ok
+test direct_built_index_serves_exact_and_prefix_lookups_from_blocks ... ok
+test direct_primary_key_fts_reader_can_skip_the_startup_rowid_registry ... ok
+test legacy_array_projection_backfill_stays_per_posting ... ok
+test multi_chunk_direct_build_probes_every_pk_without_duplicates ... ok
+test paged_postings_shadow_the_embedded_index_under_churn ... ok
+test postings_survive_a_crash_shaped_reopen ... ok
+test postings_survive_restart_and_serve_lookups_with_zero_resident_rows ... ok
+test read_through_postings_keep_zero_resident_bytes ... ok
+test updates_diff_terms_and_deletes_remove_them ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.58s
+
+     Running tests/paged_index_entries.rs (target/debug/deps/paged_index_entries-4fa0a54bc83ad104)
+
+running 8 tests
+test a_reopened_index_is_loaded_from_durable_entries_and_verifies ... ok
+test a_reopened_index_serves_read_through_with_no_resident_bytes ... ok
+test an_index_created_after_the_rows_is_backfilled_durably ... ok
+test dropping_an_index_removes_its_durable_entries ... ok
+test entries_survive_a_drop_without_close ... ok
+test index_entries_survive_restart_without_rebuild ... ok
+test the_resident_index_still_verifies_in_both_modes ... ok
+test updates_and_deletes_move_the_durable_entries ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.06s
+
+     Running tests/transaction_rollback_mark.rs (target/debug/deps/transaction_rollback_mark-3eab1e82d5b89a39)
+
+running 2 tests
+test read_lock_release_preserves_earlier_locks_and_refuses_write_locks ... ok
+test rollback_marks_preserve_earlier_hooks_and_reject_other_transactions ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests/unique_index_build_identity.rs (target/debug/deps/unique_index_build_identity-91585b0a268ee50b)
+
+running 1 test
+test unique_index_build_conflict_is_structured_and_does_not_publish_an_index ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+

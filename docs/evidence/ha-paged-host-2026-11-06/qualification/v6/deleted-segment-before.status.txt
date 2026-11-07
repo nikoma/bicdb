@@ -1,0 +1,45 @@
+      |
+      = note: `#[warn(dropping_references)]` on by default
+help: use `let _ = ...` to ignore the expression or result
+      |
+17143 -                 drop(db);
+17143 +                 let _ = db;
+      |
+
+warning: unused `std::result::Result` that must be used
+   --> crates/bicdb-core/src/db/flashback.rs:491:9
+    |
+491 |         tx.push_writes(history);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+    = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+    |
+491 |         let _ = tx.push_writes(history);
+    |         +++++++
+
+warning: `bicdb-core` (lib) generated 98 warnings (run `cargo fix --lib -p bicdb-core` to apply 14 suggestions)
+    Finished `test` profile [unoptimized] target(s) in 35.07s
+     Running tests/paged_fts_postings.rs (target/debug/deps/paged_fts_postings-45da32214f2f63f2)
+
+running 1 test
+test bounded_folds_preserve_search_across_interleaved_writes_and_reopen ... FAILED
+
+failures:
+
+---- bounded_folds_preserve_search_across_interleaved_writes_and_reopen stdout ----
+
+thread 'bounded_folds_preserve_search_across_interleaved_writes_and_reopen' (3422250) panicked at crates/bicdb-core/tests/paged_fts_postings.rs:916:17:
+assertion `left == right` failed: bulk=true step=20 term=uniqueaa
+  left: ["r0"]
+ right: []
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    bounded_folds_preserve_search_across_interleaved_writes_and_reopen
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.61s
+
+error: test failed, to rerun pass `-p bicdb-core --test paged_fts_postings`

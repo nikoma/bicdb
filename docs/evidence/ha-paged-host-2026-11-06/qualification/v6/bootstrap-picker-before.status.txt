@@ -1,0 +1,45 @@
+     |               ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `command_tag_for_buffered_sql` is never used
+    --> crates/bicdb-pgwire/src/sql_parsing.rs:1353:15
+     |
+1353 | pub(crate) fn command_tag_for_buffered_sql(normalized: &str) -> &'static str {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `bicdb-pgwire` (lib) generated 21 warnings (run `cargo fix --lib -p bicdb-pgwire` to apply 3 suggestions)
+   Compiling bicdb-app-host v1.0.438-beta (/root/ehr-bicdb-migration-20261104/crates/bicdb-app-host)
+    Finished `test` profile [unoptimized] target(s) in 2m 46s
+     Running tests/replicated_state.rs (target/debug/deps/replicated_state-993b7e7bceb379d1)
+
+running 1 test
+test server_paged_native_failover_preserves_migrations_jobs_and_effect_receipts ... FAILED
+
+failures:
+
+---- server_paged_native_failover_preserves_migrations_jobs_and_effect_receipts stdout ----
+bicdb replication: standby n1 needs a snapshot: the standby is at commit 0, but the log only reaches back to 20
+bicdb replication: receiving a snapshot of the primary at commit 20
+bicdb replication: standby n2 needs a snapshot: the standby is at commit 0, but the log only reaches back to 20
+bicdb replication: sent standby n1 a snapshot at commit 20 (21437 bytes)
+bicdb replication: receiving a snapshot of the primary at commit 20
+bicdb replication: sent standby n2 a snapshot at commit 20 (21435 bytes)
+bicdb replication: index catalog announcement failed: database is read-only standby: commit write transaction is refused: this primary heard from 0 of the 1 standby(s) its write lease needs within 1.5s
+bicdb replication: snapshot staged (21437 bytes); the next start installs it; restarting
+bicdb replication: installed a snapshot of the primary into /tmp/.tmpfgjLdk/n1/data
+
+thread 'server_paged_native_failover_preserves_migrations_jobs_and_effect_receipts' (3443561) panicked at crates/bicdb-app-host/tests/replicated_state.rs:86:86:
+called `Result::unwrap()` on an `Err` value: bicdb error: format compatibility error: database at /tmp/.tmpfgjLdk/n1/data has storage_mode `server_paged` but was opened with `embedded_memory`; BicDB never converts storage mode implicitly — run an explicit migration
+
+Caused by:
+    format compatibility error: database at /tmp/.tmpfgjLdk/n1/data has storage_mode `server_paged` but was opened with `embedded_memory`; BicDB never converts storage mode implicitly — run an explicit migration
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+bicdb replication: index catalog announcement failed: database is read-only standby: commit write transaction is refused after writer authority closed; restart before accepting writes; current primary: 127.0.0.1:46593
+bicdb replication: snapshot staged (21435 bytes); the next start installs it; restarting
+
+
+failures:
+    server_paged_native_failover_preserves_migrations_jobs_and_effect_receipts
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3 filtered out; finished in 4.52s
+
+error: test failed, to rerun pass `-p bicdb-app-host --test replicated_state`

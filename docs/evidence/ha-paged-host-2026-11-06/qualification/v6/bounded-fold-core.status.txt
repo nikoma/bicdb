@@ -1,0 +1,45 @@
+    |               ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `envelope_for_event` is never used
+   --> crates/bicdb-core/src/sync_mesh.rs:744:15
+    |
+744 | pub(crate) fn envelope_for_event(
+    |               ^^^^^^^^^^^^^^^^^^
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+     --> crates/bicdb-core/src/db.rs:17143:17
+      |
+17143 |                 drop(db);
+      |                 ^^^^^--^
+      |                      |
+      |                      argument has type `&db::BicDb`
+      |
+      = note: `#[warn(dropping_references)]` on by default
+help: use `let _ = ...` to ignore the expression or result
+      |
+17143 -                 drop(db);
+17143 +                 let _ = db;
+      |
+
+warning: unused `std::result::Result` that must be used
+   --> crates/bicdb-core/src/db/flashback.rs:491:9
+    |
+491 |         tx.push_writes(history);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+    = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+    |
+491 |         let _ = tx.push_writes(history);
+    |         +++++++
+
+warning: `bicdb-core` (lib) generated 98 warnings (run `cargo fix --lib -p bicdb-core` to apply 14 suggestions)
+    Finished `test` profile [unoptimized] target(s) in 35.17s
+     Running tests/paged_fts_postings.rs (target/debug/deps/paged_fts_postings-45da32214f2f63f2)
+
+running 1 test
+test bounded_folds_preserve_search_across_interleaved_writes_and_reopen ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.65s
+

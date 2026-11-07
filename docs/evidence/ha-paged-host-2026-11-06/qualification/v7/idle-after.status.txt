@@ -1,0 +1,45 @@
+1353 | pub(crate) fn command_tag_for_buffered_sql(normalized: &str) -> &'static str {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `bicdb-pgwire` (lib) generated 21 warnings (run `cargo fix --lib -p bicdb-pgwire` to apply 3 suggestions)
+warning: variable does not need to be mutable
+     --> crates/bicdb-pgwire/tests/protocol.rs:13318:10
+      |
+13318 |     let (mut first, first_connection) = tokio_postgres::connect(&config, tokio_postgres::NoTls)
+      |          ----^^^^^
+      |          |
+      |          help: remove this `mut`
+      |
+      = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `copy_from_stdin_csv_imports_rows_over_wire` is never used
+    --> crates/bicdb-pgwire/tests/protocol.rs:1881:4
+     |
+1881 | fn copy_from_stdin_csv_imports_rows_over_wire() {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `startup_with_password` is never used
+     --> crates/bicdb-pgwire/tests/protocol.rs:12113:4
+      |
+12113 | fn startup_with_password(stream: &mut TcpStream, user: &str, password: &str) {
+      |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `send_password` is never used
+     --> crates/bicdb-pgwire/tests/protocol.rs:12282:4
+      |
+12282 | fn send_password(stream: &mut TcpStream, password: &str) {
+      |    ^^^^^^^^^^^^^
+
+warning: `bicdb-pgwire` (test "protocol") generated 4 warnings (run `cargo fix --test "protocol" -p bicdb-pgwire` to apply 1 suggestion)
+    Finished `test` profile [unoptimized] target(s) in 18.39s
+     Running tests/protocol.rs (target/debug/deps/protocol-d19154d75375feca)
+
+running 3 tests
+test idle_timeout_excludes_async_query_execution ... ok
+test idle_timeout_excludes_copy_execution_before_commit ... ok
+test idle_timeout_excludes_sync_query_execution ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 184 filtered out; finished in 6.36s
+

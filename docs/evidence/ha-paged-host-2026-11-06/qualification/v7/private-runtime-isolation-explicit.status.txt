@@ -1,0 +1,45 @@
+warning: function `parse_advisory_lock_call` is never used
+ --> crates/bicdb-pgwire/src/sql_parsing.rs:7:15
+  |
+7 | pub(crate) fn parse_advisory_lock_call(sql: &str) -> Result<Option<AdvisoryLockCall>> {
+  |               ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `advisory_integer_expr` is never used
+   --> crates/bicdb-pgwire/src/sql_parsing.rs:225:15
+    |
+225 | pub(crate) fn advisory_integer_expr(expr: &Expr) -> Result<Option<i64>> {
+    |               ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `parse_pg_sleep` is never used
+   --> crates/bicdb-pgwire/src/sql_parsing.rs:273:15
+    |
+273 | pub(crate) fn parse_pg_sleep(sql: &str) -> Option<Duration> {
+    |               ^^^^^^^^^^^^^^
+
+warning: function `should_buffer_in_transaction` is never used
+    --> crates/bicdb-pgwire/src/sql_parsing.rs:1100:15
+     |
+1100 | pub(crate) fn should_buffer_in_transaction(normalized: &str) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `buffer_transaction_sql` is never used
+    --> crates/bicdb-pgwire/src/sql_parsing.rs:1109:15
+     |
+1109 | pub(crate) fn buffer_transaction_sql(
+     |               ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `command_tag_for_buffered_sql` is never used
+    --> crates/bicdb-pgwire/src/sql_parsing.rs:1353:15
+     |
+1353 | pub(crate) fn command_tag_for_buffered_sql(normalized: &str) -> &'static str {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `bicdb-pgwire` (lib) generated 21 warnings (run `cargo fix --lib -p bicdb-pgwire` to apply 3 suggestions)
+    Finished `test` profile [unoptimized] target(s) in 0.32s
+     Running tests/private_runtime.rs (target/debug/deps/private_runtime-6cf6355b905611e8)
+
+running 1 test
+test isolated_http_cannot_read_private_state_or_receive_platform_capabilities ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.40s
+

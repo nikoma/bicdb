@@ -1,0 +1,45 @@
+    |
+273 | pub(crate) fn parse_pg_sleep(sql: &str) -> Option<Duration> {
+    |               ^^^^^^^^^^^^^^
+
+warning: function `should_buffer_in_transaction` is never used
+    --> crates/bicdb-pgwire/src/sql_parsing.rs:1100:15
+     |
+1100 | pub(crate) fn should_buffer_in_transaction(normalized: &str) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `buffer_transaction_sql` is never used
+    --> crates/bicdb-pgwire/src/sql_parsing.rs:1109:15
+     |
+1109 | pub(crate) fn buffer_transaction_sql(
+     |               ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `command_tag_for_buffered_sql` is never used
+    --> crates/bicdb-pgwire/src/sql_parsing.rs:1353:15
+     |
+1353 | pub(crate) fn command_tag_for_buffered_sql(normalized: &str) -> &'static str {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `bicdb-pgwire` (lib test) generated 21 warnings (run `cargo fix --lib -p bicdb-pgwire --tests` to apply 5 suggestions)
+    Finished `test` profile [unoptimized] target(s) in 2m 38s
+     Running unittests src/lib.rs (target/debug/deps/bicdb_pgwire-8543d414cfe8acae)
+
+running 1 test
+test checkpoint_driver::fold_writer_tests::automatic_full_text_folding_allows_writes_before_the_fold_finishes ... FAILED
+
+failures:
+
+---- checkpoint_driver::fold_writer_tests::automatic_full_text_folding_allows_writes_before_the_fold_finishes stdout ----
+
+thread 'checkpoint_driver::fold_writer_tests::automatic_full_text_folding_allows_writes_before_the_fold_finishes' (3433107) panicked at crates/bicdb-pgwire/src/checkpoint_driver.rs:2208:18:
+foreground writer must proceed while the search index is still folding: Server("write timed out waiting for database writer after 1000ms")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+{"timestamp":1794012807,"event":"fts_fold.completed","severity":"info","fields":{"blocks_written":8160,"elapsed_ms":3492,"index":"articles_fts","terms_folded":8001}}
+
+
+failures:
+    checkpoint_driver::fold_writer_tests::automatic_full_text_folding_allows_writes_before_the_fold_finishes
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 139 filtered out; finished in 5.80s
+
+error: test failed, to rerun pass `-p bicdb-pgwire --lib`

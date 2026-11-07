@@ -1,0 +1,45 @@
+
+warning: fields `process_id` and `secret_key` are never read
+    --> crates/bicdb-pgwire/src/server_cluster.rs:2821:16
+     |
+2814 | pub(crate) struct InitializedBlockingClient {
+     |                   ------------------------- fields in this struct
+...
+2821 |     pub(crate) process_id: i32,
+     |                ^^^^^^^^^^
+2822 |     pub(crate) secret_key: i32,
+     |                ^^^^^^^^^^
+
+warning: function `parse_pg_sleep` is never used
+   --> crates/bicdb-pgwire/src/sql_parsing.rs:273:15
+    |
+273 | pub(crate) fn parse_pg_sleep(sql: &str) -> Option<Duration> {
+    |               ^^^^^^^^^^^^^^
+
+warning: function `should_buffer_in_transaction` is never used
+    --> crates/bicdb-pgwire/src/sql_parsing.rs:1100:15
+     |
+1100 | pub(crate) fn should_buffer_in_transaction(normalized: &str) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `buffer_transaction_sql` is never used
+    --> crates/bicdb-pgwire/src/sql_parsing.rs:1109:15
+     |
+1109 | pub(crate) fn buffer_transaction_sql(
+     |               ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `command_tag_for_buffered_sql` is never used
+    --> crates/bicdb-pgwire/src/sql_parsing.rs:1353:15
+     |
+1353 | pub(crate) fn command_tag_for_buffered_sql(normalized: &str) -> &'static str {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `bicdb-pgwire` (lib test) generated 21 warnings (run `cargo fix --lib -p bicdb-pgwire --tests` to apply 5 suggestions)
+    Finished `test` profile [unoptimized] target(s) in 14.62s
+     Running unittests src/lib.rs (target/debug/deps/bicdb_pgwire-8543d414cfe8acae)
+
+running 1 test
+test checkpoint_driver::fold_writer_tests::automatic_full_text_folding_allows_writes_before_the_fold_finishes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 139 filtered out; finished in 2.66s
+

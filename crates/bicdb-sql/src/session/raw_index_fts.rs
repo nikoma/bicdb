@@ -870,7 +870,13 @@ impl<'db> SqlSession<'db> {
         {
             return self.with_statement_transaction(|session| session.execute_query_inner(query));
         }
-        if self.tx.is_none()
+        if self.row_routine_call && query_has_row_locks(query) {
+            return Err(super::row_routine_write_error());
+        }
+        // Read-only row hosts already borrow the outer statement's snapshot.
+        // A nested table function must not start/commit an independent unit.
+        if !self.row_routine_call
+            && self.tx.is_none()
             && (query_has_row_locks(query) || self.query_has_plpgsql_set_functions(query)?)
         {
             self.execute("BEGIN")?;

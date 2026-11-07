@@ -303,7 +303,9 @@ impl<'db> SqlSession<'db> {
         for call in base_call.iter().chain(calls.iter().flatten()) {
             self.ensure_routine_execute_privilege(&call.0)?;
         }
-        if self.tx.is_none() {
+        // A read-only per-row host uses its caller's statement transaction.
+        // Actual mutations remain fenced by row_routine_call.
+        if self.read_tx().is_none() {
             return Err(SqlError::InvalidTransactionState {
                 message: "set-returning routine execution requires its statement transaction"
                     .into(),

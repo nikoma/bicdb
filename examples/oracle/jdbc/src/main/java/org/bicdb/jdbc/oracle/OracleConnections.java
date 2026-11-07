@@ -73,10 +73,26 @@ public final class OracleConnections {
                             if (objectMethod(p, m, a)) return objectResult(p, m, a);
                             if (m.getName().equals("unwrap") && ((Class<?>) a[0]).isInstance(p)) return p;
                             if (m.getName().equals("isWrapperFor") && ((Class<?>) a[0]).isInstance(p)) return true;
+                            Boolean folding = identifierFolding(m.getName());
+                            if (folding != null) return folding;
                             return m.getName().equals("getConnection") ? proxy : call(metadata, m, a);
                         });
             }
             return result;
+        }
+    }
+
+    /**
+     * This profile folds unquoted identifiers to upper case, while PgJDBC reports PostgreSQL's
+     * lower-case folding. Callers that fold a name before a metadata lookup need the profile's rule.
+     */
+    static Boolean identifierFolding(String method) {
+        switch (method) {
+            case "storesUpperCaseIdentifiers": return Boolean.TRUE;
+            case "storesLowerCaseIdentifiers":
+            case "storesMixedCaseIdentifiers":
+            case "supportsMixedCaseIdentifiers": return Boolean.FALSE;
+            default: return null;
         }
     }
 

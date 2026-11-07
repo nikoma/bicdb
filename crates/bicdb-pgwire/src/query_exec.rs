@@ -87,6 +87,14 @@ pub(crate) fn record_proc_mix_if_enabled(server: &PgWireServer, normalized: &str
     }
 }
 
+/// Query text of a Parse message: `name\0query\0...`.
+pub(crate) fn parse_payload_sql(payload: &[u8]) -> Option<&str> {
+    let after_name = payload.iter().position(|byte| *byte == 0)? + 1;
+    let rest = payload.get(after_name..)?;
+    let end = rest.iter().position(|byte| *byte == 0)?;
+    std::str::from_utf8(&rest[..end]).ok()
+}
+
 pub(crate) fn top_level_proc_name(normalized: &str) -> Option<&str> {
     let rest = normalized
         .strip_prefix("call ")

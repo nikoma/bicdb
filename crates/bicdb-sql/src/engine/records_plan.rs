@@ -719,6 +719,28 @@ impl<'db> SqlEngine<'db> {
             .find(|index| index.name == index_name || index.name.eq_ignore_ascii_case(index_name))
     }
 
+    /// Whether an exact typed record id names a row this statement can see,
+    /// including rows written earlier in the enclosing transaction. A miss
+    /// falls back to a full typed-identity scan, so probing only committed
+    /// state turned every lookup of a same-transaction row into a table scan
+    /// (once per outer row under a correlated subquery).
+    pub(crate) fn primary_key_record_id_exists_unchecked(
+        &self,
+        table: &str,
+        record_id: &str,
+    ) -> Result<bool> {
+        if self.db_ref().get_unchecked(table, record_id)?.is_some() {
+            return Ok(true);
+        }
+        match self.tx {
+            Some(tx) => Ok(tx
+                .get_visible_record_unchecked(table, record_id)
+                .map_err(SqlError::from)?
+                .is_some()),
+            None => Ok(false),
+        }
+    }
+
     pub(crate) fn scan_record_ids_with_prefix(
         &self,
         collection: &str,
@@ -733,6 +755,31 @@ impl<'db> SqlEngine<'db> {
                 .scan_collection_record_ids_with_prefix_unchecked(collection, prefix)
                 .map_err(SqlError::from),
         }
+    }
+
+    /// Record-id candidates of `collection` within `(lower, upper)` in id
+    /// order, read from one seek of the id key space; see
+    /// [`bicdb_core::Transaction::scan_collection_record_key_candidates_in_range_unchecked`].
+    /// Locator planning only: every id resolves through the visible-row path.
+    pub(crate) fn record_key_candidates_in_range(
+        &self,
+        collection: &str,
+        lower: std::ops::Bound<&str>,
+        upper: std::ops::Bound<&str>,
+        descending: bool,
+        limit: usize,
+    ) -> Result<(Vec<String>, bool)> {
+        match self.tx {
+            Some(tx) => tx.scan_collection_record_key_candidates_in_range_unchecked(
+                collection, lower, upper, descending, limit,
+            ),
+            None => self
+                .db_ref()
+                .scan_collection_record_key_candidates_in_range_unchecked(
+                    collection, lower, upper, descending, limit,
+                ),
+        }
+        .map_err(SqlError::from)
     }
 
     pub(crate) fn load_ann_records_if_enabled(
@@ -933,6 +980,63 @@ impl<'db> SqlEngine<'db> {
             }
         }
         sql_profile_index_lookup();
+        if extreme_idx == 0 && primary_key_record_id_orders_like_values(schema) {
+            // The key lives only in the record id, and those ids sort like the
+            // key: the extreme is the first visible id from that end. The
+            // fallback below enumerates and fetches every row, which on a
+            // reopened server-paged table is a walk of the whole heap.
+            const EXTREME_CANDIDATE_BATCH: usize = 64;
+            let mut resume_after: Option<String> = None;
+            let mut best = SqlValue::Null;
+            'candidates: loop {
+                self.check_cancellation()?;
+                let past = match resume_after.as_deref() {
+                    Some(id) => std::ops::Bound::Excluded(id),
+                    None => std::ops::Bound::Unbounded,
+                };
+                let (lower, upper) = if greatest {
+                    (std::ops::Bound::Unbounded, past)
+                } else {
+                    (past, std::ops::Bound::Unbounded)
+                };
+                let (ids, complete) = self.record_key_candidates_in_range(
+                    collection,
+                    lower,
+                    upper,
+                    greatest,
+                    EXTREME_CANDIDATE_BATCH,
+                )?;
+                for id in &ids {
+                    // Resolves visibility: a deleted or invisible key is skipped.
+                    let Some(values) = self.primary_key_values_for_record_id(
+                        collection,
+                        schema,
+                        &primary_key_columns,
+                        id,
+                    )?
+                    else {
+                        continue;
+                    };
+                    if let Some(value) = values
+                        .into_iter()
+                        .next()
+                        .filter(|value| !matches!(value, SqlValue::Null))
+                    {
+                        best = value;
+                        break 'candidates;
+                    }
+                }
+                match ids.last() {
+                    Some(last) if !complete => resume_after = Some(last.clone()),
+                    _ => break,
+                }
+            }
+            let column_name = alias_name.unwrap_or_else(|| aggregate.column_name());
+            let column_types = vec![aggregate_result_pg_type(&aggregate, Some(schema))];
+            return Ok(Some(
+                SqlResult::new(vec![column_name], vec![vec![best]]).with_column_types(column_types),
+            ));
+        }
         let id_prefix = if prefix_values.is_empty() {
             String::new()
         } else {
@@ -1083,7 +1187,22 @@ impl<'db> SqlEngine<'db> {
         }
         sql_profile_record_id_prefix_scan();
         let typed_prefix = primary_key_prefix_requires_typed_identity(schema, prefix_values.len());
-        let physical_prefix = if typed_prefix { "" } else { record_id_prefix };
+        // A typed key prefix (e.g. the NUMERIC leading column of a composite
+        // key) used to scan every record id of the table and parse every
+        // record to compare the prefix: one table walk per lookup, and per
+        // outer row under a correlated subquery. When the prefix columns have
+        // canonical labels, equal values encode to the same leading record-id
+        // cells, so the physical prefix (computed the way record ids are,
+        // after the column cast) already holds every candidate; the typed
+        // comparison below still re-checks each of them.
+        let canonical_prefix = typed_prefix
+            .then(|| self.canonical_typed_record_id_prefix(schema, prefix_values))
+            .flatten();
+        let physical_prefix = match (&canonical_prefix, typed_prefix) {
+            (Some(prefix), _) => prefix.as_str(),
+            (None, true) => "",
+            (None, false) => record_id_prefix,
+        };
         let ids = self.scan_record_ids_with_prefix(table, physical_prefix)?;
         if !typed_prefix {
             return Ok(Rc::from(ids));
@@ -1104,6 +1223,37 @@ impl<'db> SqlEngine<'db> {
             }
         }
         Ok(Rc::from(matched))
+    }
+
+    /// The physical record-id prefix shared by every row whose leading key
+    /// columns equal `prefix_values`, or `None` when it is not definitive (a
+    /// non-canonical label, a NULL, a value that does not cast to the column
+    /// type) and the caller must keep the full-table fallback.
+    fn canonical_typed_record_id_prefix(
+        &self,
+        schema: &TableSchema,
+        prefix_values: &[SqlValue],
+    ) -> Option<String> {
+        let primary_key_columns = primary_key_columns_for_schema(schema);
+        // A full key is an exact lookup, not a prefix; a one-column record
+        // id is a bare cell with no composite framing to prefix.
+        if schema.has_hidden_primary_key()
+            || prefix_values.is_empty()
+            || primary_key_columns.len() < 2
+            || prefix_values.len() >= primary_key_columns.len()
+            || !primary_key_prefix_label_is_canonical(schema, prefix_values.len())
+        {
+            return None;
+        }
+        let mut cast = Vec::with_capacity(prefix_values.len());
+        for (column, value) in primary_key_columns.iter().zip(prefix_values) {
+            if matches!(value, SqlValue::Null) {
+                return None;
+            }
+            let column_schema = schema.column(column)?;
+            cast.push(cast_value_to_column_type(value.clone(), column_schema).ok()?);
+        }
+        composite_record_id_prefix_from_values(schema, &primary_key_columns, &cast).ok()
     }
 
     pub(crate) fn primary_key_expr_index(
@@ -1375,6 +1525,13 @@ impl<'db> SqlEngine<'db> {
                 if let Some(candidate) = self.primary_key_filter_candidate(
                     collection, alias, schema, selection, total_rows,
                 )? {
+                    candidates.push(candidate);
+                }
+            }
+            if let Some(schema) = schema.as_ref() {
+                if let Some(candidate) = self
+                    .primary_key_record_id_range_candidate(collection, alias, schema, selection)?
+                {
                     candidates.push(candidate);
                 }
             }
@@ -2267,6 +2424,13 @@ impl<'db> SqlEngine<'db> {
             return Ok(None);
         };
         Ok(Some(match access {
+            PrimaryKeyAccess::Never => QueryPlan {
+                kind: PlanKind::PrimaryKeyInLookup {
+                    record_ids: Vec::new(),
+                },
+                estimated_rows: 0,
+                estimated_cost: 0.0,
+            },
             PrimaryKeyAccess::Exact { record_id, values } => {
                 if primary_key_requires_typed_identity(schema) {
                     QueryPlan {
@@ -2327,6 +2491,36 @@ impl<'db> SqlEngine<'db> {
                     estimated_cost: 1.0 + estimated_rows as f64 * 0.25,
                 }
             }
+        }))
+    }
+
+    /// A range over a single primary key whose record ids sort like its
+    /// values (`primary_key_record_id_orders_like_values`), as the record ids
+    /// in that range. Such a key's `_pkey` index is unreadable, so no index
+    /// candidate covers the range and the planner fell back to a full scan
+    /// (which on a reopened server-paged table walks the whole heap). The ids
+    /// come from one seek of the id key space; the predicate is re-applied to
+    /// the rows they resolve to.
+    pub(crate) fn primary_key_record_id_range_candidate(
+        &self,
+        table: &str,
+        alias: &str,
+        schema: &TableSchema,
+        selection: &Expr,
+    ) -> Result<Option<QueryPlan>> {
+        if self.security_context.is_some() || !primary_key_record_id_orders_like_values(schema) {
+            return Ok(None);
+        }
+        let Some((_, record_ids)) =
+            self.primary_key_range_record_ids_for_table_selection(table, alias, schema, selection)?
+        else {
+            return Ok(None);
+        };
+        let estimated_rows = record_ids.len();
+        Ok(Some(QueryPlan {
+            kind: PlanKind::PrimaryKeyInLookup { record_ids },
+            estimated_rows,
+            estimated_cost: 1.0 + estimated_rows as f64 * 0.25,
         }))
     }
 
@@ -2502,12 +2696,16 @@ impl<'db> SqlEngine<'db> {
             };
             bound_values.push(value);
         }
+        // `pk = NULL` is never TRUE. Declining here sent the statement to a
+        // full scan that evaluated the NULL comparison against every row; a
+        // literal NULL was caught earlier, but a scalar subquery that finds
+        // no row is only evaluated here.
         if bound_values
             .iter()
             .flatten()
             .any(|value| matches!(value, SqlValue::Null))
         {
-            return Ok(None);
+            return Ok(Some(PrimaryKeyAccess::Never));
         }
         if bound_values.iter().all(Option::is_some) {
             let values = bound_values

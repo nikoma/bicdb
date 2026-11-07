@@ -60,12 +60,31 @@ public final class OracleAdapterProbe {
 
         String table = "BICDB_JDBC_" + UUID.randomUUID().toString().replace("-", "");
         try (Connection connection = DriverManager.getConnection(args[0], properties)) {
+            String connectedDatabase = connection.unwrap(org.postgresql.core.BaseConnection.class)
+                    .getQueryExecutor().getDatabase();
+            check("connection_catalog_context", connectedDatabase.equals(connection.getCatalog()));
+            try (Statement statement = connection.createStatement();
+                 ResultSet rows = statement.executeQuery("SELECT CURRENT_CATALOG")) {
+                check("catalog_context_name_metadata", "current_catalog".equals(rows.getMetaData().getColumnLabel(1))
+                        && "name".equals(rows.getMetaData().getColumnTypeName(1)));
+                check("catalog_context_value", rows.next() && connectedDatabase.equals(rows.getString(1)) && !rows.next());
+            }
+            try (PreparedStatement statement = connection.prepareStatement("SELECT CURRENT_CATALOG")) {
+                statement.unwrap(org.postgresql.PGStatement.class).setPrepareThreshold(1);
+                try (ResultSet rows = statement.executeQuery()) {
+                    check("prepared_catalog_context_name_metadata", "name".equals(rows.getMetaData().getColumnTypeName(1)));
+                    check("prepared_catalog_context_value", rows.next() && connectedDatabase.equals(rows.getString(1)) && !rows.next());
+                }
+            }
             checks += OracleBlobProbe.run(connection);
             checks += OracleSavepointProbe.run(connection);
             check("connection_wrapper_identity", connection.unwrap(Connection.class) == connection
                     && connection.isWrapperFor(org.postgresql.PGConnection.class));
             check("metadata_connection_identity", connection.getMetaData().getConnection() == connection);
             check("metadata_unwrap_connection_identity", connection.getMetaData().unwrap(java.sql.DatabaseMetaData.class).getConnection() == connection);
+            check("metadata_upper_case_identifier_folding", connection.getMetaData().storesUpperCaseIdentifiers()
+                    && !connection.getMetaData().storesLowerCaseIdentifiers()
+                    && !connection.getMetaData().storesMixedCaseIdentifiers());
             boolean created = false;
             try {
                 try (Statement statement = connection.createStatement()) {

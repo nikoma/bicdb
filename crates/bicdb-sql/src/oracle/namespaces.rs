@@ -108,6 +108,33 @@ fn qualify_impl<T: sqlparser::ast::VisitMut>(node: &mut T, schema: &str, calls: 
                 }
                 Statement::CreateSequence { name, .. } => self.pre_visit_relation(name)?,
                 Statement::CreateView(view) => self.pre_visit_relation(&mut view.name)?,
+                // A foreign key's target is a relation reference too, but
+                // sqlparser does not visit `REFERENCES <table>` as one. Left
+                // unqualified it resolved outside the application schema, so
+                // the REFERENCES gate saw a nonexistent relation and denied
+                // even the owner of both tables.
+                Statement::CreateTable(table) => {
+                    for constraint in &mut table.constraints {
+                        self.qualify_foreign_key_constraint(constraint)?;
+                    }
+                    for column in &mut table.columns {
+                        self.qualify_foreign_key_column(column)?;
+                    }
+                }
+                Statement::AlterTable(table) => {
+                    for operation in &mut table.operations {
+                        match operation {
+                            sqlparser::ast::AlterTableOperation::AddConstraint {
+                                constraint,
+                                ..
+                            } => self.qualify_foreign_key_constraint(constraint)?,
+                            sqlparser::ast::AlterTableOperation::AddColumn {
+                                column_def, ..
+                            } => self.qualify_foreign_key_column(column_def)?,
+                            _ => {}
+                        }
+                    }
+                }
                 Statement::CreateFunction(function)
                     if function.language.as_ref().is_some_and(|language| {
                         preview_routine_language_version(&ident_value(language))
@@ -193,6 +220,31 @@ fn qualify_impl<T: sqlparser::ast::VisitMut>(node: &mut T, schema: &str, calls: 
             ControlFlow::Continue(())
         }
         fn pre_visit_relation(&mut self, name: &mut ObjectName) -> ControlFlow<()> {
+            self.qualify_name(name)
+        }
+    }
+    impl Qualify {
+        fn qualify_foreign_key_constraint(
+            &mut self,
+            constraint: &mut sqlparser::ast::TableConstraint,
+        ) -> ControlFlow<()> {
+            if let sqlparser::ast::TableConstraint::ForeignKey(foreign_key) = constraint {
+                self.qualify_name(&mut foreign_key.foreign_table)?;
+            }
+            ControlFlow::Continue(())
+        }
+        fn qualify_foreign_key_column(
+            &mut self,
+            column: &mut sqlparser::ast::ColumnDef,
+        ) -> ControlFlow<()> {
+            for option in &mut column.options {
+                if let sqlparser::ast::ColumnOption::ForeignKey(foreign_key) = &mut option.option {
+                    self.qualify_name(&mut foreign_key.foreign_table)?;
+                }
+            }
+            ControlFlow::Continue(())
+        }
+        fn qualify_name(&mut self, name: &mut ObjectName) -> ControlFlow<()> {
             let parts = object_name_parts(name);
             if let [table] = parts.as_slice() {
                 if !self.ctes.iter().rev().any(|ctes| ctes.contains(table)) {

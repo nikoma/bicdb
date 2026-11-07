@@ -73,6 +73,7 @@ pub use transaction_receipts::{
     TransactionWriteRollback,
 };
 pub use transaction_suspension::TransactionSuspension;
+pub use wait_graph::row_lock_waits_active;
 
 use petgraph::algo::{astar, dijkstra};
 use petgraph::graph::{DiGraph, NodeIndex};
@@ -5519,6 +5520,35 @@ fn prefix_upper_bound(prefix: &[u8]) -> Option<Vec<u8>> {
 /// Byte length of the FIRST field in an `encode_index_key` byte string. The
 /// encoding is self-delimiting (see `encode_index_value`): a tag byte then a
 /// fixed- or variable-width body. Used to value-shard on the leading field only.
+fn record_id_in_range(id: &str, lower: Bound<&str>, upper: Bound<&str>) -> bool {
+    let above_lower = match lower {
+        Bound::Included(lower) => id >= lower,
+        Bound::Excluded(lower) => id > lower,
+        Bound::Unbounded => true,
+    };
+    let below_upper = match upper {
+        Bound::Included(upper) => id <= upper,
+        Bound::Excluded(upper) => id < upper,
+        Bound::Unbounded => true,
+    };
+    above_lower && below_upper
+}
+
+/// Sorted ids filtered to `(lower, upper)`, in the requested direction.
+fn record_ids_in_range_ordered(
+    mut ids: Vec<String>,
+    lower: Bound<&str>,
+    upper: Bound<&str>,
+    descending: bool,
+) -> Vec<String> {
+    ids.retain(|id| record_id_in_range(id, lower, upper));
+    ids.sort_unstable();
+    if descending {
+        ids.reverse();
+    }
+    ids
+}
+
 fn index_first_field_len(key: &[u8]) -> usize {
     match key.first() {
         None => 0,
@@ -8573,6 +8603,12 @@ pub struct Transaction {
     /// O(rows^2) — 100 -> 195 -> 813 us/row across 50k/100k/200k in a single
     /// bulk load, with no indexes, no audit and no projections involved.
     locked_keys: Mutex<LockedKeys>,
+    /// When set, DML row locks held by another transaction are waited for
+    /// (cancellably, with cycle detection) like SQL locking reads, instead of
+    /// the bounded age-based policy. Only callers that do not hold an
+    /// exclusive database guard may install it: the owner must be able to
+    /// reach COMMIT while this transaction waits.
+    blocking_row_waits: Mutex<Option<crate::CancellationToken>>,
     // Own handle to the active-snapshot registry so drop can deregister this
     // transaction's snapshot (unblocking version-chain GC) without touching `db`.
     active_snapshots: Arc<ActiveSnapshots>,
@@ -15123,7 +15159,8 @@ impl Transaction {
             )));
         }
         let db = self.db_ref();
-        if let Some(cancellation) = cancellation {
+        let installed = self.blocking_row_waits.lock().clone();
+        if let Some(cancellation) = cancellation.or(installed.as_ref()) {
             db.lock_tx_record_cancellable(
                 self.id,
                 collection,
@@ -15937,7 +15974,7 @@ impl Transaction {
             if id.is_empty() {
                 return Err(BicDbError::EmptyRecordId);
             }
-            db.lock_tx_record_for_read_committed_update(tx_id, collection, id, &self.locked_keys)?;
+            self.lock_row_for_write(tx_id, collection, id, true)?;
         }
         Ok(())
     }
@@ -16093,6 +16130,50 @@ impl Transaction {
         self.scan_collection_record_ids_with_prefix_unchecked(collection, id_prefix)
     }
 
+    /// Install (or clear) the cancellation that makes DML row-lock conflicts
+    /// wait for the owner; see `blocking_row_waits`.
+    pub fn set_blocking_row_waits(&self, cancellation: Option<crate::CancellationToken>) {
+        *self.blocking_row_waits.lock() = cancellation;
+    }
+
+    fn lock_row_for_write(
+        &self,
+        tx_id: TransactionId,
+        collection: &str,
+        id: &str,
+        read_committed: bool,
+    ) -> Result<()> {
+        let db = self.db_ref();
+        let blocking = self.blocking_row_waits.lock().clone();
+        match blocking {
+            Some(cancellation) => db.lock_tx_record_cancellable(
+                tx_id,
+                collection,
+                id,
+                &self.locked_keys,
+                &cancellation,
+            ),
+            None if read_committed => db.lock_tx_record_for_read_committed_update(
+                tx_id,
+                collection,
+                id,
+                &self.locked_keys,
+            ),
+            None => db.lock_tx_record(tx_id, collection, id, &self.locked_keys),
+        }
+    }
+
+    /// Snapshot-visible point read with no policy or protection gate,
+    /// including this transaction's own uncommitted writes. For locator
+    /// planning only: callers fetch the rows through policy-filtered paths.
+    pub fn get_visible_record_unchecked(
+        &self,
+        collection: &str,
+        id: &str,
+    ) -> Result<Option<Arc<Record>>> {
+        self.get_visible_unchecked(collection, id)
+    }
+
     /// Prefix id scan with no policy or protection gate; see
     /// [`BicDb::scan_collection_record_ids_with_prefix_unchecked`].
     pub fn scan_collection_record_ids_with_prefix_unchecked(
@@ -16161,6 +16242,77 @@ impl Transaction {
             }
         }
         Ok(ids.into_iter().collect())
+    }
+
+    /// Record-id locator candidates within `(lower, upper)`, in id order
+    /// (descending when `descending`), at this transaction's pinned paged
+    /// snapshot plus touched and pending keys. Like
+    /// [`Self::scan_collection_record_key_candidates_with_prefix_unchecked`]
+    /// this is a superset: resolve each candidate through transaction
+    /// visibility and authorization before returning or counting a row.
+    ///
+    /// A lazy paged collection reads at most `limit` page-store keys from one
+    /// seek, so a bounded id range costs the range, not the table. Returns
+    /// `(ids, complete)`: when `complete` is false the ids are exactly the
+    /// candidates up to the last one returned, and the caller resumes past it.
+    pub fn scan_collection_record_key_candidates_in_range_unchecked(
+        &self,
+        collection: &str,
+        lower: Bound<&str>,
+        upper: Bound<&str>,
+        descending: bool,
+        limit: usize,
+    ) -> Result<(Vec<String>, bool)> {
+        let db = self.db_ref();
+        db.ensure_collection(collection)?;
+        let state = db.collection_state(collection)?;
+        if !state.paged_lazy {
+            drop(state);
+            let ids = self.scan_collection_record_ids_with_prefix_unchecked(collection, "")?;
+            return Ok((
+                record_ids_in_range_ordered(ids, lower, upper, descending),
+                true,
+            ));
+        }
+        let limit = limit.max(1);
+        let mut paged_ids = Vec::new();
+        if let (Some(snapshot), Some(paged)) = (&self.paged_snapshot, &db.paged_records) {
+            paged_ids =
+                paged.scan_ids_in_range(snapshot, collection, lower, upper, descending, limit)?;
+        }
+        let complete = paged_ids.len() < limit;
+        let boundary = (!complete).then(|| paged_ids.last().cloned()).flatten();
+        let mut ids = paged_ids.into_iter().collect::<BTreeSet<_>>();
+        for shard in state.read_all() {
+            for versions in shard.versions.values() {
+                if let Some(id) = versions.first().map(|version| &version.record.id) {
+                    if record_id_in_range(id, lower, upper) {
+                        ids.insert(id.clone());
+                    }
+                }
+            }
+        }
+        for write in self.pending_writes_for_collection(collection) {
+            if record_id_in_range(&write.record_id, lower, upper) {
+                ids.insert(write.record_id.clone());
+            }
+        }
+        // Past the last page-store key read, page-store candidates are unknown:
+        // keep only the exact prefix the caller can resume after.
+        if let Some(boundary) = boundary {
+            ids.retain(|id| {
+                if descending {
+                    id >= &boundary
+                } else {
+                    id <= &boundary
+                }
+            });
+        }
+        let mut ids = ids.into_iter().collect::<Vec<_>>();
+        if descending {
+            ids.reverse();
+        }
+        Ok((ids, complete))
     }
 
     /// Key-only locator candidates at this transaction's pinned paged snapshot,
@@ -16607,7 +16759,7 @@ impl Transaction {
             if id.is_empty() {
                 return Err(BicDbError::EmptyRecordId);
             }
-            db.lock_tx_record(tx_id, collection, &id, &self.locked_keys)?;
+            self.lock_row_for_write(tx_id, collection, &id, false)?;
             let statement_snapshot =
                 self.conflict_snapshot_for_write(collection, &id, statement_snapshot);
             writes.push(TxWrite {
@@ -17009,7 +17161,7 @@ impl Transaction {
                 }
                 let record_id = record.id.clone();
                 validate_record(collection, &record, &mut next_dim)?;
-                db.lock_tx_record(tx_id, collection, &record_id, &self.locked_keys)?;
+                self.lock_row_for_write(tx_id, collection, &record_id, false)?;
                 let statement_snapshot =
                     self.conflict_snapshot_for_write(collection, &record_id, statement_snapshot);
                 writes.push(TxWrite {
@@ -17192,7 +17344,7 @@ impl Transaction {
                     &mut next_dim,
                 )?;
                 if repair.is_none() && !optimistic_inserts {
-                    db.lock_tx_record(tx_id, collection, &record_id, &self.locked_keys)?;
+                    self.lock_row_for_write(tx_id, collection, &record_id, false)?;
                 }
                 let statement_snapshot =
                     self.conflict_snapshot_for_write(collection, &record_id, statement_snapshot);
@@ -17243,7 +17395,7 @@ impl Transaction {
                 let record_id = record.id.clone();
                 validate_record(collection, &record, &mut next_dim)?;
                 if repair.is_none() {
-                    db.lock_tx_record(tx_id, collection, &record_id, &self.locked_keys)?;
+                    self.lock_row_for_write(tx_id, collection, &record_id, false)?;
                 }
                 let statement_snapshot =
                     self.conflict_snapshot_for_write(collection, &record_id, statement_snapshot);
@@ -17340,7 +17492,7 @@ impl Transaction {
             None => db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?,
         }
         db.ensure_collection(collection)?;
-        db.lock_tx_record_for_read_committed_update(tx_id, collection, id, &self.locked_keys)?;
+        self.lock_row_for_write(tx_id, collection, id, true)?;
         let Some(max_tx) = Self::latest_committed_record_sequence(db, collection, id)? else {
             return Ok(Some((None, 0)));
         };
@@ -17411,7 +17563,7 @@ impl Transaction {
         if reservation {
             db.lock_tx_first_record_for_reservation(tx_id, collection, id, &self.locked_keys)?;
         } else {
-            db.lock_tx_record_for_read_committed_update(tx_id, collection, id, &self.locked_keys)?;
+            self.lock_row_for_write(tx_id, collection, id, true)?;
         }
         let Some(max_tx) = Self::latest_committed_record_sequence(db, collection, id)? else {
             return Ok(Some((None, 0)));
@@ -17475,7 +17627,7 @@ impl Transaction {
             None => db.ensure_unprotected_legacy_access(collection, SecureOperation::Delete)?,
         }
         db.ensure_collection(collection)?;
-        db.lock_tx_record_for_read_committed_update(tx_id, collection, id, &self.locked_keys)?;
+        self.lock_row_for_write(tx_id, collection, id, true)?;
         let Some(max_tx) = Self::latest_committed_record_sequence(db, collection, id)? else {
             return Ok(None);
         };

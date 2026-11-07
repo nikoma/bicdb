@@ -3622,6 +3622,11 @@ fn role_has_table_privilege_uncached(
     let role = normalize_role_name(role);
     let table = if let Some(resolved) = resolve_relation_name_memoized(db, table) {
         resolved
+    } else if crate::eval::rewrite_helpers::logical_relation_name(table).is_some() {
+        // Already the physical name of a schema-isolated relation that does
+        // not exist. Re-encoding it as a SQL identifier failed with the
+        // reserved-prefix error instead of reporting the missing relation.
+        table.to_string()
     } else {
         let parts = sql_identifier_parts(table)?;
         let name = relation_name_from_parts(&parts)?;
@@ -4249,6 +4254,15 @@ pub(crate) fn sql_value_text(value: &SqlValue) -> Option<String> {
     }
 }
 
+/// [`unqualified_relation`] for error messages: they name the SQL relation,
+/// never its schema-isolated storage name (`__bicdb_s_<digest>_<hex>`).
+pub(crate) fn relation_name_for_message(name: &str) -> String {
+    match crate::eval::rewrite_helpers::logical_relation_name(name) {
+        Some(logical) => unqualified_relation(&logical),
+        None => unqualified_relation(name),
+    }
+}
+
 pub(crate) fn unqualified_relation(name: &str) -> String {
     name.trim_matches('"')
         .rsplit('.')
@@ -4270,9 +4284,50 @@ pub(crate) fn load_view(db: &BicDb, view: &str) -> Result<Option<ViewSchema>> {
     }
 }
 
-pub(crate) fn list_views(db: &BicDb) -> Result<Vec<ViewSchema>> {
+type ViewList = std::sync::Arc<Vec<ViewSchema>>;
+
+thread_local! {
+    // db -> (view catalog stamp, views). Every pg_class read listed the views
+    // three times and decoded each stored definition again; on a catalog with
+    // a few hundred views that was most of a driver metadata call.
+    static VIEW_LIST_MEMO: std::cell::RefCell<rustc_hash::FxHashMap<u64, ((u64, usize), ViewList)>> =
+        std::cell::RefCell::new(rustc_hash::FxHashMap::default());
+}
+
+/// The view definitions, decoded once per change of the view catalog.
+pub(crate) fn list_views_shared(db: &BicDb) -> Result<ViewList> {
     #[cfg(test)]
     VIEW_CATALOG_ENUMERATIONS.with(|count| count.set(count.get() + 1));
+    let key = db.instance_id();
+    let stamp = (
+        db.collection_generation(VIEW_COLLECTION),
+        db.collection_count(),
+    );
+    let hit = VIEW_LIST_MEMO.with(|memo| {
+        memo.borrow()
+            .get(&key)
+            .filter(|(cached, _)| *cached == stamp)
+            .map(|(_, views)| std::sync::Arc::clone(views))
+    });
+    if let Some(views) = hit {
+        return Ok(views);
+    }
+    let views = std::sync::Arc::new(list_views_uncached(db)?);
+    VIEW_LIST_MEMO.with(|memo| {
+        let mut memo = memo.borrow_mut();
+        if memo.len() >= 64 {
+            memo.clear();
+        }
+        memo.insert(key, (stamp, std::sync::Arc::clone(&views)));
+    });
+    Ok(views)
+}
+
+pub(crate) fn list_views(db: &BicDb) -> Result<Vec<ViewSchema>> {
+    Ok(list_views_shared(db)?.as_ref().clone())
+}
+
+fn list_views_uncached(db: &BicDb) -> Result<Vec<ViewSchema>> {
     let records = match db.scan_collection(VIEW_COLLECTION) {
         Ok(records) => records,
         Err(BicDbError::CollectionNotFound(_)) => return Ok(Vec::new()),

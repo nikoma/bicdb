@@ -1,6 +1,46 @@
 //! Constraint grammar positions must not turn ordinary identifiers into keywords.
 use super::*;
 
+/// `DROP TABLE <name> CASCADE CONSTRAINTS [PURGE]` drops the foreign keys
+/// that reference the table along with it, which is native `CASCADE`.
+pub(super) fn drop_cascade_constraints(sql: &str) -> Option<String> {
+    if !sql
+        .trim_start()
+        .get(..10)
+        .is_some_and(|head| head.eq_ignore_ascii_case("DROP TABLE"))
+    {
+        return None;
+    }
+    let tokens = sqlparser::tokenizer::Tokenizer::new(&sqlparser::dialect::GenericDialect {}, sql)
+        .tokenize()
+        .ok()?;
+    let significant = (0..tokens.len())
+        .filter(|at| !matches!(tokens[*at], Token::Whitespace(_)))
+        .collect::<Vec<_>>();
+    let mut end = significant.len();
+    if end > 0 && tokens[significant[end - 1]] == Token::SemiColon {
+        end -= 1;
+    }
+    if end > 0 && word(&tokens[significant[end - 1]], "PURGE") {
+        end -= 1;
+    }
+    if end < 5
+        || !word(&tokens[significant[end - 1]], "CONSTRAINTS")
+        || !word(&tokens[significant[end - 2]], "CASCADE")
+    {
+        return None;
+    }
+    let constraints = significant[end - 1];
+    Some(
+        tokens
+            .iter()
+            .enumerate()
+            .filter(|(at, _)| *at != constraints)
+            .map(|(_, token)| token.to_string())
+            .collect(),
+    )
+}
+
 fn identifier_end(source: &[Token], mut at: usize) -> Option<usize> {
     if !matches!(source.get(at), Some(Token::Word(_))) {
         return None;

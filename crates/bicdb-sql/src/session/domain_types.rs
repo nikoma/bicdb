@@ -443,6 +443,10 @@ impl<'db> SqlSession<'db> {
     ) -> Result<SqlResult> {
         match object_type {
             ObjectType::Table => {
+                let dropping = names
+                    .iter()
+                    .map(relation_name)
+                    .collect::<Result<Vec<_>>>()?;
                 for name in names {
                     let table = relation_name(name)?;
                     // DROP TABLE destroys a relation outright and had no
@@ -451,6 +455,7 @@ impl<'db> SqlSession<'db> {
                     self.require_table_ownership(&table, "drop it")?;
                     let schema = load_schema(self.db_ref(), &table)?;
                     if let Some(schema) = &schema {
+                        self.drop_table_inbound_foreign_keys(schema, &dropping, cascade)?;
                         self.drop_table_row_type_dependents(schema, cascade)?;
                         if !purge && self.move_table_to_recycle_bin(&table, schema)? {
                             continue;
@@ -732,6 +737,50 @@ impl<'db> SqlSession<'db> {
                 "DROP {object_type} is not supported"
             ))),
         }
+    }
+
+    /// Foreign keys of other tables that reference `target` keep it from
+    /// being dropped; with CASCADE only those constraints are dropped, never
+    /// the referencing tables or their rows. Tables dropped by the same
+    /// statement do not count.
+    pub(crate) fn drop_table_inbound_foreign_keys(
+        &mut self,
+        target: &TableSchema,
+        dropping: &[String],
+        cascade: bool,
+    ) -> Result<()> {
+        let references_target = |constraint: &ConstraintSchema| {
+            matches!(constraint, ConstraintSchema::ForeignKey { foreign_table, .. }
+                if foreign_table.eq_ignore_ascii_case(&target.name))
+        };
+        for mut child in list_schemas(self.db_ref())? {
+            if child.name.eq_ignore_ascii_case(&target.name)
+                || dropping
+                    .iter()
+                    .any(|name| name.eq_ignore_ascii_case(&child.name))
+                || !child.constraints.iter().any(references_target)
+            {
+                continue;
+            }
+            if !cascade {
+                if oracle::preview_routine_language_enabled(self.db_ref())? {
+                    return Err(oracle::errors::database_error(
+                        -2449,
+                        "2BP01",
+                        "unique/primary keys in table referenced by foreign keys",
+                    ));
+                }
+                return Err(SqlError::dependent_objects_still_exist(format!(
+                    "cannot drop table {} because other objects depend on it",
+                    catalog_display_name(&target.name)
+                )));
+            }
+            child
+                .constraints
+                .retain(|constraint| !references_target(constraint));
+            self.save_session_schema(&child)?;
+        }
+        Ok(())
     }
 
     pub(crate) fn drop_table_row_type_dependents(
@@ -1137,6 +1186,33 @@ impl<'db> SqlSession<'db> {
                 AlterTableOperation::EnableRowLevelSecurity => {
                     self.capture_table_state_undo(&table, &schema)?;
                     schema.rls_enabled = true;
+                    schema_dirty = true;
+                }
+                AlterTableOperation::SetOptionsParens { options }
+                    if matches!(options.as_slice(), [SqlOption::KeyValue { key, .. }]
+                        if key.value.eq_ignore_ascii_case(oracle::partitioning::OPTION)) =>
+                {
+                    // Lowered Oracle `MODIFY PARTITION BY`; not a native option.
+                    if !oracle::preview_routine_language_enabled(self.db_ref())? {
+                        return Err(SqlError::Unsupported(format!(
+                            "table option {} requires the Oracle preview profile",
+                            oracle::partitioning::OPTION
+                        )));
+                    }
+                    let [SqlOption::KeyValue { value, .. }] = options.as_slice() else {
+                        unreachable!()
+                    };
+                    let Expr::Value(ValueWithSpan {
+                        value: Value::SingleQuotedString(metadata),
+                        ..
+                    }) = value
+                    else {
+                        return Err(SqlError::InvalidSql(
+                            "partitioning metadata must be a string".into(),
+                        ));
+                    };
+                    self.capture_table_state_undo(&table, &schema)?;
+                    oracle::partitioning::apply_option(&mut schema, metadata)?;
                     schema_dirty = true;
                 }
                 AlterTableOperation::DisableRowLevelSecurity => {

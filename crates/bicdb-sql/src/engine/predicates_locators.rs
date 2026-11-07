@@ -213,13 +213,34 @@ impl<'db> SqlEngine<'db> {
                 .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(&table).to_string());
             let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
             let schema = load_schema_shared(self.db_ref(), &table)?;
-            names.push((table, alias_name, schema));
+            // Relations without a stored schema (catalogs, views, CTEs) are
+            // recognised in a term by their qualified column names.
+            let columns = match schema {
+                Some(_) => None,
+                None => match self.row_set_columns_from_table_factor_without_rows(relation) {
+                    Ok(Some(columns)) => Some(columns.into_iter().collect::<BTreeSet<_>>()),
+                    _ => return Ok(None),
+                },
+            };
+            names.push((table, alias_name, schema, columns));
         }
         let mut join_terms: Vec<Vec<Expr>> = vec![Vec::new(); order.len()];
         for term in on_terms {
+            let references = qualified_predicate_references(&term);
             let mut position = 1;
-            for (index, (table, alias, schema)) in names.iter().enumerate().skip(1) {
-                if self.expr_references_table(&term, table, alias, schema.as_deref())? {
+            for (index, (table, alias, schema, columns)) in names.iter().enumerate().skip(1) {
+                let referenced = match columns {
+                    None => self.expr_references_table(&term, table, alias, schema.as_deref())?,
+                    // A term that cannot be attributed by name must not be
+                    // moved ahead of the relation it may read.
+                    Some(columns) => match &references {
+                        Some(references) => references
+                            .iter()
+                            .any(|reference| qualified_reference_in(reference, columns)),
+                        None => return Ok(None),
+                    },
+                };
+                if referenced {
                     position = index;
                 }
             }
@@ -263,8 +284,23 @@ impl<'db> SqlEngine<'db> {
         let mut remaining = Vec::with_capacity(from.joins.len() + 1);
         remaining.push(from.relation.clone());
         remaining.extend(from.joins.iter().map(|join| join.relation.clone()));
-        if !remaining.iter().all(simple_reorderable_table_factor) {
+        if !remaining
+            .iter()
+            .all(|relation| cross_join_reorderable_table_factor(relation))
+        {
             return Ok(None);
+        }
+        // A movable table function must also describe its columns up front;
+        // one that cannot keeps the statement in its written order.
+        for relation in &remaining {
+            if !simple_reorderable_table_factor(relation)
+                && !matches!(
+                    self.row_set_columns_from_table_factor_without_rows(relation),
+                    Ok(Some(_))
+                )
+            {
+                return Ok(None);
+            }
         }
         let initial_available_columns = self.outer_columns_named_in(selection, &remaining)?;
         let has_bound_start = remaining.iter().try_fold(false, |found, relation| {
@@ -365,7 +401,11 @@ impl<'db> SqlEngine<'db> {
             ..
         } = relation
         else {
-            return Ok(0);
+            return self.bound_where_term_count_by_column_names(
+                selection,
+                relation,
+                available_columns,
+            );
         };
         let table = relation_name(name)?;
         let alias_name = alias
@@ -374,6 +414,13 @@ impl<'db> SqlEngine<'db> {
             .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(&table).to_string());
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
         let schema = load_schema_shared(self.db_ref(), &table)?;
+        if schema.is_none() {
+            return self.bound_where_term_count_by_column_names(
+                selection,
+                relation,
+                available_columns,
+            );
+        }
         let mut count = 0usize;
         for term in and_terms(selection) {
             let Expr::BinaryOp {
@@ -390,6 +437,53 @@ impl<'db> SqlEngine<'db> {
                 schema.as_deref(),
                 available_columns,
             )? {
+                count += 1;
+            }
+        }
+        Ok(count)
+    }
+
+    /// [`Self::bound_where_term_count_for_relation`] for a relation without
+    /// a stored schema (catalog relation, view, CTE, table function): the
+    /// equality conjuncts that read this relation's columns and otherwise
+    /// only columns already available, all by qualified name. Without it
+    /// such relations never looked bound, so comma joins over them kept
+    /// their textual order however disconnected it was.
+    fn bound_where_term_count_by_column_names(
+        &self,
+        selection: &Expr,
+        relation: &TableFactor,
+        available_columns: &BTreeSet<String>,
+    ) -> Result<usize> {
+        if !matches!(relation, TableFactor::Table { .. }) {
+            return Ok(0);
+        }
+        let Ok(Some(columns)) = self.row_set_columns_from_table_factor_without_rows(relation)
+        else {
+            return Ok(0);
+        };
+        let columns = columns.into_iter().collect::<BTreeSet<_>>();
+        let mut count = 0usize;
+        for term in and_terms(selection) {
+            if !matches!(
+                unwrap_nested_expr(term),
+                Expr::BinaryOp {
+                    op: BinaryOperator::Eq,
+                    ..
+                }
+            ) {
+                continue;
+            }
+            let Some(references) = qualified_predicate_references(term) else {
+                continue;
+            };
+            let mut reads_relation = false;
+            let all_available = references.iter().all(|reference| {
+                let own = qualified_reference_in(reference, &columns);
+                reads_relation |= own;
+                own || qualified_reference_in(reference, available_columns)
+            });
+            if all_available && reads_relation {
                 count += 1;
             }
         }
@@ -595,9 +689,14 @@ impl<'db> SqlEngine<'db> {
         if is_virtual_table(&table) || load_sequence(self.db_ref(), &table)?.is_some() {
             return Ok(1);
         }
-        Ok(self
-            .db_ref()
-            .collection_record_count_cancellable(&table, &self.cancellation)?)
+        // Join ordering only compares magnitudes, so it takes the cheap
+        // planner estimate. The exact count is a visibility-checked walk of
+        // every row of a lazy server-paged table (every table after a reopen),
+        // and the join-order memo is keyed by the statement's literals, so each
+        // new key value paid a full walk of the larger relation before a
+        // single key lookup ran.
+        self.cancellation.check()?;
+        Ok(self.db_ref().estimated_record_count(&table)?)
     }
 
     pub(crate) fn row_set_from_table_factor_with_selection(
@@ -1270,12 +1369,12 @@ impl<'db> SqlEngine<'db> {
             || load_view(self.db_ref(), table)?.is_some();
         if !exists {
             return Err(SqlError::BicDb(BicDbError::CollectionNotFound(
-                unqualified_relation(table).to_string(),
+                relation_name_for_message(table),
             )));
         }
         Err(SqlError::BicDb(BicDbError::Authorization(format!(
             "permission denied for table {}",
-            unqualified_relation(table)
+            relation_name_for_message(table)
         ))))
     }
 
@@ -1416,9 +1515,18 @@ impl<'db> SqlEngine<'db> {
                 RecordLocators::Pks(pks) => self
                     .records_for_pks_with_schema(table, &pks, schema)
                     .map(Some),
-                RecordLocators::Rowids(rowids) => self
-                    .records_for_rowids_with_schema(table, &rowids, schema)
-                    .map(Some),
+                RecordLocators::Rowids(rowids) => {
+                    // RowIds follow insertion order; the id path and table
+                    // scans yield record-id order. Keep one order so rows
+                    // that tie under ORDER BY do not depend on the access
+                    // path the planner picked.
+                    let mut records =
+                        self.records_for_rowids_with_schema(table, &rowids, schema)?;
+                    if !records.is_sorted_by(|left, right| left.id <= right.id) {
+                        records.sort_unstable_by(|left, right| left.id.cmp(&right.id));
+                    }
+                    Ok(Some(records))
+                }
             };
         }
         let Some(ids) =
@@ -1794,7 +1902,10 @@ impl<'db> SqlEngine<'db> {
         selection: &Expr,
     ) -> Result<Option<usize>> {
         let access = self.primary_key_access_for_selection(table, alias, schema, selection)?;
-        if matches!(access, Some(PrimaryKeyAccess::Exact { .. })) {
+        if matches!(
+            access,
+            Some(PrimaryKeyAccess::Exact { .. } | PrimaryKeyAccess::Never)
+        ) {
             return Ok(Some(usize::MAX));
         }
         if self.security_context.is_none() {
@@ -1810,6 +1921,18 @@ impl<'db> SqlEngine<'db> {
                 prefix_len += 1;
             }
             if let Some(range_column) = primary_key_columns.get(prefix_len) {
+                if prefix_len == 0 && primary_key_record_id_orders_like_values(schema) {
+                    // A range over a key whose record ids sort like it is a
+                    // record-id range (see
+                    // `primary_key_range_record_ids_for_table_selection`).
+                    let field = IndexField::MetadataPath(vec![range_column.clone()]);
+                    if self
+                        .dynamic_range_bounds(selection, table, alias, Some(schema), &field)?
+                        .is_some()
+                    {
+                        return Ok(Some(1));
+                    }
+                }
                 if !primary_key_requires_typed_identity(schema)
                     && readable_primary_key_index_for_schema(self.db_ref(), schema).is_some()
                 {
@@ -3583,13 +3706,20 @@ impl<'db> SqlEngine<'db> {
             return Ok(Some((usize::MAX, ids)));
         }
         let access = self.primary_key_access_for_selection(table, alias, schema, selection)?;
+        if matches!(access, Some(PrimaryKeyAccess::Never)) {
+            return Ok(Some((usize::MAX, Vec::new())));
+        }
         if let Some(PrimaryKeyAccess::Exact { record_id, values }) = access.as_ref() {
             if primary_key_requires_typed_identity(schema) {
                 // Locator planning: probes id existence only; the rows those
                 // ids resolve to are fetched through the policy-filtered
                 // record paths.
-                if self.db_ref().get_unchecked(table, record_id)?.is_some() {
+                if self.primary_key_record_id_exists_unchecked(table, record_id)? {
                     return Ok(Some((usize::MAX, vec![record_id.clone()])));
+                }
+                if primary_key_label_is_canonical(schema) {
+                    // No row under the canonical id: none has an equal key.
+                    return Ok(Some((usize::MAX, Vec::new())));
                 }
                 return Ok(Some((
                     usize::MAX,
@@ -3608,6 +3738,7 @@ impl<'db> SqlEngine<'db> {
             return Ok(None);
         };
         match access {
+            PrimaryKeyAccess::Never => Ok(Some((usize::MAX, Vec::new()))),
             PrimaryKeyAccess::Exact { record_id, .. } => Ok(Some((usize::MAX, vec![record_id]))),
             PrimaryKeyAccess::Prefix {
                 prefix,
@@ -3643,16 +3774,22 @@ impl<'db> SqlEngine<'db> {
             return Ok(Some((usize::MAX, RecordLocators::Pks(ids))));
         }
         let access = self.primary_key_access_for_selection(table, alias, schema, selection)?;
+        if matches!(access, Some(PrimaryKeyAccess::Never)) {
+            return Ok(Some((usize::MAX, RecordLocators::Pks(Vec::new()))));
+        }
         if let Some(PrimaryKeyAccess::Exact { record_id, values }) = access.as_ref() {
             if primary_key_requires_typed_identity(schema) {
                 // Locator planning: probes id existence only; the rows those
                 // ids resolve to are fetched through the policy-filtered
                 // record paths.
-                if self.db_ref().get_unchecked(table, record_id)?.is_some() {
+                if self.primary_key_record_id_exists_unchecked(table, record_id)? {
                     return Ok(Some((
                         usize::MAX,
                         RecordLocators::Pks(vec![record_id.clone()]),
                     )));
+                }
+                if primary_key_label_is_canonical(schema) {
+                    return Ok(Some((usize::MAX, RecordLocators::Pks(Vec::new()))));
                 }
                 return Ok(Some((
                     usize::MAX,
@@ -3676,6 +3813,7 @@ impl<'db> SqlEngine<'db> {
             return Ok(None);
         };
         match access {
+            PrimaryKeyAccess::Never => Ok(Some((usize::MAX, RecordLocators::Pks(Vec::new())))),
             PrimaryKeyAccess::Exact { record_id, .. } => {
                 Ok(Some((usize::MAX, RecordLocators::Pks(vec![record_id]))))
             }
@@ -3873,6 +4011,47 @@ impl<'db> SqlEngine<'db> {
                 }
                 return Ok(Some((range_idx + 1, ids)));
             }
+        }
+        if range_idx == 0 && primary_key_record_id_orders_like_values(schema) {
+            // The key lives only in the record id (its `_pkey` index is
+            // unreadable), but the ids are order-preserving labels: the
+            // range bounds, put through the same typed label as the ids, are
+            // an id range read from one seek. The fallback below enumerates
+            // every id and fetches every row — on a reopened server-paged
+            // table that walks the whole heap for a 20-row range. Bounds are
+            // inclusive and ids may be stale keys; callers resolve each row
+            // and re-apply the predicate, as for any index range.
+            let Some((lower, upper, has_null_bound)) =
+                self.dynamic_range_bounds(selection, table, alias, Some(schema), &field)?
+            else {
+                return Ok(None);
+            };
+            if has_null_bound {
+                return Ok(Some((1, Vec::new())));
+            }
+            fn label_bound(bound: &Option<IndexValue>) -> Option<std::ops::Bound<&str>> {
+                match bound {
+                    None => Some(std::ops::Bound::Unbounded),
+                    Some(IndexValue::String(label)) => {
+                        Some(std::ops::Bound::Included(label.as_str()))
+                    }
+                    Some(_) => None,
+                }
+            }
+            if let (Some(lower), Some(upper)) = (label_bound(&lower), label_bound(&upper)) {
+                let (ids, _) =
+                    self.record_key_candidates_in_range(table, lower, upper, false, usize::MAX)?;
+                if sql_trace_flags().plan {
+                    eprintln!(
+                        "bicdb_trace_plan primary_key_range source=record_id_range table={} ids={}",
+                        table,
+                        ids.len()
+                    );
+                }
+                return Ok(Some((1, ids)));
+            }
+            // Not a typed label: the bound cannot be compared with the ids.
+            return Ok(None);
         }
         let Some((lower, upper, has_null_bound)) =
             self.dynamic_sql_range_bounds(selection, table, alias, Some(schema), &field)?
@@ -4876,9 +5055,26 @@ impl<'db> SqlEngine<'db> {
                 )));
             }
         };
+        // A constraint derived from column names alone carries no key type,
+        // so it may only drive a hash join over integer keys (below).
+        let mut constraint_derived_by_name = false;
         let derived_constraint =
             if matches!(kind, RowJoinKind::Inner) && matches!(constraint, JoinConstraint::None) {
-                self.derive_where_join_constraint(&left, &join.relation, selection)?
+                match self.derive_where_join_constraint(&left, &join.relation, selection)? {
+                    Some(derived) => Some(derived),
+                    None => {
+                        let derived = match selection {
+                            Some(selection) => self.derive_where_join_constraint_from_columns(
+                                &left,
+                                &join.relation,
+                                selection,
+                            )?,
+                            None => None,
+                        };
+                        constraint_derived_by_name = derived.is_some();
+                        derived
+                    }
+                }
             } else {
                 None
             };
@@ -5052,28 +5248,15 @@ impl<'db> SqlEngine<'db> {
             // admitted: textual/numeric/boolean coercions can compare equal
             // while producing different untyped labels. Keep those shapes on
             // the ordinary evaluator until their common key type is known.
-            let simple_equality = matches!(
-                effective_constraint,
-                JoinConstraint::On(expr)
-                    if matches!(unwrap_nested_expr(expr), Expr::BinaryOp { op: BinaryOperator::Eq, .. })
-            );
-            fn integer_column_key(expr: &Expr, set: &RowSet) -> bool {
-                let parts = match unwrap_nested_expr(expr) {
-                    Expr::Identifier(ident) => vec![ident.value.clone()],
-                    Expr::CompoundIdentifier(parts) => {
-                        parts.iter().map(|ident| ident.value.clone()).collect()
-                    }
-                    _ => return false,
-                };
-                set.rows.iter().all(|row| {
-                    matches!(
-                        slot_row_value_from_parts(&set.columns, row, &parts),
-                        SqlValue::Int(_) | SqlValue::Null
-                    )
-                })
-            }
+            let simple_equality = !constraint_derived_by_name
+                && matches!(
+                    effective_constraint,
+                    JoinConstraint::On(expr)
+                        if matches!(unwrap_nested_expr(expr), Expr::BinaryOp { op: BinaryOperator::Eq, .. })
+                );
             if simple_equality
-                || (integer_column_key(left_key, &left) && integer_column_key(right_key, &right))
+                || (self.join_key_values_are_integers(left_key, &left)
+                    && self.join_key_values_are_integers(right_key, &right))
             {
                 return self.apply_inner_hash_join(
                     left,
@@ -5098,6 +5281,8 @@ impl<'db> SqlEngine<'db> {
         let mut matched_right = vec![false; right.rows.len()];
         let null_left = null_slot_row_for_columns(&left.columns);
         let null_right = null_slot_row_for_columns(&right.columns);
+        let prepared =
+            self.prepare_join_constraint(&left.columns, &right.columns, effective_constraint);
 
         for (left_idx, left_row) in left.rows.iter().enumerate() {
             if left_idx % 128 == 0 {
@@ -5108,7 +5293,8 @@ impl<'db> SqlEngine<'db> {
                 if right_idx % 1024 == 0 {
                     self.check_cancellation()?;
                 }
-                if self.join_constraint_matches(
+                if self.prepared_join_constraint_matches(
+                    &prepared,
                     left_row,
                     &left.columns,
                     right_row,
@@ -5573,6 +5759,71 @@ impl<'db> SqlEngine<'db> {
         Ok(derived.map(JoinConstraint::On))
     }
 
+    /// [`Self::derive_where_join_constraint`] for a right relation without a
+    /// stored `TableSchema` — catalog relations, views, CTEs and table
+    /// functions. Its columns are known by name, so a WHERE conjunct joins
+    /// it when every column it reads is a qualified reference to the left
+    /// input or to this relation, and it reads both. Without this, a comma
+    /// join over such relations was a full Cartesian product filtered only
+    /// after the last join (driver foreign-key metadata over pg_class,
+    /// pg_attribute and pg_constraint exceeded the nested-loop ceiling on
+    /// any real catalog). Inner joins only: the conjunct still filters the
+    /// final rows, so applying it early cannot change the result.
+    fn derive_where_join_constraint_from_columns(
+        &self,
+        left: &RowSet,
+        right_relation: &TableFactor,
+        selection: &Expr,
+    ) -> Result<Option<JoinConstraint>> {
+        let TableFactor::Table { name, args, .. } = right_relation else {
+            return Ok(None);
+        };
+        // Stored tables keep their schema-typed derivation alone.
+        if args.is_none() {
+            let table = relation_name(name)?;
+            if self.cte(&table).is_none()
+                && load_schema_shared(
+                    self.db_ref(),
+                    &resolve_session_relation_name_if_exists(self.db_ref(), &table),
+                )?
+                .is_some()
+            {
+                return Ok(None);
+            }
+        }
+        // Relations that cannot name their columns before materializing
+        // simply keep the WHERE-only evaluation they had.
+        let Ok(Some(right_columns)) =
+            self.row_set_columns_from_table_factor_without_rows(right_relation)
+        else {
+            return Ok(None);
+        };
+        let right_columns = right_columns.into_iter().collect::<BTreeSet<_>>();
+        let left_columns = left.columns.iter().cloned().collect::<BTreeSet<_>>();
+        let mut derived = None;
+        for term in and_terms(selection) {
+            let Some(references) = qualified_predicate_references(term) else {
+                continue;
+            };
+            let (mut reads_left, mut reads_right) = (false, false);
+            let all_available = references.iter().all(|reference| {
+                let on_left = qualified_reference_in(reference, &left_columns);
+                let on_right = qualified_reference_in(reference, &right_columns);
+                reads_left |= on_left;
+                reads_right |= on_right;
+                on_left || on_right
+            });
+            if !all_available || !reads_left || !reads_right {
+                continue;
+            }
+            derived = Some(match derived {
+                Some(existing) => and_expr(existing, term.clone()),
+                None => term.clone(),
+            });
+        }
+        Ok(derived.map(JoinConstraint::On))
+    }
+
     pub(crate) fn where_term_applies_to_right_table(
         &self,
         term: &Expr,
@@ -5987,6 +6238,43 @@ impl<'db> SqlEngine<'db> {
         Ok(estimate)
     }
 
+    /// Whether a join key is an integer (or NULL) on every row of its side.
+    /// Integer keys hash exactly, so a hash join over them finds every pair
+    /// the nested loop would; the full constraint is still checked for each
+    /// candidate. A key computed from columns (`con.conkey[pos.n]`) counts
+    /// when its values are integers; a key that fails to evaluate on some row
+    /// is left to the nested loop, which reports that error in its own order.
+    pub(crate) fn join_key_values_are_integers(&self, key: &Expr, set: &RowSet) -> bool {
+        let is_integer = |value: &SqlValue| matches!(value, SqlValue::Int(_) | SqlValue::Null);
+        let parts = match unwrap_nested_expr(key) {
+            Expr::Identifier(ident) => Some(vec![ident.value.clone()]),
+            Expr::CompoundIdentifier(parts) => {
+                Some(parts.iter().map(|ident| ident.value.clone()).collect())
+            }
+            _ => None,
+        };
+        if let Some(parts) = parts {
+            return set
+                .rows
+                .iter()
+                .all(|row| is_integer(&slot_row_value_from_parts(&set.columns, row, &parts)));
+        }
+        let (scope, context) = self.bound_row_context(&set.columns);
+        let bound = scope.bind(key);
+        set.rows.iter().all(|row| {
+            let value = match &bound {
+                Some(bound) => bound.eval(&BoundExprFrame {
+                    user_calls: &[],
+                    db: self.db_ref(),
+                    columns: BoundExprColumns::Values(row),
+                    vars: &context.var_values,
+                }),
+                None => self.eval_slot_row_value(row, &context, key),
+            };
+            value.is_ok_and(|value| is_integer(&value))
+        })
+    }
+
     pub(crate) fn apply_inner_hash_join(
         &self,
         left: RowSet,
@@ -6030,6 +6318,7 @@ impl<'db> SqlEngine<'db> {
 
         let mut rows = Vec::new();
         let mut candidate_pairs = 0_usize;
+        let prepared = self.prepare_join_constraint(&left.columns, &right.columns, constraint);
         let (left_scope, left_context) = self.bound_row_context(&left.columns);
         let left_key_bound = left_scope.bind(left_key);
         for (left_idx, left_row) in left.rows.iter().enumerate() {
@@ -6069,7 +6358,8 @@ impl<'db> SqlEngine<'db> {
                         })
                     );
                 if typed_equality_is_complete
-                    || self.join_constraint_matches(
+                    || self.prepared_join_constraint_matches(
+                        &prepared,
                         left_row,
                         &left.columns,
                         right_row,
@@ -6874,10 +7164,19 @@ impl<'db> SqlEngine<'db> {
                         None => self.db_ref().get_stored_by_rowids(table, &rowids),
                     }
                     .map_err(SqlError::from)?;
-                    stored
+                    let mut visible = stored
                         .into_iter()
                         .map(|stored| stored.map(VisibleRow::Stored))
-                        .collect()
+                        .collect::<Vec<_>>();
+                    // Same record-id order as the pk path and table scans; see
+                    // `indexed_records_for_table_selection`.
+                    fn id(row: &Option<VisibleRow>) -> Option<&str> {
+                        row.as_ref().map(VisibleRow::id)
+                    }
+                    if !visible.is_sorted_by(|left, right| id(left) <= id(right)) {
+                        visible.sort_by(|left, right| id(left).cmp(&id(right)));
+                    }
+                    visible
                 }
             }
         };

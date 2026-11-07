@@ -211,6 +211,13 @@ fn oracle_number_divide(left: &SqlValue, right: &SqlValue) -> Result<SqlValue> {
     if rounded_exponent > 125 {
         return Err(overflow());
     }
+    // NUMBER values carry no display scale: 10/1 is 10, not 10.000...
+    let mut value = value;
+    let ten = BigInt::from(10);
+    while value.scale > 0 && (&value.mantissa % &ten).is_zero() {
+        value.mantissa /= &ten;
+        value.scale -= 1;
+    }
     Ok(SqlValue::String(value.format()))
 }
 

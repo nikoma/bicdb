@@ -146,6 +146,7 @@ pub use consensus::{
 };
 pub use db::effective_fts_partitions;
 pub use db::index_predicate_matches;
+pub use db::row_lock_waits_active;
 pub use db::AuthenticationStrength;
 pub use db::ChangedRecord;
 pub use db::FullTextBuildStep;
@@ -472,7 +473,10 @@ pub use paged_checkpoint_maintenance::{
     PagedCheckpointTotals, DEFAULT_PAGED_CHECKPOINT_SCHEDULE,
     PAGED_CHECKPOINT_SCHEDULE_FORMAT_VERSION,
 };
-pub use paged_collection::{IndexEntryFormat, IndexEntryRef, PagedRecords, PagedRecordsOptions};
+pub use paged_collection::{
+    paged_live_count_walks_on_this_thread, IndexEntryFormat, IndexEntryRef, PagedRecords,
+    PagedRecordsOptions,
+};
 pub use paged_integrity_maintenance::{
     PagedIntegrityPhase, PagedIntegritySchedule, PagedIntegrityScheduleAdvance,
     PagedIntegrityScheduleLimits, PagedIntegrityTotals, DEFAULT_PAGED_INTEGRITY_SCHEDULE,

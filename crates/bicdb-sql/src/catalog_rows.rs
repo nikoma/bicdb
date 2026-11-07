@@ -2296,8 +2296,53 @@ pub(crate) fn pg_extension_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlVa
     Ok(rows)
 }
 
+type PgDependRows = std::sync::Arc<Vec<BTreeMap<String, SqlValue>>>;
+
+thread_local! {
+    // db -> (catalog stamp, pg_depend rows). Building the rows derives every
+    // table's constraint rows (tens of thousands on an ERP schema) and sorts
+    // them by text keys; driver foreign-key metadata joins pg_depend in every
+    // call.
+    static PG_DEPEND_ROWS_MEMO: std::cell::RefCell<rustc_hash::FxHashMap<u64, ((u64, u64, u64, u64, u64, u64, usize), PgDependRows)>> =
+        std::cell::RefCell::new(rustc_hash::FxHashMap::default());
+}
+
+/// `pg_depend` rows, rebuilt only when the catalogs they derive from change:
+/// schemas (tables, constraints, policies), views (relation OIDs), user
+/// types, routines and executable indexes (foreign-key index OIDs).
 pub(crate) fn pg_depend_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     validate_constraint_catalog_oids(db)?;
+    let key = db.instance_id();
+    let stamp = (
+        db.collection_generation(SCHEMA_COLLECTION),
+        db.collection_generation(VIEW_COLLECTION),
+        db.collection_generation(USER_TYPE_COLLECTION),
+        db.collection_generation(USER_TYPE_OID_COLLECTION),
+        db.collection_generation(ROUTINE_COLLECTION),
+        db.index_generation(),
+        db.collection_count(),
+    );
+    let hit = PG_DEPEND_ROWS_MEMO.with(|memo| {
+        memo.borrow()
+            .get(&key)
+            .filter(|(cached, _)| *cached == stamp)
+            .map(|(_, rows)| std::sync::Arc::clone(rows))
+    });
+    if let Some(rows) = hit {
+        return Ok(rows.as_ref().clone());
+    }
+    let rows = std::sync::Arc::new(pg_depend_rows_uncached(db)?);
+    PG_DEPEND_ROWS_MEMO.with(|memo| {
+        let mut memo = memo.borrow_mut();
+        if memo.len() >= 64 {
+            memo.clear();
+        }
+        memo.insert(key, (stamp, std::sync::Arc::clone(&rows)));
+    });
+    Ok(rows.as_ref().clone())
+}
+
+fn pg_depend_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     let mut rows = [
         (PG_PROC_CATALOG_OID, PLPGSQL_CALL_HANDLER_OID),
         (PG_PROC_CATALOG_OID, PLPGSQL_INLINE_HANDLER_OID),
@@ -2587,6 +2632,23 @@ pub(crate) fn pg_depend_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue
     let constraint_rows =
         pg_constraint_rows_from_schemas(db, &schemas, &relation_oids, None, None, None)?;
     for row in &constraint_rows {
+        // A foreign key depends on the referenced unique index.
+        if virtual_cell(row, "contype").to_cell() == "f" {
+            if let (Some(oid), Some(index_oid)) = (
+                sql_value_i64(&virtual_cell(row, "oid")),
+                sql_value_i64(&virtual_cell(row, "conindid")).filter(|oid| *oid != 0),
+            ) {
+                rows.push(dependency_row(
+                    PG_CONSTRAINT_CATALOG_OID,
+                    oid,
+                    0,
+                    PG_CLASS_CATALOG_OID,
+                    index_oid,
+                    "n",
+                ));
+            }
+            continue;
+        }
         if virtual_cell(row, "contype").to_cell() != "c" {
             continue;
         }
@@ -4059,6 +4121,31 @@ pub(crate) fn pg_settings_rows() -> Vec<BTreeMap<String, SqlValue>> {
     ]
     .into_iter()
     .map(|(name, setting, vartype)| pg_settings_row(name, setting, vartype))
+    .chain(
+        // Read-only presets describing the server build; drivers read some
+        // (max_index_keys) for database metadata.
+        [
+            ("block_size", "8192", "integer"),
+            ("integer_datetimes", "on", "bool"),
+            ("max_function_args", "100", "integer"),
+            ("max_identifier_length", "63", "integer"),
+            ("max_index_keys", "32", "integer"),
+            ("server_encoding", "UTF8", "string"),
+        ]
+        .into_iter()
+        .map(|(name, setting, vartype)| {
+            let mut row = pg_settings_row(name, setting, vartype);
+            row.insert(
+                "context".to_string(),
+                SqlValue::String("internal".to_string()),
+            );
+            row.insert(
+                "category".to_string(),
+                SqlValue::String("Preset Options".to_string()),
+            );
+            row
+        }),
+    )
     .collect()
 }
 
@@ -4956,6 +5043,7 @@ pub(crate) fn pg_constraint_rows_from_schemas(
     relation_oids: Option<&BTreeSet<i64>>,
 ) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     let mut rows = Vec::new();
+    let mut referenced_indexes = None;
     for schema in schemas {
         let primary_key_columns = primary_key_columns_for_schema(schema);
         let table_oid = *table_oids.get(&schema.name).unwrap_or(&0);
@@ -5125,6 +5213,39 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                         types,
                         relation_oids,
                     ) {
+                        let confrelid = *table_oids.get(foreign_table).unwrap_or(&0);
+                        // A conrelid filter selects emitted rows, not the
+                        // referenced schema needed to describe each FK.
+                        let loaded_parent;
+                        let parent =
+                            match schemas.iter().find(|parent| parent.name == *foreign_table) {
+                                Some(parent) => Some(parent),
+                                None => {
+                                    loaded_parent = load_schema_shared(db, foreign_table)?;
+                                    loaded_parent.as_deref()
+                                }
+                            };
+                        let confkey = match parent {
+                            Some(parent) => constraint_attnums(
+                                std::slice::from_ref(parent),
+                                foreign_table,
+                                referred_columns,
+                            ),
+                            None => vec![0; referred_columns.len()],
+                        };
+                        // PostgreSQL records the parent's unique index that
+                        // enforces the referenced key. Driver metadata joins
+                        // through it (and its pg_depend edge) to report FKs.
+                        let conindid = match parent {
+                            Some(parent) => foreign_key_referenced_index_oid(
+                                db,
+                                parent,
+                                confrelid,
+                                &confkey,
+                                &mut referenced_indexes,
+                            ),
+                            None => 0,
+                        };
                         rows.push(pg_constraint_row(PgConstraintRow {
                             condeferrable: *deferrable,
                             condeferred: *initially_deferred,
@@ -5133,24 +5254,12 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                             contype: "f",
                             conrelid: table_oid,
                             connamespace: namespace_oid(&schema.schema_name),
-                            conindid: 0,
-                            confrelid: *table_oids.get(foreign_table).unwrap_or(&0),
+                            conindid,
+                            confrelid,
                             confupdtype: fk_action_code(*on_update),
                             confdeltype: fk_action_code(*on_delete),
                             conkey: constraint_attnums(schemas, &schema.name, columns),
-                            // A conrelid filter selects emitted rows, not the
-                            // referenced schema needed to describe each FK.
-                            confkey: if schemas.iter().any(|parent| parent.name == *foreign_table) {
-                                constraint_attnums(schemas, foreign_table, referred_columns)
-                            } else if let Some(parent) = load_schema_shared(db, foreign_table)? {
-                                constraint_attnums(
-                                    std::slice::from_ref(parent.as_ref()),
-                                    foreign_table,
-                                    referred_columns,
-                                )
-                            } else {
-                                vec![0; referred_columns.len()]
-                            },
+                            confkey,
                             conbin: None,
                             convalidated: *validated,
                         }));
@@ -5197,6 +5306,59 @@ pub(crate) fn pg_constraint_rows_from_schemas(
         }
     }
     Ok(rows)
+}
+
+/// `pg_constraint.conindid` of a foreign key: the referenced table's primary
+/// key index, or else a plain unique index over exactly the referenced
+/// columns, as PostgreSQL requires one to exist. `0` when none matches.
+/// Unique indexes are listed once per catalog read, on the first FK.
+fn foreign_key_referenced_index_oid(
+    db: &BicDb,
+    parent: &TableSchema,
+    parent_oid: i64,
+    referenced_attnums: &[i64],
+    unique_indexes: &mut Option<BTreeMap<String, Vec<(i64, Vec<i64>)>>>,
+) -> i64 {
+    let same_key = |attnums: &[i64]| {
+        let mut left = attnums.to_vec();
+        let mut right = referenced_attnums.to_vec();
+        left.sort_unstable();
+        right.sort_unstable();
+        !left.is_empty() && !left.contains(&0) && left == right
+    };
+    let primary_key_columns = primary_key_columns_for_schema(parent);
+    if parent_oid != 0
+        && !parent.has_hidden_primary_key()
+        && !primary_key_columns.is_empty()
+        && same_key(&constraint_attnums(
+            std::slice::from_ref(parent),
+            &parent.name,
+            &primary_key_columns,
+        ))
+    {
+        return primary_index_oid(parent_oid);
+    }
+    let unique_indexes = unique_indexes.get_or_insert_with(|| {
+        let schemas = relation_schemas(db).unwrap_or_default();
+        let mut by_table = BTreeMap::<String, Vec<(i64, Vec<i64>)>>::new();
+        for index in catalog_indexes(&schemas, db) {
+            if index.unique
+                && !index.exclusion
+                && index.predicate.is_none()
+                && index.indexprs.is_none()
+            {
+                by_table.entry(index.collection.clone()).or_default().push((
+                    secondary_index_oid(&index.schema_name, &index.name),
+                    index.indkey.clone(),
+                ));
+            }
+        }
+        by_table
+    });
+    unique_indexes
+        .get(&parent.name)
+        .and_then(|indexes| indexes.iter().find(|(_, attnums)| same_key(attnums)))
+        .map_or(0, |(oid, _)| *oid)
 }
 
 pub(crate) fn pg_constraint_oid(table_oid: i64, local_slot: i64) -> i64 {
@@ -7083,6 +7245,7 @@ pub(crate) fn catalog_view_schema(db: &BicDb, view: ViewSchema) -> Result<TableS
         owner: view.owner,
         partitioning: None,
         partition_of: None,
+        oracle_partitioning: None,
     })
 }
 pub(crate) fn relation_schemas(db: &BicDb) -> Result<Vec<TableSchema>> {
@@ -7452,7 +7615,10 @@ pub(crate) fn catalog_indexes(schemas: &[TableSchema], db: &BicDb) -> Vec<Catalo
                     collations: index.collations.clone(),
                     operator_classes: index.operator_classes.clone(),
                     exclusion: false,
-                    predicate: None,
+                    // A partial index keeps its predicate however its keys
+                    // are stored (`pg_index.indpred`, the driver's
+                    // FILTER_CONDITION).
+                    predicate: index.predicate.clone(),
                 });
                 continue;
             }

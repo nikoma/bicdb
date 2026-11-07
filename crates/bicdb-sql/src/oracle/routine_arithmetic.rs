@@ -274,6 +274,16 @@ impl Resolve<'_> {
             };
             select.projection = vec![SelectItem::UnnamedExpr(expr.clone())];
             probe.locks.clear();
+            // Untyped binds elsewhere in the statement (predicates, joins)
+            // would leave the whole probe undescribed; the probed expression's
+            // type does not depend on their values.
+            let _ = sqlparser::ast::visit_expressions_mut(&mut probe, |node| {
+                if matches!(node, Expr::Value(value) if matches!(value.value, Value::Placeholder(_)))
+                {
+                    *node = Expr::value(Value::Null);
+                }
+                ControlFlow::<()>::Continue(())
+            });
             probe.to_string()
         } else if let Some(Some(from)) = self.statement_from.last() {
             format!("SELECT {expr} FROM {from}")
@@ -448,6 +458,26 @@ impl Resolve<'_> {
                         | "bicdb_oracle_chr"
                         | "bicdb_oracle_default_to_char",
                     ) => return Kind::Text,
+                    // Case functions return character data: the argument's
+                    // character kind, or text for an untyped bind (or NULL),
+                    // which is bound as character.
+                    Some("lower" | "upper" | "initcap") => {
+                        match function_args(function)
+                            .first()
+                            .map(|arg| (arg, self.kind(arg)))
+                        {
+                            Some((
+                                _,
+                                kind @ (Kind::Text | Kind::NationalText | Kind::FixedNationalText),
+                            )) => return kind,
+                            Some((Expr::Value(value), Kind::Unknown | Kind::Null))
+                                if matches!(value.value, Value::Placeholder(_) | Value::Null) =>
+                            {
+                                return Kind::Text
+                            }
+                            _ => {}
+                        }
+                    }
                     Some(
                         "substr" | "substring" | "trim" | "btrim" | "ltrim" | "rtrim" | "reverse"
                         | "lower" | "upper",

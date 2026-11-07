@@ -939,6 +939,83 @@ fn cluster_shares_transactional_roles_but_isolates_user_types() {
 }
 
 #[test]
+fn current_catalog_keeps_name_oid_in_simple_and_prepared_protocols() {
+    for profile in ["postgres", "oracle-hr-v1", "oracle-preview-v1"] {
+        let dir = tempfile::tempdir().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = PgWireServer::open(
+            dir.path(),
+            PgWireConfig {
+                sql_profile: profile.into(),
+                fsync: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let serving = server.clone();
+        let task = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
+        let mut client = TcpStream::connect(address).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(15)))
+            .unwrap();
+        send_startup_version_with_options(
+            &mut client,
+            196_608,
+            true,
+            &[("options", &format!("-c bicdb.sql_profile={profile}"))],
+        );
+        read_until_ready(&mut client);
+        let read_catalog = |client: &mut TcpStream, format: i16| {
+            let mut fields = Vec::new();
+            let mut rows = Vec::new();
+            loop {
+                let (tag, payload) = read_message(client);
+                match tag {
+                    b'T' => fields = parse_row_description_fields(&payload),
+                    b'D' => rows.push(parse_data_row(&payload)),
+                    b'E' => panic!("{profile}: {}", String::from_utf8_lossy(&payload)),
+                    b'Z' => break,
+                    _ => {}
+                }
+            }
+            assert_eq!(
+                fields,
+                vec![RowDescriptionField::new(
+                    "current_catalog",
+                    0,
+                    0,
+                    19,
+                    64,
+                    -1,
+                    format
+                )],
+                "{profile}"
+            );
+            assert_eq!(rows, vec![vec!["bicdb".to_string()]], "{profile}");
+        };
+        send_query(&mut client, "SELECT CURRENT_CATALOG");
+        read_catalog(&mut client, 0);
+        send_parse(
+            &mut client,
+            "catalog_context",
+            "SELECT CURRENT_CATALOG",
+            &[],
+        );
+        for format in [0, 1] {
+            send_bind_binary(&mut client, "", "catalog_context", &[], &[format]);
+            send_describe_portal(&mut client, "");
+            send_execute(&mut client, "");
+            send_sync(&mut client);
+            read_catalog(&mut client, format);
+        }
+        client.write_all(b"X\0\0\0\x04").unwrap();
+        server.request_shutdown();
+        task.join().unwrap().unwrap();
+    }
+}
+
+#[test]
 fn timezone_status_tracks_session_and_transaction_changes_before_rows() {
     for profile in ["postgres", "oracle-preview-v1"] {
         let dir = tempfile::tempdir().unwrap();
@@ -5080,17 +5157,50 @@ fn pgwire_savepoint_guc_snapshots_respect_connection_memory_limit() {
     assert_eq!(read_query_rows_with_status(&mut client).1, b'I');
     send_query(&mut client, "BEGIN;");
     assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
-    for name in ["first", "second"] {
-        send_query(&mut client, &format!("SAVEPOINT {name};"));
-        assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
+    // Savepoints share the connection's settings until a setting changes, so
+    // every savepoint here keeps its own large snapshot. The statement that
+    // crosses the limit is rejected (a SET that would leave the oversized
+    // state behind also ends the connection).
+    let mut rejected = None;
+    'steps: for step in 0..16 {
+        let value = format!("{step:02}").repeat(8 * 1024);
+        for sql in [
+            format!("SET app.large = '{value}';"),
+            format!("SAVEPOINT s{step};"),
+        ] {
+            if client.write_all(&query_message(&sql)).is_err() {
+                rejected = Some((step, "connection closed".to_string()));
+                break 'steps;
+            }
+            let mut error = None;
+            loop {
+                let mut header = [0_u8; 5];
+                if client.read_exact(&mut header).is_err() {
+                    error.get_or_insert_with(|| "connection closed".to_string());
+                    break;
+                }
+                let length = u32::from_be_bytes(header[1..5].try_into().unwrap()) as usize;
+                let mut payload = vec![0_u8; length - 4];
+                client.read_exact(&mut payload).unwrap();
+                match header[0] {
+                    b'E' => error = Some(String::from_utf8_lossy(&payload).to_string()),
+                    b'Z' => break,
+                    _ => {}
+                }
+            }
+            if let Some(error) = error {
+                rejected = Some((step, error));
+                break 'steps;
+            }
+        }
     }
-    send_query(&mut client, "SAVEPOINT rejected;");
-    let (error, status) = read_error_response_with_status(&mut client);
-    assert!(error.contains("connection memory estimate"));
-    assert_eq!(status, b'E');
-    send_query(&mut client, "ROLLBACK;");
-    assert_eq!(read_query_rows_with_status(&mut client).1, b'I');
-    client.write_all(b"X\0\0\0\x04").unwrap();
+    let (step, error) = rejected.expect("retained savepoint settings reach the limit");
+    assert!(step >= 2, "rejected after {step} savepoints");
+    assert!(
+        error.contains("connection memory estimate") || error == "connection closed",
+        "{error}"
+    );
+    drop(client);
 
     let mut recovery = TcpStream::connect(address).unwrap();
     startup(&mut recovery);
@@ -5099,6 +5209,58 @@ fn pgwire_savepoint_guc_snapshots_respect_connection_memory_limit() {
     assert_eq!(read_query_rows(&mut recovery), vec![vec!["1".to_string()]]);
     recovery.write_all(b"X\0\0\0\x04").unwrap();
 
+    server.request_shutdown();
+    server_thread.join().unwrap().unwrap();
+}
+
+#[test]
+fn pgwire_unreleased_savepoints_do_not_each_count_the_shared_settings() {
+    // Clients that never release savepoints (statement-level savepoints on
+    // profiles without RELEASE) keep thousands in one transaction.
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = PgWireServer::open(dir.path(), PgWireConfig::default()).unwrap();
+    let server_for_thread = server.clone();
+    let server_thread =
+        thread::spawn(move || bicdb_pgwire::serve_existing_listener(server_for_thread, listener));
+    let mut client = TcpStream::connect(address).unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    // Counted once per savepoint, these settings alone would pass the
+    // default limit after about a thousand savepoints.
+    let value = "s".repeat(8 * 1024);
+    send_query(&mut client, &format!("SET app.context = '{value}';"));
+    assert_eq!(read_query_rows_with_status(&mut client).1, b'I');
+    send_query(&mut client, "CREATE TABLE marks (id INTEGER PRIMARY KEY);");
+    assert_eq!(read_query_rows_with_status(&mut client).1, b'I');
+    send_query(&mut client, "BEGIN;");
+    assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
+    for step in 0..3_000 {
+        send_query(
+            &mut client,
+            &format!("SAVEPOINT \"JDBC_SAVEPOINT_{step}\";"),
+        );
+        assert_eq!(
+            read_query_rows_with_status(&mut client).1,
+            b'T',
+            "savepoint {step}"
+        );
+    }
+    send_query(&mut client, "INSERT INTO marks VALUES (1);");
+    assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
+    send_query(
+        &mut client,
+        "ROLLBACK TO SAVEPOINT \"JDBC_SAVEPOINT_2999\";",
+    );
+    assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
+    send_query(&mut client, "INSERT INTO marks VALUES (2);");
+    assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
+    send_query(&mut client, "COMMIT;");
+    assert_eq!(read_query_rows_with_status(&mut client).1, b'I');
+    send_query(&mut client, "SELECT id FROM marks;");
+    assert_eq!(read_query_rows(&mut client), vec![vec!["2".to_string()]]);
+    client.write_all(b"X\0\0\0\x04").unwrap();
     server.request_shutdown();
     server_thread.join().unwrap().unwrap();
 }
@@ -10529,6 +10691,113 @@ fn pgwire_read_committed_updates_wait_for_the_row_owner_and_serialize() {
 }
 
 #[test]
+fn pgwire_autocommit_dml_waits_for_row_owner_without_stalling_other_sessions() {
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let dir = tempfile::tempdir().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = PgWireServer::open(
+            dir.path(),
+            PgWireConfig {
+                sql_profile: profile.into(),
+                fsync: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let serving = server.clone();
+        let task = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
+        let connect = || {
+            let mut client = TcpStream::connect(address).unwrap();
+            send_startup_version_with_options(
+                &mut client,
+                196_608,
+                true,
+                &[("options", &format!("-c bicdb.sql_profile={profile}"))],
+            );
+            read_startup_parameters_until_ready(&mut client);
+            client
+        };
+        let mut owner = connect();
+        let mut other = connect();
+        for sql in [
+            "CREATE TABLE counters (id INTEGER PRIMARY KEY, v INTEGER);",
+            "INSERT INTO counters VALUES (1, 0);",
+            "INSERT INTO counters VALUES (2, 0);",
+        ] {
+            send_query(&mut owner, sql);
+            assert_eq!(
+                read_query_rows_with_status(&mut owner).1,
+                b'I',
+                "{profile} {sql}"
+            );
+        }
+        // Statements that need exclusive access are not write contention:
+        // they must not route later DML onto the exclusive path.
+        for index in 0..40 {
+            send_query(
+                &mut owner,
+                &format!("CREATE TABLE ddl_{index} (id INTEGER);"),
+            );
+            assert_eq!(read_query_rows_with_status(&mut owner).1, b'I', "{profile}");
+        }
+        send_query(&mut owner, "BEGIN;");
+        assert_eq!(read_query_rows_with_status(&mut owner).1, b'T');
+        send_query(&mut owner, "UPDATE counters SET v = 1 WHERE id = 1;");
+        assert_eq!(read_query_rows_with_status(&mut owner).1, b'T');
+
+        let waiters = [10, 100].map(|delta| {
+            let mut waiter = connect();
+            thread::spawn(move || {
+                send_query(
+                    &mut waiter,
+                    &format!("UPDATE counters SET v = v + {delta} WHERE id = 1;"),
+                );
+                let status = read_query_rows_with_status(&mut waiter).1;
+                (waiter, status)
+            })
+        });
+        thread::sleep(Duration::from_millis(300));
+        assert!(
+            waiters.iter().all(|waiter| !waiter.is_finished()),
+            "{profile}: autocommit updates of an owned row must wait for its owner"
+        );
+        // Other sessions keep reading and writing other rows meanwhile.
+        let started = std::time::Instant::now();
+        send_query(&mut other, "UPDATE counters SET v = v + 1 WHERE id = 2;");
+        assert_eq!(read_query_rows_with_status(&mut other).1, b'I');
+        send_query(&mut other, "SELECT v FROM counters WHERE id = 2;");
+        assert_eq!(
+            read_query_rows_with_status(&mut other).0,
+            vec![vec!["1".to_string()]]
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "{profile}: unrelated work stalled behind a row wait: {:?}",
+            started.elapsed()
+        );
+
+        send_query(&mut owner, "COMMIT;");
+        assert_eq!(read_query_rows_with_status(&mut owner).1, b'I');
+        for waiter in waiters {
+            let (mut waiter, status) = waiter.join().unwrap();
+            assert_eq!(status, b'I', "{profile}");
+            waiter.write_all(b"X\0\0\0\x04").unwrap();
+        }
+        send_query(&mut other, "SELECT v FROM counters WHERE id = 1;");
+        assert_eq!(
+            read_query_rows_with_status(&mut other).0,
+            vec![vec!["111".to_string()]],
+            "{profile}: both waiting updates apply after the owner's"
+        );
+        owner.write_all(b"X\0\0\0\x04").unwrap();
+        other.write_all(b"X\0\0\0\x04").unwrap();
+        server.request_shutdown();
+        task.join().unwrap().unwrap();
+    }
+}
+
+#[test]
 fn pgwire_autocommit_select_function_waits_without_blocking_row_owner_commit() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -12331,13 +12600,15 @@ fn send_password(stream: &mut TcpStream, password: &str) {
 }
 
 fn send_query(stream: &mut TcpStream, query: &str) {
-    let mut payload = query.as_bytes().to_vec();
-    payload.push(0);
-    stream.write_all(b"Q").unwrap();
-    stream
-        .write_all(&((payload.len() as i32) + 4).to_be_bytes())
-        .unwrap();
-    stream.write_all(&payload).unwrap();
+    stream.write_all(&query_message(query)).unwrap();
+}
+
+fn query_message(query: &str) -> Vec<u8> {
+    let mut message = b"Q".to_vec();
+    message.extend_from_slice(&((query.len() as i32) + 5).to_be_bytes());
+    message.extend_from_slice(query.as_bytes());
+    message.push(0);
+    message
 }
 
 fn send_parse(stream: &mut TcpStream, name: &str, sql: &str, oids: &[i32]) {

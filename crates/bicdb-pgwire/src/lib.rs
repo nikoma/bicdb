@@ -2670,8 +2670,11 @@ fn handle_frontend_message(
                 parse_complete(stream)?;
             }
             Err(error) => {
+                state.failed_queries += 1;
+                server.failed_queries.fetch_add(1, Ordering::SeqCst);
                 state.record_query_error(&server.config.sql_profile);
                 state.discard_until_sync = true;
+                log_failed_query(server, state, parse_payload_sql(&payload), &error);
                 error_response_for_error(stream, &error)?;
                 if error.closes_connection() {
                     return Ok(false);
@@ -2684,7 +2687,10 @@ fn handle_frontend_message(
                 bind_complete(stream)?;
             }
             Err(error) => {
+                state.failed_queries += 1;
+                server.failed_queries.fetch_add(1, Ordering::SeqCst);
                 state.discard_until_sync = true;
+                log_failed_query(server, state, None, &error);
                 error_response_for_error(stream, &error)?;
                 if error.closes_connection() {
                     return Ok(false);
@@ -2693,7 +2699,13 @@ fn handle_frontend_message(
         },
         b'D' => {
             if let Err(error) = describe_message(stream, &payload, server, state) {
+                // Describe executes row-returning statements early, so its
+                // errors are query failures like Execute's.
+                state.failed_queries += 1;
+                server.failed_queries.fetch_add(1, Ordering::SeqCst);
                 state.discard_until_sync = true;
+                let sql = describe_payload_sql(&payload, state);
+                log_failed_query(server, state, sql.as_deref(), &error);
                 error_response_for_error(stream, &error)?;
                 if error.closes_connection() {
                     return Ok(false);
@@ -2827,6 +2839,24 @@ fn handle_frontend_message(
         }
     }
     Ok(true)
+}
+
+/// Source SQL of the statement or portal a Describe message names.
+fn describe_payload_sql(payload: &[u8], state: &ConnectionState) -> Option<String> {
+    let (kind, rest) = payload.split_first()?;
+    let end = rest.iter().position(|byte| *byte == 0)?;
+    let name = std::str::from_utf8(&rest[..end]).ok()?;
+    match kind {
+        b'S' => state
+            .prepared
+            .get(name)
+            .map(|statement| statement.sql.clone()),
+        b'P' => state
+            .portals
+            .get(name)
+            .map(|portal| portal.source_sql.clone()),
+        _ => None,
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -3033,10 +3063,10 @@ struct SavepointMark {
 }
 
 impl SavepointMark {
-    fn memory_estimate(&self) -> usize {
+    fn memory_estimate(&self, counted: &mut FxHashSet<usize>) -> usize {
         self.name
             .capacity()
-            .saturating_add(self.session_state.memory_estimate())
+            .saturating_add(self.session_state.memory_estimate_beyond(counted))
     }
 }
 
@@ -3216,10 +3246,13 @@ impl ConnectionState {
             .chain(&self.committed_shared_role_ddl)
             .map(String::len)
             .sum::<usize>();
-        let savepoints = self.savepoints.iter().fold(0_usize, |estimate, mark| {
-            estimate.saturating_add(mark.memory_estimate())
-        });
         let session_state = self.session_state.memory_estimate();
+        // Savepoints share the connection's setting maps until one changes.
+        let mut counted = FxHashSet::default();
+        self.session_state.note_shared_maps(&mut counted);
+        let savepoints = self.savepoints.iter().fold(0_usize, |estimate, mark| {
+            estimate.saturating_add(mark.memory_estimate(&mut counted))
+        });
         let copy_in = self
             .copy_in
             .as_ref()
@@ -3960,7 +3993,11 @@ fn execute_server_db_sql_for_state_inner(
     // guaranteed progress. DDL / non-transactional statements still error out of
     // the shared attempt and take the exclusive path.
     const MAX_SHARED_COMMIT_ATTEMPTS: u32 = 8;
-    for _attempt in 0..MAX_SHARED_COMMIT_ATTEMPTS {
+    // Only exhausted conflict retries are contention; statements that need
+    // exclusive access (DDL) or a closed gate must not debit the gate.
+    let mut conflicts_exhausted = false;
+    for attempt in 0..MAX_SHARED_COMMIT_ATTEMPTS {
+        conflicts_exhausted = attempt + 1 == MAX_SHARED_COMMIT_ATTEMPTS;
         // Plain SELECTs must never be throttled by the write gate. A SELECT
         // can still invoke a writing PL/pgSQL function, though, so execute it
         // with deferred commit and only enter write admission when the session
@@ -3972,6 +4009,7 @@ fn execute_server_db_sql_for_state_inner(
             None
         } else {
             let Some(slot) = server.try_acquire_shared_write() else {
+                conflicts_exhausted = false;
                 break;
             };
             Some(slot)
@@ -4022,9 +4060,23 @@ fn execute_server_db_sql_for_state_inner(
             }
             return result.map_err(PgWireError::from);
         }
+        // A row-lock or snapshot conflict raised while executing is retried
+        // here with a fresh snapshot: DML waits for row owners on this shared
+        // path, whereas the exclusive path would hold the global guard the
+        // owner needs to reach COMMIT.
+        if matches!(
+            result,
+            Err(SqlError::BicDb(BicDbError::TransactionConflict(_)))
+        ) {
+            if let Some(tx) = pending {
+                tx.rollback()?;
+            }
+            continue;
+        }
         // Needs exclusive access (DDL / non-transactional) or hit a genuine SQL
         // error: hand off to the exclusive path, which re-runs and surfaces it.
         let Ok(res) = result else {
+            conflicts_exhausted = false;
             break;
         };
         let Some(tx) = pending else {
@@ -4138,7 +4190,7 @@ fn execute_server_db_sql_for_state_inner(
     // Every shared retry was exhausted (or the gate was already closed): this is
     // genuine sustained contention, so debit the gate ONCE to throttle the shared
     // slot count, then fall back to the exclusive path for guaranteed progress.
-    if !read_only_candidate {
+    if !read_only_candidate && conflicts_exhausted {
         server.note_shared_commit(true);
     }
 

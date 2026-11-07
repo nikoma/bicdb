@@ -172,7 +172,7 @@ impl SqlSession<'_> {
                 if matches!(fields.get(column), Some(SqlValue::Null)) {
                     return Err(constraint_violation(
                         "23502",
-                        format!("null value in column \"{column}\" of relation \"{table}\" violates not-null constraint"),
+                        format!("null value in column \"{column}\" of relation \"{}\" violates not-null constraint", catalog_display_name(table)),
                         Some(table.into()), Some(column.clone()),
                         Some(not_null_constraint_name(table, column)),
                     ));
@@ -381,6 +381,277 @@ mod tests {
         .unwrap();
         crate::oracle::ensure_database_profile(&mut db, profile).unwrap();
         (root, db)
+    }
+
+    #[test]
+    fn numeric_comparisons_ignore_decimal_spelling_in_every_row_shape() {
+        for profile in ["postgres", "oracle-preview-v1"] {
+            let (_root, mut db) = database(profile);
+            let mut session = SqlSession::new(&mut db);
+            for sql in [
+                r#"CREATE TABLE "Amounts"("Id" INTEGER PRIMARY KEY,"Amt" NUMERIC(10),"Code" VARCHAR(10))"#,
+                r#"CREATE TABLE "Scaled"("Id" INTEGER PRIMARY KEY,"Amt" NUMERIC(10,2))"#,
+                r#"INSERT INTO "Amounts" VALUES(1,100,'007')"#,
+                r#"INSERT INTO "Scaled" VALUES(1,100)"#,
+            ] {
+                run(&mut session, profile, sql).unwrap_or_else(|e| panic!("{profile} {sql}: {e}"));
+            }
+            let one = vec![vec![SqlValue::Int(1)]];
+            for sql in [
+                r#"SELECT a."Id" FROM "Amounts" a WHERE a."Amt"=100.000"#,
+                r#"SELECT a."Id" FROM "Amounts" a WHERE a."Amt">=100.000 AND a."Amt"<=100.0"#,
+                r#"SELECT a."Id" FROM "Amounts" a WHERE NOT (a."Amt"<>100.0)"#,
+                r#"SELECT a."Id" FROM "Amounts" a WHERE a."Amt" IN (100.0, 7)"#,
+                r#"SELECT "Id" FROM "Amounts" WHERE "Amt" IN (100.0, 7)"#,
+                r#"SELECT CASE WHEN a."Amt"=100.0 THEN 1 ELSE 0 END FROM "Amounts" a"#,
+                r#"SELECT CASE a."Amt" WHEN 100.0 THEN 1 ELSE 0 END FROM "Amounts" a"#,
+                r#"SELECT COUNT(*) FROM "Amounts" GROUP BY "Amt" HAVING MAX("Amt")=100.0"#,
+                r#"SELECT s."Id" FROM (SELECT "Id","Amt" AS "Q" FROM "Scaled") s WHERE s."Q"=100.0"#,
+                r#"SELECT a."Id" FROM "Amounts" a WHERE EXISTS (SELECT 1 FROM "Scaled" s WHERE s."Amt"=a."Amt" AND s."Amt"=100.0)"#,
+            ] {
+                assert_eq!(
+                    run(&mut session, profile, sql)
+                        .unwrap_or_else(|e| panic!("{profile} {sql}: {e}"))
+                        .rows,
+                    one,
+                    "{profile}: {sql}"
+                );
+            }
+            // Text keeps text equality: '007' is not '7'.
+            for sql in [
+                r#"SELECT a."Id" FROM "Amounts" a WHERE a."Code"='7'"#,
+                r#"SELECT a."Id" FROM "Amounts" a WHERE a."Code" IN ('7')"#,
+            ] {
+                assert!(
+                    run(&mut session, profile, sql).unwrap().rows.is_empty(),
+                    "{profile}: {sql}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn ordered_ties_do_not_depend_on_whether_an_index_served_the_filter() {
+        for profile in ["postgres", "oracle-preview-v1"] {
+            for indexed in [false, true] {
+                let (_root, mut db) = database(profile);
+                let mut session = SqlSession::new(&mut db);
+                run(&mut session, profile, r#"CREATE TABLE "Lists"("Id" NUMERIC(10) PRIMARY KEY,"Client" NUMERIC(10),"Flag" CHAR(1))"#).unwrap();
+                if indexed {
+                    run(
+                        &mut session,
+                        profile,
+                        r#"CREATE INDEX "Lists_Client" ON "Lists"("Client")"#,
+                    )
+                    .unwrap();
+                }
+                // Inserted out of key order, so insertion order differs from key order.
+                for id in [200000, 102, 150] {
+                    run(
+                        &mut session,
+                        profile,
+                        &format!(r#"INSERT INTO "Lists" VALUES({id},11,'N')"#),
+                    )
+                    .unwrap();
+                }
+                let rows = run(
+                    &mut session,
+                    profile,
+                    r#"SELECT "Id" FROM "Lists" WHERE "Client"=11 ORDER BY "Flag" DESC"#,
+                )
+                .unwrap()
+                .rows;
+                assert_eq!(
+                    rows,
+                    ["102", "150", "200000"]
+                        .map(|id| vec![SqlValue::String(id.into())])
+                        .to_vec(),
+                    "{profile} indexed={indexed}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn update_with_correlated_exists_uses_statement_candidates() {
+        for profile in ["postgres", "oracle-preview-v1"] {
+            let (_root, mut db) = database(profile);
+            let mut session = SqlSession::new(&mut db);
+            for sql in [
+                r#"CREATE TABLE "Cols"("ColId" NUMERIC(10) PRIMARY KEY,"ElemId" NUMERIC(10))"#,
+                r#"CREATE TABLE "Items"("ItemId" NUMERIC(10) PRIMARY KEY,"ColId" NUMERIC(10),"Central" CHAR(1),"Name" VARCHAR(20))"#,
+            ] {
+                run(&mut session, profile, sql).unwrap();
+            }
+            for id in 1..=300 {
+                run(
+                    &mut session,
+                    profile,
+                    &format!(r#"INSERT INTO "Cols" VALUES({id},{})"#, id % 10),
+                )
+                .unwrap();
+                run(
+                    &mut session,
+                    profile,
+                    &format!(
+                        r#"INSERT INTO "Items" VALUES({id},{id},'{}','old')"#,
+                        if id % 2 == 0 { "Y" } else { "N" }
+                    ),
+                )
+                .unwrap();
+            }
+            crate::SQL_PROFILE_STACK
+                .with(|stack| stack.borrow_mut().push(crate::SqlProfileStats::default()));
+            let updated = run(
+                &mut session,
+                profile,
+                r#"UPDATE "Items" SET "Name"='new' WHERE "Central"='Y' AND EXISTS (SELECT * FROM "Cols" c WHERE c."ColId"="Items"."ColId" AND c."ElemId"=4)"#,
+            )
+            .unwrap();
+            let stats = crate::SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().pop().unwrap());
+            // Even ids with id % 10 == 4: 4, 14, ..., 294.
+            assert_eq!(updated.command_complete_tag(), "UPDATE 30", "{profile}");
+            assert_eq!(
+                run(
+                    &mut session,
+                    profile,
+                    r#"SELECT COUNT(*) FROM "Items" WHERE "Name"='new'"#
+                )
+                .unwrap()
+                .rows,
+                vec![vec![SqlValue::Int(30)]],
+                "{profile}"
+            );
+            // Candidate rows whose key has no qualifying inner row are answered
+            // from the statement's candidate set, not by running the subquery.
+            assert!(
+                stats.index_lookup_count < 60,
+                "{profile}: {} subquery lookups for 150 candidate rows",
+                stats.index_lookup_count
+            );
+            let negated = run(
+                &mut session,
+                profile,
+                r#"SELECT COUNT(*) FROM "Items" WHERE "Central"='Y' AND NOT EXISTS (SELECT 1 FROM "Cols" c WHERE c."ColId"="Items"."ColId" AND c."ElemId"=4)"#,
+            )
+            .unwrap();
+            assert_eq!(negated.rows, vec![vec![SqlValue::Int(120)]], "{profile}");
+        }
+    }
+
+    #[test]
+    fn update_with_uncorrelated_in_subquery_runs_it_once() {
+        for profile in ["postgres", "oracle-preview-v1"] {
+            let (_root, mut db) = database(profile);
+            let mut session = SqlSession::new(&mut db);
+            for sql in [
+                r#"CREATE TABLE "Cols"("ColId" NUMERIC(10) PRIMARY KEY,"ElemId" NUMERIC(10))"#,
+                r#"CREATE TABLE "Fields"("FieldId" NUMERIC(10) PRIMARY KEY,"ColId" NUMERIC(10),"Central" CHAR(1),"Name" VARCHAR(20))"#,
+            ] {
+                run(&mut session, profile, sql).unwrap();
+            }
+            for id in 1..=300 {
+                run(
+                    &mut session,
+                    profile,
+                    &format!(r#"INSERT INTO "Cols" VALUES({id},{})"#, id % 10),
+                )
+                .unwrap();
+                run(
+                    &mut session,
+                    profile,
+                    &format!(r#"INSERT INTO "Fields" VALUES({id},{id},'Y','old')"#),
+                )
+                .unwrap();
+            }
+            crate::SQL_PROFILE_STACK
+                .with(|stack| stack.borrow_mut().push(crate::SqlProfileStats::default()));
+            let updated = run(
+                &mut session,
+                profile,
+                r#"UPDATE "Fields" SET "Name"='new' WHERE "ColId" IN (SELECT "ColId" FROM "Cols" WHERE "ElemId"=4) AND "Central"='Y'"#,
+            )
+            .unwrap();
+            let stats = crate::SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().pop().unwrap());
+            assert_eq!(updated.command_complete_tag(), "UPDATE 30", "{profile}");
+            assert!(
+                stats.full_scan_count <= 2,
+                "{profile}: the uncorrelated subquery ran per row ({} scans)",
+                stats.full_scan_count
+            );
+        }
+    }
+
+    #[test]
+    fn typed_exact_key_probe_sees_same_transaction_rows_without_scanning() {
+        for profile in ["postgres", "oracle-preview-v1"] {
+            let (_root, mut db) = database(profile);
+            let mut session = SqlSession::new(&mut db);
+            for sql in [
+                r#"CREATE TABLE "Parents"("P" NUMERIC(10) PRIMARY KEY,"Name" VARCHAR(20))"#,
+                r#"CREATE TABLE "Children"("C" NUMERIC(10) PRIMARY KEY,"P" NUMERIC(10))"#,
+                r#"INSERT INTO "Parents" VALUES(1,'one')"#,
+                r#"INSERT INTO "Parents" VALUES(2,'two')"#,
+                r#"INSERT INTO "Parents" VALUES(3,'three')"#,
+                r#"INSERT INTO "Children" VALUES(10,1)"#,
+                "BEGIN",
+                r#"INSERT INTO "Children" VALUES(20,2)"#,
+            ] {
+                run(&mut session, profile, sql).unwrap_or_else(|e| panic!("{profile} {sql}: {e}"));
+            }
+            let query = r#"SELECT "Name" FROM "Parents" p WHERE EXISTS (SELECT 1 FROM "Children" c WHERE c."P"=p."P" AND c."C"=20)"#;
+            crate::SQL_PROFILE_STACK
+                .with(|stack| stack.borrow_mut().push(crate::SqlProfileStats::default()));
+            let rows = run(&mut session, profile, query).map(|result| result.rows);
+            let stats = crate::SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().pop().unwrap());
+            assert_eq!(
+                rows.unwrap(),
+                vec![vec![SqlValue::String("two".to_string())]],
+                "{profile}"
+            );
+            assert_eq!(
+                stats.record_id_prefix_scans, 0,
+                "{profile}: an exact typed key written in this transaction must not scan"
+            );
+            // Exact keys equal by type but spelled differently still match.
+            let spelled = r#"SELECT "Name" FROM "Parents" p WHERE EXISTS (SELECT 1 FROM "Children" c WHERE c."P"=p."P" AND c."C"=20.000)"#;
+            assert_eq!(
+                run(&mut session, profile, spelled).unwrap().rows,
+                vec![vec![SqlValue::String("two".to_string())]],
+                "{profile}"
+            );
+            // A missing NUMERIC key is answered from its canonical id alone.
+            crate::SQL_PROFILE_STACK
+                .with(|stack| stack.borrow_mut().push(crate::SqlProfileStats::default()));
+            let missing = run(
+                &mut session,
+                profile,
+                r#"SELECT "P" FROM "Children" WHERE "C"=999"#,
+            )
+            .map(|result| result.rows);
+            let stats = crate::SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().pop().unwrap());
+            assert!(missing.unwrap().is_empty(), "{profile}");
+            assert_eq!(
+                stats.record_id_prefix_scans, 0,
+                "{profile}: a key miss must not scan"
+            );
+            assert_eq!(
+                run(
+                    &mut session,
+                    profile,
+                    r#"SELECT "P" FROM "Children" WHERE "C"=10.00"#
+                )
+                .unwrap()
+                .rows,
+                vec![vec![SqlValue::String("1".to_string())]],
+                "{profile}"
+            );
+            run(&mut session, profile, "ROLLBACK").unwrap();
+            assert!(
+                run(&mut session, profile, query).unwrap().rows.is_empty(),
+                "{profile}: rolled-back key must not be visible"
+            );
+        }
     }
 
     #[test]

@@ -314,7 +314,12 @@ fn lower_bound(be: &BoundExpr) -> Option<IrExpr> {
             right,
             left_type,
             right_type,
+            numeric,
         } => {
+            if *numeric {
+                // NUMERIC operands compare by decimal value, not IR scalars.
+                return None;
+            }
             if [left_type.as_deref(), right_type.as_deref()]
                 .into_iter()
                 .flatten()

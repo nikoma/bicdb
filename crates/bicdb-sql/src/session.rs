@@ -14,7 +14,14 @@ pub(crate) use merge::UpdateMatchPolicy;
 pub(crate) mod recycle_bin;
 pub(crate) use recycle_bin::is_recycle_bin_name;
 pub use recycle_bin::RECYCLE_BIN_COLLECTION;
+#[cfg(test)]
+mod catalog_join_tests;
+#[cfg(test)]
+mod driver_metadata_tests;
 pub(crate) mod functions_insert;
+mod join_lookup_tests;
+#[cfg(test)]
+mod primary_key_range_tests;
 mod primary_key_updates;
 mod privilege_projection;
 mod raw_ddl_analyze;
@@ -23,6 +30,8 @@ mod read_only;
 mod row_assignments;
 mod row_triggers;
 mod set_functions;
+#[cfg(test)]
+mod subquery_scope_tests;
 mod transaction_defaults;
 pub use read_only::parse_transaction_read_only;
 pub(crate) mod txn_update;
@@ -1216,12 +1225,43 @@ impl SqlSessionGucState {
     /// Conservatively estimates memory owned by this opaque state, including
     /// effective values, transaction-start snapshots, and local restore data.
     pub fn memory_estimate(&self) -> usize {
+        self.memory_estimate_with(|gucs| string_map_memory_estimate(gucs))
+    }
+
+    /// Records the setting maps this state holds, which copies of it (such as
+    /// savepoints) share until a setting changes.
+    pub fn note_shared_maps(&self, counted: &mut FxHashSet<usize>) {
+        counted.insert(Arc::as_ptr(&self.session_gucs) as usize);
+        if let Some(start) = &self.transaction_start {
+            counted.insert(Arc::as_ptr(&start.session_gucs) as usize);
+        }
+    }
+
+    /// `memory_estimate` for a copy kept beside other states: a setting map
+    /// already in `counted` is not counted again.
+    pub fn memory_estimate_beyond(&self, counted: &mut FxHashSet<usize>) -> usize {
+        self.memory_estimate_with(|gucs| {
+            if counted.insert(Arc::as_ptr(gucs) as usize) {
+                string_map_memory_estimate(gucs)
+            } else {
+                0
+            }
+        })
+    }
+
+    fn memory_estimate_with(
+        &self,
+        mut map_estimate: impl FnMut(&Arc<HashMap<String, String>>) -> usize,
+    ) -> usize {
         std::mem::size_of::<Self>()
-            .saturating_add(string_map_memory_estimate(&self.session_gucs))
+            .saturating_add(map_estimate(&self.session_gucs))
             .saturating_add(
                 self.transaction_start
                     .as_ref()
-                    .map(SqlSessionGucSnapshot::memory_estimate)
+                    .map(|start| {
+                        std::mem::size_of::<SqlSessionGucSnapshot>()
+                            .saturating_add(map_estimate(&start.session_gucs))
+                    })
                     .unwrap_or_default(),
             )
             .saturating_add(optional_string_map_memory_estimate(&self.local_restore))
@@ -1466,12 +1506,6 @@ fn rewrite_composite_value(
             }
         }
         value => Ok(value),
-    }
-}
-
-impl SqlSessionGucSnapshot {
-    fn memory_estimate(&self) -> usize {
-        std::mem::size_of::<Self>().saturating_add(string_map_memory_estimate(&self.session_gucs))
     }
 }
 
@@ -2537,11 +2571,19 @@ impl<'db> SqlSession<'db> {
             .snapshot_floor
             .max(crate::statement_context::latest_independent_commit());
         let mut tx = self.db_ref().begin_transaction_after(floor)?;
+        tx.set_blocking_row_waits(self.blocking_row_wait_token());
         if isolation == "serializable" {
             tx.set_snapshot_isolation(true, floor)?;
             tx.set_statement_write_conflict_check(true)?;
         }
         Ok(tx)
+    }
+
+    /// DML waits for a row's owner (as SQL locking reads do) only on shared
+    /// sessions: the owner commits through a shared guard, so a wait under an
+    /// exclusive guard could never be released.
+    pub(crate) fn blocking_row_wait_token(&self) -> Option<CancellationToken> {
+        (!self.exclusive).then(|| self.cancellation.clone())
     }
 
     /// The transaction this session reads through: its own, or for a per-row
@@ -2936,6 +2978,9 @@ impl<'db> SqlSession<'db> {
         // Statement-scoped only: CREATE/DROP INDEX between statements must
         // not be answered from a stale arbiter.
         self.conflict_arbiter_memo.borrow_mut().take();
+        if let Some(tx) = self.tx.as_ref() {
+            tx.set_blocking_row_waits(self.blocking_row_wait_token());
+        }
         let effects = crate::statement_context::StatementScope::enter();
         let atomic = self.tx.is_some() && oracle::preview_routine_language_enabled(self.db_ref())?;
         let execute = |session: &mut Self| {

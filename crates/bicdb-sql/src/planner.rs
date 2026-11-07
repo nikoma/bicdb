@@ -222,6 +222,34 @@ impl SlotRowLookup {
         &self.cols.columns
     }
 
+    /// Whether the qualified reference `parts` would reach this layout only
+    /// through the trailing-column fallback of `value_from_parts`, landing on
+    /// a column that a different relation qualifies. `m.c` names relation
+    /// `m`; read against an outer scope it must not bind `o.c`.
+    pub(crate) fn binds_foreign_qualifier(&self, parts: &[String]) -> bool {
+        if parts.len() < 2 {
+            return false;
+        }
+        let qualifier = &parts[parts.len() - 2];
+        if self.cols.qualifier(qualifier).is_some()
+            || self.slot_for_key(&parts.join(".")).is_some()
+            || self
+                .slot_for_key(&format!("{}.{}", parts[0], parts[1]))
+                .is_some()
+            || self.slot_for_key(&parts[0]).is_some()
+        {
+            return false;
+        }
+        let Some(slot) = self.slot_for_key(&parts[parts.len() - 1]) else {
+            return false;
+        };
+        let Some((prefix, _)) = self.columns()[slot].rsplit_once('.') else {
+            return false;
+        };
+        let own = prefix.rsplit('.').next().unwrap_or(prefix);
+        !own.eq_ignore_ascii_case(qualifier)
+    }
+
     /// The slot `value_for_key` reads for `key`, if any.
     pub(crate) fn slot_for_key(&self, key: &str) -> Option<usize> {
         if let Some(id) = self
@@ -493,7 +521,13 @@ impl OuterSlotRow {
         }
     }
 
+    /// A qualified name binds here only to a column of the relation it
+    /// names (see `binds_foreign_qualifier`); it reads nothing otherwise, so
+    /// it neither returns a value nor marks the row read.
     pub(crate) fn value_from_parts(&self, parts: &[String]) -> Option<SqlValue> {
+        if self.lookup.binds_foreign_qualifier(parts) {
+            return None;
+        }
         let value = self.lookup.value_from_parts(&self.values, parts);
         if !self.probes.is_empty() {
             self.mark_parts(parts, value.is_some());
@@ -612,6 +646,9 @@ pub(crate) enum BoundExpr {
         right: Box<BoundExpr>,
         left_type: Option<String>,
         right_type: Option<String>,
+        /// Both operands resolve to types whose combination is NUMERIC:
+        /// compare by value, so `2` equals `2.000`.
+        numeric: bool,
     },
     And(Box<BoundExpr>, Box<BoundExpr>),
     Or(Box<BoundExpr>, Box<BoundExpr>),
@@ -1335,7 +1372,7 @@ impl InsertValuesTemplate {
                     "23502",
                     format!(
                         "null value in column \"{}\" of relation \"{}\" violates not-null constraint",
-                        column.name, table
+                        column.name, catalog_display_name(table)
                     ),
                     Some(table.to_string()),
                     Some(column.name.clone()),
@@ -1368,7 +1405,7 @@ impl InsertValuesTemplate {
                     "23502",
                     format!(
                         "null value in column \"{}\" of relation \"{}\" violates not-null constraint",
-                        column.name, table
+                        column.name, catalog_display_name(table)
                     ),
                     Some(table.to_string()),
                     Some(column.name.clone()),
@@ -1629,6 +1666,28 @@ impl BoundExprScope {
         self
     }
 
+    /// Whether `expr` reads an input column of this scope, whose declared
+    /// type the scope does not know.
+    pub(crate) fn references_row_column(&self, expr: &Expr) -> bool {
+        match expr {
+            Expr::Identifier(ident) => matches!(
+                self.bind_identifier(&[ident_value(ident)]),
+                Some(BoundExpr::Column(_))
+            ),
+            Expr::CompoundIdentifier(idents) => matches!(
+                self.bind_identifier(&idents.iter().map(ident_value).collect::<Vec<_>>()),
+                Some(BoundExpr::Column(_))
+            ),
+            Expr::Nested(inner)
+            | Expr::UnaryOp { expr: inner, .. }
+            | Expr::Cast { expr: inner, .. } => self.references_row_column(inner),
+            Expr::BinaryOp { left, right, .. } => {
+                self.references_row_column(left) || self.references_row_column(right)
+            }
+            _ => false,
+        }
+    }
+
     pub(crate) fn known_expr_type(&self, expr: &Expr) -> Option<String> {
         match expr {
             Expr::Identifier(ident) => match self.bind_identifier(&[ident_value(ident)])? {
@@ -1850,12 +1909,29 @@ impl BoundExprScope {
                         }
                         left_type = right_type.clone();
                     }
+                    // NUMERIC travels as decimal text. Against an operand
+                    // this scope cannot type (a row column), the untyped
+                    // comparison would compare `2` and `2.000` as text; the
+                    // row evaluator resolves the column's declared type.
+                    let numeric =
+                        numeric_comparison_types(left_type.as_deref(), right_type.as_deref());
+                    if !numeric
+                        && (left_type.as_deref() == Some("numeric")
+                            && right_type.is_none()
+                            && self.references_row_column(right)
+                            || right_type.as_deref() == Some("numeric")
+                                && left_type.is_none()
+                                && self.references_row_column(left))
+                    {
+                        return None;
+                    }
                     Some(BoundExpr::Compare {
                         left: Box::new(self.bind_in(left, ctx)?),
                         op: op.clone(),
                         right: Box::new(self.bind_in(right, ctx)?),
                         left_type,
                         right_type,
+                        numeric,
                     })
                 }
                 BinaryOperator::Arrow | BinaryOperator::LongArrow => None,
@@ -2385,9 +2461,13 @@ impl BoundExpr {
                 right,
                 left_type,
                 right_type,
+                numeric,
             } => {
                 let left = left.eval_borrowed(frame)?;
                 let right = right.eval_borrowed(frame)?;
+                if *numeric {
+                    return compare_numeric_values(left.as_ref(), op, right.as_ref());
+                }
                 // Unknown slot types are not unknown literals. Use temporal
                 // promotion here only when both operand types are resolved.
                 if left_type.is_some() && right_type.is_some() {
@@ -2540,12 +2620,12 @@ pub(crate) fn equi_join_key_exprs<'a>(
                 op: BinaryOperator::Eq,
                 right,
             } => {
-                if predicate_references_only_columns(left, left_columns)
-                    && predicate_references_only_columns(right, right_columns)
+                if join_key_references_only_columns(left, left_columns)
+                    && join_key_references_only_columns(right, right_columns)
                 {
                     Some((left, right))
-                } else if predicate_references_only_columns(left, right_columns)
-                    && predicate_references_only_columns(right, left_columns)
+                } else if join_key_references_only_columns(left, right_columns)
+                    && join_key_references_only_columns(right, left_columns)
                 {
                     Some((right, left))
                 } else {
@@ -2557,6 +2637,22 @@ pub(crate) fn equi_join_key_exprs<'a>(
         }
     }
     find_key(expr, &left_column_set, &right_column_set)
+}
+
+/// Whether a join key reads only `columns`. Beyond the predicate column
+/// references this admits subscripts of qualified array columns, the
+/// `pka.attnum = con.confkey[pos.n]` keys of driver foreign-key metadata,
+/// which otherwise left those joins to a nested loop over every attribute.
+fn join_key_references_only_columns(expr: &Expr, columns: &BTreeSet<String>) -> bool {
+    if !matches!(unwrap_nested_expr(expr), Expr::CompoundFieldAccess { .. }) {
+        return predicate_references_only_columns(expr, columns);
+    }
+    qualified_predicate_references(expr).is_some_and(|references| {
+        !references.is_empty()
+            && references
+                .iter()
+                .all(|reference| qualified_reference_in(reference, columns))
+    })
 }
 
 pub(crate) fn join_constraint_can_eval_with_outer_row(
@@ -5155,4 +5251,92 @@ mod case_preserving_slot_tests {
             vec![vec![SqlValue::Int(1), SqlValue::Int(9), SqlValue::Int(9)]]
         );
     }
+}
+
+/// The `alias.column` references a predicate reads, for relations whose
+/// columns are known only by name (catalog relations, views, CTEs, table
+/// functions — anything without a stored `TableSchema`). `None` when the
+/// predicate holds anything whose inputs cannot be read off syntactically:
+/// an unqualified name (its owner is ambiguous without a schema), a function
+/// call, a subquery. Callers only ever treat `None` as "not a join term".
+pub(crate) fn qualified_predicate_references(expr: &Expr) -> Option<Vec<String>> {
+    fn collect(expr: &Expr, out: &mut Vec<String>) -> bool {
+        match expr {
+            Expr::CompoundIdentifier(idents) if idents.len() >= 2 => {
+                let [qualifier, column] = &idents[idents.len() - 2..] else {
+                    return false;
+                };
+                out.push(format!("{}.{}", qualifier.value, column.value));
+                true
+            }
+            // `alias.array_column[index]`
+            Expr::CompoundFieldAccess { root, access_chain } => {
+                let (Expr::Identifier(qualifier), Some(AccessExpr::Dot(Expr::Identifier(column)))) =
+                    (root.as_ref(), access_chain.first())
+                else {
+                    return false;
+                };
+                out.push(format!("{}.{}", qualifier.value, column.value));
+                access_chain[1..].iter().all(|access| match access {
+                    AccessExpr::Subscript(Subscript::Index { index }) => collect(index, out),
+                    _ => false,
+                })
+            }
+            Expr::BinaryOp { left, right, .. } => collect(left, out) && collect(right, out),
+            Expr::UnaryOp { expr, .. }
+            | Expr::Nested(expr)
+            | Expr::Cast { expr, .. }
+            | Expr::IsNull(expr)
+            | Expr::IsNotNull(expr)
+            | Expr::IsTrue(expr)
+            | Expr::IsNotTrue(expr)
+            | Expr::IsFalse(expr)
+            | Expr::IsNotFalse(expr) => collect(expr, out),
+            Expr::InList { expr, list, .. } => {
+                collect(expr, out) && list.iter().all(|item| collect(item, out))
+            }
+            Expr::Between {
+                expr, low, high, ..
+            } => collect(expr, out) && collect(low, out) && collect(high, out),
+            Expr::Value(_) | Expr::TypedString(_) => true,
+            _ => false,
+        }
+    }
+    let mut references = Vec::new();
+    collect(expr, &mut references).then_some(references)
+}
+
+/// Whether a qualified `alias.column` reference names one of `columns`.
+pub(crate) fn qualified_reference_in(reference: &str, columns: &BTreeSet<String>) -> bool {
+    columns
+        .iter()
+        .any(|column| column.eq_ignore_ascii_case(reference))
+}
+
+/// A FROM item the comma-join planner may move: a plain relation, or a table
+/// function whose arguments read no row (`generate_series(1, 32) pos(n)`),
+/// which therefore cannot depend on what precedes it. Correlated table
+/// functions and time-travel relations keep their position.
+pub(crate) fn cross_join_reorderable_table_factor(relation: &TableFactor) -> bool {
+    if simple_reorderable_table_factor(relation) {
+        return true;
+    }
+    let TableFactor::Table {
+        args: Some(args),
+        with_ordinality: false,
+        ..
+    } = relation
+    else {
+        return false;
+    };
+    if args.settings.is_some() {
+        return false;
+    }
+    if !matches!(crate::engine::flashback::flashback_request(args), Ok(None)) {
+        return false;
+    }
+    args.args.iter().all(|arg| match arg {
+        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => row_independent_expr(expr),
+        _ => false,
+    })
 }

@@ -485,6 +485,34 @@ impl BicDb {
         self.scan_collection_record_ids_with_prefix_unchecked(collection, id_prefix)
     }
 
+    /// Record-id locator candidates within `(lower, upper)`; see
+    /// [`Transaction::scan_collection_record_key_candidates_in_range_unchecked`]
+    /// for the contract. In paged mode it reads at most `limit` page-store
+    /// keys from one seek (the page store is the complete committed view).
+    pub fn scan_collection_record_key_candidates_in_range_unchecked(
+        &self,
+        collection: &str,
+        lower: Bound<&str>,
+        upper: Bound<&str>,
+        descending: bool,
+        limit: usize,
+    ) -> Result<(Vec<String>, bool)> {
+        if let Some(paged) = &self.paged_records {
+            drop(self.collection_state(collection)?);
+            let snapshot = paged.latest_snapshot();
+            let limit = limit.max(1);
+            let ids =
+                paged.scan_ids_in_range(&snapshot, collection, lower, upper, descending, limit)?;
+            let complete = ids.len() < limit;
+            return Ok((ids, complete));
+        }
+        let ids = self.scan_collection_record_ids_with_prefix_unchecked(collection, "")?;
+        Ok((
+            record_ids_in_range_ordered(ids, lower, upper, descending),
+            true,
+        ))
+    }
+
     /// Prefix id scan with no policy or protection gate, for locator planning
     /// whose ids resolve to rows only through policy-filtered record paths.
     pub fn scan_collection_record_ids_with_prefix_unchecked(
@@ -847,6 +875,7 @@ impl BicDb {
             read_images: Mutex::new(ReadImages::default()),
             write_locks: Arc::clone(&self.write_locks),
             locked_keys: Mutex::new(LockedKeys::default()),
+            blocking_row_waits: Mutex::new(None),
             active_snapshots: Arc::clone(&self.active_snapshots),
             tx_states: Arc::clone(&self.tx_states),
             pending_broker_publishes: Mutex::new(Vec::new()),

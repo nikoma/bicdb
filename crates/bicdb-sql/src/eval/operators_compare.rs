@@ -879,6 +879,63 @@ pub(crate) fn compare_values(
     }))
 }
 
+/// Both operand types are resolved and combine to NUMERIC (numeric with
+/// numeric or an integer). Such values travel as decimal text, which the
+/// untyped comparison would compare as text: `2` against `2.000`.
+pub(crate) fn numeric_comparison_types(left: Option<&str>, right: Option<&str>) -> bool {
+    left.is_some()
+        && right.is_some()
+        && numeric_combine_pg_type(left, right).as_deref() == Some("numeric")
+}
+
+/// Compare two values by NUMERIC value with SQL NULL semantics.
+pub(crate) fn compare_numeric_values(
+    left: &SqlValue,
+    op: &BinaryOperator,
+    right: &SqlValue,
+) -> Result<Option<bool>> {
+    if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
+        return Ok(None);
+    }
+    Ok(Some(comparison_from_ordering(
+        op,
+        pg_typed_compare("numeric", left, right)?,
+    )))
+}
+
+/// `compare_values` for operands with resolved types: NUMERIC combinations
+/// compare by value; everything else keeps the untyped comparison.
+pub(crate) fn compare_values_with_types(
+    left_type: Option<&str>,
+    right_type: Option<&str>,
+    left: &SqlValue,
+    op: &BinaryOperator,
+    right: &SqlValue,
+) -> Result<Option<bool>> {
+    if numeric_comparison_types(left_type, right_type) {
+        return compare_numeric_values(left, op, right);
+    }
+    if numeric_against_untyped(left_type, right_type) {
+        // The untyped side (a derived-table column, say) has a real type
+        // the row cannot name. Only a numeric operand compares with NUMERIC
+        // without a cast; anything that does not parse keeps the old path.
+        if let Ok(truth) = compare_numeric_values(left, op, right) {
+            return Ok(truth);
+        }
+    }
+    compare_values(left, op, right)
+}
+
+/// Exactly one operand type is resolved, and it is NUMERIC.
+pub(crate) fn numeric_against_untyped(left: Option<&str>, right: Option<&str>) -> bool {
+    match (left, right) {
+        (Some(known), None) | (None, Some(known)) => {
+            numeric_combine_pg_type(Some(known), None).as_deref() == Some("numeric")
+        }
+        _ => false,
+    }
+}
+
 pub(crate) fn eval_tuple_comparison<F>(
     left: &Expr,
     op: &BinaryOperator,
@@ -1136,6 +1193,14 @@ pub(crate) fn simple_case_values_equal(
         || right_type == Some("bpchar") && left_type.is_none()
     {
         return Ok(pg_typed_compare("bpchar", left, right)? == Ordering::Equal);
+    }
+    if numeric_comparison_types(left_type, right_type) {
+        return Ok(pg_typed_compare("numeric", left, right)? == Ordering::Equal);
+    }
+    if numeric_against_untyped(left_type, right_type) {
+        if let Ok(ordering) = pg_typed_compare("numeric", left, right) {
+            return Ok(ordering == Ordering::Equal);
+        }
     }
     Ok(values_equal(left, right))
 }
@@ -2181,10 +2246,13 @@ where
             return eval_string_subscript_value(text, subscript, eval);
         }
     }
+    // int2vector and oidvector (`pg_index.indkey`, `indoption`, `proargtypes`)
+    // subscript from 0, as their PostgreSQL array lower bound is 0.
     let value = match value {
-        SqlValue::String(text) => array_value(
+        SqlValue::String(text) => array_value_with_lower_bounds(
             pg_int_vector_values(&text)
                 .expect("non-vector strings returned through string subscripting"),
+            vec![0],
         ),
         value => value,
     };

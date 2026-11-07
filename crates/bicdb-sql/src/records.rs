@@ -508,7 +508,8 @@ fn validate_record_columns(table: &str, schema: &TableSchema, record: &Record) -
                 "23502",
                 format!(
                     "null value in column \"{}\" of relation \"{}\" violates not-null constraint",
-                    column.name, table
+                    column.name,
+                    catalog_display_name(table)
                 ),
                 Some(table.to_string()),
                 Some(column.name.clone()),
@@ -555,7 +556,8 @@ pub(crate) fn validate_not_null(table: &str, schema: &TableSchema, record: &Reco
                 "23502",
                 format!(
                     "null value in column \"{}\" of relation \"{}\" violates not-null constraint",
-                    column.name, table
+                    column.name,
+                    catalog_display_name(table)
                 ),
                 Some(table.to_string()),
                 Some(column.name.clone()),
@@ -840,7 +842,27 @@ pub(crate) fn validate_unique_constraints_for_update(
         if changed_records.is_empty() {
             continue;
         }
-        validate_unique_arbiter_records(db, tx, table, schema, &arbiter, &changed_records, true)?;
+        // Oracle checks unique constraints when the statement ends: a stored
+        // key whose row this statement moves to another key is no conflict
+        // (the new keys are checked against each other).
+        let vacated = if oracle::preview_routine_language_enabled(db)? {
+            changed_records
+                .iter()
+                .map(|record| record.id.clone())
+                .collect()
+        } else {
+            BTreeSet::new()
+        };
+        validate_unique_arbiter_records_vacating(
+            db,
+            tx,
+            table,
+            schema,
+            &arbiter,
+            &changed_records,
+            true,
+            &vacated,
+        )?;
     }
     Ok(())
 }
@@ -1153,6 +1175,34 @@ pub(crate) fn validate_unique_arbiter_records(
     records: &[Record],
     allow_existing_same_id: bool,
 ) -> Result<()> {
+    validate_unique_arbiter_records_vacating(
+        db,
+        tx,
+        table,
+        schema,
+        arbiter,
+        records,
+        allow_existing_same_id,
+        &BTreeSet::new(),
+    )
+}
+
+/// `validate_unique_arbiter_records` where the stored keys of the `vacated`
+/// rows no longer count (they are being rewritten to the keys in `records`).
+#[allow(clippy::too_many_arguments)]
+fn validate_unique_arbiter_records_vacating(
+    db: &BicDb,
+    tx: Option<&Transaction>,
+    table: &str,
+    schema: &TableSchema,
+    arbiter: &UniqueConflictArbiter,
+    records: &[Record],
+    allow_existing_same_id: bool,
+    vacated: &BTreeSet<String>,
+) -> Result<()> {
+    let conflicts = |id: &String, record: &Record| {
+        (!allow_existing_same_id || id != &record.id) && !vacated.contains(id)
+    };
     let mut seen = BTreeMap::<Vec<String>, String>::new();
     for record in records {
         let key_values = unique_key_values(record, schema, &arbiter.key);
@@ -1208,10 +1258,10 @@ pub(crate) fn validate_unique_arbiter_records(
                 continue;
             }
             let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
-            if existing.get(&key).is_some_and(|ids| {
-                ids.iter()
-                    .any(|id| !allow_existing_same_id || id != &record.id)
-            }) {
+            if existing
+                .get(&key)
+                .is_some_and(|ids| ids.iter().any(|id| conflicts(id, record)))
+            {
                 return Err(unique_violation(schema, &arbiter.name));
             }
         }
@@ -1246,18 +1296,15 @@ pub(crate) fn validate_unique_arbiter_records(
             table,
             db.lookup_index_exact(index_name, &index_values)?,
         );
-        if ids
-            .iter()
-            .any(|id| !allow_existing_same_id || id != &record.id)
-        {
+        if ids.iter().any(|id| conflicts(id, record)) {
             return Err(unique_violation(schema, &arbiter.name));
         }
         // Committed index entries cannot see this transaction's earlier writes.
         let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
-        if pending_keys.get(&key).is_some_and(|ids| {
-            ids.iter()
-                .any(|id| !allow_existing_same_id || id != &record.id)
-        }) {
+        if pending_keys
+            .get(&key)
+            .is_some_and(|ids| ids.iter().any(|id| conflicts(id, record)))
+        {
             return Err(unique_violation(schema, &arbiter.name));
         }
     }
@@ -1618,6 +1665,61 @@ pub(crate) fn primary_key_prefix_requires_typed_identity(
 pub(crate) fn primary_key_requires_typed_identity(schema: &TableSchema) -> bool {
     let columns = primary_key_columns_for_schema(schema);
     primary_key_prefix_requires_typed_identity(schema, columns.len())
+}
+
+/// Whether equal primary-key values always produce the same record id, so an
+/// exact-key miss is definitive. Typed labels are canonical index keys for
+/// NUMERIC and date/time values (`20` and `20.000` share one); padded
+/// characters, floats, intervals, collations and user types can compare equal
+/// across different labels and keep the scanning fallback.
+pub(crate) fn primary_key_label_is_canonical(schema: &TableSchema) -> bool {
+    let columns = primary_key_columns_for_schema(schema);
+    primary_key_prefix_label_is_canonical(schema, columns.len())
+}
+
+/// [`primary_key_label_is_canonical`] for the leading `prefix_columns` key
+/// columns: equal values of each of them always encode to the same record-id
+/// cell, so the record ids of every row with an equal key prefix share one
+/// physical record-id prefix.
+pub(crate) fn primary_key_prefix_label_is_canonical(
+    schema: &TableSchema,
+    prefix_columns: usize,
+) -> bool {
+    let columns = primary_key_columns_for_schema(schema);
+    prefix_columns <= columns.len()
+        && columns.iter().take(prefix_columns).all(|name| {
+            schema.column(name).is_some_and(|column| {
+                column.user_type.is_none()
+                    && column.collation.is_none()
+                    && (!pg_type_requires_typed_identity(&column.pg_type)
+                        || matches!(
+                            column.pg_type.as_str(),
+                            "numeric" | "date" | "timestamp" | "timestamptz"
+                        ))
+            })
+        })
+}
+
+/// Whether a single-column primary key's record ids sort like its values, so
+/// a key range (or the least/greatest key) is a record-id range of the
+/// collection. The record id of such a key is its typed label, which is the
+/// hex of the order-preserving index key (`column_typed_index_label`); hex
+/// keeps byte order and the canonical label maps equal values to one id.
+/// Plain text/integer ids (`to_cell`) do not sort like their values, and
+/// collated or user-defined types keep the record-id fallback.
+pub(crate) fn primary_key_record_id_orders_like_values(schema: &TableSchema) -> bool {
+    let columns = primary_key_columns_for_schema(schema);
+    let [column] = columns.as_slice() else {
+        return false;
+    };
+    schema.column(column).is_some_and(|column| {
+        column.user_type.is_none()
+            && column.collation.is_none()
+            && matches!(
+                column.pg_type.as_str(),
+                "numeric" | "date" | "timestamp" | "timestamptz"
+            )
+    })
 }
 
 pub(crate) fn pg_type_requires_typed_identity(pg_type: &str) -> bool {

@@ -12,7 +12,7 @@ mod bounded_primary_key;
 pub(crate) mod column_check;
 mod exists_probe;
 pub(crate) mod flashback;
-use exists_probe::ExistsProbeMemo;
+use exists_probe::{ExistsCandidate, ExistsProbeMemo};
 mod hierarchy;
 mod joins_windows;
 pub(crate) mod materialize;
@@ -2770,6 +2770,15 @@ pub(crate) fn json_projection_set_returning_call(
     Ok(result)
 }
 
+/// A join constraint bound once over the merged layout of two row sets. The
+/// nested-loop and hash-join rechecks evaluated `join_constraint_matches` per
+/// candidate pair, which re-merged the column lists, rebuilt the scope and
+/// re-bound the ON expression every time. `None` keeps that per-pair path, for
+/// constraints that are not ON expressions or that the binder declines.
+pub(crate) struct PreparedJoinConstraint {
+    pub(crate) bound: Option<(BoundExpr, BoundRowContext, Vec<JoinedSlotSource>)>,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum ArrayProjectionSetReturningFunction {
     Unnest,
@@ -2778,6 +2787,10 @@ pub(crate) enum ArrayProjectionSetReturningFunction {
     GenerateSeries(Option<GenerateSeriesKind>),
     PgSnapshotXip,
     TxidSnapshotXip,
+    /// `information_schema._pg_expandarray(anyarray)`: one `(x, n)` record per
+    /// element, `n` counting from 1. PgJDBC's key and index metadata expand
+    /// `pg_index.indkey` with it.
+    ExpandArray,
 }
 
 #[derive(Clone, Debug)]
@@ -2785,6 +2798,108 @@ pub(crate) struct ArrayProjectionSetReturningCall {
     pub(crate) projection_index: usize,
     pub(crate) function: ArrayProjectionSetReturningFunction,
     pub(crate) arguments: Vec<Expr>,
+    /// The record field selected from each produced value: `(srf(...)).field`.
+    pub(crate) field: Option<String>,
+}
+
+impl ArrayProjectionSetReturningCall {
+    /// The values this call produces for one input row, after the record field
+    /// selection `(srf(...)).field` when there is one.
+    pub(crate) fn values(&self, arguments: Vec<SqlValue>) -> Result<Vec<SqlValue>> {
+        let values = array_projection_set_values(self.function, arguments)?;
+        let Some(field) = self.field.as_deref() else {
+            return Ok(values);
+        };
+        values
+            .into_iter()
+            .map(|value| match value {
+                SqlValue::Null => Ok(SqlValue::Null),
+                SqlValue::Composite(composite) => {
+                    composite
+                        .field(field)
+                        .cloned()
+                        .ok_or_else(|| SqlError::UndefinedColumn {
+                            table: composite.type_name.clone(),
+                            column: field.to_string(),
+                        })
+                }
+                other => Err(SqlError::InvalidSql(format!(
+                    "column notation .{field} applied to a non-composite value {}",
+                    other.to_cell()
+                ))),
+            })
+            .collect()
+    }
+
+    /// The result column type when the call's output type is fixed.
+    pub(crate) fn output_pg_type(&self) -> Option<String> {
+        match (self.function, self.field.as_deref()) {
+            (ArrayProjectionSetReturningFunction::ExpandArray, None) => Some("record".to_string()),
+            (ArrayProjectionSetReturningFunction::ExpandArray, Some(field))
+                if field.eq_ignore_ascii_case("n") =>
+            {
+                Some("int4".to_string())
+            }
+            (ArrayProjectionSetReturningFunction::ExpandArray, Some(_)) => self
+                .arguments
+                .first()
+                .and_then(|argument| projected_expr_pg_type(argument, None))
+                .and_then(|pg_type| array_pg_type_element(&pg_type)),
+            (_, Some(_)) => None,
+            (ArrayProjectionSetReturningFunction::GenerateSubscripts, None) => {
+                Some("int4".to_string())
+            }
+            (ArrayProjectionSetReturningFunction::PgSnapshotXip, None) => Some("xid8".to_string()),
+            (ArrayProjectionSetReturningFunction::TxidSnapshotXip, None) => {
+                Some("int8".to_string())
+            }
+            (ArrayProjectionSetReturningFunction::Unnest, None) => None,
+            (ArrayProjectionSetReturningFunction::GenerateSeries(_), None) => {
+                generate_series_projection_pg_type(self)
+            }
+        }
+    }
+}
+
+/// The element type of an array type name (`int2vector` and `oidvector`
+/// included), if it is one.
+fn array_pg_type_element(pg_type: &str) -> Option<String> {
+    match pg_type {
+        "int2vector" => Some("int2".to_string()),
+        "oidvector" => Some("oid".to_string()),
+        _ => pg_type
+            .strip_suffix("[]")
+            .or_else(|| pg_type.strip_prefix('_'))
+            .map(str::to_string),
+    }
+}
+
+/// A SELECT-list set-returning function call, possibly under a record field
+/// selection: `srf(...)` or `(srf(...)).field`.
+fn projection_set_returning_target(expr: &Expr) -> (&Expr, Option<String>) {
+    if let Expr::CompoundFieldAccess { root, access_chain } = expr {
+        if let [AccessExpr::Dot(Expr::Identifier(field))] = access_chain.as_slice() {
+            let mut inner = root.as_ref();
+            while let Expr::Nested(nested) = inner {
+                inner = nested.as_ref();
+            }
+            if matches!(inner, Expr::Function(_)) {
+                return (inner, Some(field.value.clone()));
+            }
+        }
+    }
+    (expr, None)
+}
+
+/// A scalar-typed name for a value, used for the element field of a record
+/// built from array elements whose declared type is unknown.
+fn expanded_array_element_pg_type(value: &SqlValue) -> &'static str {
+    match value {
+        SqlValue::Int(_) => "int8",
+        SqlValue::Float(_) => "float8",
+        SqlValue::Bool(_) => "bool",
+        _ => "text",
+    }
 }
 
 pub(crate) fn array_projection_set_returning_calls(
@@ -2796,6 +2911,7 @@ pub(crate) fn array_projection_set_returning_calls(
             SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => expr,
             _ => continue,
         };
+        let (expr, field) = projection_set_returning_target(expr);
         let Expr::Function(function) = expr else {
             continue;
         };
@@ -2803,6 +2919,9 @@ pub(crate) fn array_projection_set_returning_calls(
         let name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
         let kind = match name {
             "unnest" => ArrayProjectionSetReturningFunction::Unnest,
+            "_pg_expandarray" | "information_schema._pg_expandarray" => {
+                ArrayProjectionSetReturningFunction::ExpandArray
+            }
             "generate_subscripts" => ArrayProjectionSetReturningFunction::GenerateSubscripts,
             "pg_snapshot_xip" => ArrayProjectionSetReturningFunction::PgSnapshotXip,
             "txid_snapshot_xip" => ArrayProjectionSetReturningFunction::TxidSnapshotXip,
@@ -2831,6 +2950,12 @@ pub(crate) fn array_projection_set_returning_calls(
                     arguments.len()
                 )));
             }
+            ArrayProjectionSetReturningFunction::ExpandArray if arguments.len() != 1 => {
+                return Err(SqlError::InvalidSql(format!(
+                    "_pg_expandarray expects one array argument, got {}",
+                    arguments.len()
+                )));
+            }
             ArrayProjectionSetReturningFunction::GenerateSubscripts
                 if !(2..=3).contains(&arguments.len()) =>
             {
@@ -2854,6 +2979,7 @@ pub(crate) fn array_projection_set_returning_calls(
             projection_index,
             function: kind,
             arguments,
+            field,
         });
     }
     Ok(result)
@@ -2957,6 +3083,32 @@ pub(crate) fn array_projection_set_values(
     match function {
         ArrayProjectionSetReturningFunction::Unnest => {
             unnest_values_from_sql(arguments.into_iter().next().unwrap_or(SqlValue::Null))
+        }
+        ArrayProjectionSetReturningFunction::ExpandArray => {
+            let elements =
+                unnest_values_from_sql(arguments.into_iter().next().unwrap_or(SqlValue::Null))?;
+            Ok(elements
+                .into_iter()
+                .enumerate()
+                .map(|(index, element)| {
+                    SqlValue::Composite(SqlComposite {
+                        type_oid: None,
+                        type_name: "record".to_string(),
+                        fields: vec![
+                            SqlCompositeField {
+                                name: "x".to_string(),
+                                pg_type: expanded_array_element_pg_type(&element).to_string(),
+                                value: element,
+                            },
+                            SqlCompositeField {
+                                name: "n".to_string(),
+                                pg_type: "int4".to_string(),
+                                value: SqlValue::Int(index as i64 + 1),
+                            },
+                        ],
+                    })
+                })
+                .collect())
         }
         ArrayProjectionSetReturningFunction::GenerateSubscripts => {
             if !(2..=3).contains(&arguments.len()) {
@@ -3206,6 +3358,10 @@ pub(crate) enum JsonbIndexCandidate {
 
 #[derive(Clone, Debug)]
 pub(crate) enum PrimaryKeyAccess {
+    /// A primary-key equality conjunct is bound to NULL (`pk = (SELECT ..)`
+    /// whose subquery found no row): the WHERE clause is never TRUE, so no
+    /// row can qualify and nothing needs to be read.
+    Never,
     Exact {
         record_id: String,
         values: Vec<SqlValue>,

@@ -1676,6 +1676,10 @@ impl<'db> SqlSession<'db> {
             false
         };
         let row_engine = self.sql_engine_with_ctes(ctes.clone());
+        // Uncorrelated subqueries in the predicate run once per statement, as
+        // for SELECT and DELETE, instead of once per candidate row.
+        let _subqueries = row_engine.subquery_memo.scope();
+        let _exists_probes = row_engine.dml_predicate_probe_scope(table, selection);
         let cell_fields = schema
             .filter(|schema| {
                 row_engine
@@ -2506,6 +2510,11 @@ impl<'db> SqlSession<'db> {
     // of security-definer identity helpers.
     #[inline(never)]
     fn eval_session_function_expr(&mut self, expr: &Expr, function: &Function) -> Result<SqlValue> {
+        if is_current_catalog_keyword(function) {
+            return Ok(SqlValue::String(current_database_from_gucs(
+                &self.session_gucs,
+            )));
+        }
         let dispatch_key = crate::eval::expr_type_scope()
             .filter(|_| crate::eval::can_memoize_routine_expr(expr))
             .map(|(generation, ir)| (generation, ir, function as *const Function as usize));
@@ -5505,7 +5514,7 @@ impl<'db> SqlSession<'db> {
         }
         Err(SqlError::BicDb(BicDbError::Authorization(format!(
             "permission denied for table {}",
-            unqualified_relation(table)
+            relation_name_for_message(table)
         ))))
     }
 
@@ -6715,7 +6724,7 @@ impl<'db> SqlSession<'db> {
                         "23502",
                         format!(
                             "null value in column \"{}\" of relation \"{}\" violates not-null constraint",
-                            column_schema.name, table
+                            column_schema.name, catalog_display_name(table)
                         ),
                         Some(table.to_string()),
                         Some(column_schema.name.clone()),

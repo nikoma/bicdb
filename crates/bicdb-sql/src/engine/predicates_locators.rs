@@ -2023,6 +2023,9 @@ impl<'db> SqlEngine<'db> {
                     prefix_complete = false;
                     break;
                 }
+                if !case_mapped_probe_value_is_text(plan.fields.get(field_idx), &value) {
+                    continue 'plans;
+                }
                 match index_value_from_sql(value) {
                     Ok(value) => {
                         let value = if let (Some(schema), Some(field)) =
@@ -2828,7 +2831,9 @@ impl<'db> SqlEngine<'db> {
                     continue 'plans;
                 }
                 let value = self.eval_dynamic_bound_expr(expr)?;
-                if matches!(value, SqlValue::Null) {
+                if matches!(value, SqlValue::Null)
+                    || !case_mapped_probe_value_is_text(plan.fields.get(field_idx), &value)
+                {
                     continue 'plans;
                 }
                 let value = index_value_from_sql(value)?;
@@ -3710,16 +3715,18 @@ impl<'db> SqlEngine<'db> {
             return Ok(Some((usize::MAX, Vec::new())));
         }
         if let Some(PrimaryKeyAccess::Exact { record_id, values }) = access.as_ref() {
-            if primary_key_requires_typed_identity(schema) {
+            // A canonical label is definitive, so the id is the locator
+            // exactly as for an untyped key: the visible-row fetch resolves
+            // it (or finds nothing). Probing it first decoded the whole
+            // record only to drop it, once per key lookup.
+            if primary_key_requires_typed_identity(schema)
+                && !primary_key_label_is_canonical(schema)
+            {
                 // Locator planning: probes id existence only; the rows those
                 // ids resolve to are fetched through the policy-filtered
                 // record paths.
                 if self.primary_key_record_id_exists_unchecked(table, record_id)? {
                     return Ok(Some((usize::MAX, vec![record_id.clone()])));
-                }
-                if primary_key_label_is_canonical(schema) {
-                    // No row under the canonical id: none has an equal key.
-                    return Ok(Some((usize::MAX, Vec::new())));
                 }
                 return Ok(Some((
                     usize::MAX,
@@ -3778,7 +3785,10 @@ impl<'db> SqlEngine<'db> {
             return Ok(Some((usize::MAX, RecordLocators::Pks(Vec::new()))));
         }
         if let Some(PrimaryKeyAccess::Exact { record_id, values }) = access.as_ref() {
-            if primary_key_requires_typed_identity(schema) {
+            // Canonical labels: see `primary_key_record_ids_for_table_selection`.
+            if primary_key_requires_typed_identity(schema)
+                && !primary_key_label_is_canonical(schema)
+            {
                 // Locator planning: probes id existence only; the rows those
                 // ids resolve to are fetched through the policy-filtered
                 // record paths.
@@ -3787,9 +3797,6 @@ impl<'db> SqlEngine<'db> {
                         usize::MAX,
                         RecordLocators::Pks(vec![record_id.clone()]),
                     )));
-                }
-                if primary_key_label_is_canonical(schema) {
-                    return Ok(Some((usize::MAX, RecordLocators::Pks(Vec::new()))));
                 }
                 return Ok(Some((
                     usize::MAX,
@@ -4130,7 +4137,9 @@ impl<'db> SqlEngine<'db> {
                     continue;
                 }
                 let value = self.eval_dynamic_bound_expr(right)?;
-                if matches!(value, SqlValue::Null) {
+                if matches!(value, SqlValue::Null)
+                    || !case_mapped_probe_value_is_text(Some(field), &value)
+                {
                     continue;
                 }
                 let value = index_value_from_sql(value)?;
@@ -4148,7 +4157,9 @@ impl<'db> SqlEngine<'db> {
                     continue;
                 }
                 let value = self.eval_dynamic_bound_expr(left)?;
-                if matches!(value, SqlValue::Null) {
+                if matches!(value, SqlValue::Null)
+                    || !case_mapped_probe_value_is_text(Some(field), &value)
+                {
                     continue;
                 }
                 let value = index_value_from_sql(value)?;
@@ -6498,6 +6509,13 @@ impl<'db> SqlEngine<'db> {
     ) -> Result<Option<Vec<PreparedDynamicBoundExpr>>> {
         let mut prefix = Vec::new();
         for field in fields {
+            // A join probe evaluates its bound per outer row and treats the
+            // result as the answer, without the text check single-table
+            // probes make (`case_mapped_probe_value_is_text`). Keep
+            // `upper(col)`/`lower(col)` keys out of join probes.
+            if matches!(field, IndexField::Upper(_) | IndexField::Lower(_)) {
+                break;
+            }
             let Some(bound) =
                 self.dynamic_equality_bound_expr(selection, table, alias, schema, field, scope)?
             else {

@@ -145,6 +145,8 @@ pub use consensus::{
     ConsensusRole, ConsensusState, ConsensusStatus, RequestVote, VoteResponse,
 };
 pub use db::effective_fts_partitions;
+pub use db::index_key_lower;
+pub use db::index_key_upper;
 pub use db::index_predicate_matches;
 pub use db::row_lock_waits_active;
 pub use db::AuthenticationStrength;
@@ -474,7 +476,8 @@ pub use paged_checkpoint_maintenance::{
     PAGED_CHECKPOINT_SCHEDULE_FORMAT_VERSION,
 };
 pub use paged_collection::{
-    paged_live_count_walks_on_this_thread, IndexEntryFormat, IndexEntryRef, PagedRecords,
+    paged_live_count_walks_on_this_thread, paged_record_gets_on_this_thread,
+    paged_record_scans_on_this_thread, IndexEntryFormat, IndexEntryRef, PagedRecords,
     PagedRecordsOptions,
 };
 pub use paged_integrity_maintenance::{

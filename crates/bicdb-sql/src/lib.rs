@@ -728,6 +728,9 @@ thread_local! {
     static SQL_SLOT_ROW_TO_MAP_CALLS: RefCell<usize> = const { RefCell::new(0) };
     static SQL_INDEX_STORAGE_LOOKUP_CALLS: RefCell<usize> = const { RefCell::new(0) };
     static SQL_RECORD_STORAGE_GET_CALLS: RefCell<usize> = const { RefCell::new(0) };
+    /// Primary-key existence probes (`primary_key_record_id_exists_unchecked`),
+    /// each a full record decode before the row itself is fetched.
+    static SQL_PRIMARY_KEY_EXISTENCE_PROBES: RefCell<usize> = const { RefCell::new(0) };
     static SQL_RECORDS_FOR_IDS_CALLS: RefCell<usize> = const { RefCell::new(0) };
     static SQL_CELL_ROWS_FAST: RefCell<usize> = const { RefCell::new(0) };
     /// Fields converted by `slot_rows_from_visible` (sum over rows): proves
@@ -1568,6 +1571,11 @@ fn reset_sql_record_storage_get_calls() {
 #[cfg(test)]
 fn sql_record_storage_get_calls() -> usize {
     SQL_RECORD_STORAGE_GET_CALLS.with(|calls| *calls.borrow())
+}
+
+#[cfg(test)]
+fn sql_primary_key_existence_probes() -> usize {
+    SQL_PRIMARY_KEY_EXISTENCE_PROBES.with(|calls| *calls.borrow())
 }
 
 #[cfg(test)]

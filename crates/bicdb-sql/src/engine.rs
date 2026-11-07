@@ -4116,6 +4116,9 @@ fn index_range_probe_is_compatible(
     // Integer indexes store integer keys. NUMERIC/string or floating bounds
     // must retain SQL comparison semantics rather than enum-variant ordering.
     // Decline those probes instead of rounding a fractional/out-of-range bound.
+    if matches!(field, IndexField::Upper(_) | IndexField::Lower(_)) {
+        return matches!(value, IndexValue::String(_) | IndexValue::Null);
+    }
     match index_field_pg_type(schema, field)
         .as_deref()
         .and_then(pg_type_oid_by_name)
@@ -4123,6 +4126,14 @@ fn index_range_probe_is_compatible(
         Some(20 | 21 | 23) => matches!(value, IndexValue::Int(_) | IndexValue::Null),
         _ => true,
     }
+}
+
+/// An `upper(col)`/`lower(col)` key is text. A probe value of another type
+/// (`upper(code) = 7`, which the Oracle profile compares numerically) has no
+/// key every matching row shares, so the index must not narrow the rows.
+fn case_mapped_probe_value_is_text(field: Option<&IndexField>, value: &SqlValue) -> bool {
+    !matches!(field, Some(IndexField::Upper(_) | IndexField::Lower(_)))
+        || matches!(value, SqlValue::String(_))
 }
 
 impl<'db> SqlEngine<'db> {

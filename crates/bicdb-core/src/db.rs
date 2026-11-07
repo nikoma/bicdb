@@ -4690,6 +4690,28 @@ pub enum IndexField {
     TimestampDay(Box<IndexField>),
 }
 
+/// The case mapping of an [`IndexField::Upper`] key. SQL `upper(text)`
+/// evaluates with this same function, and the planner relies on that: it
+/// probes an `upper(col)` index with the SQL value of the other side of
+/// `upper(col) = $1`, which finds every matching row only because the stored
+/// key and the SQL function are one function.
+///
+/// It maps ASCII letters only, which is PostgreSQL's `upper` under the C
+/// LC_CTYPE that BicDB databases report. This is the persisted key format of
+/// every existing `Upper` index: Unicode case mapping (`ǆ` → `Ǆ`) must be a
+/// new `IndexField` variant (rebuilt from the rows) that the planner matches
+/// only against the Unicode SQL function. Changing this function in place
+/// would make existing indexes miss rows.
+pub fn index_key_upper(text: &str) -> String {
+    text.to_ascii_uppercase()
+}
+
+/// The case mapping of an [`IndexField::Lower`] key and of SQL `lower(text)`.
+/// See [`index_key_upper`].
+pub fn index_key_lower(text: &str) -> String {
+    text.to_ascii_lowercase()
+}
+
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum IndexKind {
@@ -22049,11 +22071,11 @@ fn image_cells_index_key(
             }
             IndexField::Upper(inner) => match field_value(stored, cells, inner)? {
                 IndexValue::Null => IndexValue::Null,
-                value => IndexValue::String(index_value_text(&value).to_ascii_uppercase()),
+                value => IndexValue::String(index_key_upper(&index_value_text(&value))),
             },
             IndexField::Lower(inner) => match field_value(stored, cells, inner)? {
                 IndexValue::Null => IndexValue::Null,
-                value => IndexValue::String(index_value_text(&value).to_ascii_lowercase()),
+                value => IndexValue::String(index_key_lower(&index_value_text(&value))),
             },
             IndexField::Trim(inner) => match field_value(stored, cells, inner)? {
                 IndexValue::Null => IndexValue::Null,
@@ -22159,11 +22181,11 @@ fn stored_index_key(stored: &StoredRecord, fields: &[IndexField]) -> Option<Vec<
             }
             IndexField::Upper(inner) => match field_value(stored, cells, inner)? {
                 IndexValue::Null => IndexValue::Null,
-                value => IndexValue::String(index_value_text(&value).to_ascii_uppercase()),
+                value => IndexValue::String(index_key_upper(&index_value_text(&value))),
             },
             IndexField::Lower(inner) => match field_value(stored, cells, inner)? {
                 IndexValue::Null => IndexValue::Null,
-                value => IndexValue::String(index_value_text(&value).to_ascii_lowercase()),
+                value => IndexValue::String(index_key_lower(&index_value_text(&value))),
             },
             IndexField::Trim(inner) => match field_value(stored, cells, inner)? {
                 IndexValue::Null => IndexValue::Null,
@@ -22212,11 +22234,11 @@ fn record_index_field_json(record: &Record, field: &IndexField) -> Value {
         }
         IndexField::Upper(inner) => match record_index_field_json(record, inner) {
             Value::Null => Value::Null,
-            value => Value::String(predicate_value_text(&value).to_ascii_uppercase()),
+            value => Value::String(index_key_upper(&predicate_value_text(&value))),
         },
         IndexField::Lower(inner) => match record_index_field_json(record, inner) {
             Value::Null => Value::Null,
-            value => Value::String(predicate_value_text(&value).to_ascii_lowercase()),
+            value => Value::String(index_key_lower(&predicate_value_text(&value))),
         },
         IndexField::Trim(inner) => match record_index_field_json(record, inner) {
             Value::Null => Value::Null,
@@ -22723,11 +22745,11 @@ fn record_index_field_value(record: &Record, field: &IndexField) -> IndexValue {
         }
         IndexField::Upper(inner) => match record_index_field_value(record, inner) {
             IndexValue::Null => IndexValue::Null,
-            value => IndexValue::String(index_value_text(&value).to_ascii_uppercase()),
+            value => IndexValue::String(index_key_upper(&index_value_text(&value))),
         },
         IndexField::Lower(inner) => match record_index_field_value(record, inner) {
             IndexValue::Null => IndexValue::Null,
-            value => IndexValue::String(index_value_text(&value).to_ascii_lowercase()),
+            value => IndexValue::String(index_key_lower(&index_value_text(&value))),
         },
         IndexField::Trim(inner) => match record_index_field_value(record, inner) {
             IndexValue::Null => IndexValue::Null,

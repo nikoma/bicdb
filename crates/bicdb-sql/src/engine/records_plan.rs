@@ -7,6 +7,19 @@ use crate::engine::predicates_locators::{
 #[allow(unused_imports)]
 use crate::*;
 
+/// The least string greater than every string that starts with `prefix`
+/// (exclusive upper bound of the prefix's id range), or `None` when the last
+/// character is not ASCII. Composite-key prefixes end in `,`.
+fn record_id_prefix_successor(prefix: &str) -> Option<String> {
+    let mut end = prefix.to_string();
+    let last = end.pop()?;
+    if !last.is_ascii() || last == '\x7f' {
+        return None;
+    }
+    end.push((last as u8 + 1) as char);
+    Some(end)
+}
+
 impl<'db> SqlEngine<'db> {
     pub(crate) fn execute_set_query(&self, query: &Query) -> Result<SqlResult> {
         let mut result = self.execute_set_expr(query.body.as_ref())?;
@@ -729,6 +742,8 @@ impl<'db> SqlEngine<'db> {
         table: &str,
         record_id: &str,
     ) -> Result<bool> {
+        #[cfg(test)]
+        SQL_PRIMARY_KEY_EXISTENCE_PROBES.with(|calls| *calls.borrow_mut() += 1);
         if self.db_ref().get_unchecked(table, record_id)?.is_some() {
             return Ok(true);
         }
@@ -1203,7 +1218,27 @@ impl<'db> SqlEngine<'db> {
             (None, true) => "",
             (None, false) => record_id_prefix,
         };
-        let ids = self.scan_record_ids_with_prefix(table, physical_prefix)?;
+        // The canonical prefix is a contiguous record-id range, read as keys
+        // from one seek. The prefix id scan still walks (and, in server-paged
+        // storage, deserializes) every row of the table to filter by id; the
+        // range candidates are a superset (deleted keys may appear) and every
+        // one is resolved and re-checked below.
+        let ids = match canonical_prefix
+            .as_deref()
+            .and_then(|prefix| record_id_prefix_successor(prefix).map(|end| (prefix, end)))
+        {
+            Some((prefix, end)) => {
+                self.record_key_candidates_in_range(
+                    table,
+                    std::ops::Bound::Included(prefix),
+                    std::ops::Bound::Excluded(end.as_str()),
+                    false,
+                    usize::MAX,
+                )?
+                .0
+            }
+            None => self.scan_record_ids_with_prefix(table, physical_prefix)?,
+        };
         if !typed_prefix {
             return Ok(Rc::from(ids));
         }
@@ -2026,20 +2061,35 @@ impl<'db> SqlEngine<'db> {
         {
             let mut prefix = Vec::new();
             for field in &index.fields {
-                let value = if matches!(field, IndexField::TimestampDay(_)) {
+                let value = if matches!(
+                    field,
+                    IndexField::TimestampDay(_) | IndexField::Upper(_) | IndexField::Lower(_)
+                ) {
                     // The static path needs the same schema-aware expression
-                    // identity as dynamic joins. Do not execute arbitrary
-                    // functions to obtain a planning-time bound.
-                    self.dynamic_equality_field_expr(
-                        selection,
-                        collection,
-                        alias,
-                        schema.as_ref(),
-                        field,
-                    )?
-                    .and_then(|bound| eval_constant_expr(bound).ok())
-                    .map(index_value_from_sql)
-                    .transpose()?
+                    // identity as dynamic joins and the row locator: the
+                    // syntactic `equality_value` erases CAST and COLLATE and
+                    // reads `t.col` as a nested path, so it neither proves a
+                    // `upper(CAST(col AS varchar(3)))` key nor finds
+                    // `upper(t.col)`. Do not execute arbitrary functions to
+                    // obtain a planning-time bound.
+                    match self
+                        .dynamic_equality_field_expr(
+                            selection,
+                            collection,
+                            alias,
+                            schema.as_ref(),
+                            field,
+                        )?
+                        .and_then(|bound| eval_constant_expr(bound).ok())
+                        .filter(|value| case_mapped_probe_value_is_text(Some(field), value))
+                    {
+                        Some(value) => Some(index_value_from_sql(value)?),
+                        None => schema.as_ref().and_then(|schema| {
+                            folded_text_equality_prefix(
+                                self, schema, selection, collection, alias, field,
+                            )
+                        }),
+                    }
                 } else {
                     equality_value(selection, field)?.or_else(|| {
                         schema.as_ref().and_then(|schema| {
@@ -2108,7 +2158,10 @@ impl<'db> SqlEngine<'db> {
             let [field] = index.fields.as_slice() else {
                 continue;
             };
-            let bounds = if matches!(field, IndexField::TimestampDay(_)) {
+            let bounds = if matches!(
+                field,
+                IndexField::TimestampDay(_) | IndexField::Upper(_) | IndexField::Lower(_)
+            ) {
                 let mut lower = None;
                 let mut upper = None;
                 for (operator, expression) in self.dynamic_range_bound_exprs(
@@ -2121,7 +2174,9 @@ impl<'db> SqlEngine<'db> {
                     let Ok(value) = eval_constant_expr(&expression) else {
                         continue;
                     };
-                    if matches!(value, SqlValue::Null) {
+                    if matches!(value, SqlValue::Null)
+                        || !case_mapped_probe_value_is_text(Some(field), &value)
+                    {
                         continue;
                     }
                     let value = index_value_from_sql(value)?;
@@ -2942,18 +2997,9 @@ pub(super) fn folded_text_equality_prefix(
     let [name] = path.as_slice() else {
         return None;
     };
-    let column = schema.column(name)?;
     // Padded characters, user-defined equality, and locale collations need
     // their own implication proof. Do not infer raw string bounds for them.
-    if !matches!(column.pg_type.as_str(), "text" | "varchar")
-        || column.user_type.is_some()
-        || column.collation.is_some()
-        || !matches!(
-            column.type_modifier,
-            None | Some(PgTypeModifier::Character { .. })
-                | Some(PgTypeModifier::OracleCharacterV1 { fixed: false, .. })
-        )
-    {
+    if !case_mapped_text_column_is_exact(schema.column(name)?) {
         return None;
     }
     fn unnest(mut expr: &Expr) -> &Expr {
@@ -2994,13 +3040,12 @@ pub(super) fn folded_text_equality_prefix(
         }
         None
     })?;
-    // Match the durable core key extractor, which currently converts ASCII
-    // letters only. Using Unicode conversion here would miss existing keys
-    // such as Straße. This inference does not change SQL function semantics.
+    // The durable core key extractor itself, so the bound is the key of
+    // every row whose text equals `value` (see `bicdb_core::index_key_upper`).
     Some(IndexValue::String(if upper {
-        value.to_ascii_uppercase()
+        bicdb_core::index_key_upper(&value)
     } else {
-        value.to_ascii_lowercase()
+        bicdb_core::index_key_lower(&value)
     }))
 }
 

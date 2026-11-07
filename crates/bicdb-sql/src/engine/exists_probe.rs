@@ -31,10 +31,54 @@ struct ProbeEntry {
 struct CandidateProbe {
     outer_slot: usize,
     primary_key: Expr,
-    keys: BTreeMap<String, Vec<SqlValue>>,
+    source: CandidateSource,
     /// The original subquery has run once with an empty candidate set, so
     /// its relation and projection authorization held for this statement.
     empty_verified: Cell<bool>,
+}
+
+#[derive(Debug)]
+enum CandidateSource {
+    /// Primary keys of the inner rows that pass the residual filters, by
+    /// canonical numeric key, from one scan of the inner table.
+    Scanned(BTreeMap<String, Vec<SqlValue>>),
+    /// Record ids by index key from an index-only read of an index that
+    /// holds the correlation column at any position (no record decoded).
+    Indexed(IndexedCandidates),
+}
+
+/// A bucket is resolved to primary-key values and narrowed by the residual
+/// filters the first time an outer value probes it, so each inner row is
+/// read at most once per statement, and only for correlated values that
+/// actually occur among the outer rows.
+#[derive(Debug)]
+struct IndexedCandidates {
+    table: String,
+    schema: TableSchema,
+    primary_name: String,
+    field: IndexField,
+    buckets: RefCell<BTreeMap<IndexValue, IndexedBucket>>,
+    /// `SELECT <primary key> FROM <inner> WHERE <residual filters>`, or
+    /// `None` when the subquery has no residual filter.
+    residual_scan: Option<Query>,
+}
+
+#[derive(Debug)]
+enum IndexedBucket {
+    Ids(Vec<String>),
+    Keys(Vec<SqlValue>),
+}
+
+fn candidate_literals(keys: &[SqlValue]) -> Vec<Expr> {
+    if keys.is_empty() {
+        return vec![Expr::Value(Value::Null.into())];
+    }
+    keys.iter()
+        .map(|value| match value {
+            SqlValue::Int(value) => Expr::Value(Value::Number(value.to_string(), false).into()),
+            _ => Expr::Value(Value::SingleQuotedString(value.to_cell()).into()),
+        })
+        .collect()
 }
 
 /// How a correlated EXISTS is answered from its statement-local candidates.
@@ -507,13 +551,23 @@ impl SqlEngine<'_> {
         let Some(value) = row.get(plan.outer_slot) else {
             return Ok(None);
         };
-        let keys = if matches!(value, SqlValue::Null) {
-            &[][..]
+        let keys: Cow<'_, [SqlValue]> = if matches!(value, SqlValue::Null) {
+            Cow::Borrowed(&[][..])
         } else {
-            let Some(key) = numeric_key(self.db_ref(), value) else {
-                return Ok(None);
-            };
-            plan.keys.get(&key).map(Vec::as_slice).unwrap_or(&[])
+            match &plan.source {
+                CandidateSource::Scanned(keys) => {
+                    let Some(key) = numeric_key(self.db_ref(), value) else {
+                        return Ok(None);
+                    };
+                    Cow::Borrowed(keys.get(&key).map(Vec::as_slice).unwrap_or(&[]))
+                }
+                CandidateSource::Indexed(index) => {
+                    match self.indexed_candidates(index, &plan.primary_key, value)? {
+                        Some(keys) => Cow::Owned(keys),
+                        None => return Ok(None),
+                    }
+                }
+            }
         };
         if keys.len() > MAX_BUCKET_KEYS {
             return Ok(None);
@@ -527,18 +581,7 @@ impl SqlEngine<'_> {
         let SetExpr::Select(select) = limited.body.as_mut() else {
             return Ok(None);
         };
-        let list = if keys.is_empty() {
-            vec![Expr::Value(Value::Null.into())]
-        } else {
-            keys.iter()
-                .map(|value| match value {
-                    SqlValue::Int(value) => {
-                        Expr::Value(Value::Number(value.to_string(), false).into())
-                    }
-                    _ => Expr::Value(Value::SingleQuotedString(value.to_cell()).into()),
-                })
-                .collect()
-        };
+        let list = candidate_literals(&keys);
         // Even an empty candidate set executes the original projection and
         // relation authorization path; it is never an authorization shortcut.
         let filter = Expr::InList {
@@ -688,6 +731,24 @@ impl SqlEngine<'_> {
             offset: None,
             limit_by: Vec::new(),
         });
+        // A scan decodes every inner row in full. When an index holds the
+        // correlation column (even as a non-leading key column), read its
+        // entries instead and fetch only the rows outer values ask for.
+        if let Some(indexed) = self.indexed_exists_candidates(
+            &resolved,
+            &qualifier[qualifier.len() - 1],
+            &schema,
+            &primary.name,
+            &scan,
+            &primary_key,
+        )? {
+            return Ok(Some(CandidateProbe {
+                outer_slot,
+                primary_key,
+                source: CandidateSource::Indexed(indexed),
+                empty_verified: Cell::new(false),
+            }));
+        }
         let result = match self.execute_query(&scan) {
             Ok(result) => result,
             Err(_) => {
@@ -724,9 +785,197 @@ impl SqlEngine<'_> {
         Ok(Some(CandidateProbe {
             outer_slot,
             primary_key,
-            keys,
+            source: CandidateSource::Scanned(keys),
             empty_verified: Cell::new(false),
         }))
+    }
+
+    /// Index-only candidates for the correlation column projected first by
+    /// `scan`. Candidates are a superset: every visible inner row whose
+    /// column equals an outer value is filed under that value's index key
+    /// (the property every index locator relies on), and the original
+    /// subquery still decides each outer row.
+    fn indexed_exists_candidates(
+        &self,
+        table: &str,
+        alias: &str,
+        schema: &TableSchema,
+        primary_name: &str,
+        scan: &Query,
+        primary_key: &Expr,
+    ) -> Result<Option<IndexedCandidates>> {
+        // As for the rowid fast path: the committed index is authoritative
+        // only without a security context and without this transaction's
+        // buffered writes to the table.
+        if self.security_context.is_some() || self.tx.is_some_and(|tx| tx.has_pending_writes(table))
+        {
+            return Ok(None);
+        }
+        let SetExpr::Select(select) = scan.body.as_ref() else {
+            return Ok(None);
+        };
+        let Some(SelectItem::UnnamedExpr(key_expr)) = select.projection.first() else {
+            return Ok(None);
+        };
+        // The narrowest plain B-tree index that holds the column. Partial
+        // indexes are already excluded: they omit rows.
+        let mut best: Option<(IndexDefinition, usize)> = None;
+        for index in sql_index_definitions_for_collection(self.db_ref(), table) {
+            if index.kind != IndexKind::BTree
+                || index.predicate.is_some()
+                || index.exclusion.is_some()
+                || best
+                    .as_ref()
+                    .is_some_and(|(chosen, _)| chosen.fields.len() <= index.fields.len())
+            {
+                continue;
+            }
+            let mut position = None;
+            for (at, field) in index.fields.iter().enumerate() {
+                if self.expr_matches_table_index_field(
+                    key_expr,
+                    table,
+                    alias,
+                    Some(schema),
+                    field,
+                )? {
+                    position = Some(at);
+                    break;
+                }
+            }
+            if let Some(position) = position {
+                best = Some((index, position));
+            }
+        }
+        let Some((index, position)) = best else {
+            return Ok(None);
+        };
+        let entries = match self
+            .db_ref()
+            .index_field_entries(&index.name, position, MAX_PROBE_ROWS)
+        {
+            Ok(Some(entries)) => entries,
+            Ok(None) | Err(_) => return Ok(None),
+        };
+        let mut grouped = BTreeMap::<IndexValue, Vec<String>>::new();
+        let mut bytes = 0usize;
+        for (at, (value, id)) in entries.into_iter().enumerate() {
+            if at % 1024 == 0 {
+                self.check_cancellation()?;
+            }
+            // NULL never equals an outer value.
+            if matches!(value, IndexValue::Null) {
+                continue;
+            }
+            bytes = bytes.saturating_add(id.len() + 128);
+            if bytes > MAX_PROBE_BYTES {
+                return Ok(None);
+            }
+            grouped.entry(value).or_default().push(id);
+        }
+        let residual_scan = select.selection.is_some().then(|| {
+            let mut residual = scan.clone();
+            if let SetExpr::Select(select) = residual.body.as_mut() {
+                select.projection = vec![SelectItem::UnnamedExpr(primary_key.clone())];
+            }
+            residual
+        });
+        Ok(Some(IndexedCandidates {
+            table: table.to_string(),
+            schema: schema.clone(),
+            primary_name: primary_name.to_string(),
+            field: index.fields[position].clone(),
+            buckets: RefCell::new(
+                grouped
+                    .into_iter()
+                    .map(|(value, ids)| (value, IndexedBucket::Ids(ids)))
+                    .collect(),
+            ),
+            residual_scan,
+        }))
+    }
+
+    /// The candidate primary keys for one non-NULL outer value, or `None`
+    /// to decline to the ordinary evaluator.
+    fn indexed_candidates(
+        &self,
+        index: &IndexedCandidates,
+        primary_key: &Expr,
+        value: &SqlValue,
+    ) -> Result<Option<Vec<SqlValue>>> {
+        // The probe key an ordinary index locator would use for `column = value`.
+        let Ok(probe) = index_value_from_sql(value.clone()) else {
+            return Ok(None);
+        };
+        let Ok(probe) = typed_index_predicate_value(&index.schema, &index.field, probe) else {
+            return Ok(None);
+        };
+        let ids = match index.buckets.borrow().get(&probe) {
+            None => return Ok(Some(Vec::new())),
+            Some(IndexedBucket::Keys(keys)) => return Ok(Some(keys.clone())),
+            Some(IndexedBucket::Ids(ids)) => ids.clone(),
+        };
+        if ids.len() > MAX_BUCKET_KEYS {
+            return Ok(None);
+        }
+        let columns = [index.primary_name.clone()];
+        let typed_identity = primary_key_requires_typed_identity(&index.schema);
+        let mut keys = Vec::with_capacity(ids.len());
+        for id in &ids {
+            match self.primary_key_values_for_record_id(
+                &index.table,
+                &index.schema,
+                &columns,
+                id,
+            )? {
+                Some(values) => match <[SqlValue; 1]>::try_from(values) {
+                    Ok([key]) => keys.push(key),
+                    Err(_) => return Ok(None),
+                },
+                // A typed identity is read from its row: no visible row, no
+                // candidate.
+                None if typed_identity => {}
+                None => return Ok(None),
+            }
+        }
+        if let (Some(residual), false) = (&index.residual_scan, keys.is_empty()) {
+            // Residual filters are infallible (see `numeric_correlation`), so
+            // evaluating them on this bucket's rows cannot add an error.
+            let mut residual = residual.clone();
+            let SetExpr::Select(select) = residual.body.as_mut() else {
+                return Ok(None);
+            };
+            let filter = Expr::InList {
+                expr: Box::new(primary_key.clone()),
+                list: candidate_literals(&keys),
+                negated: false,
+            };
+            select.selection = Some(match select.selection.take() {
+                Some(original) => Expr::BinaryOp {
+                    left: Box::new(Expr::Nested(Box::new(original))),
+                    op: BinaryOperator::And,
+                    right: Box::new(filter),
+                },
+                None => filter,
+            });
+            let result = match self.execute_query(&residual) {
+                Ok(result) => result,
+                Err(_) => {
+                    self.check_cancellation()?;
+                    return Ok(None);
+                }
+            };
+            keys = result
+                .rows
+                .into_iter()
+                .filter_map(|row| row.into_iter().next())
+                .collect();
+        }
+        index
+            .buckets
+            .borrow_mut()
+            .insert(probe, IndexedBucket::Keys(keys.clone()));
+        Ok(Some(keys))
     }
 }
 

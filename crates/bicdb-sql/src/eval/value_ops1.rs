@@ -3495,18 +3495,20 @@ pub(crate) fn eval_compatibility_function_value(
             if matches!(args[0], SqlValue::Null) {
                 return Ok(Some(SqlValue::Null));
             }
-            Ok(Some(SqlValue::String(
-                args[0].to_cell().to_ascii_lowercase(),
-            )))
+            // One function with the `lower(col)` index key: see
+            // `bicdb_core::index_key_upper`.
+            Ok(Some(SqlValue::String(bicdb_core::index_key_lower(
+                &args[0].to_cell(),
+            ))))
         }
         "upper" | "pg_catalog.upper" => {
             require_arg_count("upper", args, 1)?;
             if matches!(args[0], SqlValue::Null) {
                 return Ok(Some(SqlValue::Null));
             }
-            Ok(Some(SqlValue::String(
-                args[0].to_cell().to_ascii_uppercase(),
-            )))
+            Ok(Some(SqlValue::String(bicdb_core::index_key_upper(
+                &args[0].to_cell(),
+            ))))
         }
         "initcap" | "pg_catalog.initcap" => {
             require_arg_count("initcap", args, 1)?;

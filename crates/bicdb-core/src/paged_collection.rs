@@ -55,6 +55,22 @@ const MAX_RECORD_BYTES: usize = 64 * 1024 * 1024;
 
 thread_local! {
     static LIVE_COUNT_WALKS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    static RECORD_SCANS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    static RECORD_GETS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Point record reads ([`PagedRecords::get`]) on the calling thread, each one
+/// a decoded record. Lets a test see a key lookup that decodes a row twice.
+pub fn paged_record_gets_on_this_thread() -> u64 {
+    RECORD_GETS.with(|gets| gets.get())
+}
+
+/// Whole-collection record scans ([`PagedRecords::scan`]) started on the
+/// calling thread. Each decodes every row of the collection, so a key lookup
+/// must never need one. Thread-local like
+/// [`paged_live_count_walks_on_this_thread`].
+pub fn paged_record_scans_on_this_thread() -> u64 {
+    RECORD_SCANS.with(|scans| scans.get())
 }
 
 /// Exact visibility-checked row-count walks ([`PagedRecords::count_live`])
@@ -526,6 +542,7 @@ impl PagedRecords {
     }
 
     pub fn get(&self, snapshot: &Snapshot, collection: &str, id: &str) -> Result<Option<Record>> {
+        RECORD_GETS.with(|gets| gets.set(gets.get() + 1));
         let physical = self.physical_collection(collection);
         let collection: &str = &physical;
         let key = record_key(collection, id);
@@ -604,6 +621,7 @@ impl PagedRecords {
         snapshot: &Snapshot,
         collection: &str,
     ) -> Result<impl Iterator<Item = Result<Record>> + 'a> {
+        RECORD_SCANS.with(|scans| scans.set(scans.get() + 1));
         let physical = self.physical_collection(collection);
         let collection: &str = &physical;
         let prefix = collection_prefix(collection);

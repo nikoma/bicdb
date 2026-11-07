@@ -3688,3 +3688,87 @@ async fn concurrent_locked_counter_allocation_never_fails_and_never_repeats() {
         connection.await.unwrap();
     }
 }
+
+/// Prepared application queries whose other predicates carry bind values:
+/// collection functions under MULTISET and character patterns over joined
+/// column functions resolve as they do in unparameterized SQL.
+#[tokio::test]
+async fn prepared_queries_resolve_collection_functions_and_patterns() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = Running::with_profile(directory.path(), "oracle-preview-v1");
+    let mut config = tokio_postgres::Config::new();
+    config
+        .host("127.0.0.1")
+        .port(server.port)
+        .user("bicdb")
+        .dbname("bicdb")
+        .options("-c bicdb.sql_profile=oracle-preview-v1");
+    let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+    let connection = tokio::spawn(async move { connection.await.unwrap() });
+    for sql in [
+        "CREATE TYPE TABLE_OF_VARCHAR2 AS TABLE OF VARCHAR2(4000)",
+        "CREATE OR REPLACE FUNCTION toTableOfVarchar2(p_list IN VARCHAR2)
+      RETURN TABLE_OF_VARCHAR2 DETERMINISTIC
+    AS
+      l_tab TABLE_OF_VARCHAR2 := TABLE_OF_VARCHAR2();
+    BEGIN
+      FOR i IN
+      ( select trim('\"' from REGEXP_SUBSTR(p_list, '(\".*?\"|.*?)(,|$)', 1, level, NULL, 1)) split
+      from dual
+      connect by level<=length(regexp_replace(p_list,'\".*?\"|[^,]*'))+1)
+      LOOP
+       l_tab.EXTEND;
+       l_tab(l_tab.COUNT) := i.split;
+     END LOOP;
+     RETURN l_tab;
+   END toTableOfVarchar2;",
+        "CREATE or REPLACE FUNCTION isIntersectCSV( p_csv1 IN VARCHAR2 , p_csv2 IN VARCHAR2)
+RETURN CHAR AS
+BEGIN
+   IF toTableOfVarchar2(p_csv1) MULTISET INTERSECT toTableOfVarchar2(p_csv2) IS NOT EMPTY
+   THEN
+       RETURN 'Y';
+   ELSE
+       RETURN 'N';
+   END IF;
+END;",
+        "CREATE TABLE accounts (id NUMBER(10) PRIMARY KEY, email VARCHAR2(60), scopes VARCHAR2(200))",
+        "INSERT INTO accounts VALUES (1, 'a@x', 'Document,EMail')",
+        "INSERT INTO accounts VALUES (2, 'a@x', 'Document')",
+        "CREATE TABLE partners (id NUMBER(10) PRIMARY KEY, value VARCHAR2(40))",
+        "CREATE TABLE partner_users (id NUMBER(10) PRIMARY KEY, partner_id NUMBER(10), name VARCHAR2(40))",
+        "INSERT INTO partners VALUES (1, 'joe')",
+        "INSERT INTO partners VALUES (2, 'ann')",
+        "INSERT INTO partner_users VALUES (10, 1, 'Joe Block')",
+    ] {
+        client
+            .batch_execute(sql)
+            .await
+            .unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    let rows = client
+        .query(
+            "SELECT CAST(id AS VARCHAR2(10)) FROM accounts WHERE (email = $1 AND isIntersectCSV(scopes, 'EMail') = 'Y') ORDER BY id",
+            &[&"a@x"],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        rows.iter()
+            .map(|row| row.get::<_, String>(0))
+            .collect::<Vec<_>>(),
+        vec!["1"]
+    );
+    let rows = client
+        .query(
+            "SELECT CAST(COUNT(*) AS VARCHAR2(10)) FROM (SELECT bp.id, NVL(c.name,'-') FROM partners bp \
+             LEFT OUTER JOIN partner_users c ON (bp.id=c.partner_id) \
+             WHERE Upper(bp.value) Like UPPER($1) AND bp.id IN (1, 2)) a",
+            &[&"JO%"],
+        )
+        .await
+        .unwrap();
+    assert_eq!(rows[0].get::<_, String>(0), "1");
+    drop(client);
+    connection.await.unwrap();
+}

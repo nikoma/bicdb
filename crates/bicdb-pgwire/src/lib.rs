@@ -2841,16 +2841,6 @@ fn handle_frontend_message(
     Ok(true)
 }
 
-/// Diagnostic (env `BICDB_TRACE_WRITE_ESCALATION=1`): why a statement left the
-/// shared write path for exclusive database access.
-fn trace_write_escalation(reason: &str, sql: &str) {
-    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    if *ENABLED.get_or_init(|| std::env::var_os("BICDB_TRACE_WRITE_ESCALATION").is_some()) {
-        let head: String = sql.chars().take(200).collect();
-        eprintln!("write escalation: {reason}: {head}");
-    }
-}
-
 /// Source SQL of the statement or portal a Describe message names.
 fn describe_payload_sql(payload: &[u8], state: &ConnectionState) -> Option<String> {
     let (kind, rest) = payload.split_first()?;
@@ -4016,7 +4006,6 @@ fn execute_server_db_sql_for_state_inner(
             None
         } else {
             let Some(slot) = server.try_acquire_shared_write() else {
-                trace_write_escalation("shared-write gate closed", sql);
                 conflicts_exhausted = false;
                 break;
             };
@@ -4084,9 +4073,6 @@ fn execute_server_db_sql_for_state_inner(
         // Needs exclusive access (DDL / non-transactional) or hit a genuine SQL
         // error: hand off to the exclusive path, which re-runs and surfaces it.
         let Ok(res) = result else {
-            if let Err(error) = &result {
-                trace_write_escalation(&error.to_string(), sql);
-            }
             conflicts_exhausted = false;
             break;
         };

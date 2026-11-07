@@ -581,6 +581,25 @@ fn batch(template: &SqlResult, rows: Vec<Vec<SqlValue>>) -> SqlResult {
     SqlResult::new(columns, rows).with_column_types(types)
 }
 
+/// How far a change round may read once the feed reports `durable`: the
+/// highest commit that is both durable and applied. A commit is made durable
+/// before its rows are applied and its table counters bumped, so counters read
+/// at `durable` can still miss it, and that commit would never be reported. A
+/// watermark that stays behind for longer than `POLL` is not waited for.
+fn applied_through(server: &PgWireServer, last_seq: u64, durable: u64) -> Result<u64> {
+    let deadline = Instant::now() + POLL;
+    loop {
+        let visible = server.read_db()?.current_visibility_watermark();
+        if visible >= durable || Instant::now() >= deadline {
+            return Ok(durable);
+        }
+        if visible > last_seq {
+            return Ok(visible);
+        }
+        std::thread::sleep(Duration::from_micros(200));
+    }
+}
+
 /// True when the client closed the connection. Bytes waiting to be read
 /// (the extended protocol's `Sync` after `Execute`, a pipelined query) do
 /// not end the subscription; they are handled once it ends.
@@ -1219,7 +1238,7 @@ pub(crate) fn start_dispatcher(server: Arc<PgWireServer>) -> Result<()> {
                 if durable <= last_seq {
                     continue;
                 }
-                last_seq = durable;
+                last_seq = applied_through(&server, last_seq, durable).unwrap_or(durable);
                 if server.live_registry.len() == 0 {
                     continue;
                 }
@@ -1393,7 +1412,7 @@ pub(crate) fn run_subscription(
         if durable <= last_seq {
             continue;
         }
-        last_seq = durable;
+        last_seq = applied_through(server, last_seq, durable)?;
         let previous = {
             let db = server.read_db()?;
             subscription.take_changed_generations(&db)

@@ -3899,7 +3899,26 @@ impl<'db> SqlSession<'db> {
             definition.name = sql_index_storage_name(&schema.schema_name, &definition.name);
         }
         let name = definition.name.clone();
-        if let Err(error) = self.db_mut()?.create_index(definition) {
+        // Only a table created by this transaction, before any of its data
+        // writes, may initialize an empty paged constraint index. Rebuilding an
+        // existing corpus retains the ordinary pending-transaction fence.
+        let new_empty_table = self.db_ref().is_server_paged()
+            && definition.kind == IndexKind::BTree
+            && definition.exclusion.is_none()
+            && self
+                .tx
+                .as_ref()
+                .is_some_and(|tx| !tx.has_pending_writes(&definition.collection))
+            && self.ddl_undo.iter().any(|undo| {
+                matches!(undo,
+                DdlUndo::DropCollection { name } if name == &definition.collection)
+            });
+        let created = if new_empty_table {
+            self.db_mut()?.create_empty_btree_index(definition)
+        } else {
+            self.db_mut()?.create_index(definition)
+        };
+        if let Err(error) = created {
             if matches!(error, BicDbError::UniqueIndexBuildConflict { .. }) {
                 if let Some(schema) = &schema {
                     let mut error = unique_violation(schema, &logical_name);

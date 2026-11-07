@@ -545,3 +545,46 @@ fn failed_job_deliveries_keep_their_identity_and_reach_the_attempt_ceiling() {
     assert_eq!(status["in_flight"], 0);
     assert_eq!(status["pending_redelivery"], 0);
 }
+
+#[test]
+fn server_paged_application_preserves_data_and_effect_receipts_after_reopen() {
+    use bicdb_core::{storage_mode, BicDb, DbConfig, StorageMode};
+    let root = tempfile::tempdir().unwrap();
+    let data = root.path().join("data");
+    drop(
+        BicDb::open_with_config(
+            &data,
+            DbConfig::default().with_storage_mode(StorageMode::ServerPaged),
+        )
+        .unwrap(),
+    );
+    let package = release("CREATE TABLE paged_counts (id INT PRIMARY KEY, value INT); INSERT INTO paged_counts VALUES (1, 40)");
+    let request = batch(
+        "UPDATE paged_counts SET value = value + 1 RETURNING value",
+        Some("paged-once"),
+    );
+    let expected = {
+        let mut database = Database::open(root.path()).unwrap();
+        database.prepare(&package).unwrap();
+        let result = database.query(&request).unwrap();
+        assert_eq!(
+            serde_json::to_value(&result[0].rows).unwrap(),
+            json!([[41]])
+        );
+        result
+    };
+    let mut reopened = Database::open(root.path()).unwrap();
+    reopened.prepare(&package).unwrap();
+    assert_eq!(reopened.query(&request).unwrap(), expected);
+    assert_eq!(
+        serde_json::to_value(
+            &reopened
+                .query(&batch("SELECT value FROM paged_counts", None))
+                .unwrap()[0]
+                .rows
+        )
+        .unwrap(),
+        json!([[41]])
+    );
+    assert_eq!(storage_mode(&data).unwrap(), StorageMode::ServerPaged);
+}

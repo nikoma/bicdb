@@ -81,3 +81,93 @@ fn format_one_recovery_images_migrate_pending_local_broker_jobs() {
     recovered.settle("worker", &message, true).unwrap();
     assert!(recovered.consume("worker", 1000).unwrap().is_none());
 }
+
+#[test]
+fn server_paged_recovery_restores_inactive_application_data_and_pending_jobs() {
+    use bicdb_app_host::{
+        database::{Query, QueryBatch},
+        store::Deployment,
+    };
+    use bicdb_core::{storage_mode, DbConfig, StorageMode};
+    let root = tempfile::tempdir().unwrap();
+    let source = root.path().join("source");
+    drop(
+        BicDb::open_with_config(
+            source.join("data"),
+            DbConfig::default().with_storage_mode(StorageMode::ServerPaged),
+        )
+        .unwrap(),
+    );
+    let release = Release::read(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/platform/counter/bic.json"),
+    )
+    .unwrap();
+    let mut database = Database::open(&source).unwrap();
+    database.prepare(&release).unwrap();
+    let batch = |sql: &str| QueryBatch {
+        statements: vec![Query {
+            sql: sql.into(),
+            params: vec![],
+        }],
+        idempotency_key: None,
+        jobs: vec![],
+    };
+    database
+        .query(&batch("UPDATE counters SET value=73 WHERE id='requests'"))
+        .unwrap();
+    let queued = database
+        .enqueue(
+            json!({"action":"paged-recovery"}),
+            Some("paged-recovery-once".into()),
+        )
+        .unwrap();
+    let passphrase = "paged-application-recovery-test-key-with-at-least-32-characters";
+    let archive = root.path().join("paged.bicbak");
+    bicdb_app_host::recovery::snapshot(
+        &mut database,
+        Deployment {
+            application: "counter".into(),
+            release: release.digest().unwrap(),
+            previous: None,
+            generation: 1,
+            enabled: true,
+        },
+        release,
+        None,
+        &archive,
+        passphrase,
+    )
+    .unwrap();
+    drop(database);
+    let target = Store::open(&root.path().join("target")).unwrap();
+    let restored = bicdb_app_host::recovery::restore(&target, &archive, passphrase).unwrap();
+    assert!(!restored.enabled, "recovery must remain inactive");
+    let application = target.app_dir("counter").unwrap();
+    let mut recovered = Database::open(&application.join("database")).unwrap();
+    assert_eq!(
+        storage_mode(&application.join("database/data")).unwrap(),
+        StorageMode::ServerPaged
+    );
+    assert_eq!(
+        serde_json::to_value(
+            &recovered
+                .query(&batch("SELECT value FROM counters WHERE id='requests'"))
+                .unwrap()[0]
+                .rows
+        )
+        .unwrap(),
+        json!([[73]])
+    );
+    let replay = recovered
+        .enqueue(
+            json!({"action":"paged-recovery"}),
+            Some("paged-recovery-once".into()),
+        )
+        .unwrap();
+    assert_eq!(replay["id"], queued["id"]);
+    assert_eq!(replay["deduplicated"], true);
+    let message = recovered.consume("worker", 1000).unwrap().unwrap();
+    assert_eq!(message.payload, json!({"action":"paged-recovery"}));
+    recovered.settle("worker", &message, true).unwrap();
+    assert!(recovered.consume("worker", 1000).unwrap().is_none());
+}

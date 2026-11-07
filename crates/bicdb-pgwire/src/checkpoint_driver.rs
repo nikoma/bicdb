@@ -840,8 +840,8 @@ pub(crate) fn start_automatic_paged_vacuum_worker(
 
 /// Fold hygiene: when an FTS index's unfolded write-layer tail crosses the
 /// configured threshold, fold it — before the tail degrades ranked search
-/// and bloats the entry keyspace. The fold runs under a database read
-/// guard exactly like the SQL statement an operator would otherwise issue.
+/// and bloats the entry keyspace. Each bounded term batch releases its
+/// database read guard before the next batch so foreground writers can proceed.
 pub(crate) fn start_automatic_fts_fold_worker(server: Arc<PgWireServer>) -> thread::JoinHandle<()> {
     thread::spawn(move || {
         let _worker = BackgroundWorker::register(server.clone());
@@ -853,15 +853,18 @@ pub(crate) fn start_automatic_fts_fold_worker(server: Arc<PgWireServer>) -> thre
         let mut consecutive_failures = 0_u32;
         while !server.is_shutdown_requested() {
             let result = (|| -> Result<()> {
-                let db = server.read_db()?;
-                let fts_indexes: Vec<String> = db
+                let fts_indexes: Vec<String> = server
+                    .read_db()?
                     .index_definitions()
                     .into_iter()
                     .filter(|definition| definition.kind == bicdb_core::IndexKind::FullText)
                     .map(|definition| definition.name)
                     .collect();
                 for index in fts_indexes {
-                    let over = match db.full_text_unfolded_entries_capped(&index, threshold) {
+                    let over = match server
+                        .read_db()?
+                        .full_text_unfolded_entries_capped(&index, threshold)
+                    {
                         Ok(Some(_)) => false,
                         Ok(None) => true,
                         // Non-read-through / non-paged indexes have no tail.
@@ -871,7 +874,22 @@ pub(crate) fn start_automatic_fts_fold_worker(server: Arc<PgWireServer>) -> thre
                         continue;
                     }
                     let started = Instant::now();
-                    let (terms, blocks) = db.compact_full_text_index(&index)?;
+                    let mut terms = 0;
+                    let mut blocks = 0;
+                    while !server.is_shutdown_requested() {
+                        // Release the global read guard after each bounded batch
+                        // so foreground writes do not wait for the entire index
+                        // (or a full checkpoint/vacuum) to finish folding.
+                        let (folded, written) = server
+                            .read_db()?
+                            .compact_full_text_index_batch(&index, 16)?;
+                        terms += folded;
+                        blocks += written;
+                        if folded == 0 {
+                            break;
+                        }
+                        thread::yield_now();
+                    }
                     log_operational_event(
                         "fts_fold.completed",
                         "info",
@@ -2117,4 +2135,110 @@ pub(crate) fn validate_server_config(config: &PgWireConfig) -> Result<()> {
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod fold_writer_tests {
+    use super::*;
+    use bicdb_core::{DbConfig, IndexDefinition, IndexField, IndexKind, Record, StorageMode};
+
+    #[test]
+    fn automatic_full_text_folding_allows_writes_before_the_fold_finishes() {
+        let root = tempfile::tempdir().unwrap();
+        {
+            let mut db = BicDb::open_with_config(
+                root.path(),
+                DbConfig::default()
+                    .with_fsync(false)
+                    .with_storage_mode(StorageMode::ServerPaged),
+            )
+            .unwrap();
+            db.create_collection("articles").unwrap();
+            db.create_index(IndexDefinition {
+                name: "articles_fts".into(),
+                collection: "articles".into(),
+                fields: vec![IndexField::MetadataPath(vec!["title".into()])],
+                unique: false,
+                nulls_not_distinct: false,
+                kind: IndexKind::FullText,
+                predicate: None,
+                exclusion: None,
+            })
+            .unwrap();
+            db.close().unwrap();
+        }
+        let server = PgWireServer::open(
+            root.path(),
+            PgWireConfig {
+                fsync: false,
+                write_timeout: Duration::from_secs(1),
+                automatic_fts_fold_threshold_entries: 1,
+                automatic_fts_fold_poll_interval: Duration::from_millis(10),
+                ..PgWireConfig::default()
+            },
+        )
+        .unwrap();
+        {
+            let mut db = server.db.write();
+            let mut tx = db.begin_transaction().unwrap();
+            for n in 0..8000 {
+                let a = char::from(b'a' + (n / (26 * 26)) as u8);
+                let b = char::from(b'a' + ((n / 26) % 26) as u8);
+                let c = char::from(b'a' + (n % 26) as u8);
+                tx.insert(
+                    "articles",
+                    Record::new(format!("r{n}"))
+                        .with_metadata(json!({"title":format!("term{a}{b}{c} shared")})),
+                )
+                .unwrap();
+            }
+            tx.commit().unwrap();
+        }
+        let initial = server
+            .db
+            .read()
+            .full_text_unfolded_entries_capped("articles_fts", usize::MAX)
+            .unwrap()
+            .unwrap();
+        assert!(initial > 8000);
+        let worker = start_automatic_fts_fold_worker(server.clone());
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let deadline = Instant::now() + Duration::from_secs(30);
+            loop {
+                let remaining = server
+                    .db
+                    .read()
+                    .full_text_unfolded_entries_capped("articles_fts", usize::MAX)
+                    .unwrap()
+                    .unwrap();
+                if remaining > 0 && remaining < initial {
+                    break;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "must observe a partially folded index"
+                );
+                thread::sleep(Duration::from_millis(5));
+            }
+            let admission = server.try_admit_write().unwrap();
+            let mut db = server
+                .write_db_with_admission(&admission)
+                .expect("foreground writer must proceed while the search index is still folding");
+            db.insert(
+                "articles",
+                Record::new("concurrent").with_metadata(json!({"title":"concurrent shared"})),
+            )
+            .unwrap();
+            assert_eq!(
+                db.lookup_full_text_term("articles_fts", "concurrent", false)
+                    .unwrap(),
+                vec!["concurrent"]
+            );
+        }));
+        server.request_shutdown();
+        worker.join().unwrap();
+        if let Err(error) = result {
+            std::panic::resume_unwind(error);
+        }
+    }
 }

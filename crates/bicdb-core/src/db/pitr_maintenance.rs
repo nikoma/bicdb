@@ -2729,9 +2729,36 @@ impl BicDb {
         self.create_index_online(definition).map(|_| ())
     }
 
+    /// Initialize a B-tree for a newly created, empty paged collection. There is
+    /// no corpus to rebuild; subsequent transaction commits maintain its entries.
+    /// SQL uses this only before the new table has any pending data writes.
+    pub fn create_empty_btree_index(&mut self, definition: IndexDefinition) -> Result<()> {
+        self.ensure_writable("initialize empty B-tree index")?;
+        if !self.is_server_paged()
+            || definition.kind != IndexKind::BTree
+            || definition.exclusion.is_some()
+            || self.indexes.contains_key(&definition.name)
+            || self.collection_record_count(&definition.collection)? != 0
+        {
+            return Err(BicDbError::Index(
+                "empty B-tree initialization requires a new index on an empty paged collection"
+                    .into(),
+            ));
+        }
+        self.create_index_online_inner(definition, true).map(|_| ())
+    }
+
     pub fn create_index_online(
         &mut self,
         definition: IndexDefinition,
+    ) -> Result<IndexMaintenanceReport> {
+        self.create_index_online_inner(definition, false)
+    }
+
+    fn create_index_online_inner(
+        &mut self,
+        definition: IndexDefinition,
+        initialize_empty: bool,
     ) -> Result<IndexMaintenanceReport> {
         self.ensure_writable("create index online")?;
         validate_index_definition(&definition)?;
@@ -2791,6 +2818,7 @@ impl BicDb {
         if self.is_server_paged()
             && definition.kind == IndexKind::BTree
             && definition.exclusion.is_none()
+            && !initialize_empty
         {
             let started = Instant::now();
             let limits = self.paged_btree_build_limits();

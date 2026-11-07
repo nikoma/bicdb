@@ -8978,3 +8978,103 @@ fn exists_candidate_probes_decline_fallible_residual_conversions() {
     let error=session.execute("SELECT r.id FROM fallible_requests r WHERE EXISTS(SELECT * FROM fallible_controls c WHERE CAST(c.label AS INTEGER)>0 AND c.period=r.period)").unwrap_err();
     assert_eq!(error.sqlstate(), "22P02");
 }
+
+#[test]
+fn server_paged_migration_initializes_new_table_constraints_atomically() {
+    use bicdb_core::{DbConfig, StorageMode};
+    let root = tempfile::tempdir().unwrap();
+    let config = || {
+        DbConfig::default()
+            .with_storage_mode(StorageMode::ServerPaged)
+            .with_fsync(false)
+    };
+    let mut db = BicDb::open_with_config(root.path(), config()).unwrap();
+    {
+        let mut session = SqlSession::new(&mut db);
+        session.execute("BEGIN").unwrap();
+        session
+            .execute("CREATE TABLE paged_fresh_good(id INT PRIMARY KEY, label TEXT UNIQUE)")
+            .unwrap();
+        session
+            .execute("INSERT INTO paged_fresh_good VALUES(1,'first'),(2,'second')")
+            .unwrap();
+        session.execute("COMMIT").unwrap();
+        session.execute("BEGIN").unwrap();
+        session
+            .execute("CREATE TABLE paged_fresh_rejected(id INT PRIMARY KEY, label TEXT UNIQUE)")
+            .unwrap();
+        let error = session
+            .execute("INSERT INTO paged_fresh_rejected VALUES(1,'same'),(2,'same')")
+            .unwrap_err();
+        assert_eq!(error.sqlstate(), "23505");
+        session.execute("ROLLBACK").unwrap();
+        assert_eq!(
+            session
+                .execute("SELECT * FROM paged_fresh_rejected")
+                .unwrap_err()
+                .sqlstate(),
+            "42P01"
+        );
+        session.execute("BEGIN").unwrap();
+        session
+            .execute("CREATE TABLE paged_fresh_rollback(id INT PRIMARY KEY)")
+            .unwrap();
+        session
+            .execute("INSERT INTO paged_fresh_rollback VALUES(3)")
+            .unwrap();
+        session.execute("ROLLBACK").unwrap();
+        assert_eq!(
+            session
+                .execute("SELECT * FROM paged_fresh_rollback")
+                .unwrap_err()
+                .sqlstate(),
+            "42P01"
+        );
+    }
+    assert!(db.index_definitions().iter().all(|index| !matches!(
+        index.collection.as_str(),
+        "paged_fresh_rejected" | "paged_fresh_rollback"
+    )));
+    let mut nonempty = db
+        .index_definitions()
+        .into_iter()
+        .find(|index| index.collection == "paged_fresh_good")
+        .unwrap();
+    nonempty.name = "refused_empty_on_data".into();
+    assert!(db.create_empty_btree_index(nonempty).is_err());
+    assert!(!db
+        .index_definitions()
+        .iter()
+        .any(|index| index.name == "refused_empty_on_data"));
+    drop(db);
+    let mut db = BicDb::open_with_config(root.path(), config()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    assert_eq!(
+        session
+            .execute("SELECT id FROM paged_fresh_good WHERE label='first'")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(1)]]
+    );
+    assert_eq!(
+        session
+            .execute("SELECT * FROM paged_fresh_rejected")
+            .unwrap_err()
+            .sqlstate(),
+        "42P01"
+    );
+    assert_eq!(
+        session
+            .execute("SELECT * FROM paged_fresh_rollback")
+            .unwrap_err()
+            .sqlstate(),
+        "42P01"
+    );
+    assert_eq!(
+        session
+            .execute("INSERT INTO paged_fresh_good VALUES(3,'first')")
+            .unwrap_err()
+            .sqlstate(),
+        "23505"
+    );
+}

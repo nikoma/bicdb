@@ -471,6 +471,9 @@ fn default_max_queued_queries() -> usize {
 }
 
 fn database_config_for_server(path: &Path, config: &PgWireConfig) -> Result<DbConfig> {
+    // Bootstrap can change storage mode and persisted HA history. Resolve both
+    // from the installed image, rather than the previous empty directory.
+    bicdb_core::finish_standby_bootstrap(path)?;
     // The server checkpoints from its own background worker (BICDB_AUTO_COMPACT_WAL_MB).
     let mut base_config = DbConfig::default();
     config.database_options.apply(&mut base_config);
@@ -2248,6 +2251,9 @@ async fn handle_plain_client_async(
                     break;
                 }
                 stream = TokioTcpStream::from_std(std_stream)?;
+                // Execution and reply flushing are busy time, including COPY.
+                // Give the client its full idle budget after the reply.
+                last_activity = Instant::now();
             }
             Err(error) => {
                 result = Err(error);
@@ -2465,6 +2471,8 @@ fn handle_client_loop(
             cleanup_portals(server, state);
             return Ok(());
         }
+        stream.flush()?;
+        last_activity = Instant::now();
     }
 }
 

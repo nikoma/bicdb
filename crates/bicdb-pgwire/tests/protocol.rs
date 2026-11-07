@@ -11491,6 +11491,136 @@ fn server_query_timeout_and_unsupported_sql_return_errors() {
 }
 
 #[test]
+fn server_paged_bootstrap_selects_the_installed_engine_before_open() {
+    use bicdb_core::{
+        create_backup_from_open_database, stage_standby_bootstrap, BackupCreateOptions, DbConfig,
+        StorageMode,
+    };
+    let root = tempfile::tempdir().unwrap();
+    let source = root.path().join("source");
+    let target = root.path().join("target");
+    let archive = root.path().join("source.bicbackup");
+    let key = "paged-bootstrap-protocol-fixture-key-at-least-32-bytes";
+    {
+        let mut db = BicDb::open_with_config(
+            &source,
+            DbConfig::default().with_storage_mode(StorageMode::ServerPaged),
+        )
+        .unwrap();
+        SqlSession::new(&mut db)
+            .execute(
+                "CREATE TABLE bootstrap_rows(value INT); INSERT INTO bootstrap_rows VALUES (73)",
+            )
+            .unwrap();
+        create_backup_from_open_database(
+            &db,
+            &archive,
+            BackupCreateOptions {
+                passphrase: key.into(),
+                base_backup: None,
+            },
+        )
+        .unwrap();
+    }
+    drop(BicDb::open(&target).unwrap());
+    assert_eq!(
+        bicdb_core::storage_mode(&target).unwrap(),
+        StorageMode::EmbeddedMemory
+    );
+    stage_standby_bootstrap(&target, &archive, key, true).unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = PgWireServer::open(&target, PgWireConfig::default()).unwrap();
+    assert_eq!(
+        bicdb_core::storage_mode(&target).unwrap(),
+        StorageMode::ServerPaged
+    );
+    let serving = server.clone();
+    let worker = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
+    let mut client = TcpStream::connect(address).unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    send_query(&mut client, "SELECT value FROM bootstrap_rows");
+    assert_eq!(read_query_rows(&mut client), vec![vec!["73".to_owned()]]);
+    drop(client);
+    server.request_shutdown();
+    worker.join().unwrap().unwrap();
+}
+
+#[test]
+fn idle_timeout_excludes_async_query_execution() {
+    idle_budget_after_work(false, false);
+}
+
+#[test]
+fn idle_timeout_excludes_sync_query_execution() {
+    idle_budget_after_work(true, false);
+}
+
+#[test]
+fn idle_timeout_excludes_copy_execution_before_commit() {
+    idle_budget_after_work(false, true);
+}
+
+fn idle_budget_after_work(sync: bool, copy: bool) {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = PgWireServer::open(
+        dir.path(),
+        PgWireConfig {
+            idle_timeout: Duration::from_secs(1),
+            shutdown_grace_period: Duration::from_millis(500),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let serving = server.clone();
+    let worker = thread::spawn(move || {
+        if sync {
+            let (stream, peer) = listener.accept().unwrap();
+            bicdb_pgwire::handle_client_with_server(stream, peer, serving)
+        } else {
+            bicdb_pgwire::serve_existing_listener(serving, listener)
+        }
+    });
+    let mut client = TcpStream::connect(address).unwrap();
+    client
+        .set_read_timeout(Some(Duration::from_secs(10)))
+        .unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if copy {
+            send_query(&mut client, "CREATE TABLE slow_copy(value INT); CREATE FUNCTION pause_copy() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_sleep(1.5); RETURN NEW; END $$; CREATE TRIGGER pause_copy BEFORE INSERT ON slow_copy FOR EACH ROW EXECUTE FUNCTION pause_copy(); BEGIN");
+            assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
+            send_query(&mut client, "COPY slow_copy FROM STDIN");
+            assert_eq!(read_message(&mut client).0, b'G');
+            send_message(&mut client, b'd', b"73\n");
+            send_message(&mut client, b'c', &[]);
+            assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
+        } else {
+            send_query(&mut client, "SELECT pg_sleep(1.5)");
+            assert_eq!(read_query_rows(&mut client), vec![vec![String::new()]]);
+        }
+        // Longer than the 250-ms transport poll but below the actual idle limit.
+        thread::sleep(Duration::from_millis(400));
+        if copy {
+            send_query(&mut client, "COMMIT");
+            assert_eq!(read_query_rows_with_status(&mut client).1, b'I');
+            send_query(&mut client, "SELECT value FROM slow_copy");
+        } else {
+            send_query(&mut client, "SELECT 73");
+        }
+        assert_eq!(read_query_rows(&mut client), vec![vec!["73".to_owned()]]);
+    }));
+    drop(client);
+    server.request_shutdown();
+    worker.join().unwrap().unwrap();
+    outcome.unwrap();
+}
+
+#[test]
 fn idle_timeout_closes_inactive_connections() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

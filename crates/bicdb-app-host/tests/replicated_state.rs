@@ -10,7 +10,9 @@ use bicdb_app_host::{
     database::{Database, Query, QueryBatch},
     manifest::{Manifest, Release, Resources, Runtime},
 };
-use bicdb_core::{BicDb, ReplicationConfig, ReplicationTlsConfig, SyncTimeoutPolicy};
+use bicdb_core::{
+    BicDb, DbConfig, ReplicationConfig, ReplicationTlsConfig, StorageMode, SyncTimeoutPolicy,
+};
 use bicdb_pgwire::{AllowedStandby, FailoverConfig, HaPeer, HaServerConfig, HaServerRole};
 use bicdb_sql::SqlSession;
 use serde_json::json;
@@ -134,9 +136,27 @@ fn batch(sql: &str, key: Option<&str>) -> QueryBatch {
 
 #[test]
 fn native_failover_preserves_migrations_outbox_job_leases_and_effect_receipts() {
+    failover_preserves_application_state(StorageMode::EmbeddedMemory);
+}
+
+#[test]
+fn server_paged_native_failover_preserves_migrations_jobs_and_effect_receipts() {
+    failover_preserves_application_state(StorageMode::ServerPaged);
+}
+
+fn failover_preserves_application_state(mode: StorageMode) {
     let root = tempfile::tempdir().unwrap();
     let ports = ports(3);
     let package = package();
+    if mode == StorageMode::ServerPaged {
+        drop(
+            BicDb::open_with_config(
+                root.path().join("n0/data"),
+                DbConfig::default().with_storage_mode(mode.clone()),
+            )
+            .unwrap(),
+        );
+    }
     // Exercise an existing standalone application's upgrade, not just an empty
     // native database. Its historical migration is preserved during bootstrap.
     {
@@ -163,6 +183,14 @@ fn native_failover_preserves_migrations_outbox_job_leases_and_effect_receipts() 
                     .is_ok_and(|result| serde_json::to_value(result.rows).unwrap() == json!([[40]]))
             })
     });
+    if mode == StorageMode::ServerPaged {
+        for index in 0..3 {
+            assert_eq!(
+                bicdb_core::storage_mode(&root.path().join(format!("n{index}/data"))).unwrap(),
+                StorageMode::ServerPaged
+            );
+        }
+    }
     let request = {
         let mut request = batch(
             "UPDATE effects SET value = value + 1 RETURNING value",
@@ -298,4 +326,39 @@ fn unmigrated_legacy_jobs_are_rejected_before_any_state_listener_starts() {
     assert!(database
         .configure_sync(&sync_package.manifest.sync)
         .is_err());
+}
+
+#[test]
+fn server_paged_native_open_keeps_the_persisted_engine() {
+    let root = tempfile::tempdir().unwrap();
+    let ports = ports(1);
+    let data = root.path().join("n0/data");
+    {
+        let mut db = BicDb::open_with_config(
+            &data,
+            DbConfig::default().with_storage_mode(StorageMode::ServerPaged),
+        )
+        .unwrap();
+        SqlSession::new(&mut db)
+            .execute("CREATE TABLE paged_seed (value INT); INSERT INTO paged_seed VALUES (73)")
+            .unwrap();
+    }
+    let mut host = open(root.path(), 0, &ports);
+    wait(|| host.writable());
+    host.prepare(&package()).unwrap();
+    assert_eq!(
+        serde_json::to_value(
+            &host
+                .query(&batch("SELECT value FROM paged_seed", None))
+                .unwrap()[0]
+                .rows
+        )
+        .unwrap(),
+        json!([[73]])
+    );
+    assert_eq!(
+        bicdb_core::storage_mode(&data).unwrap(),
+        StorageMode::ServerPaged
+    );
+    host.request_shutdown();
 }

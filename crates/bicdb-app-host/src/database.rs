@@ -6,7 +6,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{bail, ensure, Context, Result};
-use bicdb_core::{BicDb, DbConfig};
+use bicdb_core::{storage_mode, BicDb, DbConfig};
 use bicdb_sql::{SqlResult, SqlSession, SqlValue};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -67,6 +67,16 @@ fn quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }
 
+fn recorded_database_config(path: &Path) -> Result<DbConfig> {
+    // A completed native bootstrap can replace an empty memory store with a
+    // paged snapshot. Install it before selecting the persisted engine/role.
+    bicdb_core::finish_standby_bootstrap(path)?;
+    Ok(DbConfig::default()
+        .with_storage_mode(storage_mode(path)?)
+        .with_fsync(true)
+        .with_audit_events(true))
+}
+
 impl Database {
     pub fn open(path: &Path) -> Result<Self> {
         ensure!(
@@ -75,7 +85,7 @@ impl Database {
         );
         let db = BicDb::open_with_config(
             path.join("data"),
-            DbConfig::default().with_fsync(true).with_audit_events(true),
+            recorded_database_config(&path.join("data"))?,
         )?;
         let mut database = Self {
             db: Arc::new(RwLock::new(db)),
@@ -122,7 +132,7 @@ impl Database {
                     ..Default::default()
                 })
             },
-            DbConfig::default().with_fsync(true).with_audit_events(true),
+            recorded_database_config(&path.join("data"))?,
             move |db| {
                 if legacy.exists() {
                     let migrated = SqlSession::new_shared(db)

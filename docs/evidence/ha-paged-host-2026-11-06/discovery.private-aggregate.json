@@ -1,0 +1,17 @@
+{
+  "production_cutover": false,
+  "clinical_data_exported": false,
+  "clinical_records_deleted": false,
+  "target_status": "FAILED_NOT_ADMITTED",
+  "reconciled_tables": 60,
+  "failure_stage": "copy:catalog_items",
+  "sqlstate": "XX000",
+  "writer_wait_budget_ms": 30000,
+  "automatic_search_fold_ms": 213114,
+  "folded_terms": 14901,
+  "written_blocks": 16943,
+  "recovered_ordinary_table_guards": 289,
+  "target_patients": 0,
+  "guard_recovery_finished_at": "2026-11-07T00:39:15.936Z",
+  "sensitive_reports_retained_on_production_host": true
+}

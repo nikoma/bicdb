@@ -847,3 +847,116 @@ fn checkpoint_for_resume_is_a_durable_barrier() {
     }
     assert_eq!(count, 500, "rows lost across the resume barrier");
 }
+
+#[test]
+fn bounded_folds_preserve_search_across_interleaved_writes_and_reopen() {
+    for bulk_before_index in [false, true] {
+        let dir = TempDir::new().unwrap();
+        let index = IndexDefinition {
+            fields: vec![IndexField::MetadataPath(vec!["title".into()])],
+            ..fts_index()
+        };
+        let terms: Vec<String> = (0..32)
+            .map(|n| {
+                format!(
+                    "unique{}{}",
+                    char::from(b'a' + n / 26),
+                    char::from(b'a' + n % 26)
+                )
+            })
+            .collect();
+        let make_record = |n: usize| {
+            Record::new(format!("r{n}"))
+                .with_metadata(json!({"title": format!("{} shared", terms[n])}))
+        };
+        {
+            let mut db = BicDb::open_with_config(dir.path(), paged_config()).unwrap();
+            db.create_collection("articles").unwrap();
+            if bulk_before_index {
+                for n in 0..16 {
+                    db.insert("articles", make_record(n)).unwrap();
+                }
+            }
+            db.create_index(index).unwrap();
+            db.close().unwrap();
+        }
+        let mut db = BicDb::open_with_config(dir.path(), paged_config()).unwrap();
+        for n in if bulk_before_index { 16..32 } else { 0..32 } {
+            db.insert("articles", make_record(n)).unwrap();
+        }
+        assert!(db.compact_full_text_index_batch("articles_fts", 0).is_err());
+        let mut steps = 0;
+        loop {
+            let (folded, _) = db.compact_full_text_index_batch("articles_fts", 1).unwrap();
+            assert!(folded <= 1, "a batch must not fold the entire index");
+            if folded == 0 {
+                break;
+            }
+            steps += 1;
+            assert!(steps < 100, "bounded folding must make progress");
+            if steps == 3 {
+                db.insert(
+                    "articles",
+                    Record::new("fresh").with_metadata(json!({"title":"fresh shared"})),
+                )
+                .unwrap();
+                assert!(
+                    db.delete("articles", "r0").unwrap(),
+                    "row must exist before deletion; bulk={bulk_before_index}"
+                );
+                db.close().unwrap();
+                db = BicDb::open_with_config(dir.path(), paged_config()).unwrap();
+            }
+            for (n, term) in terms.iter().enumerate() {
+                let expected = if steps >= 3 && n == 0 {
+                    vec![]
+                } else {
+                    vec![format!("r{n}")]
+                };
+                assert_eq!(
+                    db.lookup_full_text_term("articles_fts", term, false)
+                        .unwrap(),
+                    expected,
+                    "bulk={bulk_before_index} step={steps} term={term}"
+                );
+            }
+        }
+        assert!(steps >= 16, "fixture must exercise multiple batches");
+        assert_eq!(
+            db.lookup_full_text_term("articles_fts", "fresh", false)
+                .unwrap(),
+            vec!["fresh"]
+        );
+        assert!(db.verify_index("articles_fts").unwrap().valid);
+        db.close().unwrap();
+        let mut db = BicDb::open_with_config(dir.path(), paged_config()).unwrap();
+        assert_eq!(
+            db.lookup_full_text_term("articles_fts", "uniqueaa", false)
+                .unwrap(),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            db.lookup_full_text_term("articles_fts", "uniquea", true)
+                .unwrap()
+                .len(),
+            25
+        );
+        assert_eq!(
+            db.lookup_full_text_term("articles_fts", "shared", false)
+                .unwrap()
+                .len(),
+            32
+        );
+        db.insert(
+            "articles",
+            Record::new("replacement").with_metadata(json!({"title":"uniqueaa"})),
+        )
+        .unwrap();
+        db.compact_full_text_index("articles_fts").unwrap();
+        assert_eq!(
+            db.lookup_full_text_term("articles_fts", "uniqueaa", false)
+                .unwrap(),
+            vec!["replacement"]
+        );
+    }
+}

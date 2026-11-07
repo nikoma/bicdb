@@ -89,6 +89,32 @@ impl BicDb {
     /// transactional TAIL for writes after the fold; reads merge
     /// blocks + tail - tombstones. Returns (terms folded, blocks written).
     pub fn compact_full_text_index(&self, name: &str) -> Result<(usize, usize)> {
+        self.compact_full_text_index_inner(name, None)
+    }
+
+    /// Fold at most `max_terms` whole terms without synchronous full-store
+    /// reclamation. Hosts release their database guard between batches; the
+    /// governed checkpoint/vacuum workers reclaim retired posting versions.
+    /// A single term remains atomic, so this is a term bound, not a byte or
+    /// elapsed-time guarantee for an unusually large individual posting list.
+    pub fn compact_full_text_index_batch(
+        &self,
+        name: &str,
+        max_terms: usize,
+    ) -> Result<(usize, usize)> {
+        if max_terms == 0 {
+            return Err(BicDbError::Index(
+                "full-text fold batch must be nonzero".into(),
+            ));
+        }
+        self.compact_full_text_index_inner(name, Some(max_terms))
+    }
+
+    fn compact_full_text_index_inner(
+        &self,
+        name: &str,
+        max_terms: Option<usize>,
+    ) -> Result<(usize, usize)> {
         let state = self
             .indexes
             .get(name)
@@ -106,7 +132,7 @@ impl BicDb {
             .ok_or_else(|| BicDbError::Index(format!("index `{name}` has no page store")))?;
         let paged = Arc::clone(paged);
         if paged.index_has_numeric_posting_blocks(&paged.latest_snapshot(), name)? {
-            return self.compact_numeric_full_text_index(name, &paged);
+            return self.compact_numeric_full_text_index(name, &paged, max_terms);
         }
 
         // Terms with anything to fold: a v1 tail entry or a tombstone.
@@ -115,15 +141,21 @@ impl BicDb {
         for entry in paged.scan_index(&snapshot, name)? {
             let (encoded_key, _) = entry?;
             terms.insert(encoded_key);
+            if max_terms.is_some_and(|limit| terms.len() >= limit) {
+                break;
+            }
         }
         // v2 twins are written alongside v1 since 0.9.51, so the v1 scan
         // already covers every tail term.
-        let mut tombstone_terms: std::collections::BTreeSet<Vec<u8>> =
-            std::collections::BTreeSet::new();
-        for entry in paged.scan_index_tombstone_terms(&snapshot, name)? {
-            tombstone_terms.insert(entry?);
+        if max_terms.is_none_or(|limit| terms.len() < limit) {
+            for entry in paged.scan_index_tombstone_terms(&snapshot, name)? {
+                let term = entry?;
+                terms.insert(term);
+                if max_terms.is_some_and(|limit| terms.len() >= limit) {
+                    break;
+                }
+            }
         }
-        terms.extend(tombstone_terms.iter().cloned());
 
         let mut folded_terms = 0usize;
         let mut blocks_written = 0usize;
@@ -240,12 +272,14 @@ impl BicDb {
         // (writes tolerate reclaimed chain heads) and B11b (slot directories
         // keep trailing dead slots, so generations stay monotonic and stale
         // locators can never validate against a new tenant).
-        paged.checkpoint()?;
-        vacuum_paged_records_to_completion(paged.as_ref())?;
-        // Vacuum retires the versions; the sweep retires the KEYS. Without
-        // it every read of a folded term still walks the dead tail's B-tree
-        // entries (~180 ms per 100k keys, measured).
-        paged.sweep_dead_index_entries(usize::MAX)?;
+        if max_terms.is_none() {
+            paged.checkpoint()?;
+            vacuum_paged_records_to_completion(paged.as_ref())?;
+            // Vacuum retires the versions; the sweep retires the KEYS. Without
+            // it every read of a folded term still walks the dead tail's B-tree
+            // entries (~180 ms per 100k keys, measured).
+            paged.sweep_dead_index_entries(usize::MAX)?;
+        }
         Ok((folded_terms, blocks_written))
     }
 
@@ -253,6 +287,7 @@ impl BicDb {
         &self,
         name: &str,
         paged: &Arc<crate::paged_collection::PagedRecords>,
+        max_terms: Option<usize>,
     ) -> Result<(usize, usize)> {
         let snapshot = paged.latest_snapshot();
         let mut collection_statistics = paged
@@ -266,9 +301,17 @@ impl BicDb {
         for entry in paged.scan_index(&snapshot, name)? {
             let (encoded_key, _) = entry?;
             terms.insert(encoded_key);
+            if max_terms.is_some_and(|limit| terms.len() >= limit) {
+                break;
+            }
         }
-        for entry in paged.scan_index_tombstone_terms(&snapshot, name)? {
-            terms.insert(entry?);
+        if max_terms.is_none_or(|limit| terms.len() < limit) {
+            for entry in paged.scan_index_tombstone_terms(&snapshot, name)? {
+                terms.insert(entry?);
+                if max_terms.is_some_and(|limit| terms.len() >= limit) {
+                    break;
+                }
+            }
         }
 
         let mut folded_terms = 0usize;
@@ -413,7 +456,12 @@ impl BicDb {
                 }
                 statistics
             });
-            match (previous_statistics.is_some(), term_statistics.is_some()) {
+            match (
+                previous_statistics
+                    .as_ref()
+                    .is_some_and(|statistics| statistics.document_frequency > 0),
+                term_statistics.is_some(),
+            ) {
                 (false, true) => {
                     collection_statistics.term_count =
                         collection_statistics.term_count.saturating_add(1);
@@ -448,6 +496,15 @@ impl BicDb {
                     paged.put_full_text_document_id(xid, name, *document_id, pk)?;
                     paged.put_full_text_document_statistics(xid, name, *document_id, statistics)?;
                 }
+                if posting_blocks.is_empty() {
+                    // The immutable segment still contains this term. Keep an
+                    // authoritative empty paged block: removing every override
+                    // would make exact/prefix/ranked probes fall back to that
+                    // segment and resurrect its deleted matches. The existing
+                    // numeric codec represents an empty list without new format.
+                    let empty = crate::paged_collection::encode_numeric_posting_block(&[], 0, 0.0);
+                    paged.put_numeric_posting_block(xid, name, &encoded_key, 0, &empty)?;
+                }
                 for (last_document_id, bytes) in &posting_blocks {
                     paged.put_numeric_posting_block(
                         xid,
@@ -470,16 +527,25 @@ impl BicDb {
                 if let Some(statistics) = &term_statistics {
                     paged.put_full_text_term_statistics(xid, name, &encoded_key, statistics)?;
                 } else {
-                    paged.delete_full_text_term_statistics(xid, name, &encoded_key)?;
+                    // An absent dictionary row would likewise fall back to
+                    // the immutable segment's old nonzero statistics.
+                    paged.put_full_text_term_statistics(
+                        xid,
+                        name,
+                        &encoded_key,
+                        &crate::fts_format::FullTextTermStatistics::default(),
+                    )?;
                 }
                 paged.put_full_text_collection_statistics(xid, name, &collection_statistics)
             })?;
             folded_terms += 1;
             blocks_written += posting_blocks.len();
         }
-        paged.checkpoint()?;
-        vacuum_paged_records_to_completion(paged.as_ref())?;
-        paged.sweep_dead_index_entries(usize::MAX)?;
+        if max_terms.is_none() {
+            paged.checkpoint()?;
+            vacuum_paged_records_to_completion(paged.as_ref())?;
+            paged.sweep_dead_index_entries(usize::MAX)?;
+        }
         Ok((folded_terms, blocks_written))
     }
 

@@ -3904,13 +3904,51 @@ fn typed_index_predicate_value(
         let value = cast_value_to_column_type(sql_value_from_index_value(&value), column)?;
         return Ok(index_value_from_sql(value)?);
     }
-    let Some(pg_type) =
-        index_field_pg_type(schema, field).filter(|pg_type| uses_typed_storage(pg_type))
-    else {
+    let pg_type = index_field_pg_type(schema, field);
+    // Integer indexes store `Int` keys, but an integral decimal or double
+    // (`i = 3.0`, `i = 3e0`) compares equal to them in SQL: probe with the
+    // integer key it equals. A fractional value equals no integer and is left
+    // as is (an equality probe then correctly finds nothing; range probes are
+    // declined by `index_range_probe_is_compatible`).
+    if pg_type
+        .as_deref()
+        .and_then(pg_type_oid_by_name)
+        .is_some_and(|oid| matches!(oid, 20 | 21 | 23))
+    {
+        if let Some(key) = integral_integer_index_key(&value) {
+            return Ok(IndexValue::Int(key));
+        }
+    }
+    let Some(pg_type) = pg_type.filter(|pg_type| uses_typed_storage(pg_type)) else {
         return Ok(value);
     };
     let value = cast_value_to_pg_type(sql_value_from_index_value(&value), &pg_type)?;
     pg_typed_index_label(&pg_type, &value).map(IndexValue::String)
+}
+
+/// The exact `i64` a non-integer index probe value equals, if it is integral.
+fn integral_integer_index_key(value: &IndexValue) -> Option<i64> {
+    match value {
+        IndexValue::Float(bits) => {
+            let value = f64::from_bits(decode_ordered_f64(*bits));
+            // 2^63 is exactly representable; every finite double in
+            // [-2^63, 2^63) with no fractional part is an exact i64.
+            (value.is_finite()
+                && value.fract() == 0.0
+                && value >= -9_223_372_036_854_775_808.0
+                && value < 9_223_372_036_854_775_808.0)
+                .then_some(value as i64)
+        }
+        IndexValue::String(text) if is_valid_numeric_text(text) => {
+            let decimal = parse_decimal(text).ok()?;
+            let divisor = num_bigint::BigInt::from(10u8).pow(decimal.scale);
+            if !num_traits::Zero::is_zero(&(&decimal.mantissa % &divisor)) {
+                return None;
+            }
+            num_traits::ToPrimitive::to_i64(&(&decimal.mantissa / &divisor))
+        }
+        _ => None,
+    }
 }
 
 fn index_range_probe_is_compatible(

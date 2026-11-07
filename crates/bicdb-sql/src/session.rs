@@ -1218,12 +1218,43 @@ impl SqlSessionGucState {
     /// Conservatively estimates memory owned by this opaque state, including
     /// effective values, transaction-start snapshots, and local restore data.
     pub fn memory_estimate(&self) -> usize {
+        self.memory_estimate_with(|gucs| string_map_memory_estimate(gucs))
+    }
+
+    /// Records the setting maps this state holds, which copies of it (such as
+    /// savepoints) share until a setting changes.
+    pub fn note_shared_maps(&self, counted: &mut FxHashSet<usize>) {
+        counted.insert(Arc::as_ptr(&self.session_gucs) as usize);
+        if let Some(start) = &self.transaction_start {
+            counted.insert(Arc::as_ptr(&start.session_gucs) as usize);
+        }
+    }
+
+    /// `memory_estimate` for a copy kept beside other states: a setting map
+    /// already in `counted` is not counted again.
+    pub fn memory_estimate_beyond(&self, counted: &mut FxHashSet<usize>) -> usize {
+        self.memory_estimate_with(|gucs| {
+            if counted.insert(Arc::as_ptr(gucs) as usize) {
+                string_map_memory_estimate(gucs)
+            } else {
+                0
+            }
+        })
+    }
+
+    fn memory_estimate_with(
+        &self,
+        mut map_estimate: impl FnMut(&Arc<HashMap<String, String>>) -> usize,
+    ) -> usize {
         std::mem::size_of::<Self>()
-            .saturating_add(string_map_memory_estimate(&self.session_gucs))
+            .saturating_add(map_estimate(&self.session_gucs))
             .saturating_add(
                 self.transaction_start
                     .as_ref()
-                    .map(SqlSessionGucSnapshot::memory_estimate)
+                    .map(|start| {
+                        std::mem::size_of::<SqlSessionGucSnapshot>()
+                            .saturating_add(map_estimate(&start.session_gucs))
+                    })
                     .unwrap_or_default(),
             )
             .saturating_add(optional_string_map_memory_estimate(&self.local_restore))
@@ -1468,12 +1499,6 @@ fn rewrite_composite_value(
             }
         }
         value => Ok(value),
-    }
-}
-
-impl SqlSessionGucSnapshot {
-    fn memory_estimate(&self) -> usize {
-        std::mem::size_of::<Self>().saturating_add(string_map_memory_estimate(&self.session_gucs))
     }
 }
 

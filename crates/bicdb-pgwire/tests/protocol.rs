@@ -5157,17 +5157,50 @@ fn pgwire_savepoint_guc_snapshots_respect_connection_memory_limit() {
     assert_eq!(read_query_rows_with_status(&mut client).1, b'I');
     send_query(&mut client, "BEGIN;");
     assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
-    for name in ["first", "second"] {
-        send_query(&mut client, &format!("SAVEPOINT {name};"));
-        assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
+    // Savepoints share the connection's settings until a setting changes, so
+    // every savepoint here keeps its own large snapshot. The statement that
+    // crosses the limit is rejected (a SET that would leave the oversized
+    // state behind also ends the connection).
+    let mut rejected = None;
+    'steps: for step in 0..16 {
+        let value = format!("{step:02}").repeat(8 * 1024);
+        for sql in [
+            format!("SET app.large = '{value}';"),
+            format!("SAVEPOINT s{step};"),
+        ] {
+            if client.write_all(&query_message(&sql)).is_err() {
+                rejected = Some((step, "connection closed".to_string()));
+                break 'steps;
+            }
+            let mut error = None;
+            loop {
+                let mut header = [0_u8; 5];
+                if client.read_exact(&mut header).is_err() {
+                    error.get_or_insert_with(|| "connection closed".to_string());
+                    break;
+                }
+                let length = u32::from_be_bytes(header[1..5].try_into().unwrap()) as usize;
+                let mut payload = vec![0_u8; length - 4];
+                client.read_exact(&mut payload).unwrap();
+                match header[0] {
+                    b'E' => error = Some(String::from_utf8_lossy(&payload).to_string()),
+                    b'Z' => break,
+                    _ => {}
+                }
+            }
+            if let Some(error) = error {
+                rejected = Some((step, error));
+                break 'steps;
+            }
+        }
     }
-    send_query(&mut client, "SAVEPOINT rejected;");
-    let (error, status) = read_error_response_with_status(&mut client);
-    assert!(error.contains("connection memory estimate"));
-    assert_eq!(status, b'E');
-    send_query(&mut client, "ROLLBACK;");
-    assert_eq!(read_query_rows_with_status(&mut client).1, b'I');
-    client.write_all(b"X\0\0\0\x04").unwrap();
+    let (step, error) = rejected.expect("retained savepoint settings reach the limit");
+    assert!(step >= 2, "rejected after {step} savepoints");
+    assert!(
+        error.contains("connection memory estimate") || error == "connection closed",
+        "{error}"
+    );
+    drop(client);
 
     let mut recovery = TcpStream::connect(address).unwrap();
     startup(&mut recovery);
@@ -5176,6 +5209,58 @@ fn pgwire_savepoint_guc_snapshots_respect_connection_memory_limit() {
     assert_eq!(read_query_rows(&mut recovery), vec![vec!["1".to_string()]]);
     recovery.write_all(b"X\0\0\0\x04").unwrap();
 
+    server.request_shutdown();
+    server_thread.join().unwrap().unwrap();
+}
+
+#[test]
+fn pgwire_unreleased_savepoints_do_not_each_count_the_shared_settings() {
+    // Clients that never release savepoints (statement-level savepoints on
+    // profiles without RELEASE) keep thousands in one transaction.
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = PgWireServer::open(dir.path(), PgWireConfig::default()).unwrap();
+    let server_for_thread = server.clone();
+    let server_thread =
+        thread::spawn(move || bicdb_pgwire::serve_existing_listener(server_for_thread, listener));
+    let mut client = TcpStream::connect(address).unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    // Counted once per savepoint, these settings alone would pass the
+    // default limit after about a thousand savepoints.
+    let value = "s".repeat(8 * 1024);
+    send_query(&mut client, &format!("SET app.context = '{value}';"));
+    assert_eq!(read_query_rows_with_status(&mut client).1, b'I');
+    send_query(&mut client, "CREATE TABLE marks (id INTEGER PRIMARY KEY);");
+    assert_eq!(read_query_rows_with_status(&mut client).1, b'I');
+    send_query(&mut client, "BEGIN;");
+    assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
+    for step in 0..3_000 {
+        send_query(
+            &mut client,
+            &format!("SAVEPOINT \"JDBC_SAVEPOINT_{step}\";"),
+        );
+        assert_eq!(
+            read_query_rows_with_status(&mut client).1,
+            b'T',
+            "savepoint {step}"
+        );
+    }
+    send_query(&mut client, "INSERT INTO marks VALUES (1);");
+    assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
+    send_query(
+        &mut client,
+        "ROLLBACK TO SAVEPOINT \"JDBC_SAVEPOINT_2999\";",
+    );
+    assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
+    send_query(&mut client, "INSERT INTO marks VALUES (2);");
+    assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
+    send_query(&mut client, "COMMIT;");
+    assert_eq!(read_query_rows_with_status(&mut client).1, b'I');
+    send_query(&mut client, "SELECT id FROM marks;");
+    assert_eq!(read_query_rows(&mut client), vec![vec!["2".to_string()]]);
+    client.write_all(b"X\0\0\0\x04").unwrap();
     server.request_shutdown();
     server_thread.join().unwrap().unwrap();
 }
@@ -12515,13 +12600,15 @@ fn send_password(stream: &mut TcpStream, password: &str) {
 }
 
 fn send_query(stream: &mut TcpStream, query: &str) {
-    let mut payload = query.as_bytes().to_vec();
-    payload.push(0);
-    stream.write_all(b"Q").unwrap();
-    stream
-        .write_all(&((payload.len() as i32) + 4).to_be_bytes())
-        .unwrap();
-    stream.write_all(&payload).unwrap();
+    stream.write_all(&query_message(query)).unwrap();
+}
+
+fn query_message(query: &str) -> Vec<u8> {
+    let mut message = b"Q".to_vec();
+    message.extend_from_slice(&((query.len() as i32) + 5).to_be_bytes());
+    message.extend_from_slice(query.as_bytes());
+    message.push(0);
+    message
 }
 
 fn send_parse(stream: &mut TcpStream, name: &str, sql: &str, oids: &[i32]) {

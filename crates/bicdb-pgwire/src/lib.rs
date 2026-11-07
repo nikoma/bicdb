@@ -3063,10 +3063,10 @@ struct SavepointMark {
 }
 
 impl SavepointMark {
-    fn memory_estimate(&self) -> usize {
+    fn memory_estimate(&self, counted: &mut FxHashSet<usize>) -> usize {
         self.name
             .capacity()
-            .saturating_add(self.session_state.memory_estimate())
+            .saturating_add(self.session_state.memory_estimate_beyond(counted))
     }
 }
 
@@ -3246,10 +3246,13 @@ impl ConnectionState {
             .chain(&self.committed_shared_role_ddl)
             .map(String::len)
             .sum::<usize>();
-        let savepoints = self.savepoints.iter().fold(0_usize, |estimate, mark| {
-            estimate.saturating_add(mark.memory_estimate())
-        });
         let session_state = self.session_state.memory_estimate();
+        // Savepoints share the connection's setting maps until one changes.
+        let mut counted = FxHashSet::default();
+        self.session_state.note_shared_maps(&mut counted);
+        let savepoints = self.savepoints.iter().fold(0_usize, |estimate, mark| {
+            estimate.saturating_add(mark.memory_estimate(&mut counted))
+        });
         let copy_in = self
             .copy_in
             .as_ref()

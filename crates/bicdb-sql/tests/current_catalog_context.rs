@@ -152,3 +152,32 @@ fn current_catalog_oracle_transport_keeps_native_context_and_quoted_application_
         assert_eq!(result.column_types, vec![Some("text".into())]);
     }
 }
+
+#[test]
+fn current_catalog_without_from_resolves_through_sessions_inside_and_outside_transactions() {
+    for profile in ["postgres", ORACLE_PREVIEW_PROFILE] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            bicdb_core::DbConfig::default().with_fsync(false),
+        )
+        .unwrap();
+        ensure_database_profile(&mut db, profile).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        let expected = session.execute("SELECT current_database()").unwrap().rows;
+        for (step, sql) in [
+            ("autocommit", "select current_catalog"),
+            ("begin", "BEGIN"),
+            ("transaction", "select current_catalog"),
+            ("transaction-upper", "SELECT CURRENT_CATALOG"),
+            ("commit", "COMMIT"),
+        ] {
+            let result = session
+                .execute(sql)
+                .unwrap_or_else(|error| panic!("{profile} {step}: {error}"));
+            if sql.to_ascii_lowercase().contains("current_catalog") {
+                assert_eq!(result.rows, expected, "{profile} {step}");
+            }
+        }
+    }
+}

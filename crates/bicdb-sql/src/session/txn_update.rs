@@ -2506,6 +2506,11 @@ impl<'db> SqlSession<'db> {
     // of security-definer identity helpers.
     #[inline(never)]
     fn eval_session_function_expr(&mut self, expr: &Expr, function: &Function) -> Result<SqlValue> {
+        if is_current_catalog_keyword(function) {
+            return Ok(SqlValue::String(current_database_from_gucs(
+                &self.session_gucs,
+            )));
+        }
         let dispatch_key = crate::eval::expr_type_scope()
             .filter(|_| crate::eval::can_memoize_routine_expr(expr))
             .map(|(generation, ir)| (generation, ir, function as *const Function as usize));

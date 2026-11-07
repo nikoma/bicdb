@@ -36,6 +36,12 @@ surrogate, with native national type metadata. This closes that source-driver
 observation dependency; BicDB's lossless values, storage, selected PostgreSQL-driver
 codec and complete national-character behavior remain unqualified.
 
+The [PGJDBC type-identity dependency checkpoint](evidence/jdbc-national-type-identity-2026-11-06/README.md)
+verifies the driver's OID-based metadata behavior, same-name enum isolation and
+ordinary array-mapping preservation using real driver objects and a simulated
+catalog. It changes no production SDK code; server types, capability checks,
+value/storage integration and actual wire round trips remain open.
+
 The [correlated EXISTS candidate-probe checkpoint](evidence/sql-correlated-exists-probes-2026-11-06/README.md)
 qualifies bounded statement-local candidate maps and primary-key list lookups,
 with independent PostgreSQL/Oracle-preview result, NULL, duplicate and rollback

@@ -1676,6 +1676,9 @@ impl<'db> SqlSession<'db> {
             false
         };
         let row_engine = self.sql_engine_with_ctes(ctes.clone());
+        // Uncorrelated subqueries in the predicate run once per statement, as
+        // for SELECT and DELETE, instead of once per candidate row.
+        let _subqueries = row_engine.subquery_memo.scope();
         let _exists_probes = row_engine.dml_predicate_probe_scope(table, selection);
         let cell_fields = schema
             .filter(|schema| {

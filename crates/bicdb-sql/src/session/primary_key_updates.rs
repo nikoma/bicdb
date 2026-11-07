@@ -540,6 +540,49 @@ mod tests {
     }
 
     #[test]
+    fn update_with_uncorrelated_in_subquery_runs_it_once() {
+        for profile in ["postgres", "oracle-preview-v1"] {
+            let (_root, mut db) = database(profile);
+            let mut session = SqlSession::new(&mut db);
+            for sql in [
+                r#"CREATE TABLE "Cols"("ColId" NUMERIC(10) PRIMARY KEY,"ElemId" NUMERIC(10))"#,
+                r#"CREATE TABLE "Fields"("FieldId" NUMERIC(10) PRIMARY KEY,"ColId" NUMERIC(10),"Central" CHAR(1),"Name" VARCHAR(20))"#,
+            ] {
+                run(&mut session, profile, sql).unwrap();
+            }
+            for id in 1..=300 {
+                run(
+                    &mut session,
+                    profile,
+                    &format!(r#"INSERT INTO "Cols" VALUES({id},{})"#, id % 10),
+                )
+                .unwrap();
+                run(
+                    &mut session,
+                    profile,
+                    &format!(r#"INSERT INTO "Fields" VALUES({id},{id},'Y','old')"#),
+                )
+                .unwrap();
+            }
+            crate::SQL_PROFILE_STACK
+                .with(|stack| stack.borrow_mut().push(crate::SqlProfileStats::default()));
+            let updated = run(
+                &mut session,
+                profile,
+                r#"UPDATE "Fields" SET "Name"='new' WHERE "ColId" IN (SELECT "ColId" FROM "Cols" WHERE "ElemId"=4) AND "Central"='Y'"#,
+            )
+            .unwrap();
+            let stats = crate::SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().pop().unwrap());
+            assert_eq!(updated.command_complete_tag(), "UPDATE 30", "{profile}");
+            assert!(
+                stats.full_scan_count <= 2,
+                "{profile}: the uncorrelated subquery ran per row ({} scans)",
+                stats.full_scan_count
+            );
+        }
+    }
+
+    #[test]
     fn typed_exact_key_probe_sees_same_transaction_rows_without_scanning() {
         for profile in ["postgres", "oracle-preview-v1"] {
             let (_root, mut db) = database(profile);

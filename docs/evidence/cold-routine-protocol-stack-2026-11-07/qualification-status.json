@@ -1,0 +1,12 @@
+{
+  "status": "SOURCE_REGRESSIONS_VERIFIED_NOT_ADMITTED",
+  "production_admitted": false,
+  "base_source_revision": "93e40a750804eac369f2739e68bdea8d164a789d",
+  "patch_files": [
+    "crates/bicdb-sql/src/virtual_tables.rs",
+    "crates/bicdb-sql/src/session/txn_update.rs",
+    "crates/bicdb-sql/src/routines/quantified_tests.rs",
+    "crates/bicdb-sql/tests/cold_routine_compilation_stack.rs",
+    "crates/bicdb-pgwire/tests/protocol.rs"
+  ]
+}

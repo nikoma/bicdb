@@ -3,6 +3,55 @@ use bicdb_core::{BicDb, Record};
 use std::process::Command;
 
 #[test]
+fn offline_sql_follows_the_persisted_mode_for_reads_and_writes() {
+    for mode in [
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            bicdb_core::DbConfig::default()
+                .with_storage_mode(mode.clone())
+                .with_fsync(false),
+        )
+        .unwrap();
+        {
+            let mut session = bicdb_sql::SqlSession::new(&mut db);
+            session
+                .execute("CREATE TABLE retained_sql(id INT PRIMARY KEY,label TEXT)")
+                .unwrap();
+            session
+                .execute("INSERT INTO retained_sql VALUES(1,'retained')")
+                .unwrap();
+        }
+        db.close().unwrap();
+        for (query, expected) in [
+            ("SELECT label FROM retained_sql WHERE id=1", "retained"),
+            (
+                "UPDATE retained_sql SET label='updated' WHERE id=1 RETURNING label",
+                "updated",
+            ),
+            ("SELECT label FROM retained_sql WHERE id=1", "updated"),
+        ] {
+            let output = Command::new(env!("CARGO_BIN_EXE_bicdb"))
+                .arg("sql")
+                .arg(root.path())
+                .args(["--json", query])
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{mode} {query}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let body = String::from_utf8(output.stdout).unwrap();
+            assert!(body.contains(expected), "{body}");
+        }
+    }
+}
+
+#[test]
 fn migrate_verify_and_inspect_follow_the_persisted_mode() {
     let root = tempfile::tempdir().unwrap();
     let source = root.path().join("source");

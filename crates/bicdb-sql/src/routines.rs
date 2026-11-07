@@ -416,6 +416,7 @@ pub(crate) fn collect_routine_stmt_symbols(
             | RoutineStmt::OpenCursor { .. }
             | RoutineStmt::CloseCursor { .. }
             | RoutineStmt::RaiseException { .. }
+            | RoutineStmt::ReturnNext
             | RoutineStmt::ReturnQuery(_)
             | RoutineStmt::Return(_) => {}
         }
@@ -652,6 +653,7 @@ pub(crate) fn bind_routine_statement_exprs(statements: &mut [RoutineStmt], scope
             | RoutineStmt::SqlInto { .. }
             | RoutineStmt::FetchCursor { .. }
             | RoutineStmt::CloseCursor { .. }
+            | RoutineStmt::ReturnNext
             | RoutineStmt::ReturnQuery(_)
             | RoutineStmt::Return(None) => {}
             // Dynamic SQL is evaluated against the materialized routine frame at
@@ -1707,10 +1709,10 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
             "EXIT with a label is not implemented".to_string(),
         ));
     }
-    if let Some(rest) = strip_prefix_ci(statement, "RAISE") {
+    if let Some(rest) = strip_routine_keyword(statement, "RAISE") {
         return parse_routine_raise(rest.trim());
     }
-    if let Some(rest) = strip_prefix_ci(statement, "PERFORM ") {
+    if let Some(rest) = strip_routine_keyword(statement, "PERFORM") {
         // PERFORM expr is SELECT expr with the rows thrown away. It still sets
         // FOUND, which is how a trigger body asks "did the check function run
         // against a real row".
@@ -1730,7 +1732,7 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
             return Ok(RoutineStmt::OracleDynamicExecute(Box::new(dynamic)));
         }
     }
-    if let Some(rest) = strip_prefix_ci(statement, "EXECUTE") {
+    if let Some(rest) = strip_routine_keyword(statement, "EXECUTE") {
         let rest = rest.trim();
         if rest.is_empty() {
             return Err(SqlError::InvalidSql(
@@ -1746,7 +1748,10 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
         if let Some(rest) = strip_routine_keyword(rest, "QUERY") {
             return Ok(RoutineStmt::ReturnQuery(parse_single_query(rest.trim())?));
         }
-        if strip_routine_keyword(rest, "NEXT").is_some() {
+        if let Some(expression) = strip_routine_keyword(rest, "NEXT") {
+            if expression.trim().is_empty() {
+                return Ok(RoutineStmt::ReturnNext);
+            }
             return Err(SqlError::UnsupportedPlpgsqlFeature(
                 "RETURN NEXT is not implemented".to_string(),
             ));
@@ -1758,14 +1763,14 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
                 .transpose()?,
         ));
     }
-    if let Some(rest) = strip_prefix_ci(statement, "OPEN") {
+    if let Some(rest) = strip_routine_keyword(statement, "OPEN") {
         let (name, arguments) = parameterized_cursors::parse_call(rest.trim())?;
         return Ok(RoutineStmt::OpenCursor { name, arguments });
     }
-    if let Some(rest) = strip_prefix_ci(statement, "FETCH") {
+    if let Some(rest) = strip_routine_keyword(statement, "FETCH") {
         return parse_routine_fetch(rest.trim());
     }
-    if let Some(rest) = strip_prefix_ci(statement, "CLOSE") {
+    if let Some(rest) = strip_routine_keyword(statement, "CLOSE") {
         let name = parse_single_routine_identifier(rest.trim(), "CLOSE")?;
         return Ok(RoutineStmt::CloseCursor { name });
     }

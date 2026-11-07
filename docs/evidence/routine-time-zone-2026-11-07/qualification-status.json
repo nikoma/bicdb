@@ -1,0 +1,9 @@
+{
+  "status": "SOURCE_REGRESSIONS_VERIFIED_NOT_ADMITTED",
+  "production_admitted": false,
+  "source_commit": "acfc830f24aa33d3873d579fb59ce2ddeef9d0aa",
+  "patch_files": [
+    "crates/bicdb-sql/src/session/txn_update.rs",
+    "crates/bicdb-sql/tests/routine_time_zone.rs"
+  ]
+}

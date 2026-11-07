@@ -1,0 +1,13 @@
+{
+  "base_revision": "93e40a750804eac369f2739e68bdea8d164a789d",
+  "checked_base_compile_and_fixture_inputs": 1408,
+  "additional_patch_inputs": 1,
+  "all_compile_and_fixture_inputs_match": true,
+  "patch": {
+    "crates/bicdb-sql/src/virtual_tables.rs": "41e1e7da2e0bb6f8ea90eddac2d8ed5dc7bd1cae1331cadc8426c3bd0d0b6e1e",
+    "crates/bicdb-sql/src/session/txn_update.rs": "d2cbb708f7dc929d9be3c98c982815b2e1d465c8f8045fc2c7802988b817840b",
+    "crates/bicdb-sql/src/routines/quantified_tests.rs": "0bb806604c48b41bd2b75bfae42e1e89c9c97a83f4aa7648d1819651e99a680f",
+    "crates/bicdb-sql/tests/cold_routine_compilation_stack.rs": "a3747e4855267bd8966668e6a601cf944e661763e49d38769983a1856f4d6027",
+    "crates/bicdb-pgwire/tests/protocol.rs": "d3635d8e38f0daedb9302bbfe570747d9439cf761a9258d535d5e0f7b2f9fd6b"
+  }
+}

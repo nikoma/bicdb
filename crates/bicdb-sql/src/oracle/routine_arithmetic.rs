@@ -1792,6 +1792,7 @@ fn statements(
             | RoutineStmt::Null
             | RoutineStmt::FetchCursor { .. }
             | RoutineStmt::CloseCursor { .. }
+            | RoutineStmt::ReturnNext
             | RoutineStmt::Return(None) => {}
         }
     }

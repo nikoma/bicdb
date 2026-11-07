@@ -855,21 +855,22 @@ pub(crate) fn raw_routine_type_details(declaration: &str) -> Result<(RoutineType
             false,
         ));
     }
-    let sql = format!("CREATE TABLE __bicdb_type_probe(value {normalized})");
-    let mut statements = Parser::parse_sql(&PostgreSqlDialect {}, &sql)
+    // Cold helper routines may compile from within deeply nested evaluation.
+    // Parse only the type: a synthetic CREATE TABLE needlessly adds the much
+    // larger statement/column/constraint parser frames to that worker stack.
+    let mut parser = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql(&normalized)
         .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
-    let Some(Statement::CreateTable(table)) = statements.pop() else {
+    let data_type = parser
+        .parse_data_type()
+        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+    if parser.peek_token().token != Token::EOF {
         return Err(SqlError::InvalidSql(format!(
-            "could not parse routine type {declaration}"
+            "unexpected routine type suffix in {declaration}"
         )));
-    };
-    let data_type = &table
-        .columns
-        .first()
-        .ok_or_else(|| SqlError::InvalidSql(format!("empty routine type {declaration}")))?
-        .data_type;
+    }
     Ok((
-        routine_type_schema(data_type)?,
+        routine_type_schema(&data_type)?,
         matches!(data_type, DataType::Date),
     ))
 }

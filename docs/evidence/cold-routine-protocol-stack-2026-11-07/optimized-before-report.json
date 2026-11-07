@@ -1,0 +1,12 @@
+{
+  "status": "FAILED_NOT_ADMITTED",
+  "revision": "93e40a750804eac369f2739e68bdea8d164a789d",
+  "production_cutover": false,
+  "synthetic_only": true,
+  "unified_runtime_qualified": false,
+  "checks": [],
+  "binary_sha256": "50230ca13865e90c7ec95a33b3ca7dde075ef962d160d2779ecc1895a0076087",
+  "error_type": "Error",
+  "error_code": "ECONNRESET",
+  "error": "read ECONNRESET"
+}

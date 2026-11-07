@@ -18,6 +18,51 @@ use sqlx::{Connection as _, Row as _};
 type HmacSha256 = Hmac<Sha256>;
 
 #[test]
+fn cold_monitoring_validator_uses_an_ordinary_protocol_stack() {
+    let dir = tempfile::tempdir().unwrap();
+    {
+        let mut db = BicDb::open(dir.path()).unwrap();
+        SqlSession::new(&mut db)
+            .execute(include_str!(
+                "../../bicdb-sql/tests/fixtures/ehr-monitoring-validator.sql"
+            ))
+            .unwrap();
+    }
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    // Persisted declarations must compile with cold, thread-local IR caches.
+    let server = thread::Builder::new()
+        .name("cold-monitoring-protocol".into())
+        .stack_size(2 * 1024 * 1024)
+        .spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            bicdb_pgwire::handle_client(stream, path).unwrap();
+        })
+        .unwrap();
+    let mut client = TcpStream::connect(address).unwrap();
+    client
+        .set_read_timeout(Some(Duration::from_secs(30)))
+        .unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    send_parse(
+        &mut client,
+        "validate",
+        "SELECT (monitoring_validate_config($1::jsonb)->>'valid')::boolean",
+        &[3802],
+    );
+    let config = include_str!("../../bicdb-sql/tests/fixtures/ehr-monitoring-config.json");
+    send_bind(&mut client, "", "validate", &[config]);
+    send_describe_portal(&mut client, "");
+    send_execute(&mut client, "");
+    send_sync(&mut client);
+    assert_eq!(read_query_rows(&mut client), vec![vec!["t".to_owned()]]);
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
+#[test]
 fn exclusive_transaction_retry_preserves_backend_identity_and_advisory_locks() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

@@ -1632,6 +1632,28 @@ impl BoundExprScope {
         self
     }
 
+    /// Whether `expr` reads an input column of this scope, whose declared
+    /// type the scope does not know.
+    pub(crate) fn references_row_column(&self, expr: &Expr) -> bool {
+        match expr {
+            Expr::Identifier(ident) => matches!(
+                self.bind_identifier(&[ident_value(ident)]),
+                Some(BoundExpr::Column(_))
+            ),
+            Expr::CompoundIdentifier(idents) => matches!(
+                self.bind_identifier(&idents.iter().map(ident_value).collect::<Vec<_>>()),
+                Some(BoundExpr::Column(_))
+            ),
+            Expr::Nested(inner)
+            | Expr::UnaryOp { expr: inner, .. }
+            | Expr::Cast { expr: inner, .. } => self.references_row_column(inner),
+            Expr::BinaryOp { left, right, .. } => {
+                self.references_row_column(left) || self.references_row_column(right)
+            }
+            _ => false,
+        }
+    }
+
     pub(crate) fn known_expr_type(&self, expr: &Expr) -> Option<String> {
         match expr {
             Expr::Identifier(ident) => match self.bind_identifier(&[ident_value(ident)])? {
@@ -1860,8 +1882,12 @@ impl BoundExprScope {
                     let numeric =
                         numeric_comparison_types(left_type.as_deref(), right_type.as_deref());
                     if !numeric
-                        && (left_type.as_deref() == Some("numeric") && right_type.is_none()
-                            || right_type.as_deref() == Some("numeric") && left_type.is_none())
+                        && (left_type.as_deref() == Some("numeric")
+                            && right_type.is_none()
+                            && self.references_row_column(right)
+                            || right_type.as_deref() == Some("numeric")
+                                && left_type.is_none()
+                                && self.references_row_column(left))
                     {
                         return None;
                     }

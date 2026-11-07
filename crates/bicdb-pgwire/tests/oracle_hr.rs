@@ -3652,7 +3652,10 @@ async fn concurrent_locked_counter_allocation_never_fails_and_never_repeats() {
                 let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
                 let connection = tokio::spawn(async move { connection.await.unwrap() });
                 let lock = client
-                    .prepare("SELECT next_value, id FROM counters WHERE name = $1 FOR UPDATE")
+                    .prepare(
+                        "SELECT next_value, id FROM counters AS counters \
+                         WHERE name = $1 AND id > 0 FOR UPDATE OF counters",
+                    )
                     .await
                     .unwrap();
                 let bump = client

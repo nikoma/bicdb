@@ -1836,6 +1836,10 @@ impl<'db> SqlEngine<'db> {
         if let Some(value) = eval_spatial_function_value(&name, &args, &arg_types)? {
             return Ok(value);
         }
+        // A stored function over aggregate results, e.g. f(max(a), max(b)).
+        if let Some(value) = self.eval_stored_sql_function_value(&name, &args)? {
+            return Ok(value);
+        }
         Err(SqlError::Unsupported(format!(
             "function {} is not supported in aggregate projection",
             function.name

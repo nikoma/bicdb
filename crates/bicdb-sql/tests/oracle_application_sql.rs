@@ -272,3 +272,37 @@ fn postgres_drop_table_respects_referencing_foreign_keys() {
         vec![vec!["2"]]
     );
 }
+
+#[test]
+fn stored_functions_apply_to_aggregate_results_across_joins() {
+    let (_root, mut db) = app_database();
+    for source in [
+        "CREATE OR REPLACE FUNCTION daysBetween
+(
+    p_date1     DATE,
+    p_date2     DATE
+)
+ 	RETURN NUMBER
+AS
+BEGIN
+    RETURN (TRUNC(p_date1) - TRUNC(p_date2));
+END;",
+        "CREATE TABLE runs (run_id NUMBER(10) PRIMARY KEY, run_date DATE)",
+        "CREATE TABLE run_entries (entry_id NUMBER(10) PRIMARY KEY, run_id NUMBER(10))",
+        "CREATE TABLE run_lines (line_id NUMBER(10) PRIMARY KEY, entry_id NUMBER(10), invoice_id NUMBER(10))",
+        "INSERT INTO runs VALUES (1, TO_DATE('2024-01-01','YYYY-MM-DD'))",
+        "INSERT INTO runs VALUES (2, TO_DATE('2024-01-11','YYYY-MM-DD'))",
+        "INSERT INTO run_entries VALUES (10, 1)",
+        "INSERT INTO run_lines VALUES (100, 10, 7)",
+    ] {
+        run(&mut db, source).unwrap_or_else(|error| panic!("{source}: {error}"));
+    }
+    let sql = "SELECT COUNT(*), COALESCE(DAYSBETWEEN(MAX(dr2.run_date), MAX(dr.run_date)),0) \
+               FROM runs dr2, runs dr \
+               INNER JOIN run_entries dre ON (dr.run_id=dre.run_id) \
+               INNER JOIN run_lines drl ON (dre.entry_id=drl.entry_id) \
+               WHERE dr2.run_id=2 AND drl.invoice_id=7";
+    assert_eq!(texts(run(&mut db, sql).unwrap()), vec![vec!["1", "10"]]);
+    let none = sql.replace("invoice_id=7", "invoice_id=8");
+    assert_eq!(texts(run(&mut db, &none).unwrap()), vec![vec!["0", "0"]]);
+}

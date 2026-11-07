@@ -684,12 +684,14 @@ fn measure_natural(
         .as_ref()
         .map(|d| d.candidates[d.chosen].signature.label());
     let overridden = last.decisions.iter().any(|d| d.hybrid_override);
+    let nominated = last.decisions.iter().any(|d| d.hybrid_nominated);
     Ok(json!({
         "hybrid": hybrid,
         "warm_ms": median(&mut warm),
         "flushed_ms": median(&mut flushed),
         "chosen": chosen,
         "hybrid_override": overridden,
+        "hybrid_nominated": nominated,
         "rule_decision_us": median(&mut locator_us),
         "wasted_probe_us": median(&mut wasted_us),
         "planner_us": median(&mut planner_us),

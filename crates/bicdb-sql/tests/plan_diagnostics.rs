@@ -145,7 +145,7 @@ fn diagnostics_are_off_by_default() {
 }
 
 #[test]
-fn locator_hybrid_gate_overrides_only_unprobed_shorter_candidates() {
+fn locator_hybrid_gate_nominates_shorter_candidates_and_probes_decide() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();
     let mut session = SqlSession::new(&mut db);
@@ -183,7 +183,7 @@ fn locator_hybrid_gate_overrides_only_unprobed_shorter_candidates() {
         (
             rows,
             locator.candidates[locator.chosen].signature.label(),
-            locator.hybrid_override,
+            (locator.hybrid_nominated, locator.hybrid_override),
             locator.decision_micros.is_some(),
         )
     };
@@ -192,28 +192,31 @@ fn locator_hybrid_gate_overrides_only_unprobed_shorter_candidates() {
     // Without statistics the gate has nothing to compare: the rule stands.
     let (rule_rows, rule_choice, overridden, timed) = chosen(&mut session, trap, Some(true));
     assert_eq!(rule_choice, "IndexLookup(h_region_status/2)");
-    assert!(!overridden && timed);
+    assert!(overridden == (false, false) && timed);
     session.execute("ANALYZE h").unwrap();
     // Default (gate unset in tests) and explicit off: the rule.
     let (rows, choice, overridden, _) = chosen(&mut session, trap, None);
     assert_eq!(
         (choice.as_str(), overridden),
-        ("IndexLookup(h_region_status/2)", false)
+        ("IndexLookup(h_region_status/2)", (false, false))
     );
     assert_eq!(rows, rule_rows);
-    // On: the selective shorter index, same rows.
+    // On: the value-blind composite estimate nominates the shorter index;
+    // its exact probe is smaller, so it wins, with the same rows.
     let (rows, choice, overridden, _) = chosen(&mut session, trap, Some(true));
     assert_eq!(
         (choice.as_str(), overridden),
-        ("IndexLookup(h_customer/1)", true)
+        ("IndexLookup(h_customer/1)", (true, true))
     );
     assert_eq!(rows, rule_rows);
-    // Control: the long prefix is the selective one; no override.
+    // Control: the estimates are the same as in the trap (composite
+    // estimates ignore bound values), so the shorter index is nominated too,
+    // but the long prefix's exact probe is the smaller one and keeps the win.
     let (control_off, _, _, _) = chosen(&mut session, control, Some(false));
     let (control_on, choice, overridden, _) = chosen(&mut session, control, Some(true));
     assert_eq!(
         (choice.as_str(), overridden),
-        ("IndexLookup(h_region_status/2)", false)
+        ("IndexLookup(h_region_status/2)", (true, false))
     );
     assert_eq!(control_on, control_off);
 }

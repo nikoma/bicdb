@@ -5610,9 +5610,10 @@ pub(crate) fn fts_budget_abort(error: &bicdb_core::BicDbError) -> bool {
 
 /// Internal, default-off gate for the statistics-guided locator hybrid: with
 /// ANALYZE statistics, a B-tree candidate with FEWER matched columns than the
-/// rule's winners (one the rule would discard without probing) replaces them
+/// rule's winners (one the rule would discard without probing) is nominated
 /// when its estimated rows are `BICDB_LOCATOR_HYBRID_RATIO` (default 2) times
-/// smaller than the best tied winner's estimate. Ties keep their exact probes.
+/// smaller than the best tied winner's estimate. The nominee is then probed
+/// with the winners and the smallest exact row-id count wins.
 pub(crate) fn locator_hybrid_ratio() -> Option<f64> {
     static GATE: OnceLock<Option<f64>> = OnceLock::new();
     let configured = *GATE.get_or_init(|| {

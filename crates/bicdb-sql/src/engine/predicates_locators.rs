@@ -2034,10 +2034,14 @@ impl<'db> SqlEngine<'db> {
         // Internal, default-off statistics-guided hybrid (see
         // `locator_hybrid_ratio`): the rule discards candidates with fewer
         // matched columns WITHOUT probing them; with ANALYZE statistics, one
-        // of those replaces the winners when its estimated rows are `ratio`
-        // times smaller than the best tied winner's. Tied winners keep their
-        // exact probes.
+        // of those is NOMINATED when its estimated rows are `ratio` times
+        // smaller than the best tied winner's. Estimates only nominate: the
+        // nominee is probed alongside the tied winners and the smallest exact
+        // row-id count wins. Composite estimates ignore the bound values, so
+        // they cannot tell an unselective long prefix from a selective one;
+        // the exact probes can.
         let mut hybrid_override = false;
+        let mut nominated: Option<usize> = None;
         if !forced_applied {
             if let (Some(ratio), Some(stats)) = (
                 locator_hybrid_ratio(),
@@ -2078,11 +2082,7 @@ impl<'db> SqlEngine<'db> {
                         .min();
                     if let (Some(tied), Some((rows, position))) = (tied_best, shorter_best) {
                         if (rows as f64) * ratio <= tied as f64 {
-                            let chosen = candidates.swap_remove(position);
-                            candidates = vec![chosen];
-                            pk_matched = None;
-                            pk_result = None;
-                            hybrid_override = true;
+                            nominated = Some(position);
                         }
                     }
                 }
@@ -2139,8 +2139,9 @@ impl<'db> SqlEngine<'db> {
                 }
             }
         }
-        for (matched_columns, candidate) in candidates {
-            if matched_columns < max_matched {
+        for (position, (matched_columns, candidate)) in candidates.into_iter().enumerate() {
+            let is_nominee = nominated == Some(position);
+            if matched_columns < max_matched && !is_nominee {
                 continue;
             }
             let candidate_signature = traced_signatures
@@ -2184,8 +2185,12 @@ impl<'db> SqlEngine<'db> {
                     .to_vec(),
             };
             let replace = best.as_ref().is_none_or(|(best_prefix_len, best_loc)| {
-                matched_columns > *best_prefix_len
-                    || (matched_columns == *best_prefix_len && rowids.len() < best_loc.len())
+                if nominated.is_some() {
+                    rowids.len() < best_loc.len()
+                } else {
+                    matched_columns > *best_prefix_len
+                        || (matched_columns == *best_prefix_len && rowids.len() < best_loc.len())
+                }
             });
             let probe_micros = probe_started
                 .map(|started| started.elapsed().as_micros() as u64)
@@ -2195,6 +2200,7 @@ impl<'db> SqlEngine<'db> {
                 best = Some((matched_columns, RecordLocators::Rowids(rowids)));
                 best_signature = candidate_signature;
                 best_probe_micros = probe_micros;
+                hybrid_override = is_nominee;
             }
         }
         if let Some(signatures) = traced_signatures {
@@ -2212,6 +2218,7 @@ impl<'db> SqlEngine<'db> {
                     decision_started.map(|started| started.elapsed().as_micros() as u64);
                 decision.wasted_probe_micros =
                     Some(total_probe_micros.saturating_sub(best_probe_micros));
+                decision.hybrid_nominated = nominated.is_some();
                 decision.hybrid_override = hybrid_override;
             });
         }

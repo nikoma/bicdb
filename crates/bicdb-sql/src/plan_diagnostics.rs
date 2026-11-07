@@ -100,7 +100,10 @@ pub struct DecisionTrace {
     /// Locator only: time spent probing tied candidates that were then NOT
     /// used, in microseconds: pure optimization overhead.
     pub wasted_probe_micros: Option<u64>,
-    /// Locator only: the statistics-guided hybrid replaced the rule's choice.
+    /// Locator only: the statistics-guided hybrid nominated a shorter
+    /// candidate for an exact probe.
+    pub hybrid_nominated: bool,
+    /// Locator only: the nominee's probe won, replacing the rule's choice.
     pub hybrid_override: bool,
 }
 
@@ -269,6 +272,7 @@ pub(crate) fn choose_and_record(
             rows_matched: None,
             decision_micros: None,
             wasted_probe_micros: None,
+            hybrid_nominated: false,
             hybrid_override: false,
         });
         chosen
@@ -354,6 +358,7 @@ fn record_decision_with(
             rows_matched: None,
             decision_micros: None,
             wasted_probe_micros: None,
+            hybrid_nominated: false,
             hybrid_override: false,
         });
     });

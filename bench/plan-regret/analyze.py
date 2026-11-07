@@ -23,9 +23,10 @@ latencies of the forced candidates):
                   strongest non-neural baseline a model would have to beat
   analyze         the cost-based planner's choice after a fresh ANALYZE
   hybrid          the rule, except that with statistics a candidate with fewer
-                  matched columns (discarded without probing) replaces the
-                  rule's choice when its estimated rows are HYBRID_RATIO-times
-                  smaller (env, default 2); tie probes are kept
+                  matched columns (discarded without probing) is NOMINATED when
+                  its estimated rows are HYBRID_RATIO-times smaller (env,
+                  default 2); the nominee and the rule's choice are then
+                  compared on exact probed row counts; tie probes are kept
   oracle          fastest measured legal candidate
 
 Fitted/calibrated policies are only scored on the TEST split; every report
@@ -192,7 +193,15 @@ def choose(record, policy, selectivities=None, latency_models=None):
             est = planner_rows_estimate(record, "stats", lbl)
             if est is not None and est * HYBRID_RATIO <= rule_est and est < best[0]:
                 best = (est, lbl)
-        return best[1]
+        nominee = best[1]
+        if nominee == rule_choice:
+            return rule_choice
+        # Estimates only nominate; the nominee and the rule's choice are both
+        # probed and the smaller exact row count wins (ties keep the rule).
+        fetched = lambda lbl: (measured.get(lbl) or {}).get("rows_fetched")
+        if fetched(nominee) is None or fetched(rule_choice) is None:
+            return nominee
+        return nominee if fetched(nominee) < fetched(rule_choice) else rule_choice
     best, best_cost = None, math.inf
     for lbl, m in measured.items():
         kind = executed_kind(lbl)
@@ -305,6 +314,7 @@ def overhead(records, key):
             "max": max(values) if values else float("nan"),
             "share_of_e2e_pct": 100.0 * sum(values) / sum(e2e) if e2e and sum(e2e) else float("nan"),
         }
+    out["nominations"] = sum(bool(r.get(key, {}).get("hybrid_nominated")) for r in records)
     out["overrides"] = sum(bool(r.get(key, {}).get("hybrid_override")) for r in records)
     out["semantic_mismatches"] = sum(not r.get(key, {}).get("semantics_ok", True) for r in records)
     return out
@@ -557,7 +567,7 @@ def main():
                 m = fields[field]
                 lines.append(f"| {key} | {field} | {fmt(m['p50'], 1)} | {fmt(m['p95'], 1)} | "
                              f"{fmt(m['max'], 1)} | {fmt(m['share_of_e2e_pct'], 2)}% |")
-            lines.append(f"| {key} | overrides / mismatches | {fields['overrides']} | {fields['semantic_mismatches']} | | |")
+            lines.append(f"| {key} | nominations / overrides / mismatches | {fields['nominations']} | {fields['overrides']} | {fields['semantic_mismatches']} | |")
     po = summary["planning_overhead"]
     lines.append("\n## Planning overhead\n")
     lines.append(f"EXPLAIN-only planning p50 {fmt(po['nostats_plan_only_ms_p50'], 3)} ms "

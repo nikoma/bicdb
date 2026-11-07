@@ -4580,6 +4580,33 @@ impl<'db> SqlSession<'db> {
                         .transpose()?,
                 })
             }
+            RoutineStmt::ReturnNext => {
+                if frame.returned_set.is_none() || frame.output_names.is_empty() {
+                    return Err(SqlError::InvalidSql(
+                        "bare RETURN NEXT requires a set-returning function with output parameters"
+                            .into(),
+                    ));
+                }
+                // Copy the current OUT values: later assignments must not alter
+                // an already emitted row. RETURN NEXT continues the routine and
+                // does not change FOUND.
+                let row = frame
+                    .output_names
+                    .iter()
+                    .map(|name| frame.get(name))
+                    .collect::<Vec<_>>();
+                let target = frame.returned_set.as_mut().unwrap();
+                let row = row
+                    .into_iter()
+                    .zip(&target.column_types)
+                    .map(|(value, ty)| match ty {
+                        Some(ty) => cast_value_to_pg_type(value, ty),
+                        None => Ok(value),
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                target.rows.push(row);
+                Ok(RoutineControl::Continue)
+            }
             RoutineStmt::ReturnQuery(query) => {
                 if frame.returned_set.is_none() {
                     return Err(SqlError::InvalidSql(

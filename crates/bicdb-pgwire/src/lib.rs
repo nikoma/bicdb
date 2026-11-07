@@ -2670,8 +2670,11 @@ fn handle_frontend_message(
                 parse_complete(stream)?;
             }
             Err(error) => {
+                state.failed_queries += 1;
+                server.failed_queries.fetch_add(1, Ordering::SeqCst);
                 state.record_query_error(&server.config.sql_profile);
                 state.discard_until_sync = true;
+                log_failed_query(server, state, parse_payload_sql(&payload), &error);
                 error_response_for_error(stream, &error)?;
                 if error.closes_connection() {
                     return Ok(false);
@@ -2684,7 +2687,10 @@ fn handle_frontend_message(
                 bind_complete(stream)?;
             }
             Err(error) => {
+                state.failed_queries += 1;
+                server.failed_queries.fetch_add(1, Ordering::SeqCst);
                 state.discard_until_sync = true;
+                log_failed_query(server, state, None, &error);
                 error_response_for_error(stream, &error)?;
                 if error.closes_connection() {
                     return Ok(false);
@@ -2693,7 +2699,12 @@ fn handle_frontend_message(
         },
         b'D' => {
             if let Err(error) = describe_message(stream, &payload, server, state) {
+                // Describe executes row-returning statements early, so its
+                // errors are query failures like Execute's.
+                state.failed_queries += 1;
+                server.failed_queries.fetch_add(1, Ordering::SeqCst);
                 state.discard_until_sync = true;
+                log_failed_query(server, state, None, &error);
                 error_response_for_error(stream, &error)?;
                 if error.closes_connection() {
                     return Ok(false);

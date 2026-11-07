@@ -78,9 +78,13 @@ fn every_executed_candidate_can_be_forced_without_changing_results() {
                 candidate.signature
             );
             if candidate.signature.kind == "FullScan" {
-                assert!(locator
-                    .iter()
-                    .all(|decision| decision.rows_fetched.is_none()));
+                // Declined to locate; the row-set path then scanned the table.
+                assert!(
+                    locator
+                        .iter()
+                        .any(|decision| decision.rows_fetched == Some(3000)),
+                    "{sql}: {locator:?}"
+                );
             } else {
                 assert!(locator
                     .iter()

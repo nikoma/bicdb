@@ -66,10 +66,12 @@ pub struct CandidateTrace {
 /// One single-table access-path decision.
 #[derive(Clone, Debug)]
 pub struct DecisionTrace {
-    /// Which chooser decided: `"planner"` (the cost-based `plan_query`, also
-    /// what EXPLAIN reports) or `"locator"` (the rule-based index locator the
-    /// row-set executor uses: most matched index columns wins, ties broken by
-    /// probing; a full scan only when no index matches).
+    /// Which chooser decided: `"planner"` (the cost-based `plan_query`),
+    /// `"locator"` (the rule-based index locator the row-set executor uses:
+    /// most matched index columns wins, ties broken by probing; a full scan
+    /// only when no index matches), or `"pending-writes"` (the record-id
+    /// chooser used while the table has uncommitted writes in the
+    /// transaction; same rule, but it probes every candidate).
     pub chooser: &'static str,
     /// Table identifier (schema metadata, not data).
     pub collection: String,
@@ -147,6 +149,20 @@ pub fn with_plan_diagnostics<R>(
     (result, decisions)
 }
 
+/// Run `f` under an internal capture scope that inherits the current scope's
+/// options, returning the decisions it made. Used by EXPLAIN to learn the
+/// executing route's choice from the same code that executes it.
+pub(crate) fn capture<R>(f: impl FnOnce() -> R) -> (R, Vec<DecisionTrace>) {
+    let options = STATE.with(|state| {
+        state
+            .borrow()
+            .as_ref()
+            .map(|state| state.options.clone())
+            .unwrap_or_default()
+    });
+    with_plan_diagnostics(options, f)
+}
+
 #[inline]
 pub(crate) fn active() -> bool {
     STATE.with(|state| state.borrow().is_some())
@@ -179,11 +195,13 @@ pub(crate) fn signature_of(kind: &PlanKind) -> PlanSignature {
             index_name, prefix, ..
         } => ("IndexPrefixOrderedScan", Some(index_name), prefix.len()),
         PlanKind::SpatialIndexScan { index_name, .. } => ("SpatialIndexScan", Some(index_name), 0),
-        PlanKind::GeometricIndexScan { index_name, .. } => {
-            ("GeometricIndexScan", Some(index_name), 0)
+        // The user-visible index name (what EXPLAIN prints), not the
+        // per-column internal storage name.
+        PlanKind::GeometricIndexScan { display_name, .. } => {
+            ("GeometricIndexScan", Some(display_name), 0)
         }
-        PlanKind::GeometricKnnIndexScan { index_name, .. } => {
-            ("GeometricKnnIndexScan", Some(index_name), 0)
+        PlanKind::GeometricKnnIndexScan { display_name, .. } => {
+            ("GeometricKnnIndexScan", Some(display_name), 0)
         }
         PlanKind::FullTextIndexScan { index_name, .. } => {
             ("FullTextIndexScan", Some(index_name), 0)
@@ -263,6 +281,36 @@ pub(crate) fn record_locator_decision(
     forced: bool,
     rows_fetched: Option<usize>,
 ) {
+    record_decision_with(
+        "locator",
+        collection,
+        candidates,
+        chosen,
+        forced,
+        rows_fetched,
+    );
+}
+
+/// Record a decision of another rule-based chooser (e.g. `"pending-writes"`,
+/// the record-id path used while the table has uncommitted writes).
+pub(crate) fn record_decision_for(
+    chooser: &'static str,
+    collection: &str,
+    candidates: Vec<PlanSignature>,
+    chosen: &PlanSignature,
+    rows_fetched: Option<usize>,
+) {
+    record_decision_with(chooser, collection, candidates, chosen, false, rows_fetched);
+}
+
+fn record_decision_with(
+    chooser: &'static str,
+    collection: &str,
+    candidates: Vec<PlanSignature>,
+    chosen: &PlanSignature,
+    forced: bool,
+    rows_fetched: Option<usize>,
+) {
     STATE.with(|state| {
         let mut state = state.borrow_mut();
         let Some(state) = state.as_mut() else {
@@ -273,7 +321,7 @@ pub(crate) fn record_locator_decision(
             .position(|candidate| candidate == chosen)
             .unwrap_or(0);
         state.decisions.push(DecisionTrace {
-            chooser: "locator",
+            chooser,
             collection: collection.to_string(),
             total_rows: 0,
             has_statistics: false,

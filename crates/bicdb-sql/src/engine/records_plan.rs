@@ -1208,34 +1208,50 @@ impl<'db> SqlEngine<'db> {
         } else {
             self.plan_query(&collection, &alias_name, select, query)?
         };
-        let mut lines = plan.explain_lines();
+        let planner_lines = plan.explain_lines();
         if analyze {
+            // Execute the statement exactly as a client would and describe
+            // the access path that execution recorded.
             let started = Instant::now();
-            let mut records = self.load_records_for_plan(&collection, &plan)?;
-            if let Some(selection) = &select.selection {
-                let schema = load_schema(self.db_ref(), &collection)?;
-                let predicate_env = self.from_relation_columns(&select.from).unwrap_or_default();
-                let mut filtered = Vec::new();
-                for (idx, record) in records.into_iter().enumerate() {
-                    if idx % 1024 == 0 {
-                        self.check_cancellation()?;
-                    }
-                    let row = row_from_record(&collection, &collection, schema.as_ref(), &record)?;
-                    if self
-                        .eval_row_truth_typed(&row, selection, &predicate_env)?
-                        .unwrap_or(false)
-                    {
-                        filtered.push(record);
-                    }
-                }
-                records = filtered;
+            let (result, decisions) =
+                crate::plan_diagnostics::capture(|| self.execute_query(query));
+            let elapsed = started.elapsed();
+            let result = result?;
+            let executed = ExecutedAccess::from_decisions(&decisions);
+            let mut lines = explain_access_lines(&plan, planner_lines, executed.as_ref());
+            if let Some(fetched) = decisions
+                .iter()
+                .rev()
+                .find(|decision| decision.chooser != "planner" || decision.rows_fetched.is_some())
+                .and_then(|decision| decision.rows_fetched)
+            {
+                lines.push(format!("ActualRowsFetched {fetched}"));
             }
-            lines.push(format!("ActualRows {}", records.len()));
+            lines.push(format!("ActualRows {}", result.rows.len()));
             lines.push(format!(
                 "ActualTimeMs {:.3}",
-                started.elapsed().as_secs_f64() * 1000.0
+                elapsed.as_secs_f64() * 1000.0
+            ));
+            return Ok(SqlResult::new(
+                vec!["QUERY PLAN".to_string()],
+                lines
+                    .into_iter()
+                    .map(|line| vec![SqlValue::String(line)])
+                    .collect(),
             ));
         }
+        let executed = if is_virtual_table(&collection) {
+            None
+        } else {
+            self.predicted_executed_access(
+                &select.from[0],
+                select,
+                query,
+                &collection,
+                &alias_name,
+            )?
+        };
+        let lines = explain_access_lines(&plan, planner_lines, executed.as_ref());
         Ok(SqlResult::new(
             vec!["QUERY PLAN".to_string()],
             lines
@@ -2052,6 +2068,53 @@ impl<'db> SqlEngine<'db> {
         select: &Select,
         query: &Query,
     ) -> Result<Option<RowSet>> {
+        let Some(bounded) = self.bounded_ordered_index_plan(from, select, query)? else {
+            return Ok(None);
+        };
+        let ids = self.db_ref().prefix_ordered_index_records(
+            &bounded.index_name,
+            bounded.prefix.as_slice(),
+            bounded.descending,
+            bounded.limit,
+        )?;
+        let records =
+            self.records_for_ids_with_schema(&bounded.collection, &ids, bounded.schema.as_ref())?;
+        if crate::plan_diagnostics::active() {
+            let signature = bounded.signature();
+            crate::plan_diagnostics::record_decision_for(
+                "bounded-ordered",
+                &bounded.collection,
+                vec![signature.clone()],
+                &signature,
+                Some(records.len()),
+            );
+        }
+        let collection = bounded.collection;
+        let schema = bounded.schema;
+        let alias_name = bounded.alias;
+        let fields = row_fields_for_records(schema.as_ref(), &records);
+        let columns = row_output_columns_from_fields(&collection, &alias_name, &fields);
+        let mut rows = Vec::with_capacity(records.len());
+        for record in &records {
+            rows.push(slot_row_from_record_fields(
+                &collection,
+                &alias_name,
+                &fields,
+                record,
+            )?);
+        }
+        Ok(Some(RowSet { rows, columns }))
+    }
+
+    /// The bounded `WHERE <equality prefix> ORDER BY <next field> LIMIT k`
+    /// index plan the row path executes, if this statement qualifies. Shared
+    /// by execution and EXPLAIN so the two cannot disagree on eligibility.
+    pub(crate) fn bounded_ordered_index_plan(
+        &self,
+        from: &TableWithJoins,
+        select: &Select,
+        query: &Query,
+    ) -> Result<Option<BoundedOrderedIndexPlan>> {
         if !from.joins.is_empty()
             || select.distinct.is_some()
             || has_group_by(select)?
@@ -2100,14 +2163,7 @@ impl<'db> SqlEngine<'db> {
         else {
             return Ok(None);
         };
-        let ids = self.db_ref().prefix_ordered_index_records(
-            &index_name,
-            prefix.as_slice(),
-            descending,
-            limit,
-        )?;
-        let records = self.records_for_ids_with_schema(&collection, &ids, schema.as_ref())?;
-        let alias_name = alias
+        let alias = alias
             .as_ref()
             .map(|alias| alias.name.value.clone())
             .unwrap_or_else(|| {
@@ -2117,18 +2173,69 @@ impl<'db> SqlEngine<'db> {
                     .unwrap_or(&collection)
                     .to_string()
             });
-        let fields = row_fields_for_records(schema.as_ref(), &records);
-        let columns = row_output_columns_from_fields(&collection, &alias_name, &fields);
-        let mut rows = Vec::with_capacity(records.len());
-        for record in &records {
-            rows.push(slot_row_from_record_fields(
-                &collection,
-                &alias_name,
-                &fields,
-                record,
-            )?);
+        Ok(Some(BoundedOrderedIndexPlan {
+            collection,
+            alias,
+            schema,
+            index_name,
+            prefix,
+            descending,
+            limit,
+        }))
+    }
+
+    /// The access path a single-table SELECT will execute, as the chooser of
+    /// the route that runs it decides: the bounded ordered row path, the
+    /// pending-writes record-id chooser, or the row-set index locator.
+    /// `None` when it cannot be determined without executing (EXPLAIN then
+    /// keeps the planner's description).
+    pub(crate) fn predicted_executed_access(
+        &self,
+        from: &TableWithJoins,
+        select: &Select,
+        query: &Query,
+        collection: &str,
+        alias: &str,
+    ) -> Result<Option<ExecutedAccess>> {
+        if let Some(bounded) = self.bounded_ordered_index_plan(from, select, query)? {
+            return Ok(Some(ExecutedAccess {
+                chooser: "bounded-ordered",
+                signature: bounded.signature(),
+            }));
         }
-        Ok(Some(RowSet { rows, columns }))
+        let Some(selection) = select.selection.as_ref() else {
+            return Ok(None);
+        };
+        let schema = load_schema(self.db_ref(), collection)?;
+        let pending = self.tx.is_some_and(|tx| tx.has_pending_writes(collection));
+        let (located, decisions) = crate::plan_diagnostics::capture(|| {
+            if pending {
+                self.indexed_record_ids_for_table_selection(
+                    collection,
+                    alias,
+                    schema.as_ref(),
+                    Some(selection),
+                )
+                .map(|ids| ids.is_some())
+            } else {
+                self.indexed_record_locators_for_table_selection(
+                    collection,
+                    alias,
+                    schema.as_ref(),
+                    Some(selection),
+                )
+                .map(|locators| locators.is_some())
+            }
+        });
+        let located = located?;
+        // A decline hands the statement to the next route (which may use the
+        // planner's non-B-tree index plans), so only a positive choice or a
+        // contradiction proof is authoritative here.
+        if !located {
+            return Ok(None);
+        }
+        Ok(ExecutedAccess::from_decisions(&decisions)
+            .filter(|executed| executed.signature.kind != "FullScan"))
     }
 
     pub(crate) fn primary_key_filter_candidate(
@@ -2811,4 +2918,141 @@ fn contradiction_domain(
         "float8" | "double precision" => NumericDomain::Float,
         _ => return None,
     })
+}
+
+/// A bounded ordered index read the row path will execute.
+pub(crate) struct BoundedOrderedIndexPlan {
+    collection: String,
+    alias: String,
+    schema: Option<TableSchema>,
+    index_name: String,
+    prefix: Vec<IndexValue>,
+    descending: bool,
+    limit: usize,
+}
+
+impl BoundedOrderedIndexPlan {
+    fn signature(&self) -> crate::plan_diagnostics::PlanSignature {
+        crate::plan_diagnostics::PlanSignature {
+            kind: "IndexPrefixOrderedScan",
+            index: Some(self.index_name.clone()),
+            prefix_len: self.prefix.len(),
+        }
+    }
+}
+
+/// The access path an execution route chose (value-free).
+pub(crate) struct ExecutedAccess {
+    chooser: &'static str,
+    signature: crate::plan_diagnostics::PlanSignature,
+}
+
+impl ExecutedAccess {
+    /// The executing decision in a captured trace: a contradiction proof, the
+    /// last rule-based (non-planner) decision, else the planner decision that
+    /// fetched rows.
+    fn from_decisions(decisions: &[crate::plan_diagnostics::DecisionTrace]) -> Option<Self> {
+        if let Some(decision) = decisions
+            .iter()
+            .rev()
+            .find(|decision| decision.contradiction)
+        {
+            return Some(Self {
+                chooser: decision.chooser,
+                signature: crate::plan_diagnostics::PlanSignature {
+                    kind: "Contradiction",
+                    index: None,
+                    prefix_len: 0,
+                },
+            });
+        }
+        // The route that fetched rows executed. A rule-based chooser that
+        // declined (no index matched) hands the statement to the next route,
+        // so it only decides when nothing fetched rows: the scan.
+        let decision = decisions
+            .iter()
+            .rev()
+            .find(|decision| decision.rows_fetched.is_some())
+            .or_else(|| {
+                decisions
+                    .iter()
+                    .rev()
+                    .find(|decision| decision.chooser != "planner")
+            })?;
+        Some(Self {
+            chooser: decision.chooser,
+            signature: decision.candidates.get(decision.chosen)?.signature.clone(),
+        })
+    }
+}
+
+/// EXPLAIN lines for a single-table access. When the executing route agrees
+/// with the cost-based planner the planner's description is kept verbatim;
+/// otherwise the executed access path leads and the planner's choice is shown
+/// on a `PlannerChoice` line.
+fn explain_access_lines(
+    plan: &QueryPlan,
+    planner_lines: Vec<String>,
+    executed: Option<&ExecutedAccess>,
+) -> Vec<String> {
+    let Some(executed) = executed else {
+        return planner_lines;
+    };
+    let planned = crate::plan_diagnostics::signature_of(&plan.kind);
+    let signature = &executed.signature;
+    let agrees = match (planned.kind, signature.kind) {
+        ("PrimaryKeyInLookup", "Contradiction") => planned.prefix_len == 0,
+        ("IndexRange", "IndexRange") => {
+            planned.index == signature.index && signature.prefix_len == 1
+        }
+        (left, right) => {
+            left == right
+                && planned.index == signature.index
+                && (left != "IndexLookup" || planned.prefix_len == signature.prefix_len)
+        }
+    };
+    if agrees {
+        return planner_lines;
+    }
+    let mut lines = match signature.kind {
+        "FullScan" => vec!["FullScan".to_string()],
+        "Contradiction" => vec!["Empty (contradictory WHERE)".to_string()],
+        "IndexLookup" => vec![
+            format!("IndexScan {}", signature.index.as_deref().unwrap_or("?")),
+            format!("PrefixKeys {}", signature.prefix_len),
+        ],
+        "IndexRange" => vec![
+            format!(
+                "IndexRangeScan {}",
+                signature.index.as_deref().unwrap_or("?")
+            ),
+            format!("MatchedColumns {}", signature.prefix_len),
+        ],
+        "IndexPrefixOrderedScan" => vec![
+            format!(
+                "IndexPrefixOrderedScan {}",
+                signature.index.as_deref().unwrap_or("?")
+            ),
+            format!("PrefixKeys {}", signature.prefix_len),
+        ],
+        "PrimaryKeyLocator" => vec![format!(
+            "PrimaryKeyLookup MatchedColumns {}",
+            signature.prefix_len
+        )],
+        other => vec![other.to_string()],
+    };
+    lines.push(format!(
+        "AccessChooser {}",
+        match executed.chooser {
+            "locator" => "index-locator",
+            other => other,
+        }
+    ));
+    lines.push(format!(
+        "PlannerChoice {} EstimatedRows {} Cost {:.3}",
+        planner_lines.first().map(String::as_str).unwrap_or("?"),
+        plan.estimated_rows,
+        plan.estimated_cost
+    ));
+    lines
 }

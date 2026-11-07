@@ -3621,3 +3621,70 @@ async fn oracle_chunked_persistent_blob_append_roundtrips_over_pg_driver_and_rol
     drop(client);
     connection.await.unwrap();
 }
+
+/// Sequence allocation as applications do it: lock the counter row, bump it,
+/// commit. A READ COMMITTED `FOR UPDATE` that waited for another allocator
+/// locks and returns the row's latest version; it never fails.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_locked_counter_allocation_never_fails_and_never_repeats() {
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        let server = Running::with_profile(directory.path(), profile);
+        let mut config = tokio_postgres::Config::new();
+        config
+            .host("127.0.0.1")
+            .port(server.port)
+            .user("bicdb")
+            .dbname("bicdb")
+            .options(&format!("-c bicdb.sql_profile={profile}"));
+        let (setup, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+        let connection = tokio::spawn(async move { connection.await.unwrap() });
+        setup
+            .batch_execute(
+                "CREATE TABLE counters (id INTEGER PRIMARY KEY, name VARCHAR(20), next_value INTEGER); \
+                 INSERT INTO counters VALUES (1, 'doc', 1000)",
+            )
+            .await
+            .unwrap();
+        let workers = (0..8).map(|_| {
+            let config = config.clone();
+            tokio::spawn(async move {
+                let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+                let connection = tokio::spawn(async move { connection.await.unwrap() });
+                let lock = client
+                    .prepare("SELECT next_value, id FROM counters WHERE name = $1 FOR UPDATE")
+                    .await
+                    .unwrap();
+                let bump = client
+                    .prepare("UPDATE counters SET next_value = next_value + 1 WHERE id = $1")
+                    .await
+                    .unwrap();
+                let mut taken = Vec::new();
+                for _ in 0..20 {
+                    client.batch_execute("BEGIN").await.unwrap();
+                    let row = client.query_one(&lock, &[&"doc"]).await.unwrap();
+                    let (value, id): (i32, i32) = (row.get(0), row.get(1));
+                    client.execute(&bump, &[&id]).await.unwrap();
+                    client.batch_execute("COMMIT").await.unwrap();
+                    taken.push(value);
+                }
+                drop(client);
+                connection.await.unwrap();
+                taken
+            })
+        });
+        let mut taken = Vec::new();
+        for worker in workers {
+            taken.extend(worker.await.unwrap());
+        }
+        taken.sort_unstable();
+        assert_eq!(taken, (1000..1160).collect::<Vec<_>>(), "{profile}");
+        let row = setup
+            .query_one("SELECT next_value FROM counters WHERE id = 1", &[])
+            .await
+            .unwrap();
+        assert_eq!(row.get::<_, i32>(0), 1160, "{profile}");
+        drop(setup);
+        connection.await.unwrap();
+    }
+}

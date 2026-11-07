@@ -620,6 +620,32 @@ mod tests {
                 vec![vec![SqlValue::String("two".to_string())]],
                 "{profile}"
             );
+            // A missing NUMERIC key is answered from its canonical id alone.
+            crate::SQL_PROFILE_STACK
+                .with(|stack| stack.borrow_mut().push(crate::SqlProfileStats::default()));
+            let missing = run(
+                &mut session,
+                profile,
+                r#"SELECT "P" FROM "Children" WHERE "C"=999"#,
+            )
+            .map(|result| result.rows);
+            let stats = crate::SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().pop().unwrap());
+            assert!(missing.unwrap().is_empty(), "{profile}");
+            assert_eq!(
+                stats.record_id_prefix_scans, 0,
+                "{profile}: a key miss must not scan"
+            );
+            assert_eq!(
+                run(
+                    &mut session,
+                    profile,
+                    r#"SELECT "P" FROM "Children" WHERE "C"=10.00"#
+                )
+                .unwrap()
+                .rows,
+                vec![vec![SqlValue::String("1".to_string())]],
+                "{profile}"
+            );
             run(&mut session, profile, "ROLLBACK").unwrap();
             assert!(
                 run(&mut session, profile, query).unwrap().rows.is_empty(),

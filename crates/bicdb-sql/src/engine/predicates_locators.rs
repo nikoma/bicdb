@@ -3201,6 +3201,10 @@ impl<'db> SqlEngine<'db> {
                 if self.primary_key_record_id_exists_unchecked(table, record_id)? {
                     return Ok(Some((usize::MAX, vec![record_id.clone()])));
                 }
+                if primary_key_label_is_canonical(schema) {
+                    // No row under the canonical id: none has an equal key.
+                    return Ok(Some((usize::MAX, Vec::new())));
+                }
                 return Ok(Some((
                     usize::MAX,
                     self.primary_key_prefix_record_ids(table, schema, values, record_id)?
@@ -3263,6 +3267,9 @@ impl<'db> SqlEngine<'db> {
                         usize::MAX,
                         RecordLocators::Pks(vec![record_id.clone()]),
                     )));
+                }
+                if primary_key_label_is_canonical(schema) {
+                    return Ok(Some((usize::MAX, RecordLocators::Pks(Vec::new()))));
                 }
                 return Ok(Some((
                     usize::MAX,

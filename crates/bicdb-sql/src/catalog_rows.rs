@@ -4059,6 +4059,31 @@ pub(crate) fn pg_settings_rows() -> Vec<BTreeMap<String, SqlValue>> {
     ]
     .into_iter()
     .map(|(name, setting, vartype)| pg_settings_row(name, setting, vartype))
+    .chain(
+        // Read-only presets describing the server build; drivers read some
+        // (max_index_keys) for database metadata.
+        [
+            ("block_size", "8192", "integer"),
+            ("integer_datetimes", "on", "bool"),
+            ("max_function_args", "100", "integer"),
+            ("max_identifier_length", "63", "integer"),
+            ("max_index_keys", "32", "integer"),
+            ("server_encoding", "UTF8", "string"),
+        ]
+        .into_iter()
+        .map(|(name, setting, vartype)| {
+            let mut row = pg_settings_row(name, setting, vartype);
+            row.insert(
+                "context".to_string(),
+                SqlValue::String("internal".to_string()),
+            );
+            row.insert(
+                "category".to_string(),
+                SqlValue::String("Preset Options".to_string()),
+            );
+            row
+        }),
+    )
     .collect()
 }
 

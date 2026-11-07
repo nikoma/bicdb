@@ -22,6 +22,10 @@ latencies of the forced candidates):
                   TRAIN (latency ~ a_kind + b_kind * rows_fetched) -- the
                   strongest non-neural baseline a model would have to beat
   analyze         the cost-based planner's choice after a fresh ANALYZE
+  hybrid          the rule, except that with statistics a candidate with fewer
+                  matched columns (discarded without probing) replaces the
+                  rule's choice when its estimated rows are HYBRID_RATIO-times
+                  smaller (env, default 2); tie probes are kept
   oracle          fastest measured legal candidate
 
 Fitted/calibrated policies are only scored on the TEST split; every report
@@ -37,6 +41,7 @@ from collections import defaultdict
 from pathlib import Path
 
 CONDITIONS = ("warm", "flushed")
+HYBRID_RATIO = float(__import__("os").environ.get("HYBRID_RATIO", "2"))
 
 
 def load(path):
@@ -163,6 +168,31 @@ def choose(record, policy, selectivities=None, latency_models=None):
         if not decision:
             return label(record["executed"]["chosen"])
         return map_planner_label(record, decision["chosen"])
+    if policy == "hybrid":
+        # Deterministic hybrid: the executed chooser's candidates and its
+        # choice when there are no statistics; with ANALYZE statistics, rank
+        # the index candidates by the planner's estimated rows instead of by
+        # matched-column count. Never prefers a full scan over an index.
+        rule_choice = label(record["executed"]["chosen"])
+        if not (record.get("stats") or {}).get("has_statistics"):
+            return rule_choice
+        # Ties on matched columns were resolved by exact probing, which beats
+        # any estimate: keep them. Only candidates the rule discarded WITHOUT
+        # probing (fewer matched columns) may override it, and only when the
+        # statistics say the rule's choice reads >= 10x more rows.
+        def matched(lbl):
+            return int(lbl.rsplit("/", 1)[1].rstrip(")"))
+        rule_est = planner_rows_estimate(record, "stats", rule_choice)
+        if rule_est is None or executed_kind(rule_choice) == "FullScan":
+            return rule_choice
+        best = (rule_est, rule_choice)
+        for lbl in measured:
+            if executed_kind(lbl) == "FullScan" or matched(lbl) >= matched(rule_choice):
+                continue
+            est = planner_rows_estimate(record, "stats", lbl)
+            if est is not None and est * HYBRID_RATIO <= rule_est and est < best[0]:
+                best = (est, lbl)
+        return best[1]
     best, best_cost = None, math.inf
     for lbl, m in measured.items():
         kind = executed_kind(lbl)
@@ -350,6 +380,7 @@ def main():
             "fitted": lambda r: choose(r, "fitted", selectivities),
             "calibrated": lambda r, m=models: choose(r, "calibrated", selectivities, m),
             "analyze": lambda r: choose(r, "analyze"),
+            "hybrid": lambda r: choose(r, "hybrid"),
             "oracle": lambda r, c=condition: oracle(r, c)[0],
         }
         summary["policies"][condition] = {
@@ -357,7 +388,7 @@ def main():
         }
         summary["policies"][condition + "_all_queries"] = {
             name: policy_metrics(records, condition, choosers[name])
-            for name in ("rule", "heuristic", "analyze", "oracle")
+            for name in ("rule", "heuristic", "analyze", "hybrid", "oracle")
         }
         for ds, rs in sorted(by_dataset.items()):
             ds_test = [r for r in test if r["dataset"] == ds]
@@ -372,6 +403,7 @@ def main():
                 "rule": policy_metrics(rs, condition, choosers["rule"]),
                 "heuristic": policy_metrics(rs, condition, choosers["heuristic"]),
                 "analyze": policy_metrics(rs, condition, choosers["analyze"]),
+                "hybrid": policy_metrics(rs, condition, choosers["hybrid"]),
             }
             for t, rs in sorted(templates.items())
         }
@@ -423,19 +455,19 @@ def main():
                 f"{fmt(m['max_query_regret'])}× | {m['over_2x']} | {m['catastrophic_over_10x']} |"
             )
     lines.append("\n## Per dataset — warm, test split (workload regret % / >10× count)\n")
-    lines.append("| dataset | rule | heuristic | fitted | calibrated | analyze |")
-    lines.append("|---|---:|---:|---:|---:|---:|")
+    lines.append("| dataset | rule | heuristic | fitted | calibrated | analyze | hybrid |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|")
     for ds, conds in summary["per_dataset"].items():
         m = conds["warm"]
         cells = [f"{fmt(m[p]['workload_regret_pct'], 1)}% / {m[p]['catastrophic_over_10x']}"
-                 for p in ("rule", "heuristic", "fitted", "calibrated", "analyze")]
+                 for p in ("rule", "heuristic", "fitted", "calibrated", "analyze", "hybrid")]
         lines.append(f"| {ds} | " + " | ".join(cells) + " |")
     lines.append("\n## Per template — warm, all queries (workload regret %, >10×)\n")
-    lines.append("| template | n | rule | heuristic | analyze |")
-    lines.append("|---|---:|---:|---:|---:|")
+    lines.append("| template | n | rule | heuristic | analyze | hybrid |")
+    lines.append("|---|---:|---:|---:|---:|---:|")
     for t, m in summary["per_template_heuristic_regret"]["warm"].items():
         cells = [f"{fmt(m[p]['workload_regret_pct'], 1)}% ({m[p]['catastrophic_over_10x']})"
-                 for p in ("rule", "heuristic", "analyze")]
+                 for p in ("rule", "heuristic", "analyze", "hybrid")]
         lines.append(f"| {t} | {m['rule']['queries']} | " + " | ".join(cells) + " |")
     lines.append("\n## Cardinality estimation q-error (test split)\n")
     lines.append("| estimator:target | n | median | p90 | p95 | max | share >10× |")

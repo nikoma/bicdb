@@ -4199,6 +4199,9 @@ impl<'db> SqlSession<'db> {
         result
     }
 
+    // Structural recursion must not retain SQL-result and exception-message
+    // temporaries from leaf statements. Cold helper compilation also uses the
+    // same worker stack while nested conditions and loops are active.
     pub(crate) fn execute_routine_statement_inner(
         &mut self,
         frame: &mut RoutineFrame,
@@ -4210,8 +4213,6 @@ impl<'db> SqlSession<'db> {
                 body,
                 handlers,
             } => self.execute_nested_routine_block(frame, declarations, body, handlers),
-            RoutineStmt::ContinueLoop => Ok(RoutineControl::NextIteration),
-            RoutineStmt::ExitLoop => Ok(RoutineControl::ExitLoop),
             RoutineStmt::Loop { body } => loop {
                 self.cancellation.check()?;
                 match self.execute_routine_statements(frame, body)? {
@@ -4233,6 +4234,81 @@ impl<'db> SqlSession<'db> {
                     returned => break Ok(returned),
                 }
             },
+            RoutineStmt::If {
+                condition,
+                then_body,
+                else_body,
+            } => {
+                let condition =
+                    sql_value_truth(self.eval_routine_expr(frame, condition)?)?.unwrap_or(false);
+                if condition {
+                    self.execute_routine_statements(frame, then_body)
+                } else {
+                    self.execute_routine_statements(frame, else_body)
+                }
+            }
+            RoutineStmt::Case {
+                expression,
+                arms,
+                else_body,
+            } => {
+                let selected = self.eval_routine_expr(frame, expression)?;
+                let SqlValue::Int(index) = selected else {
+                    return Err(SqlError::InvalidSql(
+                        "invalid procedural CASE arm index".into(),
+                    ));
+                };
+                if let Ok(index) = usize::try_from(index) {
+                    if let Some(body) = arms.get(index) {
+                        return self.execute_routine_statements(frame, body);
+                    }
+                }
+                if let Some(body) = else_body {
+                    self.execute_routine_statements(frame, body)
+                } else {
+                    Err(SqlError::RaisedException {
+                        message: "case not found".into(),
+                        detail: None,
+                        sqlstate: "20000".into(),
+                    })
+                }
+            }
+            RoutineStmt::ForLoop {
+                iterator,
+                lower,
+                upper,
+                body,
+            } => self.execute_routine_for_loop(frame, iterator, lower, upper, body),
+            RoutineStmt::ForeachLoop {
+                target,
+                slice,
+                array,
+                body,
+            } => self.execute_routine_foreach_loop(frame, target, *slice, array, body),
+            RoutineStmt::QueryForLoop {
+                target,
+                query,
+                body,
+            } => self.execute_routine_query_for_loop(frame, target, query, body),
+            RoutineStmt::CursorForLoop {
+                target,
+                cursor,
+                arguments,
+                body,
+            } => self.execute_routine_cursor_for_loop(frame, target, cursor, arguments, body),
+            _ => self.execute_routine_leaf_statement(frame, statement),
+        }
+    }
+
+    #[inline(never)]
+    fn execute_routine_leaf_statement(
+        &mut self,
+        frame: &mut RoutineFrame,
+        statement: &RoutineStmt,
+    ) -> Result<RoutineControl> {
+        match statement {
+            RoutineStmt::ContinueLoop => Ok(RoutineControl::NextIteration),
+            RoutineStmt::ExitLoop => Ok(RoutineControl::ExitLoop),
             RoutineStmt::Null => Ok(RoutineControl::Continue),
             RoutineStmt::Assignment { target, expr } => {
                 let value = self.eval_routine_expr(frame, expr)?;
@@ -4362,68 +4438,6 @@ impl<'db> SqlSession<'db> {
                 }
                 Ok(RoutineControl::Continue)
             }
-            RoutineStmt::If {
-                condition,
-                then_body,
-                else_body,
-            } => {
-                let condition =
-                    sql_value_truth(self.eval_routine_expr(frame, condition)?)?.unwrap_or(false);
-                if condition {
-                    self.execute_routine_statements(frame, then_body)
-                } else {
-                    self.execute_routine_statements(frame, else_body)
-                }
-            }
-            RoutineStmt::Case {
-                expression,
-                arms,
-                else_body,
-            } => {
-                let selected = self.eval_routine_expr(frame, expression)?;
-                let SqlValue::Int(index) = selected else {
-                    return Err(SqlError::InvalidSql(
-                        "invalid procedural CASE arm index".into(),
-                    ));
-                };
-                if let Ok(index) = usize::try_from(index) {
-                    if let Some(body) = arms.get(index) {
-                        return self.execute_routine_statements(frame, body);
-                    }
-                }
-                if let Some(body) = else_body {
-                    self.execute_routine_statements(frame, body)
-                } else {
-                    Err(SqlError::RaisedException {
-                        message: "case not found".into(),
-                        detail: None,
-                        sqlstate: "20000".into(),
-                    })
-                }
-            }
-            RoutineStmt::ForLoop {
-                iterator,
-                lower,
-                upper,
-                body,
-            } => self.execute_routine_for_loop(frame, iterator, lower, upper, body),
-            RoutineStmt::ForeachLoop {
-                target,
-                slice,
-                array,
-                body,
-            } => self.execute_routine_foreach_loop(frame, target, *slice, array, body),
-            RoutineStmt::QueryForLoop {
-                target,
-                query,
-                body,
-            } => self.execute_routine_query_for_loop(frame, target, query, body),
-            RoutineStmt::CursorForLoop {
-                target,
-                cursor,
-                arguments,
-                body,
-            } => self.execute_routine_cursor_for_loop(frame, target, cursor, arguments, body),
             RoutineStmt::OpenCursor { name, arguments } => {
                 self.open_routine_cursor(frame, name, arguments)?;
                 Ok(RoutineControl::Continue)
@@ -4584,6 +4598,17 @@ impl<'db> SqlSession<'db> {
                     .map(|expr| self.eval_routine_expr(frame, expr))
                     .transpose()?;
                 Ok(RoutineControl::Return(value))
+            }
+            RoutineStmt::Block { .. }
+            | RoutineStmt::Case { .. }
+            | RoutineStmt::CursorForLoop { .. }
+            | RoutineStmt::ForLoop { .. }
+            | RoutineStmt::ForeachLoop { .. }
+            | RoutineStmt::If { .. }
+            | RoutineStmt::Loop { .. }
+            | RoutineStmt::QueryForLoop { .. }
+            | RoutineStmt::WhileLoop { .. } => {
+                unreachable!("structural statement dispatched before leaf execution")
             }
         }
     }

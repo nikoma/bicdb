@@ -9,6 +9,46 @@ fn scalar(source: &str, query: &str) -> Result<SqlValue> {
 }
 
 #[test]
+fn routine_type_parser_preserves_type_details_and_requires_a_complete_type() {
+    for declaration in [
+        "jsonb",
+        "text[]",
+        "numeric(12, 3)",
+        "character varying(40)",
+        "timestamp(3) with time zone",
+        "date",
+        "pg_catalog.int4",
+        "\"care schema\".\"Goal type\"",
+    ] {
+        let statement = format!("CREATE TABLE type_reference(value {declaration})");
+        let Statement::CreateTable(table) = Parser::parse_sql(&PostgreSqlDialect {}, &statement)
+            .unwrap()
+            .remove(0)
+        else {
+            unreachable!()
+        };
+        let data_type = &table.columns[0].data_type;
+        let (actual, date) = raw_routine_type_details(declaration).unwrap();
+        assert_eq!(
+            actual,
+            routine_type_schema(data_type).unwrap(),
+            "{declaration}"
+        );
+        assert_eq!(date, matches!(data_type, DataType::Date), "{declaration}");
+    }
+    for declaration in [
+        "text); SELECT 1; --",
+        "integer, extra text",
+        "text DEFAULT 'x'",
+    ] {
+        assert!(
+            raw_routine_type_details(declaration).is_err(),
+            "{declaration}"
+        );
+    }
+}
+
+#[test]
 fn routine_quantified_json_parameter_and_local_array_use_live_values() {
     let source = r#"CREATE FUNCTION measurement_known(item jsonb, ids text[]) RETURNS boolean LANGUAGE plpgsql AS $$
         BEGIN RETURN (item->>'measurement') = ANY(ids); END $$"#;

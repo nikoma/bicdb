@@ -1,0 +1,193 @@
+warning: Missing auto-load script at offset 0 in section .debug_gdb_scripts
+of file /tmp/ehr-validator-protocol-current-NhJDSI/bicdb.
+Use `info auto-load python-scripts [REGEXP]' to list them.
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+[New Thread 0x7ffff71bf6c0 (LWP 4087942)]
+[Thread 0x7ffff71bf6c0 (LWP 4087942) exited]
+Serving BicDB PostgreSQL wire protocol at 127.0.0.1:34413 for /tmp/ehr-validator-protocol-current-NhJDSI/database
+[New Thread 0x7ffff71bf6c0 (LWP 4087943)]
+[New Thread 0x7ffff69be6c0 (LWP 4087963)]
+[Thread 0x7ffff69be6c0 (LWP 4087963) exited]
+[New Thread 0x7ffff69be6c0 (LWP 4087964)]
+[New Thread 0x7ffff67bd6c0 (LWP 4087965)]
+[New Thread 0x7ffff65bc6c0 (LWP 4087967)]
+[New Thread 0x7ffff63bb6c0 (LWP 4087968)]
+[New Thread 0x7ffff61ba6c0 (LWP 4087969)]
+[New Thread 0x7ffff5fb96c0 (LWP 4087970)]
+[New Thread 0x7ffff5db86c0 (LWP 4087971)]
+[New Thread 0x7ffff5bb76c0 (LWP 4087973)]
+[New Thread 0x7ffff59b66c0 (LWP 4087974)]
+[New Thread 0x7ffff57b56c0 (LWP 4087975)]
+[New Thread 0x7ffff55b46c0 (LWP 4087976)]
+[New Thread 0x7ffff53b36c0 (LWP 4087977)]
+[New Thread 0x7ffff51b26c0 (LWP 4087979)]
+[New Thread 0x7ffff4fb16c0 (LWP 4087980)]
+[Thread 0x7ffff67bd6c0 (LWP 4087965) exited]
+[Thread 0x7ffff69be6c0 (LWP 4087964) exited]
+[New Thread 0x7ffff4db06c0 (LWP 4087981)]
+[New Thread 0x7ffff4baf6c0 (LWP 4087982)]
+[New Thread 0x7ffff49ae6c0 (LWP 4087983)]
+[Thread 0x7ffff5fb96c0 (LWP 4087970) exited]
+[Thread 0x7ffff63bb6c0 (LWP 4087968) exited]
+[New Thread 0x7ffff47ad6c0 (LWP 4087985)]
+[New Thread 0x7ffff45ac6c0 (LWP 4087987)]
+[New Thread 0x7ffff43ab6c0 (LWP 4087988)]
+[Thread 0x7ffff5bb76c0 (LWP 4087973) exited]
+[Thread 0x7ffff65bc6c0 (LWP 4087967) exited]
+[New Thread 0x7fffb7fff6c0 (LWP 4087989)]
+[New Thread 0x7fffb7dfe6c0 (LWP 4087991)]
+[Thread 0x7ffff59b66c0 (LWP 4087974) exited]
+[Thread 0x7ffff61ba6c0 (LWP 4087969) exited]
+[New Thread 0x7fffb7bfd6c0 (LWP 4087992)]
+[Thread 0x7ffff4fb16c0 (LWP 4087980) exited]
+[Thread 0x7ffff5db86c0 (LWP 4087971) exited]
+[Thread 0x7ffff55b46c0 (LWP 4087976) exited]
+[New Thread 0x7fffb79fc6c0 (LWP 4087993)]
+[Thread 0x7ffff49ae6c0 (LWP 4087983) exited]
+[Thread 0x7ffff4baf6c0 (LWP 4087982) exited]
+[Thread 0x7ffff57b56c0 (LWP 4087975) exited]
+[Thread 0x7ffff53b36c0 (LWP 4087977) exited]
+[Thread 0x7ffff51b26c0 (LWP 4087979) exited]
+[Thread 0x7ffff47ad6c0 (LWP 4087985) exited]
+[Thread 0x7ffff4db06c0 (LWP 4087981) exited]
+[Thread 0x7ffff45ac6c0 (LWP 4087987) exited]
+[Thread 0x7ffff43ab6c0 (LWP 4087988) exited]
+[Thread 0x7fffb7fff6c0 (LWP 4087989) exited]
+[Thread 0x7fffb7dfe6c0 (LWP 4087991) exited]
+[Thread 0x7fffb7bfd6c0 (LWP 4087992) exited]
+[Thread 0x7fffb79fc6c0 (LWP 4087993) exited]
+[New Thread 0x7fffb79fc6c0 (LWP 4087994)]
+[Thread 0x7fffb79fc6c0 (LWP 4087994) exited]
+[Thread 0x7ffff71bf6c0 (LWP 4087943) exited]
+[New Thread 0x7fffb79fc6c0 (LWP 4087999)]
+{"timestamp":1794023189,"event":"server.listening","severity":"info","fields":{"address":"127.0.0.1:34413"}}
+[New Thread 0x7fffb7bfd6c0 (LWP 4088000)]
+[New Thread 0x7fffb7dfe6c0 (LWP 4088001)]
+[New Thread 0x7fffb7fff6c0 (LWP 4088002)]
+[New Thread 0x7ffff43ab6c0 (LWP 4088003)]
+[New Thread 0x7ffff45ac6c0 (LWP 4088004)]
+[New Thread 0x7ffff47ad6c0 (LWP 4088006)]
+[New Thread 0x7ffff49ae6c0 (LWP 4088007)]
+[New Thread 0x7ffff4baf6c0 (LWP 4088008)]
+[New Thread 0x7ffff4db06c0 (LWP 4088009)]
+[New Thread 0x7ffff4fb16c0 (LWP 4088010)]
+[New Thread 0x7ffff51b26c0 (LWP 4088012)]
+[New Thread 0x7ffff53b36c0 (LWP 4088013)]
+[New Thread 0x7ffff55b46c0 (LWP 4088014)]
+[New Thread 0x7ffff57b56c0 (LWP 4088015)]
+[New Thread 0x7ffff71bf6c0 (LWP 4088016)]
+[New Thread 0x7ffff69be6c0 (LWP 4088018)]
+[New Thread 0x7ffff67bd6c0 (LWP 4088019)]
+[New Thread 0x7ffff65bc6c0 (LWP 4088020)]
+[New Thread 0x7ffff63bb6c0 (LWP 4088021)]
+[New Thread 0x7ffff61ba6c0 (LWP 4088022)]
+[New Thread 0x7ffff5fb96c0 (LWP 4088024)]
+[New Thread 0x7ffff5db86c0 (LWP 4088025)]
+[New Thread 0x7ffff5bb76c0 (LWP 4088026)]
+[New Thread 0x7ffff59b66c0 (LWP 4088027)]
+[New Thread 0x7fffb77fb6c0 (LWP 4088028)]
+[New Thread 0x7fffb75fa6c0 (LWP 4088029)]
+[New Thread 0x7fffb73f96c0 (LWP 4088031)]
+[New Thread 0x7fffb71f86c0 (LWP 4088032)]
+[New Thread 0x7fffb6ff76c0 (LWP 4088033)]
+[New Thread 0x7fffb6df66c0 (LWP 4088034)]
+[New Thread 0x7fffb6bf56c0 (LWP 4088035)]
+[New Thread 0x7fffb69f46c0 (LWP 4088037)]
+[New Thread 0x7fffb67f36c0 (LWP 4088038)]
+[New Thread 0x7fffb65f26c0 (LWP 4088039)]
+bicdb pgwire listening on 127.0.0.1:34413 — effective limits: --max-connections=2 --max-pending-accepts=100 --max-active-queries=24 (reads 24 / writes 24) --max-queued-queries=96 (reads 96 / writes 96). Defaults are host-sized; set these explicitly for production.
+{"timestamp":1794023189,"event":"server.limits","severity":"info","fields":{"address":"127.0.0.1:34413","max_active_queries":24,"max_active_reads":24,"max_active_writes":24,"max_connections":2,"max_pending_accepts":100,"max_queued_queries":96,"max_queued_reads":96,"max_queued_writes":96}}
+[New Thread 0x7fffb63f16c0 (LWP 4088040)]
+{"timestamp":1794023189,"event":"connection.opened","severity":"info","fields":{"connection_id":1,"database":"bicdb","peer_addr":"127.0.0.1:59288","tls":false,"user":"ehr_bicdb_migration"}}
+
+Thread 65 "tokio-rt-worker" received signal SIGSEGV, Segmentation fault.
+[Switching to Thread 0x7fffb63f16c0 (LWP 4088040)]
+0x000055556faf8e16 in parse_optional_table_constraint () at src/parser/mod.rs:9708
+9708	    pub fn parse_optional_table_constraint(
+#0  0x000055556faf8e16 in parse_optional_table_constraint () at src/parser/mod.rs:9708
+#1  0x000055556f96e4a3 in parse_columns () at src/parser/mod.rs:9113
+#2  0x000055556f9cf38e in parse_create_table () at src/parser/mod.rs:8506
+#3  0x000055556f948a15 in parse_create () at src/parser/mod.rs:5146
+#4  0x000055556f9904ae in parse_statement () at src/parser/mod.rs:638
+#5  0x000055556f9a343a in parse_statements () at src/parser/mod.rs:523
+#6  0x000055556fb47bea in parse_sql () at src/parser/mod.rs:546
+#7  0x0000555564570b73 in raw_routine_type_details () at crates/bicdb-sql/src/virtual_tables.rs:859
+#8  0x0000555564e08fa7 in parse_routine_decl () at crates/bicdb-sql/src/routines.rs:1228
+#9  {closure#2} () at crates/bicdb-sql/src/routines.rs:1055
+#10 {closure#0}<alloc::string::String, core::result::Result<bicdb_sql::RoutineDecl, bicdb_sql::SqlError>, (), core::ops::control_flow::ControlFlow<core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>, ()>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}, core::iter::adapters::{impl#0}::try_fold::{closure_env#0}<core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<alloc::vec::into_iter::IntoIter<alloc::string::String, alloc::alloc::Global>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}>, core::result::Result<core::convert::Infallible, bicdb_sql::SqlError>, (), core::iter::traits::iterator::Iterator::try_for_each::call::{closure_env#0}<bicdb_sql::RoutineDecl, core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>, fn(bicdb_sql::RoutineDecl) -> core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>>, core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>>> () at /rustc/ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96/library/core/src/iter/adapters/map.rs:95
+#11 {closure#0}<alloc::string::String, (), core::ops::control_flow::ControlFlow<core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>, ()>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}, core::iter::adapters::map::map_try_fold::{closure_env#0}<alloc::string::String, core::result::Result<bicdb_sql::RoutineDecl, bicdb_sql::SqlError>, (), core::ops::control_flow::ControlFlow<core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>, ()>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}, core::iter::adapters::{impl#0}::try_fold::{closure_env#0}<core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<alloc::vec::into_iter::IntoIter<alloc::string::String, alloc::alloc::Global>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}>, core::result::Result<core::convert::Infallible, bicdb_sql::SqlError>, (), core::iter::traits::iterator::Iterator::try_for_each::call::{closure_env#0}<bicdb_sql::RoutineDecl, core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>, fn(bicdb_sql::RoutineDecl) -> core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>>, core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>>>> () at /rustc/ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96/library/core/src/iter/adapters/filter.rs:86
+#12 try_fold<alloc::string::String, alloc::alloc::Global, (), core::iter::adapters::filter::filter_try_fold::{closure_env#0}<alloc::string::String, (), core::ops::control_flow::ControlFlow<core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>, ()>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}, core::iter::adapters::map::map_try_fold::{closure_env#0}<alloc::string::String, core::result::Result<bicdb_sql::RoutineDecl, bicdb_sql::SqlError>, (), core::ops::control_flow::ControlFlow<core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>, ()>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}, core::iter::adapters::{impl#0}::try_fold::{closure_env#0}<core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<alloc::vec::into_iter::IntoIter<alloc::string::String, alloc::alloc::Global>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}>, core::result::Result<core::convert::Infallible, bicdb_sql::SqlError>, (), core::iter::traits::iterator::Iterator::try_for_each::call::{closure_env#0}<bicdb_sql::RoutineDecl, core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>, fn(bicdb_sql::RoutineDecl) -> core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>>, core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>>>>, core::ops::control_flow::ControlFlow<core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>, ()>> () at /rustc/ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96/library/alloc/src/vec/into_iter.rs:401
+#13 0x00005555643833f0 in try_fold<alloc::vec::into_iter::IntoIter<alloc::string::String, alloc::alloc::Global>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}, (), core::iter::adapters::map::map_try_fold::{closure_env#0}<alloc::string::String, core::result::Result<bicdb_sql::RoutineDecl, bicdb_sql::SqlError>, (), core::ops::control_flow::ControlFlow<core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>, ()>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}, core::iter::adapters::{impl#0}::try_fold::{closure_env#0}<core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<alloc::vec::into_iter::IntoIter<alloc::string::String, alloc::alloc::Global>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}>, core::result::Result<core::convert::Infallible, bicdb_sql::SqlError>, (), core::iter::traits::iterator::Iterator::try_for_each::call::{closure_env#0}<bicdb_sql::RoutineDecl, core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>, fn(bicdb_sql::RoutineDecl) -> core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>>, core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>>>, core::ops::control_flow::ControlFlow<core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>, ()>> () at /rustc/ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96/library/core/src/iter/adapters/filter.rs:157
+#14 try_fold<core::result::Result<bicdb_sql::RoutineDecl, bicdb_sql::SqlError>, core::iter::adapters::filter::Filter<alloc::vec::into_iter::IntoIter<alloc::string::String, alloc::alloc::Global>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}, (), core::iter::adapters::{impl#0}::try_fold::{closure_env#0}<core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<alloc::vec::into_iter::IntoIter<alloc::string::String, alloc::alloc::Global>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}>, core::result::Result<core::convert::Infallible, bicdb_sql::SqlError>, (), core::iter::traits::iterator::Iterator::try_for_each::call::{closure_env#0}<bicdb_sql::RoutineDecl, core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>, fn(bicdb_sql::RoutineDecl) -> core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>>, core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>>, core::ops::control_flow::ControlFlow<core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>, ()>> () at /rustc/ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96/library/core/src/iter/adapters/map.rs:121
+#15 0x0000555564e3e18a in try_fold<core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<alloc::vec::into_iter::IntoIter<alloc::string::String, alloc::alloc::Global>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}>, core::result::Result<core::convert::Infallible, bicdb_sql::SqlError>, (), core::iter::traits::iterator::Iterator::try_for_each::call::{closure_env#0}<bicdb_sql::RoutineDecl, core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>, fn(bicdb_sql::RoutineDecl) -> core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>>, core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>> () at /rustc/ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96/library/core/src/iter/adapters/mod.rs:195
+#16 try_for_each<core::iter::adapters::GenericShunt<core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<alloc::vec::into_iter::IntoIter<alloc::string::String, alloc::alloc::Global>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}>, core::result::Result<core::convert::Infallible, bicdb_sql::SqlError>>, fn(bicdb_sql::RoutineDecl) -> core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>, core::ops::control_flow::ControlFlow<bicdb_sql::RoutineDecl, ()>> () at /rustc/ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96/library/core/src/iter/traits/iterator.rs:2558
+#17 next<core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<alloc::vec::into_iter::IntoIter<alloc::string::String, alloc::alloc::Global>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}>, core::result::Result<core::convert::Infallible, bicdb_sql::SqlError>> () at /rustc/ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96/library/core/src/iter/adapters/mod.rs:177
+#18 0x000055556373e6eb in from_iter<bicdb_sql::RoutineDecl, core::iter::adapters::GenericShunt<core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<alloc::vec::into_iter::IntoIter<alloc::string::String, alloc::alloc::Global>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}>, core::result::Result<core::convert::Infallible, bicdb_sql::SqlError>>> () at /rustc/ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96/library/alloc/src/vec/spec_from_iter_nested.rs:24
+#19 from_iter<bicdb_sql::RoutineDecl, core::iter::adapters::GenericShunt<core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<alloc::vec::into_iter::IntoIter<alloc::string::String, alloc::alloc::Global>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}>, core::result::Result<core::convert::Infallible, bicdb_sql::SqlError>>> () at /rustc/ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96/library/alloc/src/vec/in_place_collect.rs:245
+#20 0x00005555651a4e6f in from_iter<bicdb_sql::RoutineDecl, core::iter::adapters::GenericShunt<core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<alloc::vec::into_iter::IntoIter<alloc::string::String, alloc::alloc::Global>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}>, core::result::Result<core::convert::Infallible, bicdb_sql::SqlError>>> () at /rustc/ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96/library/alloc/src/vec/mod.rs:3891
+#21 collect<core::iter::adapters::GenericShunt<core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<alloc::vec::into_iter::IntoIter<alloc::string::String, alloc::alloc::Global>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}>, core::result::Result<core::convert::Infallible, bicdb_sql::SqlError>>, alloc::vec::Vec<bicdb_sql::RoutineDecl, alloc::alloc::Global>> () at /rustc/ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96/library/core/src/iter/traits/iterator.rs:2092
+#22 {closure#0}<bicdb_sql::RoutineDecl, bicdb_sql::SqlError, alloc::vec::Vec<bicdb_sql::RoutineDecl, alloc::alloc::Global>, core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<alloc::vec::into_iter::IntoIter<alloc::string::String, alloc::alloc::Global>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}>> () at /rustc/ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96/library/core/src/result.rs:2156
+#23 try_process<core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<alloc::vec::into_iter::IntoIter<alloc::string::String, alloc::alloc::Global>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}>, bicdb_sql::RoutineDecl, core::result::Result<core::convert::Infallible, bicdb_sql::SqlError>, core::result::{impl#26}::from_iter::{closure_env#0}<bicdb_sql::RoutineDecl, bicdb_sql::SqlError, alloc::vec::Vec<bicdb_sql::RoutineDecl, alloc::alloc::Global>, core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<alloc::vec::into_iter::IntoIter<alloc::string::String, alloc::alloc::Global>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}>>, alloc::vec::Vec<bicdb_sql::RoutineDecl, alloc::alloc::Global>> () at /rustc/ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96/library/core/src/iter/adapters/mod.rs:163
+#24 from_iter<bicdb_sql::RoutineDecl, bicdb_sql::SqlError, alloc::vec::Vec<bicdb_sql::RoutineDecl, alloc::alloc::Global>, core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<alloc::vec::into_iter::IntoIter<alloc::string::String, alloc::alloc::Global>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}>> () at /rustc/ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96/library/core/src/result.rs:2156
+#25 collect<core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<alloc::vec::into_iter::IntoIter<alloc::string::String, alloc::alloc::Global>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#1}>, bicdb_sql::routines::parse_plpgsql_block::{closure_env#2}>, core::result::Result<alloc::vec::Vec<bicdb_sql::RoutineDecl, alloc::alloc::Global>, bicdb_sql::SqlError>> () at /rustc/ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96/library/core/src/iter/traits/iterator.rs:2092
+#26 parse_plpgsql_block () at crates/bicdb-sql/src/routines.rs:1056
+#27 0x000055556519df14 in parse_plpgsql_body () at crates/bicdb-sql/src/routines.rs:1023
+#28 0x000055556503c55f in compile_routine_ir_in_catalog () at crates/bicdb-sql/src/routines.rs:129
+#29 compile_cached_routine_ir_in_catalog () at crates/bicdb-sql/src/routines.rs:272
+#30 resolve_routine_cached () at crates/bicdb-sql/src/schema_meta.rs:4552
+#31 0x00005555640c76e3 in eval_stored_function_value () at crates/bicdb-sql/src/session/txn_update.rs:3388
+#32 0x00005555640c629d in eval_session_function_expr () at crates/bicdb-sql/src/session/txn_update.rs:2652
+#33 0x000055556408c038 in eval_session_expr () at crates/bicdb-sql/src/session/txn_update.rs:2722
+#34 0x00005555640a1d40 in eval_session_binary_expr () at crates/bicdb-sql/src/session/txn_update.rs:2973
+#35 0x000055556408a836 in eval_session_expr () at crates/bicdb-sql/src/session/txn_update.rs:2732
+#36 0x0000555564088451 in eval_routine_expr_inner () at crates/bicdb-sql/src/session/txn_update.rs:4946
+#37 eval_routine_expr () at crates/bicdb-sql/src/session/txn_update.rs:4910
+#38 0x00005555640de460 in execute_routine_statement_inner () at crates/bicdb-sql/src/session/txn_update.rs:4238
+#39 0x00005555640b155a in execute_routine_statement () at crates/bicdb-sql/src/session/txn_update.rs:4169
+#40 0x00005555640ce616 in execute_routine_statements () at crates/bicdb-sql/src/session/txn_update.rs:4127
+#41 0x00005555640e9cde in execute_routine_statement_inner () at crates/bicdb-sql/src/session/txn_update.rs:4373
+#42 0x00005555640b155a in execute_routine_statement () at crates/bicdb-sql/src/session/txn_update.rs:4169
+#43 0x00005555640ce616 in execute_routine_statements () at crates/bicdb-sql/src/session/txn_update.rs:4127
+#44 0x00005555640e9ca6 in execute_routine_statement_inner () at crates/bicdb-sql/src/session/txn_update.rs:4375
+#45 0x00005555640b155a in execute_routine_statement () at crates/bicdb-sql/src/session/txn_update.rs:4169
+#46 0x00005555640ce616 in execute_routine_statements () at crates/bicdb-sql/src/session/txn_update.rs:4127
+#47 0x00005555640e9ca6 in execute_routine_statement_inner () at crates/bicdb-sql/src/session/txn_update.rs:4375
+#48 0x00005555640b155a in execute_routine_statement () at crates/bicdb-sql/src/session/txn_update.rs:4169
+#49 0x00005555640ce616 in execute_routine_statements () at crates/bicdb-sql/src/session/txn_update.rs:4127
+#50 0x00005555640e9ca6 in execute_routine_statement_inner () at crates/bicdb-sql/src/session/txn_update.rs:4375
+#51 0x00005555640b155a in execute_routine_statement () at crates/bicdb-sql/src/session/txn_update.rs:4169
+#52 0x00005555640ce616 in execute_routine_statements () at crates/bicdb-sql/src/session/txn_update.rs:4127
+#53 0x00005555640e9ca6 in execute_routine_statement_inner () at crates/bicdb-sql/src/session/txn_update.rs:4375
+#54 0x00005555640b155a in execute_routine_statement () at crates/bicdb-sql/src/session/txn_update.rs:4169
+#55 0x000055556411b0e2 in execute_routine_statements () at crates/bicdb-sql/src/session/txn_update.rs:4127
+#56 execute_routine_block () at crates/bicdb-sql/src/session/txn_update.rs:4039
+#57 execute_plpgsql_function_value_inner () at crates/bicdb-sql/src/session/txn_update.rs:3905
+#58 execute_plpgsql_function_value_in_context () at crates/bicdb-sql/src/session/txn_update.rs:3776
+#59 0x00005555640c9749 in execute_plpgsql_function_value () at crates/bicdb-sql/src/session/txn_update.rs:3765
+#60 {closure#0} () at crates/bicdb-sql/src/session/txn_update.rs:3404
+#61 0x00005555640c86ec in execute_with_routine_security<bicdb_sql::SqlValue, bicdb_sql::session::txn_update::{impl#2}::eval_stored_function_value::{closure_env#0}> () at /rustc/ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96/library/alloc/src/raw_vec/mod.rs:434
+#62 eval_stored_function_value () at crates/bicdb-sql/src/session/txn_update.rs:3400
+#63 0x00005555640c629d in eval_session_function_expr () at crates/bicdb-sql/src/session/txn_update.rs:2652
+#64 0x000055556408c038 in eval_session_expr () at crates/bicdb-sql/src/session/txn_update.rs:2722
+#65 0x0000555564088451 in eval_routine_expr_inner () at crates/bicdb-sql/src/session/txn_update.rs:4946
+#66 eval_routine_expr () at crates/bicdb-sql/src/session/txn_update.rs:4910
+#67 0x00005555640de460 in execute_routine_statement_inner () at crates/bicdb-sql/src/session/txn_update.rs:4238
+#68 0x00005555640b155a in execute_routine_statement () at crates/bicdb-sql/src/session/txn_update.rs:4169
+#69 0x00005555640ce616 in execute_routine_statements () at crates/bicdb-sql/src/session/txn_update.rs:4127
+#70 0x00005555640e3dc6 in execute_routine_for_loop () at crates/bicdb-sql/src/session/txn_update.rs:4657
+#71 execute_routine_statement_inner () at crates/bicdb-sql/src/session/txn_update.rs:4409
+#72 0x00005555640b155a in execute_routine_statement () at crates/bicdb-sql/src/session/txn_update.rs:4169
+#73 0x00005555640ce616 in execute_routine_statements () at crates/bicdb-sql/src/session/txn_update.rs:4127
+#74 0x00005555640e9ca6 in execute_routine_statement_inner () at crates/bicdb-sql/src/session/txn_update.rs:4375
+#75 0x00005555640b155a in execute_routine_statement () at crates/bicdb-sql/src/session/txn_update.rs:4169
+#76 0x00005555640ce616 in execute_routine_statements () at crates/bicdb-sql/src/session/txn_update.rs:4127
+#77 0x00005555640e9cde in execute_routine_statement_inner () at crates/bicdb-sql/src/session/txn_update.rs:4373
+#78 0x00005555640b155a in execute_routine_statement () at crates/bicdb-sql/src/session/txn_update.rs:4169
+#79 0x00005555640ce616 in execute_routine_statements () at crates/bicdb-sql/src/session/txn_update.rs:4127
+Exception ignored in: <gdb._GdbFile object at 0x7fbd342e1460>
+Traceback (most recent call last):
+  File "/usr/share/gdb/python/gdb/__init__.py", line 62, in flush
+    def flush(self):
+
+KeyboardInterrupt: 

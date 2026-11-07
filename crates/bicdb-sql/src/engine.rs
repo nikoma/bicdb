@@ -444,6 +444,7 @@ impl ParameterTypeResolver<'_, '_> {
                 | RoutineStmt::FetchCursor { .. }
                 | RoutineStmt::CloseCursor { .. }
                 | RoutineStmt::Rethrow
+                | RoutineStmt::ReturnNext
                 | RoutineStmt::Return(None) => {}
             }
         }

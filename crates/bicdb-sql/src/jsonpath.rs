@@ -318,6 +318,19 @@ fn is_ident_continue(character: char) -> bool {
     is_ident_start(character) || character.is_ascii_digit()
 }
 
+/// Result of one optional parser step: the extended expression, or the
+/// original back when the next token does not continue it.
+enum Postfix {
+    Extended(Expr),
+    Unchanged(Expr),
+}
+
+#[cold]
+#[inline(never)]
+fn unexpected_token(context: &str, token: Token) -> SqlError {
+    syntax_error(format!("{context}, found {token:?}"))
+}
+
 struct Parser {
     tokens: Vec<Token>,
     cursor: usize,
@@ -388,115 +401,190 @@ impl Parser {
             .map_err(|error| syntax_error(error.message().to_string()))
     }
 
+    /// Kept tiny on purpose: it sits on every level of the parser's
+    /// recursion (`prefix` -> `nested_expression` -> `expression`), so its
+    /// frame, not the operator loop's, multiplies by the nesting depth.
     fn expression(&mut self, min_binding_power: u8) -> Result<Expr> {
-        let mut left = self.prefix()?;
-        loop {
-            while let Some(next) = self.postfix(left.clone())? {
-                // Each postfix step wraps the accumulated expression in
-                // another node, so a FLAT chain like `$.a.a.a…` or
-                // `$[0][0][0]…` builds a tree exactly as deep as the chain is
-                // long — even though this loop is iterative and never
-                // recurses. The nesting budget only fired on constructs that
-                // recurse during parsing (parens, filters), so a few thousand
-                // accessors sailed past it and then overflowed the stack in
-                // evaluation and in the recursive `Drop` of the tree itself.
-                // A stack overflow is a hardware fault, not a panic: it aborts
-                // the process for every tenant, and `catch_unwind` cannot hold
-                // it. Charge tree depth here, where the depth is actually
-                // created, and never `leave` — the level persists in the tree
-                // for the rest of the parse.
-                self.charge_tree_depth()?;
-                left = next;
-            }
-            if matches!(self.peek(), Token::Ident(value) if value.eq_ignore_ascii_case("starts")) {
-                if 5 < min_binding_power {
-                    break;
-                }
-                self.next();
-                match self.next() {
-                    Token::Ident(value) if value.eq_ignore_ascii_case("with") => {}
-                    token => {
-                        return Err(syntax_error(format!(
-                            "expected WITH after STARTS, found {token:?}"
-                        )))
-                    }
-                }
-                let right = self.expression(6)?;
-                self.charge_tree_depth()?;
-                left = Expr::Binary(Box::new(left), BinaryOp::StartsWith, Box::new(right));
-                continue;
-            }
-            if matches!(self.peek(), Token::Ident(value) if value.eq_ignore_ascii_case("like_regex"))
-            {
-                if 5 < min_binding_power {
-                    break;
-                }
-                self.next();
-                let right = self.expression(6)?;
-                let flags = if matches!(self.peek(), Token::Ident(value) if value.eq_ignore_ascii_case("flag"))
-                {
-                    self.next();
-                    match self.next() {
-                        Token::String(flags) => flags,
-                        token => {
-                            return Err(syntax_error(format!(
-                                "expected quoted flags after FLAG, found {token:?}"
-                            )))
-                        }
-                    }
-                } else {
-                    String::new()
-                };
-                self.charge_tree_depth()?;
-                left = Expr::LikeRegex(Box::new(left), Box::new(right), flags);
-                continue;
-            }
-            let (operator, left_power, right_power) = match self.peek() {
-                Token::Or => (BinaryOp::Or, 1, 2),
-                Token::And => (BinaryOp::And, 3, 4),
-                Token::Eq => (BinaryOp::Eq, 5, 6),
-                Token::NotEq => (BinaryOp::NotEq, 5, 6),
-                Token::Lt => (BinaryOp::Lt, 5, 6),
-                Token::LtEq => (BinaryOp::LtEq, 5, 6),
-                Token::Gt => (BinaryOp::Gt, 5, 6),
-                Token::GtEq => (BinaryOp::GtEq, 5, 6),
-                Token::Plus => (BinaryOp::Add, 7, 8),
-                Token::Minus => (BinaryOp::Subtract, 7, 8),
-                Token::Star => (BinaryOp::Multiply, 9, 10),
-                Token::Slash => (BinaryOp::Divide, 9, 10),
-                Token::Percent => (BinaryOp::Modulo, 9, 10),
-                Token::Ident(value) if value.eq_ignore_ascii_case("is") => {
-                    if 5 < min_binding_power {
-                        break;
-                    }
-                    self.next();
-                    match self.next() {
-                        Token::Ident(value) if value.eq_ignore_ascii_case("unknown") => {
-                            self.charge_tree_depth()?;
-                            left = Expr::IsUnknown(Box::new(left));
-                            continue;
-                        }
-                        token => {
-                            return Err(syntax_error(format!(
-                                "expected UNKNOWN after IS, found {token:?}"
-                            )))
-                        }
-                    }
-                }
-                _ => break,
-            };
-            if left_power < min_binding_power {
-                break;
-            }
-            self.next();
-            let right = self.expression(right_power)?;
-            self.charge_tree_depth()?;
-            left = Expr::Binary(Box::new(left), operator, Box::new(right));
-        }
-        Ok(left)
+        let left = self.prefix()?;
+        self.expression_tail(left, min_binding_power)
     }
 
+    /// The operator loop. Like every function on the recursion path it only
+    /// dispatches: each step that recurses lives in its own small outlined
+    /// helper, so a nesting level costs a handful of small frames rather than
+    /// one frame sized for every arm's temporaries.
+    #[inline(never)]
+    fn expression_tail(&mut self, mut left: Expr, min_binding_power: u8) -> Result<Expr> {
+        loop {
+            // Each postfix step wraps the accumulated expression in another
+            // node, so a FLAT chain like `$.a.a.a…` or `$[0][0][0]…` builds a
+            // tree exactly as deep as the chain is long — even though this
+            // loop is iterative and never recurses. That depth overflows the
+            // stack in evaluation and in the tree's recursive `Drop`, and a
+            // stack overflow is a hardware fault, not a panic: it aborts the
+            // process for every tenant. Charge tree depth here, where the
+            // depth is created, and never `leave` — the level persists.
+            loop {
+                match self.postfix(left)? {
+                    Postfix::Extended(next) => {
+                        self.charge_tree_depth()?;
+                        left = next;
+                    }
+                    Postfix::Unchanged(unchanged) => {
+                        left = unchanged;
+                        break;
+                    }
+                }
+            }
+            match self.infix(left, min_binding_power)? {
+                Postfix::Extended(next) => left = next,
+                Postfix::Unchanged(done) => return Ok(done),
+            }
+        }
+    }
+
+    /// One infix step, or `Unchanged` when the next token ends this operand.
+    #[inline(never)]
+    fn infix(&mut self, left: Expr, min_binding_power: u8) -> Result<Postfix> {
+        let (operator, left_power, right_power) = match self.peek() {
+            Token::Ident(value) if value.eq_ignore_ascii_case("starts") => {
+                if 5 < min_binding_power {
+                    return Ok(Postfix::Unchanged(left));
+                }
+                return self.starts_with(left).map(Postfix::Extended);
+            }
+            Token::Ident(value) if value.eq_ignore_ascii_case("like_regex") => {
+                if 5 < min_binding_power {
+                    return Ok(Postfix::Unchanged(left));
+                }
+                return self.like_regex(left).map(Postfix::Extended);
+            }
+            Token::Ident(value) if value.eq_ignore_ascii_case("is") => {
+                if 5 < min_binding_power {
+                    return Ok(Postfix::Unchanged(left));
+                }
+                return self.is_unknown(left).map(Postfix::Extended);
+            }
+            Token::Or => (BinaryOp::Or, 1, 2),
+            Token::And => (BinaryOp::And, 3, 4),
+            Token::Eq => (BinaryOp::Eq, 5, 6),
+            Token::NotEq => (BinaryOp::NotEq, 5, 6),
+            Token::Lt => (BinaryOp::Lt, 5, 6),
+            Token::LtEq => (BinaryOp::LtEq, 5, 6),
+            Token::Gt => (BinaryOp::Gt, 5, 6),
+            Token::GtEq => (BinaryOp::GtEq, 5, 6),
+            Token::Plus => (BinaryOp::Add, 7, 8),
+            Token::Minus => (BinaryOp::Subtract, 7, 8),
+            Token::Star => (BinaryOp::Multiply, 9, 10),
+            Token::Slash => (BinaryOp::Divide, 9, 10),
+            Token::Percent => (BinaryOp::Modulo, 9, 10),
+            _ => return Ok(Postfix::Unchanged(left)),
+        };
+        if left_power < min_binding_power {
+            return Ok(Postfix::Unchanged(left));
+        }
+        self.binary(left, operator, right_power)
+            .map(Postfix::Extended)
+    }
+
+    #[inline(never)]
+    fn binary(&mut self, left: Expr, operator: BinaryOp, right_power: u8) -> Result<Expr> {
+        self.next();
+        let right = self.nested_expression(right_power)?;
+        self.charge_tree_depth()?;
+        Ok(Expr::Binary(Box::new(left), operator, Box::new(right)))
+    }
+
+    #[inline(never)]
+    fn starts_with(&mut self, left: Expr) -> Result<Expr> {
+        self.next();
+        let with = self.next();
+        if !matches!(&with, Token::Ident(value) if value.eq_ignore_ascii_case("with")) {
+            return Err(unexpected_token("expected WITH after STARTS", with));
+        }
+        let right = self.nested_expression(6)?;
+        self.charge_tree_depth()?;
+        Ok(Expr::Binary(
+            Box::new(left),
+            BinaryOp::StartsWith,
+            Box::new(right),
+        ))
+    }
+
+    #[inline(never)]
+    fn like_regex(&mut self, left: Expr) -> Result<Expr> {
+        self.next();
+        let right = self.nested_expression(6)?;
+        let flags = self.like_regex_flags()?;
+        self.charge_tree_depth()?;
+        Ok(Expr::LikeRegex(Box::new(left), Box::new(right), flags))
+    }
+
+    #[inline(never)]
+    fn like_regex_flags(&mut self) -> Result<String> {
+        if !matches!(self.peek(), Token::Ident(value) if value.eq_ignore_ascii_case("flag")) {
+            return Ok(String::new());
+        }
+        self.next();
+        match self.next() {
+            Token::String(flags) => Ok(flags),
+            token => Err(unexpected_token("expected quoted flags after FLAG", token)),
+        }
+    }
+
+    #[inline(never)]
+    fn is_unknown(&mut self, left: Expr) -> Result<Expr> {
+        self.next();
+        let unknown = self.next();
+        if !matches!(&unknown, Token::Ident(value) if value.eq_ignore_ascii_case("unknown")) {
+            return Err(unexpected_token("expected UNKNOWN after IS", unknown));
+        }
+        self.charge_tree_depth()?;
+        Ok(Expr::IsUnknown(Box::new(left)))
+    }
+
+    /// Dispatches without holding the atoms' temporaries: the recursive forms
+    /// (parentheses, EXISTS, unary operators) go through small outlined
+    /// helpers so each nesting level costs only a few small frames.
     fn prefix(&mut self) -> Result<Expr> {
+        match self.peek() {
+            Token::LParen => self.parenthesized(),
+            Token::Not | Token::Plus | Token::Minus => self.unary(),
+            Token::Ident(value) if value.eq_ignore_ascii_case("exists") => self.exists(),
+            _ => self.atom(),
+        }
+    }
+
+    #[inline(never)]
+    fn parenthesized(&mut self) -> Result<Expr> {
+        self.next();
+        let expression = self.nested_expression(0)?;
+        self.expect(Token::RParen)?;
+        Ok(expression)
+    }
+
+    #[inline(never)]
+    fn unary(&mut self) -> Result<Expr> {
+        let operator = match self.next() {
+            Token::Not => UnaryOp::Not,
+            Token::Plus => UnaryOp::Plus,
+            _ => UnaryOp::Minus,
+        };
+        Ok(Expr::Unary(operator, Box::new(self.nested_expression(11)?)))
+    }
+
+    #[inline(never)]
+    fn exists(&mut self) -> Result<Expr> {
+        self.next();
+        self.expect(Token::LParen)?;
+        let expression = self.nested_expression(0)?;
+        self.expect(Token::RParen)?;
+        Ok(Expr::Exists(Box::new(expression)))
+    }
+
+    /// Non-recursive leaves.
+    #[inline(never)]
+    fn atom(&mut self) -> Result<Expr> {
         Ok(match self.next() {
             Token::Root => Expr::Root,
             Token::Current => Expr::Current,
@@ -516,20 +604,6 @@ impl Parser {
             Token::Ident(value) if value.eq_ignore_ascii_case("null") => {
                 Expr::Literal(JsonValue::Null)
             }
-            Token::Ident(value) if value.eq_ignore_ascii_case("exists") => {
-                self.expect(Token::LParen)?;
-                let expression = self.nested_expression(0)?;
-                self.expect(Token::RParen)?;
-                Expr::Exists(Box::new(expression))
-            }
-            Token::LParen => {
-                let expression = self.nested_expression(0)?;
-                self.expect(Token::RParen)?;
-                expression
-            }
-            Token::Not => Expr::Unary(UnaryOp::Not, Box::new(self.nested_expression(11)?)),
-            Token::Plus => Expr::Unary(UnaryOp::Plus, Box::new(self.nested_expression(11)?)),
-            Token::Minus => Expr::Unary(UnaryOp::Minus, Box::new(self.nested_expression(11)?)),
             token => {
                 return Err(syntax_error(format!(
                     "unexpected token {token:?} in jsonpath expression"
@@ -538,63 +612,81 @@ impl Parser {
         })
     }
 
-    fn postfix(&mut self, left: Expr) -> Result<Option<Expr>> {
+    /// One accessor step after `left`, or `Unchanged` when there is none.
+    /// Takes `left` by value: the old signature cloned the whole accumulated
+    /// tree on every step of a chain.
+    #[inline(never)]
+    fn postfix(&mut self, left: Expr) -> Result<Postfix> {
         match self.peek() {
-            Token::Dot => {
-                self.next();
-                match self.next() {
-                    Token::String(name) | Token::Ident(name) => {
-                        if matches!(self.peek(), Token::LParen) {
-                            self.next();
-                            let mut arguments = Vec::new();
-                            if !matches!(self.peek(), Token::RParen) {
-                                loop {
-                                    arguments.push(self.expression(0)?);
-                                    if !matches!(self.peek(), Token::Comma) {
-                                        break;
-                                    }
-                                    self.next();
-                                }
-                            }
-                            self.expect(Token::RParen)?;
-                            let method = Method::parse(&name).ok_or_else(|| {
-                                syntax_error(format!("unknown jsonpath method {name}()"))
-                            })?;
-                            validate_method_argument_count(method, arguments.len())?;
-                            Ok(Some(Expr::Method(Box::new(left), method, arguments)))
-                        } else {
-                            Ok(Some(Expr::Member(Box::new(left), name)))
-                        }
-                    }
-                    Token::Star => {
-                        if matches!(self.peek(), Token::Star) {
-                            self.next();
-                            let (minimum, maximum) = self.descendant_bounds()?;
-                            Ok(Some(Expr::Descendant(Box::new(left), minimum, maximum)))
-                        } else {
-                            Ok(Some(Expr::MemberWildcard(Box::new(left))))
-                        }
-                    }
-                    token => Err(syntax_error(format!(
-                        "expected member, wildcard, or method after '.', found {token:?}"
-                    ))),
+            Token::Dot => self.member_step(left).map(Postfix::Extended),
+            Token::LBracket => self.array_step(left).map(Postfix::Extended),
+            Token::Question => self.filter_step(left).map(Postfix::Extended),
+            _ => Ok(Postfix::Unchanged(left)),
+        }
+    }
+
+    #[inline(never)]
+    fn member_step(&mut self, left: Expr) -> Result<Expr> {
+        self.next();
+        match self.next() {
+            Token::String(name) | Token::Ident(name) => {
+                if matches!(self.peek(), Token::LParen) {
+                    self.method_call(left, name)
+                } else {
+                    Ok(Expr::Member(Box::new(left), name))
                 }
             }
-            Token::LBracket => {
-                self.next();
-                let selectors = self.array_selectors()?;
-                self.expect(Token::RBracket)?;
-                Ok(Some(Expr::Array(Box::new(left), selectors)))
+            Token::Star => {
+                if matches!(self.peek(), Token::Star) {
+                    self.next();
+                    let (minimum, maximum) = self.descendant_bounds()?;
+                    Ok(Expr::Descendant(Box::new(left), minimum, maximum))
+                } else {
+                    Ok(Expr::MemberWildcard(Box::new(left)))
+                }
             }
-            Token::Question => {
-                self.next();
-                self.expect(Token::LParen)?;
-                let predicate = self.expression(0)?;
-                self.expect(Token::RParen)?;
-                Ok(Some(Expr::Filter(Box::new(left), Box::new(predicate))))
-            }
-            _ => Ok(None),
+            token => Err(unexpected_token(
+                "expected member, wildcard, or method after '.'",
+                token,
+            )),
         }
+    }
+
+    #[inline(never)]
+    fn method_call(&mut self, left: Expr, name: String) -> Result<Expr> {
+        self.next();
+        let mut arguments = Vec::new();
+        if !matches!(self.peek(), Token::RParen) {
+            loop {
+                arguments.push(self.nested_expression(0)?);
+                if !matches!(self.peek(), Token::Comma) {
+                    break;
+                }
+                self.next();
+            }
+        }
+        self.expect(Token::RParen)?;
+        let method = Method::parse(&name)
+            .ok_or_else(|| syntax_error(format!("unknown jsonpath method {name}()")))?;
+        validate_method_argument_count(method, arguments.len())?;
+        Ok(Expr::Method(Box::new(left), method, arguments))
+    }
+
+    #[inline(never)]
+    fn array_step(&mut self, left: Expr) -> Result<Expr> {
+        self.next();
+        let selectors = self.array_selectors()?;
+        self.expect(Token::RBracket)?;
+        Ok(Expr::Array(Box::new(left), selectors))
+    }
+
+    #[inline(never)]
+    fn filter_step(&mut self, left: Expr) -> Result<Expr> {
+        self.next();
+        self.expect(Token::LParen)?;
+        let predicate = self.nested_expression(0)?;
+        self.expect(Token::RParen)?;
+        Ok(Expr::Filter(Box::new(left), Box::new(predicate)))
     }
 
     fn descendant_bounds(&mut self) -> Result<(usize, Option<usize>)> {

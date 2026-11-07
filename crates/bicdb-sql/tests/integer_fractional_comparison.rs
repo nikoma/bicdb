@@ -20,17 +20,20 @@ fn ids(session: &mut SqlSession<'_>, sql: &str) -> Vec<i64> {
     ids
 }
 
-#[test]
-fn integer_columns_compare_exactly_with_fractional_literals() {
+fn integer_columns_compare_exactly(reopen: bool) {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();
-    let mut session = SqlSession::new(&mut db);
-    session
+    SqlSession::new(&mut db)
         .execute(
             "CREATE TABLE m (id int4 PRIMARY KEY, i int4, s int2, b int8);
              INSERT INTO m VALUES (1, 2, 2, 2), (2, 3, 3, 3), (3, NULL, NULL, NULL), (4, -3, -3, -3);",
         )
         .unwrap();
+    if reopen {
+        drop(db);
+        db = BicDb::open(root.path()).unwrap();
+    }
+    let mut session = SqlSession::new(&mut db);
     for column in ["i", "s", "b"] {
         let cases: [(&str, &[i64]); 12] = [
             ("{c} = 2.5", &[]),
@@ -56,4 +59,14 @@ fn integer_columns_compare_exactly_with_fractional_literals() {
             }
         }
     }
+}
+
+#[test]
+fn integer_columns_compare_exactly_with_fractional_literals() {
+    integer_columns_compare_exactly(false);
+}
+
+#[test]
+fn integer_columns_compare_exactly_with_fractional_literals_after_reopen() {
+    integer_columns_compare_exactly(true);
 }

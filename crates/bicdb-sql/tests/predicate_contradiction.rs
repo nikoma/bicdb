@@ -171,22 +171,24 @@ fn contradiction_semantics_hold_for_aggregates_and_dml() {
 }
 
 #[test]
-fn positional_parameters_participate_only_when_bound() {
+fn bound_parameters_never_change_results() {
+    // Host-bound `$n` parameters run through the bound-expression path, which
+    // does not consult the single-table planner, so detection must neither
+    // fire nor alter results there; literal-bound predicates are covered above.
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();
     {
         let mut session = SqlSession::new(&mut db);
         session.execute(SETUP).unwrap();
     }
-    let cases: [(&str, Vec<SqlValue>, bool); 5] = [
-        ("i > $1 AND i < $2", vec![SqlValue::Int(60), SqlValue::Int(30)], true),
-        ("i > $1 AND i < $2", vec![SqlValue::Int(30), SqlValue::Int(61)], false),
-        ("i = $1", vec![SqlValue::Null], true),
-        ("f > $1 AND f < $2", vec![SqlValue::Float(1.5), SqlValue::Float(1.0)], true),
-        // A double parameter on an integer column is left to the evaluator.
-        ("i > $1 AND i < $2", vec![SqlValue::Float(60.0), SqlValue::Int(30)], false),
+    let cases: [(&str, Vec<SqlValue>); 5] = [
+        ("i > $1 AND i < $2", vec![SqlValue::Int(60), SqlValue::Int(30)]),
+        ("i > $1 AND i < $2", vec![SqlValue::Int(29), SqlValue::Int(61)]),
+        ("i = $1", vec![SqlValue::Null]),
+        ("f > $1 AND f < $2", vec![SqlValue::Float(1.5), SqlValue::Float(1.0)]),
+        ("i > $1 AND i < $2", vec![SqlValue::Float(60.0), SqlValue::Int(30)]),
     ];
-    for (predicate, parameters, expect_detected) in cases {
+    for (predicate, parameters) in cases {
         let sql = format!("SELECT id FROM c WHERE {predicate}");
         let mut run = |detect: bool| {
             let mut session = SqlSession::new(&mut db).with_positional_parameters(parameters.clone());
@@ -195,12 +197,12 @@ fn positional_parameters_participate_only_when_bound() {
         let (baseline, _) = run(false);
         let (optimized, decisions) = run(true);
         assert_eq!(optimized, baseline, "result changed for: {predicate} {parameters:?}");
-        assert_eq!(
-            detected(&decisions),
-            expect_detected,
-            "detection mismatch for: {predicate} {parameters:?}"
-        );
+        assert!(!detected(&decisions), "{predicate} {parameters:?}: {decisions:?}");
     }
+    // The literal-bound equivalents are detected.
+    let mut session = SqlSession::new(&mut db);
+    assert!(check(&mut session, "i > 60 AND i < 30"));
+    assert!(!check(&mut session, "i > 29 AND i < 61"));
 }
 
 #[test]

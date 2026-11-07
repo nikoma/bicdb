@@ -330,11 +330,11 @@ pub(crate) fn conjunction_is_unsatisfiable(
     let mut terms = Vec::new();
     flatten_and(selection, &mut terms);
     let mut facts: BTreeMap<String, ColumnFacts> = BTreeMap::new();
-    let mut record = |column: ColumnRef| -> &mut ColumnFacts {
+    fn record(facts: &mut BTreeMap<String, ColumnFacts>, column: ColumnRef) -> &mut ColumnFacts {
         let entry = facts.entry(column.key).or_default();
         entry.domain = Some(column.domain);
         entry
-    };
+    }
 
     for term in terms {
         match term {
@@ -356,7 +356,7 @@ pub(crate) fn conjunction_is_unsatisfiable(
                     // A comparison with NULL is never TRUE.
                     Some(ConstValue::Null) => return true,
                     Some(ConstValue::Number(number)) => {
-                        let facts = record(col);
+                        let facts = record(&mut facts, col);
                         facts.compared = true;
                         facts.atoms.push(Atom::Cmp(op, number));
                     }
@@ -365,12 +365,12 @@ pub(crate) fn conjunction_is_unsatisfiable(
             }
             Expr::IsNull(inner) => {
                 if let Some(col) = column(inner) {
-                    record(col).is_null = true;
+                    record(&mut facts, col).is_null = true;
                 }
             }
             Expr::IsNotNull(inner) => {
                 if let Some(col) = column(inner) {
-                    record(col).is_not_null = true;
+                    record(&mut facts, col).is_not_null = true;
                 }
             }
             Expr::Between {
@@ -385,7 +385,7 @@ pub(crate) fn conjunction_is_unsatisfiable(
                 match (constant(low), constant(high)) {
                     (Some(ConstValue::Null), _) | (_, Some(ConstValue::Null)) => return true,
                     (Some(ConstValue::Number(low)), Some(ConstValue::Number(high))) => {
-                        let facts = record(col);
+                        let facts = record(&mut facts, col);
                         facts.compared = true;
                         facts.atoms.push(Atom::Cmp(CmpOp::GtEq, low));
                         facts.atoms.push(Atom::Cmp(CmpOp::LtEq, high));
@@ -420,7 +420,7 @@ pub(crate) fn conjunction_is_unsatisfiable(
                     // Every member is NULL: never TRUE.
                     return true;
                 }
-                let facts = record(col);
+                let facts = record(&mut facts, col);
                 facts.compared = true;
                 facts.atoms.push(Atom::InSet(members));
             }

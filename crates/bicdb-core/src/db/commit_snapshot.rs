@@ -45,6 +45,32 @@ impl BicDb {
             .fetch_max(contiguous, AtomicOrdering::SeqCst);
     }
 
+    /// Waits until new snapshots see `commit_seq`. The visibility watermark
+    /// covers only the contiguous applied prefix, so while a lower sequence is
+    /// still applying, a commit acknowledged now would be invisible to the
+    /// next transaction of every other session. Lower sequences are past
+    /// validation and only applying; a fenced database or a stall past the
+    /// bound stops the wait rather than hanging the commit.
+    pub(crate) fn wait_until_visible(&self, commit_seq: u64) {
+        let mut spins = 0_u32;
+        let mut started = None;
+        while self.last_committed_tx.load(AtomicOrdering::SeqCst) < commit_seq {
+            if self.recovery_required.load(AtomicOrdering::Acquire) {
+                return;
+            }
+            if spins < 64 {
+                spins += 1;
+                std::hint::spin_loop();
+                continue;
+            }
+            let started = *started.get_or_insert_with(std::time::Instant::now);
+            if started.elapsed() > std::time::Duration::from_secs(5) {
+                return;
+            }
+            std::thread::yield_now();
+        }
+    }
+
     /// Encodes a committed transaction's WAL frames into a single byte buffer
     /// (no write). Replicated databases persist a marker even for an empty
     /// commit: its acknowledged sequence must survive promotion or restart.

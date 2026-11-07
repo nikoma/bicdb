@@ -2485,6 +2485,9 @@ impl BicDb {
         // Publish visibility only after this seq's records are fully applied; the
         // watermark advances across the contiguous applied prefix (see above).
         self.mark_committed_seq(commit_seq);
+        // Row-lock waiters wake to re-read the row, so release them only once
+        // this commit is visible to their refreshed snapshots.
+        self.wait_until_visible(commit_seq);
         let locked_keys = tx.locked_keys.get_mut().take_all();
         release_owned_write_locks(&self.write_locks, tx.id, &locked_keys);
         tx.state = TxState::Committed;

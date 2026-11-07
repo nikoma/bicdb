@@ -1294,8 +1294,8 @@ impl<'db> SqlEngine<'db> {
         self.non_btree_index_records(table, alias, schema, selection)
     }
 
-    /// Non-B-tree index access (GIN jsonb/array/full-text, GiST geometric,
-    /// spatial) for the row-set executor once the B-tree locator declined.
+    /// Non-B-tree index access (GIN jsonb/array, GiST geometric, spatial) for
+    /// the row-set executor once the B-tree locator declined.
     /// Without this the row-set path scanned the whole table even though the
     /// planner (and EXPLAIN) chose the index. The caller re-applies the full
     /// WHERE, so each candidate only needs to be a superset, which is the same
@@ -1387,11 +1387,10 @@ impl<'db> SqlEngine<'db> {
             record(kind, &index_name, records.len());
             return Ok(Some(records));
         }
-        if let Some(ids) = self.full_text_index_record_ids(table, alias, schema, selection)? {
-            let records = self.records_for_ids_with_schema(table, &ids, schema)?;
-            record("FullTextIndexScan", "full_text", records.len());
-            return Ok(Some(records));
-        }
+        // Full-text search is deliberately absent: it has dedicated execution
+        // paths (ranking, interrupted-build handling) outside the row-set
+        // executor, and the row path's scan is the oracle they are tested
+        // against.
         Ok(None)
     }
 

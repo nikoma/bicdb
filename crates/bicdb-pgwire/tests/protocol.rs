@@ -894,6 +894,83 @@ fn cluster_shares_transactional_roles_but_isolates_user_types() {
 }
 
 #[test]
+fn current_catalog_keeps_name_oid_in_simple_and_prepared_protocols() {
+    for profile in ["postgres", "oracle-hr-v1", "oracle-preview-v1"] {
+        let dir = tempfile::tempdir().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = PgWireServer::open(
+            dir.path(),
+            PgWireConfig {
+                sql_profile: profile.into(),
+                fsync: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let serving = server.clone();
+        let task = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
+        let mut client = TcpStream::connect(address).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(15)))
+            .unwrap();
+        send_startup_version_with_options(
+            &mut client,
+            196_608,
+            true,
+            &[("options", &format!("-c bicdb.sql_profile={profile}"))],
+        );
+        read_until_ready(&mut client);
+        let read_catalog = |client: &mut TcpStream, format: i16| {
+            let mut fields = Vec::new();
+            let mut rows = Vec::new();
+            loop {
+                let (tag, payload) = read_message(client);
+                match tag {
+                    b'T' => fields = parse_row_description_fields(&payload),
+                    b'D' => rows.push(parse_data_row(&payload)),
+                    b'E' => panic!("{profile}: {}", String::from_utf8_lossy(&payload)),
+                    b'Z' => break,
+                    _ => {}
+                }
+            }
+            assert_eq!(
+                fields,
+                vec![RowDescriptionField::new(
+                    "current_catalog",
+                    0,
+                    0,
+                    19,
+                    64,
+                    -1,
+                    format
+                )],
+                "{profile}"
+            );
+            assert_eq!(rows, vec![vec!["bicdb".to_string()]], "{profile}");
+        };
+        send_query(&mut client, "SELECT CURRENT_CATALOG");
+        read_catalog(&mut client, 0);
+        send_parse(
+            &mut client,
+            "catalog_context",
+            "SELECT CURRENT_CATALOG",
+            &[],
+        );
+        for format in [0, 1] {
+            send_bind_binary(&mut client, "", "catalog_context", &[], &[format]);
+            send_describe_portal(&mut client, "");
+            send_execute(&mut client, "");
+            send_sync(&mut client);
+            read_catalog(&mut client, format);
+        }
+        client.write_all(b"X\0\0\0\x04").unwrap();
+        server.request_shutdown();
+        task.join().unwrap().unwrap();
+    }
+}
+
+#[test]
 fn timezone_status_tracks_session_and_transaction_changes_before_rows() {
     for profile in ["postgres", "oracle-preview-v1"] {
         let dir = tempfile::tempdir().unwrap();

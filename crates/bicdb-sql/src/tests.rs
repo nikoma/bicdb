@@ -1,6 +1,24 @@
 use super::*;
 
 #[test]
+fn current_catalog_constant_folding_requires_session() {
+    let statements = Parser::parse_sql(&PostgreSqlDialect {}, "SELECT CURRENT_CATALOG").unwrap();
+    let Statement::Query(query) = &statements[0] else {
+        panic!("expected query")
+    };
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        panic!("expected SELECT")
+    };
+    let SelectItem::UnnamedExpr(expr) = &select.projection[0] else {
+        panic!("expected expression")
+    };
+    assert!(
+        eval_constant_expr(expr).is_err(),
+        "session-dependent values cannot be folded without a session"
+    );
+}
+
+#[test]
 fn catalog_oid_null_prunes_correlated_catalogue_work() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(dir.path()).unwrap();

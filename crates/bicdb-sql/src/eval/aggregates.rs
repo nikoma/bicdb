@@ -1446,7 +1446,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         if ident.quote_style.is_none()
             && matches!(
                 ident.value.to_ascii_lowercase().as_str(),
-                "current_user" | "current_role" | "session_user" | "user"
+                "current_catalog" | "current_user" | "current_role" | "session_user" | "user"
             )
         {
             return Some("name".to_string());
@@ -1469,6 +1469,9 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         return Some(pg_type.to_string());
     }
     if let Expr::Function(function) = expr {
+        if is_current_catalog_keyword(function) {
+            return Some("name".into());
+        }
         // Type memos retain node addresses across calls. Borrow real argument
         // nodes; never cache the addresses of function_args' temporary clones.
         let argument_nodes = function_arg_list(function);
@@ -2162,6 +2165,9 @@ fn projected_expr_pg_type_with_db_uncached(db: &BicDb, expr: &Expr) -> Option<St
             .map(|element| format!("{element}[]"));
     }
     if let Expr::Function(function) = expr {
+        if is_current_catalog_keyword(function) {
+            return Some("name".into());
+        }
         let name = object_name(&function.name).ok()?.to_ascii_lowercase();
         let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
         let argument_nodes = function_arg_list(function);

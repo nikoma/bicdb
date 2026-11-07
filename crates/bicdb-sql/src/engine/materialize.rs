@@ -274,6 +274,11 @@ impl<'db> SqlEngine<'db> {
                     .unwrap_or(Ok(SqlValue::Null))
             }
             Expr::Function(function) => {
+                if is_current_catalog_keyword(function) {
+                    return Ok(SqlValue::String(current_database_from_gucs(
+                        &self.session_gucs,
+                    )));
+                }
                 let name = object_name(&function.name)?.to_ascii_lowercase();
                 if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
                     let arguments = function_arg_list(function);
@@ -3022,7 +3027,11 @@ impl<'db> SqlEngine<'db> {
                 if ident.quote_style.is_none()
                     && matches!(
                         ident.value.to_ascii_lowercase().as_str(),
-                        "current_user" | "current_role" | "session_user" | "user"
+                        "current_catalog"
+                            | "current_user"
+                            | "current_role"
+                            | "session_user"
+                            | "user"
                     ) =>
             {
                 Some("name".to_string())
@@ -3139,6 +3148,23 @@ impl<'db> SqlEngine<'db> {
         function: &Function,
         env: &[RelationColumns],
     ) -> Option<String> {
+        if is_current_catalog_keyword(function) {
+            return Some("name".into());
+        }
+        if matches!(function.args, sqlparser::ast::FunctionArguments::None) {
+            let parts = object_name_parts(&function.name);
+            if parts.len() >= 2
+                && parts
+                    .last()
+                    .is_some_and(|name| name.eq_ignore_ascii_case("current_catalog"))
+            {
+                return env_lookup_qualified(
+                    env,
+                    &parts[..parts.len() - 1].join("."),
+                    parts.last()?,
+                );
+            }
+        }
         let name = object_name(&function.name).ok()?.to_ascii_lowercase();
         let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
         // ARRAY(SELECT x ...) is an array of the subquery column's type.

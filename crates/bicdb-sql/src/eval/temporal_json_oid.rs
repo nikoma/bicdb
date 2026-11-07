@@ -1541,6 +1541,12 @@ pub(crate) fn is_valid_numeric_text(value: &str) -> bool {
 
 pub(crate) fn select_expr_column_name(expr: &Expr) -> String {
     match expr {
+        Expr::Identifier(ident)
+            if ident.quote_style.is_none()
+                && ident.value.eq_ignore_ascii_case("current_catalog") =>
+        {
+            "current_catalog".to_string()
+        }
         Expr::Identifier(ident) => ident.value.clone(),
         Expr::CompoundFieldAccess { access_chain, .. } => access_chain
             .last()
@@ -1567,6 +1573,9 @@ pub(crate) fn select_expr_column_name(expr: &Expr) -> String {
             } else {
                 "?column?".to_string()
             }
+        }
+        Expr::Function(function) if is_current_catalog_keyword(function) => {
+            "current_catalog".into()
         }
         Expr::Function(function) => object_name(&function.name)
             .map(|name| postgres_xml_function_column_name(&name))

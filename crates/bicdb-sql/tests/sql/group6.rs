@@ -2182,10 +2182,11 @@ fn alter_function_reset_all_validates_function_and_succeeds() {
     let error = session
         .execute("ALTER FUNCTION missing_trigger_fn RESET ALL")
         .unwrap_err();
-    assert_eq!(error.sqlstate(), "42601");
+    // PostgreSQL: 42883 undefined_function.
+    assert_eq!(error.sqlstate(), "42883");
     assert_eq!(
         error.to_string(),
-        "invalid SQL: function \"missing_trigger_fn\" does not exist"
+        "function \"missing_trigger_fn\" does not exist"
     );
 }
 

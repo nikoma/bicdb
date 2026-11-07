@@ -1,0 +1,126 @@
+{
+  "format": 1,
+  "status": "original_initial_client_setup_passed",
+  "upstream_source_commit": "da0730aec42f3e9f5f671e81a70ff71e24d5e534",
+  "original_test_jar_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+  "original_test_source_sha256": "1462868001ce6dcd9c05d6a5b9c22a1585e47c0571b4cb7a93e146268c36ea9e",
+  "original_test_class_sha256": "d5eaaeba16eebe8fa98c46a2b5c1cd3c9432cd6821b89f9a22c24fe6509308e0",
+  "original_test_source_bytes_match_upstream": true,
+  "test_assertions_or_bytecode_changed": false,
+  "application_seed_changed_for_test": false,
+  "backend_source_commit": "4861c5d8aefc2edee2aa435a7bd981c0302e7a7a",
+  "backend_sha256": "72a0c0e1ab1d3df2420f41efa54c13566827b3642811ad45549c705e8b8e1aef",
+  "backend_merged_main_commit": "cbc5d9f27241836abc1b4362e488cabcebc27c14",
+  "jdbc_adapter_source_commit": "a46572f983cf4ab5ccf19529e24104b7f7efd1a4",
+  "jdbc_adapter_sha256": "8d0d10b01a5b6caf7cf6528372c46e1f95998e799b87ff43509946d5c343b6d5",
+  "jdbc_provider_sha256": "8059fd7ec50db8a17fe706ef29793a150496fd5ff56e7cf23ae3b0587a51e7cf",
+  "runtime_class_origins": [
+    {
+      "class_name": "org.compiere.db.DB_Oracle",
+      "source_sha256": "8059fd7ec50db8a17fe706ef29793a150496fd5ff56e7cf23ae3b0587a51e7cf",
+      "matched": true
+    },
+    {
+      "class_name": "org.bicdb.jdbc.oracle.OracleDriver",
+      "source_sha256": "8d0d10b01a5b6caf7cf6528372c46e1f95998e799b87ff43509946d5c343b6d5",
+      "matched": true
+    },
+    {
+      "class_name": "org.postgresql.Driver",
+      "source_sha256": "2a32a9dcbc42d67a50ad3a0de5efd102c8d2be46720045f2cbd6689f160ab7c7",
+      "matched": true
+    },
+    {
+      "class_name": "org.idempiere.test.base.InitialClientSetupTest",
+      "source_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+      "matched": true
+    }
+  ],
+  "original_junit": {
+    "tests": 1,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "raw_xml_sha256": "f06a7041d5325ae307482bd3e17c151edded0087f9226fd902aa45d36d92c184",
+    "extracted_result_sha256": "60fdad6a6dc0fe8880639862bf21e60c8852b7f7ae5056b8992ac4ffdf727674",
+    "testcases": [
+      {
+        "name": "testSetup",
+        "classname": "org.idempiere.test.base.InitialClientSetupTest",
+        "time": "3081.133"
+      }
+    ]
+  },
+  "expected_invocations_matched": true,
+  "selected_classes_all_reported": true,
+  "process_exit_codes": [
+    {
+      "role": "test_jvm",
+      "returncode": 0
+    },
+    {
+      "role": "database",
+      "returncode": 0
+    }
+  ],
+  "all_test_processes_stopped": true,
+  "selected_test_runtime_packaging_qualified": true,
+  "full_application_packaging_qualified": false,
+  "external_network_isolation": true,
+  "runtime_private_resources_preserved_upstream": true,
+  "completed_period_control_insert_events": 384,
+  "completed_print_item_insert_events": 736,
+  "completed_residual_print_queries": [
+    {
+      "elapsed_ms": 4312,
+      "rows": 72,
+      "event_sha256": "81a5c042a98f20570d71b75804215be05413aefa09264da5f1cfe195334af034"
+    },
+    {
+      "elapsed_ms": 4253,
+      "rows": 44,
+      "event_sha256": "52b181a8be8151244ba3ff7143017adad97b4fafe002271208dead2d9c71f9bc"
+    },
+    {
+      "elapsed_ms": 4123,
+      "rows": 54,
+      "event_sha256": "a844546bd139d85f5825e580566f7e92d4807d315f6f45df903f67c8bc9026f8"
+    },
+    {
+      "elapsed_ms": 4185,
+      "rows": 47,
+      "event_sha256": "5d5f84e30854648263d586f132aa7b23dc2b4d118ee6aa3659cdb98c00f51aed"
+    },
+    {
+      "elapsed_ms": 4081,
+      "rows": 47,
+      "event_sha256": "7ec7832b2e28182898cdf71573b43080c830571d613b5d19df1b43f832458d84"
+    },
+    {
+      "elapsed_ms": 3958,
+      "rows": 37,
+      "event_sha256": "89c199b47c38f900128bf6d7f5cf94b37930d6f0ef443051e5929fdd8ab7a5ff"
+    },
+    {
+      "elapsed_ms": 3994,
+      "rows": 25,
+      "event_sha256": "f48d6cfeaa92bc174a457431f167032205a0afe8671a26e4f6660b0c935a583d"
+    },
+    {
+      "elapsed_ms": 3945,
+      "rows": 17,
+      "event_sha256": "0dcfcf60831d5c50bc6e1833997d9d860ec0dfb5f804f311cef5254adeebc8bf"
+    },
+    {
+      "elapsed_ms": 4116,
+      "rows": 25,
+      "event_sha256": "544ca73818bc0769681cca346f5cde80487ba449f83b167c5e755f8e3b977e4e"
+    }
+  ],
+  "writer_timeout_events": 0,
+  "passed_disposable_database_removed_after_validation": true,
+  "passed_database_reclaimed_allocated_bytes": 1054638080,
+  "full_application_qualified": false,
+  "production_qualified": false,
+  "remaining_original_test_batches_qualified": false
+}

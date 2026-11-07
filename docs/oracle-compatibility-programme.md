@@ -55,6 +55,13 @@ read-only-standby controls. Settings still use ordinary SQL session validation
 and authorization. An actively held exclusive database guard still serializes
 access; this does not establish general latency or full application acceptance.
 
+The [original client-setup checkpoint](evidence/idempiere-initial-client-setup-2026-11-06/README.md)
+records the unchanged upstream test passing on the qualified Oracle-schema paged
+target through PostgreSQL JDBC, with zero failures/errors/skips, no writer
+timeouts and clean JVM/database exits. It validates the selected test and its
+runtime origins. Remaining original tests, unresolved business workflows, full
+application packaging and production qualification remain open.
+
 The [safe residual EXISTS checkpoint](evidence/sql-correlated-exists-residuals-2026-11-06/README.md)
 extends candidate eligibility to bounded, non-fallible inner boolean filters.
 Independent PostgreSQL/Oracle-preview native controls preserve results and reduce

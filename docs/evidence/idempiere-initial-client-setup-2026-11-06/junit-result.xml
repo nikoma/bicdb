@@ -1,0 +1,4 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite name="org.idempiere.test.base.InitialClientSetupTest" tests="1" failures="0" errors="0" skipped="0" time="3081.141">
+  <testcase name="testSetup" classname="org.idempiere.test.base.InitialClientSetupTest" time="3081.133" />
+</testsuite>

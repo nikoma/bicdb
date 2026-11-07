@@ -1,0 +1,83 @@
+{
+  "format": "walknorth.bicdb-current-ehr/v1",
+  "started_at": "2026-11-07T02:12:43.703Z",
+  "production_cutover": false,
+  "resumed": true,
+  "scope": "current schema and Node API compatibility; native backend and website hosting remain separate gates",
+  "state_directory": "/tmp/walknorth-ehr-bicdb-paged-ttz36mqg",
+  "checks": [
+    {
+      "name": "explicit BicDB binary",
+      "ok": true,
+      "detail": "bicdb 1.0.438-beta"
+    },
+    {
+      "name": "current immutable migration registry validates",
+      "ok": true
+    },
+    {
+      "name": "SQL connection reaches BicDB, not PostgreSQL",
+      "ok": true,
+      "detail": "1.0.438-beta"
+    },
+    {
+      "name": "migration owner is an explicit SQL administrator",
+      "ok": true
+    },
+    {
+      "name": "application identity cannot administer SQL or bypass RLS",
+      "ok": true
+    },
+    {
+      "name": "operational contract helper reads this authenticated BicDB fixture",
+      "ok": true
+    },
+    {
+      "name": "operational contract helper reports SQL failures on this fixture",
+      "ok": true
+    },
+    {
+      "name": "complete current production schema and restricted runtime grants",
+      "ok": true
+    },
+    {
+      "name": "latest companion migration recorded without dirty entries",
+      "ok": true
+    },
+    {
+      "name": "current command and reflection signatures survive migration cleanup",
+      "ok": true
+    },
+    {
+      "name": "production migration replay is clean",
+      "ok": true
+    },
+    {
+      "name": "current API starts against restricted BicDB runtime identity",
+      "ok": true
+    },
+    {
+      "name": "patient saves through real API",
+      "ok": "1294397a-0f9f-4e41-bb59-6407fffac473",
+      "detail": "{\"id\":\"1294397a-0f9f-4e41-bb59-6407fffac473\",\"org_id\":\"4ce749f6-03c1-41f8-8a7b-95aef097b29a\",\"mrn\":\"bicdb-e92fb372-f415-403a-b968-f13eb0283e08\",\"full_name\":\"Synthetic BicDB patient\",\"preferred_name\":null,\"birth_date\":\"1990-01-01\",\"sex_at_birth\":\"unknown\",\"status\":\"active\",\"deleted_at\":null,\"created_at\":\"2026-11-07T02:14:35.348Z\",\"updated_at\":\"2026-11-07T02:14:35.348Z\",\"creation_reference_id\":\"c83a2ef4-7b2f-4b50-b998-e9811024eeeb\",\"email\":\"patient-e749151c-18e7-46ce-8f9d-1e400f55d155@example.test\",\"phone\":null,\"address_line1\":null,\"address_line2\":null,\"city\":null,\"state\":null,\"postal_code\":null,\"country\":\"US\",\"emergency_contact_name\":null,\"emergency_contact_relationship\":null,\"emergency_contact_phone\":null,\"guardian_name\":null,\"guardian_relationship\":null,\"guardian_phone\":null,\"preferred_language\":null,\"timezone\":null,\"communication_preference\":null,\"gender_identity\":null,\"pronouns\":null,\"primary_care_provider\":null,\"referring_provider\":null,\"preferred_pharmacy\":null,\"tags_json\":[],\"portal_status\":\"not_invited\",\"normalized_email\":null,\"normalized_phone\":null,\"state_region\":null,\"country_code\":null,\"version\":1,\"profile_photo_asset_id\":null}"
+    },
+    {
+      "name": "canonical meal saves through patient identity",
+      "ok": false,
+      "detail": "{\"code\":\"internal_server_error\",\"message\":\"Internal server error\",\"message_key\":\"runtime.errors.internal_server_error.ceeedbeea61aff75\",\"parameters\":{},\"requestId\":\"req-3\"}"
+    }
+  ],
+  "status": "FAILED",
+  "engine": "bicdb 1.0.438-beta",
+  "binary_sha256": "972b65489531ebbd1e40b1496fd75007dfdd0a8dd43906990621b0cb359f60a0",
+  "migration_count": 168,
+  "migration_registry_sha256": "17d6faa4f1ee387a8f21eb3691f5bbe6837f70c6b803017a4c3e247e4a87f5a5",
+  "error": "Error: canonical meal saves through patient identity\n    at check (file:///root/ehr-bicdb-current-qualification-20261104/scripts/check-bicdb-current-ehr.mjs:113:18)\n    at file:///root/ehr-bicdb-current-qualification-20261104/scripts/check-bicdb-current-ehr.mjs:653:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)",
+  "migration_progress": {
+    "registered_total": 168,
+    "registered_applied": 168,
+    "next_pending": null,
+    "pending": []
+  },
+  "finished_at": "2026-11-07T02:14:35.950Z"
+}

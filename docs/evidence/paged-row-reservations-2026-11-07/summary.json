@@ -1,0 +1,70 @@
+{
+  "source_commit": "032c7c1df192e9fc1812867e6d787bc6059d5cb4",
+  "source_manifest_sha256": "700b1d153dc39eba121de8c00278fbf7a4673b276e56620d4e7c4a251a3ec3d0",
+  "production_qualified": false,
+  "checks": {
+    "app-host": {
+      "passed": 47,
+      "failed": 0,
+      "ignored": 1,
+      "suites": 7,
+      "log_sha256": "058f1db3126eaaf280b5fbe28e2028b8fdc964aac179509bda8d4299a8b763bb"
+    },
+    "protocol": {
+      "passed": 187,
+      "failed": 0,
+      "ignored": 0,
+      "suites": 1,
+      "log_sha256": "0dd9131ae067d3f7569a2fd05ff20755529a8c2f3b2186110307677c37cb4fc1"
+    },
+    "sql-library": {
+      "passed": 762,
+      "failed": 0,
+      "ignored": 4,
+      "suites": 1,
+      "log_sha256": "692945beb6ac0d7171e9a722a92f3d2ca6c1e088b3bbe52123ab2ea2c5ca5f0f"
+    },
+    "core-library": {
+      "passed": 452,
+      "failed": 0,
+      "ignored": 3,
+      "suites": 1,
+      "log_sha256": "90297e1d76173734d7648f50c62c9cb200a4a75928a93f03c90125a0fc00d574"
+    },
+    "core-transactions": {
+      "passed": 25,
+      "failed": 0,
+      "ignored": 0,
+      "suites": 4,
+      "log_sha256": "fab5a44246a219a9ebcce79591757862225656e0b20d877c1d0331e525d03e13"
+    },
+    "sql-after": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "suites": 1,
+      "log_sha256": "31211feedeea89d559f87aaba848989c3c8b7b87b817f117395360d61c34bf27"
+    },
+    "core-after": {
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "suites": 1,
+      "log_sha256": "069baeaf1b3406284afac724bd675ec90ad5c7d91ec42cfab24ad0469dac359b"
+    },
+    "sql-before": {
+      "passed": 0,
+      "failed": 1,
+      "ignored": 0,
+      "suites": 1,
+      "log_sha256": "fc6d945da0702f692a108ab69e47dbad498c4a60329f954dbd9e81959a994032"
+    },
+    "core-before": {
+      "passed": 2,
+      "failed": 1,
+      "ignored": 0,
+      "suites": 1,
+      "log_sha256": "b94ac44fe3835fcbf2454d6eb9e6b07d6ae18375ab0b0867068293dc98eec926"
+    }
+  }
+}

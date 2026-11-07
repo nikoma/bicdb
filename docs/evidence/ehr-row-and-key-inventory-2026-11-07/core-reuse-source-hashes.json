@@ -1,0 +1,13 @@
+{
+  "prior_source_commit": "fc63926ca22a9b32aa52420a7642223ed2d3a251",
+  "current_source_commit": "ded71d144fa8b6d3abba19b49b26f4d0a9e60a45",
+  "scope": "Core and paged storage source, tests, manifests and root dependency lock",
+  "identical_files": 270,
+  "hashes_identical": true,
+  "reused_results": {
+    "core_library_passed": 452,
+    "core_library_ignored": 3,
+    "core_transaction_integration_passed": 24
+  },
+  "sql_result_reuse": false
+}

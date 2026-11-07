@@ -2573,7 +2573,9 @@ impl<'db> SqlSession<'db> {
         }
         if matches!(name.as_ref(), "txid_current" | "pg_catalog.txid_current") {
             require_arg_count("txid_current", &args, 0)?;
-            let transaction_id = if let Some(tx) = &self.tx {
+            // Per-row routine hosts borrow the caller's transaction. Reading
+            // its identity does not start a new transaction or authorize writes.
+            let transaction_id = if let Some(tx) = self.read_tx() {
                 tx.id().0
             } else {
                 // A standalone SELECT still has an implicit PostgreSQL
@@ -4579,6 +4581,33 @@ impl<'db> SqlSession<'db> {
                         })
                         .transpose()?,
                 })
+            }
+            RoutineStmt::ReturnNext => {
+                if frame.returned_set.is_none() || frame.output_names.is_empty() {
+                    return Err(SqlError::InvalidSql(
+                        "bare RETURN NEXT requires a set-returning function with output parameters"
+                            .into(),
+                    ));
+                }
+                // Copy the current OUT values: later assignments must not alter
+                // an already emitted row. RETURN NEXT continues the routine and
+                // does not change FOUND.
+                let row = frame
+                    .output_names
+                    .iter()
+                    .map(|name| frame.get(name))
+                    .collect::<Vec<_>>();
+                let target = frame.returned_set.as_mut().unwrap();
+                let row = row
+                    .into_iter()
+                    .zip(&target.column_types)
+                    .map(|(value, ty)| match ty {
+                        Some(ty) => cast_value_to_pg_type(value, ty),
+                        None => Ok(value),
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                target.rows.push(row);
+                Ok(RoutineControl::Continue)
             }
             RoutineStmt::ReturnQuery(query) => {
                 if frame.returned_set.is_none() {

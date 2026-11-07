@@ -1134,6 +1134,7 @@ fn routine_statement_profile_kind(statement: &RoutineStmt) -> String {
         RoutineStmt::FetchCursor { .. } => "ROUTINE_FETCH_CURSOR".to_string(),
         RoutineStmt::CloseCursor { .. } => "ROUTINE_CLOSE_CURSOR".to_string(),
         RoutineStmt::RaiseException { .. } => "ROUTINE_RAISE_EXCEPTION".to_string(),
+        RoutineStmt::ReturnNext => "ROUTINE_RETURN_NEXT".to_string(),
         RoutineStmt::ReturnQuery(_) => "ROUTINE_RETURN_QUERY".to_string(),
         RoutineStmt::Return(_) => "ROUTINE_RETURN".to_string(),
         RoutineStmt::OracleBuiltin { .. } => "ORACLE_BUILTIN".into(),
@@ -1211,6 +1212,7 @@ fn routine_statement_profile_signature(statement: &RoutineStmt) -> String {
         } => {
             format!("RAISE EXCEPTION {message:?} USING ERRCODE = {sqlstate:?}")
         }
+        RoutineStmt::ReturnNext => "RETURN NEXT".to_string(),
         RoutineStmt::ReturnQuery(query) => format!("RETURN QUERY {query}"),
         RoutineStmt::OracleBuiltin { builtin, arguments } => format!(
             "{builtin:?}({})",
@@ -4654,6 +4656,7 @@ enum RoutineStmt {
         arguments: Vec<RoutineExpr>,
     },
     Rethrow,
+    ReturnNext,
     ReturnQuery(Query),
     Return(Option<RoutineExpr>),
 }
@@ -4819,6 +4822,7 @@ fn routine_statement_may_write(statement: &RoutineStmt) -> bool {
         | RoutineStmt::RaiseException { .. }
         | RoutineStmt::OracleBuiltin { .. }
         | RoutineStmt::Rethrow
+        | RoutineStmt::ReturnNext
         | RoutineStmt::Return(_) => false,
     }
 }

@@ -416,6 +416,7 @@ pub(crate) fn collect_routine_stmt_symbols(
             | RoutineStmt::OpenCursor { .. }
             | RoutineStmt::CloseCursor { .. }
             | RoutineStmt::RaiseException { .. }
+            | RoutineStmt::ReturnNext
             | RoutineStmt::ReturnQuery(_)
             | RoutineStmt::Return(_) => {}
         }
@@ -652,6 +653,7 @@ pub(crate) fn bind_routine_statement_exprs(statements: &mut [RoutineStmt], scope
             | RoutineStmt::SqlInto { .. }
             | RoutineStmt::FetchCursor { .. }
             | RoutineStmt::CloseCursor { .. }
+            | RoutineStmt::ReturnNext
             | RoutineStmt::ReturnQuery(_)
             | RoutineStmt::Return(None) => {}
             // Dynamic SQL is evaluated against the materialized routine frame at
@@ -1028,6 +1030,31 @@ pub(crate) fn parse_plpgsql_body(
     Ok((declarations, statements, exception_handlers))
 }
 
+fn strip_plpgsql_compiler_directives(mut body: &str) -> Result<&str> {
+    loop {
+        body = trim_leading_sql_comments_with_offset(body).0;
+        let Some(option) = body.strip_prefix('#') else {
+            return Ok(body);
+        };
+        let (line, remaining) = option.split_once('\n').unwrap_or((option, ""));
+        let mut words = line.split_whitespace();
+        let name = words.next().unwrap_or("");
+        let mode = words.next().unwrap_or("");
+        // Query expressions already resolve row columns before routine locals.
+        // Consume the matching explicit mode before parsing DECLARE; otherwise
+        // the header becomes a bogus declaration and loses the first local.
+        if !name.eq_ignore_ascii_case("variable_conflict")
+            || !mode.eq_ignore_ascii_case("use_column")
+            || words.next().is_some()
+        {
+            return Err(SqlError::UnsupportedPlpgsqlFeature(format!(
+                "compiler directive #{name} {mode} is not implemented; only #variable_conflict use_column is supported"
+            )));
+        }
+        body = remaining;
+    }
+}
+
 fn parse_plpgsql_block(
     body: &str,
 ) -> Result<(
@@ -1035,7 +1062,7 @@ fn parse_plpgsql_block(
     Vec<RoutineStmt>,
     Vec<RoutineExceptionHandler>,
 )> {
-    let body = trim_sql_statement(body);
+    let body = strip_plpgsql_compiler_directives(trim_sql_statement(body))?;
     let Some(begin_idx) = find_top_level_keyword(body, "BEGIN") else {
         return Err(SqlError::UnsupportedPlpgsqlFeature(
             "routine body must contain a BEGIN block".to_string(),
@@ -1554,6 +1581,43 @@ fn matching_routine_end(
     Err(SqlError::UnsupportedPlpgsqlFeature(error.to_string()))
 }
 
+// These fragments are single lexical units even when they contain quotes,
+// assignment operators, unmatched parentheses, or statement separators.
+fn skip_routine_comment_or_dollar_quote(sql: &str, start: usize) -> Option<usize> {
+    let bytes = sql.as_bytes();
+    if bytes.get(start..start + 2) == Some(b"--") {
+        return Some(sql[start..].find('\n').map_or(sql.len(), |n| start + n + 1));
+    }
+    if bytes.get(start..start + 2) == Some(b"/*") {
+        let mut at = start + 2;
+        let mut depth = 1usize;
+        while at < bytes.len() && depth > 0 {
+            if bytes.get(at..at + 2) == Some(b"/*") {
+                depth += 1;
+                at += 2;
+            } else if bytes.get(at..at + 2) == Some(b"*/") {
+                depth -= 1;
+                at += 2;
+            } else {
+                at += 1;
+            }
+        }
+        return Some(at);
+    }
+    if bytes.get(start) == Some(&b'$') && (start == 0 || !is_sql_identifier_byte(bytes[start - 1]))
+    {
+        if let Some(delimiter) = dollar_quote_delimiter(&sql[start..]) {
+            let content = start + delimiter.len();
+            return Some(
+                sql[content..]
+                    .find(&delimiter)
+                    .map_or(sql.len(), |n| content + n + delimiter.len()),
+            );
+        }
+    }
+    None
+}
+
 pub(crate) fn find_top_level_statement_semicolon(value: &str) -> Option<usize> {
     let bytes = value.as_bytes();
     let mut idx = 0usize;
@@ -1577,6 +1641,10 @@ pub(crate) fn find_top_level_statement_semicolon(value: &str) -> Option<usize> {
                 double_quoted = false;
             }
             idx += 1;
+            continue;
+        }
+        if let Some(end) = skip_routine_comment_or_dollar_quote(value, idx) {
+            idx = end;
             continue;
         }
         match bytes[idx] {
@@ -1707,10 +1775,10 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
             "EXIT with a label is not implemented".to_string(),
         ));
     }
-    if let Some(rest) = strip_prefix_ci(statement, "RAISE") {
+    if let Some(rest) = strip_routine_keyword(statement, "RAISE") {
         return parse_routine_raise(rest.trim());
     }
-    if let Some(rest) = strip_prefix_ci(statement, "PERFORM ") {
+    if let Some(rest) = strip_routine_keyword(statement, "PERFORM") {
         // PERFORM expr is SELECT expr with the rows thrown away. It still sets
         // FOUND, which is how a trigger body asks "did the check function run
         // against a real row".
@@ -1730,7 +1798,7 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
             return Ok(RoutineStmt::OracleDynamicExecute(Box::new(dynamic)));
         }
     }
-    if let Some(rest) = strip_prefix_ci(statement, "EXECUTE") {
+    if let Some(rest) = strip_routine_keyword(statement, "EXECUTE") {
         let rest = rest.trim();
         if rest.is_empty() {
             return Err(SqlError::InvalidSql(
@@ -1746,7 +1814,10 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
         if let Some(rest) = strip_routine_keyword(rest, "QUERY") {
             return Ok(RoutineStmt::ReturnQuery(parse_single_query(rest.trim())?));
         }
-        if strip_routine_keyword(rest, "NEXT").is_some() {
+        if let Some(expression) = strip_routine_keyword(rest, "NEXT") {
+            if expression.trim().is_empty() {
+                return Ok(RoutineStmt::ReturnNext);
+            }
             return Err(SqlError::UnsupportedPlpgsqlFeature(
                 "RETURN NEXT is not implemented".to_string(),
             ));
@@ -1758,14 +1829,14 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
                 .transpose()?,
         ));
     }
-    if let Some(rest) = strip_prefix_ci(statement, "OPEN") {
+    if let Some(rest) = strip_routine_keyword(statement, "OPEN") {
         let (name, arguments) = parameterized_cursors::parse_call(rest.trim())?;
         return Ok(RoutineStmt::OpenCursor { name, arguments });
     }
-    if let Some(rest) = strip_prefix_ci(statement, "FETCH") {
+    if let Some(rest) = strip_routine_keyword(statement, "FETCH") {
         return parse_routine_fetch(rest.trim());
     }
-    if let Some(rest) = strip_prefix_ci(statement, "CLOSE") {
+    if let Some(rest) = strip_routine_keyword(statement, "CLOSE") {
         let name = parse_single_routine_identifier(rest.trim(), "CLOSE")?;
         return Ok(RoutineStmt::CloseCursor { name });
     }
@@ -2398,7 +2469,15 @@ pub(crate) fn routine_target_names(targets: &str) -> Result<Vec<String>> {
 
 pub(crate) fn parse_routine_expr(expr: &str) -> Result<Expr> {
     let sql = format!("SELECT {expr}");
-    let statements = parse_statements(&sql)?;
+    let statements = parse_statements(&sql)?
+        .into_iter()
+        .map(|statement| {
+            // Procedural expressions need the same named-argument mapping as
+            // query/DML expressions. Otherwise make_interval(days => n) loses
+            // its argument in scalar dispatch and silently becomes zero.
+            order_by_ordinal::rewrite_dml_call_forms(&statement).unwrap_or(statement)
+        })
+        .collect::<Vec<_>>();
     let [Statement::Query(query)] = statements.as_slice() else {
         return Err(SqlError::InvalidSql(format!(
             "invalid routine expression {expr}"
@@ -2482,6 +2561,10 @@ pub(crate) fn find_top_level_operator(sql: &str, operator: &str) -> Option<usize
                 double_quoted = false;
             }
             idx += 1;
+            continue;
+        }
+        if let Some(end) = skip_routine_comment_or_dollar_quote(sql, idx) {
+            idx = end;
             continue;
         }
         match bytes[idx] {

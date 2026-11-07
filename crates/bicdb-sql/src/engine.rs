@@ -8,6 +8,7 @@
 // imports and the other split modules' re-exports) into scope so the moved
 // code compiles unchanged.
 use crate::*;
+mod bounded_primary_key;
 pub(crate) mod column_check;
 mod exists_probe;
 pub(crate) mod flashback;
@@ -444,6 +445,7 @@ impl ParameterTypeResolver<'_, '_> {
                 | RoutineStmt::FetchCursor { .. }
                 | RoutineStmt::CloseCursor { .. }
                 | RoutineStmt::Rethrow
+                | RoutineStmt::ReturnNext
                 | RoutineStmt::Return(None) => {}
             }
         }
@@ -4788,6 +4790,12 @@ impl<'db> SqlEngine<'db> {
 
         if has_windows {
             return self.execute_row_query(select, query);
+        }
+
+        if let [from] = select.from.as_slice() {
+            if let Some(rows) = self.try_bounded_uuid_primary_key_row_set(from, select, query)? {
+                return self.execute_materialized_row_query(select, query, from, rows);
+            }
         }
 
         if query_group_aggregate_functions(select, query)?

@@ -1,0 +1,10 @@
+{
+  "status": "SOURCE_REGRESSIONS_VERIFIED_NOT_ADMITTED",
+  "production_admitted": false,
+  "source_commit": "5f3cec922cf168ba9f13cadfe44b78fc0b1593c1",
+  "patch_files": [
+    "crates/bicdb-sql/src/routines.rs",
+    "crates/bicdb-sql/src/session/txn_update.rs",
+    "crates/bicdb-sql/tests/routine_table_emission.rs"
+  ]
+}

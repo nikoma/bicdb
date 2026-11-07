@@ -1,6 +1,47 @@
 use super::*;
 
 #[test]
+fn current_catalog_index_filters_use_session_context_instead_of_constant_defaults() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    SqlSession::new(&mut db).execute("CREATE TABLE catalog_names(id INTEGER PRIMARY KEY, catalog TEXT); CREATE INDEX catalog_names_catalog_idx ON catalog_names(catalog); INSERT INTO catalog_names VALUES(1,'tenant_one'),(2,'OtherCatalog'),(3,'bicdb')").unwrap();
+    for (database, expected) in [("tenant_one", 1), ("OtherCatalog", 2), ("bicdb", 3)] {
+        let gucs = Arc::new(HashMap::from([("database".into(), database.into())]));
+        let engine = SqlEngine::new(&db).with_session_gucs(gucs);
+        let result = engine
+            .execute("SELECT id FROM catalog_names WHERE catalog=current_catalog")
+            .unwrap();
+        assert_eq!(
+            result.rows,
+            vec![vec![SqlValue::Int(expected)]],
+            "{database}"
+        );
+        assert_eq!(
+            engine
+                .execute("SELECT count(*) FROM catalog_names WHERE catalog=current_catalog")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(1)]],
+            "{database}"
+        );
+    }
+    let statements = Parser::parse_sql(&PostgreSqlDialect {}, "SELECT CURRENT_CATALOG").unwrap();
+    let Statement::Query(query) = &statements[0] else {
+        panic!("expected query")
+    };
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        panic!("expected SELECT")
+    };
+    let SelectItem::UnnamedExpr(expr) = &select.projection[0] else {
+        panic!("expected expression")
+    };
+    assert!(
+        eval_constant_expr(expr).is_err(),
+        "session-dependent values cannot be folded without a session"
+    );
+}
+
+#[test]
 fn current_catalog_reads_connected_database_and_retains_name_descriptor() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(dir.path()).unwrap();

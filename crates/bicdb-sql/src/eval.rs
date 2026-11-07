@@ -243,11 +243,7 @@ pub(crate) fn eval_value(record: &Record, expr: &Expr) -> Result<SqlValue> {
         Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("current_date") => {
             Ok(SqlValue::String(unix_now_date_string()))
         }
-        Expr::Identifier(ident)
-            if ident.quote_style.is_none()
-                && (ident.value.eq_ignore_ascii_case("current_catalog")
-                    || ident.value.eq_ignore_ascii_case("current_database")) =>
-        {
+        Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("current_database") => {
             Ok(SqlValue::String("bicdb".to_string()))
         }
         Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("current_schema") => {
@@ -413,7 +409,9 @@ pub(crate) fn eval_value(record: &Record, expr: &Expr) -> Result<SqlValue> {
 
 pub(crate) fn eval_record_function_value(record: &Record, function: &Function) -> Result<SqlValue> {
     if is_current_catalog_keyword(function) {
-        return Ok(SqlValue::String("bicdb".to_string()));
+        return Err(SqlError::Unsupported(
+            "CURRENT_CATALOG requires session evaluation".into(),
+        ));
     }
     let name = object_name(&function.name)?.to_ascii_lowercase();
     if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
@@ -521,11 +519,7 @@ pub(crate) fn eval_constant_expr(expr: &Expr) -> Result<SqlValue> {
         Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("current_date") => {
             Ok(SqlValue::String(unix_now_date_string()))
         }
-        Expr::Identifier(ident)
-            if ident.quote_style.is_none()
-                && (ident.value.eq_ignore_ascii_case("current_catalog")
-                    || ident.value.eq_ignore_ascii_case("current_database")) =>
-        {
+        Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("current_database") => {
             Ok(SqlValue::String("bicdb".to_string()))
         }
         Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("current_schema") => {
@@ -770,7 +764,9 @@ pub(crate) fn eval_builtin_function_value(function: &Function) -> Result<SqlValu
 
 pub(crate) fn eval_constant_function_value(function: &Function) -> Result<SqlValue> {
     if is_current_catalog_keyword(function) {
-        return Ok(SqlValue::String("bicdb".to_string()));
+        return Err(SqlError::Unsupported(
+            "CURRENT_CATALOG requires session evaluation".into(),
+        ));
     }
     let name = object_name(&function.name)?.to_ascii_lowercase();
     if matches!(

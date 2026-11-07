@@ -143,3 +143,77 @@ fn diagnostics_are_off_by_default() {
     });
     assert!(!inner.1.is_empty(), "inner scope records its own decisions");
 }
+
+#[test]
+fn locator_hybrid_gate_overrides_only_unprobed_shorter_candidates() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    // (region, status) is unselective for status 0 (about 4,000 rows per
+    // region) while customer is about 1,000 rows; status 7 is rare (200 rows,
+    // all in region 0), so there the long prefix is the selective one.
+    session
+        .execute(
+            "CREATE TABLE h (id int4 PRIMARY KEY, region int4, status int4, customer int4);
+             INSERT INTO h SELECT g, g % 5, CASE WHEN g % 100 = 0 THEN 7 ELSE 0 END, g % 20
+               FROM generate_series(1, 20000) g;
+             CREATE INDEX h_region_status ON h (region, status);
+             CREATE INDEX h_customer ON h (customer);",
+        )
+        .unwrap();
+    let chosen = |session: &mut SqlSession<'_>, sql: &str, hybrid: Option<bool>| {
+        let options = DiagnosticsOptions {
+            locator_hybrid: hybrid,
+            ..DiagnosticsOptions::default()
+        };
+        let (result, decisions) = with_plan_diagnostics(options, || session.execute(sql));
+        let mut rows = result
+            .unwrap()
+            .rows
+            .into_iter()
+            .map(|row| row[0].to_cell())
+            .collect::<Vec<_>>();
+        rows.sort();
+        let locator = decisions
+            .iter()
+            .rev()
+            .find(|decision| decision.chooser == "locator")
+            .expect("locator decision")
+            .clone();
+        (
+            rows,
+            locator.candidates[locator.chosen].signature.label(),
+            locator.hybrid_override,
+            locator.decision_micros.is_some(),
+        )
+    };
+    let trap = "SELECT id FROM h WHERE region = 2 AND status = 0 AND customer = 7";
+    let control = "SELECT id FROM h WHERE region = 0 AND status = 7 AND customer = 0";
+    // Without statistics the gate has nothing to compare: the rule stands.
+    let (rule_rows, rule_choice, overridden, timed) = chosen(&mut session, trap, Some(true));
+    assert_eq!(rule_choice, "IndexLookup(h_region_status/2)");
+    assert!(!overridden && timed);
+    session.execute("ANALYZE h").unwrap();
+    // Default (gate unset in tests) and explicit off: the rule.
+    let (rows, choice, overridden, _) = chosen(&mut session, trap, None);
+    assert_eq!(
+        (choice.as_str(), overridden),
+        ("IndexLookup(h_region_status/2)", false)
+    );
+    assert_eq!(rows, rule_rows);
+    // On: the selective shorter index, same rows.
+    let (rows, choice, overridden, _) = chosen(&mut session, trap, Some(true));
+    assert_eq!(
+        (choice.as_str(), overridden),
+        ("IndexLookup(h_customer/1)", true)
+    );
+    assert_eq!(rows, rule_rows);
+    // Control: the long prefix is the selective one; no override.
+    let (control_off, _, _, _) = chosen(&mut session, control, Some(false));
+    let (control_on, choice, overridden, _) = chosen(&mut session, control, Some(true));
+    assert_eq!(
+        (choice.as_str(), overridden),
+        ("IndexLookup(h_region_status/2)", false)
+    );
+    assert_eq!(control_on, control_off);
+}

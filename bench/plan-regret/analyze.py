@@ -260,6 +260,56 @@ def policy_metrics(records, condition, chooser):
     }
 
 
+def natural_metrics(records, condition, key):
+    """End-to-end (unforced) latency of the chooser as a client sees it,
+    including planning and every probe it ran, against the forced oracle."""
+    lat, regret, catastrophic, two_x, oracle_total, missing = [], [], 0, 0, 0.0, 0
+    for record in records:
+        natural = record.get(key)
+        if not natural:
+            missing += 1
+            continue
+        ms = natural[f"{condition}_ms"]
+        _, best = oracle(record, condition)
+        lat.append(ms)
+        oracle_total += best
+        ratio = ms / max(best, 1e-9)
+        regret.append(ratio)
+        catastrophic += ratio > 10.0
+        two_x += ratio > 2.0
+    total = sum(lat)
+    return {
+        "queries": len(lat),
+        "p50_ms": pct(lat, 50),
+        "p95_ms": pct(lat, 95),
+        "total_ms": total,
+        "workload_regret_pct": 100.0 * (total / oracle_total - 1.0) if oracle_total else float("nan"),
+        "median_query_regret": pct(regret, 50),
+        "p95_query_regret": pct(regret, 95),
+        "max_query_regret": max(regret) if regret else float("nan"),
+        "over_2x": two_x,
+        "catastrophic_over_10x": catastrophic,
+        "unmeasured_choice": missing,
+    }
+
+
+def overhead(records, key):
+    """Decision-time split for the natural runs (warm medians per query)."""
+    out = {}
+    for field in ("planner_us", "rule_decision_us", "wasted_probe_us"):
+        values = [r[key][field] for r in records if r.get(key) and r[key].get(field) is not None]
+        e2e = [r[key]["warm_ms"] * 1000.0 for r in records if r.get(key)]
+        out[field] = {
+            "p50": pct(values, 50),
+            "p95": pct(values, 95),
+            "max": max(values) if values else float("nan"),
+            "share_of_e2e_pct": 100.0 * sum(values) / sum(e2e) if e2e and sum(e2e) else float("nan"),
+        }
+    out["overrides"] = sum(bool(r.get(key, {}).get("hybrid_override")) for r in records)
+    out["semantic_mismatches"] = sum(not r.get(key, {}).get("semantics_ok", True) for r in records)
+    return out
+
+
 def cardinality_errors(records, selectivities):
     """q-error of the cost-based planner's per-candidate row estimates (and of
     fitted constants) against the rows the corresponding executed access path
@@ -386,6 +436,16 @@ def main():
         summary["policies"][condition] = {
             name: policy_metrics(test, condition, chooser) for name, chooser in choosers.items()
         }
+        if any("natural_stats" in r for r in test):
+            summary["policies"][condition]["rule_e2e"] = natural_metrics(test, condition, "natural_stats")
+            summary["policies"][condition]["hybrid_e2e"] = natural_metrics(test, condition, "natural_hybrid")
+        if any("natural_stats" in r for r in records):
+            for ds in sorted(by_dataset):
+                ds_test = [r for r in test if r["dataset"] == ds]
+                summary["per_dataset"].setdefault(ds, {}).setdefault(condition + "_e2e", {
+                    "rule_e2e": natural_metrics(ds_test, condition, "natural_stats"),
+                    "hybrid_e2e": natural_metrics(ds_test, condition, "natural_hybrid"),
+                })
         summary["policies"][condition + "_all_queries"] = {
             name: policy_metrics(records, condition, choosers[name])
             for name in ("rule", "heuristic", "analyze", "hybrid", "oracle")
@@ -475,6 +535,29 @@ def main():
     for key, m in summary["cardinality_q_error_test"].items():
         lines.append(f"| {key} | {m['n']} | {fmt(m['median'])} | {fmt(m['p90'])} | {fmt(m['p95'])} | "
                      f"{fmt(m['max'])} | {fmt(100 * m['share_over_10x'], 1)}% |")
+    if any("natural_stats" in r for r in records):
+        summary["natural_overhead"] = {
+            key: overhead(records, key) for key in ("natural_nostats", "natural_stats", "natural_hybrid")
+        }
+        lines.append("\n## End-to-end (unforced) per dataset — warm, test split\n")
+        lines.append("| dataset | rule e2e regret / >10× | hybrid e2e regret / >10× |")
+        lines.append("|---|---:|---:|")
+        for ds, conds in summary["per_dataset"].items():
+            e2e = conds.get("warm_e2e")
+            if not e2e:
+                continue
+            cells = [f"{fmt(e2e[p]['workload_regret_pct'], 1)}% / {e2e[p]['catastrophic_over_10x']}"
+                     for p in ("rule_e2e", "hybrid_e2e")]
+            lines.append(f"| {ds} | " + " | ".join(cells) + " |")
+        lines.append("\n## Decision overhead in natural runs (µs, warm)\n")
+        lines.append("| run | field | p50 | p95 | max | share of end-to-end |")
+        lines.append("|---|---|---:|---:|---:|---:|")
+        for key, fields in summary["natural_overhead"].items():
+            for field in ("planner_us", "rule_decision_us", "wasted_probe_us"):
+                m = fields[field]
+                lines.append(f"| {key} | {field} | {fmt(m['p50'], 1)} | {fmt(m['p95'], 1)} | "
+                             f"{fmt(m['max'], 1)} | {fmt(m['share_of_e2e_pct'], 2)}% |")
+            lines.append(f"| {key} | overrides / mismatches | {fields['overrides']} | {fields['semantic_mismatches']} | | |")
     po = summary["planning_overhead"]
     lines.append("\n## Planning overhead\n")
     lines.append(f"EXPLAIN-only planning p50 {fmt(po['nostats_plan_only_ms_p50'], 3)} ms "

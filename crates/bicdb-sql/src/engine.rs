@@ -5608,6 +5608,31 @@ pub(crate) fn fts_budget_abort(error: &bicdb_core::BicDbError) -> bool {
     )
 }
 
+/// Internal, default-off gate for the statistics-guided locator hybrid: with
+/// ANALYZE statistics, a B-tree candidate with FEWER matched columns than the
+/// rule's winners (one the rule would discard without probing) replaces them
+/// when its estimated rows are `BICDB_LOCATOR_HYBRID_RATIO` (default 2) times
+/// smaller than the best tied winner's estimate. Ties keep their exact probes.
+pub(crate) fn locator_hybrid_ratio() -> Option<f64> {
+    static GATE: OnceLock<Option<f64>> = OnceLock::new();
+    let configured = *GATE.get_or_init(|| {
+        let on = std::env::var("BICDB_LOCATOR_HYBRID")
+            .map(|value| matches!(value.as_str(), "1" | "on" | "true" | "yes"))
+            .unwrap_or(false);
+        let ratio = std::env::var("BICDB_LOCATOR_HYBRID_RATIO")
+            .ok()
+            .and_then(|value| value.parse::<f64>().ok())
+            .filter(|ratio| ratio.is_finite() && *ratio >= 1.0)
+            .unwrap_or(2.0);
+        on.then_some(ratio)
+    });
+    match crate::plan_diagnostics::locator_hybrid_override() {
+        Some(true) => Some(configured.unwrap_or(2.0)),
+        Some(false) => None,
+        None => configured,
+    }
+}
+
 pub(crate) fn locator_plans_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
     *ENABLED.get_or_init(|| {

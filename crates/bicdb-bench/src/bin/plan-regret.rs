@@ -231,6 +231,18 @@ fn build_dataset(session: &mut SqlSession<'_>, dataset: &Dataset, seed: u64) -> 
         session.execute(&sql)?;
         id = end + 1;
     }
+    if is_challenge2(dataset) {
+        // Held-out layout: different composite orders and members than the
+        // datasets the hybrid was evaluated on.
+        session.execute(
+            "CREATE INDEX orders_customer ON orders (customer_id);
+             CREATE INDEX orders_status ON orders (status);
+             CREATE INDEX orders_day ON orders (created_day);
+             CREATE INDEX orders_status_region ON orders (status, region);
+             CREATE INDEX orders_day_status ON orders (created_day, status);",
+        )?;
+        return Ok(());
+    }
     session.execute(
         "CREATE INDEX orders_customer ON orders (customer_id);
          CREATE INDEX orders_status ON orders (status);
@@ -250,7 +262,11 @@ fn build_dataset(session: &mut SqlSession<'_>, dataset: &Dataset, seed: u64) -> 
 /// longer but unselective index prefix beating a short selective one, and
 /// ties resolved by executing every tied (possibly huge) probe.
 fn is_challenge(dataset: &Dataset) -> bool {
-    dataset.name.starts_with("challenge")
+    dataset.name.starts_with("challenge") && !is_challenge2(dataset)
+}
+
+fn is_challenge2(dataset: &Dataset) -> bool {
+    dataset.name.starts_with("challenge2")
 }
 
 // ---------------------------------------------------------------- queries
@@ -279,6 +295,42 @@ fn generate_queries(dataset: &Dataset, count: usize, rng: &mut Rng) -> Vec<Query
             let width = *rng.pick(&widths);
             let status = rng.below(8);
             let region = rng.below(REGIONS);
+            if is_challenge2(dataset) {
+                let common = *rng.pick(&[0u64, 0, 0, 1]);
+                return match rng.below(4) {
+                    0 => Query {
+                        template: "c2_status_region_customer",
+                        sql: format!(
+                            "{projection} WHERE status = {common} AND region = {} AND customer_id = {}",
+                            5 + rng.below(REGIONS - 5),
+                            customer(rng)
+                        ),
+                    },
+                    1 => Query {
+                        template: "c2_status_region_day",
+                        sql: format!(
+                            "{projection} WHERE status = {common} AND region = {} AND created_day = {}",
+                            5 + rng.below(REGIONS - 5),
+                            rng.below(DAYS as u64)
+                        ),
+                    },
+                    2 => Query {
+                        // Control: here the longer prefix IS the selective one
+                        // (rare statuses), so an override would be a mistake.
+                        template: "c2_control_rare_status",
+                        sql: format!(
+                            "{projection} WHERE status = {} AND region = {} AND customer_id = {}",
+                            6 + rng.below(2),
+                            5 + rng.below(REGIONS - 5),
+                            zipf.sample(rng)
+                        ),
+                    },
+                    _ => Query {
+                        template: "c2_customer_eq",
+                        sql: format!("{projection} WHERE customer_id = {}", customer(rng)),
+                    },
+                };
+            }
             if is_challenge(dataset) {
                 // Common statuses make the long composite prefixes unselective.
                 let common = *rng.pick(&[0u64, 0, 0, 1]);
@@ -411,11 +463,22 @@ struct Run {
     decision: Option<DecisionTrace>,
     planner: Option<DecisionTrace>,
     forced: bool,
+    decisions: Vec<DecisionTrace>,
 }
 
 fn run_once(session: &mut SqlSession<'_>, sql: &str, force: Option<&PlanSignature>) -> Result<Run> {
+    run_with(session, sql, force, Some(false))
+}
+
+fn run_with(
+    session: &mut SqlSession<'_>,
+    sql: &str,
+    force: Option<&PlanSignature>,
+    hybrid: Option<bool>,
+) -> Result<Run> {
     let options = DiagnosticsOptions {
         force: force.cloned(),
+        locator_hybrid: hybrid,
         ..DiagnosticsOptions::default()
     };
     let started = Instant::now();
@@ -444,6 +507,7 @@ fn run_once(session: &mut SqlSession<'_>, sql: &str, force: Option<&PlanSignatur
         decision,
         planner,
         forced,
+        decisions,
     })
 }
 
@@ -558,6 +622,81 @@ fn measure_candidates(
     Ok(out)
 }
 
+/// End-to-end timing of the UNFORCED statement, i.e. what a client sees:
+/// planning, the chooser's own probes (including tie probes it discards),
+/// and execution of its choice. Reports the decision-time split per run.
+#[allow(clippy::too_many_arguments)]
+fn measure_natural(
+    session: &mut SqlSession<'_>,
+    sql: &str,
+    reference: (usize, u64),
+    hybrid: bool,
+    reps: usize,
+    rng: &mut Rng,
+    flusher: &mut CacheFlusher,
+) -> Result<Value> {
+    run_with(session, sql, None, Some(hybrid))?;
+    let mut warm = Vec::new();
+    let mut flushed = Vec::new();
+    let mut locator_us = Vec::new();
+    let mut wasted_us = Vec::new();
+    let mut planner_us = Vec::new();
+    let mut semantics_ok = true;
+    let mut last: Option<Run> = None;
+    let mut conditions = CONDITIONS.to_vec();
+    rng.shuffle(&mut conditions);
+    for condition in conditions {
+        for _ in 0..reps {
+            if condition == "flushed" {
+                flusher.flush();
+            }
+            let run = run_with(session, sql, None, Some(hybrid))?;
+            semantics_ok &= run.fingerprint == reference;
+            if condition == "warm" {
+                warm.push(run.elapsed_ms);
+                let rule = run
+                    .decisions
+                    .iter()
+                    .filter(|d| d.chooser != "planner")
+                    .collect::<Vec<_>>();
+                locator_us.push(rule.iter().filter_map(|d| d.decision_micros).sum::<u64>() as f64);
+                wasted_us.push(
+                    rule.iter()
+                        .filter_map(|d| d.wasted_probe_micros)
+                        .sum::<u64>() as f64,
+                );
+                planner_us.push(
+                    run.decisions
+                        .iter()
+                        .filter(|d| d.chooser == "planner")
+                        .filter_map(|d| d.decision_micros)
+                        .sum::<u64>() as f64,
+                );
+            } else {
+                flushed.push(run.elapsed_ms);
+            }
+            last = Some(run);
+        }
+    }
+    let last = last.expect("at least one repetition");
+    let chosen = last
+        .decision
+        .as_ref()
+        .map(|d| d.candidates[d.chosen].signature.label());
+    let overridden = last.decisions.iter().any(|d| d.hybrid_override);
+    Ok(json!({
+        "hybrid": hybrid,
+        "warm_ms": median(&mut warm),
+        "flushed_ms": median(&mut flushed),
+        "chosen": chosen,
+        "hybrid_override": overridden,
+        "rule_decision_us": median(&mut locator_us),
+        "wasted_probe_us": median(&mut wasted_us),
+        "planner_us": median(&mut planner_us),
+        "semantics_ok": semantics_ok,
+    }))
+}
+
 fn signature_json(signature: &PlanSignature) -> Value {
     json!({
         "label": signature.label(),
@@ -627,7 +766,17 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
                 &mut rng,
                 &mut flusher,
             )?;
+            let natural_nostats = measure_natural(
+                &mut session,
+                &query.sql,
+                references[qi],
+                false,
+                config.reps,
+                &mut rng,
+                &mut flusher,
+            )?;
             records[qi] = json!({
+                "natural_nostats": natural_nostats,
                 "dataset": dataset.name,
                 "rows": dataset.rows,
                 "note_bytes": [dataset.note_min, dataset.note_max],
@@ -684,8 +833,48 @@ fn run_dataset(config: &Config, dataset: &Dataset, out: &mut impl Write) -> Resu
                 )?;
                 measured[qi].extend(extra);
             }
+            let natural_stats = measure_natural(
+                &mut session,
+                &query.sql,
+                references[qi],
+                false,
+                config.reps,
+                &mut rng,
+                &mut flusher,
+            )?;
+            let natural_hybrid = measure_natural(
+                &mut session,
+                &query.sql,
+                references[qi],
+                true,
+                config.reps,
+                &mut rng,
+                &mut flusher,
+            )?;
+            // Make sure the hybrid's choice also has a forced measurement.
+            let hybrid_run = run_with(&mut session, &query.sql, None, Some(true))?;
+            if let Some(hybrid_decision) = &hybrid_run.decision {
+                let signature = hybrid_decision.candidates[hybrid_decision.chosen]
+                    .signature
+                    .clone();
+                if !measured[qi].contains_key(&signature) {
+                    let extra = measure_candidates(
+                        &mut session,
+                        &query.sql,
+                        &[signature],
+                        references[qi],
+                        dataset.rows,
+                        config.reps,
+                        &mut rng,
+                        &mut flusher,
+                    )?;
+                    measured[qi].extend(extra);
+                }
+            }
             let plan_ms = time_plan_only(&mut session, &query.sql, 5)?;
             let record = records[qi].as_object_mut().expect("record");
+            record.insert("natural_stats".into(), natural_stats);
+            record.insert("natural_hybrid".into(), natural_hybrid);
             record.insert("executed_after_analyze".into(), decision_json(&decision));
             record.insert(
                 "stats".into(),

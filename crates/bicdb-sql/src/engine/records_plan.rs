@@ -1308,6 +1308,7 @@ impl<'db> SqlEngine<'db> {
         select: &Select,
         query: &Query,
     ) -> Result<QueryPlan> {
+        let planning_started = crate::plan_diagnostics::active().then(std::time::Instant::now);
         let stats = self.db_ref().table_statistics(collection);
         // Row-count estimate for costing. Without ANALYZE stats (the common case —
         // e.g. some external workloads never run ANALYZE), fall back to the collection's cheap
@@ -1526,6 +1527,10 @@ impl<'db> SqlEngine<'db> {
                 contradiction,
                 &candidates,
             );
+            crate::plan_diagnostics::annotate_last_decision(|decision| {
+                decision.decision_micros =
+                    planning_started.map(|started| started.elapsed().as_micros() as u64);
+            });
             return Ok(candidates
                 .into_iter()
                 .nth(chosen)

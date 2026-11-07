@@ -238,7 +238,19 @@ fn build_dataset(session: &mut SqlSession<'_>, dataset: &Dataset, seed: u64) -> 
          CREATE INDEX orders_region_status ON orders (region, status);
          CREATE INDEX orders_customer_day ON orders (customer_id, created_day);",
     )?;
+    if is_challenge(dataset) {
+        // A long composite over unselective columns: competes with the
+        // selective single-column indexes in the adversarial templates.
+        session.execute("CREATE INDEX orders_status_day ON orders (status, created_day);")?;
+    }
     Ok(())
+}
+
+/// Adversarial datasets target the rule-based chooser's two weak spots: a
+/// longer but unselective index prefix beating a short selective one, and
+/// ties resolved by executing every tied (possibly huge) probe.
+fn is_challenge(dataset: &Dataset) -> bool {
+    dataset.name.starts_with("challenge")
 }
 
 // ---------------------------------------------------------------- queries
@@ -267,6 +279,35 @@ fn generate_queries(dataset: &Dataset, count: usize, rng: &mut Rng) -> Vec<Query
             let width = *rng.pick(&widths);
             let status = rng.below(8);
             let region = rng.below(REGIONS);
+            if is_challenge(dataset) {
+                // Common statuses make the long composite prefixes unselective.
+                let common = *rng.pick(&[0u64, 0, 0, 1]);
+                return match rng.below(3) {
+                    0 => Query {
+                        template: "trap_longer_prefix",
+                        sql: format!(
+                            "{projection} WHERE region = {} AND status = {common} AND customer_id = {}",
+                            5 + rng.below(REGIONS - 5),
+                            customer(rng)
+                        ),
+                    },
+                    1 => Query {
+                        template: "trap_tied_huge_probe",
+                        sql: format!(
+                            "{projection} WHERE status = {common} AND customer_id = {}",
+                            customer(rng)
+                        ),
+                    },
+                    _ => Query {
+                        template: "trap_tied_range_probe",
+                        sql: format!(
+                            "{projection} WHERE status = {common} AND created_day >= {} AND region = {}",
+                            rng.below(50),
+                            5 + rng.below(REGIONS - 5)
+                        ),
+                    },
+                };
+            }
             match rng.below(9) {
                 0 => Query {
                     template: "customer_eq",

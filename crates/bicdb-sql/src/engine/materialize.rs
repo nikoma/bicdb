@@ -3351,19 +3351,26 @@ impl<'db> SqlEngine<'db> {
             return Some("bool".to_string());
         }
         if matches!(bare_name, "lower" | "upper") {
-            let range_type = self.infer_env_expr_type(args.first()?, env)?;
-            return match range_type.as_str() {
-                "int4range" => Some("int4".to_string()),
-                "int8range" => Some("int8".to_string()),
-                "numrange" => Some("numeric".to_string()),
-                "daterange" => Some("date".to_string()),
-                "tsrange" => Some("timestamp".to_string()),
-                "tstzrange" => Some("timestamptz".to_string()),
-                _ => load_named_user_type(&range_type).and_then(|user_type| match user_type.kind {
-                    UserTypeKind::Range { value, .. } => Some(value.subtype),
-                    _ => None,
-                }),
+            // Range bounds; any other argument is the text function below.
+            let range_type = self.infer_env_expr_type(args.first()?, env);
+            let bound = match range_type.as_deref() {
+                Some("int4range") => Some("int4".to_string()),
+                Some("int8range") => Some("int8".to_string()),
+                Some("numrange") => Some("numeric".to_string()),
+                Some("daterange") => Some("date".to_string()),
+                Some("tsrange") => Some("timestamp".to_string()),
+                Some("tstzrange") => Some("timestamptz".to_string()),
+                Some(other) => {
+                    load_named_user_type(other).and_then(|user_type| match user_type.kind {
+                        UserTypeKind::Range { value, .. } => Some(value.subtype),
+                        _ => None,
+                    })
+                }
+                None => None,
             };
+            if bound.is_some() || range_type.is_none() {
+                return bound;
+            }
         }
         if bare_name == "range_merge" {
             let arg_type = self.infer_env_expr_type(args.first()?, env)?;

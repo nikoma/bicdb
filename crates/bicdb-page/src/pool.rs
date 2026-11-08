@@ -590,6 +590,11 @@ struct Shard {
     streaming_capacity: usize,
     metadata_capacity: usize,
     capacity: usize,
+    /// No-steal preference (GAP-1 interim mitigation): while set, reclaim
+    /// skips a dirty frame whose changes are not logged yet, that is a page
+    /// an uncommitted (or aborted, not yet re-logged) transaction modified.
+    /// Only `evict_one`'s last-resort pass clears it.
+    avoid_unlogged: bool,
 }
 
 #[derive(Debug)]
@@ -675,6 +680,12 @@ struct PoolMetrics {
     writeback_io_limit_stops: AtomicU64,
     writeback_duration_limit_stops: AtomicU64,
     writeback_pinned_skips: AtomicU64,
+    /// Evictions that had to write an unlogged frame because the shard had
+    /// no other victim (GAP-1: the window stays open for these).
+    unlogged_steals: AtomicU64,
+    /// Online writeback candidates skipped because they hold unlogged
+    /// changes of an uncommitted transaction.
+    unlogged_writeback_skips: AtomicU64,
     read_ahead_requests: AtomicU64,
     read_ahead_undriven: AtomicU64,
     read_ahead_enqueued: AtomicU64,
@@ -923,6 +934,7 @@ impl BufferPool {
                     streaming_capacity,
                     metadata_capacity,
                     capacity,
+                    avoid_unlogged: true,
                 })
             })
             .collect::<Vec<_>>()
@@ -1389,7 +1401,33 @@ impl BufferPool {
     }
 
     /// Free one frame in this shard, writing it back if dirty.
+    ///
+    /// A frame with unlogged changes (a page an uncommitted transaction
+    /// modified) is chosen only when the shard has no other victim. Writing it
+    /// would put uncommitted bytes in the page file, which recovery cannot
+    /// undo (GAP-1 in `docs/recovery-semantics.md`).
     fn evict_one(
+        &self,
+        shard: &mut Shard,
+        wanted: PageId,
+        class: CacheClass,
+    ) -> Result<Arc<RwLock<Vec<u8>>>> {
+        shard.avoid_unlogged = true;
+        match self.evict_one_pass(shard, wanted, class) {
+            Err(PageError::PoolExhausted { .. }) => {
+                shard.avoid_unlogged = false;
+                let result = self.evict_one_pass(shard, wanted, class);
+                shard.avoid_unlogged = true;
+                if result.is_ok() {
+                    self.metrics.unlogged_steals.fetch_add(1, Ordering::Relaxed);
+                }
+                result
+            }
+            other => other,
+        }
+    }
+
+    fn evict_one_pass(
         &self,
         shard: &mut Shard,
         wanted: PageId,
@@ -1599,6 +1637,12 @@ impl BufferPool {
         if frame.pins.load(Ordering::Acquire) > 0 {
             return Ok(None);
         }
+        if shard.avoid_unlogged
+            && frame.dirty.load(Ordering::Acquire)
+            && frame.needs_log.load(Ordering::Acquire)
+        {
+            return Ok(None);
+        }
         if frame.dirty.load(Ordering::Acquire) {
             // This flush still runs under the caller's shard lock: eviction
             // must hand a free buffer to the in-progress acquire, and the
@@ -1659,10 +1703,25 @@ impl BufferPool {
     /// append plus fsync, which is the difference between a page-granular
     /// pause and a pool-wide stall.
     fn write_back_frame(&self, page_id: PageId, frame: &Arc<Frame>) -> Result<bool> {
+        self.write_back_frame_with(page_id, frame, true)
+    }
+
+    /// `allow_unlogged = false` leaves a frame with unlogged changes dirty and
+    /// returns `false`. The check is under the data latch, so a writer cannot
+    /// mark the frame between it and the write.
+    fn write_back_frame_with(
+        &self,
+        page_id: PageId,
+        frame: &Arc<Frame>,
+        allow_unlogged: bool,
+    ) -> Result<bool> {
         let mut bytes = self.write_frame_data(&frame.data);
         // Re-check under the latch: another writeback (or an eviction) may
         // have flushed this frame while we waited.
         if !frame.dirty.load(Ordering::Acquire) {
+            return Ok(false);
+        }
+        if !allow_unlogged && frame.needs_log.load(Ordering::Acquire) {
             return Ok(false);
         }
         // Write-ahead ordering: the log record must be durable before the
@@ -1688,6 +1747,43 @@ impl BufferPool {
         self.dirty_index.lock().remove(&page_id);
         self.metrics.writebacks.fetch_add(1, Ordering::Relaxed);
         Ok(true)
+    }
+
+    /// Evictions that wrote an unlogged frame for lack of another victim.
+    pub fn unlogged_steals(&self) -> u64 {
+        self.metrics.unlogged_steals.load(Ordering::Relaxed)
+    }
+
+    /// Online writeback candidates skipped for holding unlogged changes.
+    pub fn unlogged_writeback_skips(&self) -> u64 {
+        self.metrics.unlogged_writeback_skips.load(Ordering::Relaxed)
+    }
+
+    /// Write every dirty page whose changes are already logged, and fsync.
+    /// Pages with unlogged changes (an uncommitted transaction's) stay dirty.
+    pub fn flush_logged(&self) -> Result<u64> {
+        let mut flushed = 0u64;
+        for shard in self.shards.iter() {
+            let dirty_frames: Vec<(PageId, Arc<Frame>)> = {
+                let shard = self.lock_shard(shard);
+                shard
+                    .resident
+                    .iter()
+                    .filter(|(_, frame)| {
+                        frame.dirty.load(Ordering::Acquire)
+                            && !frame.needs_log.load(Ordering::Acquire)
+                    })
+                    .map(|(page_id, frame)| (*page_id, frame.clone()))
+                    .collect()
+            };
+            for (page_id, frame) in dirty_frames {
+                if self.write_back_frame_with(page_id, &frame, false)? {
+                    flushed += 1;
+                }
+            }
+        }
+        self.store.flush()?;
+        Ok(flushed)
     }
 
     /// Write every dirty page back and fsync. Used at checkpoint.
@@ -1734,6 +1830,26 @@ impl BufferPool {
         &self,
         cursor: WritebackCursor,
         limits: WritebackLimits,
+    ) -> Result<WritebackStepReport> {
+        self.writeback_step_with(cursor, limits, true)
+    }
+
+    /// [`Self::writeback_step`] for online use without the writer gate: a
+    /// frame with unlogged changes (an uncommitted transaction's page) is
+    /// skipped and stays dirty, counted in `dirty_pages_remaining`.
+    pub fn writeback_step_logged_only(
+        &self,
+        cursor: WritebackCursor,
+        limits: WritebackLimits,
+    ) -> Result<WritebackStepReport> {
+        self.writeback_step_with(cursor, limits, false)
+    }
+
+    fn writeback_step_with(
+        &self,
+        cursor: WritebackCursor,
+        limits: WritebackLimits,
+        include_unlogged: bool,
     ) -> Result<WritebackStepReport> {
         limits.validate(self.page_size)?;
         self.metrics.writeback_steps.fetch_add(1, Ordering::Relaxed);
@@ -1803,8 +1919,14 @@ impl BufferPool {
                     .fetch_add(1, Ordering::Relaxed);
                 continue;
             }
+            if !include_unlogged && frame.needs_log.load(Ordering::Acquire) {
+                self.metrics
+                    .unlogged_writeback_skips
+                    .fetch_add(1, Ordering::Relaxed);
+                continue;
+            }
 
-            if !self.write_back_frame(page_id, &frame)? {
+            if !self.write_back_frame_with(page_id, &frame, include_unlogged)? {
                 report.stale_candidates_removed = report.stale_candidates_removed.saturating_add(1);
                 continue;
             }

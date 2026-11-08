@@ -650,7 +650,6 @@ fn gap2_production_path_survives_an_interrupted_log_reset() {
 /// precedes the page apply), so recovery replays it. Every acknowledged row
 /// must survive, and the big transaction must be all or nothing.
 #[test]
-#[ignore = "GAP-1: steal without undo of an uncommitted root split"]
 fn gap1_a_crash_after_an_uncommitted_root_split_keeps_acknowledged_rows() {
     let temp = tempfile::tempdir().unwrap();
     let keep = KeepOnPanic(temp.path().to_path_buf(), "gap1 root split".into());

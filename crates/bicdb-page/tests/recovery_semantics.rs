@@ -119,7 +119,6 @@ fn one_page() -> WritebackLimits {
 /// leaf but not its new right sibling leaves the committed keys that moved
 /// right unreachable.
 #[test]
-#[ignore = "GAP-1: steal without undo loses committed keys moved by an uncommitted split"]
 fn q1_crash_after_partial_drain_of_an_uncommitted_leaf_split_keeps_committed_keys() {
     const COMMITTED: usize = 300;
     let crashed: Vec<Vec<u8>> = (0..40)
@@ -139,7 +138,7 @@ fn q1_crash_after_partial_drain_of_an_uncommitted_leaf_split_keeps_committed_key
         loop {
             let report = store.writeback_step(cursor, one_page()).unwrap();
             steps += report.pages_written as usize;
-            if report.complete && report.dirty_pages_remaining == 0 {
+            if report.complete {
                 break;
             }
             cursor = if report.complete {
@@ -150,13 +149,12 @@ fn q1_crash_after_partial_drain_of_an_uncommitted_leaf_split_keeps_committed_key
         }
         steps
     };
-    assert!(
-        steps >= 3,
-        "the split must dirty several pages, got {steps}"
-    );
+    // With the no-steal mitigation the online writeback skips the
+    // uncommitted pages, so there may be nothing to write at all.
+
 
     let mut failures = Vec::new();
-    for written in 1..=steps {
+    for written in 0..=steps {
         let dir = TempDir::new().unwrap();
         {
             let store = committed_and_checkpointed(dir.path(), 0..COMMITTED);
@@ -199,7 +197,6 @@ fn q1_crash_after_partial_drain_of_an_uncommitted_leaf_split_keeps_committed_key
 /// The crashed transaction's keys sort first, so the committed keys are the
 /// ones pushed into the right half.
 #[test]
-#[ignore = "GAP-1: the root-split flush steals an uncommitted split and loses committed keys"]
 fn q1_crash_after_an_uncommitted_root_split_keeps_committed_keys() {
     let mut failures = Vec::new();
     for committed in [2usize, 4, 6, 8] {

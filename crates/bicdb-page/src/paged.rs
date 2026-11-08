@@ -2475,9 +2475,12 @@ impl PagedStore {
 
         let report = match cursor.phase {
             PagedCheckpointPhase::Drain => {
+                // Drain runs without the writer gate, next to in-flight
+                // transactions: it must not write their unlogged pages
+                // (GAP-1). Finalize, under the gate, writes what remains.
                 let writeback = self
                     .pool
-                    .writeback_step(cursor.writeback, limits.writeback)?;
+                    .writeback_step_logged_only(cursor.writeback, limits.writeback)?;
                 crate::test_faults::crash_point("checkpoint_step.after_drain");
                 let drained = writeback.complete && writeback.dirty_pages_remaining == 0;
                 let drain_passes = if writeback.complete && !drained {
@@ -2717,13 +2720,15 @@ impl PagedStore {
     }
 
     /// Write back one cursor-bounded dirty-buffer window. The pool's installed
-    /// barrier durably logs every after-image before its page write.
+    /// barrier durably logs every after-image before its page write. Pages
+    /// holding an in-flight transaction's unlogged changes are skipped: this
+    /// runs without the writer gate (GAP-1).
     pub fn writeback_step(
         &self,
         cursor: WritebackCursor,
         limits: WritebackLimits,
     ) -> Result<WritebackStepReport> {
-        self.pool.writeback_step(cursor, limits)
+        self.pool.writeback_step_logged_only(cursor, limits)
     }
 
     /// The durable page directory and free-space map.

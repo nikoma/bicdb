@@ -128,6 +128,17 @@ fn run(db_dir: &Path, mode: &str, threads: usize, seconds: u64, crash: bool) {
     let mut all: Vec<u64> = latencies.into_iter().flatten().collect();
     all.sort_unstable();
     let stats = db.deferred_materialize_stats();
+    // Whether the row-commit sync ran outside the writer lock
+    // (`BICDB_PAGED_COMMIT_SYNC_OUTSIDE_LOCK`), and the page-log sync counters,
+    // so a result always names the path it measured.
+    let outside_lock = db.paged_records_handle().map(|paged| {
+        let store = paged.store();
+        (
+            store.commit_sync_outside_lock(),
+            store.committing_stats(),
+            store.wal().snapshot(),
+        )
+    });
     println!(
         "{}",
         json!({
@@ -144,6 +155,14 @@ fn run(db_dir: &Path, mode: &str, threads: usize, seconds: u64, crash: bool) {
             },
             "transaction_log_bytes": file_bytes(&db_dir.join("transactions.log")),
             "page_wal_bytes": page_wal_bytes(db_dir),
+            "commit_sync_outside_lock": outside_lock.as_ref().map(|(on, _, _)| *on),
+            "committing": outside_lock.as_ref().map(|(_, c, _)| json!({
+                "enqueued": c.enqueued, "published_by_other": c.published_by_other,
+                "barrier_drains": c.barrier_drains, "overlap_waits": c.overlap_waits,
+                "max_depth": c.max_depth,
+            })),
+            "page_wal_sync_count": outside_lock.as_ref().map(|(_, _, w)| w.syncs),
+            "page_wal_group_savings": outside_lock.as_ref().map(|(_, _, w)| w.group_commit_savings),
             "materializer": stats.map(|s| json!({
                 "passes": s.passes, "wal_syncs": s.wal_syncs,
                 "markers_written": s.markers_written, "queued": s.queued,

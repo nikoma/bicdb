@@ -64,13 +64,39 @@ fn child_binary() -> PathBuf {
 const SMALL_POOL_BYTES: u64 = 256 * 1024;
 
 /// A case's mode is `all-logs` or `transaction-log`, optionally suffixed
-/// `+small-pool`.
+/// `+small-pool` and/or `+outside-lock` (the experimental row-commit sync
+/// outside the page store's writer lock, docs/commit-fsync-outside-locks.md).
 fn durability(mode: &str) -> &str {
-    mode.trim_end_matches("+small-pool")
+    mode.split('+').next().unwrap_or(mode)
 }
 
 fn small_pool(mode: &str) -> bool {
-    mode.ends_with("+small-pool")
+    mode.contains("+small-pool")
+}
+
+fn outside_lock(mode: &str) -> bool {
+    mode.contains("+outside-lock")
+}
+
+const OUTSIDE_LOCK_ENV: &str = "BICDB_PAGED_COMMIT_SYNC_OUTSIDE_LOCK";
+
+/// `+small-wal`: a page-log trigger small enough that commits run bounded
+/// checkpoint steps themselves, under the commit admission other commits
+/// share, so a checkpoint's writer lock meets committing transactions (the
+/// committing barrier). The resume checkpoint excludes commits entirely.
+const SMALL_WAL_BYTES: u64 = 256 * 1024;
+
+fn set_outside_lock_env(command: &mut Command, mode: &str) {
+    if outside_lock(mode) {
+        command.env(OUTSIDE_LOCK_ENV, "1");
+    } else {
+        command.env_remove(OUTSIDE_LOCK_ENV);
+    }
+    if mode.contains("+small-wal") {
+        command.env("BICDB_PAGED_WAL_MAX_BYTES", SMALL_WAL_BYTES.to_string());
+    } else {
+        command.env_remove("BICDB_PAGED_WAL_MAX_BYTES");
+    }
 }
 
 fn config(mode: &str) -> DbConfig {
@@ -78,7 +104,8 @@ fn config(mode: &str) -> DbConfig {
         .with_fsync(true)
         .with_sync_outbox(false)
         .with_storage_mode(StorageMode::ServerPaged)
-        .with_transaction_log_commit_durability(durability(mode) == "transaction-log");
+        .with_transaction_log_commit_durability(durability(mode) == "transaction-log")
+        .with_paged_commit_sync_outside_lock(outside_lock(mode));
     if small_pool(mode) {
         config.with_paged_buffer_pool_bytes(SMALL_POOL_BYTES)
     } else {
@@ -116,6 +143,7 @@ fn run_child_with(
     } else {
         command.env_remove("DURABILITY_POOL_BYTES");
     }
+    set_outside_lock_env(&mut command, mode);
     if let Some(point) = crash_at {
         command.env("BICDB_TEST_CRASH_AT", point);
     }
@@ -443,6 +471,97 @@ fn transaction_log_only_path_survives_every_crash_point() {
     );
 }
 
+// The same production matrices with the row-commit sync outside the writer
+// lock, plus crash points inside its new windows (after the lock is
+// released, after the sync before publication, after publication, and after
+// a writer-lock barrier drained committing transactions).
+const OUTSIDE_LOCK_POINTS: &[&str] = &[
+    "commit.page.appended_unlocked:4",
+    "commit.page.appended_unlocked:60",
+    "commit.page.appended_unlocked:250",
+    "commit.page.synced_unpublished:4",
+    "commit.page.synced_unpublished:60",
+    "commit.page.synced_unpublished:250",
+    "commit.page.published:4",
+    "commit.page.published:60",
+    "commit.page.published:250",
+];
+
+/// Reached only when a checkpoint meets committing transactions (`+small-wal`).
+const BARRIER_POINTS: &[&str] = &[
+    "commit.barrier.drained:1",
+    "commit.barrier.drained:5",
+    "commit.barrier.drained:20",
+];
+
+fn outside_lock_points() -> Vec<&'static str> {
+    COMMON_POINTS
+        .iter()
+        .chain(OUTSIDE_LOCK_POINTS)
+        .copied()
+        .collect()
+}
+
+#[test]
+fn outside_lock_path_survives_crashes_inside_the_checkpoint_barrier() {
+    matrix(
+        "all-logs+outside-lock+small-wal",
+        BARRIER_POINTS
+            .iter()
+            .chain(OUTSIDE_LOCK_POINTS)
+            .copied()
+            .collect(),
+        &["commit.barrier.drained:5"],
+    );
+}
+
+#[test]
+fn outside_lock_path_survives_crashes_inside_the_checkpoint_barrier_with_eviction() {
+    matrix(
+        "all-logs+small-pool+outside-lock+small-wal",
+        BARRIER_POINTS
+            .iter()
+            .chain(OUTSIDE_LOCK_POINTS)
+            .copied()
+            .collect(),
+        &["commit.barrier.drained:5"],
+    );
+}
+
+#[test]
+fn outside_lock_path_survives_every_crash_point() {
+    matrix(
+        "all-logs+outside-lock",
+        outside_lock_points(),
+        &[
+            "commit.after_page_apply:100",
+            "commit.page.synced_unpublished:60",
+        ],
+    );
+}
+
+#[test]
+fn outside_lock_path_survives_every_crash_point_with_eviction() {
+    matrix(
+        "all-logs+small-pool+outside-lock",
+        outside_lock_points(),
+        &[
+            "commit.after_page_apply:100",
+            "commit.page.appended_unlocked:60",
+        ],
+    );
+}
+
+#[test]
+fn outside_lock_path_fails_closed_at_every_io_failure_site() {
+    fail_io_matrix("all-logs+outside-lock");
+}
+
+#[test]
+fn outside_lock_path_fails_closed_at_every_io_failure_site_with_eviction() {
+    fail_io_matrix("all-logs+small-pool+outside-lock");
+}
+
 // Fail-closed matrix (docs/durability-failure-handling.md): instead of a
 // crash, a durability-critical write or sync returns EIO at its n-th call.
 // The child keeps running and must not acknowledge anything after the
@@ -485,6 +604,7 @@ fn fail_io_case(mode: &str, spec: &str) {
     } else {
         command.env_remove("DURABILITY_POOL_BYTES");
     }
+    set_outside_lock_env(&mut command, mode);
     let output = command.output().expect("run durability child");
     assert!(
         output.status.success(),

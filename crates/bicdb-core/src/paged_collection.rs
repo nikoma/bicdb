@@ -251,8 +251,19 @@ fn page_error_from_message(message: String) -> BicDbError {
 impl PagedRecords {
     /// Open or create paged record storage under `dir`, recovering if needed.
     pub fn open(dir: impl AsRef<Path>, options: PagedRecordsOptions) -> Result<Self> {
+        Self::open_with_commit_sync_outside_lock(dir, options, false)
+    }
+
+    /// [`Self::open`] with the experimental row-commit sync outside the
+    /// store's writer lock (`PagedStoreOptions::commit_sync_outside_lock`).
+    pub fn open_with_commit_sync_outside_lock(
+        dir: impl AsRef<Path>,
+        options: PagedRecordsOptions,
+        commit_sync_outside_lock: bool,
+    ) -> Result<Self> {
         let dir = dir.as_ref();
         let store_options = PagedStoreOptions::default()
+            .with_commit_sync_outside_lock(commit_sync_outside_lock)
             .with_page_size(options.page_size)
             .with_buffer_pool_bytes(options.buffer_pool_bytes)
             .with_read_ahead_queue_pages(options.read_ahead_queue_pages)
@@ -6059,7 +6070,7 @@ fn decompress_record_value(bytes: &[u8]) -> Result<Vec<u8>> {
 
 /// Translate a page-engine error, preserving the distinction between a
 /// concurrency conflict (retry) and corruption (do not).
-fn page_error(error: bicdb_page::PageError) -> BicDbError {
+pub(crate) fn page_error(error: bicdb_page::PageError) -> BicDbError {
     if error.is_write_failed() {
         return crate::error::durability_error(error);
     }

@@ -101,6 +101,13 @@ fn main() {
     std::fs::create_dir_all(&ledger).expect("ledger dir");
 
     let mut db = BicDb::open_with_config(&db_dir, config(&mode)).expect("open db");
+    // The matrix must exercise the path it names: the experimental row-commit
+    // sync outside the writer lock engages exactly when requested.
+    let requested = std::env::var("BICDB_PAGED_COMMIT_SYNC_OUTSIDE_LOCK").as_deref() == Ok("1");
+    let engaged = db
+        .paged_records_handle()
+        .is_some_and(|paged| paged.store().commit_sync_outside_lock());
+    assert_eq!(engaged, requested, "commit sync outside lock engaged={engaged}");
     if !db.collections().iter().any(|meta| meta.name == "rows") {
         db.create_collection("rows").expect("create rows");
         db.create_index(index("rows_owner", "owner", false))

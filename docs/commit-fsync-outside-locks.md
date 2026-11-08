@@ -1,7 +1,11 @@
 # Commit page-log sync outside the store write lock (design)
 
-Status: **design, awaiting approval of the contract items in section 10.
-No code yet.** The prototype will sit behind a gate that is off by default.
+Status: **prototype under qualification, gate off by default.** The owner
+approved the prototype (contract items in section 10) once P0's fail-closed
+semantics were settled (PR #55). Enabling it beyond tests needs the owner's
+explicit approval. Code: `crates/bicdb-page/src/paged_commit_outside_lock.rs`,
+`PagedStore::{commit_append, await_commit}`, and
+`row_commit_with_sync_outside_lock` in `crates/bicdb-core/src/db/spatial_paged.rs`.
 
 Code citations are to `main` at `decb9d0`.
 
@@ -131,10 +135,19 @@ commit's fsync again, under the lock. Depth is tracked per thread.
 
 Checkpoints (`checkpoint`, both `write_lock` phases of `checkpoint_step`,
 `finalize_structural_frees`) and every `Wal::reset` caller therefore run with
-an empty queue. As a second guard, the truncation decision becomes
-`!has_unfrozen_commits() && !backup_pinned() && committing.is_empty()`, and
-`reset()` refuses to run while the queue is non-empty. The refusal is an error,
-not a silent skip, and it is covered by a test.
+an empty queue. As a second guard, every truncation decision becomes
+`!has_unfrozen_commits() && !backup_pinned() && committing.is_empty()`: with a
+non-empty queue the checkpoint still flushes, but keeps the log. With the
+barrier in place this guard is unreachable (the only way the barrier leaves
+entries is a durability failure, and P0 then refuses the reset anyway), so a
+mutant removing only this guard survives by construction; the barrier
+mutant is the one the tests must kill.
+
+Implementation: `writer_lock()` replaces every `write_lock.lock()` in the
+page store. Gate off it is exactly `write_lock.lock()`. Gate on it drains when
+`!write_lock.is_owned_by_current_thread()` (outermost depth). The row commit
+takes `row_commit_guard()`, which never drains. Backup capture
+(`try_lock_for`) drains after acquiring.
 
 ### 4.4 Crash points
 
@@ -144,8 +157,8 @@ These are new, and exist only on the gated path:
 - `commit.page.synced_unpublished`: after `sync_through` returned, before
   publication;
 - `commit.page.published`: after publication, before returning to the core;
-- `checkpoint.barrier.drained`: after the barrier emptied the queue, before
-  the freeze.
+- `commit.barrier.drained`: after a writer-lock barrier emptied the queue,
+  before the holder (often a checkpoint) proceeds.
 
 ## 5. Conflict and visibility rules with a committing transaction
 

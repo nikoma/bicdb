@@ -1488,6 +1488,42 @@ impl BicDb {
         self.in_paged_transaction_inner(false, None, apply)
     }
 
+    /// The gated row commit: page work and the commit-record append under
+    /// the row-commit guard, then the sync and publication without it. Error
+    /// handling is the locked path's: a failure after the durable decision is
+    /// reported by the caller with its commit sequence (outcome unknown).
+    fn row_commit_with_sync_outside_lock<F>(
+        &self,
+        paged: &crate::paged_collection::PagedRecords,
+        apply: F,
+    ) -> Result<Option<bicdb_page::Xid>>
+    where
+        F: FnOnce(&crate::paged_collection::PagedRecords, bicdb_page::Xid) -> Result<()>,
+    {
+        let store = paged.store();
+        let guard = store.row_commit_guard();
+        self.check_recovery_state()?;
+        let xid = store.begin_row_commit();
+        if let Err(error) = apply(paged, xid) {
+            if let Err(abort_error) = store.abort(xid) {
+                self.fence_durability("paged.abort", &abort_error);
+            } else {
+                self.fence_durability("commit.materialize", &error);
+            }
+            return Err(error);
+        }
+        let ticket = store.commit_append(xid);
+        drop(guard);
+        let committed = ticket
+            .and_then(|ticket| store.await_commit(ticket))
+            .map_err(crate::paged_collection::page_error);
+        if let Err(error) = committed {
+            self.fence_durability("paged.commit", &error);
+            return Err(error);
+        }
+        Ok(Some(xid))
+    }
+
     fn in_paged_transaction_inner<F>(
         &self,
         durable_decision: bool,
@@ -1500,6 +1536,15 @@ impl BicDb {
         let Some(paged) = &self.paged_records else {
             return Ok(None);
         };
+        // EXPERIMENTAL, off by default: a row commit (durable decision, synced
+        // page commit) releases the writer lock before its page-log sync.
+        // See docs/commit-fsync-outside-locks.md.
+        if durable_decision
+            && deferred_page_commit.is_none()
+            && paged.store().commit_sync_outside_lock()
+        {
+            return self.row_commit_with_sync_outside_lock(paged, apply);
+        }
         // Held across begin..commit so no other batch's operations interleave
         // with this one — see `PagedStore::write_guard`. Without it, two
         // core-committed batches could interleave puts and commits, producing

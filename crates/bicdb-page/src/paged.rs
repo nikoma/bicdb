@@ -379,6 +379,11 @@ pub struct PagedStoreOptions {
     /// exceptions — a visibility hazard. Opt in only for stores known to
     /// predate durable abort exceptions.
     pub accept_legacy_meta: bool,
+    /// EXPERIMENTAL, off by default: a core row commit appends its commit
+    /// record under the writer lock, releases the lock, and waits for the
+    /// page-log sync outside it. Visibility still follows durability, in
+    /// commit-record order. See `docs/commit-fsync-outside-locks.md`.
+    pub commit_sync_outside_lock: bool,
 }
 
 impl Default for PagedStoreOptions {
@@ -392,6 +397,7 @@ impl Default for PagedStoreOptions {
             extent_bytes: 0,
             wal_segment_bytes: 64 * 1024 * 1024,
             accept_legacy_meta: false,
+            commit_sync_outside_lock: false,
         }
     }
 }
@@ -434,6 +440,12 @@ impl PagedStoreOptions {
 
     pub fn with_accept_legacy_meta(mut self, accept: bool) -> Self {
         self.accept_legacy_meta = accept;
+        self
+    }
+
+    /// See [`PagedStoreOptions::commit_sync_outside_lock`]. Experimental.
+    pub fn with_commit_sync_outside_lock(mut self, enabled: bool) -> Self {
+        self.commit_sync_outside_lock = enabled;
         self
     }
 }
@@ -723,6 +735,13 @@ pub struct PagedStore {
     /// scheduling. Losing this in-memory cursor on crash is safe because WAL
     /// recovery rebuilds the page file before a new sweep starts.
     automatic_checkpoint_cursor: Mutex<PagedCheckpointCursor>,
+    /// Gate for row commits that sync outside `write_lock`
+    /// (`paged_commit_outside_lock.rs`). Off by default.
+    commit_sync_outside_lock: bool,
+    /// Row commits appended but not yet durable and published. Always empty
+    /// with the gate off.
+    committing: Mutex<commit_outside_lock::CommittingQueue>,
+    committing_counters: commit_outside_lock::CommittingCounters,
     /// Bounded startup evidence retained for diagnostics; never contains WAL
     /// records or page contents.
     last_recovery: RecoveryReport,
@@ -849,6 +868,9 @@ impl PagedStore {
             .ok_or_else(|| PageError::BackupSnapshot {
                 reason: "paged writer gate exceeded the backup coordination budget".into(),
             })?;
+        if self.commit_sync_outside_lock {
+            self.drain_committing();
+        }
         self.begin_backup_pin();
         let captured = (|| {
             self.wal.sync()?;
@@ -1083,6 +1105,7 @@ impl PagedStore {
         // transform having become durable.
         recovery.legacy_meta_migrated = legacy_meta;
 
+        let commit_sync_outside_lock = options.commit_sync_outside_lock;
         let paged = Self {
             pool,
             heap,
@@ -1097,6 +1120,9 @@ impl PagedStore {
             spill,
             snapshots: Mutex::new(BTreeMap::new()),
             automatic_checkpoint_cursor: Mutex::new(PagedCheckpointCursor::default()),
+            commit_sync_outside_lock,
+            committing: Mutex::new(Default::default()),
+            committing_counters: Default::default(),
             last_recovery: recovery,
             backup_pins: AtomicU64::new(0),
             write_lock: ReentrantMutex::new(()),
@@ -1546,7 +1572,7 @@ impl PagedStore {
         value: &[u8],
     ) -> Result<VersionChainRepairReport> {
         let (transaction, replacement_head, inspection) = {
-            let _guard = self.write_lock.lock();
+            let _guard = self.writer_lock();
             let _structure = self.structure.write();
             let active = self.transactions.in_progress();
             if !active.is_empty() {
@@ -1646,7 +1672,7 @@ impl PagedStore {
     /// guarded region (including a `checkpoint` triggered by a commit crossing
     /// the WAL ceiling) re-enter rather than deadlock.
     pub fn write_guard(&self) -> ReentrantMutexGuard<'_, ()> {
-        self.write_lock.lock()
+        self.writer_lock()
     }
 
     /// Begin a transaction, returning its id and read snapshot.
@@ -1704,7 +1730,8 @@ impl PagedStore {
         key: &[u8],
         value: &[u8],
     ) -> Result<TupleLocator> {
-        let _guard = self.write_lock.lock();
+        let _guard = self.writer_lock();
+        self.note_row_commit_write(transaction, key)?;
         let _structure = self.structure.write();
         self.pool.set_current_transaction(transaction);
         let head = self.index.get(key)?.and_then(|b| TupleLocator::decode(&b));
@@ -1864,6 +1891,7 @@ impl PagedStore {
     /// version. Newest-first is deliberate: a reader at the current snapshot
     /// stops immediately, and only readers holding older snapshots pay to walk.
     pub fn get_as_of(&self, snapshot: &Snapshot, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        self.wait_for_committing_key_read(snapshot, key)?;
         let _structure = self.structure.read();
         self.get_as_of_locked(snapshot, key)
     }
@@ -2085,7 +2113,8 @@ impl PagedStore {
     /// still entitled to see it — a snapshot-isolation violation dressed up as a
     /// delete.
     pub fn delete(&self, transaction: Xid, key: &[u8]) -> Result<bool> {
-        let _guard = self.write_lock.lock();
+        let _guard = self.writer_lock();
+        self.note_row_commit_write(transaction, key)?;
         let _structure = self.structure.write();
         self.pool.set_current_transaction(transaction);
         let Some(bytes) = self.index.get(key)? else {
@@ -2150,7 +2179,7 @@ impl PagedStore {
         // barrier on its way out, so nothing reaches disk unlogged either way.
         let commit_lsn;
         {
-            let _guard = self.write_lock.lock();
+            let _guard = self.writer_lock();
             let free_adoption = self.prepare_free_adoption(transaction, &[])?;
             self.log_dirty_pages(transaction)?;
             let lsn = if sync || !free_adoption.is_empty() {
@@ -2173,6 +2202,13 @@ impl PagedStore {
         // Outside the guard: `checkpoint` takes the same lock, and it is not
         // reentrant. Checkpointing is also the one write-path step with no
         // reason to hold up other committers while it runs.
+        self.after_commit_maintenance()?;
+        Ok(commit_lsn)
+    }
+
+    /// The commit-time checkpoint trigger, shared by the locked commit and
+    /// the commit whose sync runs outside the lock.
+    pub(crate) fn after_commit_maintenance(&self) -> Result<()> {
         let wal_bytes = self.wal.size_bytes();
         if wal_bytes > self.options.wal_max_bytes {
             let mut cursor = self.automatic_checkpoint_cursor.lock();
@@ -2204,7 +2240,7 @@ impl PagedStore {
                 };
             }
         }
-        Ok(commit_lsn)
+        Ok(())
     }
 
     /// Discard a transaction's writes.
@@ -2217,7 +2253,8 @@ impl PagedStore {
         // Serialize the abort record with checkpoint publication/reset. An
         // abort does not mutate a page, but it does append to the same WAL a
         // checkpoint may truncate.
-        let _guard = self.write_lock.lock();
+        let _guard = self.writer_lock();
+        self.forget_row_commit(transaction);
         self.wal.abort(transaction)?;
         self.transactions.abort(transaction);
         self.snapshots.lock().remove(&transaction);
@@ -2311,7 +2348,7 @@ impl PagedStore {
     /// re-run.
     pub fn advance_transaction_floor(&self, beyond: Xid) -> Result<(Xid, Xid)> {
         {
-            let _guard = self.write_lock.lock();
+            let _guard = self.writer_lock();
             let allocated_before = self.transactions.next_xid();
             let oldest_active = self.transactions.oldest_in_progress_or_next();
             // Freeze the range that was genuinely allocated so every real
@@ -2363,7 +2400,7 @@ impl PagedStore {
                 found: 0,
             });
         }
-        let _guard = self.write_lock.lock();
+        let _guard = self.writer_lock();
         let _structure = self.structure.write();
         let Some(locator) = self.index.get(key)?.and_then(|b| TupleLocator::decode(&b)) else {
             return Err(PageError::HeaderRepairRefused {
@@ -2410,7 +2447,7 @@ impl PagedStore {
         // Same lock as the writers: a checkpoint rewrites the meta page and
         // flushes frames, so running it alongside a `put` mid-split would
         // checkpoint a half-modified tree.
-        let _guard = self.write_lock.lock();
+        let _guard = self.writer_lock();
         // Freeze first, so the watermark the meta page records is as advanced as
         // it can safely be. Freezing stops at the oldest still-running
         // transaction, so an in-flight writer is never frozen into visibility.
@@ -2443,7 +2480,12 @@ impl PagedStore {
         // A held backup pin also defers truncation: an online backup is
         // streaming the log chain and page tail, and discarding either
         // underneath it would corrupt the archive. Dirty pages still drain.
-        if self.transactions.has_unfrozen_commits() || self.backup_pinned() {
+        // A committing transaction's only evidence is its record in the log:
+        // never truncate under one (the barrier above normally emptied it).
+        if self.transactions.has_unfrozen_commits()
+            || self.backup_pinned()
+            || !self.committing_is_empty()
+        {
             self.checkpointer.checkpoint(self.meta_page)?;
         } else {
             let checkpoint = self.checkpointer.checkpoint_and_truncate(self.meta_page)?;
@@ -2534,7 +2576,7 @@ impl PagedStore {
                 }
             }
             PagedCheckpointPhase::Freeze => {
-                let _guard = self.write_lock.lock();
+                let _guard = self.writer_lock();
                 let oldest_active = self.transactions.oldest_in_progress_or_next();
                 let max_xids = usize::try_from(limits.max_freeze_xids).map_err(|_| {
                     PageError::InvalidMaintenanceLimits {
@@ -2574,7 +2616,7 @@ impl PagedStore {
                 }
             }
             PagedCheckpointPhase::Finalize => {
-                let _guard = self.write_lock.lock();
+                let _guard = self.writer_lock();
                 // Recheck the watermark under the same fence used for final
                 // publication. Commits between the Freeze and Finalize ticks
                 // must either be frozen now or leave the WAL untruncated.
@@ -2668,8 +2710,9 @@ impl PagedStore {
                             stop_reason: PagedCheckpointStopReason::Writeback,
                         }
                     } else {
-                        let truncate =
-                            !self.transactions.has_unfrozen_commits() && !self.backup_pinned();
+                        let truncate = !self.transactions.has_unfrozen_commits()
+                            && !self.backup_pinned()
+                            && self.committing_is_empty();
                         let redo_lsn = self.wal.next_lsn();
                         let checkpoint = self.checkpointer.finish_checkpoint(
                             self.meta_page,
@@ -2842,7 +2885,7 @@ impl PagedStore {
         limits.validate(self.pool.page_size())?;
         let started = Instant::now();
         let expired = || started.elapsed().as_millis() >= u128::from(limits.max_duration_millis);
-        let _guard = self.write_lock.lock();
+        let _guard = self.writer_lock();
         let store = self.pool.store();
         let page_size = store.page_size();
         // The scan classifies pages from on-disk headers, so any dirty page
@@ -2962,7 +3005,7 @@ impl PagedStore {
         limits.validate(self.pool.page_size())?;
         // Reclamation rewrites slots and free space, so it is a writer like any
         // other and must not interleave with `put` — or with readers.
-        let _guard = self.write_lock.lock();
+        let _guard = self.writer_lock();
         let _structure = self.structure.write();
         let oldest_active = self.transactions.oldest_in_progress_or_next();
 
@@ -3190,7 +3233,7 @@ impl PagedStore {
     /// interleave, so remove-while-iterating is safe via the two-phase
     /// collect-then-remove below. Returns the number of keys removed.
     pub fn sweep_dead_index_entries(&self, max_keys: usize) -> Result<u64> {
-        let _guard = self.write_lock.lock();
+        let _guard = self.writer_lock();
         let _structure = self.structure.write();
         // Phase 1: collect removable keys (bounded).
         let mut removable: Vec<Vec<u8>> = Vec::new();
@@ -3315,7 +3358,10 @@ impl PagedStore {
             self.wal.sync()?;
             self.pool.flush_all()?;
             self.adopt_free_segments(&adoption)?;
-            if !self.transactions.has_unfrozen_commits() && !self.backup_pinned() {
+            if !self.transactions.has_unfrozen_commits()
+                && !self.backup_pinned()
+                && self.committing_is_empty()
+            {
                 self.checkpointer.checkpoint_and_truncate(self.meta_page)?;
             }
         }
@@ -5346,6 +5392,14 @@ impl crate::pool::WritebackBarrier for WalWritebackBarrier {
         self.wal.sync_deferred_commits()
     }
 }
+
+#[path = "paged_commit_outside_lock.rs"]
+mod commit_outside_lock;
+pub use commit_outside_lock::{CommitTicket, CommittingStats};
+
+#[cfg(test)]
+#[path = "paged_commit_outside_lock_tests.rs"]
+mod commit_outside_lock_tests;
 
 #[cfg(test)]
 mod tests {

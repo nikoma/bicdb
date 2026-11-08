@@ -76,7 +76,8 @@ pub use page::{
 };
 pub use paged::{
     abort_exception_capacity, extract_status_spill, inspect_meta_page, repair_status_spill,
-    status_spill_entries_per_page, HintedRead, MetaPageInspection, PagedBackupCapture,
+    status_spill_entries_per_page, CommitTicket, CommittingStats, HintedRead, MetaPageInspection,
+    PagedBackupCapture,
     PagedCheckpointCursor, PagedCheckpointLimits, PagedCheckpointPhase, PagedCheckpointStepReport,
     PagedCheckpointStopReason, PagedIntegrityReport, PagedLocalityBatch, PagedPaths, PagedScan,
     PagedScanHeads, PagedStore, PagedStoreOptions, PagedStoreSnapshot, StatusSpillRepairReport,

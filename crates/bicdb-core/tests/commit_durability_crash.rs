@@ -60,12 +60,30 @@ fn child_binary() -> PathBuf {
         .expect("build the child first: cargo build -p bicdb-core --example durability_child")
 }
 
+/// Small enough that the workload evicts and writes back pages.
+const SMALL_POOL_BYTES: u64 = 256 * 1024;
+
+/// A case's mode is `all-logs` or `transaction-log`, optionally suffixed
+/// `+small-pool`.
+fn durability(mode: &str) -> &str {
+    mode.trim_end_matches("+small-pool")
+}
+
+fn small_pool(mode: &str) -> bool {
+    mode.ends_with("+small-pool")
+}
+
 fn config(mode: &str) -> DbConfig {
-    DbConfig::default()
+    let config = DbConfig::default()
         .with_fsync(true)
         .with_sync_outbox(false)
         .with_storage_mode(StorageMode::ServerPaged)
-        .with_transaction_log_commit_durability(mode == "transaction-log")
+        .with_transaction_log_commit_durability(durability(mode) == "transaction-log");
+    if small_pool(mode) {
+        config.with_paged_buffer_pool_bytes(SMALL_POOL_BYTES)
+    } else {
+        config
+    }
 }
 
 #[derive(Debug)]
@@ -89,10 +107,15 @@ fn run_child_with(
     command
         .arg(db)
         .arg(ledger)
-        .arg(mode)
+        .arg(durability(mode))
         .arg(commits.to_string())
         .env("BICDB_TEST_WAL_VOLATILE_TAIL", "1")
         .env_remove("BICDB_TEST_CRASH_AT");
+    if small_pool(mode) {
+        command.env("DURABILITY_POOL_BYTES", SMALL_POOL_BYTES.to_string());
+    } else {
+        command.env_remove("DURABILITY_POOL_BYTES");
+    }
     if let Some(point) = crash_at {
         command.env("BICDB_TEST_CRASH_AT", point);
     }
@@ -334,6 +357,27 @@ fn matrix(mode: &'static str, points: Vec<&'static str>, replays: &[&'static str
         ));
     }
     run_matrix(cases);
+}
+
+// The same matrices with a buffer pool small enough to evict, so pages reach
+// the page file between checkpoints (the WAL-before-data path, I5).
+
+#[test]
+fn production_path_survives_every_crash_point_with_eviction() {
+    matrix(
+        "all-logs+small-pool",
+        COMMON_POINTS.to_vec(),
+        &["commit.after_page_apply:100"],
+    );
+}
+
+#[test]
+fn transaction_log_only_path_survives_every_crash_point_with_eviction() {
+    matrix(
+        "transaction-log+small-pool",
+        COMMON_POINTS.iter().chain(DEFERRED_POINTS).copied().collect(),
+        &["commit.after_page_apply:100", "materialize.after_wal_sync:20"],
+    );
 }
 
 #[test]

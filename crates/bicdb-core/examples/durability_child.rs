@@ -18,6 +18,9 @@
 //! A checkpoint thread runs the resume checkpoint (page checkpoint plus
 //! transaction-log cut) every 40 ms.
 //!
+//! `DURABILITY_POOL_BYTES` shrinks the page buffer pool so eviction and
+//! writeback run during the workload.
+//!
 //! Exit 0 after every writer finishes, unless a crash point aborts first.
 
 use std::fs::OpenOptions;
@@ -33,11 +36,16 @@ use serde_json::json;
 pub const WRITERS: usize = 4;
 
 fn config(mode: &str) -> DbConfig {
-    DbConfig::default()
+    let config = DbConfig::default()
         .with_fsync(true)
         .with_sync_outbox(false)
         .with_storage_mode(StorageMode::ServerPaged)
-        .with_transaction_log_commit_durability(mode == "transaction-log")
+        .with_transaction_log_commit_durability(mode == "transaction-log");
+    // A small pool forces eviction and writeback during the workload.
+    match std::env::var("DURABILITY_POOL_BYTES").ok().and_then(|v| v.parse().ok()) {
+        Some(bytes) => config.with_paged_buffer_pool_bytes(bytes),
+        None => config,
+    }
 }
 
 fn append_line(path: &Path, line: &str) {
@@ -178,5 +186,11 @@ fn main() {
         .expect("sole owner")
         .into_inner()
         .expect("db lock");
+    if let Ok(Some(snapshot)) = db.paged_storage_snapshot() {
+        eprintln!(
+            "durability child pool: evictions {} writebacks {}",
+            snapshot.buffer_pool.evictions, snapshot.buffer_pool.writebacks
+        );
+    }
     db.close().expect("close");
 }

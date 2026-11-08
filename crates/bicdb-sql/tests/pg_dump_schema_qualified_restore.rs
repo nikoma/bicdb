@@ -360,6 +360,8 @@ fn restored_view_owners_and_schema_qualified_triggers_work() {
     sql.execute("INSERT INTO app.blob VALUES (7)").unwrap();
     sql.execute("DELETE FROM app.blob").unwrap();
     assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.removed"), 1);
+}
+
 /// Migration scripts register themselves with `SELECT f('..') FROM dual`,
 /// where `f` writes; function bodies use `=` assignment and RAISE WARNING.
 #[test]

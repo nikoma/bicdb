@@ -361,3 +361,53 @@ fn restored_view_owners_and_schema_qualified_triggers_work() {
     sql.execute("DELETE FROM app.blob").unwrap();
     assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.removed"), 1);
 }
+
+/// One simple-query text that sets search_path and then names relations
+/// unqualified: each statement binds with the path and schemas in force when
+/// it runs, not the path before the text started.
+#[test]
+fn statement_list_binds_each_statement_with_the_path_set_before_it() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA adempiere").unwrap();
+    sql.execute("CREATE TABLE adempiere.ad_client (id INT PRIMARY KEY)")
+        .unwrap();
+    sql.execute("INSERT INTO adempiere.ad_client VALUES (11), (12)")
+        .unwrap();
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SET search_path TO adempiere, public; SELECT count(*) FROM ad_client"
+        ),
+        2
+    );
+    // The path persists after the list, as a plain SET would.
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM ad_client"), 2);
+
+    // A schema created earlier in the same text is on the path for the
+    // statements after it, and new relations land in it.
+    sql.execute("RESET search_path").unwrap();
+    sql.execute(
+        "CREATE SCHEMA batch_app; SET search_path TO batch_app, public; \
+         CREATE TABLE batch_item (id INT); INSERT INTO batch_item VALUES (1)",
+    )
+    .unwrap();
+    sql.execute("RESET search_path").unwrap();
+    assert_eq!(
+        int_at(&mut sql, "SELECT count(*) FROM batch_app.batch_item"),
+        1
+    );
+    assert!(sql
+        .execute("SELECT count(*) FROM public.batch_item")
+        .is_err());
+
+    // SET LOCAL lasts for the rest of the text, like an implicit transaction.
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SET LOCAL search_path TO adempiere, public; SELECT count(*) FROM ad_client"
+        ),
+        2
+    );
+    assert!(sql.execute("SELECT count(*) FROM ad_client").is_err());
+}

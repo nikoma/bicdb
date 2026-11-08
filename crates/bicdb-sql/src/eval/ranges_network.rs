@@ -2630,6 +2630,12 @@ pub(crate) fn eval_binary_value(
                 "unsupported value operator {op}"
             ))),
         },
+        // Exponentiation, as power().
+        BinaryOperator::PGExp => match (&left, &right) {
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => crate::pg_scalar_extra::eval_pg_scalar_extra("power", &[left, right])?
+                .ok_or_else(|| SqlError::Unsupported("unsupported value operator ^".to_string())),
+        },
         other => Err(SqlError::Unsupported(format!(
             "unsupported value operator {other}"
         ))),

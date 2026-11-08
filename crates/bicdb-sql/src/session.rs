@@ -2985,9 +2985,10 @@ impl<'db> SqlSession<'db> {
         // statement sees the path and schemas earlier statements set up.
         let per_statement = crate::search_path::statements_bound_separately(sql, path.is_some());
         let path = if per_statement.is_some() { None } else { path };
-        let bound = path
-            .as_deref()
-            .and_then(|path| crate::search_path::bind_sql_text(self.db_ref(), sql, path));
+        let bound = match path.as_deref() {
+            Some(path) => crate::search_path::bind_sql_text(self.db_ref(), sql, path)?,
+            None => None,
+        };
         let _path_scope = crate::search_path::PathScope::enter(path);
         let sql = bound.as_deref().unwrap_or(sql);
         // A per-row routine call reaches raw SQL only through dynamic EXECUTE
@@ -3013,9 +3014,14 @@ impl<'db> SqlSession<'db> {
                                 session.db_ref(),
                                 &session.session_gucs,
                             )?;
-                            let bound = path.as_deref().and_then(|path| {
-                                crate::search_path::bind_sql_text(session.db_ref(), statement, path)
-                            });
+                            let bound = match path.as_deref() {
+                                Some(path) => crate::search_path::bind_sql_text(
+                                    session.db_ref(),
+                                    statement,
+                                    path,
+                                )?,
+                                None => None,
+                            };
                             let _path_scope = crate::search_path::PathScope::enter(path);
                             session.conflict_arbiter_memo.borrow_mut().take();
                             last =

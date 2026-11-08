@@ -389,6 +389,56 @@ fn search_path_binding_preserves_statement_text() {
     );
 }
 
+/// Every statement form a schema restore and its migrations use binds its
+/// unqualified relation names through the search_path. Binding never falls
+/// back to running a statement unbound: a name without a source position is
+/// an error, so each of these forms must carry positions.
+#[test]
+fn search_path_binding_covers_restore_and_migration_statement_forms() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("SET search_path TO app, public").unwrap();
+    for statement in [
+        "CREATE TABLE parent (id INT PRIMARY KEY, name VARCHAR(20) DEFAULT 'it''s')",
+        "CREATE TABLE child (id INT, parent_id INT, CONSTRAINT child_parent FOREIGN KEY (parent_id) REFERENCES parent (id))",
+        "CREATE TABLE tree (id INT PRIMARY KEY, up INT REFERENCES tree (id))",
+        "ALTER TABLE child ADD COLUMN note TEXT",
+        "ALTER TABLE ONLY child ADD CONSTRAINT child_pk PRIMARY KEY (id)",
+        "CREATE INDEX child_parent_idx ON child (parent_id)",
+        "CREATE UNIQUE INDEX parent_name_idx ON parent (name)",
+        "CREATE VIEW parent_names AS SELECT p.id, p.name FROM parent p",
+        "INSERT INTO parent (id, name) VALUES (1, 'a''b'), (2, 'c')",
+        "INSERT INTO child SELECT id, id, NULL FROM parent",
+        "UPDATE child SET note = (SELECT name FROM parent WHERE parent.id = child.parent_id)",
+        "UPDATE child c SET note = p.name || '''' FROM parent p WHERE p.id = c.parent_id",
+        "WITH gone AS (SELECT id FROM parent WHERE id = 2) UPDATE child SET note = 'gone' WHERE id IN (SELECT id FROM gone)",
+        "DELETE FROM child WHERE NOT EXISTS (SELECT 1 FROM parent_names v WHERE v.id = child.parent_id)",
+        "COMMENT ON TABLE parent IS 'parents'",
+        "TRUNCATE TABLE tree",
+        "DROP VIEW parent_names",
+        "DROP INDEX child_parent_idx",
+    ] {
+        sql.execute(statement)
+            .unwrap_or_else(|error| panic!("{statement}: {error}"));
+    }
+    assert_eq!(
+        sql.execute("SELECT id, note FROM app.child ORDER BY id")
+            .unwrap()
+            .rows,
+        vec![
+            vec![SqlValue::Int(1), SqlValue::String("a'b'".into())],
+            vec![SqlValue::Int(2), SqlValue::String("gone".into())],
+        ]
+    );
+    assert_eq!(
+        sql.execute("SELECT name FROM app.parent WHERE id = 1")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String("a'b".into())]]
+    );
+}
+
 /// The documented restore sets the application role's search_path as a
 /// role default, which applies to the role's later sessions.
 #[test]

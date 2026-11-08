@@ -5114,9 +5114,9 @@ impl<'db> SqlSession<'db> {
         self.routine_slots = previous.1;
     }
 
-    /// The query with unqualified references to routine variables in its
-    /// filters (WHERE, JOIN ON, HAVING) replaced by their current values, or
-    /// `None`. Only names that are not a column of any relation the query
+    /// For a query that reads catalog relations: the query with unqualified
+    /// references to routine variables in its filters (WHERE, JOIN ON,
+    /// HAVING) replaced by their current values, or `None`. Only names that are not a column of any relation the query
     /// reads are replaced; a query over relations whose columns are not known
     /// here (derived tables, functions, CTEs) is left unchanged.
     fn routine_query_with_values(&self, query: &Query) -> Result<Option<Query>> {
@@ -5128,6 +5128,7 @@ impl<'db> SqlSession<'db> {
             db: &'a BicDb,
             columns: BTreeSet<String>,
             unknown: bool,
+            catalog: bool,
         }
         impl Visitor for Relations<'_> {
             type Break = ();
@@ -5143,10 +5144,12 @@ impl<'db> SqlSession<'db> {
                     TableFactor::Table {
                         name, args: None, ..
                     } => table_factor_column_names(self.db, relation).or_else(|| {
-                        object_name(name).ok().and_then(|name| {
-                            let name = name.to_ascii_lowercase();
-                            virtual_table_columns(name.strip_prefix("pg_catalog.").unwrap_or(&name))
-                        })
+                        let name = object_name(name).ok()?.to_ascii_lowercase();
+                        let columns = virtual_table_columns(
+                            name.strip_prefix("pg_catalog.").unwrap_or(&name),
+                        )?;
+                        self.catalog = true;
+                        Some(columns)
                     }),
                     _ => None,
                 };
@@ -5170,9 +5173,12 @@ impl<'db> SqlSession<'db> {
             db: self.db_ref(),
             columns: BTreeSet::new(),
             unknown: false,
+            catalog: false,
         };
         let _ = query.visit(&mut relations);
-        if relations.unknown || relations.columns.is_empty() {
+        // Queries over stored tables already filter by bound variables; only
+        // catalog relations, which are generated per query, need the values.
+        if relations.unknown || !relations.catalog {
             return Ok(None);
         }
         let types = self

@@ -9715,7 +9715,7 @@ impl BicDb {
         }
 
         let ha_state = load_ha_state(&path)?;
-        let consensus_state = load_consensus_state(&path, &config.consensus)?;
+        let consensus_state = load_consensus_state(&path, &config.consensus, config.fsync)?;
         let mut tx_recovery = recover_transaction_log(
             &path.join(DEFAULT_TRANSACTION_LOG),
             config.read_mode,
@@ -10486,6 +10486,7 @@ impl BicDb {
                 NodeRole::Primary
             },
             config.fsync,
+            durability.clone(),
         )?;
         let last_committed_tx = Arc::new(AtomicU64::new(tx_recovery.last_commit_seq));
         let deferred_materializer = match &paged_records {
@@ -11155,6 +11156,7 @@ impl BicDb {
             &self.model_registry.read(),
             self.config.fsync,
             &self.encryption,
+            storage::FailClosed::AfterRename(&self.durability),
         )
     }
 
@@ -11164,6 +11166,7 @@ impl BicDb {
             &self.memory_indexes.read(),
             self.config.fsync,
             &self.encryption,
+            storage::FailClosed::AfterRename(&self.durability),
         )
     }
 
@@ -11173,6 +11176,7 @@ impl BicDb {
             &self.memory_index_jobs.read(),
             self.config.fsync,
             &self.encryption,
+            storage::FailClosed::AfterRename(&self.durability),
         )
     }
 
@@ -11348,34 +11352,51 @@ impl BicDb {
         )))
     }
 
-    pub fn consensus_start_election(&mut self) -> Result<RequestVote> {
+    /// Run one consensus state change and make it durable before its result
+    /// (a vote, a term, an appended entry, an acknowledgement) is returned.
+    ///
+    /// The term, the vote and the log are a promise to other nodes: a vote
+    /// granted and then lost to a crash allows two votes in one term. So the
+    /// new state is persisted with the durable replacement protocol, and on
+    /// any error memory is put back to the state before the change, so it
+    /// never runs ahead of what the disk holds. A failed directory `fsync`
+    /// after the rename leaves the file's outcome unknown and fences the
+    /// database (`consensus_state.dir_sync`); a fenced database makes no
+    /// consensus state change until it is reopened.
+    fn consensus_transition<T>(
+        &mut self,
+        change: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
         self.ensure_consensus_enabled()?;
-        let request = self.consensus_state.become_candidate();
-        self.persist_consensus_state()?;
-        Ok(request)
+        self.check_recovery_state()?;
+        let before = self.consensus_state.clone();
+        let result = change(self).and_then(|value| {
+            self.persist_consensus_state()?;
+            Ok(value)
+        });
+        if result.is_err() {
+            self.consensus_state = before;
+        }
+        result
+    }
+
+    pub fn consensus_start_election(&mut self) -> Result<RequestVote> {
+        self.consensus_transition(|db| Ok(db.consensus_state.become_candidate()))
     }
 
     pub fn consensus_become_leader(&mut self) -> Result<()> {
-        self.ensure_consensus_enabled()?;
-        self.consensus_state.become_leader()?;
-        self.persist_consensus_state()
+        self.consensus_transition(|db| db.consensus_state.become_leader())
     }
 
     pub fn consensus_handle_request_vote(&mut self, request: RequestVote) -> Result<VoteResponse> {
-        self.ensure_consensus_enabled()?;
-        let response = self.consensus_state.handle_request_vote(request)?;
-        self.persist_consensus_state()?;
-        Ok(response)
+        self.consensus_transition(|db| db.consensus_state.handle_request_vote(request))
     }
 
     pub fn consensus_handle_append_entries(
         &mut self,
         request: AppendEntries,
     ) -> Result<AppendResponse> {
-        self.ensure_consensus_enabled()?;
-        let response = self.consensus_state.handle_append_entries(request)?;
-        self.persist_consensus_state()?;
-        Ok(response)
+        self.consensus_transition(|db| db.consensus_state.handle_append_entries(request))
     }
 
     pub fn consensus_append_local_commit(
@@ -11384,9 +11405,7 @@ impl BicDb {
     ) -> Result<crate::consensus::ConsensusLogEntry> {
         self.ensure_consensus_enabled()?;
         frame.verify_checksum()?;
-        let entry = self.consensus_state.append_local_commit(frame)?;
-        self.persist_consensus_state()?;
-        Ok(entry)
+        self.consensus_transition(|db| db.consensus_state.append_local_commit(frame))
     }
 
     pub fn consensus_record_append_response(
@@ -11394,12 +11413,7 @@ impl BicDb {
         node_id: &str,
         response: &AppendResponse,
     ) -> Result<u64> {
-        self.ensure_consensus_enabled()?;
-        let commit_index = self
-            .consensus_state
-            .record_append_response(node_id, response)?;
-        self.persist_consensus_state()?;
-        Ok(commit_index)
+        self.consensus_transition(|db| db.consensus_state.record_append_response(node_id, response))
     }
 
     pub fn consensus_append_entries_from(&self, next_index: u64) -> Result<AppendEntries> {
@@ -11408,23 +11422,24 @@ impl BicDb {
     }
 
     pub fn consensus_apply_committed(&mut self) -> Result<ReplicationApplyReport> {
-        self.ensure_consensus_enabled()?;
-        let frames = self.consensus_state.apply_committed_prefix();
-        let expected_cluster = self.config.consensus.cluster_id.clone();
-        let mut applied = 0usize;
-        let mut duplicates = 0usize;
-        for frame in &frames {
-            let report = self.apply_replication_frame_inner(frame, false, &expected_cluster)?;
-            applied += report.applied;
-            duplicates += report.duplicates;
-        }
-        let report = ReplicationApplyReport {
-            applied,
-            duplicates,
-            last_applied_commit_seq: self.last_applied_commit_seq(),
-        };
-        self.persist_consensus_state()?;
-        Ok(report)
+        // On an error `last_applied` goes back with the rest of the state, so
+        // the frames are offered again (applying one twice is a duplicate).
+        self.consensus_transition(|db| {
+            let frames = db.consensus_state.apply_committed_prefix();
+            let expected_cluster = db.config.consensus.cluster_id.clone();
+            let mut applied = 0usize;
+            let mut duplicates = 0usize;
+            for frame in &frames {
+                let report = db.apply_replication_frame_inner(frame, false, &expected_cluster)?;
+                applied += report.applied;
+                duplicates += report.duplicates;
+            }
+            Ok(ReplicationApplyReport {
+                applied,
+                duplicates,
+                last_applied_commit_seq: db.last_applied_commit_seq(),
+            })
+        })
     }
 
     fn ensure_consensus_enabled(&self) -> Result<()> {
@@ -18511,7 +18526,11 @@ fn load_memory_index_jobs(
     }
 }
 
-fn load_consensus_state(path: &Path, config: &ConsensusConfig) -> Result<ConsensusState> {
+fn load_consensus_state(
+    path: &Path,
+    config: &ConsensusConfig,
+    fsync: bool,
+) -> Result<ConsensusState> {
     let state_path = path.join(DEFAULT_CONSENSUS_STATE);
     let mut state = match fs::read(&state_path) {
         Ok(bytes) => serde_json::from_slice::<ConsensusState>(&bytes)?,
@@ -18520,6 +18539,14 @@ fn load_consensus_state(path: &Path, config: &ConsensusConfig) -> Result<Consens
         }
         Err(error) => return Err(error.into()),
     };
+    if fsync {
+        // The term and vote this node is about to act on may come from a
+        // rename the previous process never synced; make them durable first.
+        storage::sync_parent_directory(&state_path).map_err(|error| BicDbError::WriteFailed {
+            site: format!("{CONSENSUS_STATE_SITE}.dir_sync"),
+            detail: format!("{}: {error}", state_path.display()),
+        })?;
+    }
     if config.enabled {
         if state.cluster_id != config.cluster_id {
             return Err(crate::consensus::consensus_error(format!(
@@ -18541,19 +18568,30 @@ fn load_consensus_state(path: &Path, config: &ConsensusConfig) -> Result<Consens
     Ok(state)
 }
 
+/// `last_apply_error` of a standby whose file-shipping apply started and has
+/// not finished.
+const HA_APPLY_IN_PROGRESS: &str =
+    "an apply was in progress and did not finish; re-run the apply or promote with force";
+
+/// Fault-injection and failure site of [`DEFAULT_HA_STATE`].
+pub const HA_STATE_SITE: &str = "ha_state";
+/// Fault-injection and failure site of [`DEFAULT_CONSENSUS_STATE`].
+pub const CONSENSUS_STATE_SITE: &str = "consensus_state";
+
+/// The file-shipping HA state (role, promotion, apply progress) of the
+/// database at `path`. Written with the durable replacement protocol. No
+/// open handle owns this file in the shipping and promotion flows, so a
+/// failure is returned to the operation, which is then not acknowledged;
+/// there is no database state to fence.
 fn persist_ha_state(path: &Path, state: &HaState, fsync: bool) -> Result<()> {
     fs::create_dir_all(path)?;
-    let state_path = path.join(DEFAULT_HA_STATE);
-    let tmp_path = state_path.with_extension("json.tmp");
-    fs::write(&tmp_path, serde_json::to_vec_pretty(state)?)?;
-    if fsync {
-        storage::sync_file(&tmp_path)?;
-    }
-    fs::rename(&tmp_path, &state_path)?;
-    if fsync {
-        storage::sync_file(&state_path)?;
-    }
-    Ok(())
+    storage::replace_durably(
+        &path.join(DEFAULT_HA_STATE),
+        storage::ReplaceContents::Plain(&serde_json::to_vec_pretty(state)?),
+        fsync,
+        HA_STATE_SITE,
+        storage::FailClosed::No,
+    )
 }
 
 fn persist_replication_state(
@@ -18574,6 +18612,7 @@ fn persist_model_registry(
     registry: &FxHashMap<String, ModelRegistryEntry>,
     fsync: bool,
     encryption: &EncryptionRuntime,
+    policy: storage::FailClosed<'_>,
 ) -> Result<()> {
     let mut entries = registry.values().cloned().collect::<Vec<_>>();
     entries.sort_by(|left, right| left.name.cmp(&right.name));
@@ -18584,6 +18623,8 @@ fn persist_model_registry(
         &serde_json::to_vec_pretty(&entries)?,
         fsync,
         encryption,
+        "model_registry",
+        policy,
     )
 }
 
@@ -18592,6 +18633,7 @@ fn persist_memory_index_catalog(
     catalog: &FxHashMap<String, MemoryIndexDefinition>,
     fsync: bool,
     encryption: &EncryptionRuntime,
+    policy: storage::FailClosed<'_>,
 ) -> Result<()> {
     let mut entries = catalog.values().cloned().collect::<Vec<_>>();
     entries.sort_by(|left, right| left.name.cmp(&right.name));
@@ -18602,6 +18644,8 @@ fn persist_memory_index_catalog(
         &serde_json::to_vec_pretty(&entries)?,
         fsync,
         encryption,
+        "memory_index_catalog",
+        policy,
     )
 }
 
@@ -18610,6 +18654,7 @@ fn persist_memory_index_jobs(
     jobs: &[MemoryIndexJob],
     fsync: bool,
     encryption: &EncryptionRuntime,
+    policy: storage::FailClosed<'_>,
 ) -> Result<()> {
     fs::create_dir_all(path)?;
     write_sidecar(
@@ -18618,22 +18663,25 @@ fn persist_memory_index_jobs(
         &serde_json::to_vec_pretty(jobs)?,
         fsync,
         encryption,
+        "memory_index_jobs",
+        policy,
     )
 }
 
-fn persist_consensus_state(path: &Path, state: &ConsensusState, fsync: bool) -> Result<()> {
+fn persist_consensus_state(
+    path: &Path,
+    state: &ConsensusState,
+    fsync: bool,
+    policy: storage::FailClosed<'_>,
+) -> Result<()> {
     fs::create_dir_all(path)?;
-    let state_path = path.join(DEFAULT_CONSENSUS_STATE);
-    let tmp_path = state_path.with_extension("json.tmp");
-    fs::write(&tmp_path, serde_json::to_vec_pretty(state)?)?;
-    if fsync {
-        storage::sync_file(&tmp_path)?;
-    }
-    fs::rename(&tmp_path, &state_path)?;
-    if fsync {
-        storage::sync_file(&state_path)?;
-    }
-    Ok(())
+    storage::replace_durably(
+        &path.join(DEFAULT_CONSENSUS_STATE),
+        storage::ReplaceContents::Plain(&serde_json::to_vec_pretty(state)?),
+        fsync,
+        CONSENSUS_STATE_SITE,
+        policy,
+    )
 }
 
 fn ship_to_standby(source_path: &Path, standby_path: &Path) -> Result<HaApplyReport> {
@@ -18660,6 +18708,26 @@ fn ship_to_standby(source_path: &Path, standby_path: &Path) -> Result<HaApplyRep
     collect_ha_files(&source_path, &source_path, &mut files)?;
     let mut files_copied = 0;
 
+    // Before the first file of the standby is replaced, record durably that
+    // an apply is in progress. A crash in the middle of the copy, or a
+    // failure to record the copy's own error below, then leaves a standby
+    // that refuses promotion without `force`, instead of one whose older
+    // state file still says the last apply succeeded while its files are a
+    // mix of two checkpoints.
+    persist_ha_state(
+        &standby_path,
+        &HaState {
+            role: HaRole::Standby,
+            source_path: Some(source_path.clone()),
+            source_checkpoint_bytes,
+            applied_checkpoint_bytes: 0,
+            last_apply_at: Some(unix_timestamp()),
+            last_apply_error: Some(HA_APPLY_IN_PROGRESS.to_string()),
+            promoted_at: None,
+        },
+        true,
+    )?;
+
     let apply = (|| -> Result<()> {
         for relative in &files {
             let source = source_path.join(relative);
@@ -18669,6 +18737,7 @@ fn ship_to_standby(source_path: &Path, standby_path: &Path) -> Result<HaApplyRep
             }
             copy_ha_regular_file(&source, &target)?;
             files_copied += 1;
+            bicdb_page::test_faults::crash_point("ha_ship.after_file");
         }
         remove_standby_orphan_files(&standby_path, &files)?;
         Ok(())
@@ -18704,6 +18773,9 @@ fn ship_to_standby(source_path: &Path, standby_path: &Path) -> Result<HaApplyRep
         }
         Err(error) => {
             state.last_apply_error = Some(error.to_string());
+            // Deliberately best effort: the copy's error is what the caller
+            // must see, and if this write fails the durable in-progress
+            // record written before the copy still refuses promotion.
             let _ = persist_ha_state(&standby_path, &state, true);
             Err(error)
         }
@@ -18834,6 +18906,7 @@ fn sync_parent_dir(_path: &Path) -> Result<()> {
 fn sync_parent_dir(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::File::open(parent)?.sync_all()?;
+        bicdb_page::test_faults::directory_synced(parent);
     }
     Ok(())
 }
@@ -20839,18 +20912,29 @@ fn read_optional_sidecar(
     read_immutable_sidecar(path, kind, encryption).map(Some)
 }
 
+/// Replace a sidecar (catalog, index catalog, registries, statistics) with
+/// the durable replacement protocol. `site` names it for fault injection
+/// and failure reports; `policy` says which failures fence the database
+/// (`docs/durability-failure-handling.md`, section 7).
 fn write_sidecar(
     path: &Path,
     kind: FrameKind,
     bytes: &[u8],
     fsync: bool,
     encryption: &EncryptionRuntime,
+    site: &str,
+    policy: storage::FailClosed<'_>,
 ) -> Result<()> {
-    if encryption.bound_object_cipher().is_some() {
-        storage::write_frame_atomic(path, kind, bytes, fsync, encryption)
+    let contents = if encryption.bound_object_cipher().is_some() {
+        storage::ReplaceContents::Framed {
+            kind,
+            payload: bytes,
+            encryption,
+        }
     } else {
-        storage::write_atomic(path, bytes, fsync)
-    }
+        storage::ReplaceContents::Plain(bytes)
+    };
+    storage::replace_durably(path, contents, fsync, site, policy)
 }
 
 fn graph_projection_path_for(path: &Path, projection: &str) -> PathBuf {

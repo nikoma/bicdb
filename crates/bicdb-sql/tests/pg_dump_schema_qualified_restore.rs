@@ -354,9 +354,9 @@ fn user_operators_resolve_by_search_path_and_operand_types() {
     );
     assert!(value.starts_with("2020-01-02 00:00:00"), "{value}");
     // timestamp coerces to timestamptz; a numeric column is the day count.
-    let value = text_at(&mut sql, "SELECT (dateacct + 1)::text FROM docs");
+    let value = text_at(&mut sql, "SELECT (dateacct + 1)::text FROM app.docs");
     assert!(value.starts_with("2020-01-02 10:00:00"), "{value}");
-    let value = text_at(&mut sql, "SELECT (dateacct - days)::text FROM docs");
+    let value = text_at(&mut sql, "SELECT (dateacct - days)::text FROM app.docs");
     assert!(value.starts_with("2019-12-29 10:00:00"), "{value}");
     // date + integer is an exact built-in match and stays a date.
     assert_eq!(text_at(&mut sql, "SELECT (date '2020-01-01' + 1)::text"), "2020-01-02");
@@ -374,13 +374,13 @@ fn user_operators_resolve_by_search_path_and_operand_types() {
     assert_eq!(
         int_at(
             &mut sql,
-            "SELECT count(*) FROM docs WHERE dateacct + 1 > timestamptz '2020-01-02 00:00:00+00'"
+            "SELECT count(*) FROM app.docs WHERE dateacct + 1 > timestamptz '2020-01-02 00:00:00+00'"
         ),
         1
     );
-    sql.execute("UPDATE docs SET dateacct = dateacct + 1 WHERE id = 1")
+    sql.execute("UPDATE app.docs SET dateacct = dateacct + 1 WHERE id = 1")
         .unwrap();
-    let value = text_at(&mut sql, "SELECT dateacct::text FROM docs");
+    let value = text_at(&mut sql, "SELECT dateacct::text FROM app.docs");
     assert!(value.starts_with("2020-01-02 10:00:00"), "{value}");
 
     // A shell operator cannot be used; an unknown literal is ambiguous

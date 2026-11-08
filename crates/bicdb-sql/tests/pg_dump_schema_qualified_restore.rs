@@ -1456,6 +1456,14 @@ fn routine_bodies_bind_user_operators_by_declared_types() {
         // operator (a day count) gives a value.
         "CREATE FUNCTION app.idays(i interval, n numeric) RETURNS integer \
          LANGUAGE plpgsql AS $$ BEGIN RETURN i + n; END; $$",
+        // A FOR bound and a RAISE argument.
+        "CREATE FUNCTION app.loops(i interval, n numeric) RETURNS int LANGUAGE plpgsql AS $$ \
+         DECLARE c int := 0; \
+         BEGIN \
+           FOR k IN 1 .. i + n LOOP c := c + 1; END LOOP; \
+           RAISE NOTICE 'due %', timestamptz '2020-01-01 00:00:00+00' + n; \
+           RETURN c; \
+         END; $$",
         // A date variable plus an integer stays date arithmetic.
         "CREATE FUNCTION app.nextday(d date) RETURNS date LANGUAGE plpgsql AS $$ \
          DECLARE v date := d; BEGIN v := v + 1; RETURN v; END; $$",
@@ -1485,5 +1493,15 @@ fn routine_bodies_bind_user_operators_by_declared_types() {
     assert_eq!(
         int_at(&mut sql, "SELECT app.idays(interval '3 days', 2)"),
         5
+    );
+    let result = sql
+        .execute("SELECT app.loops(interval '3 days', 2)")
+        .unwrap();
+    assert_eq!(result.rows, vec![vec![SqlValue::Int(5)]]);
+    assert_eq!(result.notices.len(), 1);
+    assert!(
+        result.notices[0].message.starts_with("due 2020-01-03 00:00:00"),
+        "{}",
+        result.notices[0].message
     );
 }

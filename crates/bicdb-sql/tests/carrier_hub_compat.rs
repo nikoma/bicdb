@@ -1025,8 +1025,48 @@ fn weak_row_lock_strengths_parse_in_queries_and_routines() {
     ] {
         assert_eq!(session_rows(&mut session, sql).len(), 1, "{sql}");
     }
+    // The rewrites keep every other token as written: doubled quotes,
+    // escape strings and quoted identifiers.
+    for sql in [
+        r#"SELECT 'it''s' AS "a""b" FROM parents WHERE id = 1 FOR NO KEY UPDATE"#,
+        r#"SELECT E'it\'s' FROM parents WHERE id = 1 FOR KEY SHARE"#,
+        r#"SELECT 'it''s' FROM parents WHERE id = 1 FOR UPDATE SKIP LOCKED LIMIT 1"#,
+    ] {
+        let rows = session_rows(&mut session, sql);
+        assert_eq!(rows, vec![vec![SqlValue::String("it's".into())]], "{sql}");
+    }
     let note = session_rows(&mut session, "SELECT note FROM parents WHERE id = 1");
     assert_eq!(note[0][0].to_cell(), "for key share stays text");
+}
+
+/// Statements rebuilt from tokens keep literals and quoted names: ALTER
+/// DOMAIN SET DEFAULT and a multi-relation FOR UPDATE OF list.
+#[test]
+fn token_rebuilt_statements_keep_quotes() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE DOMAIN note_text AS TEXT",
+        "ALTER DOMAIN note_text SET DEFAULT 'it''s'",
+        "CREATE TABLE notes (id INT, body note_text)",
+        "INSERT INTO notes (id) VALUES (1)",
+        r#"CREATE TABLE "q""t" (id INT)"#,
+        r#"INSERT INTO "q""t" VALUES (1)"#,
+    ] {
+        session
+            .execute(sql)
+            .unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    assert_eq!(
+        session_rows(&mut session, "SELECT body FROM notes"),
+        vec![vec![SqlValue::String("it's".into())]]
+    );
+    let sql = r#"SELECT n.id, 'a''b' FROM notes n, "q""t" t WHERE n.id = t.id FOR UPDATE OF n, t"#;
+    assert_eq!(
+        session_rows(&mut session, sql),
+        vec![vec![SqlValue::Int(1), SqlValue::String("a'b".into())]]
+    );
 }
 
 /// The Hub's document reference compatibility report selects

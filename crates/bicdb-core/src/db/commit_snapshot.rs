@@ -1699,32 +1699,54 @@ impl BicDb {
     }
 
     pub(crate) fn collect_table_statistics(&self, collection: &str) -> Result<TableStatistics> {
-        let state = self.collection_state(collection)?;
-        // A bounded reservoir sample of the resident records feeds the
-        // whole-collection `collect_column_statistics(&RecordMap, ..)` API;
-        // tables at or under the sample limit are analyzed exactly. Only the
-        // sampled entries are cloned (an `Arc` bump each), never the map.
-        let shards = state.read_all();
-        let total_rows: usize = shards.iter().map(|shard| shard.records.len()).sum();
+        // A bounded reservoir sample of the collection's rows feeds the
+        // column statistics; tables at or under the sample limit are analyzed
+        // exactly. A lazily paged collection is read from its page store:
+        // after a reopen none of its rows are resident, and sampling the
+        // resident shards would record an empty table (the planner then
+        // prices a full scan at zero and picks it for every query).
         let mut sampler = AnalyzeSampler::new(analyze_sample_limit(), collection);
-        let mut sampled = Vec::<(RowId, RecordEntry)>::new();
-        for (key, entry) in shards.iter().flat_map(|shard| shard.records.iter()) {
-            match sampler.offer() {
-                Some(slot) if slot == sampled.len() => sampled.push((key.clone(), entry.clone())),
-                Some(slot) => sampled[slot] = (key.clone(), entry.clone()),
-                None => {}
+        let mut sampled = Vec::<Record>::new();
+        let streamed = self.for_each_record_batch(collection, 1024, |batch| {
+            for record in batch {
+                match sampler.offer() {
+                    Some(slot) if slot == sampled.len() => sampled.push(record),
+                    Some(slot) => sampled[slot] = record,
+                    None => {}
+                }
             }
-        }
-        drop(shards);
-        let all_records: RecordMap = sampled.into_iter().collect();
+            Ok(true)
+        })?;
+        let total_rows = if streamed {
+            sampler.seen()
+        } else {
+            // Resident records: only the sampled entries are cloned (an `Arc`
+            // bump each), never the map, and decoded after sampling.
+            let state = self.collection_state(collection)?;
+            let shards = state.read_all();
+            let total_rows: usize = shards.iter().map(|shard| shard.records.len()).sum();
+            let mut entries = Vec::<Arc<StoredRecord>>::new();
+            for entry in shards.iter().flat_map(|shard| shard.records.values()) {
+                match sampler.offer() {
+                    Some(slot) if slot == entries.len() => entries.push(entry.record.clone()),
+                    Some(slot) => entries[slot] = entry.record.clone(),
+                    None => {}
+                }
+            }
+            drop(shards);
+            sampled = entries
+                .iter()
+                .map(|stored| stored.to_record())
+                .collect::<Result<_>>()?;
+            total_rows
+        };
         let mut fields = BTreeMap::<String, IndexField>::new();
         fields.insert("id".to_string(), IndexField::Id);
         fields.insert("timestamp".to_string(), IndexField::Timestamp);
         fields.insert("geometry".to_string(), IndexField::Geometry);
 
-        for entry in all_records.values() {
-            let metadata = entry.record.metadata_value()?;
-            if let Some(object) = metadata.as_object() {
+        for record in &sampled {
+            if let Some(object) = record.metadata.as_object() {
                 for key in object.keys() {
                     fields
                         .entry(key.clone())
@@ -1746,10 +1768,7 @@ impl BicDb {
 
         let mut columns = BTreeMap::new();
         for (name, field) in fields {
-            columns.insert(
-                name,
-                collect_column_statistics(&all_records, field, total_rows),
-            );
+            columns.insert(name, collect_column_statistics(&sampled, field, total_rows));
         }
 
         let mut indexes = BTreeMap::new();

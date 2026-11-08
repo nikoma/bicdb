@@ -38,7 +38,10 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering}
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use parking_lot::{ArcRwLockReadGuard, ArcRwLockWriteGuard, Condvar, Mutex, RawRwLock, RwLock};
+use parking_lot::{
+    ArcRwLockReadGuard, ArcRwLockUpgradableReadGuard, ArcRwLockWriteGuard, Condvar, Mutex,
+    RawRwLock, RwLock,
+};
 use rustc_hash::FxHashMap;
 
 use crate::error::{PageError, Result};
@@ -494,6 +497,87 @@ impl std::ops::Deref for PageGuard {
 impl Drop for PageGuard {
     fn drop(&mut self) {
         self.frame.pins.fetch_sub(1, Ordering::Release);
+    }
+}
+
+/// A pinned page read with intent to modify.
+///
+/// It reads like a [`PageGuard`] and excludes writers and other upgradable
+/// readers, so what the caller checks cannot change before [`Self::upgrade`].
+/// Dropping it without upgrading leaves the frame exactly as it was: not
+/// dirty, not queued for the WAL. A caller that only *might* write (a heap
+/// insert probing a candidate page for room) uses this instead of
+/// [`BufferPool::get_mut`], whose guard marks the page modified
+/// unconditionally and would make the commit log an unchanged page image.
+pub struct PageGuardUpgradable {
+    /// Always `Some` until [`Self::upgrade`] moves it out; `Drop` unpins only
+    /// what is still here.
+    inner: Option<UpgradableInner>,
+}
+
+struct UpgradableInner {
+    frame: Arc<Frame>,
+    guard: ArcRwLockUpgradableReadGuard<RawRwLock, Vec<u8>>,
+    dirty_index: Arc<Mutex<BTreeSet<PageId>>>,
+    acquired_at_millis: u64,
+}
+
+impl std::fmt::Debug for PageGuardUpgradable {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PageGuardUpgradable")
+            .field("page_id", &self.page_id())
+            .finish_non_exhaustive()
+    }
+}
+
+impl PageGuardUpgradable {
+    fn inner(&self) -> &UpgradableInner {
+        self.inner
+            .as_ref()
+            .expect("upgradable page guard used after upgrade")
+    }
+
+    pub fn page_id(&self) -> PageId {
+        self.inner().frame.page_id
+    }
+
+    pub fn bytes(&self) -> &[u8] {
+        &self.inner().guard
+    }
+
+    /// Become a write guard without releasing the latch. From here on the
+    /// page is treated as modified, exactly as if it had been taken with
+    /// [`BufferPool::get_mut`]; the dirty age still counts from acquisition.
+    pub fn upgrade(mut self) -> PageGuardMut {
+        let inner = self
+            .inner
+            .take()
+            .expect("upgradable page guard upgraded twice");
+        PageGuardMut {
+            frame: inner.frame,
+            guard: ArcRwLockUpgradableReadGuard::upgrade(inner.guard),
+            dirty_index: inner.dirty_index,
+            dirty_started_at_millis: inner.acquired_at_millis,
+        }
+    }
+}
+
+impl std::ops::Deref for PageGuardUpgradable {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        self.bytes()
+    }
+}
+
+impl Drop for PageGuardUpgradable {
+    fn drop(&mut self) {
+        // Nothing was written through this guard: unpin only. After an
+        // upgrade the write guard owns the pin.
+        if let Some(inner) = self.inner.take() {
+            drop(inner.guard);
+            inner.frame.pins.fetch_sub(1, Ordering::Release);
+        }
     }
 }
 
@@ -1137,6 +1221,35 @@ impl BufferPool {
             guard,
             dirty_index: self.dirty_index.clone(),
             dirty_started_at_millis,
+        })
+    }
+
+    /// Pin a page for reading with the option to modify it, loading it on a
+    /// miss. See [`PageGuardUpgradable`]: unlike [`Self::get_mut`], dropping
+    /// the guard without upgrading never marks the page dirty.
+    pub fn get_upgradable(&self, page_id: PageId) -> Result<PageGuardUpgradable> {
+        if self.read_only {
+            return Err(PageError::ReadOnlyPageSource { page_id });
+        }
+        let frame = self.acquire(page_id)?;
+        let data = frame.data.clone();
+        let guard = match data.try_upgradable_read_arc() {
+            Some(guard) => guard,
+            None => {
+                let started = Instant::now();
+                let guard = data.upgradable_read_arc();
+                self.record_page_latch_wait(started);
+                guard
+            }
+        };
+        let acquired_at_millis = self.monotonic_millis();
+        Ok(PageGuardUpgradable {
+            inner: Some(UpgradableInner {
+                frame,
+                guard,
+                dirty_index: self.dirty_index.clone(),
+                acquired_at_millis,
+            }),
         })
     }
 

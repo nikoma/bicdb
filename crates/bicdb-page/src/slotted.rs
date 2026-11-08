@@ -261,6 +261,49 @@ macro_rules! slot_accessors {
                     })
                     .collect()
             }
+
+            /// Contiguous free bytes [`SlottedPage::compact`] would leave:
+            /// everything not held by the header, the slot directory (dead
+            /// slots are kept), live tuples, or the trailer.
+            ///
+            /// Unlike [`Self::reclaimable_space`] this is exact after an
+            /// earlier compaction too: dead slots keep their old length, so
+            /// summing dead lengths counts space a previous compaction
+            /// already returned.
+            pub fn free_space_after_compaction(&self) -> usize {
+                let live: usize = (0..self.slot_count())
+                    .filter_map(|slot| self.slot_entry(slot).ok())
+                    .filter(|(offset, _, _)| *offset != DEAD_OFFSET)
+                    .map(|(_, len, _)| len as usize)
+                    .sum();
+                let directory_end = PAGE_HEADER_BYTES + self.slot_count() as usize * SLOT_BYTES;
+                (self.bytes.len() - PAGE_TRAILER_BYTES)
+                    .saturating_sub(live)
+                    .saturating_sub(directory_end)
+            }
+
+            /// Whether a value of `len` would fit once the page is compacted.
+            pub fn can_fit_after_compaction(&self, len: usize) -> bool {
+                let needs_new_slot = self.find_dead_slot().is_none();
+                let required = len + if needs_new_slot { SLOT_BYTES } else { 0 };
+                self.free_space_after_compaction() >= required
+            }
+
+            /// Whether a value of `len` fits without compaction.
+            pub fn can_fit(&self, len: usize) -> bool {
+                // A recyclable dead slot avoids the directory cost.
+                let needs_new_slot = self.find_dead_slot().is_none();
+                let required = len + if needs_new_slot { SLOT_BYTES } else { 0 };
+                self.free_space() >= required
+            }
+
+            fn find_dead_slot(&self) -> Option<u16> {
+                (0..self.slot_count()).find(|slot| {
+                    self.slot_entry(*slot)
+                        .map(|(offset, _, _)| offset == DEAD_OFFSET)
+                        .unwrap_or(false)
+                })
+            }
         }
     };
 }
@@ -346,22 +389,6 @@ impl<'a> SlottedPage<'a> {
     /// Bytes needed to store a value of `len` in a fresh slot.
     pub fn required_space(len: usize) -> usize {
         len + SLOT_BYTES
-    }
-
-    /// Whether a value of `len` fits without compaction.
-    pub fn can_fit(&self, len: usize) -> bool {
-        // A recyclable dead slot avoids the directory cost.
-        let needs_new_slot = self.find_dead_slot().is_none();
-        let required = len + if needs_new_slot { SLOT_BYTES } else { 0 };
-        self.free_space() >= required
-    }
-
-    fn find_dead_slot(&self) -> Option<u16> {
-        (0..self.slot_count()).find(|slot| {
-            self.slot_entry(*slot)
-                .map(|(offset, _, _)| offset == DEAD_OFFSET)
-                .unwrap_or(false)
-        })
     }
 
     /// Insert a tuple, returning its durable locator.

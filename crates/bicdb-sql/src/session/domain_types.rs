@@ -943,7 +943,11 @@ impl<'db> SqlSession<'db> {
             if !sequences.is_empty() {
                 self.execute_drop(ObjectType::Sequence, true, &sequences, true, true)?;
             }
-            for routine in &target.routines {
+            // Further overloads first: dropping a name's first routine moves
+            // its next overload to the name's plain catalog key.
+            let mut routines = target.routines.iter().collect::<Vec<_>>();
+            routines.sort_by_key(|routine| routine.overload.is_none());
+            for routine in routines {
                 self.delete_session_routine(routine)?;
             }
             let types = target

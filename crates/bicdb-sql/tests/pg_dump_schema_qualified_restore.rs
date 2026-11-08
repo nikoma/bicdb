@@ -546,6 +546,39 @@ fn drop_schema_requires_ownership() {
     assert!(format!("{error}").contains("owner"), "{error}");
 }
 
+#[test]
+fn drop_schema_cascade_removes_every_overload() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA calc").unwrap();
+    for signature in ["a integer", "a text", "a integer, b integer"] {
+        sql.execute(&format!(
+            "CREATE FUNCTION calc.twice({signature}) RETURNS text LANGUAGE sql AS $$ SELECT 'x' $$"
+        ))
+        .unwrap();
+    }
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_proc WHERE proname = 'twice'"
+        ),
+        3
+    );
+    sql.execute("DROP SCHEMA calc CASCADE").unwrap();
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_proc WHERE proname = 'twice'"
+        ),
+        0
+    );
+    sql.execute("CREATE SCHEMA calc").unwrap();
+    sql.execute(
+        "CREATE FUNCTION calc.twice(a integer) RETURNS text LANGUAGE sql AS $$ SELECT 'y' $$",
+    )
+    .expect("no overload of the dropped schema survives");
+}
+
 /// A dump defines several functions of one name that differ by input types;
 /// each call runs the overload whose declared types fit its arguments.
 #[test]

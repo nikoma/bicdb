@@ -1933,6 +1933,21 @@ impl BicDb {
             .and_then(|paged| paged.store().wal().archive_health().failure())
     }
 
+    /// Page-log archive state, including the local bytes retention keeps
+    /// for it. `None` outside paged storage.
+    pub fn wal_archive_status(&self) -> Option<crate::db::WalArchiveStatus> {
+        let paged = self.paged_records.as_ref()?;
+        let wal = paged.store().wal();
+        let (unarchived_segments, unarchived_bytes) = wal.unarchived_sealed();
+        Some(crate::db::WalArchiveStatus {
+            retention_enabled: wal.archive_retention_enabled(),
+            archived_through: wal.archived_through(),
+            unarchived_segments,
+            unarchived_bytes,
+            failure: wal.archive_health().failure(),
+        })
+    }
+
     /// Whether this paged store keeps unarchived sealed segments
     /// (persistent; see [`Self::archive_wal_segments`]).
     pub fn wal_archive_retention_enabled(&self) -> bool {

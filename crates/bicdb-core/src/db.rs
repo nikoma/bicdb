@@ -3349,6 +3349,23 @@ pub struct WalArchiveReport {
     pub skipped: usize,
 }
 
+/// Page-log archive state of one handle ([`BicDb::wal_archive_status`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WalArchiveStatus {
+    /// Checkpoints keep unarchived sealed segments (persisted setting).
+    pub retention_enabled: bool,
+    /// Highest sealed segment this handle confirmed archived (0: none).
+    pub archived_through: u64,
+    /// Sealed segments on disk this handle has not confirmed archived:
+    /// what retention keeps locally until the archiver catches up.
+    pub unarchived_segments: u64,
+    /// Their total size in bytes: the local disk cost of a lagging or
+    /// failed archiver.
+    pub unarchived_bytes: u64,
+    /// The archiver's first failure on this handle, if any.
+    pub failure: Option<crate::WriteFailure>,
+}
+
 /// The two chained artifacts of [`BicDb::create_online_backup`].
 #[derive(Clone, Debug)]
 pub struct OnlineBackupReport {

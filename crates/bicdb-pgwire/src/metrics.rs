@@ -229,12 +229,28 @@ pub(crate) fn render(server: &Arc<PgWireServer>) -> Result<String> {
                 failure.at_unix_millis / 1000,
             );
         }
-        let wal_failure = server.read_db()?.wal_archive_failure();
+        let wal = server.read_db()?.wal_archive_status();
         out.gauge(
             "bicdb_wal_archive_failed",
             "The page-log archiver failed on this handle; sealed segments stay local until a \
              reopened handle archives them again.",
-            u8::from(wal_failure.is_some()),
+            u8::from(wal.as_ref().is_some_and(|wal| wal.failure.is_some())),
+        );
+        out.gauge(
+            "bicdb_wal_archive_retention_enabled",
+            "Checkpoints keep unarchived sealed page-log segments (persisted).",
+            u8::from(wal.as_ref().is_some_and(|wal| wal.retention_enabled)),
+        );
+        out.gauge(
+            "bicdb_wal_archive_unarchived_segments",
+            "Sealed page-log segments kept locally because the archive has not confirmed them.",
+            wal.as_ref().map_or(0, |wal| wal.unarchived_segments),
+        );
+        out.gauge(
+            "bicdb_wal_archive_unarchived_bytes",
+            "Local disk held by sealed page-log segments the archive has not confirmed; grows \
+             while the archiver lags or is stopped.",
+            wal.as_ref().map_or(0, |wal| wal.unarchived_bytes),
         );
     }
     out.gauge(

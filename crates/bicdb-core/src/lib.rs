@@ -230,6 +230,7 @@ pub use db::{
     CommitAdmission, CommitAdmissionIntent, CommitAdmissionMutation, CommitAdmissionTicket,
 };
 pub use db::{CommitResolution, INCARNATION_JOURNAL};
+pub use db::{WalArchiveReport, WalArchiveStatus};
 pub use distribution::{
     build_failure_repair_plan, build_rebalance_plan, distribution_key_token,
     filter_commit_frame_for_range, load_distribution_config, provision_cluster_member_directory,

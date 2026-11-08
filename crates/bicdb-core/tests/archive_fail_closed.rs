@@ -554,6 +554,25 @@ fn page_log_case(site: &str) {
             .filter(|sequence| *sequence > through_before)
             .collect();
         assert!(!unconfirmed.is_empty(), "{label}");
+        // The disk cost of retention is visible.
+        let status = db.wal_archive_status().unwrap();
+        assert_eq!(status.failure.unwrap().site, site, "{label}");
+        assert_eq!(status.archived_through, through_before, "{label}");
+        assert_eq!(
+            status.unarchived_segments,
+            unconfirmed.len() as u64,
+            "{label}"
+        );
+        let expected_bytes: u64 = unconfirmed
+            .iter()
+            .map(|sequence| {
+                std::fs::metadata(db_path.join(format!("paged/store.wal.{sequence}")))
+                    .unwrap()
+                    .len()
+            })
+            .sum();
+        assert_eq!(status.unarchived_bytes, expected_bytes, "{label}");
+        assert!(expected_bytes > 0, "{label}");
         drop(guard);
         db.close().unwrap();
         let db = BicDb::open_with_config(&db_path, paged_config()).unwrap();
@@ -586,6 +605,16 @@ fn page_log_case(site: &str) {
         };
         put_rows(&db, "c", 40, &mut acked);
         db.archive_wal_segments(&archive).unwrap();
+        let status = db.wal_archive_status().unwrap();
+        assert!(
+            status.failure.is_none() && status.retention_enabled,
+            "{label}"
+        );
+        assert_eq!(
+            (status.unarchived_segments, status.unarchived_bytes),
+            (0, 0),
+            "{label}: everything sealed is archived"
+        );
         db.checkpoint_for_resume().unwrap();
         db.close().unwrap();
         chain

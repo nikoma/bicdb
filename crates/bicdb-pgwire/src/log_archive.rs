@@ -743,6 +743,10 @@ mod fail_closed_tests {
         );
         let metrics = crate::metrics::render(&server).unwrap();
         assert!(metrics.contains("bicdb_log_archive_failed 1"), "{metrics}");
+        assert!(
+            metrics.contains("bicdb_wal_archive_unarchived_bytes 0"),
+            "{metrics}"
+        );
         assert!(server.read_db().unwrap().durability_state().is_healthy());
 
         // A new handle (after the backoff) rewrites the unconfirmed suffix.

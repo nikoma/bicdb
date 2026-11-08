@@ -470,6 +470,14 @@ sync or ship decision depends on the archive, before or after.
   `bicdb_log_archive_failed_timestamp_seconds{site}`,
   `bicdb_wal_archive_failed`; the existing `bicdb_log_hold_commit_seq` shows
   the hold standing still.
+- Disk cost of retention (approved change 1): `bicdb_wal_archive_retention_enabled`,
+  `bicdb_wal_archive_unarchived_segments` and `bicdb_wal_archive_unarchived_bytes`
+  (sealed page-log segments kept locally because the archive has not
+  confirmed them), also `BicDb::wal_archive_status()`. Alert on
+  `bicdb_wal_archive_unarchived_bytes` growing: a stopped page-log archiver
+  grows `paged/` until it catches up or `disable_wal_archiving()` is called.
+  The commit-log side's retained log shows as `bicdb_log_hold_commit_seq`
+  standing still against the current commit.
 - A JSON event `archive.write_failed` (severity critical) on stderr at the
   first failure, `archive.unconfirmed_suffix_discarded` when a new handle
   discards a suffix, and an `ARCHIVE FAILED` line from the server's archiver.

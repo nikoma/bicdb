@@ -1385,6 +1385,25 @@ impl Wal {
         self.archived_through.load(Ordering::Acquire)
     }
 
+    /// Sealed segments on disk named above [`Self::archived_through`]
+    /// (count, total bytes): what archive retention keeps locally until the
+    /// archiver confirms them. One `stat` per such segment.
+    pub fn unarchived_sealed(&self) -> (u64, u64) {
+        let through = self.archived_through();
+        let sealed = self.sealed.lock().clone();
+        let mut count = 0u64;
+        let mut bytes = 0u64;
+        for sequence in sealed.into_iter().filter(|sequence| *sequence > through) {
+            count += 1;
+            bytes = bytes.saturating_add(
+                std::fs::metadata(self.sealed_path(sequence))
+                    .map(|metadata| metadata.len())
+                    .unwrap_or(0),
+            );
+        }
+        (count, bytes)
+    }
+
     /// The archiver durably holds every sealed segment named <= `sequence`
     /// (bytes and directory entries); local truncation may delete them.
     /// Refused once the archiver failed on this handle: a later "successful"

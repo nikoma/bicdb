@@ -24445,7 +24445,7 @@ pub fn estimate_distinct_from_sample(
 }
 
 fn collect_column_statistics(
-    records: &RecordMap,
+    records: &[Record],
     field: IndexField,
     row_count: usize,
 ) -> ColumnStatistics {
@@ -24454,11 +24454,8 @@ fn collect_column_statistics(
     let mut min = None::<IndexValue>;
     let mut max = None::<IndexValue>;
 
-    for entry in records.values() {
-        let Ok(record) = entry.record.to_record() else {
-            continue;
-        };
-        let value = record_index_key(&record, std::slice::from_ref(&field))
+    for record in records {
+        let value = record_index_key(record, std::slice::from_ref(&field))
             .into_iter()
             .next()
             .unwrap_or(IndexValue::Null);

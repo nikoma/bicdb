@@ -3116,7 +3116,9 @@ impl<'db> SqlEngine<'db> {
             }
         }
         if let Some(value) = deferred_values.first() {
-            if deferred_values.len() != 1 {
+            // Non-B-tree candidates are deliberately absent from the
+            // structural B-tree list; they may also avoid this policy key.
+            if deferred_values.len() != 1 || strategy.has_non_btree_indexes {
                 return Ok(None);
             }
             if let Some(selection) = selection {

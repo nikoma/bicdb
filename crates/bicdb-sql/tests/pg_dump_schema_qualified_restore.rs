@@ -1500,7 +1500,9 @@ fn routine_bodies_bind_user_operators_by_declared_types() {
     assert_eq!(result.rows, vec![vec![SqlValue::Int(5)]]);
     assert_eq!(result.notices.len(), 1);
     assert!(
-        result.notices[0].message.starts_with("due 2020-01-03 00:00:00"),
+        result.notices[0]
+            .message
+            .starts_with("due 2020-01-03 00:00:00"),
         "{}",
         result.notices[0].message
     );

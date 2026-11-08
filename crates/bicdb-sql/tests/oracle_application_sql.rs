@@ -430,3 +430,31 @@ fn drop_schema_stays_unsupported() {
         .unwrap_err();
     assert!(format!("{error}").contains("not supported"), "{error}");
 }
+
+/// Standalone Oracle functions are not overloaded: CREATE OR REPLACE with a
+/// different signature replaces the function, as before.
+#[test]
+fn oracle_standalone_functions_are_replaced_not_overloaded() {
+    let (_root, mut db) = app_database();
+    run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION pick(p_a IN NUMBER) RETURN NUMBER AS
+         BEGIN
+           RETURN p_a;
+         END;",
+    )
+    .unwrap();
+    run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION pick(p_a IN NUMBER, p_b IN NUMBER) RETURN NUMBER AS
+         BEGIN
+           RETURN p_a + p_b;
+         END;",
+    )
+    .unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT pick(1, 2) FROM dual").unwrap()),
+        vec![vec!["3".to_string()]]
+    );
+    assert!(run(&mut db, "SELECT pick(1) FROM dual").is_err());
+}

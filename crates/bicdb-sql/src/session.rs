@@ -2068,8 +2068,7 @@ pub(crate) enum DdlUndo {
         grant: DefaultPrivilegeGrant,
     },
     DeleteRoutine {
-        kind: RoutineKind,
-        name: String,
+        routine: RoutineSchema,
     },
     RestoreRoutine {
         routine: RoutineSchema,
@@ -4610,8 +4609,8 @@ impl<'db> SqlSession<'db> {
             DdlUndo::RestoreDefaultPrivilege { grant } => {
                 save_default_privilege(self.db_mut()?, &grant)?;
             }
-            DdlUndo::DeleteRoutine { kind, name } => {
-                delete_routine(self.db_mut()?, kind, &name)?;
+            DdlUndo::DeleteRoutine { routine } => {
+                delete_routine_schema(self.db_mut()?, &routine)?;
             }
             DdlUndo::RestoreRoutine { routine } => {
                 save_routine(self.db_mut()?, &routine)?;

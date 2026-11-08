@@ -196,11 +196,13 @@ mod application_copy;
 mod constraint_nulls;
 mod lock_lists;
 mod role_settings;
+mod routine_overloads;
 mod schema_meta;
 pub mod search_path;
 pub use application_copy::{copy_application_tables, ApplicationCopyReport};
 pub(crate) use constraint_nulls::*;
 pub use role_settings::role_session_settings;
+pub(crate) use routine_overloads::*;
 mod statement_cache;
 pub use schema_meta::*;
 mod catalog_memo;
@@ -4417,6 +4419,10 @@ struct RoutineSchema {
     owner: Option<String>,
     #[serde(default)]
     security_definer: bool,
+    /// Input signature of a further overload of `name`; `None` for the name's
+    /// first routine, which keeps the plain catalog key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    overload: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

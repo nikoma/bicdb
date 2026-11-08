@@ -2520,7 +2520,14 @@ impl<'db> SqlSession<'db> {
             .map(|(generation, ir)| (generation, ir, function as *const Function as usize));
         let remembered = dispatch_key
             .and_then(|key| FN_DISPATCH_MEMO.with(|memo| memo.borrow().get(&key).cloned()));
-        if let Some(dispatch) = remembered.as_deref().filter(|d| d.stored) {
+        // Overloads select by argument types, which this shortcut skips.
+        if let Some(dispatch) = remembered.as_deref().filter(|d| {
+            d.stored
+                && routine_overloads(self.db_ref(), RoutineKind::Function, &d.name)
+                    .ok()
+                    .flatten()
+                    .is_none()
+        }) {
             // Straight to the stored function: the earlier dispatchers
             // are name-only and declined last time for this node.
             let mut args = PooledArgs::take();
@@ -2660,7 +2667,7 @@ impl<'db> SqlSession<'db> {
         if let Some(value) = eval_spatial_function_value(&name, &args, &arg_types)? {
             return Ok(value);
         }
-        let stored = self.eval_stored_function_value(&name, &args)?;
+        let stored = self.eval_stored_function_value_typed(&name, &args, &arg_types)?;
         if let Some(key) = dispatch_key {
             if remembered.is_none() {
                 let entry = std::rc::Rc::new(FnDispatch {
@@ -3412,7 +3419,19 @@ impl<'db> SqlSession<'db> {
         name: &str,
         args: &[SqlValue],
     ) -> Result<Option<SqlValue>> {
-        let Some(routine) = resolve_routine_cached(self.db_ref(), RoutineKind::Function, name)?
+        self.eval_stored_function_value_typed(name, args, &[])
+    }
+
+    /// Calls a stored function, selecting among overloads of `name` by the
+    /// arguments' static types where known and otherwise by their values.
+    pub(crate) fn eval_stored_function_value_typed(
+        &mut self,
+        name: &str,
+        args: &[SqlValue],
+        arg_types: &[Option<String>],
+    ) -> Result<Option<SqlValue>> {
+        let Some(routine) =
+            resolve_routine_for_call(self.db_ref(), RoutineKind::Function, name, arg_types, args)?
         else {
             return Ok(None);
         };
@@ -6927,10 +6946,11 @@ impl RoutineCallHost for SessionRoutineHost {
         engine: &SqlEngine<'_>,
         name: &str,
         args: &[SqlValue],
+        arg_types: &[Option<String>],
     ) -> Result<SqlValue> {
         let mut session = SqlSession::for_row_routine_call(engine);
         session
-            .eval_stored_function_value(name, args)?
+            .eval_stored_function_value_typed(name, args, arg_types)?
             .ok_or_else(|| SqlError::undefined_function(format!("function {name} does not exist")))
     }
 }

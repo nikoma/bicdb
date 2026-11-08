@@ -1367,6 +1367,13 @@ fn binary_operand_types(
         BinaryOperator::And | BinaryOperator::Or => {
             (Some("bool".to_string()), Some("bool".to_string()))
         }
+        // JSONB existence operators have asymmetric signatures. Inferring the
+        // unknown RHS from the document column describes a key as jsonb and
+        // makes a valid pgwire text bind fail before query evaluation.
+        BinaryOperator::Question => (Some("jsonb".to_string()), Some("text".to_string())),
+        BinaryOperator::QuestionAnd | BinaryOperator::QuestionPipe => {
+            (Some("jsonb".to_string()), Some("text[]".to_string()))
+        }
         BinaryOperator::Eq
         | BinaryOperator::NotEq
         | BinaryOperator::Lt
@@ -3999,6 +4006,7 @@ pub(crate) trait RoutineCallHost: std::fmt::Debug {
         engine: &SqlEngine<'_>,
         name: &str,
         args: &[SqlValue],
+        arg_types: &[Option<String>],
     ) -> Result<SqlValue>;
 }
 

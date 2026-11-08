@@ -46,8 +46,31 @@ impl<'db> SqlEngine<'db> {
                 set_quantifier,
                 right,
             } => {
-                let left = self.execute_set_expr(left)?;
-                let right = self.execute_set_expr(right)?;
+                let left_expr = left;
+                let right_expr = right;
+                let mut left = self.execute_set_expr(left_expr)?;
+                let mut right = self.execute_set_expr(right_expr)?;
+                // A branch executed without result metadata (a SELECT without
+                // FROM) is described statically, so its literals take part in
+                // type resolution.
+                for (branch, expr) in [(&mut left, left_expr), (&mut right, right_expr)] {
+                    if branch.column_types.len() != branch.columns.len() {
+                        let described = self.set_expr_output_columns(expr);
+                        branch.column_types =
+                            (0..branch.columns.len())
+                                .map(|index| {
+                                    branch.column_types.get(index).cloned().flatten().or_else(
+                                        || {
+                                            described
+                                                .as_ref()
+                                                .and_then(|columns| columns.get(index))
+                                                .and_then(|(_, pg_type)| pg_type.clone())
+                                        },
+                                    )
+                                })
+                                .collect();
+                    }
+                }
                 let column_types = left
                     .column_types
                     .iter()
@@ -66,6 +89,12 @@ impl<'db> SqlEngine<'db> {
                         .map(Some)
                     })
                     .collect::<Result<Vec<_>>>()?;
+                // Each branch's values become the common type before rows are
+                // compared or returned: a date branch of a timestamp column is
+                // a timestamp, and an untyped literal must be valid input of
+                // the resolved type.
+                let left = coerce_set_branch(left, &column_types)?;
+                let right = coerce_set_branch(right, &column_types)?;
                 let mut result = combine_set_results(left, *op, *set_quantifier, right)?;
                 result.column_types = column_types;
                 Ok(result)
@@ -3313,4 +3342,45 @@ fn explain_access_lines(
         plan.estimated_cost
     ));
     lines
+}
+
+/// Converts one set-operation branch to the operation's column types. Typed
+/// columns of another type are cast; untyped (unknown literal) text is read
+/// as the resolved type. Only built-in result types are converted.
+fn coerce_set_branch(mut branch: SqlResult, column_types: &[Option<String>]) -> Result<SqlResult> {
+    let mut casts = Vec::new();
+    for (index, common) in column_types.iter().enumerate() {
+        let Some(common) = common else {
+            continue;
+        };
+        let builtin = pg_type_spec(common.strip_suffix("[]").unwrap_or(common)).is_some();
+        let branch_type = branch.column_types.get(index).cloned().flatten();
+        if !builtin || branch_type.as_deref() == Some(common.as_str()) {
+            continue;
+        }
+        if matches!(common.as_str(), "text" | "varchar" | "bpchar" | "name")
+            && branch_type.is_none()
+        {
+            continue;
+        }
+        casts.push((index, common.clone(), branch_type.is_none()));
+    }
+    if !casts.is_empty() {
+        for row in &mut branch.rows {
+            for (index, common, untyped) in &casts {
+                let Some(value) = row.get_mut(*index) else {
+                    continue;
+                };
+                if matches!(value, SqlValue::Null)
+                    || (*untyped && !matches!(value, SqlValue::String(_)))
+                {
+                    continue;
+                }
+                let original = std::mem::replace(value, SqlValue::Null);
+                *value = cast_value_to_pg_type(original, common)?;
+            }
+        }
+    }
+    branch.column_types = column_types.to_vec();
+    Ok(branch)
 }

@@ -385,7 +385,9 @@ impl<'db> SqlEngine<'db> {
                 if let Some(value) = eval_spatial_function_value(&name, &args, &arg_types)? {
                     return Ok(value);
                 }
-                if let Some(value) = self.eval_stored_sql_function_value(&name, &args)? {
+                if let Some(value) =
+                    self.eval_stored_sql_function_value(&name, &args, &arg_types)?
+                {
                     return Ok(value);
                 }
                 eval_builtin_function_value(function)
@@ -3155,10 +3157,9 @@ impl<'db> SqlEngine<'db> {
                 else_result,
                 ..
             } => {
-                let mut branches: Vec<&Expr> = conditions.iter().map(|when| &when.result).collect();
-                if let Some(else_result) = else_result {
-                    branches.push(else_result);
-                }
+                // PostgreSQL considers ELSE first, then each WHEN result.
+                let mut branches: Vec<&Expr> = else_result.iter().map(|result| &**result).collect();
+                branches.extend(conditions.iter().map(|when| &when.result));
                 self.common_branch_type(&branches, env)
             }
             Expr::Subquery(query) => self.scalar_query_output_type(query),
@@ -3623,10 +3624,18 @@ impl<'db> SqlEngine<'db> {
             "abs" | "ceil" | "ceiling" | "floor" | "round" | "mod" | "power" | "sqrt" => {
                 self.infer_env_expr_type(args.first()?, env)
             }
-            _ => load_routine(self.db_ref(), RoutineKind::Function, &name)
-                .ok()
-                .flatten()
-                .map(|routine| routine.return_type),
+            _ => {
+                let static_types = args
+                    .iter()
+                    .map(|arg| self.infer_env_expr_type(arg, env))
+                    .collect::<Vec<_>>();
+                overload_return_type(self.db_ref(), &name, &static_types).or_else(|| {
+                    load_routine(self.db_ref(), RoutineKind::Function, &name)
+                        .ok()
+                        .flatten()
+                        .map(|routine| routine.return_type)
+                })
+            }
         }
     }
 

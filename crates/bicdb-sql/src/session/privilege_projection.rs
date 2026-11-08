@@ -126,7 +126,9 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn save_session_routine(&mut self, routine: &RoutineSchema) -> Result<()> {
-        let previous = load_routine(self.db_ref(), routine.kind, &routine.name)?;
+        let previous = routines_named(self.db_ref(), routine.kind, &routine.name)?
+            .into_iter()
+            .find(|existing| existing.overload == routine.overload);
         let created = previous.is_none();
         save_routine(self.db_mut()?, routine)?;
         if self.tx.is_some() {
@@ -135,8 +137,7 @@ impl<'db> SqlSession<'db> {
                     .ddl_undo
                     .push(DdlUndo::RestoreRoutine { routine: previous }),
                 None => self.ddl_undo.push(DdlUndo::DeleteRoutine {
-                    kind: routine.kind,
-                    name: routine.name.clone(),
+                    routine: routine.clone(),
                 }),
             }
         }
@@ -167,26 +168,80 @@ impl<'db> SqlSession<'db> {
             oracle::routine_arithmetic::prepare_physical_metadata(&mut routine)?;
         }
         self.require_schema_create_privilege(&routine.schema)?;
-        if load_routine(self.db_ref(), routine.kind, &routine.name)?.is_some() {
-            if if_not_exists {
-                return Ok(());
+        let existing = routines_named(self.db_ref(), routine.kind, &routine.name)?;
+        if !existing.is_empty() {
+            // PostgreSQL identifies a function by its name and input types: a
+            // new signature adds an overload, the same one replaces it.
+            let signature = routine_input_signature(&routine)?;
+            let mut same = None;
+            for candidate in &existing {
+                if routine_input_signature(candidate)? == signature {
+                    same = Some(candidate);
+                    break;
+                }
             }
-            if !or_replace {
-                return Err(SqlError::InvalidSql(format!(
-                    "routine \"{}\" already exists",
-                    routine.name
-                )));
+            match same {
+                Some(same) => {
+                    if if_not_exists {
+                        return Ok(());
+                    }
+                    if !or_replace {
+                        return Err(SqlError::InvalidSql(format!(
+                            "routine \"{}\" already exists",
+                            routine.name
+                        )));
+                    }
+                    routine.overload = same.overload.clone();
+                }
+                None if routine.kind == RoutineKind::Function
+                    && oracle::preview_routine_language_version(&routine.language).is_none() =>
+                {
+                    routine.overload = Some(signature);
+                }
+                None => {
+                    if if_not_exists {
+                        return Ok(());
+                    }
+                    if !or_replace {
+                        return Err(SqlError::InvalidSql(format!(
+                            "routine \"{}\" already exists",
+                            routine.name
+                        )));
+                    }
+                }
             }
         }
         self.save_session_routine(&routine)
     }
 
     pub(crate) fn delete_session_routine(&mut self, routine: &RoutineSchema) -> Result<bool> {
-        let existed = delete_routine(self.db_mut()?, routine.kind, &routine.name)?;
+        let successor = if routine.overload.is_none() {
+            routines_named(self.db_ref(), routine.kind, &routine.name)?
+                .into_iter()
+                .find(|other| other.overload.is_some())
+        } else {
+            None
+        };
+        let existed = delete_routine_schema(self.db_mut()?, routine)?;
         if existed && self.tx.is_some() {
             self.ddl_undo.push(DdlUndo::RestoreRoutine {
                 routine: routine.clone(),
             });
+        }
+        if existed {
+            // The name's next overload takes over its plain catalog key.
+            if let Some(next) = successor {
+                delete_routine_schema(self.db_mut()?, &next)?;
+                let mut promoted = next.clone();
+                promoted.overload = None;
+                save_routine(self.db_mut()?, &promoted)?;
+                if self.tx.is_some() {
+                    self.ddl_undo
+                        .push(DdlUndo::RestoreRoutine { routine: next });
+                    self.ddl_undo
+                        .push(DdlUndo::DeleteRoutine { routine: promoted });
+                }
+            }
         }
         Ok(existed)
     }

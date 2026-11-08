@@ -930,7 +930,7 @@ pub(crate) fn raw_routine_argument_type_details(arg: &str) -> Result<(RoutineTyp
         {
             type_start += 1;
         }
-    } else if words.len() > 1 && !is_likely_type_word(&words[0]) {
+    } else if words.len() > 1 && routine_arg_words_have_name(&words) {
         type_start = 1;
     }
 
@@ -941,6 +941,21 @@ pub(crate) fn raw_routine_argument_type_details(arg: &str) -> Result<(RoutineTyp
         )));
     }
     raw_routine_type_details(&declaration)
+}
+
+/// Whether an argument declaration without a mode starts with a parameter
+/// name. An unnamed multi-word type (`character varying`,
+/// `timestamp with time zone`) parses whole while its tail does not.
+pub(crate) fn routine_arg_words_have_name(words: &[String]) -> bool {
+    if words.len() < 2 {
+        return false;
+    }
+    if raw_routine_type_details(&words.join(" ")).is_ok()
+        && raw_routine_type_details(&words[1..].join(" ")).is_err()
+    {
+        return false;
+    }
+    !is_likely_type_word(&words[0])
 }
 
 pub(crate) fn routine_data_type(data_type: &DataType) -> Result<String> {

@@ -505,3 +505,110 @@ fn prepared_array_types_follow_every_context_used_by_cognee() {
         );
     }
 }
+
+/// Set operations, CASE and COALESCE resolve one common type the way
+/// PostgreSQL 18 does; each case below was checked against PostgreSQL.
+#[test]
+fn set_operation_and_case_types_follow_postgres_common_type_rules() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for statement in [
+        "CREATE TABLE t (i int, n numeric, v varchar(10), c char(3), x text, d date, ts timestamp, tz timestamptz)",
+        "INSERT INTO t VALUES (1, 1.0, 'v', 'c', 'x', '2020-01-01', '2020-01-01 10:00:00', '2020-01-01 10:00:00+00')",
+        "CREATE DOMAIN dint AS int",
+        "CREATE TABLE dt (a dint)",
+        "INSERT INTO dt VALUES (5)",
+    ] {
+        session.execute(statement).unwrap();
+    }
+    let text = |value: &str| SqlValue::String(value.to_string());
+
+    // date and timestamp unify as timestamp: the date branch is converted,
+    // not compared or returned as a date.
+    let result = session
+        .execute("SELECT x FROM (SELECT d AS x FROM t UNION SELECT ts FROM t) q ORDER BY x")
+        .unwrap();
+    assert_eq!(result.column_types, vec![Some("timestamp".to_string())]);
+    assert_eq!(
+        result.rows,
+        vec![
+            vec![text("2020-01-01 00:00:00")],
+            vec![text("2020-01-01 10:00:00")]
+        ]
+    );
+    let result = session
+        .execute("SELECT x FROM (SELECT d AS x FROM t UNION ALL SELECT tz FROM t) q")
+        .unwrap();
+    assert_eq!(result.column_types, vec![Some("timestamptz".to_string())]);
+    assert_eq!(result.rows.len(), 2);
+
+    // integer and numeric unify as numeric, so 1 and 1.0 are one row.
+    let result = session
+        .execute("SELECT i FROM t UNION SELECT n FROM t")
+        .unwrap();
+    assert_eq!(result.column_types, vec![Some("numeric".to_string())]);
+    assert_eq!(result.rows.len(), 1);
+
+    // A domain and its base type unify as the base type.
+    let result = session
+        .execute("SELECT a FROM dt UNION ALL SELECT i FROM t ORDER BY 1")
+        .unwrap();
+    assert_eq!(result.column_types, vec![Some("int4".to_string())]);
+    assert_eq!(
+        result.rows,
+        vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(5)]]
+    );
+
+    // An unknown literal takes the other branch's type and must be valid
+    // input for it.
+    let error = session.execute("SELECT 'a' UNION SELECT 1").unwrap_err();
+    assert_eq!(error.sqlstate(), "22P02", "{error}");
+    let result = session
+        .execute("SELECT x FROM (SELECT '7' AS x UNION SELECT 1) q ORDER BY x")
+        .unwrap();
+    assert_eq!(result.column_types, vec![Some("int4".to_string())]);
+    assert_eq!(
+        result.rows,
+        vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(7)]]
+    );
+
+    // Mismatched categories are rejected with PostgreSQL's type names.
+    for (statement, message) in [
+        (
+            "SELECT i FROM t UNION SELECT x FROM t",
+            "UNION types integer and text cannot be matched",
+        ),
+        (
+            "SELECT i FROM t UNION SELECT ts FROM t",
+            "UNION types integer and timestamp without time zone cannot be matched",
+        ),
+        (
+            "SELECT CASE WHEN true THEN i ELSE x END FROM t",
+            "CASE types text and integer cannot be matched",
+        ),
+        (
+            "SELECT COALESCE(i, x) FROM t",
+            "COALESCE types integer and text cannot be matched",
+        ),
+    ] {
+        let error = session.execute(statement).unwrap_err();
+        assert_eq!(error.sqlstate(), "42804", "{statement}: {error}");
+        assert!(error.to_string().contains(message), "{statement}: {error}");
+    }
+
+    drop(session);
+    // CASE considers its ELSE result first.
+    assert_eq!(
+        infer_query_result_types(&db, "SELECT CASE WHEN i = 1 THEN v ELSE c END FROM t").unwrap(),
+        Some(vec![Some("bpchar".to_string())])
+    );
+    assert_eq!(
+        infer_query_result_types(
+            &db,
+            "SELECT CASE WHEN i = 1 THEN x WHEN false THEN NULL ELSE v END FROM t"
+        )
+        .unwrap(),
+        Some(vec![Some("varchar".to_string())])
+    );
+}

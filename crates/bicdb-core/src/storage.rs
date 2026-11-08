@@ -558,6 +558,15 @@ pub(crate) fn acquire_backup_write_guard(path: &Path) -> Result<Option<BackupGat
         // an opened database. Real database opens always initialize the gate.
         return Ok(None);
     };
+    // `backup_gate.timeout` (tests only), keyed by the file about to be
+    // written: report the timeout at once, as if a backup had held the
+    // gate for the whole wait.
+    if bicdb_page::test_faults::io_fault("backup_gate.timeout", path).is_err() {
+        return Err(BicDbError::Backup(format!(
+            "timed out waiting for shared backup I/O gate {}",
+            gate.display()
+        )));
+    }
     acquire_backup_gate(&gate, false).map(Some)
 }
 
@@ -573,15 +582,6 @@ pub(crate) fn acquire_database_backup_exclusive_guard(db_path: &Path) -> Result<
 
 fn acquire_backup_gate(path: &Path, exclusive: bool) -> Result<BackupGateGuard> {
     let started = Instant::now();
-    // `backup_gate.timeout` (tests only): report the timeout at once, as if
-    // a backup had held the gate for the whole wait.
-    if bicdb_page::test_faults::io_fault("backup_gate.timeout", path).is_err() {
-        return Err(BicDbError::Backup(format!(
-            "timed out waiting for {} backup I/O gate {}",
-            if exclusive { "exclusive" } else { "shared" },
-            path.display()
-        )));
-    }
     loop {
         match try_acquire_backup_gate(path, exclusive) {
             Ok(Some(file)) => return Ok(BackupGateGuard { _file: file }),

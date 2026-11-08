@@ -705,7 +705,14 @@ fn a_backup_gate_timeout_does_not_fence() {
         let mut db = BicDb::open_with_config(dir.path(), config(storage.clone())).unwrap();
         seed(&mut db, 2);
         {
-            let fault = arm_io_failure("backup_gate.timeout", dir.path(), 1, false);
+            // Scoped to the transaction log: the gate wait of the commit's
+            // own durable write, after its decision was queued.
+            let fault = arm_io_failure(
+                "backup_gate.timeout",
+                &dir.path().join("transactions.log"),
+                1,
+                false,
+            );
             let mut tx = db.begin_transaction().unwrap();
             tx.insert("items", Record::new("x")).unwrap();
             let observer = tx.observe_outcome();

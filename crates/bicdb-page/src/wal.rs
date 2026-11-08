@@ -529,10 +529,15 @@ impl Wal {
         } else {
             file.flush().map_err(|e| PageError::io(&self.path, e))?;
         }
+        // The seal's own sync covers the whole file. Power-loss emulation
+        // reads this offset; without it a crash right after the rename would
+        // cut synced bytes out of the now-sealed segment.
+        self.synced_offset.store(active_bytes, Ordering::Release);
         let sequence = self.active_first_lsn.load(Ordering::Acquire);
         let sealed_path = self.sealed_path(sequence);
         std::fs::rename(&self.path, &sealed_path)
             .map_err(|e| self.fail("page_log.seal_rename", &sealed_path, e))?;
+        crate::test_faults::crash_point_with_locked_wal("wal_seal.after_rename", self);
         let fresh = OpenOptions::new()
             .read(true)
             .write(true)
@@ -1075,10 +1080,14 @@ impl Wal {
             if active > 0 {
                 self.seal_active_locked(&mut file, active)?;
             }
+            crate::test_faults::crash_point_with_locked_wal("wal_reset.after_seal", self);
         }
         crate::test_faults::io_fault("page_log.reset", &self.path)
             .and_then(|()| file.set_len(0))
             .map_err(|e| self.fail("page_log.reset", &self.path, e))?;
+        // Power-loss emulation treats the truncation as durable from here.
+        self.synced_offset.store(0, Ordering::Release);
+        crate::test_faults::crash_point_with_locked_wal("wal_reset.after_active_truncate", self);
         let archived_through = self.archived_through.load(Ordering::Acquire);
         let mut sealed = self.sealed.lock();
         let mut retained = Vec::new();
@@ -1101,6 +1110,7 @@ impl Wal {
             // on-disk state a partial removal leaves is the known reset gap,
             // not something the fence repairs.
             std::fs::remove_file(&path).map_err(|e| self.fail("page_log.reset", &path, e))?;
+            crate::test_faults::crash_point_with_locked_wal("wal_reset.after_segment_delete", self);
         }
         let locally_empty = retained.is_empty();
         *sealed = retained;
@@ -1347,6 +1357,7 @@ pub(crate) fn recover_with_outcomes(
         }
         Ok(())
     })?;
+    crate::test_faults::crash_point("page_recovery.after_scan");
     let peak_transaction_outcome_bytes = outcomes.allocated_bytes();
     if let Some(xid) = outcomes.normalize() {
         return Err(PageError::WalCorruption {
@@ -1428,6 +1439,7 @@ pub(crate) fn recover_with_outcomes(
         store.reserve(page_count)?;
         store.write_page(record.page_id, record.payload)?;
         report.pages_replayed = report.pages_replayed.saturating_add(1);
+        crate::test_faults::crash_point_with_locked_wal("page_recovery.after_page_replay", wal);
         Ok(())
     })?;
     if second.truncated_bytes != 0
@@ -1443,6 +1455,7 @@ pub(crate) fn recover_with_outcomes(
     report.peak_record_bytes = report.peak_record_bytes.max(second.peak_record_bytes);
 
     store.flush()?;
+    crate::test_faults::crash_point("page_recovery.after_flush");
     wal.redo_lsn.store(redo_lsn, Ordering::Release);
     report.duration_nanos = u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX);
     Ok((report, outcomes))

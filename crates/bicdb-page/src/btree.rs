@@ -1127,6 +1127,7 @@ impl BTree {
             // crash in between leaves the old root intact and the new one
             // unreferenced — garbage, but never a dangling root.
             self.pool.flush_all()?;
+            crate::test_faults::crash_point("btree.after_root_split_flush");
             *self.root.lock() = new_root;
             *self.root_changed.lock() = true;
             return Ok(());

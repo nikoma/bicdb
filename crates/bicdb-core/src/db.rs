@@ -10281,6 +10281,7 @@ impl BicDb {
         // again — duplicate-version noise, never loss.
         if let Some(paged) = &paged_records {
             paged.checkpoint()?;
+            bicdb_page::test_faults::crash_point("open.after_recovery_checkpoint");
         }
         open_trace!("apply_unmaterialized_tx");
         // Legacy empty indexes use a completeness sentinel but have neither
@@ -10411,6 +10412,7 @@ impl BicDb {
                     tx_recovery.last_commit_seq,
                     config.fsync,
                 )?;
+                bicdb_page::test_faults::crash_point("open.after_txlog_floor");
                 copy_transaction_log_tail(&log_path, log_len, config.fsync)?;
             }
         }

@@ -18,6 +18,10 @@ pub struct LogArchiveConfig {
     /// Base backups to keep; older ones, and the log only they need, are
     /// removed.
     pub keep_base_backups: usize,
+    /// Archive-guard thresholds; `None` reads `BICDB_ARCHIVE_GUARD_*`
+    /// (defaults otherwise). See `docs/durability-failure-handling.md`,
+    /// section 7.6.
+    pub guard: Option<bicdb_core::archive_guard::ArchiveGuardConfig>,
 }
 
 impl std::fmt::Debug for LogArchiveConfig {
@@ -31,6 +35,7 @@ impl std::fmt::Debug for LogArchiveConfig {
             )
             .field("base_backup_interval", &self.base_backup_interval)
             .field("keep_base_backups", &self.keep_base_backups)
+            .field("guard", &self.guard)
             .finish()
     }
 }
@@ -64,6 +69,86 @@ pub(crate) struct LogArchiveStatus {
     pub recoveries_total: u64,
     /// Commits discarded (and rewritten from the log) by those recoveries.
     pub rewritten_commits_total: u64,
+    /// The last confirmed-prefix verification (persisted).
+    pub verification: Option<bicdb_core::archive_guard::ArchiveVerification>,
+    /// The last archive-guard evaluation.
+    pub guard: Option<bicdb_core::archive_guard::ArchiveGuardStatus>,
+}
+
+/// Opens the archive through the database (discarding the unconfirmed
+/// suffix, re-verifying a recorded verification failure). Never fails: a
+/// handle that cannot be used comes back failed.
+fn open_archive(db: &BicDb, dir: &Path, fsync: bool) -> (LogArchive, u64) {
+    let mut archive = match LogArchive::open(dir, fsync) {
+        Ok(archive) => archive,
+        Err(error) => {
+            return (
+                LogArchive::failed(dir, fsync, "log_archive.open", &error),
+                0,
+            )
+        }
+    };
+    match db.reconcile_log_archive(&mut archive) {
+        Ok(rewritten) => (archive, rewritten),
+        Err(error) => {
+            if archive.failure().is_none() {
+                archive.fail_with("log_archive.open", &error);
+            }
+            (archive, 0)
+        }
+    }
+}
+
+/// Starts the archive guard: every `check_interval` it evaluates disk
+/// capacity, retention and archive health, escalates alerts and sets the
+/// database's write backpressure (section 7.6 of
+/// `docs/durability-failure-handling.md`).
+fn start_guard(
+    server: Arc<PgWireServer>,
+    commit_log_dir: Option<PathBuf>,
+    config: Option<bicdb_core::archive_guard::ArchiveGuardConfig>,
+) -> Result<()> {
+    let config = match config {
+        Some(config) => config,
+        None => {
+            bicdb_core::archive_guard::ArchiveGuardConfig::from_env().map_err(PgWireError::from)?
+        }
+    };
+    let guard = bicdb_core::archive_guard::ArchiveGuard::new(config);
+    let worker = BackgroundWorker::register(Arc::clone(&server));
+    std::thread::Builder::new()
+        .name("bicdb-archive-guard".to_string())
+        .spawn(move || {
+            let _worker = worker;
+            while !server.is_shutdown_requested() {
+                evaluate_guard(&server, &guard, commit_log_dir.as_deref());
+                let deadline = Instant::now() + guard.config().check_interval;
+                while !server.is_shutdown_requested() && Instant::now() < deadline {
+                    std::thread::sleep(Duration::from_millis(50));
+                }
+            }
+        })?;
+    Ok(())
+}
+
+pub(crate) fn evaluate_guard(
+    server: &PgWireServer,
+    guard: &bicdb_core::archive_guard::ArchiveGuard,
+    commit_log_dir: Option<&Path>,
+) {
+    let failure = server.log_archive_status.lock().unwrap().failure.clone();
+    let Ok(db) = server.read_db() else {
+        return;
+    };
+    let inputs = db.archive_guard_inputs(commit_log_dir.map(|dir| (dir, failure.as_ref())));
+    let status = guard.evaluate(&inputs);
+    db.set_archive_backpressure(
+        status.backpressure,
+        status.backpressure_reason.as_deref().unwrap_or(""),
+        guard.config().throttle_delay,
+    );
+    drop(db);
+    update_status(server, |current| current.guard = Some(status));
 }
 
 fn update_status(server: &PgWireServer, update: impl FnOnce(&mut LogArchiveStatus)) {
@@ -96,10 +181,15 @@ pub(crate) fn local_replication() -> ReplicationConfig {
 /// archiving is off.
 pub(crate) fn start(server: Arc<PgWireServer>) -> Result<()> {
     let Some(config) = server.config.log_archive.clone() else {
-        return server
-            .read_db()?
-            .release_log_archive_hold()
-            .map_err(PgWireError::from);
+        let db = server.read_db()?;
+        db.release_log_archive_hold().map_err(PgWireError::from)?;
+        // A page-log archive (driven through the library) still needs the
+        // guard: its retention is local disk too.
+        if db.wal_archive_retention_enabled() {
+            drop(db);
+            start_guard(Arc::clone(&server), None, None)?;
+        }
+        return Ok(());
     };
     let root = config.dir.clone();
     // One archive per database in cluster mode.
@@ -112,14 +202,10 @@ pub(crate) fn start(server: Arc<PgWireServer>) -> Result<()> {
     };
     // Discards and rewrites whatever an earlier run wrote but never
     // confirmed (it failed, or crashed before advancing the log hold).
-    let (mut archive, rewritten) = {
-        let db = server.read_db()?;
-        let mut archive = LogArchive::open(&dir, server.config.fsync).map_err(PgWireError::from)?;
-        let rewritten = db
-            .reconcile_log_archive(&mut archive)
-            .map_err(PgWireError::from)?;
-        (archive, rewritten)
-    };
+    // An archive that cannot be opened or verified comes back as a failed
+    // handle: the server starts, the archiver reports the failure and
+    // retries with new handles.
+    let (mut archive, rewritten) = open_archive(&*server.read_db()?, &dir, server.config.fsync);
     eprintln!(
         "bicdb log archive: {} (archived through commit {}{})",
         dir.display(),
@@ -135,7 +221,19 @@ pub(crate) fn start(server: Arc<PgWireServer>) -> Result<()> {
         status.dir = Some(dir.clone());
         status.archived_commit_seq = archive.last_commit_seq();
         status.rewritten_commits_total += rewritten;
+        status.verification = server
+            .read_db()
+            .ok()
+            .and_then(|db| db.log_archive_verification());
     });
+    let guard_config = match config.guard.clone() {
+        Some(guard) => guard,
+        None => {
+            bicdb_core::archive_guard::ArchiveGuardConfig::from_env().map_err(PgWireError::from)?
+        }
+    };
+    let verify_interval = guard_config.verify_interval;
+    start_guard(Arc::clone(&server), Some(dir.clone()), Some(guard_config))?;
     let worker = BackgroundWorker::register(Arc::clone(&server));
     std::thread::Builder::new()
         .name("bicdb-log-archiver".to_string())
@@ -144,6 +242,7 @@ pub(crate) fn start(server: Arc<PgWireServer>) -> Result<()> {
             let mut cursor = ReplicationCursor::new(archive.last_commit_seq());
             let mut last_error = None::<String>;
             let mut next_recovery = None::<Instant>;
+            let mut next_prefix_verify = Instant::now();
             let mut next_base = Instant::now();
             let mut next_verify = Instant::now();
             let mut base_task: Option<
@@ -164,12 +263,13 @@ pub(crate) fn start(server: Arc<PgWireServer>) -> Result<()> {
                         .read_db()
                         .map_err(|error| error.to_string())
                         .and_then(|db| {
-                            let mut fresh = LogArchive::open(&dir, server.config.fsync)
-                                .map_err(|error| error.to_string())?;
-                            let rewritten = db
-                                .reconcile_log_archive(&mut fresh)
-                                .map_err(|error| error.to_string())?;
-                            Ok((fresh, rewritten))
+                            let (fresh, rewritten) = open_archive(&db, &dir, server.config.fsync);
+                            match fresh.failure() {
+                                // Still failing (for example its confirmed
+                                // prefix does not verify): stay stopped.
+                                Some(failure) => Err(failure.to_string()),
+                                None => Ok((fresh, rewritten)),
+                            }
                         });
                     match reopened {
                         Ok((fresh, rewritten)) => {
@@ -296,6 +396,34 @@ pub(crate) fn start(server: Arc<PgWireServer>) -> Result<()> {
                             eprintln!("bicdb log archive: base backup failed: {error}");
                             next_base = Instant::now() + Duration::from_secs(60);
                         }
+                    }
+                }
+                // Confirmed-prefix verification: periodic here, on demand
+                // through `bicdb_archive_verify`. A failed one stops this
+                // handle like any archive failure, and every new handle
+                // stays stopped while it is recorded.
+                if archive.failure().is_none() {
+                    let recorded_failed = server
+                        .log_archive_status
+                        .lock()
+                        .unwrap()
+                        .verification
+                        .as_ref()
+                        .is_some_and(|verification| !verification.ok);
+                    let verification = if recorded_failed || Instant::now() >= next_prefix_verify {
+                        next_prefix_verify = Instant::now() + verify_interval;
+                        server
+                            .read_db()
+                            .ok()
+                            .and_then(|db| db.verify_log_archive(&dir).ok())
+                    } else {
+                        None
+                    };
+                    if let Some(verification) = verification {
+                        if !verification.ok {
+                            archive.fail_verification(&verification.detail);
+                        }
+                        update_status(&server, |status| status.verification = Some(verification));
                     }
                 }
                 let archived = server
@@ -509,6 +637,7 @@ mod legacy_archive_tests {
             base_backup_key: Some("key".into()),
             base_backup_interval: Duration::from_secs(24 * 3600),
             keep_base_backups: 7,
+            guard: None,
         };
         let result = take_base_backup(&server, &settings, &archive, false);
         assert!(
@@ -587,6 +716,7 @@ mod streaming_during_base_tests {
             base_backup_key: Some("key".into()),
             base_backup_interval: Duration::from_secs(1),
             keep_base_backups: 7,
+            guard: None,
         });
         let server = PgWireServer::open(&path, config).unwrap();
         let _running = Running(Arc::clone(&server));
@@ -694,6 +824,7 @@ mod fail_closed_tests {
             base_backup_key: None,
             base_backup_interval: Duration::from_secs(3600),
             keep_base_backups: 1,
+            guard: None,
         });
         let server = PgWireServer::open(&path, config).unwrap();
         let _running = Running(Arc::clone(&server));
@@ -775,5 +906,121 @@ mod fail_closed_tests {
             metrics.contains("bicdb_log_archive_recoveries_total 1"),
             "{metrics}"
         );
+    }
+
+    /// Prolonged failure with tiny thresholds: the guard refuses writes
+    /// (SQLSTATE 53100) while the archive is failed and the log it needs is
+    /// retained, escalates its alert, and lifts the backpressure by itself
+    /// once a new archive handle has caught up.
+    #[test]
+    fn the_guard_refuses_writes_during_an_archive_failure_and_lifts_after_recovery() {
+        use bicdb_core::archive_guard::{AlertLevel, ArchiveGuardConfig, Backpressure};
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("db");
+        let directory = root.path().join("archive");
+        {
+            let mut db = BicDb::open_with_config(
+                &path,
+                DbConfig::default()
+                    .with_storage_mode(StorageMode::EmbeddedMemory)
+                    .with_replication(local_replication()),
+            )
+            .unwrap();
+            db.create_collection("rows").unwrap();
+        }
+        let guard = ArchiveGuardConfig {
+            check_interval: Duration::from_millis(50),
+            warn_failure_after: Duration::ZERO,
+            critical_failure_after: Duration::ZERO,
+            // Degraded only by the failure; refuse as soon as anything is
+            // retained for it.
+            warn_retained_bytes: u64::MAX / 2,
+            critical_retained_bytes: u64::MAX,
+            throttle_retained_bytes: 1,
+            refuse_retained_bytes: 1,
+            warn_free_fraction: 0.0,
+            critical_free_fraction: 0.0,
+            throttle_free_fraction: 0.0,
+            refuse_free_fraction: 0.0,
+            refuse_free_bytes: 0,
+            ..ArchiveGuardConfig::default()
+        };
+        let mut config = PgWireConfig::default();
+        config.log_archive = Some(LogArchiveConfig {
+            dir: directory.clone(),
+            base_backup_key: None,
+            base_backup_interval: Duration::from_secs(3600),
+            keep_base_backups: 1,
+            guard: Some(guard),
+        });
+        let server = PgWireServer::open(&path, config).unwrap();
+        let _running = Running(Arc::clone(&server));
+        start(Arc::clone(&server)).unwrap();
+        let commit = |id: &str| {
+            let mut db = server.db.write();
+            db.insert("rows", Record::new(id))
+                .map(|_| db.last_applied_commit_seq())
+        };
+        let archived = || {
+            server
+                .log_archive_status
+                .lock()
+                .unwrap()
+                .archived_commit_seq
+        };
+        let backpressure = || server.read_db().unwrap().archive_backpressure();
+        let first = commit("before").unwrap();
+        wait_for("the first archive round", || archived() >= first);
+        assert_eq!(backpressure(), Backpressure::None);
+
+        let fault =
+            bicdb_page::test_faults::arm_io_failure("log_archive.write", &directory, 1, true);
+        commit("unarchived").unwrap();
+        wait_for("backpressure", || backpressure() == Backpressure::Refuse);
+        let error = commit("refused").unwrap_err();
+        assert!(
+            matches!(error, bicdb_core::BicDbError::ArchiveBackpressure(_)),
+            "{error}"
+        );
+        assert_eq!(crate::protocol_wire::bicdb_error_sqlstate(&error), "53100");
+        let status = server.log_archive_status.lock().unwrap().clone();
+        let evaluated = status.guard.unwrap();
+        assert_eq!(evaluated.level, AlertLevel::Critical, "{evaluated:?}");
+        assert!(evaluated.retained_bytes > 0, "{evaluated:?}");
+        let metrics = crate::metrics::render(&server).unwrap();
+        assert!(
+            metrics.contains("bicdb_archive_backpressure 2"),
+            "{metrics}"
+        );
+        assert!(metrics.contains("bicdb_archive_alert_level 2"), "{metrics}");
+        assert!(
+            metrics.contains("bicdb_volume_free_bytes{volume=\"data\"}"),
+            "{metrics}"
+        );
+
+        // The disk recovers; the archiver's new handle catches up and the
+        // guard lifts the backpressure without any operator action.
+        drop(fault);
+        wait_for("the archiver to recover", || {
+            server.log_archive_status.lock().unwrap().recoveries_total >= 1
+        });
+        wait_for("backpressure to lift", || {
+            backpressure() == Backpressure::None
+        });
+        let after = commit("after").unwrap();
+        wait_for("the archive to catch up", || archived() >= after);
+        let mut seen = Vec::new();
+        read_log_archive(&directory, 0, ReplayTarget::default(), |frame| {
+            seen.push(frame.commit_seq);
+            Ok(true)
+        })
+        .unwrap();
+        let start = *seen.first().unwrap();
+        assert_eq!(seen, (start..=after).collect::<Vec<_>>());
+        assert!(server
+            .read_db()
+            .unwrap()
+            .log_archive_verification()
+            .is_some_and(|verification| verification.ok));
     }
 }

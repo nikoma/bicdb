@@ -242,6 +242,42 @@ impl LogArchive {
         self.health.failure()
     }
 
+    /// A handle that failed before it could be used (see
+    /// `BicDb::open_log_archive`): every append and hold refuses.
+    pub fn failed(dir: &Path, fsync: bool, site: &str, error: &dyn std::fmt::Display) -> Self {
+        let archive = Self {
+            dir: dir.to_path_buf(),
+            meta: None,
+            last_commit_seq: 0,
+            segment: None,
+            health: bicdb_page::ArchiveHealth::new(),
+            fsync,
+        };
+        archive.fail_with(site, error);
+        archive
+    }
+
+    /// Stop this handle with a failure at `site`.
+    pub fn fail_with(&self, site: &str, error: &dyn std::fmt::Display) {
+        self.health.record_failure(
+            "commit_log",
+            site,
+            &format!("{}: {error}", self.dir.display()),
+        );
+    }
+
+    /// The archive directory, when it is open on disk.
+    pub fn dir(&self) -> Option<&Path> {
+        Some(&self.dir)
+    }
+
+    /// Stop this handle because its confirmed prefix did not read back
+    /// intact (`log_archive.verify`).
+    pub fn fail_verification(&self, detail: &str) {
+        self.health
+            .record_failure("commit_log", "log_archive.verify", &detail);
+    }
+
     /// `Err` once this handle failed.
     pub fn check_healthy(&self) -> Result<()> {
         match self.health.failure() {

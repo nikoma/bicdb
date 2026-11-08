@@ -866,6 +866,89 @@ pub(crate) fn execute_server_virtual_query_for_normalized(
                 vec![row],
             )))
         }
+        "select * from bicdb_archive_guard" => {
+            // Disk capacity, retention, alert level and write backpressure.
+            let status = server.log_archive_status.lock().unwrap().clone();
+            let guard = status.guard.unwrap_or_default();
+            let volume_row =
+                |name: &str, volume: &bicdb_core::archive_guard::VolumeStatus| -> Vec<SqlValue> {
+                    vec![
+                        SqlValue::String(name.into()),
+                        SqlValue::String(guard.level.as_str().into()),
+                        SqlValue::String(guard.backpressure.as_str().into()),
+                        SqlValue::Int(guard.retained_bytes as i64),
+                        SqlValue::Int(volume.free_bytes as i64),
+                        SqlValue::Int(volume.total_bytes as i64),
+                        volume
+                            .seconds_to_full
+                            .map_or(SqlValue::Null, |seconds| SqlValue::Int(seconds as i64)),
+                        SqlValue::Int(guard.failure_seconds as i64),
+                        SqlValue::Bool(guard.verification_failed),
+                        SqlValue::String(guard.reasons.join("; ")),
+                    ]
+                };
+            let mut rows = Vec::new();
+            if let Some(volume) = &guard.data_volume {
+                rows.push(volume_row("data", volume));
+            }
+            for volume in &guard.archive_volumes {
+                rows.push(volume_row(&volume.name, volume));
+            }
+            Ok(Some(SqlResult::new(
+                [
+                    "volume",
+                    "alert_level",
+                    "backpressure",
+                    "retained_bytes",
+                    "free_bytes",
+                    "total_bytes",
+                    "seconds_to_full",
+                    "failure_seconds",
+                    "verification_failed",
+                    "reasons",
+                ]
+                .map(str::to_string)
+                .to_vec(),
+                rows,
+            )))
+        }
+        "select * from bicdb_archive_verify" => {
+            // On-demand confirmed-prefix verification of both archives.
+            if !caller.is_some_and(|caller| server.user_is_admin(caller.user)) {
+                return Err(PgWireError::Server(
+                    "bicdb_archive_verify requires an administrator".into(),
+                ));
+            }
+            let dir = server.log_archive_status.lock().unwrap().dir.clone();
+            let db = server.read_db()?;
+            let mut results = Vec::new();
+            if let Some(dir) = dir {
+                let verification = db.verify_log_archive(&dir)?;
+                server.log_archive_status.lock().unwrap().verification = Some(verification.clone());
+                results.push(verification);
+            }
+            if let Some(verification) = db.verify_wal_archive()? {
+                results.push(verification);
+            }
+            let rows = results
+                .into_iter()
+                .map(|verification| {
+                    vec![
+                        SqlValue::String(verification.archive),
+                        SqlValue::Bool(verification.ok),
+                        SqlValue::Int(verification.through as i64),
+                        SqlValue::Int((verification.at_unix_millis / 1000) as i64),
+                        SqlValue::String(verification.detail),
+                    ]
+                })
+                .collect();
+            Ok(Some(SqlResult::new(
+                ["archive", "ok", "through", "verified_at", "detail"]
+                    .map(str::to_string)
+                    .to_vec(),
+                rows,
+            )))
+        }
         "select * from bicdb_connectors" => {
             let rows = connectors::statuses(server)
                 .into_iter()
@@ -1474,6 +1557,8 @@ pub(crate) fn is_server_status_query_normalized(normalized: &str) -> bool {
             | "select * from bicdb_workload"
             | "select * from bicdb_verify"
             | "select * from bicdb_log_archive"
+            | "select * from bicdb_archive_guard"
+            | "select * from bicdb_archive_verify"
             | "select * from bicdb_activity"
     )
 }

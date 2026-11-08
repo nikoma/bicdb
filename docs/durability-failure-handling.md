@@ -516,6 +516,106 @@ anchor check and the new log is rescanned from its start
   only at the end shortens the roll-forward to the archive's end, which is
   that archive's recovery point.
 
+### 7.6 Archive guard: verification, capacity, alerts and backpressure
+
+Retaining local logs for a failed archive (section 7.5) is safe only until
+the data volume fills. The guard (`crates/bicdb-core/src/archive_guard.rs`,
+run by the server every `check_interval`) makes a prolonged failure
+visible early and stops it from turning into a full disk.
+
+**Persistent confirmed-prefix verification.** The confirmed prefix of each
+archive is read back periodically (`verify_interval`, default 1 h), on
+demand (`SELECT * FROM bicdb_archive_verify`, administrators), and on every
+new archiver handle while an earlier verification is recorded as failed.
+
+- Commit-log archive (`BicDb::verify_log_archive`): every record from the
+  archive's first commit through the transaction-log hold (the confirmed
+  end): record checksum, frame checksum, consecutive commit sequences, and
+  the archive must reach the hold.
+- Page-log archive (`BicDb::verify_wal_archive`, also run by
+  `archive_wal_segments` on a new handle and every `verify_interval`): every
+  archived `store.wal.<n>` up to the confirmed segment: every record's
+  checksum, no torn or partial segment, LSN continuity from segment to
+  segment, and the confirmed segment present. The confirmed segment is now
+  persisted (`paged/store.wal-archive-confirmed`, synced, directory synced,
+  site `wal_archive.confirm`), so a reopened handle keeps what an earlier
+  handle confirmed.
+- Results are persisted (`log-archive-verification.json` in the database
+  directory, `paged/store.wal-archive-verification`; both node-local,
+  excluded from backups). A failed verification stops the archiver like any
+  archive failure (`log_archive.verify`, `wal_archive.verify`): nothing more
+  is confirmed and nothing local is released. Every new handle re-verifies
+  while the failure is recorded and stays stopped until the prefix reads
+  back intact; it raises a critical alert and an
+  `archive.verification_failed` event.
+
+**Disk capacity.** Per evaluation: bytes retained only for the archives
+(unarchived page-log segments, plus `transactions.log` while the hold is
+behind the current commit), free and total bytes of the data volume and of
+each archive volume (`statvfs`), and a projected time to full from an
+exponentially weighted consumption rate (absent while a volume is not
+filling).
+
+**Escalating alerts.** Warning, then critical, by:
+
+| Signal | Warning | Critical |
+|---|---|---|
+| An archiver failed for | `warn_failure_after` (5 min) | `critical_failure_after` (30 min) |
+| Bytes retained for the archives | `warn_retained_bytes` (8 GiB) | `critical_retained_bytes` (32 GiB) |
+| Free space, data or archive volume | below `warn_free_fraction` (20 %) | below `critical_free_fraction` (10 %) |
+| Confirmed-prefix verification | — | failed |
+
+A fresh failure is already loud (section 7.5); these escalate it. Every
+change of level emits an `archive.alert` event with the reasons.
+
+**Safe backpressure.** Only while an archive is *degraded* (an archiver is
+failed, a verification failed, or it retains at least
+`warn_retained_bytes`): it protects the data volume from the archive's
+retention and is not a general disk-full policy.
+
+| State | When (degraded only) | Effect |
+|---|---|---|
+| Throttle | data volume free below `throttle_free_fraction` (10 %), or retained at least `throttle_retained_bytes` (32 GiB) | each write commit is delayed by `throttle_delay` (50 ms) |
+| Refuse | data volume free below `max(refuse_free_fraction` (5 %) of the volume, `refuse_free_bytes` (1 GiB)`)`, or retained at least `refuse_retained_bytes` (64 GiB) | write operations fail with SQLSTATE `53100` (`disk_full`, `BicDbError::ArchiveBackpressure`); reads, checkpoints and the archivers keep running |
+
+Retention is never dropped and no unarchived log is deleted in any state.
+The state is re-evaluated every `check_interval`; when the archive recovers
+(its failure clears and the retained bytes drain below the thresholds, or
+free space returns) the next evaluation lifts it and writes resume without
+operator action. Every change emits an `archive.backpressure` event.
+
+**Write availability (owner decision).** Refusing writes is a change in
+write availability: a database whose archive has been failed long enough
+to nearly fill the data volume stops accepting writes (53100) instead of
+continuing until the volume is full. The alternative, letting the volume
+fill, fails the database's own durable writes (the page log, the
+transaction log) and fences it (`WriteFailed`), which needs a reopen; the
+refusal is recoverable by itself. The thresholds are configurable; setting
+the refuse thresholds to `0` and `u64::MAX` disables refusal.
+
+**Configuration.** `LogArchiveConfig::guard` (server), otherwise
+environment variables `BICDB_ARCHIVE_GUARD_<FIELD>` (`CHECK_INTERVAL`,
+`VERIFY_INTERVAL`, `WARN_FAILURE_AFTER`, `CRITICAL_FAILURE_AFTER` in
+seconds; `WARN_RETAINED_BYTES`, `CRITICAL_RETAINED_BYTES`,
+`THROTTLE_RETAINED_BYTES`, `REFUSE_RETAINED_BYTES`, `REFUSE_FREE_BYTES` in
+bytes; `WARN_FREE_FRACTION`, `CRITICAL_FREE_FRACTION`,
+`THROTTLE_FREE_FRACTION`, `REFUSE_FREE_FRACTION` as decimals;
+`THROTTLE_DELAY_MS`). Thresholds must escalate (validated at start). A
+database used as a library evaluates `ArchiveGuard::evaluate` on
+`BicDb::archive_guard_inputs` and applies `BicDb::set_archive_backpressure`
+itself.
+
+**Visibility.** `SELECT * FROM bicdb_archive_guard` (per volume: alert
+level, backpressure, retained bytes, free and total bytes, seconds to full,
+failure duration, verification state, reasons) and
+`SELECT * FROM bicdb_archive_verify`. Metrics: `bicdb_archive_alert_level`,
+`bicdb_archive_backpressure`, `bicdb_archive_retained_bytes`,
+`bicdb_archive_failure_seconds`, `bicdb_volume_free_bytes{volume}`,
+`bicdb_volume_total_bytes{volume}`, `bicdb_volume_seconds_to_full{volume}`,
+`bicdb_archive_verification_ok{archive}`,
+`bicdb_archive_verification_timestamp_seconds{archive}`, plus the section
+7.5 metrics.
+
 ## 8. Site names and fault injection
 
 The recorded `site` and the injection name are the same strings.
@@ -543,8 +643,11 @@ The recorded `site` and the injection name are the same strings.
 | `frame_log.sync` | the same, after the whole batch was written, when the append is durable |
 | `frame_log.repair` | the cut-back after a failed append (recorded as `frame_log.repair` when it fails) |
 
-Archive sites (section 7.5; an archive failure stops the archiver, not the
-database): `log_archive.meta_write`, `log_archive.meta_sync`,
+Archive sites (sections 7.5 and 7.6; an archive failure stops the archiver,
+not the database): `log_archive.open` (an archive that cannot be opened
+or discarded comes back as a failed handle; the server still starts),
+`log_archive.verify`, `wal_archive.verify`,
+`wal_archive.confirm`, `log_archive.meta_write`, `log_archive.meta_sync`,
 `log_archive.rename`, `log_archive.dir_sync`, `log_archive.create`,
 `log_archive.write`, `log_archive.sync`, `log_archive.truncate`,
 `log_archive.repair`; `wal_archive.retention`, `wal_archive.create`,
@@ -636,6 +739,12 @@ Injection (`crates/bicdb-page/src/test_faults.rs`):
 | `archive_fail_closed::page_log_archive_refuses_a_differing_unconfirmed_copy` | An unconfirmed archived segment with different bytes is refused and kept; the local copy stays |
 | `archive_fail_closed::page_log_roll_forward_refuses_a_gapped_archive` | A roll-forward over an archive with a missing middle segment refuses to open; the complete archive restores |
 | `archive_fail_closed::restore_refuses_a_target_the_archive_does_not_reach` | Time and commit targets past the archive's end are refused |
+| `archive_fail_closed::commit_log_confirmed_prefix_verification_stops_and_resumes_the_archiver` | Damage inside the confirmed prefix: verification fails and is persisted, every new handle (also after a restart) stays stopped with `log_archive.verify`, the hold does not move; after the repair the next handle verifies, clears the record and archives |
+| `archive_fail_closed::page_log_confirmed_prefix_verification_stops_and_resumes_the_archiver` | Same for the page-log archive (`wal_archive.verify`), with the persisted confirmed watermark: no confirmation past it, a checkpoint releases nothing unarchived, repair resumes |
+| `archive_fail_closed::archive_backpressure_throttles_then_refuses_and_lifts` | Throttle delays a commit, refuse fails it with `ArchiveBackpressure` (53100) while reads continue and the node is not reported as a standby, lifting resumes writes |
+| `archive_fail_closed::the_guard_refuses_writes_for_a_failed_page_log_archive_and_lifts_after_recovery` | Library end to end: a failed page-log archive's retained bytes, the data volume and the failure drive a critical alert and refusal; retention is kept through a checkpoint; after recovery the evaluation lifts it |
+| `archive_guard::tests::*` | Alert escalation by duration, retained bytes, free space and verification; backpressure only for a degraded archive, throttle then refuse, lifted on recovery; time-to-full; threshold validation; the gate |
+| pgwire `log_archive::fail_closed_tests::the_guard_refuses_writes_during_an_archive_failure_and_lifts_after_recovery` | Server end to end: a persistent archive write failure, the guard refuses writes (53100), critical alert and metrics; the disk recovers, the archiver's new handle catches up and the backpressure lifts by itself; the archive is contiguous and its verification persisted as passing |
 | `commit_durability_crash::archives_fail_closed_and_roll_forward_to_every_acknowledged_commit` | Out of process, with the crash-matrix child feeding both archives under the concurrent workload: 4 crash points and 6 injected failures in the archivers. The database reconciles against the ledger; restores from each archive as left reconcile against the commits that archive had confirmed and hold no commit the database lacks; after resuming with new handles, restores from both archives hold every acknowledged commit |
 
 Mutation checks (each mutation applied alone; the named tests must fail):

@@ -302,8 +302,9 @@ fn unconfirmed_archive_suffix_is_rewritten_after_restart() {
         // A fault while discarding stops that handle and changes nothing.
         {
             let guard = arm_io_failure("log_archive.truncate", &dir, 1, false);
-            let error = db.open_log_archive(&dir, true).unwrap_err();
-            assert_eq!(archive_failure_site(&error), "log_archive.truncate");
+            let failed = db.open_log_archive(&dir, true).unwrap();
+            assert_eq!(failed.failure().unwrap().site, "log_archive.truncate");
+            assert!(failed.check_healthy().is_err());
             assert_eq!(guard.fired(), 1);
             assert_eq!(hold(&db), Some(held));
         }
@@ -804,4 +805,269 @@ fn a_log_cut_between_anchor_check_and_read_never_ships_empty_frames() {
         }
         drop(guard);
     }
+}
+
+// ---- archive guard: verification, capacity, alerts, backpressure ---------
+
+fn flip_byte(path: &Path, at: usize) {
+    let mut bytes = std::fs::read(path).unwrap();
+    bytes[at] ^= 0xff;
+    std::fs::write(path, &bytes).unwrap();
+}
+
+/// The confirmed prefix is read back; damage inside it stops the archiver,
+/// keeps every new handle stopped while it is recorded, and archiving
+/// resumes once the prefix reads back intact again.
+#[test]
+fn commit_log_confirmed_prefix_verification_stops_and_resumes_the_archiver() {
+    let root = tempfile::tempdir().unwrap();
+    let dir = root.path().join("archive");
+    let db_path = root.path().join("db");
+    let mut db =
+        BicDb::open_with_config(&db_path, primary_config(StorageMode::EmbeddedMemory)).unwrap();
+    db.create_collection("items").unwrap();
+    for i in 0..5 {
+        put(&db, &format!("a{i}"));
+    }
+    let mut archive = db.open_log_archive(&dir, true).unwrap();
+    archive_all(&db, &mut archive);
+    let verification = db.verify_log_archive(&dir).unwrap();
+    assert!(verification.ok, "{verification:?}");
+    assert_eq!(verification.through, db.current_commit_seq());
+    assert_eq!(db.log_archive_verification(), Some(verification));
+    drop(archive);
+
+    let segment = std::fs::read_dir(&dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| path.extension().is_some_and(|ext| ext == "log"))
+        .unwrap();
+    let middle = std::fs::metadata(&segment).unwrap().len() as usize / 2;
+    flip_byte(&segment, middle);
+    let failed = db.verify_log_archive(&dir).unwrap();
+    assert!(
+        !failed.ok,
+        "damage inside the confirmed prefix was not detected"
+    );
+    assert!(!db.log_archive_verification().unwrap().ok, "not persisted");
+    let held = hold(&db);
+    // Every new handle stays stopped while the failure is recorded.
+    put(&db, "during");
+    // Damage in the newest segment already fails the open (`log_archive.open`);
+    // elsewhere the recorded verification does (`log_archive.verify`).
+    let mut archive = db.open_log_archive(&dir, true).unwrap();
+    let site = archive.failure().unwrap().site;
+    assert!(
+        site == "log_archive.verify" || site == "log_archive.open",
+        "{site}"
+    );
+    let mut cursor = ReplicationCursor::new(archive.last_commit_seq());
+    let error = db
+        .archive_commits(&mut archive, &mut cursor, 10)
+        .unwrap_err();
+    assert_eq!(archive_failure_site(&error), site);
+    assert_eq!(
+        hold(&db),
+        held,
+        "the hold advanced past a failed verification"
+    );
+    drop(archive);
+    // The verification failure survives a restart of the database.
+    drop(db);
+    let db =
+        BicDb::open_with_config(&db_path, primary_config(StorageMode::EmbeddedMemory)).unwrap();
+    assert!(!db.log_archive_verification().unwrap().ok);
+    assert!(db.open_log_archive(&dir, true).unwrap().failure().is_some());
+    // Repaired: the next handle verifies, clears the record and resumes.
+    flip_byte(&segment, middle);
+    let mut archive = db.open_log_archive(&dir, true).unwrap();
+    assert!(archive.failure().is_none());
+    assert!(db.log_archive_verification().unwrap().ok);
+    archive_all(&db, &mut archive);
+    db.release_log_archive_hold().unwrap();
+}
+
+#[test]
+fn page_log_confirmed_prefix_verification_stops_and_resumes_the_archiver() {
+    let root = tempfile::tempdir().unwrap();
+    let db_path = root.path().join("db");
+    let archive = root.path().join("wal-archive");
+    {
+        let mut db = BicDb::open_with_config(&db_path, paged_config()).unwrap();
+        db.create_collection("items").unwrap();
+        put_rows(&db, "a", 30, &mut BTreeSet::new());
+        db.archive_wal_segments(&archive).unwrap();
+        put_rows(&db, "b", 30, &mut BTreeSet::new());
+        db.archive_wal_segments(&archive).unwrap();
+        let verification = db.verify_wal_archive().unwrap().unwrap();
+        assert!(verification.ok, "{verification:?}");
+        assert_eq!(verification.through, archived_through(&db));
+        db.close().unwrap();
+    }
+    // Damage a confirmed (and therefore possibly locally released) segment.
+    let confirmed = *archived_names(&archive).iter().next().unwrap();
+    let segment = archive.join(format!("store.wal.{confirmed}"));
+    let middle = std::fs::metadata(&segment).unwrap().len() as usize / 2;
+    flip_byte(&segment, middle);
+    {
+        let db = BicDb::open_with_config(&db_path, paged_config()).unwrap();
+        let through = archived_through(&db);
+        assert!(through >= confirmed, "the confirmed watermark is persisted");
+        put_rows(&db, "c", 30, &mut BTreeSet::new());
+        // A new handle verifies before it confirms anything more.
+        let error = db.archive_wal_segments(&archive).unwrap_err();
+        assert_eq!(archive_failure_site(&error), "wal_archive.verify");
+        assert_eq!(
+            archived_through(&db),
+            through,
+            "advanced past a failed verification"
+        );
+        assert!(
+            !db.page_log_archive_verification().unwrap().ok,
+            "not persisted"
+        );
+        let unarchived = db.wal_archive_status().unwrap().unarchived_segments;
+        assert!(unarchived > 0);
+        db.checkpoint_for_resume().unwrap();
+        assert!(
+            db.wal_archive_status().unwrap().unarchived_segments > unarchived,
+            "the checkpoint sealed more and released nothing unarchived"
+        );
+        db.close().unwrap();
+    }
+    {
+        // Still damaged: the recorded failure keeps the next handle stopped.
+        let db = BicDb::open_with_config(&db_path, paged_config()).unwrap();
+        let error = db.archive_wal_segments(&archive).unwrap_err();
+        assert_eq!(archive_failure_site(&error), "wal_archive.verify");
+    }
+    flip_byte(&segment, middle);
+    let db = BicDb::open_with_config(&db_path, paged_config()).unwrap();
+    db.archive_wal_segments(&archive).unwrap();
+    assert!(db.page_log_archive_verification().unwrap().ok);
+    assert_eq!(db.wal_archive_status().unwrap().unarchived_segments, 0);
+}
+
+/// Refused writes report SQLSTATE 53100's error, reads continue, nothing
+/// is dropped, and writes resume as soon as the backpressure lifts.
+#[test]
+fn archive_backpressure_throttles_then_refuses_and_lifts() {
+    use bicdb_core::archive_guard::Backpressure;
+    use std::time::{Duration, Instant};
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open_with_config(
+        root.path().join("db"),
+        primary_config(StorageMode::EmbeddedMemory),
+    )
+    .unwrap();
+    db.create_collection("items").unwrap();
+    put(&db, "before");
+    db.set_archive_backpressure(Backpressure::Throttle, "test", Duration::from_millis(80));
+    let started = Instant::now();
+    put(&db, "throttled");
+    assert!(
+        started.elapsed() >= Duration::from_millis(80),
+        "not throttled"
+    );
+    db.set_archive_backpressure(
+        Backpressure::Refuse,
+        "data volume nearly full",
+        Duration::ZERO,
+    );
+    let mut tx = db.begin_transaction().unwrap();
+    tx.insert("items", Record::new("refused")).unwrap();
+    let error = tx.commit().unwrap_err();
+    assert!(
+        matches!(error, BicDbError::ArchiveBackpressure(_)),
+        "unexpected error {error}"
+    );
+    assert!(
+        error.to_string().contains("data volume nearly full"),
+        "{error}"
+    );
+    assert!(
+        db.get("items", "before").unwrap().is_some(),
+        "reads continue"
+    );
+    assert!(db.get("items", "refused").unwrap().is_none());
+    assert!(
+        !db.is_read_only_standby(),
+        "backpressure is not a role change"
+    );
+    db.set_archive_backpressure(Backpressure::None, "", Duration::ZERO);
+    put(&db, "after");
+    assert!(db.get("items", "after").unwrap().is_some());
+}
+
+/// End to end in the library: a failed page-log archive retains its
+/// segments, the guard sees the failure, the retained bytes and the data
+/// volume, escalates, and its backpressure refuses writes before anything
+/// else happens; a recovered archive (a new handle) lifts it.
+#[test]
+fn the_guard_refuses_writes_for_a_failed_page_log_archive_and_lifts_after_recovery() {
+    use bicdb_core::archive_guard::{AlertLevel, ArchiveGuard, ArchiveGuardConfig, Backpressure};
+    let root = tempfile::tempdir().unwrap();
+    let db_path = root.path().join("db");
+    let archive = root.path().join("wal-archive");
+    let config = ArchiveGuardConfig {
+        warn_retained_bytes: 1,
+        critical_retained_bytes: 2,
+        throttle_retained_bytes: 2,
+        refuse_retained_bytes: 4096,
+        // Free-space thresholds off for the test: only retained bytes.
+        warn_free_fraction: 0.0,
+        critical_free_fraction: 0.0,
+        throttle_free_fraction: 0.0,
+        refuse_free_fraction: 0.0,
+        refuse_free_bytes: 0,
+        ..ArchiveGuardConfig::default()
+    };
+    config.validate().unwrap();
+    let guard = ArchiveGuard::new(config);
+    let apply = |db: &BicDb| {
+        let status = guard.evaluate(&db.archive_guard_inputs(None));
+        db.set_archive_backpressure(
+            status.backpressure,
+            status.backpressure_reason.as_deref().unwrap_or(""),
+            guard.config().throttle_delay,
+        );
+        status
+    };
+    {
+        let mut db = BicDb::open_with_config(&db_path, paged_config()).unwrap();
+        db.create_collection("items").unwrap();
+        db.archive_wal_segments(&archive).unwrap();
+        assert_eq!(apply(&db).backpressure, Backpressure::None);
+        let fault = arm_io_failure("wal_archive.copy", &archive, 1, true);
+        put_rows(&db, "a", 40, &mut BTreeSet::new());
+        db.archive_wal_segments(&archive).unwrap_err();
+        drop(fault);
+        let status = apply(&db);
+        assert!(status
+            .data_volume
+            .as_ref()
+            .is_some_and(|v| v.total_bytes > 0));
+        assert!(status.retained_bytes > 4096, "{status:?}");
+        assert_eq!(status.level, AlertLevel::Critical, "{status:?}");
+        assert_eq!(status.backpressure, Backpressure::Refuse, "{status:?}");
+        let mut tx = db.begin_transaction().unwrap();
+        tx.insert("items", Record::new("refused")).unwrap();
+        assert!(matches!(
+            tx.commit().unwrap_err(),
+            BicDbError::ArchiveBackpressure(_)
+        ));
+        // Retention is never dropped: a checkpoint still keeps the segments.
+        let before = db.wal_archive_status().unwrap().unarchived_bytes;
+        db.checkpoint_for_resume().unwrap();
+        assert!(db.wal_archive_status().unwrap().unarchived_bytes >= before);
+        db.close().unwrap();
+    }
+    // Recovery: a new handle archives everything; the next evaluation
+    // lifts the backpressure.
+    let db = BicDb::open_with_config(&db_path, paged_config()).unwrap();
+    db.archive_wal_segments(&archive).unwrap();
+    let status = apply(&db);
+    assert_eq!(status.retained_bytes, 0, "{status:?}");
+    assert_eq!(status.backpressure, Backpressure::None);
+    put_rows(&db, "after", 3, &mut BTreeSet::new());
 }

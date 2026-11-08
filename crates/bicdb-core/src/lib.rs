@@ -80,6 +80,7 @@ mod resource_governor;
 // (no sockets there), and it carries the rustls dependency.
 pub mod aggregate_projection;
 pub mod aggregate_sketch;
+pub mod archive_guard;
 pub mod log_archive;
 pub mod query_budget;
 #[cfg(feature = "tls-replication")]

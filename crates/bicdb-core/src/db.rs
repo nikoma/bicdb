@@ -3892,6 +3892,9 @@ pub struct BicDb {
     commit_seq: Arc<AtomicU64>,
     // Synchronous replication: commits wait here for standby confirmations.
     sync_quorum: Arc<SyncQuorum>,
+    /// Write backpressure set by the archive guard (section 7.6 of
+    /// `docs/durability-failure-handling.md`).
+    archive_backpressure: Arc<crate::archive_guard::BackpressureGate>,
     // Runtime replication role, epoch and persisted standby positions.
     ha_node: Arc<ha_node::HaNode>,
     // Index catalog last announced to standbys (primary).
@@ -10568,6 +10571,7 @@ impl BicDb {
                 quorum.seed_holds(ha_node.read(|file| file.holds.clone()));
                 Arc::new(quorum)
             },
+            archive_backpressure: Arc::default(),
             ha_node: Arc::new(ha_node),
             announced_index_catalog: Mutex::new(None),
             local_index_maintenance: false,

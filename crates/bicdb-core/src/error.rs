@@ -224,6 +224,17 @@ pub enum BicDbError {
         site: String,
         detail: String,
     },
+
+    /// Write refused by archive backpressure: an archive is failed or
+    /// lagging and the local logs it needs (which are never dropped) would
+    /// otherwise fill the data volume. SQLSTATE 53100 (disk_full). Writes
+    /// resume on their own when the archive recovers. See
+    /// `docs/durability-failure-handling.md`, section 7.6.
+    #[error("write refused by archive backpressure: {0}")]
+    ArchiveBackpressure(String),
+
+    #[error("invalid configuration: {0}")]
+    InvalidConfig(String),
 }
 
 fn commit_outcome_identity_line(

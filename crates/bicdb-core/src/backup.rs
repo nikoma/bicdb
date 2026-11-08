@@ -2023,7 +2023,8 @@ fn collect_source_files_inner(
                     || name == "store.lock"
                     // Archive retention belongs to the archiving node, not
                     // to its data: a restored copy must not inherit it.
-                    || name == "store.wal-archive-retention"
+                    || name.starts_with("store.wal-archive-")
+                    || name == crate::archive_guard::COMMIT_LOG_VERIFICATION_FILE
             })
             || exclude.is_some_and(|exclude| {
                 paths_identical(&path, exclude)

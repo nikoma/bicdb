@@ -1804,6 +1804,33 @@ impl BicDb {
                     .map_err(|error| fail("wal_archive.dir_sync", destination, &error))?;
             }
         }
+        wal.set_archive_destination(destination);
+        // Read back the confirmed prefix before advancing it: on a new
+        // handle, periodically, and while an earlier verification is
+        // recorded as failed. A failure stops this archiver (nothing more is
+        // confirmed, nothing local released).
+        let previous_failed =
+            crate::archive_guard::load_verification(&page_log_verification_path(wal.path()))
+                .is_some_and(|verification| !verification.ok);
+        let interval = crate::archive_guard::ArchiveGuardConfig::from_env()
+            .map(|config| config.verify_interval)
+            .unwrap_or_else(|_| {
+                crate::archive_guard::ArchiveGuardConfig::default().verify_interval
+            });
+        let due = previous_failed
+            || wal
+                .archive_verified_at()
+                .is_none_or(|at| at.elapsed() >= interval);
+        if due {
+            let verification = self.verify_wal_archive_at(destination)?;
+            if !verification.ok {
+                return Err(page_archive_error(
+                    wal.archive_health()
+                        .failure()
+                        .expect("a failed verification records a failure"),
+                ));
+            }
+        }
         let sealed = store
             .seal_wal_for_backup()
             .map_err(|error| BicDbError::Backup(error.to_string()))?;
@@ -1922,6 +1949,66 @@ impl BicDb {
             .archived_through
             .or((confirmed > 0).then_some(confirmed));
         Ok(report)
+    }
+
+    /// Read back the page-log archive's confirmed prefix (every archived
+    /// segment up to the confirmed one: record checksums, no torn segment,
+    /// LSN continuity) and persist the result. A failure stops the page-log
+    /// archiver on this handle. `None` when this handle has not archived
+    /// anywhere yet.
+    pub fn verify_wal_archive(&self) -> Result<Option<crate::archive_guard::ArchiveVerification>> {
+        let Some(paged) = &self.paged_records else {
+            return Ok(None);
+        };
+        let Some(destination) = paged.store().wal().archive_destination() else {
+            return Ok(None);
+        };
+        self.verify_wal_archive_at(&destination).map(Some)
+    }
+
+    fn verify_wal_archive_at(
+        &self,
+        destination: &Path,
+    ) -> Result<crate::archive_guard::ArchiveVerification> {
+        let paged = self.paged_records.as_ref().ok_or_else(|| {
+            BicDbError::Backup("WAL archiving requires server_paged storage".into())
+        })?;
+        let wal = paged.store().wal();
+        let through = wal.archived_through();
+        let result = bicdb_page::wal::verify_archived_segments(destination, through);
+        let verification = crate::archive_guard::ArchiveVerification {
+            archive: "page_log".into(),
+            ok: result.is_ok(),
+            at_unix_millis: crate::archive_guard::unix_millis(),
+            through,
+            detail: match &result {
+                Ok(report) => format!(
+                    "{} segment(s), {} record(s), LSN {:?}..{:?}",
+                    report.segments, report.records, report.first_lsn, report.last_lsn
+                ),
+                Err(error) => error.to_string(),
+            },
+        };
+        crate::archive_guard::store_verification(
+            &page_log_verification_path(wal.path()),
+            &verification,
+            self.config.fsync,
+        )?;
+        wal.set_archive_verified_now();
+        if !verification.ok {
+            wal.record_archive_failure("wal_archive.verify", destination, &verification.detail);
+        }
+        Ok(verification)
+    }
+
+    /// The last persisted page-log archive verification.
+    pub fn page_log_archive_verification(
+        &self,
+    ) -> Option<crate::archive_guard::ArchiveVerification> {
+        let paged = self.paged_records.as_ref()?;
+        crate::archive_guard::load_verification(&page_log_verification_path(
+            paged.store().wal().path(),
+        ))
     }
 
     /// The page-log archiver's first failure on this handle, if any. While
@@ -2143,6 +2230,10 @@ impl BicDb {
         self.check_recovery_state()?;
         if self.local_index_maintenance {
             return Ok(());
+        }
+        // `probe` asks whether this node is a writable primary at all.
+        if operation != "probe" {
+            self.archive_backpressure.enforce(operation)?;
         }
         let replication_role = self.config.replication.enabled.then(|| self.ha_node.role());
         let reason = if self.ha_state.role == HaRole::Standby
@@ -2839,4 +2930,11 @@ fn files_equal(left: &Path, right: &Path) -> std::io::Result<bool> {
             return Ok(false);
         }
     }
+}
+
+/// Persisted result of the last page-log archive verification.
+pub(crate) fn page_log_verification_path(wal: &Path) -> PathBuf {
+    let mut os = wal.as_os_str().to_os_string();
+    os.push("-archive-verification");
+    PathBuf::from(os)
 }

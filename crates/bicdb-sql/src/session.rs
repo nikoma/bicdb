@@ -2974,6 +2974,18 @@ impl<'db> SqlSession<'db> {
     pub fn execute(&mut self, sql: &str) -> Result<SqlResult> {
         self.statement_error_recovered = false;
         self.db_ref().check_recovery_state()?;
+        // Unqualified relations resolve through the session's search_path;
+        // routine bodies compiled during this statement bind the same way.
+        let path = crate::search_path::binding_path(self.db_ref(), &self.session_gucs)?;
+        // A statement list binds each statement just before it runs, so a
+        // statement sees the path and schemas earlier statements set up.
+        let per_statement = crate::search_path::statements_bound_separately(sql, path.is_some());
+        let path = if per_statement.is_some() { None } else { path };
+        let bound = path
+            .as_deref()
+            .and_then(|path| crate::search_path::bind_sql_text(self.db_ref(), sql, path));
+        let _path_scope = crate::search_path::PathScope::enter(path);
+        let sql = bound.as_deref().unwrap_or(sql);
         // A per-row routine call reaches raw SQL only through dynamic EXECUTE
         // fallbacks for statements sqlparser cannot represent (DDL, grants).
         if self.row_routine_call {
@@ -2989,18 +3001,27 @@ impl<'db> SqlSession<'db> {
         let atomic = self.tx.is_some() && oracle::preview_routine_language_enabled(self.db_ref())?;
         let execute = |session: &mut Self| {
             session.with_implicit_guc_statement(|session| {
-                let mut result = if session.transaction_read_only() {
-                    let statements = parse_statements(sql).map_err(|_| read_only::violation())?;
-                    if statements.len() > 1 {
-                        session.execute_statement_list(&statements)?
-                    } else {
-                        if let Some(statement) = statements.first() {
-                            session.ensure_read_only_statement(statement)?;
+                let mut result = match &per_statement {
+                    Some(statements) => {
+                        let mut last = None;
+                        for statement in statements {
+                            let path = crate::search_path::binding_path(
+                                session.db_ref(),
+                                &session.session_gucs,
+                            )?;
+                            let bound = path.as_deref().and_then(|path| {
+                                crate::search_path::bind_sql_text(session.db_ref(), statement, path)
+                            });
+                            let _path_scope = crate::search_path::PathScope::enter(path);
+                            session.conflict_arbiter_memo.borrow_mut().take();
+                            last =
+                                Some(session.execute_text_statements(
+                                    bound.as_deref().unwrap_or(statement),
+                                )?);
                         }
-                        session.execute_profiled(sql)?
+                        last.ok_or_else(|| SqlError::InvalidSql("empty SQL statement".into()))?
                     }
-                } else {
-                    session.execute_profiled(sql)?
+                    None => session.execute_text_statements(sql)?,
                 };
                 session.apply_bytea_output(&mut result);
                 Ok(result)
@@ -3024,6 +3045,22 @@ impl<'db> SqlSession<'db> {
             }
         };
         effects.finish(result)
+    }
+
+    /// Statement text through the profiled executor; a read-only transaction
+    /// checks a single statement before it runs.
+    fn execute_text_statements(&mut self, sql: &str) -> Result<SqlResult> {
+        if !self.transaction_read_only() {
+            return self.execute_profiled(sql);
+        }
+        let statements = parse_statements(sql).map_err(|_| read_only::violation())?;
+        if statements.len() > 1 {
+            return self.execute_statement_list(&statements);
+        }
+        if let Some(statement) = statements.first() {
+            self.ensure_read_only_statement(statement)?;
+        }
+        self.execute_profiled(sql)
     }
 
     /// True only after restoring a failed preview statement's pending work.
@@ -3201,6 +3238,9 @@ impl<'db> SqlSession<'db> {
             return self.execute_parsed_sql(sql);
         }
         if let Some(result) = self.execute_raw_oracle_collection(sql)? {
+            return Ok(result);
+        }
+        if let Some(result) = self.execute_raw_alter_role_settings(sql)? {
             return Ok(result);
         }
         if let Some(result) = self.execute_raw_reset(sql)? {
@@ -4839,7 +4879,7 @@ impl<'db> SqlSession<'db> {
             .is_some_and(|role| role.superuser || role.create_role))
     }
 
-    fn require_role_management_privilege(&self, action: &str) -> Result<()> {
+    pub(crate) fn require_role_management_privilege(&self, action: &str) -> Result<()> {
         if self.current_user_can_manage_roles()? {
             return Ok(());
         }

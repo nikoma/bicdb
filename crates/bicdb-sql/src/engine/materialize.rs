@@ -705,6 +705,7 @@ impl<'db> SqlEngine<'db> {
         rows: Vec<BTreeMap<String, SqlValue>>,
     ) -> Result<Vec<BTreeMap<String, SqlValue>>> {
         let role = rls_check_user_from_gucs(&self.session_gucs);
+        let rows = filter_information_schema_rows_for_role(self.db_ref(), &role, table, rows)?;
         if let Some((key, columns)) = virtual_catalog_redactions(table) {
             return redact_catalog_rows_for_role(self.db_ref(), &role, &key, columns, rows);
         }

@@ -151,6 +151,7 @@ pub use db::index_predicate_matches;
 pub use db::row_lock_waits_active;
 pub use db::AuthenticationStrength;
 pub use db::ChangedRecord;
+pub use db::DeferredMaterializeStats;
 pub use db::FullTextBuildStep;
 pub use db::FullTextStoredTextPage;
 pub use db::ReplicationWriterAuthority;

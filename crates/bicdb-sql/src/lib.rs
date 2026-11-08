@@ -194,9 +194,12 @@ pub use runtime::*;
 mod application_copy;
 mod constraint_nulls;
 mod lock_lists;
+mod role_settings;
 mod schema_meta;
+pub mod search_path;
 pub use application_copy::{copy_application_tables, ApplicationCopyReport};
 pub(crate) use constraint_nulls::*;
+pub use role_settings::role_session_settings;
 mod statement_cache;
 pub use schema_meta::*;
 mod catalog_memo;
@@ -3408,17 +3411,46 @@ impl ColumnSchema {
         })
     }
 
+    /// The built-in type and modifier information_schema describes: the
+    /// column's own type, or a domain's base type. Arrays, composite, enum
+    /// and other user-defined types carry no size or precision metadata.
+    fn information_schema_true_type(&self) -> Option<(&str, Option<&PgTypeModifier>)> {
+        match &self.user_type {
+            Some(user_type) => user_type.information_schema_domain_base(),
+            None if pg_type_is_array(&self.pg_type) => None,
+            None => Some((self.pg_type.as_str(), self.type_modifier.as_ref())),
+        }
+    }
+
     fn character_maximum_length(&self) -> Option<i64> {
-        if !matches!(self.pg_type.as_str(), "bpchar" | "varchar") {
+        let (pg_type, type_modifier) = self.information_schema_true_type()?;
+        if !matches!(pg_type, "bpchar" | "varchar" | "bit" | "varbit") {
             return None;
         }
-        match self.type_modifier.as_ref() {
+        match type_modifier {
             Some(
                 PgTypeModifier::Character { length }
-                | PgTypeModifier::OracleCharacterV1 { length, .. },
+                | PgTypeModifier::OracleCharacterV1 { length, .. }
+                | PgTypeModifier::Bit { length },
             ) => Some(i64::from(*length)),
             _ => None,
         }
+    }
+
+    /// `numeric_precision`, `numeric_precision_radix` and `numeric_scale`.
+    fn information_schema_numeric(&self) -> (SqlValue, SqlValue, SqlValue) {
+        let Some((pg_type, type_modifier)) = self.information_schema_true_type() else {
+            return (SqlValue::Null, SqlValue::Null, SqlValue::Null);
+        };
+        information_schema_numeric_for(pg_type, type_modifier)
+    }
+
+    /// `datetime_precision` and `interval_type`.
+    fn information_schema_datetime(&self) -> (SqlValue, SqlValue) {
+        let Some((pg_type, type_modifier)) = self.information_schema_true_type() else {
+            return (SqlValue::Null, SqlValue::Null);
+        };
+        information_schema_datetime_for(pg_type, type_modifier)
     }
 
     fn character_octet_length(&self) -> Option<i64> {
@@ -3436,7 +3468,8 @@ impl ColumnSchema {
                 };
             return Some(declared.min(if fixed { 2000 } else { 4000 }));
         }
-        match self.pg_type.as_str() {
+        let (pg_type, _) = self.information_schema_true_type()?;
+        match pg_type {
             "text" | "bpchar" | "varchar" => Some(
                 self.character_maximum_length()
                     .map(|length| length * 4)
@@ -3447,6 +3480,8 @@ impl ColumnSchema {
     }
 }
 
+/// information_schema `data_type` of a built-in scalar type: its SQL-standard
+/// name without a type modifier, as PostgreSQL's `format_type(oid, NULL)`.
 fn information_schema_builtin_data_type(pg_type: &str) -> String {
     match pg_type {
         "bool" => "boolean",
@@ -3457,9 +3492,86 @@ fn information_schema_builtin_data_type(pg_type: &str) -> String {
         "float8" => "double precision",
         "bpchar" => "character",
         "varchar" => "character varying",
+        "time" => "time without time zone",
+        "timetz" => "time with time zone",
+        "timestamp" => "timestamp without time zone",
+        "timestamptz" => "timestamp with time zone",
+        "varbit" => "bit varying",
         other => other,
     }
     .to_string()
+}
+
+/// `numeric_precision`, `numeric_precision_radix` and `numeric_scale` of a
+/// built-in type, as PostgreSQL's information_schema computes them: binary
+/// precision for integers and floats, declared decimal precision for numeric.
+fn information_schema_numeric_for(
+    pg_type: &str,
+    type_modifier: Option<&PgTypeModifier>,
+) -> (SqlValue, SqlValue, SqlValue) {
+    let binary = |precision: i64, scale: Option<i64>| {
+        (
+            SqlValue::Int(precision),
+            SqlValue::Int(2),
+            scale.map(SqlValue::Int).unwrap_or(SqlValue::Null),
+        )
+    };
+    match pg_type {
+        "int2" => binary(16, Some(0)),
+        "int4" => binary(32, Some(0)),
+        "int8" => binary(64, Some(0)),
+        "float4" => binary(24, None),
+        "float8" => binary(53, None),
+        "numeric" => match type_modifier {
+            Some(PgTypeModifier::Numeric { precision, scale }) => (
+                SqlValue::Int(i64::from(*precision)),
+                SqlValue::Int(10),
+                SqlValue::Int(i64::from(*scale)),
+            ),
+            _ => (SqlValue::Null, SqlValue::Int(10), SqlValue::Null),
+        },
+        _ => (SqlValue::Null, SqlValue::Null, SqlValue::Null),
+    }
+}
+
+/// `datetime_precision` and `interval_type` of a built-in type. An
+/// unconstrained time, timestamp or interval has fractional precision 6.
+fn information_schema_datetime_for(
+    pg_type: &str,
+    type_modifier: Option<&PgTypeModifier>,
+) -> (SqlValue, SqlValue) {
+    match pg_type {
+        "date" => (SqlValue::Int(0), SqlValue::Null),
+        "time" | "timetz" | "timestamp" | "timestamptz" => {
+            let precision = match type_modifier {
+                Some(
+                    PgTypeModifier::Temporal { precision }
+                    | PgTypeModifier::OracleTemporalV1 { precision, .. },
+                ) => i64::from(*precision),
+                _ => 6,
+            };
+            (SqlValue::Int(precision), SqlValue::Null)
+        }
+        "interval" => {
+            let (fields, precision) = match type_modifier {
+                Some(PgTypeModifier::Interval { fields, precision }) => {
+                    (fields.as_deref(), *precision)
+                }
+                _ => (None, None),
+            };
+            let interval_type = fields
+                .map(|fields| {
+                    let mut rendered = fields.to_ascii_uppercase();
+                    if let Some(precision) = precision {
+                        rendered.push_str(&format!("({precision})"));
+                    }
+                    SqlValue::String(rendered)
+                })
+                .unwrap_or(SqlValue::Null);
+            (SqlValue::Int(precision.map_or(6, i64::from)), interval_type)
+        }
+        _ => (SqlValue::Null, SqlValue::Null),
+    }
 }
 
 fn collation_oid(name: &str) -> Option<i64> {
@@ -3711,6 +3823,9 @@ struct RoleSchema {
     password_set: bool,
     #[serde(default)]
     valid_until: Option<String>,
+    /// Session defaults set by `ALTER ROLE ... SET` (`pg_db_role_setting`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    settings: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -3877,6 +3992,25 @@ impl UserTypeColumnSchema {
                 .map(UserTypeColumnSchema::information_schema_scalar_data_type)
                 .unwrap_or_else(|| information_schema_builtin_data_type(base_type)),
             _ => "USER-DEFINED".to_string(),
+        }
+    }
+
+    /// The built-in base type and modifier of a (possibly nested) domain.
+    fn information_schema_domain_base(&self) -> Option<(&str, Option<&PgTypeModifier>)> {
+        if self.array {
+            return None;
+        }
+        match &self.kind {
+            UserTypeKind::Domain {
+                base_user_type: Some(base),
+                ..
+            } => base.information_schema_domain_base(),
+            UserTypeKind::Domain {
+                base_type,
+                type_modifier,
+                ..
+            } if !pg_type_is_array(base_type) => Some((base_type.as_str(), type_modifier.as_ref())),
+            _ => None,
         }
     }
 
@@ -4467,6 +4601,7 @@ struct RoutineIrCacheKey {
     language: String,
     definition: String,
     catalog_scope: Option<RoutineCompilationScope>,
+    search_path: Option<std::sync::Arc<[String]>>,
 }
 
 type RoutineCompilationScope = (u64, u64, u64, u64, u64, u64);

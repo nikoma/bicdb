@@ -1333,6 +1333,7 @@ impl BicDb {
     pub(crate) fn apply_record_writes_to_paged(
         &self,
         writes_by_collection: &BTreeMap<&str, Vec<&TxWrite>>,
+        deferred_page_commit: Option<&mut Option<bicdb_page::Lsn>>,
     ) -> Result<Option<bicdb_page::Xid>> {
         if writes_by_collection.is_empty() {
             return Ok(None);
@@ -1356,7 +1357,7 @@ impl BicDb {
                 ))
             })
             .collect::<Result<Vec<_>>>()?;
-        self.in_paged_transaction_inner(true, |paged, xid| {
+        self.in_paged_transaction_inner(true, deferred_page_commit, |paged, xid| {
             for (collection, writes, index_defs) in prepared {
                 // Pre-image reads for index maintenance: the row state before this
                 // transaction, overlaid with earlier writes in this same batch so
@@ -1484,12 +1485,13 @@ impl BicDb {
     where
         F: FnOnce(&crate::paged_collection::PagedRecords, bicdb_page::Xid) -> Result<()>,
     {
-        self.in_paged_transaction_inner(false, apply)
+        self.in_paged_transaction_inner(false, None, apply)
     }
 
     fn in_paged_transaction_inner<F>(
         &self,
         durable_decision: bool,
+        deferred_page_commit: Option<&mut Option<bicdb_page::Lsn>>,
         apply: F,
     ) -> Result<Option<bicdb_page::Xid>>
     where
@@ -1508,7 +1510,11 @@ impl BicDb {
         let (xid, _) = paged.begin();
         match apply(paged, xid) {
             Ok(()) => {
-                if let Err(error) = paged.commit(xid) {
+                let committed = match deferred_page_commit {
+                    Some(lsn) => paged.commit_deferred(xid).map(|commit| *lsn = Some(commit)),
+                    None => paged.commit(xid),
+                };
+                if let Err(error) = committed {
                     self.recovery_required.store(true, AtomicOrdering::Release);
                     return Err(error);
                 }
@@ -2410,7 +2416,13 @@ impl BicDb {
             tx.receipt_recovery_required(commit_seq);
             return Err(error);
         }
+        bicdb_page::test_faults::crash_point("commit.after_txlog_durable");
         timer.lap(&commit_trace::WAL_ENCODE);
+        let deferred = self
+            .deferred_materializer
+            .as_ref()
+            .map(|handle| &handle.materializer);
+        let mut deferred_page_commit = None;
         // Record/version/vector apply: per-shard write locks under the shared
         // collection read guard, so disjoint-key commits (even within one
         // collection) apply in parallel. This allocates each brand-new record's
@@ -2427,7 +2439,9 @@ impl BicDb {
                 &index_mutations_by_collection,
                 &dim_plan,
                 &mut timer,
+                deferred.map(|_| &mut deferred_page_commit),
             )?;
+            bicdb_page::test_faults::crash_point("commit.after_page_apply");
             // Now every record is resident: re-resolve locators (brand-new records now
             // resolve to `Some`) and apply the index entries (Pass 2). Returns spatial
             // audit events to append after the index locks drop.
@@ -2464,7 +2478,22 @@ impl BicDb {
                     &CompressionConfig::disabled(),
                     &self.encryption,
                 )?;
-                self.tx_log.append_auxiliary(&framed)?;
+                match (deferred, deferred_page_commit) {
+                    (Some(materializer), Some(lsn)) => {
+                        materializer.enqueue(commit_seq, lsn, framed);
+                    }
+                    (Some(materializer), None) => {
+                        // No deferred page commit was recorded: cover the
+                        // whole log tail, a superset of this commit.
+                        let tail = self
+                            .paged_records
+                            .as_ref()
+                            .map_or(0, |paged| paged.store().wal().next_lsn().saturating_sub(1));
+                        materializer.enqueue(commit_seq, tail, framed);
+                    }
+                    (None, _) => self.tx_log.append_auxiliary(&framed)?,
+                }
+                bicdb_page::test_faults::crash_point("commit.after_marker");
             }
             timer.lap(&commit_trace::GRAPH);
             Ok(())

@@ -1634,6 +1634,43 @@ fn simple_query_current_schemas_returns_pg_array_text() {
 }
 
 #[test]
+fn simple_query_statement_list_binds_after_set_search_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+
+    let mut client = TcpStream::connect(address).unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+
+    send_query(
+        &mut client,
+        "CREATE SCHEMA adempiere; CREATE TABLE adempiere.ad_system (name TEXT); \
+         INSERT INTO adempiere.ad_system VALUES ('System');",
+    );
+    read_query_rows(&mut client);
+    // As psql sends it: one Query message, the SET first.
+    send_query(
+        &mut client,
+        "SET search_path TO adempiere, public; SELECT name FROM ad_system;",
+    );
+    assert_eq!(
+        read_query_rows(&mut client),
+        vec![vec!["System".to_string()]]
+    );
+    send_query(&mut client, "SELECT count(*) FROM ad_system;");
+    assert_eq!(read_query_rows(&mut client), vec![vec!["1".to_string()]]);
+
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
+#[test]
 fn simple_query_sql_prepare_execute_and_deallocate_are_supported() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

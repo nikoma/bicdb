@@ -608,3 +608,24 @@ fn oracle_standalone_functions_are_replaced_not_overloaded() {
     );
     assert!(run(&mut db, "SELECT pick(1) FROM dual").is_err());
 }
+
+/// PL/SQL compares DATE with TIMESTAMP values as date/time values.
+#[test]
+fn plsql_compares_dates_and_timestamps_as_datetimes() {
+    let (_root, mut db) = app_database();
+    run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION same_instant(p_days IN NUMBER) RETURN NUMBER AS
+           d DATE := TO_DATE('2002-07-04', 'YYYY-MM-DD');
+           t TIMESTAMP := TO_TIMESTAMP('2002-07-04 00:00:00', 'YYYY-MM-DD HH24:MI:SS');
+         BEGIN
+           IF d = t AND NOT d <> t AND d < t + p_days THEN RETURN 1; END IF;
+           RETURN 0;
+         END;",
+    )
+    .unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT same_instant(1) FROM dual").unwrap()),
+        vec![vec!["1".to_string()]]
+    );
+}

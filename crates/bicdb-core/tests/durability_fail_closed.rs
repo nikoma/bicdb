@@ -9,8 +9,8 @@
 use std::sync::{Arc, Barrier, Mutex};
 
 use bicdb_core::{
-    BicDb, BicDbError, CommitResolution, DbConfig, DurabilityState, Record, ReplicationConfig, ReplicationCursor,
-    ReplicationMode, ReplicationTlsConfig, StorageMode, TransactionOutcome,
+    BicDb, BicDbError, CommitResolution, DbConfig, DurabilityState, Record, ReplicationConfig,
+    ReplicationCursor, ReplicationMode, ReplicationTlsConfig, StorageMode, TransactionOutcome,
     DURABILITY_FAILURE_MARKER,
 };
 use bicdb_page::test_faults::{arm_io_failure, arm_io_hook};
@@ -487,9 +487,21 @@ fn a_failing_standby_is_fenced_and_catches_up_after_reopen() {
 fn an_unknown_commit_resolves_by_identity_to_what_recovery_kept() {
     // (storage, faults, recovery keeps it)
     let cases: Vec<(StorageMode, Vec<&str>, bool)> = vec![
-        (StorageMode::EmbeddedMemory, vec!["transaction_log.write"], false),
-        (StorageMode::ServerPaged, vec!["transaction_log.write"], false),
-        (StorageMode::EmbeddedMemory, vec!["transaction_log.sync"], false),
+        (
+            StorageMode::EmbeddedMemory,
+            vec!["transaction_log.write"],
+            false,
+        ),
+        (
+            StorageMode::ServerPaged,
+            vec!["transaction_log.write"],
+            false,
+        ),
+        (
+            StorageMode::EmbeddedMemory,
+            vec!["transaction_log.sync"],
+            false,
+        ),
         (
             StorageMode::EmbeddedMemory,
             vec!["transaction_log.sync", "transaction_log.repair"],
@@ -530,11 +542,16 @@ fn an_unknown_commit_resolves_by_identity_to_what_recovery_kept() {
             assert_eq!(*tx_id, Some(observer.transaction_id().0), "{label}");
             assert_eq!(
                 observer.outcome(),
-                TransactionOutcome::RecoveryRequired { sequence: seq.unwrap() },
+                TransactionOutcome::RecoveryRequired {
+                    sequence: seq.unwrap()
+                },
                 "{label}: the receipt names the same commit"
             );
             let (detail, hint) = error.commit_outcome_identity().unwrap();
-            assert!(detail.contains(&format!("commit_seq={}", seq.unwrap())), "{label}: {detail}");
+            assert!(
+                detail.contains(&format!("commit_seq={}", seq.unwrap())),
+                "{label}: {detail}"
+            );
             assert!(hint.contains(inc.as_str()), "{label}: {hint}");
             // The failed handle itself never answers.
             assert_eq!(
@@ -583,11 +600,17 @@ fn a_primary_that_fails_mid_stream_is_replaced_by_a_promoted_standby() {
         let standby_dir = tempfile::tempdir().unwrap();
         let start;
         {
-            let mut standby =
-                open_replica(standby_dir.path(), storage.clone(), ReplicationMode::Standby);
+            let mut standby = open_replica(
+                standby_dir.path(),
+                storage.clone(),
+                ReplicationMode::Standby,
+            );
             let mut cursor = ReplicationCursor::new(standby.last_applied_commit_seq());
-            let mut primary =
-                open_replica(primary_dir.path(), storage.clone(), ReplicationMode::Primary);
+            let mut primary = open_replica(
+                primary_dir.path(),
+                storage.clone(),
+                ReplicationMode::Primary,
+            );
             seed(&mut primary, 4);
             ship(&primary, &mut standby, &mut cursor).unwrap();
             put(&primary, "streamed").unwrap();
@@ -600,18 +623,32 @@ fn a_primary_that_fails_mid_stream_is_replaced_by_a_promoted_standby() {
             );
             ship(&primary, &mut standby, &mut cursor).unwrap();
             assert!(present(&standby, "streamed"), "{storage:?}");
-            assert!(!present(&standby, "x"), "{storage:?}: an uncertain commit shipped");
+            assert!(
+                !present(&standby, "x"),
+                "{storage:?}: an uncertain commit shipped"
+            );
             start = standby.last_applied_commit_seq();
             standby.promote_by_election(1, "standby", None).unwrap();
         }
-        let promoted = open_replica(standby_dir.path(), storage.clone(), ReplicationMode::Primary);
+        let promoted = open_replica(
+            standby_dir.path(),
+            storage.clone(),
+            ReplicationMode::Primary,
+        );
         assert_eq!(promoted.replication_role(), bicdb_core::NodeRole::Primary);
         assert!(!present(&promoted, "x"), "{storage:?}");
         put(&promoted, "after-failover").unwrap();
         // The old primary recovers its own disk, which holds the uncertain
         // commit past the promotion point: a divergent history.
-        let old = open_replica(primary_dir.path(), storage.clone(), ReplicationMode::Standby);
-        assert!(present(&old, "x"), "{storage:?}: the decision reached the old primary's disk");
+        let old = open_replica(
+            primary_dir.path(),
+            storage.clone(),
+            ReplicationMode::Standby,
+        );
+        assert!(
+            present(&old, "x"),
+            "{storage:?}: the decision reached the old primary's disk"
+        );
         assert!(old.last_applied_commit_seq() > start, "{storage:?}");
         assert!(
             matches!(
@@ -668,13 +705,11 @@ fn a_fence_after_a_durable_commit_does_not_report_the_commit_as_refused() {
 fn a_failed_bulk_load_commit_reports_an_unknown_outcome() {
     let dir = tempfile::tempdir().unwrap();
     {
-        let mut db =
-            BicDb::open_with_config(dir.path(), config(StorageMode::ServerPaged)).unwrap();
+        let mut db = BicDb::open_with_config(dir.path(), config(StorageMode::ServerPaged)).unwrap();
         db.create_collection("bulk").unwrap();
     }
     {
-        let mut db =
-            BicDb::open_with_config(dir.path(), config(StorageMode::ServerPaged)).unwrap();
+        let mut db = BicDb::open_with_config(dir.path(), config(StorageMode::ServerPaged)).unwrap();
         let fault = arm_io_failure("page_log.sync", dir.path(), 1, false);
         let records: Vec<_> = (0..50).map(|i| Record::new(format!("b{i}"))).collect();
         let error = db.bulk_load_insert("bulk", records).unwrap_err();
@@ -692,7 +727,10 @@ fn a_failed_bulk_load_commit_reports_an_unknown_outcome() {
     let present = (0..50)
         .filter(|i| db.get("bulk", &format!("b{i}")).unwrap().is_some())
         .count();
-    assert!(present == 0 || present == 50, "a partial batch survived: {present}");
+    assert!(
+        present == 0 || present == 50,
+        "a partial batch survived: {present}"
+    );
 }
 
 /// A backup-gate timeout (a backup or branch holding the gate too long)
@@ -724,7 +762,11 @@ fn a_backup_gate_timeout_does_not_fence() {
                 matches!(error, BicDbError::Backup(_)),
                 "{storage:?}: {error}"
             );
-            assert_eq!(observer.outcome(), TransactionOutcome::Aborted, "{storage:?}");
+            assert_eq!(
+                observer.outcome(),
+                TransactionOutcome::Aborted,
+                "{storage:?}"
+            );
         }
         assert!(
             db.durability_state().is_healthy(),
@@ -736,7 +778,10 @@ fn a_backup_gate_timeout_does_not_fence() {
         drop(db);
         let db = BicDb::open_with_config(dir.path(), config(storage.clone())).unwrap();
         assert!(present(&db, "a1") && present(&db, "y"), "{storage:?}");
-        assert!(!present(&db, "x"), "{storage:?}: a withdrawn commit came back");
+        assert!(
+            !present(&db, "x"),
+            "{storage:?}: a withdrawn commit came back"
+        );
     }
 }
 
@@ -767,7 +812,11 @@ fn verification_rewrites_the_transaction_log() {
         let before_verify = inode();
         let db = reopen_and_verify(dir.path(), storage.clone(), &acked);
         drop(db);
-        assert_ne!(inode(), before_verify, "{storage:?}: verification did not rewrite the log");
+        assert_ne!(
+            inode(),
+            before_verify,
+            "{storage:?}: verification did not rewrite the log"
+        );
         if storage == StorageMode::EmbeddedMemory {
             assert_eq!(before_normal, after_normal, "a normal open rewrote the log");
         }

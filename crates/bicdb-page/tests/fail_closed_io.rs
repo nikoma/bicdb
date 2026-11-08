@@ -358,10 +358,16 @@ fn a_failed_sync_during_online_extent_migration_fences_the_store() {
         assert_eq!(fault.fired(), 1, "the migration never synced a segment");
         let error = failed.expect("the failed migration sync must surface");
         assert!(error.is_write_failed(), "{error}");
-        assert_eq!(failed_site(store.durability_health().state()), "page_file.sync");
+        assert_eq!(
+            failed_site(store.durability_health().state()),
+            "page_file.sync"
+        );
         // The checkpoint that would have truncated the log is refused.
         assert!(store.checkpoint().unwrap_err().is_write_failed());
-        assert!(store.advance_extent_migration(16).unwrap_err().is_write_failed());
+        assert!(store
+            .advance_extent_migration(16)
+            .unwrap_err()
+            .is_write_failed());
         // Reads of acknowledged rows continue at the page layer.
         assert!(store.get(&key(7_999)).unwrap().is_some());
     }

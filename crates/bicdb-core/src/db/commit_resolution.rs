@@ -253,8 +253,7 @@ mod tests {
     fn pruning_keeps_the_newest_records() {
         let dir = tempfile::tempdir().unwrap();
         let mut index = 0usize;
-        while std::fs::metadata(dir.path().join(INCARNATION_JOURNAL))
-            .map_or(0, |meta| meta.len())
+        while std::fs::metadata(dir.path().join(INCARNATION_JOURNAL)).map_or(0, |meta| meta.len())
             < PRUNE_AT_BYTES - 1_024
         {
             record_incarnation(dir.path(), &format!("i{index}"), index as u64, false).unwrap();

@@ -134,7 +134,6 @@ pub use bicdb_page::{
     PAGE_IO_LATENCY_BUCKET_COUNT, PAGE_IO_LATENCY_BUCKET_UPPER_BOUNDS_NANOS, VERSION_HEADER_BYTES,
 };
 pub use bicdb_page::{DurabilityState, WriteFailure};
-pub use db::{CommitResolution, INCARNATION_JOURNAL};
 pub use broker::{
     Broker, BrokerAccess, BrokerCaller, BrokerDeliverySnapshot, BrokerDeliveryState, BrokerMessage,
     BrokerStats, ConsumeOptions, ConsumerGroupInfo, DrainOptions, DrainReport, GroupStats,
@@ -230,6 +229,7 @@ pub use db::{timestamp_day_index_inputs_supported, timestamp_day_index_value};
 pub use db::{
     CommitAdmission, CommitAdmissionIntent, CommitAdmissionMutation, CommitAdmissionTicket,
 };
+pub use db::{CommitResolution, INCARNATION_JOURNAL};
 pub use distribution::{
     build_failure_repair_plan, build_rebalance_plan, distribution_key_token,
     filter_commit_frame_for_range, load_distribution_config, provision_cluster_member_directory,

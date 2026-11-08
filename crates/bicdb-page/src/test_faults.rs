@@ -286,9 +286,22 @@ mod tests {
 
     #[test]
     fn io_fault_specs_are_parsed_strictly() {
-        assert_eq!(parse_io_fault_entry("page_log.sync:3"), Some(("page_log.sync", false, 3)));
-        assert_eq!(parse_io_fault_entry("page_log.sync:1+"), Some(("page_log.sync", true, 1)));
-        for bad in ["page_log.sync", "page_log.sync:0", "page_log.sync:x", ":3", "a b:1", "s:-1"] {
+        assert_eq!(
+            parse_io_fault_entry("page_log.sync:3"),
+            Some(("page_log.sync", false, 3))
+        );
+        assert_eq!(
+            parse_io_fault_entry("page_log.sync:1+"),
+            Some(("page_log.sync", true, 1))
+        );
+        for bad in [
+            "page_log.sync",
+            "page_log.sync:0",
+            "page_log.sync:x",
+            ":3",
+            "a b:1",
+            "s:-1",
+        ] {
             assert_eq!(parse_io_fault_entry(bad), None, "{bad}");
         }
     }

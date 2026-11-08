@@ -145,7 +145,10 @@ pub(crate) fn eval_db_catalog_function_value(
                 args.len()
             )));
         }
-        if args.iter().any(|argument| matches!(argument, SqlValue::Null)) {
+        if args
+            .iter()
+            .any(|argument| matches!(argument, SqlValue::Null))
+        {
             return Ok(Some(SqlValue::Null));
         }
         let SqlValue::String(incarnation) = &args[0] else {

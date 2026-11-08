@@ -43,8 +43,8 @@ pub use flashback::{
     scn_to_unix_micros, unix_micros_to_scn, FlashbackConfig, FlashbackOperation, FlashbackPoint,
     FlashbackVersion, FLASHBACK_HISTORY_PREFIX,
 };
-mod fts_build;
 mod commit_resolution;
+mod fts_build;
 pub use commit_resolution::{CommitResolution, INCARNATION_JOURNAL};
 mod fts_query;
 mod index_build;

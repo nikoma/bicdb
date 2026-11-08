@@ -226,9 +226,9 @@ fn commit_outcome_identity_line(
 
 fn commit_outcome_hint(sequence: Option<u64>, incarnation: &str) -> String {
     match sequence {
-        Some(sequence) => format!(
-            "resolve it with SELECT bicdb_commit_outcome('{incarnation}', {sequence})"
-        ),
+        Some(sequence) => {
+            format!("resolve it with SELECT bicdb_commit_outcome('{incarnation}', {sequence})")
+        }
         None => "re-read the operation's result: it has no commit sequence, and the page \
                  store's recovery kept it only if its commit record reached the disk"
             .to_string(),
@@ -251,7 +251,10 @@ impl BicDbError {
         };
         Some((
             commit_outcome_identity_line(*sequence, *transaction_id, incarnation),
-            format!("after reopening the database, {}", commit_outcome_hint(*sequence, incarnation)),
+            format!(
+                "after reopening the database, {}",
+                commit_outcome_hint(*sequence, incarnation)
+            ),
         ))
     }
 

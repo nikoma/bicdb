@@ -2234,7 +2234,9 @@ impl SqlError {
             }
             Self::BicDb(error @ BicDbError::CommitOutcomeUnknown { .. }) => error
                 .commit_outcome_identity()
-                .map(|(detail, hint)| vec![SqlErrorField::Detail(detail), SqlErrorField::Hint(hint)])
+                .map(|(detail, hint)| {
+                    vec![SqlErrorField::Detail(detail), SqlErrorField::Hint(hint)]
+                })
                 .unwrap_or_default(),
             _ => Vec::new(),
         }

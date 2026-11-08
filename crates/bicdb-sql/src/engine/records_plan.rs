@@ -46,8 +46,33 @@ impl<'db> SqlEngine<'db> {
                 set_quantifier,
                 right,
             } => {
-                let left = self.execute_set_expr(left)?;
-                let right = self.execute_set_expr(right)?;
+                let left_expr = left;
+                let right_expr = right;
+                let mut left = self.execute_set_expr(left_expr)?;
+                let mut right = self.execute_set_expr(right_expr)?;
+                // A branch executed without result metadata (a SELECT without
+                // FROM) is described statically, so its literals take part in
+                // type resolution.
+                for (branch, expr) in [(&mut left, left_expr), (&mut right, right_expr)] {
+                    if branch.column_types.len() != branch.columns.len() {
+                        let described = self.set_expr_output_columns(expr);
+                        branch.column_types = (0..branch.columns.len())
+                            .map(|index| {
+                                branch
+                                    .column_types
+                                    .get(index)
+                                    .cloned()
+                                    .flatten()
+                                    .or_else(|| {
+                                        described
+                                            .as_ref()
+                                            .and_then(|columns| columns.get(index))
+                                            .and_then(|(_, pg_type)| pg_type.clone())
+                                    })
+                            })
+                            .collect();
+                    }
+                }
                 let column_types = left
                     .column_types
                     .iter()

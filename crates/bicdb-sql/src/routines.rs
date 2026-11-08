@@ -1875,6 +1875,12 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
         let expr = RoutineExpr::unbound(parse_routine_expr(statement[idx + 2..].trim())?);
         return Ok(RoutineStmt::Assignment { target, expr });
     }
+    // PL/pgSQL also accepts `=` as the assignment operator.
+    if let Some(idx) = plain_equals_assignment(statement) {
+        let target = parse_routine_assignment_target(statement[..idx].trim())?;
+        let expr = RoutineExpr::unbound(parse_routine_expr(statement[idx + 1..].trim())?);
+        return Ok(RoutineStmt::Assignment { target, expr });
+    }
     if routine_query_statement(statement) {
         if let Some((sql, targets, strict)) = extract_query_into(statement)? {
             return Ok(RoutineStmt::SelectInto {
@@ -1930,8 +1936,12 @@ pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
     if statement.trim().is_empty() {
         return Ok(RoutineStmt::Rethrow);
     }
+    // Non-error levels report a message and continue, as NOTICE does.
+    const MESSAGE_LEVELS: [&str; 5] = ["NOTICE", "WARNING", "INFO", "LOG", "DEBUG"];
     if !starts_with_plpgsql_word(statement, "EXCEPTION")
-        && !starts_with_plpgsql_word(statement, "NOTICE")
+        && !MESSAGE_LEVELS
+            .iter()
+            .any(|level| starts_with_plpgsql_word(statement, level))
     {
         if let Ok(RoutineExceptionCondition::SqlState(sqlstate)) =
             routine_exception_condition(statement)
@@ -1946,7 +1956,10 @@ pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
             });
         }
     }
-    let (notice, rest) = if let Some(rest) = strip_routine_keyword(statement, "NOTICE") {
+    let (notice, rest) = if let Some(rest) = MESSAGE_LEVELS
+        .iter()
+        .find_map(|level| strip_routine_keyword(statement, level))
+    {
         (true, rest)
     } else if let Some(rest) = strip_routine_keyword(statement, "EXCEPTION") {
         (false, rest)
@@ -2566,6 +2579,31 @@ pub(crate) fn split_top_level_keyword(sql: &str, keyword: &str) -> Vec<String> {
         parts.push(rest.to_string());
     }
     parts
+}
+
+/// `target = expr` where the target is a variable, field or array element:
+/// the position of that `=`.
+fn plain_equals_assignment(statement: &str) -> Option<usize> {
+    let idx = statement.find('=')?;
+    let (left, right) = (&statement[..idx], &statement[idx + 1..]);
+    if left.ends_with(['<', '>', '!', ':', '=']) || right.starts_with(['=', '>']) {
+        return None;
+    }
+    let left = left.trim();
+    let (path, index) = match left.find('[') {
+        Some(open) if left.ends_with(']') => (&left[..open], Some(&left[open..])),
+        Some(_) => return None,
+        None => (left, None),
+    };
+    let _ = index;
+    let identifier = |part: &str| {
+        let mut chars = part.chars();
+        chars
+            .next()
+            .is_some_and(|first| first.is_ascii_alphabetic() || first == '_')
+            && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '$')
+    };
+    (!path.is_empty() && path.split('.').all(identifier)).then_some(idx)
 }
 
 pub(crate) fn find_top_level_operator(sql: &str, operator: &str) -> Option<usize> {

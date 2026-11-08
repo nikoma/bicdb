@@ -379,6 +379,15 @@ pub struct PagedStoreOptions {
     /// exceptions — a visibility hazard. Opt in only for stores known to
     /// predate durable abort exceptions.
     pub accept_legacy_meta: bool,
+    /// EXPERIMENTAL, disposable test stores only. When CREATING a store,
+    /// mark it as a disposable page-delta store (superblock magic
+    /// `BICDBPG5`). This is the store half of the two locks that experimental
+    /// page-delta WAL records need; the other is `BICDB_PAGE_WAL_DELTAS=1`.
+    /// Opening an existing store with this set is an error: an existing store
+    /// can never acquire the marker. A marked store cannot be opened by
+    /// engines that predate it and is neither upgradeable nor downgradeable.
+    /// See `docs/page-delta-redo-design.md`.
+    pub experimental_page_deltas_disposable: bool,
 }
 
 impl Default for PagedStoreOptions {
@@ -392,11 +401,18 @@ impl Default for PagedStoreOptions {
             extent_bytes: 0,
             wal_segment_bytes: 64 * 1024 * 1024,
             accept_legacy_meta: false,
+            experimental_page_deltas_disposable: false,
         }
     }
 }
 
 impl PagedStoreOptions {
+    /// See [`Self::experimental_page_deltas_disposable`].
+    pub fn with_experimental_page_deltas_disposable(mut self, disposable: bool) -> Self {
+        self.experimental_page_deltas_disposable = disposable;
+        self
+    }
+
     pub fn with_page_size(mut self, page_size: u32) -> Self {
         self.page_size = page_size;
         self
@@ -928,6 +944,13 @@ impl PagedStore {
         // WAL segmentation rides the page store's v2 format gate: sealed
         // segments only ever appear next to a store whose superblock magic
         // already fail-closes pre-segmentation engines.
+        // Experimental page deltas, store half of the two locks: only a store
+        // created right now, by explicit request, is ever marked.
+        if options.experimental_page_deltas_disposable {
+            store.mark_disposable_page_delta_store()?;
+        } else if store.created_now() && test_hook_creates_disposable_page_delta_store() {
+            store.mark_disposable_page_delta_store()?;
+        }
         let wal_segment_bytes = if store.extent_pages() > 0 {
             options.wal_segment_bytes
         } else {
@@ -954,6 +977,13 @@ impl PagedStore {
                 .with_read_ahead_queue_pages(options.read_ahead_queue_pages),
         )?);
         pool.enable_wal_managed_frees();
+        // Experimental page deltas engage only when BOTH locks are open: the
+        // process gate and a store created as disposable. Recovery above
+        // reads delta records either way; this only governs writing them.
+        if crate::wal_delta::gate_from_env() && store.is_disposable_page_delta_store() {
+            wal.engage_deltas();
+            pool.engage_deltas();
+        }
 
         // Heap, index, and catalog share ONE page file, one buffer pool, and one
         // log.
@@ -2161,7 +2191,17 @@ impl PagedStore {
         // Outside the guard: `checkpoint` takes the same lock, and it is not
         // reentrant. Checkpointing is also the one write-path step with no
         // reason to hold up other committers while it runs.
-        let wal_bytes = self.wal.size_bytes();
+        let mut wal_bytes = self.wal.size_bytes();
+        if self.wal.deltas_engaged() {
+            // Experimental page deltas: recovery work is page records, not
+            // bytes. Count each record as a page so replay stays bounded by
+            // the same page count as with full images (design C8).
+            wal_bytes = wal_bytes.max(
+                self.wal
+                    .page_records_since_redo()
+                    .saturating_mul(u64::from(self.options.page_size)),
+            );
+        }
         if wal_bytes > self.options.wal_max_bytes {
             let mut cursor = self.automatic_checkpoint_cursor.lock();
             if wal_bytes
@@ -2237,12 +2277,27 @@ impl PagedStore {
     /// segments are retained — the invariants an online file copy needs.
     pub fn begin_backup_pin(&self) {
         self.backup_pins.fetch_add(1, Ordering::AcqRel);
+        // Experimental page deltas: no record after the backup start may
+        // name a base before it (design section 6.3). No-op otherwise.
+        self.wal.start_epoch();
     }
 
     /// Release one [`Self::begin_backup_pin`]. Truncation resumes at the
     /// next checkpoint once every pin is released.
     pub fn end_backup_pin(&self) {
         self.backup_pins.fetch_sub(1, Ordering::AcqRel);
+    }
+
+    /// Experimental page deltas: whether they are engaged for this store
+    /// (both locks open), and their counters.
+    pub fn page_deltas(&self) -> (bool, crate::wal::DeltaStats) {
+        (self.wal.deltas_engaged(), self.wal.delta_stats())
+    }
+
+    /// Whether this store was created as a disposable experimental
+    /// page-delta store (superblock `BICDBPG5`).
+    pub fn is_disposable_page_delta_store(&self) -> bool {
+        self.pool.store().is_disposable_page_delta_store()
     }
 
     fn backup_pinned(&self) -> bool {
@@ -2658,7 +2713,7 @@ impl PagedStore {
                     } else {
                         let truncate =
                             !self.transactions.has_unfrozen_commits() && !self.backup_pinned();
-                        let redo_lsn = self.wal.next_lsn();
+                        let redo_lsn = self.wal.begin_redo_epoch();
                         let checkpoint = self.checkpointer.finish_checkpoint(
                             self.meta_page,
                             redo_lsn,
@@ -3222,6 +3277,11 @@ impl PagedStore {
     /// put the log first. The ordering that matters — log durable before page
     /// durable — is preserved.
     fn log_dirty_pages(&self, transaction: u64) -> Result<()> {
+        if self.pool.deltas_engaged() {
+            return self
+                .pool
+                .log_pages_needing_log_with_deltas(&self.wal, transaction);
+        }
         let dirty = self.pool.take_pages_needing_log();
         for page_id in dirty {
             let image = {
@@ -5300,6 +5360,20 @@ impl crate::mvcc::OutcomeSpill for PagedOutcomeSpill {
     }
 }
 
+/// Test-harness hook, compiled only with the `page-delta-test-hook` feature:
+/// `BICDB_TEST_PAGE_DELTAS_CREATE_DISPOSABLE=1` creates every NEW store as a
+/// disposable page-delta store, so existing suites can run with deltas. It
+/// never touches an existing store, and a normal build has no such hook.
+#[cfg(feature = "page-delta-test-hook")]
+fn test_hook_creates_disposable_page_delta_store() -> bool {
+    std::env::var("BICDB_TEST_PAGE_DELTAS_CREATE_DISPOSABLE").is_ok_and(|value| value == "1")
+}
+
+#[cfg(not(feature = "page-delta-test-hook"))]
+fn test_hook_creates_disposable_page_delta_store() -> bool {
+    false
+}
+
 /// Makes a page recoverable before it is allowed to reach disk.
 ///
 /// Logging here rather than only at commit is what lets the pool evict freely:
@@ -5324,6 +5398,20 @@ impl crate::pool::WritebackBarrier for WalWritebackBarrier {
     fn before_writeback(&self, page_id: PageId, transaction: u64, bytes: &[u8]) -> Result<()> {
         let lsn = self.wal.log_page_image(page_id, transaction, bytes)?;
         self.wal.sync_through(lsn)
+    }
+
+    fn before_writeback_delta(
+        &self,
+        page_id: PageId,
+        transaction: u64,
+        bytes: &[u8],
+        delta: Option<&[u8]>,
+    ) -> Result<Option<Lsn>> {
+        let (lsn, _) = self
+            .wal
+            .log_page_maybe_delta(page_id, transaction, bytes, delta)?;
+        self.wal.sync_through(lsn)?;
+        Ok(Some(lsn))
     }
 
     fn before_logged_writeback(&self, _page_id: PageId) -> Result<()> {

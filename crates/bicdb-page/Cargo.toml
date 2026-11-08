@@ -26,6 +26,12 @@ sha2.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 
+[features]
+# Test harness only: lets existing suites create disposable experimental
+# page-delta stores through an environment variable. Never enable in a build
+# that serves data. See docs/page-delta-redo-design.md.
+page-delta-test-hook = []
+
 [dev-dependencies]
 tempfile.workspace = true
 

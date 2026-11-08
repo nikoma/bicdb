@@ -290,7 +290,7 @@ pub struct DbConfig {
     /// dominant restart cost on large datasets). Default on for compatibility;
     /// set `BICDB_SYNC_OUTBOX=off` (or `with_sync_outbox(false)`) to disable.
     pub sync_outbox: bool,
-    /// EXPERIMENTAL, off by default: in `server_paged` with fsync on, make the
+    /// EXPERIMENTAL, off by default: in `server_paged`, make the
     /// transaction log the only synchronous write before a row commit is
     /// acknowledged. The page log is synced and `CommitMaterialized` markers
     /// written by a background materializer instead; recovery replays any
@@ -10355,7 +10355,9 @@ impl BicDb {
         )?;
         let last_committed_tx = Arc::new(AtomicU64::new(tx_recovery.last_commit_seq));
         let deferred_materializer = match &paged_records {
-            Some(paged) if config.transaction_log_commit_durability && config.fsync => {
+            // The deferral is a code-path change regardless of fsync; with fsync
+            // off nothing is crash durable in either mode.
+            Some(paged) if config.transaction_log_commit_durability => {
                 Some(deferred_materialize::DeferredMaterializerHandle::start(
                     deferred_materialize::DeferredMaterializer::new(
                         paged.clone(),

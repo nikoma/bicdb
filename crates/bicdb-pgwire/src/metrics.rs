@@ -164,6 +164,28 @@ fn render(server: &Arc<PgWireServer>) -> Result<String> {
     }
 
     out.gauge("bicdb_up", "The server is serving.", 1);
+    {
+        // Fail-closed durability state (docs/durability-failure-handling.md).
+        let durability = server.read_db()?.durability_state();
+        out.gauge(
+            "bicdb_durability_write_failed",
+            "A durability-critical write or sync failed; writes are refused until the \
+             database is reopened and verified.",
+            u8::from(!durability.is_healthy()),
+        );
+        out.metric(
+            "bicdb_durability_write_failed_timestamp_seconds",
+            "gauge",
+            "Time of the first durability failure, labelled by the failing site.",
+        );
+        if let Some(failure) = durability.failure() {
+            out.sample(
+                "bicdb_durability_write_failed_timestamp_seconds",
+                &[("site", failure.site.as_str())],
+                failure.at_unix_millis / 1000,
+            );
+        }
+    }
     out.gauge(
         "bicdb_connections_active",
         "Open client connections.",

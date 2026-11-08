@@ -443,6 +443,107 @@ fn transaction_log_only_path_survives_every_crash_point() {
     );
 }
 
+// Fail-closed matrix (docs/durability-failure-handling.md): instead of a
+// crash, a durability-critical write or sync returns EIO at its n-th call.
+// The child keeps running and must not acknowledge anything after the
+// failure; the reopen then runs recovery plus the verification checkpoint,
+// and the same reconciler proves every acknowledged commit survived.
+
+const FAIL_IO_SPECS: &[&str] = &[
+    // transactions.log: nothing written / written but not synced / written,
+    // not synced and the tail repair failed too (the decision stays on disk
+    // and recovery must honour it).
+    "transaction_log.write:150",
+    "transaction_log.sync:150",
+    "transaction_log.sync:150,transaction_log.repair:1",
+    // Page log and page file, in commits, writebacks and checkpoints.
+    "page_log.sync:60",
+    "page_log.write:300",
+    "page_file.sync:12",
+    "page_log.reset:3",
+    // The commit point of a transaction-log cut.
+    "transaction_log.cut_sync:3",
+];
+
+fn fail_io_case(mode: &str, spec: &str) {
+    let label = format!("{mode} fail-io {spec}");
+    let temp = tempfile::tempdir().unwrap();
+    let keep = KeepOnPanic(temp.path().to_path_buf(), label.clone());
+    let db = temp.path().join("db");
+    let ledger = temp.path().join("ledger");
+    let mut command = Command::new(child_binary());
+    command
+        .arg(&db)
+        .arg(&ledger)
+        .arg(durability(mode))
+        .arg(COMMITS.to_string())
+        .env("BICDB_TEST_FAIL_IO", spec)
+        .env_remove("BICDB_TEST_WAL_VOLATILE_TAIL")
+        .env_remove("BICDB_TEST_CRASH_AT");
+    if small_pool(mode) {
+        command.env("DURABILITY_POOL_BYTES", SMALL_POOL_BYTES.to_string());
+    } else {
+        command.env_remove("DURABILITY_POOL_BYTES");
+    }
+    let output = command.output().expect("run durability child");
+    assert!(
+        output.status.success(),
+        "{label}: child failed: {}\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let state = ledger_lines(&ledger.join("state"));
+    assert!(
+        state.len() == 1 && state[0].starts_with("failed "),
+        "{label}: the fault was never reached or did not fence the database: {state:?}"
+    );
+    let violations = ledger_lines(&ledger.join("violations"));
+    assert!(violations.is_empty(), "{label}: {violations:#?}");
+    let marker = db.join(bicdb_core::DURABILITY_FAILURE_MARKER);
+    assert!(
+        marker.exists(),
+        "{label}: no failure marker for the next open"
+    );
+    let first = reconcile(&db, &ledger, mode, &label);
+    assert!(
+        !marker.exists(),
+        "{label}: verification did not clear the marker"
+    );
+    let second = reconcile(&db, &ledger, mode, &format!("{label} (second reopen)"));
+    assert_eq!(first, second, "{label}: a second reopen changed the state");
+    drop(keep);
+}
+
+fn fail_io_matrix(mode: &'static str) {
+    run_matrix(
+        FAIL_IO_SPECS
+            .iter()
+            .map(|&spec| {
+                (
+                    spec.to_string(),
+                    Box::new(move || fail_io_case(mode, spec))
+                        as Box<dyn FnOnce() + std::panic::UnwindSafe>,
+                )
+            })
+            .collect(),
+    );
+}
+
+#[test]
+fn production_path_fails_closed_at_every_io_failure_site() {
+    fail_io_matrix("all-logs");
+}
+
+#[test]
+fn production_path_fails_closed_at_every_io_failure_site_with_eviction() {
+    fail_io_matrix("all-logs+small-pool");
+}
+
+#[test]
+fn transaction_log_only_path_fails_closed_at_every_io_failure_site() {
+    fail_io_matrix("transaction-log");
+}
+
 /// Diagnostic: repeat one case. `DURABILITY_CASE=<mode>/<point>` and
 /// `DURABILITY_REPEAT=<n>`; failing case directories are kept.
 #[test]
@@ -466,4 +567,86 @@ fn repeat_one_case() {
         })
         .collect();
     run_matrix(cases);
+}
+
+/// Merge-gate qualification: repeat the core cases of the fail-closed matrix
+/// and of the production crash matrix `DURABILITY_ROUNDS` times (default
+/// 100) on `DURABILITY_WORKERS` threads (default 4). Every case reconciles
+/// against its ledger as in the ordinary matrices. Reports every failure.
+#[test]
+#[ignore]
+fn repeat_core_matrices() {
+    let rounds: usize = std::env::var("DURABILITY_ROUNDS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(100);
+    let workers: usize = std::env::var("DURABILITY_WORKERS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(4)
+        .max(1);
+    #[derive(Clone, Copy)]
+    enum Case {
+        FailIo(&'static str, &'static str),
+        Crash(&'static str, &'static str),
+    }
+    let mut cases = Vec::new();
+    for round in 0..rounds {
+        for mode in ["all-logs", "all-logs+small-pool"] {
+            for &spec in FAIL_IO_SPECS {
+                cases.push((round, Case::FailIo(mode, spec)));
+            }
+        }
+        for &point in COMMON_POINTS {
+            cases.push((round, Case::Crash("all-logs", point)));
+        }
+    }
+    // `DURABILITY_ONLY=<substring>` keeps only matching cases (diagnosis).
+    if let Ok(only) = std::env::var("DURABILITY_ONLY") {
+        cases.retain(|(_, case)| match case {
+            Case::FailIo(mode, spec) => format!("{mode} fail-io {spec}").contains(&only),
+            Case::Crash(mode, point) => format!("{mode} crash {point}").contains(&only),
+        });
+    }
+    let total = cases.len();
+    let queue = std::sync::Mutex::new(cases.into_iter());
+    let failures = std::sync::Mutex::new(Vec::new());
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| loop {
+                let Some((round, case)) = queue.lock().unwrap().next() else {
+                    return;
+                };
+                let (label, result) = match case {
+                    Case::FailIo(mode, spec) => (
+                        format!("round {round} {mode} fail-io {spec}"),
+                        std::panic::catch_unwind(|| fail_io_case(mode, spec)),
+                    ),
+                    Case::Crash(mode, point) => (
+                        format!("round {round} {mode} crash {point}"),
+                        std::panic::catch_unwind(|| crash_case(mode, Some(point), true)),
+                    ),
+                };
+                if let Err(panic) = result {
+                    let message = panic
+                        .downcast_ref::<String>()
+                        .cloned()
+                        .or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string()))
+                        .unwrap_or_default();
+                    failures.lock().unwrap().push(format!("{label}: {message}"));
+                }
+            });
+        }
+    });
+    let failures = failures.into_inner().unwrap();
+    eprintln!(
+        "repeat_core_matrices: {total} cases ({rounds} rounds), {} failed",
+        failures.len()
+    );
+    assert!(
+        failures.is_empty(),
+        "{} of {total} cases failed:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
 }

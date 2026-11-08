@@ -22,6 +22,14 @@
 //! writeback run during the workload.
 //!
 //! Exit 0 after every writer finishes, unless a crash point aborts first.
+//!
+//! With `BICDB_TEST_FAIL_IO` set (fail-closed matrix, see
+//! `docs/durability-failure-handling.md`) a failed operation does not panic.
+//! A writer whose commit fails tries [`AFTER_FAILURE_ATTEMPTS`] more commits
+//! and appends a line to `ledger-dir/violations` if any of them is
+//! acknowledged, or if any error is not a durability failure. The other
+//! threads stop at their first error. On exit the child records the
+//! database's durability state in `ledger-dir/state`.
 
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -32,6 +40,13 @@ use std::time::Duration;
 
 use bicdb_core::{BicDb, DbConfig, IndexDefinition, IndexField, IndexKind, Record, StorageMode};
 use serde_json::json;
+
+/// Commits a writer still attempts after its first failure; none may succeed.
+const AFTER_FAILURE_ATTEMPTS: u64 = 3;
+
+fn fail_io_mode() -> bool {
+    std::env::var_os("BICDB_TEST_FAIL_IO").is_some()
+}
 
 /// See `checkpoints` in `main`.
 const MIN_CHECKPOINTS: u64 = 20;
@@ -101,36 +116,57 @@ fn main() {
     // the n-th hit. Keep the run going until enough checkpoints happened.
     let checkpoints = Arc::new(AtomicU64::new(0));
 
+    let fail_io = fail_io_mode();
+    let violations = ledger.join("violations");
+    let writers_done = Arc::new(AtomicU64::new(0));
     std::thread::scope(|scope| {
         for writer in 0..WRITERS {
             let db = db.clone();
+            let violations = violations.clone();
+            let writers_done = writers_done.clone();
             let ledger = ledger.join(format!("writer-{writer}"));
             scope.spawn(move || {
+                let mut failures = 0u64;
                 for i in 1..=commits {
                     let guard = db.read().expect("db lock");
-                    let mut tx = guard.begin_transaction().expect("begin");
-                    tx.insert(
-                        "rows",
-                        Record::new(format!("r-{writer}-{i}")).with_metadata(
-                            json!({"owner": writer, "seq": i, "uk": format!("u-{writer}-{i}")}),
-                        ),
-                    )
-                    .expect("insert");
-                    tx.update(
-                        "rows",
-                        Record::new(format!("hot-{writer}")).with_metadata(
-                            json!({"owner": writer, "seq": i, "uk": format!("h-{writer}")}),
-                        ),
-                    )
-                    .expect("upsert hot");
-                    if i % 7 == 0 && i > 3 {
-                        tx.delete("rows", &format!("r-{writer}-{}", i - 3))
-                            .expect("delete");
-                    }
-                    tx.commit().expect("commit");
+                    let result = (|| -> bicdb_core::Result<()> {
+                        let mut tx = guard.begin_transaction()?;
+                        tx.insert(
+                            "rows",
+                            Record::new(format!("r-{writer}-{i}")).with_metadata(
+                                json!({"owner": writer, "seq": i, "uk": format!("u-{writer}-{i}")}),
+                            ),
+                        )?;
+                        tx.update(
+                            "rows",
+                            Record::new(format!("hot-{writer}")).with_metadata(
+                                json!({"owner": writer, "seq": i, "uk": format!("h-{writer}")}),
+                            ),
+                        )?;
+                        if i % 7 == 0 && i > 3 {
+                            tx.delete("rows", &format!("r-{writer}-{}", i - 3))?;
+                        }
+                        tx.commit()
+                    })();
                     drop(guard);
-                    append_line(&ledger, &i.to_string());
+                    match result {
+                        Ok(()) if failures > 0 => {
+                            append_line(&violations, &format!("writer {writer}: commit {i} acknowledged after a failure"));
+                        }
+                        Ok(()) => append_line(&ledger, &i.to_string()),
+                        Err(error) if fail_io => {
+                            if !error.is_durability_failure() {
+                                append_line(&violations, &format!("writer {writer}: commit {i}: not a durability failure: {error}"));
+                            }
+                            failures += 1;
+                            if failures > AFTER_FAILURE_ATTEMPTS {
+                                break;
+                            }
+                        }
+                        Err(error) => panic!("commit: {error}"),
+                    }
                 }
+                writers_done.fetch_add(1, Ordering::AcqRel);
             });
         }
         {
@@ -145,6 +181,12 @@ fn main() {
                     std::thread::sleep(Duration::from_millis(25));
                     generation += 1;
                     let name = format!("side_{}", generation % 3);
+                    if fail_io {
+                        if db.read().expect("db lock").durability_state().is_healthy() {
+                            continue_ddl(&db, &ledger, &name, generation);
+                        }
+                        continue;
+                    }
                     {
                         let mut guard = db.write().expect("db lock");
                         if guard.collections().iter().any(|meta| meta.name == name) {
@@ -177,7 +219,13 @@ fn main() {
                 while !done.load(Ordering::Acquire) {
                     std::thread::sleep(Duration::from_millis(40));
                     let guard = db.read().expect("db lock");
-                    guard.checkpoint_for_resume().expect("checkpoint");
+                    match guard.checkpoint_for_resume() {
+                        Ok(()) => {}
+                        // The checkpoint itself may be the failing site; it
+                        // counts so the run is not held open forever.
+                        Err(_) if fail_io => {}
+                        Err(error) => panic!("checkpoint: {error}"),
+                    }
                     checkpoints.fetch_add(1, Ordering::AcqRel);
                 }
             });
@@ -187,6 +235,8 @@ fn main() {
         loop {
             std::thread::sleep(Duration::from_millis(20));
             let finished = commits == 0
+                || writers_done.load(Ordering::Acquire) == WRITERS as u64
+                    && (fail_io || checkpoints.load(Ordering::Acquire) >= MIN_CHECKPOINTS)
                 || checkpoints.load(Ordering::Acquire) >= MIN_CHECKPOINTS
                     && (0..WRITERS).all(|writer| {
                         std::fs::read_to_string(ledger.join(format!("writer-{writer}")))
@@ -204,6 +254,21 @@ fn main() {
         .expect("sole owner")
         .into_inner()
         .expect("db lock");
+    if fail_io {
+        let state = match db.durability_state() {
+            bicdb_core::DurabilityState::Healthy => "healthy".to_string(),
+            bicdb_core::DurabilityState::WriteFailed(failure) => format!("failed {}", failure.site),
+        };
+        append_line(&ledger.join("state"), &state);
+        if !db.durability_state().is_healthy() {
+            // A fenced handle refuses close's final checkpoint; the next
+            // open recovers and verifies instead.
+            if db.checkpoint_for_resume().is_ok() {
+                append_line(&violations, "checkpoint succeeded on a fenced database");
+            }
+            return;
+        }
+    }
     if let Ok(Some(snapshot)) = db.paged_storage_snapshot() {
         eprintln!(
             "durability child pool: evictions {} writebacks {}",
@@ -211,4 +276,32 @@ fn main() {
         );
     }
     db.close().expect("close");
+}
+
+/// One DDL round of the fail-closed matrix: errors end the round quietly,
+/// and nothing is recorded unless it was acknowledged.
+fn continue_ddl(db: &RwLock<BicDb>, ledger: &Path, name: &str, generation: u64) {
+    {
+        let mut guard = db.write().expect("db lock");
+        if guard.collections().iter().any(|meta| meta.name == name) {
+            if guard.drop_collection(name).is_err() {
+                return;
+            }
+            append_line(ledger, &format!("drop {name} {generation}"));
+        }
+        if guard.create_collection(name).is_err() {
+            return;
+        }
+    }
+    let guard = db.read().expect("db lock");
+    let committed = guard.begin_transaction().and_then(|mut tx| {
+        tx.insert(
+            name,
+            Record::new("only").with_metadata(json!({"g": generation})),
+        )?;
+        tx.commit()
+    });
+    if committed.is_ok() {
+        append_line(ledger, &format!("create {name} {generation}"));
+    }
 }

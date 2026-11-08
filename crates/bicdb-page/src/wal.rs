@@ -50,6 +50,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use parking_lot::{Condvar, Mutex};
 
 use crate::error::{PageError, Result};
+use crate::health::DurabilityHealth;
 use crate::mvcc::{RecoveredOutcomes, TxStatus};
 use crate::page::{PageId, MAX_PAGE_SIZE};
 
@@ -276,6 +277,13 @@ pub struct Wal {
     /// represented as ranges, with a hard range-count ceiling so a pinned
     /// checkpoint cannot turn this safety index into unbounded memory.
     committed_this_generation: Mutex<CommittedRanges>,
+    /// Fail-closed durability state shared with the page file and the
+    /// database host. The first failed append, sync, seal or reset moves it
+    /// to `WriteFailed`; from then on no append is accepted and no sync
+    /// publishes durability. A failed `fsync` can drop the dirty pages it
+    /// could not write and clear the error, so a retried `fsync` that
+    /// succeeds proves nothing about the records written before it.
+    health: std::sync::Arc<DurabilityHealth>,
 }
 
 const MAX_COMMITTED_RANGES: usize = 4_096;
@@ -407,7 +415,25 @@ impl Wal {
             metrics: Mutex::new(WalSnapshot::default()),
             checkpoint_freshness: Mutex::new(CheckpointFreshness::default()),
             committed_this_generation: Mutex::new(CommittedRanges::default()),
+            health: DurabilityHealth::new(),
         })
+    }
+
+    /// Share `health` with the other layers of the same database.
+    pub fn with_health(mut self, health: std::sync::Arc<DurabilityHealth>) -> Self {
+        self.health = health;
+        self
+    }
+
+    /// This log's fail-closed durability state.
+    pub fn health(&self) -> &std::sync::Arc<DurabilityHealth> {
+        &self.health
+    }
+
+    /// Record a durability-critical I/O failure on this log.
+    fn fail(&self, site: &str, path: &Path, error: impl std::fmt::Display) -> PageError {
+        self.health
+            .record_failure(site, &format!("{}: {error}", path.display()))
     }
 
     pub fn path(&self) -> &Path {
@@ -495,26 +521,34 @@ impl Wal {
     /// Seal the active file: make it durable, rename it to the next sealed
     /// sequence, and start a fresh active file. Caller holds the file mutex.
     fn seal_active_locked(&self, file: &mut File, active_bytes: u64) -> Result<()> {
+        self.health.check()?;
         if self.fsync {
-            file.sync_data().map_err(|e| PageError::io(&self.path, e))?;
+            crate::test_faults::io_fault("page_log.seal_sync", &self.path)
+                .and_then(|()| file.sync_data())
+                .map_err(|e| self.fail("page_log.seal_sync", &self.path, e))?;
         } else {
             file.flush().map_err(|e| PageError::io(&self.path, e))?;
         }
         let sequence = self.active_first_lsn.load(Ordering::Acquire);
         let sealed_path = self.sealed_path(sequence);
-        std::fs::rename(&self.path, &sealed_path).map_err(|e| PageError::io(&sealed_path, e))?;
+        std::fs::rename(&self.path, &sealed_path)
+            .map_err(|e| self.fail("page_log.seal_rename", &sealed_path, e))?;
         let fresh = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .truncate(true)
             .open(&self.path)
-            .map_err(|e| PageError::io(&self.path, e))?;
+            .map_err(|e| self.fail("page_log.seal_rename", &self.path, e))?;
         if self.fsync {
-            if let Some(parent) = self.path.parent() {
-                if let Ok(dir) = File::open(parent) {
-                    let _ = dir.sync_all();
-                }
+            // The rename is what makes the sealed name and the fresh active
+            // file the log's layout. A swallowed directory sync used to let a
+            // crash revive the pre-seal layout after this returned success.
+            if let Some(parent) = self.path.parent().filter(|p| !p.as_os_str().is_empty()) {
+                crate::test_faults::io_fault("page_log.seal_dir_sync", parent)
+                    .and_then(|()| File::open(parent))
+                    .and_then(|dir| dir.sync_all())
+                    .map_err(|e| self.fail("page_log.seal_dir_sync", parent, e))?;
             }
         }
         *file = fresh;
@@ -581,6 +615,10 @@ impl Wal {
         let written;
         {
             let mut file = self.file.lock();
+            // Checked under the file lock: once a failure is recorded no
+            // further record reaches the file, so nothing appended after it
+            // can be mistaken for part of the log's durable prefix.
+            self.health.check()?;
             // Seal at record boundaries only: a record never spans segment
             // files, so every sealed file is a self-contained record run.
             if self.segment_bytes > 0 {
@@ -605,10 +643,13 @@ impl Wal {
             buffer.extend_from_slice(&hasher.finalize().to_le_bytes());
             buffer.extend_from_slice(&body);
 
-            file.seek(SeekFrom::End(0))
-                .map_err(|e| PageError::io(&self.path, e))?;
-            file.write_all(&buffer)
-                .map_err(|e| PageError::io(&self.path, e))?;
+            // A failed or partial write leaves a torn record in the middle of
+            // the log and burns its LSN: recovery stops at it and discards
+            // everything after. Nothing may be appended behind it.
+            crate::test_faults::io_fault("page_log.write", &self.path)
+                .and_then(|()| file.seek(SeekFrom::End(0)).map(|_| ()))
+                .and_then(|()| file.write_all(&buffer))
+                .map_err(|e| self.fail("page_log.write", &self.path, e))?;
             written = buffer.len();
             // Keep the published append offset in the same critical section as
             // the bytes it describes. A concurrent segment seal/reset must
@@ -731,9 +772,15 @@ impl Wal {
     pub fn sync_through(&self, lsn: Lsn) -> Result<()> {
         let mut state = self.sync_state.lock();
         loop {
+            // Durability published before any failure is real: a successful
+            // sync covered it. `durable_lsn` never advances after a failure.
             if state.durable_lsn >= lsn {
                 return Ok(());
             }
+            // Fail-closed: a waiter whose record was not covered before the
+            // failure gets the failure, never a retry of its own. Retrying is
+            // what turned a failed fsync into a false durability report.
+            self.health.check()?;
             if state.syncing {
                 // Someone else is syncing; their sync may cover us.
                 let mut metrics = self.metrics.lock();
@@ -753,10 +800,16 @@ impl Wal {
             let covered_offset = self.end_offset.load(Ordering::Acquire);
             let started = Instant::now();
             let result = if self.fsync {
-                file.sync_data().map_err(|e| PageError::io(&self.path, e))
+                crate::test_faults::io_fault("page_log.sync", &self.path)
+                    .and_then(|()| file.sync_data())
+                    .map_err(|e| self.fail("page_log.sync", &self.path, e))
             } else {
                 file.flush().map_err(|e| PageError::io(&self.path, e))
             };
+            // A failure recorded anywhere while this sync ran (a torn append,
+            // a failed seal) fences the log: the target may name the record
+            // that failed, so this sync publishes nothing.
+            let result = result.and_then(|()| self.health.check());
             let elapsed = started.elapsed();
             if result.is_ok() {
                 self.synced_offset.store(covered_offset, Ordering::Release);
@@ -1004,6 +1057,13 @@ impl Wal {
     /// the page file. Callers get there through [`Checkpointer::checkpoint`].
     pub fn reset(&self) -> Result<bool> {
         let mut file = self.file.lock();
+        // A fenced store never discards its log: after a failure the page
+        // file's durability is unproven, and the log is the redo. This check
+        // does NOT make a partial reset safe: a removal failure or a crash
+        // part-way through still leaves a state the next recovery mishandles
+        // (see "Known gap" in docs/durability-failure-handling.md, fixed
+        // separately).
+        self.health.check()?;
         let retention = self.archive_retention.load(Ordering::Acquire);
         // Under archive retention EVERY record must flow through a sealed
         // segment before local truncation discards it — the checkpoint
@@ -1016,7 +1076,9 @@ impl Wal {
                 self.seal_active_locked(&mut file, active)?;
             }
         }
-        file.set_len(0).map_err(|e| PageError::io(&self.path, e))?;
+        crate::test_faults::io_fault("page_log.reset", &self.path)
+            .and_then(|()| file.set_len(0))
+            .map_err(|e| self.fail("page_log.reset", &self.path, e))?;
         let archived_through = self.archived_through.load(Ordering::Acquire);
         let mut sealed = self.sealed.lock();
         let mut retained = Vec::new();
@@ -1035,7 +1097,10 @@ impl Wal {
                 retained.push(sequence);
                 continue;
             }
-            std::fs::remove_file(&path).map_err(|e| PageError::io(&path, e))?;
+            // Recorded as a durability failure so this handle stops; the
+            // on-disk state a partial removal leaves is the known reset gap,
+            // not something the fence repairs.
+            std::fs::remove_file(&path).map_err(|e| self.fail("page_log.reset", &path, e))?;
         }
         let locally_empty = retained.is_empty();
         *sealed = retained;

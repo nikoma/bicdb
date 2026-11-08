@@ -425,6 +425,11 @@ pub(crate) fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
         BicDbError::InvalidCollectionName(_) => "42602",
         BicDbError::TransactionConflict(_) => "40001",
         BicDbError::TransactionNotPending => "25P01",
+        // Durability fence: io_error for refused writes, and
+        // transaction_resolution_unknown for a commit whose outcome the
+        // failure made unknown. See docs/durability-failure-handling.md.
+        BicDbError::WriteFailed { .. } => "58030",
+        BicDbError::CommitOutcomeUnknown { .. } => "08007",
         BicDbError::ReadOnlyStandby(_) => "25006",
         BicDbError::Authorization(_) => "42501",
         BicDbError::QueryMemoryLimit(_) => "53200",
@@ -449,6 +454,10 @@ pub(crate) fn bicdb_error_fields(error: &BicDbError) -> Vec<SqlErrorField> {
             .map(SqlErrorField::Hint)
             .into_iter()
             .collect(),
+        BicDbError::CommitOutcomeUnknown { .. } => error
+            .commit_outcome_identity()
+            .map(|(detail, hint)| vec![SqlErrorField::Detail(detail), SqlErrorField::Hint(hint)])
+            .unwrap_or_default(),
         _ => Vec::new(),
     }
 }
@@ -2204,4 +2213,36 @@ pub(crate) enum AutomaticPagedCheckpointTick {
     Idle,
     Paused { operation_id: Uuid },
     Advanced(PagedCheckpointScheduleAdvance),
+}
+
+#[cfg(test)]
+mod durability_sqlstate_tests {
+    use super::*;
+
+    /// Stable SQLSTATEs for the durability fence (docs/durability-failure-handling.md).
+    #[test]
+    fn durability_failures_have_stable_sqlstates() {
+        let refused = BicDbError::WriteFailed {
+            site: "page_log.sync".into(),
+            detail: "EIO".into(),
+        };
+        let unknown = BicDbError::CommitOutcomeUnknown {
+            sequence: Some(7),
+            transaction_id: Some(11),
+            incarnation: "inc-1".into(),
+            detail: "EIO".into(),
+        };
+        let fields = bicdb_error_fields(&unknown);
+        assert!(fields.iter().any(|field| matches!(field,
+            SqlErrorField::Detail(detail)
+                if detail == "commit_seq=7 transaction_id=11 incarnation=inc-1")));
+        assert!(fields.iter().any(|field| matches!(field,
+            SqlErrorField::Hint(hint) if hint.contains("bicdb_commit_outcome('inc-1', 7)"))));
+        assert_eq!(bicdb_error_sqlstate(&refused), "58030");
+        assert_eq!(bicdb_error_sqlstate(&unknown), "08007");
+        assert_eq!(
+            crate::query_exec::pgwire_error_sqlstate(&PgWireError::BicDb(unknown)),
+            "08007"
+        );
+    }
 }

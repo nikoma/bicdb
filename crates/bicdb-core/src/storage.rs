@@ -411,13 +411,38 @@ pub(crate) fn write_raw(handle: &mut AppendHandle, path: &Path, bytes: &[u8]) ->
         return Ok(());
     }
     let _backup_gate = acquire_backup_write_guard(path)?;
+    write_raw_holding_gate(handle, path, bytes)
+}
+
+/// [`write_raw`] for a caller that already holds the backup write gate.
+/// Separating the two lets the transaction log tell a gate timeout (nothing
+/// was written; an ordinary, retryable error) from a failed write or sync
+/// (a durability failure that fences the database).
+pub(crate) fn write_raw_holding_gate(
+    handle: &mut AppendHandle,
+    path: &Path,
+    bytes: &[u8],
+) -> Result<()> {
+    handle.check_writable()?;
+    if bytes.is_empty() {
+        return Ok(());
+    }
     write_raw_with_repair(
         handle,
         bytes,
         |file, bytes, sync_after_write| {
-            append_and_sync(file, bytes, sync_after_write, File::sync_data)
+            // Fault injection (tests only; one atomic load otherwise).
+            // `transaction_log.write` fails before any byte is written.
+            // `transaction_log.sync` writes the bytes and then fails, as an
+            // O_DSYNC write whose data sync failed does: the bytes may or may
+            // not be durable. `transaction_log.repair` then fails the tail
+            // repair too, so the bytes stay in the file.
+            bicdb_page::test_faults::io_fault("transaction_log.write", path)?;
+            append_and_sync(file, bytes, sync_after_write, File::sync_data)?;
+            bicdb_page::test_faults::io_fault("transaction_log.sync", path)
         },
         |file, len, durable| {
+            bicdb_page::test_faults::io_fault("transaction_log.repair", path)?;
             file.set_len(len)?;
             // O_DSYNC covers writes, not a subsequent ftruncate. Persist the
             // repaired boundary before permitting another acknowledged batch.
@@ -533,6 +558,15 @@ pub(crate) fn acquire_backup_write_guard(path: &Path) -> Result<Option<BackupGat
         // an opened database. Real database opens always initialize the gate.
         return Ok(None);
     };
+    // `backup_gate.timeout` (tests only), keyed by the file about to be
+    // written: report the timeout at once, as if a backup had held the
+    // gate for the whole wait.
+    if bicdb_page::test_faults::io_fault("backup_gate.timeout", path).is_err() {
+        return Err(BicDbError::Backup(format!(
+            "timed out waiting for shared backup I/O gate {}",
+            gate.display()
+        )));
+    }
     acquire_backup_gate(&gate, false).map(Some)
 }
 

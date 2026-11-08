@@ -55,7 +55,7 @@ impl BicDb {
         let mut spins = 0_u32;
         let mut started = None;
         while self.last_committed_tx.load(AtomicOrdering::SeqCst) < commit_seq {
-            if self.recovery_required.load(AtomicOrdering::Acquire) {
+            if self.durability.is_failed() {
                 return;
             }
             if spins < 64 {
@@ -191,6 +191,9 @@ impl BicDb {
         journal: &[Event],
     ) -> Result<()> {
         let _commit_guard = self.commit_lock.lock();
+        // A fenced standby imports nothing: its acknowledgement position
+        // (the durable commit sequence) must stop at the failure.
+        self.check_recovery_state()?;
         let current = self.commit_seq.load(AtomicOrdering::SeqCst);
         if commit_seq <= current {
             return Ok(());
@@ -244,33 +247,54 @@ impl BicDb {
         )?;
         self.tx_log.enqueue(commit_seq, wal_bytes);
 
-        let mut timer = commit_trace::Timer::start();
-        self.apply_committed_record_writes(
-            commit_seq,
-            &writes_by_collection,
-            &index_mutations_by_collection,
-            &dim_plan,
-            &mut timer,
-            None,
-        )?;
-        self.fill_all_index_mutation_rowids(&mut index_mutations_by_collection)?;
-        let spatial_events = self.apply_index_mutations(&index_mutations_by_collection)?;
-        if !spatial_events.is_empty() {
-            let mut events = self.events.lock();
-            for event in spatial_events {
-                events.append(event)?;
-            }
-        }
-        self.refresh_graph_projections()?;
-        self.tx_log.write_durable(commit_seq)?;
-        if !journal.is_empty() {
-            {
+        // From the enqueue on, the resident state runs ahead of the log until
+        // `write_durable` returns. Any failure in between leaves the two
+        // diverged, so it fences the standby until a reopen rebuilds the
+        // state from what reached the disk. The commit is not acknowledged
+        // to the primary: `commit_seq` does not advance.
+        let applied = (|| -> Result<()> {
+            let mut timer = commit_trace::Timer::start();
+            self.apply_committed_record_writes(
+                commit_seq,
+                &writes_by_collection,
+                &index_mutations_by_collection,
+                &dim_plan,
+                &mut timer,
+                None,
+            )?;
+            self.fill_all_index_mutation_rowids(&mut index_mutations_by_collection)?;
+            let spatial_events = self.apply_index_mutations(&index_mutations_by_collection)?;
+            if !spatial_events.is_empty() {
                 let mut events = self.events.lock();
-                for event in journal {
-                    events.append_imported(event.clone())?;
+                for event in spatial_events {
+                    events.append(event)?;
                 }
             }
-            self.persist_record_audit_publication(TransactionId(tx_id), journal)?;
+            self.refresh_graph_projections()?;
+            self.tx_log.write_durable(commit_seq)
+        })();
+        if let Err(error) = applied {
+            self.fence_durability("standby.import", &error);
+            return Err(error);
+        }
+        // The commit is durable from here, but `commit_seq` has not advanced:
+        // a failure in the journal appends would let a retry re-apply a
+        // durable commit over itself. Fence instead; the reopen recovers the
+        // commit from the log and republishes its journal.
+        if !journal.is_empty() {
+            let published = (|| -> Result<()> {
+                {
+                    let mut events = self.events.lock();
+                    for event in journal {
+                        events.append_imported(event.clone())?;
+                    }
+                }
+                self.persist_record_audit_publication(TransactionId(tx_id), journal)
+            })();
+            if let Err(error) = published {
+                self.fence_durability("standby.import", &error);
+                return Err(error);
+            }
         }
         self.commit_seq.store(commit_seq, AtomicOrdering::SeqCst);
         self.mark_committed_seq(commit_seq);

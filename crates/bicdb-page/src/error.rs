@@ -14,6 +14,14 @@ pub type Result<T> = std::result::Result<T, PageError>;
 /// only being able to log.
 #[derive(Debug, thiserror::Error)]
 pub enum PageError {
+    /// A durability-critical write or sync failed earlier (or just now) and
+    /// the database refuses writes until it is reopened through recovery.
+    /// See `crate::health`.
+    #[error(
+        "durable write failed at {site}: {detail}; the database refuses writes until it is \
+         reopened and recovery verifies it"
+    )]
+    WriteFailed { site: String, detail: String },
     #[error("page backup snapshot: {reason}")]
     BackupSnapshot { reason: String },
     #[error("page store io error at {path}: {source}")]
@@ -275,6 +283,11 @@ impl PageError {
     /// Distinct from corruption and from a caller mistake: a conflicting
     /// transaction did nothing wrong, and retrying after abort is the correct
     /// response rather than surfacing an error to a user.
+    /// Whether the database is fenced by a durability-critical I/O failure.
+    pub fn is_write_failed(&self) -> bool {
+        matches!(self, Self::WriteFailed { .. })
+    }
+
     pub fn is_write_conflict(&self) -> bool {
         matches!(self, Self::WriteConflict { .. })
     }

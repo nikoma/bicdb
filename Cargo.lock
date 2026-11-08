@@ -1422,6 +1422,7 @@ dependencies = [
  "base64 0.22.1",
  "bicdb-core",
  "bicdb-extension",
+ "bicdb-page",
  "chrono",
  "chrono-tz",
  "crc32fast",

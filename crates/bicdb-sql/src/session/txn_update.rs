@@ -4463,7 +4463,12 @@ impl<'db> SqlSession<'db> {
                     return Ok(RoutineControl::Continue);
                 }
                 match parse_single_statement(&sql) {
-                    Ok(parsed) => {
+                    Ok(mut parsed) => {
+                        // Dynamic SQL resolves its relations through the
+                        // caller's search_path when it runs.
+                        if let Some(path) = crate::search_path::active_path() {
+                            crate::search_path::bind_node(self.db_ref(), &mut parsed, &path);
+                        }
                         // Parsed per execution: not an IR node.
                         let previous = self.bind_routine_frame(frame);
                         let owned = std::mem::replace(&mut self.ir_owned_statement, false);

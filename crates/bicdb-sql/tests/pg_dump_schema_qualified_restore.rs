@@ -203,6 +203,29 @@ AS $$ BEGIN RETURN NEW; END; $$"#,
     );
 }
 
+/// Dynamic SQL in a routine resolves unqualified relations through the
+/// caller's search_path when it runs.
+#[test]
+fn dynamic_execute_binds_relations_through_search_path() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE TABLE app.item (id INT, note TEXT)")
+        .unwrap();
+    sql.execute(
+        "CREATE FUNCTION app.run(command text) RETURNS void LANGUAGE plpgsql AS $$ \
+         BEGIN EXECUTE command; END; $$",
+    )
+    .unwrap();
+    sql.execute("SET search_path TO app, public").unwrap();
+    sql.execute("SELECT run('insert into item values (1, ''a'')')")
+        .unwrap();
+    sql.execute("SELECT run('alter table item alter column note set not null')")
+        .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.item"), 1);
+    assert!(sql.execute("INSERT INTO item VALUES (2, NULL)").is_err());
+}
+
 /// A dump restores into its own schema; the application then names its
 /// relations unqualified and resolves them through `search_path`, including
 /// inside PL/pgSQL bodies, which resolve with the caller's path.

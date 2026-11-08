@@ -342,6 +342,150 @@ Mutants to kill:
 - a publish allowed after a failure;
 - conflict instead of wait in the safety net.
 
+## 9a. Qualification results (2026-11-08)
+
+All runs on s3ny (24 cores, ext4 on NVMe, fsync on), on `main` at `e4647d8`
+(fail-closed, PR #55) plus this change. "Gate on" means
+`BICDB_PAGED_COMMIT_SYNC_OUTSIDE_LOCK=1`. "Both" adds #43's
+`BICDB_PAGED_WAL_SYNC_UNLOCKED=1`, on a bench-only branch that combines the
+two changes (`p2b-combo-bench3`, not proposed for merge).
+
+| Area | Test | Result |
+|---|---|---|
+| Gate | `commit_sync_outside_lock_is_strictly_opt_in` (core): default off; only `1` enables it, 11 near misses rejected; builder both ways; off means no row commit enters the committing queue (counter 0), on means all 10 do; no page store outside `server_paged` | pass |
+| Gate | `the_gate_is_off_by_default_and_off_means_the_locked_commit` (page): off, `commit_append` is the synced commit, visible on return; queue counters stay zero; no deferred commit LSN recorded | pass |
+| Ordering | `publication_is_durable_first_and_in_commit_record_order`: 8 writers × 60 row commits, a monitor checks every snapshot (visible ⇒ LSN ≤ `durable_lsn`; invisible ⇒ above every visible LSN); all present after reopen | pass |
+| Ordering | `publication_never_covers_a_record_past_the_durable_lsn`: a durable commit publishes while a later appended commit stays invisible | pass |
+| Ordering | `concurrent_row_commits_with_the_gate_on/off` (core): 8 writers × 80 commits (insert, own hot row, deletes, unique index) plus a contended shared row; a reader never sees a hot row go backwards; `overlap_waits == 0`; published == enqueued; state identical after reopen | pass |
+| Lock released | `a_writer_proceeds_while_a_commit_sync_is_in_flight_and_readers_do_not_see_it`: with the sync paused (#55's I/O hook), another writer takes the writer lock and does page work; a reader does not see the committing row | pass |
+| Crash matrix | `outside_lock_path_survives_every_crash_point` and `_with_eviction` (256 KiB pool): 15 common points + 9 new-window points (`commit.page.appended_unlocked`, `commit.page.synced_unpublished`, `commit.page.published`, each at hits 4/60/250) + 2 interrupted replays; reconciler: every acknowledged commit, atomicity, index = scan, unique keys, no resurrected generation, identical second reopen | pass |
+| Crash matrix | `outside_lock_path_survives_crashes_inside_the_checkpoint_barrier` and `_with_eviction`: `+small-wal` (256 KiB page-log trigger, so commits run checkpoint steps under the shared admission and meet committing transactions); `commit.barrier.drained` at hits 1/5/20 + the 9 window points + interrupted replay | pass (the points are reached) |
+| Crash matrix | Production (`all-logs`, ±small pool) and transaction-log matrices, gate off | pass (regression) |
+| Crash matrix | Combined with #43 (bench branch): every production, transaction-log, unlocked-sync, outside-lock and both-gates matrix (20 tests) | pass |
+| Repeats | 50 rounds each: `commit.page.synced_unpublished:60`, `commit.page.appended_unlocked:60`, `commit.after_txlog_durable:150`; small pool + small WAL `commit.barrier.drained:5`; small pool `pool.after_writeback:120` | 250/250 |
+| Checkpoint | `a_checkpoint_resolves_committing_transactions_before_it_truncates` (a committing transaction across `checkpoint()`, then reopen), the same for bounded `checkpoint_step`, `a_checkpoint_waits_for_a_paused_commit_sync`, `non_row_writers_never_coexist_with_a_committing_transaction` (write guard, vacuum) | pass |
+| Eviction (I5) | `eviction_of_a_committing_page_syncs_the_log_first`: 200 committing transactions with a 16-page pool, all present after reopen | pass |
+| Fsync failure | `one_failed_sync_fails_every_queued_commit_and_publishes_nothing` (1, 4, 16 queued): exactly one fsync attempted; every waiter gets `WriteFailed`; none visible; the queue stays; later syncs and checkpoints refuse; earlier commits intact | pass |
+| Fsync failure | `a_covered_but_unpublished_commit_is_not_reported_committed_after_a_failure`: a commit a successful sync covered, not yet published when a later sync fails, returns an error and stays invisible (P0: never reported committed after the failure) | pass |
+| Fsync failure | `outside_lock_path_fails_closed_at_every_io_failure_site` and `_with_eviction`: #55's `BICDB_TEST_FAIL_IO` specs (transaction-log write/sync/repair, page-log sync/write/reset, page-file sync, log-cut sync); the child reports any acknowledgment after the failure and any non-durability error; marker required; reconciled twice against the acknowledged-commit ledger | pass |
+| Overlap safety net | `an_overlapping_row_commit_waits_instead_of_conflicting` (pre-image read and put) and `an_overlapping_write_without_a_pre_image_read_waits` (put and delete) | pass |
+| Visibility | `commit_visibility`, `sync_transaction_visibility`, `mvcc_chain_recovery`, forced `server_paged`, gate off vs on | identical, pass |
+| Replication / failover | Core, forced `server_paged`, gate off vs on: `live_replication` 31, `log_archive_pitr` 8, `backup_online` 3, `backup_online_wal_rotation` 1, `backup_paged` 4, `replication_journal` 2, `durability_fail_closed` 16 (includes quorum `08007` after fencing and failover after a primary failure). pgwire: `embedded_ha` 6, `online_backups` 4 | identical, pass |
+| Regression | `paged_concurrency` 13, `paged_checkpoint_maintenance` 4, `paged_observability` 4, gate off vs on; `bicdb-page` full suite (326 lib + integration), gate default | pass |
+
+The replication and visibility suites ran on the #55 branch tip (`28ffd8c`)
+before it merged. `main` differs from it only in `bicdb-sql`. The page suite,
+the crash matrices and the repeats ran on the rebased branch.
+
+### Test strength (mutants)
+
+| Mutant | Page tests | Crash / core tests |
+|---|---|---|
+| Publish past `durable_lsn` | killed (`publication_never_covers_a_record_past_the_durable_lsn`) | — |
+| Publish in reverse LSN order | killed (2 tests) | — |
+| No committing barrier (writer lock and backup capture never drain) | killed (3 checkpoint/barrier tests) | killed (both barrier crash matrices: acknowledged commits lost) |
+| Publish after a durability failure | killed | — |
+| Report committed after a failure | killed | — |
+| Skip the sync before publication | killed (7 tests) | killed (children never publish a commit) |
+| Conflict instead of wait (safety net off) | killed | survives: core row locks make the overlap unreachable |
+| Committing transactions left in a new row commit's `in_flight` | killed (2 tests) | survives, same reason |
+| No truncation guard (barrier intact) | survives | survives: unreachable by construction (section 4.3) |
+
+The two safety-net mutants survive the core tests, which is the expected
+outcome: they confirm that the core never reaches the safety net, and the
+page tests exercise it directly. The truncation guard is defence in depth
+behind the barrier.
+
+### Measurements
+
+Command: `commit_durability_bench run <dir> all-logs <writers> 30` (production
+commit path, one-row commits with a unique and a B-tree index), release
+build, fsync on, s3ny NVMe. The four arms come from one binary built on the
+bench branch:
+- `off`: both gates off, which is `main`'s commit path;
+- `p2b`: this change;
+- `u43`: #43;
+- `both`: the two together.
+
+Each trial ran every arm at every writer count, with the arm order rotated
+per trial and per writer count. There were two batches of 5 trials (13:12 to
+13:54 and 13:54 to 14:35), so 10 trials per cell. The host is a shared warm
+standby: the 1-minute load average at run start ranged from 4 to 30.
+"syncs/commit" is page-log `fdatasync` calls per commit.
+
+| Writers | Arm | Commits/s median (range) | p50 ms | p95 ms | p99 ms | syncs/commit | load (median) | n |
+|---|---|---|---|---|---|---|---|---|
+| 1 | off | 224 (57-559) | 3.1 | 14.7 | 26.9 | 1.01 | 12.1 | 10 |
+| 1 | p2b | 280 (+25%) (68-528) | 2.7 | 9.6 | 26.6 | 1.01 | 10.9 | 10 |
+| 1 | u43 | 243 (+9%) (47-545) | 3.4 | 8.2 | 21.4 | 1.01 | 13.0 | 10 |
+| 1 | both | 205 (-8%) (12-614) | 2.8 | 18.2 | 25.2 | 1.01 | 11.7 | 10 |
+| 4 | off | 510 (75-779) | 6.6 | 10.1 | 19.6 | 1.01 | 12.1 | 10 |
+| 4 | p2b | 504 (-1%) (178-820) | 6.0 | 13.7 | 27.7 | 1.01 | 11.5 | 10 |
+| 4 | u43 | 361 (-29%) (201-821) | 8.0 | 28.6 | 76.0 | 1.01 | 10.5 | 10 |
+| 4 | both | 350 (-31%) (77-504) | 7.9 | 40.2 | 81.2 | 0.99 | 10.7 | 10 |
+| 16 | off | 438 (268-637) | 25.6 | 53.1 | 218.8 | 1.01 | 7.0 | 10 |
+| 16 | p2b | 534 (+22%) (316-709) | 19.5 | 108.2 | 213.2 | 1.01 | 7.4 | 10 |
+| 16 | u43 | 528 (+20%) (251-875) | 23.6 | 57.7 | 186.1 | 1.01 | 10.9 | 10 |
+| 16 | both | 664 (+52%) (386-1301) | 18.0 | 61.9 | 143.0 | 0.45 | 8.2 | 10 |
+| 64 | off | 627 (369-777) | 99.2 | 166.0 | 487.0 | 1.01 | 16.2 | 10 |
+| 64 | p2b | 534 (-15%) (327-1112) | 62.2 | 395.6 | 811.7 | 1.01 | 9.0 | 10 |
+| 64 | u43 | 411 (-34%) (192-858) | 92.6 | 549.5 | 805.5 | 1.01 | 7.5 | 10 |
+| 64 | both | 550 (-12%) (147-1216) | 84.8 | 435.7 | 592.8 | 0.22 | 16.5 | 10 |
+
+How to read this:
+
+- **The noise is larger than most of the effects.** Within a cell, trials
+  span 2 to 40 times. At 1 writer, where none of the arms can change anything,
+  the medians still differ by up to 25%. Only a dedicated host can settle the
+  throughput figures.
+- **Group commit works only with both changes.** With `both`, page-log syncs
+  per commit fall to 0.45 at 16 writers and 0.22 at 64. The queue reaches the
+  full writer count, and most publications are done by another committer's
+  sync (`published_by_other`, in the result JSON). With `p2b` alone, syncs
+  stay at 1.01 per commit and the queue depth stays at 1 to 8. The locked
+  page-log sync still holds the log's file mutex across `fdatasync`, so the
+  next committer cannot append its commit record until the sync ends.
+- **16 writers is the one consistent gain.** `both` is +52% over `off`
+  (median of 10). The two batches separately gave +38% and +62%, and p99 was
+  143 ms against 219 ms.
+- **64 writers: no throughput gain, and worse tails.** `both` does five times
+  fewer syncs, yet throughput is not higher, and p95 is worse than `off` in
+  both batches. The remaining serial work under the writer lock caps it: the
+  full page images (about 70 KB per one-row commit,
+  `docs/commit-durability-invariants.md` section 7), plus the committing
+  barrier. The commit-triggered checkpoint steps drained the queue under the
+  lock 7 to 161 times per 30-second run. This matches PR #40's conclusion:
+  above a few writers, the volume of page-log data per commit is the next
+  bound.
+- **4 writers is negative for `u43` and `both`.** The figures are -29% and
+  -31%, with wide ranges. #43's own earlier run on the same host showed +25% at
+  4 writers. This is not resolved here.
+- **Correctness counters:** `overlap_waits` was 0 in every run.
+
+## 9b. Remaining risks
+
+1. **Benchmark noise.** No throughput claim except "group commit happens
+   with both gates" survives the noise on s3ny. A dedicated host is needed
+   before any enablement decision, especially for 4 and 64 writers.
+2. **Tails at 64 writers.** p95/p99 are worse with the gate on. A likely
+   cause is the barrier: commit-triggered checkpoint steps drain the queue
+   while holding the lock, so every committer waits for one more fsync. A
+   remedy, for example the supervisor doing checkpoint steps instead of
+   committers, needs its own measurement.
+3. **Real power loss** is not tested. The emulation cuts the active page log
+   to the last published sync offset (as in #43). A VM hard-reset test on the
+   target hardware is needed before enabling.
+4. **The overlap safety net is unreachable from the core path.** That is by
+   design and proved by the mutants. Any future core path that writes shared
+   page keys in a row commit without a core lock would reach it; it would
+   then be correct, but slow (a sync under the lock).
+5. **`p2b` without #43 does little:** no group commit. The value is in the
+   combination, which needs #43 merged, or rebased onto `main` with #55's
+   fail-closed sync (done on the bench branch, not on #43 itself).
+6. **The waiting moves.** DDL, index builds, vacuum and backup capture now
+   wait under the lock for in-flight commit syncs (item C4). This was not
+   measured under a mixed DDL load.
+
 ## 10. Contract and semantics changes needing approval
 
 None of the durability invariants I1-I11 is weakened. A commit is still

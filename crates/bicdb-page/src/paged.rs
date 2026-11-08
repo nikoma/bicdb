@@ -50,7 +50,7 @@ use crate::pool::{
     ReadAheadSubmitReport, WritebackCursor, WritebackLimits, WritebackStepReport,
 };
 use crate::slotted::TupleLocator;
-use crate::wal::{self, CheckpointReport, Checkpointer, RecoveryReport, Wal, WalSnapshot};
+use crate::wal::{self, CheckpointReport, Checkpointer, Lsn, RecoveryReport, Wal, WalSnapshot};
 
 /// Version of the stable paged-storage telemetry contract.
 pub const PAGED_STORE_SNAPSHOT_FORMAT_VERSION: u32 = 11;
@@ -941,6 +941,7 @@ impl PagedStore {
             // across truncate+reopen so sealed-segment names never recur.
             store.checkpoint_lsn(),
         )?);
+        crate::test_faults::register_wal(&wal);
 
         // Recovery runs BEFORE anything reads a page, so no caller can ever
         // observe the un-replayed state.
@@ -2109,6 +2110,22 @@ impl PagedStore {
 
     /// Make a transaction's writes durable.
     pub fn commit(&self, transaction: Xid) -> Result<()> {
+        self.commit_with_sync(transaction, true).map(|_| ())
+    }
+
+    /// Commit WITHOUT syncing the log: the commit record is appended and the
+    /// rows become visible, but nothing is promised to survive a crash until
+    /// a later [`Wal::sync_through`] covers the returned LSN.
+    ///
+    /// Only for transactions whose complete redo is already durable in
+    /// another log, so a crash that loses this tail loses nothing that log
+    /// cannot replay. A transaction that frees pages still syncs: segment
+    /// adoption rewrites the free map, which must not run ahead of the log.
+    pub fn commit_deferred(&self, transaction: Xid) -> Result<Lsn> {
+        self.commit_with_sync(transaction, false)
+    }
+
+    fn commit_with_sync(&self, transaction: Xid, sync: bool) -> Result<Lsn> {
         // Log page images once per transaction rather than once per operation.
         //
         // A page stays dirty across a whole transaction, so logging after every
@@ -2119,18 +2136,25 @@ impl PagedStore {
         //
         // Safe because a page evicted mid-transaction is logged by the writeback
         // barrier on its way out, so nothing reaches disk unlogged either way.
+        let commit_lsn;
         {
             let _guard = self.write_lock.lock();
             let free_adoption = self.prepare_free_adoption(transaction, &[])?;
             self.log_dirty_pages(transaction)?;
-            self.wal.commit(transaction)?;
+            let lsn = if sync || !free_adoption.is_empty() {
+                self.wal.commit(transaction)?
+            } else {
+                self.wal.commit_unsynced(transaction)?
+            };
+            commit_lsn = lsn;
             if !free_adoption.is_empty() {
                 self.pool.flush_all()?;
                 self.adopt_free_segments(&free_adoption)?;
             }
             // Only after the commit record is durable: marking it committed first
             // would make its rows visible to readers before a crash could still
-            // lose them.
+            // lose them. (A deferred commit is the exception by contract: its
+            // redo is already durable in the caller's log.)
             self.transactions.commit(transaction);
             self.snapshots.lock().remove(&transaction);
         }
@@ -2168,7 +2192,7 @@ impl PagedStore {
                 };
             }
         }
-        Ok(())
+        Ok(commit_lsn)
     }
 
     /// Discard a transaction's writes.

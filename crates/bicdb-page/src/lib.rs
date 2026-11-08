@@ -41,6 +41,7 @@ pub mod tiered_cache;
 pub mod tiered_gc;
 pub mod tiered_manifest;
 pub mod tiered_reader;
+pub mod test_faults;
 pub mod wal;
 
 pub use backup::{PageBackupLimits, PageBackupSnapshot, PageBackupStats};

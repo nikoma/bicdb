@@ -253,6 +253,9 @@ pub struct Wal {
     next_lsn: AtomicU64,
     /// Bytes written to the ACTIVE file, i.e. its append offset.
     end_offset: AtomicU64,
+    /// Active-file offset covered by the last successful sync. Only
+    /// power-loss emulation in tests reads it.
+    synced_offset: AtomicU64,
     sync_state: Mutex<SyncState>,
     sync_signal: Condvar,
     fsync: bool,
@@ -388,6 +391,7 @@ impl Wal {
             sealed_bytes: AtomicU64::new(sealed_bytes),
             next_lsn: AtomicU64::new(initial_lsn),
             end_offset: AtomicU64::new(end_offset),
+            synced_offset: AtomicU64::new(end_offset),
             sync_state: Mutex::new(SyncState {
                 durable_lsn: 0,
                 syncing: false,
@@ -514,6 +518,7 @@ impl Wal {
         self.sealed.lock().push(sequence);
         self.sealed_bytes.fetch_add(active_bytes, Ordering::AcqRel);
         self.end_offset.store(0, Ordering::Release);
+        self.synced_offset.store(0, Ordering::Release);
         let mut metrics = self.metrics.lock();
         metrics.segments_sealed = metrics.segments_sealed.saturating_add(1);
         Ok(())
@@ -623,6 +628,19 @@ impl Wal {
     ///
     /// Returns after the commit record is on disk, never before.
     pub fn commit(&self, transaction: u64) -> Result<Lsn> {
+        let lsn = self.commit_unsynced(transaction)?;
+        // Recorded before the sync: the record is in the log whether or not
+        // the fsync below succeeds, and it is the record's existence that
+        // must forbid a later abort for the same transaction.
+        self.sync_through(lsn)?;
+        Ok(lsn)
+    }
+
+    /// Log a commit WITHOUT making it durable. Returns the record's LSN; the
+    /// caller owns the obligation to `sync_through` it before anything relies
+    /// on it surviving a crash. Only for transactions whose redo is durable
+    /// elsewhere, so that losing this record loses nothing.
+    pub fn commit_unsynced(&self, transaction: u64) -> Result<Lsn> {
         if !self.committed_this_generation.lock().insert(transaction) {
             return Err(PageError::InvalidMaintenanceLimits {
                 reason: format!(
@@ -630,12 +648,17 @@ impl Wal {
                 ),
             });
         }
-        let lsn = self.append(RecordKind::Commit, 0, transaction, &[])?;
-        // Recorded before the sync: the record is in the log whether or not
-        // the fsync below succeeds, and it is the record's existence that
-        // must forbid a later abort for the same transaction.
-        self.sync_through(lsn)?;
-        Ok(lsn)
+        self.append(RecordKind::Commit, 0, transaction, &[])
+    }
+
+    /// Power-loss emulation for tests: cut the active file back to what the
+    /// last successful sync covered. Sealed segments were synced when sealed.
+    pub(crate) fn discard_unsynced_tail_for_test(&self) {
+        let synced = self.synced_offset.load(Ordering::Acquire);
+        if let Ok(file) = OpenOptions::new().write(true).open(&self.path) {
+            let _ = file.set_len(synced);
+            let _ = file.sync_all();
+        }
     }
 
     /// Log an abort. Not synced: an abandoned transaction that is lost to a
@@ -682,6 +705,7 @@ impl Wal {
             drop(state);
 
             let mut file = self.file.lock();
+            let covered_offset = self.end_offset.load(Ordering::Acquire);
             let started = Instant::now();
             let result = if self.fsync {
                 file.sync_data().map_err(|e| PageError::io(&self.path, e))
@@ -689,6 +713,9 @@ impl Wal {
                 file.flush().map_err(|e| PageError::io(&self.path, e))
             };
             let elapsed = started.elapsed();
+            if result.is_ok() {
+                self.synced_offset.store(covered_offset, Ordering::Release);
+            }
             drop(file);
 
             state = self.sync_state.lock();
@@ -971,6 +998,7 @@ impl Wal {
         self.sealed_bytes.store(retained_bytes, Ordering::Release);
         drop(file);
         self.end_offset.store(0, Ordering::Release);
+        self.synced_offset.store(0, Ordering::Release);
         let next = self.next_lsn.load(Ordering::Acquire);
         self.active_first_lsn.store(next, Ordering::Release);
         self.sync_state.lock().durable_lsn = next.saturating_sub(1);
@@ -1357,8 +1385,10 @@ impl Checkpointer {
     pub fn checkpoint(&self, root_page: PageId) -> Result<CheckpointReport> {
         let redo_lsn = self.wal.next_lsn();
         self.wal.sync()?;
+        crate::test_faults::crash_point("checkpoint.after_wal_sync");
         let flushed = self.pool.flush_all()?;
         self.pool.store().flush()?;
+        crate::test_faults::crash_point("checkpoint.after_page_flush");
         self.finish_checkpoint(root_page, redo_lsn, flushed, false)
     }
 
@@ -1370,8 +1400,10 @@ impl Checkpointer {
     pub fn checkpoint_and_truncate(&self, root_page: PageId) -> Result<CheckpointReport> {
         let redo_lsn = self.wal.next_lsn();
         self.wal.sync()?;
+        crate::test_faults::crash_point("checkpoint.after_wal_sync");
         let flushed = self.pool.flush_all()?;
         self.pool.store().flush()?;
+        crate::test_faults::crash_point("checkpoint.after_page_flush");
         self.finish_checkpoint(root_page, redo_lsn, flushed, true)
     }
 
@@ -1402,10 +1434,13 @@ impl Checkpointer {
         self.pool
             .store()
             .publish_root(root_page, self.wal.next_lsn())?;
+        crate::test_faults::crash_point("checkpoint.after_publish");
         let wal_truncated = if truncate {
             // Safe only under the caller contract above: every page represented
             // by the discarded log is already durable.
-            self.wal.reset()?
+            let truncated = self.wal.reset()?;
+            crate::test_faults::crash_point("checkpoint.after_wal_reset");
+            truncated
         } else {
             false
         };

@@ -3905,6 +3905,7 @@ fn compressed_records_reopen_with_mmap_reads() {
                 allow_unsafe_legacy_mesh_collections: DbConfig::default()
                     .allow_unsafe_legacy_mesh_collections,
                 sync_outbox: true,
+                transaction_log_commit_durability: false,
                 snapshot: false,
                 replication: Default::default(),
                 consensus: Default::default(),
@@ -3971,6 +3972,7 @@ fn compressed_records_reopen_with_mmap_reads() {
             allow_unsafe_legacy_mesh_collections: DbConfig::default()
                 .allow_unsafe_legacy_mesh_collections,
             sync_outbox: true,
+            transaction_log_commit_durability: false,
             snapshot: false,
             replication: Default::default(),
             consensus: Default::default(),

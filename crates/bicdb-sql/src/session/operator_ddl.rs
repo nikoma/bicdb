@@ -402,23 +402,10 @@ impl SqlSession<'_> {
             } else {
                 &mut other.negator
             };
-            match back {
-                Some(existing) if *existing != id => {
-                    let (kind, role) = if commutator {
-                        ("commutator", "commutator")
-                    } else {
-                        ("negator", "negator")
-                    };
-                    return Err(SqlError::data_exception_public(
-                        "42P13",
-                        format!(
-                            "{kind} operator {} is already the {role} of operator {}",
-                            target.name, existing.name
-                        ),
-                        None,
-                    ));
-                }
-                _ => *back = Some(id.clone()),
+            // An operator already linked to another one keeps its link
+            // (PostgreSQL 16 semantics): only an unset link is filled in.
+            if back.is_none() {
+                *back = Some(id.clone());
             }
             writes.push(other);
             Ok(target)

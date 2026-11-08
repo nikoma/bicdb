@@ -596,6 +596,11 @@ fn create_day_operators(sql: &mut SqlSession) {
         "CREATE OPERATOR app.+ (FUNCTION = app.adddays, LEFTARG = timestamp with time zone, \
          RIGHTARG = numeric, COMMUTATOR = OPERATOR(app.+))",
         "ALTER OPERATOR app.+ (timestamp with time zone, numeric) OWNER TO bicdb",
+        // The pg_dump order names `-`(numeric, interval) as this operator's
+        // commutator although it already commutes with `+`(interval, numeric).
+        "CREATE OPERATOR app.- (FUNCTION = app.intervaldays, LEFTARG = interval, \
+         RIGHTARG = numeric, COMMUTATOR = OPERATOR(app.-))",
+        "ALTER OPERATOR app.- (interval, numeric) OWNER TO bicdb",
         "CREATE OPERATOR app.- (FUNCTION = app.subtractdays, LEFTARG = timestamp with time zone, \
          RIGHTARG = numeric, COMMUTATOR = OPERATOR(app.-))",
         "ALTER OPERATOR app.- (timestamp with time zone, numeric) OWNER TO bicdb",
@@ -611,8 +616,8 @@ fn create_operator_records_operators_and_commutator_shells() {
     let mut sql = SqlSession::new(&mut db);
     create_day_operators(&mut sql);
 
-    // Three operators plus the three shells their COMMUTATOR options named.
-    assert_eq!(app_operator_count(&mut sql), 6);
+    // Four operators plus the three shells their COMMUTATOR options named.
+    assert_eq!(app_operator_count(&mut sql), 7);
     assert_eq!(
         int_at(
             &mut sql,
@@ -628,7 +633,7 @@ fn create_operator_records_operators_and_commutator_shells() {
             "SELECT count(*) FROM pg_operator o JOIN pg_namespace n ON n.oid = o.oprnamespace \
              WHERE n.nspname = 'app' AND o.oprcom <> 0"
         ),
-        6,
+        7,
         "operators and shells link to each other"
     );
     // Built-in operators are in the catalog too.
@@ -639,31 +644,21 @@ fn create_operator_records_operators_and_commutator_shells() {
         ) > 30
     );
 
-    // The pg_dump order then names `-`(numeric, interval) as the commutator
-    // of a second operator although it already commutes with `+`. PostgreSQL
-    // 17 and later reject that definition, and so its ALTER finds nothing.
-    let error = error_of(
-        &mut sql,
-        "CREATE OPERATOR app.- (FUNCTION = app.intervaldays, LEFTARG = interval, \
-         RIGHTARG = numeric, COMMUTATOR = OPERATOR(app.-))",
-    );
-    assert!(
-        error.contains("commutator operator - is already the commutator of operator +"),
-        "{error}"
-    );
-    let error = error_of(
-        &mut sql,
-        "ALTER OPERATOR app.- (interval, numeric) OWNER TO bicdb",
-    );
-    assert!(
-        error.contains("operator does not exist: interval app.- numeric"),
-        "{error}"
-    );
-    assert_eq!(
-        app_operator_count(&mut sql),
-        6,
-        "a rejected definition writes nothing"
-    );
+    // An already-paired commutator keeps its link (as PostgreSQL 16 does):
+    // `-`(interval, numeric) points at the shell `-`(numeric, interval),
+    // which still points back at `+`(interval, numeric).
+    let linked = |sql: &mut SqlSession, left: i64, right: i64| {
+        text_at(
+            sql,
+            &format!(
+                "SELECT c.oprname || '(' || c.oprleft::text || ',' || c.oprright::text || ')' \
+                 FROM pg_operator o JOIN pg_operator c ON c.oid = o.oprcom \
+                 WHERE o.oprname = '-' AND o.oprleft = {left} AND o.oprright = {right}"
+            ),
+        )
+    };
+    assert_eq!(linked(&mut sql, 1186, 1700), "-(1700,1186)");
+    assert_eq!(linked(&mut sql, 1700, 1186), "+(1186,1700)");
 
     let error = error_of(
         &mut sql,
@@ -783,14 +778,14 @@ fn user_operators_resolve_by_search_path_and_operand_types() {
     // commutator's link.
     sql.execute("DROP OPERATOR app.+ (timestamp with time zone, numeric)")
         .unwrap();
-    assert_eq!(app_operator_count(&mut sql), 5);
+    assert_eq!(app_operator_count(&mut sql), 6);
     assert_eq!(
         int_at(
             &mut sql,
             "SELECT count(*) FROM pg_operator o JOIN pg_namespace n ON n.oid = o.oprnamespace \
              WHERE n.nspname = 'app' AND o.oprcom <> 0"
         ),
-        4
+        5
     );
     let error = error_of(
         &mut sql,
@@ -814,9 +809,9 @@ fn operator_ddl_rolls_back_with_its_transaction() {
     .unwrap();
     sql.execute("DROP OPERATOR app.- (timestamp with time zone, numeric)")
         .unwrap();
-    assert_eq!(app_operator_count(&mut sql), 7);
+    assert_eq!(app_operator_count(&mut sql), 8);
     sql.execute("ROLLBACK").unwrap();
-    assert_eq!(app_operator_count(&mut sql), 6);
+    assert_eq!(app_operator_count(&mut sql), 7);
     sql.execute("SET search_path TO app, pg_catalog").unwrap();
     let value = text_at(
         &mut sql,
@@ -847,7 +842,7 @@ fn user_operators_survive_reopen_in_both_storage_modes() {
         let mut sql = SqlSession::new(&mut db);
         assert_eq!(
             app_operator_count(&mut sql),
-            6,
+            7,
             "[{mode}] operators lost on reopen"
         );
         sql.execute("SET search_path TO app, pg_catalog").unwrap();

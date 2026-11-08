@@ -3116,10 +3116,36 @@ impl<'db> SqlEngine<'db> {
             }
         }
         if let Some(value) = deferred_values.first() {
-            // Non-B-tree candidates are deliberately absent from the
-            // structural B-tree list; they may also avoid this policy key.
-            if deferred_values.len() != 1 || strategy.has_non_btree_indexes {
+            if deferred_values.len() != 1 {
                 return Ok(None);
+            }
+            if strategy.has_non_btree_indexes {
+                // Carrier models commonly carry a generated FullText index.
+                // The existing FTS candidate extractor requires an authored
+                // @@ expression; an unused FTS index cannot avoid this key.
+                // Do not evaluate a search expression just to classify it.
+                let authored_search = selection.is_some_and(|selection| {
+                    sqlparser::ast::visit_expressions(selection, |expr| {
+                        if matches!(
+                            expr,
+                            Expr::BinaryOp {
+                                op: BinaryOperator::AtAt,
+                                ..
+                            }
+                        ) {
+                            std::ops::ControlFlow::Break(())
+                        } else {
+                            std::ops::ControlFlow::Continue(())
+                        }
+                    })
+                    .is_break()
+                });
+                let other_non_btree = sql_index_definitions_for_collection(self.db_ref(), table)
+                    .iter()
+                    .any(|index| !matches!(index.kind, IndexKind::BTree | IndexKind::FullText));
+                if authored_search || other_non_btree {
+                    return Ok(None);
+                }
             }
             if let Some(selection) = selection {
                 let original =

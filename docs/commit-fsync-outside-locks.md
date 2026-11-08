@@ -181,26 +181,27 @@ not yet published, and is `InProgress` in the transaction table.
   So W's `in_flight` may contain C, but W never reads or overwrites a version
   C wrote. W's commit record has a higher LSN than C's, so W publishes after C
   (section 4.2). If C's sync fails, W cannot be published either (section 8).
-- **Safety net for an unexpected overlap.** If `write_base` or
-  `check_write_conflict` meets an `xmin`/`xmax` that is in the committing
-  queue, raising `WriteConflict` would be spurious, and on this path fatal: a
-  page-apply error after the durable decision sets `recovery_required` and
-  fences the handle (`spatial_paged.rs:1510-1527`). So instead, the writer:
-  1. calls `sync_through(C.lsn)` and `publish_durable()`, still holding
-     `write_lock`. This is correct, only slow. It needs no lock that C holds;
-  2. refreshes its own stored snapshot so C counts as committed before it.
-     This is allowed only for row-commit page transactions, whose logical
-     isolation was already decided by the core, and is what today's ordering
-     would have produced;
-  3. re-reads the chain head and continues.
+- **Safety net for an unexpected overlap.** Raising `WriteConflict` against a
+  committing writer would be spurious, and on this path fatal: a page-apply
+  error after the durable decision fences the handle. As implemented:
+  1. `begin_row_commit` removes every transaction committing at that moment
+     from the new row commit's snapshot `in_flight` set. The host ordered them
+     before it (their decisions and page work came first, under the same
+     lock); with the locked commit this transaction would only have begun
+     after their publication. They still count as committed only once
+     published (`TxStatus::Committed`).
+  2. Each row-commit `put`/`delete` records a hash of its key. If the key was
+     written by a committing transaction, the writer waits for that
+     transaction's publication (`sync_through` its LSN, publish the durable
+     prefix), still holding `write_lock`. This is correct, only slow, and it
+     needs no lock the committing transaction holds.
+  3. A "decided before xmax" read (`xid == 0`, empty `in_flight`: the host's
+     pre-image read, `pre_snapshot` in `apply_record_writes_to_paged`) of a key
+     a committing transaction wrote also waits for its publication first.
 
-  The pre-image read uses `pre_snapshot { xmax: xid, in_flight: {} }` at
-  `spatial_paged.rs:1367-1371`, which judges C uncommitted while it is
-  committing. It goes through the same check: if the version it would return
-  was written by a committing xid, it waits for publication first. A counter,
-  `committing_overlap_waits`, counts these. The qualification expects 0 on
-  every workload, and a debug assertion flags any non-zero value in tests, so
-  that a missing core lock is found rather than masked.
+  `CommittingStats::overlap_waits` counts these waits. Core row locks make
+  them unreachable from the core commit path. The core workload test asserts
+  0, so a missing core lock shows up as a failure rather than being masked.
 - **Non-row writers.** They see an empty queue (section 4.3), so their
   conflict and visibility behaviour is unchanged.
 

@@ -188,7 +188,7 @@ fn instead_rules_replace_the_rewritten_statement() {
     .unwrap();
     sql.execute(
         "CREATE RULE apply_rule AS\n    ON INSERT TO app.requests DO INSTEAD  \
-         SELECT app.apply_request(new.tablename, new.amount) AS apply_request",
+         SELECT app.apply_request(new.tablename || '''', new.amount) AS apply_request",
     )
     .unwrap();
     sql.execute("CREATE TABLE app.locked (id INT)").unwrap();
@@ -203,6 +203,14 @@ fn instead_rules_replace_the_rewritten_statement() {
         int_at(&mut sql, "SELECT sum(amount) FROM app.applied"),
         12,
         "the rule action ran once per row"
+    );
+    // The action keeps its literals exactly (a doubled quote stays one quote).
+    assert_eq!(
+        int_at(
+            &mut sql,
+            r#"SELECT count(*) FROM app.applied WHERE tablename = 'a'''"#
+        ),
+        1
     );
     sql.execute("DELETE FROM app.locked").unwrap();
     assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.locked"), 1);

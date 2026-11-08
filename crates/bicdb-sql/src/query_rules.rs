@@ -110,7 +110,9 @@ fn parse_create(sql: &str) -> Result<Option<(RuleSchema, bool)>> {
         if statements.is_empty() {
             return Err(invalid());
         }
-        statements.iter().map(ToString::to_string).collect()
+        // Keep the action as written: re-rendering parsed SQL is not a
+        // faithful round trip for every literal.
+        vec![body.trim().to_string()]
     };
     Ok(Some((
         RuleSchema {

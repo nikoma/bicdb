@@ -384,6 +384,40 @@ fn alter_role_set_records_session_defaults() {
         .is_empty());
 }
 
+/// A correlated subquery names the outer table by its bare name, also when
+/// the table lives in a schema (written qualified, or bound through
+/// search_path).
+#[test]
+fn correlated_references_name_schema_qualified_tables_by_their_bare_name() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE TABLE app.line (id INT, product_id INT, uom_id INT)")
+        .unwrap();
+    sql.execute("CREATE TABLE app.product (product_id INT, uom_id INT)")
+        .unwrap();
+    sql.execute("INSERT INTO app.line VALUES (1, 10, NULL), (2, 20, NULL)")
+        .unwrap();
+    sql.execute("INSERT INTO app.product VALUES (10, 100), (20, 200)")
+        .unwrap();
+    sql.execute(
+        "UPDATE app.line SET uom_id = \
+         (SELECT uom_id FROM app.product WHERE product_id = line.product_id)",
+    )
+    .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT sum(uom_id) FROM app.line"), 300);
+    sql.execute("SET search_path TO app, public").unwrap();
+    sql.execute(
+        "UPDATE Line SET uom_id = \
+         (SELECT uom_id + 1 FROM Product WHERE product_id = Line.product_id)",
+    )
+    .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT sum(uom_id) FROM line"), 302);
+    sql.execute("DELETE FROM line WHERE EXISTS (SELECT 1 FROM product WHERE product.product_id = line.product_id AND product.uom_id = 200)")
+        .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM line"), 1);
+}
+
 /// pg_dump emits ALTER TABLE ... OWNER TO for views, and creates triggers on
 /// schema-qualified tables.
 #[test]

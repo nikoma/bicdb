@@ -3934,7 +3934,7 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "pg_opfamily" => Ok(pg_opfamily_rows()),
         "pg_amop" => Ok(pg_amop_rows()),
         "pg_amproc" => Ok(pg_amproc_rows()),
-        "pg_operator" => Ok(Vec::new()),
+        "pg_operator" => crate::pg_operators::pg_operator_rows(db),
         "pg_ts_config" | "pg_ts_config_map" | "pg_ts_dict" | "pg_ts_parser" | "pg_ts_template" => {
             Ok(Vec::new())
         }
@@ -5536,6 +5536,23 @@ pub(crate) fn virtual_table_column_types(table: &str) -> Option<Vec<(String, Opt
             ("opfname", "name"),
             ("opfnamespace", "oid"),
             ("opfowner", "oid"),
+        ],
+        "pg_operator" => &[
+            ("oid", "oid"),
+            ("oprname", "name"),
+            ("oprnamespace", "oid"),
+            ("oprowner", "oid"),
+            ("oprkind", "char"),
+            ("oprcanmerge", "bool"),
+            ("oprcanhash", "bool"),
+            ("oprleft", "oid"),
+            ("oprright", "oid"),
+            ("oprresult", "oid"),
+            ("oprcom", "oid"),
+            ("oprnegate", "oid"),
+            ("oprcode", "regproc"),
+            ("oprrest", "regproc"),
+            ("oprjoin", "regproc"),
         ],
         "pg_amop" => &[
             ("oid", "oid"),

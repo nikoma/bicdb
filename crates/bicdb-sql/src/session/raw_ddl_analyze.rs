@@ -1023,13 +1023,28 @@ impl<'db> SqlSession<'db> {
 
     pub(crate) fn execute_statement(&mut self, statement: &Statement) -> Result<SqlResult> {
         self.ensure_read_only_statement(statement)?;
+        // User-defined operators bind to their functions before execution.
+        let bound = match crate::pg_operators::operators_to_bind(self.db_ref(), statement)? {
+            Some(operators) => crate::pg_operators::bind_statement_operators(
+                &self.sql_engine(),
+                &self.session_gucs,
+                &operators,
+                statement,
+            )?,
+            None => None,
+        };
+        let statement = bound.as_ref().unwrap_or(statement);
         if matches!(statement, Statement::Merge(_)) {
             return self
                 .with_statement_transaction(|session| session.execute_statement_inner(statement));
         }
         if matches!(
             statement,
-            Statement::DropFunction(_) | Statement::DropProcedure { .. }
+            Statement::DropFunction(_)
+                | Statement::DropProcedure { .. }
+                | Statement::CreateOperator(_)
+                | Statement::AlterOperator(_)
+                | Statement::DropOperator(_)
         ) {
             // Routine deletion records DDL undo. Keep all names in one DROP
             // atomic when a later lookup, owner check or dependency fails.
@@ -1128,6 +1143,9 @@ impl<'db> SqlSession<'db> {
             Statement::CreateRole(create_role) => self.execute_create_role(create_role),
             Statement::AlterRole { name, operation } => self.execute_alter_role(name, operation),
             Statement::DropFunction(drop_function) => self.execute_drop_function(drop_function),
+            Statement::CreateOperator(create) => self.execute_create_operator(create),
+            Statement::AlterOperator(alter) => self.execute_alter_operator(alter),
+            Statement::DropOperator(drop) => self.execute_drop_operator(drop),
             Statement::DropProcedure {
                 if_exists,
                 proc_desc,

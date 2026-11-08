@@ -96,6 +96,7 @@ mod fts;
 mod geometric;
 mod pg_casts;
 mod pg_opclasses;
+mod pg_operators;
 mod trigram;
 use trigram::*;
 pub mod pg_types;
@@ -5016,7 +5017,10 @@ fn statement_may_write(statement: &Statement) -> bool {
         | Statement::DropProcedure { .. }
         | Statement::DropTrigger(_)
         | Statement::AlterTable(_)
-        | Statement::AlterFunction(_) => true,
+        | Statement::AlterFunction(_)
+        | Statement::CreateOperator(_)
+        | Statement::AlterOperator(_)
+        | Statement::DropOperator(_) => true,
         _ => false,
     }
 }

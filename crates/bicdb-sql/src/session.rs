@@ -24,6 +24,7 @@ mod catalog_join_tests;
 mod driver_metadata_tests;
 pub(crate) mod functions_insert;
 mod join_lookup_tests;
+mod operator_ddl;
 #[cfg(test)]
 mod primary_key_range_tests;
 mod primary_key_updates;
@@ -2071,6 +2072,10 @@ pub(crate) enum DdlUndo {
     },
     RestoreRoutine {
         routine: RoutineSchema,
+    },
+    RestoreOperator {
+        id: crate::pg_operators::OperatorRef,
+        previous: Option<Box<crate::pg_operators::OperatorSchema>>,
     },
     DeleteNamespace {
         namespace: String,
@@ -4610,6 +4615,10 @@ impl<'db> SqlSession<'db> {
             DdlUndo::RestoreRoutine { routine } => {
                 save_routine(self.db_mut()?, &routine)?;
             }
+            DdlUndo::RestoreOperator { id, previous } => match previous {
+                Some(previous) => crate::pg_operators::save_operator(self.db_mut()?, &previous)?,
+                None => crate::pg_operators::delete_operator(self.db_mut()?, &id)?,
+            },
             DdlUndo::DeleteNamespace { namespace } => {
                 delete_namespace(self.db_mut()?, &namespace)?;
             }

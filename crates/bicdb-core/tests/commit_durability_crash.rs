@@ -341,3 +341,28 @@ fn transaction_log_only_path_survives_every_crash_point() {
         &["commit.after_page_apply:100", "materialize.after_wal_sync:20"],
     );
 }
+
+/// Diagnostic: repeat one case. `DURABILITY_CASE=<mode>/<point>` and
+/// `DURABILITY_REPEAT=<n>`; failing case directories are kept.
+#[test]
+#[ignore]
+fn repeat_one_case() {
+    let spec = std::env::var("DURABILITY_CASE").expect("DURABILITY_CASE=<mode>/<point>");
+    let repeat: usize = std::env::var("DURABILITY_REPEAT")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(10);
+    let (mode, point) = spec.split_once('/').expect("<mode>/<point>");
+    let mode: &'static str = Box::leak(mode.to_string().into_boxed_str());
+    let point: &'static str = Box::leak(point.to_string().into_boxed_str());
+    let cases = (0..repeat)
+        .map(|round| {
+            (
+                format!("round {round}"),
+                Box::new(move || crash_case(mode, Some(point), true))
+                    as Box<dyn FnOnce() + std::panic::UnwindSafe>,
+            )
+        })
+        .collect();
+    run_matrix(cases);
+}

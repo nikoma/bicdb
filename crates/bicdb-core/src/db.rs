@@ -19079,7 +19079,16 @@ fn apply_unmaterialized_transaction_log(
         .collect();
     ordered.sort_unstable();
     let mut dropped_collection_writes: BTreeMap<String, usize> = BTreeMap::new();
+    let trace_replay = std::env::var_os("BICDB_TRACE_REPLAY").is_some();
     for (commit_seq, tx_id) in ordered {
+        if trace_replay {
+            let collections: Vec<&str> = recovery
+                .writes
+                .get(&tx_id)
+                .map(|writes| writes.iter().map(|write| write.collection()).collect())
+                .unwrap_or_default();
+            eprintln!("bicdb replay: commit_seq {commit_seq} tx {tx_id} writes {collections:?}");
+        }
         // Once this transaction has been replayed its decoded rows are no
         // longer needed. Retain commit state and outboxes, not a second copy
         // of every historical row throughout the rest of database open.

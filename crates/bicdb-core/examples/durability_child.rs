@@ -21,7 +21,24 @@
 //! `DURABILITY_POOL_BYTES` shrinks the page buffer pool so eviction and
 //! writeback run during the workload.
 //!
+//! `DURABILITY_WAL_MAX_BYTES` lowers the page-log threshold at which commits
+//! advance the bounded checkpoint (`checkpoint_step`) themselves, and
+//! `DURABILITY_WAL_SEGMENT_BYTES` the size at which the page log seals into
+//! `store.wal.<lsn>` segments. `DURABILITY_CHECKPOINTS=bounded` replaces the
+//! resume-checkpoint thread with the server's bounded checkpoint supervisor
+//! (`start_checkpoint_maintenance` / `tick_checkpoint_maintenance` through the
+//! storage-only handle, without the database guard, as the server runs it):
+//! the transaction log is then cut only at open and close, and the run lasts
+//! until enough bounded checkpoints completed.
+//!
 //! Exit 0 after every writer finishes, unless a crash point aborts first.
+//!
+//! Two more modes probe GAP-1 of `docs/recovery-semantics.md` end to end:
+//! `q1-setup` commits `<commits>` rows `r-NNNNN` to collection `q1`, one per
+//! transaction, each appended to `ledger-dir/q1` after commit returns.
+//! `q1-split` then commits ONE transaction of `<commits>` rows `a-NNNNN`,
+//! whose keys sort before every `r-` key, so the B-tree splits that it causes
+//! move committed keys to new right siblings.
 
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -30,7 +47,10 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use bicdb_core::{BicDb, DbConfig, IndexDefinition, IndexField, IndexKind, Record, StorageMode};
+use bicdb_core::{
+    BicDb, DbConfig, IndexDefinition, IndexField, IndexKind, PagedCheckpointScheduleAdvance,
+    PagedCheckpointScheduleLimits, Record, ResourceGovernor, ResourceGovernorConfig, StorageMode,
+};
 use serde_json::json;
 
 /// See `checkpoints` in `main`.
@@ -44,12 +64,79 @@ fn config(mode: &str) -> DbConfig {
         .with_storage_mode(StorageMode::ServerPaged)
         .with_transaction_log_commit_durability(mode == "transaction-log");
     // A small pool forces eviction and writeback during the workload.
-    match std::env::var("DURABILITY_POOL_BYTES")
-        .ok()
-        .and_then(|v| v.parse().ok())
-    {
+    let env = |name: &str| std::env::var(name).ok().and_then(|v| v.parse::<u64>().ok());
+    let config = match env("DURABILITY_POOL_BYTES") {
         Some(bytes) => config.with_paged_buffer_pool_bytes(bytes),
         None => config,
+    };
+    let config = match env("DURABILITY_WAL_MAX_BYTES") {
+        Some(bytes) => config.with_paged_wal_max_bytes(bytes),
+        None => config,
+    };
+    match env("DURABILITY_WAL_SEGMENT_BYTES") {
+        Some(bytes) => config.with_paged_wal_segment_bytes(bytes),
+        None => config,
+    }
+}
+
+fn bounded_checkpoints() -> bool {
+    std::env::var("DURABILITY_CHECKPOINTS").is_ok_and(|value| value == "bounded")
+}
+
+/// Completed bounded checkpoints a `bounded` run waits for.
+const MIN_BOUNDED_CHECKPOINTS: u64 = 6;
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// The server's checkpoint worker: one supervised bounded phase per tick,
+/// resuming an operation a crash left active.
+fn run_bounded_checkpoints(
+    handle: bicdb_core::PagedCheckpointMaintenanceHandle,
+    done: &AtomicBool,
+    completed: &AtomicU64,
+) {
+    let governor = ResourceGovernor::new(ResourceGovernorConfig::default(), now_ms())
+        .expect("resource governor");
+    let mut limits = PagedCheckpointScheduleLimits::default();
+    limits.step_interval_ms = 1;
+    let mut operation = None;
+    while !done.load(Ordering::Acquire) {
+        let id = match operation {
+            Some(id) => id,
+            None => {
+                let id = match handle.start_checkpoint_maintenance(now_ms(), limits) {
+                    Ok(schedule) => schedule.operation_id,
+                    Err(_) => {
+                        handle
+                            .checkpoint_maintenance_status()
+                            .expect("checkpoint status")
+                            .expect("an active checkpoint operation")
+                            .operation_id
+                    }
+                };
+                operation = Some(id);
+                id
+            }
+        };
+        match handle
+            .tick_checkpoint_maintenance(id, &governor, now_ms())
+            .expect("checkpoint tick")
+        {
+            PagedCheckpointScheduleAdvance::Complete { .. } => {
+                completed.fetch_add(1, Ordering::AcqRel);
+                operation = None;
+            }
+            PagedCheckpointScheduleAdvance::Paused { reason } => {
+                panic!("bounded checkpoint paused: {reason}")
+            }
+            _ => {}
+        }
+        std::thread::sleep(Duration::from_millis(2));
     }
 }
 
@@ -77,6 +164,44 @@ fn index(name: &str, field: &str, unique: bool) -> IndexDefinition {
     }
 }
 
+fn q1(db_dir: &Path, ledger: &Path, phase: &str, rows: u64) {
+    let db = BicDb::open_with_config(db_dir, config("all-logs")).expect("open db");
+    if !db.collections().iter().any(|meta| meta.name == "q1") {
+        let mut db = db;
+        db.create_collection("q1").expect("create q1");
+        db.close().expect("close");
+        return q1(db_dir, ledger, phase, rows);
+    }
+    match phase {
+        "setup" => {
+            for i in 0..rows {
+                let mut tx = db.begin_transaction().expect("begin");
+                tx.insert(
+                    "q1",
+                    Record::new(format!("r-{i:05}")).with_metadata(json!({"i": i})),
+                )
+                .expect("insert");
+                tx.commit().expect("commit");
+                append_line(&ledger.join("q1"), &format!("r-{i:05}"));
+            }
+        }
+        "split" => {
+            let mut tx = db.begin_transaction().expect("begin");
+            for i in 0..rows {
+                tx.insert(
+                    "q1",
+                    Record::new(format!("a-{i:05}")).with_metadata(json!({"i": i})),
+                )
+                .expect("insert");
+            }
+            tx.commit().expect("commit");
+            append_line(&ledger.join("q1"), "split");
+        }
+        other => panic!("unknown q1 phase {other}"),
+    }
+    db.close().expect("close");
+}
+
 fn main() {
     let mut args = std::env::args().skip(1);
     let db_dir = PathBuf::from(args.next().expect("db dir"));
@@ -84,6 +209,11 @@ fn main() {
     let mode = args.next().expect("mode");
     let commits: u64 = args.next().and_then(|a| a.parse().ok()).unwrap_or(400);
     std::fs::create_dir_all(&ledger).expect("ledger dir");
+
+    if let Some(phase) = mode.strip_prefix("q1-") {
+        q1(&db_dir, &ledger, phase, commits);
+        return;
+    }
 
     let mut db = BicDb::open_with_config(&db_dir, config(&mode)).expect("open db");
     if !db.collections().iter().any(|meta| meta.name == "rows") {
@@ -133,7 +263,8 @@ fn main() {
                 }
             });
         }
-        {
+        // A run with no commits only reopens (recovery); it does no DDL either.
+        if commits > 0 {
             let db = db.clone();
             let done = done.clone();
             let ledger = ledger.join("ddl");
@@ -169,7 +300,16 @@ fn main() {
                 }
             });
         }
-        {
+        if bounded_checkpoints() && commits > 0 {
+            let handle = db
+                .read()
+                .expect("db lock")
+                .paged_checkpoint_maintenance_handle()
+                .expect("server_paged");
+            let done = done.clone();
+            let checkpoints = checkpoints.clone();
+            scope.spawn(move || run_bounded_checkpoints(handle, &done, &checkpoints));
+        } else {
             let db = db.clone();
             let done = done.clone();
             let checkpoints = checkpoints.clone();
@@ -186,8 +326,13 @@ fn main() {
         // polling their ledgers rather than joining inside the scope.
         loop {
             std::thread::sleep(Duration::from_millis(20));
+            let wanted = if bounded_checkpoints() {
+                MIN_BOUNDED_CHECKPOINTS
+            } else {
+                MIN_CHECKPOINTS
+            };
             let finished = commits == 0
-                || checkpoints.load(Ordering::Acquire) >= MIN_CHECKPOINTS
+                || checkpoints.load(Ordering::Acquire) >= wanted
                     && (0..WRITERS).all(|writer| {
                         std::fs::read_to_string(ledger.join(format!("writer-{writer}")))
                             .map(|text| text.lines().last() == Some(commits.to_string().as_str()))

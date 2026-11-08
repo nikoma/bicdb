@@ -88,12 +88,37 @@ pub fn crash_point(point: &str) {
     crash_now(plan.volatile_tail);
 }
 
+/// [`crash_point`] for a call site that holds `locked`'s file lock. Power-loss
+/// emulation skips that log: discarding its tail would need the same lock.
+/// Callers use it only where that log has no unsynced bytes that matter (a
+/// seal has just synced the file, a reset is discarding it, recovery appends
+/// nothing).
+pub(crate) fn crash_point_with_locked_wal(point: &str, locked: &Wal) {
+    let Some(plan) = plan() else {
+        return;
+    };
+    if plan.point != point {
+        return;
+    }
+    if plan.seen.fetch_add(1, Ordering::AcqRel) + 1 != plan.hit {
+        return;
+    }
+    crash_with(plan.volatile_tail, Some(locked));
+}
+
 /// Abort the process, first discarding unsynced page-WAL bytes when power
 /// loss emulation is on.
 pub fn crash_now(volatile_tail: bool) -> ! {
+    crash_with(volatile_tail, None)
+}
+
+fn crash_with(volatile_tail: bool, locked: Option<&Wal>) -> ! {
     if volatile_tail {
         let wals = registry().lock().unwrap_or_else(|e| e.into_inner());
         for wal in wals.iter().filter_map(Weak::upgrade) {
+            if locked.is_some_and(|locked| std::ptr::eq(locked, Arc::as_ptr(&wal))) {
+                continue;
+            }
             wal.discard_unsynced_tail_for_test();
         }
     }

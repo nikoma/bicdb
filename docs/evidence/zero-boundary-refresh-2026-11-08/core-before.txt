@@ -1,0 +1,55 @@
+      |
+17389 -                 drop(db);
+17389 +                 let _ = db;
+      |
+
+warning: unused `std::result::Result` that must be used
+   --> crates/bicdb-core/src/db/flashback.rs:491:9
+    |
+491 |         tx.push_writes(history);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+    = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+    |
+491 |         let _ = tx.push_writes(history);
+    |         +++++++
+
+warning: `bicdb-core` (lib) generated 98 warnings (run `cargo fix --lib -p bicdb-core` to apply 14 suggestions)
+    Finished `test` profile [unoptimized] target(s) in 30.85s
+     Running tests/read_committed_zero_boundary.rs (/root/carrier-zero-friction-target/debug/deps/read_committed_zero_boundary-2d2c66af5212326c)
+
+running 4 tests
+test independent_refresh_keeps_new_uncontested_key_committable ... ok
+test refresh_after_buffering_cannot_rebase_observed_absent_key ... FAILED
+test refresh_before_buffering_cannot_rebase_observed_absent_key ... FAILED
+test zero_snapshot_optimistic_insert_keeps_its_original_boundary ... FAILED
+
+failures:
+
+---- refresh_after_buffering_cannot_rebase_observed_absent_key stdout ----
+
+thread 'refresh_after_buffering_cannot_rebase_observed_absent_key' (3610650) panicked at crates/bicdb-core/tests/read_committed_zero_boundary.rs:35:5:
+refreshing after an independent commit must not authorize replacing a key observed absent
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- refresh_before_buffering_cannot_rebase_observed_absent_key stdout ----
+
+thread 'refresh_before_buffering_cannot_rebase_observed_absent_key' (3610651) panicked at crates/bicdb-core/tests/read_committed_zero_boundary.rs:35:5:
+refreshing after an independent commit must not authorize replacing a key observed absent
+
+---- zero_snapshot_optimistic_insert_keeps_its_original_boundary stdout ----
+
+thread 'zero_snapshot_optimistic_insert_keeps_its_original_boundary' (3610652) panicked at crates/bicdb-core/tests/read_committed_zero_boundary.rs:105:5:
+assertion failed: matches!(stale.commit(), Err(BicDbError::TransactionConflict(_)))
+
+
+failures:
+    refresh_after_buffering_cannot_rebase_observed_absent_key
+    refresh_before_buffering_cannot_rebase_observed_absent_key
+    zero_snapshot_optimistic_insert_keeps_its_original_boundary
+
+test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+error: test failed, to rerun pass `-p bicdb-core --test read_committed_zero_boundary`

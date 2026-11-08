@@ -487,3 +487,66 @@ fn domain_policy_columns_retain_full_rls_results_without_inferred_keys() {
     );
     assert!(plan(&mut sql, "SELECT id FROM domain_orders WHERE number='N42'").contains("FullScan"));
 }
+
+fn alternative_index_fixture(db: &mut BicDb, multiple_keys: bool) {
+    let mut sql = SqlSession::new(db);
+    for ddl in [
+        "CREATE TABLE alternative_orders(id TEXT PRIMARY KEY, org_id TEXT, number TEXT, region TEXT)",
+        "CREATE UNIQUE INDEX alternative_number ON alternative_orders(number)",
+        "CREATE INDEX alternative_org ON alternative_orders(org_id)",
+        "CREATE INDEX alternative_region ON alternative_orders(region)",
+        "INSERT INTO alternative_orders VALUES ('present','own','present','west')",
+        "CREATE FUNCTION alternative_failing_key() RETURNS TEXT LANGUAGE SQL STABLE SECURITY DEFINER AS $$ SELECT (1/0)::text $$",
+        "GRANT SELECT,UPDATE ON alternative_orders TO probe_reader",
+        "GRANT EXECUTE ON FUNCTION alternative_failing_key() TO probe_reader",
+        "ALTER TABLE alternative_orders ENABLE ROW LEVEL SECURITY",
+    ] {
+        sql.execute(ddl).unwrap();
+    }
+    let policy = if multiple_keys {
+        "org_id=(SELECT probe_tenant()) AND region=(SELECT alternative_failing_key())"
+    } else {
+        "org_id=(SELECT alternative_failing_key())"
+    };
+    sql.execute(&format!(
+        "CREATE POLICY alternative_policy ON alternative_orders TO probe_reader USING ({policy})"
+    ))
+    .unwrap();
+}
+
+#[test]
+fn an_existing_secondary_lookup_does_not_initialize_an_unused_policy_key() {
+    let (_dir, mut db) = fixture();
+    alternative_index_fixture(&mut db, false);
+    let mut sql = reader(&mut db);
+    // FOR UPDATE exercises the row-set locator, which must not initialize
+    // every eligible secondary index before the existing number lookup.
+    assert!(sql
+        .execute("SELECT id FROM alternative_orders WHERE number='missing' FOR UPDATE")
+        .unwrap()
+        .rows
+        .is_empty());
+    assert!(
+        sql.execute("SELECT id FROM alternative_orders WHERE number='present' FOR UPDATE")
+            .is_err(),
+        "policy remains active for a matching row"
+    );
+}
+
+#[test]
+fn alternative_policy_indexes_do_not_initialize_all_stable_keys() {
+    let (_dir, mut db) = fixture();
+    alternative_index_fixture(&mut db, true);
+    let mut sql = reader(&mut db);
+    sql.execute("SET app.tenant='own'").unwrap();
+    assert!(sql
+        .execute("SELECT id FROM alternative_orders WHERE number='missing' FOR UPDATE")
+        .unwrap()
+        .rows
+        .is_empty());
+    assert!(
+        sql.execute("SELECT id FROM alternative_orders WHERE number='present' FOR UPDATE")
+            .is_err(),
+        "residual policy key still executes on a matching row"
+    );
+}

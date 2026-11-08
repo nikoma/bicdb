@@ -407,6 +407,8 @@ fn postgres_dialect_forms_do_not_apply_to_the_oracle_profile() {
     let (_root, mut db) = app_database();
     for source in [
         "CREATE TABLE audit_rows (id NUMBER)",
+        "CREATE TABLE audit_sources (id NUMBER)",
+        "INSERT INTO audit_sources VALUES (1)",
         "CREATE OR REPLACE FUNCTION note_row(p_id IN NUMBER) RETURN NUMBER AS
          BEGIN
            INSERT INTO audit_rows VALUES (p_id);
@@ -415,7 +417,7 @@ fn postgres_dialect_forms_do_not_apply_to_the_oracle_profile() {
     ] {
         run(&mut db, source).unwrap();
     }
-    assert!(run(&mut db, "SELECT note_row(1) FROM dual").is_err());
+    assert!(run(&mut db, "SELECT note_row(id) FROM audit_sources").is_err());
     assert_eq!(
         texts(run(&mut db, "SELECT COUNT(*) FROM audit_rows").unwrap()),
         vec![vec!["0".to_string()]]

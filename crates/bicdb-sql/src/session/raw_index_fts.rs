@@ -835,6 +835,9 @@ impl<'db> SqlSession<'db> {
 
     pub(crate) fn execute_query(&mut self, query: &Query) -> Result<SqlResult> {
         self.ensure_read_only_query(query)?;
+        // Every relation of the FROM tree needs SELECT before any row is read,
+        // whether or not the executor ends up scanning it.
+        self.sql_engine().require_from_relations_readable(query)?;
         if self.oracle_autonomous && query_has_row_locks(query) {
             // A locking read starts an Oracle transaction even if SELECT INTO
             // subsequently raises NO_DATA_FOUND and its handler catches it.

@@ -1452,6 +1452,10 @@ fn routine_bodies_bind_user_operators_by_declared_types() {
            WHILE v - n < d LOOP v := v + 1; k := k + 1; END LOOP; \
            RETURN v - 1; \
          END; $$",
+        // interval + numeric has no built-in meaning: only the user
+        // operator (a day count) gives a value.
+        "CREATE FUNCTION app.idays(i interval, n numeric) RETURNS integer \
+         LANGUAGE plpgsql AS $$ BEGIN RETURN i + n; END; $$",
         // A date variable plus an integer stays date arithmetic.
         "CREATE FUNCTION app.nextday(d date) RETURNS date LANGUAGE plpgsql AS $$ \
          DECLARE v date := d; BEGIN v := v + 1; RETURN v; END; $$",
@@ -1478,4 +1482,5 @@ fn routine_bodies_bind_user_operators_by_declared_types() {
         text_at(&mut sql, "SELECT app.nextday(date '2020-02-28')::text"),
         "2020-02-29"
     );
+    assert_eq!(int_at(&mut sql, "SELECT app.idays(interval '3 days', 2)"), 5);
 }

@@ -573,16 +573,20 @@ Open items (not GAPs yet: unexplained, no failing test in this suite):
     acceptance (`.github/workflows/rails.yml`: `cargo build -p bicdb-cli
     --bin bicdb`, then `BICDB_BIN=target/debug/bicdb bin/verify` in
     `examples/rails/team_board`).
-- **OPEN-2, duplicate unique-index keys after a kill and restart.** The
-  Rails acceptance intermittently fails its "Pending jobs and binary Solid
-  Cache value survive BicDB SIGKILL/restart" check. After the restart,
-  inserts fail with `unique index index_solid_cache_entries_on_key_hash has
-  duplicate keys`. Seen on 2026-11-08 in runs of two branches with the GAP-2
-  fix and one without it (`plpgsql-ops`, based on the fail-closed change),
-  so it predates the GAP-2 fix. Evidence: the `rails-team-board-evidence`
-  artifact of those runs (`bicdb.log`, `queue-completed.log`). Reproduce with
-  the Rails recipe above, repeated. The crash-matrix reconciler checks
-  unique keys per writer, but not under the Solid Cache upsert pattern.
+- **OPEN-2, "duplicate keys" after a kill and restart: explained, not a
+  recovery bug.** The Rails acceptance intermittently failed its "Pending
+  jobs and binary Solid Cache value survive BicDB SIGKILL/restart" check
+  with `unique index index_solid_cache_entries_on_key_hash has duplicate
+  keys`. The root cause is in the pgwire layer and reproduces without any
+  crash. A concurrent autocommit `INSERT ... ON CONFLICT DO UPDATE` that
+  lost the unique-key race at COMMIT returned `UniqueIndexConflict`, mapped
+  to SQLSTATE `XX000`, instead of re-running and taking the update path.
+  - The constraint held: the losing commit is rejected before the log
+    append, and heap and index agree.
+  - It appeared after the restart step only because that is when the two
+    Solid Queue workers race on the same cache key.
+  - Fixed by #88 ("Re-run upserts that lose a unique-key commit race"). No
+    recovery change is needed.
 
 ## 10. Proposed behaviour changes (not implemented here; need approval)
 

@@ -568,3 +568,78 @@ fn repeat_one_case() {
         .collect();
     run_matrix(cases);
 }
+
+/// Merge-gate qualification: repeat the core cases of the fail-closed matrix
+/// and of the production crash matrix `DURABILITY_ROUNDS` times (default
+/// 100) on `DURABILITY_WORKERS` threads (default 4). Every case reconciles
+/// against its ledger as in the ordinary matrices. Reports every failure.
+#[test]
+#[ignore]
+fn repeat_core_matrices() {
+    let rounds: usize = std::env::var("DURABILITY_ROUNDS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(100);
+    let workers: usize = std::env::var("DURABILITY_WORKERS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(4)
+        .max(1);
+    #[derive(Clone, Copy)]
+    enum Case {
+        FailIo(&'static str, &'static str),
+        Crash(&'static str, &'static str),
+    }
+    let mut cases = Vec::new();
+    for round in 0..rounds {
+        for mode in ["all-logs", "all-logs+small-pool"] {
+            for &spec in FAIL_IO_SPECS {
+                cases.push((round, Case::FailIo(mode, spec)));
+            }
+        }
+        for &point in COMMON_POINTS {
+            cases.push((round, Case::Crash("all-logs", point)));
+        }
+    }
+    let total = cases.len();
+    let queue = std::sync::Mutex::new(cases.into_iter());
+    let failures = std::sync::Mutex::new(Vec::new());
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| loop {
+                let Some((round, case)) = queue.lock().unwrap().next() else {
+                    return;
+                };
+                let (label, result) = match case {
+                    Case::FailIo(mode, spec) => (
+                        format!("round {round} {mode} fail-io {spec}"),
+                        std::panic::catch_unwind(|| fail_io_case(mode, spec)),
+                    ),
+                    Case::Crash(mode, point) => (
+                        format!("round {round} {mode} crash {point}"),
+                        std::panic::catch_unwind(|| crash_case(mode, Some(point), true)),
+                    ),
+                };
+                if let Err(panic) = result {
+                    let message = panic
+                        .downcast_ref::<String>()
+                        .cloned()
+                        .or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string()))
+                        .unwrap_or_default();
+                    failures.lock().unwrap().push(format!("{label}: {message}"));
+                }
+            });
+        }
+    });
+    let failures = failures.into_inner().unwrap();
+    eprintln!(
+        "repeat_core_matrices: {total} cases ({rounds} rounds), {} failed",
+        failures.len()
+    );
+    assert!(
+        failures.is_empty(),
+        "{} of {total} cases failed:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}

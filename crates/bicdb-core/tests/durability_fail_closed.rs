@@ -184,7 +184,10 @@ fn a_durable_decision_whose_page_commit_fails_is_kept_by_recovery() {
 /// and every failure is a durability failure.
 #[test]
 fn concurrent_commits_around_a_failing_write_never_acknowledge_after_it() {
-    for storage in storage_modes() {
+    for (storage, writers) in storage_modes()
+        .into_iter()
+        .flat_map(|storage| [(storage.clone(), 8usize), (storage, 32usize)])
+    {
         let dir = tempfile::tempdir().unwrap();
         let acked = Arc::new(Mutex::new(Vec::new()));
         {
@@ -192,7 +195,6 @@ fn concurrent_commits_around_a_failing_write_never_acknowledge_after_it() {
             seed(&mut db, 1);
             let fault = arm_io_failure("transaction_log.write", dir.path(), 25, false);
             let db = Arc::new(db);
-            let writers = 8;
             let start = Arc::new(Barrier::new(writers));
             std::thread::scope(|scope| {
                 for writer in 0..writers {
@@ -564,6 +566,61 @@ fn an_unknown_commit_resolves_by_identity_to_what_recovery_kept() {
             db.resolve_commit_outcome(&incarnation, sequence).unwrap(),
             resolution,
             "{label}: the answer must not change"
+        );
+    }
+}
+
+/// Failover after a primary failure. The primary's uncertain commit reached
+/// its own disk (the tail repair failed too) but was never shipped: shipping
+/// stops at the durable prefix. The promoted standby's history, which is
+/// authoritative, does not contain it, takes new writes, and recognises the
+/// old primary's divergent tail (it must be rebuilt from a snapshot, never
+/// streamed into the new history).
+#[test]
+fn a_primary_that_fails_mid_stream_is_replaced_by_a_promoted_standby() {
+    for storage in storage_modes() {
+        let primary_dir = tempfile::tempdir().unwrap();
+        let standby_dir = tempfile::tempdir().unwrap();
+        let start;
+        {
+            let mut standby =
+                open_replica(standby_dir.path(), storage.clone(), ReplicationMode::Standby);
+            let mut cursor = ReplicationCursor::new(standby.last_applied_commit_seq());
+            let mut primary =
+                open_replica(primary_dir.path(), storage.clone(), ReplicationMode::Primary);
+            seed(&mut primary, 4);
+            ship(&primary, &mut standby, &mut cursor).unwrap();
+            put(&primary, "streamed").unwrap();
+            let _sync = arm_io_failure("transaction_log.sync", primary_dir.path(), 1, false);
+            let _repair = arm_io_failure("transaction_log.repair", primary_dir.path(), 1, false);
+            let error = put(&primary, "x").unwrap_err();
+            assert!(
+                matches!(error, BicDbError::CommitOutcomeUnknown { .. }),
+                "{storage:?}: {error}"
+            );
+            ship(&primary, &mut standby, &mut cursor).unwrap();
+            assert!(present(&standby, "streamed"), "{storage:?}");
+            assert!(!present(&standby, "x"), "{storage:?}: an uncertain commit shipped");
+            start = standby.last_applied_commit_seq();
+            standby.promote_by_election(1, "standby", None).unwrap();
+        }
+        let promoted = open_replica(standby_dir.path(), storage.clone(), ReplicationMode::Primary);
+        assert_eq!(promoted.replication_role(), bicdb_core::NodeRole::Primary);
+        assert!(!present(&promoted, "x"), "{storage:?}");
+        put(&promoted, "after-failover").unwrap();
+        // The old primary recovers its own disk, which holds the uncertain
+        // commit past the promotion point: a divergent history.
+        let old = open_replica(primary_dir.path(), storage.clone(), ReplicationMode::Standby);
+        assert!(present(&old, "x"), "{storage:?}: the decision reached the old primary's disk");
+        assert!(old.last_applied_commit_seq() > start, "{storage:?}");
+        assert!(
+            matches!(
+                promoted
+                    .standby_resume(0, old.last_applied_commit_seq())
+                    .unwrap(),
+                bicdb_core::StandbyResume::Snapshot(_)
+            ),
+            "{storage:?}: the old primary must be rebuilt, never streamed"
         );
     }
 }

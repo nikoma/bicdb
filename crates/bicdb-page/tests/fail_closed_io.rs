@@ -138,11 +138,16 @@ fn a_failed_log_write_fences_the_log() {
 /// acknowledged records whose writeback had failed.
 #[test]
 fn concurrent_commits_waiting_on_a_failing_sync_all_fail() {
+    for writers in [8u64, 32] {
+        concurrent_waiters_on_a_failing_sync(writers);
+    }
+}
+
+fn concurrent_waiters_on_a_failing_sync(writers: u64) {
     let dir = TempDir::new().unwrap();
     let wal = Arc::new(Wal::open(dir.path().join("store.wal"), true).unwrap());
     wal.commit(1).unwrap();
     let durable = wal.durable_lsn();
-    let writers = 8u64;
     let lsns: Vec<_> = (0..writers)
         .map(|writer| {
             wal.log_page_image(1, 10 + writer, &[7u8; 256]).unwrap();

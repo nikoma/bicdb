@@ -122,7 +122,9 @@ fn reconcile(db_dir: &Path, ledger: &Path, mode: &str, label: &str) -> BTreeMap<
     let db = BicDb::open_with_config(db_dir, config(mode))
         .unwrap_or_else(|error| panic!("{label}: reopen failed: {error}"));
     let mut digest = BTreeMap::new();
-    let rows = db.scan_collection("rows").expect("scan rows");
+    let rows = db
+        .scan_collection("rows")
+        .unwrap_or_else(|error| panic!("{label}: scan rows: {error}"));
     let by_id: BTreeMap<String, serde_json::Value> = rows
         .iter()
         .map(|record| (record.id.clone(), record.metadata.clone()))
@@ -203,6 +205,7 @@ fn reconcile(db_dir: &Path, ledger: &Path, mode: &str, label: &str) -> BTreeMap<
 fn crash_case(mode: &str, crash_at: Option<&str>, expect_crash: bool) {
     let label = format!("{mode} {}", crash_at.unwrap_or("no-crash"));
     let temp = tempfile::tempdir().unwrap();
+    let keep = KeepOnPanic(temp.path().to_path_buf(), label.clone());
     let db = temp.path().join("db");
     let ledger = temp.path().join("ledger");
     let outcome = run_child(&db, &ledger, mode, crash_at);
@@ -215,6 +218,26 @@ fn crash_case(mode: &str, crash_at: Option<&str>, expect_crash: bool) {
     let first = reconcile(&db, &ledger, mode, &label);
     let second = reconcile(&db, &ledger, mode, &format!("{label} (second reopen)"));
     assert_eq!(first, second, "{label}: a second reopen changed the state");
+    drop(keep);
+}
+
+/// On panic, copy the case directory aside for inspection.
+struct KeepOnPanic(PathBuf, String);
+
+impl Drop for KeepOnPanic {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            let name: String = self
+                .1
+                .chars()
+                .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+                .collect();
+            let target = std::env::temp_dir().join(format!("durability-failure-{name}"));
+            let _ = std::fs::remove_dir_all(&target);
+            let _ = Command::new("cp").arg("-a").arg(&self.0).arg(&target).status();
+            eprintln!("kept failing case at {}", target.display());
+        }
+    }
 }
 
 /// Crash once in the workload, then crash again in the middle of recovery
@@ -255,21 +278,52 @@ const DEFERRED_POINTS: &[&str] = &[
     "materialize.after_markers:6",
 ];
 
+/// Run every case and report all failures together, so one bad boundary
+/// does not hide the rest of the matrix.
+fn run_matrix(cases: Vec<(String, Box<dyn FnOnce() + std::panic::UnwindSafe>)>) {
+    let mut failures = Vec::new();
+    for (label, case) in cases {
+        if let Err(panic) = std::panic::catch_unwind(case) {
+            let message = panic
+                .downcast_ref::<String>()
+                .cloned()
+                .or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string()))
+                .unwrap_or_default();
+            failures.push(format!("{label}: {message}"));
+        }
+    }
+    assert!(failures.is_empty(), "{} failing cases:\n{}", failures.len(), failures.join("\n"));
+}
+
+fn matrix(mode: &'static str, points: Vec<&'static str>, replays: &[&'static str]) {
+    let mut cases: Vec<(String, Box<dyn FnOnce() + std::panic::UnwindSafe>)> =
+        vec![("no-crash".into(), Box::new(move || crash_case(mode, None, false)))];
+    for point in points {
+        cases.push((point.into(), Box::new(move || crash_case(mode, Some(point), true))));
+    }
+    for &point in replays {
+        cases.push((
+            format!("{point} + replay"),
+            Box::new(move || interrupted_recovery_case(mode, point)),
+        ));
+    }
+    run_matrix(cases);
+}
+
 #[test]
 fn production_path_survives_every_crash_point() {
-    crash_case("all-logs", None, false);
-    for point in COMMON_POINTS {
-        crash_case("all-logs", Some(point), true);
-    }
-    interrupted_recovery_case("all-logs", "commit.after_page_apply:100");
+    matrix(
+        "all-logs",
+        COMMON_POINTS.to_vec(),
+        &["commit.after_page_apply:100"],
+    );
 }
 
 #[test]
 fn transaction_log_only_path_survives_every_crash_point() {
-    crash_case("transaction-log", None, false);
-    for point in COMMON_POINTS.iter().chain(DEFERRED_POINTS) {
-        crash_case("transaction-log", Some(point), true);
-    }
-    interrupted_recovery_case("transaction-log", "commit.after_page_apply:100");
-    interrupted_recovery_case("transaction-log", "materialize.after_wal_sync:20");
+    matrix(
+        "transaction-log",
+        COMMON_POINTS.iter().chain(DEFERRED_POINTS).copied().collect(),
+        &["commit.after_page_apply:100", "materialize.after_wal_sync:20"],
+    );
 }

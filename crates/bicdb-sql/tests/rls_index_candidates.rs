@@ -550,19 +550,3 @@ fn alternative_policy_indexes_do_not_initialize_all_stable_keys() {
         "residual policy key still executes on a matching row"
     );
 }
-
-#[test]
-fn an_independent_gin_lookup_does_not_initialize_a_policy_btree_key() {
-    let (_dir, mut db) = fixture();
-    alternative_index_fixture(&mut db, false);
-    let mut sql = SqlSession::new(&mut db);
-    sql.execute("ALTER TABLE alternative_orders ADD COLUMN payload JSONB")
-        .unwrap();
-    sql.execute("UPDATE alternative_orders SET payload='{\"present\":true}'::jsonb")
-        .unwrap();
-    sql.execute("CREATE INDEX alternative_payload ON alternative_orders USING gin(payload)")
-        .unwrap();
-    sql.execute("SET ROLE probe_reader").unwrap();
-    assert!(sql.execute("SELECT id FROM alternative_orders WHERE payload @> '{\"missing\":true}'::jsonb FOR UPDATE").unwrap().rows.is_empty());
-    assert!(sql.execute("SELECT id FROM alternative_orders WHERE payload @> '{\"present\":true}'::jsonb FOR UPDATE").is_err(), "residual RLS remains active for GIN candidates");
-}

@@ -639,6 +639,21 @@ impl<'db> SqlSession<'db> {
                     dependent.schema_name, dependent.name
                 )));
             }
+            let operators = self.routine_operators(&routine)?;
+            if let Some(operator) = operators.first().filter(|_| !cascade) {
+                return Err(SqlError::dependent_objects_still_exist(format!(
+                    "cannot drop function {name} because other objects depend on it \
+                     (operator {} depends on function {name})",
+                    operator.id.display()
+                )));
+            }
+            if cascade && !operators.is_empty() {
+                let ids = operators
+                    .iter()
+                    .map(|operator| operator.id.clone())
+                    .collect::<Vec<_>>();
+                self.drop_operators(&ids)?;
+            }
             if cascade {
                 let mut dropped = BTreeSet::new();
                 for dependent in dependents {

@@ -122,6 +122,18 @@ fn reconcile(db_dir: &Path, ledger: &Path, mode: &str, label: &str) -> BTreeMap<
     let db = BicDb::open_with_config(db_dir, config(mode))
         .unwrap_or_else(|error| panic!("{label}: reopen failed: {error}"));
     let mut digest = BTreeMap::new();
+    if !db.collections().iter().any(|meta| meta.name == "rows") {
+        // A crash during setup, before the schema was durable, leaves
+        // nothing; that is only correct if nothing was acknowledged.
+        for writer in 0..WRITERS {
+            assert!(
+                ledger_lines(&ledger.join(format!("writer-{writer}"))).is_empty(),
+                "{label}: schema missing although writer {writer} has acknowledged commits"
+            );
+        }
+        db.close().expect("close after reconcile");
+        return digest;
+    }
     let rows = db
         .scan_collection("rows")
         .unwrap_or_else(|error| panic!("{label}: scan rows: {error}"));
@@ -257,16 +269,18 @@ fn interrupted_recovery_case(mode: &str, crash_at: &str) {
 }
 
 const COMMON_POINTS: &[&str] = &[
+    // Early checkpoint hits land in open and schema setup.
+    "checkpoint.after_wal_sync:2",
     "commit.after_txlog_durable:5",
     "commit.after_txlog_durable:150",
     "commit.after_page_apply:7",
     "commit.after_page_apply:200",
     "commit.after_marker:9",
     "commit.after_marker:300",
-    "checkpoint.after_wal_sync:2",
-    "checkpoint.after_page_flush:3",
-    "checkpoint.after_publish:2",
-    "checkpoint.after_wal_reset:4",
+    "checkpoint.after_wal_sync:9",
+    "checkpoint.after_page_flush:11",
+    "checkpoint.after_publish:13",
+    "checkpoint.after_wal_reset:15",
     "txlog_cut.after_barrier:3",
     "txlog_cut.after_floor:2",
 ];

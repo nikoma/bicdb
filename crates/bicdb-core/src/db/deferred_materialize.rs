@@ -135,8 +135,8 @@ impl DeferredMaterializer {
         }
         if bicdb_page::test_faults::crash_point_armed("materialize.torn_markers") {
             let _ = self.tx_log.append_auxiliary(&bytes[..bytes.len() / 2]);
-            bicdb_page::test_faults::crash_point("materialize.torn_markers");
         }
+        bicdb_page::test_faults::crash_point("materialize.torn_markers");
         if let Err(error) = self.tx_log.append_auxiliary(&bytes) {
             self.poisoned.store(true, AtomicOrdering::Release);
             return Err(error);

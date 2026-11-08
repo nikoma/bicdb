@@ -439,3 +439,51 @@ fn a_new_policy_prefix_does_not_hoist_authored_volatile_filters_above_rls() {
         .iter()
         .any(|row| row[0].to_cell().contains("FullScan")));
 }
+
+#[test]
+fn missing_pk_and_unindexed_empty_reads_do_not_initialize_unused_policy_keys() {
+    let (_dir, mut db) = fixture();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE FUNCTION failing_tenant() RETURNS TEXT LANGUAGE SQL STABLE SECURITY DEFINER AS $$ SELECT (1/0)::text $$").unwrap();
+    sql.execute("GRANT EXECUTE ON FUNCTION failing_tenant() TO probe_reader")
+        .unwrap();
+    sql.execute("DROP POLICY tenant ON orders").unwrap();
+    sql.execute("CREATE POLICY failing_key ON orders FOR SELECT TO probe_reader USING (org_id=(SELECT failing_tenant()))").unwrap();
+    sql.execute("SET ROLE probe_reader").unwrap();
+    assert!(sql
+        .execute("SELECT id FROM orders WHERE id='missing'")
+        .unwrap()
+        .rows
+        .is_empty());
+    sql.execute("RESET ROLE").unwrap();
+    sql.execute("ALTER TABLE orders DROP CONSTRAINT orders_org_id_number_key")
+        .unwrap();
+    sql.execute("DELETE FROM orders").unwrap();
+    sql.execute("SET ROLE probe_reader").unwrap();
+    assert_eq!(count(&mut sql, "N42"), 0);
+}
+
+#[test]
+fn domain_policy_columns_retain_full_rls_results_without_inferred_keys() {
+    let (_dir, mut db) = fixture();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE DOMAIN probe_org_domain AS TEXT")
+        .unwrap();
+    sql.execute("CREATE TABLE domain_orders(id TEXT PRIMARY KEY, org_id probe_org_domain, number TEXT, UNIQUE(org_id,number))").unwrap();
+    sql.execute("INSERT INTO domain_orders VALUES ('own','own','N42'),('other','other','N42')")
+        .unwrap();
+    sql.execute("ALTER TABLE domain_orders ENABLE ROW LEVEL SECURITY")
+        .unwrap();
+    sql.execute("CREATE POLICY domain_tenant ON domain_orders FOR SELECT TO probe_reader USING (org_id=(SELECT probe_tenant()))").unwrap();
+    sql.execute("GRANT SELECT ON domain_orders TO probe_reader")
+        .unwrap();
+    sql.execute("SET ROLE probe_reader").unwrap();
+    sql.execute("SET app.tenant='own'").unwrap();
+    assert_eq!(
+        sql.execute("SELECT id FROM domain_orders WHERE number='N42'")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String("own".to_string())]]
+    );
+    assert!(plan(&mut sql, "SELECT id FROM domain_orders WHERE number='N42'").contains("FullScan"));
+}

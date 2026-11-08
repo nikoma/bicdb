@@ -316,6 +316,25 @@ fn driver_metadata_presets_are_published() {
     }
 }
 
+/// Query rewrite rules are a PostgreSQL feature: the Oracle profile keeps
+/// rejecting CREATE RULE, and its DML is never rewritten.
+#[test]
+fn rules_are_not_available_in_the_oracle_profile() {
+    let (_root, mut db) = app_database();
+    run(&mut db, "CREATE TABLE ruled (id NUMBER)").unwrap();
+    assert!(run(
+        &mut db,
+        "CREATE RULE keep AS ON DELETE TO ruled DO INSTEAD NOTHING"
+    )
+    .is_err());
+    run(&mut db, "INSERT INTO ruled VALUES (1)").unwrap();
+    run(&mut db, "DELETE FROM ruled").unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT COUNT(*) FROM ruled").unwrap()),
+        vec![vec!["0".to_string()]]
+    );
+}
+
 #[test]
 fn postgres_drop_table_respects_referencing_foreign_keys() {
     let (_root, mut db) = database("postgres");

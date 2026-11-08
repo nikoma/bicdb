@@ -55,8 +55,13 @@ synchronous-quorum tracker
 - **Reopen.** A new handle runs normal recovery. If the marker exists, the
   open then runs the verification step: `checkpoint_for_resume` end to end
   (transaction-log flush, page-log sync, page flush and page-file sync,
-  checkpoint record, superblock publication, transaction-log cut), an `fsync`
-  of `transactions.log`, and a final health check. Only when all of that
+  checkpoint record, superblock publication, transaction-log cut), then a
+  **rewrite** of `transactions.log` (copy to a new file, `fsync`, rename,
+  directory `fsync`), and a final health check. The rewrite matters: after a
+  failed `fsync`, frames recovery just read may exist only in the page
+  cache, clean but never written, and an `fsync` of clean pages writes
+  nothing. The copy writes every byte recovery used to a new, synced inode,
+  so an OS crash after the reopen cannot open a hole in the log. Only when all of that
   succeeds is the marker removed (followed by a directory `fsync`) and writes
   are accepted. If verification fails, the open fails with `WriteFailed`
   (site `open.verify`) and the marker stays.
@@ -103,6 +108,9 @@ Metrics (pgwire `/metrics`):
 | Decision durable in `transactions.log`; page-log commit sync or materialization fails afterwards | `08007` | `RecoveryRequired` | **Present.** Recovery replays the durable decision. |
 | Commits waiting on a failing group sync (page log or transaction log) | `08007` for each | `RecoveryRequired` | Whatever reached the disk; never a commit acknowledged after the failure |
 | Commit attempted after the failure | `WriteFailed` (`58030`) | `Aborted` / `Pending` (no decision was made) | Absent |
+| A fence lands after the commit was durable and visible (for example its record-audit publication marker fails) | **Success.** The commit is not ambiguous, and a `58030` would make the client retry and duplicate it. The failure is logged (`durability.audit_publication_deferred`) and the database is fenced for everything after. | `Committed` | Present; recovery republishes its audit entries |
+| A page-store-only commit (bulk load, index and full-text build steps) whose page-log commit fails | `08007` without a commit sequence (the page-log commit record is the decision and may be on disk) | — | All or nothing; resolve by re-reading the result |
+| The backup write gate times out before the commit's bytes are written (a backup or branch held it) | The ordinary `Backup` error: the commit is withdrawn (its queued bytes become an empty slot, so no later batch can write it), so it definitively did not commit, and a retry is safe. **No fence.** | `Aborted` | Absent |
 | Commit acknowledged before the failure | (was `Ok`) | `Committed` | Present (reconciled by the crash and fault matrices) |
 
 "Outcome unknown" means: do not assume the commit committed, and do not
@@ -118,7 +126,7 @@ Every `08007` carries the identity needed to resolve it
 | Part | Meaning |
 |---|---|
 | `incarnation` | Random id of the database handle (one per open), `BicDb::incarnation_id()` |
-| `commit_seq` | The commit sequence the transaction reserved. Unique within an incarnation. |
+| `commit_seq` | The commit sequence the transaction reserved. Unique within an incarnation. `none` for page-store-only operations (bulk load, index builds), which are resolved by re-reading their result. |
 | `transaction_id` | The transaction id (the receipt's `transaction_id()`). Absent for a quorum-wait `08007`, which knows only the sequence. |
 
 Where it appears:
@@ -128,7 +136,7 @@ Where it appears:
   `commit_seq`, and `observe_outcome().transaction_id()` for the same
   transaction id.
 - **pgwire / SQL:** the error DETAIL is
-  `commit_seq=<n> transaction_id=<t|unknown> incarnation=<uuid>`, and the
+  `commit_seq=<n|none> transaction_id=<t|none> incarnation=<uuid>`, and the
   HINT names the resolving statement.
 
 Commit sequences and transaction ids are recovered from the log at open, so a
@@ -232,6 +240,8 @@ what recovery does. Line numbers are at the time of writing.
 | Paged commit / abort / materialization | `in_paged_transaction_inner`, `spatial_paged.rs:1491` | Error, `recovery_required` set | No → No | Durable decision replayed |
 | Transaction-log cut, commit point (`transaction_log.cut`; injection `transaction_log.cut_rename`, `transaction_log.cut_sync`) | `replace_log_after_cut` from `truncate_log_file` / `copy_transaction_log_tail`, `db.rs:18767-18813`; `cut_transaction_log`, `db/replication_live.rs:312` | Error; **stale descriptor kept** | **Yes, to an unlinked inode** → No | Reopen reads whichever log the directory holds |
 | Standby import | `apply_imported_replication_commit`, `crates/bicdb-core/src/db/commit_snapshot.rs:185` | Error, no fence; resident state applied ahead of the log | Yes (a retry re-applied) → No | Reopen replays what reached the log |
+| Standby import, journal-event and audit-publication appends after the durable write | same function, after `write_durable` | Error with `commit_seq` not advanced, so a retry re-applied a durable commit | Yes → No (fenced; covered by code, not by a dedicated test, because it needs record-journal replication) | Reopen recovers the commit and republishes its journal |
+| Online extent migration copy sync (`page_file.sync`) | `PageStore::advance_extent_migration`, `crates/bicdb-page/src/manager.rs` | Plain error. The sync used the same segment descriptors the checkpoint syncs, so it consumed the writeback error, and the next checkpoint's sync succeeded and truncated the log over pages that may have been lost. | **Yes** → No | — |
 | Deferred materializer (experimental transaction-log-only mode) | `DeferredMaterializer::materialize`, `db/deferred_materialize.rs:104` | Error; batch requeued for a later sync | **Yes** (a later sync could succeed) → No (the shared log health refuses) | Unmarked commits replay |
 | Synchronous quorum | `SyncQuorum::wait_for`, `db/replication_live.rs:680` | Confirmation from standby acks only | Yes → No (`08007` once fenced) | — |
 
@@ -240,6 +250,7 @@ what recovery does. Line numbers are at the time of writing.
 | Site | Why it does not fence |
 |---|---|
 | Page-file page write (`page_file.write`, `write_page_raw`, `manager.rs:2398`) | The frame stays dirty and the page log still holds its redo, so the write is retried; only a failed page-file sync fences. A short or torn write is also caught by the page checksum. |
+| Backup write-gate timeout (`backup_gate.timeout`) | Nothing was written. The transaction log takes the gate before the append and fences only on errors from the write and the repair; the commit is withdrawn and reports the ordinary `Backup` error. |
 | Superblock write in `publish_root` | Same as a page write. A failed publication leaves the older checkpoint LSN in the superblock, and recovery then replays from the start of the log, which is idempotent. |
 | Opening the transaction-log handle | Nothing is written, so there is nothing whose durability is unknown. The commit stays pending and is retried. |
 | Tail copy before the rename in a cut (`transaction_log.cut_copy`) | The live log is untouched until the rename; the checkpoint fails and is retried later. |
@@ -276,6 +287,9 @@ The recorded `site` and the injection name are the same strings.
 | `transaction_log.repair` | the tail repair after a failed append |
 | `transaction_log.cut_rename`, `transaction_log.cut_sync` | `replace_log_after_cut` (recorded as `transaction_log.cut`) |
 | `transaction_log.cut_copy` | `copy_transaction_log_tail`, before the rename (not fatal) |
+| `page_file.sync` (migration) | `PageStore::advance_extent_migration` copy sync |
+| `backup_gate.timeout` | the backup write-gate wait reports its timeout at once (not fatal) |
+| `transaction_log.cut_window` | hook point only (`arm_io_hook`), between the cut's flush and its rename |
 
 Other recorded sites: `transaction_log.auxiliary`, `paged.commit`,
 `paged.abort`, `commit.materialize`, `standby.import`, `open.verify`.
@@ -291,7 +305,15 @@ Injection (`crates/bicdb-page/src/test_faults.rs`):
   in process, counting only paths under `scope_dir`, so parallel tests do
   not interfere. The returned guard reports `fired()` and `seen()` and
   disarms on drop.
+- `test_faults::arm_io_hook(site, scope_dir, n, hook)`: runs `hook` at the
+  `n`-th call and then performs the I/O, so a test can make something happen
+  while an I/O is in flight (a failure elsewhere during a successful
+  `fsync`, a fence during a log cut).
 - With nothing armed, an injection point is one atomic load.
+- `BICDB_TEST_FAIL_IO` is a test-only setting that works in any build. When
+  it is set, a `test_faults.io_failure_injection_enabled` event (severity
+  `critical`) is logged at the first I/O, and a malformed entry is refused
+  with a panic naming it, instead of silently arming nothing.
 
 ## 9. Qualification
 
@@ -304,6 +326,8 @@ Injection (`crates/bicdb-page/src/test_faults.rs`):
 | `fail_closed_io::a_failure_in_each_checkpoint_phase_fences_and_recovers` | Log sync, page-file sync, log append and log reset during a checkpoint, monolithic and segmented |
 | `fail_closed_io::a_failed_segment_seal_fences_the_log` | Seal sync and seal directory sync (the latter used to be ignored) |
 | `fail_closed_io::a_failed_page_write_is_retryable_and_not_a_durability_failure` | The deliberate non-fatal case |
+| `fail_closed_io::a_failure_during_an_in_flight_sync_publishes_no_durability` | A failure recorded while an `fsync` is in flight (hook): the `fsync` that then succeeds publishes nothing |
+| `fail_closed_io::a_failed_sync_during_online_extent_migration_fences_the_store` | The migration copy sync fences, and the checkpoint that would truncate the log is refused |
 | `fail_closed_io::a_failure_during_recovery_replay_fails_the_open_and_a_retry_recovers` | Recovery replay failures |
 | `bicdb-core` `durability_fail_closed::a_failed_transaction_log_write_fences_and_reports_an_unknown_outcome` | Embedded and paged: `08007`, receipt, fencing of writes and reads, marker, no retry, reopen and verification |
 | `durability_fail_closed::an_unknown_outcome_resolves_to_what_reached_the_disk` | Sync failure with and without a failed tail repair: absent and present after recovery respectively |
@@ -311,6 +335,11 @@ Injection (`crates/bicdb-page/src/test_faults.rs`):
 | `durability_fail_closed::concurrent_commits_around_a_failing_write_never_acknowledge_after_it` | 8 and 32 writers, embedded and paged: no writer sees `Ok` after its first error, every error is a durability failure, no write is attempted after the failure, every acknowledged commit survives |
 | `durability_fail_closed::a_failed_checkpoint_fences_and_the_reopen_verifies` | Page-file sync, page-log sync and log reset inside `checkpoint_for_resume` |
 | `durability_fail_closed::a_failed_log_cut_fences_after_the_rename_and_not_before` | The stale-descriptor cut bug; the copy failure before the rename stays retryable |
+| `durability_fail_closed::a_fence_after_a_durable_commit_does_not_report_the_commit_as_refused` | Publication-marker failure after the commit: success, fenced afterwards, present after reopen |
+| `durability_fail_closed::a_failed_bulk_load_commit_reports_an_unknown_outcome` | Page-store-only commit failure: `08007` without a sequence, batch all or nothing |
+| `durability_fail_closed::a_backup_gate_timeout_does_not_fence` | Gate timeout: the commit is withdrawn (`Aborted`, absent), no fence, later commits visible |
+| `durability_fail_closed::verification_rewrites_the_transaction_log` | The verifying open rewrites the log to a new inode; a normal open does not |
+| `durability_fail_closed::a_fence_during_a_log_cut_stops_the_rename` | A fence in the cut window (hook) stops the rename |
 | `durability_fail_closed::a_reopen_whose_verification_fails_stays_fenced` | Verification is required, and its failure keeps the marker |
 | `durability_fail_closed::a_fenced_primary_ships_only_its_durable_prefix_and_the_standby_keeps_working` | Shipping stops at the durable prefix, the quorum confirms nothing, the standby stays healthy, and replication resumes after the primary's reopen |
 | `durability_fail_closed::an_unknown_commit_resolves_by_identity_to_what_recovery_kept` | Six fault cases (embedded and paged): the identity in the error matches the receipt and the transaction; the failed handle answers `Unresolved`; after the reopen the answer matches what recovery kept, and stays the same after later commits reuse the sequence |
@@ -332,7 +361,23 @@ Mutation checks (each mutation applied alone; the named tests must fail):
 | The transaction log's `write_durable` and `flush_buffer` no longer check the health state | `concurrent_commits_around_a_failing_write_never_acknowledge_after_it` (writes after the failure: 31 instead of 25) |
 | The cut no longer fences after a failed rename or sync | `a_failed_log_cut_fences_after_the_rename_and_not_before` |
 
-## 10. Durability-contract notes
+## 10. Known gaps (outside this change)
+
+- **Partial page-log reset.** If removing the sealed segments fails part way
+  through `Wal::reset`, or the process crashes there, the next recovery can
+  lose checkpointed pages. Fencing stops this handle, but it does **not**
+  make the on-disk state a partial reset leaves safe. Until the
+  recovery-side fix (follow-up 1, "GAP-2") lands, treat a `page_log.reset`
+  failure as needing that fix or a restore. It is scheduled to land
+  directly after this change.
+- **Reopening mid-migration.** A store whose online extent migration
+  stopped before it had created every segment its page count implies does
+  not reopen (`SegmentMissing`). This happens whether the migration step
+  failed (now a fence) or crashed. It is an existing limitation of online
+  migration, found while writing the migration fence test, and is tracked
+  separately.
+
+## 11. Durability-contract notes
 
 This change does not alter what a successful commit guarantees, when a
 commit is acknowledged in the healthy state, or what replication ships while

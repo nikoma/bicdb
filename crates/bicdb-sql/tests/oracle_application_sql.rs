@@ -480,6 +480,37 @@ fn missing_application_relations_are_not_reported_as_reserved_names() {
     }
 }
 
+/// A correlated subquery names a schema-local UPDATE or DELETE target by its
+/// table name in the Oracle profile too.
+#[test]
+fn correlated_references_name_update_and_delete_targets_by_table_name() {
+    let (_root, mut db) = app_database();
+    for source in [
+        "CREATE TABLE line (id NUMBER, product_id NUMBER, uom_id NUMBER)",
+        "CREATE TABLE product (product_id NUMBER, uom_id NUMBER)",
+        "INSERT INTO line VALUES (1, 10, NULL)",
+        "INSERT INTO line VALUES (2, 20, NULL)",
+        "INSERT INTO product VALUES (10, 100)",
+        "INSERT INTO product VALUES (20, 200)",
+        "UPDATE line SET uom_id = (SELECT uom_id FROM product WHERE product_id = line.product_id)",
+    ] {
+        run(&mut db, source).unwrap();
+    }
+    assert_eq!(
+        texts(run(&mut db, "SELECT SUM(uom_id) FROM line").unwrap()),
+        vec![vec!["300".to_string()]]
+    );
+    run(
+        &mut db,
+        "DELETE FROM line WHERE EXISTS (SELECT 1 FROM product WHERE product.product_id = line.product_id AND product.uom_id = 200)",
+    )
+    .unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT COUNT(*) FROM line").unwrap()),
+        vec![vec!["1".to_string()]]
+    );
+}
+
 /// `TOP` is not row-limit syntax in this profile either: a column named
 /// `top` is an ordinary identifier.
 #[test]

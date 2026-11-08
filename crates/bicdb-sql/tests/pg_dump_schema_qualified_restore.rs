@@ -346,6 +346,49 @@ fn unqualified_relations_resolve_through_search_path() {
     assert_eq!(int_at(&mut sql, "SELECT app.item_count()"), 1);
 }
 
+/// Binding unqualified names must leave the rest of the statement text
+/// untouched: string literals with doubled quotes, comments and layout.
+#[test]
+fn search_path_binding_preserves_statement_text() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE TABLE app.note (id INT, body TEXT)")
+        .unwrap();
+    sql.execute("CREATE TABLE app.registered (body TEXT)")
+        .unwrap();
+    sql.execute("CREATE VIEW app.one_row AS SELECT 1 AS id")
+        .unwrap();
+    sql.execute(
+        "CREATE FUNCTION app.register(p text) RETURNS void LANGUAGE plpgsql AS $$ \
+         BEGIN INSERT INTO app.registered VALUES (p); END; $$",
+    )
+    .unwrap();
+    sql.execute("SET search_path TO app, public").unwrap();
+    sql.execute(
+        r#"INSERT INTO note /* keep */ VALUES (1, 'COALESCE(AD_Language, '''')'),
+            (2, 'it''s')"#,
+    )
+    .unwrap();
+    let rows = sql
+        .execute("SELECT body FROM note ORDER BY id")
+        .unwrap()
+        .rows;
+    assert_eq!(
+        rows,
+        vec![
+            vec![SqlValue::String("COALESCE(AD_Language, '')".into())],
+            vec![SqlValue::String("it's".into())],
+        ]
+    );
+    sql.execute(r#"SELECT register('x''''y') FROM one_row"#)
+        .unwrap();
+    assert_eq!(
+        sql.execute("SELECT body FROM registered").unwrap().rows,
+        vec![vec![SqlValue::String("x''y".into())]]
+    );
+}
+
 /// The documented restore sets the application role's search_path as a
 /// role default, which applies to the role's later sessions.
 #[test]
@@ -413,6 +456,29 @@ fn correlated_references_name_schema_qualified_tables_by_their_bare_name() {
     )
     .unwrap();
     assert_eq!(int_at(&mut sql, "SELECT sum(uom_id) FROM line"), 302);
+    // Siblings: UPDATE ... FROM, a correlated subquery in a select list, and
+    // a correlated reference to a view, all named by the bare name.
+    sql.execute("UPDATE line SET uom_id = 0").unwrap();
+    sql.execute("UPDATE line SET uom_id = product.uom_id FROM product WHERE product.product_id = line.product_id")
+        .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT sum(uom_id) FROM line"), 300);
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT (SELECT uom_id FROM product WHERE product_id = line.product_id) FROM app.line ORDER BY id"
+        ),
+        100
+    );
+    sql.execute("CREATE VIEW app.line_view AS SELECT id, product_id FROM app.line")
+        .unwrap();
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM app.line_view WHERE EXISTS \
+             (SELECT 1 FROM product WHERE product.product_id = line_view.product_id)"
+        ),
+        2
+    );
     sql.execute("DELETE FROM line WHERE EXISTS (SELECT 1 FROM product WHERE product.product_id = line.product_id AND product.uom_id = 200)")
         .unwrap();
     assert_eq!(int_at(&mut sql, "SELECT count(*) FROM line"), 1);

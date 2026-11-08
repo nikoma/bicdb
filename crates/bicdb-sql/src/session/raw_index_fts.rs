@@ -902,15 +902,15 @@ impl<'db> SqlSession<'db> {
             .map(|alias| ident_value(&alias.name))
             .or_else(|| object_name_parts(name).last().cloned())
             .unwrap_or_default();
-        let source_sql = format!(
-            "SELECT * FROM {relation}{}",
-            select
-                .selection
-                .as_ref()
-                .map(|selection| format!(" WHERE {selection}"))
-                .unwrap_or_default()
-        );
-        let source = self.execute_query_in_sql(&parse_single_query(&source_sql)?)?;
+        // Built as ASTs, never re-rendered text: rendering is not a faithful
+        // round trip for every literal.
+        let mut source_query = query.clone();
+        if let SetExpr::Select(source_select) = source_query.body.as_mut() {
+            source_select.projection = vec![SelectItem::Wildcard(
+                sqlparser::ast::WildcardAdditionalOptions::default(),
+            )];
+        }
+        let source = self.execute_query_in_sql(&source_query)?;
         let mut output: Option<SqlResult> = None;
         for row in &source.rows {
             let mut projection = select.projection.clone();
@@ -934,13 +934,13 @@ impl<'db> SqlSession<'db> {
                 }
                 ControlFlow::<()>::Continue(())
             });
-            let projection_sql = projection
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join(", ");
-            let produced = self
-                .execute_query_in_sql(&parse_single_query(&format!("SELECT {projection_sql}"))?)?;
+            let mut row_query = query.clone();
+            if let SetExpr::Select(row_select) = row_query.body.as_mut() {
+                row_select.projection = projection;
+                row_select.from.clear();
+                row_select.selection = None;
+            }
+            let produced = self.execute_query_in_sql(&row_query)?;
             match &mut output {
                 Some(output) => output.rows.extend(produced.rows),
                 None => output = Some(produced),

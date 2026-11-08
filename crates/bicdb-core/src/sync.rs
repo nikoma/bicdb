@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -40,6 +41,9 @@ pub(crate) struct SyncLog {
     encryption: EncryptionRuntime,
     pending: BTreeMap<Uuid, SyncOp>,
     synced: BTreeSet<Uuid>,
+    /// The database's fail-closed state: a failed tail repair of this log
+    /// fences the database (`storage::fence_on_frame_log_failure`).
+    durability: Option<Arc<bicdb_page::DurabilityHealth>>,
 }
 
 impl SyncLog {
@@ -83,6 +87,7 @@ impl SyncLog {
             encryption,
             pending,
             synced,
+            durability: None,
         })
     }
 
@@ -97,7 +102,12 @@ impl SyncLog {
             encryption,
             pending: BTreeMap::new(),
             synced: BTreeSet::new(),
+            durability: None,
         }
+    }
+
+    pub(crate) fn attach_durability(&mut self, health: Arc<bicdb_page::DurabilityHealth>) {
+        self.durability = Some(health);
     }
 
     pub fn append_ops(&mut self, ops: &[SyncOp]) -> Result<()> {
@@ -111,6 +121,9 @@ impl SyncLog {
             payloads.push(serde_json::to_vec(&event)?);
         }
 
+        // A failed append cuts its bytes back before returning (or, when that
+        // fails too, fences the database), so the commit that called this
+        // aborts with nothing of it left in the log.
         storage::append_frames(
             &self.path,
             FrameKind::Sync,
@@ -118,7 +131,8 @@ impl SyncLog {
             self.fsync,
             &storage::CompressionConfig::disabled(),
             &self.encryption,
-        )?;
+        )
+        .map_err(|error| storage::fence_on_frame_log_failure(self.durability.as_ref(), error))?;
 
         for op in ops {
             if !self.synced.contains(&op.op_id) {
@@ -154,7 +168,8 @@ impl SyncLog {
             &payload,
             self.fsync,
             &self.encryption,
-        )?;
+        )
+        .map_err(|error| storage::fence_on_frame_log_failure(self.durability.as_ref(), error))?;
 
         for op_id in op_ids {
             self.synced.insert(*op_id);

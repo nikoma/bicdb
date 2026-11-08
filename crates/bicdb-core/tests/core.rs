@@ -2667,6 +2667,13 @@ fn intentional_frame_corruption_is_detected_and_not_silently_repaired() {
             "transaction" => temp.path().join(DEFAULT_TRANSACTION_LOG),
             _ => unreachable!(),
         };
+        // Whether a second frame follows the first: frame headers start with
+        // "BICF" and version 1, which serialized JSON payloads never contain.
+        let has_later_frame = fs::read(&path)
+            .unwrap()
+            .windows(5)
+            .skip(1)
+            .any(|window| window == b"BICF\x01");
         corrupt_first_byte(&path);
 
         assert!(
@@ -2678,15 +2685,38 @@ fn intentional_frame_corruption_is_detected_and_not_silently_repaired() {
             .is_err(),
             "{file_name} corruption should fail strict verification"
         );
-        let reopened = BicDb::open_with_config(
-            temp.path(),
-            DbConfig::default().with_storage_mode(StorageMode::EmbeddedMemory),
-        )
-        .unwrap_or_else(|error| {
-            panic!("{file_name} corruption at offset 0 must be recoverable: {error}")
-        });
+        // Damage at offset 0 with valid frames after it is not a torn tail:
+        // truncating would silently drop every later frame. The open refuses
+        // and leaves the file as it was. A log whose only frame is damaged
+        // has nothing after it, and is recovered as a torn tail.
+        let damaged = fs::read(&path).unwrap();
+        let open = || {
+            BicDb::open_with_config(
+                temp.path(),
+                DbConfig::default().with_storage_mode(StorageMode::EmbeddedMemory),
+            )
+        };
+        match open() {
+            Err(BicDbError::Corruption { message, .. }) if has_later_frame => {
+                assert!(
+                    message.contains("valid frame follows"),
+                    "{file_name}: {message}"
+                );
+                assert_eq!(fs::read(&path).unwrap(), damaged, "{file_name} changed");
+                // The explicit operator action accepts the loss and keeps the
+                // moved bytes in a side file.
+                let salvage = bicdb_core::salvage_frame_log(&path).unwrap();
+                assert_eq!(salvage.kept_bytes, 0);
+                assert_eq!(fs::read(salvage.moved_to.unwrap()).unwrap(), damaged);
+                drop(open().unwrap_or_else(|error| {
+                    panic!("{file_name} must open after salvage: {error}")
+                }));
+            }
+            Ok(reopened) if !has_later_frame => drop(reopened),
+            Ok(_) => panic!("{file_name}: damage before a valid frame was truncated silently"),
+            Err(error) => panic!("{file_name}: unexpected error {error}"),
+        }
         assert_eq!(fs::metadata(&path).unwrap().len(), 0);
-        drop(reopened);
         BicDb::verify_path(
             temp.path(),
             DbConfig::default().with_storage_mode(StorageMode::EmbeddedMemory),

@@ -445,7 +445,7 @@ that runs regardless of the xid's outcome. Proposed options are in section 10.
 
 ### Q2. First-record check
 
-**Answer: sound in a precise form, and implemented as a separate change.**
+**Answer: sound in a precise form, and implemented as a separate change (#57).**
 
 The literal proposal ("the first record of the active log must carry the
 checkpoint's LSN") is **not** sound. A checkpoint that did not reset (backup
@@ -532,7 +532,7 @@ instead (section 10).
    need (b) or (c).
 
 None of these is in the docs-and-tests change. Change 1 is ready as its own
-PR. Changes 2 and 3 await a decision.
+PR (#57). Changes 2 and 3 await a decision.
 
 ## 11. Crash points added
 

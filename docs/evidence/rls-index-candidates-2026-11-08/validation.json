@@ -101,5 +101,6 @@
   "excluded_incomplete_phases": [
     "07b full batch resource-interrupted after completed core/page gates; remaining SQL gate rerun on final source",
     "gin-keys-red cancellation raced with flock acquisition and source synchronization; no RED/GREEN claim from that phase"
-  ]
+  ],
+  "qualification_stage": "Initial non-FTS b4 candidate; generated-FTS qualification is validation-a5bbadc.json"
 }

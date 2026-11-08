@@ -1,5 +1,47 @@
 # Necessary row-policy equalities as existing index candidates
 
+The FTS-qualified implementation is `a5bbadca5e2eb253d887fd33554e67e1f3f8e4fb`.
+It passes **622** SQL/security/FTS/upstream tests across 21 targets, formatting,
+and the CLI build. `validation-a5bbadc.json` gives exact source/binary scopes.
+This source includes the existing journal HA fixture boundary correction; no
+production lease, admission or journal assertions were weakened.
+
+A final metadata audit found that the first conservative candidate (`b4e0142`)
+still declined models carrying generated FullText indexes, including the actual
+Inventory PO/SO shape. The added weighted-FTS regression retained correct rows but
+failed the composite-index plan on b4 (17 passed/1 failed). The narrow refinement
+passes 18/18, including repeated tenants, residual visibility and actual FTS path
+results. It permits an unused FullText index only when no authored `@@` exists;
+JSONB/array/spatial alternatives still conservatively decline augmentation.
+
+A separate fresh authenticated probe keeps the generated weighted FullText index
+in **both** arms, the same 100 own rows, same 0/1,000/5,000 unrelated rows, identical
+parameterized query and identical script SHA. The b4/a5 production difference is
+this guard refinement; both use the same 3f3 core lineage.
+
+| Unrelated rows | b4 implicit policy ms | a5 implicit policy ms | a5 explicit control ms |
+| ---: | ---: | ---: | ---: |
+| 0 | 34.717 | 13.754 | 13.800 |
+| 1,000 | 338.447 | 13.002 | 13.960 |
+| 5,000 | 1,540.143 | 13.762 | 13.857 |
+
+Each cell is a median of 7 measured requests. The refined plans all use the
+composite index with `PrefixKeys 2` and `ActualRowsFetched 1`. Final/initial median
+ratio is 1.001; `data_growth_goal_met` is explicitly false before and true after.
+Context changes, empty identity, owner bypass, permissive OR and restrictive AND
+controls pass. These shared-host debug-build timings establish this workload,
+not a production SLA or universal growth-free runtime. The explicit control moved
+with the run's constant overhead; structural RED/GREEN is the mechanism evidence.
+
+Use `probe-generated-fts.mjs` with the same environment contract described below.
+Its before/after SHA is
+`90150f911bada16d4dfef08d4f1a9e2fb1451bb8c6fd0e72b48fc0c0036abf49`.
+The a5 CLI SHA is
+`466a8c5aae1a5c17530757d8b74c0d92dfb331dc5af1b45913d030f762f406d7`.
+Later mainline durability changes are separate from these pinned binaries and
+require their own combined-main qualification; no global engine was deployed.
+Earlier non-FTS probes and failed prototypes below remain distinct evidence.
+
 A common enterprise query filters `number = $1` while a SELECT policy supplies
 `org_id = (SELECT current_tenant())`. An existing `(org_id, number)` index cannot
 serve the query if the index planner only receives the authored WHERE. On the
@@ -46,8 +88,11 @@ storage, or secondary query optimizer is introduced.
 - Deferred augmentation requires one distinct policy InitPlan value shared by every
   eligible lookup, and no existing authored lookup. Multiple policy values or an
   alternative index that can avoid that value retain the prior execution path.
-  Tables carrying non-B-tree indexes conservatively retain their prior path too,
-  since those alternatives are excluded from the B-tree strategy metadata.
+  JSONB/array/spatial index catalogs retain their prior path. FullText-only
+  catalogs may use the candidate when the authored predicate has no `@@` anywhere:
+  the central FTS candidate extractor requires that operator. This AST check
+  executes no query or policy helper; actual searches keep their prior FTS path.
+  Future non-`@@` FTS access must update this explicit guard contract.
   This prevents the row-set locator from initializing an unused policy helper while
   comparing alternative indexes. The common tenant-plus-number composite lookup
   remains eligible. Literal-only candidates do not require InitPlan initialization.
@@ -106,10 +151,10 @@ were transaction-rolled-back.
 A separate PostgreSQL JSONB GIN probe was not a valid extension of the alternate
 B-tree contract: the non-leakproof JSONB predicate remained after the row policy,
 and PostgreSQL legitimately initialized a tenant-index key. No GIN parity assertion
-is included. Non-B-tree tables simply decline this new optimization; their broader
+is included. JSONB/array/spatial tables decline this optimization; their broader
 security-barrier/expression-order qualification is outside this change.
 
-## Final validation and measured growth
+## Initial non-FTS validation and measured growth
 
 Source `b4e0142437a0518dac5deb176b9dccf088987d51` passed formatting, all **592**
 selected SQL/security/upstream tests (16 binaries, zero failures or ignored cases),

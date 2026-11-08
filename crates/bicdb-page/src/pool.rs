@@ -1679,6 +1679,7 @@ impl BufferPool {
             }
         }
         self.store.write_page(page_id, &mut bytes)?;
+        crate::test_faults::crash_point("pool.after_writeback");
         // Clear only after the page write succeeds. A failed write remains
         // conservatively eligible for another WAL barrier and retry.
         frame.needs_log.store(false, Ordering::Release);

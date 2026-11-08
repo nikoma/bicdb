@@ -318,6 +318,9 @@ const COMMON_POINTS: &[&str] = &[
     "checkpoint.after_wal_reset:15",
     "txlog_cut.after_barrier:3",
     "txlog_cut.after_floor:2",
+    // A page just reached the page file: its log records must be durable.
+    "pool.after_writeback:40",
+    "pool.after_writeback:120",
 ];
 
 const DEFERRED_POINTS: &[&str] = &[

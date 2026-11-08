@@ -544,6 +544,9 @@ impl Drop for PageGuardMut {
         }
         self.frame.dirty.store(true, Ordering::Release);
         self.frame.needs_log.store(true, Ordering::Release);
+        if crate::wal_amplification::enabled() {
+            crate::wal_amplification::note_dirty(self.frame.page_id);
+        }
         self.dirty_index.lock().insert(self.frame.page_id);
         self.frame.pins.fetch_sub(1, Ordering::Release);
     }

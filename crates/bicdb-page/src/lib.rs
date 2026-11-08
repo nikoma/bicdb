@@ -42,6 +42,7 @@ pub mod tiered_gc;
 pub mod tiered_manifest;
 pub mod tiered_reader;
 pub mod wal;
+pub mod wal_amplification;
 
 pub use backup::{PageBackupLimits, PageBackupSnapshot, PageBackupStats};
 pub use btree::{

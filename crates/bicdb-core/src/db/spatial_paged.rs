@@ -1505,9 +1505,16 @@ impl BicDb {
         // transactions that do not contain their own rows.
         let _guard = paged.write_guard();
         self.check_recovery_state()?;
+        let amp_started =
+            bicdb_page::wal_amplification::enabled().then(std::time::Instant::now);
         let (xid, _) = paged.begin();
         match apply(paged, xid) {
             Ok(()) => {
+                if let Some(started) = amp_started {
+                    bicdb_page::wal_amplification::record_apply_timing(
+                        started.elapsed().as_nanos() as u64,
+                    );
+                }
                 if let Err(error) = paged.commit(xid) {
                     self.recovery_required.store(true, AtomicOrdering::Release);
                     return Err(error);

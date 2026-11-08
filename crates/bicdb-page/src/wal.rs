@@ -616,7 +616,11 @@ impl Wal {
 
     /// Log a full page after-image.
     pub fn log_page_image(&self, page_id: PageId, transaction: u64, image: &[u8]) -> Result<Lsn> {
-        self.append(RecordKind::PageImage, page_id, transaction, image)
+        let lsn = self.append(RecordKind::PageImage, page_id, transaction, image)?;
+        if crate::wal_amplification::enabled() {
+            crate::wal_amplification::record_image(page_id, image, lsn, self.redo_lsn());
+        }
+        Ok(lsn)
     }
 
     /// Log a commit and make the log durable through it.
@@ -631,6 +635,9 @@ impl Wal {
             });
         }
         let lsn = self.append(RecordKind::Commit, 0, transaction, &[])?;
+        if crate::wal_amplification::enabled() {
+            crate::wal_amplification::record_commit();
+        }
         // Recorded before the sync: the record is in the log whether or not
         // the fsync below succeeds, and it is the record's existence that
         // must forbid a later abort for the same transaction.
@@ -650,6 +657,9 @@ impl Wal {
     pub fn abort(&self, transaction: u64) -> Result<Lsn> {
         if self.committed_this_generation.lock().contains(transaction) {
             return Ok(self.next_lsn().saturating_sub(1));
+        }
+        if crate::wal_amplification::enabled() {
+            crate::wal_amplification::record_abort();
         }
         self.append(RecordKind::Abort, 0, transaction, &[])
     }

@@ -2798,6 +2798,9 @@ pub(crate) fn eval_bytea_function_value(
         || matches!(
             name,
             "get_byte"
+                | "int2send"
+                | "int4send"
+                | "int8send"
                 | "set_byte"
                 | "get_bit"
                 | "set_bit"
@@ -2848,6 +2851,26 @@ pub(crate) fn eval_bytea_function_value(
                 .map(|byte| i64::from(byte.count_ones()))
                 .sum();
             Ok(Some(SqlValue::Int(bits)))
+        }
+        "int2send" | "int4send" | "int8send" => {
+            // The type's binary send format: big-endian two's complement.
+            require_arg_count(name, args, 1)?;
+            let value = sql_value_i64(&args[0])
+                .ok_or_else(|| SqlError::invalid_parameter_value("argument is not an integer"))?;
+            let out_of_range =
+                || SqlError::numeric_value_out_of_range(format!("{name} argument out of range"));
+            let bytes = match name {
+                "int2send" => i16::try_from(value)
+                    .map_err(|_| out_of_range())?
+                    .to_be_bytes()
+                    .to_vec(),
+                "int4send" => i32::try_from(value)
+                    .map_err(|_| out_of_range())?
+                    .to_be_bytes()
+                    .to_vec(),
+                _ => value.to_be_bytes().to_vec(),
+            };
+            Ok(Some(SqlValue::String(format_bytea_hex(&bytes))))
         }
         "get_byte" | "get_bit" => {
             require_arg_count(name, args, 2)?;

@@ -2482,6 +2482,34 @@ impl<'db> SqlSession<'db> {
         Ok(expr.clone())
     }
 
+    fn oracle_routine_frame(&self) -> bool {
+        self.routine_slots
+            .as_ref()
+            .is_some_and(|slots| slots.oracle_procedural_evaluation)
+    }
+
+    /// Whether an expression in a routine body has type bytea, using the
+    /// declared types of routine variables, which value inspection cannot
+    /// tell apart from text.
+    fn routine_expr_is_bytea(&self, expr: &Expr) -> bool {
+        if self.oracle_routine_frame() {
+            // Oracle RAW values keep the profile's existing conversions.
+            return projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref() == Some("bytea");
+        }
+        match expr {
+            Expr::Nested(inner) => self.routine_expr_is_bytea(inner),
+            Expr::Substring { expr, .. } | Expr::Overlay { expr, .. } => {
+                self.routine_expr_is_bytea(expr)
+            }
+            Expr::BinaryOp {
+                left,
+                op: BinaryOperator::StringConcat,
+                right,
+            } => self.routine_expr_is_bytea(left) || self.routine_expr_is_bytea(right),
+            _ => self.routine_unary_operand_type(expr).as_deref() == Some("bytea"),
+        }
+    }
+
     fn routine_unary_operand_type(&self, expr: &Expr) -> Option<String> {
         let name = match expr {
             Expr::Identifier(ident) => Some(ident.value.as_str()),
@@ -2867,9 +2895,7 @@ impl<'db> SqlSession<'db> {
             Expr::Position { expr, r#in } => eval_position_typed_value(
                 self.eval_session_expr(expr)?,
                 self.eval_session_expr(r#in)?,
-                projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref() == Some("bytea")
-                    || projected_expr_pg_type_with_db(self.db_ref(), r#in).as_deref()
-                        == Some("bytea"),
+                self.routine_expr_is_bytea(expr) || self.routine_expr_is_bytea(r#in),
             ),
             Expr::Substring {
                 expr,
@@ -2878,11 +2904,10 @@ impl<'db> SqlSession<'db> {
                 shorthand,
                 ..
             } => {
-                let bytea =
-                    projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref() == Some("bytea");
+                let bytea = self.routine_expr_is_bytea(expr);
                 let invalid_bit_shorthand = *shorthand
                     && matches!(
-                        projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref(),
+                        self.routine_unary_operand_type(expr).as_deref(),
                         Some("bit" | "varbit")
                     );
                 eval_substring_expr(
@@ -2912,8 +2937,7 @@ impl<'db> SqlSession<'db> {
                 overlay_from,
                 overlay_for,
             } => {
-                let bytea =
-                    projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref() == Some("bytea");
+                let bytea = self.routine_expr_is_bytea(expr);
                 eval_overlay_expr(
                     expr,
                     overlay_what,
@@ -3005,7 +3029,22 @@ impl<'db> SqlSession<'db> {
             Expr::BinaryOp { left, op, right } => {
                 let left_value = self.eval_session_expr(left)?;
                 let right_value = self.eval_session_expr(right)?;
-                let types = self.routine_binary_expr_types(left, op, right);
+                let mut types = self.routine_binary_expr_types(left, op, right);
+                if matches!(op, BinaryOperator::StringConcat)
+                    && !self.oracle_routine_frame()
+                    && (self.routine_expr_is_bytea(left) || self.routine_expr_is_bytea(right))
+                {
+                    let bytea = || Some("bytea".to_string());
+                    types = std::rc::Rc::new(RoutineBinaryExprTypes {
+                        range_left: types.range_left.clone(),
+                        range_right: types.range_right.clone(),
+                        binary: BinaryExprTypes {
+                            left: bytea(),
+                            right: bytea(),
+                            result: bytea(),
+                        },
+                    });
+                }
                 if let Some(value) = eval_range_binary_value_with_db(
                     self.db_ref(),
                     left_value.clone(),

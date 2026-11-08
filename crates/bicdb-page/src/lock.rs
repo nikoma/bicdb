@@ -138,6 +138,86 @@ impl DirectoryLock {
     }
 }
 
+/// Whether some handle currently owns a store directory, observed without
+/// taking, creating or modifying anything. Used by the read-only store
+/// verifier, which must refuse to read a store a live writer is changing
+/// but must never create `store.lock` itself.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum DirectoryLockProbe {
+    /// There is no `store.lock` file (the store was never opened by an engine
+    /// that locks, or the file was removed). Nothing can hold it.
+    NoLockFile,
+    /// The lock file exists and no process holds its record lock.
+    Unlocked,
+    /// Another process holds the record lock.
+    HeldByProcess { pid: i64 },
+    /// A handle in THIS process owns the directory.
+    HeldInThisProcess,
+    /// The platform cannot test the lock without taking it.
+    Unknown,
+}
+
+impl DirectoryLockProbe {
+    pub fn is_held(&self) -> bool {
+        matches!(self, Self::HeldByProcess { .. } | Self::HeldInThisProcess)
+    }
+}
+
+/// Test the directory lock without acquiring it. Opens the lock file
+/// read-only (never creating it) and asks the kernel with `F_GETLK`, which
+/// reports a conflicting lock and changes nothing.
+#[cfg(unix)]
+pub fn probe_directory_lock(dir: &Path) -> Result<DirectoryLockProbe> {
+    use std::os::unix::fs::OpenOptionsExt;
+    use std::os::unix::io::AsRawFd;
+
+    let metadata = std::fs::metadata(dir).map_err(|source| PageError::io(dir, source))?;
+    let identity = DirectoryIdentity {
+        device: metadata.dev(),
+        inode: metadata.ino(),
+    };
+    if process_locks_guard().contains(&identity) {
+        return Ok(DirectoryLockProbe::HeldInThisProcess);
+    }
+    let path = dir.join(LOCK_FILE);
+    let file = match OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(&path)
+    {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(DirectoryLockProbe::NoLockFile)
+        }
+        Err(error) => return Err(PageError::io(&path, error)),
+    };
+    // SAFETY: see `try_lock_exclusive`; all-zero is a valid `flock`.
+    let mut lock: libc::flock = unsafe { std::mem::zeroed() };
+    lock.l_type = libc::F_WRLCK as _;
+    lock.l_whence = libc::SEEK_SET as _;
+    lock.l_start = 0;
+    lock.l_len = 0;
+    // SAFETY: `file` is open for the call and `lock` is initialized. F_GETLK
+    // only reports; it never places or releases a lock.
+    let rc = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETLK, &mut lock) };
+    if rc != 0 {
+        return Err(PageError::io(&path, std::io::Error::last_os_error()));
+    }
+    if i32::from(lock.l_type) == libc::F_UNLCK {
+        Ok(DirectoryLockProbe::Unlocked)
+    } else {
+        Ok(DirectoryLockProbe::HeldByProcess {
+            pid: i64::from(lock.l_pid),
+        })
+    }
+}
+
+#[cfg(not(unix))]
+pub fn probe_directory_lock(_dir: &Path) -> Result<DirectoryLockProbe> {
+    Ok(DirectoryLockProbe::Unknown)
+}
+
 #[cfg(unix)]
 impl Drop for DirectoryLock {
     fn drop(&mut self) {

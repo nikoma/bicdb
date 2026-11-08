@@ -644,25 +644,25 @@ impl PageIoSnapshot {
 
 /// Mutable file-level metadata, published atomically via the superblock.
 #[derive(Clone, Copy, Debug, Default)]
-struct Superblock {
-    page_count: u64,
-    free_list_head: PageId,
-    free_page_count: u64,
-    generation: u64,
+pub(crate) struct Superblock {
+    pub(crate) page_count: u64,
+    pub(crate) free_list_head: PageId,
+    pub(crate) free_page_count: u64,
+    pub(crate) generation: u64,
     /// Opaque to this crate: the owning engine's root page (e.g. a catalog
     /// B+ tree root). Stored here so "the current root" is published by the same
     /// atomic write that publishes the page count.
-    root_page: PageId,
-    checkpoint_lsn: u64,
+    pub(crate) root_page: PageId,
+    pub(crate) checkpoint_lsn: u64,
     /// Pages per segment file; `0` = legacy monolithic layout. Non-zero
     /// stores publish the SEGMENTED superblock magic so pre-segmentation
     /// engines fail closed instead of misreading segment 0 as the whole
     /// store.
-    extent_pages: u64,
+    pub(crate) extent_pages: u64,
     /// Online-migration target extent size (pages); `0` = none in progress.
-    migration_target_pages: u64,
+    pub(crate) migration_target_pages: u64,
     /// Durable migration progress: pages below this live in segment files.
-    migration_watermark: u64,
+    pub(crate) migration_watermark: u64,
 }
 
 fn free_list_corruption(meta: &Superblock, reason: impl Into<String>) -> PageError {
@@ -2620,53 +2620,69 @@ impl PageStore {
         self.probe_page_size(expected_page_size)?;
 
         let mut page = vec![0u8; expected_page_size as usize];
-        let header = self.read_page_unchecked(SUPERBLOCK_PAGE_ID, &mut page)?;
-        if header.page_type != PageType::Superblock {
-            return Err(PageError::UnexpectedPageType {
-                page_id: SUPERBLOCK_PAGE_ID,
-                found: header.page_type as u8,
-                expected: PageType::Superblock as u8,
-            });
-        }
-
-        let body = &page[PAGE_HEADER_BYTES..];
-        let tracked = body[0..8] == SUPERBLOCK_MAGIC_TRACKED
-            || body[0..8] == SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC;
+        self.read_page_unchecked(SUPERBLOCK_PAGE_ID, &mut page)?;
+        let (superblock, tracked) = decode_superblock(&page, &self.path, expected_page_size)?;
         self.backup_format.store(tracked, Ordering::Release);
-        let segmented =
-            body[0..8] == SUPERBLOCK_MAGIC_SEGMENTED || body[0..8] == SUPERBLOCK_MAGIC_TRACKED;
-        if !segmented
-            && body[0..8] != SUPERBLOCK_MAGIC
-            && body[0..8] != SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC
-        {
-            let mut found = [0u8; 4];
-            found.copy_from_slice(&body[0..4]);
-            return Err(PageError::NotAPageFile {
-                path: self.path.clone(),
-                found,
-            });
-        }
-        let page_size = u32::from_le_bytes(body[8..12].try_into().unwrap());
-        if page_size != expected_page_size {
-            return Err(PageError::PageSizeMismatch {
-                path: self.path.clone(),
-                found: page_size,
-                expected: expected_page_size,
-            });
-        }
-        let (extent_pages, migration_target_pages, migration_watermark) = if segmented {
-            (
-                u64::from_le_bytes(body[52..60].try_into().unwrap()),
-                u64::from_le_bytes(body[60..68].try_into().unwrap()),
-                u64::from_le_bytes(body[68..76].try_into().unwrap()),
-            )
-        } else {
-            // Legacy superblocks carry zeroes here; treat as monolithic
-            // regardless.
-            (0, 0, 0)
-        };
+        Ok(superblock)
+    }
+}
 
-        Ok(Superblock {
+/// Decode a superblock page that already passed [`page::verify`]. Returns
+/// the superblock and whether it carries a tracked (backup-format) magic.
+/// Shared with the read-only store verifier, which must parse page 0 exactly
+/// as an open does without constructing a [`PageStore`].
+pub(crate) fn decode_superblock(
+    page: &[u8],
+    path: &Path,
+    expected_page_size: u32,
+) -> Result<(Superblock, bool)> {
+    let header = PageHeader::decode(page, path)?;
+    if header.page_type != PageType::Superblock {
+        return Err(PageError::UnexpectedPageType {
+            page_id: SUPERBLOCK_PAGE_ID,
+            found: header.page_type as u8,
+            expected: PageType::Superblock as u8,
+        });
+    }
+
+    let body = &page[PAGE_HEADER_BYTES..];
+    let tracked =
+        body[0..8] == SUPERBLOCK_MAGIC_TRACKED || body[0..8] == SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC;
+    let segmented =
+        body[0..8] == SUPERBLOCK_MAGIC_SEGMENTED || body[0..8] == SUPERBLOCK_MAGIC_TRACKED;
+    if !segmented
+        && body[0..8] != SUPERBLOCK_MAGIC
+        && body[0..8] != SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC
+    {
+        let mut found = [0u8; 4];
+        found.copy_from_slice(&body[0..4]);
+        return Err(PageError::NotAPageFile {
+            path: path.to_path_buf(),
+            found,
+        });
+    }
+    let page_size = u32::from_le_bytes(body[8..12].try_into().unwrap());
+    if page_size != expected_page_size {
+        return Err(PageError::PageSizeMismatch {
+            path: path.to_path_buf(),
+            found: page_size,
+            expected: expected_page_size,
+        });
+    }
+    let (extent_pages, migration_target_pages, migration_watermark) = if segmented {
+        (
+            u64::from_le_bytes(body[52..60].try_into().unwrap()),
+            u64::from_le_bytes(body[60..68].try_into().unwrap()),
+            u64::from_le_bytes(body[68..76].try_into().unwrap()),
+        )
+    } else {
+        // Legacy superblocks carry zeroes here; treat as monolithic
+        // regardless.
+        (0, 0, 0)
+    };
+
+    Ok((
+        Superblock {
             page_count: u64::from_le_bytes(body[12..20].try_into().unwrap()),
             free_list_head: u64::from_le_bytes(body[20..28].try_into().unwrap()),
             free_page_count: u64::from_le_bytes(body[28..36].try_into().unwrap()),
@@ -2676,8 +2692,9 @@ impl PageStore {
             extent_pages,
             migration_target_pages,
             migration_watermark,
-        })
-    }
+        },
+        tracked,
+    ))
 }
 
 /// Offline page-file relayout: rewrite a store between the monolithic and

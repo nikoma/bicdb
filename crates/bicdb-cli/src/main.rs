@@ -286,6 +286,38 @@ enum Command {
         #[command(subcommand)]
         command: StoreCommand,
     },
+    /// Read-only detection verifier for a `server_paged` store. Detects rows
+    /// placed on freed pages (and rows already lost that way), committed data
+    /// the key tree no longer reaches or cannot read, and interrupted
+    /// page-log resets. Opens every file read-only, probes the directory lock
+    /// without taking it, and reproduces recovery in memory instead of running
+    /// it, so the store's files are left byte-for-byte unchanged. Prints a JSON
+    /// report. Exit status: 0 clean, 2 inconsistent, 3 needs an external
+    /// cross-check or at risk, 4 incomplete (a limit stopped the run).
+    VerifyStore {
+        /// Database directory (containing `paged/`) or the paged store
+        /// directory itself (containing `store.pages`).
+        path: PathBuf,
+        /// Required: acknowledges that this command only reads.
+        #[arg(long)]
+        read_only: bool,
+        /// Also write every finding (not only the sampled ones) as JSON lines
+        /// to this NEW file, which must lie outside the store.
+        #[arg(long)]
+        findings_out: Option<PathBuf>,
+        /// Memory budget for the verifier's own structures.
+        #[arg(long, default_value_t = 256)]
+        max_memory_mb: u64,
+        /// Stop after this many seconds and report an incomplete result.
+        #[arg(long)]
+        max_seconds: Option<u64>,
+        /// Findings kept in the report per class (counts are always exact).
+        #[arg(long, default_value_t = 20)]
+        max_samples: usize,
+        /// Read even though another handle holds the store's lock.
+        #[arg(long)]
+        allow_live: bool,
+    },
     Inspect {
         path: PathBuf,
         #[arg(long)]
@@ -3458,6 +3490,118 @@ fn write_status_spill_outcomes(path: &Path, outcomes: &[(u64, TxStatus)]) -> Res
     Ok(())
 }
 
+/// The paged store directory for a database or store path.
+fn paged_store_dir(path: &Path) -> Result<PathBuf> {
+    if path.join("store.pages").is_file() {
+        return Ok(path.to_path_buf());
+    }
+    let nested = path.join(DEFAULT_PAGED_DIR);
+    if nested.join("store.pages").is_file() {
+        return Ok(nested);
+    }
+    bail!(
+        "no paged store at {} or {}",
+        path.join("store.pages").display(),
+        nested.join("store.pages").display()
+    )
+}
+
+/// `[name_len: u16 BE][collection][record id]`, the record layer's key
+/// layout, decoded only for display.
+fn record_key_hint(key: &[u8]) -> Option<(String, String)> {
+    let len = usize::from(u16::from_be_bytes(key.get(0..2)?.try_into().ok()?));
+    let name = std::str::from_utf8(key.get(2..2 + len)?).ok()?;
+    let id = &key[2 + len..];
+    let id = match std::str::from_utf8(id) {
+        Ok(text) if text.chars().all(|c| !c.is_control()) => text.to_string(),
+        _ => format!("0x{}", hex::encode(id)),
+    };
+    Some((name.to_string(), id))
+}
+
+fn verify_store_command(
+    path: &Path,
+    read_only: bool,
+    findings_out: Option<&Path>,
+    max_memory_mb: u64,
+    max_seconds: Option<u64>,
+    max_samples: usize,
+    allow_live: bool,
+) -> Result<i32> {
+    if !read_only {
+        bail!("verify-store only runs read-only; pass --read-only to acknowledge");
+    }
+    let dir = paged_store_dir(path)?;
+    let mut writer = match findings_out {
+        Some(out) => {
+            let parent = out
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .unwrap_or(Path::new("."));
+            let parent = std::fs::canonicalize(parent)
+                .with_context(|| format!("findings directory {}", parent.display()))?;
+            let store = std::fs::canonicalize(&dir)?;
+            if parent.starts_with(&store) {
+                bail!(
+                    "--findings-out must lie outside the store directory {}",
+                    store.display()
+                );
+            }
+            let file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(out)
+                .with_context(|| format!("create {} (it must not exist)", out.display()))?;
+            Some(std::io::BufWriter::new(file))
+        }
+        None => None,
+    };
+    let options = bicdb_page::StoreVerifyOptions {
+        max_memory_bytes: max_memory_mb.saturating_mul(1024 * 1024),
+        max_duration: max_seconds.map(std::time::Duration::from_secs),
+        max_samples_per_class: max_samples,
+        allow_live_store: allow_live,
+        ..bicdb_page::StoreVerifyOptions::default()
+    };
+    let mut write_error = None;
+    let report = bicdb_page::verify_store_read_only_streaming(&dir, &options, &mut |finding| {
+        let Some(writer) = writer.as_mut() else {
+            return;
+        };
+        if write_error.is_some() {
+            return;
+        }
+        let mut line = serde_json::to_value(finding).unwrap_or_default();
+        if let Some((collection, record_id)) = finding.key.as_deref().and_then(record_key_hint) {
+            line["collection"] = serde_json::Value::String(collection);
+            line["record_id"] = serde_json::Value::String(record_id);
+        }
+        if let Err(error) = serde_json::to_writer(&mut *writer, &line)
+            .map_err(std::io::Error::from)
+            .and_then(|()| writer.write_all(b"\n"))
+        {
+            write_error = Some(error);
+        }
+    })?;
+    if let Some(error) = write_error {
+        return Err(error).context("write findings");
+    }
+    if let Some(mut writer) = writer {
+        writer.flush()?;
+    }
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    Ok(if !report.complete {
+        4
+    } else {
+        match report.verdict {
+            bicdb_page::StoreVerdict::Clean => 0,
+            bicdb_page::StoreVerdict::Inconsistent => 2,
+            bicdb_page::StoreVerdict::NeedsExternalCrossCheck
+            | bicdb_page::StoreVerdict::AtRisk => 3,
+        }
+    })
+}
+
 fn main() -> Result<()> {
     let invocation = server_config::parse().unwrap_or_else(|error| error.exit());
     let cli = invocation.cli;
@@ -3839,6 +3983,28 @@ fn main() -> Result<()> {
                 );
             }
         },
+        Command::VerifyStore {
+            path,
+            read_only,
+            findings_out,
+            max_memory_mb,
+            max_seconds,
+            max_samples,
+            allow_live,
+        } => {
+            let code = verify_store_command(
+                &path,
+                read_only,
+                findings_out.as_deref(),
+                max_memory_mb,
+                max_seconds,
+                max_samples,
+                allow_live,
+            )?;
+            if code != 0 {
+                std::process::exit(code);
+            }
+        }
         Command::Inspect { path, key, key_env } => {
             let db = open_db_with_key_args(&path, key, key_env)?;
             let stats = db.stats()?;

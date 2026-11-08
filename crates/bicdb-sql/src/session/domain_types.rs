@@ -760,6 +760,7 @@ impl<'db> SqlSession<'db> {
             sequences: Vec<String>,
             routines: Vec<RoutineSchema>,
             types: Vec<UserTypeSchema>,
+            operators: Vec<crate::pg_operators::OperatorSchema>,
         }
         let mut targets: Vec<Contents> = Vec::new();
         for name in names {
@@ -821,6 +822,7 @@ impl<'db> SqlSession<'db> {
                 .into_iter()
                 .filter(|user_type| user_type.schema_name == schema)
                 .collect::<Vec<_>>();
+            let operators = self.schema_operators(&schema)?;
             targets.push(Contents {
                 namespace,
                 tables,
@@ -828,6 +830,7 @@ impl<'db> SqlSession<'db> {
                 sequences,
                 routines,
                 types,
+                operators,
             });
         }
         for target in &targets {
@@ -856,6 +859,12 @@ impl<'db> SqlSession<'db> {
                         .types
                         .iter()
                         .map(|user_type| format!("type {schema}.{}", user_type.name)),
+                )
+                .chain(
+                    target
+                        .operators
+                        .iter()
+                        .map(|operator| format!("operator {}", operator.id.display())),
                 );
             if !cascade {
                 if let Some(first) = objects.next() {
@@ -896,6 +905,13 @@ impl<'db> SqlSession<'db> {
                 self.require_object_ownership(
                     &user_type.owner,
                     &format!("type {schema}.{}", user_type.name),
+                    "drop it",
+                )?;
+            }
+            for operator in &target.operators {
+                self.require_object_ownership(
+                    &operator.owner(),
+                    &format!("operator {}.{}", operator.id.schema, operator.id.name),
                     "drop it",
                 )?;
             }
@@ -943,6 +959,13 @@ impl<'db> SqlSession<'db> {
             if !sequences.is_empty() {
                 self.execute_drop(ObjectType::Sequence, true, &sequences, true, true)?;
             }
+            // Operators go before the functions that implement them.
+            let operators = target
+                .operators
+                .iter()
+                .map(|operator| operator.id.clone())
+                .collect::<Vec<_>>();
+            self.drop_operators(&operators)?;
             for routine in &target.routines {
                 self.delete_session_routine(routine)?;
             }

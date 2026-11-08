@@ -541,12 +541,30 @@ impl SqlSession<'_> {
             )?;
             dropped.push(operator);
         }
-        for operator in &dropped {
-            self.remove_operator(&operator.id)?;
-            // Links from other operators to a dropped operator are cleared.
+        let ids = dropped
+            .into_iter()
+            .map(|operator| operator.id)
+            .collect::<Vec<_>>();
+        self.drop_operators(&ids)?;
+        Ok(SqlResult::command("DROP OPERATOR"))
+    }
+
+    /// The operators of `schema`, for DROP SCHEMA.
+    pub(crate) fn schema_operators(&self, schema: &str) -> Result<Vec<OperatorSchema>> {
+        Ok(user_operators(self.db_ref())?
+            .iter()
+            .filter(|operator| operator.id.schema == schema)
+            .cloned()
+            .collect())
+    }
+
+    /// Removes operators; links from other operators to them are cleared.
+    pub(crate) fn drop_operators(&mut self, ids: &[OperatorRef]) -> Result<()> {
+        for id in ids {
+            self.remove_operator(id)?;
             for other in user_operators(self.db_ref())?.iter() {
-                let commutes = other.commutator.as_ref() == Some(&operator.id);
-                let negates = other.negator.as_ref() == Some(&operator.id);
+                let commutes = other.commutator.as_ref() == Some(id);
+                let negates = other.negator.as_ref() == Some(id);
                 if commutes || negates {
                     let mut other = other.clone();
                     if commutes {
@@ -559,6 +577,6 @@ impl SqlSession<'_> {
                 }
             }
         }
-        Ok(SqlResult::command("DROP OPERATOR"))
+        Ok(())
     }
 }

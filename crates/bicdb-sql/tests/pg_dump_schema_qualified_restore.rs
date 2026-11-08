@@ -947,3 +947,44 @@ fn user_operators_survive_reopen_in_both_storage_modes() {
         assert!(value.starts_with("2020-01-08 00:00:00"), "[{mode}] {value}");
     }
 }
+
+#[test]
+fn drop_schema_restricts_on_and_cascades_to_operators() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    create_day_operators(&mut sql);
+    // A schema holding only operators (their function lives in `app`).
+    sql.execute("CREATE SCHEMA ops").unwrap();
+    sql.execute(
+        "CREATE OPERATOR ops.+ (FUNCTION = app.adddays, LEFTARG = timestamp with time zone, \
+         RIGHTARG = numeric, COMMUTATOR = OPERATOR(ops.+))",
+    )
+    .unwrap();
+    let ops_count = |sql: &mut SqlSession| {
+        int_at(
+            sql,
+            "SELECT count(*) FROM pg_operator o JOIN pg_namespace n ON n.oid = o.oprnamespace \
+             WHERE n.nspname = 'ops'",
+        )
+    };
+    assert_eq!(ops_count(&mut sql), 2);
+
+    let error = sql.execute("DROP SCHEMA ops").unwrap_err();
+    assert_eq!(error.sqlstate(), "2BP01", "{error}");
+    assert!(error.to_string().contains("operator ops.+"), "{error}");
+    assert_eq!(ops_count(&mut sql), 2);
+
+    sql.execute("DROP SCHEMA ops CASCADE").unwrap();
+    assert_eq!(ops_count(&mut sql), 0);
+
+    // CASCADE drops a schema's operators together with their functions.
+    sql.execute("DROP SCHEMA app CASCADE").unwrap();
+    assert_eq!(app_operator_count(&mut sql), 0);
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_operator WHERE oprnamespace <> 11"
+        ),
+        0
+    );
+}

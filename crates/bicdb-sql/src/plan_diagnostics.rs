@@ -222,6 +222,10 @@ pub(crate) fn signature_of(kind: &PlanKind) -> PlanSignature {
         PlanKind::IndexLookup { index_name, prefix } => {
             ("IndexLookup", Some(index_name), prefix.len())
         }
+        PlanKind::DeferredIndexLookup {
+            index_name,
+            prefix_exprs,
+        } => ("IndexLookup", Some(index_name), prefix_exprs.len()),
         PlanKind::IndexRange { index_name, .. } => ("IndexRange", Some(index_name), 0),
         PlanKind::OrderedIndexScan { index_name, .. } => ("OrderedIndexScan", Some(index_name), 0),
         PlanKind::IndexPrefixOrderedScan {

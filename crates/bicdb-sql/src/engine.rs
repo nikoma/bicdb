@@ -18,6 +18,7 @@ mod joins_windows;
 pub(crate) mod materialize;
 mod pg_catalog;
 mod predicates_locators;
+pub(crate) use predicates_locators::selection_has_false_term;
 mod quantified_vectors;
 mod records_plan;
 mod row_eval;
@@ -3249,6 +3250,11 @@ pub(crate) enum PlanKind {
         index_name: String,
         prefix: Vec<IndexValue>,
     },
+    /// Runtime policy InitPlans stay unevaluated during EXPLAIN/costing.
+    DeferredIndexLookup {
+        index_name: String,
+        prefix_exprs: Vec<Expr>,
+    },
     IndexRange {
         index_name: String,
         lower: Option<IndexValue>,
@@ -3429,6 +3435,14 @@ impl QueryPlan {
             PlanKind::IndexLookup { index_name, prefix } => vec![
                 format!("IndexScan {index_name}"),
                 format!("PrefixKeys {}", prefix.len()),
+            ],
+            PlanKind::DeferredIndexLookup {
+                index_name,
+                prefix_exprs,
+            } => vec![
+                format!("IndexScan {index_name}"),
+                format!("PrefixKeys {}", prefix_exprs.len()),
+                "RuntimeKeys deferred".to_string(),
             ],
             PlanKind::IndexRange {
                 index_name,

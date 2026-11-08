@@ -1614,6 +1614,40 @@ impl<'db> SqlEngine<'db> {
             })
             .collect::<Vec<_>>();
 
+        if let Some(selection) = self.rls_index_candidate_selection(
+            collection,
+            alias,
+            schema.as_ref(),
+            select.selection.as_ref(),
+            false,
+        )? {
+            // Existing structural locator planning retains expressions. Never
+            // execute policy InitPlans merely to EXPLAIN or cost an index key.
+            let strategy =
+                self.derive_locator_strategy(collection, alias, schema.as_ref(), &selection)?;
+            for index in strategy
+                .indexes
+                .iter()
+                .filter(|index| !index.prefix_exprs.is_empty())
+            {
+                let estimated_rows = total_rows
+                    .saturating_div(10usize.saturating_pow(index.prefix_exprs.len() as u32))
+                    .max(1)
+                    .min(total_rows);
+                candidates.push(QueryPlan {
+                    kind: PlanKind::DeferredIndexLookup {
+                        index_name: index.name.clone(),
+                        prefix_exprs: index.prefix_exprs.clone(),
+                    },
+                    estimated_rows,
+                    estimated_cost: if stats.is_some() {
+                        20.0 + estimated_rows as f64 * 2.0
+                    } else {
+                        1.0 + estimated_rows as f64 * 0.10
+                    },
+                });
+            }
+        }
         if let Some(selection) = &select.selection {
             self.add_index_filter_candidates(
                 collection,

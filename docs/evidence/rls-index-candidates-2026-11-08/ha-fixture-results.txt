@@ -1,0 +1,19 @@
+phase=ha-setup-red-resumed
+trial=1
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.76s
+trial=2
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.31s
+trial=3
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.68s
+phase=ha-pause-red
+called `Result::unwrap()` on an `Err` value: Sql(BicDb(ReadOnlyStandby("insert records is refused: this primary heard from 0 of the 1 standby(s) its write lease needs within 1.5s")))
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 4.62s
+phase=ha-pause-green
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 9.72s
+phase=ha-setup-green
+trial=1
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.96s
+trial=2
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.67s
+trial=3
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.58s

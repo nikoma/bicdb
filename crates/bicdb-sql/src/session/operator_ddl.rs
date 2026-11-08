@@ -81,7 +81,57 @@ fn missing_operator(id: &OperatorRef, qualified: bool) -> SqlError {
     })
 }
 
+/// A routine's input argument types (IN, INOUT and VARIADIC), canonical.
+fn routine_input_types(routine: &RoutineSchema) -> Result<Vec<Option<String>>> {
+    let params = parse_routine_params(&routine.args)?;
+    let recorded = routine.arg_types.len() == params.len();
+    Ok(params
+        .iter()
+        .enumerate()
+        .filter(|(_, param)| param.mode != RoutineArgMode::Out)
+        .map(|(index, param)| {
+            if recorded {
+                Some(canonical_type(&routine.arg_types[index].pg_type))
+            } else {
+                param
+                    .type_schema
+                    .as_ref()
+                    .map(|schema| canonical_type(&schema.pg_type))
+            }
+        })
+        .collect())
+}
+
 impl SqlSession<'_> {
+    /// Operators implemented by `routine` (its schema, name and input types).
+    pub(crate) fn routine_operators(&self, routine: &RoutineSchema) -> Result<Vec<OperatorSchema>> {
+        if routine.kind != RoutineKind::Function {
+            return Ok(Vec::new());
+        }
+        let operators = user_operators(self.db_ref())?;
+        if operators.is_empty() {
+            return Ok(Vec::new());
+        }
+        let schema = routine_schema_name(routine);
+        let name = normalize_object_name(&routine.name);
+        let inputs = routine_input_types(routine)?;
+        Ok(operators
+            .iter()
+            .filter(|operator| {
+                operator.function.as_ref().is_some_and(|function| {
+                    function.schema == schema && function.name == name
+                }) && operator
+                    .id
+                    .left
+                    .iter()
+                    .chain(std::iter::once(&operator.id.right))
+                    .map(|pg_type| Some(pg_type.clone()))
+                    .eq(inputs.iter().cloned())
+            })
+            .cloned()
+            .collect())
+    }
+
     fn operator_creation_schema(&self, schema: Option<String>) -> Result<String> {
         if let Some(schema) = schema {
             if !matches!(schema.as_str(), "public" | "pg_catalog")
@@ -141,23 +191,7 @@ impl SqlSession<'_> {
                 if routine_schema_name(routine) != schema {
                     continue;
                 }
-                let params = parse_routine_params(&routine.args)?;
-                let recorded = routine.arg_types.len() == params.len();
-                let inputs = params
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, param)| param.mode != RoutineArgMode::Out)
-                    .map(|(index, param)| {
-                        if recorded {
-                            Some(canonical_type(&routine.arg_types[index].pg_type))
-                        } else {
-                            param
-                                .type_schema
-                                .as_ref()
-                                .map(|schema| canonical_type(&schema.pg_type))
-                        }
-                    })
-                    .collect::<Vec<_>>();
+                let inputs = routine_input_types(routine)?;
                 if inputs.len() == arg_types.len()
                     && inputs
                         .iter()

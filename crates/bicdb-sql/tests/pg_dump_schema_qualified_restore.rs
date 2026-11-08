@@ -1259,3 +1259,54 @@ fn drop_schema_restricts_on_and_cascades_to_operators() {
         0
     );
 }
+
+#[test]
+fn drop_function_restricts_on_and_cascades_to_its_operators() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    create_day_operators(&mut sql);
+    // An overload of an operator function: only operators of this signature
+    // depend on it.
+    sql.execute(
+        "CREATE FUNCTION app.adddays(inter interval, days numeric) RETURNS integer \
+         LANGUAGE plpgsql AS $$ BEGIN RETURN days::int; END; $$",
+    )
+    .unwrap();
+    sql.execute(
+        "CREATE OPERATOR app.* (FUNCTION = app.adddays, LEFTARG = interval, RIGHTARG = numeric)",
+    )
+    .unwrap();
+    assert_eq!(app_operator_count(&mut sql), 8);
+
+    let error = sql
+        .execute("DROP FUNCTION app.intervaldays(interval, numeric)")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "2BP01", "{error}");
+    assert!(error.to_string().contains("operator app."), "{error}");
+    assert_eq!(app_operator_count(&mut sql), 8);
+
+    // CASCADE drops both operators implemented by the function; the shell
+    // they named as commutator stays, unlinked, as in PostgreSQL.
+    sql.execute("DROP FUNCTION app.intervaldays(interval, numeric) CASCADE")
+        .unwrap();
+    assert_eq!(app_operator_count(&mut sql), 6);
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_operator WHERE oprname = '-' AND oprleft = 1700 \
+             AND oprright = 1186 AND oprcom = 0"
+        ),
+        1
+    );
+
+    sql.execute("DROP FUNCTION app.adddays(interval, numeric) CASCADE")
+        .unwrap();
+    assert_eq!(app_operator_count(&mut sql), 5);
+    // The timestamptz overload and its operator are untouched.
+    sql.execute("SET search_path TO app, pg_catalog").unwrap();
+    let value = text_at(
+        &mut sql,
+        "SELECT (timestamptz '2020-01-01 00:00:00+00' + 1)::text",
+    );
+    assert!(value.starts_with("2020-01-02 00:00:00"), "{value}");
+}

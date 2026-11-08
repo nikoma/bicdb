@@ -1482,5 +1482,8 @@ fn routine_bodies_bind_user_operators_by_declared_types() {
         text_at(&mut sql, "SELECT app.nextday(date '2020-02-28')::text"),
         "2020-02-29"
     );
-    assert_eq!(int_at(&mut sql, "SELECT app.idays(interval '3 days', 2)"), 5);
+    assert_eq!(
+        int_at(&mut sql, "SELECT app.idays(interval '3 days', 2)"),
+        5
+    );
 }

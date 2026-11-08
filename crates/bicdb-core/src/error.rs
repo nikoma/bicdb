@@ -173,4 +173,107 @@ pub enum BicDbError {
 
     #[error("paged storage error: {0}")]
     PagedStorage(String),
+
+    /// A durability-critical write or sync failed. The database refuses
+    /// writes (and the reads it fences) until it is reopened, which runs
+    /// recovery and a verification checkpoint. SQLSTATE 58030 (io_error).
+    /// See `docs/durability-failure-handling.md`.
+    #[error(
+        "database refuses writes after a failed durable write at {site}: {detail}; \
+         reopen the database to run recovery and verification"
+    )]
+    WriteFailed { site: String, detail: String },
+
+    /// A commit whose durability is unknown: its decision may or may not be
+    /// on disk. It is neither committed nor rolled back from the caller's
+    /// point of view; the next open's recovery decides, and honours the
+    /// decision if it reached the disk. SQLSTATE 08007
+    /// (transaction_resolution_unknown).
+    ///
+    /// `incarnation` and `sequence` identify the commit for
+    /// `BicDb::resolve_commit_outcome` (SQL: `bicdb_commit_outcome`) once
+    /// the database has been reopened. `sequence` is `None` for operations
+    /// that commit only in the page store (bulk load, index builds): those
+    /// are resolved by re-reading their result after the reopen.
+    /// `transaction_id` is informational (absent when only the commit
+    /// sequence is known, as in a quorum wait).
+    #[error(
+        "commit outcome unknown: {}: {detail}; do not assume it committed or rolled back. \
+         Reopen the database, then {}",
+        commit_outcome_identity_line(*sequence, *transaction_id, incarnation),
+        commit_outcome_hint(*sequence, incarnation)
+    )]
+    CommitOutcomeUnknown {
+        sequence: Option<u64>,
+        transaction_id: Option<u64>,
+        incarnation: String,
+        detail: String,
+    },
+}
+
+fn commit_outcome_identity_line(
+    sequence: Option<u64>,
+    transaction_id: Option<u64>,
+    incarnation: &str,
+) -> String {
+    let show = |value: Option<u64>| value.map_or_else(|| "none".to_string(), |v| v.to_string());
+    format!(
+        "commit_seq={} transaction_id={} incarnation={incarnation}",
+        show(sequence),
+        show(transaction_id)
+    )
+}
+
+fn commit_outcome_hint(sequence: Option<u64>, incarnation: &str) -> String {
+    match sequence {
+        Some(sequence) => {
+            format!("resolve it with SELECT bicdb_commit_outcome('{incarnation}', {sequence})")
+        }
+        None => "re-read the operation's result: it has no commit sequence, and the page \
+                 store's recovery kept it only if its commit record reached the disk"
+            .to_string(),
+    }
+}
+
+impl BicDbError {
+    /// For `CommitOutcomeUnknown`: the outcome-resolution identity as a
+    /// machine-readable detail line, and how to resolve it. pgwire sends
+    /// them as the error's DETAIL and HINT fields.
+    pub fn commit_outcome_identity(&self) -> Option<(String, String)> {
+        let Self::CommitOutcomeUnknown {
+            sequence,
+            transaction_id,
+            incarnation,
+            ..
+        } = self
+        else {
+            return None;
+        };
+        Some((
+            commit_outcome_identity_line(*sequence, *transaction_id, incarnation),
+            format!(
+                "after reopening the database, {}",
+                commit_outcome_hint(*sequence, incarnation)
+            ),
+        ))
+    }
+
+    /// Whether this error means the database is fenced by a durability
+    /// failure, including a commit whose outcome that failure made unknown.
+    pub fn is_durability_failure(&self) -> bool {
+        matches!(
+            self,
+            Self::WriteFailed { .. } | Self::CommitOutcomeUnknown { .. }
+        )
+    }
+}
+
+/// Translate a page-layer error, keeping a durability fence distinct.
+pub(crate) fn durability_error(error: bicdb_page::PageError) -> BicDbError {
+    match error {
+        bicdb_page::PageError::WriteFailed { site, detail } => {
+            BicDbError::WriteFailed { site, detail }
+        }
+        other => BicDbError::PagedStorage(other.to_string()),
+    }
 }

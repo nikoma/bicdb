@@ -933,14 +933,19 @@ impl PagedStore {
         } else {
             0
         };
-        let wal = Arc::new(Wal::open_with_segments_and_floor(
-            &paths.wal,
-            options.fsync,
-            wal_segment_bytes,
-            // The superblock's checkpoint LSN horizon: keeps LSNs monotonic
-            // across truncate+reopen so sealed-segment names never recur.
-            store.checkpoint_lsn(),
-        )?);
+        let wal = Arc::new(
+            Wal::open_with_segments_and_floor(
+                &paths.wal,
+                options.fsync,
+                wal_segment_bytes,
+                // The superblock's checkpoint LSN horizon: keeps LSNs monotonic
+                // across truncate+reopen so sealed-segment names never recur.
+                store.checkpoint_lsn(),
+            )?
+            // One fail-closed state for the page file and its log: a failure in
+            // either fences both.
+            .with_health(store.durability_health().clone()),
+        );
         crate::test_faults::register_wal(&wal);
 
         // Recovery runs BEFORE anything reads a page, so no caller can ever
@@ -2106,6 +2111,13 @@ impl PagedStore {
         self.mark_deleted(locator, transaction)?;
         self.sync_roots()?;
         Ok(true)
+    }
+
+    /// The fail-closed durability state shared by this store's page file
+    /// and log. Hosts clone it to fence their own write paths on the same
+    /// failure.
+    pub fn durability_health(&self) -> &Arc<crate::health::DurabilityHealth> {
+        self.wal.health()
     }
 
     /// Make a transaction's writes durable.

@@ -320,6 +320,15 @@ impl Transaction {
             TransactionOutcome::RecoveryRequired { sequence };
     }
 
+    /// The commit was withdrawn before any byte of it was written: it did
+    /// not commit.
+    pub(super) fn receipt_commit_withdrawn(&self) {
+        self.clear_write_tags();
+        if let Some(observer) = self.outcome_observer.get() {
+            *observer.outcome.lock() = TransactionOutcome::Aborted;
+        }
+    }
+
     pub(super) fn receipt_aborted(&self) {
         self.clear_write_tags();
         if let Some(observer) = self.outcome_observer.get() {

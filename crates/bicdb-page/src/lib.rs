@@ -26,6 +26,7 @@ pub mod backup;
 pub mod btree;
 pub mod catalog;
 pub mod error;
+pub mod health;
 pub mod heap;
 pub mod lock;
 pub mod manager;
@@ -55,6 +56,7 @@ pub use btree::{
 };
 pub use catalog::{Catalog, FREE_BUCKETS};
 pub use error::{PageError, Result};
+pub use health::{DurabilityHealth, DurabilityState, WriteFailure};
 pub use heap::{HeapFile, HeapOptions, HeapScan, HeapSnapshot};
 pub use lock::DirectoryLock;
 pub use manager::{

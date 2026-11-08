@@ -6060,6 +6060,9 @@ fn decompress_record_value(bytes: &[u8]) -> Result<Vec<u8>> {
 /// Translate a page-engine error, preserving the distinction between a
 /// concurrency conflict (retry) and corruption (do not).
 fn page_error(error: bicdb_page::PageError) -> BicDbError {
+    if error.is_write_failed() {
+        return crate::error::durability_error(error);
+    }
     // A conflict is not a failure of the storage layer — it is a concurrency
     // outcome the caller should retry. Collapsing it into a generic storage
     // error would make every retryable conflict look like a fault.

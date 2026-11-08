@@ -423,7 +423,14 @@ pub(crate) fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
         BicDbError::CollectionNotFound(_) => "42P01",
         BicDbError::CollectionAlreadyExists(_) => "42P07",
         BicDbError::InvalidCollectionName(_) => "42602",
+        // A unique key claimed by another row is unique_violation, whether a
+        // statement or a COMMIT found it: drivers map 23505 to their
+        // "record not unique" error and applications rescue exactly that.
+        BicDbError::UniqueIndexBuildConflict { .. } | BicDbError::UniqueIndexConflict { .. } => {
+            "23505"
+        }
         BicDbError::TransactionConflict(_) => "40001",
+        BicDbError::TransactionDeadlock(_) => "40P01",
         BicDbError::TransactionNotPending => "25P01",
         // Durability fence: io_error for refused writes, and
         // transaction_resolution_unknown for a commit whose outcome the
@@ -449,6 +456,9 @@ pub(crate) fn bicdb_error_fields(error: &BicDbError) -> Vec<SqlErrorField> {
     match error {
         BicDbError::CollectionNotFound(collection) => {
             vec![SqlErrorField::Table(collection.clone())]
+        }
+        BicDbError::UniqueIndexConflict { index } => {
+            vec![SqlErrorField::Constraint(index.clone())]
         }
         BicDbError::ReadOnlyStandby(message) => bicdb_core::read_only_standby_hint(message)
             .map(SqlErrorField::Hint)

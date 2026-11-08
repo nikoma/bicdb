@@ -4176,6 +4176,23 @@ fn execute_server_db_sql_for_state_inner(
                 state.catalog_cache = catalog_cache;
                 return Err(error.into());
             }
+            Err(BicDbError::UniqueIndexConflict { .. }) if !independent => {
+                // Another transaction committed (or is committing) the same
+                // unique key after this statement's snapshot was taken. That
+                // decides nothing yet: an `INSERT ... ON CONFLICT` must now
+                // find that row and take its conflict action instead of
+                // failing, and a plain INSERT must report unique_violation at
+                // statement time. Re-run on the exclusive path. Its write
+                // guard waits for every in-flight shared commit, so the rival
+                // row is visible to the re-run, which therefore either takes
+                // the conflict action or fails exactly as a serial execution
+                // would. Not counted as contention: no gate debit.
+                drop(tx);
+                drop(rdb);
+                drop(admission);
+                conflicts_exhausted = false;
+                break;
+            }
             Err(BicDbError::TransactionConflict(_)) => {
                 // Lost the first-committer-wins race. Do NOT debit the gate here:
                 // most conflicts under concurrent commit are TRANSIENT watermark-lag

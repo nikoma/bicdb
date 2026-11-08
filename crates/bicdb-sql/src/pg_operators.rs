@@ -1282,6 +1282,242 @@ pub(crate) fn bind_statement_operators(
     Ok(binder.changed.then_some(bound))
 }
 
+// ---------------------------------------------------------------------------
+// Routine bodies
+// ---------------------------------------------------------------------------
+
+/// A routine variable scope: unqualified variables, plus one relation per
+/// record variable of an enclosing query loop.
+#[derive(Clone, Default)]
+struct RoutineScope {
+    variables: Vec<(String, Option<String>)>,
+    records: Vec<RelationColumns>,
+}
+
+impl RoutineScope {
+    fn env(&self) -> Vec<RelationColumns> {
+        let mut env = vec![RelationColumns {
+            alias: String::new(),
+            row_type: None,
+            columns: self.variables.clone(),
+        }];
+        env.extend(self.records.iter().cloned());
+        env
+    }
+
+    fn declare(&mut self, declarations: &[RoutineDecl]) {
+        for declaration in declarations {
+            if let RoutineDecl::Variable { name, pg_type, .. } = declaration {
+                self.variables.retain(|(existing, _)| existing != name);
+                self.variables.push((name.clone(), pg_type.as_deref().map(canonical_type)));
+            }
+        }
+    }
+}
+
+struct RoutineBinder<'s, 'db> {
+    binder: Binder<'s, 'db>,
+}
+
+impl RoutineBinder<'_, '_> {
+    fn visit<T: sqlparser::ast::VisitMut>(&mut self, scope: &RoutineScope, node: &mut T) -> Result<()> {
+        self.binder.scopes = vec![scope.env()];
+        // A resolution error (an ambiguous or shell operator) belongs to the
+        // statement when it runs, not to the routine as a whole: the
+        // expression is left unbound and reports through the executor.
+        let _ = sqlparser::ast::VisitMut::visit(node, &mut self.binder);
+        Ok(())
+    }
+
+    fn declarations(&mut self, scope: &RoutineScope, declarations: &mut [RoutineDecl]) -> Result<()> {
+        for declaration in declarations {
+            match declaration {
+                RoutineDecl::Variable {
+                    default_expr: Some(expr),
+                    ..
+                } => self.visit(scope, &mut expr.expr)?,
+                RoutineDecl::Cursor { query, .. } => self.visit(scope, query)?,
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn statements(&mut self, scope: &RoutineScope, statements: &mut [RoutineStmt]) -> Result<()> {
+        for statement in statements {
+            match statement {
+                RoutineStmt::Block {
+                    declarations,
+                    body,
+                    handlers,
+                } => {
+                    let mut inner = scope.clone();
+                    inner.declare(declarations);
+                    self.declarations(&inner, declarations)?;
+                    self.statements(&inner, body)?;
+                    for handler in handlers {
+                        self.statements(&inner, &mut handler.statements)?;
+                    }
+                }
+                RoutineStmt::If {
+                    condition,
+                    then_body,
+                    else_body,
+                } => {
+                    self.visit(scope, &mut condition.expr)?;
+                    self.statements(scope, then_body)?;
+                    self.statements(scope, else_body)?;
+                }
+                RoutineStmt::Case {
+                    expression,
+                    arms,
+                    else_body,
+                } => {
+                    self.visit(scope, &mut expression.expr)?;
+                    for arm in arms {
+                        self.statements(scope, arm)?;
+                    }
+                    if let Some(body) = else_body {
+                        self.statements(scope, body)?;
+                    }
+                }
+                RoutineStmt::ForLoop {
+                    iterator,
+                    lower,
+                    upper,
+                    body,
+                    ..
+                } => {
+                    self.visit(scope, &mut lower.expr)?;
+                    self.visit(scope, &mut upper.expr)?;
+                    let mut inner = scope.clone();
+                    inner.variables.retain(|(name, _)| name != iterator);
+                    inner.variables.push((iterator.clone(), Some("int4".into())));
+                    self.statements(&inner, body)?;
+                }
+                RoutineStmt::QueryForLoop {
+                    target,
+                    query,
+                    body,
+                } => {
+                    self.visit(scope, query)?;
+                    let mut inner = scope.clone();
+                    if let Some(columns) = self.binder.engine.query_output_columns(query) {
+                        inner.records.retain(|record| record.alias != *target);
+                        inner.records.push(RelationColumns {
+                            alias: target.clone(),
+                            row_type: None,
+                            columns,
+                        });
+                    }
+                    self.statements(&inner, body)?;
+                }
+                RoutineStmt::ForeachLoop { array, body, .. } => {
+                    self.visit(scope, &mut array.expr)?;
+                    self.statements(scope, body)?;
+                }
+                RoutineStmt::CursorForLoop {
+                    arguments, body, ..
+                } => {
+                    for argument in arguments {
+                        self.visit(scope, &mut argument.expr.expr)?;
+                    }
+                    self.statements(scope, body)?;
+                }
+                RoutineStmt::WhileLoop { condition, body } => {
+                    self.visit(scope, &mut condition.expr)?;
+                    self.statements(scope, body)?;
+                }
+                RoutineStmt::Loop { body } => self.statements(scope, body)?,
+                leaf => {
+                    // Statements without nested bodies: every expression,
+                    // query and SQL statement they carry.
+                    let mut failure = None;
+                    crate::search_path::bind_statements(std::slice::from_mut(leaf), &mut |node| {
+                        if failure.is_some() {
+                            return;
+                        }
+                        let result = match node {
+                            crate::search_path::RoutineNode::Expr(expr) => self.visit(scope, expr),
+                            crate::search_path::RoutineNode::Query(query) => {
+                                self.visit(scope, query)
+                            }
+                            crate::search_path::RoutineNode::Statement(statement) => {
+                                self.visit(scope, statement)
+                            }
+                        };
+                        if let Err(error) = result {
+                            failure = Some(error);
+                        }
+                    });
+                    if let Some(error) = failure {
+                        return Err(error);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Bind user-defined operators throughout a PL/pgSQL routine body, with the
+/// routine's parameters, variables and query-loop records typed as declared.
+pub(crate) fn bind_routine_operators(
+    db: &BicDb,
+    path: Option<&[String]>,
+    params: &mut [RoutineParam],
+    declarations: &mut [RoutineDecl],
+    statements: &mut [RoutineStmt],
+    handlers: &mut [RoutineExceptionHandler],
+) -> Result<()> {
+    let operators = user_operators(db)?;
+    if operators.is_empty() {
+        return Ok(());
+    }
+    let mut path = path
+        .map(<[String]>::to_vec)
+        .unwrap_or_else(|| vec!["public".to_string()]);
+    if !path.iter().any(|schema| schema == "pg_catalog") {
+        path.insert(0, "pg_catalog".to_string());
+    }
+    let engine = SqlEngine::new(db);
+    let mut scope = RoutineScope::default();
+    for param in params.iter() {
+        if let Some(name) = &param.name {
+            scope.variables.push((
+                normalize_object_name(name),
+                param
+                    .type_schema
+                    .as_ref()
+                    .map(|schema| canonical_type(&schema.pg_type)),
+            ));
+        }
+    }
+    scope.declare(declarations);
+    let mut binder = RoutineBinder {
+        binder: Binder {
+            engine: &engine,
+            facts: CatalogTypeFacts(db),
+            operators: &operators,
+            path,
+            scopes: Vec::new(),
+            bound_types: HashMap::new(),
+            changed: false,
+        },
+    };
+    for param in params.iter_mut() {
+        if let Some(expr) = &mut param.default_expr {
+            binder.visit(&scope, expr)?;
+        }
+    }
+    binder.declarations(&scope, declarations)?;
+    binder.statements(&scope, statements)?;
+    for handler in handlers {
+        binder.statements(&scope, &mut handler.statements)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

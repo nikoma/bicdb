@@ -4624,7 +4624,7 @@ struct RoutineIrCacheKey {
     search_path: Option<std::sync::Arc<[String]>>,
 }
 
-type RoutineCompilationScope = (u64, u64, u64, u64, u64, u64);
+type RoutineCompilationScope = (u64, u64, u64, u64, u64, u64, u64);
 
 thread_local! {
     static ROUTINE_IR_CACHE: RefCell<FxHashMap<RoutineIrCacheKey, Arc<RoutineIR>>> = RefCell::new(FxHashMap::default());

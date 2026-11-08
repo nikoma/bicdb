@@ -1419,3 +1419,63 @@ fn drop_function_restricts_on_and_cascades_to_its_operators() {
     );
     assert!(value.starts_with("2020-01-02 00:00:00"), "{value}");
 }
+
+/// PL/pgSQL expressions resolve user-defined operators by the routine's
+/// declared types: parameters, variables and query-loop records, in
+/// assignments, conditions, loop bounds and RETURN. Values match
+/// PostgreSQL 16 running the same functions.
+#[test]
+fn routine_bodies_bind_user_operators_by_declared_types() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    create_day_operators(&mut sql);
+    sql.execute("SET search_path TO app, pg_catalog").unwrap();
+    for statement in [
+        "CREATE TABLE app.terms (id int, netdays numeric, grace numeric)",
+        "INSERT INTO app.terms VALUES (1, 30, 2), (2, 10, 0)",
+        // Record field from a query loop, as in the payment-term functions.
+        "CREATE FUNCTION app.due(term int, docdate timestamp with time zone) \
+         RETURNS timestamp with time zone LANGUAGE plpgsql AS $$ \
+         DECLARE due timestamp with time zone; p record; \
+         BEGIN \
+           FOR p IN SELECT netdays, grace FROM app.terms WHERE id = term LOOP \
+             due := docdate + p.netdays + p.grace; \
+           END LOOP; \
+           RETURN due; \
+         END; $$",
+        // Variables in a condition, a WHILE loop and RETURN.
+        "CREATE FUNCTION app.skip(d timestamp with time zone, n numeric) \
+         RETURNS timestamp with time zone LANGUAGE plpgsql AS $$ \
+         DECLARE v timestamp with time zone := d; k int := 0; \
+         BEGIN \
+           IF d + n > d THEN v := v + 1; END IF; \
+           WHILE v - n < d LOOP v := v + 1; k := k + 1; END LOOP; \
+           RETURN v - 1; \
+         END; $$",
+        // A date variable plus an integer stays date arithmetic.
+        "CREATE FUNCTION app.nextday(d date) RETURNS date LANGUAGE plpgsql AS $$ \
+         DECLARE v date := d; BEGIN v := v + 1; RETURN v; END; $$",
+    ] {
+        sql.execute(statement)
+            .unwrap_or_else(|error| panic!("`{statement}` failed: {error}"));
+    }
+    let value = text_at(
+        &mut sql,
+        "SELECT app.due(1, timestamptz '2020-01-01 00:00:00+00')::text",
+    );
+    assert!(value.starts_with("2020-02-02 00:00:00"), "{value}");
+    let value = text_at(
+        &mut sql,
+        "SELECT app.due(2, timestamptz '2020-01-01 00:00:00+00')::text",
+    );
+    assert!(value.starts_with("2020-01-11 00:00:00"), "{value}");
+    let value = text_at(
+        &mut sql,
+        "SELECT app.skip(timestamptz '2020-01-01 00:00:00+00', 3)::text",
+    );
+    assert!(value.starts_with("2020-01-03 00:00:00"), "{value}");
+    assert_eq!(
+        text_at(&mut sql, "SELECT app.nextday(date '2020-02-28')::text"),
+        "2020-02-29"
+    );
+}

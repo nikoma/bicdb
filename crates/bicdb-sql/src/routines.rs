@@ -241,6 +241,20 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             );
         }
     }
+    // User-defined operators bind against the body's declared types.
+    if oracle::preview_routine_language_version(&routine.language).is_none() {
+        if let Some(db) = db {
+            let path = crate::search_path::active_path();
+            crate::pg_operators::bind_routine_operators(
+                db,
+                path.as_deref(),
+                &mut params,
+                &mut declarations,
+                &mut statements,
+                &mut exception_handlers,
+            )?;
+        }
+    }
     let symbol_names =
         routine_symbol_names(&params, &declarations, &statements, &exception_handlers);
     bind_routine_expressions(
@@ -280,6 +294,7 @@ pub(crate) fn routine_compilation_scope(db: &BicDb) -> RoutineCompilationScope {
         db.collection_generation(VIEW_COLLECTION),
         db.collection_generation(USER_TYPE_COLLECTION),
         db.index_generation(),
+        db.collection_generation(crate::pg_operators::OPERATOR_COLLECTION),
     )
 }
 
@@ -292,6 +307,12 @@ pub(crate) fn compile_cached_routine_ir_in_catalog(
         // The bound body depends on the path and on which relations exist.
         key.search_path = Some(path);
         key.catalog_scope = Some(routine_compilation_scope(db));
+    }
+    if let Some(db) = db {
+        // Operator binding depends on the operator catalog.
+        if !crate::pg_operators::user_operators(db)?.is_empty() {
+            key.catalog_scope = Some(routine_compilation_scope(db));
+        }
     }
     if oracle::typed_preview_routine_language(&routine.language) {
         key.catalog_scope = Some(routine_compilation_scope(db.ok_or_else(|| {

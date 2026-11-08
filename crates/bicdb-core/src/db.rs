@@ -373,6 +373,13 @@ pub struct DbConfig {
     /// on a store that already uses the current layout the same validation
     /// failure means real corruption and must keep failing the open.
     pub paged_accept_legacy_meta: bool,
+    /// EXPERIMENTAL, off by default: in `server_paged`, sync the page log
+    /// without holding its append lock across the `fdatasync`, so one sync
+    /// no longer stalls every page-log append. Durability is still published
+    /// only for records the sync covered. Set
+    /// `BICDB_PAGED_WAL_SYNC_UNLOCKED=1` (exactly) to enable. Not for
+    /// production until qualified; see `docs/wal-unlocked-sync.md`.
+    pub paged_wal_sync_unlocked: bool,
     /// Bytes per page-file extent for NEWLY created paged stores. `0` keeps
     /// one monolithic `store.pages`; the default segments new stores into
     /// 1 GiB files so file-level tooling (rsync deltas, parallel uploads,
@@ -1226,6 +1233,11 @@ impl Default for DbConfig {
             paged_wal_max_bytes: paged_wal_max_bytes_default(),
             paged_wal_segment_bytes: paged_wal_segment_bytes_default(),
             paged_accept_legacy_meta: paged_accept_legacy_meta_default(),
+            paged_wal_sync_unlocked: paged_wal_sync_unlocked_from(
+                std::env::var("BICDB_PAGED_WAL_SYNC_UNLOCKED")
+                    .ok()
+                    .as_deref(),
+            ),
             paged_extent_bytes: paged_extent_bytes_default(),
             fts_build_memory_bytes: fts_build_memory_bytes_default(),
             fts_build_workers: fts_build_workers_default(),
@@ -1681,6 +1693,11 @@ fn paged_wal_segment_bytes_default() -> u64 {
         .unwrap_or(64 * 1024 * 1024)
 }
 
+/// Only the exact value `1` enables the unlocked page-log sync.
+pub(crate) fn paged_wal_sync_unlocked_from(value: Option<&str>) -> bool {
+    value == Some("1")
+}
+
 fn paged_accept_legacy_meta_default() -> bool {
     std::env::var("BICDB_ACCEPT_LEGACY_META")
         .map(|value| matches!(value.trim(), "1" | "true" | "TRUE" | "on"))
@@ -2005,6 +2022,12 @@ impl DbConfig {
 
     pub fn with_paged_accept_legacy_meta(mut self, accept: bool) -> Self {
         self.paged_accept_legacy_meta = accept;
+        self
+    }
+
+    /// See [`DbConfig::paged_wal_sync_unlocked`]. Experimental.
+    pub fn with_paged_wal_sync_unlocked(mut self, enabled: bool) -> Self {
+        self.paged_wal_sync_unlocked = enabled;
         self
     }
 
@@ -9590,6 +9613,7 @@ impl BicDb {
                     extent_bytes: config.paged_extent_bytes,
                     fsync: config.fsync,
                     accept_legacy_meta: config.paged_accept_legacy_meta,
+                    unlocked_wal_sync: config.paged_wal_sync_unlocked,
                 },
             )?))
         } else {

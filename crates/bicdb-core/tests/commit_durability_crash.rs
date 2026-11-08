@@ -64,13 +64,18 @@ fn child_binary() -> PathBuf {
 const SMALL_POOL_BYTES: u64 = 256 * 1024;
 
 /// A case's mode is `all-logs` or `transaction-log`, optionally suffixed
-/// `+small-pool`.
+/// `+small-pool` and/or `+unlocked-sync` (the gated unlocked page-log sync,
+/// `docs/wal-unlocked-sync.md`).
 fn durability(mode: &str) -> &str {
-    mode.trim_end_matches("+small-pool")
+    mode.split('+').next().unwrap_or(mode)
 }
 
 fn small_pool(mode: &str) -> bool {
-    mode.ends_with("+small-pool")
+    mode.split('+').any(|part| part == "small-pool")
+}
+
+fn unlocked_sync(mode: &str) -> bool {
+    mode.split('+').any(|part| part == "unlocked-sync")
 }
 
 fn config(mode: &str) -> DbConfig {
@@ -78,7 +83,8 @@ fn config(mode: &str) -> DbConfig {
         .with_fsync(true)
         .with_sync_outbox(false)
         .with_storage_mode(StorageMode::ServerPaged)
-        .with_transaction_log_commit_durability(durability(mode) == "transaction-log");
+        .with_transaction_log_commit_durability(durability(mode) == "transaction-log")
+        .with_paged_wal_sync_unlocked(unlocked_sync(mode));
     if small_pool(mode) {
         config.with_paged_buffer_pool_bytes(SMALL_POOL_BYTES)
     } else {
@@ -115,6 +121,11 @@ fn run_child_with(
         command.env("DURABILITY_POOL_BYTES", SMALL_POOL_BYTES.to_string());
     } else {
         command.env_remove("DURABILITY_POOL_BYTES");
+    }
+    if unlocked_sync(mode) {
+        command.env("BICDB_PAGED_WAL_SYNC_UNLOCKED", "1");
+    } else {
+        command.env_remove("BICDB_PAGED_WAL_SYNC_UNLOCKED");
     }
     if let Some(point) = crash_at {
         command.env("BICDB_TEST_CRASH_AT", point);
@@ -348,6 +359,30 @@ const DEFERRED_POINTS: &[&str] = &[
     "materialize.after_markers:6",
 ];
 
+/// Inside the unlocked sync's window: after the descriptor is duplicated and
+/// the append lock released but before the `fdatasync`, and after the
+/// `fdatasync` but before durability is published. Only the unlocked step
+/// has these points.
+const UNLOCKED_SYNC_POINTS: &[&str] = &[
+    "wal.sync.after_clone:2",
+    "wal.sync.after_clone:40",
+    "wal.sync.after_clone:250",
+    "wal.sync.before_publish:3",
+    "wal.sync.before_publish:60",
+    "wal.sync.before_publish:300",
+];
+
+/// The transaction-log mode syncs the page log far less often (the
+/// materializer batches), so its window points sit at lower hit counts.
+const TXLOG_UNLOCKED_SYNC_POINTS: &[&str] = &[
+    "wal.sync.after_clone:2",
+    "wal.sync.after_clone:20",
+    "wal.sync.after_clone:40",
+    "wal.sync.before_publish:3",
+    "wal.sync.before_publish:30",
+    "wal.sync.before_publish:60",
+];
+
 /// Run every case and report all failures together, so one bad boundary
 /// does not hide the rest of the matrix.
 fn run_matrix(cases: Vec<(String, Box<dyn FnOnce() + std::panic::UnwindSafe>)>) {
@@ -466,4 +501,62 @@ fn repeat_one_case() {
         })
         .collect();
     run_matrix(cases);
+}
+
+// The same matrices with the unlocked page-log sync on.
+
+#[test]
+fn production_path_with_unlocked_sync_survives_every_crash_point() {
+    matrix(
+        "all-logs+unlocked-sync",
+        COMMON_POINTS.iter().chain(UNLOCKED_SYNC_POINTS).copied().collect(),
+        &["commit.after_page_apply:100", "wal.sync.before_publish:60"],
+    );
+}
+
+#[test]
+fn production_path_with_unlocked_sync_survives_every_crash_point_with_eviction() {
+    matrix(
+        "all-logs+small-pool+unlocked-sync",
+        COMMON_POINTS
+            .iter()
+            .chain(UNLOCKED_SYNC_POINTS)
+            .copied()
+            .collect(),
+        &["commit.after_page_apply:100", "wal.sync.after_clone:40"],
+    );
+}
+
+#[test]
+fn transaction_log_only_path_with_unlocked_sync_survives_every_crash_point() {
+    matrix(
+        "transaction-log+unlocked-sync",
+        COMMON_POINTS
+            .iter()
+            .chain(DEFERRED_POINTS)
+            .chain(TXLOG_UNLOCKED_SYNC_POINTS)
+            .copied()
+            .collect(),
+        &[
+            "commit.after_page_apply:100",
+            "materialize.after_wal_sync:20",
+        ],
+    );
+}
+
+#[test]
+fn transaction_log_only_path_with_unlocked_sync_survives_every_crash_point_with_eviction() {
+    matrix(
+        "transaction-log+small-pool+unlocked-sync",
+        COMMON_POINTS
+            .iter()
+            .chain(DEFERRED_POINTS)
+            .chain(TXLOG_UNLOCKED_SYNC_POINTS)
+            .copied()
+            .collect(),
+        &[
+            "commit.after_page_apply:100",
+            "materialize.after_wal_sync:20",
+        ],
+    );
 }

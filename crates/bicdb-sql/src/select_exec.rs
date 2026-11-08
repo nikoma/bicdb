@@ -6837,6 +6837,9 @@ pub(crate) fn information_schema_columns_filtered(
                 .character_maximum_length()
                 .map(SqlValue::Int)
                 .unwrap_or(SqlValue::Null);
+            let (numeric_precision, numeric_precision_radix, numeric_scale) =
+                column.information_schema_numeric();
+            let (datetime_precision, interval_type) = column.information_schema_datetime();
             let character_octet_length = column
                 .character_octet_length()
                 .map(SqlValue::Int)
@@ -6900,6 +6903,11 @@ pub(crate) fn information_schema_columns_filtered(
                 ("is_updatable", SqlValue::String("YES".to_string())),
                 ("character_maximum_length", character_maximum_length),
                 ("character_octet_length", character_octet_length),
+                ("numeric_precision", numeric_precision),
+                ("numeric_precision_radix", numeric_precision_radix),
+                ("numeric_scale", numeric_scale),
+                ("datetime_precision", datetime_precision),
+                ("interval_type", interval_type),
                 (
                     "collation_catalog",
                     explicit_collation
@@ -7024,6 +7032,9 @@ pub(crate) fn information_schema_columns_filtered(
                 .character_maximum_length()
                 .map(SqlValue::Int)
                 .unwrap_or(SqlValue::Null);
+            let (numeric_precision, numeric_precision_radix, numeric_scale) =
+                column.information_schema_numeric();
+            let (datetime_precision, interval_type) = column.information_schema_datetime();
             let character_octet_length = column
                 .character_octet_length()
                 .map(SqlValue::Int)
@@ -7069,6 +7080,11 @@ pub(crate) fn information_schema_columns_filtered(
                 ("is_updatable", SqlValue::String("YES".to_string())),
                 ("character_maximum_length", character_maximum_length),
                 ("character_octet_length", character_octet_length),
+                ("numeric_precision", numeric_precision),
+                ("numeric_precision_radix", numeric_precision_radix),
+                ("numeric_scale", numeric_scale),
+                ("datetime_precision", datetime_precision),
+                ("interval_type", interval_type),
                 ("is_nullable", SqlValue::String("YES".to_string())),
                 ("column_default", SqlValue::Null),
                 ("is_identity", SqlValue::String("NO".to_string())),
@@ -7098,6 +7114,9 @@ pub(crate) fn information_schema_columns_filtered(
                 .character_maximum_length()
                 .map(SqlValue::Int)
                 .unwrap_or(SqlValue::Null);
+            let (numeric_precision, numeric_precision_radix, numeric_scale) =
+                column.information_schema_numeric();
+            let (datetime_precision, interval_type) = column.information_schema_datetime();
             let character_octet_length = column
                 .character_octet_length()
                 .map(SqlValue::Int)
@@ -7122,6 +7141,11 @@ pub(crate) fn information_schema_columns_filtered(
                 ("is_updatable", SqlValue::String("YES".to_string())),
                 ("character_maximum_length", character_maximum_length),
                 ("character_octet_length", character_octet_length),
+                ("numeric_precision", numeric_precision),
+                ("numeric_precision_radix", numeric_precision_radix),
+                ("numeric_scale", numeric_scale),
+                ("datetime_precision", datetime_precision),
+                ("interval_type", interval_type),
                 ("is_nullable", SqlValue::String("YES".to_string())),
             ]));
         }

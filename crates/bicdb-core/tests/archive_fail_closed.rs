@@ -1071,3 +1071,58 @@ fn the_guard_refuses_writes_for_a_failed_page_log_archive_and_lifts_after_recove
     assert_eq!(status.backpressure, Backpressure::None);
     put_rows(&db, "after", 3, &mut BTreeSet::new());
 }
+
+/// Confirmed records lost from the archive (the archive now ends before the
+/// hold) still open, so only the verification catches them: it fails, is
+/// recorded, and every new handle stays stopped until they are back.
+#[test]
+fn lost_confirmed_commit_log_records_fail_verification_and_stop_new_handles() {
+    let root = tempfile::tempdir().unwrap();
+    let dir = root.path().join("archive");
+    let mut db = BicDb::open_with_config(
+        root.path().join("db"),
+        primary_config(StorageMode::EmbeddedMemory),
+    )
+    .unwrap();
+    db.create_collection("items").unwrap();
+    for i in 0..5 {
+        put(&db, &format!("a{i}"));
+    }
+    let mut archive = db.open_log_archive(&dir, true).unwrap();
+    archive_all(&db, &mut archive);
+    drop(archive);
+    let held = hold(&db);
+    let segment = std::fs::read_dir(&dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| path.extension().is_some_and(|ext| ext == "log"))
+        .unwrap();
+    let original = std::fs::read(&segment).unwrap();
+    // Cut the last two whole records.
+    let mut boundaries = vec![0usize];
+    while *boundaries.last().unwrap() < original.len() {
+        let at = *boundaries.last().unwrap();
+        let len = u32::from_be_bytes(original[at..at + 4].try_into().unwrap()) as usize;
+        boundaries.push(at + 8 + len);
+    }
+    let cut = boundaries[boundaries.len() - 3];
+    std::fs::write(&segment, &original[..cut]).unwrap();
+    let verification = db.verify_log_archive(&dir).unwrap();
+    assert!(!verification.ok, "{verification:?}");
+    put(&db, "during");
+    let mut archive = db.open_log_archive(&dir, true).unwrap();
+    assert_eq!(archive.failure().unwrap().site, "log_archive.verify");
+    let mut cursor = ReplicationCursor::new(archive.last_commit_seq());
+    let error = db
+        .archive_commits(&mut archive, &mut cursor, 10)
+        .unwrap_err();
+    assert_eq!(archive_failure_site(&error), "log_archive.verify");
+    assert_eq!(hold(&db), held);
+    drop(archive);
+    std::fs::write(&segment, &original).unwrap();
+    let mut archive = db.open_log_archive(&dir, true).unwrap();
+    assert!(archive.failure().is_none());
+    assert!(db.log_archive_verification().unwrap().ok);
+    archive_all(&db, &mut archive);
+    db.release_log_archive_hold().unwrap();
+}

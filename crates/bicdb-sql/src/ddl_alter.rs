@@ -159,7 +159,7 @@ pub(crate) fn alter_table_alter_column(
                 let pg_type = schema.columns[idx].pg_type.clone();
                 schema.columns[idx].default_value =
                     literal_default_value_from_expr_with_db(db, value, &pg_type)?;
-                schema.columns[idx].default_expr = Some(value.to_string());
+                schema.columns[idx].default_expr = Some(crate::sql_text::sql_text(value));
             }
             save_schema(db, schema)
         }
@@ -1306,7 +1306,7 @@ pub(crate) fn default_expr_contains_function(expr: &Expr) -> bool {
 pub(crate) fn column_default_expr(column: &ColumnDef) -> Option<String> {
     column.options.iter().find_map(|option| {
         if let ColumnOption::Default(expr) = &option.option {
-            Some(expr.to_string())
+            Some(crate::sql_text::sql_text(expr))
         } else {
             None
         }
@@ -1552,7 +1552,7 @@ pub(crate) fn column_schema_from_def(db: &BicDb, column: &ColumnDef) -> Result<C
             ColumnOption::Generated {
                 generation_expr: Some(expr),
                 ..
-            } => Some(expr.to_string()),
+            } => Some(crate::sql_text::sql_text(expr)),
             _ => None,
         });
     let mut type_modifier = oracle::lob_columns::modifier(db, &column.data_type)?
@@ -1878,7 +1878,7 @@ pub(crate) fn column_constraints_from_def(
                     .as_ref()
                     .map(ident_value)
                     .unwrap_or_else(|| format!("{}_{}_check", table, column_schema.name)),
-                expression: check.expr.to_string(),
+                expression: crate::sql_text::sql_text(&*check.expr),
                 validated: true,
             }),
             ColumnOption::ForeignKey(foreign_key) => {
@@ -1956,7 +1956,7 @@ pub(crate) fn table_constraint_schema(
                 .as_ref()
                 .map(ident_value)
                 .unwrap_or_else(|| format!("{}_check", table)),
-            expression: check.expr.to_string(),
+            expression: crate::sql_text::sql_text(&*check.expr),
             validated: true,
         }],
         TableConstraint::ForeignKey(foreign_key) => {

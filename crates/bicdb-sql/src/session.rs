@@ -709,9 +709,11 @@ fn parse_base_type_definition(
             UserDefinedTypeSqlDefinitionOption::Preferred(preferred) => {
                 definition.preferred = *preferred;
             }
-            UserDefinedTypeSqlDefinitionOption::Default(expr) => {
-                set_base_type_option(&mut definition.default_expr, expr.to_string(), "DEFAULT")?
-            }
+            UserDefinedTypeSqlDefinitionOption::Default(expr) => set_base_type_option(
+                &mut definition.default_expr,
+                crate::sql_text::sql_text(expr),
+                "DEFAULT",
+            )?,
             UserDefinedTypeSqlDefinitionOption::Element(data_type) => {
                 let element_type = pg_type_from_data_type(data_type)?.0;
                 set_base_type_option(&mut definition.element_type, element_type, "ELEMENT")?;
@@ -905,7 +907,7 @@ fn rewrite_routine_definition_type_identity(
     for (index, argument) in function.args.iter_mut().flatten().enumerate() {
         if relocate(&mut argument.data_type, previous, updated) {
             if let Some(declaration) = routine.args.get_mut(index) {
-                *declaration = argument.to_string();
+                *declaration = crate::sql_text::sql_text(argument);
             }
             if let (Some(saved), Ok(rewritten)) = (
                 routine.arg_types.get_mut(index),
@@ -931,7 +933,7 @@ fn rewrite_routine_definition_type_identity(
     if changed {
         // Loading routine metadata reparses this declaration. Keep its typed
         // header current while preserving the body as its original SQL value.
-        routine.definition = statements[0].to_string();
+        routine.definition = crate::sql_text::sql_text(&statements[0]);
     }
     changed
 }

@@ -304,7 +304,11 @@ impl<'db> SqlSession<'db> {
                 }
             }
         }
-        apply_catalog_view_column_types(&view, &create_view.query.to_string(), &mut columns);
+        apply_catalog_view_column_types(
+            &view,
+            &crate::sql_text::sql_text(&create_view.query),
+            &mut columns,
+        );
 
         let mut security_invoker = false;
         let mut security_barrier = false;
@@ -359,7 +363,7 @@ impl<'db> SqlSession<'db> {
             name: view,
             row_type_oid: Some(row_type_oid),
             row_array_type_oid: Some(row_array_type_oid),
-            query_sql: create_view.query.to_string(),
+            query_sql: crate::sql_text::sql_text(&create_view.query),
             columns,
             materialized: create_view.materialized,
             indexes: Vec::new(),
@@ -2465,7 +2469,7 @@ impl<'db> SqlSession<'db> {
             ));
         }
         validate_policy_expression_columns(schema, expr)?;
-        let text = format!("({expr})");
+        let text = format!("({})", crate::sql_text::sql_text(expr));
         // Guarantee the stored text round-trips through the policy-expression
         // parser used at enforcement time.
         parse_policy_expression(&text)?;
@@ -2968,7 +2972,7 @@ impl<'db> SqlSession<'db> {
         let expression = create_index
             .columns
             .iter()
-            .map(ToString::to_string)
+            .map(crate::sql_text::sql_text)
             .collect::<Vec<_>>()
             .join(", ");
         let collations = create_index
@@ -3154,7 +3158,7 @@ impl<'db> SqlSession<'db> {
                     &pg_type,
                     &mut records,
                 )?;
-                source_expressions.push(expression_ast.to_string());
+                source_expressions.push(crate::sql_text::sql_text(&expression_ast));
                 operator_classes.push(
                     column
                         .operator_class
@@ -3284,7 +3288,7 @@ impl<'db> SqlSession<'db> {
                 name: index_name,
                 expression,
                 source_expressions: if trigram {
-                    vec![expression_ast.to_string()]
+                    vec![crate::sql_text::sql_text(&expression_ast)]
                 } else {
                     Vec::new()
                 },
@@ -3308,7 +3312,7 @@ impl<'db> SqlSession<'db> {
             // and compression are engine-owned and parallel; SQL only
             // evaluates the declared expression for each bounded row batch.
             if self.tx.is_none() && self.db_ref().is_server_paged() {
-                let signature = expression_ast.to_string();
+                let signature = crate::sql_text::sql_text(&expression_ast);
                 let progress = self
                     .db_ref()
                     .prepare_full_text_build(&index_name, &table, &signature)
@@ -3485,7 +3489,7 @@ impl<'db> SqlSession<'db> {
         let predicate_text = predicate
             .as_ref()
             .and(create_index.predicate.as_ref())
-            .map(|predicate| predicate.to_string());
+            .map(crate::sql_text::sql_text);
         self.create_session_index(IndexDefinition {
             nulls_not_distinct: create_index.nulls_distinct == Some(false),
             name: index_name.clone(),
@@ -3609,7 +3613,7 @@ impl<'db> SqlSession<'db> {
             args: create_function
                 .args
                 .as_ref()
-                .map(|args| args.iter().map(ToString::to_string).collect())
+                .map(|args| args.iter().map(crate::sql_text::sql_text).collect())
                 .unwrap_or_default(),
             arg_types,
             return_type,
@@ -3617,7 +3621,7 @@ impl<'db> SqlSession<'db> {
             return_type_declaration: Some(return_type_declaration),
             returns_set,
             language,
-            definition: create_function.to_string(),
+            definition: crate::sql_text::sql_text(create_function),
             internal_symbol,
             owner: Some(current_user_from_gucs(&self.session_gucs)),
             security_definer: matches!(create_function.security, Some(FunctionSecurity::Definer)),

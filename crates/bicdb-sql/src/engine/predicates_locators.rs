@@ -5148,7 +5148,7 @@ impl<'db> SqlEngine<'db> {
                     let sql = format!(
                         "SELECT * FROM {name}({})",
                         args.iter()
-                            .map(ToString::to_string)
+                            .map(crate::sql_text::sql_text)
                             .collect::<Vec<_>>()
                             .join(",")
                     );
@@ -6815,7 +6815,7 @@ impl<'db> SqlEngine<'db> {
         if !plan_cache::enabled() {
             return Ok(None);
         }
-        let sql = query.to_string();
+        let sql = crate::sql_text::sql_key(query);
 
         // Cache probe, validated against the current schema generation (handled in
         // `sql_plan_cache_get`) and the current routine-variable name shape.

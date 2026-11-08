@@ -2501,7 +2501,9 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_grant(&mut self, grant: &Grant) -> Result<SqlResult> {
-        if let Some(result) = self.execute_raw_function_privileges(&grant.to_string())? {
+        if let Some(result) =
+            self.execute_raw_function_privileges(&crate::sql_text::sql_text(grant))?
+        {
             return Ok(result);
         }
         if grant.with_grant_option
@@ -2523,7 +2525,9 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_revoke(&mut self, revoke: &Revoke) -> Result<SqlResult> {
-        if let Some(result) = self.execute_raw_function_privileges(&revoke.to_string())? {
+        if let Some(result) =
+            self.execute_raw_function_privileges(&crate::sql_text::sql_text(revoke))?
+        {
             return Ok(result);
         }
         if revoke.granted_by.is_some() || matches!(revoke.cascade, Some(CascadeOption::Cascade)) {

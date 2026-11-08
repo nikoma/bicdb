@@ -107,6 +107,7 @@ Metrics (pgwire `/metrics`):
 | As above, and the tail repair fails too | `08007` | `RecoveryRequired` | **Present.** The decision reached the disk; recovery honours it. |
 | Decision durable in `transactions.log`; page-log commit sync or materialization fails afterwards | `08007` | `RecoveryRequired` | **Present.** Recovery replays the durable decision. |
 | Commits waiting on a failing group sync (page log or transaction log) | `08007` for each | `RecoveryRequired` | Whatever reached the disk; never a commit acknowledged after the failure |
+| Commit or transaction operation that fails before its decision on a database fenced meanwhile (for example by reading a row whose failed commit left a resident version the page store never committed) | `WriteFailed` (`58030`), never the incidental error | `Aborted` | Absent |
 | Commit attempted after the failure | `WriteFailed` (`58030`) | `Aborted` / `Pending` (no decision was made) | Absent |
 | A fence lands after the commit was durable and visible (for example its record-audit publication marker fails) | **Success.** The commit is not ambiguous, and a `58030` would make the client retry and duplicate it. The failure is logged (`durability.audit_publication_deferred`) and the database is fenced for everything after. | `Committed` | Present; recovery republishes its audit entries |
 | A page-store-only commit (bulk load, index and full-text build steps) whose page-log commit fails | `08007` without a commit sequence (the page-log commit record is the decision and may be on disk) | — | All or nothing; resolve by re-reading the result |
@@ -376,6 +377,15 @@ Mutation checks (each mutation applied alone; the named tests must fail):
   failed (now a fence) or crashed. It is an existing limitation of online
   migration, found while writing the migration fence test, and is tracked
   separately.
+
+- **A recovery that refuses to open after an early stop.** About 1 in
+  several hundred repeated runs leaves a state that recovery refuses to open
+  with `page N is beyond the end of the file (N pages)`, both after a crash
+  (`pool.after_writeback:40`) and after an injected early page-log sync
+  failure. The binary built from `main`, without this change, refuses the
+  same saved states identically, so it is an existing recovery defect, not
+  one this change introduced. It fails closed (the open is refused; nothing
+  is silently discarded). The states are saved for the recovery work.
 
 ## 11. Durability-contract notes
 

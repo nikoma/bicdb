@@ -1568,6 +1568,16 @@ pub(crate) fn read_bytes_at(path: &Path, offset: u64, len: usize) -> Result<Opti
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error.into()),
     };
+    read_bytes_at_file(&mut file, offset, len)
+}
+
+/// [`read_bytes_at`] on an already open file (the same inode as a
+/// following [`read_frames_readonly_from_file`]).
+pub(crate) fn read_bytes_at_file(
+    file: &mut File,
+    offset: u64,
+    len: usize,
+) -> Result<Option<Vec<u8>>> {
     if file.metadata()?.len() < offset + len as u64 {
         return Ok(None);
     }
@@ -1593,6 +1603,20 @@ pub(crate) fn read_frames_readonly_from(
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(error) => return Err(error.into()),
     };
+    read_frames_readonly_from_file(&mut file, path, start_offset, expected_kind, encryption)
+}
+
+/// [`read_frames_readonly_from`] on an already open file. A reader that
+/// validates a resume position and then reads must use one descriptor for
+/// both: a log cut renames a new file over `path` in between, and offsets
+/// of the old file mean nothing in the new one.
+pub(crate) fn read_frames_readonly_from_file(
+    file: &mut File,
+    path: &Path,
+    start_offset: u64,
+    expected_kind: FrameKind,
+    encryption: &EncryptionRuntime,
+) -> Result<Vec<(u64, u64, Vec<u8>)>> {
     let file_len = file.metadata()?.len();
     if start_offset >= file_len {
         return Ok(Vec::new());

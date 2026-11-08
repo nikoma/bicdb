@@ -756,3 +756,52 @@ fn archived_names(dir: &Path) -> BTreeSet<u64> {
         })
         .collect()
 }
+
+/// Found by the archive crash matrix: a transaction-log cut that renamed a
+/// new log over the old one between the commit stream's anchor check and
+/// its read made the read start at an old offset in the new file. Every
+/// commit it then did not see was shipped as an empty frame, so the
+/// commit-log archive (and a standby) silently lost those writes. The read
+/// now uses the descriptor the anchor was checked on.
+#[test]
+fn a_log_cut_between_anchor_check_and_read_never_ships_empty_frames() {
+    for storage in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let db_path = root.path().join("db");
+        let mut db = BicDb::open_with_config(&db_path, primary_config(storage.clone())).unwrap();
+        db.create_collection("items").unwrap();
+        put(&db, "a");
+        let mut cursor = ReplicationCursor::new(0);
+        let first = db.replication_frames_after(&mut cursor, 1000).unwrap();
+        assert!(!first.is_empty());
+        let shipped = cursor.sent_seq();
+        put(&db, "b");
+        put(&db, "c");
+        // The cut: a new (here: empty) log renamed over the path while the
+        // reader sits between its anchor check and its read.
+        let log = db_path.join(bicdb_core::DEFAULT_TRANSACTION_LOG);
+        let hook_log = log.clone();
+        let guard = bicdb_page::test_faults::arm_io_hook(
+            "replication.frames_read",
+            &db_path,
+            1,
+            move || {
+                let staging = hook_log.with_extension("cut-test");
+                std::fs::write(&staging, b"").unwrap();
+                std::fs::rename(&staging, &hook_log).unwrap();
+            },
+        );
+        let frames = db.replication_frames_after(&mut cursor, 1000).unwrap();
+        assert_eq!(guard.seen(), 1, "{storage:?}: the hook did not run");
+        assert!(!frames.is_empty(), "{storage:?}");
+        for frame in &frames {
+            assert!(frame.commit_seq > shipped, "{storage:?}");
+            assert!(
+                !frame.writes.is_empty(),
+                "{storage:?}: commit {} was shipped without its writes",
+                frame.commit_seq
+            );
+        }
+        drop(guard);
+    }
+}

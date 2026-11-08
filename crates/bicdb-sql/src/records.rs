@@ -2844,6 +2844,155 @@ pub(crate) fn row_security_disabled_error(table: &str) -> SqlError {
     )))
 }
 
+// Do not move direct user/volatile calls out of row-policy evaluation. A
+// FROM-less InitPlan may supply a lookup key only through literal expressions,
+// supported immutable wrappers, or a declared STABLE/IMMUTABLE zero-arg routine.
+fn policy_lookup_value(db: &BicDb, expr: &Expr, in_init_plan: bool) -> bool {
+    match expr {
+        Expr::Value(_) | Expr::TypedString(_) => true,
+        Expr::Nested(inner) | Expr::Cast { expr: inner, .. } => {
+            policy_lookup_value(db, inner, in_init_plan)
+        }
+        Expr::Subquery(query) if is_policy_init_plan(query) => {
+            let SetExpr::Select(select) = query.body.as_ref() else {
+                return false;
+            };
+            let Some(SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. }) =
+                select.projection.first()
+            else {
+                return false;
+            };
+            policy_lookup_value(db, expr, true)
+        }
+        Expr::Function(function)
+            if function.filter.is_none()
+                && function.over.is_none()
+                && function.within_group.is_empty()
+                && function.null_treatment.is_none()
+                && function.parameters == FunctionArguments::None =>
+        {
+            let FunctionArguments::List(args) = &function.args else {
+                return false;
+            };
+            if args.duplicate_treatment.is_some() || !args.clauses.is_empty()
+                || !args.args.iter().all(|arg| matches!(arg,
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) if policy_lookup_value(db, expr, in_init_plan)))
+                { return false; }
+            let Ok(name) = object_name_lowercase(&function.name) else {
+                return false;
+            };
+            matches!(
+                name.as_ref(),
+                "nullif" | "pg_catalog.nullif" | "coalesce" | "pg_catalog.coalesce"
+            ) || (in_init_plan
+                && (matches!(
+                    name.as_ref(),
+                    "current_setting" | "pg_catalog.current_setting"
+                ) || (args.args.is_empty()
+                    && resolve_routine_for_call(db, RoutineKind::Function, &name, &[], &[])
+                        .ok()
+                        .flatten()
+                        .is_some_and(|routine| {
+                            matches!(routine.schema.declared_volatility(), "s" | "i")
+                        }))))
+        }
+        _ => false,
+    }
+}
+
+impl<'db> SqlEngine<'db> {
+    /// Add only equalities necessary for every row admitted by the applicable
+    /// SELECT policy. This narrows index candidates, never replaces residual
+    /// RLS. Role/owner/FORCE/native bypass decisions come from the same resolver
+    /// used by row checks. Values are folded in the current statement context;
+    /// the existing content-keyed memo cannot reuse another identity’s values.
+    pub(crate) fn rls_index_candidate_selection(
+        &self,
+        table: &str,
+        alias: &str,
+        schema: Option<&TableSchema>,
+        selection: Option<&Expr>,
+    ) -> Result<Option<Expr>> {
+        let Some(schema) = schema else {
+            return Ok(None);
+        };
+        let PreparedRls::Filter(filter) = prepare_rls_with_schema(
+            self.db_ref(),
+            table,
+            PolicyAction::Select,
+            Some(schema),
+            &self.session_gucs,
+            self.security_context.as_ref(),
+            false,
+        )?
+        else {
+            return Ok(None);
+        };
+        let Some((_, first)) = filter.permissive.first() else {
+            return Ok(None);
+        };
+        // Permissive policies are OR: only an identical conjunct of every
+        // branch is necessary. Restrictive policies AND with that union.
+        // Deliberately do no independent expression simplification/optimization.
+        let mut terms = and_terms(first);
+        terms.retain(|term| {
+            filter
+                .permissive
+                .iter()
+                .skip(1)
+                .all(|(_, expr)| and_terms(expr).contains(term))
+        });
+        for (_, expr) in &filter.restrictive {
+            terms.extend(and_terms(expr));
+        }
+        let mut candidates = Vec::new();
+        for term in terms {
+            let Expr::BinaryOp {
+                left,
+                op: BinaryOperator::Eq,
+                right,
+            } = term
+            else {
+                continue;
+            };
+            for (column, value) in [
+                (left.as_ref(), right.as_ref()),
+                (right.as_ref(), left.as_ref()),
+            ] {
+                if !policy_lookup_value(self.db_ref(), value, false) {
+                    continue;
+                }
+                // Existing cast/equality rules reject truncation, UUID->text,
+                // collation transforms, and every unsupported expression key.
+                let Some(column @ Expr::Identifier(_)) =
+                    normalize_table_lookup_field_expr(column, table, alias, Some(schema))
+                else {
+                    continue;
+                };
+                let value = fold_policy_init_plans(self, value, policy_context_hash(self))?;
+                if expr_contains_subquery(&value) {
+                    continue;
+                }
+                let candidate = Expr::BinaryOp {
+                    left: Box::new(column),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(value.into_owned()),
+                };
+                if !candidates.contains(&candidate) {
+                    candidates.push(candidate);
+                }
+                break;
+            }
+        }
+        Ok(
+            expr_from_and_terms(candidates).map(|predicate| match selection {
+                Some(selection) => and_expr(selection.clone(), predicate),
+                None => predicate,
+            }),
+        )
+    }
+}
+
 impl RlsFilter {
     pub(crate) fn verdict(
         &self,

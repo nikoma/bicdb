@@ -1385,6 +1385,9 @@ impl<'db> SqlEngine<'db> {
         schema: Option<&TableSchema>,
         selection: Option<&Expr>,
     ) -> Result<Option<Vec<Arc<Record>>>> {
+        let policy_selection =
+            self.rls_index_candidate_selection(table, alias, schema, selection)?;
+        let selection = policy_selection.as_ref().or(selection);
         if let Some(records) =
             self.btree_indexed_records_for_table_selection(table, alias, schema, selection)?
         {

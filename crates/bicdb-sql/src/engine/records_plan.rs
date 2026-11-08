@@ -1538,6 +1538,21 @@ impl<'db> SqlEngine<'db> {
                 .unwrap_or(0)
         });
         let schema = load_schema(self.db_ref(), collection)?;
+        // Use the same necessary policy predicates as the row-set locator, so
+        // EXPLAIN and execution choose from identical index candidates.
+        let policy_select = self
+            .rls_index_candidate_selection(
+                collection,
+                alias,
+                schema.as_ref(),
+                select.selection.as_ref(),
+            )?
+            .map(|selection| {
+                let mut candidate = select.clone();
+                candidate.selection = Some(selection);
+                candidate
+            });
+        let select = policy_select.as_ref().unwrap_or(select);
         let full_scan_rows = match (&select.selection, schema.as_ref(), stats) {
             (Some(selection), Some(schema), Some(stats)) => self
                 .estimate_range_predicate_rows(collection, alias, schema, selection, stats)?

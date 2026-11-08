@@ -66,6 +66,11 @@ fn assert_point_plan(sql: &mut SqlSession<'_>, query: &str) {
 fn necessary_policy_equality_reuses_index_and_statement_context_without_dropping_residual_rls() {
     let (_dir, mut db) = fixture();
     let mut sql = reader(&mut db);
+    assert_eq!(
+        count(&mut sql, "N42"),
+        0,
+        "missing tenant yields NULL and denies rows"
+    );
     for tenant in ["own", "other", "third", "own"] {
         sql.execute(&format!("SET app.tenant='{tenant}'")).unwrap();
         assert_eq!(count(&mut sql, "N42"), 1);
@@ -225,6 +230,38 @@ fn volatile_policy_init_plans_are_not_speculatively_evaluated_by_explain() {
     assert_eq!(
         owner
             .execute("SELECT nextval('probe_effect')")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(1)]]
+    );
+}
+
+#[test]
+fn volatility_comes_from_the_selected_zero_argument_overload() {
+    let (_dir, mut db) = fixture();
+    let mut owner = SqlSession::new(&mut db);
+    owner
+        .execute("CREATE SEQUENCE probe_overload_effect")
+        .unwrap();
+    owner.execute("CREATE FUNCTION overloaded_tenant(value TEXT DEFAULT 'own') RETURNS TEXT LANGUAGE SQL STABLE AS $$ SELECT value $$").unwrap();
+    owner.execute("CREATE FUNCTION overloaded_tenant() RETURNS TEXT LANGUAGE SQL VOLATILE AS $$ SELECT nextval('probe_overload_effect')::text $$").unwrap();
+    owner
+        .execute("GRANT EXECUTE ON FUNCTION overloaded_tenant() TO probe_reader")
+        .unwrap();
+    owner.execute("DROP POLICY tenant ON orders").unwrap();
+    owner.execute("CREATE POLICY overloaded_init ON orders FOR SELECT TO probe_reader USING (org_id=(SELECT overloaded_tenant()))").unwrap();
+    owner.execute("SET ROLE probe_reader").unwrap();
+    let output = owner
+        .execute("EXPLAIN SELECT count(*)::int FROM orders WHERE number='N42'")
+        .unwrap();
+    assert!(output
+        .rows
+        .iter()
+        .any(|row| row[0].to_cell().contains("FullScan")));
+    owner.execute("RESET ROLE").unwrap();
+    assert_eq!(
+        owner
+            .execute("SELECT nextval('probe_overload_effect')")
             .unwrap()
             .rows,
         vec![vec![SqlValue::Int(1)]]

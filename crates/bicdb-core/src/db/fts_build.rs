@@ -2,6 +2,11 @@
 //! unchanged — a separate `impl` block on the same type.
 use super::*;
 
+/// Impact-block bytes one page transaction writes during a full-text
+/// backfill: far below the default buffer pool (256 MiB), so a common term's
+/// blocks are not refused for pool pressure (GAP-1 no-steal).
+const FTS_IMPACT_TRANSACTION_BYTES: usize = 4 * 1024 * 1024;
+
 impl BicDb {
     /// Continue an interrupted full-text build rather than refusing the retry.
     ///
@@ -1716,12 +1721,30 @@ impl BicDb {
             });
             let impact_blocks =
                 build_posting_blocks(&postings, FTS_BLOCK_DOC_CAP, FTS_BLOCK_BYTE_TARGET);
-            self.in_paged_transaction(|paged, xid| {
-                for (seq, (_, block)) in impact_blocks.iter().enumerate() {
-                    paged.put_impact_block(xid, name, encoded_key, seq as u32, block)?;
+            // Bounded by bytes per transaction: one very common term can hold
+            // more blocks than the buffer pool, and a page transaction that
+            // outgrows the pool is refused (GAP-1 no-steal). Splitting a
+            // term's blocks is safe because nothing reads impact blocks until
+            // the sentinel below commits, after every term.
+            let mut start = 0;
+            while start < impact_blocks.len() {
+                let mut end = start;
+                let mut bytes = 0usize;
+                while end < impact_blocks.len()
+                    && (end == start || bytes < FTS_IMPACT_TRANSACTION_BYTES)
+                {
+                    bytes += impact_blocks[end].1.len();
+                    end += 1;
                 }
-                Ok(())
-            })?;
+                self.in_paged_transaction(|paged, xid| {
+                    for (seq, (_, block)) in impact_blocks.iter().enumerate().take(end).skip(start)
+                    {
+                        paged.put_impact_block(xid, name, encoded_key, seq as u32, block)?;
+                    }
+                    Ok(())
+                })?;
+                start = end;
+            }
         }
         // The blocks now cover every document; the sentinel authorizes
         // early-terminating impact scans exactly as a per-posting backfill

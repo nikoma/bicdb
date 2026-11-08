@@ -410,6 +410,9 @@ const COMMON_POINTS: &[&str] = &[
     // A page just reached the page file: its log records must be durable.
     "pool.after_writeback:40",
     "pool.after_writeback:120",
+    // A commit's page images are in the log, its page commit record is not.
+    "paged.after_page_images:7",
+    "paged.after_page_images:150",
 ];
 
 const DEFERRED_POINTS: &[&str] = &[
@@ -878,42 +881,52 @@ fn production_path_survives_an_interrupted_log_reset_with_eviction() {
 /// GAP-1 end to end on the production row-commit path. 150 rows commit one
 /// by one and are acknowledged; the database closes cleanly, so every one of
 /// them is only in the page file. One transaction then inserts 2,000 rows
-/// whose keys sort first. Its page apply splits the B-tree root, and the
-/// root-split flush writes the split root in place while the transaction is
-/// still uncommitted in the page store. The crash lands right after that
-/// flush. The transaction is durable in the transaction log (its decision
-/// precedes the page apply), so recovery replays it. Every acknowledged row
-/// must survive, and the big transaction must be all or nothing.
-#[test]
-#[ignore = "GAP-1: steal without undo of an uncommitted root split"]
-fn gap1_a_crash_after_an_uncommitted_root_split_keeps_acknowledged_rows() {
+/// whose keys sort first. Its page apply splits the B-tree root. The crash
+/// lands at `crash_at` inside or right after that page apply. The
+/// transaction is durable in the transaction log (its decision precedes the
+/// page apply), so recovery replays it. Every acknowledged row must survive,
+/// and the big transaction must be all or nothing. Reconciled against the
+/// child's ledger, which records a row only after its commit returned.
+fn gap1_split_case(mode: &str, crash_at: &str) {
+    gap1_split_case_with(mode, crash_at, true)
+}
+
+/// `require_crash = false` accepts a run in which `crash_at` is never reached
+/// (the transaction then completes and must be fully present).
+fn gap1_split_case_with(mode: &str, crash_at: &str, require_crash: bool) {
     let temp = tempfile::tempdir().unwrap();
-    let keep = KeepOnPanic(temp.path().to_path_buf(), "gap1 root split".into());
+    let keep = KeepOnPanic(temp.path().to_path_buf(), format!("gap1 {mode} {crash_at}"));
     let db_dir = temp.path().join("db");
     let ledger = temp.path().join("ledger");
+    let flags: String = mode
+        .split('+')
+        .skip(1)
+        .map(|flag| format!("+{flag}"))
+        .collect();
     assert!(matches!(
-        run_child_with(&db_dir, &ledger, "q1-setup", None, 150),
+        run_child_with(&db_dir, &ledger, &format!("q1-setup{flags}"), None, 150),
         Outcome::Completed
     ));
-    assert!(
-        matches!(
-            run_child_with(
-                &db_dir,
-                &ledger,
-                "q1-split",
-                Some("btree.after_root_split_flush:1"),
-                2_000,
-            ),
-            Outcome::Crashed
-        ),
-        "the big transaction must split the root"
+    let outcome = run_child_with(
+        &db_dir,
+        &ledger,
+        &format!("q1-split{flags}"),
+        Some(crash_at),
+        2_000,
     );
-    let acknowledged: Vec<String> = ledger_lines(&ledger.join("q1"))
-        .into_iter()
+    assert!(
+        !require_crash || matches!(outcome, Outcome::Crashed),
+        "{crash_at} must be reached during the big transaction"
+    );
+    let lines = ledger_lines(&ledger.join("q1"));
+    let acknowledged: Vec<String> = lines
+        .iter()
         .filter(|line| line.starts_with("r-"))
+        .cloned()
         .collect();
     assert_eq!(acknowledged.len(), 150);
-    let db = BicDb::open_with_config(&db_dir, config("all-logs"))
+    let split_acknowledged = lines.iter().any(|line| line == "split");
+    let db = BicDb::open_with_config(&db_dir, config(&format!("all-logs{flags}")))
         .unwrap_or_else(|error| panic!("reopen after the split crash failed: {error}"));
     let mut missing = Vec::new();
     for id in &acknowledged {
@@ -938,7 +951,85 @@ fn gap1_a_crash_after_an_uncommitted_root_split_keeps_acknowledged_rows() {
         replayed == 0 || replayed == 2_000,
         "the big transaction is partial after recovery: {replayed} of 2000 rows"
     );
+    assert!(
+        !split_acknowledged || replayed == 2_000,
+        "the big transaction was acknowledged but did not survive"
+    );
     drop(keep);
+}
+
+/// W3: the crash lands right after the root-split flush. Before the
+/// interim, 124 of the 150 acknowledged rows were lost here.
+#[test]
+fn gap1_a_crash_after_an_uncommitted_root_split_keeps_acknowledged_rows() {
+    gap1_split_case("all-logs", "btree.after_root_split_flush:1");
+}
+
+/// The shape of the saved P0 crash state (`all-logs`, `pool.after_writeback:40`,
+/// about 2 in 240 runs on one head): the root-split flush wrote the split
+/// leaf, its new right sibling and the new root under the uncommitted page
+/// transaction, the crash landed inside that flush, and the reopen refused
+/// with "page 6 is beyond the end of the file". Made deterministic here: the
+/// crash lands at each of the first writebacks of the process that runs the
+/// splitting transaction, which before the interim fell inside the
+/// root-split flush. With no-steal that flush writes no unlogged page, so
+/// these points land later or never; either way every acknowledged row must
+/// survive and the reopen must succeed.
+#[test]
+fn gap1_a_crash_inside_the_root_split_flush_reopens_and_keeps_acknowledged_rows() {
+    let mut cases: Vec<(String, Box<dyn FnOnce() + std::panic::UnwindSafe>)> = Vec::new();
+    for hit in 1..=8u32 {
+        let point: &'static str = Box::leak(format!("pool.after_writeback:{hit}").into_boxed_str());
+        cases.push((
+            point.into(),
+            Box::new(move || gap1_split_case_with("all-logs", point, false)),
+        ));
+    }
+    run_matrix(cases);
+}
+
+/// The big transaction's page apply interrupted at its other boundaries:
+/// after its page images are logged but before its page commit record (the
+/// window in which a commit's pages used to count as logged already), after
+/// the page apply, and at the transaction-log decision.
+#[test]
+fn gap1_a_crash_at_every_boundary_of_a_splitting_page_apply_keeps_acknowledged_rows() {
+    let mut cases: Vec<(String, Box<dyn FnOnce() + std::panic::UnwindSafe>)> = Vec::new();
+    for point in [
+        "commit.after_txlog_durable:1",
+        "btree.after_root_split_flush:1",
+        "paged.after_page_images:1",
+        "commit.after_page_apply:1",
+    ] {
+        cases.push((
+            point.into(),
+            Box::new(move || gap1_split_case("all-logs+bounded", point)),
+        ));
+    }
+    run_matrix(cases);
+}
+
+/// Still open after the interim (GAP-1 W1 for redo-backed transactions):
+/// with a 32-frame pool the 2,000-row page apply cannot fit, and it is a
+/// decided commit, so it is never refused; eviction steals its pages as a
+/// last resort (`unlogged_steals`). A crash before its page commit can then
+/// lose acknowledged rows that its splits moved. Closing this needs the
+/// structural-unit log (option (b) in `docs/recovery-semantics.md` 14.3).
+#[test]
+#[ignore = "GAP-1 W1: a decided commit larger than the buffer pool still steals; needs option (b)"]
+fn gap1_a_decided_commit_larger_than_the_pool_keeps_acknowledged_rows() {
+    let mut cases: Vec<(String, Box<dyn FnOnce() + std::panic::UnwindSafe>)> = Vec::new();
+    for point in [
+        "pool.after_writeback:20",
+        "btree.after_root_split_flush:1",
+        "paged.after_page_images:1",
+    ] {
+        cases.push((
+            point.into(),
+            Box::new(move || gap1_split_case("all-logs+small-pool", point)),
+        ));
+    }
+    run_matrix(cases);
 }
 
 /// Reopens of a crashed database that do no new work, each a chain: the

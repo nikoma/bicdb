@@ -224,6 +224,31 @@ impl HeapFile {
         // Try the free-space ring first.
         let candidates: Vec<PageId> = self.candidates.lock().iter().copied().collect();
         for page_id in candidates {
+            // Probe through a read guard first. A write guard marks its page
+            // changed whether or not anything is written, and probing every
+            // candidate with one made a single insert dirty the whole ring.
+            // Under no-steal those pages stay in memory until commit, so the
+            // probe would make one operation's footprint unbounded (GAP-1).
+            // The probe never touches the unlogged flag itself; only the
+            // write guard below, on a page that takes the tuple, sets it. A
+            // page that is no longer a heap page (freed by vacuum) is never
+            // a target. (#54 replaces this probe with an upgradable latch
+            // and the same page-type check; on a conflict, take #54's.)
+            let usable = match self.pool.get(page_id) {
+                Ok(guard) => {
+                    let is_heap = PageType::from_u8(guard.bytes()[6]) == Some(PageType::Heap);
+                    let mut probe = guard.bytes().to_vec();
+                    let heap = SlottedPage::new(&mut probe);
+                    is_heap
+                        && (heap.can_fit(tuple.len())
+                            || heap.reclaimable_space() >= SlottedPage::required_space(tuple.len()))
+                }
+                Err(PageError::PoolExhausted { .. }) => continue,
+                Err(other) => return Err(other),
+            };
+            if !usable {
+                continue;
+            }
             let mut guard = match self.pool.get_mut(page_id) {
                 Ok(guard) => guard,
                 // A full pool is a reason to try another page, not to fail:

@@ -354,6 +354,13 @@ impl PagedRecords {
         self.store.begin_transaction()
     }
 
+    /// Begin a transaction whose redo is already durable in the transaction
+    /// log: a commit's page apply. See `PagedStore::begin_redo_backed`: its
+    /// writes are never refused for buffer-pool pressure.
+    pub fn begin_redo_backed(&self) -> (Xid, Snapshot) {
+        self.store.begin_redo_backed()
+    }
+
     pub fn latest_snapshot(&self) -> Snapshot {
         self.store.latest_snapshot()
     }

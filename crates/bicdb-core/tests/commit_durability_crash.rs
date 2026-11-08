@@ -64,8 +64,9 @@ fn child_binary() -> PathBuf {
 const SMALL_POOL_BYTES: u64 = 256 * 1024;
 
 /// A case's mode is `all-logs` or `transaction-log`, optionally suffixed
-/// `+small-pool` and/or `+outside-lock` (the experimental row-commit sync
-/// outside the page store's writer lock, docs/commit-fsync-outside-locks.md).
+/// `+small-pool`, `+outside-lock` (the experimental row-commit sync outside
+/// the page store's writer lock, docs/commit-fsync-outside-locks.md) and/or
+/// `+unlocked-sync` (the gated unlocked page-log sync, docs/wal-unlocked-sync.md).
 fn durability(mode: &str) -> &str {
     mode.split('+').next().unwrap_or(mode)
 }
@@ -99,13 +100,18 @@ fn set_outside_lock_env(command: &mut Command, mode: &str) {
     }
 }
 
+fn unlocked_sync(mode: &str) -> bool {
+    mode.split('+').any(|part| part == "unlocked-sync")
+}
+
 fn config(mode: &str) -> DbConfig {
     let config = DbConfig::default()
         .with_fsync(true)
         .with_sync_outbox(false)
         .with_storage_mode(StorageMode::ServerPaged)
         .with_transaction_log_commit_durability(durability(mode) == "transaction-log")
-        .with_paged_commit_sync_outside_lock(outside_lock(mode));
+        .with_paged_commit_sync_outside_lock(outside_lock(mode))
+        .with_paged_wal_sync_unlocked(unlocked_sync(mode));
     if small_pool(mode) {
         config.with_paged_buffer_pool_bytes(SMALL_POOL_BYTES)
     } else {
@@ -144,6 +150,11 @@ fn run_child_with(
         command.env_remove("DURABILITY_POOL_BYTES");
     }
     set_outside_lock_env(&mut command, mode);
+    if unlocked_sync(mode) {
+        command.env("BICDB_PAGED_WAL_SYNC_UNLOCKED", "1");
+    } else {
+        command.env_remove("BICDB_PAGED_WAL_SYNC_UNLOCKED");
+    }
     if let Some(point) = crash_at {
         command.env("BICDB_TEST_CRASH_AT", point);
     }
@@ -374,6 +385,30 @@ const DEFERRED_POINTS: &[&str] = &[
     "materialize.after_wal_sync:40",
     "materialize.torn_markers:5",
     "materialize.after_markers:6",
+];
+
+/// Inside the unlocked sync's window: after the descriptor is duplicated and
+/// the append lock released but before the `fdatasync`, and after the
+/// `fdatasync` but before durability is published. Only the unlocked step
+/// has these points.
+const UNLOCKED_SYNC_POINTS: &[&str] = &[
+    "wal.sync.after_clone:2",
+    "wal.sync.after_clone:40",
+    "wal.sync.after_clone:250",
+    "wal.sync.before_publish:3",
+    "wal.sync.before_publish:60",
+    "wal.sync.before_publish:300",
+];
+
+/// The transaction-log mode syncs the page log far less often (the
+/// materializer batches), so its window points sit at lower hit counts.
+const TXLOG_UNLOCKED_SYNC_POINTS: &[&str] = &[
+    "wal.sync.after_clone:2",
+    "wal.sync.after_clone:20",
+    "wal.sync.after_clone:40",
+    "wal.sync.before_publish:3",
+    "wal.sync.before_publish:30",
+    "wal.sync.before_publish:60",
 ];
 
 /// Run every case and report all failures together, so one bad boundary
@@ -769,4 +804,95 @@ fn repeat_core_matrices() {
         failures.len(),
         failures.join("\n")
     );
+}
+
+// The same matrices with the unlocked page-log sync on.
+
+#[test]
+fn production_path_with_unlocked_sync_survives_every_crash_point() {
+    matrix(
+        "all-logs+unlocked-sync",
+        COMMON_POINTS.iter().chain(UNLOCKED_SYNC_POINTS).copied().collect(),
+        &["commit.after_page_apply:100", "wal.sync.before_publish:60"],
+    );
+}
+
+#[test]
+fn production_path_with_unlocked_sync_survives_every_crash_point_with_eviction() {
+    matrix(
+        "all-logs+small-pool+unlocked-sync",
+        COMMON_POINTS
+            .iter()
+            .chain(UNLOCKED_SYNC_POINTS)
+            .copied()
+            .collect(),
+        &["commit.after_page_apply:100", "wal.sync.after_clone:40"],
+    );
+}
+
+#[test]
+fn transaction_log_only_path_with_unlocked_sync_survives_every_crash_point() {
+    matrix(
+        "transaction-log+unlocked-sync",
+        COMMON_POINTS
+            .iter()
+            .chain(DEFERRED_POINTS)
+            .chain(TXLOG_UNLOCKED_SYNC_POINTS)
+            .copied()
+            .collect(),
+        &[
+            "commit.after_page_apply:100",
+            "materialize.after_wal_sync:20",
+        ],
+    );
+}
+
+#[test]
+fn transaction_log_only_path_with_unlocked_sync_survives_every_crash_point_with_eviction() {
+    matrix(
+        "transaction-log+small-pool+unlocked-sync",
+        COMMON_POINTS
+            .iter()
+            .chain(DEFERRED_POINTS)
+            .chain(TXLOG_UNLOCKED_SYNC_POINTS)
+            .copied()
+            .collect(),
+        &[
+            "commit.after_page_apply:100",
+            "materialize.after_wal_sync:20",
+        ],
+    );
+}
+
+// Both gates together (row-commit sync outside the writer lock, and the
+// unlocked page-log sync): the combination the benchmark measures.
+#[test]
+fn outside_lock_with_unlocked_sync_survives_every_crash_point() {
+    matrix(
+        "all-logs+outside-lock+unlocked-sync",
+        outside_lock_points()
+            .into_iter()
+            .chain(UNLOCKED_SYNC_POINTS.iter().copied())
+            .collect(),
+        &["commit.page.synced_unpublished:60", "wal.sync.before_publish:60"],
+    );
+}
+
+#[test]
+fn outside_lock_with_unlocked_sync_survives_every_crash_point_with_eviction_and_barrier() {
+    matrix(
+        "all-logs+small-pool+outside-lock+unlocked-sync+small-wal",
+        BARRIER_POINTS
+            .iter()
+            .chain(OUTSIDE_LOCK_POINTS)
+            .chain(UNLOCKED_SYNC_POINTS)
+            .copied()
+            .collect(),
+        &["commit.barrier.drained:5", "wal.sync.after_clone:40"],
+    );
+}
+
+#[test]
+fn outside_lock_with_unlocked_sync_fails_closed_at_every_io_failure_site() {
+    fail_io_matrix("all-logs+small-pool+outside-lock+unlocked-sync");
 }

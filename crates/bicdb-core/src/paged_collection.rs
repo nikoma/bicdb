@@ -125,6 +125,8 @@ pub struct PagedRecordsOptions {
     /// Accept and transform a pre-durable-abort-exceptions meta page at open.
     /// See `PagedStoreOptions::accept_legacy_meta` for why this is opt-in.
     pub accept_legacy_meta: bool,
+    /// See `PagedStoreOptions::unlocked_wal_sync`. Off by default.
+    pub unlocked_wal_sync: bool,
 }
 
 impl Default for PagedRecordsOptions {
@@ -138,6 +140,7 @@ impl Default for PagedRecordsOptions {
             wal_segment_bytes: 64 * 1024 * 1024,
             extent_bytes: 0,
             accept_legacy_meta: false,
+            unlocked_wal_sync: false,
         }
     }
 }
@@ -271,7 +274,8 @@ impl PagedRecords {
             .with_wal_max_bytes(options.wal_max_bytes)
             .with_wal_segment_bytes(options.wal_segment_bytes)
             .with_extent_bytes(options.extent_bytes)
-            .with_accept_legacy_meta(options.accept_legacy_meta);
+            .with_accept_legacy_meta(options.accept_legacy_meta)
+            .with_unlocked_wal_sync(options.unlocked_wal_sync);
         let (store, _recovery) = PagedStore::open(dir, store_options).map_err(page_error)?;
         let aliases = load_nearby_index_aliases(dir)?;
         Ok(Self {

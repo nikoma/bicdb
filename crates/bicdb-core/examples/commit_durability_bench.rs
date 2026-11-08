@@ -139,6 +139,12 @@ fn run(db_dir: &Path, mode: &str, threads: usize, seconds: u64, crash: bool) {
             store.wal().snapshot(),
         )
     });
+    // Which page-log sync step ran (`BICDB_PAGED_WAL_SYNC_UNLOCKED`), and its
+    // sync counters, so a result always names the path it measured.
+    let page_wal = db.paged_records_handle().map(|paged| {
+        let wal = paged.store().wal();
+        (wal.unlocked_sync(), wal.snapshot())
+    });
     println!(
         "{}",
         json!({
@@ -163,6 +169,10 @@ fn run(db_dir: &Path, mode: &str, threads: usize, seconds: u64, crash: bool) {
             })),
             "page_wal_sync_count": outside_lock.as_ref().map(|(_, _, w)| w.syncs),
             "page_wal_group_savings": outside_lock.as_ref().map(|(_, _, w)| w.group_commit_savings),
+            "page_wal_sync_unlocked": page_wal.as_ref().map(|(unlocked, _)| *unlocked),
+            "page_wal_syncs": page_wal.as_ref().map(|(_, snapshot)| snapshot.syncs),
+            "page_wal_group_commit_savings":
+                page_wal.as_ref().map(|(_, snapshot)| snapshot.group_commit_savings),
             "materializer": stats.map(|s| json!({
                 "passes": s.passes, "wal_syncs": s.wal_syncs,
                 "markers_written": s.markers_written, "queued": s.queued,

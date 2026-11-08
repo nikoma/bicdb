@@ -387,6 +387,13 @@ pub struct DbConfig {
     /// `BICDB_PAGED_COMMIT_SYNC_OUTSIDE_LOCK=1` (exactly) to enable. Not for
     /// production until qualified; see `docs/commit-fsync-outside-locks.md`.
     pub paged_commit_sync_outside_lock: bool,
+    /// EXPERIMENTAL, off by default: in `server_paged`, sync the page log
+    /// without holding its append lock across the `fdatasync`, so one sync
+    /// no longer stalls every page-log append. Durability is still published
+    /// only for records the sync covered. Set
+    /// `BICDB_PAGED_WAL_SYNC_UNLOCKED=1` (exactly) to enable. Not for
+    /// production until qualified; see `docs/wal-unlocked-sync.md`.
+    pub paged_wal_sync_unlocked: bool,
     /// Bytes per page-file extent for NEWLY created paged stores. `0` keeps
     /// one monolithic `store.pages`; the default segments new stores into
     /// 1 GiB files so file-level tooling (rsync deltas, parallel uploads,
@@ -1245,6 +1252,11 @@ impl Default for DbConfig {
                     .ok()
                     .as_deref(),
             ),
+            paged_wal_sync_unlocked: paged_wal_sync_unlocked_from(
+                std::env::var("BICDB_PAGED_WAL_SYNC_UNLOCKED")
+                    .ok()
+                    .as_deref(),
+            ),
             paged_extent_bytes: paged_extent_bytes_default(),
             fts_build_memory_bytes: fts_build_memory_bytes_default(),
             fts_build_workers: fts_build_workers_default(),
@@ -1705,6 +1717,11 @@ pub(crate) fn paged_commit_sync_outside_lock_from(value: Option<&str>) -> bool {
     value == Some("1")
 }
 
+/// Only the exact value `1` enables the unlocked page-log sync.
+pub(crate) fn paged_wal_sync_unlocked_from(value: Option<&str>) -> bool {
+    value == Some("1")
+}
+
 fn paged_accept_legacy_meta_default() -> bool {
     std::env::var("BICDB_ACCEPT_LEGACY_META")
         .map(|value| matches!(value.trim(), "1" | "true" | "TRUE" | "on"))
@@ -2035,6 +2052,12 @@ impl DbConfig {
     /// See [`DbConfig::paged_commit_sync_outside_lock`]. Experimental.
     pub fn with_paged_commit_sync_outside_lock(mut self, enabled: bool) -> Self {
         self.paged_commit_sync_outside_lock = enabled;
+        self
+    }
+
+    /// See [`DbConfig::paged_wal_sync_unlocked`]. Experimental.
+    pub fn with_paged_wal_sync_unlocked(mut self, enabled: bool) -> Self {
+        self.paged_wal_sync_unlocked = enabled;
         self
     }
 
@@ -9710,6 +9733,7 @@ impl BicDb {
                         extent_bytes: config.paged_extent_bytes,
                         fsync: config.fsync,
                         accept_legacy_meta: config.paged_accept_legacy_meta,
+                        unlocked_wal_sync: config.paged_wal_sync_unlocked,
                     },
                     config.paged_commit_sync_outside_lock,
                 )?,

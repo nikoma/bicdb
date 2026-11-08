@@ -2857,6 +2857,34 @@ fn policy_lookup_value(db: &BicDb, expr: &Expr, in_init_plan: bool) -> bool {
             let SetExpr::Select(select) = query.body.as_ref() else {
                 return false;
             };
+            // The older InitPlan classifier checks projection row-independence.
+            // A lookup must additionally reject every other expression-bearing
+            // clause: GROUP/DISTINCT/QUALIFY etc. can contain volatile effects.
+            if query.fetch.is_some()
+                || !query.locks.is_empty()
+                || query.for_clause.is_some()
+                || query.settings.is_some()
+                || query.format_clause.is_some()
+                || !query.pipe_operators.is_empty()
+                || !select.optimizer_hints.is_empty()
+                || select.distinct.is_some()
+                || select.select_modifiers.is_some()
+                || select.top.is_some()
+                || select.exclude.is_some()
+                || select.into.is_some()
+                || !select.lateral_views.is_empty()
+                || select.prewhere.is_some()
+                || !select.connect_by.is_empty()
+                || !matches!(&select.group_by, GroupByExpr::Expressions(exprs,modifiers) if exprs.is_empty() && modifiers.is_empty())
+                || !select.cluster_by.is_empty()
+                || !select.distribute_by.is_empty()
+                || !select.sort_by.is_empty()
+                || !select.named_window.is_empty()
+                || select.qualify.is_some()
+                || select.value_table_mode.is_some()
+            {
+                return false;
+            }
             let Some(SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. }) =
                 select.projection.first()
             else {
@@ -2894,6 +2922,10 @@ fn policy_lookup_value(db: &BicDb, expr: &Expr, in_init_plan: bool) -> bool {
                         .flatten()
                         .is_some_and(|routine| {
                             matches!(routine.schema.declared_volatility(), "s" | "i")
+                                // Zero actual arguments can select a defaulted
+                                // signature; its defaults may be volatile.
+                                && parse_routine_params(&routine.schema.args).is_ok_and(|params|
+                                    params.is_empty())
                         }))))
         }
         _ => false,

@@ -237,7 +237,7 @@ fn volatile_policy_init_plans_are_not_speculatively_evaluated_by_explain() {
 }
 
 #[test]
-fn volatility_comes_from_the_selected_zero_argument_overload() {
+fn defaulted_overloads_are_not_misclassified_as_pure_zero_argument_calls() {
     let (_dir, mut db) = fixture();
     let mut owner = SqlSession::new(&mut db);
     owner
@@ -262,6 +262,45 @@ fn volatility_comes_from_the_selected_zero_argument_overload() {
     assert_eq!(
         owner
             .execute("SELECT nextval('probe_overload_effect')")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(1)]]
+    );
+}
+
+#[test]
+fn volatile_defaults_and_decorated_init_plans_are_not_executed_by_explain() {
+    let (_dir, mut db) = fixture();
+    let mut owner = SqlSession::new(&mut db);
+    owner
+        .execute("CREATE SEQUENCE probe_hidden_effect")
+        .unwrap();
+    owner.execute("CREATE FUNCTION defaulted_tenant(value TEXT DEFAULT nextval('probe_hidden_effect')::text) RETURNS TEXT LANGUAGE SQL STABLE AS $$ SELECT value $$").unwrap();
+    owner
+        .execute("GRANT EXECUTE ON FUNCTION defaulted_tenant(TEXT) TO probe_reader")
+        .unwrap();
+    owner.execute("DROP POLICY tenant ON orders").unwrap();
+    for expression in [
+        "(SELECT defaulted_tenant())",
+        "(SELECT probe_tenant() GROUP BY nextval('probe_hidden_effect'))",
+    ] {
+        owner.execute(&format!("CREATE POLICY hidden_effect ON orders FOR SELECT TO probe_reader USING (org_id={expression})")).unwrap();
+        owner.execute("SET ROLE probe_reader").unwrap();
+        let output = owner
+            .execute("EXPLAIN SELECT count(*)::int FROM orders WHERE number='N42'")
+            .unwrap();
+        assert!(output
+            .rows
+            .iter()
+            .any(|row| row[0].to_cell().contains("FullScan")));
+        owner.execute("RESET ROLE").unwrap();
+        owner
+            .execute("DROP POLICY hidden_effect ON orders")
+            .unwrap();
+    }
+    assert_eq!(
+        owner
+            .execute("SELECT nextval('probe_hidden_effect')")
             .unwrap()
             .rows,
         vec![vec![SqlValue::Int(1)]]

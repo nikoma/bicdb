@@ -3512,7 +3512,8 @@ impl<'db> SqlSession<'db> {
             )
             .is_some_and(|v| v >= 29),
         );
-        let (function_schema, name) = routine_schema_and_name(&object_name(&create_function.name)?);
+        let (function_schema, name) =
+            routine_creation_schema_and_name(&object_name(&create_function.name)?);
         let (return_type, returns_set) = create_function
             .return_type
             .as_ref()

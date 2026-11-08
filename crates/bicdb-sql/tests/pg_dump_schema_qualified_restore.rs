@@ -421,6 +421,47 @@ fn restored_view_owners_and_schema_qualified_triggers_work() {
     assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.removed"), 1);
 }
 
+/// An unqualified CREATE FUNCTION creates (or replaces) the function in the
+/// first schema on the search_path.
+#[test]
+fn unqualified_functions_are_created_in_the_first_search_path_schema() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE FUNCTION app.make_id() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$")
+        .unwrap();
+    sql.execute("SET search_path TO app, public").unwrap();
+    sql.execute(
+        "CREATE OR REPLACE FUNCTION Make_ID() RETURNS integer LANGUAGE sql AS $$ SELECT 2 $$",
+    )
+    .unwrap();
+    sql.execute(
+        "CREATE FUNCTION fresh_fn() RETURNS integer LANGUAGE plpgsql AS $$ BEGIN RETURN 3; END $$",
+    )
+    .unwrap();
+    let rows = sql
+        .execute(
+            "SELECT p.proname, n.nspname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace \
+             WHERE p.proname IN ('make_id', 'fresh_fn') ORDER BY 1",
+        )
+        .unwrap()
+        .rows;
+    assert_eq!(
+        rows,
+        vec![
+            vec![
+                SqlValue::String("fresh_fn".into()),
+                SqlValue::String("app".into())
+            ],
+            vec![
+                SqlValue::String("make_id".into()),
+                SqlValue::String("app".into())
+            ],
+        ]
+    );
+    assert_eq!(int_at(&mut sql, "SELECT app.make_id()"), 2);
+}
+
 /// One simple-query text that sets search_path and then names relations
 /// unqualified: each statement binds with the path and schemas in force when
 /// it runs, not the path before the text started.

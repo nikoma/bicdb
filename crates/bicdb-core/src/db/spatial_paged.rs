@@ -1762,8 +1762,8 @@ impl BicDb {
     /// The first call enables archive retention, persistently (it survives
     /// reopens until [`Self::disable_wal_archiving`]): sealed segments
     /// survive local truncation until archived, so a stalled archiver grows
-    /// the local WAL directory (deliberately — the PostgreSQL
-    /// `archive_command` trade) rather than gapping the archive. Roll a
+    /// the local WAL directory (deliberately: space traded for a gap-free
+    /// archive) rather than gapping the archive. Roll a
     /// restore forward with [`apply_archived_wal`]: restore an online-backup
     /// chain, apply the archive, open.
     ///

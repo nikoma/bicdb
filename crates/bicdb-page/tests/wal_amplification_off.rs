@@ -24,7 +24,9 @@ fn one_commit_wal_bytes() -> u64 {
     let before = store.wal().snapshot().bytes_appended;
     let xid = store.begin();
     store.put(xid, b"\x00\x04rowsr-1", b"value").unwrap();
-    store.put(xid, b"\x00\x00\x01\x00\x08rows_idxk\x00\x00r-1", b"").unwrap();
+    store
+        .put(xid, b"\x00\x00\x01\x00\x08rows_idxk\x00\x00r-1", b"")
+        .unwrap();
     store.commit(xid).unwrap();
     store.wal().snapshot().bytes_appended - before
 }
@@ -37,7 +39,10 @@ fn the_trace_is_off_by_default_records_nothing_and_never_changes_the_log() {
         assert!(!wal_amplification::env_value_enables(value), "{value:?}");
     }
     if std::env::var(wal_amplification::ENV).is_ok_and(|v| v == "1") {
-        eprintln!("{} is set in this environment; skipping", wal_amplification::ENV);
+        eprintln!(
+            "{} is set in this environment; skipping",
+            wal_amplification::ENV
+        );
         return;
     }
 
@@ -53,7 +58,10 @@ fn the_trace_is_off_by_default_records_nothing_and_never_changes_the_log() {
     let report = wal_amplification::report();
     wal_amplification::disable();
     wal_amplification::clear();
-    assert_eq!(on_bytes, off_bytes, "the trace must not change what is logged");
+    assert_eq!(
+        on_bytes, off_bytes,
+        "the trace must not change what is logged"
+    );
     assert_eq!(report.commits, 1);
     assert!(report.totals.images > 0);
     assert_eq!(
@@ -65,7 +73,10 @@ fn the_trace_is_off_by_default_records_nothing_and_never_changes_the_log() {
         .rows
         .iter()
         .any(|row| row.operations.contains("put:index_entry")));
-    assert!(report.rows.iter().any(|row| row.operations.contains("put:row")));
+    assert!(report
+        .rows
+        .iter()
+        .any(|row| row.operations.contains("put:row")));
 
     // Off again: nothing further is recorded.
     assert!(!wal_amplification::enabled());

@@ -1018,7 +1018,8 @@ impl BTree {
 
     /// Split the leaf at the end of `path`, propagating upward as needed.
     fn split_and_insert(&self, path: &[PathStep], key: &[u8], value: &[u8]) -> Result<()> {
-        let _amp = crate::wal_amplification::scope(crate::wal_amplification::Field::Detail, "split");
+        let _amp =
+            crate::wal_amplification::scope(crate::wal_amplification::Field::Detail, "split");
         let page_size = self.pool.page_size();
         let leaf_id = path.last().unwrap().page_id;
 

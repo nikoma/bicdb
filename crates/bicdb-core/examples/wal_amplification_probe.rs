@@ -217,9 +217,8 @@ fn workload_commit(db: &BicDb, workload: &str, thread: usize, i: u64, rng: &mut 
             }
             tx.update(
                 "rows",
-                Record::new(format!("hot-{thread}")).with_metadata(
-                    json!({"owner": thread, "seq": i, "uk": format!("h-{thread}")}),
-                ),
+                Record::new(format!("hot-{thread}"))
+                    .with_metadata(json!({"owner": thread, "seq": i, "uk": format!("h-{thread}")})),
             )
             .expect("update");
             tx.commit().expect("commit");
@@ -271,7 +270,10 @@ fn main() {
     let db_dir = Path::new(&args[0]);
     let workload = args[1].as_str();
     let commits: u64 = args[2].parse().expect("commits");
-    let threads: usize = args.get(3).map(|t| t.parse().expect("threads")).unwrap_or(1);
+    let threads: usize = args
+        .get(3)
+        .map(|t| t.parse().expect("threads"))
+        .unwrap_or(1);
 
     wal_amplification::enable();
     let mut db = BicDb::open_with_config(db_dir, config()).expect("open");

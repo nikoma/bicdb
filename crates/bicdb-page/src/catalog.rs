@@ -151,10 +151,8 @@ impl Catalog {
         page_type: PageType,
         free_bytes: usize,
     ) -> Result<()> {
-        let _amp = crate::wal_amplification::scope(
-            crate::wal_amplification::Field::Component,
-            "catalog",
-        );
+        let _amp =
+            crate::wal_amplification::scope(crate::wal_amplification::Field::Component, "catalog");
         self.tree
             .insert(&directory_key(page_id), &[page_type as u8])?;
         let bucket = bucket_for(free_bytes, self.page_size);
@@ -170,10 +168,8 @@ impl Catalog {
         previous_free: usize,
         free_bytes: usize,
     ) -> Result<()> {
-        let _amp = crate::wal_amplification::scope(
-            crate::wal_amplification::Field::Component,
-            "catalog",
-        );
+        let _amp =
+            crate::wal_amplification::scope(crate::wal_amplification::Field::Component, "catalog");
         let previous = bucket_for(previous_free, self.page_size);
         let current = bucket_for(free_bytes, self.page_size);
         if previous == current {
@@ -211,10 +207,8 @@ impl Catalog {
 
     /// Remove a page from the catalog entirely.
     pub fn forget_page(&self, page_id: PageId, free_bytes: usize) -> Result<()> {
-        let _amp = crate::wal_amplification::scope(
-            crate::wal_amplification::Field::Component,
-            "catalog",
-        );
+        let _amp =
+            crate::wal_amplification::scope(crate::wal_amplification::Field::Component, "catalog");
         self.tree.remove(&directory_key(page_id))?;
         let bucket = bucket_for(free_bytes, self.page_size);
         self.tree.remove(&free_key(bucket, page_id))?;
@@ -240,10 +234,8 @@ impl Catalog {
 
     /// Record `floor` for `page_id`; floors only ever grow.
     pub fn set_page_generation_floor(&self, page_id: PageId, floor: u32) -> Result<()> {
-        let _amp = crate::wal_amplification::scope(
-            crate::wal_amplification::Field::Component,
-            "catalog",
-        );
+        let _amp =
+            crate::wal_amplification::scope(crate::wal_amplification::Field::Component, "catalog");
         let current = self.page_generation_floor(page_id)?;
         if floor <= current {
             return Ok(());

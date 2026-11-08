@@ -1505,8 +1505,7 @@ impl BicDb {
         // transactions that do not contain their own rows.
         let _guard = paged.write_guard();
         self.check_recovery_state()?;
-        let amp_started =
-            bicdb_page::wal_amplification::enabled().then(std::time::Instant::now);
+        let amp_started = bicdb_page::wal_amplification::enabled().then(std::time::Instant::now);
         let (xid, _) = paged.begin();
         match apply(paged, xid) {
             Ok(()) => {

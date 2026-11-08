@@ -472,10 +472,7 @@ pub fn record_image(page_id: PageId, image: &[u8], lsn: u64, redo_lsn: u64) {
     // `commits` counts commit records appended so far; an image logged by the
     // commit about to be numbered `commit_now` is "consecutive" when the same
     // page was imaged by commit `commit_now - 1`.
-    if site == Site::Commit
-        && commit_now > 0
-        && page.last_image_commit == Some(commit_now - 1)
-    {
+    if site == Site::Commit && commit_now > 0 && page.last_image_commit == Some(commit_now - 1) {
         row.consecutive_commit_images = 1;
     }
     page.last_image_lsn = Some(lsn);

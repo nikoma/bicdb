@@ -1702,8 +1702,12 @@ impl PagedStore {
         let _guard = self.write_lock.lock();
         let _structure = self.structure.write();
         let _amp_op = crate::wal_amplification::scope(crate::wal_amplification::Field::Op, "put");
-        let _amp_key = crate::wal_amplification::enabled()
-            .then(|| crate::wal_amplification::scope(crate::wal_amplification::Field::KeyClass, crate::wal_amplification::key_class(key)));
+        let _amp_key = crate::wal_amplification::enabled().then(|| {
+            crate::wal_amplification::scope(
+                crate::wal_amplification::Field::KeyClass,
+                crate::wal_amplification::key_class(key),
+            )
+        });
         self.pool.set_current_transaction(transaction);
         let head = self.index.get(key)?.and_then(|b| TupleLocator::decode(&b));
         // Chain the new version onto the newest version that is not aborted:
@@ -1832,7 +1836,8 @@ impl PagedStore {
 
     /// Stamp `xmax` on an existing version.
     fn mark_deleted(&self, locator: TupleLocator, transaction: Xid) -> Result<()> {
-        let _amp = crate::wal_amplification::scope(crate::wal_amplification::Field::Detail, "xmax_stamp");
+        let _amp =
+            crate::wal_amplification::scope(crate::wal_amplification::Field::Detail, "xmax_stamp");
         let mut current = match self.heap.get(locator) {
             Ok(current) => current,
             // The superseded version was vacuumed away — and its slot may
@@ -2086,9 +2091,14 @@ impl PagedStore {
     pub fn delete(&self, transaction: Xid, key: &[u8]) -> Result<bool> {
         let _guard = self.write_lock.lock();
         let _structure = self.structure.write();
-        let _amp_op = crate::wal_amplification::scope(crate::wal_amplification::Field::Op, "delete");
-        let _amp_key = crate::wal_amplification::enabled()
-            .then(|| crate::wal_amplification::scope(crate::wal_amplification::Field::KeyClass, crate::wal_amplification::key_class(key)));
+        let _amp_op =
+            crate::wal_amplification::scope(crate::wal_amplification::Field::Op, "delete");
+        let _amp_key = crate::wal_amplification::enabled().then(|| {
+            crate::wal_amplification::scope(
+                crate::wal_amplification::Field::KeyClass,
+                crate::wal_amplification::key_class(key),
+            )
+        });
         self.pool.set_current_transaction(transaction);
         let Some(bytes) = self.index.get(key)? else {
             return Ok(false);
@@ -2219,7 +2229,10 @@ impl PagedStore {
     fn persist_status_spill(&self) -> Result<()> {
         let outcomes = self.transactions.terminal_outcomes();
         let frozen_xid = self.transactions.frozen_xid();
-        let _amp = crate::wal_amplification::scope(crate::wal_amplification::Field::Component, "status_spill");
+        let _amp = crate::wal_amplification::scope(
+            crate::wal_amplification::Field::Component,
+            "status_spill",
+        );
         self.spill
             .persist(&self.pool, &self.wal, frozen_xid, outcomes)?;
         self.transactions.evict_terminal_outcomes();
@@ -3175,7 +3188,8 @@ impl PagedStore {
     /// interleave, so remove-while-iterating is safe via the two-phase
     /// collect-then-remove below. Returns the number of keys removed.
     pub fn sweep_dead_index_entries(&self, max_keys: usize) -> Result<u64> {
-        let _amp = crate::wal_amplification::scope(crate::wal_amplification::Field::Op, "index_sweep");
+        let _amp =
+            crate::wal_amplification::scope(crate::wal_amplification::Field::Op, "index_sweep");
         let _guard = self.write_lock.lock();
         let _structure = self.structure.write();
         // Phase 1: collect removable keys (bounded).
@@ -3247,7 +3261,8 @@ impl PagedStore {
         transaction: u64,
         extra: &[PageId],
     ) -> Result<Vec<(PageId, u64)>> {
-        let _amp = crate::wal_amplification::scope(crate::wal_amplification::Field::Op, "free_adoption");
+        let _amp =
+            crate::wal_amplification::scope(crate::wal_amplification::Field::Op, "free_adoption");
         let mut pages = self.pool.take_pending_frees(transaction);
         pages.extend_from_slice(extra);
         pages.sort_unstable();

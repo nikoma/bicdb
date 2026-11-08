@@ -135,6 +135,34 @@ pub(crate) fn eval_db_catalog_function_value(
             ))));
         }
     }
+    // Resolve a commit reported with SQLSTATE 08007 (outcome unknown) by
+    // the incarnation and commit sequence in its DETAIL. Superuser only
+    // (the bicdb_ gate above). See docs/durability-failure-handling.md.
+    if bare_name == "bicdb_commit_outcome" {
+        if args.len() != 2 {
+            return Err(SqlError::InvalidSql(format!(
+                "bicdb_commit_outcome expects 2 arguments (incarnation, commit_seq), got {}",
+                args.len()
+            )));
+        }
+        if args.iter().any(|argument| matches!(argument, SqlValue::Null)) {
+            return Ok(Some(SqlValue::Null));
+        }
+        let SqlValue::String(incarnation) = &args[0] else {
+            return Err(SqlError::InvalidSql(
+                "bicdb_commit_outcome: incarnation must be text".into(),
+            ));
+        };
+        let sequence = sql_value_i64(&args[1])
+            .and_then(|sequence| u64::try_from(sequence).ok())
+            .ok_or_else(|| {
+                SqlError::InvalidSql(
+                    "bicdb_commit_outcome: commit_seq must be a non-negative integer".into(),
+                )
+            })?;
+        let resolution = db.resolve_commit_outcome(incarnation, sequence)?;
+        return Ok(Some(SqlValue::String(resolution.as_str().to_string())));
+    }
     if let Some(value) = eval_fts_db_function_value(db, name, args, session_gucs)? {
         return Ok(Some(value));
     }

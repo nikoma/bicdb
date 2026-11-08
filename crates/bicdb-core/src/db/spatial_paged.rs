@@ -1919,13 +1919,20 @@ impl BicDb {
     }
 
     /// The commit-outcome error for `sequence` after a durability failure.
-    fn commit_outcome_unknown(&self, sequence: u64, error: &BicDbError) -> BicDbError {
+    fn commit_outcome_unknown(
+        &self,
+        transaction_id: u64,
+        sequence: u64,
+        error: &BicDbError,
+    ) -> BicDbError {
         let cause = match self.durability.failure() {
             Some(failure) => format!("the database is fenced by a failure at {failure}"),
             None => error.to_string(),
         };
         BicDbError::CommitOutcomeUnknown {
             sequence,
+            transaction_id: Some(transaction_id),
+            incarnation: self.incarnation.clone(),
             detail: format!("{error}; {cause}"),
         }
     }
@@ -2489,7 +2496,7 @@ impl BicDb {
             // unknown: some or all of the batch may be on disk.
             self.fence_durability("transaction_log.write", &error);
             tx.receipt_recovery_required(commit_seq);
-            return Err(self.commit_outcome_unknown(commit_seq, &error));
+            return Err(self.commit_outcome_unknown(tx.id.0, commit_seq, &error));
         }
         bicdb_page::test_faults::crash_point("commit.after_txlog_durable");
         timer.lap(&commit_trace::WAL_ENCODE);
@@ -2578,7 +2585,7 @@ impl BicDb {
             // handle cannot, and must not report it as committed.
             self.fence_durability("commit.materialize", &error);
             tx.receipt_recovery_required(commit_seq);
-            return Err(self.commit_outcome_unknown(commit_seq, &error));
+            return Err(self.commit_outcome_unknown(tx.id.0, commit_seq, &error));
         }
         // Done: drop the tx_states entry rather than leaving a `Committed`
         // tombstone. Nothing reads a completed tx's state by tx_id (visibility is
@@ -2603,7 +2610,7 @@ impl BicDb {
         if self.durability.is_failed() {
             tx.receipt_recovery_required(commit_seq);
             let fenced = self.check_recovery_state().unwrap_err();
-            return Err(self.commit_outcome_unknown(commit_seq, &fenced));
+            return Err(self.commit_outcome_unknown(tx.id.0, commit_seq, &fenced));
         }
         tx.state = TxState::Committed;
         tx.committed_seq = Some(commit_seq);

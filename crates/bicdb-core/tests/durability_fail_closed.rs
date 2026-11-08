@@ -9,7 +9,7 @@
 use std::sync::{Arc, Barrier, Mutex};
 
 use bicdb_core::{
-    BicDb, BicDbError, DbConfig, DurabilityState, Record, ReplicationConfig, ReplicationCursor,
+    BicDb, BicDbError, CommitResolution, DbConfig, DurabilityState, Record, ReplicationConfig, ReplicationCursor,
     ReplicationMode, ReplicationTlsConfig, StorageMode, TransactionOutcome,
     DURABILITY_FAILURE_MARKER,
 };
@@ -474,5 +474,96 @@ fn a_failing_standby_is_fenced_and_catches_up_after_reopen() {
     ship(&primary, &mut standby, &mut cursor).unwrap();
     for id in ["a2", "b0", "b1", "b2"] {
         assert!(present(&standby, id), "{id}");
+    }
+}
+
+/// Outcome resolution by identity. Every 08007 carries the incarnation, the
+/// commit sequence and the transaction id; after the reopen,
+/// `resolve_commit_outcome` gives a definitive answer that matches what
+/// recovery kept, in each direction.
+#[test]
+fn an_unknown_commit_resolves_by_identity_to_what_recovery_kept() {
+    // (storage, faults, recovery keeps it)
+    let cases: Vec<(StorageMode, Vec<&str>, bool)> = vec![
+        (StorageMode::EmbeddedMemory, vec!["transaction_log.write"], false),
+        (StorageMode::ServerPaged, vec!["transaction_log.write"], false),
+        (StorageMode::EmbeddedMemory, vec!["transaction_log.sync"], false),
+        (
+            StorageMode::EmbeddedMemory,
+            vec!["transaction_log.sync", "transaction_log.repair"],
+            true,
+        ),
+        (
+            StorageMode::ServerPaged,
+            vec!["transaction_log.sync", "transaction_log.repair"],
+            true,
+        ),
+        (StorageMode::ServerPaged, vec!["page_log.sync"], true),
+    ];
+    for (storage, faults, kept) in cases {
+        let label = format!("{storage:?} {faults:?}");
+        let dir = tempfile::tempdir().unwrap();
+        let (incarnation, sequence, transaction_id);
+        {
+            let mut db = BicDb::open_with_config(dir.path(), config(storage.clone())).unwrap();
+            seed(&mut db, 3);
+            let _faults: Vec<_> = faults
+                .iter()
+                .map(|site| arm_io_failure(site, dir.path(), 1, false))
+                .collect();
+            let mut tx = db.begin_transaction().unwrap();
+            tx.insert("items", Record::new("x")).unwrap();
+            let observer = tx.observe_outcome();
+            let error = tx.commit().unwrap_err();
+            let BicDbError::CommitOutcomeUnknown {
+                sequence: seq,
+                transaction_id: tx_id,
+                incarnation: inc,
+                ..
+            } = &error
+            else {
+                panic!("{label}: {error}");
+            };
+            assert_eq!(inc, db.incarnation_id(), "{label}");
+            assert_eq!(*tx_id, Some(observer.transaction_id().0), "{label}");
+            assert_eq!(
+                observer.outcome(),
+                TransactionOutcome::RecoveryRequired { sequence: *seq },
+                "{label}: the receipt names the same commit"
+            );
+            let (detail, hint) = error.commit_outcome_identity().unwrap();
+            assert!(detail.contains(&format!("commit_seq={seq}")), "{label}: {detail}");
+            assert!(hint.contains(inc.as_str()), "{label}: {hint}");
+            // The failed handle itself never answers.
+            assert_eq!(
+                db.resolve_commit_outcome(inc, *seq).unwrap(),
+                CommitResolution::Unresolved,
+                "{label}"
+            );
+            (incarnation, sequence, transaction_id) = (inc.clone(), *seq, *tx_id);
+        }
+        let _ = transaction_id;
+        let db = BicDb::open_with_config(dir.path(), config(storage.clone())).unwrap();
+        let resolution = db.resolve_commit_outcome(&incarnation, sequence).unwrap();
+        assert_eq!(present(&db, "x"), kept, "{label}");
+        assert_eq!(
+            resolution,
+            if kept {
+                CommitResolution::Committed
+            } else {
+                CommitResolution::NotCommitted
+            },
+            "{label}"
+        );
+        // New commits may reuse the sequence number; the answer is stable
+        // because it is keyed by the failed incarnation.
+        put(&db, "after").unwrap();
+        drop(db);
+        let db = BicDb::open_with_config(dir.path(), config(storage)).unwrap();
+        assert_eq!(
+            db.resolve_commit_outcome(&incarnation, sequence).unwrap(),
+            resolution,
+            "{label}: the answer must not change"
+        );
     }
 }

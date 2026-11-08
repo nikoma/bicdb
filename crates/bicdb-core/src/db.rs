@@ -44,6 +44,8 @@ pub use flashback::{
     FlashbackVersion, FLASHBACK_HISTORY_PREFIX,
 };
 mod fts_build;
+mod commit_resolution;
+pub use commit_resolution::{CommitResolution, INCARNATION_JOURNAL};
 mod fts_query;
 mod index_build;
 mod integrity_reservations;
@@ -3702,6 +3704,9 @@ pub struct BicDb {
     /// recovery and, when the failure marker is present, a verification
     /// checkpoint. See `docs/durability-failure-handling.md`.
     durability: Arc<bicdb_page::DurabilityHealth>,
+    /// Random id of this open; with a commit sequence it identifies an
+    /// uncertain commit for later resolution (see `commit_resolution`).
+    incarnation: String,
     /// Exclusive claim on the database directory, held for as long as this
     /// handle lives and released by the kernel if the process dies.
     ///
@@ -9680,6 +9685,15 @@ impl BicDb {
         tx_recovery.last_commit_seq = tx_recovery
             .last_commit_seq
             .max(read_commit_seq_floor(&path)?);
+        // Before anything can commit in this incarnation: the evidence that
+        // resolves an earlier incarnation's uncertain commits.
+        let incarnation = uuid::Uuid::new_v4().to_string();
+        commit_resolution::record_incarnation(
+            &path,
+            &incarnation,
+            tx_recovery.last_commit_seq,
+            config.fsync,
+        )?;
         let replication_state =
             load_replication_state(&path, &config.replication, tx_recovery.last_commit_seq)?;
         open_trace!("tx_recovery");
@@ -10446,6 +10460,7 @@ impl BicDb {
         let mut db = Self {
             path,
             durability: durability.clone(),
+            incarnation: incarnation.clone(),
             _directory_lock: Some(Arc::new(directory_lock)),
             config,
             ha_state,
@@ -10486,7 +10501,7 @@ impl BicDb {
             commit_seq: Arc::new(AtomicU64::new(tx_recovery.last_commit_seq)),
             sync_quorum: {
                 let quorum = SyncQuorum::default();
-                quorum.attach_durability(durability.clone());
+                quorum.attach_durability(durability.clone(), incarnation.clone());
                 quorum.seed(ha_node.read(|file| file.slots.clone()));
                 quorum.seed_holds(ha_node.read(|file| file.holds.clone()));
                 Arc::new(quorum)

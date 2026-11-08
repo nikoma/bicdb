@@ -2232,6 +2232,10 @@ impl SqlError {
                     .into_iter()
                     .collect()
             }
+            Self::BicDb(error @ BicDbError::CommitOutcomeUnknown { .. }) => error
+                .commit_outcome_identity()
+                .map(|(detail, hint)| vec![SqlErrorField::Detail(detail), SqlErrorField::Hint(hint)])
+                .unwrap_or_default(),
             _ => Vec::new(),
         }
     }
@@ -5727,8 +5731,13 @@ mod durability_sqlstate_tests {
         });
         let unknown = SqlError::BicDb(BicDbError::CommitOutcomeUnknown {
             sequence: 3,
+            transaction_id: None,
+            incarnation: "inc-2".into(),
             detail: "EIO".into(),
         });
+        assert!(unknown.fields().iter().any(|field| matches!(field,
+            SqlErrorField::Detail(detail)
+                if detail == "commit_seq=3 transaction_id=unknown incarnation=inc-2")));
         assert_eq!(refused.sqlstate(), "58030");
         assert_eq!(unknown.sqlstate(), "08007");
     }

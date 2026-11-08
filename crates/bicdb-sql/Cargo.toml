@@ -54,5 +54,7 @@ wasm-encoder = { version = "0.252.0", optional = true }
 wasmtime = { version = "48.0.3", optional = true }
 
 [dev-dependencies]
+# Deterministic I/O fault injection for tests/commit_outcome_resolution.rs.
+bicdb-page = { path = "../bicdb-page", version = "1.0.438-beta" }
 tempfile.workspace = true
 wat = "1"

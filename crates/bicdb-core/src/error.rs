@@ -189,14 +189,48 @@ pub enum BicDbError {
     /// point of view; the next open's recovery decides, and honours the
     /// decision if it reached the disk. SQLSTATE 08007
     /// (transaction_resolution_unknown).
+    ///
+    /// `incarnation` and `sequence` identify the commit for
+    /// `BicDb::resolve_commit_outcome` (SQL: `bicdb_commit_outcome`) once
+    /// the database has been reopened; `transaction_id` is informational
+    /// (absent when only the commit sequence is known, as in a quorum wait).
     #[error(
-        "commit {sequence} outcome is unknown: {detail}; do not assume it committed or rolled \
-         back. Reopen the database; recovery keeps the commit if its decision reached the disk"
+        "commit outcome unknown: commit_seq={sequence} transaction_id={} incarnation={incarnation}: \
+         {detail}; do not assume it committed or rolled back. Reopen the database, then resolve it \
+         with bicdb_commit_outcome('{incarnation}', {sequence})",
+        transaction_id.map_or_else(|| "unknown".to_string(), |id| id.to_string())
     )]
-    CommitOutcomeUnknown { sequence: u64, detail: String },
+    CommitOutcomeUnknown {
+        sequence: u64,
+        transaction_id: Option<u64>,
+        incarnation: String,
+        detail: String,
+    },
 }
 
 impl BicDbError {
+    /// For `CommitOutcomeUnknown`: the outcome-resolution identity as a
+    /// machine-readable detail line, and the statement that resolves it.
+    /// pgwire sends them as the error's DETAIL and HINT fields.
+    pub fn commit_outcome_identity(&self) -> Option<(String, String)> {
+        let Self::CommitOutcomeUnknown {
+            sequence,
+            transaction_id,
+            incarnation,
+            ..
+        } = self
+        else {
+            return None;
+        };
+        let transaction = transaction_id.map_or_else(|| "unknown".to_string(), |id| id.to_string());
+        Some((
+            format!("commit_seq={sequence} transaction_id={transaction} incarnation={incarnation}"),
+            format!(
+                "after reopening the database: SELECT bicdb_commit_outcome('{incarnation}', {sequence})"
+            ),
+        ))
+    }
+
     /// Whether this error means the database is fenced by a durability
     /// failure, including a commit whose outcome that failure made unknown.
     pub fn is_durability_failure(&self) -> bool {

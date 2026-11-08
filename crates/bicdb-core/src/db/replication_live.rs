@@ -412,7 +412,7 @@ pub struct SyncQuorum {
     stats: SyncWaitStats,
     /// The primary's fail-closed durability state. A commit is never
     /// confirmed once the primary is fenced, whatever the standbys report.
-    durability: std::sync::OnceLock<Arc<bicdb_page::DurabilityHealth>>,
+    durability: std::sync::OnceLock<(Arc<bicdb_page::DurabilityHealth>, String)>,
 }
 
 impl Default for SyncQuorum {
@@ -657,18 +657,27 @@ impl SyncQuorum {
 
     /// Blocks until `required` standbys have durably applied `seq`.
     /// Fence confirmations with the database's durability state.
-    pub(crate) fn attach_durability(&self, health: Arc<bicdb_page::DurabilityHealth>) {
-        let _ = self.durability.set(health);
+    pub(crate) fn attach_durability(
+        &self,
+        health: Arc<bicdb_page::DurabilityHealth>,
+        incarnation: String,
+    ) {
+        let _ = self.durability.set((health, incarnation));
     }
 
     /// `Err(CommitOutcomeUnknown)` once the primary is fenced: the commit's
     /// local decision may be durable, but no acknowledgment is issued after
     /// a durability failure.
     fn check_durability(&self, seq: u64) -> Result<()> {
-        match self.durability.get().and_then(|health| health.failure()) {
+        let Some((health, incarnation)) = self.durability.get() else {
+            return Ok(());
+        };
+        match health.failure() {
             None => Ok(()),
             Some(failure) => Err(BicDbError::CommitOutcomeUnknown {
                 sequence: seq,
+                transaction_id: None,
+                incarnation: incarnation.clone(),
                 detail: format!(
                     "the primary is fenced by a durability failure at {failure} and confirms no \
                      commit"

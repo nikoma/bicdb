@@ -36,6 +36,19 @@ const SUPERBLOCK_MAGIC_SEGMENTED: [u8; 8] = *b"BICDBPG2";
 // Older page engines must not modify files without marking tracked extents.
 const SUPERBLOCK_MAGIC_TRACKED: [u8; 8] = *b"BICDBPG3";
 const SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC: [u8; 8] = *b"BICDBPG4";
+/// EXPERIMENTAL, disposable test stores only: the store was created with
+/// `experimental_page_deltas_disposable` and its WAL may hold page-delta
+/// records (`docs/page-delta-redo-design.md`). Engines that predate it refuse
+/// the store (`NotAPageFile`) instead of truncating delta records as a torn
+/// tail. The layout bits that the other magics encode move into a feature
+/// word at body `[76..84]`. Written only at creation, never added to an
+/// existing store, and never removed: such a store is neither upgradeable nor
+/// downgradeable.
+const SUPERBLOCK_MAGIC_PAGE_DELTAS: [u8; 8] = *b"BICDBPG5";
+const FEATURE_SEGMENTED: u64 = 1;
+const FEATURE_TRACKED: u64 = 2;
+const FEATURE_DISPOSABLE_PAGE_DELTAS: u64 = 4;
+const KNOWN_FEATURES: u64 = FEATURE_SEGMENTED | FEATURE_TRACKED | FEATURE_DISPOSABLE_PAGE_DELTAS;
 /// Smallest legal extent: keeps segment counts sane and guarantees the
 /// superblock page fits in segment 0 at any page size.
 pub const MIN_EXTENT_BYTES: u64 = 1024 * 1024;
@@ -712,6 +725,12 @@ fn validate_free_list_metadata(meta: &Superblock) -> Result<()> {
 #[derive(Debug)]
 pub struct PageStore {
     backup_format: AtomicBool,
+    /// Created as a disposable experimental page-delta store (superblock
+    /// magic `BICDBPG5`). Set only by `mark_disposable_page_delta_store` on a
+    /// store this process just created, or read from such a superblock.
+    page_delta_disposable: AtomicBool,
+    /// This handle created the page file (it was empty at open).
+    created_now: bool,
     extent_tracker: Mutex<Option<crate::extent_tracking::ExtentTracker>>,
     /// Serializes physical page overwrites with snapshot reads/capture only.
     /// The snapshot itself holds no writer gate while it uploads bytes.
@@ -777,6 +796,7 @@ impl PageStore {
             && body[0..8] != SUPERBLOCK_MAGIC_SEGMENTED
             && body[0..8] != SUPERBLOCK_MAGIC_TRACKED
             && body[0..8] != SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC
+            && body[0..8] != SUPERBLOCK_MAGIC_PAGE_DELTAS
         {
             let mut found = [0u8; 4];
             found.copy_from_slice(&body[0..4]);
@@ -821,6 +841,8 @@ impl PageStore {
         let store = if len == 0 {
             let store = Self {
                 backup_format: AtomicBool::new(false),
+                page_delta_disposable: AtomicBool::new(false),
+                created_now: true,
                 extent_tracker: Mutex::new(None),
                 backup: Mutex::new(None),
                 path,
@@ -844,6 +866,8 @@ impl PageStore {
         } else {
             let mut store = Self {
                 backup_format: AtomicBool::new(false),
+                page_delta_disposable: AtomicBool::new(false),
+                created_now: false,
                 extent_tracker: Mutex::new(None),
                 backup: Mutex::new(None),
                 path,
@@ -884,6 +908,41 @@ impl PageStore {
         };
 
         Ok(store)
+    }
+
+    /// EXPERIMENTAL: turn the store THIS handle just created into a disposable
+    /// page-delta test store by writing the sticky `BICDBPG5` superblock and
+    /// syncing it. Refused on any store that already existed or has been
+    /// written: an existing or production store can never acquire the marker.
+    pub(crate) fn mark_disposable_page_delta_store(&self) -> Result<()> {
+        let meta = *self.meta.lock();
+        if !self.created_now || meta.page_count != 1 || meta.root_page != 0 {
+            return Err(PageError::InvalidMaintenanceLimits {
+                reason: "experimental page deltas can only be enabled when a disposable test \
+                         store is created; this store already exists"
+                    .to_string(),
+            });
+        }
+        self.page_delta_disposable.store(true, Ordering::Release);
+        if let Err(error) = self
+            .write_superblock_meta(&meta)
+            .and_then(|()| self.sync_data_observed())
+        {
+            self.page_delta_disposable.store(false, Ordering::Release);
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    /// The store was created as a disposable experimental page-delta store
+    /// (superblock magic `BICDBPG5`). Such a store cannot be opened by engines
+    /// that predate the format, and is neither upgradeable nor downgradeable.
+    pub(crate) fn created_now(&self) -> bool {
+        self.created_now
+    }
+
+    pub fn is_disposable_page_delta_store(&self) -> bool {
+        self.page_delta_disposable.load(Ordering::Acquire)
     }
 
     /// Path of segment `index`: the base path for 0, `<base>.<index>` above.
@@ -2389,7 +2448,14 @@ impl PageStore {
     }
 
     fn write_page_raw(&self, page_id: PageId, buffer: &mut [u8], generation: u64) -> Result<()> {
-        if page_id == SUPERBLOCK_PAGE_ID && self.backup_format.load(Ordering::Acquire) {
+        if page_id == SUPERBLOCK_PAGE_ID
+            && self.page_delta_disposable.load(Ordering::Acquire)
+            && self.backup_format.load(Ordering::Acquire)
+        {
+            let at = PAGE_HEADER_BYTES + 76;
+            let features = u64::from_le_bytes(buffer[at..at + 8].try_into().unwrap());
+            buffer[at..at + 8].copy_from_slice(&(features | FEATURE_TRACKED).to_le_bytes());
+        } else if page_id == SUPERBLOCK_PAGE_ID && self.backup_format.load(Ordering::Acquire) {
             let magic = if self.extent_pages() == 0
                 && self.migration_target_pages.load(Ordering::Acquire) == 0
             {
@@ -2501,6 +2567,7 @@ impl PageStore {
             && body[0..8] != SUPERBLOCK_MAGIC_SEGMENTED
             && body[0..8] != SUPERBLOCK_MAGIC_TRACKED
             && body[0..8] != SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC
+            && body[0..8] != SUPERBLOCK_MAGIC_PAGE_DELTAS
         {
             let mut found = [0u8; 4];
             found.copy_from_slice(&body[0..4]);
@@ -2565,6 +2632,17 @@ impl PageStore {
                 .load(Ordering::Acquire)
                 .to_le_bytes(),
         );
+        if self.page_delta_disposable.load(Ordering::Acquire) {
+            let mut features = FEATURE_DISPOSABLE_PAGE_DELTAS;
+            if extent_pages != 0 || migration_target != 0 {
+                features |= FEATURE_SEGMENTED;
+            }
+            if self.backup_format.load(Ordering::Acquire) {
+                features |= FEATURE_TRACKED;
+            }
+            body[0..8].copy_from_slice(&SUPERBLOCK_MAGIC_PAGE_DELTAS);
+            body[76..84].copy_from_slice(&features.to_le_bytes());
+        }
 
         self.write_page_raw(SUPERBLOCK_PAGE_ID, &mut page, meta.generation.max(1))
     }
@@ -2591,14 +2669,29 @@ impl PageStore {
         }
 
         let body = &page[PAGE_HEADER_BYTES..];
+        let delta_features = (body[0..8] == SUPERBLOCK_MAGIC_PAGE_DELTAS)
+            .then(|| u64::from_le_bytes(body[76..84].try_into().unwrap()));
+        if let Some(features) = delta_features {
+            if features & !KNOWN_FEATURES != 0 || features & FEATURE_DISPOSABLE_PAGE_DELTAS == 0 {
+                return Err(PageError::NotAPageFile {
+                    path: self.path.clone(),
+                    found: [b'P', b'G', b'5', b'?'],
+                });
+            }
+        }
+        self.page_delta_disposable
+            .store(delta_features.is_some(), Ordering::Release);
         let tracked = body[0..8] == SUPERBLOCK_MAGIC_TRACKED
-            || body[0..8] == SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC;
+            || body[0..8] == SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC
+            || delta_features.is_some_and(|features| features & FEATURE_TRACKED != 0);
         self.backup_format.store(tracked, Ordering::Release);
-        let segmented =
-            body[0..8] == SUPERBLOCK_MAGIC_SEGMENTED || body[0..8] == SUPERBLOCK_MAGIC_TRACKED;
+        let segmented = body[0..8] == SUPERBLOCK_MAGIC_SEGMENTED
+            || body[0..8] == SUPERBLOCK_MAGIC_TRACKED
+            || delta_features.is_some_and(|features| features & FEATURE_SEGMENTED != 0);
         if !segmented
             && body[0..8] != SUPERBLOCK_MAGIC
             && body[0..8] != SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC
+            && delta_features.is_none()
         {
             let mut found = [0u8; 4];
             found.copy_from_slice(&body[0..4]);
@@ -2711,6 +2804,10 @@ pub fn convert_extent_layout(
     };
     let target = PageStore {
         backup_format: AtomicBool::new(source.backup_format.load(Ordering::Acquire)),
+        page_delta_disposable: AtomicBool::new(
+            source.page_delta_disposable.load(Ordering::Acquire),
+        ),
+        created_now: false,
         extent_tracker: Mutex::new(None),
         backup: Mutex::new(None),
         path: file_name(0),

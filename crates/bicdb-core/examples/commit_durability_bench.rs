@@ -65,6 +65,16 @@ fn percentile(sorted: &[u64], p: f64) -> u64 {
 }
 
 fn run(db_dir: &Path, mode: &str, threads: usize, seconds: u64, crash: bool) {
+    // EXPERIMENTAL page deltas (docs/page-delta-redo-design.md): create the
+    // database as a disposable test store; deltas also need
+    // BICDB_PAGE_WAL_DELTAS=1.
+    if std::env::var("BENCH_DISPOSABLE_PAGE_DELTAS").is_ok_and(|v| v == "1") {
+        bicdb_core::page_deltas_experimental::create_disposable_page_delta_store(
+            db_dir,
+            &config(mode),
+        )
+        .expect("create disposable store");
+    }
     let mut db = BicDb::open_with_config(db_dir, config(mode)).expect("open");
     db.create_collection("rows").expect("create");
     db.create_index(index("rows_owner", "owner", false))

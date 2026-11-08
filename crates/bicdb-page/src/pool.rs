@@ -429,6 +429,61 @@ pub trait WritebackBarrier: Send + Sync + std::fmt::Debug {
     fn before_logged_writeback(&self, _page_id: PageId) -> Result<()> {
         Ok(())
     }
+
+    /// Experimental page deltas: like [`Self::before_writeback`], but offered
+    /// a delta payload against the page's last logged record. Returns the
+    /// LSN of the record written, or `None` if this barrier logged nothing it
+    /// can name (the default, which ignores the delta).
+    fn before_writeback_delta(
+        &self,
+        page_id: PageId,
+        transaction: u64,
+        bytes: &[u8],
+        _delta: Option<&[u8]>,
+    ) -> Result<Option<crate::wal::Lsn>> {
+        self.before_writeback(page_id, transaction, bytes)?;
+        Ok(None)
+    }
+}
+
+/// Experimental page-delta state of one frame (`docs/page-delta-redo-design.md`
+/// section 4.1). Untouched unless the pool's deltas are engaged.
+#[derive(Debug, Default)]
+struct FrameDelta {
+    /// LSN of the record whose content this frame held when last logged.
+    /// `None` for a frame loaded or allocated since: its next record is full.
+    logged_lsn: Option<crate::wal::Lsn>,
+    /// No write guard has been dropped since the frame was last logged, so its
+    /// bytes equal record `logged_lsn` (outside the stamped fields). Changes
+    /// only under the frame's data latch.
+    clean: bool,
+    /// The frame's bytes at its first write guard after being logged.
+    base: Option<BaseCopy>,
+}
+
+/// A captured delta base, charged against the pool's capture budget.
+#[derive(Debug)]
+struct BaseCopy {
+    bytes: Box<[u8]>,
+    budget: Arc<AtomicU64>,
+}
+
+impl Drop for BaseCopy {
+    fn drop(&mut self) {
+        self.budget
+            .fetch_sub(self.bytes.len() as u64, Ordering::AcqRel);
+    }
+}
+
+/// The delta payload for a frame about to be logged, from its captured base
+/// or, when it is still clean, from itself. `None` means a full image.
+fn delta_candidate(state: &FrameDelta, current: &[u8]) -> Option<Vec<u8>> {
+    let base_lsn = state.logged_lsn?;
+    match &state.base {
+        Some(base) => crate::wal_delta::encode(base_lsn, &base.bytes, current),
+        None if state.clean => crate::wal_delta::encode(base_lsn, current, current),
+        None => None,
+    }
 }
 
 /// One cached page.
@@ -458,6 +513,8 @@ struct Frame {
     needs_log: AtomicBool,
     /// Loaded speculatively and not yet consumed by a foreground access.
     prefetched: AtomicBool,
+    /// Experimental page deltas only.
+    delta: Mutex<FrameDelta>,
     /// A speculative load is not a cache touch. The first foreground use sets
     /// this flag; only a later use may promote the page into protected 2Q.
     foreground_touched: AtomicBool,
@@ -505,6 +562,8 @@ pub struct PageGuardMut {
     /// Earliest instant at which this writable guard could have modified the
     /// page. Using acquisition rather than drop time makes age conservative.
     dirty_started_at_millis: u64,
+    /// The pool's experimental deltas are engaged.
+    deltas: bool,
 }
 
 impl std::fmt::Debug for PageGuardMut {
@@ -552,6 +611,11 @@ impl Drop for PageGuardMut {
         }
         self.frame.dirty.store(true, Ordering::Release);
         self.frame.needs_log.store(true, Ordering::Release);
+        if self.deltas {
+            // Still under the data latch: the frame may differ from its last
+            // record from here on.
+            self.frame.delta.lock().clean = false;
+        }
         self.dirty_index.lock().insert(self.frame.page_id);
         self.frame.pins.fetch_sub(1, Ordering::Release);
     }
@@ -791,6 +855,13 @@ pub struct BufferPool {
     /// PagedStore enables this after attaching a WAL barrier. Standalone heap
     /// users retain the immediate allocator semantics they historically used.
     wal_managed_frees: AtomicBool,
+    /// Experimental page deltas engaged (both locks open). False otherwise.
+    deltas: AtomicBool,
+    /// Bytes held by captured delta bases, and their cap.
+    delta_base_bytes: Arc<AtomicU64>,
+    delta_base_budget: AtomicU64,
+    /// Captures skipped because the budget was exhausted.
+    delta_base_skipped: AtomicU64,
     /// Pages logically freed by each transaction but not yet published into
     /// the superblock free list. The owning store links, WAL-logs, flushes,
     /// and adopts them at the transaction durability boundary.
@@ -942,6 +1013,10 @@ impl BufferPool {
             dirty_index: Arc::new(Mutex::new(BTreeSet::new())),
             current_transaction: AtomicU64::new(0),
             wal_managed_frees: AtomicBool::new(false),
+            deltas: AtomicBool::new(false),
+            delta_base_bytes: Arc::new(AtomicU64::new(0)),
+            delta_base_budget: AtomicU64::new(0),
+            delta_base_skipped: AtomicU64::new(0),
             pending_frees: Mutex::new(BTreeMap::new()),
             read_ahead: Mutex::new(ReadAheadQueue {
                 pending: BTreeMap::new(),
@@ -1132,11 +1207,31 @@ impl BufferPool {
             }
         };
         let dirty_started_at_millis = self.monotonic_millis();
+        let deltas = self.deltas.load(Ordering::Acquire);
+        if deltas {
+            // Capture the delta base under the data latch, before any byte
+            // changes: only a clean frame equals its last record.
+            let mut state = frame.delta.lock();
+            if state.clean && state.logged_lsn.is_some() && state.base.is_none() {
+                let len = guard.len() as u64;
+                let used = self.delta_base_bytes.fetch_add(len, Ordering::AcqRel);
+                if used.saturating_add(len) <= self.delta_base_budget.load(Ordering::Acquire) {
+                    state.base = Some(BaseCopy {
+                        bytes: guard.to_vec().into_boxed_slice(),
+                        budget: self.delta_base_bytes.clone(),
+                    });
+                } else {
+                    self.delta_base_bytes.fetch_sub(len, Ordering::AcqRel);
+                    self.delta_base_skipped.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        }
         Ok(PageGuardMut {
             frame,
             guard,
             dirty_index: self.dirty_index.clone(),
             dirty_started_at_millis,
+            deltas,
         })
     }
 
@@ -1348,6 +1443,7 @@ impl BufferPool {
                         ),
                         needs_log: AtomicBool::new(false),
                         prefetched: AtomicBool::new(false),
+                        delta: Mutex::new(FrameDelta::default()),
                         foreground_touched: AtomicBool::new(true),
                     });
                     shard.resident.insert(page_id, frame.clone());
@@ -1668,7 +1764,24 @@ impl BufferPool {
         // Write-ahead ordering: the log record must be durable before the
         // page is. Writing a dirty page without this loses committed data
         // to a crash, silently.
-        if frame.needs_log.load(Ordering::Acquire) {
+        if frame.needs_log.load(Ordering::Acquire) && self.deltas.load(Ordering::Acquire) {
+            // Experimental deltas: offer a delta against the last record, and
+            // record what was logged before the latch is released.
+            let mut state = frame.delta.lock();
+            let delta = delta_candidate(&state, &bytes);
+            let barrier = self.barrier.lock().clone();
+            if let Some(barrier) = barrier {
+                let logged = barrier.before_writeback_delta(
+                    page_id,
+                    frame.dirtied_by.load(Ordering::Acquire),
+                    &bytes,
+                    delta.as_deref(),
+                )?;
+                state.base = None;
+                state.logged_lsn = logged;
+                state.clean = logged.is_some();
+            }
+        } else if frame.needs_log.load(Ordering::Acquire) {
             self.barrier_for(page_id, frame.dirtied_by.load(Ordering::Acquire), &bytes)?;
         } else {
             // Logged already, but possibly by a commit whose log record is
@@ -2125,6 +2238,7 @@ impl BufferPool {
             dirtied_by: AtomicU64::new(0),
             needs_log: AtomicBool::new(false),
             prefetched: AtomicBool::new(true),
+            delta: Mutex::new(FrameDelta::default()),
             foreground_touched: AtomicBool::new(false),
         });
         shard.resident.insert(page_id, frame);
@@ -2218,6 +2332,50 @@ impl BufferPool {
         }
         out.sort_unstable();
         out
+    }
+
+    /// Experimental page deltas: engage them for this pool. Only the paged
+    /// store's open calls this, after verifying both locks.
+    pub(crate) fn engage_deltas(&self) {
+        let budget = (self.page_size as u64)
+            .saturating_mul(self.total_frames as u64)
+            .saturating_div(4)
+            .min(256 * 1024 * 1024)
+            .max(self.page_size as u64);
+        self.delta_base_budget.store(budget, Ordering::Release);
+        self.deltas.store(true, Ordering::Release);
+    }
+
+    /// Whether experimental page deltas are engaged for this pool.
+    pub fn deltas_engaged(&self) -> bool {
+        self.deltas.load(Ordering::Acquire)
+    }
+
+    /// Delta-base captures skipped because the capture budget was full.
+    pub fn delta_base_captures_skipped(&self) -> u64 {
+        self.delta_base_skipped.load(Ordering::Relaxed)
+    }
+
+    /// Experimental page deltas: log every page modified since its last
+    /// record under `transaction`, as a delta where eligible. The frame's
+    /// data latch is held from reading the image until its delta state names
+    /// the new record, so the state can never describe bytes the log lacks.
+    pub(crate) fn log_pages_needing_log_with_deltas(
+        &self,
+        wal: &crate::wal::Wal,
+        transaction: u64,
+    ) -> Result<()> {
+        for page_id in self.take_pages_needing_log() {
+            let guard = self.get(page_id)?;
+            let mut state = guard.frame.delta.lock();
+            let delta = delta_candidate(&state, guard.bytes());
+            let (lsn, _) =
+                wal.log_page_maybe_delta(page_id, transaction, guard.bytes(), delta.as_deref())?;
+            state.base = None;
+            state.logged_lsn = Some(lsn);
+            state.clean = true;
+        }
+        Ok(())
     }
 
     /// Whether a page is currently cached. Diagnostic and test support — a

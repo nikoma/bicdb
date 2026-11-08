@@ -89,6 +89,7 @@ mod spatial_pack_build;
 mod spatial_packed;
 mod storage;
 
+pub mod page_deltas_experimental;
 pub mod storage_mode_migration;
 mod sync;
 mod sync_mesh;

@@ -43,6 +43,7 @@ pub mod tiered_gc;
 pub mod tiered_manifest;
 pub mod tiered_reader;
 pub mod wal;
+pub mod wal_delta;
 
 pub use backup::{PageBackupLimits, PageBackupSnapshot, PageBackupStats};
 pub use btree::{
@@ -115,8 +116,8 @@ pub use tiered_manifest::{
 };
 pub use tiered_reader::TieredPageReader;
 pub use wal::{
-    recover, CheckpointReport, Checkpointer, Lsn, RecordKind, RecoveryReport, Wal, WalRecord,
-    WalSnapshot, MAX_WAL_RECORD_BYTES,
+    recover, CheckpointReport, Checkpointer, DeltaStats, Lsn, RecordKind, RecoveryReport, Wal,
+    WalRecord, WalSnapshot, MAX_WAL_RECORD_BYTES,
 };
 
 mod extent_tracking;

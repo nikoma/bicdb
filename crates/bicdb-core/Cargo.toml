@@ -17,6 +17,8 @@ tls-replication = ["dep:rustls", "dep:rustls-pemfile"]
 mmap = ["dep:memmap2"]
 osm-import = ["dep:osmpbfreader"]
 compression = ["dep:zstd"]
+# Test harness only; see bicdb-page `page-delta-test-hook`.
+page-delta-test-hook = ["bicdb-page/page-delta-test-hook"]
 
 [dependencies]
 bicdb-lua = { path = "../bicdb-lua", version = "1.0.438-beta", optional = true }

@@ -78,6 +78,10 @@ pub enum RecordKind {
     /// A transaction was abandoned; its page images before this must not be
     /// treated as committed.
     Abort = 4,
+    /// Experimental: byte runs that turn one earlier page record (named by
+    /// `base_lsn` in the payload) into this page. Written only on disposable
+    /// stores with the delta gate open; see `docs/page-delta-redo-design.md`.
+    PageDelta = 5,
 }
 
 impl RecordKind {
@@ -87,6 +91,7 @@ impl RecordKind {
             2 => Self::Commit,
             3 => Self::Checkpoint,
             4 => Self::Abort,
+            5 => Self::PageDelta,
             _ => return None,
         })
     }
@@ -276,6 +281,45 @@ pub struct Wal {
     /// represented as ranges, with a hard range-count ceiling so a pinned
     /// checkpoint cannot turn this safety index into unbounded memory.
     committed_this_generation: Mutex<CommittedRanges>,
+    /// Experimental page deltas are engaged for this log. Set once at open,
+    /// only when both locks are open (`wal_delta`); false on every other
+    /// store, and then nothing below is ever touched.
+    deltas: AtomicBool,
+    /// Delta bookkeeping. Locked only while holding `file`, so its contents
+    /// change atomically with the appends they describe.
+    delta_state: Mutex<DeltaState>,
+}
+
+/// Per-epoch state for the full-page-write rule. Cleared at every epoch start
+/// (redo choice, reset, seal, backup pin).
+#[derive(Debug, Default)]
+struct DeltaState {
+    /// Last page record appended for each page in the current epoch.
+    last_record: rustc_hash::FxHashMap<PageId, (Lsn, u64)>,
+    /// Commit records appended in the current epoch, recorded AFTER the
+    /// append, under the file lock.
+    appended_commits: CommittedRanges,
+    /// Page records (images and deltas) since the last redo choice or reset:
+    /// the replay work recovery would face. Drives the checkpoint trigger.
+    page_records_since_redo: u64,
+    stats: DeltaStats,
+}
+
+/// Counters for the experimental delta path. All zero on stores where it is
+/// not engaged.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DeltaStats {
+    pub delta_records: u64,
+    pub delta_bytes: u64,
+    pub full_images: u64,
+    pub full_image_bytes: u64,
+    /// A delta was offered but the base rule or epoch refused it.
+    pub delta_refused: u64,
+    pub epoch_starts: u64,
+    /// Deltas applied by the last recovery of this log.
+    pub recovery_deltas_replayed: u64,
+    /// Peak size of that recovery's last-applied-record table.
+    pub recovery_delta_base_entries: u64,
 }
 
 const MAX_COMMITTED_RANGES: usize = 4_096;
@@ -407,7 +451,80 @@ impl Wal {
             metrics: Mutex::new(WalSnapshot::default()),
             checkpoint_freshness: Mutex::new(CheckpointFreshness::default()),
             committed_this_generation: Mutex::new(CommittedRanges::default()),
+            deltas: AtomicBool::new(false),
+            delta_state: Mutex::new(DeltaState::default()),
         })
+    }
+
+    /// Engage experimental page deltas for this log. The caller (the paged
+    /// store's open) has verified both locks; nothing else may call this.
+    pub(crate) fn engage_deltas(&self) {
+        let _file = self.file.lock();
+        let mut state = self.delta_state.lock();
+        // Keep what recovery recorded; start the epoch fresh.
+        let stats = state.stats;
+        *state = DeltaState {
+            stats,
+            ..DeltaState::default()
+        };
+        drop(state);
+        self.deltas.store(true, Ordering::Release);
+    }
+
+    /// Whether experimental page deltas are engaged for this log.
+    pub fn deltas_engaged(&self) -> bool {
+        self.deltas.load(Ordering::Acquire)
+    }
+
+    /// Counters for the experimental delta path.
+    pub fn delta_stats(&self) -> DeltaStats {
+        self.delta_state.lock().stats
+    }
+
+    /// Page records since the last redo choice or reset (0 when deltas are
+    /// not engaged).
+    pub fn page_records_since_redo(&self) -> u64 {
+        if !self.deltas_engaged() {
+            return 0;
+        }
+        self.delta_state.lock().page_records_since_redo
+    }
+
+    /// Clear the delta epoch. Caller holds the file mutex.
+    fn start_epoch_locked(&self, redo: bool) {
+        if !self.deltas.load(Ordering::Acquire) {
+            return;
+        }
+        let mut state = self.delta_state.lock();
+        state.last_record.clear();
+        state.appended_commits.clear();
+        if redo {
+            state.page_records_since_redo = 0;
+        }
+        state.stats.epoch_starts = state.stats.epoch_starts.saturating_add(1);
+    }
+
+    /// Start a new full-image epoch now (backup pin). A no-op unless deltas
+    /// are engaged.
+    pub fn start_epoch(&self) {
+        if !self.deltas_engaged() {
+            return;
+        }
+        let _file = self.file.lock();
+        self.start_epoch_locked(false);
+    }
+
+    /// Choose a checkpoint redo LSN. With deltas engaged the choice and the
+    /// epoch start happen under the file lock, so no delta appended after the
+    /// redo point can name a base before it. Otherwise exactly `next_lsn()`.
+    pub fn begin_redo_epoch(&self) -> Lsn {
+        if !self.deltas_engaged() {
+            return self.next_lsn();
+        }
+        let _file = self.file.lock();
+        let lsn = self.next_lsn();
+        self.start_epoch_locked(true);
+        lsn
     }
 
     pub fn path(&self) -> &Path {
@@ -524,6 +641,7 @@ impl Wal {
         self.sealed_bytes.fetch_add(active_bytes, Ordering::AcqRel);
         self.end_offset.store(0, Ordering::Release);
         self.synced_offset.store(0, Ordering::Release);
+        self.start_epoch_locked(false);
         let mut metrics = self.metrics.lock();
         metrics.segments_sealed = metrics.segments_sealed.saturating_add(1);
         Ok(())
@@ -616,6 +734,21 @@ impl Wal {
             // reverse) and make a retention or truncation decision from a
             // torn logical state.
             self.end_offset.fetch_add(written as u64, Ordering::AcqRel);
+            if self.deltas.load(Ordering::Acquire) {
+                let mut state = self.delta_state.lock();
+                match kind {
+                    RecordKind::PageImage => {
+                        state.last_record.insert(page_id, (lsn, transaction));
+                        state.page_records_since_redo += 1;
+                        state.stats.full_images += 1;
+                        state.stats.full_image_bytes += written as u64;
+                    }
+                    RecordKind::Commit => {
+                        let _ = state.appended_commits.insert(transaction);
+                    }
+                    _ => {}
+                }
+            }
         }
 
         let mut metrics = self.metrics.lock();
@@ -627,6 +760,104 @@ impl Wal {
     /// Log a full page after-image.
     pub fn log_page_image(&self, page_id: PageId, transaction: u64, image: &[u8]) -> Result<Lsn> {
         self.append(RecordKind::PageImage, page_id, transaction, image)
+    }
+
+    /// Log a page, as a delta when `delta` (a `wal_delta::encode` payload
+    /// naming its base LSN) is offered AND still eligible under the file lock;
+    /// otherwise as the full `image`. Returns the LSN and whether a delta was
+    /// written.
+    ///
+    /// Eligibility (I12/I13, `docs/page-delta-redo-design.md` sections 4-5):
+    /// the base is the page's last record in the current epoch, and replaying
+    /// this record implies replaying the base: the base is structural (xid 0),
+    /// from this same transaction, or from a transaction whose commit record
+    /// was already appended. Structural records are always full images.
+    pub(crate) fn log_page_maybe_delta(
+        &self,
+        page_id: PageId,
+        transaction: u64,
+        image: &[u8],
+        delta: Option<&[u8]>,
+    ) -> Result<(Lsn, bool)> {
+        let Some(delta) = delta.filter(|_| self.deltas_engaged() && transaction != 0) else {
+            return self
+                .append(RecordKind::PageImage, page_id, transaction, image)
+                .map(|lsn| (lsn, false));
+        };
+        let Some(header) = crate::wal_delta::header(delta) else {
+            return self
+                .append(RecordKind::PageImage, page_id, transaction, image)
+                .map(|lsn| (lsn, false));
+        };
+        let base_lsn = header.base_lsn;
+        let eligible = |state: &DeltaState| match state.last_record.get(&page_id) {
+            Some(&(lsn, base_xid)) if lsn == base_lsn => {
+                base_xid == 0
+                    || base_xid == transaction
+                    || state.appended_commits.contains(base_xid)
+            }
+            _ => false,
+        };
+
+        let mut file = self.file.lock();
+        let mut use_delta = eligible(&self.delta_state.lock());
+        if self.segment_bytes > 0 {
+            let active = self.end_offset.load(Ordering::Acquire);
+            let payload_len = if use_delta { delta.len() } else { image.len() };
+            let record_bytes = (RECORD_HEADER_BYTES + RECORD_FIXED_BODY_BYTES + payload_len) as u64;
+            if active > 0 && active.saturating_add(record_bytes) > self.segment_bytes {
+                // Sealing starts a new epoch: re-decide (it is now a full image).
+                self.seal_active_locked(&mut file, active)?;
+                use_delta = eligible(&self.delta_state.lock());
+            }
+        }
+        let (kind, payload) = if use_delta {
+            (RecordKind::PageDelta, delta)
+        } else {
+            (RecordKind::PageImage, image)
+        };
+        let lsn = self.next_lsn.fetch_add(1, Ordering::AcqRel);
+        let mut buffer =
+            Vec::with_capacity(RECORD_HEADER_BYTES + RECORD_FIXED_BODY_BYTES + payload.len());
+        buffer.extend_from_slice(&RECORD_MAGIC);
+        buffer.extend_from_slice(&lsn.to_le_bytes());
+        buffer.push(kind as u8);
+        buffer.extend_from_slice(&[0u8; 3]);
+        buffer.extend_from_slice(&((RECORD_FIXED_BODY_BYTES + payload.len()) as u32).to_le_bytes());
+        let mut hasher = crc32fast::Hasher::new();
+        hasher.update(&buffer);
+        let body_start = buffer.len() + 4;
+        buffer.extend_from_slice(&[0u8; 4]);
+        buffer.extend_from_slice(&page_id.to_le_bytes());
+        buffer.extend_from_slice(&transaction.to_le_bytes());
+        buffer.extend_from_slice(payload);
+        hasher.update(&buffer[body_start..]);
+        let crc = hasher.finalize();
+        buffer[body_start - 4..body_start].copy_from_slice(&crc.to_le_bytes());
+        file.seek(SeekFrom::End(0))
+            .map_err(|e| PageError::io(&self.path, e))?;
+        file.write_all(&buffer)
+            .map_err(|e| PageError::io(&self.path, e))?;
+        let written = buffer.len() as u64;
+        self.end_offset.fetch_add(written, Ordering::AcqRel);
+        {
+            let mut state = self.delta_state.lock();
+            state.last_record.insert(page_id, (lsn, transaction));
+            state.page_records_since_redo += 1;
+            if use_delta {
+                state.stats.delta_records += 1;
+                state.stats.delta_bytes += written;
+            } else {
+                state.stats.full_images += 1;
+                state.stats.full_image_bytes += written;
+                state.stats.delta_refused += 1;
+            }
+        }
+        drop(file);
+        let mut metrics = self.metrics.lock();
+        metrics.records_appended = metrics.records_appended.saturating_add(1);
+        metrics.bytes_appended = metrics.bytes_appended.saturating_add(written);
+        Ok((lsn, use_delta))
     }
 
     /// Log a commit and make the log durable through it.
@@ -1041,6 +1272,7 @@ impl Wal {
         *sealed = retained;
         drop(sealed);
         self.sealed_bytes.store(retained_bytes, Ordering::Release);
+        self.start_epoch_locked(true);
         drop(file);
         self.end_offset.store(0, Ordering::Release);
         self.synced_offset.store(0, Ordering::Release);
@@ -1070,6 +1302,36 @@ impl Wal {
         self.sealed_bytes
             .load(Ordering::Acquire)
             .saturating_add(self.end_offset.load(Ordering::Acquire))
+    }
+}
+
+/// Test harness only (`page-delta-test-hook`): when
+/// `BICDB_TEST_PAGE_DELTAS_TALLY` names a file, every log with deltas engaged
+/// appends its counters there on drop, so a suite run can prove deltas were
+/// actually exercised.
+#[cfg(feature = "page-delta-test-hook")]
+impl Drop for Wal {
+    fn drop(&mut self) {
+        if !self.deltas_engaged() {
+            return;
+        }
+        let Ok(path) = std::env::var("BICDB_TEST_PAGE_DELTAS_TALLY") else {
+            return;
+        };
+        let stats = self.delta_stats();
+        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+            let _ = writeln!(
+                file,
+                "deltas={} delta_bytes={} full={} full_bytes={} refused={} epochs={} recovery_deltas={}",
+                stats.delta_records,
+                stats.delta_bytes,
+                stats.full_images,
+                stats.full_image_bytes,
+                stats.delta_refused,
+                stats.epoch_starts,
+                stats.recovery_deltas_replayed
+            );
+        }
     }
 }
 
@@ -1244,6 +1506,7 @@ pub(crate) fn recover_with_outcomes(
     let mut terminal_outcome_records = 0_u64;
     let mut redo_lsn = 0_u64;
     let mut max_record_transaction = 0_u64;
+    let mut log_has_deltas = false;
     let first = wal.scan_records(max_body_bytes, true, |record| {
         // Checkpoint records reuse the transaction field for a redo LSN, so
         // they are excluded; transaction 0 marks structural images. Page
@@ -1279,6 +1542,18 @@ pub(crate) fn recover_with_outcomes(
             }
             RecordKind::Checkpoint => redo_lsn = record.transaction,
             RecordKind::PageImage => {}
+            RecordKind::PageDelta => {
+                log_has_deltas = true;
+                if let Err(reason) =
+                    crate::wal_delta::validate(record.payload, store.page_size() as usize)
+                {
+                    return Err(PageError::WalCorruption {
+                        path: wal.path().to_path_buf(),
+                        lsn: record.lsn,
+                        reason: format!("page delta for page {}: {reason}", record.page_id),
+                    });
+                }
+            }
         }
         Ok(())
     })?;
@@ -1326,7 +1601,59 @@ pub(crate) fn recover_with_outcomes(
     // twice leaves the same bytes. That is what lets recovery restart safely
     // after being interrupted.
     let mut free_list_detached = false;
+    // Last record applied to each page in THIS replay: the only legal delta
+    // base (I12/I13). Empty, and never consulted, for logs with no deltas.
+    let mut applied: rustc_hash::FxHashMap<PageId, Lsn> = rustc_hash::FxHashMap::default();
+    let mut delta_page: Vec<u8> = Vec::new();
+    let mut deltas_replayed = 0u64;
     let second = wal.scan_records(max_body_bytes, false, |record| {
+        if record.kind == RecordKind::PageDelta {
+            if record.lsn < redo_lsn {
+                return Ok(());
+            }
+            if record.transaction != 0
+                && outcomes.status(record.transaction) != Some(TxStatus::Committed)
+            {
+                report.uncommitted_skipped = report.uncommitted_skipped.saturating_add(1);
+                return Ok(());
+            }
+            let corrupt = |reason: String| PageError::WalCorruption {
+                path: wal.path().to_path_buf(),
+                lsn: record.lsn,
+                reason: format!("page delta for page {}: {reason}", record.page_id),
+            };
+            let header = crate::wal_delta::header(record.payload)
+                .ok_or_else(|| corrupt("truncated header".to_string()))?;
+            match applied.get(&record.page_id) {
+                Some(&lsn) if lsn == header.base_lsn => {}
+                Some(&lsn) => {
+                    return Err(corrupt(format!(
+                        "base LSN {} is not the page's last replayed record {lsn}",
+                        header.base_lsn
+                    )))
+                }
+                None => {
+                    return Err(corrupt(format!(
+                        "base LSN {} was not replayed (no full image of the page at or after redo LSN {redo_lsn})",
+                        header.base_lsn
+                    )))
+                }
+            }
+            delta_page.resize(store.page_size() as usize, 0);
+            store.read_page(record.page_id, &mut delta_page)?;
+            if crate::wal_delta::masked_crc(&delta_page) != header.base_crc {
+                return Err(corrupt("replayed base does not match the delta's base checksum".into()));
+            }
+            crate::wal_delta::apply(record.payload, &mut delta_page).map_err(corrupt)?;
+            if crate::wal_delta::masked_crc(&delta_page) != header.result_crc {
+                return Err(corrupt("delta result does not match its result checksum".into()));
+            }
+            store.write_page(record.page_id, &mut delta_page)?;
+            applied.insert(record.page_id, record.lsn);
+            report.pages_replayed = report.pages_replayed.saturating_add(1);
+            deltas_replayed += 1;
+            return Ok(());
+        }
         if record.kind != RecordKind::PageImage {
             return Ok(());
         }
@@ -1362,6 +1689,9 @@ pub(crate) fn recover_with_outcomes(
             })?;
         store.reserve(page_count)?;
         store.write_page(record.page_id, record.payload)?;
+        if log_has_deltas {
+            applied.insert(record.page_id, record.lsn);
+        }
         report.pages_replayed = report.pages_replayed.saturating_add(1);
         Ok(())
     })?;
@@ -1379,6 +1709,11 @@ pub(crate) fn recover_with_outcomes(
 
     store.flush()?;
     wal.redo_lsn.store(redo_lsn, Ordering::Release);
+    {
+        let mut state = wal.delta_state.lock();
+        state.stats.recovery_deltas_replayed = deltas_replayed;
+        state.stats.recovery_delta_base_entries = applied.len() as u64;
+    }
     report.duration_nanos = u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX);
     Ok((report, outcomes))
 }
@@ -1428,7 +1763,7 @@ impl Checkpointer {
     /// durable when they are not, and recovery would skip exactly the records
     /// needed to fix them.
     pub fn checkpoint(&self, root_page: PageId) -> Result<CheckpointReport> {
-        let redo_lsn = self.wal.next_lsn();
+        let redo_lsn = self.wal.begin_redo_epoch();
         self.wal.sync()?;
         crate::test_faults::crash_point("checkpoint.after_wal_sync");
         let flushed = self.pool.flush_all()?;
@@ -1443,7 +1778,7 @@ impl Checkpointer {
     /// recovery time grows with total writes rather than with the post-checkpoint
     /// suffix — which is the gate Phase 3 is judged by.
     pub fn checkpoint_and_truncate(&self, root_page: PageId) -> Result<CheckpointReport> {
-        let redo_lsn = self.wal.next_lsn();
+        let redo_lsn = self.wal.begin_redo_epoch();
         self.wal.sync()?;
         crate::test_faults::crash_point("checkpoint.after_wal_sync");
         let flushed = self.pool.flush_all()?;
@@ -1743,6 +2078,297 @@ mod tests {
             store.read_page(2, &mut page).is_err() || page[PAGE_HEADER_BYTES] != 0xBB,
             "an uncommitted page was exposed by recovery"
         );
+    }
+
+    // ---- Experimental page deltas (docs/page-delta-redo-design.md) ----
+
+    fn delta_wal(dir: &TempDir) -> Wal {
+        let wal = Wal::open(dir.path().join("test.wal"), false).unwrap();
+        wal.engage_deltas();
+        wal
+    }
+
+    fn with_marker(
+        _page_id: PageId,
+        page_size: u32,
+        at: usize,
+        marker: u8,
+        base: &[u8],
+    ) -> Vec<u8> {
+        let mut page = base.to_vec();
+        page.resize(page_size as usize, 0);
+        page[at] = marker;
+        page
+    }
+
+    fn read(store: &PageStore, page_id: PageId, page_size: u32) -> Vec<u8> {
+        let mut page = vec![0u8; page_size as usize];
+        store.read_page(page_id, &mut page).unwrap();
+        page
+    }
+
+    #[test]
+    fn delta_after_committed_image_replays_and_matches_the_full_image() {
+        let dir = TempDir::new().unwrap();
+        let page_size = 512u32;
+        let store = store(&dir, page_size);
+        store.reserve(4).unwrap();
+        let wal = delta_wal(&dir);
+        let base = page_image(1, page_size, 0xAA);
+        let (base_lsn, delta) = wal.log_page_maybe_delta(1, 1, &base, None).unwrap();
+        assert!(!delta);
+        wal.commit(1).unwrap();
+        let next = with_marker(1, page_size, 200, 0x11, &base);
+        let payload = crate::wal_delta::encode(base_lsn, &base, &next).unwrap();
+        let (lsn2, delta) = wal
+            .log_page_maybe_delta(1, 2, &next, Some(&payload))
+            .unwrap();
+        assert!(delta, "a delta on a committed base must be taken");
+        // Same transaction may chain on its own record.
+        let third = with_marker(1, page_size, 300, 0x22, &next);
+        let payload = crate::wal_delta::encode(lsn2, &next, &third).unwrap();
+        assert!(
+            wal.log_page_maybe_delta(1, 2, &third, Some(&payload))
+                .unwrap()
+                .1
+        );
+        wal.commit(2).unwrap();
+        wal.sync().unwrap();
+
+        let report = recover(&wal, &store).unwrap();
+        assert_eq!(report.pages_replayed, 3);
+        let page = read(&store, 1, page_size);
+        assert_eq!(
+            crate::wal_delta::masked_crc(&page),
+            crate::wal_delta::masked_crc(&third)
+        );
+        // Repeated recovery converges on the same page.
+        recover(&wal, &store).unwrap();
+        assert_eq!(
+            crate::wal_delta::masked_crc(&read(&store, 1, page_size)),
+            crate::wal_delta::masked_crc(&page)
+        );
+        assert_eq!(wal.delta_stats().recovery_deltas_replayed, 2);
+    }
+
+    #[test]
+    fn a_delta_is_never_based_on_another_transactions_uncommitted_record() {
+        let dir = TempDir::new().unwrap();
+        let page_size = 512u32;
+        let wal = delta_wal(&dir);
+        let base = page_image(1, page_size, 0xAA);
+        // Transaction 1 logs (e.g. eviction) but has not committed.
+        let (base_lsn, _) = wal.log_page_maybe_delta(1, 1, &base, None).unwrap();
+        let next = with_marker(1, page_size, 200, 0x11, &base);
+        let payload = crate::wal_delta::encode(base_lsn, &base, &next).unwrap();
+        let (_, delta) = wal
+            .log_page_maybe_delta(1, 2, &next, Some(&payload))
+            .unwrap();
+        assert!(
+            !delta,
+            "uncommitted base of another transaction must force a full image"
+        );
+        // An abort does not make it a legal base either.
+        wal.abort(1).unwrap();
+        let (lsn, _) = wal.log_page_maybe_delta(1, 3, &next, None).unwrap();
+        wal.commit(3).unwrap();
+        let more = with_marker(1, page_size, 201, 0x12, &next);
+        let payload = crate::wal_delta::encode(lsn, &next, &more).unwrap();
+        assert!(
+            wal.log_page_maybe_delta(1, 4, &more, Some(&payload))
+                .unwrap()
+                .1
+        );
+        // Structural records are always full images.
+        let payload = crate::wal_delta::encode(lsn + 1, &more, &more).unwrap();
+        assert!(
+            !wal.log_page_maybe_delta(1, 0, &more, Some(&payload))
+                .unwrap()
+                .1
+        );
+    }
+
+    #[test]
+    fn every_epoch_start_forces_a_full_image() {
+        let dir = TempDir::new().unwrap();
+        let page_size = 512u32;
+        let wal = delta_wal(&dir);
+        let base = page_image(1, page_size, 0xAA);
+        let next = with_marker(1, page_size, 200, 0x11, &base);
+        for start in ["redo", "backup", "reset"] {
+            let (lsn, _) = wal.log_page_maybe_delta(1, 7, &base, None).unwrap();
+            match start {
+                "redo" => {
+                    wal.begin_redo_epoch();
+                }
+                "backup" => wal.start_epoch(),
+                _ => {
+                    wal.reset().unwrap();
+                }
+            }
+            let payload = crate::wal_delta::encode(lsn, &base, &next).unwrap();
+            assert!(
+                !wal.log_page_maybe_delta(1, 7, &next, Some(&payload))
+                    .unwrap()
+                    .1,
+                "{start}: a delta crossed an epoch start"
+            );
+        }
+    }
+
+    #[test]
+    fn a_segment_seal_forces_a_full_image() {
+        let dir = TempDir::new().unwrap();
+        let page_size = 512u32;
+        let wal = Wal::open_with_segments(dir.path().join("test.wal"), false, 4096).unwrap();
+        wal.engage_deltas();
+        let base = page_image(1, page_size, 0xAA);
+        let mut previous = base.clone();
+        let mut lsn = wal.log_page_maybe_delta(1, 9, &base, None).unwrap().0;
+        let mut saw_seal_full_image = false;
+        for round in 0..200u32 {
+            let next = with_marker(
+                1,
+                page_size,
+                100 + (round as usize % 300),
+                round as u8,
+                &previous,
+            );
+            let payload = crate::wal_delta::encode(lsn, &previous, &next).unwrap();
+            let sealed_before = wal.snapshot().segments_sealed;
+            let (new_lsn, delta) = wal
+                .log_page_maybe_delta(1, 9, &next, Some(&payload))
+                .unwrap();
+            if wal.snapshot().segments_sealed > sealed_before {
+                assert!(!delta, "the first record after a seal must be a full image");
+                saw_seal_full_image = true;
+            } else {
+                assert!(delta);
+            }
+            lsn = new_lsn;
+            previous = next;
+        }
+        assert!(saw_seal_full_image);
+    }
+
+    fn committed_image_then_delta(wal: &Wal, page_size: u32) -> (Vec<u8>, Vec<u8>, Lsn) {
+        let base = page_image(1, page_size, 0xAA);
+        let (base_lsn, _) = wal.log_page_maybe_delta(1, 1, &base, None).unwrap();
+        wal.commit(1).unwrap();
+        let next = with_marker(1, page_size, 200, 0x11, &base);
+        (base, next, base_lsn)
+    }
+
+    /// Append a raw delta record bypassing eligibility, to build logs that a
+    /// correct writer can never produce.
+    fn forge_delta(wal: &Wal, page_id: PageId, xid: u64, payload: &[u8]) -> Lsn {
+        wal.append(RecordKind::PageDelta, page_id, xid, payload)
+            .unwrap()
+    }
+
+    #[test]
+    fn recovery_refuses_a_delta_whose_base_was_skipped_as_uncommitted() {
+        let dir = TempDir::new().unwrap();
+        let page_size = 512u32;
+        let store = store(&dir, page_size);
+        store.reserve(4).unwrap();
+        let wal = delta_wal(&dir);
+        let base = page_image(1, page_size, 0xAA);
+        let base_lsn = wal.log_page_image(1, 5, &base).unwrap(); // never commits
+        let next = with_marker(1, page_size, 200, 0x11, &base);
+        let payload = crate::wal_delta::encode(base_lsn, &base, &next).unwrap();
+        forge_delta(&wal, 1, 6, &payload);
+        wal.commit(6).unwrap();
+        wal.sync().unwrap();
+        let error = recover(&wal, &store).unwrap_err().to_string();
+        assert!(error.contains("was not replayed"), "{error}");
+    }
+
+    #[test]
+    fn recovery_refuses_a_delta_with_no_full_image_after_the_redo_point() {
+        let dir = TempDir::new().unwrap();
+        let page_size = 512u32;
+        let store = store(&dir, page_size);
+        store.reserve(4).unwrap();
+        let wal = delta_wal(&dir);
+        let (base, next, base_lsn) = committed_image_then_delta(&wal, page_size);
+        // Redo point between the image and the delta: forged, because the
+        // writer's epoch rule never produces this.
+        let redo = wal.next_lsn();
+        wal.checkpoint(redo, 0).unwrap();
+        // The page files must vouch for the redo point, as after a real
+        // checkpoint's publish.
+        store.publish_root(0, wal.next_lsn()).unwrap();
+        let payload = crate::wal_delta::encode(base_lsn, &base, &next).unwrap();
+        forge_delta(&wal, 1, 2, &payload);
+        wal.commit(2).unwrap();
+        wal.sync().unwrap();
+        let error = recover(&wal, &store).unwrap_err().to_string();
+        assert!(error.contains("was not replayed"), "{error}");
+    }
+
+    #[test]
+    fn recovery_refuses_checksum_mismatches_and_malformed_deltas() {
+        let page_size = 512u32;
+        for case in ["result", "base", "malformed", "wrong-base-lsn"] {
+            let dir = TempDir::new().unwrap();
+            let store = store(&dir, page_size);
+            store.reserve(4).unwrap();
+            let wal = delta_wal(&dir);
+            let (base, next, base_lsn) = committed_image_then_delta(&wal, page_size);
+            let mut payload = crate::wal_delta::encode(base_lsn, &base, &next).unwrap();
+            match case {
+                "result" => payload[12] ^= 0xFF,
+                "base" => payload[8] ^= 0xFF,
+                "malformed" => payload.push(1),
+                _ => payload[0..8].copy_from_slice(&(base_lsn + 100).to_le_bytes()),
+            }
+            forge_delta(&wal, 1, 2, &payload);
+            wal.commit(2).unwrap();
+            wal.sync().unwrap();
+            let error = recover(&wal, &store).unwrap_err();
+            assert!(
+                matches!(error, PageError::WalCorruption { .. }),
+                "{case}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_uncommitted_delta_is_skipped_without_needing_its_base() {
+        let dir = TempDir::new().unwrap();
+        let page_size = 512u32;
+        let store = store(&dir, page_size);
+        store.reserve(4).unwrap();
+        let wal = delta_wal(&dir);
+        let (base, next, base_lsn) = committed_image_then_delta(&wal, page_size);
+        let payload = crate::wal_delta::encode(base_lsn + 50, &base, &next).unwrap();
+        forge_delta(&wal, 1, 9, &payload); // transaction 9 never commits
+        wal.sync().unwrap();
+        let report = recover(&wal, &store).unwrap();
+        assert_eq!(report.uncommitted_skipped, 1);
+        assert_eq!(
+            crate::wal_delta::masked_crc(&read(&store, 1, page_size)),
+            crate::wal_delta::masked_crc(&base)
+        );
+    }
+
+    #[test]
+    fn a_log_without_deltas_recovers_exactly_as_before_and_tracks_nothing() {
+        let dir = TempDir::new().unwrap();
+        let page_size = 512u32;
+        let store = store(&dir, page_size);
+        store.reserve(4).unwrap();
+        let wal = Wal::open(dir.path().join("test.wal"), false).unwrap();
+        wal.log_page_image(1, 1, &page_image(1, page_size, 0xAA))
+            .unwrap();
+        wal.commit(1).unwrap();
+        wal.sync().unwrap();
+        let report = recover(&wal, &store).unwrap();
+        assert_eq!(report.pages_replayed, 1);
+        assert_eq!(wal.delta_stats(), DeltaStats::default());
+        assert!(!wal.deltas_engaged());
+        assert_eq!(wal.begin_redo_epoch(), wal.next_lsn());
     }
 
     #[test]

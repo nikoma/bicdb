@@ -412,6 +412,44 @@ fn statement_list_binds_each_statement_with_the_path_set_before_it() {
     assert!(sql.execute("SELECT count(*) FROM ad_client").is_err());
 }
 
+/// current_schema and current_schemas report the search_path's schemas.
+#[test]
+fn current_schema_follows_the_search_path() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    let text = |sql: &mut SqlSession, query: &str| sql.execute(query).unwrap().rows[0][0].to_cell();
+    assert_eq!(text(&mut sql, "SELECT current_schema()"), "public");
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE TABLE app.item (id INT)").unwrap();
+    sql.execute("SET search_path TO app, public").unwrap();
+    assert_eq!(text(&mut sql, "SELECT current_schema()"), "app");
+    assert_eq!(text(&mut sql, "SELECT current_schema"), "app");
+    assert_eq!(
+        text(
+            &mut sql,
+            "SELECT array_to_string(current_schemas(false), ',')"
+        ),
+        "app,public"
+    );
+    assert_eq!(
+        text(
+            &mut sql,
+            "SELECT array_to_string(current_schemas(true), ',')"
+        ),
+        "pg_catalog,app,public"
+    );
+    // Catalog lookups by CURRENT_SCHEMA inside a routine find the schema's relations.
+    sql.execute(
+        "CREATE FUNCTION app.has_item() RETURNS bigint LANGUAGE plpgsql AS $$ \
+         DECLARE n bigint; BEGIN SELECT count(*) INTO n FROM pg_catalog.pg_class pc \
+         WHERE pc.relname = 'item' AND pc.relnamespace = \
+         (SELECT oid FROM pg_catalog.pg_namespace WHERE nspname = CURRENT_SCHEMA); \
+         RETURN n; END; $$",
+    )
+    .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT has_item()"), 1);
+}
+
 fn namespace_exists(sql: &mut SqlSession, name: &str) -> bool {
     int_at(
         sql,

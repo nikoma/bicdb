@@ -247,7 +247,7 @@ pub(crate) fn eval_value(record: &Record, expr: &Expr) -> Result<SqlValue> {
             Ok(SqlValue::String("bicdb".to_string()))
         }
         Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("current_schema") => {
-            Ok(SqlValue::String("public".to_string()))
+            Ok(SqlValue::String(crate::search_path::current_schema_name()))
         }
         Expr::Identifier(_) | Expr::CompoundIdentifier(_) | Expr::JsonAccess { .. } => {
             FieldRef::from_expr(expr)?.value(record)
@@ -523,7 +523,7 @@ pub(crate) fn eval_constant_expr(expr: &Expr) -> Result<SqlValue> {
             Ok(SqlValue::String("bicdb".to_string()))
         }
         Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("current_schema") => {
-            Ok(SqlValue::String("public".to_string()))
+            Ok(SqlValue::String(crate::search_path::current_schema_name()))
         }
         Expr::Value(value) => literal_to_value(value),
         Expr::TypedString(value) => typed_string_to_value(value),

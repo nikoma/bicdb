@@ -617,3 +617,25 @@ pub fn bind_session_sql(
         .as_deref()
         .and_then(|path| bind_sql_text(db, sql, path)))
 }
+
+/// `current_schema`: the first existing schema on the search_path of the
+/// running statement (`public` when the path names no other schema).
+pub(crate) fn current_schema_name() -> String {
+    active_path()
+        .and_then(|path| path.first().cloned())
+        .unwrap_or_else(|| "public".to_string())
+}
+
+/// `current_schemas(include_implicit)`: the existing schemas on the path in
+/// order, after the implicitly searched `pg_catalog` when requested.
+pub(crate) fn current_schema_names(include_implicit: bool) -> Vec<String> {
+    let mut schemas = Vec::new();
+    if include_implicit {
+        schemas.push("pg_catalog".to_string());
+    }
+    match active_path() {
+        Some(path) => schemas.extend(path.iter().cloned()),
+        None => schemas.push("public".to_string()),
+    }
+    schemas
+}

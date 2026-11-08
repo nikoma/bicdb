@@ -56,7 +56,7 @@ pub use btree::{
 };
 pub use catalog::{Catalog, FREE_BUCKETS};
 pub use error::{PageError, Result};
-pub use health::{DurabilityHealth, DurabilityState, WriteFailure};
+pub use health::{ArchiveHealth, DurabilityHealth, DurabilityState, WriteFailure};
 pub use heap::{HeapFile, HeapOptions, HeapScan, HeapSnapshot};
 pub use lock::DirectoryLock;
 pub use manager::{

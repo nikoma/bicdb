@@ -255,6 +255,9 @@ pub struct Wal {
     /// bounded only by the archiver keeping up — same failure mode as
     /// PostgreSQL's archive_command, and deliberately so.
     archive_retention: AtomicBool,
+    /// The page-log archiver's own health. Its first failure stops
+    /// [`Self::mark_archived_through`] for this handle.
+    archive_health: std::sync::Arc<crate::health::ArchiveHealth>,
     /// Total bytes across sealed segments (the active file's bytes are
     /// `end_offset`).
     sealed_bytes: AtomicU64,
@@ -398,6 +401,10 @@ impl Wal {
         let end_offset = file.metadata().map_err(|e| PageError::io(&path, e))?.len();
         let (sealed, sealed_bytes) = discover_sealed_segments(&path)?;
         let initial_lsn = lsn_floor.max(1);
+        // Archive retention outlives the handle that enabled it: a reopen
+        // (and the checkpoints recovery runs) must not delete sealed segments
+        // the archiver has not confirmed, or the archive gaps for good.
+        let archive_retention = archive_retention_marker(&path).exists();
 
         Ok(Self {
             path,
@@ -406,7 +413,8 @@ impl Wal {
             sealed: Mutex::new(sealed),
             active_first_lsn: AtomicU64::new(initial_lsn),
             archived_through: AtomicU64::new(0),
-            archive_retention: AtomicBool::new(false),
+            archive_retention: AtomicBool::new(archive_retention),
+            archive_health: crate::health::ArchiveHealth::new(),
             sealed_bytes: AtomicU64::new(sealed_bytes),
             next_lsn: AtomicU64::new(initial_lsn),
             end_offset: AtomicU64::new(end_offset),
@@ -1312,17 +1320,103 @@ impl Wal {
         Ok(deleted)
     }
 
-    /// Turn on archive retention: from now until the handle closes,
-    /// checkpoint truncation keeps sealed segments the archiver has not
-    /// confirmed via [`Self::mark_archived_through`].
-    pub fn enable_archive_retention(&self) {
+    /// Turn on archive retention: checkpoint truncation keeps sealed
+    /// segments the archiver has not confirmed via
+    /// [`Self::mark_archived_through`]. The setting is persisted next to the
+    /// log (`<log>-archive-retention`), so it also holds for every later
+    /// handle until [`Self::disable_archive_retention`]; a reopened handle
+    /// starts with nothing confirmed, so it keeps every sealed segment until
+    /// the archiver confirms it again.
+    pub fn enable_archive_retention(&self) -> Result<()> {
+        // In memory first: from here on nothing unconfirmed is deleted, even
+        // if persisting the setting fails below.
         self.archive_retention.store(true, Ordering::Release);
+        let marker = archive_retention_marker(&self.path);
+        if marker.exists() {
+            return Ok(());
+        }
+        let persist = || -> std::io::Result<()> {
+            crate::test_faults::io_fault("wal_archive.retention", &marker)?;
+            let file = File::create(&marker)?;
+            if self.fsync {
+                file.sync_all()?;
+                if let Some(parent) = marker.parent().filter(|p| !p.as_os_str().is_empty()) {
+                    File::open(parent)?.sync_all()?;
+                }
+            }
+            Ok(())
+        };
+        persist().map_err(|error| {
+            let failure = self.record_archive_failure("wal_archive.retention", &marker, &error);
+            PageError::ArchiveFailed {
+                site: failure.site,
+                detail: failure.error,
+            }
+        })
     }
 
-    /// The archiver durably holds every sealed segment named <= `sequence`;
-    /// local truncation may delete them.
-    pub fn mark_archived_through(&self, sequence: u64) {
+    /// Turn archive retention off (archiving was stopped on purpose): the
+    /// next checkpoint deletes sealed segments whether archived or not.
+    pub fn disable_archive_retention(&self) -> Result<()> {
+        let marker = archive_retention_marker(&self.path);
+        match std::fs::remove_file(&marker) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(PageError::io(&marker, error)),
+        }
+        if self.fsync {
+            if let Some(parent) = marker.parent().filter(|p| !p.as_os_str().is_empty()) {
+                File::open(parent)
+                    .and_then(|dir| dir.sync_all())
+                    .map_err(|e| PageError::io(parent, e))?;
+            }
+        }
+        self.archive_retention.store(false, Ordering::Release);
+        Ok(())
+    }
+
+    /// Whether checkpoint truncation keeps unarchived sealed segments.
+    pub fn archive_retention_enabled(&self) -> bool {
+        self.archive_retention.load(Ordering::Acquire)
+    }
+
+    /// Highest sealed-segment name this handle has confirmed archived.
+    pub fn archived_through(&self) -> u64 {
+        self.archived_through.load(Ordering::Acquire)
+    }
+
+    /// The archiver durably holds every sealed segment named <= `sequence`
+    /// (bytes and directory entries); local truncation may delete them.
+    /// Refused once the archiver failed on this handle: a later "successful"
+    /// step proves nothing about the bytes the failure may have dropped.
+    pub fn mark_archived_through(&self, sequence: u64) -> Result<()> {
+        if let Some(failure) = self.archive_health.failure() {
+            return Err(PageError::ArchiveFailed {
+                site: failure.site,
+                detail: failure.error,
+            });
+        }
         self.archived_through.fetch_max(sequence, Ordering::AcqRel);
+        Ok(())
+    }
+
+    /// The page-log archiver's health for this handle.
+    pub fn archive_health(&self) -> &std::sync::Arc<crate::health::ArchiveHealth> {
+        &self.archive_health
+    }
+
+    /// Record a page-log archiver failure (first one wins).
+    pub fn record_archive_failure(
+        &self,
+        site: &str,
+        path: &Path,
+        error: &dyn std::fmt::Display,
+    ) -> crate::health::WriteFailure {
+        self.archive_health.record_failure(
+            "page_log",
+            site,
+            &format!("{}: {error}", path.display()),
+        )
     }
 
     /// Total log bytes: every sealed segment plus the active file.
@@ -1409,6 +1503,13 @@ where
         *expected_lsn = Some(lsn + 1);
     }
     Ok((valid_bytes, first_lsn))
+}
+
+/// File whose presence keeps archive retention on across reopens.
+pub fn archive_retention_marker(path: &Path) -> PathBuf {
+    let mut os = path.as_os_str().to_os_string();
+    os.push("-archive-retention");
+    PathBuf::from(os)
 }
 
 /// Sealed segments on disk next to `path`, ascending, with their total size.

@@ -92,7 +92,7 @@ impl Exposition {
     }
 }
 
-fn render(server: &Arc<PgWireServer>) -> Result<String> {
+pub(crate) fn render(server: &Arc<PgWireServer>) -> Result<String> {
     let mut out = Exposition(String::new());
     for (name, value) in backups::metric_values(server) {
         out.gauge(
@@ -185,6 +185,57 @@ fn render(server: &Arc<PgWireServer>) -> Result<String> {
                 failure.at_unix_millis / 1000,
             );
         }
+    }
+    {
+        // Archivers (docs/durability-failure-handling.md, section 7.5). An
+        // archive failure leaves the database writable but stops archiving;
+        // the local logs it would have released are retained.
+        let status = server.log_archive_status.lock().unwrap().clone();
+        out.gauge(
+            "bicdb_log_archive_enabled",
+            "The commit log archiver is configured.",
+            u8::from(status.enabled),
+        );
+        out.gauge(
+            "bicdb_log_archive_failed",
+            "The commit log archiver stopped after a failed write or sync; the transaction log \
+             is retained until a new archive handle rewrites the unconfirmed suffix.",
+            u8::from(status.failure.is_some()),
+        );
+        out.gauge(
+            "bicdb_log_archive_archived_commit_seq",
+            "Last commit confirmed durable in the commit log archive.",
+            status.archived_commit_seq,
+        );
+        out.counter(
+            "bicdb_log_archive_failures_total",
+            "Commit log archive handles stopped by a failed write or sync.",
+            status.failures_total,
+        );
+        out.counter(
+            "bicdb_log_archive_recoveries_total",
+            "New commit log archive handles that resumed after a failure.",
+            status.recoveries_total,
+        );
+        out.metric(
+            "bicdb_log_archive_failed_timestamp_seconds",
+            "gauge",
+            "Time of the failure that stopped the commit log archiver, labelled by site.",
+        );
+        if let Some(failure) = &status.failure {
+            out.sample(
+                "bicdb_log_archive_failed_timestamp_seconds",
+                &[("site", failure.site.as_str())],
+                failure.at_unix_millis / 1000,
+            );
+        }
+        let wal_failure = server.read_db()?.wal_archive_failure();
+        out.gauge(
+            "bicdb_wal_archive_failed",
+            "The page-log archiver failed on this handle; sealed segments stay local until a \
+             reopened handle archives them again.",
+            u8::from(wal_failure.is_some()),
+        );
     }
     out.gauge(
         "bicdb_connections_active",

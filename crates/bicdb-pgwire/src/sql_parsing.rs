@@ -825,6 +825,47 @@ pub(crate) fn execute_server_virtual_query_for_normalized(
                 rows,
             )))
         }
+        "select * from bicdb_log_archive" => {
+            // The commit log archiver: whether it runs, how far it has
+            // confirmed, and the failure that stopped it (if any).
+            let privileged = caller.is_some_and(|caller| server.user_is_admin(caller.user));
+            let status = server.log_archive_status.lock().unwrap().clone();
+            let failure = status.failure.as_ref().or(status.last_failure.as_ref());
+            let row = vec![
+                SqlValue::Bool(status.enabled),
+                SqlValue::Bool(status.enabled && status.failure.is_none()),
+                SqlValue::Int(status.archived_commit_seq as i64),
+                failure.map_or(SqlValue::Null, |failure| {
+                    SqlValue::String(failure.site.clone())
+                }),
+                match failure {
+                    Some(failure) if privileged => SqlValue::String(failure.error.clone()),
+                    _ => SqlValue::Null,
+                },
+                failure.map_or(SqlValue::Null, |failure| {
+                    SqlValue::Int((failure.at_unix_millis / 1000) as i64)
+                }),
+                SqlValue::Int(status.failures_total as i64),
+                SqlValue::Int(status.recoveries_total as i64),
+                SqlValue::Int(status.rewritten_commits_total as i64),
+            ];
+            Ok(Some(SqlResult::new(
+                [
+                    "enabled",
+                    "healthy",
+                    "archived_commit_seq",
+                    "failure_site",
+                    "failure_error",
+                    "failed_at",
+                    "failures_total",
+                    "recoveries_total",
+                    "rewritten_commits_total",
+                ]
+                .map(str::to_string)
+                .to_vec(),
+                vec![row],
+            )))
+        }
         "select * from bicdb_connectors" => {
             let rows = connectors::statuses(server)
                 .into_iter()
@@ -1432,6 +1473,7 @@ pub(crate) fn is_server_status_query_normalized(normalized: &str) -> bool {
             | "select * from bicdb_region"
             | "select * from bicdb_workload"
             | "select * from bicdb_verify"
+            | "select * from bicdb_log_archive"
             | "select * from bicdb_activity"
     )
 }

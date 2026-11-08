@@ -922,6 +922,7 @@ impl PgWireServer {
             live_incremental_runs: AtomicU64::new(0),
             live_registry: Default::default(),
             verification_runs: Mutex::new(Vec::new()),
+            log_archive_status: Mutex::new(Default::default()),
             backup_jobs: Mutex::new(Default::default()),
             workload: Default::default(),
             live_breaker_trips: AtomicU64::new(0),

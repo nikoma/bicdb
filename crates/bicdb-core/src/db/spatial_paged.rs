@@ -1759,25 +1759,55 @@ impl BicDb {
     /// checkpoint truncation. Call on a cadence — the archive's freshness
     /// IS the recovery point objective.
     ///
-    /// The first call enables archive retention for this handle's
-    /// lifetime: sealed segments survive local truncation until archived,
-    /// so a stalled archiver grows the local WAL directory (deliberately —
-    /// the PostgreSQL `archive_command` trade) rather than gapping the
-    /// archive. Roll a restore forward with [`apply_archived_wal`]:
-    /// restore an online-backup chain, apply the archive, open.
+    /// The first call enables archive retention, persistently (it survives
+    /// reopens until [`Self::disable_wal_archiving`]): sealed segments
+    /// survive local truncation until archived, so a stalled archiver grows
+    /// the local WAL directory (deliberately — the PostgreSQL
+    /// `archive_command` trade) rather than gapping the archive. Roll a
+    /// restore forward with [`apply_archived_wal`]: restore an online-backup
+    /// chain, apply the archive, open.
+    ///
+    /// Fail-closed: a segment counts as archived (and local truncation may
+    /// delete it) only after its bytes AND its directory entry are durable in
+    /// the archive, confirmed by this handle's own fsyncs. A segment already
+    /// in the archive that this handle has not confirmed is compared and
+    /// copied again rather than trusted. The first failed step stops the
+    /// archiver for this handle ([`Self::wal_archive_failure`]): nothing more
+    /// is marked archived and nothing unarchived is deleted, until a
+    /// reopened handle copies every unconfirmed segment again. The database
+    /// itself stays writable. See `docs/durability-failure-handling.md`.
     pub fn archive_wal_segments(&self, destination: impl AsRef<Path>) -> Result<WalArchiveReport> {
         let Some(paged) = &self.paged_records else {
             return Err(BicDbError::Backup(
                 "WAL archiving requires server_paged storage".to_string(),
             ));
         };
-        let destination = destination.as_ref();
-        fs::create_dir_all(destination)?;
         let store = paged.store();
-        store.enable_wal_archive_retention();
+        let wal = store.wal();
+        if let Some(failure) = wal.archive_health().failure() {
+            return Err(page_archive_error(failure));
+        }
+        // Retention first: from here on nothing unconfirmed is deleted.
+        store
+            .enable_wal_archive_retention()
+            .map_err(crate::error::durability_error)?;
+        let destination = destination.as_ref();
+        let fsync = self.config.fsync;
+        let fail = |site: &str, path: &Path, error: &dyn std::fmt::Display| {
+            page_archive_error(wal.record_archive_failure(site, path, error))
+        };
+        if !destination.is_dir() {
+            fs::create_dir_all(destination)
+                .map_err(|error| fail("wal_archive.create", destination, &error))?;
+            if fsync {
+                sync_parent_dir("wal_archive.dir_sync", destination)
+                    .map_err(|error| fail("wal_archive.dir_sync", destination, &error))?;
+            }
+        }
         let sealed = store
             .seal_wal_for_backup()
             .map_err(|error| BicDbError::Backup(error.to_string()))?;
+        let confirmed = wal.archived_through();
         let mut report = WalArchiveReport {
             archived: 0,
             bytes: 0,
@@ -1802,45 +1832,125 @@ impl BicDb {
                 .ok_or_else(|| {
                     BicDbError::Backup(format!("sealed WAL segment {name} has no sequence"))
                 })?;
+            if sequence <= confirmed {
+                // Confirmed durable by this handle earlier.
+                report.skipped += 1;
+                continue;
+            }
             let target = destination.join(&name);
             let source_len = fs::metadata(&path)?.len();
             match fs::metadata(&target) {
-                Ok(existing) if existing.len() == source_len => {
-                    report.skipped += 1;
+                Ok(existing) if existing.len() != source_len => {
+                    return Err(fail(
+                        "wal_archive.mismatch",
+                        &target,
+                        &format!(
+                            "archive already holds {name} with {} bytes but the store's copy \
+                             has {source_len}; refusing to overwrite an archived segment",
+                            existing.len()
+                        ),
+                    ));
                 }
-                Ok(existing) => {
-                    return Err(BicDbError::Backup(format!(
-                        "archive already holds {name} with {} bytes but the store's copy has                          {source_len}; refusing to overwrite an archived segment",
-                        existing.len()
-                    )));
+                Ok(_) => {
+                    // Present but not confirmed by this handle: an earlier
+                    // run may have failed after the rename, so its bytes or
+                    // entry are not proven durable. Same bytes are copied
+                    // again (fresh writes this handle syncs itself); other
+                    // bytes are refused.
+                    let same = files_equal(&path, &target)
+                        .map_err(|error| fail("wal_archive.copy", &target, &error))?;
+                    if !same {
+                        return Err(fail(
+                            "wal_archive.mismatch",
+                            &target,
+                            &format!(
+                                "archive already holds {name} with different contents; \
+                                 refusing to overwrite an archived segment"
+                            ),
+                        ));
+                    }
                 }
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    // Copy through a temp name + rename so a torn copy can
-                    // never be mistaken for an archived segment.
-                    let staging = destination.join(format!("{name}.partial"));
-                    fs::copy(&path, &staging)?;
-                    let copied = File::open(&staging)?;
-                    copied.sync_all()?;
-                    drop(copied);
-                    fs::rename(&staging, &target)?;
-                    report.archived += 1;
-                    report.bytes = report.bytes.saturating_add(source_len);
-                }
-                Err(error) => return Err(error.into()),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(fail("wal_archive.copy", &target, &error)),
             }
+            // Copy through a temp name + rename so a torn copy can never be
+            // mistaken for an archived segment.
+            let staging = destination.join(format!("{name}.partial"));
+            let copied = (|| -> std::result::Result<(), (&'static str, std::io::Error)> {
+                bicdb_page::test_faults::io_fault("wal_archive.copy", &staging)
+                    .and_then(|()| fs::copy(&path, &staging).map(|_| ()))
+                    .map_err(|error| ("wal_archive.copy", error))?;
+                if fsync {
+                    bicdb_page::test_faults::io_fault("wal_archive.sync", &staging)
+                        .and_then(|()| File::open(&staging))
+                        .and_then(|copied| copied.sync_all())
+                        .map_err(|error| ("wal_archive.sync", error))?;
+                }
+                bicdb_page::test_faults::io_fault("wal_archive.rename", &target)
+                    .and_then(|()| fs::rename(&staging, &target))
+                    .map_err(|error| ("wal_archive.rename", error))
+            })();
+            if let Err((site, error)) = copied {
+                let _ = fs::remove_file(&staging);
+                return Err(fail(site, &target, &error));
+            }
+            bicdb_page::test_faults::crash_point("wal_archive.after_rename");
+            report.archived += 1;
+            report.bytes = report.bytes.saturating_add(source_len);
             report.archived_through = Some(
                 report
                     .archived_through
                     .map_or(sequence, |max| max.max(sequence)),
             );
         }
-        if let Ok(dir) = File::open(destination) {
-            let _ = dir.sync_all();
+        // The renames are only durable once the directory is; a swallowed
+        // failure here used to release segments whose archive entry a crash
+        // could still lose.
+        if fsync && report.archived > 0 {
+            bicdb_page::test_faults::io_fault("wal_archive.dir_sync", destination)
+                .and_then(|()| File::open(destination))
+                .and_then(|dir| dir.sync_all())
+                .map_err(|error| fail("wal_archive.dir_sync", destination, &error))?;
         }
+        bicdb_page::test_faults::crash_point("wal_archive.before_mark");
         if let Some(through) = report.archived_through {
-            store.mark_wal_archived_through(through);
+            store
+                .mark_wal_archived_through(through)
+                .map_err(crate::error::durability_error)?;
         }
+        report.archived_through = report
+            .archived_through
+            .or((confirmed > 0).then_some(confirmed));
         Ok(report)
+    }
+
+    /// The page-log archiver's first failure on this handle, if any. While
+    /// set, [`Self::archive_wal_segments`] refuses and local sealed segments
+    /// are retained.
+    pub fn wal_archive_failure(&self) -> Option<crate::WriteFailure> {
+        self.paged_records
+            .as_ref()
+            .and_then(|paged| paged.store().wal().archive_health().failure())
+    }
+
+    /// Whether this paged store keeps unarchived sealed segments
+    /// (persistent; see [`Self::archive_wal_segments`]).
+    pub fn wal_archive_retention_enabled(&self) -> bool {
+        self.paged_records
+            .as_ref()
+            .is_some_and(|paged| paged.store().wal().archive_retention_enabled())
+    }
+
+    /// Stop page-log archiving on purpose: the next checkpoint deletes
+    /// sealed segments whether archived or not.
+    pub fn disable_wal_archiving(&self) -> Result<()> {
+        let Some(paged) = &self.paged_records else {
+            return Ok(());
+        };
+        paged
+            .store()
+            .disable_wal_archive_retention()
+            .map_err(crate::error::durability_error)
     }
 
     /// Begin migrating a live monolithic paged store to `extent_bytes`
@@ -2671,5 +2781,47 @@ impl BicDb {
             tx.commit_admission_ticket = Some((admission, ticket));
         }
         Ok(commit_seq)
+    }
+}
+
+fn page_archive_error(failure: crate::WriteFailure) -> BicDbError {
+    BicDbError::ArchiveFailed {
+        archive: "page_log".into(),
+        site: failure.site,
+        detail: failure.error,
+    }
+}
+
+/// Fsync the directory that holds `path` (making a new entry durable).
+fn sync_parent_dir(site: &str, path: &Path) -> std::io::Result<()> {
+    let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) else {
+        return Ok(());
+    };
+    bicdb_page::test_faults::io_fault(site, parent)?;
+    File::open(parent)?.sync_all()
+}
+
+/// Byte-for-byte comparison of two files.
+fn files_equal(left: &Path, right: &Path) -> std::io::Result<bool> {
+    use std::io::Read;
+    let mut left = std::io::BufReader::new(File::open(left)?);
+    let mut right = std::io::BufReader::new(File::open(right)?);
+    let mut a = vec![0u8; 64 * 1024];
+    let mut b = vec![0u8; 64 * 1024];
+    loop {
+        let read = left.read(&mut a)?;
+        if read == 0 {
+            return Ok(right.read(&mut b[..1])? == 0);
+        }
+        right.read_exact(&mut b[..read]).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::UnexpectedEof {
+                std::io::Error::other("archive copy is shorter than the local segment")
+            } else {
+                error
+            }
+        })?;
+        if a[..read] != b[..read] {
+            return Ok(false);
+        }
     }
 }

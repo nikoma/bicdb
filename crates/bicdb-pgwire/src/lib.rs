@@ -1056,6 +1056,8 @@ pub struct PgWireServer {
     /// Subscriptions registered with `SUBSCRIBE name AS ...`.
     live_registry: live_queries::LiveRegistry,
     verification_runs: Mutex<Vec<verification::VerificationRun>>,
+    /// The commit log archiver's health (`bicdb_log_archive`, metrics).
+    log_archive_status: Mutex<log_archive::LogArchiveStatus>,
     backup_jobs: Mutex<backups::BackupJobs>,
     workload: workload::WorkloadState,
     live_breaker_trips: AtomicU64,

@@ -39,6 +39,38 @@ impl std::fmt::Debug for LogArchiveConfig {
 const BATCH_COMMITS: usize = 512;
 /// Idle wait between rounds when nothing new committed.
 const IDLE: Duration = Duration::from_secs(1);
+/// Wait after an archive failure before a new handle rewrites the
+/// unconfirmed suffix.
+const RECOVERY_BACKOFF: Duration = if cfg!(test) {
+    Duration::from_millis(500)
+} else {
+    Duration::from_secs(60)
+};
+
+/// What the archiver reports (`SELECT * FROM bicdb_log_archive`, metrics).
+#[derive(Clone, Debug, Default)]
+pub(crate) struct LogArchiveStatus {
+    pub enabled: bool,
+    pub dir: Option<PathBuf>,
+    /// Last commit confirmed durable in the archive.
+    pub archived_commit_seq: u64,
+    /// The failure that stopped the current archive handle; `None` while
+    /// archiving runs.
+    pub failure: Option<bicdb_core::WriteFailure>,
+    /// The most recent failure, kept after a recovery.
+    pub last_failure: Option<bicdb_core::WriteFailure>,
+    pub failures_total: u64,
+    /// Times a new handle discarded and rewrote an unconfirmed suffix.
+    pub recoveries_total: u64,
+    /// Commits discarded (and rewritten from the log) by those recoveries.
+    pub rewritten_commits_total: u64,
+}
+
+fn update_status(server: &PgWireServer, update: impl FnOnce(&mut LogArchiveStatus)) {
+    if let Ok(mut status) = server.log_archive_status.lock() {
+        update(&mut status);
+    }
+}
 
 /// Replication settings that make a server without standbys keep complete
 /// commit frames for its archive.
@@ -78,12 +110,32 @@ pub(crate) fn start(server: Arc<PgWireServer>) -> Result<()> {
         }
         None => root,
     };
-    let mut archive = LogArchive::open(&dir, server.config.fsync).map_err(PgWireError::from)?;
+    // Discards and rewrites whatever an earlier run wrote but never
+    // confirmed (it failed, or crashed before advancing the log hold).
+    let (mut archive, rewritten) = {
+        let db = server.read_db()?;
+        let mut archive = LogArchive::open(&dir, server.config.fsync).map_err(PgWireError::from)?;
+        let rewritten = db
+            .reconcile_log_archive(&mut archive)
+            .map_err(PgWireError::from)?;
+        (archive, rewritten)
+    };
     eprintln!(
-        "bicdb log archive: {} (archived through commit {})",
+        "bicdb log archive: {} (archived through commit {}{})",
         dir.display(),
-        archive.last_commit_seq()
+        archive.last_commit_seq(),
+        if rewritten > 0 {
+            format!("; rewriting {rewritten} unconfirmed commit(s) from the log")
+        } else {
+            String::new()
+        }
     );
+    update_status(&server, |status| {
+        status.enabled = true;
+        status.dir = Some(dir.clone());
+        status.archived_commit_seq = archive.last_commit_seq();
+        status.rewritten_commits_total += rewritten;
+    });
     let worker = BackgroundWorker::register(Arc::clone(&server));
     std::thread::Builder::new()
         .name("bicdb-log-archiver".to_string())
@@ -91,6 +143,7 @@ pub(crate) fn start(server: Arc<PgWireServer>) -> Result<()> {
             let _worker = worker;
             let mut cursor = ReplicationCursor::new(archive.last_commit_seq());
             let mut last_error = None::<String>;
+            let mut next_recovery = None::<Instant>;
             let mut next_base = Instant::now();
             let mut next_verify = Instant::now();
             let mut base_task: Option<
@@ -102,6 +155,46 @@ pub(crate) fn start(server: Arc<PgWireServer>) -> Result<()> {
                 >,
             > = None;
             while !server.is_shutdown_requested() {
+                if next_recovery.is_some_and(|at| Instant::now() >= at) {
+                    // A failed handle is never retried. A new one discards
+                    // what the failed handle wrote after its last confirmed
+                    // commit and rewrites it from the transaction log, which
+                    // the hold kept.
+                    let reopened = server
+                        .read_db()
+                        .map_err(|error| error.to_string())
+                        .and_then(|db| {
+                            let mut fresh = LogArchive::open(&dir, server.config.fsync)
+                                .map_err(|error| error.to_string())?;
+                            let rewritten = db
+                                .reconcile_log_archive(&mut fresh)
+                                .map_err(|error| error.to_string())?;
+                            Ok((fresh, rewritten))
+                        });
+                    match reopened {
+                        Ok((fresh, rewritten)) => {
+                            archive = fresh;
+                            cursor = ReplicationCursor::new(archive.last_commit_seq());
+                            next_recovery = None;
+                            last_error = None;
+                            eprintln!(
+                                "bicdb log archive: resumed at commit {} with a new handle \
+                                 ({rewritten} unconfirmed commit(s) discarded for rewriting)",
+                                archive.last_commit_seq()
+                            );
+                            update_status(&server, |status| {
+                                status.failure = None;
+                                status.recoveries_total += 1;
+                                status.rewritten_commits_total += rewritten;
+                                status.archived_commit_seq = archive.last_commit_seq();
+                            });
+                        }
+                        Err(error) => {
+                            eprintln!("bicdb log archive: recovery failed: {error}");
+                            next_recovery = Some(Instant::now() + RECOVERY_BACKOFF);
+                        }
+                    }
+                }
                 if base_task.as_ref().is_some_and(|task| task.is_finished()) {
                     let result = base_task
                         .take()
@@ -243,6 +336,10 @@ pub(crate) fn start(server: Arc<PgWireServer>) -> Result<()> {
                         }
                     }
                 }
+                if archived.is_ok() {
+                    let confirmed = archive.last_commit_seq();
+                    update_status(&server, |status| status.archived_commit_seq = confirmed);
+                }
                 match archived {
                     Ok(0) => {
                         last_error = None;
@@ -250,10 +347,30 @@ pub(crate) fn start(server: Arc<PgWireServer>) -> Result<()> {
                     }
                     Ok(_) => last_error = None,
                     Err(error) => {
-                        if last_error.as_ref() != Some(&error) {
+                        if let Some(failure) = archive.failure() {
+                            if next_recovery.is_none() {
+                                // Loud: the archive is stopped and the local
+                                // log grows until a new handle catches up.
+                                eprintln!(
+                                    "bicdb log archive: ARCHIVE FAILED at {}: {}; archiving is \
+                                     stopped at commit {}, the transaction log is retained, and \
+                                     a new handle will rewrite the unconfirmed suffix in {}s",
+                                    failure.site,
+                                    failure.error,
+                                    archive.last_commit_seq(),
+                                    RECOVERY_BACKOFF.as_secs()
+                                );
+                                next_recovery = Some(Instant::now() + RECOVERY_BACKOFF);
+                                update_status(&server, |status| {
+                                    status.failure = Some(failure.clone());
+                                    status.last_failure = Some(failure.clone());
+                                    status.failures_total += 1;
+                                });
+                            }
+                        } else if last_error.as_ref() != Some(&error) {
                             eprintln!("bicdb log archive: {error}");
-                            last_error = Some(error);
                         }
+                        last_error = Some(error);
                         std::thread::sleep(Duration::from_secs(5));
                     }
                 }
@@ -527,6 +644,132 @@ mod streaming_during_base_tests {
         assert!(
             server.wait_for_background_quiesce(Duration::from_secs(5)),
             "copy or archive worker leaked past shutdown"
+        );
+    }
+}
+
+#[cfg(test)]
+mod fail_closed_tests {
+    use super::*;
+    use bicdb_core::log_archive::{read_log_archive, ReplayTarget};
+    use bicdb_core::{BicDb, DbConfig, Record, StorageMode, LOG_ARCHIVE_HOLDER};
+
+    struct Running(Arc<PgWireServer>);
+    impl Drop for Running {
+        fn drop(&mut self) {
+            self.0.request_shutdown();
+            let _ = self.0.wait_for_background_quiesce(Duration::from_secs(5));
+        }
+    }
+
+    fn wait_for(what: &str, mut done: impl FnMut() -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while !done() {
+            assert!(Instant::now() < deadline, "timed out waiting for {what}");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    /// The server's archiver stops at the first failure (loudly: status and
+    /// metrics), keeps the hold where it was, does not retry the handle, and
+    /// a new handle rewrites the suffix so the archive is complete again.
+    #[test]
+    fn a_failed_archive_append_stops_the_archiver_visibly_and_a_new_handle_resumes() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("db");
+        let directory = root.path().join("archive");
+        {
+            let mut db = BicDb::open_with_config(
+                &path,
+                DbConfig::default()
+                    .with_storage_mode(StorageMode::EmbeddedMemory)
+                    .with_replication(local_replication()),
+            )
+            .unwrap();
+            db.create_collection("rows").unwrap();
+        }
+        let mut config = PgWireConfig::default();
+        config.log_archive = Some(LogArchiveConfig {
+            dir: directory.clone(),
+            base_backup_key: None,
+            base_backup_interval: Duration::from_secs(3600),
+            keep_base_backups: 1,
+        });
+        let server = PgWireServer::open(&path, config).unwrap();
+        let _running = Running(Arc::clone(&server));
+        start(Arc::clone(&server)).unwrap();
+        let commit = |id: &str| {
+            let mut db = server.db.write();
+            db.insert("rows", Record::new(id)).unwrap();
+            db.last_applied_commit_seq()
+        };
+        let archived = || {
+            server
+                .log_archive_status
+                .lock()
+                .unwrap()
+                .archived_commit_seq
+        };
+        let first = commit("before");
+        wait_for("the first archive round", || archived() >= first);
+        let hold = || {
+            server
+                .read_db()
+                .unwrap()
+                .sync_quorum()
+                .holds()
+                .get(LOG_ARCHIVE_HOLDER)
+                .copied()
+        };
+        assert_eq!(hold(), Some(first));
+
+        let guard =
+            bicdb_page::test_faults::arm_io_failure("log_archive.write", &directory, 1, false);
+        let second = commit("during");
+        wait_for("the failure to be reported", || {
+            server.log_archive_status.lock().unwrap().failure.is_some()
+        });
+        let status = server.log_archive_status.lock().unwrap().clone();
+        assert_eq!(status.failure.as_ref().unwrap().site, "log_archive.write");
+        assert_eq!(status.failures_total, 1);
+        assert_eq!(
+            status.archived_commit_seq, first,
+            "nothing past the failure is confirmed"
+        );
+        assert_eq!(
+            hold(),
+            Some(first),
+            "the hold must not advance past a failed append"
+        );
+        let metrics = crate::metrics::render(&server).unwrap();
+        assert!(metrics.contains("bicdb_log_archive_failed 1"), "{metrics}");
+        assert!(server.read_db().unwrap().durability_state().is_healthy());
+
+        // A new handle (after the backoff) rewrites the unconfirmed suffix.
+        wait_for("the archiver to resume", || {
+            let status = server.log_archive_status.lock().unwrap();
+            status.failure.is_none() && status.recoveries_total == 1
+        });
+        let third = commit("after");
+        wait_for("the archive to catch up", || archived() >= third);
+        assert!(second < third);
+        assert_eq!(guard.fired(), 1);
+        assert_eq!(hold(), Some(third));
+        let mut seen = Vec::new();
+        read_log_archive(&directory, 0, ReplayTarget::default(), |frame| {
+            seen.push(frame.commit_seq);
+            Ok(true)
+        })
+        .unwrap();
+        let start = *seen.first().unwrap();
+        assert_eq!(seen, (start..=third).collect::<Vec<_>>());
+        let status = server.log_archive_status.lock().unwrap().clone();
+        assert_eq!(status.last_failure.unwrap().site, "log_archive.write");
+        let metrics = crate::metrics::render(&server).unwrap();
+        assert!(metrics.contains("bicdb_log_archive_failed 0"), "{metrics}");
+        assert!(
+            metrics.contains("bicdb_log_archive_recoveries_total 1"),
+            "{metrics}"
         );
     }
 }

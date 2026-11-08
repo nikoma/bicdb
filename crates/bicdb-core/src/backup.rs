@@ -2018,7 +2018,12 @@ fn collect_source_files_inner(
             .file_name()
             .and_then(|name| name.to_str())
             .is_some_and(|name| {
-                name.starts_with(".backup-") || name == "backup-source.json" || name == "store.lock"
+                name.starts_with(".backup-")
+                    || name == "backup-source.json"
+                    || name == "store.lock"
+                    // Archive retention belongs to the archiving node, not
+                    // to its data: a restored copy must not inherit it.
+                    || name == "store.wal-archive-retention"
             })
             || exclude.is_some_and(|exclude| {
                 paths_identical(&path, exclude)

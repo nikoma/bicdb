@@ -421,6 +421,14 @@ impl WritebackStepReport {
 pub trait WritebackBarrier: Send + Sync + std::fmt::Debug {
     /// Ensure `bytes` for `page_id` are recoverable before they reach disk.
     fn before_writeback(&self, page_id: PageId, transaction: u64, bytes: &[u8]) -> Result<()>;
+
+    /// Ensure a dirty page whose after-image is ALREADY logged (no new record
+    /// is needed) may reach disk: every log record that could describe it
+    /// must be durable. The default suits owners whose logged images are
+    /// always durable by the time logging returns.
+    fn before_logged_writeback(&self, _page_id: PageId) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// One cached page.
@@ -1662,6 +1670,13 @@ impl BufferPool {
         // to a crash, silently.
         if frame.needs_log.load(Ordering::Acquire) {
             self.barrier_for(page_id, frame.dirtied_by.load(Ordering::Acquire), &bytes)?;
+        } else {
+            // Logged already, but possibly by a commit whose log record is
+            // not durable yet (a deferred commit): the owner decides.
+            let barrier = self.barrier.lock().clone();
+            if let Some(barrier) = barrier {
+                barrier.before_logged_writeback(page_id)?;
+            }
         }
         self.store.write_page(page_id, &mut bytes)?;
         // Clear only after the page write succeeds. A failed write remains

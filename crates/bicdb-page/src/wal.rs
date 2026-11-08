@@ -256,6 +256,10 @@ pub struct Wal {
     /// Active-file offset covered by the last successful sync. Only
     /// power-loss emulation in tests reads it.
     synced_offset: AtomicU64,
+    /// Highest LSN of a commit record appended by [`Self::commit_unsynced`]
+    /// (0: none). Page writeback syncs through it first, see
+    /// [`Self::sync_deferred_commits`].
+    deferred_commit_lsn: AtomicU64,
     sync_state: Mutex<SyncState>,
     sync_signal: Condvar,
     fsync: bool,
@@ -392,6 +396,7 @@ impl Wal {
             next_lsn: AtomicU64::new(initial_lsn),
             end_offset: AtomicU64::new(end_offset),
             synced_offset: AtomicU64::new(end_offset),
+            deferred_commit_lsn: AtomicU64::new(0),
             sync_state: Mutex::new(SyncState {
                 durable_lsn: 0,
                 syncing: false,
@@ -628,7 +633,7 @@ impl Wal {
     ///
     /// Returns after the commit record is on disk, never before.
     pub fn commit(&self, transaction: u64) -> Result<Lsn> {
-        let lsn = self.commit_unsynced(transaction)?;
+        let lsn = self.append_commit(transaction)?;
         // Recorded before the sync: the record is in the log whether or not
         // the fsync below succeeds, and it is the record's existence that
         // must forbid a later abort for the same transaction.
@@ -641,6 +646,35 @@ impl Wal {
     /// on it surviving a crash. Only for transactions whose redo is durable
     /// elsewhere, so that losing this record loses nothing.
     pub fn commit_unsynced(&self, transaction: u64) -> Result<Lsn> {
+        let lsn = self.append_commit(transaction)?;
+        self.deferred_commit_lsn.fetch_max(lsn, Ordering::AcqRel);
+        Ok(lsn)
+    }
+
+    /// Make every commit record appended by [`Self::commit_unsynced`] so far
+    /// durable. A no-op when there is none, or when it is already durable.
+    ///
+    /// The writeback barrier needs this. A page whose after-image was already
+    /// logged (by a commit's `log_dirty_pages`) is written back without a new
+    /// log record, and with a synced commit that was safe: logged implied
+    /// durable. A deferred commit breaks that implication, so before such a
+    /// page reaches the page file the log is synced through the deferred
+    /// commits that may have logged it (WAL before data, I5).
+    pub fn sync_deferred_commits(&self) -> Result<()> {
+        let lsn = self.deferred_commit_lsn.load(Ordering::Acquire);
+        if lsn == 0 {
+            return Ok(());
+        }
+        self.sync_through(lsn)
+    }
+
+    /// Test support: the active-file offset the last successful sync covered.
+    #[cfg(test)]
+    pub(crate) fn synced_offset_for_test(&self) -> u64 {
+        self.synced_offset.load(Ordering::Acquire)
+    }
+
+    fn append_commit(&self, transaction: u64) -> Result<Lsn> {
         if !self.committed_this_generation.lock().insert(transaction) {
             return Err(PageError::InvalidMaintenanceLimits {
                 reason: format!(

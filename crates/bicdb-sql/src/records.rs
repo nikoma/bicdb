@@ -2823,6 +2823,10 @@ pub(crate) struct RlsFilter {
     table: String,
     permissive: Vec<(String, Expr)>,
     restrictive: Vec<(String, Expr)>,
+    // The table's typed columns: policies are evaluated with the column
+    // types a WHERE clause on the table sees (character padding, numeric
+    // and temporal comparison), not on the untyped stored values.
+    env: Vec<RelationColumns>,
 }
 
 pub(crate) enum RlsRowVerdict {
@@ -3206,10 +3210,15 @@ impl RlsFilter {
     ) -> Result<RlsRowVerdict> {
         let row = row_from_record(&self.table, &self.table, Some(schema), record)?;
         let context = policy_context_hash(engine);
+        let holds = |expr: &Expr| -> Result<bool> {
+            Ok(engine
+                .eval_row_truth_typed(&row, expr, &self.env)?
+                .unwrap_or(false))
+        };
         let mut admitted = false;
         for (_, expr) in &self.permissive {
             let expr = fold_policy_init_plans(engine, expr, context)?;
-            if engine.eval_row_predicate(&row, &expr)? {
+            if holds(&expr)? {
                 admitted = true;
                 break;
             }
@@ -3219,7 +3228,7 @@ impl RlsFilter {
         }
         for (name, expr) in &self.restrictive {
             let expr = fold_policy_init_plans(engine, expr, context)?;
-            if !engine.eval_row_predicate(&row, &expr)? {
+            if !holds(&expr)? {
                 return Ok(RlsRowVerdict::Denied(Some(name.clone())));
             }
         }
@@ -3317,10 +3326,31 @@ pub(crate) fn prepare_rls_with_schema(
             restrictive.push((policy.name.clone(), expr));
         }
     }
+    let short = table
+        .rsplit('.')
+        .next()
+        .unwrap_or(table)
+        .to_ascii_lowercase();
+    let env = vec![RelationColumns {
+        alias: short.clone(),
+        row_type: Some(short),
+        columns: schema
+            .columns
+            .iter()
+            .filter(|column| !column.hidden)
+            .map(|column| {
+                (
+                    column.name.to_ascii_lowercase(),
+                    Some(column.pg_type.clone()),
+                )
+            })
+            .collect(),
+    }];
     Ok(PreparedRls::Filter(RlsFilter {
         table: table.to_string(),
         permissive,
         restrictive,
+        env,
     }))
 }
 

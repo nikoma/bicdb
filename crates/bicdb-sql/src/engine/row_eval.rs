@@ -317,17 +317,32 @@ impl<'db> SqlEngine<'db> {
                 } else {
                     left_type.clone().or_else(|| right_type.clone())
                 };
+                // character = text resolves to text = text in PostgreSQL: the
+                // character side loses its trailing padding, the text side
+                // keeps its spaces.
+                let character_text =
+                    bpchar_text_comparison(left_type.as_deref(), right_type.as_deref());
+                let pg_type = if character_text.is_some() {
+                    Some("text".to_string())
+                } else {
+                    pg_type
+                };
                 let Some(pg_type) = pg_type else {
                     return self.eval_row_truth(row, expr);
                 };
-                let left = enforce_integer_value_type(
+                let mut left = enforce_integer_value_type(
                     self.eval_row_value(row, left)?,
                     left_type.as_deref(),
                 )?;
-                let right = enforce_integer_value_type(
+                let mut right = enforce_integer_value_type(
                     self.eval_row_value(row, right)?,
                     right_type.as_deref(),
                 )?;
+                match character_text {
+                    Some(CharacterSide::Left) => left = bpchar_as_text(left),
+                    Some(CharacterSide::Right) => right = bpchar_as_text(right),
+                    None => {}
+                }
                 if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
                     return Ok(None);
                 }
@@ -3727,5 +3742,32 @@ mod memo_eligibility_tests {
             };
             assert_eq!(subquery_is_memoizable(&db, query), expected, "{source}");
         }
+    }
+}
+
+pub(crate) enum CharacterSide {
+    Left,
+    Right,
+}
+
+/// Which operand of a comparison is `character(n)` when the other is
+/// `text`/`varchar`: PostgreSQL then compares as text, the character value
+/// cast to text (trailing spaces removed).
+pub(crate) fn bpchar_text_comparison(
+    left: Option<&str>,
+    right: Option<&str>,
+) -> Option<CharacterSide> {
+    let text = |pg_type: Option<&str>| matches!(pg_type, Some("text" | "varchar"));
+    match (left, right) {
+        (Some("bpchar"), right) if text(right) => Some(CharacterSide::Left),
+        (left, Some("bpchar")) if text(left) => Some(CharacterSide::Right),
+        _ => None,
+    }
+}
+
+pub(crate) fn bpchar_as_text(value: SqlValue) -> SqlValue {
+    match value {
+        SqlValue::String(text) => SqlValue::String(text.trim_end_matches(' ').to_string()),
+        other => other,
     }
 }

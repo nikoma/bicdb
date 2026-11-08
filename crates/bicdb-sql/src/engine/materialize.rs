@@ -3157,10 +3157,9 @@ impl<'db> SqlEngine<'db> {
                 else_result,
                 ..
             } => {
-                let mut branches: Vec<&Expr> = conditions.iter().map(|when| &when.result).collect();
-                if let Some(else_result) = else_result {
-                    branches.push(else_result);
-                }
+                // PostgreSQL considers ELSE first, then each WHEN result.
+                let mut branches: Vec<&Expr> = else_result.iter().map(|result| &**result).collect();
+                branches.extend(conditions.iter().map(|when| &when.result));
                 self.common_branch_type(&branches, env)
             }
             Expr::Subquery(query) => self.scalar_query_output_type(query),

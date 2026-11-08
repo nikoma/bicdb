@@ -792,6 +792,17 @@ pub(crate) fn coerce_common_json_value(value: SqlValue, pg_type: Option<&str>) -
     }
 }
 
+/// A type as PostgreSQL's messages spell it (`integer`, `timestamp without
+/// time zone`); user-defined types keep their own names.
+pub(crate) fn common_type_display(pg_type: &str) -> String {
+    if let Some(element) = pg_type.strip_suffix("[]") {
+        return format!("{}[]", common_type_display(element));
+    }
+    pg_type_spec(pg_type)
+        .map(|spec| spec.display_name.to_string())
+        .unwrap_or_else(|| pg_type.to_string())
+}
+
 pub(crate) fn common_type_implicit_direction(from: &str, to: &str) -> bool {
     pg_cast_allows(from, to, PgCastContext::Implicit)
 }
@@ -896,11 +907,13 @@ pub(crate) fn select_common_pg_type(
             "42804",
             format!(
                 "{construct} types {} and {} cannot be matched",
-                flattened[0],
-                flattened
-                    .iter()
-                    .find(|pg_type| common_type_category(db, pg_type).ok() != Some(category))
-                    .unwrap_or(&flattened[1])
+                common_type_display(&flattened[0]),
+                common_type_display(
+                    flattened
+                        .iter()
+                        .find(|pg_type| common_type_category(db, pg_type).ok() != Some(category))
+                        .unwrap_or(&flattened[1])
+                )
             ),
             None,
         ));
@@ -925,11 +938,13 @@ pub(crate) fn select_common_pg_type(
             "42804",
             format!(
                 "{construct} types {} and {} cannot be matched",
-                candidate,
-                flattened
-                    .iter()
-                    .find(|pg_type| !common_type_implicit_direction(pg_type, &candidate))
-                    .unwrap_or(&flattened[0])
+                common_type_display(&candidate),
+                common_type_display(
+                    flattened
+                        .iter()
+                        .find(|pg_type| !common_type_implicit_direction(pg_type, &candidate))
+                        .unwrap_or(&flattened[0])
+                )
             ),
             None,
         ));

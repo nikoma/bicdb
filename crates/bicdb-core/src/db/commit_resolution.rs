@@ -100,6 +100,9 @@ pub(crate) fn record_incarnation(
     recovered_through_seq: u64,
     fsync: bool,
 ) -> Result<()> {
+    // Shared backup write gate: an online backup streams this directory and
+    // must never see the journal change under it.
+    let _backup_gate = crate::storage::acquire_database_backup_write_guard(root)?;
     let path = root.join(INCARNATION_JOURNAL);
     let created = !path.exists();
     let record = IncarnationRecord {

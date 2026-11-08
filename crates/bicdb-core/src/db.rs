@@ -15235,8 +15235,10 @@ impl Transaction {
 
     pub fn get(&self, collection: &str, id: &str) -> Result<Option<Arc<Record>>> {
         let db = self.db_ref();
+        db.check_recovery_state()?;
         db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
-        self.get_visible_unchecked(collection, id)
+        let result = self.get_visible_unchecked(collection, id);
+        self.fenced(result)
     }
 
     /// Reserve a snapshot-visible row without changing it. The caller must
@@ -16825,30 +16827,54 @@ impl Transaction {
         }
     }
 
+    /// A transaction on a fenced database reports the fence (58030), not
+    /// whatever its operation tripped over. Once a commit's materialization
+    /// failed, rows it touched can have resident versions the page store
+    /// never committed; reading one is not corruption but the fence.
+    fn fenced<T>(&self, result: Result<T>) -> Result<T> {
+        let db = self.db_ref();
+        db.check_recovery_state()?;
+        match result {
+            Err(error) if !error.is_durability_failure() => {
+                db.check_recovery_state()?;
+                Err(error)
+            }
+            other => other,
+        }
+    }
+
     pub fn insert(&mut self, collection: &str, record: Record) -> Result<()> {
-        self.write_upsert(collection, record)
+        self.db_ref().check_recovery_state()?;
+        let result = self.write_upsert(collection, record);
+        self.fenced(result)
     }
 
     pub fn batch_insert<I>(&mut self, collection: &str, records: I) -> Result<()>
     where
         I: IntoIterator<Item = Record>,
     {
+        self.db_ref().check_recovery_state()?;
         let records = records.into_iter().collect::<Vec<_>>();
         if records.is_empty() {
             return Ok(());
         }
-        self.write_upserts(collection, records)
+        let result = self.write_upserts(collection, records);
+        self.fenced(result)
     }
 
     pub fn update(&mut self, collection: &str, record: Record) -> Result<()> {
-        self.write_upsert(collection, record)
+        self.db_ref().check_recovery_state()?;
+        let result = self.write_upsert(collection, record);
+        self.fenced(result)
     }
 
     pub fn delete(&mut self, collection: &str, id: &str) -> Result<()> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
-        self.delete_many(collection, std::iter::once(id))
+        self.db_ref().check_recovery_state()?;
+        let result = self.delete_many(collection, std::iter::once(id));
+        self.fenced(result)
     }
 
     fn conflict_snapshot_for_write(

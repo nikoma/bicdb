@@ -1988,6 +1988,7 @@ impl BicDb {
             let log = self.tx_log_path();
             if log.exists() {
                 self.tx_log.flush_pending()?;
+                let _backup_gate = storage::acquire_database_backup_write_guard(&self.path)?;
                 copy_transaction_log_tail(&log, 0, true)?;
                 self.tx_log.invalidate();
             }

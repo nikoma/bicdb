@@ -281,19 +281,19 @@ fn sealed_segments(dir: &Path) -> Vec<PathBuf> {
     sealed
 }
 
-/// `Wal::reset` truncates the active file first and deletes the sealed
-/// segments after it, oldest first, with no directory sync. A crash (or a
-/// power cut before the next journal commit) between the two leaves sealed
-/// segments whose records all predate the published checkpoint horizon,
-/// next to an empty active file.
+/// GAP-2 in `docs/recovery-semantics.md`. `Wal::reset` used to truncate the
+/// active file first and delete the sealed segments after it, with no
+/// directory sync. A crash (or a power cut before the next journal commit)
+/// between the two left sealed segments whose records all predate the
+/// published checkpoint horizon, next to an empty active file. Recovery then
+/// found no checkpoint record, replayed that chain over newer pages, and the
+/// first record appended after the reopen did not continue it, so the next
+/// recovery truncated the whole active file as a torn tail.
 ///
-/// GAP-2 in `docs/recovery-semantics.md`: recovery finds no checkpoint record
-/// in that chain, replays it from the start, and writes older committed page
-/// images over newer pages. Then the first record appended after the reopen
-/// carries the horizon LSN, which does not continue the stale chain, so the
-/// next recovery truncates the whole active file as a torn tail.
+/// The reset now deletes first, and recovery recognises the shape an older
+/// engine leaves: it replays nothing and finishes the reset. This test builds
+/// that shape directly.
 #[test]
-#[ignore = "GAP-2: an interrupted log reset replays stale segments and gaps the chain"]
 fn an_interrupted_log_reset_neither_regresses_pages_nor_loses_later_commits() {
     let dir = TempDir::new().unwrap();
     let hot = b"hot".to_vec();
@@ -357,7 +357,16 @@ fn an_interrupted_log_reset_neither_regresses_pages_nor_loses_later_commits() {
 
     let mut failures = Vec::new();
     {
-        let (store, _) = PagedStore::open(dir.path(), segmented_options()).unwrap();
+        let (store, report) = PagedStore::open(dir.path(), segmented_options()).unwrap();
+        if report.stale_records_discarded == 0 || report.pages_replayed != 0 {
+            failures.push(format!(
+                "the stale chain was not recognised: {} records discarded, {} pages replayed",
+                report.stale_records_discarded, report.pages_replayed
+            ));
+        }
+        if !sealed_segments(dir.path()).is_empty() {
+            failures.push("recovery did not finish the interrupted reset".to_string());
+        }
         let found = store.get(&hot).unwrap();
         if found.as_deref() != Some(final_value.as_slice()) {
             failures.push(format!(

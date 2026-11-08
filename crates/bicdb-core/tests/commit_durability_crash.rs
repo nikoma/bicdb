@@ -556,6 +556,14 @@ fn fail_io_case(mode: &str, spec: &str) {
     } else {
         command.env_remove("DURABILITY_POOL_BYTES");
     }
+    if has_flag(mode, "segments") {
+        command.env(
+            "DURABILITY_WAL_SEGMENT_BYTES",
+            SMALL_SEGMENT_BYTES.to_string(),
+        );
+    } else {
+        command.env_remove("DURABILITY_WAL_SEGMENT_BYTES");
+    }
     let output = command.output().expect("run durability child");
     assert!(
         output.status.success(),
@@ -585,9 +593,38 @@ fn fail_io_case(mode: &str, spec: &str) {
     drop(keep);
 }
 
+/// Every step of the page-log reset, with sealed segments present: a failed
+/// segment unlink (first and a later one), directory sync, truncation and
+/// truncation sync. Each must fence the database and recover every
+/// acknowledged commit. Opening a new database resets the log twice (the
+/// fresh store's checkpoint and the recovery checkpoint), so truncation
+/// counts start above that.
+const RESET_FAIL_IO_SPECS: &[&str] = &[
+    "page_log.reset_unlink:1",
+    "page_log.reset_unlink:4",
+    "page_log.reset_dir_sync:1",
+    "page_log.reset_dir_sync:3",
+    "page_log.reset:4",
+    "page_log.reset_sync:4",
+];
+
+#[test]
+fn production_path_fails_closed_at_every_log_reset_step() {
+    run_specs("all-logs+segments", RESET_FAIL_IO_SPECS);
+}
+
+#[test]
+fn production_path_fails_closed_at_every_log_reset_step_with_eviction() {
+    run_specs("all-logs+small-pool+segments", RESET_FAIL_IO_SPECS);
+}
+
 fn fail_io_matrix(mode: &'static str) {
+    run_specs(mode, FAIL_IO_SPECS);
+}
+
+fn run_specs(mode: &'static str, specs: &'static [&'static str]) {
     run_matrix(
-        FAIL_IO_SPECS
+        specs
             .iter()
             .map(|&spec| {
                 (
@@ -804,20 +841,35 @@ fn transaction_log_only_path_survives_interrupted_checkpoints() {
     );
 }
 
-/// GAP-2: a crash inside the page-log reset while sealed segments exist. The
-/// reset truncates the active file before it deletes the sealed segments, so
-/// recovery finds a stale chain with no checkpoint record and replays it over
-/// newer pages.
+/// GAP-2: a crash at every step of the page-log reset while sealed segments
+/// exist. The reset used to truncate the active file before deleting the
+/// sealed segments, and a crash in between replayed a stale chain over newer
+/// pages (3 of 4 cases lost acknowledged commits). It now deletes the
+/// segments first and truncates the active file last.
 #[test]
-#[ignore = "GAP-2: an interrupted page-log reset replays stale sealed segments"]
-fn gap2_production_path_survives_an_interrupted_log_reset() {
+fn production_path_survives_an_interrupted_log_reset() {
     matrix(
         "all-logs+segments",
         vec![
-            "wal_reset.after_active_truncate:2",
-            "wal_reset.after_active_truncate:6",
             "wal_reset.after_segment_delete:1",
             "wal_reset.after_segment_delete:4",
+            "wal_reset.after_segments_removed:2",
+            "wal_reset.after_segments_removed:6",
+            "wal_reset.after_active_truncate:2",
+            "wal_reset.after_active_truncate:6",
+        ],
+        &[],
+    );
+}
+
+#[test]
+fn production_path_survives_an_interrupted_log_reset_with_eviction() {
+    matrix(
+        "all-logs+small-pool+segments",
+        vec![
+            "wal_reset.after_segment_delete:2",
+            "wal_reset.after_segments_removed:3",
+            "wal_reset.after_active_truncate:4",
         ],
         &[],
     );

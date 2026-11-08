@@ -229,7 +229,7 @@ what recovery does. Line numbers are at the time of writing.
 | Page-log append (`page_log.write`) | `Wal::append`, `crates/bicdb-page/src/wal.rs:593` | Error | Yes: next append followed a torn record → No | Torn tail truncated; stops at the first bad record |
 | Page-log sync (`page_log.sync`) | `Wal::sync_through`, `wal.rs:772` | Error to the syncer; **waiters retried their own fsync** | **Yes** (the qualification finding) → No; waiters fail; `durable_lsn` frozen | Replays committed images after the redo point |
 | Segment seal sync / rename / directory sync (`page_log.seal_sync`, `page_log.seal_rename`, `page_log.seal_dir_sync`) | `Wal::seal_active_locked`, `wal.rs:523` | Error for sync and rename; **directory sync ignored** | Yes → No | Sealed segments discovered and replayed in order |
-| Log reset at checkpoint (`page_log.reset`) | `Wal::reset`, `wal.rs:1058` | Error | Yes → No | A sealed segment left behind would be replayed over newer pages; now fenced |
+| Log reset at checkpoint (`page_log.reset_unlink`, `page_log.reset_dir_sync`, `page_log.reset`, `page_log.reset_sync`) | `Wal::reset` | Error | Yes → No | Crash-ordered (`docs/recovery-semantics.md`, GAP-2): sealed segments are deleted oldest first and the directory synced before the active file, which holds the checkpoint record, is truncated and synced. A failure or crash at any step leaves a chain that still reaches the checkpoint record, or an empty log. A stale chain left by an older engine is recognised at recovery and the reset finished |
 | Checkpoint record | `Wal::checkpoint`, `wal.rs:856` (append + sync) | Error | Yes → No | Redo point from the superblock horizon |
 | `finish_checkpoint` | `wal.rs:1524` (log sync, page flush, record, `publish_root`, reset) | Error | Yes → No | As above |
 | Page-file sync (`page_file.sync`) | `PageStore::sync_data_observed`, `crates/bicdb-page/src/manager.rs:2466`; used by `flush`, `publish_root` (superblock), `flush_all`, tail reclaim | Error; dirty set kept for a retry | **Yes** (a retried sync could succeed and let the checkpoint truncate the log) → No | Replays the log from the redo point |
@@ -280,7 +280,9 @@ The recorded `site` and the injection name are the same strings.
 |---|---|
 | `page_log.write`, `page_log.sync` | `Wal::append`, `Wal::sync_through` |
 | `page_log.seal_sync`, `page_log.seal_dir_sync` | `Wal::seal_active_locked` (rename failures record `page_log.seal_rename`) |
-| `page_log.reset` | `Wal::reset` (truncate; sealed-segment removal records the same site) |
+| `page_log.reset_unlink` | `Wal::reset`, each sealed-segment deletion |
+| `page_log.reset_dir_sync` | `Wal::reset`, the directory sync after the deletions |
+| `page_log.reset`, `page_log.reset_sync` | `Wal::reset`, the active-file truncation and its sync |
 | `page_file.write` | `PageStore::write_page_raw` (not fatal) |
 | `page_file.sync` | `PageStore::sync_data_observed` |
 | `transaction_log.write` | `storage::write_raw`, before the write |
@@ -364,13 +366,10 @@ Mutation checks (each mutation applied alone; the named tests must fail):
 
 ## 10. Known gaps (outside this change)
 
-- **Partial page-log reset.** If removing the sealed segments fails part way
-  through `Wal::reset`, or the process crashes there, the next recovery can
-  lose checkpointed pages. Fencing stops this handle, but it does **not**
-  make the on-disk state a partial reset leaves safe. Until the
-  recovery-side fix (follow-up 1, "GAP-2") lands, treat a `page_log.reset`
-  failure as needing that fix or a restore. It is scheduled to land
-  directly after this change.
+- **Partial page-log reset: fixed** (GAP-2, `docs/recovery-semantics.md`
+  4.4). `Wal::reset` is crash-ordered: segments deleted, directory synced,
+  active file truncated and synced last. Recovery finishes an interrupted
+  reset, and refuses any other short chain.
 - **Reopening mid-migration.** A store whose online extent migration
   stopped before it had created every segment its page count implies does
   not reopen (`SegmentMissing`). This happens whether the migration step

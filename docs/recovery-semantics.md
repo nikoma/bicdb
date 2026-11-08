@@ -102,12 +102,21 @@ One scan over the chain (`wal.rs:1260-1296`):
   corruption and open fails (`wal.rs:1297-1303`). `Wal::abort` refuses to
   write an abort after a commit in the same generation, so the pair is
   unwritable (`wal.rs:723`).
-- The redo point is the `redo_lsn` of the **last** `Checkpoint` record in the
-  chain (`wal.rs:1290`).
-- The redo point is used only if the page file's own horizon vouches for it,
-  that is `H >= redo_lsn`. Otherwise recovery replays from LSN 0
-  (`wal.rs:1304-1317`). This covers a restored base whose superblock predates
-  later checkpoints in an archived log.
+- **The redo point is the page file's horizon `H`** (`checkpoint_lsn` in
+  the superblock), not a checkpoint record's `redo_lsn`. `H` is published
+  only after every page dirtied before it is durable (3.4), so every image
+  below `H` is already in these pages. For the store's own log the two
+  agree, because a checkpoint record's redo point is at or below the horizon
+  its checkpoint published. They differ for a roll-forward restore over an
+  older base (later records describe the source's page files) and for a
+  stale chain (GAP-2). In both cases `H` is exact, where the code used to
+  fall back to LSN 0. `H = 0` (a new or pre-horizon store) replays the
+  whole chain. *(Changed by the GAP-2 fix; before it, a record's redo point
+  was used when `H >= redo_lsn` and LSN 0 otherwise.)*
+- **A chain that ends before `H - 1`** holds only records below the horizon
+  and lacks the checkpoint record. Recovery replays nothing, finishes the
+  interrupted reset (`Wal::reset`) before anything is appended, and reports
+  `stale_records_discarded`.
 - The highest xid named by any record is kept (`wal.rs:1263-1268`).
 
 ### 3.3 Pass 2: what is applied
@@ -229,13 +238,14 @@ Crash points: `checkpoint.*`, `checkpoint_step.*`, `wal_reset.*`,
 | Freeze, status spill, meta write (full or bounded) | Spill pages synced, descriptor not yet in a durable meta page; log intact | Old meta page and spill descriptor; the log still holds every outcome. The new spill pages are unreferenced: at worst leaked space, never reachable data. |
 | After log sync / page flush, before the checkpoint record | Pages newer than the last horizon; log intact | Replays from the previous redo point. Full images in LSN order reconverge. |
 | Bounded Drain or Finalize writeback | Some dirty pages written | Same. Every written page's image was synced first (I5, `pool.rs:1661`). GAP-1 applies when a page belongs to an in-flight transaction. |
-| After the checkpoint record, before `publish_root` | Record durable, horizon old | The record's redo point is above `H`, so it is distrusted and replay starts at LSN 0 (`wal.rs:1313`). Correct, slower. |
+| After the checkpoint record, before `publish_root` | Record durable, horizon old | Replay starts at the old horizon `H`. Correct. |
 | After `publish_root`, before or during `reset` with no sealed segments | Horizon `H`, log still full or truncated | Full log: honours the redo point. Truncated: an empty log, nothing to replay. Both are correct. |
-| During `reset` **with sealed segments** | Active truncated, some newer sealed segments left | **GAP-2**, below. |
+| During `reset` **with sealed segments** | Oldest segments deleted, active file intact (it is truncated last) | Replay from `H`; the chain still reaches the checkpoint record. A stale chain left by an older engine is finished at open (GAP-2, fixed). |
 | After `reset`, during tail reclaim or structural frees | Log empty | Nothing to replay. A trailing-page truncation is idempotent. Frees not yet finalized are at worst leaked space. |
 | `wal_seal.after_rename` | Active renamed into a sealed segment, no new active file | `Wal::open` creates an empty active file. The chain is the sealed segments. |
 
-**GAP-2 (an interrupted reset replays stale segments).** `Wal::reset`
+**GAP-2 (an interrupted reset replays stale segments). Fixed**, see the
+end of this subsection. Before the fix, `Wal::reset`
 truncates the active file, which holds the checkpoint record, **before** it
 deletes the sealed segments (`wal.rs:1025` then `wal.rs:1047`). Neither step
 syncs the directory. A crash between them leaves a chain made only of records
@@ -259,6 +269,15 @@ End to end, a crash at `wal_reset.after_active_truncate` or
 acknowledged commits: 3 of 4 cases failed, for example "writer 2
 acknowledged commit 10 but only 9 survived"
 (`gap2_production_path_survives_an_interrupted_log_reset`).
+
+**The fix.** `Wal::reset` now deletes the sealed segments oldest first,
+syncs the directory, then truncates and syncs the active file, which holds
+the checkpoint record. Every step fails closed:
+`page_log.reset_unlink`, `page_log.reset_dir_sync`, `page_log.reset`,
+`page_log.reset_sync`. A crash or failure at any step leaves a chain that
+still reaches the checkpoint record, or an empty log. Recovery replays from
+`H`, and a stale chain left by an older engine is recognised and its reset
+finished (3.2).
 
 ### 4.5 Interrupted log cut
 
@@ -511,7 +530,7 @@ instead (section 10).
 | ID | What the code does not guarantee | Evidence | Severity |
 |---|---|---|---|
 | GAP-1 | Steal without undo: an uncommitted transaction's structural page changes (split leaves and roots, references to pages beyond the persisted page count) survive a crash in the page file. Committed keys of other transactions become unreachable, or reads fail. Pages taken from the free list by the crashed transaction may also still be listed free in the superblock when nothing is replayed (reasoned, not tested). | `recovery_semantics.rs` Q1 tests and `commit_durability_crash.rs::gap1_*` (fail, ignored: 124/150 acknowledged rows lost end to end); `btree.rs:1129`; `paged.rs:2477`; `paged.rs:5319` | Committed-data loss. Needs a crash during a paged transaction after a structural writeback. |
-| GAP-2 | An interrupted `Wal::reset` with sealed segments replays stale images over newer pages, then gaps the LSN chain, so later commits are lost at the next recovery. | `recovery_semantics.rs::an_interrupted_log_reset_neither_regresses_pages_nor_loses_later_commits` and `commit_durability_crash.rs::gap2_*` (fail, ignored: acknowledged commits lost in 3 of 4 crash cases); `wal.rs:1025`, `wal.rs:1047` | Committed-data regression. Sealed segments exist with the default 64 MiB segments. |
+| GAP-2 | **Fixed.** An interrupted `Wal::reset` with sealed segments replayed stale images over newer pages, then gapped the LSN chain, so later commits were lost at the next recovery. | Before the fix, 15-16 of 20 rounds per crash case lost acknowledged commits; after it, 0 of 20. Tests: `recovery_semantics.rs::an_interrupted_log_reset_*`, `wal_reset_ordering.rs`, `commit_durability_crash.rs::production_path_survives_an_interrupted_log_reset*` and `..._fails_closed_at_every_log_reset_step*` | — |
 | GAP-3 | Mid-log corruption in either log is treated as a torn tail and silently truncates later, possibly acknowledged, records. | `storage.rs:700-790`; `wal.rs:1130`, `wal.rs:984` | Silent loss on media corruption. Detection only. |
 | GAP-4 | A page log that starts above the page file's horizon (lost prefix) is accepted, and its suffix is replayed onto pages that lack the missing changes. | `wal.rs:1246` (no check) | Closed by the Q2 change. |
 
@@ -521,7 +540,7 @@ instead (section 10).
    the published horizon. This rejects only provably inconsistent states
    (8, Q2), so it is in a separate change. The error is `WalCorruption` with
    both LSNs.
-2. **GAP-2.** Make the reset crash-ordered and the stale state harmless:
+2. **GAP-2. Implemented** in the follow-up PR, as proposed, plus the page horizon as the redo point (3.2):
    - (a) in `Wal::reset`, delete the sealed segments **before** truncating
      the active file, and sync the directory before the truncation. A crash
      then leaves a chain that still reaches the checkpoint record
@@ -581,8 +600,8 @@ collections clean) and that a second reopen changes nothing.
 | Page level: repeated recovery of one crash state, partial reset that still reaches the checkpoint record, fully drained uncommitted transaction | 3 | pass |
 | **GAP-1** page level: partial drain of an uncommitted split (49 prefixes); uncommitted root split (4 sizes) | 53 | **fail** (ignored): committed keys absent or "beyond the end of the file" |
 | **GAP-1** end to end: root-split flush in an uncommitted row commit | 1 | **fail** (ignored): 124 of 150 acknowledged rows lost |
-| **GAP-2** page level: interrupted reset | 1 | **fail** (ignored): stale value, then a later commit lost |
-| **GAP-2** end to end: `wal_reset.after_active_truncate:2/6`, `wal_reset.after_segment_delete:1/4` | 4 | **fail** (ignored): 3 of 4 lose acknowledged commits |
+| GAP-2 page level: interrupted reset (stale chain from an older engine) | 1 | pass after the fix (failed before: stale value, then a later commit lost) |
+| GAP-2 end to end: crash at every reset step (`wal_reset.after_segment_delete`, `after_segments_removed`, `after_active_truncate`), with and without eviction; EIO at every reset step (`page_log.reset_unlink`, `reset_dir_sync`, `reset`, `reset_sync`) | 9 + 12 | pass after the fix. Repeats: 20 rounds each of 4 reset crash cases, 0 failures (before the fix: 15-16 of 20 failed per case) |
 
 ## 13. How to run the tests
 

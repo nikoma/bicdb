@@ -379,6 +379,12 @@ pub struct PagedStoreOptions {
     /// exceptions — a visibility hazard. Opt in only for stores known to
     /// predate durable abort exceptions.
     pub accept_legacy_meta: bool,
+    /// Sync the page log without holding its append lock across the
+    /// `fdatasync` ([`Wal::with_unlocked_sync`]). Off by default: with it
+    /// off, a page-log sync blocks every append for its whole duration, which
+    /// is the qualified production behaviour. Under qualification; see
+    /// `docs/wal-unlocked-sync.md`.
+    pub unlocked_wal_sync: bool,
 }
 
 impl Default for PagedStoreOptions {
@@ -392,6 +398,7 @@ impl Default for PagedStoreOptions {
             extent_bytes: 0,
             wal_segment_bytes: 64 * 1024 * 1024,
             accept_legacy_meta: false,
+            unlocked_wal_sync: false,
         }
     }
 }
@@ -434,6 +441,12 @@ impl PagedStoreOptions {
 
     pub fn with_accept_legacy_meta(mut self, accept: bool) -> Self {
         self.accept_legacy_meta = accept;
+        self
+    }
+
+    /// See [`PagedStoreOptions::unlocked_wal_sync`]. Experimental.
+    pub fn with_unlocked_wal_sync(mut self, enabled: bool) -> Self {
+        self.unlocked_wal_sync = enabled;
         self
     }
 }
@@ -933,14 +946,17 @@ impl PagedStore {
         } else {
             0
         };
-        let wal = Arc::new(Wal::open_with_segments_and_floor(
-            &paths.wal,
-            options.fsync,
-            wal_segment_bytes,
-            // The superblock's checkpoint LSN horizon: keeps LSNs monotonic
-            // across truncate+reopen so sealed-segment names never recur.
-            store.checkpoint_lsn(),
-        )?);
+        let wal = Arc::new(
+            Wal::open_with_segments_and_floor(
+                &paths.wal,
+                options.fsync,
+                wal_segment_bytes,
+                // The superblock's checkpoint LSN horizon: keeps LSNs monotonic
+                // across truncate+reopen so sealed-segment names never recur.
+                store.checkpoint_lsn(),
+            )?
+            .with_unlocked_sync(options.unlocked_wal_sync),
+        );
         crate::test_faults::register_wal(&wal);
 
         // Recovery runs BEFORE anything reads a page, so no caller can ever
@@ -8455,5 +8471,85 @@ mod tests {
             survived.iter().all(|present| *present) || survived.iter().all(|present| !*present),
             "the deferred commit must be all-or-nothing after recovery"
         );
+    }
+
+    /// Visibility under the unlocked page-log sync: a commit's rows become
+    /// visible only after `wal.commit` returned, exactly as on the locked
+    /// path. Paused after the `fdatasync` but before durability is
+    /// published, a fresh snapshot must not see the row; a failed sync must
+    /// leave it invisible on both paths.
+    #[test]
+    fn rows_become_visible_only_after_the_unlocked_sync_publishes() {
+        use crate::wal::SyncPhase;
+        use std::sync::mpsc;
+        use std::time::Duration;
+        let wait = Duration::from_secs(10);
+        let dir = TempDir::new().unwrap();
+        let (store, _) = PagedStore::open(
+            dir.path(),
+            options().with_fsync(true).with_unlocked_wal_sync(true),
+        )
+        .unwrap();
+        let (reached_tx, reached_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel::<()>();
+        let reached_tx = parking_lot::Mutex::new(reached_tx);
+        let release_rx = parking_lot::Mutex::new(release_rx);
+        let armed = std::sync::atomic::AtomicBool::new(true);
+        store.wal().test_hooks().on_phase(move |phase| {
+            if phase == SyncPhase::Synced && armed.swap(false, std::sync::atomic::Ordering::AcqRel)
+            {
+                reached_tx.lock().send(()).unwrap();
+                release_rx.lock().recv_timeout(wait).unwrap();
+            }
+        });
+        std::thread::scope(|scope| {
+            let committer = scope.spawn(|| {
+                let tx = store.begin();
+                store.put(tx, b"k", b"v").unwrap();
+                store.commit(tx)
+            });
+            reached_rx.recv_timeout(wait).unwrap();
+            let durable = store.wal().durable_lsn();
+            let next = store.wal().next_lsn();
+            assert!(durable < next - 1, "the commit record is not durable yet");
+            let (seen_tx, seen_rx) = mpsc::channel();
+            let store_ref = &store;
+            scope.spawn(move || {
+                let _ = seen_tx.send(store_ref.get(b"k").unwrap());
+            });
+            let seen = seen_rx
+                .recv_timeout(wait)
+                .expect("a reader must not block on an in-flight commit sync");
+            assert_eq!(
+                seen, None,
+                "a row was visible before its commit was durable"
+            );
+            release_tx.send(()).unwrap();
+            committer.join().unwrap().unwrap();
+        });
+        assert_eq!(store.get(b"k").unwrap().as_deref(), Some(&b"v"[..]));
+        store.wal().test_hooks().clear();
+
+        // A failed sync: the commit errors and the row stays invisible, on
+        // both paths.
+        for unlocked in [false, true] {
+            let dir = TempDir::new().unwrap();
+            let (store, _) = PagedStore::open(
+                dir.path(),
+                options().with_fsync(true).with_unlocked_wal_sync(unlocked),
+            )
+            .unwrap();
+            let tx = store.begin();
+            store.put(tx, b"f", b"v").unwrap();
+            store.wal().test_hooks().fail_next_syncs(1);
+            assert!(store.commit(tx).is_err(), "unlocked={unlocked}");
+            assert_eq!(store.get(b"f").unwrap(), None, "unlocked={unlocked}");
+            store.wal().test_hooks().clear();
+            let next = store.begin();
+            store.put(next, b"g", b"w").unwrap();
+            store.commit(next).unwrap();
+            assert_eq!(store.get(b"g").unwrap().as_deref(), Some(&b"w"[..]));
+            assert_eq!(store.get(b"f").unwrap(), None, "unlocked={unlocked}");
+        }
     }
 }

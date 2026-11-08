@@ -45,7 +45,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use parking_lot::{Condvar, Mutex};
 
@@ -256,6 +256,14 @@ pub struct Wal {
     /// Active-file offset covered by the last successful sync. Only
     /// power-loss emulation in tests reads it.
     synced_offset: AtomicU64,
+    /// Bumped, under the file mutex, every time the active file is replaced
+    /// (segment seal) or emptied (reset). The unlocked sync uses it to tell
+    /// whether the offset it covered still describes the active file.
+    active_generation: AtomicU64,
+    /// Gate for [`Self::with_unlocked_sync`]; off by default.
+    unlocked_sync: bool,
+    #[cfg(test)]
+    test_hooks: SyncTestHooks,
     /// Highest LSN of a commit record appended by [`Self::commit_unsynced`]
     /// (0: none). Page writeback syncs through it first, see
     /// [`Self::sync_deferred_commits`].
@@ -340,6 +348,102 @@ impl std::fmt::Debug for SyncState {
     }
 }
 
+/// Where a test hook fires inside the unlocked sync step.
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SyncPhase {
+    /// The descriptor is duplicated and the file lock released; the
+    /// `fdatasync` has not started.
+    Unlocked,
+    /// The `fdatasync` returned; durability is not published yet.
+    Synced,
+}
+
+#[cfg(test)]
+type PhaseHook = std::sync::Arc<dyn Fn(SyncPhase) + Send + Sync>;
+
+/// Test-only fault and pause points for [`Wal::sync_through`].
+#[cfg(test)]
+#[derive(Default)]
+pub(crate) struct SyncTestHooks {
+    /// The next this-many syncs report an I/O error after running.
+    fail_syncs: AtomicU64,
+    /// The next this-many descriptor duplications fail (unlocked path).
+    fail_clones: AtomicU64,
+    phase: Mutex<Option<PhaseHook>>,
+}
+
+#[cfg(test)]
+impl std::fmt::Debug for SyncTestHooks {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SyncTestHooks")
+            .field("fail_syncs", &self.fail_syncs.load(Ordering::Relaxed))
+            .finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+impl SyncTestHooks {
+    /// Make the next `count` syncs fail (both sync paths).
+    pub(crate) fn fail_next_syncs(&self, count: u64) {
+        self.fail_syncs.store(count, Ordering::Release);
+    }
+
+    /// Run `hook` at every [`SyncPhase`] of the unlocked sync step.
+    pub(crate) fn on_phase(&self, hook: impl Fn(SyncPhase) + Send + Sync + 'static) {
+        *self.phase.lock() = Some(std::sync::Arc::new(hook));
+    }
+
+    /// Make the next `count` descriptor duplications fail.
+    pub(crate) fn fail_next_clones(&self, count: u64) {
+        self.fail_clones.store(count, Ordering::Release);
+    }
+
+    pub(crate) fn clear(&self) {
+        *self.phase.lock() = None;
+        self.fail_syncs.store(0, Ordering::Release);
+        self.fail_clones.store(0, Ordering::Release);
+    }
+
+    fn override_clone_result(&self, result: std::io::Result<File>) -> std::io::Result<File> {
+        if self
+            .fail_clones
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |left| {
+                left.checked_sub(1)
+            })
+            .is_ok()
+        {
+            return Err(std::io::Error::other(
+                "injected descriptor duplication failure",
+            ));
+        }
+        result
+    }
+
+    fn reached(&self, phase: SyncPhase) {
+        let hook = self.phase.lock().clone();
+        if let Some(hook) = hook {
+            hook(phase);
+        }
+    }
+
+    fn override_sync_result(&self, result: Result<()>, path: &Path) -> Result<()> {
+        let failed = self
+            .fail_syncs
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |left| {
+                left.checked_sub(1)
+            })
+            .is_ok();
+        if failed {
+            return Err(PageError::io(
+                path,
+                std::io::Error::other("injected fdatasync failure"),
+            ));
+        }
+        result
+    }
+}
+
 impl Wal {
     /// Open or create a log with one unbounded active file.
     pub fn open(path: impl AsRef<Path>, fsync: bool) -> Result<Self> {
@@ -396,6 +500,10 @@ impl Wal {
             next_lsn: AtomicU64::new(initial_lsn),
             end_offset: AtomicU64::new(end_offset),
             synced_offset: AtomicU64::new(end_offset),
+            active_generation: AtomicU64::new(0),
+            unlocked_sync: false,
+            #[cfg(test)]
+            test_hooks: SyncTestHooks::default(),
             deferred_commit_lsn: AtomicU64::new(0),
             sync_state: Mutex::new(SyncState {
                 durable_lsn: 0,
@@ -412,6 +520,31 @@ impl Wal {
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Opt in to syncing the log WITHOUT holding the append lock across the
+    /// `fdatasync`. Off by default, and with it off the sync path is the
+    /// original one: the lock is held for the whole sync, so a sync stalls
+    /// every append.
+    ///
+    /// With it on, a sync takes the lock only to wait out the in-flight
+    /// append, read the covered offset and duplicate the descriptor; the
+    /// `fdatasync` then runs on the duplicate with the lock released, and
+    /// durability is published only for the LSNs captured before the lock was
+    /// taken. See [`Self::sync_through`] for why that is the same promise.
+    pub fn with_unlocked_sync(mut self, enabled: bool) -> Self {
+        self.unlocked_sync = enabled;
+        self
+    }
+
+    /// Whether [`Self::with_unlocked_sync`] is on for this log.
+    pub fn unlocked_sync(&self) -> bool {
+        self.unlocked_sync
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_hooks(&self) -> &SyncTestHooks {
+        &self.test_hooks
     }
 
     fn sealed_path(&self, sequence: u64) -> PathBuf {
@@ -524,6 +657,7 @@ impl Wal {
         self.sealed_bytes.fetch_add(active_bytes, Ordering::AcqRel);
         self.end_offset.store(0, Ordering::Release);
         self.synced_offset.store(0, Ordering::Release);
+        self.active_generation.fetch_add(1, Ordering::AcqRel);
         let mut metrics = self.metrics.lock();
         metrics.segments_sealed = metrics.segments_sealed.saturating_add(1);
         Ok(())
@@ -728,6 +862,19 @@ impl Wal {
     /// durability: a caller returns only once `durable_lsn >= lsn`, so its own
     /// record is on disk. It simply may be another thread's `fsync` that put it
     /// there.
+    ///
+    /// The promise is the same with [`Self::with_unlocked_sync`] on. The
+    /// published `target` is read before the file lock is taken, and LSNs are
+    /// assigned and written under that lock, so once the sync holds the lock
+    /// every record at or below `target` is completely written to the file
+    /// the lock guards. `fdatasync` covers every byte written to the inode
+    /// before it starts, whichever descriptor wrote it, so syncing a
+    /// duplicate after releasing the lock covers those records. Records
+    /// appended meanwhile have LSNs above `target` and are not claimed. A
+    /// segment seal in the meantime renames the file the duplicate still
+    /// names (and syncs it first); a reset empties it after a checkpoint made
+    /// its records redundant. Either way no record at or below `target` lives
+    /// in a file the sync did not cover, and nothing above it is published.
     pub fn sync_through(&self, lsn: Lsn) -> Result<()> {
         let mut state = self.sync_state.lock();
         loop {
@@ -749,19 +896,26 @@ impl Wal {
             let target = self.next_lsn.load(Ordering::Acquire).saturating_sub(1);
             drop(state);
 
-            let mut file = self.file.lock();
-            let covered_offset = self.end_offset.load(Ordering::Acquire);
-            let started = Instant::now();
-            let result = if self.fsync {
-                file.sync_data().map_err(|e| PageError::io(&self.path, e))
+            let (result, elapsed) = if self.unlocked_sync {
+                self.sync_active_file_unlocked()
             } else {
-                file.flush().map_err(|e| PageError::io(&self.path, e))
+                let mut file = self.file.lock();
+                let covered_offset = self.end_offset.load(Ordering::Acquire);
+                let started = Instant::now();
+                let result = if self.fsync {
+                    file.sync_data().map_err(|e| PageError::io(&self.path, e))
+                } else {
+                    file.flush().map_err(|e| PageError::io(&self.path, e))
+                };
+                #[cfg(test)]
+                let result = self.test_hooks.override_sync_result(result, &self.path);
+                let elapsed = started.elapsed();
+                if result.is_ok() {
+                    self.synced_offset.store(covered_offset, Ordering::Release);
+                }
+                drop(file);
+                (result, elapsed)
             };
-            let elapsed = started.elapsed();
-            if result.is_ok() {
-                self.synced_offset.store(covered_offset, Ordering::Release);
-            }
-            drop(file);
 
             state = self.sync_state.lock();
             state.syncing = false;
@@ -785,6 +939,73 @@ impl Wal {
             }
             self.sync_signal.notify_all();
         }
+    }
+
+    /// The gated sync step: capture under the file lock, sync without it.
+    /// Returns the sync result and its duration, like the locked step.
+    fn sync_active_file_unlocked(&self) -> (Result<()>, Duration) {
+        let (handle, covered_offset, generation) = {
+            let file = self.file.lock();
+            // Holding the lock means no append is mid-write: every record the
+            // caller's `target` names is completely in `file`.
+            let covered_offset = self.end_offset.load(Ordering::Acquire);
+            let generation = self.active_generation.load(Ordering::Acquire);
+            let handle = if self.fsync {
+                let cloned = file.try_clone();
+                #[cfg(test)]
+                let cloned = self.test_hooks.override_clone_result(cloned);
+                match cloned {
+                    Ok(handle) => Some(handle),
+                    Err(_) => {
+                        // No descriptor to spare: sync the original under
+                        // the lock instead, exactly as the default path does.
+                        // A failed duplicate never becomes a failed commit.
+                        let started = Instant::now();
+                        let result = file.sync_data().map_err(|e| PageError::io(&self.path, e));
+                        #[cfg(test)]
+                        let result = self.test_hooks.override_sync_result(result, &self.path);
+                        let elapsed = started.elapsed();
+                        if result.is_ok() {
+                            self.synced_offset.store(covered_offset, Ordering::Release);
+                        }
+                        return (result, elapsed);
+                    }
+                }
+            } else {
+                None
+            };
+            (handle, covered_offset, generation)
+        };
+        crate::test_faults::crash_point("wal.sync.after_clone");
+        #[cfg(test)]
+        self.test_hooks.reached(SyncPhase::Unlocked);
+
+        let started = Instant::now();
+        let result = match &handle {
+            Some(handle) => handle.sync_data().map_err(|e| PageError::io(&self.path, e)),
+            None => Ok(()),
+        };
+        #[cfg(test)]
+        let result = self.test_hooks.override_sync_result(result, &self.path);
+        let elapsed = started.elapsed();
+        drop(handle);
+        crate::test_faults::crash_point("wal.sync.before_publish");
+        #[cfg(test)]
+        self.test_hooks.reached(SyncPhase::Synced);
+
+        // `synced_offset` only feeds the power-loss emulation, so production
+        // never pays the second lock hop. It is published before any waiter
+        // learns of durability, under the lock the emulation holds, and only
+        // if the active file is still the one this sync covered: after a seal
+        // or reset the offset describes a file that is no longer active.
+        if result.is_ok() && (cfg!(test) || crate::test_faults::volatile_tail_enabled()) {
+            let _file = self.file.lock();
+            if self.active_generation.load(Ordering::Acquire) == generation {
+                self.synced_offset
+                    .fetch_max(covered_offset, Ordering::AcqRel);
+            }
+        }
+        (result, elapsed)
     }
 
     /// Make everything appended so far durable.
@@ -1041,6 +1262,7 @@ impl Wal {
         *sealed = retained;
         drop(sealed);
         self.sealed_bytes.store(retained_bytes, Ordering::Release);
+        self.active_generation.fetch_add(1, Ordering::AcqRel);
         drop(file);
         self.end_offset.store(0, Ordering::Release);
         self.synced_offset.store(0, Ordering::Release);
@@ -1512,6 +1734,10 @@ pub struct CheckpointReport {
     pub wal_bytes_before: u64,
     pub wal_truncated: bool,
 }
+
+#[cfg(test)]
+#[path = "wal_unlocked_sync_tests.rs"]
+mod unlocked_sync_tests;
 
 #[cfg(test)]
 mod tests {

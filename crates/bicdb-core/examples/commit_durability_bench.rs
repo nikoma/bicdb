@@ -128,6 +128,12 @@ fn run(db_dir: &Path, mode: &str, threads: usize, seconds: u64, crash: bool) {
     let mut all: Vec<u64> = latencies.into_iter().flatten().collect();
     all.sort_unstable();
     let stats = db.deferred_materialize_stats();
+    // Which page-log sync step ran (`BICDB_PAGED_WAL_SYNC_UNLOCKED`), and its
+    // sync counters, so a result always names the path it measured.
+    let page_wal = db.paged_records_handle().map(|paged| {
+        let wal = paged.store().wal();
+        (wal.unlocked_sync(), wal.snapshot())
+    });
     println!(
         "{}",
         json!({
@@ -144,6 +150,10 @@ fn run(db_dir: &Path, mode: &str, threads: usize, seconds: u64, crash: bool) {
             },
             "transaction_log_bytes": file_bytes(&db_dir.join("transactions.log")),
             "page_wal_bytes": page_wal_bytes(db_dir),
+            "page_wal_sync_unlocked": page_wal.as_ref().map(|(unlocked, _)| *unlocked),
+            "page_wal_syncs": page_wal.as_ref().map(|(_, snapshot)| snapshot.syncs),
+            "page_wal_group_commit_savings":
+                page_wal.as_ref().map(|(_, snapshot)| snapshot.group_commit_savings),
             "materializer": stats.map(|s| json!({
                 "passes": s.passes, "wal_syncs": s.wal_syncs,
                 "markers_written": s.markers_written, "queued": s.queued,

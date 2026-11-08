@@ -193,7 +193,7 @@ impl<'db> SqlSession<'db> {
             schema: procedure_schema,
             kind: RoutineKind::Procedure,
             args: params
-                .map(|params| params.iter().map(ToString::to_string).collect())
+                .map(|params| params.iter().map(crate::sql_text::sql_text).collect())
                 .unwrap_or_default(),
             arg_types,
             return_type: "void".to_string(),
@@ -201,7 +201,11 @@ impl<'db> SqlSession<'db> {
             return_type_declaration: Some("void".to_string()),
             returns_set: false,
             language,
-            definition: format!("CREATE PROCEDURE {name} {body}"),
+            definition: format!(
+                "CREATE PROCEDURE {} {}",
+                crate::sql_text::sql_text(name),
+                crate::sql_text::sql_text(body)
+            ),
             internal_symbol: None,
             owner: Some(current_user_from_gucs(&self.session_gucs)),
             security_definer: false,
@@ -529,7 +533,7 @@ impl<'db> SqlSession<'db> {
             // PostgreSQL: constraint triggers default to FOR EACH ROW.
             for_each = "row".to_string();
         }
-        let definition = create_trigger.to_string();
+        let definition = crate::sql_text::sql_text(create_trigger);
         let arguments = parse_raw_create_trigger(&definition)?
             .map(|(trigger, _)| trigger.arguments)
             .unwrap_or_default();

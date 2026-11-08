@@ -6005,7 +6005,7 @@ fn fold_policy_init_plans<'e>(
         if !is_policy_init_plan(query) {
             return ControlFlow::Continue(());
         }
-        let key = (context, query.to_string());
+        let key = (context, crate::sql_text::sql_key(query));
         let cached = POLICY_INIT_PLANS.with(|stack| {
             stack
                 .borrow()

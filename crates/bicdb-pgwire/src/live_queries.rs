@@ -416,13 +416,13 @@ fn restricted(
             });
         }
     }
-    statement.to_string()
+    bicdb_sql::sql_text::sql_text(&statement)
 }
 
 impl Keyed {
     /// The whole query, hidden column included.
     fn whole_sql(&self) -> String {
-        self.statement.to_string()
+        bicdb_sql::sql_text::sql_text(&self.statement)
     }
 
     /// The query for the rows with these keys (filtered plans).
@@ -478,7 +478,7 @@ impl Keyed {
                 &self.key_type,
                 keys,
             ),
-            None => statement.to_string(),
+            None => bicdb_sql::sql_text::sql_text(&statement),
         }
     }
 
@@ -490,7 +490,7 @@ impl Keyed {
                 select.projection.pop();
             }
         }
-        statement.to_string()
+        bicdb_sql::sql_text::sql_text(&statement)
     }
 }
 

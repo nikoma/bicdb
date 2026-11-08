@@ -1161,20 +1161,10 @@ fn render_token(token: &Token) -> String {
 /// sqlparser's generic Display accepts both escaped and decoded values and
 /// treats adjacent quotes as already escaped. Our parser uses decoded values;
 /// double every quote on a serialization-only copy before invoking Display.
-fn render_sql<T: Clone + sqlparser::ast::VisitMut + std::fmt::Display>(node: &T) -> String {
-    let mut copy = node.clone();
-    let _ = visit_expressions_mut(&mut copy, |expr| {
-        if let Expr::Value(value) = expr {
-            match &mut value.value {
-                Value::SingleQuotedString(text) | Value::NationalStringLiteral(text) => {
-                    *text = text.replace('\'', "''")
-                }
-                _ => {}
-            }
-        }
-        ControlFlow::<()>::Continue(())
-    });
-    copy.to_string()
+pub(crate) fn render_sql<T: Clone + sqlparser::ast::VisitMut + std::fmt::Display>(
+    node: &T,
+) -> String {
+    crate::sql_text::sql_text(node)
 }
 
 fn join(tokens: &[Token]) -> String {

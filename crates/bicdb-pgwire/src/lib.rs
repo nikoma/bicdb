@@ -3568,7 +3568,7 @@ fn execute_sql_prepared_statement_query(
             state.prepared.insert(
                 name,
                 PreparedStatement {
-                    sql: statement.to_string(),
+                    sql: bicdb_sql::sql_text::sql_text(&*statement),
                     param_type_oids,
                     oracle_host_block: None,
                 },

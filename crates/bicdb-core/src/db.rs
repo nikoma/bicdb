@@ -11538,6 +11538,20 @@ impl BicDb {
         Ok(retained)
     }
 
+    /// Apply frames from a primary whose durable commit sequence, when it
+    /// sent them, was `primary_durable_seq`. Refuses the whole batch, before
+    /// applying any of it, when a frame lies above that horizon: the
+    /// primary had not established a durable commit decision for it, so the
+    /// standby must neither expose it nor ship it onward.
+    pub fn apply_replication_batch_within(
+        &mut self,
+        frames: &[CommitFrame],
+        primary_durable_seq: u64,
+    ) -> Result<ReplicationApplyReport> {
+        ensure_frames_within_durable_horizon(frames, primary_durable_seq)?;
+        self.apply_replication_batch(frames)
+    }
+
     pub fn apply_replication_batch(
         &mut self,
         frames: &[CommitFrame],
@@ -19171,6 +19185,24 @@ impl SegmentReplayIndex {
             .get(collection)
             .is_some_and(|ids| ids.contains(record_id))
     }
+}
+
+/// Refuses frames above the primary's durable commit sequence.
+pub fn ensure_frames_within_durable_horizon(
+    frames: &[CommitFrame],
+    primary_durable_seq: u64,
+) -> Result<()> {
+    if let Some(frame) = frames
+        .iter()
+        .find(|frame| frame.commit_seq > primary_durable_seq)
+    {
+        return Err(replication_error(format!(
+            "commit_seq {} is above the primary's durable commit sequence {primary_durable_seq}; \
+             a frame without a durable commit decision is never applied",
+            frame.commit_seq
+        )));
+    }
+    Ok(())
 }
 
 fn recover_transaction_log(

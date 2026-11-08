@@ -170,6 +170,57 @@ fn create_table_inline_nextval_default_resolves_schema_qualified() {
     );
 }
 
+/// pg_dump restores rewrite rules; an INSERT on a table with a DO INSTEAD
+/// rule runs the rule's action once per row, with NEW bound to that row.
+#[test]
+fn instead_rules_replace_the_rewritten_statement() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE TABLE app.requests (tablename TEXT, amount INT)")
+        .unwrap();
+    sql.execute("CREATE TABLE app.applied (tablename TEXT, amount INT)")
+        .unwrap();
+    sql.execute(
+        "CREATE FUNCTION app.apply_request(t text, n integer) RETURNS void LANGUAGE plpgsql AS $$ \
+         BEGIN INSERT INTO app.applied VALUES (t, n * 2); END; $$",
+    )
+    .unwrap();
+    sql.execute(
+        "CREATE RULE apply_rule AS\n    ON INSERT TO app.requests DO INSTEAD  \
+         SELECT app.apply_request(new.tablename, new.amount) AS apply_request",
+    )
+    .unwrap();
+    sql.execute("CREATE TABLE app.locked (id INT)").unwrap();
+    sql.execute("INSERT INTO app.locked VALUES (1)").unwrap();
+    sql.execute("CREATE RULE keep AS ON DELETE TO app.locked DO INSTEAD NOTHING")
+        .unwrap();
+
+    sql.execute("INSERT INTO app.requests VALUES ('a', 1), ('b', 5)")
+        .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.requests"), 0);
+    assert_eq!(
+        int_at(&mut sql, "SELECT sum(amount) FROM app.applied"),
+        12,
+        "the rule action ran once per row"
+    );
+    sql.execute("DELETE FROM app.locked").unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.locked"), 1);
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_rules WHERE schemaname = 'app' AND tablename = 'locked'"
+        ),
+        1
+    );
+    sql.execute("DROP RULE keep ON app.locked").unwrap();
+    sql.execute("DELETE FROM app.locked").unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.locked"), 0);
+    assert!(sql
+        .execute("CREATE RULE r AS ON INSERT TO app.locked WHERE new.id > 1 DO INSTEAD NOTHING")
+        .is_err());
+}
+
 /// Regression: a pg_dump restore creates a trigger function in a
 /// non-public schema and then a trigger that calls it schema-qualified.
 /// Routines key on the bare name everywhere, but the AST CREATE FUNCTION

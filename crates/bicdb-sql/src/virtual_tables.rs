@@ -34,6 +34,7 @@ pub(crate) fn is_internal_sql_collection(name: &str) -> bool {
         VIEW_COLLECTION,
         ROUTINE_COLLECTION,
         crate::pg_operators::OPERATOR_COLLECTION,
+        crate::query_rules::RULE_COLLECTION,
         TRIGGER_COLLECTION,
         NOTIFICATION_COLLECTION,
         ROLE_COLLECTION,

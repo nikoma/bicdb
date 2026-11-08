@@ -3247,6 +3247,12 @@ impl<'db> SqlSession<'db> {
         if let Some(result) = self.execute_raw_alter_role_settings(sql)? {
             return Ok(result);
         }
+        if let Some(result) = self.execute_raw_create_rule(sql)? {
+            return Ok(result);
+        }
+        if let Some(result) = self.execute_raw_drop_rule(sql)? {
+            return Ok(result);
+        }
         if let Some(result) = self.execute_raw_reset(sql)? {
             return Ok(result);
         }
@@ -3726,6 +3732,9 @@ impl<'db> SqlSession<'db> {
 
     fn execute_parsed_statement_in_sql(&mut self, statement: &Statement) -> Result<SqlResult> {
         self.ensure_read_only_statement(statement)?;
+        if let Some(result) = self.apply_instead_rule(statement)? {
+            return Ok(result);
+        }
         // Earlier statements in a batch can change temporal output settings.
         let _temporal_scope = self.temporal_scope();
         self.db_ref().check_recovery_state()?;

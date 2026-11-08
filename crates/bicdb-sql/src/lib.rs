@@ -195,6 +195,7 @@ pub use runtime::*;
 mod application_copy;
 mod constraint_nulls;
 mod lock_lists;
+mod query_rules;
 mod role_settings;
 mod routine_overloads;
 mod schema_meta;

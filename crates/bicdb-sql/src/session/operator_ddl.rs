@@ -7,7 +7,10 @@ use sqlparser::ast::{
 
 /// An operator name part: quoted parts keep their spelling.
 fn name_part(part: &str) -> String {
-    match part.strip_prefix('"').and_then(|rest| rest.strip_suffix('"')) {
+    match part
+        .strip_prefix('"')
+        .and_then(|rest| rest.strip_suffix('"'))
+    {
         Some(quoted) => quoted.to_string(),
         None => part.to_ascii_lowercase(),
     }
@@ -29,7 +32,9 @@ fn split_name(name: &ObjectName) -> Result<(Option<String>, String)> {
         [name] => Ok((None, name.clone())),
         [schema, name] => Ok((Some(schema.clone()), name.clone())),
         [_catalog, schema, name] => Ok((Some(schema.clone()), name.clone())),
-        _ => Err(SqlError::InvalidSql(format!("improper qualified name: {name}"))),
+        _ => Err(SqlError::InvalidSql(format!(
+            "improper qualified name: {name}"
+        ))),
     }
 }
 
@@ -45,9 +50,13 @@ fn operand_type(data_type: &DataType) -> Result<(String, String)> {
 fn operator_type_list(left: Option<&str>, right: &str) -> String {
     format!(
         "{},{}",
-        left.map(|left| pg_type_spec(left).map(|spec| spec.display_name).unwrap_or(left))
+        left.map(|left| pg_type_spec(left)
+            .map(|spec| spec.display_name)
+            .unwrap_or(left))
             .unwrap_or("NONE"),
-        pg_type_spec(right).map(|spec| spec.display_name).unwrap_or(right)
+        pg_type_spec(right)
+            .map(|spec| spec.display_name)
+            .unwrap_or(right)
     )
 }
 
@@ -190,7 +199,10 @@ impl SqlSession<'_> {
         right: &DataType,
     ) -> Result<std::result::Result<OperatorSchema, OperatorRef>> {
         let (schema, symbol) = split_name(name)?;
-        let left = left.map(operand_type).transpose()?.map(|(pg_type, _)| pg_type);
+        let left = left
+            .map(operand_type)
+            .transpose()?
+            .map(|(pg_type, _)| pg_type);
         let (right, _) = operand_type(right)?;
         let schemas = match &schema {
             Some(schema) => vec![schema.clone()],
@@ -288,7 +300,10 @@ impl SqlSession<'_> {
             ));
         }
         let existing = load_operator(self.db_ref(), &id)?;
-        if existing.as_ref().is_some_and(|existing| !existing.is_shell()) {
+        if existing
+            .as_ref()
+            .is_some_and(|existing| !existing.is_shell())
+        {
             return Err(SqlError::data_exception_public(
                 "42723",
                 format!("operator {schema}.{symbol} already exists"),
@@ -345,8 +360,8 @@ impl SqlSession<'_> {
         let mut writes: Vec<OperatorSchema> = Vec::new();
         let link = |session: &Self,
                     target: OperatorRef,
-                        commutator: bool,
-                        writes: &mut Vec<OperatorSchema>|
+                    commutator: bool,
+                    writes: &mut Vec<OperatorSchema>|
          -> Result<OperatorRef> {
             if target == id {
                 if !commutator {
@@ -416,12 +431,14 @@ impl SqlSession<'_> {
                     None,
                 )
             })?;
-            let target = self.linked_operator_ref(name, &schema, Some(id.right.clone()), right_type)?;
+            let target =
+                self.linked_operator_ref(name, &schema, Some(id.right.clone()), right_type)?;
             let target = link(self, target, true, &mut writes)?;
             operator.commutator = Some(target);
         }
         if let Some(name) = negator_name {
-            let target = self.linked_operator_ref(name, &schema, id.left.clone(), id.right.clone())?;
+            let target =
+                self.linked_operator_ref(name, &schema, id.left.clone(), id.right.clone())?;
             let target = link(self, target, false, &mut writes)?;
             operator.negator = Some(target);
         }
@@ -477,8 +494,7 @@ impl SqlSession<'_> {
                         OperatorOption::Merges => operator.merges = true,
                         OperatorOption::Commutator(_) | OperatorOption::Negator(_) => {
                             return Err(SqlError::Unsupported(
-                                "ALTER OPERATOR SET (COMMUTATOR | NEGATOR) is not supported"
-                                    .into(),
+                                "ALTER OPERATOR SET (COMMUTATOR | NEGATOR) is not supported".into(),
                             ));
                         }
                     }
@@ -525,7 +541,10 @@ impl SqlSession<'_> {
                     if drop.if_exists {
                         continue;
                     }
-                    return Err(missing_operator(&id, split_name(&signature.name)?.0.is_some()));
+                    return Err(missing_operator(
+                        &id,
+                        split_name(&signature.name)?.0.is_some(),
+                    ));
                 }
             };
             self.require_object_ownership(

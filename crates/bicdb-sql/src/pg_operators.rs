@@ -39,7 +39,11 @@ static BUILTIN_OPERATORS: LazyLock<Vec<BuiltinOperator>> = LazyLock::new(|| {
         .filter(|line| !line.is_empty() && !line.starts_with('#'))
         .map(|line| {
             let fields = line.split('\t').collect::<Vec<_>>();
-            assert_eq!(fields.len(), 12, "invalid pg_operator compatibility row: {line}");
+            assert_eq!(
+                fields.len(),
+                12,
+                "invalid pg_operator compatibility row: {line}"
+            );
             BuiltinOperator {
                 oid: fields[0].parse().expect("pg_operator OID"),
                 name: fields[1],
@@ -285,7 +289,10 @@ pub(crate) fn pg_operator_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlVal
         rows.push(virtual_row([
             ("oid", SqlValue::Int(operator.oid())),
             ("oprname", SqlValue::String(operator.id.name.clone())),
-            ("oprnamespace", SqlValue::Int(namespace_oid(&operator.id.schema))),
+            (
+                "oprnamespace",
+                SqlValue::Int(namespace_oid(&operator.id.schema)),
+            ),
             ("oprowner", SqlValue::Int(role_oid(&operator.owner()))),
             (
                 "oprkind",
@@ -357,7 +364,9 @@ pub(crate) enum Resolution<'a> {
     /// No operator of the name accepts the operand types.
     NotFound,
     /// Several candidates remain; `user` when at least one is user-defined.
-    Ambiguous { user: bool },
+    Ambiguous {
+        user: bool,
+    },
     Builtin,
     User(&'a OperatorSchema),
 }
@@ -577,7 +586,10 @@ fn select_candidate<'c, 'a>(
                      score: &dyn Fn(&Candidate) -> usize|
      -> Vec<&'c Candidate<'a>> {
         let best = candidates.iter().map(|c| score(c)).max().unwrap_or(0);
-        candidates.into_iter().filter(|c| score(c) == best).collect()
+        candidates
+            .into_iter()
+            .filter(|c| score(c) == best)
+            .collect()
     };
     let exact = |candidate: &Candidate| {
         candidate
@@ -710,10 +722,12 @@ pub(crate) fn resolve_operator<'a>(
     };
     if let Some(exact_right) = &exact_right {
         if exact_left.as_ref().is_none_or(Option::is_some) {
-            let exact_left = exact_left.as_ref().map(|left| left.clone().unwrap_or_default());
-            let found = candidates.iter().find(|candidate| {
-                candidate.left == exact_left && candidate.right == *exact_right
-            });
+            let exact_left = exact_left
+                .as_ref()
+                .map(|left| left.clone().unwrap_or_default());
+            let found = candidates
+                .iter()
+                .find(|candidate| candidate.left == exact_left && candidate.right == *exact_right);
             if let Some(candidate) = found {
                 return outcome(candidate);
             }
@@ -932,7 +946,13 @@ impl Binder<'_, '_> {
             return Ok(Some(canonical_type(&pg_type)));
         }
         if self.scopes.len() > 1 {
-            let all = self.scopes.iter().rev().flatten().cloned().collect::<Vec<_>>();
+            let all = self
+                .scopes
+                .iter()
+                .rev()
+                .flatten()
+                .cloned()
+                .collect::<Vec<_>>();
             if let Some(pg_type) = self.engine.infer_env_expr_type(expr, &all) {
                 return Ok(Some(canonical_type(&pg_type)));
             }
@@ -950,7 +970,10 @@ impl Binder<'_, '_> {
 
     fn call(&mut self, operator: &OperatorSchema, operands: Vec<Expr>) -> Result<Expr> {
         let function = operator.function.as_ref().ok_or_else(|| {
-            SqlError::undefined_function(format!("operator is only a shell: {}", operator.id.display()))
+            SqlError::undefined_function(format!(
+                "operator is only a shell: {}",
+                operator.id.display()
+            ))
         })?;
         let declarations = operator
             .left_declaration
@@ -1010,8 +1033,13 @@ impl Binder<'_, '_> {
                 if schema.is_none() && !self.has_user_candidates(None, &name, false) {
                     return Ok(());
                 }
-                let candidates =
-                    operator_candidates(self.operators, &self.path, schema.as_deref(), &name, false);
+                let candidates = operator_candidates(
+                    self.operators,
+                    &self.path,
+                    schema.as_deref(),
+                    &name,
+                    false,
+                );
                 let (Ok(left_type), Ok(right_type)) =
                     (self.operand_type(left), self.operand_type(right))
                 else {
@@ -1173,10 +1201,7 @@ impl sqlparser::ast::VisitorMut for Binder<'_, '_> {
 
 /// Whether any expression of `statement` names an operator `binds` would
 /// consider, so statements without one are never cloned.
-fn mentions_bindable_operator(
-    statement: &Statement,
-    operators: &[OperatorSchema],
-) -> bool {
+fn mentions_bindable_operator(statement: &Statement, operators: &[OperatorSchema]) -> bool {
     let binary = operators
         .iter()
         .filter(|operator| operator.id.left.is_some())
@@ -1193,8 +1218,9 @@ fn mentions_bindable_operator(
                 op: BinaryOperator::PGCustomBinaryOperator(_),
                 ..
             } => true,
-            Expr::BinaryOp { op, .. } => binary_operator_name(op)
-                .is_some_and(|(_, name)| binary.contains(name.as_str())),
+            Expr::BinaryOp { op, .. } => {
+                binary_operator_name(op).is_some_and(|(_, name)| binary.contains(name.as_str()))
+            }
             Expr::UnaryOp { op, .. } => {
                 unary_operator_name(op).is_some_and(|name| prefix.contains(name))
             }
@@ -1330,10 +1356,12 @@ mod tests {
             .filter(|operator| operator.name == "+" && operator.kind == 'b')
             .count();
         assert!(plus > 30, "{plus}");
-        assert!(builtin_operators().iter().any(|operator| operator.name == "+"
-            && operator.left == Some("date")
-            && operator.right == "int4"
-            && operator.result == "date"));
+        assert!(builtin_operators()
+            .iter()
+            .any(|operator| operator.name == "+"
+                && operator.left == Some("date")
+                && operator.right == "int4"
+                && operator.result == "date"));
     }
 
     #[test]
@@ -1341,36 +1369,90 @@ mod tests {
         let operators = day_operators();
         let path = ["app", "pg_catalog"];
         // Matches PostgreSQL 18 with the same operators on the search path.
-        assert_eq!(resolve(&operators, &path, "+", Some("timestamptz"), Some("int4")), "user");
-        assert_eq!(resolve(&operators, &path, "+", Some("timestamptz"), Some("numeric")), "user");
-        assert_eq!(resolve(&operators, &path, "+", Some("timestamp"), Some("int4")), "user");
-        assert_eq!(resolve(&operators, &path, "-", Some("timestamp"), Some("int4")), "user");
-        assert_eq!(resolve(&operators, &path, "+", Some("date"), Some("numeric")), "user");
-        assert_eq!(resolve(&operators, &path, "+", Some("interval"), Some("int4")), "user");
-        assert_eq!(resolve(&operators, &path, "+", Some("date"), Some("int4")), "builtin");
-        assert_eq!(resolve(&operators, &path, "+", Some("int4"), Some("int4")), "builtin");
-        assert_eq!(resolve(&operators, &path, "+", Some("numeric"), Some("int4")), "builtin");
         assert_eq!(
-            resolve(&operators, &path, "+", Some("timestamptz"), Some("interval")),
+            resolve(&operators, &path, "+", Some("timestamptz"), Some("int4")),
+            "user"
+        );
+        assert_eq!(
+            resolve(&operators, &path, "+", Some("timestamptz"), Some("numeric")),
+            "user"
+        );
+        assert_eq!(
+            resolve(&operators, &path, "+", Some("timestamp"), Some("int4")),
+            "user"
+        );
+        assert_eq!(
+            resolve(&operators, &path, "-", Some("timestamp"), Some("int4")),
+            "user"
+        );
+        assert_eq!(
+            resolve(&operators, &path, "+", Some("date"), Some("numeric")),
+            "user"
+        );
+        assert_eq!(
+            resolve(&operators, &path, "+", Some("interval"), Some("int4")),
+            "user"
+        );
+        assert_eq!(
+            resolve(&operators, &path, "+", Some("date"), Some("int4")),
             "builtin"
         );
-        assert_eq!(resolve(&operators, &path, "+", Some("timestamptz"), None), "ambiguous");
+        assert_eq!(
+            resolve(&operators, &path, "+", Some("int4"), Some("int4")),
+            "builtin"
+        );
+        assert_eq!(
+            resolve(&operators, &path, "+", Some("numeric"), Some("int4")),
+            "builtin"
+        );
+        assert_eq!(
+            resolve(
+                &operators,
+                &path,
+                "+",
+                Some("timestamptz"),
+                Some("interval")
+            ),
+            "builtin"
+        );
+        assert_eq!(
+            resolve(&operators, &path, "+", Some("timestamptz"), None),
+            "ambiguous"
+        );
         // Not on the search path: no user candidate.
-        assert_eq!(resolve(&operators, &["public"], "+", Some("timestamptz"), Some("int4")), "none");
+        assert_eq!(
+            resolve(
+                &operators,
+                &["public"],
+                "+",
+                Some("timestamptz"),
+                Some("int4")
+            ),
+            "none"
+        );
     }
 
     #[test]
     fn unknown_literals_prefer_the_string_category() {
         let operators = Vec::new();
-        assert_eq!(resolve(&operators, &["public"], "||", Some("text"), None), "builtin");
+        assert_eq!(
+            resolve(&operators, &["public"], "||", Some("text"), None),
+            "builtin"
+        );
         assert_eq!(resolve(&operators, &["public"], "=", None, None), "builtin");
-        assert_eq!(resolve(&operators, &["public"], "+", Some("int4"), None), "builtin");
+        assert_eq!(
+            resolve(&operators, &["public"], "+", Some("int4"), None),
+            "builtin"
+        );
     }
 
     #[test]
     fn search_path_defaults_put_pg_catalog_first() {
         let gucs = HashMap::from([("search_path".to_string(), "app, \"Mixed\"".to_string())]);
-        assert_eq!(effective_search_path(&gucs), vec!["pg_catalog", "app", "Mixed"]);
+        assert_eq!(
+            effective_search_path(&gucs),
+            vec!["pg_catalog", "app", "Mixed"]
+        );
         let gucs = HashMap::from([("search_path".to_string(), "app, pg_catalog".to_string())]);
         assert_eq!(effective_search_path(&gucs), vec!["app", "pg_catalog"]);
     }

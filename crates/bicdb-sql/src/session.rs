@@ -24,10 +24,10 @@ mod catalog_join_tests;
 mod driver_metadata_tests;
 pub(crate) mod functions_insert;
 mod join_lookup_tests;
+mod operator_ddl;
 #[cfg(test)]
 mod primary_key_range_tests;
 mod primary_key_updates;
-mod operator_ddl;
 mod privilege_projection;
 mod raw_ddl_analyze;
 mod raw_index_fts;

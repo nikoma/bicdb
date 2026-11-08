@@ -308,12 +308,19 @@ fn create_operator_records_operators_and_commutator_shells() {
         error.contains("commutator operator - is already the commutator of operator +"),
         "{error}"
     );
-    let error = error_of(&mut sql, "ALTER OPERATOR app.- (interval, numeric) OWNER TO bicdb");
+    let error = error_of(
+        &mut sql,
+        "ALTER OPERATOR app.- (interval, numeric) OWNER TO bicdb",
+    );
     assert!(
         error.contains("operator does not exist: interval app.- numeric"),
         "{error}"
     );
-    assert_eq!(app_operator_count(&mut sql), 6, "a rejected definition writes nothing");
+    assert_eq!(
+        app_operator_count(&mut sql),
+        6,
+        "a rejected definition writes nothing"
+    );
 
     let error = error_of(
         &mut sql,
@@ -333,7 +340,10 @@ fn create_operator_records_operators_and_commutator_shells() {
         &mut sql,
         "CREATE OPERATOR app.! (FUNCTION = app.adddays, LEFTARG = timestamp with time zone)",
     );
-    assert!(error.contains("right argument type must be specified"), "{error}");
+    assert!(
+        error.contains("right argument type must be specified"),
+        "{error}"
+    );
 }
 
 #[test]
@@ -359,15 +369,24 @@ fn user_operators_resolve_by_search_path_and_operand_types() {
     let value = text_at(&mut sql, "SELECT (dateacct - days)::text FROM app.docs");
     assert!(value.starts_with("2019-12-29 10:00:00"), "{value}");
     // date + integer is an exact built-in match and stays a date.
-    assert_eq!(text_at(&mut sql, "SELECT (date '2020-01-01' + 1)::text"), "2020-01-02");
+    assert_eq!(
+        text_at(&mut sql, "SELECT (date '2020-01-01' + 1)::text"),
+        "2020-01-02"
+    );
     // ... while date + numeric has no built-in candidate.
     let value = text_at(&mut sql, "SELECT (date '2020-01-01' + 1.0)::text");
     assert!(value.starts_with("2020-01-02 00:00:00"), "{value}");
     // Built-in arithmetic is untouched.
     assert_eq!(int_at(&mut sql, "SELECT 2 + 3"), 5);
     assert_eq!(
-        text_at(&mut sql, "SELECT (timestamptz '2020-01-01 00:00:00+00' + interval '1 day')::text"),
-        text_at(&mut sql, "SELECT (timestamptz '2020-01-02 00:00:00+00')::text")
+        text_at(
+            &mut sql,
+            "SELECT (timestamptz '2020-01-01 00:00:00+00' + interval '1 day')::text"
+        ),
+        text_at(
+            &mut sql,
+            "SELECT (timestamptz '2020-01-02 00:00:00+00')::text"
+        )
     );
 
     // Predicates and assignments resolve against the table's column types.
@@ -385,7 +404,10 @@ fn user_operators_resolve_by_search_path_and_operand_types() {
 
     // A shell operator cannot be used; an unknown literal is ambiguous
     // between the interval and timestamp candidates of the same name.
-    let error = error_of(&mut sql, "SELECT 1.5 + timestamptz '2020-01-01 00:00:00+00'");
+    let error = error_of(
+        &mut sql,
+        "SELECT 1.5 + timestamptz '2020-01-01 00:00:00+00'",
+    );
     assert!(error.contains("operator is only a shell"), "{error}");
     let error = error_of(&mut sql, "SELECT now() + '1'");
     assert!(error.contains("operator is not unique"), "{error}");
@@ -480,7 +502,11 @@ fn user_operators_survive_reopen_in_both_storage_modes() {
         }
         let mut db = open();
         let mut sql = SqlSession::new(&mut db);
-        assert_eq!(app_operator_count(&mut sql), 6, "[{mode}] operators lost on reopen");
+        assert_eq!(
+            app_operator_count(&mut sql),
+            6,
+            "[{mode}] operators lost on reopen"
+        );
         sql.execute("SET search_path TO app, pg_catalog").unwrap();
         let value = text_at(
             &mut sql,

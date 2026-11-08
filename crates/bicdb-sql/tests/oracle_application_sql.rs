@@ -221,6 +221,29 @@ fn unique_constraints_are_checked_when_the_statement_ends() {
     );
 }
 
+/// The PL/pgSQL `REVERSE high .. low` form does not change the Oracle
+/// profile, whose front end still rejects REVERSE loops (Oracle walks
+/// `REVERSE low .. high` backwards; the interpreter honours that order for
+/// Oracle routines once the front end accepts the form).
+#[test]
+fn reverse_for_loops_are_unchanged_in_the_oracle_profile() {
+    let (_root, mut db) = app_database();
+    let created = run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION countdown RETURN VARCHAR2 AS
+           acc VARCHAR2(20) := '';
+         BEGIN
+           FOR i IN REVERSE 1 .. 3 LOOP
+             acc := acc || i;
+           END LOOP;
+           RETURN acc;
+         END;",
+    );
+    assert!(created
+        .and_then(|_| run(&mut db, "SELECT countdown() FROM dual"))
+        .is_err());
+}
+
 #[test]
 fn driver_metadata_presets_are_published() {
     for profile in ["postgres", ORACLE_PREVIEW_PROFILE] {

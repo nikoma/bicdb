@@ -433,6 +433,14 @@ image with a higher page id made recovery extend the page count over it
 unreplayed. The failure mode differs from the first reproducer: **reads
 error instead of rows silently disappearing**.
 
+A third observation comes from the fail-closed qualification runs (P0
+evidence, s3ny `/root/bicdb-durability-s3/evidence-p0/`). One saved crash
+state from the production matrix (`all-logs`, `pool.after_writeback:40`)
+refuses to open with "page 6 is beyond the end of the file". The same state
+fails the same way on the code before the fail-closed change. A page
+written back mid-transaction lies above the persisted page count: the
+unreadable-page mode below, reached through the ordinary crash matrix.
+
 The windows on the production path:
 
 - **Root split inside any paged transaction.** This covers a core row commit's

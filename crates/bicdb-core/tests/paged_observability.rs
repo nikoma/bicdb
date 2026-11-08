@@ -117,13 +117,18 @@ fn paged_snapshot_metrics_doctor_and_reopen_share_one_bounded_contract() {
         metrics.storage["paged_page_write_latency_nanos_total"]
             >= snapshot.page_io.write_latency.sum_nanos as i64
     );
-    assert_eq!(
-        metrics.transaction["paged_wal_sync_records_total"],
-        snapshot.wal.sync_records_total as i64
+    // WAL-sync counters are monotonic and can move between the two samples:
+    // under `BICDB_COMMIT_DURABILITY=transaction-log` the metrics scan may
+    // evict a page logged by a deferred commit, and that writeback first
+    // syncs the page log (WAL before data). The later sample must not be
+    // behind.
+    assert!(
+        metrics.transaction["paged_wal_sync_records_total"]
+            >= snapshot.wal.sync_records_total as i64
     );
-    assert_eq!(
-        metrics.transaction["paged_wal_sync_latency_inf_total"],
-        snapshot.wal.sync_latency.count as i64
+    assert!(
+        metrics.transaction["paged_wal_sync_latency_inf_total"]
+            >= snapshot.wal.sync_latency.count as i64
     );
     assert_eq!(
         metrics.transaction["paged_recovery_duration_nanos"],

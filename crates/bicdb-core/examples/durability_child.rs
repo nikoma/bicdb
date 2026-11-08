@@ -26,13 +26,15 @@
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use bicdb_core::{BicDb, DbConfig, IndexDefinition, IndexField, IndexKind, Record, StorageMode};
 use serde_json::json;
 
+/// See `checkpoints` in `main`.
+const MIN_CHECKPOINTS: u64 = 20;
 pub const WRITERS: usize = 4;
 
 fn config(mode: &str) -> DbConfig {
@@ -90,6 +92,11 @@ fn main() {
     }
     let db = Arc::new(RwLock::new(db));
     let done = Arc::new(AtomicBool::new(false));
+    // The crash matrix names checkpoint boundaries by hit count (up to
+    // `checkpoint.after_wal_reset:15`). Checkpoints run on a timer, so a fast
+    // workload (the transaction-log mode commits faster) can finish before
+    // the n-th hit. Keep the run going until enough checkpoints happened.
+    let checkpoints = Arc::new(AtomicU64::new(0));
 
     std::thread::scope(|scope| {
         for writer in 0..WRITERS {
@@ -101,14 +108,16 @@ fn main() {
                     let mut tx = guard.begin_transaction().expect("begin");
                     tx.insert(
                         "rows",
-                        Record::new(format!("r-{writer}-{i}"))
-                            .with_metadata(json!({"owner": writer, "seq": i, "uk": format!("u-{writer}-{i}")})),
+                        Record::new(format!("r-{writer}-{i}")).with_metadata(
+                            json!({"owner": writer, "seq": i, "uk": format!("u-{writer}-{i}")}),
+                        ),
                     )
                     .expect("insert");
                     tx.update(
                         "rows",
-                        Record::new(format!("hot-{writer}"))
-                            .with_metadata(json!({"owner": writer, "seq": i, "uk": format!("h-{writer}")})),
+                        Record::new(format!("hot-{writer}")).with_metadata(
+                            json!({"owner": writer, "seq": i, "uk": format!("h-{writer}")}),
+                        ),
                     )
                     .expect("upsert hot");
                     if i % 7 == 0 && i > 3 {
@@ -146,8 +155,11 @@ fn main() {
                     {
                         let guard = db.read().expect("db lock");
                         let mut tx = guard.begin_transaction().expect("begin");
-                        tx.insert(&name, Record::new("only").with_metadata(json!({"g": generation})))
-                            .expect("insert side");
+                        tx.insert(
+                            &name,
+                            Record::new("only").with_metadata(json!({"g": generation})),
+                        )
+                        .expect("insert side");
                         tx.commit().expect("commit side");
                     }
                     append_line(&ledger, &format!("create {name} {generation}"));
@@ -157,11 +169,13 @@ fn main() {
         {
             let db = db.clone();
             let done = done.clone();
+            let checkpoints = checkpoints.clone();
             scope.spawn(move || {
                 while !done.load(Ordering::Acquire) {
                     std::thread::sleep(Duration::from_millis(40));
                     let guard = db.read().expect("db lock");
                     guard.checkpoint_for_resume().expect("checkpoint");
+                    checkpoints.fetch_add(1, Ordering::AcqRel);
                 }
             });
         }
@@ -170,11 +184,12 @@ fn main() {
         loop {
             std::thread::sleep(Duration::from_millis(20));
             let finished = commits == 0
-                || (0..WRITERS).all(|writer| {
-                    std::fs::read_to_string(ledger.join(format!("writer-{writer}")))
-                        .map(|text| text.lines().last() == Some(commits.to_string().as_str()))
-                        .unwrap_or(false)
-                });
+                || checkpoints.load(Ordering::Acquire) >= MIN_CHECKPOINTS
+                    && (0..WRITERS).all(|writer| {
+                        std::fs::read_to_string(ledger.join(format!("writer-{writer}")))
+                            .map(|text| text.lines().last() == Some(commits.to_string().as_str()))
+                            .unwrap_or(false)
+                    });
             if finished {
                 done.store(true, Ordering::Release);
                 break;

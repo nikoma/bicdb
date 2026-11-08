@@ -81,6 +81,7 @@ impl BicDb {
         writes: &[TxWrite],
         broker_publishes: &[crate::broker::PendingBrokerPublish],
         record_audit_events: &[Event],
+        sync_ops: &[SyncOp],
         prepared: PreparedWal,
     ) -> Result<Vec<u8>> {
         self.encode_tx_commit_frames_at(
@@ -89,6 +90,7 @@ impl BicDb {
             writes,
             broker_publishes,
             record_audit_events,
+            sync_ops,
             prepared,
             unix_timestamp(),
         )
@@ -101,6 +103,7 @@ impl BicDb {
         writes: &[TxWrite],
         broker_publishes: &[crate::broker::PendingBrokerPublish],
         record_audit_events: &[Event],
+        sync_ops: &[SyncOp],
         prepared: PreparedWal,
         timestamp: i64,
     ) -> Result<Vec<u8>> {
@@ -127,6 +130,16 @@ impl BicDb {
                         &mut bytes,
                         FrameKind::Transaction,
                         &TxFrameRef::RecordAudit { tx_id, event },
+                    )?;
+                }
+                if !sync_ops.is_empty() {
+                    storage::append_plain_json_frame(
+                        &mut bytes,
+                        FrameKind::Transaction,
+                        &TxFrameRef::SyncOps {
+                            tx_id,
+                            ops: sync_ops,
+                        },
                     )?;
                 }
                 storage::append_plain_json_frame(
@@ -166,6 +179,12 @@ impl BicDb {
             payloads.push(serde_json::to_vec(&TxFrameRef::RecordAudit {
                 tx_id,
                 event,
+            })?);
+        }
+        if !sync_ops.is_empty() {
+            payloads.push(serde_json::to_vec(&TxFrameRef::SyncOps {
+                tx_id,
+                ops: sync_ops,
             })?);
         }
         payloads.push(serde_json::to_vec(&TxFrameRef::Commit {
@@ -242,6 +261,7 @@ impl BicDb {
             writes,
             &[],
             journal,
+            &[],
             PreparedWal::default(),
             timestamp,
         )?;

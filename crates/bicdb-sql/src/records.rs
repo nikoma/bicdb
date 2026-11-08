@@ -2943,7 +2943,44 @@ fn policy_lookup_value(db: &BicDb, expr: &Expr, in_init_plan: bool) -> bool {
     }
 }
 
+// Lookup shortcuts must not execute per-row effects or user/domain checks
+// merely to test whether a bound value is NULL or to add a policy key.
+pub(crate) fn lookup_expression_has_effects(expr: &Expr) -> bool {
+    sqlparser::ast::visit_expressions(expr, |expr| {
+        use std::ops::ControlFlow;
+        match expr {
+            Expr::Function(_)
+            | Expr::Subquery(_)
+            | Expr::Exists { .. }
+            | Expr::InSubquery { .. }
+            | Expr::BinaryOp {
+                op: BinaryOperator::Custom(_) | BinaryOperator::PGCustomBinaryOperator(_),
+                ..
+            } => ControlFlow::Break(()),
+            Expr::Cast { data_type, .. }
+                if !pg_type_from_data_type(data_type)
+                    .is_ok_and(|(kind, _)| pg_type_oid_by_name(&kind).is_some()) =>
+            {
+                ControlFlow::Break(())
+            }
+            Expr::TypedString(typed)
+                if !pg_type_from_data_type(&typed.data_type)
+                    .is_ok_and(|(kind, _)| pg_type_oid_by_name(&kind).is_some()) =>
+            {
+                ControlFlow::Break(())
+            }
+            _ => ControlFlow::Continue(()),
+        }
+    })
+    .is_break()
+}
+
 impl<'db> SqlEngine<'db> {
+    pub(crate) fn eval_policy_lookup_value(&self, value: &Expr) -> Result<SqlValue> {
+        let value = fold_policy_init_plans(self, value, policy_context_hash(self))?;
+        self.eval_dynamic_bound_expr(&value)
+    }
+
     /// Add only equalities necessary for every row admitted by the applicable
     /// SELECT policy. This narrows index candidates, never replaces residual
     /// RLS. Role/owner/FORCE/native bypass decisions come from the same resolver
@@ -2955,10 +2992,22 @@ impl<'db> SqlEngine<'db> {
         alias: &str,
         schema: Option<&TableSchema>,
         selection: Option<&Expr>,
+        fold_values: bool,
     ) -> Result<Option<Expr>> {
         let Some(schema) = schema else {
             return Ok(None);
         };
+        // Preserve the executor's existing contradiction short circuit. Also
+        // decline augmentation when authored effects could otherwise be
+        // hoisted into the newly usable composite index's remaining keys.
+        if let Some(selection) = selection {
+            if crate::engine::selection_has_false_term(selection)
+                || self.selection_is_contradictory(alias, schema, selection)
+                || lookup_expression_has_effects(selection)
+            {
+                return Ok(None);
+            }
+        }
         let PreparedRls::Filter(filter) = prepare_rls_with_schema(
             self.db_ref(),
             table,
@@ -3012,14 +3061,19 @@ impl<'db> SqlEngine<'db> {
                 else {
                     continue;
                 };
-                let value = fold_policy_init_plans(self, value, policy_context_hash(self))?;
-                if expr_contains_subquery(&value) {
-                    continue;
-                }
+                let value = if fold_values {
+                    let folded = fold_policy_init_plans(self, value, policy_context_hash(self))?;
+                    if expr_contains_subquery(&folded) {
+                        continue;
+                    }
+                    folded.into_owned()
+                } else {
+                    value.clone()
+                };
                 let candidate = Expr::BinaryOp {
                     left: Box::new(column),
                     op: BinaryOperator::Eq,
-                    right: Box::new(value.into_owned()),
+                    right: Box::new(value),
                 };
                 if !candidates.contains(&candidate) {
                     candidates.push(candidate);

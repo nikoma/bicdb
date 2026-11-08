@@ -338,3 +338,104 @@ fn domain_cast_checks_are_not_speculatively_evaluated_by_explain() {
         vec![vec![SqlValue::Int(1)]]
     );
 }
+
+#[test]
+fn stable_policy_keys_are_deferred_until_execution_and_false_predicates_do_not_run_them() {
+    let (_dir, mut db) = fixture();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE FUNCTION stable_tenant() RETURNS TEXT LANGUAGE SQL STABLE SECURITY DEFINER AS $$ SELECT CASE WHEN current_setting('app.effect',true)='armed' THEN (1/0)::text ELSE current_setting('app.effect',true) END $$").unwrap();
+    sql.execute("GRANT EXECUTE ON FUNCTION stable_tenant() TO probe_reader")
+        .unwrap();
+    sql.execute("DROP POLICY tenant ON orders").unwrap();
+    sql.execute("CREATE POLICY stable_key ON orders FOR SELECT TO probe_reader USING (org_id=(SELECT stable_tenant()))").unwrap();
+    sql.execute("SET ROLE probe_reader").unwrap();
+    sql.execute("SET app.effect='armed'").unwrap();
+    let output = sql
+        .execute("EXPLAIN SELECT count(*)::int FROM orders WHERE number='N42'")
+        .unwrap();
+    assert!(output.rows.iter().any(|row| row[0]
+        .to_cell()
+        .contains("IndexScan orders_org_id_number_key")));
+    assert!(output
+        .rows
+        .iter()
+        .any(|row| row[0].to_cell().contains("RuntimeKeys deferred")));
+    assert_eq!(
+        sql.execute("SELECT count(*)::int FROM orders WHERE false")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(0)]]
+    );
+    for tenant in ["own", "other", "own"] {
+        sql.execute(&format!("SET app.effect='{tenant}'")).unwrap();
+        assert_eq!(
+            sql.execute("SELECT id FROM orders WHERE number='N42'")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::String(format!("{tenant}-42"))]]
+        );
+    }
+}
+
+#[test]
+fn stable_policy_exceptions_are_not_raised_by_explain_or_contradictory_filters() {
+    let (_dir, mut db) = fixture();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE FUNCTION failing_tenant() RETURNS TEXT LANGUAGE SQL STABLE SECURITY DEFINER AS $$ SELECT (1/0)::text $$").unwrap();
+    sql.execute("GRANT EXECUTE ON FUNCTION failing_tenant() TO probe_reader")
+        .unwrap();
+    sql.execute("DROP POLICY tenant ON orders").unwrap();
+    sql.execute("CREATE POLICY failing_key ON orders FOR SELECT TO probe_reader USING (org_id=(SELECT failing_tenant()))").unwrap();
+    sql.execute("SET ROLE probe_reader").unwrap();
+    sql.execute("EXPLAIN SELECT count(*)::int FROM orders WHERE number='N42'")
+        .unwrap();
+    for predicate in ["false", "1=0"] {
+        sql.execute(&format!(
+            "EXPLAIN SELECT count(*)::int FROM orders WHERE {predicate}"
+        ))
+        .unwrap();
+        assert_eq!(
+            sql.execute(&format!(
+                "SELECT count(*)::int FROM orders WHERE {predicate}"
+            ))
+            .unwrap()
+            .rows,
+            vec![vec![SqlValue::Int(0)]]
+        );
+    }
+    assert!(sql
+        .execute("SELECT count(*)::int FROM orders WHERE number='N42'")
+        .is_err());
+}
+
+#[test]
+fn a_new_policy_prefix_does_not_hoist_authored_volatile_filters_above_rls() {
+    let (_dir, mut db) = fixture();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE FUNCTION volatile_number() RETURNS TEXT LANGUAGE SQL VOLATILE SECURITY DEFINER AS $$ SELECT (1/0)::text $$").unwrap();
+    sql.execute("GRANT EXECUTE ON FUNCTION volatile_number() TO probe_reader")
+        .unwrap();
+    // No own rows satisfy residual RLS. An authored volatile predicate must
+    // not be hoisted into a new index key and evaluated before that denial.
+    sql.execute("UPDATE orders SET visible=false WHERE org_id='own'")
+        .unwrap();
+    sql.execute("SET ROLE probe_reader").unwrap();
+    sql.execute("SET app.tenant='own'").unwrap();
+    for column in ["number", "(number || '')"] {
+        assert_eq!(
+            sql.execute(&format!(
+                "SELECT count(*)::int FROM orders WHERE {column}=volatile_number()"
+            ))
+            .unwrap()
+            .rows,
+            vec![vec![SqlValue::Int(0)]]
+        );
+    }
+    let output = sql
+        .execute("EXPLAIN SELECT count(*)::int FROM orders WHERE number=volatile_number()")
+        .unwrap();
+    assert!(output
+        .rows
+        .iter()
+        .any(|row| row[0].to_cell().contains("FullScan")));
+}

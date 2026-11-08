@@ -545,3 +545,97 @@ fn drop_schema_requires_ownership() {
     let error = intruder.execute("DROP SCHEMA zz_owned").unwrap_err();
     assert!(format!("{error}").contains("owner"), "{error}");
 }
+
+/// A dump defines several functions of one name that differ by input types;
+/// each call runs the overload whose declared types fit its arguments.
+#[test]
+fn overloaded_functions_restore_and_dispatch_by_argument_types() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE ROLE owner_role LOGIN").unwrap();
+    sql.execute(
+        "CREATE FUNCTION public.shift(inter interval, days numeric) RETURNS integer \
+         LANGUAGE plpgsql AS $$ BEGIN RETURN EXTRACT(DAY FROM inter) + days; END; $$",
+    )
+    .unwrap();
+    sql.execute(
+        "CREATE FUNCTION public.shift(datetime timestamp with time zone, days numeric) \
+         RETURNS date LANGUAGE plpgsql AS $$ \
+         BEGIN RETURN CAST(datetime AS date) + CAST(days AS integer); END; $$",
+    )
+    .expect("a second signature is an overload, not a duplicate");
+    sql.execute(
+        "CREATE FUNCTION public.pick(character varying, integer) RETURNS text \
+         LANGUAGE sql AS $$ SELECT 'text' $$",
+    )
+    .unwrap();
+    sql.execute(
+        "CREATE FUNCTION public.pick(numeric, numeric) RETURNS text \
+         LANGUAGE sql AS $$ SELECT 'number' $$",
+    )
+    .unwrap();
+    assert!(
+        sql.execute(
+            "CREATE FUNCTION public.pick(numeric, numeric) RETURNS text \
+             LANGUAGE sql AS $$ SELECT 'again' $$",
+        )
+        .is_err(),
+        "the same signature still conflicts"
+    );
+
+    let text = |sql: &mut SqlSession, query: &str| sql.execute(query).unwrap().rows[0][0].to_cell();
+    assert_eq!(text(&mut sql, "SELECT shift(interval '3 days', 2)"), "5");
+    assert_eq!(
+        text(
+            &mut sql,
+            "SELECT shift(timestamptz '2026-01-30 10:00:00+00', 3)"
+        ),
+        "2026-02-02"
+    );
+    assert_eq!(
+        text(
+            &mut sql,
+            "SELECT pg_typeof(shift(CAST(now() AS timestamptz), 1))"
+        ),
+        "date"
+    );
+    assert_eq!(text(&mut sql, "SELECT pick('a', 1)"), "text");
+    assert_eq!(text(&mut sql, "SELECT pick(1.5, 2)"), "number");
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_proc WHERE proname IN ('shift', 'pick')"
+        ),
+        4
+    );
+
+    // DDL naming a signature acts on that overload, including unnamed ones.
+    sql.execute("ALTER FUNCTION public.pick(character varying, integer) OWNER TO owner_role")
+        .unwrap();
+    sql.execute(
+        "ALTER FUNCTION public.shift(timestamp with time zone, numeric) OWNER TO owner_role",
+    )
+    .unwrap();
+    sql.execute("DROP FUNCTION public.shift(interval, numeric)")
+        .unwrap();
+    assert_eq!(
+        text(
+            &mut sql,
+            "SELECT shift(timestamptz '2026-01-30 10:00:00+00', 1)"
+        ),
+        "2026-01-31"
+    );
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_proc WHERE proname = 'shift'"
+        ),
+        1
+    );
+    sql.execute("BEGIN").unwrap();
+    sql.execute("DROP FUNCTION public.pick(numeric, numeric)")
+        .unwrap();
+    sql.execute("ROLLBACK").unwrap();
+    assert_eq!(text(&mut sql, "SELECT pick(1.5, 2)"), "number");
+    assert_eq!(text(&mut sql, "SELECT pick('a', 1)"), "text");
+}

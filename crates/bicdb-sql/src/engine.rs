@@ -3999,6 +3999,7 @@ pub(crate) trait RoutineCallHost: std::fmt::Debug {
         engine: &SqlEngine<'_>,
         name: &str,
         args: &[SqlValue],
+        arg_types: &[Option<String>],
     ) -> Result<SqlValue>;
 }
 

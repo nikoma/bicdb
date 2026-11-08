@@ -3583,6 +3583,7 @@ impl<'db> SqlSession<'db> {
             internal_symbol,
             owner: Some(current_user_from_gucs(&self.session_gucs)),
             security_definer: matches!(create_function.security, Some(FunctionSecurity::Definer)),
+            overload: None,
         };
         if create_function.or_replace
             && list_user_types(self.db_ref())?

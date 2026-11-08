@@ -1895,7 +1895,7 @@ impl<'db> SqlEngine<'db> {
             return Ok(value);
         }
         // A stored function over aggregate results, e.g. f(max(a), max(b)).
-        if let Some(value) = self.eval_stored_sql_function_value(&name, &args)? {
+        if let Some(value) = self.eval_stored_sql_function_value(&name, &args, &arg_types)? {
             return Ok(value);
         }
         Err(SqlError::Unsupported(format!(

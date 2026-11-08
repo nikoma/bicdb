@@ -2849,9 +2849,20 @@ pub(crate) fn row_security_disabled_error(table: &str) -> SqlError {
 // supported immutable wrappers, or a declared STABLE/IMMUTABLE zero-arg routine.
 fn policy_lookup_value(db: &BicDb, expr: &Expr, in_init_plan: bool) -> bool {
     match expr {
-        Expr::Value(_) | Expr::TypedString(_) => true,
-        Expr::Nested(inner) | Expr::Cast { expr: inner, .. } => {
-            policy_lookup_value(db, inner, in_init_plan)
+        Expr::Value(value) => !matches!(&value.value, Value::Placeholder(_)),
+        Expr::TypedString(typed) => pg_type_from_data_type(&typed.data_type)
+            .is_ok_and(|(kind, _)| pg_type_oid_by_name(&kind).is_some()),
+        Expr::Nested(inner) => policy_lookup_value(db, inner, in_init_plan),
+        Expr::Cast {
+            expr: inner,
+            data_type,
+            array: false,
+            format: None,
+            ..
+        } => {
+            pg_type_from_data_type(data_type)
+                .is_ok_and(|(kind, _)| pg_type_oid_by_name(&kind).is_some())
+                && policy_lookup_value(db, inner, in_init_plan)
         }
         Expr::Subquery(query) if is_policy_init_plan(query) => {
             let SetExpr::Select(select) = query.body.as_ref() else {

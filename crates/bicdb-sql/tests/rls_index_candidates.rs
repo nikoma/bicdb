@@ -306,3 +306,35 @@ fn volatile_defaults_and_decorated_init_plans_are_not_executed_by_explain() {
         vec![vec![SqlValue::Int(1)]]
     );
 }
+
+#[test]
+fn domain_cast_checks_are_not_speculatively_evaluated_by_explain() {
+    let (_dir, mut db) = fixture();
+    let mut owner = SqlSession::new(&mut db);
+    owner
+        .execute("CREATE SEQUENCE probe_domain_effect")
+        .unwrap();
+    owner
+        .execute(
+            "CREATE DOMAIN probe_tenant_domain AS TEXT CHECK (nextval('probe_domain_effect') > 0)",
+        )
+        .unwrap();
+    owner.execute("DROP POLICY tenant ON orders").unwrap();
+    owner.execute("CREATE POLICY domain_value ON orders FOR SELECT TO probe_reader USING (org_id='own'::probe_tenant_domain)").unwrap();
+    owner.execute("SET ROLE probe_reader").unwrap();
+    let output = owner
+        .execute("EXPLAIN SELECT count(*)::int FROM orders WHERE number='N42'")
+        .unwrap();
+    assert!(output
+        .rows
+        .iter()
+        .any(|row| row[0].to_cell().contains("FullScan")));
+    owner.execute("RESET ROLE").unwrap();
+    assert_eq!(
+        owner
+            .execute("SELECT nextval('probe_domain_effect')")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(1)]]
+    );
+}

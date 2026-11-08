@@ -787,7 +787,16 @@ fn a_backup_gate_timeout_does_not_fence() {
 
 /// Verification rewrites the transaction log to a new, synced inode (an
 /// fsync of page-cache pages that a failed fsync left clean would write
-/// nothing). A normal open leaves the log alone.
+/// nothing). A normal embedded open leaves the log alone.
+///
+/// The test holds the old log open while the database runs. Without that,
+/// the comparison was racy: a paged open cuts the log (copy and rename) and
+/// so does the verification and the follow-up checkpoint, each freeing the
+/// previous inode, and the filesystem may hand a freed inode number to the
+/// next copy. The log could then end on the same inode number it started on
+/// although it was rewritten, which failed this test intermittently. An open
+/// descriptor keeps the old inode allocated, so a rewritten log always has a
+/// different number.
 #[cfg(unix)]
 #[test]
 fn verification_rewrites_the_transaction_log() {
@@ -801,22 +810,37 @@ fn verification_rewrites_the_transaction_log() {
             acked = seed(&mut db, 4);
         }
         let inode = || std::fs::metadata(&log).unwrap().ino();
+        // Pin the inode the log has before each step.
+        let pin = || std::fs::File::open(&log).unwrap();
         let before_normal = inode();
+        let pinned_normal = pin();
         drop(BicDb::open_with_config(dir.path(), config(storage.clone())).unwrap());
         let after_normal = inode();
+        drop(pinned_normal);
         {
             let db = BicDb::open_with_config(dir.path(), config(storage.clone())).unwrap();
             let _fault = arm_io_failure("transaction_log.write", dir.path(), 1, false);
             put(&db, "x").unwrap_err();
         }
+        assert!(
+            dir.path().join(DURABILITY_FAILURE_MARKER).exists(),
+            "{storage:?}: no failure marker, so the next open would not verify"
+        );
         let before_verify = inode();
-        let db = reopen_and_verify(dir.path(), storage.clone(), &acked);
-        drop(db);
+        let pinned_verify = pin();
+        let db = BicDb::open_with_config(dir.path(), config(storage.clone())).unwrap();
+        let after_verify = inode();
+        drop(pinned_verify);
+        assert!(
+            !dir.path().join(DURABILITY_FAILURE_MARKER).exists(),
+            "{storage:?}: the open did not verify"
+        );
         assert_ne!(
-            inode(),
-            before_verify,
+            after_verify, before_verify,
             "{storage:?}: verification did not rewrite the log"
         );
+        drop(db);
+        reopen_and_verify(dir.path(), storage.clone(), &acked);
         if storage == StorageMode::EmbeddedMemory {
             assert_eq!(before_normal, after_normal, "a normal open rewrote the log");
         }

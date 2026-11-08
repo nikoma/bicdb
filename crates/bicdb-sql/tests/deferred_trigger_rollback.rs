@@ -60,3 +60,51 @@ fn deferred_triggers_follow_savepoint_and_exception_rollback() {
         );
     }
 }
+
+#[test]
+fn drop_table_drops_its_triggers() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(directory.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE TABLE audited (id int)").unwrap();
+    session.execute("CREATE TABLE audit_log (id int)").unwrap();
+    session
+        .execute("CREATE FUNCTION log_row() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN INSERT INTO audit_log VALUES (NEW.id); RETURN NEW; END $$")
+        .unwrap();
+    session
+        .execute("CREATE TRIGGER log_insert AFTER INSERT ON audited FOR EACH ROW EXECUTE FUNCTION log_row()")
+        .unwrap();
+    let count =
+        |session: &mut SqlSession, sql: &str| session.execute(sql).unwrap().rows[0][0].clone();
+    assert_eq!(
+        count(
+            &mut session,
+            "SELECT count(*) FROM pg_trigger WHERE tgname = 'log_insert'"
+        ),
+        SqlValue::Int(1)
+    );
+    // Rolled back with the transaction that dropped the table.
+    session.execute("BEGIN").unwrap();
+    session.execute("DROP TABLE audited").unwrap();
+    session.execute("ROLLBACK").unwrap();
+    session.execute("INSERT INTO audited VALUES (1)").unwrap();
+    assert_eq!(
+        count(&mut session, "SELECT count(*) FROM audit_log"),
+        SqlValue::Int(1)
+    );
+    session.execute("DROP TABLE audited").unwrap();
+    assert_eq!(
+        count(
+            &mut session,
+            "SELECT count(*) FROM pg_trigger WHERE tgname = 'log_insert'"
+        ),
+        SqlValue::Int(0)
+    );
+    // A new table of the same name does not inherit the old trigger.
+    session.execute("CREATE TABLE audited (id int)").unwrap();
+    session.execute("INSERT INTO audited VALUES (2)").unwrap();
+    assert_eq!(
+        count(&mut session, "SELECT count(*) FROM audit_log"),
+        SqlValue::Int(1)
+    );
+}

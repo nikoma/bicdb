@@ -22,7 +22,7 @@ impl<'db> SqlSession<'db> {
         let name_end = rest
             .find(|ch: char| ch == '(' || ch.is_whitespace())
             .ok_or_else(|| SqlError::InvalidSql("CREATE FUNCTION requires a name".to_string()))?;
-        let (raw_function_schema, name) = routine_schema_and_name(&rest[..name_end]);
+        let (raw_function_schema, name) = routine_creation_schema_and_name(&rest[..name_end]);
         let (return_type, returns_set) = raw_routine_return_type(trimmed)?;
         let language = raw_routine_language(trimmed)?;
         match language.as_str() {
@@ -186,7 +186,8 @@ impl<'db> SqlSession<'db> {
         );
         let arg_types = procedure_argument_type_schemas(params)?;
         validate_routine_pseudo_types(&arg_types, &[], arg_types.len(), None, &language)?;
-        let (procedure_schema, procedure_name) = routine_schema_and_name(&object_name(name)?);
+        let (procedure_schema, procedure_name) =
+            routine_creation_schema_and_name(&object_name(name)?);
         let routine = RoutineSchema {
             name: procedure_name,
             schema: procedure_schema,

@@ -5723,10 +5723,15 @@ pub(crate) fn table_with_joins_name_and_alias(table: &TableWithJoins) -> Result<
         ));
     };
     let table = relation_name(name)?;
-    let alias = alias
-        .as_ref()
-        .map(|alias| alias.name.value.clone())
-        .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(&table).to_string());
+    // Without an alias the target is named by its table name, also when its
+    // storage name encodes a non-public schema.
+    let alias = match alias {
+        Some(alias) => alias.name.value.clone(),
+        None => object_name_parts(name)
+            .last()
+            .cloned()
+            .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(&table).to_string()),
+    };
     Ok((table, alias))
 }
 

@@ -462,6 +462,13 @@ impl<'db> SqlSession<'db> {
                         }
                     }
                     let schema_existed = schema.is_some();
+                    // A table's triggers belong to it and are dropped with it.
+                    for trigger in list_triggers(self.db_ref())?
+                        .into_iter()
+                        .filter(|trigger| trigger.table_name.eq_ignore_ascii_case(&table))
+                    {
+                        self.delete_session_trigger(&trigger.name, Some(&trigger.table_name))?;
+                    }
                     let existed = self.drop_session_collection(&table)?;
                     self.delete_session_schema(&table)?;
                     if existed || schema_existed {
@@ -943,7 +950,11 @@ impl<'db> SqlSession<'db> {
             if !sequences.is_empty() {
                 self.execute_drop(ObjectType::Sequence, true, &sequences, true, true)?;
             }
-            for routine in &target.routines {
+            // Further overloads first: dropping a name's first routine moves
+            // its next overload to the name's plain catalog key.
+            let mut routines = target.routines.iter().collect::<Vec<_>>();
+            routines.sort_by_key(|routine| routine.overload.is_none());
+            for routine in routines {
                 self.delete_session_routine(routine)?;
             }
             let types = target
@@ -2672,7 +2683,10 @@ impl<'db> SqlSession<'db> {
         let _dynamic = oracle::dynamic_sql::Scope::new(
             oracle::preview_routine_language_version(&language).is_some_and(|v| v >= 16),
         );
-        let (mut declarations, mut statements, mut exception_handlers) = parse_plpgsql_body(&body)?;
+        let (mut declarations, mut statements, mut exception_handlers) = {
+            let _dialect = routines::PostgresDialectScope::new(!oracle_block);
+            parse_plpgsql_body(&body)?
+        };
         routines::parameterized_cursors::validate_capabilities(
             &language,
             &declarations,
@@ -3505,7 +3519,8 @@ impl<'db> SqlSession<'db> {
             )
             .is_some_and(|v| v >= 29),
         );
-        let (function_schema, name) = routine_schema_and_name(&object_name(&create_function.name)?);
+        let (function_schema, name) =
+            routine_creation_schema_and_name(&object_name(&create_function.name)?);
         let (return_type, returns_set) = create_function
             .return_type
             .as_ref()

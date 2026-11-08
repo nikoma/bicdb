@@ -1547,7 +1547,9 @@ pub(crate) fn execute_builtin_function(
         )),
         "current_schema" | "pg_catalog.current_schema" => Ok(SqlResult::new(
             vec!["current_schema".to_string()],
-            vec![vec![SqlValue::String("public".to_string())]],
+            vec![vec![SqlValue::String(
+                crate::search_path::current_schema_name(),
+            )]],
         )),
         "current_schemas" | "pg_catalog.current_schemas" => {
             let args = function_args(function)
@@ -1568,14 +1570,10 @@ pub(crate) fn execute_builtin_function(
                     ));
                 }
             };
-            let schemas = if include_implicit {
-                vec![
-                    SqlValue::String("pg_catalog".to_string()),
-                    SqlValue::String("public".to_string()),
-                ]
-            } else {
-                vec![SqlValue::String("public".to_string())]
-            };
+            let schemas = crate::search_path::current_schema_names(include_implicit)
+                .into_iter()
+                .map(SqlValue::String)
+                .collect::<Vec<_>>();
             Ok(SqlResult::new(
                 vec![name.replace("pg_catalog.", "")],
                 vec![vec![sql_array_value(schemas)?]],

@@ -1647,6 +1647,7 @@ fn statements(
                 lower,
                 upper,
                 body,
+                ..
             } => {
                 visit(db, env, &mut lower.expr)?;
                 visit(db, env, &mut upper.expr)?;

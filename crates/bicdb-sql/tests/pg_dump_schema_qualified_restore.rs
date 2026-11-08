@@ -100,6 +100,42 @@ fn set_default_nextval_resolves_a_schema_qualified_sequence() {
     );
 }
 
+/// Migration scripts register themselves with `SELECT f('..') FROM dual`,
+/// where `f` writes; function bodies use `=` assignment and RAISE WARNING.
+#[test]
+fn writing_functions_in_select_lists_and_plpgsql_dialect_forms() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE TABLE public.registered (name TEXT)")
+        .unwrap();
+    sql.execute("CREATE VIEW public.one_row AS SELECT 'X' AS dummy")
+        .unwrap();
+    sql.execute(
+        "CREATE FUNCTION public.register(p_name varchar) RETURNS void LANGUAGE plpgsql AS $$ \
+         DECLARE n integer; BEGIN \
+           n = 2; n = n * 3; \
+           RAISE WARNING 'registering % (%)', p_name, n; \
+           RAISE INFO 'info'; \
+           INSERT INTO public.registered VALUES (p_name || n); \
+         END; $$",
+    )
+    .unwrap();
+    sql.execute("SELECT register('a') FROM one_row").unwrap();
+    sql.execute("SELECT register(dummy) FROM one_row WHERE dummy = 'X'")
+        .unwrap();
+    let rows = sql
+        .execute("SELECT name FROM public.registered ORDER BY name")
+        .unwrap()
+        .rows;
+    assert_eq!(
+        rows,
+        vec![
+            vec![SqlValue::String("X6".into())],
+            vec![SqlValue::String("a6".into())]
+        ]
+    );
+}
+
 /// CREATE TABLE with an inline schema-qualified nextval default (the other
 /// spelling pg_dump emits) binds to the same sequence.
 #[test]
@@ -201,6 +237,29 @@ AS $$ BEGIN RETURN NEW; END; $$"#,
         rows.rows,
         vec![vec![SqlValue::String("public".to_string())]]
     );
+}
+
+/// Dynamic SQL in a routine resolves unqualified relations through the
+/// caller's search_path when it runs.
+#[test]
+fn dynamic_execute_binds_relations_through_search_path() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE TABLE app.item (id INT, note TEXT)")
+        .unwrap();
+    sql.execute(
+        "CREATE FUNCTION app.run(command text) RETURNS void LANGUAGE plpgsql AS $$ \
+         BEGIN EXECUTE command; END; $$",
+    )
+    .unwrap();
+    sql.execute("SET search_path TO app, public").unwrap();
+    sql.execute("SELECT run('insert into item values (1, ''a'')')")
+        .unwrap();
+    sql.execute("SELECT run('alter table item alter column note set not null')")
+        .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.item"), 1);
+    assert!(sql.execute("INSERT INTO item VALUES (2, NULL)").is_err());
 }
 
 /// A dump restores into its own schema; the application then names its
@@ -325,6 +384,40 @@ fn alter_role_set_records_session_defaults() {
         .is_empty());
 }
 
+/// A correlated subquery names the outer table by its bare name, also when
+/// the table lives in a schema (written qualified, or bound through
+/// search_path).
+#[test]
+fn correlated_references_name_schema_qualified_tables_by_their_bare_name() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE TABLE app.line (id INT, product_id INT, uom_id INT)")
+        .unwrap();
+    sql.execute("CREATE TABLE app.product (product_id INT, uom_id INT)")
+        .unwrap();
+    sql.execute("INSERT INTO app.line VALUES (1, 10, NULL), (2, 20, NULL)")
+        .unwrap();
+    sql.execute("INSERT INTO app.product VALUES (10, 100), (20, 200)")
+        .unwrap();
+    sql.execute(
+        "UPDATE app.line SET uom_id = \
+         (SELECT uom_id FROM app.product WHERE product_id = line.product_id)",
+    )
+    .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT sum(uom_id) FROM app.line"), 300);
+    sql.execute("SET search_path TO app, public").unwrap();
+    sql.execute(
+        "UPDATE Line SET uom_id = \
+         (SELECT uom_id + 1 FROM Product WHERE product_id = Line.product_id)",
+    )
+    .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT sum(uom_id) FROM line"), 302);
+    sql.execute("DELETE FROM line WHERE EXISTS (SELECT 1 FROM product WHERE product.product_id = line.product_id AND product.uom_id = 200)")
+        .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM line"), 1);
+}
+
 /// pg_dump emits ALTER TABLE ... OWNER TO for views, and creates triggers on
 /// schema-qualified tables.
 #[test]
@@ -360,6 +453,47 @@ fn restored_view_owners_and_schema_qualified_triggers_work() {
     sql.execute("INSERT INTO app.blob VALUES (7)").unwrap();
     sql.execute("DELETE FROM app.blob").unwrap();
     assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.removed"), 1);
+}
+
+/// An unqualified CREATE FUNCTION creates (or replaces) the function in the
+/// first schema on the search_path.
+#[test]
+fn unqualified_functions_are_created_in_the_first_search_path_schema() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE FUNCTION app.make_id() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$")
+        .unwrap();
+    sql.execute("SET search_path TO app, public").unwrap();
+    sql.execute(
+        "CREATE OR REPLACE FUNCTION Make_ID() RETURNS integer LANGUAGE sql AS $$ SELECT 2 $$",
+    )
+    .unwrap();
+    sql.execute(
+        "CREATE FUNCTION fresh_fn() RETURNS integer LANGUAGE plpgsql AS $$ BEGIN RETURN 3; END $$",
+    )
+    .unwrap();
+    let rows = sql
+        .execute(
+            "SELECT p.proname, n.nspname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace \
+             WHERE p.proname IN ('make_id', 'fresh_fn') ORDER BY 1",
+        )
+        .unwrap()
+        .rows;
+    assert_eq!(
+        rows,
+        vec![
+            vec![
+                SqlValue::String("fresh_fn".into()),
+                SqlValue::String("app".into())
+            ],
+            vec![
+                SqlValue::String("make_id".into()),
+                SqlValue::String("app".into())
+            ],
+        ]
+    );
+    assert_eq!(int_at(&mut sql, "SELECT app.make_id()"), 2);
 }
 
 /// One simple-query text that sets search_path and then names relations
@@ -410,6 +544,44 @@ fn statement_list_binds_each_statement_with_the_path_set_before_it() {
         2
     );
     assert!(sql.execute("SELECT count(*) FROM ad_client").is_err());
+}
+
+/// current_schema and current_schemas report the search_path's schemas.
+#[test]
+fn current_schema_follows_the_search_path() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    let text = |sql: &mut SqlSession, query: &str| sql.execute(query).unwrap().rows[0][0].to_cell();
+    assert_eq!(text(&mut sql, "SELECT current_schema()"), "public");
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE TABLE app.item (id INT)").unwrap();
+    sql.execute("SET search_path TO app, public").unwrap();
+    assert_eq!(text(&mut sql, "SELECT current_schema()"), "app");
+    assert_eq!(text(&mut sql, "SELECT current_schema"), "app");
+    assert_eq!(
+        text(
+            &mut sql,
+            "SELECT array_to_string(current_schemas(false), ',')"
+        ),
+        "app,public"
+    );
+    assert_eq!(
+        text(
+            &mut sql,
+            "SELECT array_to_string(current_schemas(true), ',')"
+        ),
+        "pg_catalog,app,public"
+    );
+    // Catalog lookups by CURRENT_SCHEMA inside a routine find the schema's relations.
+    sql.execute(
+        "CREATE FUNCTION app.has_item() RETURNS bigint LANGUAGE plpgsql AS $$ \
+         DECLARE n bigint; BEGIN SELECT count(*) INTO n FROM pg_catalog.pg_class pc \
+         WHERE pc.relname = 'item' AND pc.relnamespace = \
+         (SELECT oid FROM pg_catalog.pg_namespace WHERE nspname = CURRENT_SCHEMA); \
+         RETURN n; END; $$",
+    )
+    .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT has_item()"), 1);
 }
 
 fn namespace_exists(sql: &mut SqlSession, name: &str) -> bool {
@@ -544,6 +716,39 @@ fn drop_schema_requires_ownership() {
     let mut intruder = SqlSession::new_unprivileged(&mut db, "intruder");
     let error = intruder.execute("DROP SCHEMA zz_owned").unwrap_err();
     assert!(format!("{error}").contains("owner"), "{error}");
+}
+
+#[test]
+fn drop_schema_cascade_removes_every_overload() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA calc").unwrap();
+    for signature in ["a integer", "a text", "a integer, b integer"] {
+        sql.execute(&format!(
+            "CREATE FUNCTION calc.twice({signature}) RETURNS text LANGUAGE sql AS $$ SELECT 'x' $$"
+        ))
+        .unwrap();
+    }
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_proc WHERE proname = 'twice'"
+        ),
+        3
+    );
+    sql.execute("DROP SCHEMA calc CASCADE").unwrap();
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_proc WHERE proname = 'twice'"
+        ),
+        0
+    );
+    sql.execute("CREATE SCHEMA calc").unwrap();
+    sql.execute(
+        "CREATE FUNCTION calc.twice(a integer) RETURNS text LANGUAGE sql AS $$ SELECT 'y' $$",
+    )
+    .expect("no overload of the dropped schema survives");
 }
 
 /// A dump defines several functions of one name that differ by input types;

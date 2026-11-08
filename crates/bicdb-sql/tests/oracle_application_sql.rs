@@ -116,6 +116,44 @@ END;",
     );
 }
 
+/// PostgreSQL-only PL/pgSQL forms (`=` assignment, RAISE WARNING) and
+/// data-modifying functions in a query's select list keep the Oracle
+/// profile's behaviour: a function that modifies data cannot be called from
+/// a query over a table (Oracle raises ORA-14551), and `x = 1;` is not an
+/// assignment.
+#[test]
+fn postgres_dialect_forms_do_not_apply_to_the_oracle_profile() {
+    let (_root, mut db) = app_database();
+    for source in [
+        "CREATE TABLE audit_rows (id NUMBER)",
+        "CREATE TABLE audit_sources (id NUMBER)",
+        "INSERT INTO audit_sources VALUES (1)",
+        "CREATE OR REPLACE FUNCTION note_row(p_id IN NUMBER) RETURN NUMBER AS
+         BEGIN
+           INSERT INTO audit_rows VALUES (p_id);
+           RETURN p_id;
+         END;",
+    ] {
+        run(&mut db, source).unwrap();
+    }
+    assert!(run(&mut db, "SELECT note_row(id) FROM audit_sources").is_err());
+    assert_eq!(
+        texts(run(&mut db, "SELECT COUNT(*) FROM audit_rows").unwrap()),
+        vec![vec!["0".to_string()]]
+    );
+    assert!(run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION equals_form RETURN NUMBER AS
+           n NUMBER;
+         BEGIN
+           n = 1;
+           RETURN n;
+         END;"
+    )
+    .and_then(|_| run(&mut db, "SELECT equals_form FROM dual"))
+    .is_err());
+}
+
 #[test]
 fn character_patterns_over_joined_column_functions() {
     let (_root, mut db) = app_database();
@@ -189,6 +227,28 @@ fn drop_table_cascade_constraints_removes_referencing_foreign_keys() {
     assert!(run_owner(&mut db, "SELECT COUNT(*) FROM gone_t").is_err());
 }
 
+/// RAW values in Oracle routines keep the profile's conversion rules: the
+/// PostgreSQL bytea typing of routine variables does not apply, and RAW
+/// concatenation still requires an explicit conversion.
+#[test]
+fn raw_routine_parameters_keep_oracle_profile_conversions() {
+    let (_root, mut db) = app_database();
+    let created = run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION raw_pair(p IN RAW) RETURN VARCHAR2 AS
+         BEGIN
+           RETURN p || p;
+         END;",
+    );
+    let error = created
+        .and_then(|_| run(&mut db, "SELECT raw_pair(HEXTORAW('0102')) FROM dual"))
+        .unwrap_err();
+    assert!(
+        error.to_string().contains("Oracle concatenation requires"),
+        "{error}"
+    );
+}
+
 #[test]
 fn unique_constraints_are_checked_when_the_statement_ends() {
     let (_root, mut db) = app_database();
@@ -219,6 +279,29 @@ fn unique_constraints_are_checked_when_the_statement_ends() {
         texts(run(&mut db, "SELECT id, seq FROM entries ORDER BY seq").unwrap()),
         vec![vec!["2", "1"], vec!["1", "2"]]
     );
+}
+
+/// The PL/pgSQL `REVERSE high .. low` form does not change the Oracle
+/// profile, whose front end still rejects REVERSE loops (Oracle walks
+/// `REVERSE low .. high` backwards; the interpreter honours that order for
+/// Oracle routines once the front end accepts the form).
+#[test]
+fn reverse_for_loops_are_unchanged_in_the_oracle_profile() {
+    let (_root, mut db) = app_database();
+    let created = run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION countdown RETURN VARCHAR2 AS
+           acc VARCHAR2(20) := '';
+         BEGIN
+           FOR i IN REVERSE 1 .. 3 LOOP
+             acc := acc || i;
+           END LOOP;
+           RETURN acc;
+         END;",
+    );
+    assert!(created
+        .and_then(|_| run(&mut db, "SELECT countdown() FROM dual"))
+        .is_err());
 }
 
 #[test]

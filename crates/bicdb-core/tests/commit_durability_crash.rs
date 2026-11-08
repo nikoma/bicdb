@@ -601,6 +601,13 @@ fn repeat_core_matrices() {
             cases.push((round, Case::Crash("all-logs", point)));
         }
     }
+    // `DURABILITY_ONLY=<substring>` keeps only matching cases (diagnosis).
+    if let Ok(only) = std::env::var("DURABILITY_ONLY") {
+        cases.retain(|(_, case)| match case {
+            Case::FailIo(mode, spec) => format!("{mode} fail-io {spec}").contains(&only),
+            Case::Crash(mode, point) => format!("{mode} crash {point}").contains(&only),
+        });
+    }
     let total = cases.len();
     let queue = std::sync::Mutex::new(cases.into_iter());
     let failures = std::sync::Mutex::new(Vec::new());

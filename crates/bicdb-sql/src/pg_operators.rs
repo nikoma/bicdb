@@ -1309,7 +1309,8 @@ impl RoutineScope {
         for declaration in declarations {
             if let RoutineDecl::Variable { name, pg_type, .. } = declaration {
                 self.variables.retain(|(existing, _)| existing != name);
-                self.variables.push((name.clone(), pg_type.as_deref().map(canonical_type)));
+                self.variables
+                    .push((name.clone(), pg_type.as_deref().map(canonical_type)));
             }
         }
     }
@@ -1320,7 +1321,11 @@ struct RoutineBinder<'s, 'db> {
 }
 
 impl RoutineBinder<'_, '_> {
-    fn visit<T: sqlparser::ast::VisitMut>(&mut self, scope: &RoutineScope, node: &mut T) -> Result<()> {
+    fn visit<T: sqlparser::ast::VisitMut>(
+        &mut self,
+        scope: &RoutineScope,
+        node: &mut T,
+    ) -> Result<()> {
         self.binder.scopes = vec![scope.env()];
         // A resolution error (an ambiguous or shell operator) belongs to the
         // statement when it runs, not to the routine as a whole: the
@@ -1329,7 +1334,11 @@ impl RoutineBinder<'_, '_> {
         Ok(())
     }
 
-    fn declarations(&mut self, scope: &RoutineScope, declarations: &mut [RoutineDecl]) -> Result<()> {
+    fn declarations(
+        &mut self,
+        scope: &RoutineScope,
+        declarations: &mut [RoutineDecl],
+    ) -> Result<()> {
         for declaration in declarations {
             match declaration {
                 RoutineDecl::Variable {
@@ -1392,7 +1401,9 @@ impl RoutineBinder<'_, '_> {
                     self.visit(scope, &mut upper.expr)?;
                     let mut inner = scope.clone();
                     inner.variables.retain(|(name, _)| name != iterator);
-                    inner.variables.push((iterator.clone(), Some("int4".into())));
+                    inner
+                        .variables
+                        .push((iterator.clone(), Some("int4".into())));
                     self.statements(&inner, body)?;
                 }
                 RoutineStmt::QueryForLoop {

@@ -160,6 +160,47 @@ fn hash_join_conjunction_avoids_cartesian_candidate_pairs() {
 }
 
 #[test]
+fn routine_queries_filter_catalog_joins_by_variable_values() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE TABLE altered_items (amount numeric(10), label varchar(20))")
+        .unwrap();
+    for n in 0..30 {
+        sql.execute(&format!(
+            "CREATE TABLE filler_{n} (a int, b text, c numeric, d date)"
+        ))
+        .unwrap();
+    }
+    sql.execute(
+        "CREATE FUNCTION column_type(tablename name, columnname name) RETURNS text \
+         LANGUAGE plpgsql AS $$ DECLARE sqltype text; BEGIN \
+         SELECT format_type(pg_type.oid, pg_attribute.atttypmod) INTO sqltype \
+           FROM pg_class, pg_attribute, pg_type, pg_namespace \
+          WHERE relname = lower(tablename) AND relkind IN ('r','p') \
+            AND pg_class.oid = pg_attribute.attrelid AND attname = lower(columnname) \
+            AND atttypid = pg_type.oid AND pg_class.relnamespace = pg_namespace.oid \
+            AND pg_namespace.nspname = 'public'; \
+         RETURN sqltype; END; $$",
+    )
+    .unwrap();
+    SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().push(SqlProfileStats::default()));
+    let result = sql.execute("SELECT column_type('Altered_Items', 'AMOUNT')");
+    let stats = SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().pop().unwrap());
+    assert_eq!(
+        result.unwrap().rows,
+        vec![vec![SqlValue::String("numeric(10,0)".into())]]
+    );
+    assert!(
+        // Without the variable values the join enumerates ~30k pairs here and
+        // grows with catalog size (out of memory on a 900-table schema).
+        stats.join_candidate_pairs < 5_000,
+        "variable filters must narrow the catalog join: {} pairs",
+        stats.join_candidate_pairs
+    );
+}
+
+#[test]
 fn hash_join_conjunction_keeps_residuals_duplicates_and_null_semantics() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(dir.path()).unwrap();

@@ -1,0 +1,7 @@
+     Running tests/read_committed_zero_boundary.rs (/root/carrier-zero-friction-target/debug/deps/read_committed_zero_boundary-2d2c66af5212326c)
+running 4 tests
+test independent_refresh_keeps_new_uncontested_key_committable ... ok
+test refresh_after_buffering_cannot_rebase_observed_absent_key ... ok
+test refresh_before_buffering_cannot_rebase_observed_absent_key ... ok
+test zero_snapshot_optimistic_insert_keeps_its_original_boundary ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s

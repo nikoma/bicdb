@@ -1781,3 +1781,18 @@ pub(crate) fn sql_value_to_literal_expr(value: &SqlValue) -> Expr {
     };
     Expr::Value(literal.into())
 }
+
+/// A literal expression for an evaluated value.
+pub(crate) fn sql_value_literal_expr(value: &SqlValue) -> Expr {
+    let value = match value {
+        SqlValue::Null => Value::Null,
+        SqlValue::Bool(value) => Value::Boolean(*value),
+        SqlValue::Int(value) => Value::Number(value.to_string(), false),
+        SqlValue::Float(value) => Value::Number(value.to_string(), false),
+        other => Value::SingleQuotedString(other.to_cell()),
+    };
+    Expr::Value(ValueWithSpan {
+        value,
+        span: sqlparser::tokenizer::Span::empty(),
+    })
+}

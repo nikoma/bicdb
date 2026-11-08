@@ -1,0 +1,35 @@
+     Running tests/commit_durability_isolation.rs (/root/carrier-zero-friction-target/debug/deps/commit_durability_isolation-f8a731c1ec2c66cb)
+running 1 test
+test transaction_log_only_durability_is_strictly_opt_in ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+     Running tests/transaction_isolation.rs (/root/carrier-zero-friction-target/debug/deps/transaction_isolation-3e711890c0c1186b)
+running 5 tests
+test read_committed_refreshes_at_each_host_statement_boundary ... ok
+test repeatable_read_keeps_its_fixed_mvcc_snapshot ... ok
+test serializable_relation_reads_reject_write_skew ... ok
+test statement_conflict_checks_are_opt_in_and_keep_commit_validation ... ok
+test statement_conflict_checks_do_not_buffer_a_partial_batch_or_stale_delete ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+     Running tests/transaction_receipts.rs (/root/carrier-zero-friction-target/debug/deps/transaction_receipts-26ce0a77c04b66e6)
+running 9 tests
+test explicit_rollback_and_abandonment_survive_the_transaction_object ... ok
+test failed_wal_append_reports_recovery_required_instead_of_abort ... ok
+test late_write_tag_registration_survives_rollback_to_its_existing_write ... ok
+test outcome_observers_can_cross_threads_without_retaining_database_pointers ... ok
+test predecision_validation_failure_remains_pending_until_retry_or_drop ... ok
+test receipts_follow_nested_rollback_prefixes_and_late_registration ... ok
+test rollback_receipts_do_not_resurrect_when_write_slots_are_reused ... ok
+test write_tags_follow_native_savepoints_without_cross_transaction_state ... ok
+test write_truncation_and_buffered_commit_publish_the_same_receipt_lifecycle ... ok
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+     Running tests/transaction_rollback_mark.rs (/root/carrier-zero-friction-target/debug/deps/transaction_rollback_mark-3eab1e82d5b89a39)
+running 2 tests
+test read_lock_release_preserves_earlier_locks_and_refuses_write_locks ... ok
+test rollback_marks_preserve_earlier_hooks_and_reject_other_transactions ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+     Running tests/core.rs (/root/carrier-zero-friction-target/debug/deps/core-ee898cb6afac5ba8)
+running 3 tests
+test delta_repair_rebuilds_even_when_floored_snapshot_covers_the_conflict ... ok
+test floored_snapshot_cannot_mask_a_batch_point_read_lost_update ... ok
+test floored_snapshot_cannot_mask_a_point_read_lost_update ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 103 filtered out; finished in 0.56s

@@ -100,6 +100,42 @@ fn set_default_nextval_resolves_a_schema_qualified_sequence() {
     );
 }
 
+/// Migration scripts register themselves with `SELECT f('..') FROM dual`,
+/// where `f` writes; function bodies use `=` assignment and RAISE WARNING.
+#[test]
+fn writing_functions_in_select_lists_and_plpgsql_dialect_forms() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE TABLE public.registered (name TEXT)")
+        .unwrap();
+    sql.execute("CREATE VIEW public.one_row AS SELECT 'X' AS dummy")
+        .unwrap();
+    sql.execute(
+        "CREATE FUNCTION public.register(p_name varchar) RETURNS void LANGUAGE plpgsql AS $$ \
+         DECLARE n integer; BEGIN \
+           n = 2; n = n * 3; \
+           RAISE WARNING 'registering % (%)', p_name, n; \
+           RAISE INFO 'info'; \
+           INSERT INTO public.registered VALUES (p_name || n); \
+         END; $$",
+    )
+    .unwrap();
+    sql.execute("SELECT register('a') FROM one_row").unwrap();
+    sql.execute("SELECT register(dummy) FROM one_row WHERE dummy = 'X'")
+        .unwrap();
+    let rows = sql
+        .execute("SELECT name FROM public.registered ORDER BY name")
+        .unwrap()
+        .rows;
+    assert_eq!(
+        rows,
+        vec![
+            vec![SqlValue::String("X6".into())],
+            vec![SqlValue::String("a6".into())]
+        ]
+    );
+}
+
 /// CREATE TABLE with an inline schema-qualified nextval default (the other
 /// spelling pg_dump emits) binds to the same sequence.
 #[test]
@@ -201,6 +237,29 @@ AS $$ BEGIN RETURN NEW; END; $$"#,
         rows.rows,
         vec![vec![SqlValue::String("public".to_string())]]
     );
+}
+
+/// Dynamic SQL in a routine resolves unqualified relations through the
+/// caller's search_path when it runs.
+#[test]
+fn dynamic_execute_binds_relations_through_search_path() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE TABLE app.item (id INT, note TEXT)")
+        .unwrap();
+    sql.execute(
+        "CREATE FUNCTION app.run(command text) RETURNS void LANGUAGE plpgsql AS $$ \
+         BEGIN EXECUTE command; END; $$",
+    )
+    .unwrap();
+    sql.execute("SET search_path TO app, public").unwrap();
+    sql.execute("SELECT run('insert into item values (1, ''a'')')")
+        .unwrap();
+    sql.execute("SELECT run('alter table item alter column note set not null')")
+        .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.item"), 1);
+    assert!(sql.execute("INSERT INTO item VALUES (2, NULL)").is_err());
 }
 
 /// A dump restores into its own schema; the application then names its
@@ -544,6 +603,39 @@ fn drop_schema_requires_ownership() {
     let mut intruder = SqlSession::new_unprivileged(&mut db, "intruder");
     let error = intruder.execute("DROP SCHEMA zz_owned").unwrap_err();
     assert!(format!("{error}").contains("owner"), "{error}");
+}
+
+#[test]
+fn drop_schema_cascade_removes_every_overload() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA calc").unwrap();
+    for signature in ["a integer", "a text", "a integer, b integer"] {
+        sql.execute(&format!(
+            "CREATE FUNCTION calc.twice({signature}) RETURNS text LANGUAGE sql AS $$ SELECT 'x' $$"
+        ))
+        .unwrap();
+    }
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_proc WHERE proname = 'twice'"
+        ),
+        3
+    );
+    sql.execute("DROP SCHEMA calc CASCADE").unwrap();
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_proc WHERE proname = 'twice'"
+        ),
+        0
+    );
+    sql.execute("CREATE SCHEMA calc").unwrap();
+    sql.execute(
+        "CREATE FUNCTION calc.twice(a integer) RETURNS text LANGUAGE sql AS $$ SELECT 'y' $$",
+    )
+    .expect("no overload of the dropped schema survives");
 }
 
 /// A dump defines several functions of one name that differ by input types;

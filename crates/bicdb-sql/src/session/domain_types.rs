@@ -462,6 +462,13 @@ impl<'db> SqlSession<'db> {
                         }
                     }
                     let schema_existed = schema.is_some();
+                    // A table's triggers belong to it and are dropped with it.
+                    for trigger in list_triggers(self.db_ref())?
+                        .into_iter()
+                        .filter(|trigger| trigger.table_name.eq_ignore_ascii_case(&table))
+                    {
+                        self.delete_session_trigger(&trigger.name, Some(&trigger.table_name))?;
+                    }
                     let existed = self.drop_session_collection(&table)?;
                     self.delete_session_schema(&table)?;
                     if existed || schema_existed {
@@ -966,7 +973,11 @@ impl<'db> SqlSession<'db> {
                 .map(|operator| operator.id.clone())
                 .collect::<Vec<_>>();
             self.drop_operators(&operators)?;
-            for routine in &target.routines {
+            // Further overloads first: dropping a name's first routine moves
+            // its next overload to the name's plain catalog key.
+            let mut routines = target.routines.iter().collect::<Vec<_>>();
+            routines.sort_by_key(|routine| routine.overload.is_none());
+            for routine in routines {
                 self.delete_session_routine(routine)?;
             }
             let types = target
@@ -2695,7 +2706,10 @@ impl<'db> SqlSession<'db> {
         let _dynamic = oracle::dynamic_sql::Scope::new(
             oracle::preview_routine_language_version(&language).is_some_and(|v| v >= 16),
         );
-        let (mut declarations, mut statements, mut exception_handlers) = parse_plpgsql_body(&body)?;
+        let (mut declarations, mut statements, mut exception_handlers) = {
+            let _dialect = routines::PostgresDialectScope::new(!oracle_block);
+            parse_plpgsql_body(&body)?
+        };
         routines::parameterized_cursors::validate_capabilities(
             &language,
             &declarations,

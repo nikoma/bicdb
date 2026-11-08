@@ -715,14 +715,17 @@ impl BicDb {
             if let Some(rowid) = shard.rowid_of(&write.record_id) {
                 let max_tx = version_chain_max_tx(&shard.versions, rowid);
                 let mut conflict_snapshot = if write.statement_snapshot == 0 {
-                    // `snapshot_tx` may be raised above the contiguous applied
-                    // watermark solely for read-your-writes. A lower sequence
-                    // in that gap can apply after this transaction read the
-                    // row; treating the raised number as observed would mask a
-                    // real lost update. Write buffering normally replaces zero
-                    // with a point-read or lock-protected row boundary; retain
-                    // the truthful applied watermark as a defensive fallback.
-                    tx.applied_snapshot
+                    // A point read of a previously absent key has a genuine
+                    // zero boundary. An independently committed operation may
+                    // have advanced applied_snapshot since that observation;
+                    // using the new watermark would hide a competing insert.
+                    // Keep the legacy fallback only for an untracked write.
+                    tx.observed_record_versions
+                        .lock()
+                        .get(&write.collection)
+                        .and_then(|rows| rows.get(&write.record_id))
+                        .copied()
+                        .unwrap_or(tx.applied_snapshot)
                 } else {
                     write.statement_snapshot
                 };

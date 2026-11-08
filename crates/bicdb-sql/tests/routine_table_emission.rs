@@ -33,6 +33,22 @@ fn table_return_next_snapshots_outputs_and_continues_the_loop() {
 }
 
 #[test]
+fn reverse_for_loops_count_down_from_the_first_bound() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(directory.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE FUNCTION countdown(high int) RETURNS text LANGUAGE plpgsql AS $$ DECLARE acc text := '';j int;BEGIN for j in reverse high .. 1 loop acc := acc || j;END LOOP;FOR j IN REVERSE 1 .. 3 LOOP acc := acc || 'x';END LOOP;RETURN acc;END $$").unwrap();
+    assert_eq!(
+        session.execute("SELECT countdown(3)").unwrap().rows[0][0],
+        SqlValue::String("321".into())
+    );
+    assert_eq!(
+        session.execute("SELECT countdown(0)").unwrap().rows[0][0],
+        SqlValue::String("".into())
+    );
+}
+
+#[test]
 fn table_return_next_and_return_query_preserve_emission_order() {
     let directory = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(directory.path()).unwrap();

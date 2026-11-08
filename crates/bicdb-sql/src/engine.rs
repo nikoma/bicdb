@@ -374,6 +374,7 @@ impl ParameterTypeResolver<'_, '_> {
                     lower,
                     upper,
                     body,
+                    ..
                 } => {
                     self.expr(&lower.expr, &env, Some("integer"));
                     self.expr(&upper.expr, &env, Some("integer"));

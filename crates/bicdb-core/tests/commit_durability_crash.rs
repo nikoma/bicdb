@@ -227,6 +227,12 @@ fn crash_case(mode: &str, crash_at: Option<&str>, expect_crash: bool) {
             "{label}: crash point was never reached"
         );
     }
+    // The crashed, not yet recovered state, kept with the case on failure.
+    let _ = Command::new("cp")
+        .arg("-a")
+        .arg(&db)
+        .arg(temp.path().join("crashed-db"))
+        .status();
     let first = reconcile(&db, &ledger, mode, &label);
     let second = reconcile(&db, &ledger, mode, &format!("{label} (second reopen)"));
     assert_eq!(first, second, "{label}: a second reopen changed the state");
@@ -244,7 +250,13 @@ impl Drop for KeepOnPanic {
                 .chars()
                 .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
                 .collect();
-            let target = std::env::temp_dir().join(format!("durability-failure-{name}"));
+            let target = std::env::temp_dir().join(format!(
+                "durability-failure-{name}-{}",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|elapsed| elapsed.as_micros())
+                    .unwrap_or(0)
+            ));
             let _ = std::fs::remove_dir_all(&target);
             let _ = Command::new("cp").arg("-a").arg(&self.0).arg(&target).status();
             eprintln!("kept failing case at {}", target.display());

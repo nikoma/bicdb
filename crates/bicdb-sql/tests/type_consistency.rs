@@ -532,7 +532,10 @@ fn set_operation_and_case_types_follow_postgres_common_type_rules() {
     assert_eq!(result.column_types, vec![Some("timestamp".to_string())]);
     assert_eq!(
         result.rows,
-        vec![vec![text("2020-01-01 00:00:00")], vec![text("2020-01-01 10:00:00")]]
+        vec![
+            vec![text("2020-01-01 00:00:00")],
+            vec![text("2020-01-01 10:00:00")]
+        ]
     );
     let result = session
         .execute("SELECT x FROM (SELECT d AS x FROM t UNION ALL SELECT tz FROM t) q")
@@ -541,7 +544,9 @@ fn set_operation_and_case_types_follow_postgres_common_type_rules() {
     assert_eq!(result.rows.len(), 2);
 
     // integer and numeric unify as numeric, so 1 and 1.0 are one row.
-    let result = session.execute("SELECT i FROM t UNION SELECT n FROM t").unwrap();
+    let result = session
+        .execute("SELECT i FROM t UNION SELECT n FROM t")
+        .unwrap();
     assert_eq!(result.column_types, vec![Some("numeric".to_string())]);
     assert_eq!(result.rows.len(), 1);
 
@@ -550,15 +555,23 @@ fn set_operation_and_case_types_follow_postgres_common_type_rules() {
         .execute("SELECT a FROM dt UNION ALL SELECT i FROM t ORDER BY 1")
         .unwrap();
     assert_eq!(result.column_types, vec![Some("int4".to_string())]);
-    assert_eq!(result.rows, vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(5)]]);
+    assert_eq!(
+        result.rows,
+        vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(5)]]
+    );
 
     // An unknown literal takes the other branch's type and must be valid
     // input for it.
     let error = session.execute("SELECT 'a' UNION SELECT 1").unwrap_err();
     assert_eq!(error.sqlstate(), "22P02", "{error}");
-    let result = session.execute("SELECT '7' UNION SELECT 1 ORDER BY 1").unwrap();
+    let result = session
+        .execute("SELECT '7' UNION SELECT 1 ORDER BY 1")
+        .unwrap();
     assert_eq!(result.column_types, vec![Some("int4".to_string())]);
-    assert_eq!(result.rows, vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(7)]]);
+    assert_eq!(
+        result.rows,
+        vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(7)]]
+    );
 
     // Mismatched categories are rejected with PostgreSQL's type names.
     for (statement, message) in [

@@ -3348,7 +3348,8 @@ fn coerce_set_branch(mut branch: SqlResult, column_types: &[Option<String>]) -> 
                 let Some(value) = row.get_mut(*index) else {
                     continue;
                 };
-                if matches!(value, SqlValue::Null) || (*untyped && !matches!(value, SqlValue::String(_)))
+                if matches!(value, SqlValue::Null)
+                    || (*untyped && !matches!(value, SqlValue::String(_)))
                 {
                     continue;
                 }
@@ -3360,4 +3361,3 @@ fn coerce_set_branch(mut branch: SqlResult, column_types: &[Option<String>]) -> 
     branch.column_types = column_types.to_vec();
     Ok(branch)
 }
-

@@ -14,7 +14,9 @@ pub(crate) use temporal_json_oid::cast_value_to_pg_type_fast as cast_value_to_pg
 pub(crate) use temporal_json_oid::*;
 mod ranges_network;
 pub(crate) use ranges_network::*;
+mod numeric_power;
 mod operators_compare;
+pub(crate) use numeric_power::numeric_power;
 pub(crate) use operators_compare::*;
 mod aggregates;
 pub(crate) use aggregates::*;

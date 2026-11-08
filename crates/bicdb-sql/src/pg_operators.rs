@@ -405,7 +405,7 @@ pub(crate) fn operator_candidates<'a>(
         None => path.to_vec(),
     };
     let mut candidates: Vec<Candidate<'a>> = Vec::new();
-    let mut push = |candidate: Candidate<'a>, candidates: &mut Vec<Candidate<'a>>| {
+    let push = |candidate: Candidate<'a>, candidates: &mut Vec<Candidate<'a>>| {
         if !candidates
             .iter()
             .any(|seen| seen.left == candidate.left && seen.right == candidate.right)
@@ -605,7 +605,7 @@ fn select_candidate<'c, 'a>(
             .filter(|(target, (base, category))| {
                 base.is_some()
                     && (base.as_deref() == Some(**target)
-                        || (*category == Some(facts.category(target)) && is_preferred(target)))
+                        || (**category == Some(facts.category(target)) && is_preferred(target)))
             })
             .count()
     };

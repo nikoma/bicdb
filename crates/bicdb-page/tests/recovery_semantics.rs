@@ -479,3 +479,75 @@ fn repeated_recovery_of_one_crash_state_converges() {
         assert_eq!(wal_bytes(dir.path()), bytes_after_first);
     }
 }
+
+/// Second GAP-1 reproducer, found independently on the page-delta branch
+/// (`page_deltas.rs::preexisting_mid_transaction_eviction_window`, PR #48)
+/// and ported here without the delta machinery. One transaction stays open
+/// while 400 others commit, with a 32-page pool (512-byte pages), then the
+/// process crashes. The open transaction's pages are evicted under its xid,
+/// so recovery skips their images, but committed structure (logged by the
+/// other commits) already references pages it allocated. Committed rows read
+/// back correctly; the open transaction's keys must read as absent and
+/// instead fail with a checksum mismatch on a page that was never written.
+///
+/// This is the reader-visible failure mode of GAP-1 (windows W1 and W6 of
+/// section 14.1): an unreadable page rather than silent row loss.
+#[test]
+#[ignore = "GAP-1: an interleaved open transaction's evicted pages are referenced but never replayed"]
+fn an_open_transaction_interleaved_with_commits_reads_absent_after_a_crash() {
+    let key = |i: u64| format!("key-{i:05}").into_bytes();
+    let value =
+        |i: u64, round: u64| format!("v{round}-{}", "x".repeat(((i * 7 + round) % 40) as usize));
+    let small = || {
+        PagedStoreOptions::default()
+            .with_page_size(PAGE_SIZE)
+            .with_buffer_pool_bytes(32 * u64::from(PAGE_SIZE))
+            .with_fsync(false)
+            .with_wal_max_bytes(1 << 30)
+    };
+    let dir = TempDir::new().unwrap();
+    let mut model = std::collections::BTreeMap::new();
+    {
+        let (store, _) = PagedStore::open(dir.path(), small()).unwrap();
+        let open = store.begin();
+        for i in 0..400u64 {
+            store
+                .put(open, &key(20_000 + i), value(i, 1).as_bytes())
+                .unwrap();
+            let tx = store.begin();
+            store.put(tx, &key(i % 90), value(i, i).as_bytes()).unwrap();
+            store
+                .put(tx, &key(10_000 + i), value(i, 2).as_bytes())
+                .unwrap();
+            store.commit(tx).unwrap();
+            model.insert(key(i % 90), value(i, i));
+            model.insert(key(10_000 + i), value(i, 2));
+        }
+        // Crash with `open` still running.
+    }
+    let (store, _) = PagedStore::open(dir.path(), options()).unwrap();
+    let mut failures = Vec::new();
+    for (k, v) in &model {
+        match store.get(k) {
+            Ok(Some(found)) if found == v.as_bytes() => {}
+            other => failures.push(format!(
+                "committed {}: {:?}",
+                String::from_utf8_lossy(k),
+                other.map(|o| o.map(|b| String::from_utf8_lossy(&b).into_owned()))
+            )),
+        }
+    }
+    for i in 0..400u64 {
+        match store.get(&key(20_000 + i)) {
+            Ok(None) => {}
+            other => failures.push(format!(
+                "uncommitted key-{:05}: {:?}",
+                20_000 + i,
+                other.map(|o| o.map(|b| String::from_utf8_lossy(&b).into_owned()))
+            )),
+        }
+    }
+    let total = failures.len();
+    failures.truncate(6);
+    assert!(total == 0, "{total} failures, e.g. {failures:#?}");
+}

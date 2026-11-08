@@ -2933,6 +2933,8 @@ fn policy_lookup_value(db: &BicDb, expr: &Expr, in_init_plan: bool) -> bool {
                         .flatten()
                         .is_some_and(|routine| {
                             matches!(routine.schema.declared_volatility(), "s" | "i")
+                                && !routine.schema.returns_set
+                                && pg_type_oid_by_name(&routine.schema.return_type).is_some()
                                 // Zero actual arguments can select a defaulted
                                 // signature; its defaults may be volatile.
                                 && parse_routine_params(&routine.schema.args).is_ok_and(|params|
@@ -3023,6 +3025,14 @@ impl<'db> SqlEngine<'db> {
         let Some((_, first)) = filter.permissive.first() else {
             return Ok(None);
         };
+        // A complete authored PK lookup already determines the candidate row.
+        // Do not initialize unrelated policy keys for a missing-row read.
+        if let Some(selection) = selection {
+            let strategy = self.derive_locator_strategy(table, alias, Some(schema), selection)?;
+            if !strategy.pk_exprs.is_empty() && strategy.pk_exprs.iter().all(Option::is_some) {
+                return Ok(None);
+            }
+        }
         // Permissive policies are OR: only an identical conjunct of every
         // branch is necessary. Restrictive policies AND with that union.
         // Deliberately do no independent expression simplification/optimization.
@@ -3061,15 +3071,15 @@ impl<'db> SqlEngine<'db> {
                 else {
                     continue;
                 };
-                let value = if fold_values {
-                    let folded = fold_policy_init_plans(self, value, policy_context_hash(self))?;
-                    if expr_contains_subquery(&folded) {
-                        continue;
-                    }
-                    folded.into_owned()
-                } else {
-                    value.clone()
+                let Expr::Identifier(name) = &column else {
+                    unreachable!()
                 };
+                if !schema.column(&name.value).is_some_and(|column| {
+                    column.user_type.is_none() && pg_type_oid_by_name(&column.pg_type).is_some()
+                }) {
+                    continue;
+                }
+                let value = value.clone();
                 let candidate = Expr::BinaryOp {
                     left: Box::new(column),
                     op: BinaryOperator::Eq,
@@ -3081,12 +3091,45 @@ impl<'db> SqlEngine<'db> {
                 break;
             }
         }
-        Ok(
-            expr_from_and_terms(candidates).map(|predicate| match selection {
-                Some(selection) => and_expr(selection.clone(), predicate),
-                None => predicate,
-            }),
-        )
+        let augment = |predicate| match selection {
+            Some(selection) => and_expr(selection.clone(), predicate),
+            None => predicate,
+        };
+        let Some(predicate) = expr_from_and_terms(candidates.clone()) else {
+            return Ok(None);
+        };
+        if !fold_values {
+            return Ok(Some(augment(predicate)));
+        }
+        // Initialize only policy values that a real lookup can consume. With
+        // no eligible index, preserve the original empty-scan behavior.
+        let strategy =
+            self.derive_locator_strategy(table, alias, Some(schema), &augment(predicate))?;
+        let used_values = strategy
+            .indexes
+            .iter()
+            .flat_map(|index| index.prefix_exprs.iter())
+            .chain(strategy.pk_exprs.iter().filter_map(Option::as_ref))
+            .collect::<Vec<_>>();
+        let mut useful = Vec::new();
+        for candidate in candidates {
+            let Expr::BinaryOp { left, right, .. } = candidate else {
+                unreachable!()
+            };
+            if !used_values.contains(&right.as_ref()) {
+                continue;
+            }
+            let value = fold_policy_init_plans(self, &right, policy_context_hash(self))?;
+            if expr_contains_subquery(&value) {
+                continue;
+            }
+            useful.push(Expr::BinaryOp {
+                left,
+                op: BinaryOperator::Eq,
+                right: Box::new(value.into_owned()),
+            });
+        }
+        Ok(expr_from_and_terms(useful).map(augment))
     }
 }
 

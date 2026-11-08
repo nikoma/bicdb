@@ -550,3 +550,42 @@ fn alternative_policy_indexes_do_not_initialize_all_stable_keys() {
         "residual policy key still executes on a matching row"
     );
 }
+
+#[test]
+fn unused_generated_full_text_indexes_do_not_disable_tenant_number_lookups() {
+    let (_dir, mut db) = fixture();
+    let vector = "setweight(to_tsvector('english',COALESCE(number,'')),'A') || setweight(to_tsvector('english',COALESCE(id,'')),'B')";
+    SqlSession::new(&mut db)
+        .execute(&format!(
+            "CREATE INDEX orders_search_fts ON orders USING gin (({vector}))"
+        ))
+        .unwrap();
+    let mut sql = reader(&mut db);
+    for tenant in ["own", "other", "own"] {
+        sql.execute(&format!("SET app.tenant='{tenant}'")).unwrap();
+        assert_eq!(count(&mut sql, "N42"), 1);
+        assert_point_plan(
+            &mut sql,
+            "SELECT count(*)::int FROM orders WHERE number='N42'",
+        );
+        assert_eq!(
+            count(&mut sql, "N43"),
+            0,
+            "residual visibility still applies"
+        );
+        // An actual authored search keeps its existing FTS path and RLS.
+        let query = format!(
+            "SELECT count(*)::int FROM orders WHERE ({vector}) @@ to_tsquery('english','n42')"
+        );
+        assert_eq!(
+            sql.execute(&query).unwrap().rows,
+            vec![vec![SqlValue::Int(1)]]
+        );
+        let output = plan(&mut sql, &query);
+        assert!(
+            output.contains("FullTextIndexScan orders_search_fts"),
+            "{output}"
+        );
+        assert!(!output.contains("RuntimeKeys deferred"), "{output}");
+    }
+}

@@ -570,7 +570,7 @@ pub(crate) fn parse_raw_create_trigger(sql: &str) -> Result<Option<(TriggerSchem
     Ok(Some((
         TriggerSchema {
             name: normalize_object_name(&name),
-            table_name: normalize_object_name(&table_name),
+            table_name: raw_trigger_relation_name(&table_name)?,
             function_name,
             arguments,
             definition: trimmed.to_string(),
@@ -584,6 +584,18 @@ pub(crate) fn parse_raw_create_trigger(sql: &str) -> Result<Option<(TriggerSchem
         },
         or_replace,
     )))
+}
+
+/// The stored relation a trigger's `ON` name refers to; a schema qualifier
+/// selects that schema's relation rather than being discarded.
+fn raw_trigger_relation_name(name: &str) -> Result<String> {
+    let parsed = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql(name)
+        .and_then(|mut parser| parser.parse_object_name(false));
+    match parsed {
+        Ok(object) if object.0.len() > 1 => relation_name(&object),
+        _ => Ok(normalize_object_name(name)),
+    }
 }
 
 pub(crate) fn raw_trigger_timing_event(spec: &str) -> Result<(String, String)> {

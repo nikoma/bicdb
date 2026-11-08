@@ -2311,8 +2311,14 @@ pub(crate) fn parse_message(
                 .map(String::as_str),
             &state.user,
         )?
-    } else {
+    } else if is_server_status_query(&sql) {
         sql
+    } else {
+        // Bind unqualified relations through the session's search_path before
+        // the statement is described, as execution will.
+        let db = server.read_db_for_transaction_progress()?;
+        bicdb_sql::search_path::bind_session_sql(&db, &sql, state.session_state.session_gucs())?
+            .unwrap_or(sql)
     };
     // Parse describes one prepared statement. Apply this after profile lowering
     // so Oracle routine/block bodies have their protected dollar-quoted form;

@@ -2231,6 +2231,7 @@ pub(crate) fn default_role_schema(name: &str) -> RoleSchema {
         connection_limit: -1,
         password_set: false,
         valid_until: None,
+        settings: BTreeMap::new(),
     }
 }
 
@@ -4537,6 +4538,8 @@ pub(crate) struct CachedRoutine {
     pub(crate) schema: Arc<RoutineSchema>,
     pub(crate) ir: Arc<RoutineIR>,
     pub(crate) compilation_scope: Option<RoutineCompilationScope>,
+    /// The search_path its body was bound with (PostgreSQL profile).
+    pub(crate) search_path: Option<Arc<[String]>>,
 }
 
 thread_local! {
@@ -4588,6 +4591,7 @@ pub(crate) fn resolve_routine_cached(
                     routine
                         .compilation_scope
                         .is_some_and(|scope| scope != routine_compilation_scope(db))
+                        || routine.search_path != crate::search_path::active_path()
                 })
             {
                 return None;
@@ -4605,9 +4609,12 @@ pub(crate) fn resolve_routine_cached(
             oracle::validate_routine_language(db, &schema.language)?;
             let schema = Arc::new(schema);
             let ir = compile_cached_routine_ir_in_catalog(&schema, Some(db))?;
-            let compilation_scope = (oracle::typed_preview_routine_language(&schema.language))
-                .then(|| routine_compilation_scope(db));
+            let search_path = crate::search_path::active_path();
+            let compilation_scope = (oracle::typed_preview_routine_language(&schema.language)
+                || search_path.is_some())
+            .then(|| routine_compilation_scope(db));
             Some(CachedRoutine {
+                search_path,
                 schema,
                 ir,
                 compilation_scope,

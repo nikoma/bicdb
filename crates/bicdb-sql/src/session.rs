@@ -2974,6 +2974,14 @@ impl<'db> SqlSession<'db> {
     pub fn execute(&mut self, sql: &str) -> Result<SqlResult> {
         self.statement_error_recovered = false;
         self.db_ref().check_recovery_state()?;
+        // Unqualified relations resolve through the session's search_path;
+        // routine bodies compiled during this statement bind the same way.
+        let path = crate::search_path::binding_path(self.db_ref(), &self.session_gucs)?;
+        let bound = path
+            .as_deref()
+            .and_then(|path| crate::search_path::bind_sql_text(self.db_ref(), sql, path));
+        let _path_scope = crate::search_path::PathScope::enter(path);
+        let sql = bound.as_deref().unwrap_or(sql);
         // A per-row routine call reaches raw SQL only through dynamic EXECUTE
         // fallbacks for statements sqlparser cannot represent (DDL, grants).
         if self.row_routine_call {
@@ -3201,6 +3209,9 @@ impl<'db> SqlSession<'db> {
             return self.execute_parsed_sql(sql);
         }
         if let Some(result) = self.execute_raw_oracle_collection(sql)? {
+            return Ok(result);
+        }
+        if let Some(result) = self.execute_raw_alter_role_settings(sql)? {
             return Ok(result);
         }
         if let Some(result) = self.execute_raw_reset(sql)? {
@@ -4839,7 +4850,7 @@ impl<'db> SqlSession<'db> {
             .is_some_and(|role| role.superuser || role.create_role))
     }
 
-    fn require_role_management_privilege(&self, action: &str) -> Result<()> {
+    pub(crate) fn require_role_management_privilege(&self, action: &str) -> Result<()> {
         if self.current_user_can_manage_roles()? {
             return Ok(());
         }

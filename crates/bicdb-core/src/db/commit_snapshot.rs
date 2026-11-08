@@ -251,6 +251,7 @@ impl BicDb {
             &index_mutations_by_collection,
             &dim_plan,
             &mut timer,
+            None,
         )?;
         self.fill_all_index_mutation_rowids(&mut index_mutations_by_collection)?;
         let spatial_events = self.apply_index_mutations(&index_mutations_by_collection)?;
@@ -1134,6 +1135,9 @@ impl BicDb {
     /// write guard. Index mutations were already applied by
     /// [`Self::validate_and_apply_index_mutations`]; this only consults their
     /// `old_record` to decide whether a vectored value was replaced.
+    /// `deferred_page_commit` is `Some` only on the experimental
+    /// transaction-log-only commit path: the page commit is then appended
+    /// without a sync and its LSN returned through it.
     pub(crate) fn apply_committed_record_writes(
         &self,
         commit_seq: u64,
@@ -1141,6 +1145,7 @@ impl BicDb {
         index_mutations_by_collection: &BTreeMap<String, Vec<IndexRecordMutation>>,
         dim_plan: &BTreeMap<String, bool>,
         timer: &mut commit_trace::Timer,
+        deferred_page_commit: Option<&mut Option<bicdb_page::Lsn>>,
     ) -> Result<()> {
         // MVCC version stamps are commit_seq values (see VersionedRecord).
         let tx_id = TransactionId(commit_seq);
@@ -1151,7 +1156,8 @@ impl BicDb {
         let mut persist_vector_dims = false;
         // Stage every collection and native index before publishing any resident
         // row, then commit the entire batch with a single page-WAL decision.
-        let paged_xid = self.apply_record_writes_to_paged(writes_by_collection)?;
+        let paged_xid =
+            self.apply_record_writes_to_paged(writes_by_collection, deferred_page_commit)?;
         for (&collection, writes) in writes_by_collection {
             let index_mutations =
                 index_mutations_by_collection
@@ -1576,6 +1582,9 @@ impl BicDb {
     }
 
     pub(crate) fn persist_catalog(&self) -> Result<()> {
+        // I9: a catalog change must not overtake a deferred commit whose
+        // replay depends on the catalog before it.
+        self.deferred_materialize_barrier()?;
         let mut collections = self.collections();
         collections.sort_by(|left, right| left.name.cmp(&right.name));
         let catalog = CollectionCatalog { collections };
@@ -1590,6 +1599,7 @@ impl BicDb {
     }
 
     pub(crate) fn persist_index_catalog(&self) -> Result<()> {
+        self.deferred_materialize_barrier()?;
         let mut indexes = self.index_definitions();
         indexes.sort_by(|left, right| left.name.cmp(&right.name));
         if indexes.iter().any(|index| index.nulls_not_distinct) {

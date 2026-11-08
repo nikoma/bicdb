@@ -50,7 +50,7 @@ use crate::pool::{
     ReadAheadSubmitReport, WritebackCursor, WritebackLimits, WritebackStepReport,
 };
 use crate::slotted::TupleLocator;
-use crate::wal::{self, CheckpointReport, Checkpointer, RecoveryReport, Wal, WalSnapshot};
+use crate::wal::{self, CheckpointReport, Checkpointer, Lsn, RecoveryReport, Wal, WalSnapshot};
 
 /// Version of the stable paged-storage telemetry contract.
 pub const PAGED_STORE_SNAPSHOT_FORMAT_VERSION: u32 = 11;
@@ -941,6 +941,7 @@ impl PagedStore {
             // across truncate+reopen so sealed-segment names never recur.
             store.checkpoint_lsn(),
         )?);
+        crate::test_faults::register_wal(&wal);
 
         // Recovery runs BEFORE anything reads a page, so no caller can ever
         // observe the un-replayed state.
@@ -2109,6 +2110,22 @@ impl PagedStore {
 
     /// Make a transaction's writes durable.
     pub fn commit(&self, transaction: Xid) -> Result<()> {
+        self.commit_with_sync(transaction, true).map(|_| ())
+    }
+
+    /// Commit WITHOUT syncing the log: the commit record is appended and the
+    /// rows become visible, but nothing is promised to survive a crash until
+    /// a later [`Wal::sync_through`] covers the returned LSN.
+    ///
+    /// Only for transactions whose complete redo is already durable in
+    /// another log, so a crash that loses this tail loses nothing that log
+    /// cannot replay. A transaction that frees pages still syncs: segment
+    /// adoption rewrites the free map, which must not run ahead of the log.
+    pub fn commit_deferred(&self, transaction: Xid) -> Result<Lsn> {
+        self.commit_with_sync(transaction, false)
+    }
+
+    fn commit_with_sync(&self, transaction: Xid, sync: bool) -> Result<Lsn> {
         // Log page images once per transaction rather than once per operation.
         //
         // A page stays dirty across a whole transaction, so logging after every
@@ -2119,18 +2136,25 @@ impl PagedStore {
         //
         // Safe because a page evicted mid-transaction is logged by the writeback
         // barrier on its way out, so nothing reaches disk unlogged either way.
+        let commit_lsn;
         {
             let _guard = self.write_lock.lock();
             let free_adoption = self.prepare_free_adoption(transaction, &[])?;
             self.log_dirty_pages(transaction)?;
-            self.wal.commit(transaction)?;
+            let lsn = if sync || !free_adoption.is_empty() {
+                self.wal.commit(transaction)?
+            } else {
+                self.wal.commit_unsynced(transaction)?
+            };
+            commit_lsn = lsn;
             if !free_adoption.is_empty() {
                 self.pool.flush_all()?;
                 self.adopt_free_segments(&free_adoption)?;
             }
             // Only after the commit record is durable: marking it committed first
             // would make its rows visible to readers before a crash could still
-            // lose them.
+            // lose them. (A deferred commit is the exception by contract: its
+            // redo is already durable in the caller's log.)
             self.transactions.commit(transaction);
             self.snapshots.lock().remove(&transaction);
         }
@@ -2168,7 +2192,7 @@ impl PagedStore {
                 };
             }
         }
-        Ok(())
+        Ok(commit_lsn)
     }
 
     /// Discard a transaction's writes.
@@ -5301,6 +5325,14 @@ impl crate::pool::WritebackBarrier for WalWritebackBarrier {
         let lsn = self.wal.log_page_image(page_id, transaction, bytes)?;
         self.wal.sync_through(lsn)
     }
+
+    fn before_logged_writeback(&self, _page_id: PageId) -> Result<()> {
+        // A deferred commit (`PagedStore::commit_deferred`) logs its pages
+        // and its commit record without a sync. Its pages are dirty with no
+        // further record needed, so without this they could reach the page
+        // file while the log that describes them is still volatile.
+        self.wal.sync_deferred_commits()
+    }
 }
 
 #[cfg(test)]
@@ -8354,6 +8386,74 @@ mod tests {
         assert_eq!(
             store.get(b"after-reopen").unwrap().as_deref(),
             Some(&b"ok"[..])
+        );
+    }
+    /// I5 (WAL before data) under a deferred commit. `commit_deferred` logs
+    /// the transaction's page images and its commit record without a sync and
+    /// leaves the pages dirty with nothing more to log. Any writeback of those
+    /// pages (background writeback, eviction, a root split's flush) must make
+    /// the log durable first, or a power loss leaves the page file ahead of
+    /// the log: here, leaf splits whose new pages lie beyond the page count
+    /// the last checkpoint published, and which no surviving record reserves.
+    #[test]
+    fn deferred_commit_pages_never_reach_the_page_file_ahead_of_the_log() {
+        let dir = TempDir::new().unwrap();
+        let options = options().with_buffer_pool_bytes(4096 * 512);
+        let key = |batch: u32, i: u32| format!("k-{batch}-{i:04}").into_bytes();
+        let (commit_lsn, durable_after_writeback, written) = {
+            let (store, _) = PagedStore::open(dir.path(), options.clone()).unwrap();
+            let setup = store.begin();
+            for i in 0..4 {
+                store.put(setup, &key(0, i), b"base").unwrap();
+            }
+            store.commit(setup).unwrap();
+            // Publishes the page count and empties the log.
+            store.checkpoint().unwrap();
+
+            let deferred = store.begin();
+            for i in 0..200 {
+                store.put(deferred, &key(1, i), &[7u8; 40]).unwrap();
+            }
+            let commit_lsn = store.commit_deferred(deferred).unwrap();
+            // The background writer drains the dirty set.
+            let report = store
+                .writeback_step(WritebackCursor::default(), WritebackLimits::default())
+                .unwrap();
+            let durable = store.wal().durable_lsn();
+            let synced = store.wal().synced_offset_for_test();
+            let wal_path = store.wal().path().to_path_buf();
+            // Crash, then power loss: the unsynced log tail is gone, every
+            // page write that already happened stays.
+            drop(store);
+            std::fs::OpenOptions::new()
+                .write(true)
+                .open(&wal_path)
+                .unwrap()
+                .set_len(synced)
+                .unwrap();
+            (commit_lsn, durable, report.pages_written)
+        };
+        assert!(written > 0, "the writeback must have written pages");
+        assert!(
+            durable_after_writeback >= commit_lsn,
+            "{written} pages of the deferred commit reached the page file while the log \
+             was durable only through {durable_after_writeback} < commit record {commit_lsn}"
+        );
+
+        let (store, _) = PagedStore::open(dir.path(), options).unwrap();
+        for i in 0..4 {
+            assert_eq!(
+                store.get(&key(0, i)).unwrap().as_deref(),
+                Some(&b"base"[..])
+            );
+        }
+        let survived = (0..200)
+            .map(|i| store.get(&key(1, i)).map(|value| value.is_some()))
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+        assert!(
+            survived.iter().all(|present| *present) || survived.iter().all(|present| !*present),
+            "the deferred commit must be all-or-nothing after recovery"
         );
     }
 }

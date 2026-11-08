@@ -253,6 +253,13 @@ pub struct Wal {
     next_lsn: AtomicU64,
     /// Bytes written to the ACTIVE file, i.e. its append offset.
     end_offset: AtomicU64,
+    /// Active-file offset covered by the last successful sync. Only
+    /// power-loss emulation in tests reads it.
+    synced_offset: AtomicU64,
+    /// Highest LSN of a commit record appended by [`Self::commit_unsynced`]
+    /// (0: none). Page writeback syncs through it first, see
+    /// [`Self::sync_deferred_commits`].
+    deferred_commit_lsn: AtomicU64,
     sync_state: Mutex<SyncState>,
     sync_signal: Condvar,
     fsync: bool,
@@ -388,6 +395,8 @@ impl Wal {
             sealed_bytes: AtomicU64::new(sealed_bytes),
             next_lsn: AtomicU64::new(initial_lsn),
             end_offset: AtomicU64::new(end_offset),
+            synced_offset: AtomicU64::new(end_offset),
+            deferred_commit_lsn: AtomicU64::new(0),
             sync_state: Mutex::new(SyncState {
                 durable_lsn: 0,
                 syncing: false,
@@ -514,6 +523,7 @@ impl Wal {
         self.sealed.lock().push(sequence);
         self.sealed_bytes.fetch_add(active_bytes, Ordering::AcqRel);
         self.end_offset.store(0, Ordering::Release);
+        self.synced_offset.store(0, Ordering::Release);
         let mut metrics = self.metrics.lock();
         metrics.segments_sealed = metrics.segments_sealed.saturating_add(1);
         Ok(())
@@ -623,6 +633,55 @@ impl Wal {
     ///
     /// Returns after the commit record is on disk, never before.
     pub fn commit(&self, transaction: u64) -> Result<Lsn> {
+        let lsn = self.append_commit(transaction)?;
+        // Recorded before the sync: the record is in the log whether or not
+        // the fsync below succeeds, and it is the record's existence that
+        // must forbid a later abort for the same transaction.
+        self.sync_through(lsn)?;
+        Ok(lsn)
+    }
+
+    /// Log a commit WITHOUT making it durable. Returns the record's LSN; the
+    /// caller owns the obligation to `sync_through` it before anything relies
+    /// on it surviving a crash. Only for transactions whose redo is durable
+    /// elsewhere, so that losing this record loses nothing.
+    pub fn commit_unsynced(&self, transaction: u64) -> Result<Lsn> {
+        let lsn = self.append_commit(transaction)?;
+        self.deferred_commit_lsn.fetch_max(lsn, Ordering::AcqRel);
+        Ok(lsn)
+    }
+
+    /// Make every commit record appended by [`Self::commit_unsynced`] so far
+    /// durable. A no-op when there is none, or when it is already durable.
+    ///
+    /// The writeback barrier needs this. A page whose after-image was already
+    /// logged (by a commit's `log_dirty_pages`) is written back without a new
+    /// log record, and with a synced commit that was safe: logged implied
+    /// durable. A deferred commit breaks that implication, so before such a
+    /// page reaches the page file the log is synced through the deferred
+    /// commits that may have logged it (WAL before data, I5).
+    pub fn sync_deferred_commits(&self) -> Result<()> {
+        let lsn = self.deferred_commit_lsn.load(Ordering::Acquire);
+        if lsn == 0 {
+            return Ok(());
+        }
+        self.sync_through(lsn)
+    }
+
+    /// Highest commit LSN appended by [`Self::commit_unsynced`], or 0 if the
+    /// log never took a deferred commit. Synced commits never set it, so on
+    /// the default commit path it stays 0.
+    pub fn deferred_commit_lsn(&self) -> Lsn {
+        self.deferred_commit_lsn.load(Ordering::Acquire)
+    }
+
+    /// Test support: the active-file offset the last successful sync covered.
+    #[cfg(test)]
+    pub(crate) fn synced_offset_for_test(&self) -> u64 {
+        self.synced_offset.load(Ordering::Acquire)
+    }
+
+    fn append_commit(&self, transaction: u64) -> Result<Lsn> {
         if !self.committed_this_generation.lock().insert(transaction) {
             return Err(PageError::InvalidMaintenanceLimits {
                 reason: format!(
@@ -630,12 +689,21 @@ impl Wal {
                 ),
             });
         }
-        let lsn = self.append(RecordKind::Commit, 0, transaction, &[])?;
-        // Recorded before the sync: the record is in the log whether or not
-        // the fsync below succeeds, and it is the record's existence that
-        // must forbid a later abort for the same transaction.
-        self.sync_through(lsn)?;
-        Ok(lsn)
+        self.append(RecordKind::Commit, 0, transaction, &[])
+    }
+
+    /// Power-loss emulation for tests: cut the active file back to what the
+    /// last successful sync covered. Sealed segments were synced when sealed.
+    pub(crate) fn discard_unsynced_tail_for_test(&self) {
+        // Under the file lock: `sync_through` publishes `synced_offset` before
+        // releasing it, so no sync can be half-recorded here, and no append
+        // can land after the cut. Holding the lock is fine, the process
+        // aborts next.
+        let file = self.file.lock();
+        let synced = self.synced_offset.load(Ordering::Acquire);
+        let _ = file.set_len(synced);
+        let _ = file.sync_all();
+        std::mem::forget(file);
     }
 
     /// Log an abort. Not synced: an abandoned transaction that is lost to a
@@ -682,6 +750,7 @@ impl Wal {
             drop(state);
 
             let mut file = self.file.lock();
+            let covered_offset = self.end_offset.load(Ordering::Acquire);
             let started = Instant::now();
             let result = if self.fsync {
                 file.sync_data().map_err(|e| PageError::io(&self.path, e))
@@ -689,6 +758,9 @@ impl Wal {
                 file.flush().map_err(|e| PageError::io(&self.path, e))
             };
             let elapsed = started.elapsed();
+            if result.is_ok() {
+                self.synced_offset.store(covered_offset, Ordering::Release);
+            }
             drop(file);
 
             state = self.sync_state.lock();
@@ -971,6 +1043,7 @@ impl Wal {
         self.sealed_bytes.store(retained_bytes, Ordering::Release);
         drop(file);
         self.end_offset.store(0, Ordering::Release);
+        self.synced_offset.store(0, Ordering::Release);
         let next = self.next_lsn.load(Ordering::Acquire);
         self.active_first_lsn.store(next, Ordering::Release);
         self.sync_state.lock().durable_lsn = next.saturating_sub(1);
@@ -1357,8 +1430,10 @@ impl Checkpointer {
     pub fn checkpoint(&self, root_page: PageId) -> Result<CheckpointReport> {
         let redo_lsn = self.wal.next_lsn();
         self.wal.sync()?;
+        crate::test_faults::crash_point("checkpoint.after_wal_sync");
         let flushed = self.pool.flush_all()?;
         self.pool.store().flush()?;
+        crate::test_faults::crash_point("checkpoint.after_page_flush");
         self.finish_checkpoint(root_page, redo_lsn, flushed, false)
     }
 
@@ -1370,8 +1445,10 @@ impl Checkpointer {
     pub fn checkpoint_and_truncate(&self, root_page: PageId) -> Result<CheckpointReport> {
         let redo_lsn = self.wal.next_lsn();
         self.wal.sync()?;
+        crate::test_faults::crash_point("checkpoint.after_wal_sync");
         let flushed = self.pool.flush_all()?;
         self.pool.store().flush()?;
+        crate::test_faults::crash_point("checkpoint.after_page_flush");
         self.finish_checkpoint(root_page, redo_lsn, flushed, true)
     }
 
@@ -1402,10 +1479,13 @@ impl Checkpointer {
         self.pool
             .store()
             .publish_root(root_page, self.wal.next_lsn())?;
+        crate::test_faults::crash_point("checkpoint.after_publish");
         let wal_truncated = if truncate {
             // Safe only under the caller contract above: every page represented
             // by the discarded log is already durable.
-            self.wal.reset()?
+            let truncated = self.wal.reset()?;
+            crate::test_faults::crash_point("checkpoint.after_wal_reset");
+            truncated
         } else {
             false
         };
@@ -1435,6 +1515,18 @@ pub struct CheckpointReport {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn synced_commits_never_record_a_deferred_commit() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let wal = Wal::open(&dir.path().join("store.wal"), false).unwrap();
+        for transaction in 1..=5 {
+            wal.commit(transaction).unwrap();
+        }
+        assert_eq!(wal.deferred_commit_lsn(), 0);
+        let lsn = wal.commit_unsynced(6).unwrap();
+        assert_eq!(wal.deferred_commit_lsn(), lsn);
+    }
+
     use super::*;
     use crate::manager::{PageStore, PageStoreOptions};
     use crate::page::{PageHeader, PageType, PAGE_HEADER_BYTES};

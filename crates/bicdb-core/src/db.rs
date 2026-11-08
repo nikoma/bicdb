@@ -2,6 +2,8 @@ mod access_mutation;
 mod branching;
 mod collection_rename;
 mod commit_snapshot;
+mod deferred_materialize;
+pub use deferred_materialize::DeferredMaterializeStats;
 mod ha_bootstrap;
 mod ha_node;
 mod online_backup;
@@ -288,6 +290,15 @@ pub struct DbConfig {
     /// dominant restart cost on large datasets). Default on for compatibility;
     /// set `BICDB_SYNC_OUTBOX=off` (or `with_sync_outbox(false)`) to disable.
     pub sync_outbox: bool,
+    /// EXPERIMENTAL, off by default: in `server_paged`, make the
+    /// transaction log the only synchronous write before a row commit is
+    /// acknowledged. The page log is synced and `CommitMaterialized` markers
+    /// written by a background materializer instead; recovery replays any
+    /// unmarked commit from the transaction log. Page-only writes (bulk loads,
+    /// index and FTS builds) still sync at commit. Set
+    /// `BICDB_COMMIT_DURABILITY=transaction-log` to enable. See
+    /// `docs/commit-durability-invariants.md`.
+    pub transaction_log_commit_durability: bool,
     /// Whether the binary startup snapshot ("true checkpoint") is active. A derived
     /// cache written at compaction that lets the next open rebuild the heap from
     /// compact binary records instead of reparsing JSON segments. OFF by default; on
@@ -1198,6 +1209,8 @@ impl Default for DbConfig {
             require_signed_imports: true,
             allow_unsafe_legacy_mesh_collections: false,
             sync_outbox: sync_outbox_default(),
+            transaction_log_commit_durability:
+                deferred_materialize::transaction_log_durability_default(),
             snapshot: snapshot_enabled(),
             replication: ReplicationConfig::default(),
             consensus: ConsensusConfig::default(),
@@ -1917,6 +1930,12 @@ impl DbConfig {
 
     pub fn with_sync_outbox(mut self, sync_outbox: bool) -> Self {
         self.sync_outbox = sync_outbox;
+        self
+    }
+
+    /// See [`DbConfig::transaction_log_commit_durability`]. Experimental.
+    pub fn with_transaction_log_commit_durability(mut self, enabled: bool) -> Self {
+        self.transaction_log_commit_durability = enabled;
         self
     }
 
@@ -3729,7 +3748,7 @@ pub struct BicDb {
     /// be reused by the next one and would silently inherit its sequences.
     instance_id: u64,
     next_tx_id: AtomicU64,
-    last_committed_tx: AtomicU64,
+    last_committed_tx: Arc<AtomicU64>,
     // Advances `last_committed_tx` only across the contiguous prefix of applied
     // commit_seqs, so a snapshot never sees a seq whose lower neighbours are not yet
     // applied (required once apply runs concurrently / out of order).
@@ -3811,6 +3830,9 @@ pub struct BicDb {
     // O_DSYNC; buffered mode is diagnostic and not crash durable.
     // Invalidated (set to None) whenever the log is truncated/checkpointed.
     tx_log: TxLogHandle,
+    /// Present only with the experimental transaction-log-only commit
+    /// durability; see `deferred_materialize`.
+    deferred_materializer: Option<deferred_materialize::DeferredMaterializerHandle>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -10331,6 +10353,21 @@ impl BicDb {
             },
             config.fsync,
         )?;
+        let last_committed_tx = Arc::new(AtomicU64::new(tx_recovery.last_commit_seq));
+        let deferred_materializer = match &paged_records {
+            // The deferral is a code-path change regardless of fsync; with fsync
+            // off nothing is crash durable in either mode.
+            Some(paged) if config.transaction_log_commit_durability => {
+                Some(deferred_materialize::DeferredMaterializerHandle::start(
+                    deferred_materialize::DeferredMaterializer::new(
+                        paged.clone(),
+                        tx_log.clone(),
+                        last_committed_tx.clone(),
+                    ),
+                ))
+            }
+            _ => None,
+        };
         let mut db = Self {
             path,
             recovery_required: AtomicBool::new(false),
@@ -10369,7 +10406,7 @@ impl BicDb {
             next_tx_id: AtomicU64::new(tx_recovery.next_tx_id),
             // MVCC visibility watermark in commit_seq units (snapshots read it).
             instance_id: NEXT_DB_INSTANCE_ID.fetch_add(1, AtomicOrdering::Relaxed),
-            last_committed_tx: AtomicU64::new(tx_recovery.last_commit_seq),
+            last_committed_tx,
             applied_watermark: Mutex::new(AppliedWatermark::new(tx_recovery.last_commit_seq)),
             commit_seq: Arc::new(AtomicU64::new(tx_recovery.last_commit_seq)),
             sync_quorum: {
@@ -10400,6 +10437,7 @@ impl BicDb {
             exclusion_claims: Mutex::new(Vec::new()),
             active_snapshots: Arc::new(ActiveSnapshots::with_shards(orch_shard_count())),
             tx_log,
+            deferred_materializer,
         };
         if db.config.replication.record_journal {
             for (tx_id, events) in &recovered_audit_outboxes {
@@ -19041,7 +19079,16 @@ fn apply_unmaterialized_transaction_log(
         .collect();
     ordered.sort_unstable();
     let mut dropped_collection_writes: BTreeMap<String, usize> = BTreeMap::new();
+    let trace_replay = std::env::var_os("BICDB_TRACE_REPLAY").is_some();
     for (commit_seq, tx_id) in ordered {
+        if trace_replay {
+            let collections: Vec<&str> = recovery
+                .writes
+                .get(&tx_id)
+                .map(|writes| writes.iter().map(|write| write.collection()).collect())
+                .unwrap_or_default();
+            eprintln!("bicdb replay: commit_seq {commit_seq} tx {tx_id} writes {collections:?}");
+        }
         // Once this transaction has been replayed its decoded rows are no
         // longer needed. Retain commit state and outboxes, not a second copy
         // of every historical row throughout the rest of database open.
@@ -19141,6 +19188,7 @@ fn apply_unmaterialized_transaction_log(
                     match applied {
                         Ok(()) => {
                             paged.commit(xid)?;
+                            bicdb_page::test_faults::crash_point("replay.after_write");
                             let post_snapshot = bicdb_page::Snapshot {
                                 xid,
                                 xmax: xid + 1,

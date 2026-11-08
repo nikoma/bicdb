@@ -314,6 +314,10 @@ impl BicDb {
         // admission). Drain before replacing the inode, and invalidate here,
         // rather than relying on each checkpoint/close caller to remember it.
         self.tx_log.flush_pending()?;
+        // I7: with deferred page commits, the redo about to be dropped may be
+        // the only durable copy of a commit until the page log syncs.
+        self.deferred_materialize_barrier()?;
+        bicdb_page::test_faults::crash_point("txlog_cut.after_barrier");
         // Retention must survive a restart: persist the positions it is based on.
         self.persist_standby_slots()?;
         let path = self.tx_log_path();
@@ -331,6 +335,7 @@ impl BicDb {
             wal_base,
             self.config.fsync,
         )?;
+        bicdb_page::test_faults::crash_point("txlog_cut.after_floor");
         if keep_from >= log_len {
             truncate_log_file(&path, self.config.fsync)?;
         } else if keep_from > 0 {

@@ -4509,7 +4509,9 @@ impl<'db> SqlEngine<'db> {
             | "select current_schema()"
             | "select pg_catalog.current_schema()" => Ok(Some(SqlResult::new(
                 vec!["current_schema".to_string()],
-                vec![vec![SqlValue::String("public".to_string())]],
+                vec![vec![SqlValue::String(
+                    crate::search_path::current_schema_name(),
+                )]],
             ))),
             "select version()" | "select pg_catalog.version()" => Ok(Some(SqlResult::new(
                 vec!["version".to_string()],

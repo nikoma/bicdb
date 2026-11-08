@@ -1731,7 +1731,7 @@ pub(crate) fn eval_catalog_function_value(name: &str, args: &[SqlValue]) -> Opti
             Some(SqlValue::String("bicdb".to_string()))
         }
         "current_schema" | "pg_catalog.current_schema" => {
-            Some(SqlValue::String("public".to_string()))
+            Some(SqlValue::String(crate::search_path::current_schema_name()))
         }
         "current_date" | "pg_catalog.current_date" => {
             Some(SqlValue::String(unix_now_date_string()))

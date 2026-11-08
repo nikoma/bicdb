@@ -187,11 +187,11 @@ pub struct RecoveryReport {
     /// on-disk versions.
     #[serde(default)]
     pub max_record_transaction: u64,
-    /// Records of a stale chain that ended before the checkpoint horizon:
-    /// discarded unreplayed while the interrupted reset that left them was
-    /// finished (`Wal::reset`, crash order).
+    /// Sealed segments of a stale chain that ended before the checkpoint
+    /// horizon, deleted unreplayed: the remains of an interrupted log reset
+    /// (see `ResetShape` in `wal.rs`).
     #[serde(default)]
-    pub stale_records_discarded: u64,
+    pub stale_segments_discarded: u64,
     pub duration_nanos: u64,
     pub redo_lsn: Lsn,
     pub end_lsn: Lsn,
@@ -859,10 +859,15 @@ impl Wal {
     /// Record a checkpoint: everything before `redo_lsn` is already in the page
     /// file, so recovery may start there.
     ///
-    /// This is a **fuzzy** checkpoint — it names a redo point without pausing
-    /// writers. The caller's contract is only that every page dirtied before
-    /// `redo_lsn` has been flushed; pages dirtied after it are covered by the
-    /// log records that follow.
+    /// The caller's contract: every page dirtied before `redo_lsn` has been
+    /// flushed. Records appended between `redo_lsn` and this record are
+    /// replayed, because recovery redoes from this record's `redo_lsn` when it
+    /// is the last checkpoint record below the published horizon
+    /// ([`recover_with_outcomes`]). Publishing the horizon (`publish_root` in
+    /// [`Checkpointer::finish_checkpoint`]) is what must be fenced: no page
+    /// image may be appended between this record and the publication, which
+    /// both checkpoint paths guarantee by holding the store's writer gate
+    /// with no dirty page left.
     pub fn checkpoint(&self, redo_lsn: Lsn, root_page: PageId) -> Result<Lsn> {
         let lsn = self.append(RecordKind::Checkpoint, root_page, redo_lsn, &[])?;
         self.sync_through(lsn)?;
@@ -1105,37 +1110,37 @@ impl Wal {
         }
         let archived_through = self.archived_through.load(Ordering::Acquire);
         let mut sealed = self.sealed.lock();
-        let mut retained = Vec::new();
-        let mut retained_bytes = 0u64;
+        // Oldest first. One pass over the list: `kept` is what stays on disk
+        // (retained by archive retention, or not reached because a deletion
+        // failed), so list and disk agree on every return.
+        let pending = std::mem::take(&mut *sealed);
+        let mut kept = Vec::new();
         let mut deleted_any = false;
-        // Oldest first. The in-memory list loses an entry only once its file
-        // is really gone, so a failed deletion leaves list and disk in step.
-        while let Some(&sequence) = sealed.first() {
+        let mut failure = None;
+        for (index, &sequence) in pending.iter().enumerate() {
             let path = self.sealed_path(sequence);
             // With archive retention on, a sealed segment the archiver has
             // not confirmed yet must survive local truncation — deleting it
             // would gap the archive chain forever.
             if retention && sequence > archived_through {
-                retained_bytes = retained_bytes.saturating_add(
-                    std::fs::metadata(&path)
-                        .map(|metadata| metadata.len())
-                        .unwrap_or(0),
-                );
-                retained.push(sequence);
-                sealed.remove(0);
+                kept.push(sequence);
                 continue;
             }
             if let Err(error) = crate::test_faults::io_fault("page_log.reset_unlink", &path)
                 .and_then(|()| std::fs::remove_file(&path))
             {
-                // Keep the list matching the disk: retained segments go back.
-                let rest = std::mem::take(&mut *sealed);
-                sealed.extend(retained.iter().copied().chain(rest));
-                return Err(self.fail("page_log.reset_unlink", &path, error));
+                kept.extend_from_slice(&pending[index..]);
+                failure = Some(self.fail("page_log.reset_unlink", &path, error));
+                break;
             }
-            sealed.remove(0);
             deleted_any = true;
             crate::test_faults::crash_point_with_locked_wal("wal_reset.after_segment_delete", self);
+        }
+        *sealed = kept;
+        self.sealed_bytes
+            .store(self.sealed_bytes_on_disk(&sealed), Ordering::Release);
+        if let Some(failure) = failure {
+            return Err(failure);
         }
         if deleted_any && self.fsync {
             // The deletions must be durable before the truncation can be.
@@ -1160,10 +1165,8 @@ impl Wal {
         // Power-loss emulation treats the truncation as durable from here.
         self.synced_offset.store(0, Ordering::Release);
         crate::test_faults::crash_point_with_locked_wal("wal_reset.after_active_truncate", self);
-        let locally_empty = retained.is_empty();
-        *sealed = retained;
+        let locally_empty = sealed.is_empty();
         drop(sealed);
-        self.sealed_bytes.store(retained_bytes, Ordering::Release);
         drop(file);
         self.end_offset.store(0, Ordering::Release);
         self.synced_offset.store(0, Ordering::Release);
@@ -1173,6 +1176,121 @@ impl Wal {
         // The truncation discarded every commit record this set tracked.
         self.committed_this_generation.lock().clear();
         Ok(locally_empty)
+    }
+
+    fn sealed_bytes_on_disk(&self, sealed: &[u64]) -> u64 {
+        sealed
+            .iter()
+            .map(|sequence| {
+                std::fs::metadata(self.sealed_path(*sequence))
+                    .map(|metadata| metadata.len())
+                    .unwrap_or(0)
+            })
+            .sum()
+    }
+
+    /// Classify the log against the page file's horizon before recovery
+    /// touches anything. Read-only. See [`ResetShape`].
+    fn reset_shape(&self, max_body_bytes: usize, horizon: Lsn) -> Result<ResetShape> {
+        if horizon == 0 {
+            return Ok(ResetShape::Normal);
+        }
+        let mut file = self.file.lock();
+        let sealed = self.sealed.lock().clone();
+        let mut ignore = |_: WalRecordView<'_>| -> Result<()> { Ok(()) };
+        // The active file's own valid run, ignoring continuity with the
+        // sealed chain: its first and last LSN.
+        let active_bytes = file
+            .metadata()
+            .map_err(|error| PageError::io(&self.path, error))?
+            .len();
+        let mut active_scan = WalScanReport::default();
+        let (_, active_first) = scan_wal_file(
+            &mut *file,
+            &self.path,
+            max_body_bytes,
+            &mut None,
+            &mut active_scan,
+            &mut ignore,
+        )?;
+        let active_last = active_scan.last_lsn;
+        let Some(&last_sealed) = sealed.last() else {
+            return Ok(match active_last {
+                Some(last) if last.saturating_add(1) < horizon => ResetShape::Corrupt(format!(
+                    "the page log ends at LSN {last}, before the checkpoint record {} of the \
+                     page file's horizon {horizon}",
+                    horizon - 1
+                )),
+                _ => ResetShape::Normal,
+            });
+        };
+        let path = self.sealed_path(last_sealed);
+        let mut segment = File::open(&path).map_err(|e| PageError::io(&path, e))?;
+        let mut sealed_scan = WalScanReport::default();
+        scan_wal_file(
+            &mut segment,
+            &path,
+            max_body_bytes,
+            &mut None,
+            &mut sealed_scan,
+            &mut ignore,
+        )?;
+        // An undecodable sealed segment is corruption pass 1 reports.
+        let Some(sealed_last) = sealed_scan.last_lsn else {
+            return Ok(ResetShape::Normal);
+        };
+        let chain_last = match (active_first, active_last) {
+            (Some(first), Some(last)) if first == sealed_last + 1 => last,
+            _ => sealed_last,
+        };
+        if chain_last.saturating_add(1) >= horizon {
+            return Ok(ResetShape::Normal);
+        }
+        Ok(if active_bytes == 0 {
+            ResetShape::InterruptedReset
+        } else if active_first == Some(horizon) {
+            ResetShape::StaleSealedBeforeActive
+        } else {
+            ResetShape::Corrupt(format!(
+                "the sealed page-log segments end at LSN {sealed_last}, before the checkpoint \
+                 record {} of the page file's horizon {horizon}, and the active file \
+                 ({active_bytes} bytes) does not start at the horizon (first LSN {active_first:?})",
+                horizon - 1
+            ))
+        })
+    }
+
+    /// Delete every sealed segment (all older than the horizon, see
+    /// [`ResetShape::StaleSealedBeforeActive`]) without touching the active
+    /// file, then sync the directory. Fails closed. Returns how many went.
+    fn drop_stale_sealed_segments(&self) -> Result<u64> {
+        let _file = self.file.lock();
+        self.health.check()?;
+        let mut sealed = self.sealed.lock();
+        let pending = std::mem::take(&mut *sealed);
+        let mut deleted = 0u64;
+        for (index, &sequence) in pending.iter().enumerate() {
+            let path = self.sealed_path(sequence);
+            if let Err(error) = crate::test_faults::io_fault("page_log.reset_unlink", &path)
+                .and_then(|()| std::fs::remove_file(&path))
+            {
+                *sealed = pending[index..].to_vec();
+                self.sealed_bytes
+                    .store(self.sealed_bytes_on_disk(&sealed), Ordering::Release);
+                return Err(self.fail("page_log.reset_unlink", &path, error));
+            }
+            deleted += 1;
+        }
+        self.sealed_bytes.store(0, Ordering::Release);
+        if self.fsync {
+            if let Some(parent) = self.path.parent().filter(|p| !p.as_os_str().is_empty()) {
+                crate::test_faults::io_fault("page_log.reset_dir_sync", parent)
+                    .and_then(|()| File::open(parent))
+                    .and_then(|dir| dir.sync_all())
+                    .map_err(|e| self.fail("page_log.reset_dir_sync", parent, e))?;
+            }
+        }
+        Ok(deleted)
     }
 
     /// Turn on archive retention: from now until the handle closes,
@@ -1340,6 +1458,28 @@ pub fn transaction_outcomes(wal: &Wal) -> Result<Vec<(u64, crate::mvcc::TxStatus
     Ok(outcomes)
 }
 
+/// How the page-log chain relates to the page file's horizon `H`, decided
+/// before recovery changes any file.
+enum ResetShape {
+    /// The chain is empty, or reaches at least the checkpoint record `H - 1`.
+    Normal,
+    /// Sealed segments that all predate `H - 1`, next to an EMPTY active file:
+    /// exactly what a log reset interrupted between truncating the active file
+    /// and deleting the segments leaves (the order `Wal::reset` used before
+    /// GAP-2 was fixed). Every record is reflected in the page file. Finish
+    /// the reset.
+    InterruptedReset,
+    /// Such stale sealed segments, then an active file whose first record is
+    /// `H`: an interrupted reset as above, after which an older engine kept
+    /// committing into the active file. Those commits are real. Drop the stale
+    /// segments and replay the active file; continuity-checking the whole
+    /// chain would discard it as a torn tail.
+    StaleSealedBeforeActive,
+    /// Ends before `H - 1` in any other shape: corruption, or a lost log.
+    /// Refuse, and leave every file as it is.
+    Corrupt(String),
+}
+
 /// Replay a log into a page file.
 ///
 /// Two passes, which is what makes "no uncommitted row is exposed" true rather
@@ -1366,6 +1506,44 @@ pub(crate) fn recover_with_outcomes(
     let mut outcomes = RecoveredOutcomes::default();
     let mut terminal_outcome_records = 0_u64;
     let mut max_record_transaction = 0_u64;
+    let horizon = store.checkpoint_lsn();
+    // Before anything is truncated or replayed: is this the remains of an
+    // interrupted log reset (GAP-2 in `docs/recovery-semantics.md`)?
+    let mut stale_segments_discarded = 0_u64;
+    match wal.reset_shape(max_body_bytes, horizon)? {
+        ResetShape::Normal => {}
+        ResetShape::InterruptedReset => {
+            let segments = wal.sealed.lock().len() as u64;
+            // Every record is below the horizon and already in the page file.
+            // Replay nothing; finish the reset before anything is appended.
+            wal.reset()?;
+            wal.redo_lsn.store(horizon, Ordering::Release);
+            return Ok((
+                RecoveryReport {
+                    wal_bytes_scanned,
+                    scan_passes: 0,
+                    stale_segments_discarded: segments,
+                    redo_lsn: horizon,
+                    duration_nanos: u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX),
+                    ..Default::default()
+                },
+                RecoveredOutcomes::default(),
+            ));
+        }
+        ResetShape::StaleSealedBeforeActive => {
+            stale_segments_discarded = wal.drop_stale_sealed_segments()?;
+        }
+        ResetShape::Corrupt(reason) => {
+            return Err(PageError::WalCorruption {
+                path: wal.path().to_path_buf(),
+                lsn: horizon,
+                reason,
+            });
+        }
+    }
+    // Redo point of the last checkpoint record below the horizon: normally
+    // the record at `H - 1` that published `H`.
+    let mut checkpoint_redo_below_horizon = None;
     let first = wal.scan_records(max_body_bytes, true, |record| {
         // Checkpoint records reuse the transaction field for a redo LSN, so
         // they are excluded; transaction 0 marks structural images. Page
@@ -1399,46 +1577,16 @@ pub(crate) fn recover_with_outcomes(
                 debug_assert!(inserted);
                 terminal_outcome_records = terminal_outcome_records.saturating_add(1);
             }
-            // Validated and counted, but the redo point is the page file's
-            // horizon (below).
-            RecordKind::Checkpoint => {}
+            RecordKind::Checkpoint => {
+                if record.lsn < horizon {
+                    checkpoint_redo_below_horizon = Some(record.transaction);
+                }
+            }
             RecordKind::PageImage => {}
         }
         Ok(())
     })?;
     crate::test_faults::crash_point("page_recovery.after_scan");
-    // A chain that ends before the horizon's checkpoint record `H - 1` holds
-    // only records the page file already reflects, and it lacks the record
-    // that names the redo point. That is the shape a log reset interrupted
-    // between truncating the active file and deleting the sealed segments
-    // leaves (the order `Wal::reset` used before it deleted first; see GAP-2
-    // in `docs/recovery-semantics.md`). Replaying it would write older page
-    // images over newer pages. Replay nothing, and finish the reset before
-    // anything new is appended, so the next record (LSN `H`) does not land
-    // behind a stale chain it cannot continue.
-    let horizon = store.checkpoint_lsn();
-    if let Some(last) = first.last_lsn {
-        if horizon > 0 && last.saturating_add(1) < horizon {
-            wal.reset()?;
-            wal.redo_lsn.store(horizon, Ordering::Release);
-            return Ok((
-                RecoveryReport {
-                    records_scanned: first.records,
-                    truncated_bytes: first.truncated_bytes,
-                    wal_bytes_scanned,
-                    scan_passes: 1,
-                    peak_record_bytes: first.peak_record_bytes,
-                    stale_records_discarded: first.records,
-                    max_record_transaction,
-                    redo_lsn: horizon,
-                    end_lsn: last,
-                    duration_nanos: u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX),
-                    ..Default::default()
-                },
-                RecoveredOutcomes::default(),
-            ));
-        }
-    }
     let peak_transaction_outcome_bytes = outcomes.allocated_bytes();
     if let Some(xid) = outcomes.normalize() {
         return Err(PageError::WalCorruption {
@@ -1447,29 +1595,22 @@ pub(crate) fn recover_with_outcomes(
             reason: format!("transaction {xid} has contradictory commit and abort records"),
         });
     }
-    // The redo point is the page file's own checkpoint horizon `H`
-    // (superblock `checkpoint_lsn`), never a checkpoint record's.
+    // The redo point. The page file's checkpoint horizon `H` (superblock
+    // `checkpoint_lsn`) is published only once every page dirtied before it
+    // is durable, so nothing below `H` ever needs replay. The checkpoint
+    // record that published `H` (the last one below it, normally at `H - 1`)
+    // names a redo point at or below `H`; records between that point and
+    // `H` are replayed, so a checkpoint whose publication was not fenced
+    // against appends still recovers exactly.
     //
-    // `Checkpointer::finish_checkpoint` publishes `H` (the LSN right after
-    // its checkpoint record) only once every page dirtied before it is
-    // durable in the page file, so every image below `H` is already
-    // reflected in these pages. A checkpoint record in the chain names a
-    // redo point at or below the horizon its own checkpoint published, so
-    // for the store's own log the two agree.
-    //
-    // They differ in two cases, and `H` is right in both. A rolled-forward
-    // restore replays an archived log over an OLDER base copy: later
-    // checkpoint records in the stream describe the source's page files,
-    // not these, and the code used to fall back to replaying from LSN 0.
-    // The base's own horizon vouches for everything below it (its
-    // superblock is copied before its pages, and pages only move forward),
-    // so replay from `H` is exact. And a chain of records all below `H`
-    // that lacks its checkpoint record, the shape an interrupted log reset
-    // left (GAP-2), was replayed from LSN 0 over newer pages; it is
-    // handled above, and with `H` as the redo point it could not regress a
-    // page even if it were not. `H = 0` (a new store, or one written before
-    // horizons existed) replays the whole chain, as before.
-    let redo_lsn = horizon;
+    // Without such a record, `H` itself is exact. That is the case for a
+    // rolled-forward restore whose base was taken after its log was reset
+    // (later records in the stream describe the source's page files, not
+    // these), and for a log that starts at `H`. The code used to replay those
+    // from LSN 0, and a stale chain of records below `H` (GAP-2) over newer
+    // pages. `H = 0` (a new store, or one written before horizons existed)
+    // replays the whole chain.
+    let redo_lsn = checkpoint_redo_below_horizon.map_or(horizon, |redo: Lsn| redo.min(horizon));
     let mut report = RecoveryReport {
         records_scanned: first.records,
         truncated_bytes: first.truncated_bytes,
@@ -1481,6 +1622,7 @@ pub(crate) fn recover_with_outcomes(
         peak_transaction_outcome_bytes,
         committed_transactions: outcomes.committed_count() as u64,
         max_record_transaction,
+        stale_segments_discarded,
         redo_lsn,
         end_lsn: first.last_lsn.unwrap_or(0),
         ..Default::default()
@@ -1595,6 +1737,16 @@ impl Checkpointer {
     /// Doing 4 before 3 would let a crash leave a checkpoint claiming pages are
     /// durable when they are not, and recovery would skip exactly the records
     /// needed to fix them.
+    ///
+    /// # Fence
+    ///
+    /// The caller must exclude every page writer (the store's writer gate)
+    /// from step 1 until this returns, so every page logged before the
+    /// published horizon is flushed. A record appended by another thread
+    /// between the checkpoint record and the publication (a page written
+    /// back through the barrier by a thread that does not hold the gate) lands below the horizon but
+    /// above this checkpoint's redo point, and recovery replays it: the redo
+    /// point comes from the checkpoint record, not from the horizon.
     pub fn checkpoint(&self, root_page: PageId) -> Result<CheckpointReport> {
         let redo_lsn = self.wal.next_lsn();
         self.wal.sync()?;

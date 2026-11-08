@@ -102,21 +102,36 @@ One scan over the chain (`wal.rs:1260-1296`):
   corruption and open fails (`wal.rs:1297-1303`). `Wal::abort` refuses to
   write an abort after a commit in the same generation, so the pair is
   unwritable (`wal.rs:723`).
-- **The redo point is the page file's horizon `H`** (`checkpoint_lsn` in
-  the superblock), not a checkpoint record's `redo_lsn`. `H` is published
-  only after every page dirtied before it is durable (3.4), so every image
-  below `H` is already in these pages. For the store's own log the two
-  agree, because a checkpoint record's redo point is at or below the horizon
-  its checkpoint published. They differ for a roll-forward restore over an
-  older base (later records describe the source's page files) and for a
-  stale chain (GAP-2). In both cases `H` is exact, where the code used to
-  fall back to LSN 0. `H = 0` (a new or pre-horizon store) replays the
-  whole chain. *(Changed by the GAP-2 fix; before it, a record's redo point
-  was used when `H >= redo_lsn` and LSN 0 otherwise.)*
-- **A chain that ends before `H - 1`** holds only records below the horizon
-  and lacks the checkpoint record. Recovery replays nothing, finishes the
-  interrupted reset (`Wal::reset`) before anything is appended, and reports
-  `stale_records_discarded`.
+- **The redo point** is the `redo_lsn` of the last checkpoint record below
+  the page file's horizon `H` (`checkpoint_lsn` in the superblock),
+  normally the record at `H - 1` that published `H`. It is capped at `H`.
+  Without such a record, the redo point is `H` itself. `H` is published only
+  after every page dirtied before it is durable (3.4), so nothing below it
+  needs replay. Records between the record's redo point and `H` are
+  replayed, so an unfenced append before publication is still recovered.
+  Both checkpoint paths hold the writer gate across the publication. That
+  does not stop a thread outside the gate (an eviction, or a page-only
+  transaction between its operations, W4 in 14.1) from appending a page image, which is
+  why the redo point comes from the record.
+
+  This is exact for a roll-forward restore over an older base (later
+  records describe the source's page files) and for a log that starts at
+  `H`. The code used to replay both from LSN 0. `H = 0` (a new or
+  pre-horizon store) replays the whole chain. *(Changed by the GAP-2 fix.
+  Before it, the last record's redo point was used when `H >= redo_lsn`,
+  and LSN 0 otherwise.)*
+- **A chain that ends before `H - 1`** is classified before any file
+  changes (`ResetShape`):
+  - sealed segments with an **empty** active file is an interrupted reset.
+    Recovery replays nothing and finishes the reset;
+  - stale sealed segments followed by an active file whose first record is
+    `H` is an interrupted reset after which an older engine kept committing.
+    Recovery drops the stale segments and replays the active file. Before,
+    those acknowledged commits were discarded as a torn tail;
+  - anything else is refused with `WalCorruption`, and every file is left
+    untouched.
+
+  The first two shapes are counted in `stale_segments_discarded`.
 - The highest xid named by any record is kept (`wal.rs:1263-1268`).
 
 ### 3.3 Pass 2: what is applied
@@ -276,8 +291,10 @@ the checkpoint record. Every step fails closed:
 `page_log.reset_unlink`, `page_log.reset_dir_sync`, `page_log.reset`,
 `page_log.reset_sync`. A crash or failure at any step leaves a chain that
 still reaches the checkpoint record, or an empty log. Recovery replays from
-`H`, and a stale chain left by an older engine is recognised and its reset
-finished (3.2).
+the redo point of the last checkpoint record below `H`. A stale chain left by an older engine
+is recognised: either its reset is finished, or the stale segments are
+dropped and the active file replayed. Any other short chain is refused
+untouched (3.2).
 
 ### 4.5 Interrupted log cut
 
@@ -825,7 +842,7 @@ reopen has replayed them, the regressed rows are valid older versions, so
 `verify_integrity` passes unless the mixture of page ages breaks a tree.
 Only external evidence shows the loss: the commit-log archive, a standby,
 or the application. The fix (follow-up PR) recognises the state at open,
-replays nothing, and reports it as `stale_records_discarded`.
+replays nothing, and reports it as `stale_segments_discarded`.
 
 ### 15.2 GAP-1 (steal without undo)
 

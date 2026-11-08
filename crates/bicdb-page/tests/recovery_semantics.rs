@@ -358,10 +358,10 @@ fn an_interrupted_log_reset_neither_regresses_pages_nor_loses_later_commits() {
     let mut failures = Vec::new();
     {
         let (store, report) = PagedStore::open(dir.path(), segmented_options()).unwrap();
-        if report.stale_records_discarded == 0 || report.pages_replayed != 0 {
+        if report.stale_segments_discarded == 0 || report.pages_replayed != 0 {
             failures.push(format!(
-                "the stale chain was not recognised: {} records discarded, {} pages replayed",
-                report.stale_records_discarded, report.pages_replayed
+                "the stale chain was not recognised: {} segments discarded, {} pages replayed",
+                report.stale_segments_discarded, report.pages_replayed
             ));
         }
         if !sealed_segments(dir.path()).is_empty() {

@@ -236,8 +236,9 @@ What the matrix found, and how each finding was resolved:
 
 Host s3ny: 24 cores, consumer NVMe, ext4, fsync on, shared at load 13-27.
 Median of 3 trials of 30 s each. The spread between trials is about ±30%.
-"Old" is before the change that syncs the page log without holding its
-append lock (`1f78e4f`); "new" is after it.
+"Old" is the code in this branch. "New" adds a change that syncs the page log
+without holding its append lock. That change is NOT part of this branch: it
+is being qualified separately (section 8, step 2).
 
 | Threads | Mode (code version) | p50 µs | p95 µs | p99 µs | Commits/s |
 |---|---|---|---|---|---|
@@ -272,7 +273,7 @@ The experimental mode meets the tested guarantees, but its benefit is limited
 to low concurrency, and it worsens tails at high concurrency. It should not
 become the default. Proposed steps, each a separate decision:
 
-1. **Merge the investigation with the flag off.** This adds:
+1. **Merge the investigation with the flag off** (this branch). This adds:
    - this document;
    - the crash-injection points (one relaxed load each when unset);
    - the power-loss emulation;
@@ -280,12 +281,30 @@ become the default. Proposed steps, each a separate decision:
    - the benchmark;
    - the experimental mode behind `BICDB_COMMIT_DURABILITY=transaction-log`.
 
-   Default behaviour is unchanged, except the writeback barrier gains one
-   no-op check: with the flag off, no deferred commit LSN is ever recorded.
-2. **Ship the append-lock change to the production path on its own.** It
-   leaves durability unchanged and showed the clearest win (4 writers: +42%
-   throughput, p95 −68%). It needs its own review, the full CI, and the matrix,
-   which it already passes.
+   Default behaviour is unchanged. Costs on the default path:
+   - one relaxed load per crash point;
+   - one atomic store per page-log sync;
+   - one mutex lock per page writeback, for the deferred-commit hook. That
+     hook does nothing unless the flag is on, because no deferred commit LSN
+     is ever recorded.
+
+   `tests/commit_durability_isolation.rs` pins this down:
+   - the flag is off by default;
+   - only the exact value `transaction-log` enables it;
+   - it never engages outside `server_paged`;
+   - the materializer never starts on the default path.
+
+   A page-level test checks that synced commits never record a deferred
+   commit LSN.
+2. **The append-lock change ships on its own, separately.** It showed the
+   clearest win (4 writers: +42% throughput, p95 −68%). It will be gated off
+   until it passes qualification on:
+   - concurrent commit ordering;
+   - crash recovery;
+   - checkpoint interaction;
+   - fsync failures;
+   - visibility;
+   - replication.
 3. **Opt-in only, for single- and low-concurrency write workloads**, e.g. a
    serial application job that commits many small transactions. Before
    anyone enables it in production:

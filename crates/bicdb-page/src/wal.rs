@@ -668,6 +668,13 @@ impl Wal {
         self.sync_through(lsn)
     }
 
+    /// Highest commit LSN appended by [`Self::commit_unsynced`], or 0 if the
+    /// log never took a deferred commit. Synced commits never set it, so on
+    /// the default commit path it stays 0.
+    pub fn deferred_commit_lsn(&self) -> Lsn {
+        self.deferred_commit_lsn.load(Ordering::Acquire)
+    }
+
     /// Test support: the active-file offset the last successful sync covered.
     #[cfg(test)]
     pub(crate) fn synced_offset_for_test(&self) -> u64 {
@@ -1508,6 +1515,18 @@ pub struct CheckpointReport {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn synced_commits_never_record_a_deferred_commit() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let wal = Wal::open(&dir.path().join("store.wal"), false).unwrap();
+        for transaction in 1..=5 {
+            wal.commit(transaction).unwrap();
+        }
+        assert_eq!(wal.deferred_commit_lsn(), 0);
+        let lsn = wal.commit_unsynced(6).unwrap();
+        assert_eq!(wal.deferred_commit_lsn(), lsn);
+    }
+
     use super::*;
     use crate::manager::{PageStore, PageStoreOptions};
     use crate::page::{PageHeader, PageType, PAGE_HEADER_BYTES};

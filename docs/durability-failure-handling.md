@@ -383,9 +383,15 @@ Mutation checks (each mutation applied alone; the named tests must fail):
   with `page N is beyond the end of the file (N pages)`, both after a crash
   (`pool.after_writeback:40`) and after an injected early page-log sync
   failure. The binary built from `main`, without this change, refuses the
-  same saved states identically, so it is an existing recovery defect, not
-  one this change introduced. It fails closed (the open is refused; nothing
-  is silently discarded). The states are saved for the recovery work.
+  same saved states identically. The saved crash state shows the cause: the
+  log ends with page images of an uncommitted transaction that allocated
+  pages 6 and 7, and the eviction just before the crash wrote one of its
+  structural pages (which already references page 6) to the page file.
+  Recovery skips the uncommitted images, so the stolen page points past the
+  published page count. This is the "steal without undo" gap documented at
+  `WalWritebackBarrier` in `crates/bicdb-page/src/paged.rs`, an existing
+  recovery defect. It fails closed (the open is refused; nothing is silently
+  discarded). The states are saved for the recovery work.
 
 ## 11. Durability-contract notes
 

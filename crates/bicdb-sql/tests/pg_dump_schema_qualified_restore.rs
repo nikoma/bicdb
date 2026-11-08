@@ -362,6 +362,190 @@ fn restored_view_owners_and_schema_qualified_triggers_work() {
     assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.removed"), 1);
 }
 
+/// One simple-query text that sets search_path and then names relations
+/// unqualified: each statement binds with the path and schemas in force when
+/// it runs, not the path before the text started.
+#[test]
+fn statement_list_binds_each_statement_with_the_path_set_before_it() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA adempiere").unwrap();
+    sql.execute("CREATE TABLE adempiere.ad_client (id INT PRIMARY KEY)")
+        .unwrap();
+    sql.execute("INSERT INTO adempiere.ad_client VALUES (11), (12)")
+        .unwrap();
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SET search_path TO adempiere, public; SELECT count(*) FROM ad_client"
+        ),
+        2
+    );
+    // The path persists after the list, as a plain SET would.
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM ad_client"), 2);
+
+    // A schema created earlier in the same text is on the path for the
+    // statements after it, and new relations land in it.
+    sql.execute("RESET search_path").unwrap();
+    sql.execute(
+        "CREATE SCHEMA batch_app; SET search_path TO batch_app, public; \
+         CREATE TABLE batch_item (id INT); INSERT INTO batch_item VALUES (1)",
+    )
+    .unwrap();
+    sql.execute("RESET search_path").unwrap();
+    assert_eq!(
+        int_at(&mut sql, "SELECT count(*) FROM batch_app.batch_item"),
+        1
+    );
+    assert!(sql
+        .execute("SELECT count(*) FROM public.batch_item")
+        .is_err());
+
+    // SET LOCAL lasts for the rest of the text, like an implicit transaction.
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SET LOCAL search_path TO adempiere, public; SELECT count(*) FROM ad_client"
+        ),
+        2
+    );
+    assert!(sql.execute("SELECT count(*) FROM ad_client").is_err());
+}
+
+fn namespace_exists(sql: &mut SqlSession, name: &str) -> bool {
+    int_at(
+        sql,
+        &format!("SELECT count(*) FROM pg_namespace WHERE nspname = '{name}'"),
+    ) == 1
+}
+
+/// DROP SCHEMA follows PostgreSQL: RESTRICT (the default) refuses a schema
+/// that holds objects; CASCADE drops them; IF EXISTS skips missing names; the
+/// drop survives a restart.
+#[test]
+fn drop_schema_restrict_cascade_and_if_exists() {
+    let dir = tempfile::tempdir().unwrap();
+    let open = || {
+        BicDb::open_with_config(
+            dir.path(),
+            DbConfig::default()
+                .with_fsync(false)
+                .with_storage_mode(StorageMode::ServerPaged),
+        )
+        .unwrap()
+    };
+    {
+        let mut db = open();
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("CREATE SCHEMA zz_empty").unwrap();
+        sql.execute("DROP SCHEMA zz_empty").unwrap();
+        assert!(!namespace_exists(&mut sql, "zz_empty"));
+        let error = sql.execute("DROP SCHEMA zz_empty").unwrap_err();
+        assert_eq!(error.sqlstate(), "3F000", "{error}");
+        sql.execute("DROP SCHEMA IF EXISTS zz_empty, zz_never")
+            .unwrap();
+
+        for statement in [
+            "CREATE SCHEMA zz_full",
+            "CREATE TABLE zz_full.item (id INT PRIMARY KEY, label TEXT)",
+            "INSERT INTO zz_full.item VALUES (1, 'one')",
+            "CREATE INDEX item_label ON zz_full.item (label)",
+            "CREATE SEQUENCE zz_full.item_seq",
+            "CREATE VIEW zz_full.item_view AS SELECT id FROM zz_full.item",
+            "CREATE TYPE zz_full.mood AS ENUM ('ok', 'sad')",
+            "CREATE FUNCTION zz_full.item_total() RETURNS bigint LANGUAGE sql AS 'SELECT count(*) FROM zz_full.item'",
+            "CREATE FUNCTION zz_full.item_trg() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
+            "CREATE TRIGGER item_audit BEFORE INSERT ON zz_full.item FOR EACH ROW EXECUTE FUNCTION zz_full.item_trg()",
+            "CREATE SCHEMA zz_other",
+            "CREATE TABLE zz_other.keep (id INT)",
+        ] {
+            sql.execute(statement).unwrap();
+        }
+        let error = sql.execute("DROP SCHEMA zz_full").unwrap_err();
+        assert_eq!(error.sqlstate(), "2BP01", "{error}");
+        let error = sql.execute("DROP SCHEMA zz_full RESTRICT").unwrap_err();
+        assert_eq!(error.sqlstate(), "2BP01", "{error}");
+        // A refused list drops nothing, not even the empty schema in it.
+        sql.execute("CREATE SCHEMA zz_listed").unwrap();
+        assert!(sql.execute("DROP SCHEMA zz_listed, zz_full").is_err());
+        assert!(namespace_exists(&mut sql, "zz_listed"));
+        assert_eq!(int_at(&mut sql, "SELECT count(*) FROM zz_full.item"), 1);
+
+        sql.execute("DROP SCHEMA zz_full, zz_listed CASCADE")
+            .unwrap();
+        assert!(!namespace_exists(&mut sql, "zz_full"));
+        assert!(!namespace_exists(&mut sql, "zz_listed"));
+        assert!(sql.execute("SELECT count(*) FROM zz_full.item").is_err());
+        assert!(sql
+            .execute("SELECT count(*) FROM zz_full.item_view")
+            .is_err());
+        assert!(sql.execute("SELECT nextval('zz_full.item_seq')").is_err());
+        assert!(sql.execute("SELECT zz_full.item_total()").is_err());
+        assert_eq!(
+            int_at(
+                &mut sql,
+                "SELECT count(*) FROM pg_trigger WHERE tgname = 'item_audit'"
+            ),
+            0
+        );
+        assert_eq!(
+            int_at(
+                &mut sql,
+                "SELECT count(*) FROM pg_type WHERE typname = 'mood'"
+            ),
+            0
+        );
+        assert_eq!(int_at(&mut sql, "SELECT count(*) FROM zz_other.keep"), 0);
+        // System schemas cannot be dropped.
+        assert!(sql.execute("DROP SCHEMA pg_catalog").is_err());
+        assert!(sql
+            .execute("DROP SCHEMA information_schema CASCADE")
+            .is_err());
+        // The name is free again, and starts empty.
+        sql.execute("CREATE SCHEMA zz_full").unwrap();
+        sql.execute("CREATE TABLE zz_full.item (id INT)").unwrap();
+        assert_eq!(int_at(&mut sql, "SELECT count(*) FROM zz_full.item"), 0);
+        sql.execute("DROP SCHEMA zz_full CASCADE").unwrap();
+    }
+    let mut db = open();
+    let mut sql = SqlSession::new(&mut db);
+    assert!(!namespace_exists(&mut sql, "zz_full"));
+    assert!(namespace_exists(&mut sql, "zz_other"));
+    assert!(sql.execute("SELECT count(*) FROM zz_full.item").is_err());
+}
+
+/// Inside a transaction, DROP SCHEMA rolls back with everything it dropped.
+#[test]
+fn drop_schema_cascade_rolls_back_with_its_transaction() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA zz_tx").unwrap();
+    sql.execute("CREATE TABLE zz_tx.item (id INT)").unwrap();
+    sql.execute("INSERT INTO zz_tx.item VALUES (1)").unwrap();
+    sql.execute("BEGIN").unwrap();
+    sql.execute("DROP SCHEMA zz_tx CASCADE").unwrap();
+    assert!(!namespace_exists(&mut sql, "zz_tx"));
+    sql.execute("ROLLBACK").unwrap();
+    assert!(namespace_exists(&mut sql, "zz_tx"));
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM zz_tx.item"), 1);
+}
+
+/// Only the schema owner (or a superuser) may drop a schema.
+#[test]
+fn drop_schema_requires_ownership() {
+    let (_dir, mut db) = session_db();
+    {
+        let mut owner = SqlSession::new(&mut db);
+        owner
+            .execute("CREATE ROLE intruder LOGIN NOSUPERUSER")
+            .unwrap();
+        owner.execute("CREATE SCHEMA zz_owned").unwrap();
+    }
+    let mut intruder = SqlSession::new_unprivileged(&mut db, "intruder");
+    let error = intruder.execute("DROP SCHEMA zz_owned").unwrap_err();
+    assert!(format!("{error}").contains("owner"), "{error}");
+}
+
 // ---------------------------------------------------------------------------
 // User-defined operators (`CREATE OPERATOR`), as a pg_dump of an application
 // schema restores them: day arithmetic on timestamps through functions.

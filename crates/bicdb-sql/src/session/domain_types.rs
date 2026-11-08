@@ -733,10 +733,250 @@ impl<'db> SqlSession<'db> {
                 }
                 Ok(SqlResult::command("DROP ROLE"))
             }
+            ObjectType::Schema if !oracle::preview_routine_language_enabled(self.db_ref())? => {
+                self.execute_drop_schema(if_exists, names, cascade)
+            }
             _ => Err(SqlError::Unsupported(format!(
                 "DROP {object_type} is not supported"
             ))),
         }
+    }
+
+    /// `DROP SCHEMA [IF EXISTS] name [, ...] [CASCADE | RESTRICT]`. RESTRICT
+    /// (the default) refuses a schema that still holds objects; CASCADE drops
+    /// its tables, views, sequences, routines and types with it. Every schema
+    /// and contained object is checked before anything is dropped, so a
+    /// refused statement leaves the catalog unchanged.
+    pub(crate) fn execute_drop_schema(
+        &mut self,
+        if_exists: bool,
+        names: &[ObjectName],
+        cascade: bool,
+    ) -> Result<SqlResult> {
+        struct Contents {
+            namespace: NamespaceSchema,
+            tables: Vec<String>,
+            views: Vec<String>,
+            sequences: Vec<String>,
+            routines: Vec<RoutineSchema>,
+            types: Vec<UserTypeSchema>,
+        }
+        let mut targets: Vec<Contents> = Vec::new();
+        for name in names {
+            let schema = object_name(name)?;
+            if matches!(schema.as_str(), "pg_catalog" | "information_schema")
+                || schema.starts_with("pg_toast")
+                || schema.starts_with("pg_temp")
+            {
+                return Err(SqlError::dependent_objects_still_exist(format!(
+                    "cannot drop schema {schema} because it is required by the database system"
+                )));
+            }
+            if schema == "public" {
+                return Err(SqlError::Unsupported(
+                    "DROP SCHEMA public is not supported".to_string(),
+                ));
+            }
+            if targets.iter().any(|target| target.namespace.name == schema) {
+                continue;
+            }
+            let Some(namespace) = load_namespace(self.db_ref(), &schema)? else {
+                if if_exists {
+                    continue;
+                }
+                return Err(SqlError::data_exception_public(
+                    "3F000",
+                    format!("schema \"{schema}\" does not exist"),
+                    None,
+                ));
+            };
+            self.require_object_ownership(
+                &namespace.owner,
+                &format!("schema {schema}"),
+                "drop it",
+            )?;
+            let in_schema = |relation: &str| {
+                relation_catalog_namespace(self.db_ref(), relation)
+                    .is_ok_and(|namespace| namespace == schema)
+            };
+            let views = list_views(self.db_ref())?
+                .into_iter()
+                .filter(|view| in_schema(&view.name))
+                .map(|view| view.name)
+                .collect::<Vec<_>>();
+            let tables = user_collection_names(self.db_ref())
+                .into_iter()
+                .filter(|table| in_schema(table) && !views.contains(table))
+                .collect::<Vec<_>>();
+            let sequences = list_sequences(self.db_ref())?
+                .into_iter()
+                .filter(|sequence| in_schema(&sequence.name))
+                .map(|sequence| sequence.name)
+                .collect::<Vec<_>>();
+            let routines = list_routines(self.db_ref())?
+                .into_iter()
+                .filter(|routine| routine_schema_name(routine) == schema)
+                .collect::<Vec<_>>();
+            let types = list_user_types(self.db_ref())?
+                .into_iter()
+                .filter(|user_type| user_type.schema_name == schema)
+                .collect::<Vec<_>>();
+            targets.push(Contents {
+                namespace,
+                tables,
+                views,
+                sequences,
+                routines,
+                types,
+            });
+        }
+        for target in &targets {
+            let schema = &target.namespace.name;
+            let mut objects = target
+                .tables
+                .iter()
+                .map(|table| format!("table {schema}.{}", catalog_display_name(table)))
+                .chain(
+                    target
+                        .views
+                        .iter()
+                        .map(|view| format!("view {schema}.{}", catalog_display_name(view))),
+                )
+                .chain(target.sequences.iter().map(|sequence| {
+                    format!("sequence {schema}.{}", catalog_display_name(sequence))
+                }))
+                .chain(target.routines.iter().map(|routine| {
+                    format!(
+                        "function {schema}.{}",
+                        routine_schema_and_name(&routine.name).1
+                    )
+                }))
+                .chain(
+                    target
+                        .types
+                        .iter()
+                        .map(|user_type| format!("type {schema}.{}", user_type.name)),
+                );
+            if !cascade {
+                if let Some(first) = objects.next() {
+                    return Err(SqlError::dependent_objects_still_exist(format!(
+                        "cannot drop schema {schema} because other objects depend on it \
+                         ({first} depends on schema {schema})"
+                    )));
+                }
+                continue;
+            }
+            // CASCADE: the caller must be able to drop every contained object.
+            for table in &target.tables {
+                self.require_table_ownership(table, "drop it")?;
+            }
+            for view in &target.views {
+                if let Some(loaded) = load_view(self.db_ref(), view)? {
+                    let owner = loaded.owner.unwrap_or_else(current_role_name);
+                    self.require_object_ownership(&owner, &format!("view {view}"), "drop it")?;
+                }
+            }
+            for sequence in &target.sequences {
+                if let Some(loaded) = load_sequence(self.db_ref(), sequence)? {
+                    self.require_object_ownership(
+                        &loaded.owner,
+                        &format!("sequence {sequence}"),
+                        "drop it",
+                    )?;
+                }
+            }
+            for routine in &target.routines {
+                self.require_object_ownership(
+                    routine.owner(),
+                    &format!("function {}", routine.name),
+                    "drop it",
+                )?;
+            }
+            for user_type in &target.types {
+                self.require_object_ownership(
+                    &user_type.owner,
+                    &format!("type {schema}.{}", user_type.name),
+                    "drop it",
+                )?;
+            }
+        }
+        for target in targets {
+            let schema = target.namespace.name.clone();
+            let qualified = |relation: &str| {
+                ObjectName::from(vec![
+                    Ident::with_quote('"', schema.clone()),
+                    Ident::with_quote('"', catalog_display_name(relation)),
+                ])
+            };
+            let relations = target
+                .tables
+                .iter()
+                .chain(&target.views)
+                .cloned()
+                .collect::<BTreeSet<_>>();
+            for trigger in list_triggers(self.db_ref())? {
+                if relations.contains(&trigger.table_name) {
+                    self.delete_session_trigger(&trigger.name, Some(&trigger.table_name))?;
+                }
+            }
+            let views = target
+                .views
+                .iter()
+                .map(|view| qualified(view))
+                .collect::<Vec<_>>();
+            if !views.is_empty() {
+                self.execute_drop(ObjectType::View, true, &views, true, true)?;
+            }
+            let tables = target
+                .tables
+                .iter()
+                .map(|table| qualified(table))
+                .collect::<Vec<_>>();
+            if !tables.is_empty() {
+                self.execute_drop(ObjectType::Table, true, &tables, true, true)?;
+            }
+            let sequences = target
+                .sequences
+                .iter()
+                .map(|sequence| qualified(sequence))
+                .collect::<Vec<_>>();
+            if !sequences.is_empty() {
+                self.execute_drop(ObjectType::Sequence, true, &sequences, true, true)?;
+            }
+            for routine in &target.routines {
+                self.delete_session_routine(routine)?;
+            }
+            let types = target
+                .types
+                .iter()
+                .map(|user_type| {
+                    ObjectName::from(vec![
+                        Ident::with_quote('"', schema.clone()),
+                        Ident::with_quote('"', user_type.name.clone()),
+                    ])
+                })
+                .collect::<Vec<_>>();
+            if !types.is_empty() {
+                self.execute_drop(ObjectType::Type, true, &types, true, true)?;
+            }
+            for grant in list_privileges(self.db_ref())? {
+                if grant.object_type == PrivilegeObjectType::Schema && grant.object_name == schema {
+                    self.delete_session_privilege(&grant)?;
+                }
+            }
+            for grant in list_default_privileges(self.db_ref())? {
+                if grant.schema_name == schema {
+                    self.delete_session_default_privilege(&grant)?;
+                }
+            }
+            delete_namespace(self.db_mut()?, &schema)?;
+            if self.tx.is_some() {
+                self.ddl_undo.push(DdlUndo::RestoreNamespace {
+                    namespace: target.namespace,
+                });
+            }
+        }
+        Ok(SqlResult::command("DROP SCHEMA"))
     }
 
     /// Foreign keys of other tables that reference `target` keep it from

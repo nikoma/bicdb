@@ -396,3 +396,37 @@ fn missing_application_relations_are_not_reported_as_reserved_names() {
         );
     }
 }
+
+/// `TOP` is not row-limit syntax in this profile either: a column named
+/// `top` is an ordinary identifier.
+#[test]
+fn column_named_top_is_an_ordinary_identifier() {
+    let (_root, mut db) = database(ORACLE_PREVIEW_PROFILE);
+    run_owner(
+        &mut db,
+        "CREATE TABLE ranking (id NUMBER PRIMARY KEY, top NUMBER)",
+    )
+    .unwrap();
+    run_owner(&mut db, "INSERT INTO ranking VALUES (1, 5)").unwrap();
+    run_owner(&mut db, "INSERT INTO ranking VALUES (2, 7)").unwrap();
+    assert_eq!(
+        texts(run_owner(&mut db, "SELECT top FROM ranking ORDER BY id").unwrap()),
+        vec![vec!["5".to_string()], vec!["7".to_string()]]
+    );
+    assert_eq!(
+        texts(run_owner(&mut db, "SELECT DISTINCT top FROM ranking WHERE id = 2").unwrap()),
+        vec![vec!["7".to_string()]]
+    );
+    assert!(run_owner(&mut db, "SELECT TOP 1 id FROM ranking").is_err());
+}
+
+/// The DROP SCHEMA statement of the PostgreSQL profile is not part of this
+/// profile's DDL; it stays refused.
+#[test]
+fn drop_schema_stays_unsupported() {
+    let (_root, mut db) = app_database();
+    let error = SqlSession::new(&mut db)
+        .execute("DROP SCHEMA \"APP\"")
+        .unwrap_err();
+    assert!(format!("{error}").contains("not supported"), "{error}");
+}

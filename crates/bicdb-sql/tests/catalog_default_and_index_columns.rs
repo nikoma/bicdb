@@ -134,3 +134,192 @@ fn vector_quantifiers_use_resolved_types_and_do_not_accept_plain_text() {
         .is_err());
     assert!(session.execute("SELECT 2=ANY('1 2')").is_err());
 }
+
+fn catalog_session_db() -> (tempfile::TempDir, BicDb) {
+    let root = tempfile::tempdir().unwrap();
+    let db = BicDb::open_with_config(root.path(), DbConfig::default().with_fsync(false)).unwrap();
+    (root, db)
+}
+
+fn text(value: &str) -> SqlValue {
+    SqlValue::String(value.to_string())
+}
+
+/// information_schema.columns reports the SQL-standard type names and the
+/// size, precision and scale metadata PostgreSQL 16 reports for the same
+/// declarations.
+#[test]
+fn information_schema_columns_reports_type_precision_metadata() {
+    let (_root, mut db) = catalog_session_db();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE DOMAIN amount AS NUMERIC(7,3)")
+        .unwrap();
+    session
+        .execute(
+            "CREATE TABLE typed_columns (
+                n10 NUMERIC(10), n102 NUMERIC(10,2), n NUMERIC, v60 VARCHAR(60),
+                c1 CHAR(1), ts TIMESTAMP, tstz TIMESTAMP WITH TIME ZONE, b BYTEA,
+                t TEXT, i2 SMALLINT, i4 INTEGER, i8 BIGINT, ts3 TIMESTAMP(3),
+                d DATE, f8 DOUBLE PRECISION, f4 REAL, tm TIME, tmtz TIME WITH TIME ZONE,
+                iv INTERVAL, ivds INTERVAL DAY TO SECOND(3), dom amount)",
+        )
+        .unwrap();
+    let rows = session
+        .execute(
+            "SELECT column_name, data_type, character_maximum_length, character_octet_length,
+                    numeric_precision, numeric_precision_radix, numeric_scale,
+                    datetime_precision, interval_type, udt_name
+             FROM information_schema.columns
+             WHERE table_name = 'typed_columns' ORDER BY ordinal_position",
+        )
+        .unwrap()
+        .rows;
+    let null = SqlValue::Null;
+    let int = SqlValue::Int;
+    #[rustfmt::skip]
+    let expected = vec![
+        vec![text("n10"), text("numeric"), null.clone(), null.clone(), int(10), int(10), int(0), null.clone(), null.clone(), text("numeric")],
+        vec![text("n102"), text("numeric"), null.clone(), null.clone(), int(10), int(10), int(2), null.clone(), null.clone(), text("numeric")],
+        vec![text("n"), text("numeric"), null.clone(), null.clone(), null.clone(), int(10), null.clone(), null.clone(), null.clone(), text("numeric")],
+        vec![text("v60"), text("character varying"), int(60), int(240), null.clone(), null.clone(), null.clone(), null.clone(), null.clone(), text("varchar")],
+        vec![text("c1"), text("character"), int(1), int(4), null.clone(), null.clone(), null.clone(), null.clone(), null.clone(), text("bpchar")],
+        vec![text("ts"), text("timestamp without time zone"), null.clone(), null.clone(), null.clone(), null.clone(), null.clone(), int(6), null.clone(), text("timestamp")],
+        vec![text("tstz"), text("timestamp with time zone"), null.clone(), null.clone(), null.clone(), null.clone(), null.clone(), int(6), null.clone(), text("timestamptz")],
+        vec![text("b"), text("bytea"), null.clone(), null.clone(), null.clone(), null.clone(), null.clone(), null.clone(), null.clone(), text("bytea")],
+        vec![text("t"), text("text"), null.clone(), int(1_073_741_824), null.clone(), null.clone(), null.clone(), null.clone(), null.clone(), text("text")],
+        vec![text("i2"), text("smallint"), null.clone(), null.clone(), int(16), int(2), int(0), null.clone(), null.clone(), text("int2")],
+        vec![text("i4"), text("integer"), null.clone(), null.clone(), int(32), int(2), int(0), null.clone(), null.clone(), text("int4")],
+        vec![text("i8"), text("bigint"), null.clone(), null.clone(), int(64), int(2), int(0), null.clone(), null.clone(), text("int8")],
+        vec![text("ts3"), text("timestamp without time zone"), null.clone(), null.clone(), null.clone(), null.clone(), null.clone(), int(3), null.clone(), text("timestamp")],
+        vec![text("d"), text("date"), null.clone(), null.clone(), null.clone(), null.clone(), null.clone(), int(0), null.clone(), text("date")],
+        vec![text("f8"), text("double precision"), null.clone(), null.clone(), int(53), int(2), null.clone(), null.clone(), null.clone(), text("float8")],
+        vec![text("f4"), text("real"), null.clone(), null.clone(), int(24), int(2), null.clone(), null.clone(), null.clone(), text("float4")],
+        vec![text("tm"), text("time without time zone"), null.clone(), null.clone(), null.clone(), null.clone(), null.clone(), int(6), null.clone(), text("time")],
+        vec![text("tmtz"), text("time with time zone"), null.clone(), null.clone(), null.clone(), null.clone(), null.clone(), int(6), null.clone(), text("timetz")],
+        vec![text("iv"), text("interval"), null.clone(), null.clone(), null.clone(), null.clone(), null.clone(), int(6), null.clone(), text("interval")],
+        vec![text("ivds"), text("interval"), null.clone(), null.clone(), null.clone(), null.clone(), null.clone(), int(3), text("DAY TO SECOND(3)"), text("interval")],
+        vec![text("dom"), text("numeric"), null.clone(), null.clone(), int(7), int(10), int(3), null.clone(), null.clone(), text("numeric")],
+    ];
+    for (row, expected) in rows.iter().zip(&expected) {
+        assert_eq!(row, expected);
+    }
+    assert_eq!(rows.len(), expected.len());
+}
+
+/// information_schema.views and information_schema.triggers exist, with
+/// one trigger row per event and PostgreSQL's action ordering.
+#[test]
+fn information_schema_views_and_triggers_list_catalog_objects() {
+    let (_root, mut db) = catalog_session_db();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE SCHEMA s1",
+        "CREATE TABLE s1.tt (a INT, b INT)",
+        "CREATE FUNCTION trgf() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
+        "CREATE TRIGGER z_trg BEFORE INSERT OR UPDATE ON s1.tt FOR EACH ROW EXECUTE FUNCTION trgf()",
+        "CREATE TRIGGER a_trg BEFORE INSERT ON s1.tt FOR EACH ROW WHEN (NEW.a > 0) EXECUTE FUNCTION trgf()",
+        "CREATE TRIGGER st_trg AFTER DELETE ON s1.tt FOR EACH STATEMENT EXECUTE FUNCTION trgf()",
+        "CREATE VIEW s1.v1 AS SELECT a, b FROM s1.tt WHERE a > 1",
+    ] {
+        session.execute(sql).unwrap();
+    }
+    let triggers = session
+        .execute(
+            "SELECT trigger_schema, trigger_name, event_manipulation, event_object_schema,
+                    event_object_table, action_order, action_condition, action_statement,
+                    action_orientation, action_timing
+             FROM information_schema.triggers
+             WHERE event_object_schema = 's1'
+             ORDER BY trigger_name, event_manipulation",
+        )
+        .unwrap()
+        .rows;
+    let row = |name: &str,
+               event: &str,
+               order: i64,
+               condition: SqlValue,
+               orientation: &str,
+               timing: &str| {
+        vec![
+            text("s1"),
+            text(name),
+            text(event),
+            text("s1"),
+            text("tt"),
+            SqlValue::Int(order),
+            condition,
+            text("EXECUTE FUNCTION trgf()"),
+            text(orientation),
+            text(timing),
+        ]
+    };
+    assert_eq!(
+        triggers,
+        vec![
+            row("a_trg", "INSERT", 1, text("(new.a > 0)"), "ROW", "BEFORE"),
+            row("st_trg", "DELETE", 1, SqlValue::Null, "STATEMENT", "AFTER"),
+            row("z_trg", "INSERT", 2, SqlValue::Null, "ROW", "BEFORE"),
+            row("z_trg", "UPDATE", 1, SqlValue::Null, "ROW", "BEFORE"),
+        ]
+    );
+    let views = session
+        .execute(
+            "SELECT table_schema, table_name, check_option, is_updatable, is_insertable_into,
+                    view_definition IS NOT NULL
+             FROM information_schema.views WHERE table_schema = 's1'",
+        )
+        .unwrap()
+        .rows;
+    assert_eq!(
+        views,
+        vec![vec![
+            text("s1"),
+            text("v1"),
+            text("NONE"),
+            text("NO"),
+            text("NO"),
+            SqlValue::Bool(true),
+        ]]
+    );
+}
+
+/// Like PostgreSQL, a role sees only the views and trigger tables it has
+/// privileges on, and a view's definition only when it owns the view.
+#[test]
+fn information_schema_views_and_triggers_respect_role_privileges() {
+    let (_root, mut db) = catalog_session_db();
+    {
+        let mut owner = SqlSession::new(&mut db);
+        for sql in [
+            "CREATE ROLE reader LOGIN NOSUPERUSER",
+            "CREATE TABLE hidden_t (a INT)",
+            "CREATE TABLE shared_t (a INT)",
+            "CREATE FUNCTION audit_f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
+            "CREATE TRIGGER hidden_trg AFTER INSERT ON hidden_t FOR EACH ROW EXECUTE FUNCTION audit_f()",
+            "CREATE TRIGGER shared_trg AFTER INSERT ON shared_t FOR EACH ROW EXECUTE FUNCTION audit_f()",
+            "CREATE VIEW hidden_v AS SELECT a FROM hidden_t",
+            "CREATE VIEW shared_v AS SELECT a FROM shared_t",
+            "GRANT SELECT ON shared_v TO reader",
+            "GRANT SELECT ON shared_t TO reader",
+            "GRANT INSERT ON shared_t TO reader",
+        ] {
+            owner.execute(sql).unwrap();
+        }
+    }
+    let mut reader = SqlSession::new_unprivileged(&mut db, "reader");
+    assert_eq!(
+        reader
+            .execute("SELECT table_name, view_definition FROM information_schema.views")
+            .unwrap()
+            .rows,
+        vec![vec![text("shared_v"), SqlValue::Null]]
+    );
+    assert_eq!(
+        reader
+            .execute("SELECT trigger_name FROM information_schema.triggers")
+            .unwrap()
+            .rows,
+        vec![vec![text("shared_trg")]]
+    );
+}

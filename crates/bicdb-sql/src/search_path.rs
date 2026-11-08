@@ -329,6 +329,8 @@ pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Option<St
     let sql = weak_locks.as_deref().unwrap_or(sql);
     let lock_order = rewrite_locking_clause_before_limit(sql);
     let sql = lock_order.as_deref().unwrap_or(sql);
+    let top = crate::eval::rewrite_helpers::rewrite_select_top_identifiers(sql);
+    let sql = top.as_deref().unwrap_or(sql);
     let mut statements = Parser::parse_sql(&sqlparser::dialect::PostgreSqlDialect {}, sql).ok()?;
     // Routine bodies bind when they execute, with the caller's path; DDL
     // that defines them is left verbatim.
@@ -550,6 +552,62 @@ pub(crate) fn bind_statements(
 /// Statement text with unqualified relations bound through the session's
 /// `search_path` (PostgreSQL profile), for front ends that describe a
 /// statement before it executes; `None` when nothing changes.
+/// The statements of a multi-statement text when they must bind one at a
+/// time: unqualified names already bind through a non-default path, or a
+/// statement before the last changes the path or the schemas on it (SET or
+/// RESET search_path, set_config, DISCARD ALL, CREATE/ALTER/DROP SCHEMA).
+/// Binding the whole text up front used the path in force before the batch.
+pub(crate) fn statements_bound_separately(sql: &str, path_binds: bool) -> Option<Vec<String>> {
+    if !sql.contains(';') {
+        return None;
+    }
+    if !path_binds && !contains_path_change_word(sql) {
+        return None;
+    }
+    let statements = split_sql_statements(sql);
+    if statements.len() < 2 {
+        return None;
+    }
+    let changes_path = statements[..statements.len() - 1]
+        .iter()
+        .any(|statement| statement_changes_binding_path(statement));
+    (path_binds || changes_path).then_some(statements)
+}
+
+fn contains_path_change_word(sql: &str) -> bool {
+    ["search_path", "discard", "schema", "reset"]
+        .iter()
+        .any(|word| {
+            sql.as_bytes()
+                .windows(word.len())
+                .any(|window| window.eq_ignore_ascii_case(word.as_bytes()))
+        })
+}
+
+fn statement_changes_binding_path(statement: &str) -> bool {
+    let normalized = statement
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_lowercase();
+    let set_target = normalized
+        .strip_prefix("set ")
+        .map(|rest| {
+            rest.strip_prefix("session ")
+                .or_else(|| rest.strip_prefix("local "))
+                .unwrap_or(rest)
+        })
+        .map(|rest| rest.trim_start_matches('"'));
+    set_target.is_some_and(|rest| rest.starts_with("search_path"))
+        || normalized.starts_with("reset search_path")
+        || normalized.starts_with("reset all")
+        || normalized.starts_with("discard all")
+        || normalized.starts_with("create schema")
+        || normalized.starts_with("alter schema")
+        || normalized.starts_with("drop schema")
+        || (normalized.contains("set_config") && normalized.contains("search_path"))
+}
+
 pub fn bind_session_sql(
     db: &BicDb,
     sql: &str,

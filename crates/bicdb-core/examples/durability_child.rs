@@ -107,7 +107,10 @@ fn main() {
     let engaged = db
         .paged_records_handle()
         .is_some_and(|paged| paged.store().commit_sync_outside_lock());
-    assert_eq!(engaged, requested, "commit sync outside lock engaged={engaged}");
+    assert_eq!(
+        engaged, requested,
+        "commit sync outside lock engaged={engaged}"
+    );
     if !db.collections().iter().any(|meta| meta.name == "rows") {
         db.create_collection("rows").expect("create rows");
         db.create_index(index("rows_owner", "owner", false))

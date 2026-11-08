@@ -263,7 +263,11 @@ impl PagedStore {
     /// For a "decided before xmax" read (`xid == 0`, empty `in_flight`, the
     /// shape the host uses for pre-image reads): wait for a committing writer
     /// of `key`, so the read does not miss a decided commit.
-    pub(crate) fn wait_for_committing_key_read(&self, snapshot: &Snapshot, key: &[u8]) -> Result<()> {
+    pub(crate) fn wait_for_committing_key_read(
+        &self,
+        snapshot: &Snapshot,
+        key: &[u8],
+    ) -> Result<()> {
         if !self.commit_sync_outside_lock
             || self.committing_is_empty()
             || snapshot.xid != 0
@@ -360,7 +364,9 @@ impl PagedStore {
         queue.by_lsn.insert(lsn, transaction);
         queue.lsn_of.insert(transaction, lsn);
         let depth = queue.by_lsn.len() as u64;
-        self.committing_counters.count.store(depth, Ordering::Release);
+        self.committing_counters
+            .count
+            .store(depth, Ordering::Release);
         self.committing_counters
             .enqueued
             .fetch_add(1, Ordering::AcqRel);

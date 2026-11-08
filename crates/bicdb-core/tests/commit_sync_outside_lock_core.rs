@@ -44,7 +44,8 @@ fn workload(gate: bool) {
     let temp = tempfile::tempdir().unwrap();
     let mut db = BicDb::open_with_config(temp.path(), config(gate)).unwrap();
     db.create_collection("rows").unwrap();
-    db.create_index(index("rows_owner", "owner", false)).unwrap();
+    db.create_index(index("rows_owner", "owner", false))
+        .unwrap();
     db.create_index(index("rows_uk", "uk", true)).unwrap();
     {
         let mut seed = db.begin_transaction().unwrap();
@@ -122,7 +123,10 @@ fn workload(gate: bool) {
             while !done.load(Ordering::Acquire) {
                 let guard = db.read().unwrap();
                 for (writer, last) in last.iter_mut().enumerate() {
-                    let record = guard.get("rows", &format!("hot-{writer}")).unwrap().unwrap();
+                    let record = guard
+                        .get("rows", &format!("hot-{writer}"))
+                        .unwrap()
+                        .unwrap();
                     let seq = seq_of(&record);
                     assert!(seq >= *last, "hot-{writer} went back from {last} to {seq}");
                     *last = seq;
@@ -144,7 +148,10 @@ fn workload(gate: bool) {
             assert!(stats.enqueued > (WRITERS as u64) * COMMITS, "{stats:?}");
             assert_eq!(stats.published, stats.enqueued, "{stats:?}");
             assert_eq!(stats.depth, 0, "{stats:?}");
-            assert_eq!(stats.overlap_waits, 0, "the overlap safety net fired: {stats:?}");
+            assert_eq!(
+                stats.overlap_waits, 0,
+                "the overlap safety net fired: {stats:?}"
+            );
         } else {
             assert_eq!(stats, Default::default());
         }
@@ -167,7 +174,10 @@ fn check(db: &BicDb, shared_acks: &[String]) {
         }
     }
     let shared = db.get("rows", "shared").unwrap().unwrap();
-    let tag = shared.metadata["tag"].as_str().unwrap_or_default().to_string();
+    let tag = shared.metadata["tag"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
     assert!(
         shared_acks.iter().any(|ack| *ack == tag),
         "the shared row holds an acknowledged update, not {tag:?}"

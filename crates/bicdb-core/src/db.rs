@@ -9698,20 +9698,22 @@ impl BicDb {
             });
         }
         let paged_records = if effective_mode == StorageMode::ServerPaged {
-            Some(Arc::new(crate::paged_collection::PagedRecords::open_with_commit_sync_outside_lock(
-                path.join(DEFAULT_PAGED_DIR),
-                crate::paged_collection::PagedRecordsOptions {
-                    page_size: config.paged_page_size,
-                    buffer_pool_bytes: config.paged_buffer_pool_bytes,
-                    read_ahead_queue_pages: config.paged_read_ahead_queue_pages,
-                    wal_max_bytes: config.paged_wal_max_bytes,
-                    wal_segment_bytes: config.paged_wal_segment_bytes,
-                    extent_bytes: config.paged_extent_bytes,
-                    fsync: config.fsync,
-                    accept_legacy_meta: config.paged_accept_legacy_meta,
-                },
-                config.paged_commit_sync_outside_lock,
-            )?))
+            Some(Arc::new(
+                crate::paged_collection::PagedRecords::open_with_commit_sync_outside_lock(
+                    path.join(DEFAULT_PAGED_DIR),
+                    crate::paged_collection::PagedRecordsOptions {
+                        page_size: config.paged_page_size,
+                        buffer_pool_bytes: config.paged_buffer_pool_bytes,
+                        read_ahead_queue_pages: config.paged_read_ahead_queue_pages,
+                        wal_max_bytes: config.paged_wal_max_bytes,
+                        wal_segment_bytes: config.paged_wal_segment_bytes,
+                        extent_bytes: config.paged_extent_bytes,
+                        fsync: config.fsync,
+                        accept_legacy_meta: config.paged_accept_legacy_meta,
+                    },
+                    config.paged_commit_sync_outside_lock,
+                )?,
+            ))
         } else {
             None
         };

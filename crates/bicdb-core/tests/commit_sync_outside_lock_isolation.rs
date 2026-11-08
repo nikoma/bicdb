@@ -48,7 +48,9 @@ fn commit_sync_outside_lock_is_strictly_opt_in() {
     assert_eq!(engaged(&db), None, "no page store outside server_paged");
 
     // Only the exact value enables it; near misses do not.
-    for value in ["", "0", "true", "on", "yes", "TRUE", " 1", "1 ", "01", "2", "1\n"] {
+    for value in [
+        "", "0", "true", "on", "yes", "TRUE", " 1", "1 ", "01", "2", "1\n",
+    ] {
         std::env::set_var(ENV, value);
         assert!(
             !DbConfig::default().paged_commit_sync_outside_lock,
@@ -58,7 +60,11 @@ fn commit_sync_outside_lock_is_strictly_opt_in() {
     std::env::set_var(ENV, "1");
     assert!(DbConfig::default().paged_commit_sync_outside_lock);
     let (_dir, db) = open(DbConfig::default().with_storage_mode(StorageMode::ServerPaged));
-    assert_eq!(engaged(&db), Some((true, 10)), "every row commit took the gated path");
+    assert_eq!(
+        engaged(&db),
+        Some((true, 10)),
+        "every row commit took the gated path"
+    );
     std::env::remove_var(ENV);
 
     // The builder works without the environment, in both directions.

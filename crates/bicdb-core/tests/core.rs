@@ -3985,7 +3985,7 @@ fn compressed_records_reopen_with_mmap_reads() {
             paged_read_ahead_queue_pages: DbConfig::default().paged_read_ahead_queue_pages,
             paged_wal_max_bytes: DbConfig::default().paged_wal_max_bytes,
             paged_accept_legacy_meta: DbConfig::default().paged_accept_legacy_meta,
-                paged_commit_sync_outside_lock: false,
+            paged_commit_sync_outside_lock: false,
             paged_rowid_registry: DbConfig::default().paged_rowid_registry,
             paged_extent_bytes: 0,
             fts_build_memory_bytes: DbConfig::default().fts_build_memory_bytes,

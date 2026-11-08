@@ -63,7 +63,10 @@ fn the_gate_is_off_by_default_and_off_means_the_locked_commit() {
         let key = format!("k{i}");
         row_commit(&store, key.as_bytes(), b"v").unwrap();
         // Gate off: commit_append is the synced commit, visible on return.
-        assert_eq!(store.get(key.as_bytes()).unwrap().as_deref(), Some(&b"v"[..]));
+        assert_eq!(
+            store.get(key.as_bytes()).unwrap().as_deref(),
+            Some(&b"v"[..])
+        );
     }
     let tx = store.begin();
     store.put(tx, b"plain", b"v").unwrap();
@@ -82,7 +85,9 @@ fn a_writer_proceeds_while_a_commit_sync_is_in_flight_and_readers_do_not_see_it(
     let (_hook, reached, release) = pause_next_sync(&dir);
     std::thread::scope(|scope| {
         let committer = scope.spawn(|| row_commit(&store, b"k1", b"v1"));
-        reached.recv_timeout(WAIT).expect("the commit reached its sync");
+        reached
+            .recv_timeout(WAIT)
+            .expect("the commit reached its sync");
         // The record is appended but not durable; the commit is not visible.
         assert!(store.wal().durable_lsn() < store.wal().next_lsn() - 1);
         assert_eq!(store.get(b"k1").unwrap(), None, "visible before durable");
@@ -154,7 +159,10 @@ fn publication_is_durable_first_and_in_commit_record_order() {
                     .max();
                 for (lsn, seen) in &visible {
                     if *seen {
-                        assert!(*lsn <= durable, "commit {lsn} visible before durable {durable}");
+                        assert!(
+                            *lsn <= durable,
+                            "commit {lsn} visible before durable {durable}"
+                        );
                     } else if let Some(max) = max_visible {
                         assert!(*lsn > max, "commit {lsn} invisible behind visible {max}");
                     }
@@ -246,7 +254,10 @@ fn a_checkpoint_waits_for_a_paused_commit_sync() {
         reached.recv_timeout(WAIT).unwrap();
         let checkpoint = scope.spawn(|| store.checkpoint());
         std::thread::sleep(Duration::from_millis(100));
-        assert!(!checkpoint.is_finished(), "checkpoint ran past a committing commit");
+        assert!(
+            !checkpoint.is_finished(),
+            "checkpoint ran past a committing commit"
+        );
         release.send(()).unwrap();
         committer.join().unwrap().unwrap();
         checkpoint.join().unwrap().unwrap();
@@ -305,7 +316,10 @@ fn one_failed_sync_fails_every_queued_commit_and_publishes_nothing() {
             assert_eq!(store.get(format!("q{i}").as_bytes()).unwrap(), None);
         }
         let stats = store.committing_stats();
-        assert_eq!(stats.depth as usize, queued, "a failed queue is never published");
+        assert_eq!(
+            stats.depth as usize, queued,
+            "a failed queue is never published"
+        );
         assert_eq!(stats.published, 1);
         // Later syncs, barriers and checkpoints refuse: nothing is published.
         assert!(store.wal().sync().is_err());
@@ -357,7 +371,9 @@ fn an_overlapping_row_commit_waits_instead_of_conflicting() {
             Some(&b"v1"[..]),
             "the pre-image read missed a decided commit"
         );
-        store.put(xid, b"k", b"v2").expect("spurious write conflict");
+        store
+            .put(xid, b"k", b"v2")
+            .expect("spurious write conflict");
         store.commit_append(xid).unwrap()
     };
     assert_eq!(store.transactions.status(first.xid), TxStatus::Committed);
@@ -406,7 +422,10 @@ fn eviction_of_a_committing_page_syncs_the_log_first() {
     .unwrap()
     .0;
     for i in 0..200u32 {
-        assert!(store.get(format!("key-{i:05}").as_bytes()).unwrap().is_some());
+        assert!(store
+            .get(format!("key-{i:05}").as_bytes())
+            .unwrap()
+            .is_some());
     }
 }
 
@@ -421,8 +440,12 @@ fn an_overlapping_write_without_a_pre_image_read_waits() {
     let second = {
         let _guard = store.row_commit_guard();
         let xid = store.begin_row_commit();
-        store.put(xid, b"p", b"v2").expect("spurious write conflict on put");
-        assert!(store.delete(xid, b"d").expect("spurious write conflict on delete"));
+        store
+            .put(xid, b"p", b"v2")
+            .expect("spurious write conflict on put");
+        assert!(store
+            .delete(xid, b"d")
+            .expect("spurious write conflict on delete"));
         store.commit_append(xid).unwrap()
     };
     for ticket in [first, gone, second] {
@@ -451,4 +474,3 @@ fn publication_never_covers_a_record_past_the_durable_lsn() {
     store.await_commit(volatile).unwrap();
     assert_eq!(store.get(b"b").unwrap().as_deref(), Some(&b"v"[..]));
 }
-

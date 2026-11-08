@@ -9722,6 +9722,10 @@ impl BicDb {
             &encryption,
             effective_mode == StorageMode::ServerPaged,
         )?;
+        // What recovery read becomes the durable sequence below; make it so.
+        if config.fsync {
+            storage::sync_transaction_log_at_open(&path.join(DEFAULT_TRANSACTION_LOG))?;
+        }
         // The log can be truncated below the newest commit (checkpoints); the
         // persisted floor keeps commit sequence numbers monotonic across
         // restarts, which replication relies on.

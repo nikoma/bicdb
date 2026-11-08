@@ -1753,6 +1753,26 @@ pub(crate) fn sync_file(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Make every byte currently in the transaction log durable, at open.
+///
+/// Recovery accepts every complete frame it finds, including a batch whose
+/// write had not returned when the previous incarnation stopped. Those bytes
+/// can still be only in the page cache, and the recovered sequence becomes
+/// the durable sequence that replication ships and that commit resolution
+/// reports. Syncing before either can happen keeps that sequence durable.
+/// Uses a read-only descriptor so a read-only directory still opens; a
+/// missing log has nothing to sync.
+pub(crate) fn sync_transaction_log_at_open(path: &Path) -> Result<()> {
+    let file = match File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
+    bicdb_page::test_faults::io_fault("transaction_log.open_sync", path)?;
+    file.sync_data()?;
+    Ok(())
+}
+
 pub(crate) fn write_atomic(path: &Path, bytes: &[u8], fsync: bool) -> Result<()> {
     ensure_parent(path)?;
     let tmp_path = tmp_path(path);

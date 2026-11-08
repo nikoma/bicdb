@@ -206,3 +206,120 @@ fn information_schema_columns_reports_type_precision_metadata() {
     }
     assert_eq!(rows.len(), expected.len());
 }
+
+/// information_schema.views and information_schema.triggers exist, with
+/// one trigger row per event and PostgreSQL's action ordering.
+#[test]
+fn information_schema_views_and_triggers_list_catalog_objects() {
+    let (_root, mut db) = catalog_session_db();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE SCHEMA s1",
+        "CREATE TABLE s1.tt (a INT, b INT)",
+        "CREATE FUNCTION trgf() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
+        "CREATE TRIGGER z_trg BEFORE INSERT OR UPDATE ON s1.tt FOR EACH ROW EXECUTE FUNCTION trgf()",
+        "CREATE TRIGGER a_trg BEFORE INSERT ON s1.tt FOR EACH ROW WHEN (NEW.a > 0) EXECUTE FUNCTION trgf()",
+        "CREATE TRIGGER st_trg AFTER DELETE ON s1.tt FOR EACH STATEMENT EXECUTE FUNCTION trgf()",
+        "CREATE VIEW s1.v1 AS SELECT a, b FROM s1.tt WHERE a > 1",
+    ] {
+        session.execute(sql).unwrap();
+    }
+    let triggers = session
+        .execute(
+            "SELECT trigger_schema, trigger_name, event_manipulation, event_object_schema,
+                    event_object_table, action_order, action_condition, action_statement,
+                    action_orientation, action_timing
+             FROM information_schema.triggers
+             WHERE event_object_schema = 's1'
+             ORDER BY trigger_name, event_manipulation",
+        )
+        .unwrap()
+        .rows;
+    let row = |name: &str,
+               event: &str,
+               order: i64,
+               condition: SqlValue,
+               orientation: &str,
+               timing: &str| {
+        vec![
+            text("s1"),
+            text(name),
+            text(event),
+            text("s1"),
+            text("tt"),
+            SqlValue::Int(order),
+            condition,
+            text("EXECUTE FUNCTION trgf()"),
+            text(orientation),
+            text(timing),
+        ]
+    };
+    assert_eq!(
+        triggers,
+        vec![
+            row("a_trg", "INSERT", 1, text("(new.a > 0)"), "ROW", "BEFORE"),
+            row("st_trg", "DELETE", 1, SqlValue::Null, "STATEMENT", "AFTER"),
+            row("z_trg", "INSERT", 2, SqlValue::Null, "ROW", "BEFORE"),
+            row("z_trg", "UPDATE", 1, SqlValue::Null, "ROW", "BEFORE"),
+        ]
+    );
+    let views = session
+        .execute(
+            "SELECT table_schema, table_name, check_option, is_updatable, is_insertable_into,
+                    view_definition IS NOT NULL
+             FROM information_schema.views WHERE table_schema = 's1'",
+        )
+        .unwrap()
+        .rows;
+    assert_eq!(
+        views,
+        vec![vec![
+            text("s1"),
+            text("v1"),
+            text("NONE"),
+            text("NO"),
+            text("NO"),
+            SqlValue::Bool(true),
+        ]]
+    );
+}
+
+/// Like PostgreSQL, a role sees only the views and trigger tables it has
+/// privileges on, and a view's definition only when it owns the view.
+#[test]
+fn information_schema_views_and_triggers_respect_role_privileges() {
+    let (_root, mut db) = catalog_session_db();
+    {
+        let mut owner = SqlSession::new(&mut db);
+        for sql in [
+            "CREATE ROLE reader LOGIN NOSUPERUSER",
+            "CREATE TABLE hidden_t (a INT)",
+            "CREATE TABLE shared_t (a INT)",
+            "CREATE FUNCTION audit_f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
+            "CREATE TRIGGER hidden_trg AFTER INSERT ON hidden_t FOR EACH ROW EXECUTE FUNCTION audit_f()",
+            "CREATE TRIGGER shared_trg AFTER INSERT ON shared_t FOR EACH ROW EXECUTE FUNCTION audit_f()",
+            "CREATE VIEW hidden_v AS SELECT a FROM hidden_t",
+            "CREATE VIEW shared_v AS SELECT a FROM shared_t",
+            "GRANT SELECT ON shared_v TO reader",
+            "GRANT SELECT ON shared_t TO reader",
+            "GRANT INSERT ON shared_t TO reader",
+        ] {
+            owner.execute(sql).unwrap();
+        }
+    }
+    let mut reader = SqlSession::new_unprivileged(&mut db, "reader");
+    assert_eq!(
+        reader
+            .execute("SELECT table_name, view_definition FROM information_schema.views")
+            .unwrap()
+            .rows,
+        vec![vec![text("shared_v"), SqlValue::Null]]
+    );
+    assert_eq!(
+        reader
+            .execute("SELECT trigger_name FROM information_schema.triggers")
+            .unwrap()
+            .rows,
+        vec![vec![text("shared_trg")]]
+    );
+}

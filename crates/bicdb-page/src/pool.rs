@@ -454,13 +454,47 @@ struct Frame {
     metadata: AtomicBool,
     /// Transaction that last dirtied this page, for the writeback barrier.
     dirtied_by: AtomicU64,
-    /// Modified since its last log record. Cleared once logged.
+    /// Modified since its last log record. Cleared once logged. Change it
+    /// only through [`Frame::mark_needs_log`] and [`Frame::clear_needs_log`],
+    /// which keep the shard's unlogged-frame count exact.
     needs_log: AtomicBool,
+    /// The owning shard's count of frames with `needs_log` set.
+    shard_unlogged: Arc<AtomicUsize>,
+    /// Bumped by every writable guard, under the data latch. A commit that
+    /// logged this page clears `needs_log` only if no writer has touched the
+    /// page since its image was read ([`BufferPool::mark_logged`]). Starts at
+    /// a pool-wide frame epoch in the high 32 bits, so a page that was evicted
+    /// and reloaded in between never matches a value read from its earlier
+    /// frame.
+    modifications: AtomicU64,
+    /// Transaction attributed to the unlogged changes: the one whose write
+    /// guard first set `needs_log`. For reporting which transaction holds
+    /// the pool ([`BufferPool::unlogged_holder`]).
+    unlogged_owner: AtomicU64,
     /// Loaded speculatively and not yet consumed by a foreground access.
     prefetched: AtomicBool,
     /// A speculative load is not a cache touch. The first foreground use sets
     /// this flag; only a later use may promote the page into protected 2Q.
     foreground_touched: AtomicBool,
+}
+
+impl Frame {
+    fn mark_needs_log(&self) {
+        if !self.needs_log.swap(true, Ordering::AcqRel) {
+            self.unlogged_owner
+                .store(self.dirtied_by.load(Ordering::Acquire), Ordering::Release);
+            self.shard_unlogged.fetch_add(1, Ordering::AcqRel);
+        }
+    }
+
+    /// Returns whether the flag was set.
+    fn clear_needs_log(&self) -> bool {
+        let was_set = self.needs_log.swap(false, Ordering::AcqRel);
+        if was_set {
+            self.shard_unlogged.fetch_sub(1, Ordering::AcqRel);
+        }
+        was_set
+    }
 }
 
 /// A pinned, readable page. Unpins on drop.
@@ -551,7 +585,8 @@ impl Drop for PageGuardMut {
                 .store(self.dirty_started_at_millis, Ordering::Release);
         }
         self.frame.dirty.store(true, Ordering::Release);
-        self.frame.needs_log.store(true, Ordering::Release);
+        self.frame.modifications.fetch_add(1, Ordering::AcqRel);
+        self.frame.mark_needs_log();
         self.dirty_index.lock().insert(self.frame.page_id);
         self.frame.pins.fetch_sub(1, Ordering::Release);
     }
@@ -590,6 +625,12 @@ struct Shard {
     streaming_capacity: usize,
     metadata_capacity: usize,
     capacity: usize,
+    /// Frames of this shard with unlogged changes (`Frame::needs_log`).
+    unlogged: Arc<AtomicUsize>,
+    /// While set, reclaim skips a dirty frame with unlogged changes: a page
+    /// an uncommitted transaction modified (GAP-1). Only the last-resort pass
+    /// of [`BufferPool::evict_one`] clears it.
+    avoid_unlogged: bool,
 }
 
 #[derive(Debug)]
@@ -675,6 +716,13 @@ struct PoolMetrics {
     writeback_io_limit_stops: AtomicU64,
     writeback_duration_limit_stops: AtomicU64,
     writeback_pinned_skips: AtomicU64,
+    /// Evictions that wrote a frame with unlogged changes because the shard
+    /// had no other victim. Each one leaves GAP-1 open until that
+    /// transaction's commit record is durable.
+    unlogged_steals: AtomicU64,
+    /// Online writeback candidates left dirty because their changes are not
+    /// logged yet.
+    unlogged_writeback_skips: AtomicU64,
     read_ahead_requests: AtomicU64,
     read_ahead_undriven: AtomicU64,
     read_ahead_enqueued: AtomicU64,
@@ -736,6 +784,20 @@ pub struct BufferPoolSnapshot {
     pub writeback_io_limit_stops: u64,
     pub writeback_duration_limit_stops: u64,
     pub writeback_pinned_skips: u64,
+    /// Resident frames holding changes no log record describes yet: pages of
+    /// in-flight transactions. They are not written to the page file before
+    /// their transaction commits, except by a last-resort steal.
+    #[serde(default)]
+    pub unlogged_pages: u64,
+    /// Evictions that had to write an unlogged frame (see `unlogged_pages`).
+    /// Non-zero means a transaction outgrew the pool and the GAP-1 window was
+    /// open for it.
+    #[serde(default)]
+    pub unlogged_steals: u64,
+    /// Online writeback candidates skipped because their changes are not
+    /// logged yet.
+    #[serde(default)]
+    pub unlogged_writeback_skips: u64,
     pub read_ahead_queue_capacity: u64,
     pub read_ahead_queue_depth: u64,
     pub read_ahead_requests: u64,
@@ -770,6 +832,22 @@ impl BufferPoolSnapshot {
     }
 }
 
+/// A shard whose unlogged frames leave less than its reserve evictable
+/// without a steal. See [`BufferPool::unlogged_pressure`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct UnloggedPressure {
+    pub shard: usize,
+    pub unlogged_frames: u64,
+    pub shard_frames: u64,
+}
+
+/// Frames of a shard kept available to eviction without stealing: an
+/// eighth, and at least one. A write operation of a refusable transaction
+/// is admitted only while every shard's unlogged frames leave this many.
+pub fn unlogged_reserve(shard_frames: usize) -> usize {
+    (shard_frames / 8).max(1)
+}
+
 /// A bounded cache of pages over a [`PageStore`].
 #[derive(Debug)]
 pub struct BufferPool {
@@ -788,6 +866,17 @@ pub struct BufferPool {
     dirty_index: Arc<Mutex<BTreeSet<PageId>>>,
     /// Transaction attributed to pages dirtied from now on.
     current_transaction: AtomicU64,
+    /// Set once a writeback barrier is installed. Only then can a frame hold
+    /// changes that a later log record (a commit) will describe, so only then
+    /// do eviction, online writeback and the root-split flush leave unlogged
+    /// frames in memory (no-steal, GAP-1).
+    no_steal: AtomicBool,
+    /// Per shard: its frame count and its count of unlogged frames, readable
+    /// without the shard lock.
+    shard_frames: Box<[usize]>,
+    shard_unlogged: Box<[Arc<AtomicUsize>]>,
+    /// Source of `Frame::modifications` epochs.
+    frame_epochs: AtomicU64,
     /// PagedStore enables this after attaching a WAL barrier. Standalone heap
     /// users retain the immediate allocator semantics they historically used.
     wal_managed_frees: AtomicBool,
@@ -878,6 +967,10 @@ impl BufferPool {
         let shard_count = options.shards.max(1).min(total_frames);
         let per_shard = total_frames / shard_count;
         let remainder = total_frames % shard_count;
+        let shard_unlogged = (0..shard_count)
+            .map(|_| Arc::new(AtomicUsize::new(0)))
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
 
         let shards = (0..shard_count)
             .map(|index| {
@@ -911,6 +1004,7 @@ impl BufferPool {
                 let free = (0..capacity)
                     .map(|_| Arc::new(RwLock::new(vec![0u8; page_size as usize])))
                     .collect();
+                let unlogged = shard_unlogged[index].clone();
                 Mutex::new(Shard {
                     resident: FxHashMap::default(),
                     loading: FxHashMap::default(),
@@ -923,8 +1017,14 @@ impl BufferPool {
                     streaming_capacity,
                     metadata_capacity,
                     capacity,
+                    unlogged,
+                    avoid_unlogged: true,
                 })
             })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        let shard_frames = (0..shard_count)
+            .map(|index| per_shard + usize::from(index < remainder))
             .collect::<Vec<_>>()
             .into_boxed_slice();
 
@@ -941,6 +1041,10 @@ impl BufferPool {
             barrier: Mutex::new(None),
             dirty_index: Arc::new(Mutex::new(BTreeSet::new())),
             current_transaction: AtomicU64::new(0),
+            no_steal: AtomicBool::new(false),
+            shard_frames,
+            shard_unlogged,
+            frame_epochs: AtomicU64::new(0),
             wal_managed_frees: AtomicBool::new(false),
             pending_frees: Mutex::new(BTreeMap::new()),
             read_ahead: Mutex::new(ReadAheadQueue {
@@ -974,6 +1078,7 @@ impl BufferPool {
     /// Install the writeback barrier. See [`WritebackBarrier`].
     pub fn set_barrier(&self, barrier: Arc<dyn WritebackBarrier>) {
         *self.barrier.lock() = Some(barrier);
+        self.no_steal.store(true, Ordering::Release);
     }
 
     /// Attribute subsequently dirtied pages to `transaction`.
@@ -1173,7 +1278,7 @@ impl BufferPool {
         let data = frame.data.clone();
         let guard = self.write_frame_data(&data);
         self.store.free(page_id)?;
-        frame.needs_log.store(false, Ordering::Release);
+        frame.clear_needs_log();
         frame.dirty.store(false, Ordering::Release);
         frame.dirty_since_millis.store(0, Ordering::Release);
         self.dirty_index.lock().remove(&page_id);
@@ -1347,6 +1452,9 @@ impl BufferPool {
                             self.current_transaction.load(Ordering::Acquire),
                         ),
                         needs_log: AtomicBool::new(false),
+                        shard_unlogged: shard.unlogged.clone(),
+                        modifications: AtomicU64::new(self.next_frame_epoch()),
+                        unlogged_owner: AtomicU64::new(0),
                         prefetched: AtomicBool::new(false),
                         foreground_touched: AtomicBool::new(true),
                     });
@@ -1389,12 +1497,64 @@ impl BufferPool {
     }
 
     /// Free one frame in this shard, writing it back if dirty.
+    ///
+    /// No-steal (GAP-1 in `docs/recovery-semantics.md`): a frame with unlogged
+    /// changes, that is a page an in-flight transaction modified, is chosen
+    /// only when the shard has no other victim. Writing it would put
+    /// uncommitted bytes in the page file, which recovery skips but cannot
+    /// undo. Such a last-resort steal is counted in `unlogged_steals`.
+    /// `PagedStore` refuses a refusable transaction's next operation before
+    /// a shard gets that full ([`Self::unlogged_pressure`]), so a steal is
+    /// left only to an operation already under way, a transaction whose redo
+    /// is durable in another log, and reads during either.
     fn evict_one(
         &self,
         shard: &mut Shard,
         wanted: PageId,
         class: CacheClass,
     ) -> Result<Arc<RwLock<Vec<u8>>>> {
+        if !self.no_steal.load(Ordering::Acquire) {
+            return self.evict_one_pass(shard, wanted, class, true);
+        }
+        // Every frame unlogged: a no-steal pass cannot succeed, so skip its
+        // O(shard) walk.
+        let no_steal_pass = if shard.unlogged.load(Ordering::Acquire) >= shard.capacity {
+            Err(PageError::PoolExhausted {
+                page_id: wanted,
+                frames: shard.capacity,
+            })
+        } else {
+            self.evict_one_pass(shard, wanted, class, false)
+        };
+        match no_steal_pass {
+            Err(PageError::PoolExhausted { .. }) => {
+                shard.avoid_unlogged = false;
+                let result = self.evict_one_pass(shard, wanted, class, true);
+                shard.avoid_unlogged = true;
+                if result.is_ok() {
+                    self.metrics.unlogged_steals.fetch_add(1, Ordering::Relaxed);
+                }
+                result
+            }
+            other => other,
+        }
+    }
+
+    /// One eviction pass. `final_pass` is false for the no-steal pass that
+    /// a last-resort pass may follow; only a final pass counts an admission
+    /// failure, so one failed admission is counted once.
+    fn evict_one_pass(
+        &self,
+        shard: &mut Shard,
+        wanted: PageId,
+        class: CacheClass,
+        final_pass: bool,
+    ) -> Result<Arc<RwLock<Vec<u8>>>> {
+        let count_failure = |metrics: &PoolMetrics| {
+            if final_pass {
+                metrics.admission_failures.fetch_add(1, Ordering::Relaxed);
+            }
+        };
         if class == CacheClass::Metadata {
             // Metadata reclaims metadata. It never takes from the search or
             // streaming classes, so this tier cannot grow at their expense
@@ -1417,9 +1577,7 @@ impl BufferPool {
             if let Some(buffer) = self.evict_from_protected(shard)? {
                 return Ok(buffer);
             }
-            self.metrics
-                .admission_failures
-                .fetch_add(1, Ordering::Relaxed);
+            count_failure(&self.metrics);
             return Err(PageError::PoolExhausted {
                 page_id: wanted,
                 frames: shard.capacity,
@@ -1443,9 +1601,10 @@ impl BufferPool {
                     .fetch_add(1, Ordering::Relaxed);
                 return Ok(buffer);
             }
-            self.metrics
-                .admission_failures
-                .fetch_add(1, Ordering::Relaxed);
+            if let Some(buffer) = self.evict_from_metadata_as_last_resort(shard)? {
+                return Ok(buffer);
+            }
+            count_failure(&self.metrics);
             return Err(PageError::PoolExhausted {
                 page_id: wanted,
                 frames: shard.capacity,
@@ -1465,10 +1624,11 @@ impl BufferPool {
         if let Some(buffer) = self.evict_from_streaming(shard)? {
             return Ok(buffer);
         }
+        if let Some(buffer) = self.evict_from_metadata_as_last_resort(shard)? {
+            return Ok(buffer);
+        }
 
-        self.metrics
-            .admission_failures
-            .fetch_add(1, Ordering::Relaxed);
+        count_failure(&self.metrics);
         Err(PageError::PoolExhausted {
             page_id: wanted,
             frames: shard.capacity,
@@ -1486,6 +1646,31 @@ impl BufferPool {
             }
         }
         Ok(None)
+    }
+
+    /// The last-resort pass of [`Self::evict_one`] only: reclaim a metadata
+    /// frame for another class.
+    ///
+    /// Normally no class reclaims from metadata, because
+    /// `enforce_metadata_capacity` keeps that tier inside its budget. But it
+    /// cannot evict a metadata frame with unlogged changes (no-steal), so
+    /// under a transaction that dirties many metadata pages the tier can grow
+    /// until it holds a whole shard. Without this the shard then refuses
+    /// every other admission, in the middle of an operation (measured: a
+    /// B-tree split failing with `PoolExhausted`), which is worse than the
+    /// steal it avoids.
+    ///
+    /// Also used by the no-steal pass, where `try_reclaim` takes only frames
+    /// without unlogged changes, so a clean metadata frame over the budget is
+    /// preferred to a steal.
+    fn evict_from_metadata_as_last_resort(
+        &self,
+        shard: &mut Shard,
+    ) -> Result<Option<Arc<RwLock<Vec<u8>>>>> {
+        if shard.metadata.len() <= shard.metadata_capacity {
+            return Ok(None);
+        }
+        self.evict_from_metadata(shard)
     }
 
     /// Hold the metadata queue inside its budget.
@@ -1599,6 +1784,14 @@ impl BufferPool {
         if frame.pins.load(Ordering::Acquire) > 0 {
             return Ok(None);
         }
+        // No-steal: a page with unlogged changes is treated like a pinned
+        // one, except by the last-resort pass of `evict_one`.
+        if shard.avoid_unlogged
+            && self.no_steal.load(Ordering::Acquire)
+            && frame.needs_log.load(Ordering::Acquire)
+        {
+            return Ok(None);
+        }
         if frame.dirty.load(Ordering::Acquire) {
             // This flush still runs under the caller's shard lock: eviction
             // must hand a free buffer to the in-progress acquire, and the
@@ -1659,10 +1852,28 @@ impl BufferPool {
     /// append plus fsync, which is the difference between a page-granular
     /// pause and a pool-wide stall.
     fn write_back_frame(&self, page_id: PageId, frame: &Arc<Frame>) -> Result<bool> {
+        self.write_back_frame_with(page_id, frame, true)
+    }
+
+    /// `allow_unlogged = false` leaves a frame with unlogged changes dirty and
+    /// returns `false`. The check is under the data latch, so a writer cannot
+    /// mark the frame between the check and the write.
+    fn write_back_frame_with(
+        &self,
+        page_id: PageId,
+        frame: &Arc<Frame>,
+        allow_unlogged: bool,
+    ) -> Result<bool> {
         let mut bytes = self.write_frame_data(&frame.data);
         // Re-check under the latch: another writeback (or an eviction) may
         // have flushed this frame while we waited.
         if !frame.dirty.load(Ordering::Acquire) {
+            return Ok(false);
+        }
+        if !allow_unlogged && frame.needs_log.load(Ordering::Acquire) {
+            self.metrics
+                .unlogged_writeback_skips
+                .fetch_add(1, Ordering::Relaxed);
             return Ok(false);
         }
         // Write-ahead ordering: the log record must be durable before the
@@ -1682,12 +1893,116 @@ impl BufferPool {
         crate::test_faults::crash_point("pool.after_writeback");
         // Clear only after the page write succeeds. A failed write remains
         // conservatively eligible for another WAL barrier and retry.
-        frame.needs_log.store(false, Ordering::Release);
+        frame.clear_needs_log();
         frame.dirty.store(false, Ordering::Release);
         frame.dirty_since_millis.store(0, Ordering::Release);
         self.dirty_index.lock().remove(&page_id);
         self.metrics.writebacks.fetch_add(1, Ordering::Relaxed);
         Ok(true)
+    }
+
+    fn next_frame_epoch(&self) -> u64 {
+        self.frame_epochs.fetch_add(1, Ordering::Relaxed) << 32
+    }
+
+    /// The transaction holding the most unlogged frames, and how many. Walks
+    /// every resident frame: for reporting a refusal, not for a hot path.
+    pub fn unlogged_holder(&self) -> Option<(u64, u64)> {
+        let mut owners: FxHashMap<u64, u64> = FxHashMap::default();
+        for shard in self.shards.iter() {
+            let shard = self.lock_shard(shard);
+            for frame in shard.resident.values() {
+                if frame.needs_log.load(Ordering::Acquire) {
+                    *owners
+                        .entry(frame.unlogged_owner.load(Ordering::Acquire))
+                        .or_default() += 1;
+                }
+            }
+        }
+        owners
+            .into_iter()
+            .max_by_key(|&(xid, frames)| (frames, xid))
+    }
+
+    /// Evictions that wrote an unlogged frame for lack of another victim.
+    pub fn unlogged_steals(&self) -> u64 {
+        self.metrics.unlogged_steals.load(Ordering::Relaxed)
+    }
+
+    /// Online writeback candidates skipped for holding unlogged changes.
+    pub fn unlogged_writeback_skips(&self) -> u64 {
+        self.metrics
+            .unlogged_writeback_skips
+            .load(Ordering::Relaxed)
+    }
+
+    /// Resident frames with unlogged changes, over all shards.
+    pub fn unlogged_pages(&self) -> u64 {
+        self.shard_unlogged
+            .iter()
+            .map(|count| count.load(Ordering::Acquire) as u64)
+            .sum()
+    }
+
+    /// The fullest shard, if its unlogged frames leave fewer than
+    /// [`unlogged_reserve`] frames that eviction may take without stealing.
+    ///
+    /// `PagedStore` checks this before each write operation of a refusable
+    /// transaction and refuses the operation, before it modifies anything,
+    /// when it returns `Some`. The reserve is what the operation itself and
+    /// concurrent reads can then use without a steal. Always `None` without a
+    /// barrier.
+    pub fn unlogged_pressure(&self) -> Option<UnloggedPressure> {
+        if !self.no_steal.load(Ordering::Acquire) {
+            return None;
+        }
+        self.shard_frames
+            .iter()
+            .zip(self.shard_unlogged.iter())
+            .enumerate()
+            .filter_map(|(shard, (&frames, unlogged))| {
+                let unlogged = unlogged.load(Ordering::Acquire);
+                (unlogged.saturating_add(unlogged_reserve(frames)) > frames).then_some(
+                    UnloggedPressure {
+                        shard,
+                        unlogged_frames: unlogged as u64,
+                        shard_frames: frames as u64,
+                    },
+                )
+            })
+            .max_by_key(|pressure| pressure.unlogged_frames)
+    }
+
+    /// Write every dirty page whose changes are already logged, and fsync.
+    /// Pages with unlogged changes (an uncommitted transaction's) stay dirty
+    /// in memory. Without a barrier nothing is ever logged, so this is
+    /// [`Self::flush_all`].
+    pub fn flush_logged(&self) -> Result<u64> {
+        if !self.no_steal.load(Ordering::Acquire) {
+            return self.flush_all();
+        }
+        let mut flushed = 0u64;
+        for shard in self.shards.iter() {
+            let dirty_frames: Vec<(PageId, Arc<Frame>)> = {
+                let shard = self.lock_shard(shard);
+                shard
+                    .resident
+                    .iter()
+                    .filter(|(_, frame)| {
+                        frame.dirty.load(Ordering::Acquire)
+                            && !frame.needs_log.load(Ordering::Acquire)
+                    })
+                    .map(|(page_id, frame)| (*page_id, frame.clone()))
+                    .collect()
+            };
+            for (page_id, frame) in dirty_frames {
+                if self.write_back_frame_with(page_id, &frame, false)? {
+                    flushed += 1;
+                }
+            }
+        }
+        self.store.flush()?;
+        Ok(flushed)
     }
 
     /// Write every dirty page back and fsync. Used at checkpoint.
@@ -1734,6 +2049,29 @@ impl BufferPool {
         &self,
         cursor: WritebackCursor,
         limits: WritebackLimits,
+    ) -> Result<WritebackStepReport> {
+        self.writeback_step_with(cursor, limits, true)
+    }
+
+    /// [`Self::writeback_step`] for use next to in-flight transactions,
+    /// without the writer gate: a frame with unlogged changes is left dirty
+    /// (counted in `dirty_pages_remaining` and `unlogged_writeback_skips`).
+    /// Without a barrier there is no unlogged state and this is
+    /// [`Self::writeback_step`].
+    pub fn writeback_step_logged_only(
+        &self,
+        cursor: WritebackCursor,
+        limits: WritebackLimits,
+    ) -> Result<WritebackStepReport> {
+        let include_unlogged = !self.no_steal.load(Ordering::Acquire);
+        self.writeback_step_with(cursor, limits, include_unlogged)
+    }
+
+    fn writeback_step_with(
+        &self,
+        cursor: WritebackCursor,
+        limits: WritebackLimits,
+        include_unlogged: bool,
     ) -> Result<WritebackStepReport> {
         limits.validate(self.page_size)?;
         self.metrics.writeback_steps.fetch_add(1, Ordering::Relaxed);
@@ -1804,8 +2142,18 @@ impl BufferPool {
                 continue;
             }
 
-            if !self.write_back_frame(page_id, &frame)? {
-                report.stale_candidates_removed = report.stale_candidates_removed.saturating_add(1);
+            if !include_unlogged && frame.needs_log.load(Ordering::Acquire) {
+                self.metrics
+                    .unlogged_writeback_skips
+                    .fetch_add(1, Ordering::Relaxed);
+                continue;
+            }
+            if !self.write_back_frame_with(page_id, &frame, include_unlogged)? {
+                // Clean by now, or (online) re-marked unlogged under the latch.
+                if !frame.needs_log.load(Ordering::Acquire) {
+                    report.stale_candidates_removed =
+                        report.stale_candidates_removed.saturating_add(1);
+                }
                 continue;
             }
             self.metrics
@@ -2124,6 +2472,9 @@ impl BufferPool {
             metadata: AtomicBool::new(false),
             dirtied_by: AtomicU64::new(0),
             needs_log: AtomicBool::new(false),
+            shard_unlogged: shard.unlogged.clone(),
+            modifications: AtomicU64::new(self.next_frame_epoch()),
+            unlogged_owner: AtomicU64::new(0),
             prefetched: AtomicBool::new(true),
             foreground_touched: AtomicBool::new(false),
         });
@@ -2182,7 +2533,7 @@ impl BufferPool {
     /// Page ids currently dirty, so a caller can log their after-images.
     ///
     /// **Every dirty page, logged or not.** Almost always the wrong thing to
-    /// drive logging from — see [`Self::take_pages_needing_log`].
+    /// drive logging from — see [`Self::pages_needing_log`].
     pub fn dirty_page_ids(&self) -> Vec<PageId> {
         let mut out = Vec::new();
         for shard in self.shards.iter() {
@@ -2197,27 +2548,59 @@ impl BufferPool {
         out
     }
 
-    /// Pages modified since their last log record, clearing the flag.
+    /// Pages modified since their last log record, each with its
+    /// modification count. The flags are NOT cleared: the caller logs each
+    /// page's image, makes its commit record at least appended, and only then
+    /// calls [`Self::mark_logged`] with this list.
     ///
-    /// The distinction from [`Self::dirty_page_ids`] is not a micro-optimization.
-    /// A page stays dirty until it is evicted or checkpointed, so logging "every
-    /// dirty page" after each operation re-logs the entire resident set every
-    /// time — with an 8192-frame pool that is 64 MiB of log per insert.
-    /// Measured at 411 GB of WAL for 233 MB of data before this existed: a
-    /// 1,767x write amplification that made ingest disk-bound and would have
-    /// made a corpus-scale import impossible.
-    pub fn take_pages_needing_log(&self) -> Vec<PageId> {
+    /// Logging only these, not [`Self::dirty_page_ids`], is not a
+    /// micro-optimization. A page stays dirty until it is evicted or
+    /// checkpointed, so logging "every dirty page" after each operation
+    /// re-logs the entire resident set every time — with an 8192-frame pool
+    /// that is 64 MiB of log per insert. Measured at 411 GB of WAL for 233 MB
+    /// of data before this existed: a 1,767x write amplification that made
+    /// ingest disk-bound and would have made a corpus-scale import impossible.
+    ///
+    /// Clearing the flags here, before the images and the commit record were
+    /// in the log, let online writeback and eviction write a committing
+    /// transaction's pages through the "already logged" path while their
+    /// commit could still be lost (GAP-1).
+    pub fn pages_needing_log(&self) -> Vec<(PageId, u64)> {
         let mut out = Vec::new();
         for shard in self.shards.iter() {
             let shard = self.lock_shard(shard);
             for (page_id, frame) in shard.resident.iter() {
-                if frame.needs_log.swap(false, Ordering::AcqRel) {
-                    out.push(*page_id);
+                if frame.needs_log.load(Ordering::Acquire) {
+                    out.push((*page_id, frame.modifications.load(Ordering::Acquire)));
                 }
             }
         }
         out.sort_unstable();
         out
+    }
+
+    /// Clear the unlogged flag of pages from [`Self::pages_needing_log`]
+    /// whose images are now in the log under a commit record (or a structural
+    /// record) that is at least appended. A page a writer modified after the
+    /// list was taken keeps its flag; a page already written back or evicted
+    /// is skipped.
+    pub fn mark_logged(&self, pages: &[(PageId, u64)]) {
+        for &(page_id, modifications) in pages {
+            let frame = {
+                let shard = self.lock_shard(self.shard_for(page_id));
+                shard.resident.get(&page_id).cloned()
+            };
+            let Some(frame) = frame else {
+                continue;
+            };
+            // Under the data latch, shared: it excludes writers, so none can
+            // be between its change and its `modifications` bump, and it lets
+            // readers continue.
+            let _latch = frame.data.read();
+            if frame.modifications.load(Ordering::Acquire) == modifications {
+                frame.clear_needs_log();
+            }
+        }
     }
 
     /// Whether a page is currently cached. Diagnostic and test support — a
@@ -2260,6 +2643,12 @@ impl BufferPool {
                 .writeback_duration_limit_stops
                 .load(Ordering::Relaxed),
             writeback_pinned_skips: self.metrics.writeback_pinned_skips.load(Ordering::Relaxed),
+            unlogged_pages: self.unlogged_pages(),
+            unlogged_steals: self.metrics.unlogged_steals.load(Ordering::Relaxed),
+            unlogged_writeback_skips: self
+                .metrics
+                .unlogged_writeback_skips
+                .load(Ordering::Relaxed),
             read_ahead_queue_capacity,
             read_ahead_queue_depth,
             read_ahead_requests: self.metrics.read_ahead_requests.load(Ordering::Relaxed),

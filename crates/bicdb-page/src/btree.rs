@@ -1126,7 +1126,18 @@ impl BTree {
             // The new root is made durable BEFORE anyone is told about it. A
             // crash in between leaves the old root intact and the new one
             // unreferenced — garbage, but never a dangling root.
-            self.pool.flush_all()?;
+            //
+            // With a log (`PagedStore`), only pages whose changes are already
+            // logged are written. Inside a transaction the split pages, the old
+            // root among them (rebuilt in place with its left half), are
+            // unlogged until commit. Writing them here put uncommitted
+            // structure in the page file, and a crash before commit left it
+            // there with the meta page still naming the old root (GAP-1 in
+            // `docs/recovery-semantics.md`, window W3). They are logged at
+            // commit together with the meta page that names the new root, so
+            // the root change is atomic with the transaction. Without a log
+            // this is `flush_all`.
+            self.pool.flush_logged()?;
             crate::test_faults::crash_point("btree.after_root_split_flush");
             *self.root.lock() = new_root;
             *self.root_changed.lock() = true;

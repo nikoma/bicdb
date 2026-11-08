@@ -19373,7 +19373,9 @@ fn apply_unmaterialized_transaction_log(
             let paged_ctx = match paged {
                 Some(paged) => {
                     let _guard = paged.write_guard();
-                    let (xid, _) = paged.begin();
+                    // A decided commit: never refused for pool pressure (GAP-1 no-steal),
+                    // or the store could not open.
+                    let (xid, _) = paged.begin_redo_backed();
                     let index_defs = paged_durable_defs
                         .get(&write.collection)
                         .map(Vec::as_slice)

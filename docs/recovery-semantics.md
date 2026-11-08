@@ -110,9 +110,10 @@ One scan over the chain (`wal.rs:1260-1296`):
   needs replay. Records between the record's redo point and `H` are
   replayed, so an unfenced append before publication is still recovered.
   Both checkpoint paths hold the writer gate across the publication. That
-  does not stop a thread outside the gate (an eviction, or a page-only
-  transaction between its operations, W4 in 14.1) from appending a page image, which is
-  why the redo point comes from the record.
+  does not obviously stop a thread outside the gate (an eviction, or a
+  page-only transaction between its operations, W4 in 14.1) from appending
+  a page image, which is why the redo point comes from the record. Whether
+  such an append ever happens is open (OPEN-1 in section 9).
 
   This is exact for a roll-forward restore over an older base (later
   records describe the source's page files) and for a log that starts at
@@ -550,6 +551,38 @@ instead (section 10).
 | GAP-2 | **Fixed.** An interrupted `Wal::reset` with sealed segments replayed stale images over newer pages, then gapped the LSN chain, so later commits were lost at the next recovery. | Before the fix, 15-16 of 20 rounds per crash case lost acknowledged commits; after it, 0 of 20. Tests: `recovery_semantics.rs::an_interrupted_log_reset_*`, `wal_reset_ordering.rs`, `commit_durability_crash.rs::production_path_survives_an_interrupted_log_reset*` and `..._fails_closed_at_every_log_reset_step*` | — |
 | GAP-3 | Mid-log corruption in either log is treated as a torn tail and silently truncates later, possibly acknowledged, records. | `storage.rs:700-790`; `wal.rs:1130`, `wal.rs:984` | Silent loss on media corruption. Detection only. |
 | GAP-4 | A page log that starts above the page file's horizon (lost prefix) is accepted, and its suffix is replayed onto pages that lack the missing changes. | `wal.rs:1246` (no check) | Closed by the Q2 change. |
+
+Open items (not GAPs yet: unexplained, no failing test in this suite):
+
+- **OPEN-1, appends between a checkpoint record and its publication.**
+  `finish_checkpoint` publishes the horizon as `next_lsn` read after the
+  checkpoint record. If another thread appends in between, the horizon lies
+  above `record + 1`. Recovery stays correct, because the redo point comes
+  from the record (3.2). But it means the gate does not fence the log, and
+  the "every image below `H` is in the page file" argument then depends on
+  that thread's page also having been flushed.
+  - Not observed so far. A `debug_assert_eq!(next_lsn, checkpoint_lsn + 1)`
+    was tried during review; it was removed without having been seen to
+    fire.
+  - To look for it, add the assertion right after the `wal.checkpoint(...)`
+    call in `Checkpointer::finish_checkpoint` (`wal.rs`), plus a backtrace
+    capture in `Wal::append` while a "checkpoint publishing" flag is set.
+    Then run debug builds of: the crash matrices
+    (`cargo test -p bicdb-core --test commit_durability_crash`, which
+    includes the bounded-supervisor runs), the pgwire suite, and the Rails
+    acceptance (`.github/workflows/rails.yml`: `cargo build -p bicdb-cli
+    --bin bicdb`, then `BICDB_BIN=target/debug/bicdb bin/verify` in
+    `examples/rails/team_board`).
+- **OPEN-2, duplicate unique-index keys after a kill and restart.** The
+  Rails acceptance intermittently fails its "Pending jobs and binary Solid
+  Cache value survive BicDB SIGKILL/restart" check. After the restart,
+  inserts fail with `unique index index_solid_cache_entries_on_key_hash has
+  duplicate keys`. Seen on 2026-11-08 in runs of two branches with the GAP-2
+  fix and one without it (`plpgsql-ops`, based on the fail-closed change),
+  so it predates the GAP-2 fix. Evidence: the `rails-team-board-evidence`
+  artifact of those runs (`bicdb.log`, `queue-completed.log`). Reproduce with
+  the Rails recipe above, repeated. The crash-matrix reconciler checks
+  unique keys per writer, but not under the Solid Cache upsert pattern.
 
 ## 10. Proposed behaviour changes (not implemented here; need approval)
 

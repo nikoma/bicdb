@@ -190,3 +190,117 @@ Crash points:
 - mid-replay during recovery
 
 Both modes run the same matrix.
+
+## 7. Results (2026-11-08)
+
+All results are on branch `durability/txlog-only-commit`. Nothing here changes
+the default commit path.
+
+### Crash and fault injection
+
+| Check | Production (`all-logs`) | Experimental (`transaction-log`) |
+|---|---|---|
+| Full matrix: 15 boundaries (commit, checkpoint, log cut, page writeback), interrupted replay | pass | pass, plus 4 materializer boundaries |
+| Same matrix with a 256 KiB buffer pool (eviction and writeback during the workload) | pass | pass |
+| Repeats of the hardest case (crash just after the transaction-log write) | 310/310 | 610/610 |
+| Repeats: crash right after a page writeback, small pool | not run | 100/100 |
+| Existing recovery, replication, PITR, backup and HA suites, forced `server_paged`, flag off vs on | pass | pass; one observability test made monotonic (below) |
+| `bicdb-page` tests | 380/380 | (same binary) |
+
+The reconciler checks every acknowledged commit, per-commit atomicity, index
+lookups against a scan, unique-key resolution, collections recreated under a
+reused name, and identical state after a second reopen.
+
+What the matrix found, and how each finding was resolved:
+
+1. **Test emulation flaw.** The first power-loss emulation truncated the page
+   log without holding its file lock. Concurrent threads could then append
+   after the cut or sync past it. That produced impossible logs: records
+   missing from the middle, later ones kept. Fixed. The kept crash states
+   were decoded to confirm the cause.
+2. **Real defect in the experimental mode (I5).** A page logged by a deferred
+   commit stays dirty with no pending log record. Writeback then skipped the
+   barrier and could write the page ahead of its unsynced log records. Fixed:
+   writeback first syncs through the latest deferred commit record. This only
+   adds a sync. A deterministic page-level test reproduces the defect (with
+   the fix reverted, a lookup fails with `OutOfBounds`) and passes with the
+   fix. The end-to-end matrix did NOT detect this defect when the fix was
+   reverted: the replay from the transaction log masks it unless a split
+   leaves a dangling page. The page-level test is the regression guard.
+3. **Behaviour change visible to observability.** With the flag on, a
+   read-only scan that evicts a page logged by a deferred commit now syncs
+   the page log first. One test compared WAL-sync counters across two
+   samples for equality; it now checks that they never go backwards.
+
+### Performance
+
+Host s3ny: 24 cores, consumer NVMe, ext4, fsync on, shared at load 13-27.
+Median of 3 trials of 30 s each. The spread between trials is about ±30%.
+"Old" is before the change that syncs the page log without holding its
+append lock (`1f78e4f`); "new" is after it.
+
+| Threads | Mode (code version) | p50 µs | p95 µs | p99 µs | Commits/s |
+|---|---|---|---|---|---|
+| 1 | all-logs (old) | 2655 | 8442 | 20520 | 267 |
+| 1 | transaction-log (old) | 1744 | 4747 | 11024 | 458 |
+| 4 | all-logs (new) | 6765 | 11278 | 22615 | 522 |
+| 4 | transaction-log (new) | 5714 | 12628 | 16322 | 666 |
+| 16 | all-logs (new) | 30634 | 125375 | 176765 | 383 |
+| 16 | transaction-log (new) | 26427 | 55934 | 155778 | 620 |
+| 64 | all-logs (new) | 120726 | 376428 | 507720 | 409 |
+| 64 | transaction-log (new) | 128378 | 569001 | 741110 | 411 |
+
+- **Where the experimental mode helps:** 1 to 4 concurrent writers, with 1.3 to 1.9× throughput and lower tails.
+- **Where it doesn't:** it is roughly even at 16 writers, where the trial ranges overlap. At 64 writers it is even on throughput with worse tails. With 20 inserts per commit it gains little and is worse at 64 writers.
+- **The ceiling is not the sync count.** Both modes stay at roughly 400 to 700 commits/s from 4 to 64 writers. A one-row commit writes about 70 KB of full page images (about 90× the logical record), under the store-wide write lock. That serial work bounds throughput no matter how many fsyncs are removed.
+- **The lock change helps the production path by itself:** at 4 writers, 368 → 522 commits/s and p95 35 → 11 ms. It is a change to the production commit path, so it is held for a separate decision.
+
+### Recovery and log growth
+
+- **Recovery opens:** 0.3 to 1.0 s after a 16-writer crash, in either mode, driven by page-log size. No acknowledged commit was lost in any trial.
+- **What the benchmark cannot measure:** its crash keeps unsynced bytes in the OS cache, so it does not measure the replay cost after a real power loss. The matrix shows that replay is correct, not how long it takes.
+- **Log growth:** the transaction log grows by about 760 bytes per commit in both modes. Page-log size depends on checkpoint timing; cumulative growth needs a counter that does not exist yet.
+
+### Replication and failover
+
+- **Test results:** live replication, synchronous quorum, failover/promotion, standby bootstrap, PITR and online backup suites give the same results with the flag off and on.
+- **Why the flag does not change replication:** standbys still receive frames only after the transaction log is durable and the commit applied (I10). The standby import path does not use deferral.
+
+## 8. Rollout proposal
+
+The experimental mode meets the tested guarantees, but its benefit is limited
+to low concurrency, and it worsens tails at high concurrency. It should not
+become the default. Proposed steps, each a separate decision:
+
+1. **Merge the investigation with the flag off.** This adds:
+   - this document;
+   - the crash-injection points (one relaxed load each when unset);
+   - the power-loss emulation;
+   - the crash matrix and reconciler;
+   - the benchmark;
+   - the experimental mode behind `BICDB_COMMIT_DURABILITY=transaction-log`.
+
+   Default behaviour is unchanged, except the writeback barrier gains one
+   no-op check: with the flag off, no deferred commit LSN is ever recorded.
+2. **Ship the append-lock change to the production path on its own.** It
+   leaves durability unchanged and showed the clearest win (4 writers: +42%
+   throughput, p95 −68%). It needs its own review, the full CI, and the matrix,
+   which it already passes.
+3. **Opt-in only, for single- and low-concurrency write workloads**, e.g. a
+   serial application job that commits many small transactions. Before
+   anyone enables it in production:
+   - repeat the crash matrix on the target hardware;
+   - measure replay time after a real power cut (a VM hard reset, not a
+     process kill);
+   - watch materializer health (`deferred_materialize_stats`).
+4. **Biggest lever, next:** reduce page-log volume per commit (page deltas
+   instead of full page images, or a smaller logged footprint per row).
+   That bounds both modes above 4 writers.
+5. **Production recovery hardening found along the way**, for separate review:
+   - **First-record check:** fail recovery when the first record of the active
+     page log does not carry the LSN the last checkpoint published. That
+     mismatch can only mean corruption, and checking it would have caught
+     the emulation flaw directly.
+   - **Possible mid-transaction eviction window:** a page evicted right after
+     a leaf split, followed by a crash before commit. This was found by
+     reasoning only and is untested.

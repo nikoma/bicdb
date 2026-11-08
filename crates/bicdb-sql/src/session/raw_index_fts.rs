@@ -847,6 +847,11 @@ impl<'db> SqlSession<'db> {
             .as_ref()
             .is_err_and(|error| error.to_string() == super::row_routine_write_error().to_string())
             && !self.row_routine_call
+            && !self
+                .session_gucs
+                .get("bicdb.sql_profile")
+                .is_some_and(|profile| oracle::is_oracle_profile(profile))
+            && !oracle::preview_routine_language_enabled(self.db_ref())?
         {
             if let Some(rows) = self.execute_writing_projection(query)? {
                 result = Ok(rows);

@@ -1,0 +1,44 @@
+     Running tests/rls_index_candidates.rs (/root/carrier-zero-friction-target/debug/deps/rls_index_candidates-7df7a9e09aa13b5f)
+
+running 13 tests
+test a_new_policy_prefix_does_not_hoist_authored_volatile_filters_above_rls ... FAILED
+test common_permissive_conjunct_and_restrictive_conjunct_can_narrow_without_changing_union ... ok
+test defaulted_overloads_are_not_misclassified_as_pure_zero_argument_calls ... ok
+test direct_calls_and_volatile_init_plans_keep_residual_scan_semantics ... ok
+test domain_cast_checks_are_not_speculatively_evaluated_by_explain ... ok
+test lossy_policy_casts_and_inherited_role_changes_do_not_reuse_wrong_constraints ... ok
+test necessary_policy_equality_reuses_index_and_statement_context_without_dropping_residual_rls ... ok
+test owner_bypass_role_bypass_forced_rls_and_trusted_bypass_are_preserved ... ok
+test permissive_union_does_not_make_one_tenant_predicate_necessary ... ok
+test stable_policy_exceptions_are_not_raised_by_explain_or_contradictory_filters ... FAILED
+test stable_policy_keys_are_deferred_until_execution_and_false_predicates_do_not_run_them ... FAILED
+test volatile_defaults_and_decorated_init_plans_are_not_executed_by_explain ... ok
+test volatile_policy_init_plans_are_not_speculatively_evaluated_by_explain ... ok
+
+failures:
+
+---- a_new_policy_prefix_does_not_hoist_authored_volatile_filters_above_rls stdout ----
+
+thread 'a_new_policy_prefix_does_not_hoist_authored_volatile_filters_above_rls' (493139) panicked at crates/bicdb-sql/tests/rls_index_candidates.rs:429:14:
+called `Result::unwrap()` on an `Err` value: DataException { sqlstate: "22012", message: "division by zero", data_type: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- stable_policy_exceptions_are_not_raised_by_explain_or_contradictory_filters stdout ----
+
+thread 'stable_policy_exceptions_are_not_raised_by_explain_or_contradictory_filters' (493244) panicked at crates/bicdb-sql/tests/rls_index_candidates.rs:391:10:
+called `Result::unwrap()` on an `Err` value: DataException { sqlstate: "22012", message: "division by zero", data_type: None }
+
+---- stable_policy_keys_are_deferred_until_execution_and_false_predicates_do_not_run_them stdout ----
+
+thread 'stable_policy_keys_are_deferred_until_execution_and_false_predicates_do_not_run_them' (493247) panicked at crates/bicdb-sql/tests/rls_index_candidates.rs:355:10:
+called `Result::unwrap()` on an `Err` value: DataException { sqlstate: "22012", message: "division by zero", data_type: None }
+
+
+failures:
+    a_new_policy_prefix_does_not_hoist_authored_volatile_filters_above_rls
+    stable_policy_exceptions_are_not_raised_by_explain_or_contradictory_filters
+    stable_policy_keys_are_deferred_until_execution_and_false_predicates_do_not_run_them
+
+test result: FAILED. 10 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.38s
+
+error: test failed, to rerun pass `-p bicdb-sql --test rls_index_candidates`

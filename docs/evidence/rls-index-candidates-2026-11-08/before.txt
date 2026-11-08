@@ -1,0 +1,64 @@
+     Running tests/rls_index_candidates.rs (/root/carrier-zero-friction-target/debug/deps/rls_index_candidates-7df7a9e09aa13b5f)
+
+running 7 tests
+test common_permissive_conjunct_and_restrictive_conjunct_can_narrow_without_changing_union ... FAILED
+test direct_calls_and_volatile_init_plans_keep_residual_scan_semantics ... ok
+test lossy_policy_casts_and_inherited_role_changes_do_not_reuse_wrong_constraints ... FAILED
+test necessary_policy_equality_reuses_index_and_statement_context_without_dropping_residual_rls ... FAILED
+test owner_bypass_role_bypass_forced_rls_and_trusted_bypass_are_preserved ... FAILED
+test permissive_union_does_not_make_one_tenant_predicate_necessary ... ok
+test volatile_policy_init_plans_are_not_speculatively_evaluated_by_explain ... ok
+
+failures:
+
+---- common_permissive_conjunct_and_restrictive_conjunct_can_narrow_without_changing_union stdout ----
+
+thread 'common_permissive_conjunct_and_restrictive_conjunct_can_narrow_without_changing_union' (279998) panicked at crates/bicdb-sql/tests/rls_index_candidates.rs:58:5:
+FullScan
+EstimatedRows 300
+Cost 300.000
+ActualRowsFetched 100
+ActualRows 1
+ActualTimeMs 116.000
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- lossy_policy_casts_and_inherited_role_changes_do_not_reuse_wrong_constraints stdout ----
+
+thread 'lossy_policy_casts_and_inherited_role_changes_do_not_reuse_wrong_constraints' (280006) panicked at crates/bicdb-sql/tests/rls_index_candidates.rs:58:5:
+FullScan
+EstimatedRows 300
+Cost 300.000
+ActualRowsFetched 99
+ActualRows 1
+ActualTimeMs 87.059
+
+---- necessary_policy_equality_reuses_index_and_statement_context_without_dropping_residual_rls stdout ----
+
+thread 'necessary_policy_equality_reuses_index_and_statement_context_without_dropping_residual_rls' (280015) panicked at crates/bicdb-sql/tests/rls_index_candidates.rs:58:5:
+FullScan
+EstimatedRows 300
+Cost 300.000
+ActualRowsFetched 99
+ActualRows 1
+ActualTimeMs 74.147
+
+---- owner_bypass_role_bypass_forced_rls_and_trusted_bypass_are_preserved stdout ----
+
+thread 'owner_bypass_role_bypass_forced_rls_and_trusted_bypass_are_preserved' (280026) panicked at crates/bicdb-sql/tests/rls_index_candidates.rs:58:5:
+FullScan
+EstimatedRows 300
+Cost 300.000
+ActualRowsFetched 100
+ActualRows 1
+ActualTimeMs 70.793
+
+
+failures:
+    common_permissive_conjunct_and_restrictive_conjunct_can_narrow_without_changing_union
+    lossy_policy_casts_and_inherited_role_changes_do_not_reuse_wrong_constraints
+    necessary_policy_equality_reuses_index_and_statement_context_without_dropping_residual_rls
+    owner_bypass_role_bypass_forced_rls_and_trusted_bypass_are_preserved
+
+test result: FAILED. 3 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.60s
+
+error: test failed, to rerun pass `-p bicdb-sql --test rls_index_candidates`

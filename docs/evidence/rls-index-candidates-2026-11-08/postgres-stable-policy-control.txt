@@ -1,0 +1,211 @@
+BEGIN
+SET
+SET
+CREATE SCHEMA
+CREATE ROLE
+GRANT
+CREATE TABLE
+CREATE INDEX
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+GRANT
+ALTER TABLE
+ALTER TABLE
+CREATE POLICY
+CASE empty pl_stable explain_normal
+SAVEPOINT
+SET
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Aggregate  (cost=8.43..8.44 rows=1 width=8)
+   InitPlan 1 (returns $0)
+     ->  Result  (cost=0.00..0.26 rows=1 width=32)
+   ->  Index Only Scan using tenant_lookup on records  (cost=0.15..8.17 rows=1 width=0)
+         Index Cond: ((tenant = $0) AND (id = 1))
+(5 rows)
+
+ROLLBACK
+CASE empty pl_stable explain_false
+SAVEPOINT
+SET
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Aggregate  (cost=13.93..13.94 rows=1 width=8)
+   InitPlan 1 (returns $0)
+     ->  Result  (cost=0.00..0.26 rows=1 width=32)
+   ->  Result  (cost=4.20..13.67 rows=1 width=0)
+         One-Time Filter: false
+         ->  Bitmap Heap Scan on records  (cost=4.20..13.67 rows=1 width=0)
+               Recheck Cond: (tenant = $0)
+               ->  Bitmap Index Scan on tenant_lookup  (cost=0.00..4.20 rows=6 width=0)
+                     Index Cond: (tenant = $0)
+(9 rows)
+
+ROLLBACK
+CASE empty pl_stable select_false
+SAVEPOINT
+SET
+ count 
+-------
+     0
+(1 row)
+
+ROLLBACK
+CASE empty pl_stable select_normal
+SAVEPOINT
+SET
+ROLLBACK
+DROP POLICY
+CREATE POLICY
+CASE empty sql_definer_stable explain_normal
+SAVEPOINT
+SET
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Aggregate  (cost=8.43..8.44 rows=1 width=8)
+   InitPlan 1 (returns $0)
+     ->  Result  (cost=0.00..0.26 rows=1 width=32)
+   ->  Index Only Scan using tenant_lookup on records  (cost=0.15..8.17 rows=1 width=0)
+         Index Cond: ((tenant = $0) AND (id = 1))
+(5 rows)
+
+ROLLBACK
+CASE empty sql_definer_stable explain_false
+SAVEPOINT
+SET
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Aggregate  (cost=13.93..13.94 rows=1 width=8)
+   InitPlan 1 (returns $0)
+     ->  Result  (cost=0.00..0.26 rows=1 width=32)
+   ->  Result  (cost=4.20..13.67 rows=1 width=0)
+         One-Time Filter: false
+         ->  Bitmap Heap Scan on records  (cost=4.20..13.67 rows=1 width=0)
+               Recheck Cond: (tenant = $0)
+               ->  Bitmap Index Scan on tenant_lookup  (cost=0.00..4.20 rows=6 width=0)
+                     Index Cond: (tenant = $0)
+(9 rows)
+
+ROLLBACK
+CASE empty sql_definer_stable select_false
+SAVEPOINT
+SET
+ count 
+-------
+     0
+(1 row)
+
+ROLLBACK
+CASE empty sql_definer_stable select_normal
+SAVEPOINT
+SET
+ROLLBACK
+DROP POLICY
+INSERT 0 1
+CREATE POLICY
+CASE one_row pl_stable explain_normal
+SAVEPOINT
+SET
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Aggregate  (cost=8.43..8.44 rows=1 width=8)
+   InitPlan 1 (returns $0)
+     ->  Result  (cost=0.00..0.26 rows=1 width=32)
+   ->  Index Only Scan using tenant_lookup on records  (cost=0.15..8.17 rows=1 width=0)
+         Index Cond: ((tenant = $0) AND (id = 1))
+(5 rows)
+
+ROLLBACK
+CASE one_row pl_stable explain_false
+SAVEPOINT
+SET
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Aggregate  (cost=13.93..13.94 rows=1 width=8)
+   InitPlan 1 (returns $0)
+     ->  Result  (cost=0.00..0.26 rows=1 width=32)
+   ->  Result  (cost=4.20..13.67 rows=1 width=0)
+         One-Time Filter: false
+         ->  Bitmap Heap Scan on records  (cost=4.20..13.67 rows=1 width=0)
+               Recheck Cond: (tenant = $0)
+               ->  Bitmap Index Scan on tenant_lookup  (cost=0.00..4.20 rows=6 width=0)
+                     Index Cond: (tenant = $0)
+(9 rows)
+
+ROLLBACK
+CASE one_row pl_stable select_false
+SAVEPOINT
+SET
+ count 
+-------
+     0
+(1 row)
+
+ROLLBACK
+CASE one_row pl_stable select_normal
+SAVEPOINT
+SET
+ROLLBACK
+DROP POLICY
+CREATE POLICY
+CASE one_row sql_definer_stable explain_normal
+SAVEPOINT
+SET
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Aggregate  (cost=8.43..8.44 rows=1 width=8)
+   InitPlan 1 (returns $0)
+     ->  Result  (cost=0.00..0.26 rows=1 width=32)
+   ->  Index Only Scan using tenant_lookup on records  (cost=0.15..8.17 rows=1 width=0)
+         Index Cond: ((tenant = $0) AND (id = 1))
+(5 rows)
+
+ROLLBACK
+CASE one_row sql_definer_stable explain_false
+SAVEPOINT
+SET
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Aggregate  (cost=13.93..13.94 rows=1 width=8)
+   InitPlan 1 (returns $0)
+     ->  Result  (cost=0.00..0.26 rows=1 width=32)
+   ->  Result  (cost=4.20..13.67 rows=1 width=0)
+         One-Time Filter: false
+         ->  Bitmap Heap Scan on records  (cost=4.20..13.67 rows=1 width=0)
+               Recheck Cond: (tenant = $0)
+               ->  Bitmap Index Scan on tenant_lookup  (cost=0.00..4.20 rows=6 width=0)
+                     Index Cond: (tenant = $0)
+(9 rows)
+
+ROLLBACK
+CASE one_row sql_definer_stable select_false
+SAVEPOINT
+SET
+ count 
+-------
+     0
+(1 row)
+
+ROLLBACK
+CASE one_row sql_definer_stable select_normal
+SAVEPOINT
+SET
+ROLLBACK
+DROP POLICY
+ROLLBACK
+
+ERRORS:
+ERROR:  P0001: probe_pl_stable_executed
+CONTEXT:  PL/pgSQL function rls_stable_488e4e8345.pl_stable() line 1 at RAISE
+LOCATION:  exec_stmt_raise, pl_exec.c:3897
+ERROR:  22012: division by zero
+CONTEXT:  SQL function "sql_definer_stable" during startup
+LOCATION:  int4div, int.c:870
+ERROR:  P0001: probe_pl_stable_executed
+CONTEXT:  PL/pgSQL function rls_stable_488e4e8345.pl_stable() line 1 at RAISE
+LOCATION:  exec_stmt_raise, pl_exec.c:3897
+ERROR:  22012: division by zero
+CONTEXT:  SQL function "sql_definer_stable" during startup
+LOCATION:  int4div, int.c:870

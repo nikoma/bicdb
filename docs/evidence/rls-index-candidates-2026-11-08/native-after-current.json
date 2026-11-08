@@ -1,0 +1,223 @@
+{
+  "measurement_kind": "rls_index_candidate_qualification",
+  "engine_source_commit": "b4e0142437a0518dac5deb176b9dccf088987d51",
+  "engine_sha256": "45ae4fc04e68351373f86156c87d929aa5515c5d1658df539e012409de57255d",
+  "policy": "org_id::text = NULLIF((SELECT zf_probe_tenant()), '')",
+  "rls_enabled": true,
+  "rls_forced": false,
+  "index": "UNIQUE(org_id, number)",
+  "policy_tenant_function_volatility": "STABLE",
+  "samples": [
+    {
+      "own_rows": 100,
+      "unrelated_rows": 0,
+      "implicit": {
+        "count": 7,
+        "median_ms": 5.221839000000045,
+        "max_ms": 5.638091000000031
+      },
+      "explicit": {
+        "count": 7,
+        "median_ms": 5.373072999999977,
+        "max_ms": 5.5680790000000115
+      },
+      "plans": {
+        "implicit": [
+          {
+            "QUERY PLAN": "IndexScan zf_probe_orders_org_id_number_key"
+          },
+          {
+            "QUERY PLAN": "PrefixKeys 2"
+          },
+          {
+            "QUERY PLAN": "RuntimeKeys deferred"
+          },
+          {
+            "QUERY PLAN": "EstimatedRows 1"
+          },
+          {
+            "QUERY PLAN": "Cost 1.100"
+          },
+          {
+            "QUERY PLAN": "ActualRowsFetched 1"
+          },
+          {
+            "QUERY PLAN": "ActualRows 1"
+          },
+          {
+            "QUERY PLAN": "ActualTimeMs 1.707"
+          }
+        ],
+        "explicit": [
+          {
+            "QUERY PLAN": "IndexScan zf_probe_orders_org_id_number_key"
+          },
+          {
+            "QUERY PLAN": "PrefixKeys 2"
+          },
+          {
+            "QUERY PLAN": "EstimatedRows 1"
+          },
+          {
+            "QUERY PLAN": "Cost 1.100"
+          },
+          {
+            "QUERY PLAN": "ActualRowsFetched 1"
+          },
+          {
+            "QUERY PLAN": "ActualRows 1"
+          },
+          {
+            "QUERY PLAN": "ActualTimeMs 1.531"
+          }
+        ]
+      }
+    },
+    {
+      "own_rows": 100,
+      "unrelated_rows": 1000,
+      "implicit": {
+        "count": 7,
+        "median_ms": 5.733450000000175,
+        "max_ms": 8.939543000000185
+      },
+      "explicit": {
+        "count": 7,
+        "median_ms": 5.612052000000176,
+        "max_ms": 6.85312399999998
+      },
+      "plans": {
+        "implicit": [
+          {
+            "QUERY PLAN": "IndexScan zf_probe_orders_org_id_number_key"
+          },
+          {
+            "QUERY PLAN": "PrefixKeys 2"
+          },
+          {
+            "QUERY PLAN": "RuntimeKeys deferred"
+          },
+          {
+            "QUERY PLAN": "EstimatedRows 11"
+          },
+          {
+            "QUERY PLAN": "Cost 2.100"
+          },
+          {
+            "QUERY PLAN": "ActualRowsFetched 1"
+          },
+          {
+            "QUERY PLAN": "ActualRows 1"
+          },
+          {
+            "QUERY PLAN": "ActualTimeMs 1.830"
+          }
+        ],
+        "explicit": [
+          {
+            "QUERY PLAN": "IndexScan zf_probe_orders_org_id_number_key"
+          },
+          {
+            "QUERY PLAN": "PrefixKeys 2"
+          },
+          {
+            "QUERY PLAN": "EstimatedRows 1"
+          },
+          {
+            "QUERY PLAN": "Cost 1.100"
+          },
+          {
+            "QUERY PLAN": "ActualRowsFetched 1"
+          },
+          {
+            "QUERY PLAN": "ActualRows 1"
+          },
+          {
+            "QUERY PLAN": "ActualTimeMs 1.662"
+          }
+        ]
+      }
+    },
+    {
+      "own_rows": 100,
+      "unrelated_rows": 5000,
+      "implicit": {
+        "count": 7,
+        "median_ms": 5.180602000000135,
+        "max_ms": 6.286347999999862
+      },
+      "explicit": {
+        "count": 7,
+        "median_ms": 5.466368999999986,
+        "max_ms": 6.5182250000000295
+      },
+      "plans": {
+        "implicit": [
+          {
+            "QUERY PLAN": "IndexScan zf_probe_orders_org_id_number_key"
+          },
+          {
+            "QUERY PLAN": "PrefixKeys 2"
+          },
+          {
+            "QUERY PLAN": "RuntimeKeys deferred"
+          },
+          {
+            "QUERY PLAN": "EstimatedRows 51"
+          },
+          {
+            "QUERY PLAN": "Cost 6.100"
+          },
+          {
+            "QUERY PLAN": "ActualRowsFetched 1"
+          },
+          {
+            "QUERY PLAN": "ActualRows 1"
+          },
+          {
+            "QUERY PLAN": "ActualTimeMs 1.860"
+          }
+        ],
+        "explicit": [
+          {
+            "QUERY PLAN": "IndexScan zf_probe_orders_org_id_number_key"
+          },
+          {
+            "QUERY PLAN": "PrefixKeys 2"
+          },
+          {
+            "QUERY PLAN": "EstimatedRows 51"
+          },
+          {
+            "QUERY PLAN": "Cost 6.100"
+          },
+          {
+            "QUERY PLAN": "ActualRowsFetched 1"
+          },
+          {
+            "QUERY PLAN": "ActualRows 1"
+          },
+          {
+            "QUERY PLAN": "ActualTimeMs 1.542"
+          }
+        ]
+      }
+    }
+  ],
+  "correctness": {
+    "context_other": 1,
+    "context_empty": 0,
+    "context_own": 1,
+    "owner_bypass": 2,
+    "permissive_or": 2,
+    "restrictive_and": 1
+  },
+  "environment_values_recorded": false,
+  "measurement_completed": true,
+  "baseline_semantics_passed": true,
+  "policy_only_growth_ratio": 0.9921029736841925,
+  "explicit_control_growth_ratio": 1.017363620408658,
+  "data_growth_goal_met": true,
+  "outcome": "no_growth_budget_failure_observed",
+  "passed": true
+}

@@ -417,6 +417,22 @@ first two fail and are `#[ignore]`d as GAP-1. The third passes:
    a full checkpoint writes every page and publishes the page count, so the
    stolen tree is complete and the uncommitted versions stay invisible.
 
+A second, independent reproducer came from the page-delta work
+(`page_deltas.rs::preexisting_mid_transaction_eviction_window`, PR #48). It
+is ported here as
+`recovery_semantics.rs::an_open_transaction_interleaved_with_commits_reads_absent_after_a_crash`
+(ignored as GAP-1). One page transaction stays open while 400 others commit,
+with a 32-page pool, then the process crashes.
+- Every committed row reads back correctly.
+- 77 of the open transaction's 400 keys fail with `ChecksumMismatch` on page
+  340, a zero page, where they should read as absent.
+
+The likely mechanism is the same steal: the open transaction's heap page was
+written above the persisted page count under its own xid, then a committed
+image with a higher page id made recovery extend the page count over it
+unreplayed. The failure mode differs from the first reproducer: **reads
+error instead of rows silently disappearing**.
+
 The windows on the production path:
 
 - **Root split inside any paged transaction.** This covers a core row commit's
@@ -594,6 +610,18 @@ For an ordinary row commit (`in_paged_transaction_inner`, which holds
 `write_guard` for begin..commit), W1, W2, W3 and W5 apply. W4 and W6 need a
 page-only transaction that interleaves.
 
+**Two failure modes**, both reproduced:
+
+| Mode | How it arises | Seen by | Reproducer |
+|---|---|---|---|
+| Silent loss of other transactions' committed rows | An uncommitted split is stolen: the left page is rewritten in place and the right sibling, which holds the committed keys that moved, is missing or unreachable. Typical with W3. | Nobody until the rows are missed. Reads return "absent", and `verify_integrity` reports `valid` for the root-split case | `q1_*` page tests; `gap1_a_crash_after_an_uncommitted_root_split_keeps_acknowledged_rows` (124 of 150 acknowledged rows lost) |
+| Unreadable pages | A stolen page lies above the persisted page count, or committed structure (logged by other commits) references a page of the crashed transaction that recovery does not replay. Typical with W1 and W6. | Any reader of those keys, including full and range scans, gets `ChecksumMismatch` or "beyond the end of the file". Committed rows stay intact in the reproducers. | partial-drain `q1_*` states (`verify_integrity` errors); `an_open_transaction_interleaved_with_commits_reads_absent_after_a_crash` (77 keys `ChecksumMismatch`, `verify_integrity` still reports `valid`) |
+
+The second mode is less severe, because no acknowledged data is lost, but
+it is not benign. A scan that meets an affected key fails, so a whole
+collection can become unreadable until it is repaired. A fix must close
+both modes.
+
 ### 14.2 Option (a): no-steal of unlogged pages, plus a spill path
 
 A dirty frame whose `needs_log` flag is set holds changes no log record
@@ -714,6 +742,12 @@ Results on s3ny, prototype tree:
 | `gap1_a_crash_after_an_uncommitted_root_split_keeps_acknowledged_rows`, end to end (was 124 of 150 lost) | pass, 0 lost |
 | Core crash matrices: every crash point, full and bounded checkpoint phases, interrupted recovery convergence, both modes, with and without eviction | pass |
 
+The interim does **not** fix the second reproducer
+(`an_open_transaction_interleaved_with_commits_reads_absent_after_a_crash`
+still fails). Its 32-page pool leaves almost no clean victims, and the
+prototype counted 5,762 last-resort steals in that run. That is the "W1 when
+a transaction outgrows the pool" case below.
+
 Still open after the interim:
 
 - W4 and W6, for page-only transactions that interleave with checkpoints;
@@ -792,6 +826,9 @@ first loads into a new database.
 - uncommitted root split: `verify_integrity` reports `valid = true`, because
   the tree is consistent and simply lacks the committed keys that moved
   right. **Not detected.**
+- interleaved open transaction (second reproducer): `verify_integrity`
+  reports `valid = true`, but reads of 77 keys fail with `ChecksumMismatch`.
+  **Not detected by the verifier.** Only readers see the error.
 
 The undetected case needs a reachability check: enumerate committed heap
 versions through the heap catalog (not through the index), and look up

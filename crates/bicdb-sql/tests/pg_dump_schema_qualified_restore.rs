@@ -346,6 +346,49 @@ fn unqualified_relations_resolve_through_search_path() {
     assert_eq!(int_at(&mut sql, "SELECT app.item_count()"), 1);
 }
 
+/// Binding unqualified names must leave the rest of the statement text
+/// untouched: string literals with doubled quotes, comments and layout.
+#[test]
+fn search_path_binding_preserves_statement_text() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE TABLE app.note (id INT, body TEXT)")
+        .unwrap();
+    sql.execute("CREATE TABLE app.registered (body TEXT)")
+        .unwrap();
+    sql.execute("CREATE VIEW app.one_row AS SELECT 1 AS id")
+        .unwrap();
+    sql.execute(
+        "CREATE FUNCTION app.register(p text) RETURNS void LANGUAGE plpgsql AS $$ \
+         BEGIN INSERT INTO app.registered VALUES (p); END; $$",
+    )
+    .unwrap();
+    sql.execute("SET search_path TO app, public").unwrap();
+    sql.execute(
+        r#"INSERT INTO note /* keep */ VALUES (1, 'COALESCE(AD_Language, '''')'),
+            (2, 'it''s')"#,
+    )
+    .unwrap();
+    let rows = sql
+        .execute("SELECT body FROM note ORDER BY id")
+        .unwrap()
+        .rows;
+    assert_eq!(
+        rows,
+        vec![
+            vec![SqlValue::String("COALESCE(AD_Language, '')".into())],
+            vec![SqlValue::String("it's".into())],
+        ]
+    );
+    sql.execute(r#"SELECT register('x''''y') FROM one_row"#)
+        .unwrap();
+    assert_eq!(
+        sql.execute("SELECT body FROM registered").unwrap().rows,
+        vec![vec![SqlValue::String("x''y".into())]]
+    );
+}
+
 /// The documented restore sets the application role's search_path as a
 /// role default, which applies to the role's later sessions.
 #[test]

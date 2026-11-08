@@ -411,7 +411,15 @@ fn load_inner(
     }
     // read_frames verifies each frame's CRC and truncates a torn tail, so a partial
     // write surfaces as a short read that the count check below rejects.
-    let recovered = storage::read_frames(&records_path, FrameKind::Record, read_mode, encryption)?;
+    let recovered =
+        match storage::read_frames(&records_path, FrameKind::Record, read_mode, encryption) {
+            Ok(recovered) => recovered,
+            // The snapshot is a cache of the segments: damage in its middle
+            // (which recovery now reports instead of truncating) means
+            // "rebuild from the segments", like any other bad snapshot.
+            Err(crate::error::BicDbError::Corruption { .. }) => return Ok(None),
+            Err(error) => return Err(error),
+        };
 
     let decoded =
         crate::db::parallel_map_ordered(&recovered.frames, |frame| decode_chunk(&frame.payload))?;

@@ -516,7 +516,7 @@ pub use resource_governor::{
     ResourcePermit, ResourceUsage,
 };
 pub use spatial_packed::SpatialPackStrategy;
-pub use storage::{CompressionConfig, SegmentReadMode};
+pub use storage::{salvage_frame_log, CompressionConfig, FrameLogSalvage, SegmentReadMode};
 pub use sync::{OpType, SyncOp};
 pub use sync_mesh::{
     EventEnvelope, EventId, NodeId, PeerSyncStatus, StreamId, SyncBundle, SyncBundleEvent,

@@ -510,26 +510,9 @@ instead (section 10).
      definition of `H` (3.4), so skipping them is sound. Deleting them would
      discard archive input only under archive retention, which (a) never
      leaves in that shape because it seals before truncating.
-3. **GAP-1.** Options, in increasing cost:
-   - (a) **no-steal for in-flight transactions**: `write_back_frame` skips a
-     frame whose `dirtied_by` xid is in progress. Eviction picks another
-     victim. Drain skips it and reports it as remaining. The root-split
-     `flush_all` writes only frames not dirtied by the current xid, or is
-     replaced by deferring the root publication to commit. A transaction
-     larger than the pool would then fail with pool exhaustion instead of
-     stealing, which needs a spill path for bulk loads and builds;
-   - (b) **log structural changes as their own committed unit**: splits run
-     as a nested structural transaction whose images are replayed regardless
-     of the user xid's outcome. This works with steal because a split is
-     logically a no-op for committed keys, but the split pages must then
-     never carry uncommitted entries, so the split must be logged before the
-     triggering insert;
-   - (c) **before-images (undo)** for pages an uncommitted xid wrote back.
-     This is the general fix and the largest.
-
-   Option (a) is the smallest change that closes the window for row commits,
-   whose page transactions are small and bounded by the batch. Bulk paths
-   need (b) or (c).
+3. **GAP-1.** Section 14 analyses the options and section 15 the exposure.
+   The smallest safe production change is the no-steal interim in 14.4,
+   prototyped on branch `gap1-no-steal-prototype` (not proposed for merge).
 
 None of these is in the docs-and-tests change. Change 1 is ready as its own
 PR (#57). Changes 2 and 3 await a decision.
@@ -586,3 +569,234 @@ collections clean) and that a second reopen changes nothing.
   (`-- --include-ignored` for the GAP cases and the repeat diagnostics).
   `repeat_recovery_convergence` takes `DURABILITY_CASE=<mode>/<point>` and
   `DURABILITY_REPEAT=<n>`.
+
+## 14. GAP-1: options analysis
+
+GAP-1 needs a separate owner decision. This section compares the options.
+Nothing here is implemented on `main`.
+
+### 14.1 The windows
+
+A window is any path by which a page holding an in-flight transaction's
+unlogged change reaches `store.pages` before that transaction's `Commit`
+record is durable.
+
+| Window | Path | Writer gate held? | Who triggers it in production |
+|---|---|---|---|
+| W1 eviction | `BufferPool::evict_one` → `try_reclaim` → `write_back_frame` (`pool.rs:1392`, `pool.rs:1591`) | no | any thread whose page miss finds no clean victim: pool pressure |
+| W2 bounded drain | `checkpoint_step` Drain → `writeback_step` (`paged.rs:2477`) | no | the pgwire server's automatic checkpoint supervisor (`automatic_paged_checkpoint`, default on, `bicdb-pgwire/src/lib.rs:422`), concurrently with commits |
+| W3 root-split flush | `BTree::insert_separator` → `flush_all` (`btree.rs:1129`) | yes (inside the transaction) | every transaction that grows a tree's height |
+| W4 checkpoint between operations | `PagedStore::checkpoint` / Finalize between two operations of a page transaction that does not hold `write_guard` throughout | yes, per operation | page-only transactions that begin and commit around per-operation locking: index builds (`db/index_build.rs:330`), FTS builds (`db/fts_build.rs:205`), the page-store tests' orphan fixtures |
+| W5 aborted changes | after `PagedStore::abort`, in-memory pages keep the aborted changes (`paged.rs`, `abort` doc) and stay stealable under the aborted xid until the next commit logs them | — | any of W1-W4 after a rolled-back transaction |
+| W6 mislabelled steal | `dirtied_by` is set to the pool's current transaction on every access (`pool.rs:1272`), so with two interleaved page transactions a stolen image can carry the other transaction's xid; if that one commits, recovery replays uncommitted bytes as committed | — | W4 interleavings only (reasoned, not tested) |
+
+For an ordinary row commit (`in_paged_transaction_inner`, which holds
+`write_guard` for begin..commit), W1, W2, W3 and W5 apply. W4 and W6 need a
+page-only transaction that interleaves.
+
+### 14.2 Option (a): no-steal of unlogged pages, plus a spill path
+
+A dirty frame whose `needs_log` flag is set holds changes no log record
+describes yet. Those are exactly an in-flight (or aborted, not yet
+re-logged) transaction's pages: commit clears the flag for every page it logs
+(`log_dirty_pages`, `paged.rs:3234`). (a) never writes such a frame to
+`store.pages` before commit.
+
+- **Closes:** W1, W2, W3, W5. W4 only if the full checkpoint and Finalize
+  also skip unlogged frames. They cannot simply skip them, because the
+  checkpoint's meta page must then name only committed roots. W6 disappears
+  with W4.
+- **Spill path:** a transaction larger than the pool needs somewhere to put
+  its unlogged pages. That means a per-transaction spill file outside the
+  page file: read misses check it, commit logs from it, and open discards
+  it. Bulk loads and index builds need this; row commits do not.
+- **Cost:** eviction skips some candidates. Drain leaves in-flight pages to
+  Finalize, which runs under the gate, so Finalize holds the gate slightly
+  longer. The root-split flush writes less than before. The spill path costs
+  one extra write and read per spilled page, and only for transactions
+  larger than the pool.
+- **Format and recovery:** none for the interim. The spill is a transient
+  file deleted at open, so the format version is unchanged. Recovery is
+  unchanged.
+- **Risk:** low for the interim, which keeps steal as a last resort (14.4).
+  Without that fallback, transactions larger than the pool fail with
+  `PoolExhausted`. The spill path is a new subsystem of medium size.
+- **Experimental modes:** deferred commits log their pages at
+  `commit_deferred` (flag cleared), and the writeback barrier already syncs
+  through the latest deferred commit before writing them (I5). No change.
+  Page deltas get simpler: the page file only ever receives committed
+  states, so no full image has to repair a stolen page.
+
+### 14.3 Option (b): structural changes as their own committed unit
+
+When a split runs, log the pages it rewrites (left, right, parent, and the
+meta page on a root split) as structural images, xid 0, before any of them
+can be written back. Then mark them logged. Recovery already replays xid-0
+images unconditionally (`wal.rs:1349`). A stolen split is then redone whole,
+and a page allocated beyond the published page count is reserved by the
+replay (`wal.rs:1374`).
+
+- **Closes:** W1-W4 and W6 for splits (and for every other structural change
+  logged this way), whatever writes the pages. Entries the in-flight
+  transaction put into those pages are replayed too, but they point to heap
+  versions of an xid that never committed, so MVCC hides them (`write_base`
+  skips aborted heads). The root-split flush becomes unnecessary.
+- **Not closed:** non-structural steals stay without undo. That is harmless
+  only where the bytes are MVCC-tagged. Every other structure that splits or
+  allocates through the pool needs the same treatment: the catalog tree, FTS
+  and spatial pages, overflow chains, the free list. Missing one leaves a
+  hole.
+- **Cost:** about four extra full-page images per split. Splits come roughly
+  once per leaf's worth of inserts. The split pages are logged again at
+  commit. No extra sync.
+- **Format and recovery:** none. xid-0 images and their replay rule already
+  exist, so older engines read the log.
+- **Risk:** medium. The correctness argument depends on MVCC hiding every
+  uncommitted entry the replayed structure contains, for every structure,
+  including in-place head-locator updates. It needs an audit of each
+  structure plus GAP-1 style tests per structure.
+- **Experimental modes:** in transaction-log mode the barrier syncs only
+  through deferred commit LSNs (`sync_deferred_commits`). It would also have
+  to sync through the latest structural image before writing a page marked
+  logged by one. Page deltas cannot replace these images: a split rewrites
+  most of each page, so it stays a full-image boundary.
+
+### 14.4 Option (c): before-images (undo)
+
+Before stealing an unlogged frame, log its before-image. Recovery gains an
+undo pass that, after redo, applies the before-images of xids without a
+commit record, in reverse LSN order.
+
+- **Closes:** W1-W6, for every structure, with no pool pressure.
+- **Cost:** a read of the on-disk version, or a retained copy, plus a log
+  record per first steal of a page per transaction. Stolen pages roughly
+  double their log volume. Recovery gets one more pass.
+- **Format and recovery:** a new record kind. An older engine stops at the
+  unknown kind and treats the rest of the log as a torn tail, so downgrade
+  becomes data loss. The change needs a format gate and a three-phase
+  recovery whose undo is itself idempotent.
+- **Risk:** high. A page-level before-image also rolls back changes another,
+  committed transaction made to the same page since. That is safe only while
+  page transactions never interleave, and W4 shows they do. A safe version
+  needs page ownership or logical undo, which is a redesign.
+- **Experimental modes:** deferred commits lost from the log tail would be
+  undone, then replayed logically from `transactions.log`, which is
+  consistent. Page deltas would need before-values.
+
+### 14.5 Smallest safe change, and the interim
+
+**Interim (no format change, closes the window for ordinary row commits).**
+This is option (a) without the spill path, with steal kept as the last
+resort. It is prototyped on branch `gap1-no-steal-prototype` (two commits on
+top of #56, not opened as a PR):
+
+- eviction (`evict_one`) first looks for a victim without unlogged changes
+  and steals one only when the shard has nothing else. Such steals are
+  counted (`unlogged_steals`) so operators can see when the window is still
+  open;
+- the online writeback, which is Drain and `PagedStore::writeback_step`,
+  skips unlogged frames. It checks under the frame's data latch, so a writer
+  cannot mark the frame in between. Finalize, under the gate, still writes
+  them;
+- the root-split flush writes only logged pages (`BufferPool::flush_logged`).
+  The split pages and the meta page naming the new root are logged together
+  at commit, so the root change becomes atomic with the transaction;
+- all of this applies only when a log barrier is installed (pools without a
+  log have no unlogged state).
+
+Results on s3ny, prototype tree:
+
+| Test | Result |
+|---|---|
+| Page-store suite | 386 passed, 0 failed |
+| `q1_crash_after_partial_drain_of_an_uncommitted_leaf_split_keeps_committed_keys` (was failing) | pass |
+| `q1_crash_after_an_uncommitted_root_split_keeps_committed_keys` (was failing) | pass |
+| `gap1_a_crash_after_an_uncommitted_root_split_keeps_acknowledged_rows`, end to end (was 124 of 150 lost) | pass, 0 lost |
+| Core crash matrices: every crash point, full and bounded checkpoint phases, interrupted recovery convergence, both modes, with and without eviction | pass |
+
+Still open after the interim:
+
+- W4 and W6, for page-only transactions that interleave with checkpoints;
+- W1 when a transaction outgrows the pool (`unlogged_steals > 0`). That
+  means bulk loads and index builds on a store whose pool is small for them.
+
+Closing those needs either (b), or the spill path from (a) together with
+`write_guard` held across page-only transactions. Holding it serializes
+builds against commits.
+
+**Recommendation.**
+1. The interim, as a reviewed PR with the GAP-1 tests un-ignored.
+2. Then (b) for every structure that splits or allocates. That is the
+   complete fix with no format change.
+3. (c) is not recommended: it needs a format gate, and page-level undo is
+   unsafe with interleaving transactions.
+
+## 15. Exposure and detection
+
+### 15.1 GAP-2 (interrupted page-log reset)
+
+**Exposed:** every `server_paged` store with page-log segmentation, which is
+the default (64 MiB segments on stores with page extents, the default for
+new stores), whose checkpoints truncate. Truncation needs no unfrozen
+commits and no backup pin, which is the normal case.
+
+The state needs at least one sealed segment at the reset, that is 64 MiB of
+page log since the last reset. At the roughly 70 KB of page images per
+small commit measured in commit-durability-invariants section 7, that is
+about 900 commits between truncating checkpoints.
+
+**Triggers and likelihood:**
+- A process crash between the truncation and the last unlink. That window is
+  microseconds per reset: low.
+- A power loss before the next journal commit. Any later `fdatasync` forces
+  one, so the window is milliseconds under load and up to the filesystem's
+  commit interval (5 s on ext4) when idle: low to moderate.
+- A failed unlink under fail-closed handling (the #55 reviewer's route). On a
+  failing disk this is deterministic: the next reopen replays the stale
+  chain. This is the likeliest trigger.
+
+The crash matrix lost acknowledged commits in 15-16 of 20 rounds per case
+before the fix.
+
+**Detection today:** poor. Before the reopen, the state is recognisable:
+sealed segments all below `H - 1` and no checkpoint record. After the
+reopen has replayed them, the regressed rows are valid older versions, so
+`verify_integrity` passes unless the mixture of page ages breaks a tree.
+Only external evidence shows the loss: the commit-log archive, a standby,
+or the application. The fix (follow-up PR) recognises the state at open,
+replays nothing, and reports it as `stale_records_discarded`.
+
+### 15.2 GAP-1 (steal without undo)
+
+**Exposed:** a crash (process kill, OOM, power loss) while a paged
+transaction is in flight, after one of its structural pages reached the page
+file through W1-W4.
+
+| Deployment trait | Effect |
+|---|---|
+| Store or transaction working set large relative to the buffer pool (default 256 MiB) | W1 frequent: evictions of in-flight pages during large transactions |
+| pgwire server with the automatic checkpoint supervisor (default) | W2 present for every commit: Drain runs concurrently |
+| Young trees: initial loads, new indexes, FTS builds | W3: root splits happen when a tree grows a level. With 8 KiB pages that is at roughly 180, 36 000 and 7 million keys, so they are frequent early and rare later |
+| Long transactions: bulk loads, batch imports, index and FTS builds | the window is the whole transaction, and these are where OOM kills happen |
+| Small OLTP commits on a pool-resident store | windows of microseconds to milliseconds per commit: low |
+
+**Likelihood:** low for a steady OLTP store. **High** for a crash during a
+bulk load or an index build on a store larger than its pool, or during the
+first loads into a new database.
+
+**Detection today:** partial. Measured on the GAP-1 page-level states
+(diagnostic run, s3ny):
+- partial drain of a split leaf: `PagedStore::verify_integrity` fails with
+  "page N is beyond the end of the file" in every state tried. Reads of the
+  affected keys fail the same way. **Detected.**
+- uncommitted root split: `verify_integrity` reports `valid = true`, because
+  the tree is consistent and simply lacks the committed keys that moved
+  right. **Not detected.**
+
+The undetected case needs a reachability check: enumerate committed heap
+versions through the heap catalog (not through the index), and look up
+each record's key in the index. A committed version that is reachable from
+the heap but not from the index is lost. No such pass exists today.
+Proposed as a bounded maintenance step, `verify_heap_reachability`. In the
+core, the record id is inside the stored record, so the core can also run
+it per collection.

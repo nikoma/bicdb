@@ -487,6 +487,19 @@ pub fn is_known_profile(profile: &str) -> bool {
     profile == POSTGRES_PROFILE || is_oracle_profile(profile)
 }
 
+/// Whether the durable database profile is one of the second profile's.
+pub(crate) fn is_oracle_database(db: &BicDb) -> Result<bool> {
+    match db.get(PROFILE_COLLECTION, "profile") {
+        Err(BicDbError::CollectionNotFound(_)) | Ok(None) => Ok(false),
+        Err(error) => Err(error.into()),
+        Ok(Some(record)) => Ok(record
+            .metadata
+            .get("profile")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(is_oracle_profile)),
+    }
+}
+
 /// Constraint semantics follow the durable database profile, never a mutable
 /// connection setting.
 pub(crate) fn is_preview_database(db: &BicDb) -> Result<bool> {

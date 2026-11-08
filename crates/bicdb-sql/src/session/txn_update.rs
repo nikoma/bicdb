@@ -2699,6 +2699,17 @@ impl<'db> SqlSession<'db> {
                 args.first(),
             ));
         }
+        if crate::routine_overloads::user_function_takes_builtin_call(
+            self.db_ref(),
+            &self.session_gucs,
+            &name,
+            &arg_types,
+            &args,
+        )? {
+            if let Some(value) = self.eval_stored_function_value_typed(&name, &args, &arg_types)? {
+                return Ok(value);
+            }
+        }
         if matches!(name.as_ref(), "txid_current" | "pg_catalog.txid_current") {
             require_arg_count("txid_current", &args, 0)?;
             // Per-row routine hosts borrow the caller's transaction. Reading

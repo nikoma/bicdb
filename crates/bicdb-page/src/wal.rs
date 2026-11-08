@@ -654,11 +654,15 @@ impl Wal {
     /// Power-loss emulation for tests: cut the active file back to what the
     /// last successful sync covered. Sealed segments were synced when sealed.
     pub(crate) fn discard_unsynced_tail_for_test(&self) {
+        // Under the file lock: `sync_through` publishes `synced_offset` before
+        // releasing it, so no sync can be half-recorded here, and no append
+        // can land after the cut. Holding the lock is fine, the process
+        // aborts next.
+        let file = self.file.lock();
         let synced = self.synced_offset.load(Ordering::Acquire);
-        if let Ok(file) = OpenOptions::new().write(true).open(&self.path) {
-            let _ = file.set_len(synced);
-            let _ = file.sync_all();
-        }
+        let _ = file.set_len(synced);
+        let _ = file.sync_all();
+        std::mem::forget(file);
     }
 
     /// Log an abort. Not synced: an abandoned transaction that is lost to a

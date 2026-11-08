@@ -118,7 +118,7 @@ fn workload(gate: bool) {
         }
         // Readers: a writer's hot row never goes backwards.
         let reader = scope.spawn(|| {
-            let mut last = vec![0u64; WRITERS];
+            let mut last = [0u64; WRITERS];
             let mut reads = 0u64;
             while !done.load(Ordering::Acquire) {
                 let guard = db.read().unwrap();
@@ -179,7 +179,7 @@ fn check(db: &BicDb, shared_acks: &[String]) {
         .unwrap_or_default()
         .to_string();
     assert!(
-        shared_acks.iter().any(|ack| *ack == tag),
+        shared_acks.contains(&tag),
         "the shared row holds an acknowledged update, not {tag:?}"
     );
 }

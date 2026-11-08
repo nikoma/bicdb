@@ -10592,7 +10592,10 @@ impl BicDb {
         Ok(db)
     }
 
-    /// Highest durable commit sequence assigned so far. Monotonic and gap-free.
+    /// Highest commit sequence assigned so far. Monotonic and gap-free. On a
+    /// primary this is the reservation counter: it can name a commit whose
+    /// log write has not returned. Shipping and snapshot labels use
+    /// `replication_shippable_seq` instead.
     pub fn last_commit_seq(&self) -> u64 {
         self.commit_seq.load(AtomicOrdering::SeqCst)
     }
@@ -11276,7 +11279,11 @@ impl BicDb {
     ) -> Result<Vec<CommitFrame>> {
         let limit = limit.max(1);
         self.ensure_replication_frames_retained()?;
-        let commits = self.replication_commits_from_retained_wal()?;
+        // Bound by the durable sequence BEFORE reading the file: the file may
+        // already hold a batch whose write has not returned (or a fenced
+        // primary's failed batch), and such a commit can still be lost.
+        let shippable = self.replication_shippable_seq();
+        let commits = self.replication_commits_from_retained_wal(shippable)?;
         if let Some(oldest) = commits.first().map(|commit| commit.commit_seq) {
             if commit_seq < oldest.saturating_sub(1) {
                 return Err(replication_error(format!(
@@ -11438,7 +11445,13 @@ impl BicDb {
         self.ha_state.role == HaRole::Standby || self.ha_node.role() == NodeRole::Standby
     }
 
-    fn replication_commits_from_retained_wal(&self) -> Result<Vec<RetainedReplicationCommit>> {
+    /// Commits retained in the transaction log, up to and including
+    /// `through_seq`. Callers pass [`Self::replication_shippable_seq`], read
+    /// before this call, so no commit past the durable prefix is returned.
+    fn replication_commits_from_retained_wal(
+        &self,
+        through_seq: u64,
+    ) -> Result<Vec<RetainedReplicationCommit>> {
         // The log is live: read it without the recovery reader's tail
         // truncation, which would cut off a commit that is mid-write (see
         // `replication_retention_status`).
@@ -11473,7 +11486,12 @@ impl BicDb {
                     timestamp,
                     commit_seq,
                 } => {
-                    commits.push((commit_seq, tx_id.0, timestamp));
+                    if commit_seq <= through_seq {
+                        commits.push((commit_seq, tx_id.0, timestamp));
+                    } else {
+                        writes.remove(&tx_id.0);
+                        audit.remove(&tx_id.0);
+                    }
                 }
                 TxFrame::Abort { tx_id, .. } => {
                     writes.remove(&tx_id.0);

@@ -16743,16 +16743,28 @@ impl Transaction {
         if explicit_statement_snapshot != 0 {
             return explicit_statement_snapshot;
         }
-        self.observed_record_versions
-            .lock()
+        let mut observed = self.observed_record_versions.lock();
+        if let Some(boundary) = observed
             .get(collection)
             .and_then(|rows| rows.get(record_id))
             .copied()
-            // Blind writes retain the established snapshot-isolation boundary.
-            // The raised floor is legitimate read-your-writes authority for
-            // that operation. Only a point read proves that the row itself was
-            // observed below the floor and must take the conservative branch.
-            .unwrap_or(self.snapshot_tx.0)
+        {
+            return boundary;
+        }
+        // Blind writes retain the established snapshot-isolation boundary.
+        let boundary = self.snapshot_tx.0;
+        if boundary == 0 {
+            // Zero is a real boundary for an absent-key read or an optimistic
+            // insert into an initially empty database. Remember it separately
+            // from the legacy zero sentinel in serialized writes, since an
+            // independent commit may advance applied_snapshot before COMMIT.
+            observed
+                .entry(collection.to_string())
+                .or_default()
+                .entry(record_id.to_string())
+                .or_insert(0);
+        }
+        boundary
     }
 
     pub fn delete_many<I, S>(&mut self, collection: &str, ids: I) -> Result<()>

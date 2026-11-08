@@ -88,3 +88,84 @@ fn queries_on_missing_tables_report_the_table_missing() {
         assert_eq!(error.sqlstate(), "42P01", "{sql}");
     }
 }
+
+/// `top` is not a reserved word: a column, parameter or loop bound named
+/// `top` must not be read as a `TOP n` row-limit clause.
+#[test]
+fn identifier_named_top_is_not_a_select_top_clause() {
+    let (_dir, mut db) = session_db();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE ranking (id INT PRIMARY KEY, top INT, score INT)")
+        .unwrap();
+    session
+        .execute("INSERT INTO ranking VALUES (1, 5, 10), (2, 5, 20), (3, 7, 30)")
+        .unwrap();
+    let int = |value: i64| bicdb_sql::SqlValue::Int(value);
+    for (sql, expected) in [
+        (
+            "SELECT top FROM ranking ORDER BY id",
+            vec![vec![int(5)], vec![int(5)], vec![int(7)]],
+        ),
+        (
+            "SELECT top, score FROM ranking WHERE id = 3",
+            vec![vec![int(7), int(30)]],
+        ),
+        (
+            "SELECT DISTINCT top FROM ranking ORDER BY top",
+            vec![vec![int(5)], vec![int(7)]],
+        ),
+        (
+            "SELECT ALL top FROM ranking WHERE id = 1",
+            vec![vec![int(5)]],
+        ),
+        (
+            "SELECT DISTINCT ON (top) top FROM ranking ORDER BY top",
+            vec![vec![int(5)], vec![int(7)]],
+        ),
+        ("select Top from ranking where id = 2", vec![vec![int(5)]]),
+        (
+            "SELECT top + 1 FROM ranking WHERE id = 1",
+            vec![vec![int(6)]],
+        ),
+        (
+            "SELECT r.top FROM ranking r WHERE r.id = 1",
+            vec![vec![int(5)]],
+        ),
+    ] {
+        assert_eq!(session.execute(sql).unwrap().rows, expected, "{sql}");
+    }
+    // The result column keeps the identifier's folded name.
+    assert_eq!(
+        session
+            .execute("SELECT top FROM ranking WHERE id = 1")
+            .unwrap()
+            .columns,
+        vec!["top".to_string()]
+    );
+    // Literals and comments that merely contain the word are untouched.
+    assert_eq!(
+        session
+            .execute("SELECT /* top */ 'select top' FROM ranking WHERE id = 1")
+            .unwrap()
+            .rows,
+        vec![vec![bicdb_sql::SqlValue::String("select top".into())]]
+    );
+
+    session
+        .execute(
+            "CREATE FUNCTION top_sum(top int) RETURNS int LANGUAGE plpgsql AS $$
+             DECLARE total int := 0;
+             BEGIN
+                 FOR j IN 1 .. top LOOP total := total + j; END LOOP;
+                 RETURN total + top;
+             END $$",
+        )
+        .unwrap();
+    assert_eq!(
+        session.execute("SELECT top_sum(4)").unwrap().rows,
+        vec![vec![int(14)]]
+    );
+    // TOP is not row-limit syntax in this profile.
+    assert!(session.execute("SELECT TOP 1 id FROM ranking").is_err());
+}

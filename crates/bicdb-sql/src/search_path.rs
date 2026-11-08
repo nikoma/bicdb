@@ -329,6 +329,8 @@ pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Option<St
     let sql = weak_locks.as_deref().unwrap_or(sql);
     let lock_order = rewrite_locking_clause_before_limit(sql);
     let sql = lock_order.as_deref().unwrap_or(sql);
+    let top = crate::eval::rewrite_helpers::rewrite_select_top_identifiers(sql);
+    let sql = top.as_deref().unwrap_or(sql);
     let mut statements = Parser::parse_sql(&sqlparser::dialect::PostgreSqlDialect {}, sql).ok()?;
     // Routine bodies bind when they execute, with the caller's path; DDL
     // that defines them is left verbatim.

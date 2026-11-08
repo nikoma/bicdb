@@ -353,11 +353,194 @@ pub(crate) fn normalize_sql(sql: &str) -> String {
         .to_ascii_lowercase()
 }
 
+/// `top` is an ordinary identifier in both SQL profiles, but the SQL parser
+/// always reads `SELECT [ALL | DISTINCT [ON (...)]] top` as the start of a
+/// `TOP n` row-limit clause, so a column, parameter or variable named `top`
+/// failed to parse as the first select item. Quote that one occurrence; an
+/// unquoted `top` folds to the same lower-case name.
+pub(crate) fn rewrite_select_top_identifiers(sql: &str) -> Option<String> {
+    if !sql
+        .as_bytes()
+        .windows(3)
+        .any(|window| window.eq_ignore_ascii_case(b"top"))
+    {
+        return None;
+    }
+    #[derive(Clone, Copy, PartialEq)]
+    enum State {
+        Other,
+        // After SELECT, ALL, DISTINCT or DISTINCT ON (...).
+        SelectHead,
+        // After DISTINCT: ON (...) may follow.
+        AfterDistinct,
+        // After DISTINCT ON: the parenthesized list follows.
+        DistinctOn,
+    }
+    let bytes = sql.as_bytes();
+    let mut state = State::Other;
+    let mut replacements = Vec::new();
+    let mut idx = 0;
+    while idx < bytes.len() {
+        let byte = bytes[idx];
+        if byte.is_ascii_whitespace() {
+            idx += 1;
+            continue;
+        }
+        if byte == b'-' && bytes.get(idx + 1) == Some(&b'-') {
+            while idx < bytes.len() && bytes[idx] != b'\n' {
+                idx += 1;
+            }
+            continue;
+        }
+        if byte == b'/' && bytes.get(idx + 1) == Some(&b'*') {
+            let mut depth = 0_usize;
+            while idx < bytes.len() {
+                if bytes[idx] == b'/' && bytes.get(idx + 1) == Some(&b'*') {
+                    depth += 1;
+                    idx += 2;
+                } else if bytes[idx] == b'*' && bytes.get(idx + 1) == Some(&b'/') {
+                    depth -= 1;
+                    idx += 2;
+                    if depth == 0 {
+                        break;
+                    }
+                } else {
+                    idx += 1;
+                }
+            }
+            continue;
+        }
+        if byte == b'\'' {
+            let backslash_escapes = idx > 0 && bytes[idx - 1].eq_ignore_ascii_case(&b'e') && {
+                idx < 2 || !(bytes[idx - 2].is_ascii_alphanumeric() || bytes[idx - 2] == b'_')
+            };
+            idx += 1;
+            while idx < bytes.len() {
+                if backslash_escapes && bytes[idx] == b'\\' {
+                    idx += 2;
+                } else if bytes[idx] == b'\'' {
+                    if bytes.get(idx + 1) == Some(&b'\'') {
+                        idx += 2;
+                    } else {
+                        idx += 1;
+                        break;
+                    }
+                } else {
+                    idx += 1;
+                }
+            }
+            state = State::Other;
+            continue;
+        }
+        if byte == b'"' {
+            idx += 1;
+            while idx < bytes.len() {
+                if bytes[idx] == b'"' {
+                    if bytes.get(idx + 1) == Some(&b'"') {
+                        idx += 2;
+                    } else {
+                        idx += 1;
+                        break;
+                    }
+                } else {
+                    idx += 1;
+                }
+            }
+            state = State::Other;
+            continue;
+        }
+        if byte == b'$' {
+            let tag_end = bytes[idx + 1..]
+                .iter()
+                .position(|byte| !(byte.is_ascii_alphanumeric() || *byte == b'_'))
+                .map(|offset| idx + 1 + offset);
+            if let Some(tag_end) = tag_end.filter(|end| {
+                bytes[*end] == b'$' && !bytes.get(idx + 1).is_some_and(u8::is_ascii_digit)
+            }) {
+                let tag = &bytes[idx..=tag_end];
+                let body = tag_end + 1;
+                idx = bytes[body..]
+                    .windows(tag.len())
+                    .position(|window| window == tag)
+                    .map_or(bytes.len(), |offset| body + offset + tag.len());
+            } else {
+                idx += 1;
+                while idx < bytes.len() && bytes[idx].is_ascii_digit() {
+                    idx += 1;
+                }
+            }
+            state = State::Other;
+            continue;
+        }
+        if byte.is_ascii_alphabetic() || byte == b'_' || byte >= 0x80 {
+            let start = idx;
+            while idx < bytes.len()
+                && (bytes[idx].is_ascii_alphanumeric()
+                    || matches!(bytes[idx], b'_' | b'$')
+                    || bytes[idx] >= 0x80)
+            {
+                idx += 1;
+            }
+            let word = &sql[start..idx];
+            state = match state {
+                _ if word.eq_ignore_ascii_case("select") => State::SelectHead,
+                State::SelectHead if word.eq_ignore_ascii_case("all") => State::SelectHead,
+                State::SelectHead if word.eq_ignore_ascii_case("distinct") => State::AfterDistinct,
+                State::AfterDistinct if word.eq_ignore_ascii_case("on") => State::DistinctOn,
+                State::SelectHead | State::AfterDistinct if word.eq_ignore_ascii_case("top") => {
+                    replacements.push(start..idx);
+                    State::Other
+                }
+                _ => State::Other,
+            };
+            continue;
+        }
+        if byte == b'(' && state == State::DistinctOn {
+            let mut depth = 0_usize;
+            while idx < bytes.len() {
+                match bytes[idx] {
+                    b'(' => depth += 1,
+                    b')' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            idx += 1;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                idx += 1;
+            }
+            state = State::SelectHead;
+            continue;
+        }
+        state = State::Other;
+        idx += 1;
+    }
+    if replacements.is_empty() {
+        return None;
+    }
+    let mut rewritten = String::with_capacity(sql.len() + 2 * replacements.len());
+    let mut copied = 0;
+    for range in replacements {
+        rewritten.push_str(&sql[copied..range.start]);
+        rewritten.push_str("\"top\"");
+        copied = range.end;
+    }
+    rewritten.push_str(&sql[copied..]);
+    Some(rewritten)
+}
+
 pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
     let mut rewritten = sql.to_string();
     let mut changed = false;
 
     if let Some(next) = crate::engine::flashback::rewrite_flashback_clauses(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
+    if let Some(next) = rewrite_select_top_identifiers(&rewritten) {
         rewritten = next;
         changed = true;
     }

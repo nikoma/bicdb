@@ -123,17 +123,17 @@ by the final SQL-only delta, so those gates were reused rather than repeating th
 The final executable SHA-256 is
 `45ae4fc04e68351373f86156c87d929aa5515c5d1658df539e012409de57255d`.
 All 3,623 tracked source files were independently hashed against the remote tree
-before the final build. Cargo used jobs4, tests used at most4 threads, debug0, and
+before the final build. Cargo used jobs=4, tests used at most 4 threads, debug=0, and
 incremental compilation disabled, serialized under the shared task Cargo lock.
-An active guard retained8GiB available RAM and10GiB available disk. An earlier
+An active guard retained 8 GiB available RAM and 10 GiB available disk. An earlier
 07b SQL gate stopped when foreign shared-host builds exhausted disk headroom;
 its completed core/page tests remain valid, and the unfinished SQL gate was rerun.
 A cancelled exploratory GIN wrapper raced with lock acquisition and source copying;
 its output is excluded from correctness/provenance claims.
 
 Fresh native PG-wire probes used authenticated unprivileged readers, parameterized
-queries, unchanged100-row own tenants, identical schemas and the same STABLE getter.
-Each cell is a median of7 measured requests after warmup.
+queries, unchanged 100-row own tenants, identical schemas and the same STABLE getter.
+Each cell is a median of 7 measured requests after warmup.
 
 | Unrelated rows | Baseline implicit policy ms | Final implicit policy ms | Final explicit control ms |
 | ---: | ---: | ---: | ---: |
@@ -143,10 +143,10 @@ Each cell is a median of7 measured requests after warmup.
 
 Baseline source is `83377bb6f897052ac26e6640998e9bea261e0ee4`, executable SHA
 `ffe771ac227ebb8b3062c86ace819ea92e92619ecdc3bfbb8aa58c1ee9caed0e`.
-The baseline implicitly scans100/1,100/5,100 rows. The final implicit query uses
-`IndexScan`, `PrefixKeys2`, and `ActualRowsFetched1` in all three windows; the
+The baseline implicitly scans 100/1,100/5,100 rows. The final implicit query uses
+`IndexScan`, `PrefixKeys 2`, and `ActualRowsFetched 1` in all three windows; the
 existing policy remains the residual authority. Its final/initial median ratio
-is0.992, and the probe explicitly reports `data_growth_goal_met:true`. Repeated
+is 0.992, and the probe explicitly reports `data_growth_goal_met:true`. Repeated
 tenant changes, empty identity, owner bypass, permissive OR and restrictive AND
 controls all pass. This demonstrates the specific workload; it does not establish
 a universal growth-free runtime or production latency SLA.
@@ -168,3 +168,30 @@ only a reference control, not an application SQL workaround. Complex predicates,
 multiple policy InitPlans, existing alternative lookups, non-B-tree tables and
 custom/domain columns retain their existing behavior and need separate performance
 qualification.
+
+## CI fixture boundary correction
+
+The first PR84 CI run passed all-target compilation, Rails application qualification,
+core tests, and the complete SQL suite (2,212 passed across 201 test summaries).
+Its five original ignored SQL cases include four opt-in benchmark probes and one
+known functional limitation: unique validation ignores a pending delete. This
+change does not hide or resolve that separate transaction/unique-delete blocker.
+
+The PG-wire job failed its existing journal-replication test during setup. One
+`with_write` callback held the engine guard across CREATE TABLE, mesh enable and
+INSERT: three separately committed operations. Native confirmations need that
+guard released; on the busy runner the 1.5-second write lease correctly fenced the
+INSERT. The fixture now uses three separately acknowledged `with_write` calls.
+Production authority, timeouts, replication, journal/promotion assertions and
+application/benchmark acceptance inputs are unchanged. No blind retry was added.
+
+Three unmodified remote rounds passed 18/18, demonstrating that this was not a
+deterministic ordinary-load failure. A controlled diagnostic adds the same
+two-second host pause between mesh setup and INSERT. The old held-guard arm
+reproduces the exact CI lease refusal; the split-boundary arm passes all journal
+and promotion assertions. The two tiny diagnostic patches and source hashes are
+included for reproduction. Neither diagnostic pause is present in the committed
+fixture. The final fixture passes three full rounds of all six embedded HA tests
+(18/18), including neighboring admission, demotion, promotion, return-writer fencing
+and shutdown controls. `ha-fixture-validation.json` keeps each scope and the
+original CI failure separate.

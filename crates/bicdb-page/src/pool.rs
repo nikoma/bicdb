@@ -799,6 +799,9 @@ pub struct BufferPool {
     dirty_index: Arc<Mutex<BTreeSet<PageId>>>,
     /// Transaction attributed to pages dirtied from now on.
     current_transaction: AtomicU64,
+    /// Set once a WAL barrier is installed: only then do unlogged changes
+    /// exist, and only then does eviction prefer not to steal them.
+    no_steal: AtomicBool,
     /// PagedStore enables this after attaching a WAL barrier. Standalone heap
     /// users retain the immediate allocator semantics they historically used.
     wal_managed_frees: AtomicBool,
@@ -953,6 +956,7 @@ impl BufferPool {
             barrier: Mutex::new(None),
             dirty_index: Arc::new(Mutex::new(BTreeSet::new())),
             current_transaction: AtomicU64::new(0),
+            no_steal: AtomicBool::new(false),
             wal_managed_frees: AtomicBool::new(false),
             pending_frees: Mutex::new(BTreeMap::new()),
             read_ahead: Mutex::new(ReadAheadQueue {
@@ -986,6 +990,7 @@ impl BufferPool {
     /// Install the writeback barrier. See [`WritebackBarrier`].
     pub fn set_barrier(&self, barrier: Arc<dyn WritebackBarrier>) {
         *self.barrier.lock() = Some(barrier);
+        self.no_steal.store(true, Ordering::Release);
     }
 
     /// Attribute subsequently dirtied pages to `transaction`.
@@ -1414,7 +1419,7 @@ impl BufferPool {
     ) -> Result<Arc<RwLock<Vec<u8>>>> {
         shard.avoid_unlogged = true;
         match self.evict_one_pass(shard, wanted, class) {
-            Err(PageError::PoolExhausted { .. }) => {
+            Err(PageError::PoolExhausted { .. }) if self.no_steal.load(Ordering::Acquire) => {
                 shard.avoid_unlogged = false;
                 let result = self.evict_one_pass(shard, wanted, class);
                 shard.avoid_unlogged = true;
@@ -1455,9 +1460,11 @@ impl BufferPool {
             if let Some(buffer) = self.evict_from_protected(shard)? {
                 return Ok(buffer);
             }
-            self.metrics
-                .admission_failures
-                .fetch_add(1, Ordering::Relaxed);
+            if !shard.avoid_unlogged || !self.no_steal.load(Ordering::Acquire) {
+                self.metrics
+                    .admission_failures
+                    .fetch_add(1, Ordering::Relaxed);
+            }
             return Err(PageError::PoolExhausted {
                 page_id: wanted,
                 frames: shard.capacity,
@@ -1481,9 +1488,11 @@ impl BufferPool {
                     .fetch_add(1, Ordering::Relaxed);
                 return Ok(buffer);
             }
-            self.metrics
-                .admission_failures
-                .fetch_add(1, Ordering::Relaxed);
+            if !shard.avoid_unlogged || !self.no_steal.load(Ordering::Acquire) {
+                self.metrics
+                    .admission_failures
+                    .fetch_add(1, Ordering::Relaxed);
+            }
             return Err(PageError::PoolExhausted {
                 page_id: wanted,
                 frames: shard.capacity,
@@ -1638,6 +1647,7 @@ impl BufferPool {
             return Ok(None);
         }
         if shard.avoid_unlogged
+            && self.no_steal.load(Ordering::Acquire)
             && frame.dirty.load(Ordering::Acquire)
             && frame.needs_log.load(Ordering::Acquire)
         {

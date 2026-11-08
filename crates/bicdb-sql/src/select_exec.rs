@@ -3651,6 +3651,8 @@ pub(crate) fn is_virtual_table(table: &str) -> bool {
             | "information_schema.schemata"
             | "information_schema.role_table_grants"
             | "information_schema.table_privileges"
+            | "information_schema.views"
+            | "information_schema.triggers"
             | "pg_catalog.pg_database"
             | "pg_catalog.pg_default_acl"
             | "pg_catalog.pg_extension"
@@ -3840,6 +3842,8 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "information_schema.role_table_grants" | "information_schema.table_privileges" => {
             information_schema_role_table_grants(db)
         }
+        "information_schema.views" => information_schema_views(db),
+        "information_schema.triggers" => information_schema_triggers(db),
         GRAPH_NODES_TABLE => Ok(graph_node_rows(db)),
         GRAPH_EDGES_TABLE => Ok(graph_edge_rows(db)),
         "pg_database" => pg_database_rows(db),
@@ -5076,6 +5080,37 @@ pub(crate) fn virtual_table_column_types(table: &str) -> Option<Vec<(String, Opt
             ("table_schema", "name"),
             ("table_name", "name"),
             ("table_type", "varchar"),
+        ],
+        "information_schema.views" => &[
+            ("table_catalog", "name"),
+            ("table_schema", "name"),
+            ("table_name", "name"),
+            ("view_definition", "varchar"),
+            ("check_option", "varchar"),
+            ("is_updatable", "varchar"),
+            ("is_insertable_into", "varchar"),
+            ("is_trigger_updatable", "varchar"),
+            ("is_trigger_deletable", "varchar"),
+            ("is_trigger_insertable_into", "varchar"),
+        ],
+        "information_schema.triggers" => &[
+            ("trigger_catalog", "name"),
+            ("trigger_schema", "name"),
+            ("trigger_name", "name"),
+            ("event_manipulation", "varchar"),
+            ("event_object_catalog", "name"),
+            ("event_object_schema", "name"),
+            ("event_object_table", "name"),
+            ("action_order", "int4"),
+            ("action_condition", "varchar"),
+            ("action_statement", "varchar"),
+            ("action_orientation", "varchar"),
+            ("action_timing", "varchar"),
+            ("action_reference_old_table", "name"),
+            ("action_reference_new_table", "name"),
+            ("action_reference_old_row", "name"),
+            ("action_reference_new_row", "name"),
+            ("created", "timestamptz"),
         ],
         "information_schema.sequences" => &[
             ("sequence_catalog", "name"),
@@ -6395,6 +6430,235 @@ pub(crate) fn information_schema_tables(db: &BicDb) -> Result<Vec<BTreeMap<Strin
     Ok(rows)
 }
 
+/// `information_schema.views`: one row per (non-materialized) view. BicDB
+/// views are read-only unless an INSTEAD OF trigger handles the write, and
+/// no view carries a check option.
+pub(crate) fn information_schema_views(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    let triggers = list_triggers(db)?;
+    let mut rows = Vec::new();
+    for view in list_views(db)?
+        .into_iter()
+        .filter(|view| !view.materialized)
+    {
+        let instead_of = |event: &str| {
+            let handled = triggers.iter().any(|trigger| {
+                trigger.table_name == view.name
+                    && trigger.timing.eq_ignore_ascii_case("instead of")
+                    && trigger.fires_on(event)
+            });
+            SqlValue::String(if handled { "YES" } else { "NO" }.to_string())
+        };
+        rows.push(virtual_row([
+            ("table_catalog", SqlValue::String("bicdb".to_string())),
+            (
+                "table_schema",
+                SqlValue::String(relation_catalog_namespace(db, &view.name)?),
+            ),
+            (
+                "table_name",
+                SqlValue::String(catalog_display_name(&view.name)),
+            ),
+            (
+                "view_definition",
+                SqlValue::String(postgres_view_definition(&view.query_sql)),
+            ),
+            ("check_option", SqlValue::String("NONE".to_string())),
+            ("is_updatable", SqlValue::String("NO".to_string())),
+            ("is_insertable_into", SqlValue::String("NO".to_string())),
+            ("is_trigger_updatable", instead_of("update")),
+            ("is_trigger_deletable", instead_of("delete")),
+            ("is_trigger_insertable_into", instead_of("insert")),
+        ]));
+    }
+    rows.sort_by(|left, right| {
+        (
+            virtual_cell(left, "table_schema").to_cell(),
+            virtual_cell(left, "table_name").to_cell(),
+        )
+            .cmp(&(
+                virtual_cell(right, "table_schema").to_cell(),
+                virtual_cell(right, "table_name").to_cell(),
+            ))
+    });
+    Ok(rows)
+}
+
+/// `information_schema.triggers`: one row per trigger and event it fires on
+/// (INSERT, DELETE, UPDATE; TRUNCATE triggers are not listed), ranked by name
+/// within the same relation, event, timing and orientation.
+pub(crate) fn information_schema_triggers(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    struct Entry {
+        schema: String,
+        table: String,
+        event: &'static str,
+        timing: String,
+        orientation: &'static str,
+        name: String,
+        condition: SqlValue,
+        statement: String,
+        old_table: SqlValue,
+        new_table: SqlValue,
+    }
+    let mut entries = Vec::new();
+    for trigger in list_triggers(db)? {
+        let schema = relation_catalog_namespace(db, &trigger.table_name)?;
+        let parsed = Parser::parse_sql(&PostgreSqlDialect {}, &trigger.definition)
+            .ok()
+            .and_then(|statements| match statements.into_iter().next() {
+                Some(Statement::CreateTrigger(create)) => Some(create),
+                _ => None,
+            });
+        // Rendered as PostgreSQL deparses it: unquoted identifiers folded.
+        let condition = parsed
+            .as_ref()
+            .and_then(|create| create.condition.clone())
+            .map(|mut condition| {
+                let _ = sqlparser::ast::visit_expressions_mut(&mut condition, |expr| {
+                    let fold = |ident: &mut Ident| {
+                        if ident.quote_style.is_none() {
+                            ident.value = ident.value.to_ascii_lowercase();
+                        }
+                    };
+                    match expr {
+                        Expr::Identifier(ident) => fold(ident),
+                        Expr::CompoundIdentifier(idents) => idents.iter_mut().for_each(fold),
+                        _ => {}
+                    }
+                    std::ops::ControlFlow::<()>::Continue(())
+                });
+                SqlValue::String(match condition {
+                    Expr::Nested(_) => condition.to_string(),
+                    _ => format!("({condition})"),
+                })
+            })
+            .unwrap_or(SqlValue::Null);
+        let transition = |kind: sqlparser::ast::TriggerReferencingType| {
+            parsed
+                .as_ref()
+                .and_then(|create| {
+                    create
+                        .referencing
+                        .iter()
+                        .find(|referencing| referencing.refer_type == kind)
+                })
+                .map(|referencing| {
+                    SqlValue::String(referencing.transition_relation_name.to_string())
+                })
+                .unwrap_or(SqlValue::Null)
+        };
+        let old_table = transition(sqlparser::ast::TriggerReferencingType::OldTable);
+        let new_table = transition(sqlparser::ast::TriggerReferencingType::NewTable);
+        let arguments = trigger
+            .arguments
+            .iter()
+            .map(|argument| format!("'{}'", argument.replace('\'', "''")))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let statement = format!("EXECUTE FUNCTION {}({arguments})", trigger.function_name);
+        let orientation = if trigger.for_each.eq_ignore_ascii_case("row") {
+            "ROW"
+        } else {
+            "STATEMENT"
+        };
+        let timing = if trigger.timing.is_empty() {
+            "AFTER".to_string()
+        } else {
+            trigger.timing.to_ascii_uppercase()
+        };
+        for event in ["INSERT", "DELETE", "UPDATE"] {
+            if !trigger.fires_on(event) {
+                continue;
+            }
+            entries.push(Entry {
+                schema: schema.clone(),
+                table: catalog_display_name(&trigger.table_name),
+                event,
+                timing: timing.clone(),
+                orientation,
+                name: catalog_display_name(&trigger.name),
+                condition: condition.clone(),
+                statement: statement.clone(),
+                old_table: old_table.clone(),
+                new_table: new_table.clone(),
+            });
+        }
+    }
+    entries.sort_by(|left, right| {
+        (
+            &left.schema,
+            &left.table,
+            left.event,
+            &left.timing,
+            left.orientation,
+            &left.name,
+        )
+            .cmp(&(
+                &right.schema,
+                &right.table,
+                right.event,
+                &right.timing,
+                right.orientation,
+                &right.name,
+            ))
+    });
+    let mut rows = Vec::with_capacity(entries.len());
+    let mut order = 0_i64;
+    for (idx, entry) in entries.iter().enumerate() {
+        let same_partition = idx > 0 && {
+            let previous = &entries[idx - 1];
+            (
+                &previous.schema,
+                &previous.table,
+                previous.event,
+                &previous.timing,
+                previous.orientation,
+            ) == (
+                &entry.schema,
+                &entry.table,
+                entry.event,
+                &entry.timing,
+                entry.orientation,
+            )
+        };
+        order = if same_partition { order + 1 } else { 1 };
+        rows.push(virtual_row([
+            ("trigger_catalog", SqlValue::String("bicdb".to_string())),
+            ("trigger_schema", SqlValue::String(entry.schema.clone())),
+            ("trigger_name", SqlValue::String(entry.name.clone())),
+            (
+                "event_manipulation",
+                SqlValue::String(entry.event.to_string()),
+            ),
+            (
+                "event_object_catalog",
+                SqlValue::String("bicdb".to_string()),
+            ),
+            (
+                "event_object_schema",
+                SqlValue::String(entry.schema.clone()),
+            ),
+            ("event_object_table", SqlValue::String(entry.table.clone())),
+            ("action_order", SqlValue::Int(order)),
+            ("action_condition", entry.condition.clone()),
+            (
+                "action_statement",
+                SqlValue::String(entry.statement.clone()),
+            ),
+            (
+                "action_orientation",
+                SqlValue::String(entry.orientation.to_string()),
+            ),
+            ("action_timing", SqlValue::String(entry.timing.clone())),
+            ("action_reference_old_table", entry.old_table.clone()),
+            ("action_reference_new_table", entry.new_table.clone()),
+            ("action_reference_old_row", SqlValue::Null),
+            ("action_reference_new_row", SqlValue::Null),
+            ("created", SqlValue::Null),
+        ]));
+    }
+    Ok(rows)
+}
+
 pub(crate) fn information_schema_columns(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     information_schema_columns_filtered(db, None, None, None)
 }
@@ -6837,6 +7101,9 @@ pub(crate) fn information_schema_columns_filtered(
                 .character_maximum_length()
                 .map(SqlValue::Int)
                 .unwrap_or(SqlValue::Null);
+            let (numeric_precision, numeric_precision_radix, numeric_scale) =
+                column.information_schema_numeric();
+            let (datetime_precision, interval_type) = column.information_schema_datetime();
             let character_octet_length = column
                 .character_octet_length()
                 .map(SqlValue::Int)
@@ -6900,6 +7167,11 @@ pub(crate) fn information_schema_columns_filtered(
                 ("is_updatable", SqlValue::String("YES".to_string())),
                 ("character_maximum_length", character_maximum_length),
                 ("character_octet_length", character_octet_length),
+                ("numeric_precision", numeric_precision),
+                ("numeric_precision_radix", numeric_precision_radix),
+                ("numeric_scale", numeric_scale),
+                ("datetime_precision", datetime_precision),
+                ("interval_type", interval_type),
                 (
                     "collation_catalog",
                     explicit_collation
@@ -7024,6 +7296,9 @@ pub(crate) fn information_schema_columns_filtered(
                 .character_maximum_length()
                 .map(SqlValue::Int)
                 .unwrap_or(SqlValue::Null);
+            let (numeric_precision, numeric_precision_radix, numeric_scale) =
+                column.information_schema_numeric();
+            let (datetime_precision, interval_type) = column.information_schema_datetime();
             let character_octet_length = column
                 .character_octet_length()
                 .map(SqlValue::Int)
@@ -7069,6 +7344,11 @@ pub(crate) fn information_schema_columns_filtered(
                 ("is_updatable", SqlValue::String("YES".to_string())),
                 ("character_maximum_length", character_maximum_length),
                 ("character_octet_length", character_octet_length),
+                ("numeric_precision", numeric_precision),
+                ("numeric_precision_radix", numeric_precision_radix),
+                ("numeric_scale", numeric_scale),
+                ("datetime_precision", datetime_precision),
+                ("interval_type", interval_type),
                 ("is_nullable", SqlValue::String("YES".to_string())),
                 ("column_default", SqlValue::Null),
                 ("is_identity", SqlValue::String("NO".to_string())),
@@ -7098,6 +7378,9 @@ pub(crate) fn information_schema_columns_filtered(
                 .character_maximum_length()
                 .map(SqlValue::Int)
                 .unwrap_or(SqlValue::Null);
+            let (numeric_precision, numeric_precision_radix, numeric_scale) =
+                column.information_schema_numeric();
+            let (datetime_precision, interval_type) = column.information_schema_datetime();
             let character_octet_length = column
                 .character_octet_length()
                 .map(SqlValue::Int)
@@ -7122,6 +7405,11 @@ pub(crate) fn information_schema_columns_filtered(
                 ("is_updatable", SqlValue::String("YES".to_string())),
                 ("character_maximum_length", character_maximum_length),
                 ("character_octet_length", character_octet_length),
+                ("numeric_precision", numeric_precision),
+                ("numeric_precision_radix", numeric_precision_radix),
+                ("numeric_scale", numeric_scale),
+                ("datetime_precision", datetime_precision),
+                ("interval_type", interval_type),
                 ("is_nullable", SqlValue::String("YES".to_string())),
             ]));
         }

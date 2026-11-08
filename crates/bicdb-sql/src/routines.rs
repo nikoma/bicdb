@@ -87,10 +87,20 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     {
         let params = parse_routine_params(&routine.args)?;
         let body = plpgsql_body_from_definition(&routine.definition)?;
-        let statements = parse_statements(&body)?
+        let mut statements = parse_statements(&body)?
             .into_iter()
             .map(RoutineStmt::Sql)
             .collect::<Vec<_>>();
+        if let (Some(db), Some(path)) = (db, crate::search_path::active_path()) {
+            crate::search_path::bind_routine_parts(
+                db,
+                &mut [],
+                &mut [],
+                &mut statements,
+                &mut [],
+                &path,
+            );
+        }
         let symbol_names = routine_symbol_names(&params, &[], &statements, &[]);
         return Ok(RoutineIR {
             node_ownership: CompiledNodeOwnership::default(),
@@ -212,6 +222,20 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             &mut exception_handlers,
         )?;
     }
+    // PostgreSQL resolves a routine body's unqualified relations through the
+    // caller's search_path when it runs; the cache key carries that path.
+    if oracle::preview_routine_language_version(&routine.language).is_none() {
+        if let (Some(db), Some(path)) = (db, crate::search_path::active_path()) {
+            crate::search_path::bind_routine_parts(
+                db,
+                &mut params,
+                &mut declarations,
+                &mut statements,
+                &mut exception_handlers,
+                &path,
+            );
+        }
+    }
     let symbol_names =
         routine_symbol_names(&params, &declarations, &statements, &exception_handlers);
     bind_routine_expressions(
@@ -259,6 +283,11 @@ pub(crate) fn compile_cached_routine_ir_in_catalog(
     db: Option<&BicDb>,
 ) -> Result<Arc<RoutineIR>> {
     let mut key = routine_ir_cache_key(routine);
+    if let (Some(db), Some(path)) = (db, crate::search_path::active_path()) {
+        // The bound body depends on the path and on which relations exist.
+        key.search_path = Some(path);
+        key.catalog_scope = Some(routine_compilation_scope(db));
+    }
     if oracle::typed_preview_routine_language(&routine.language) {
         key.catalog_scope = Some(routine_compilation_scope(db.ok_or_else(|| {
             SqlError::Unsupported(
@@ -286,6 +315,7 @@ pub(crate) fn routine_ir_cache_key(routine: &RoutineSchema) -> RoutineIrCacheKey
         language: routine.language.to_ascii_lowercase(),
         definition: routine.definition.clone(),
         catalog_scope: None,
+        search_path: None,
     }
 }
 

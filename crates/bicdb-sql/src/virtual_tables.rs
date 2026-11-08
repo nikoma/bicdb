@@ -2326,12 +2326,10 @@ impl FieldRef {
 
     fn from_expr_inner(expr: &Expr) -> Result<Option<Self>> {
         let field = match expr {
-            Expr::Identifier(ident) => Self::from_parts(std::slice::from_ref(&ident.value))?,
+            // Unquoted identifiers fold to lower case; quoted ones are exact.
+            Expr::Identifier(ident) => Self::from_parts(std::slice::from_ref(&ident_value(ident)))?,
             Expr::CompoundIdentifier(idents) => {
-                let parts = idents
-                    .iter()
-                    .map(|ident| ident.value.clone())
-                    .collect::<Vec<_>>();
+                let parts = idents.iter().map(ident_value).collect::<Vec<_>>();
                 Self::from_parts(&parts)?
             }
             Expr::BinaryOp { left, op, right }

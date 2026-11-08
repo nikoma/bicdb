@@ -323,6 +323,12 @@ pub(crate) fn bind_node<T: sqlparser::ast::VisitMut>(
 /// when nothing changed (or the text is not ordinary SQL, which then runs as
 /// before).
 pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Option<String> {
+    // Lock strengths sqlparser lacks become the stronger ones it parses, as
+    // statement execution does.
+    let weak_locks = rewrite_weak_lock_strengths(sql);
+    let sql = weak_locks.as_deref().unwrap_or(sql);
+    let lock_order = rewrite_locking_clause_before_limit(sql);
+    let sql = lock_order.as_deref().unwrap_or(sql);
     let mut statements = Parser::parse_sql(&sqlparser::dialect::PostgreSqlDialect {}, sql).ok()?;
     // Routine bodies bind when they execute, with the caller's path; DDL
     // that defines them is left verbatim.

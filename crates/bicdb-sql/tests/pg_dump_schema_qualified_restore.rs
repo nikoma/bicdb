@@ -232,6 +232,19 @@ fn unqualified_relations_resolve_through_search_path() {
         int_at(&mut sql, "SELECT count(*) FROM item WHERE item.id = 1"),
         1
     );
+    // Unquoted mixed-case names fold to lower case, with or without a
+    // predicate, and weak row-lock strengths bind too.
+    assert_eq!(
+        sql.execute("SELECT Name FROM Item").unwrap().rows,
+        vec![vec![SqlValue::String("one".into())]]
+    );
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT ID FROM Item WHERE ID = 1 FOR NO KEY UPDATE"
+        ),
+        1
+    );
     sql.execute("INSERT INTO item VALUES (2, 'two')").unwrap();
     sql.execute("UPDATE item SET name = 'deux' WHERE id = 2")
         .unwrap();

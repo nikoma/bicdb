@@ -101,3 +101,74 @@ fn array_text_cast_keeps_nondefault_subscripts_for_rollback_copy() {
         )]]
     );
 }
+
+/// ORDER BY and LIMIT/OFFSET on set operations, checked against PostgreSQL
+/// 16: positions and result column names sort; expressions are rejected.
+#[test]
+fn set_operation_order_by_positions_names_and_limits_follow_postgres() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(directory.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE TABLE st (a int, b text)").unwrap();
+    session
+        .execute("INSERT INTO st VALUES (3, 'c'), (1, 'a'), (2, 'b')")
+        .unwrap();
+    let int = SqlValue::Int;
+    let text = |value: &str| SqlValue::String(value.to_string());
+    let rows = |session: &mut SqlSession, sql: &str| {
+        session
+            .execute(sql)
+            .unwrap_or_else(|error| panic!("{sql}: {error}"))
+            .rows
+    };
+    for (sql, expected) in [
+        (
+            "SELECT 7 UNION SELECT 1 UNION SELECT 4 ORDER BY 1",
+            vec![vec![int(1)], vec![int(4)], vec![int(7)]],
+        ),
+        (
+            "SELECT 7 AS x UNION SELECT 1 ORDER BY x DESC",
+            vec![vec![int(7)], vec![int(1)]],
+        ),
+        (
+            "SELECT 7 AS x, 'q' AS y UNION ALL SELECT 1, 'z' ORDER BY 2 DESC, 1 LIMIT 1",
+            vec![vec![int(1), text("z")]],
+        ),
+        (
+            "SELECT 7 UNION SELECT 1 UNION SELECT 4 ORDER BY 1 LIMIT 2 OFFSET 1",
+            vec![vec![int(4)], vec![int(7)]],
+        ),
+        (
+            "SELECT a FROM st UNION SELECT 10 ORDER BY a DESC LIMIT 2",
+            vec![vec![int(10)], vec![int(3)]],
+        ),
+        (
+            "SELECT a, b FROM st UNION ALL SELECT 0, 'z' ORDER BY b",
+            vec![
+                vec![int(1), text("a")],
+                vec![int(2), text("b")],
+                vec![int(3), text("c")],
+                vec![int(0), text("z")],
+            ],
+        ),
+        (
+            "SELECT a FROM st EXCEPT SELECT 2 ORDER BY 1 DESC",
+            vec![vec![int(3)], vec![int(1)]],
+        ),
+        ("SELECT a FROM st INTERSECT SELECT 2 ORDER BY 1", vec![vec![int(2)]]),
+        (
+            "(SELECT a FROM st ORDER BY a DESC LIMIT 1) UNION ALL (SELECT 0) ORDER BY 1",
+            vec![vec![int(0)], vec![int(3)]],
+        ),
+        ("SELECT 2 UNION SELECT 1 ORDER BY 1 OFFSET 1", vec![vec![int(2)]]),
+    ] {
+        assert_eq!(rows(&mut session, sql), expected, "{sql}");
+    }
+    for (sql, sqlstate) in [
+        ("SELECT a FROM st UNION SELECT 10 ORDER BY a + 1", "0A000"),
+        ("SELECT a FROM st UNION SELECT 10 ORDER BY 3", "42P10"),
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), sqlstate, "{sql}: {error}");
+    }
+}

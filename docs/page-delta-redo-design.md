@@ -1,9 +1,23 @@
 # Page-delta redo records for the page WAL: design
 
-Status: design, 2026-11-07. Nothing in this document is enabled. The prototype
-it describes sits behind `BICDB_PAGE_WAL_DELTAS=1` (exact value), off by
-default, and **every item marked CONTRACT CHANGE needs the owner's approval
-before it can be enabled anywhere but a test.**
+Status: design plus experimental prototype, 2026-11-08. **Approved for
+experimental development on disposable test stores only.** Nothing is
+enabled by default, and nothing here is approved for production stores or for
+merging to `main`.
+
+> **Compatibility boundary.** A store created with the disposable page-delta
+> opt-in carries the superblock magic `BICDBPG5` from its creation. Engines
+> that predate this format refuse to open it. It is **not upgradeable and not
+> downgradeable**: there is no path into the format for an existing store and
+> no path out of it. Use it only for data you can throw away.
+
+The prototype needs **two independent locks**, both open (section 2.1):
+1. the process gate `BICDB_PAGE_WAL_DELTAS=1` (only that exact value); and
+2. a store CREATED as a disposable experimental store
+   (`PagedStoreOptions::with_experimental_page_deltas_disposable(true)`, or
+   `bicdb_core::page_deltas_experimental::create_disposable_page_delta_store`).
+
+Every item marked CONTRACT CHANGE stays behind both locks.
 
 Inputs:
 - `docs/page-wal-write-amplification.md` (draft PR #40): a one-row commit logs
@@ -57,9 +71,10 @@ Code citations are to `main` at `decb9d0`.
   applying any delta to it, whatever is on disk. Section 6 shows this holds for
   crash recovery, for a restore over a fuzzy online copy and for archive
   roll-forward.
-- **Old binaries are locked out** by a new superblock magic, written and synced
-  before the first delta is appended. This follows the precedent of the
-  segmented-WAL format gate. The marker is sticky.
+- **Old binaries are locked out** by a new superblock magic `BICDBPG5`,
+  written and synced when a disposable store is created, and never on any
+  other store. This follows the precedent of the segmented-WAL format gate.
+  The marker is permanent.
 - **Checkpoint trigger:**
   - *Today:* checkpoints trigger on WAL bytes alone.
   - *With deltas:* recovery cost no longer tracks bytes, so the trigger also
@@ -78,7 +93,7 @@ today. None is enabled by default.
 | # | CONTRACT CHANGE | Today | With deltas | Why it is needed |
 |---|---|---|---|---|
 | C1 | **WAL format** | Every page record is a self-contained full image (`wal.rs:15-26`: "replay is trivially idempotent") | A `PageDelta` record is replayable only after its named base record. Idempotence holds per *sequence from an epoch start*, not per record | It is the whole point: 90-96% fewer bytes |
-| C2 | **On-disk compatibility** | Any binary since segmentation can open the store | A store that has logged a delta gets a new superblock magic `BICDBPG5`, and older binaries refuse it. The marker is sticky: no automatic downgrade. Downgrade is a restore, or a future explicit `store wal-downgrade` that checkpoints to an empty log and rewrites the magic | An old binary treats an unknown record kind in the *active* file as a torn tail (`wal.rs` `scan_wal_file`: `from_u8` → `break`) and **truncates committed records silently**. The marker turns that into a refusal to open. Sealed segments already fail closed (a short decode is corruption) |
+| C2 | **On-disk compatibility** | Any binary since segmentation can open the store | A store created as a disposable page-delta store carries the superblock magic `BICDBPG5` from creation, and older binaries refuse it. An existing store can never acquire it, and a marked store can never shed it: not upgradeable, not downgradeable | An old binary treats an unknown record kind in the *active* file as a torn tail (`wal.rs` `scan_wal_file`: `from_u8` → `break`) and **truncates committed records silently**. The marker turns that into a refusal to open. Sealed segments already fail closed (a short decode is corruption) |
 | C3 | **New recovery refusal class** | Recovery refuses only malformed or contradictory logs | Recovery also refuses a delta when its named base was not the page's last applied record, when its base or result checksum mismatches, or when its base precedes the redo point. The database then does not open | Applying a delta to the wrong base is silent page corruption. The refusal is the only safe answer, but it is a new way for an open to fail |
 | C4 | **New invariant I12, full image first** | (none; every record is full) | Replay starts only at an epoch start, and the first record of each page after an epoch start is a full image | Torn-page protection and replay from any legal start point depend on it |
 | C5 | **New invariant I13, replayable base** | (none) | A delta's base is a record recovery replays whenever it replays the delta (section 5) | Keeps deltas correct with skip-uncommitted recovery |
@@ -97,6 +112,23 @@ What does **not** change:
   checkpoint truncation are untouched.
 - **Under repeat-history recovery** (section 5.3), C5 stays correct as it is;
   only its delta rate improves.
+
+### 2.1 The two locks
+
+| Lock | Where | Refusals (tested, section 10.2) |
+|---|---|---|
+| Process gate | `wal_delta::gate_from_env`, read at every `PagedStore::open`: only `BICDB_PAGE_WAL_DELTAS=1` | Unset, `0`, `true`, ` 1`, `1 ` all leave deltas off |
+| Disposable store | `PageStore::mark_disposable_page_delta_store`, reachable only from `PagedStore::open` with `experimental_page_deltas_disposable` on a page file this handle just created | Env set on a normal new store: no marker, no deltas. Env set on a pre-existing store: no marker, no deltas. The option on a pre-existing store: open fails, store untouched |
+
+Deltas engage (`Wal::engage_deltas`, `BufferPool::engage_deltas`) only when
+both are open. Otherwise no delta code path runs except one relaxed `bool`
+load per write-guard acquisition, per guard drop and per page log.
+
+**Test harness hook.** To run existing suites against delta stores, the
+crates have a non-default cargo feature `page-delta-test-hook`. With it, and
+`BICDB_TEST_PAGE_DELTAS_CREATE_DISPOSABLE=1`, every NEW store is created
+disposable, and `BICDB_TEST_PAGE_DELTAS_TALLY=<file>` appends each engaged
+log's counters on drop. A build without the feature has neither hook.
 
 ## 3. Record format and versioning
 
@@ -137,21 +169,27 @@ reserved bytes, length and CRC32, then `page_id` and `transaction`.
 - **New binary, old log:** full images are unchanged and remain valid. A log
   with no kind-5 record replays exactly as today.
 - **Old binary, new log** (C2):
-  - *Before the first delta is appended,* the store writes and syncs a
-    superblock with magic `BICDBPG5`, whose body carries a feature word at
-    `[76..84]`:
+  - *When a disposable store is created* (and only then: the page file was
+    empty when this handle opened it, `page_count == 1`, no root published),
+    the store writes and syncs a superblock with magic `BICDBPG5`, whose body
+    carries a feature word at `[76..84]`:
     - bit 0: segmented;
     - bit 1: tracked (backup format);
-    - bit 2: delta WAL.
+    - bit 2: disposable page-delta store.
+
+    A reader refuses unknown feature bits, or `BICDBPG5` without bit 2.
+    Asking an existing store for the marker is an error
+    (`PagedStore::open` with the option set on an existing store), and the
+    store is left untouched.
   - *Old readers* accept only `BICDBPG\0`, `PG2`, `PG3` and `PG4` (`manager.rs`
     `read_superblock` and `probe_page_size`). They refuse with `NotAPageFile`.
   - *New readers* decode the feature word.
   - *A monolithic (unsegmented) store* gets the marker too. It has no sealed
     segments, so it has no other protection.
-- **Gate off:** the marker is never written and the magic stays as it is today.
-  A store that already carries the marker keeps it, and the new binary reads it
-  with the gate off. The gate controls *writing* deltas. *Reading* them is
-  always supported.
+- **Gate off:** the gate never writes the marker; only the creation opt-in
+  does. A marked store opened with the gate closed writes full images only,
+  and its WAL bytes are identical to an unmarked store's (section 10.2). The gate
+  controls *writing* deltas. *Reading* them is always supported.
 - **Tools:** every reader of WAL records must understand kind 5. In-tree today,
   the only readers are:
   - `read_all`;
@@ -370,10 +408,13 @@ applied, so a second run produces the same pages. This is the I8 analogue at
 the page layer.
 
 **The replay table** `applied` is an `FxHashMap<PageId, Lsn>`. It is bounded by
-the full images in the replay range. Its peak size is reported as a new field,
-`delta_base_entries`, next to the new counters `deltas_replayed` and
-`delta_bytes_replayed`. `RecoveryReport` is `deny_unknown_fields` but every
-field is `#[serde(default)]`, so older serialized reports still parse.
+the full images in the replay range, and it is populated only when pass 1 saw
+at least one delta, so a log without deltas recovers with exactly today's
+memory. Its size and the deltas applied are reported through
+`Wal::delta_stats()` / `PagedStore::page_deltas()`
+(`recovery_delta_base_entries`, `recovery_deltas_replayed`).
+`RecoveryReport` is deliberately unchanged, so its serialized form, snapshots
+and metrics are identical with the gate off.
 
 **The first-record check** proposed in
 `commit-durability-invariants.md` §8.5 is a separate production change and is
@@ -404,39 +445,192 @@ start of the replay range can never apply.
 | Torn delta record | CRC failure → torn tail (active file) or corruption (sealed), as today | Unchanged scanner |
 | Old binary opens a delta store | Would truncate committed work as a torn tail | C2 superblock magic: refusal |
 | A restore or roll-forward starts mid-epoch | Delta without its base | Refusal (C3). Prevented by I12 at seal and reset |
-| Capture memory exhausted | None. Records fall back to full images | Cap counter, metric `delta_base_capture_skipped` |
-| `appended_commits` overflow | Deltas are refused until the next epoch | Full images, metric |
-| Recovery time regression (many small records) | A long replay | C8 count trigger; measured in Q6 |
+| Capture memory exhausted | None. Records fall back to full images | Cap of `min(pool/4, 256 MiB)`; counter `BufferPool::delta_base_captures_skipped` |
+| `appended_commits` overflow (4,096 ranges) | Bases from unrecorded commits are refused until the next epoch | Full images, counted in `DeltaStats::delta_refused` |
+| Recovery time regression (many small records) | A long replay | C8 count trigger; measured in section 10.3 |
 | Refusal in production | The database does not open: a fail-closed availability event | No automatic fallback exists. The refusal message names the page, the record LSN and the base LSN. A restore from backup is the remedy |
+| Eviction then reload of a page | Its frame loses its delta state, so its next record is a full image | Costs bytes, never correctness. Visible as a lower delta rate with small pools (Q1: 470 deltas against 9,491 full images with a 16-page pool) |
 
-## 10. Qualification plan
+## 10. Qualification program
 
-| # | Check | Pass criterion |
+The owner's decision: experimental development on disposable test stores
+only, with its own qualification program, because this is a persisted-format
+change, introduces recovery invariants I12/I13, and locks older binaries out
+of upgraded stores. Every check below runs with both locks open unless it says
+otherwise. All results are from s3ny (24 cores, consumer NVMe, ext4, shared
+with other jobs at load 8-20), branch `page-delta-redo`.
+
+### 10.1 How the suites run with deltas
+
+- **New tests** (`crates/bicdb-page/tests/page_deltas.rs`, unit tests in
+  `wal.rs` and `wal_delta.rs`) create disposable stores explicitly.
+- **Existing suites** run unchanged, built with `--features
+  page-delta-test-hook` and run with these variables:
+  - `BICDB_PAGE_WAL_DELTAS=1`;
+  - `BICDB_TEST_PAGE_DELTAS_CREATE_DISPOSABLE=1`, so every new store is
+    disposable;
+  - `BICDB_TEST_PAGE_DELTAS_TALLY=<file>`, which records each engaged log's
+    counters. This is the evidence that deltas were really written and
+    replayed.
+- **Child processes inherit the variables.** This covers the core crash
+  matrix's `durability_child`, which must be built with the same feature.
+
+### 10.2 Results
+
+| Area | Check | Result |
 |---|---|---|
-| Q0 | Gate off: same bytes. A test commits an identical workload twice in fresh stores, with the gate unset and with garbage values (`0`, `true`, ` 1`), and compares `store.wal` byte-for-byte plus the superblock | Identical. The gate parses only `1` |
-| Q1 | Shadow oracle, gate on: in tests, every delta appended is also decoded and applied to a copy of its base kept by the test, then compared (masked) with the full image the gate-off path would log | Zero mismatches over the page unit suite and a randomized B-tree/heap workload |
-| Q2 | Recovery unit tests: delta after image, delta chains, a delta after a skipped (uncommitted) base is refused, a delta before the redo point is refused, a checksum mismatch is refused, a torn delta tail is truncated, idempotent double replay, an old-format log replays unchanged | All pass |
-| Q3 | `bicdb-page` suites with the gate on: `crash_matrix`, `kill_recovery`, `bounded_checkpoint`, `wal_segments`, `page_backup`, `concurrent_commits` and the full lib suite | Same results as gate off |
-| Q4 | Core crash matrix with the gate on: `commit_durability_crash.rs` + `examples/durability_child.rs`, both durability modes, including `+small-pool` (eviction and writeback mid-transaction), plus repeats of the hardest boundaries | All pass; no acknowledged commit lost |
-| Q5 | Backup, archive and PITR with the gate on: `backup_online.rs`, `backup_online_wal_rotation.rs`, `backup_paged.rs`, `log_archive_pitr.rs` | Same results as gate off |
-| Q6 | Repeated recovery: reopen N times after a crash (each open re-replays when the checkpoint is suppressed) | Identical state; recovery time recorded |
-| Q7 | Bytes per commit with the PR #40 probe (`wal_amplification_probe`), gate off vs on, for the one-row, twenty-row, erp, update, update-indexed and delete workloads | Report the measured reduction against the 90-96% estimate |
-| Q8 | Latency and throughput with `commit_durability_bench` at 1, 4, 16 and 64 writers, gate off vs on, median of 3 | Report. PR #40 predicts about 10-15% for small commits (the fsync dominates) and more for large ones |
+| Format and compatibility | **Two locks.** `deltas_need_both_locks_and_existing_stores_never_get_the_marker`: <br>• gate `1` on a normal new store → no marker, no kind-5 record; <br>• gate `1` on a pre-existing store → same; <br>• the disposable option on an existing store → open refused, store untouched; <br>• disposable store with gate unset, `0`, `true`, ` 1` or `1 ` → marker present, no deltas; <br>• both locks → deltas | pass |
+| | **Gate-closed bytes, in-process.** `with_the_gate_closed_the_wal_bytes_are_identical`: the same workload with gate unset/normal store vs gate `1` normal, `0` normal, `true` disposable, unset disposable | `store.wal` byte-identical in all five |
+| | **Gate-closed bytes, across binaries.** `page_wal_fingerprint` (400 commits, deletes, aborts) built from `main` `decb9d0` and from this branch, pools of 4,096 and 24 pages (eviction) | `store.wal` and `store.pages` SHA-256 identical for main, branch with gate unset, and branch with gate `1` |
+| | **Old binaries refuse.** By construction: readers before this branch accept only `BICDBPG\0`, `PG2`, `PG3`, `PG4`. A reader also refuses `BICDBPG5` with unknown feature bits | not executed against an old binary |
+| | **Delta encoding unit tests:** <br>• only the exact gate value `1` parses; <br>• round trip outside the stamped fields; <br>• an empty delta for an identical page; <br>• a full image when the delta would exceed half a page; <br>• malformed, masked-overlap and trailing-garbage runs rejected before any byte is written | 5/5 pass |
+| I12 / I13 | **WAL unit tests:** <br>• a delta on a committed base, chained on its own transaction; <br>• an uncommitted or aborted base of another transaction forces a full image; <br>• structural records are always full; <br>• redo choice, backup pin and reset each force a full image; <br>• a segment seal forces a full image | 4/4 pass |
+| | **Recovery refusal unit tests:** <br>• base skipped as uncommitted; <br>• no full image after the redo point; <br>• base checksum, result checksum, malformed payload, wrong `base_lsn`; <br>• an uncommitted delta is skipped without its base; <br>• a log without deltas recovers exactly as before and tracks nothing | 4/4 pass, every refusal a `WalCorruption` |
+| | **I13 end to end.** `committed_deltas_never_build_on_an_uncommitted_transactions_eviction`: a never-committing transaction shares pages with 400 commits under a 32- or 64-page pool, then a crash; the committed state is checked after two reopens | pass |
+| | **Mutation check.** Removing the epoch start at segment seal fails `replay_from_a_retained_sealed_segment_over_an_older_base`. Dropping the committed-base rule fails the unit test and the I13 end-to-end test, which refuses with "base LSN 222 is not the page's last replayed record 208" (fail-closed) | both mutants caught |
+| Q1 oracle | **Delta oracle against full images.** `replaying_deltas_reproduces_every_page_the_pool_holds`: after every one of 160 commits, an independent decoder replays the log (images and deltas, from the last truncation) and compares every page, masked, with the buffer pool's copy, which is what a full image would have carried. A delta with no earlier record is an I12 failure. Pools of 16, 64 and 4,096 pages, with checkpoints every 37 commits | 470 + 2,495 + 8,511 deltas checked, 0 mismatches |
+| Torn pages | `torn_pages_written_since_the_checkpoint_are_rebuilt`: after a crash, every page with a record at or after the redo point (121 pages) has its second half overwritten with garbage; recover twice; pools of 16 and 4,096 pages | pass |
+| | The torn tail of a record in the active log (`crash_after_any_commit…` appends a half record) | truncated, pass |
+| Interrupted checkpoints | **Retained checkpoints.** `crash_after_any_commit_with_retained_checkpoints_recovers_the_committed_state`: an open transaction keeps checkpoint records and redo points inside the log; crashes after 15 different commits; recover twice | pass |
+| | **Checkpoint crash points.** The core crash matrix covers `checkpoint.after_wal_sync`, `after_page_flush`, `after_publish` and `after_wal_reset`, plus the bounded checkpoint (`bounded_checkpoint.rs`). The `after_publish` and `after_wal_reset` points were also repeated 100 times each | pass |
+| | **Unvouched fallback.** `replay_from_a_retained_sealed_segment_over_an_older_base` (design 6.2): archive retention, the first sealed segment archived and deleted, older page files, newer checkpoints. Recovery takes the replay-from-chain-start path (`redo_lsn == 0`) and replays deltas; run twice | pass |
+| Repeated recovery | Every crash test above reopens twice and checks the same state. `delta_after_committed_image…` recovers twice and checks the masked page | pass |
+| Page-layer suites | Full `bicdb-page` test suite (lib, `crash_matrix`, `kill_recovery`, `bounded_checkpoint`, `wal_segments`, `page_backup`, `concurrent_commits`, …), both locks open via the hook | **402 passed, 0 failed, 1 ignored** (the reproducer in 10.4). 292 engaged stores; 56,577 deltas written; 45,397 deltas replayed by recovery |
+| | Same suite with the gate off | 402 passed, 0 failed, 1 ignored |
+| Crash matrix | `commit_durability_crash` (both durability modes, with and without `+small-pool` eviction, 15+ boundaries, interrupted replay) and `commit_durability_isolation`, both locks open | 4/4 + 1/1 pass |
+| | **Repeats, 100 each, both locks open:** <br>• `all-logs+small-pool/commit.after_txlog_durable:150`: 7,594 recovery deltas; <br>• `transaction-log+small-pool/pool.after_writeback:120`: 31,022 recovery deltas; <br>• `all-logs+small-pool/checkpoint.after_publish:13`; <br>• `all-logs+small-pool/checkpoint.after_wal_reset:15`. <br>The two checkpoint points leave an empty log, so they replay no deltas. An earlier revision also passed `all-logs+small-pool/pool.after_writeback:60` (9,500 recovery deltas) and `checkpoint.after_page_flush:11` (8,051) | 400/400 pass |
+| | The same core suites with the gate off | all pass |
+| Backup / archive / PITR | `backup` 10, `backup_online` 3, `backup_online_wal_rotation` 1, `backup_paged` 4, `log_archive_pitr` 8, `commit_recovery_atomicity` 3, `mvcc_chain_recovery` 1, both locks open: 215 engaged stores, 22,061 deltas, 9,304 recovery deltas | all pass; same with the gate off |
 
-The core crash matrix alone is not enough. `commit-durability-invariants.md`
-§7 found that replay from `transactions.log` masks page-layer defects, so Q1-Q3
-at the page layer are the primary guards and Q4 is the end-to-end check.
+### 10.3 Measurements
+
+**Q7: bytes per commit.** The workloads are the PR #40 probe's, in
+`examples/page_delta_bytes_probe.rs`. Bytes are the WAL's own
+`bytes_appended`. The setup is 2,000 commits (500 for twenty-row and erp),
+fsync on, and no checkpoint in the window. "Off" is a normal store; "on" is a
+disposable store with the gate open.
+
+| Workload | Off B/commit | On B/commit | Reduction | PR #40 estimate | Deltas / full images per commit |
+|---|---|---|---|---|---|
+| one-row | 59,631 | 3,202 | −94.6% | 2,581 | 7.08 / 0.16 |
+| one-row, 8 writers | 62,463 | 3,306 | −94.7% | 2,682 | 7.44 / 0.15 |
+| twenty-row | 325,089 | 33,202 | −89.8% | 28,815 | 36.69 / 2.80 |
+| erp | 364,998 | 27,208 | −92.5% | 23,792 | 42.51 / 1.83 |
+| update | 39,101 | 4,006 | −89.8% | 3,858 | 4.32 / 0.43 |
+| update-indexed | 53,877 | 4,941 | −90.8% | 4,612 | 6.06 / 0.48 |
+| delete | 8,535 | 2,799 | −67.2% | 2,740 | 0.70 / 0.33 |
+
+The measured bytes run 4-24% above the estimate, for two reasons:
+- each record carries the 20-byte delta header and a 6-byte header per run;
+- the probe-dirtied pages that PR #40 counted as unchanged become 60-byte empty
+  deltas, not nothing.
+
+**Page-layer CPU, fsync off** (`examples/page_delta_cpu_bench.rs`, 20,000
+commits of three puts each, 3 runs per arm, alternating):
+
+| | Off | On |
+|---|---|---|
+| µs per commit | 42.1 / 42.3 / 41.7 | 34.1 / 32.8 / 30.8 |
+| WAL B per commit | 60,034 | 1,957 |
+| Checkpoints | 4 | 4 |
+
+- **CPU:** with an equal number of checkpoints, the delta path costs less CPU
+  than the full-image path: about −23%.
+- **Checkpoints:** the C8 count trigger keeps the checkpoint rate the same as
+  today.
+
+**Q8: commit latency and throughput** (`commit_durability_bench`, all-logs,
+fsync on, 20 s per trial, 5 trials per arm alternating off/on, median and
+range):
+
+| Writers | Arm | Commits/s median | Range | p50 µs | p95 µs | p99 µs |
+|---|---|---|---|---|---|---|
+| 1 | off | 275 | 154-605 | 3,272 | 4,185 | 8,374 |
+| 1 | on | 215 | 175-628 | 3,004 | 12,249 | 21,882 |
+| 4 | off | 433 | 142-707 | 8,034 | 23,246 | 73,687 |
+| 4 | on | 428 | 356-552 | 8,296 | 12,587 | 15,650 |
+| 16 | off | 595 | 355-712 | 26,070 | 38,561 | 73,529 |
+| 16 | on | 391 | 184-690 | 29,724 | 104,605 | 186,926 |
+| 64 | off | 342 | 314-676 | 116,654 | 580,638 | 685,905 |
+| 64 | on | 397 | 305-686 | 98,877 | 533,903 | 718,180 |
+
+**Q8 is inconclusive on this host.**
+- **The ranges are too wide to separate the arms.** Within one arm, throughput
+  varies 2-4x between trials, and every range overlaps the other arm's.
+- **The bad periods hit both arms equally.** A page-layer A/B with fsync on
+  (6,000 commits, 3 trials per arm) swung between 1.0 and 3.3 ms per commit in
+  *both* arms, with p95 alternating between about 2 ms and about 9 ms. That
+  tracks the disk's state, not the arm.
+- **The one consistent signal is the single-writer tail.** The p95 at one
+  writer was higher with deltas in the three core runs taken (12-20 ms against
+  4-7 ms). It is not explained by CPU, which is lower, or by checkpoint rate,
+  which is equal. It needs measurement on a quiet machine before any claim
+  either way.
+- **This matches PR #40's finding.** The fsync wait, not bytes, bounds
+  small-commit throughput, so a 95% byte cut was not expected to raise commits/s
+  much.
+
+**Recovery time after a crash at 16 writers** (30 s run, then `recover`, 3
+trials):
+
+| Arm | Recovery open (ms) | Page WAL before recovery |
+|---|---|---|
+| Off | 172 / 427 / 659 | 107 / 397 / 706 MB |
+| On | 249 / 124 / 151 | 16.7 / 4.2 / 3.4 MB |
+
+- **Same order of magnitude.** Recovery opens take about the same time in both
+  arms.
+- **Why the logs differ in size:** the delta log is 25-200x smaller, because
+  the count trigger keeps checkpoints as frequent as before while each record
+  is small.
+- **Not measured:** like the PR #36 bench, this is a process kill, not a power
+  loss.
+
+### 10.4 Defect found in the current recovery path (not caused by deltas)
+
+`preexisting_mid_transaction_eviction_window` (ignored; run with `--ignored`)
+reproduces on `main` at `decb9d0` with no delta code involved:
+1. A page-level transaction stays open while 400 other transactions commit,
+   under a 32-page pool.
+2. Pages that only the open transaction logged are evicted. Their barrier
+   records are under its xid, so recovery skips them, but committed structure
+   already references those pages.
+3. The process crashes.
+4. Looking up the open transaction's keys then fails with `ChecksumMismatch {
+   page_id: 340, stored: 0 }`, a page that was never written, instead of
+   reading "absent".
+
+This is the mid-transaction eviction window of
+`commit-durability-invariants.md` §8.5, now with a deterministic reproducer.
+It belongs to the recovery-semantics track. Committed data is intact in this
+reproducer.
+
+### 10.5 Remaining risks and gaps
+
+- **The old-binary refusal** is argued from code, not executed against an
+  older build.
+- **Q8 on a quiet host.** Q8 needs to be repeated on a quiet or dedicated host,
+  especially the single-writer p95.
+- **Power loss** is emulated: a volatile WAL tail in the crash matrix, and
+  process kills in the benchmark. A VM hard reset has not been run.
+- **Small pools lose delta eligibility on eviction.** A reloaded frame starts
+  without delta state. Keeping it across eviction is possible but adds a
+  base-validity argument; it is not done.
+- **Deltas are byte-diffs.** Physiological B-tree records would shrink leaf
+  deltas further.
+- **No fuzzing of delta payloads** beyond the structural validation tests.
+- **Coverage depends on the existing suites.** The core crash matrix masks
+  page-layer defects through `transactions.log` replay (PR #36 §7). The
+  page-layer tests and the mutation checks are the primary evidence.
 
 ## 11. Rollout
 
-1. **Merge the prototype with the gate off.** This needs approval of C1-C9 as
-   *code that exists but is disabled*. The gate-off cost: one relaxed `bool`
-   check per `get_mut`, per guard drop and per page log.
-2. **Qualify on target hardware,** including a real power cut (VM reset), for
-   the recovery-time measurement.
-3. **Opt in per store.** The first delta writes the C2 marker, which is
-   irreversible without a restore until a downgrade command exists.
-4. **Follow-ups, not part of this track:**
-   - physiological B-tree records ("insert entry at slot i"), which would cut
-     leaf deltas from about 240 to about 60 bytes;
-   - relaxing I13 under repeat-history.
+Out of scope. The owner approved experimental development on disposable test
+stores only. Merging even disabled delta code to `main` is a separate
+decision, and so is any path for production stores. Prerequisites before
+either could be considered:
+1. the Q8 rerun on a quiet host;
+2. a power-cut test;
+3. an executed old-binary refusal test;
+4. a decision on the recovery-semantics track, which affects I13's delta rate
+   and owns the defect in 10.4.

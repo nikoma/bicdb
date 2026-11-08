@@ -842,9 +842,111 @@ impl<'db> SqlSession<'db> {
             self.oracle_autonomous_lock_epoch = self.oracle_autonomous_lock_epoch.wrapping_add(1);
         }
         let previous = std::mem::replace(&mut self.in_routine_expression, false);
-        let result = self.execute_query_in_sql(query);
+        let mut result = self.execute_query_in_sql(query);
+        if result
+            .as_ref()
+            .is_err_and(|error| error.to_string() == super::row_routine_write_error().to_string())
+            && !self.row_routine_call
+            && !self
+                .session_gucs
+                .get("bicdb.sql_profile")
+                .is_some_and(|profile| oracle::is_oracle_profile(profile))
+            && !oracle::preview_routine_language_enabled(self.db_ref())?
+        {
+            if let Some(rows) = self.execute_writing_projection(query)? {
+                result = Ok(rows);
+            }
+        }
         self.in_routine_expression = previous;
         result
+    }
+
+    /// `SELECT f(..) FROM one_relation [WHERE ..]` where `f` modifies data:
+    /// the per-row expression host only reads, so read the source rows first
+    /// and evaluate the select list once per row in this session, as
+    /// PostgreSQL evaluates a volatile select list once per row.
+    fn execute_writing_projection(&mut self, query: &Query) -> Result<Option<SqlResult>> {
+        let SetExpr::Select(select) = query.body.as_ref() else {
+            return Ok(None);
+        };
+        if query.with.is_some()
+            || query.order_by.is_some()
+            || query.limit_clause.is_some()
+            || query.fetch.is_some()
+            || !query.locks.is_empty()
+            || select.distinct.is_some()
+            || select.having.is_some()
+            || !matches!(&select.group_by, GroupByExpr::Expressions(exprs, _) if exprs.is_empty())
+            || select.into.is_some()
+        {
+            return Ok(None);
+        }
+        let [TableWithJoins { relation, joins }] = select.from.as_slice() else {
+            return Ok(None);
+        };
+        let TableFactor::Table { name, alias, .. } = relation else {
+            return Ok(None);
+        };
+        if !joins.is_empty()
+            || select.projection.iter().any(|item| {
+                !matches!(
+                    item,
+                    SelectItem::UnnamedExpr(_) | SelectItem::ExprWithAlias { .. }
+                )
+            })
+        {
+            return Ok(None);
+        }
+        let qualifier = alias
+            .as_ref()
+            .map(|alias| ident_value(&alias.name))
+            .or_else(|| object_name_parts(name).last().cloned())
+            .unwrap_or_default();
+        let source_sql = format!(
+            "SELECT * FROM {relation}{}",
+            select
+                .selection
+                .as_ref()
+                .map(|selection| format!(" WHERE {selection}"))
+                .unwrap_or_default()
+        );
+        let source = self.execute_query_in_sql(&parse_single_query(&source_sql)?)?;
+        let mut output: Option<SqlResult> = None;
+        for row in &source.rows {
+            let mut projection = select.projection.clone();
+            let _ = sqlparser::ast::visit_expressions_mut(&mut projection, |expr| {
+                let column = match expr {
+                    Expr::Identifier(ident) => Some(ident_value(ident)),
+                    Expr::CompoundIdentifier(parts)
+                        if parts.len() == 2 && ident_value(&parts[0]) == qualifier =>
+                    {
+                        Some(ident_value(&parts[1]))
+                    }
+                    _ => None,
+                };
+                if let Some(index) = column.and_then(|column| {
+                    source
+                        .columns
+                        .iter()
+                        .position(|name| name.eq_ignore_ascii_case(&column))
+                }) {
+                    *expr = sql_value_literal_expr(&row[index]);
+                }
+                ControlFlow::<()>::Continue(())
+            });
+            let projection_sql = projection
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ");
+            let produced = self
+                .execute_query_in_sql(&parse_single_query(&format!("SELECT {projection_sql}"))?)?;
+            match &mut output {
+                Some(output) => output.rows.extend(produced.rows),
+                None => output = Some(produced),
+            }
+        }
+        Ok(Some(output.unwrap_or_else(|| SqlResult::empty(Vec::new()))))
     }
 
     fn execute_query_in_sql(&mut self, query: &Query) -> Result<SqlResult> {

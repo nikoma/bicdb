@@ -2672,7 +2672,10 @@ impl<'db> SqlSession<'db> {
         let _dynamic = oracle::dynamic_sql::Scope::new(
             oracle::preview_routine_language_version(&language).is_some_and(|v| v >= 16),
         );
-        let (mut declarations, mut statements, mut exception_handlers) = parse_plpgsql_body(&body)?;
+        let (mut declarations, mut statements, mut exception_handlers) = {
+            let _dialect = routines::PostgresDialectScope::new(!oracle_block);
+            parse_plpgsql_body(&body)?
+        };
         routines::parameterized_cursors::validate_capabilities(
             &language,
             &declarations,

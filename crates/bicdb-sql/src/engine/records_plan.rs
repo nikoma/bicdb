@@ -3491,4 +3491,3 @@ fn validate_set_order_by(result: &SqlResult, order_by: Option<&OrderBy>) -> Resu
     }
     Ok(())
 }
-

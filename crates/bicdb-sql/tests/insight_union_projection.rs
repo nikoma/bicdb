@@ -155,12 +155,18 @@ fn set_operation_order_by_positions_names_and_limits_follow_postgres() {
             "SELECT a FROM st EXCEPT SELECT 2 ORDER BY 1 DESC",
             vec![vec![int(3)], vec![int(1)]],
         ),
-        ("SELECT a FROM st INTERSECT SELECT 2 ORDER BY 1", vec![vec![int(2)]]),
+        (
+            "SELECT a FROM st INTERSECT SELECT 2 ORDER BY 1",
+            vec![vec![int(2)]],
+        ),
         (
             "(SELECT a FROM st ORDER BY a DESC LIMIT 1) UNION ALL (SELECT 0) ORDER BY 1",
             vec![vec![int(0)], vec![int(3)]],
         ),
-        ("SELECT 2 UNION SELECT 1 ORDER BY 1 OFFSET 1", vec![vec![int(2)]]),
+        (
+            "SELECT 2 UNION SELECT 1 ORDER BY 1 OFFSET 1",
+            vec![vec![int(2)]],
+        ),
     ] {
         assert_eq!(rows(&mut session, sql), expected, "{sql}");
     }

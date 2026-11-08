@@ -1610,7 +1610,10 @@ impl<'db> SqlSession<'db> {
                     std::slice::from_ref(&record),
                     false,
                     Some(&self.sql_engine()),
-                )?;
+                )
+                .map_err(|error| {
+                    self.arbiter_race_as_conflict(table, Some(schema), &conflict_columns, error)
+                })?;
             }
             self.enforce_rls_checks(
                 table,
@@ -1618,7 +1621,9 @@ impl<'db> SqlSession<'db> {
                 PolicyAction::Insert,
                 std::slice::from_ref(&record),
             )?;
-            self.insert_session_records(table, vec![record.clone()])?;
+            if let Err(error) = self.insert_session_records(table, vec![record.clone()]) {
+                return Err(self.arbiter_race_as_conflict(table, schema, &conflict_columns, error));
+            }
             inserted_records.push(record.clone());
             affected_records.push(record);
         }
@@ -1631,6 +1636,47 @@ impl<'db> SqlSession<'db> {
             &affected_records,
             affected_records.len(),
         )
+    }
+
+    /// An upsert that found no conflicting row under its snapshot can still
+    /// meet one when it inserts: the index already holds a key that another
+    /// transaction committed after the snapshot was taken. That is not a
+    /// unique violation of this statement. Its conflict action applies once
+    /// that row is visible, so report a serialization conflict instead. An
+    /// autocommit statement is then re-run under a fresh snapshot. Inside a
+    /// transaction the client receives 40001 and retries. A violation of any
+    /// other unique index stays a 23505 unique violation.
+    pub(crate) fn arbiter_race_as_conflict(
+        &self,
+        table: &str,
+        schema: Option<&TableSchema>,
+        conflict_columns: &[String],
+        error: SqlError,
+    ) -> SqlError {
+        let Some(schema) = schema else {
+            return error;
+        };
+        let violated = match &error {
+            SqlError::ConstraintViolation {
+                sqlstate: "23505",
+                constraint: Some(name),
+                ..
+            } => name.clone(),
+            SqlError::BicDb(BicDbError::UniqueIndexConflict { index }) => index.clone(),
+            _ => return error,
+        };
+        let arbiter = match self.memoized_unique_arbiter(table, schema, conflict_columns) {
+            Ok(Some(arbiter)) => arbiter,
+            _ => return error,
+        };
+        if arbiter.name != violated && arbiter.index_name.as_deref() != Some(violated.as_str()) {
+            return error;
+        }
+        SqlError::BicDb(BicDbError::TransactionConflict(format!(
+            "{table}: another transaction inserted the conflict key `{}` after this \
+             statement's snapshot",
+            arbiter.name
+        )))
     }
 
     pub(crate) fn execute_insert_on_conflict_do_nothing(
@@ -1652,10 +1698,15 @@ impl<'db> SqlSession<'db> {
                 &inserted_records,
                 false,
                 Some(&self.sql_engine()),
-            )?;
+            )
+            .map_err(|error| {
+                self.arbiter_race_as_conflict(table, Some(schema), conflict_columns, error)
+            })?;
         }
         self.enforce_rls_checks(table, schema, PolicyAction::Insert, &inserted_records)?;
-        self.insert_session_records(table, inserted_records.clone())?;
+        if let Err(error) = self.insert_session_records(table, inserted_records.clone()) {
+            return Err(self.arbiter_race_as_conflict(table, schema, conflict_columns, error));
+        }
         self.fire_after_insert_triggers(table, schema, &inserted_records)?;
         self.insert_result(
             table,

@@ -338,13 +338,15 @@ fn a_failed_sync_during_online_extent_migration_fences_the_store() {
     let dir = TempDir::new().unwrap();
     {
         let (store, _) = PagedStore::open(dir.path(), options()).unwrap();
-        commit_rows(&store, 0..2_000);
+        for chunk in 0..8 {
+            commit_rows(&store, chunk * 1_000..(chunk + 1) * 1_000);
+        }
         store.checkpoint().unwrap();
-        store.begin_extent_migration(64 * 1024).unwrap();
+        store.begin_extent_migration(1024 * 1024).unwrap();
         let fault = arm_io_failure("page_file.sync", dir.path(), 1, false);
         let mut failed = None;
         for _ in 0..1_000 {
-            match store.advance_extent_migration(4) {
+            match store.advance_extent_migration(16) {
                 Ok(report) if report.complete => break,
                 Ok(_) => {}
                 Err(error) => {
@@ -359,9 +361,9 @@ fn a_failed_sync_during_online_extent_migration_fences_the_store() {
         assert_eq!(failed_site(store.durability_health().state()), "page_file.sync");
         // The checkpoint that would have truncated the log is refused.
         assert!(store.checkpoint().unwrap_err().is_write_failed());
-        assert!(store.advance_extent_migration(4).unwrap_err().is_write_failed());
+        assert!(store.advance_extent_migration(16).unwrap_err().is_write_failed());
     }
-    reopen_and_verify(&dir, options(), 2_000);
+    reopen_and_verify(&dir, options(), 8_000);
 }
 
 /// A failure recorded elsewhere while a page-log fsync is in flight (here: a

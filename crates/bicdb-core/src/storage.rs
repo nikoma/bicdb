@@ -573,16 +573,22 @@ pub(crate) fn acquire_database_backup_exclusive_guard(db_path: &Path) -> Result<
 
 fn acquire_backup_gate(path: &Path, exclusive: bool) -> Result<BackupGateGuard> {
     let started = Instant::now();
+    // `backup_gate.timeout` (tests only): report the timeout at once, as if
+    // a backup had held the gate for the whole wait.
+    if bicdb_page::test_faults::io_fault("backup_gate.timeout", path).is_err() {
+        return Err(BicDbError::Backup(format!(
+            "timed out waiting for {} backup I/O gate {}",
+            if exclusive { "exclusive" } else { "shared" },
+            path.display()
+        )));
+    }
     loop {
         match try_acquire_backup_gate(path, exclusive) {
             Ok(Some(file)) => return Ok(BackupGateGuard { _file: file }),
             Ok(None) => {}
             Err(error) => return Err(error),
         }
-        // `backup_gate.timeout` (tests only) takes the timeout branch at once.
-        if started.elapsed() >= BACKUP_LOCK_WAIT_TIMEOUT
-            || bicdb_page::test_faults::io_fault("backup_gate.timeout", path).is_err()
-        {
+        if started.elapsed() >= BACKUP_LOCK_WAIT_TIMEOUT {
             return Err(BicDbError::Backup(format!(
                 "timed out waiting for {} backup I/O gate {}",
                 if exclusive { "exclusive" } else { "shared" },

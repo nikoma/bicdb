@@ -425,6 +425,11 @@ pub(crate) fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
         BicDbError::InvalidCollectionName(_) => "42602",
         BicDbError::TransactionConflict(_) => "40001",
         BicDbError::TransactionNotPending => "25P01",
+        // Durability fence: io_error for refused writes, and
+        // transaction_resolution_unknown for a commit whose outcome the
+        // failure made unknown. See docs/durability-failure-handling.md.
+        BicDbError::WriteFailed { .. } => "58030",
+        BicDbError::CommitOutcomeUnknown { .. } => "08007",
         BicDbError::ReadOnlyStandby(_) => "25006",
         BicDbError::Authorization(_) => "42501",
         BicDbError::QueryMemoryLimit(_) => "53200",
@@ -2204,4 +2209,28 @@ pub(crate) enum AutomaticPagedCheckpointTick {
     Idle,
     Paused { operation_id: Uuid },
     Advanced(PagedCheckpointScheduleAdvance),
+}
+
+#[cfg(test)]
+mod durability_sqlstate_tests {
+    use super::*;
+
+    /// Stable SQLSTATEs for the durability fence (docs/durability-failure-handling.md).
+    #[test]
+    fn durability_failures_have_stable_sqlstates() {
+        let refused = BicDbError::WriteFailed {
+            site: "page_log.sync".into(),
+            detail: "EIO".into(),
+        };
+        let unknown = BicDbError::CommitOutcomeUnknown {
+            sequence: 7,
+            detail: "EIO".into(),
+        };
+        assert_eq!(bicdb_error_sqlstate(&refused), "58030");
+        assert_eq!(bicdb_error_sqlstate(&unknown), "08007");
+        assert_eq!(
+            crate::query_exec::pgwire_error_sqlstate(&PgWireError::BicDb(unknown)),
+            "08007"
+        );
+    }
 }

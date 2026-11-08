@@ -1515,14 +1515,16 @@ impl BicDb {
                     None => paged.commit(xid),
                 };
                 if let Err(error) = committed {
-                    self.recovery_required.store(true, AtomicOrdering::Release);
+                    self.fence_durability("paged.commit", &error);
                     return Err(error);
                 }
                 Ok(Some(xid))
             }
             Err(error) => {
-                if paged.abort(xid).is_err() || durable_decision {
-                    self.recovery_required.store(true, AtomicOrdering::Release);
+                if let Err(abort_error) = paged.abort(xid) {
+                    self.fence_durability("paged.abort", &abort_error);
+                } else if durable_decision {
+                    self.fence_durability("commit.materialize", &error);
                 }
                 Err(error)
             }
@@ -1897,11 +1899,81 @@ impl BicDb {
     /// Refuse use of a handle whose durable transaction needs redo. Opening a
     /// new handle replays that decision before making the database available.
     pub fn check_recovery_state(&self) -> Result<()> {
-        if self.recovery_required.load(AtomicOrdering::Acquire) {
-            return Err(BicDbError::PagedStorage(
-                "database requires recovery after a transaction durability/materialization failure; reopen before serving data".into(),
-            ));
+        self.durability
+            .check()
+            .map_err(crate::error::durability_error)
+    }
+
+    /// This handle's fail-closed durability state. Never fenced itself, so
+    /// operators and status endpoints can read why a database refuses
+    /// writes.
+    pub fn durability_state(&self) -> bicdb_page::DurabilityState {
+        self.durability.state()
+    }
+
+    /// Move the database to `WriteFailed` (first failure wins). Every later
+    /// write, and every read `check_recovery_state` guards, is refused
+    /// until the database is reopened.
+    pub(crate) fn fence_durability(&self, site: &str, error: &dyn std::fmt::Display) {
+        self.durability.record_failure(site, error);
+    }
+
+    /// The commit-outcome error for `sequence` after a durability failure.
+    fn commit_outcome_unknown(&self, sequence: u64, error: &BicDbError) -> BicDbError {
+        let cause = match self.durability.failure() {
+            Some(failure) => format!("the database is fenced by a failure at {failure}"),
+            None => error.to_string(),
+        };
+        BicDbError::CommitOutcomeUnknown {
+            sequence,
+            detail: format!("{error}; {cause}"),
         }
+    }
+
+    /// The verification step of a reopen after a durability failure. Normal
+    /// recovery has already run; when the previous handle left the failure
+    /// marker, a full checkpoint (page log sync, page flush and sync,
+    /// checkpoint record, superblock, transaction-log flush and cut) must
+    /// succeed end to end before the database accepts writes. Only then is
+    /// the marker removed. A failure keeps the marker and fails the open.
+    pub(crate) fn verify_after_durability_failure(&self) -> Result<()> {
+        let marker = self.path.join(DURABILITY_FAILURE_MARKER);
+        let previous = match std::fs::read(&marker) {
+            Ok(bytes) => serde_json::from_slice::<bicdb_page::WriteFailure>(&bytes).ok(),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(error.into()),
+        };
+        let previous = previous.map_or_else(|| "unreadable marker".to_string(), |f| f.to_string());
+        bicdb_page::health::log_event(&serde_json::json!({
+            "event": "durability.verify_started",
+            "severity": "warn",
+            "previous_failure": previous,
+        }));
+        let verified = (|| -> Result<()> {
+            self.checkpoint_for_resume()?;
+            let log = self.tx_log_path();
+            if log.exists() {
+                storage::sync_file(&log)?;
+            }
+            self.check_recovery_state()
+        })();
+        if let Err(error) = verified {
+            return Err(BicDbError::WriteFailed {
+                site: "open.verify".into(),
+                detail: format!(
+                    "verification after the earlier failure ({previous}) did not complete: {error}"
+                ),
+            });
+        }
+        std::fs::remove_file(&marker)?;
+        if self.config.fsync {
+            std::fs::File::open(&self.path)?.sync_all()?;
+        }
+        bicdb_page::health::log_event(&serde_json::json!({
+            "event": "durability.verified",
+            "severity": "info",
+            "previous_failure": previous,
+        }));
         Ok(())
     }
 
@@ -2412,9 +2484,12 @@ impl BicDb {
         // A failed sync may still have persisted it, so errors fence the handle
         // and leave the complete redo intact for restart and replication.
         if let Err(error) = self.tx_log.write_durable(commit_seq) {
-            self.recovery_required.store(true, AtomicOrdering::Release);
+            // The log fenced itself on an I/O failure; anything else (the
+            // enqueue-gap bound) fences here. Either way the outcome is
+            // unknown: some or all of the batch may be on disk.
+            self.fence_durability("transaction_log.write", &error);
             tx.receipt_recovery_required(commit_seq);
-            return Err(error);
+            return Err(self.commit_outcome_unknown(commit_seq, &error));
         }
         bicdb_page::test_faults::crash_point("commit.after_txlog_durable");
         timer.lap(&commit_trace::WAL_ENCODE);
@@ -2499,9 +2574,11 @@ impl BicDb {
             Ok(())
         })();
         if let Err(error) = apply_result {
-            self.recovery_required.store(true, AtomicOrdering::Release);
+            // The decision is durable, so recovery will apply it; this
+            // handle cannot, and must not report it as committed.
+            self.fence_durability("commit.materialize", &error);
             tx.receipt_recovery_required(commit_seq);
-            return Err(error);
+            return Err(self.commit_outcome_unknown(commit_seq, &error));
         }
         // Done: drop the tx_states entry rather than leaving a `Committed`
         // tombstone. Nothing reads a completed tx's state by tx_id (visibility is
@@ -2519,6 +2596,15 @@ impl BicDb {
         self.wait_until_visible(commit_seq);
         let locked_keys = tx.locked_keys.get_mut().take_all();
         release_owned_write_locks(&self.write_locks, tx.id, &locked_keys);
+        // Fail-closed: once the database is fenced no commit is reported
+        // committed, even one whose decision reached the disk before the
+        // failure (recovery keeps that one). The receipt says recovery
+        // required; the caller must not assume either outcome.
+        if self.durability.is_failed() {
+            tx.receipt_recovery_required(commit_seq);
+            let fenced = self.check_recovery_state().unwrap_err();
+            return Err(self.commit_outcome_unknown(commit_seq, &fenced));
+        }
         tx.state = TxState::Committed;
         tx.committed_seq = Some(commit_seq);
         tx.receipt_commit_finished(commit_seq);

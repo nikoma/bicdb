@@ -151,6 +151,10 @@ pub const DEFAULT_SEGMENTS_DIR: &str = "segments";
 pub const DEFAULT_PAGED_DIR: &str = "paged";
 pub const DEFAULT_COLLECTION_CATALOG: &str = "collections.json";
 pub const DEFAULT_TRANSACTION_LOG: &str = "transactions.log";
+/// Written (best effort) at the first durability-critical failure. Its
+/// presence makes the next open run a verification checkpoint before the
+/// database accepts writes. See `docs/durability-failure-handling.md`.
+pub const DURABILITY_FAILURE_MARKER: &str = "durability-failed.json";
 pub const DEFAULT_INDEX_CATALOG: &str = "indexes.json";
 pub const DEFAULT_INDEX_MAINTENANCE: &str = "index-maintenance.json";
 pub const DEFAULT_PLANNER_STATS: &str = "planner-stats.json";
@@ -2603,6 +2607,11 @@ pub struct TxLogHandle {
     durable_notifier: Arc<replication_live::DurableNotifier>,
     path: PathBuf,
     fsync: bool,
+    /// The database's fail-closed durability state. A failed write or sync
+    /// of this log fences it: no later batch is written, no waiter retries,
+    /// and `written_seq` (what replication ships and what commits wait on)
+    /// never advances past the failure.
+    health: Arc<bicdb_page::DurabilityHealth>,
 }
 
 impl TxLogHandle {
@@ -2622,7 +2631,26 @@ impl TxLogHandle {
             durable_notifier: Arc::new(replication_live::DurableNotifier::default()),
             path,
             fsync,
+            health: bicdb_page::DurabilityHealth::new(),
         }
+    }
+
+    /// Share the database's durability state with this log.
+    fn with_health(mut self, health: Arc<bicdb_page::DurabilityHealth>) -> Self {
+        self.health = health;
+        self
+    }
+
+    fn check_health(&self) -> Result<()> {
+        self.health.check().map_err(crate::error::durability_error)
+    }
+
+    /// Record a failed write or sync of this log and fence the database.
+    fn fail(&self, site: &str, error: BicDbError) -> BicDbError {
+        crate::error::durability_error(
+            self.health
+                .record_failure(site, &format!("{}: {error}", self.path.display())),
+        )
     }
 
     fn lock_pending(&self) -> parking_lot::MutexGuard<'_, BTreeMap<u64, Vec<u8>>> {
@@ -2669,12 +2697,19 @@ impl TxLogHandle {
     }
 
     fn flush_buffer(&self, state: &mut TxLogWriteState, buffer: &[u8], last: u64) -> Result<()> {
+        self.check_health()?;
         let from_seq = state.written_seq;
         if state.file.is_none() {
+            // Opening writes nothing, so a failure here is an ordinary,
+            // retryable error rather than a durability failure.
             state.file = Some(storage::open_append_handle(&self.path, self.fsync)?);
         }
         let file = state.file.as_mut().expect("tx_log handle present");
-        storage::write_raw(file, &self.path, buffer)?;
+        // A failed O_DSYNC write may have put some or all of the batch on
+        // disk, and a retried write that succeeds proves nothing about it.
+        if let Err(error) = storage::write_raw(file, &self.path, buffer) {
+            return Err(self.fail("transaction_log.write", error));
+        }
         if !buffer.is_empty() {
             self.write_calls.fetch_add(1, AtomicOrdering::Relaxed);
             if self.fsync {
@@ -2733,9 +2768,13 @@ impl TxLogHandle {
         loop {
             {
                 let mut state = self.lock_write();
+                // Durable before any failure: a successful write covered it.
                 if state.written_seq >= seq {
                     return Ok(());
                 }
+                // Fail-closed: a commit not covered before the failure gets
+                // the failure, never a retry of the failed write.
+                self.check_health()?;
                 let (buffer, last) = self.collect_contiguous(state.written_seq);
                 if last > state.written_seq {
                     self.flush_buffer(&mut state, &buffer, last)?;
@@ -2764,6 +2803,7 @@ impl TxLogHandle {
     /// commits can enqueue concurrently.
     fn flush_pending(&self) -> Result<()> {
         let mut state = self.lock_write();
+        self.check_health()?;
         if let Some(file) = &state.file {
             // A failed auxiliary append can poison the log even when there
             // are no pending commits. Never checkpoint past that failure.
@@ -2782,11 +2822,14 @@ impl TxLogHandle {
     /// acknowledgement from interleaving bytes with concurrent group commit.
     fn append_auxiliary(&self, bytes: &[u8]) -> Result<()> {
         let mut state = self.lock_write();
+        self.check_health()?;
         if state.file.is_none() {
             state.file = Some(storage::open_append_handle(&self.path, self.fsync)?);
         }
         let file = state.file.as_mut().expect("tx_log handle present");
-        storage::write_raw(file, &self.path, bytes)?;
+        if let Err(error) = storage::write_raw(file, &self.path, bytes) {
+            return Err(self.fail("transaction_log.auxiliary", error));
+        }
         if !bytes.is_empty() {
             self.write_calls.fetch_add(1, AtomicOrdering::Relaxed);
             if self.fsync {
@@ -2803,6 +2846,11 @@ impl TxLogHandle {
     /// sequences keep increasing across truncation.
     fn invalidate(&self) {
         let mut state = self.lock_write();
+        if self.health.is_failed() {
+            // Pending commits of a fenced log stay pending: their outcome is
+            // unknown, and only recovery decides it.
+            return;
+        }
         if state
             .file
             .as_ref()
@@ -2903,6 +2951,18 @@ mod tx_log_write_failure_tests {
             assert!(tx_log.lock_pending().contains_key(&2));
             assert!(tx_log.lock_pending().contains_key(&3));
 
+            // Fail-closed: the failed handle never retries in place, even
+            // though the limit is gone and a write would now succeed.
+            let refused = tx_log.write_durable(3).unwrap_err();
+            assert!(refused.is_durability_failure(), "{refused}");
+            assert_eq!(tx_log.stats().written_seq, 1);
+            assert_eq!(std::fs::metadata(&path).unwrap().len(), before);
+
+            // Resuming means a new handle, as a reopen creates after
+            // recovery. The repaired tail lets it append cleanly.
+            let tx_log = TxLogHandle::new(path.clone(), 1, durable);
+            tx_log.enqueue(2, encode(second.clone()));
+            tx_log.enqueue(3, encode(third.clone()));
             tx_log.write_durable(3).unwrap();
             assert_eq!(tx_log.stats().written_seq, 3);
             tx_log.enqueue(4, Vec::new());
@@ -2917,7 +2977,7 @@ mod tx_log_write_failure_tests {
                 SegmentReadMode::Buffered,
                 &encryption,
             )
-            .expect("every acknowledged WAL frame must remain readable after a retry");
+            .expect("every acknowledged WAL frame must remain readable after a reopen");
             assert_eq!(recovered.truncated_bytes, 0);
             assert_eq!(recovered.frames.len(), 4);
             assert_eq!(recovered.frames[0].payload, first);
@@ -3634,9 +3694,14 @@ impl PagedReadAheadHandle {
 #[derive(Debug)]
 pub struct BicDb {
     path: PathBuf,
-    /// A durable decision whose materialization failed must be recovered before
-    /// serving more data or allowing a checkpoint to discard its redo.
-    recovery_required: AtomicBool,
+    /// Fail-closed durability state, shared with the transaction log and the
+    /// page store. The first durability-critical write or sync failure, or a
+    /// durable decision whose materialization failed, moves it to
+    /// `WriteFailed`. The handle then refuses writes and the reads that
+    /// `check_recovery_state` guards until it is reopened; a reopen runs
+    /// recovery and, when the failure marker is present, a verification
+    /// checkpoint. See `docs/durability-failure-handling.md`.
+    durability: Arc<bicdb_page::DurabilityHealth>,
     /// Exclusive claim on the database directory, held for as long as this
     /// handle lives and released by the kernel if the process dies.
     ///
@@ -10334,11 +10399,21 @@ impl BicDb {
         };
 
         open_trace!("events+graphs+sync_state");
+        // One durability state per database: the page store's when there is
+        // one, so a failure in the page log, the page file or the
+        // transaction log fences all of them.
+        let durability = paged_records
+            .as_ref()
+            .map_or_else(bicdb_page::DurabilityHealth::new, |paged| {
+                paged.store().durability_health().clone()
+            });
+        durability.set_marker_path(path.join(DURABILITY_FAILURE_MARKER));
         let tx_log = TxLogHandle::new(
             path.join(DEFAULT_TRANSACTION_LOG),
             tx_recovery.last_commit_seq,
             config.fsync,
-        );
+        )
+        .with_health(durability.clone());
         let fts_block_cache = Arc::new(crate::fts_cache::FullTextBlockCache::new(
             config.fts_block_cache_bytes,
         ));
@@ -10370,7 +10445,7 @@ impl BicDb {
         };
         let mut db = Self {
             path,
-            recovery_required: AtomicBool::new(false),
+            durability: durability.clone(),
             _directory_lock: Some(Arc::new(directory_lock)),
             config,
             ha_state,
@@ -10411,6 +10486,7 @@ impl BicDb {
             commit_seq: Arc::new(AtomicU64::new(tx_recovery.last_commit_seq)),
             sync_quorum: {
                 let quorum = SyncQuorum::default();
+                quorum.attach_durability(durability.clone());
                 quorum.seed(ha_node.read(|file| file.slots.clone()));
                 quorum.seed_holds(ha_node.read(|file| file.holds.clone()));
                 Arc::new(quorum)
@@ -10447,6 +10523,7 @@ impl BicDb {
         db.recover_pending_replication_catalog()?;
         db.prepare_replication_journal_origin()?;
         db.flashback_after_open()?;
+        db.verify_after_durability_failure()?;
         db.auto_checkpoint_if_due();
         Ok(db)
     }
@@ -18707,12 +18784,31 @@ fn truncate_log_file(path: &Path, fsync: bool) -> Result<()> {
         fs::create_dir_all(parent)?;
     }
     File::create(&tmp_path)?;
-    replace_file(&tmp_path, path)?;
-    if fsync {
-        storage::sync_file(path)?;
-        sync_parent_dir(path)?;
-    }
-    Ok(())
+    replace_log_after_cut(&tmp_path, path, fsync)
+}
+
+/// The commit point of a transaction-log cut: rename the new log over the
+/// live one and make that durable. Every failure from here on is a
+/// durability failure. The writer's cached descriptor still names the old,
+/// now unlinked inode, so a commit acknowledged through it after a failed
+/// cut would vanish on restart; and the rename itself may or may not
+/// survive a crash. The caller fences the database on `WriteFailed`.
+fn replace_log_after_cut(tmp_path: &Path, path: &Path, fsync: bool) -> Result<()> {
+    let replaced = bicdb_page::test_faults::io_fault("transaction_log.cut_rename", path)
+        .map_err(BicDbError::from)
+        .and_then(|()| replace_file(tmp_path, path))
+        .and_then(|()| {
+            if !fsync {
+                return Ok(());
+            }
+            bicdb_page::test_faults::io_fault("transaction_log.cut_sync", path)?;
+            storage::sync_file(path)?;
+            sync_parent_dir(path)
+        });
+    replaced.map_err(|error| BicDbError::WriteFailed {
+        site: "transaction_log.cut".into(),
+        detail: format!("{}: {error}", path.display()),
+    })
 }
 
 /// Copies the transaction-log byte range `[keep_from_offset .. end]` into a fresh
@@ -18744,15 +18840,13 @@ fn copy_transaction_log_tail(path: &Path, keep_from_offset: u64, fsync: bool) ->
         let mut dst = File::create(&tmp_path)?;
         std::io::copy(&mut src, &mut dst)?;
         if fsync {
+            // Before the rename the live log is untouched: a failure here is
+            // an ordinary, retryable checkpoint error.
+            bicdb_page::test_faults::io_fault("transaction_log.cut_copy", &tmp_path)?;
             dst.sync_all()?;
         }
     }
-    replace_file(&tmp_path, path)?;
-    if fsync {
-        storage::sync_file(path)?;
-        sync_parent_dir(path)?;
-    }
-    Ok(())
+    replace_log_after_cut(&tmp_path, path, fsync)
 }
 
 fn file_len(path: &Path) -> Result<u64> {

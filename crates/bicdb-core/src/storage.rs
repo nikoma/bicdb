@@ -415,9 +415,18 @@ pub(crate) fn write_raw(handle: &mut AppendHandle, path: &Path, bytes: &[u8]) ->
         handle,
         bytes,
         |file, bytes, sync_after_write| {
-            append_and_sync(file, bytes, sync_after_write, File::sync_data)
+            // Fault injection (tests only; one atomic load otherwise).
+            // `transaction_log.write` fails before any byte is written.
+            // `transaction_log.sync` writes the bytes and then fails, as an
+            // O_DSYNC write whose data sync failed does: the bytes may or may
+            // not be durable. `transaction_log.repair` then fails the tail
+            // repair too, so the bytes stay in the file.
+            bicdb_page::test_faults::io_fault("transaction_log.write", path)?;
+            append_and_sync(file, bytes, sync_after_write, File::sync_data)?;
+            bicdb_page::test_faults::io_fault("transaction_log.sync", path)
         },
         |file, len, durable| {
+            bicdb_page::test_faults::io_fault("transaction_log.repair", path)?;
             file.set_len(len)?;
             // O_DSYNC covers writes, not a subsequent ftruncate. Persist the
             // repaired boundary before permitting another acknowledged batch.

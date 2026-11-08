@@ -2261,6 +2261,11 @@ fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
         BicDbError::TransactionConflict(_) => "40001",
         BicDbError::TransactionDeadlock(_) => "40P01",
         BicDbError::TransactionNotPending => "25P01",
+        // Durability fence: io_error for refused writes, and
+        // transaction_resolution_unknown for a commit whose outcome the
+        // failure made unknown. See docs/durability-failure-handling.md.
+        BicDbError::WriteFailed { .. } => "58030",
+        BicDbError::CommitOutcomeUnknown { .. } => "08007",
         BicDbError::ReadOnlyStandby(_) => "25006",
         BicDbError::QueryCanceled | BicDbError::QueryTimedOut => "57014",
         BicDbError::Flashback(message) => bicdb_core::flashback_error_sqlstate(message),
@@ -5708,4 +5713,23 @@ pub fn query_output_column_names(sql: &str) -> Option<Vec<String>> {
             _ => None,
         })
         .collect()
+}
+
+#[cfg(test)]
+mod durability_sqlstate_tests {
+    use super::*;
+
+    #[test]
+    fn durability_failures_keep_their_sqlstates_through_sql_errors() {
+        let refused = SqlError::BicDb(BicDbError::WriteFailed {
+            site: "transaction_log.write".into(),
+            detail: "EIO".into(),
+        });
+        let unknown = SqlError::BicDb(BicDbError::CommitOutcomeUnknown {
+            sequence: 3,
+            detail: "EIO".into(),
+        });
+        assert_eq!(refused.sqlstate(), "58030");
+        assert_eq!(unknown.sqlstate(), "08007");
+    }
 }

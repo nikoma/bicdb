@@ -173,4 +173,46 @@ pub enum BicDbError {
 
     #[error("paged storage error: {0}")]
     PagedStorage(String),
+
+    /// A durability-critical write or sync failed. The database refuses
+    /// writes (and the reads it fences) until it is reopened, which runs
+    /// recovery and a verification checkpoint. SQLSTATE 58030 (io_error).
+    /// See `docs/durability-failure-handling.md`.
+    #[error(
+        "database refuses writes after a failed durable write at {site}: {detail}; \
+         reopen the database to run recovery and verification"
+    )]
+    WriteFailed { site: String, detail: String },
+
+    /// A commit whose durability is unknown: its decision may or may not be
+    /// on disk. It is neither committed nor rolled back from the caller's
+    /// point of view; the next open's recovery decides, and honours the
+    /// decision if it reached the disk. SQLSTATE 08007
+    /// (transaction_resolution_unknown).
+    #[error(
+        "commit {sequence} outcome is unknown: {detail}; do not assume it committed or rolled \
+         back. Reopen the database; recovery keeps the commit if its decision reached the disk"
+    )]
+    CommitOutcomeUnknown { sequence: u64, detail: String },
+}
+
+impl BicDbError {
+    /// Whether this error means the database is fenced by a durability
+    /// failure, including a commit whose outcome that failure made unknown.
+    pub fn is_durability_failure(&self) -> bool {
+        matches!(
+            self,
+            Self::WriteFailed { .. } | Self::CommitOutcomeUnknown { .. }
+        )
+    }
+}
+
+/// Translate a page-layer error, keeping a durability fence distinct.
+pub(crate) fn durability_error(error: bicdb_page::PageError) -> BicDbError {
+    match error {
+        bicdb_page::PageError::WriteFailed { site, detail } => {
+            BicDbError::WriteFailed { site, detail }
+        }
+        other => BicDbError::PagedStorage(other.to_string()),
+    }
 }

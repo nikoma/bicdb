@@ -748,6 +748,11 @@ pub struct PageStore {
     meta: Mutex<Superblock>,
     pub metrics: PageIoMetrics,
     pub faults: FaultInjection,
+    /// Fail-closed durability state shared with the page log and the host.
+    /// A failed page-file sync fences the store: it may have dropped the
+    /// pages it could not write, so a later sync proves nothing and no
+    /// checkpoint may advance past it. See `crate::health`.
+    health: std::sync::Arc<crate::health::DurabilityHealth>,
 }
 
 impl PageStore {
@@ -838,6 +843,7 @@ impl PageStore {
                 }),
                 metrics: PageIoMetrics::default(),
                 faults: FaultInjection::default(),
+                health: crate::health::DurabilityHealth::new(),
             };
             store.write_superblock()?;
             store
@@ -860,6 +866,7 @@ impl PageStore {
                 meta: Mutex::new(Superblock::default()),
                 metrics: PageIoMetrics::default(),
                 faults: FaultInjection::default(),
+                health: crate::health::DurabilityHealth::new(),
             };
             let superblock = store.read_superblock(options.page_size)?;
             store
@@ -2389,6 +2396,10 @@ impl PageStore {
     }
 
     fn write_page_raw(&self, page_id: PageId, buffer: &mut [u8], generation: u64) -> Result<()> {
+        // A fenced store writes no page: the writeback barrier's "logged
+        // implies durable" premise no longer holds once the log failed, so a
+        // page could reach the file ahead of the only record that redoes it.
+        self.health.check()?;
         if page_id == SUPERBLOCK_PAGE_ID && self.backup_format.load(Ordering::Acquire) {
             let magic = if self.extent_pages() == 0
                 && self.migration_target_pages.load(Ordering::Acquire) == 0
@@ -2415,6 +2426,11 @@ impl PageStore {
         let (segment, offset) = self.locate(page_id);
         self.ensure_segment(segment)?;
         let to_write = self.faults.intercept(buffer.len())?;
+        // A failed page write is not by itself a durability failure: the
+        // frame stays dirty, the log still holds its redo, and the write is
+        // retried. Only a failed sync fences the store.
+        crate::test_faults::io_fault("page_file.write", &self.path)
+            .map_err(|e| PageError::io(&self.path, e))?;
         let started = Instant::now();
         let written = {
             let active = self.backup.lock();
@@ -2442,7 +2458,13 @@ impl PageStore {
         self.sync_data_observed()
     }
 
+    /// This store's fail-closed durability state.
+    pub fn durability_health(&self) -> &std::sync::Arc<crate::health::DurabilityHealth> {
+        &self.health
+    }
+
     fn sync_data_observed(&self) -> Result<()> {
+        self.health.check()?;
         let started = Instant::now();
         let mut dirty = self.dirty_segments.lock();
         let segments = self.segments.read();
@@ -2454,8 +2476,13 @@ impl PageStore {
                     io::Error::new(io::ErrorKind::NotFound, "dirty page segment is not open"),
                 )
             })?;
-            file.sync_data()
-                .map_err(|e| PageError::io(self.segment_path(index), e))?;
+            let path = self.segment_path(index);
+            crate::test_faults::io_fault("page_file.sync", &path)
+                .and_then(|()| file.sync_data())
+                .map_err(|e| {
+                    self.health
+                        .record_failure("page_file.sync", &format!("{}: {e}", path.display()))
+                })?;
             self.metrics.segments_synced.fetch_add(1, Ordering::Relaxed);
         }
         drop(segments);
@@ -2725,6 +2752,7 @@ pub fn convert_extent_layout(
         meta: Mutex::new(meta),
         metrics: PageIoMetrics::default(),
         faults: FaultInjection::default(),
+        health: crate::health::DurabilityHealth::new(),
     };
     target.ensure_segment(0)?;
     // Raw byte copy, page-aligned batches: free pages and all. Content is

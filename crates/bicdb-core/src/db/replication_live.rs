@@ -336,12 +336,20 @@ impl BicDb {
             self.config.fsync,
         )?;
         bicdb_page::test_faults::crash_point("txlog_cut.after_floor");
-        if keep_from >= log_len {
-            truncate_log_file(&path, self.config.fsync)?;
+        let cut = if keep_from >= log_len {
+            truncate_log_file(&path, self.config.fsync)
         } else if keep_from > 0 {
-            copy_transaction_log_tail(&path, keep_from, self.config.fsync)?;
+            copy_transaction_log_tail(&path, keep_from, self.config.fsync)
         } else {
             return Ok(());
+        };
+        if let Err(error) = cut {
+            if let BicDbError::WriteFailed { site, detail } = &error {
+                // Fenced before `invalidate`: the cached descriptor must not
+                // take another write (see `replace_log_after_cut`).
+                self.fence_durability(site, detail);
+            }
+            return Err(error);
         }
         self.tx_log.invalidate();
         Ok(())
@@ -402,6 +410,9 @@ pub struct SyncQuorum {
     /// Whether a write lease is configured (skips the lock otherwise).
     lease_fast: AtomicBool,
     stats: SyncWaitStats,
+    /// The primary's fail-closed durability state. A commit is never
+    /// confirmed once the primary is fenced, whatever the standbys report.
+    durability: std::sync::OnceLock<Arc<bicdb_page::DurabilityHealth>>,
 }
 
 impl Default for SyncQuorum {
@@ -425,6 +436,7 @@ impl Default for SyncQuorum {
             closed_fast: AtomicBool::new(false),
             lease_fast: AtomicBool::new(false),
             stats: SyncWaitStats::default(),
+            durability: std::sync::OnceLock::new(),
         }
     }
 }
@@ -644,7 +656,29 @@ impl SyncQuorum {
     }
 
     /// Blocks until `required` standbys have durably applied `seq`.
+    /// Fence confirmations with the database's durability state.
+    pub(crate) fn attach_durability(&self, health: Arc<bicdb_page::DurabilityHealth>) {
+        let _ = self.durability.set(health);
+    }
+
+    /// `Err(CommitOutcomeUnknown)` once the primary is fenced: the commit's
+    /// local decision may be durable, but no acknowledgment is issued after
+    /// a durability failure.
+    fn check_durability(&self, seq: u64) -> Result<()> {
+        match self.durability.get().and_then(|health| health.failure()) {
+            None => Ok(()),
+            Some(failure) => Err(BicDbError::CommitOutcomeUnknown {
+                sequence: seq,
+                detail: format!(
+                    "the primary is fenced by a durability failure at {failure} and confirms no \
+                     commit"
+                ),
+            }),
+        }
+    }
+
     pub fn wait_for(&self, seq: u64) -> Result<()> {
+        self.check_durability(seq)?;
         if self.required_fast.load(AtomicOrdering::Acquire) == 0
             && !self.lease_fast.load(AtomicOrdering::Acquire)
             && !self.closed_fast.load(AtomicOrdering::Acquire)
@@ -652,7 +686,9 @@ impl SyncQuorum {
             return Ok(());
         }
         let started = Instant::now();
-        let result = self.wait_for_confirmations(seq);
+        let result = self
+            .wait_for_confirmations(seq)
+            .and_then(|()| self.check_durability(seq));
         self.stats.waits.fetch_add(1, AtomicOrdering::Relaxed);
         self.stats.wait_micros.fetch_add(
             started.elapsed().as_micros() as u64,

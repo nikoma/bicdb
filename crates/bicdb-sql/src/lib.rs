@@ -4764,6 +4764,8 @@ enum RoutineStmt {
         iterator: String,
         lower: RoutineExpr,
         upper: RoutineExpr,
+        /// `FOR i IN REVERSE high .. low`: count down from `lower` to `upper`.
+        reverse: bool,
         body: Vec<RoutineStmt>,
     },
     ForeachLoop {

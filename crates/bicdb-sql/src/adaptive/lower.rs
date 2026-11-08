@@ -239,6 +239,7 @@ fn lower_stmt(stmt: &RoutineStmt, ctx: &mut LowerCtx) -> Option<ProcStmt> {
             iterator,
             lower,
             upper,
+            reverse: false,
             body,
         } => {
             let slot = slot_of(&ctx.ids, iterator)?;
@@ -253,7 +254,9 @@ fn lower_stmt(stmt: &RoutineStmt, ctx: &mut LowerCtx) -> Option<ProcStmt> {
                 body: loop_out,
             })
         }
-        RoutineStmt::Block { .. }
+        // Counting down stays in the interpreter.
+        RoutineStmt::ForLoop { reverse: true, .. }
+        | RoutineStmt::Block { .. }
         | RoutineStmt::Case { .. }
         | RoutineStmt::ForeachLoop { .. }
         | RoutineStmt::Loop { .. }

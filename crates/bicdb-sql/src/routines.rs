@@ -2140,13 +2140,20 @@ pub(crate) fn parse_routine_for_loop(statement: &str) -> Result<RoutineStmt> {
     let Some(loop_idx) = find_top_level_keyword(after_in, "LOOP") else {
         return Err(SqlError::InvalidSql("FOR loop requires LOOP".to_string()));
     };
-    let range_sql = after_in[..loop_idx].trim();
-    if strip_prefix_ci(range_sql, "REVERSE").is_some() {
-        return Err(SqlError::UnsupportedPlpgsqlFeature(
-            "REVERSE FOR loops are not implemented".to_string(),
+    let mut range_sql = after_in[..loop_idx].trim();
+    let reverse = match strip_routine_keyword(range_sql, "REVERSE") {
+        Some(rest) => {
+            range_sql = rest.trim();
+            true
+        }
+        None => false,
+    };
+    let body = routine_loop_body(&after_in[loop_idx + "LOOP".len()..])?;
+    if reverse && find_top_level_operator(range_sql, "..").is_none() {
+        return Err(SqlError::InvalidSql(
+            "REVERSE requires an integer FOR loop range".to_string(),
         ));
     }
-    let body = routine_loop_body(&after_in[loop_idx + "LOOP".len()..])?;
     if let Some(range_idx) = find_top_level_operator(range_sql, "..") {
         let lower = parse_routine_expr(range_sql[..range_idx].trim())?;
         let upper = parse_routine_expr(range_sql[range_idx + 2..].trim())?;
@@ -2154,6 +2161,7 @@ pub(crate) fn parse_routine_for_loop(statement: &str) -> Result<RoutineStmt> {
             iterator,
             lower: RoutineExpr::unbound(lower),
             upper: RoutineExpr::unbound(upper),
+            reverse,
             body,
         })
     } else {

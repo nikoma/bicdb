@@ -4362,8 +4362,9 @@ impl<'db> SqlSession<'db> {
                 iterator,
                 lower,
                 upper,
+                reverse,
                 body,
-            } => self.execute_routine_for_loop(frame, iterator, lower, upper, body),
+            } => self.execute_routine_for_loop(frame, iterator, lower, upper, *reverse, body),
             RoutineStmt::ForeachLoop {
                 target,
                 slice,
@@ -4778,6 +4779,7 @@ impl<'db> SqlSession<'db> {
         iterator: &str,
         lower: &RoutineExpr,
         upper: &RoutineExpr,
+        reverse: bool,
         body: &[RoutineStmt],
     ) -> Result<RoutineControl> {
         let Some(lower) = sql_value_i64(&self.eval_routine_expr(frame, lower)?) else {
@@ -4790,10 +4792,17 @@ impl<'db> SqlSession<'db> {
                 "FOR loop upper bound for {iterator} must be an integer"
             )));
         };
-        if lower > upper {
-            return Ok(RoutineControl::Continue);
-        }
-        for value in lower..=upper {
+        // PL/pgSQL REVERSE counts down from the first bound to the second;
+        // Oracle PL/SQL REVERSE walks the same low..high range backwards.
+        let values: Box<dyn Iterator<Item = i64>> = if reverse && frame.oracle_procedural_evaluation
+        {
+            Box::new((lower..=upper).rev())
+        } else if reverse {
+            Box::new((upper..=lower).rev())
+        } else {
+            Box::new(lower..=upper)
+        };
+        for value in values {
             self.cancellation.check()?;
             frame.set(iterator, SqlValue::Int(value));
             match self.execute_routine_statements(frame, body)? {

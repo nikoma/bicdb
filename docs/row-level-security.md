@@ -27,13 +27,28 @@ suite (`crates/bicdb-sql/tests/sql.rs`, tests prefixed `rls_`) pins them.
 - `WITH CHECK` is enforced on INSERT and UPDATE (falling back to `USING` when
   absent, PostgreSQL's rule). Failing a named restrictive policy reports
   `new row violates row-level security policy "name" for table "t"`.
-- `INSERT ... ON CONFLICT DO UPDATE`: a conflicting existing row that fails the
-  UPDATE policy's `USING` raises
-  `new row violates row-level security policy (USING expression) ...` instead
-  of the silent skip a plain UPDATE performs.
+- New rows are checked against the policies before their constraints and
+  unique keys (PostgreSQL's order), so inserting or updating to a key the
+  writer may not write is refused with 42501 instead of a 23505 that would
+  confirm the hidden key exists.
+- When a write reads its target relation, the SELECT policies join the
+  new-row checks as errors (never as silent filters): `INSERT ... RETURNING`
+  that reads a column, any `INSERT ... ON CONFLICT` with an arbiter (a
+  conflict target or constraint; `DO UPDATE` always has one), and an UPDATE
+  that reads existing values. `RETURNING 1` and an arbiter-less
+  `ON CONFLICT DO NOTHING` read nothing.
+- `INSERT ... ON CONFLICT`: every proposed row passes the INSERT checks before
+  arbitration. On the `DO UPDATE` path the `DO UPDATE ... WHERE` is evaluated
+  first; then the existing row must pass the UPDATE and SELECT policies'
+  `USING` (else
+  `new row violates row-level security policy ["name"] (USING expression) ...`),
+  and the updated row the UPDATE `WITH CHECK` and SELECT `USING`. A row the
+  writer cannot see is therefore never modified or returned. A conflict with
+  a hidden row under `DO NOTHING` is a no-op, as in PostgreSQL.
 - UPDATE/DELETE statements that read existing column values (in `WHERE`,
   assignment right-hand sides, `RETURNING`, `FROM`/`USING`) additionally apply
-  SELECT policies to those reads.
+  SELECT policies to those reads; a FROM-less subquery that reads no column
+  is not such a read.
 - `COPY table TO STDOUT` applies SELECT policies; `COPY table FROM STDIN`
   applies INSERT `WITH CHECK` policies.
 

@@ -1,0 +1,1671 @@
+{
+  "format": 1,
+  "status": "full_inventory_executed_with_failures",
+  "date": "2026-11-07",
+  "main_commit": "f103a4760dc3a6d1cc8dc0da4bb210e87612fd4b",
+  "binary_sha256": "261448f7bbec7f66853f5b2d257f5f6bfc5cf89f619e75417b821571125e8f3c",
+  "binary_profile": "release",
+  "build_host": "dev9",
+  "pre_run_validation": [
+    {
+      "name": "ci",
+      "returncode": 0
+    },
+    {
+      "name": "build",
+      "returncode": 0
+    },
+    {
+      "name": "jdbc-probe",
+      "returncode": 0
+    }
+  ],
+  "jdbc_adapter_source_commit": "15f0634",
+  "jdbc_adapter_sha256": "c9b62554e40c4c0bce727656c68b0754f6bae1b5efaad5739d669808b92b9214",
+  "jdbc_provider_sha256": "8059fd7ec50db8a17fe706ef29793a150496fd5ff56e7cf23ae3b0587a51e7cf",
+  "test_bundle": {
+    "name": "org.idempiere.test",
+    "version": "13.0.0.qualifier",
+    "installed_as": "tycho-project-directory",
+    "sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7"
+  },
+  "test_assertions_or_bytecode_changed": false,
+  "application_seed_changed_for_test": false,
+  "schema_baseline": {
+    "status": "schema_and_source_values_verified",
+    "storage_mode": "server_paged",
+    "derivation": "applied upstream migrations for this schema profile missing from the reference schema (no post-migration processes, as for the reference migrations)",
+    "registered_migrations": [
+      "202603261259_IDEMPIERE-6910.sql",
+      "202604231822_IDEMPIERE-6910.sql",
+      "202604282341_IDEMPIERE-6983.sql"
+    ]
+  },
+  "configuration": {
+    "database_sync_outbox": "off",
+    "note": "Change-data-capture outbox disabled (no consumer). Transaction log and page WAL remain synchronous."
+  },
+  "totals": {
+    "batches": 17,
+    "classes": 155,
+    "tests": 1464,
+    "failures": 4,
+    "errors": 0,
+    "skipped": 0,
+    "passed": 1460,
+    "server_aborts": 0,
+    "wall_seconds": 7312
+  },
+  "failures": [
+    {
+      "batch": "remaining-08-release",
+      "class_name": "org.idempiere.test.base.ReportTest",
+      "test": "testBackgroundJob",
+      "kind": "failure",
+      "time_seconds": 11.524,
+      "message": "Error waiting for background job to complete: null",
+      "classification": "performance_limit",
+      "explanation": "Fixed 10 s application wait for a background job. Job SQL completes quickly; remaining time is application work plus per-commit durable-flush latency."
+    },
+    {
+      "batch": "remaining-09-release",
+      "class_name": "org.idempiere.test.base.TrxTest",
+      "test": "testReleaseSavepoint",
+      "kind": "failure",
+      "time_seconds": 0.014,
+      "message": "releaseSavepoint should throw SQLException",
+      "classification": "application_profile_difference",
+      "explanation": "Trx.releaseSavepoint returns before calling the driver when the application is configured for this database profile, so the expected SQLException can never be raised by any backend."
+    },
+    {
+      "batch": "remaining-11-release",
+      "class_name": "org.idempiere.test.model.CalloutTest",
+      "test": "testAnnotatedCallout",
+      "kind": "failure",
+      "time_seconds": 0.006,
+      "message": "org.adempiere.model.CalloutInfoWindow not found for AD_InfoWindow.AD_Table_ID ==> expected: <true> but was: <false>",
+      "classification": "application_harness_race",
+      "explanation": "Annotation scanner (ClassGraph) skips already-read system bundles under concurrent startup; the callout class is never registered. No database statement is involved."
+    },
+    {
+      "batch": "remaining-14-release",
+      "class_name": "org.idempiere.test.tracking.AuditTraceContextTest",
+      "test": "testBackgroundJob",
+      "kind": "failure",
+      "time_seconds": 10.318,
+      "message": "Error waiting for background job to complete: null",
+      "classification": "performance_limit",
+      "explanation": "Same 10 s background-job wait as ReportTest.testBackgroundJob."
+    }
+  ],
+  "batches": [
+    {
+      "name": "foundation-release",
+      "status": "tests_completed",
+      "returncode": 0,
+      "seconds": 176,
+      "tests": 89,
+      "failures": 0,
+      "skipped": 0,
+      "server_aborts": 0,
+      "classes": 5,
+      "expected_test_counts_matched": true,
+      "selected_classes_all_reported": true,
+      "binary_sha256": "261448f7bbec7f66853f5b2d257f5f6bfc5cf89f619e75417b821571125e8f3c",
+      "database_sync_outbox": "off",
+      "diagnostic_unmerged_candidate": false,
+      "jdbc_adapter_sha256": "c9b62554e40c4c0bce727656c68b0754f6bae1b5efaad5739d669808b92b9214",
+      "suites": [
+        {
+          "name": "org.idempiere.test.base.InOutTest",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "b9ac73c53a5e5acdd37648faec068105169661b7ce9353def9470b3152efa6f1"
+        },
+        {
+          "name": "org.idempiere.test.base.InvoiceTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "e3922d4cf08ef8c5600ec1245cb3b0630546019044da60fec967af01787091a3"
+        },
+        {
+          "name": "org.idempiere.test.base.POInsertSQLTest",
+          "tests": 20,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "c6d9eebeb083f04b14261d4200af1eeb46cbecb2147050166b185aba0f2a2dad"
+        },
+        {
+          "name": "org.idempiere.test.base.POTest",
+          "tests": 53,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "32a19c1c2a94b658b807fccfbe5073e89c59a87672e6d956082b5d93e78377c7"
+        },
+        {
+          "name": "org.idempiere.test.model.InvoiceCustomerTest",
+          "tests": 9,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "959547ca8120987b0ae7a64712f4143ddbf6795fefc40c8733c0ecd48e9c1a99"
+        }
+      ]
+    },
+    {
+      "name": "business-day-release",
+      "status": "tests_completed",
+      "returncode": 0,
+      "seconds": 323,
+      "tests": 64,
+      "failures": 0,
+      "skipped": 0,
+      "server_aborts": 0,
+      "classes": 5,
+      "expected_test_counts_matched": true,
+      "selected_classes_all_reported": true,
+      "binary_sha256": "261448f7bbec7f66853f5b2d257f5f6bfc5cf89f619e75417b821571125e8f3c",
+      "database_sync_outbox": "off",
+      "diagnostic_unmerged_candidate": false,
+      "jdbc_adapter_sha256": "c9b62554e40c4c0bce727656c68b0754f6bae1b5efaad5739d669808b92b9214",
+      "suites": [
+        {
+          "name": "org.idempiere.test.model.AllocationTest",
+          "tests": 19,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "221555e22edaf6fa069c591b56aa3cfeb5d7d89eb56aec95d08f8bfd6a50e8ad"
+        },
+        {
+          "name": "org.idempiere.test.model.BankStatementTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "7f8f73a3084707c18a65b1883ffbf8b21169fddfa76845566a68eb251d0e979c"
+        },
+        {
+          "name": "org.idempiere.test.model.PaymentTest",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "f81872ebc4aa322be98b6631fa5f524b062db8206fdeba75faac4d7a84846d3b"
+        },
+        {
+          "name": "org.idempiere.test.model.PurchaseOrderTest",
+          "tests": 16,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "3917a1048101214d5b6b018ff87c05382dde35698cd8963eab58689e11d7f487"
+        },
+        {
+          "name": "org.idempiere.test.model.SalesOrderTest",
+          "tests": 22,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "fa51de30130df6c8ee5e4b38ef0cc3e6c48ceeb3a15f63f1aaa1f7ca703a5893"
+        }
+      ]
+    },
+    {
+      "name": "remaining-01-release",
+      "status": "tests_completed",
+      "returncode": 0,
+      "seconds": 168,
+      "tests": 100,
+      "failures": 0,
+      "skipped": 0,
+      "server_aborts": 0,
+      "classes": 4,
+      "expected_test_counts_matched": true,
+      "selected_classes_all_reported": true,
+      "binary_sha256": "261448f7bbec7f66853f5b2d257f5f6bfc5cf89f619e75417b821571125e8f3c",
+      "database_sync_outbox": "off",
+      "diagnostic_unmerged_candidate": false,
+      "jdbc_adapter_sha256": "c9b62554e40c4c0bce727656c68b0754f6bae1b5efaad5739d669808b92b9214",
+      "suites": [
+        {
+          "name": "org.idempiere.test.acct.AccountingSchemaValidRangeTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "f36e908120cf171f8d983304c247c02def4223b92af2ea04d6b8cfafc284f966"
+        },
+        {
+          "name": "org.idempiere.test.adwindow.GridFieldTest",
+          "tests": 26,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "be3e78b70ef51321ef15b9cc74b15f83931f763704405998a5103bf55d8b10ef"
+        },
+        {
+          "name": "org.idempiere.test.adwindow.GridFieldVOTest",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "30aae5124aba63c4e57fb5f21f1c8fe9966a2db1cc42cc9bde1f861043255f02"
+        },
+        {
+          "name": "org.idempiere.test.adwindow.GridTabTest",
+          "tests": 67,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "05261ffe0dca40f5dbc751229066f8b29cdf445e3263c91354983356179ec146"
+        }
+      ]
+    },
+    {
+      "name": "remaining-02-release",
+      "status": "tests_completed",
+      "returncode": 0,
+      "seconds": 60,
+      "tests": 61,
+      "failures": 0,
+      "skipped": 0,
+      "server_aborts": 0,
+      "classes": 8,
+      "expected_test_counts_matched": true,
+      "selected_classes_all_reported": true,
+      "binary_sha256": "261448f7bbec7f66853f5b2d257f5f6bfc5cf89f619e75417b821571125e8f3c",
+      "database_sync_outbox": "off",
+      "diagnostic_unmerged_candidate": false,
+      "jdbc_adapter_sha256": "c9b62554e40c4c0bce727656c68b0754f6bae1b5efaad5739d669808b92b9214",
+      "suites": [
+        {
+          "name": "org.idempiere.test.adwindow.GridTabVOTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "b1055cc643bb90858ee9182f06dec57d96edbcc419016492c6c9c89efb35059c"
+        },
+        {
+          "name": "org.idempiere.test.adwindow.GridTableTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "435f1d8f8a68ebfede0955ba6a72ae8d5608d4d9742296fecf9a5ba9c8c2ee4c"
+        },
+        {
+          "name": "org.idempiere.test.adwindow.GridWindowTest",
+          "tests": 12,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "a969e38d768c9751a38910ceec68ddd66c746b9e08d7d2355620934e94517225"
+        },
+        {
+          "name": "org.idempiere.test.base.AcessSQLParserTest",
+          "tests": 15,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "101b4590e90720d4f6269832b39e66ff4b411be025247c694a6402235c6d38c7"
+        },
+        {
+          "name": "org.idempiere.test.base.AmtInWordsTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "7315a47261f9ba85a5da9fca4c4aa070572c3a24c89cd3f7be1a752d1dd19477"
+        },
+        {
+          "name": "org.idempiere.test.base.AttachmentProviderTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "f49a8a82e5a3f2d300bcd9432d745eb6e2157fe0ce8595303ec02bcef251e826"
+        },
+        {
+          "name": "org.idempiere.test.base.CLoggerTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "50f3eb2dfdee0fa24c8a9a50014a69fd66c6e8e9c1f4f3b2fcad3dc3bde5a7e7"
+        },
+        {
+          "name": "org.idempiere.test.base.Convert_PostgreSQLTest",
+          "tests": 25,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "7131a57ef3c53f7dc0c4c8a0fb405d9867de69aa4e149d0474b2ae4d0144a88b"
+        }
+      ]
+    },
+    {
+      "name": "remaining-03-release",
+      "status": "tests_completed",
+      "returncode": 0,
+      "seconds": 60,
+      "tests": 88,
+      "failures": 0,
+      "skipped": 0,
+      "server_aborts": 0,
+      "classes": 5,
+      "expected_test_counts_matched": true,
+      "selected_classes_all_reported": true,
+      "binary_sha256": "261448f7bbec7f66853f5b2d257f5f6bfc5cf89f619e75417b821571125e8f3c",
+      "database_sync_outbox": "off",
+      "diagnostic_unmerged_candidate": false,
+      "jdbc_adapter_sha256": "c9b62554e40c4c0bce727656c68b0754f6bae1b5efaad5739d669808b92b9214",
+      "suites": [
+        {
+          "name": "org.idempiere.test.base.DBTest",
+          "tests": 55,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "1aab4d4352d7f3cc839e8f7cc3df47d7ce127b8c7114ce699e09f67e53eb8944"
+        },
+        {
+          "name": "org.idempiere.test.base.DocumentSearchTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "17998e982eb2a913844332d5efdc2312a0f59df053b431637e92d9b504c7169d"
+        },
+        {
+          "name": "org.idempiere.test.base.DocumentStatusTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "de003c10a5b497d8e5572a3424d51dfe943ac90daf593cb325a4e1e483dd9b4f"
+        },
+        {
+          "name": "org.idempiere.test.base.DynamicServiceLocatorTest",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "ad71646f60145a4376c153a226b6539a8852e73a612077f9507a87ac991452ac"
+        },
+        {
+          "name": "org.idempiere.test.base.EmailFormatValidatorTest",
+          "tests": 24,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "4d43946d3217b90d8037ca7e36fcf9c24d0f7d517ce0e98cbd64bd9cbbd6507a"
+        }
+      ]
+    },
+    {
+      "name": "remaining-04-release",
+      "status": "tests_completed",
+      "returncode": 0,
+      "seconds": 124,
+      "tests": 90,
+      "failures": 0,
+      "skipped": 0,
+      "server_aborts": 0,
+      "classes": 8,
+      "expected_test_counts_matched": true,
+      "selected_classes_all_reported": true,
+      "binary_sha256": "261448f7bbec7f66853f5b2d257f5f6bfc5cf89f619e75417b821571125e8f3c",
+      "database_sync_outbox": "off",
+      "diagnostic_unmerged_candidate": false,
+      "jdbc_adapter_sha256": "c9b62554e40c4c0bce727656c68b0754f6bae1b5efaad5739d669808b92b9214",
+      "suites": [
+        {
+          "name": "org.idempiere.test.base.EnvTest",
+          "tests": 70,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "229467ab97f407554478c3926d44f9ae43b3f61f092741749e6335f28877bf38"
+        },
+        {
+          "name": "org.idempiere.test.base.GenericPaymentExportTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "7c421ca077f611ae1061c0bff011f225c6a21b4c4dd0902a3c93c14dba7874ea"
+        },
+        {
+          "name": "org.idempiere.test.base.GenericZoomProviderTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "0920a3c8e35440d164cadabcee127f9071ccb15add45214a7548da6305b549d5"
+        },
+        {
+          "name": "org.idempiere.test.base.GetBOMFunctionsTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "c59e8ee506b4f6c83cf2c6436e7afc3e210e6937a0a948d8d7f5cca2555be9f6"
+        },
+        {
+          "name": "org.idempiere.test.base.InitialClientSetupTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "e60f46138a1fcc707c4d9de7378744d681adff094ce3750f44a2a703f1087d23"
+        },
+        {
+          "name": "org.idempiere.test.base.JfreeChartBuilderTest",
+          "tests": 9,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "929a67d24fe3f7ba48d533558a65a2cf460a4fa23662a90f6546cd6e5ee0e38e"
+        },
+        {
+          "name": "org.idempiere.test.base.JsonFieldTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "5b8af49d1c8fb64f812d7198799384b2b74a3cdc15027ae881a9b9127d75ada0"
+        },
+        {
+          "name": "org.idempiere.test.base.KeyNamePairTest",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "1cc57d098eee2ee859c9ee0f19fd9cec731d258b79ffe24213a859158a142ffa"
+        }
+      ]
+    },
+    {
+      "name": "remaining-05-release",
+      "status": "tests_completed",
+      "returncode": 0,
+      "seconds": 258,
+      "tests": 89,
+      "failures": 0,
+      "skipped": 0,
+      "server_aborts": 0,
+      "classes": 5,
+      "expected_test_counts_matched": true,
+      "selected_classes_all_reported": true,
+      "binary_sha256": "261448f7bbec7f66853f5b2d257f5f6bfc5cf89f619e75417b821571125e8f3c",
+      "database_sync_outbox": "off",
+      "diagnostic_unmerged_candidate": false,
+      "jdbc_adapter_sha256": "c9b62554e40c4c0bce727656c68b0754f6bae1b5efaad5739d669808b92b9214",
+      "suites": [
+        {
+          "name": "org.idempiere.test.base.LogicExpressionTest",
+          "tests": 23,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "2e6081192a040b73bc34b8dff93a4c1e806d88d3a88a94ee6a8f9ee5f4014fd9"
+        },
+        {
+          "name": "org.idempiere.test.base.MColumnTest",
+          "tests": 49,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "0695a6785c360867ab6bb030df92d87d322f97d210028f62a2b0b77234f2f30c"
+        },
+        {
+          "name": "org.idempiere.test.base.MDocumentStatusTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "27904f234fdbb4f2a90ca4cbdb51ed5e3d908ab5ad0f06c1340c7b7e6c090227"
+        },
+        {
+          "name": "org.idempiere.test.base.MFieldTest",
+          "tests": 14,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "e4ca3aaf39cbcd319ff558d95a20ef2df9cf47df49db8ebabf1e164ae56a792b"
+        },
+        {
+          "name": "org.idempiere.test.base.MMeasureCalcTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "1881a0560eb38526477fa513884699e77eb4d98a6e50918aeb178ff09fccedd5"
+        }
+      ]
+    },
+    {
+      "name": "remaining-06-release",
+      "status": "tests_completed",
+      "returncode": 0,
+      "seconds": 123,
+      "tests": 95,
+      "failures": 0,
+      "skipped": 0,
+      "server_aborts": 0,
+      "classes": 6,
+      "expected_test_counts_matched": true,
+      "selected_classes_all_reported": true,
+      "binary_sha256": "261448f7bbec7f66853f5b2d257f5f6bfc5cf89f619e75417b821571125e8f3c",
+      "database_sync_outbox": "off",
+      "diagnostic_unmerged_candidate": false,
+      "jdbc_adapter_sha256": "c9b62554e40c4c0bce727656c68b0754f6bae1b5efaad5739d669808b92b9214",
+      "suites": [
+        {
+          "name": "org.idempiere.test.base.MProcessTest",
+          "tests": 22,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "3da98db8f8534bdc4c162ae562a577490336917a078db5103cf06b990a956202"
+        },
+        {
+          "name": "org.idempiere.test.base.MQueryTest",
+          "tests": 18,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "ab98217f8f8072f51fabc99a37c16bc48a8ef81f68901a9dcc3098357045fca7"
+        },
+        {
+          "name": "org.idempiere.test.base.MRelationTypeTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "435838eba14c8367fad41535f8d3be9ac04815ba5eb8ddda1469ee926df305b5"
+        },
+        {
+          "name": "org.idempiere.test.base.MStorageTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "904b6c3852f47f5f3ea795bbe3285bb519fd50805c3ca36c1dd7b89549023e3e"
+        },
+        {
+          "name": "org.idempiere.test.base.MTabTest",
+          "tests": 14,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "f77c5835d25ef45ce55092fc54e8051fdf11484c9b3f6f208757df4ac1c0a879"
+        },
+        {
+          "name": "org.idempiere.test.base.MTableTest",
+          "tests": 38,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "4a98f739b7c5be7997383784ddfa15bc24275d27c37855750d9bdf6b25d1f17f"
+        }
+      ]
+    },
+    {
+      "name": "remaining-07-release",
+      "status": "tests_completed",
+      "returncode": 0,
+      "seconds": 450,
+      "tests": 100,
+      "failures": 0,
+      "skipped": 0,
+      "server_aborts": 0,
+      "classes": 11,
+      "expected_test_counts_matched": true,
+      "selected_classes_all_reported": true,
+      "binary_sha256": "261448f7bbec7f66853f5b2d257f5f6bfc5cf89f619e75417b821571125e8f3c",
+      "database_sync_outbox": "off",
+      "diagnostic_unmerged_candidate": false,
+      "jdbc_adapter_sha256": "c9b62554e40c4c0bce727656c68b0754f6bae1b5efaad5739d669808b92b9214",
+      "suites": [
+        {
+          "name": "org.idempiere.test.base.MWindowTest",
+          "tests": 16,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "112a055e9f25471fe234b692376beb863cd59c10b4499b66d3cdfd0ac17ec1e6"
+        },
+        {
+          "name": "org.idempiere.test.base.M_ElementTest",
+          "tests": 16,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "a0579caecf4b3ed3c5cb0567fddba2892482b8703ed37d023dcc164096727288"
+        },
+        {
+          "name": "org.idempiere.test.base.MappedByNameFactoryTest",
+          "tests": 10,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "24adc3f0f47f96e6524a14f47be48f9fde8145bf2cd48a6d86ba98501f143692"
+        },
+        {
+          "name": "org.idempiere.test.base.MappedProcessFactoryTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "58934beaafad9e97f971637f85028b43474fd8c47dd3bbb222d5d4849482498f"
+        },
+        {
+          "name": "org.idempiere.test.base.MarkdownTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "c8f9eace59190202c7cca0600df1276f46121c6985695b2634a10d6f667be403"
+        },
+        {
+          "name": "org.idempiere.test.base.MatchInv2ndAcctSchemaTest",
+          "tests": 14,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "a84405a5b95883bab0258d60712e99ed7f057c89095d14a3ad7f3885cf0dae69"
+        },
+        {
+          "name": "org.idempiere.test.base.MatchInvTest",
+          "tests": 8,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "b46aefa50bab130aae4eb8ad50a670f9f2aabc63a27234b06eb5e122526a8c81"
+        },
+        {
+          "name": "org.idempiere.test.base.MatchInvTestIsolated",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "bc203316bbb6334e71feac9b72e2cdce4b45d5597067078f1268421af8e31d9c"
+        },
+        {
+          "name": "org.idempiere.test.base.MatchPOTest",
+          "tests": 10,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "a7151b1e3aa8c7e194e7acb7989c1e94c6eecd81f63891794ac85a31a6235f6d"
+        },
+        {
+          "name": "org.idempiere.test.base.ModelInterfaceGeneratorTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "e040cf723d8664287995dc6b425babc6ef810a2815943a17dbae842ce03e7787"
+        },
+        {
+          "name": "org.idempiere.test.base.MsgTest",
+          "tests": 17,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "2c7270fdaa7e12729243cf3add6f10a8cb14832bb645623fbb1bc6d3291d06c3"
+        }
+      ]
+    },
+    {
+      "name": "remaining-08-release",
+      "status": "tests_failed",
+      "returncode": 1,
+      "seconds": 122,
+      "tests": 97,
+      "failures": 1,
+      "skipped": 0,
+      "server_aborts": 0,
+      "classes": 7,
+      "expected_test_counts_matched": true,
+      "selected_classes_all_reported": true,
+      "binary_sha256": "261448f7bbec7f66853f5b2d257f5f6bfc5cf89f619e75417b821571125e8f3c",
+      "database_sync_outbox": "off",
+      "diagnostic_unmerged_candidate": false,
+      "jdbc_adapter_sha256": "c9b62554e40c4c0bce727656c68b0754f6bae1b5efaad5739d669808b92b9214",
+      "suites": [
+        {
+          "name": "org.idempiere.test.base.POCrossTenantTest",
+          "tests": 11,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "1393497300c35251c3ff941eda9bb19b0bb1e8fe3a253c46803d34c4621dbc06"
+        },
+        {
+          "name": "org.idempiere.test.base.POInfoTest",
+          "tests": 49,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "dc191010ac35e827a29eec29d046333c9b1560c0a9c92ce479191339e16cf5f9"
+        },
+        {
+          "name": "org.idempiere.test.base.POTableAttributeTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "19489f06f1c8d0d021925c2b1701cb515ee569ad7adef674f207d0484f2f67fa"
+        },
+        {
+          "name": "org.idempiere.test.base.PasswordResetTest",
+          "tests": 8,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "9c478320dd031bf554b445fef8cb726c2e63f479103f605fc4afd2d69a55f863"
+        },
+        {
+          "name": "org.idempiere.test.base.QueryTest",
+          "tests": 20,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "760364c60c126091316c483313711aaad485ff203c53225f25f343f29d699640"
+        },
+        {
+          "name": "org.idempiere.test.base.ReportTest",
+          "tests": 5,
+          "failures": 1,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "405bb6ce960267e568fbd305ac545dc0c991765084ef99af02d568ce041ccf81"
+        },
+        {
+          "name": "org.idempiere.test.base.SecureInterfaceTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "a5f991e596b245fa9adb652a950ddf661112a3d95efff4d8f582f185578ed84a"
+        }
+      ]
+    },
+    {
+      "name": "remaining-09-release",
+      "status": "tests_failed",
+      "returncode": 1,
+      "seconds": 675,
+      "tests": 84,
+      "failures": 1,
+      "skipped": 0,
+      "server_aborts": 0,
+      "classes": 6,
+      "expected_test_counts_matched": true,
+      "selected_classes_all_reported": true,
+      "binary_sha256": "261448f7bbec7f66853f5b2d257f5f6bfc5cf89f619e75417b821571125e8f3c",
+      "database_sync_outbox": "off",
+      "diagnostic_unmerged_candidate": false,
+      "jdbc_adapter_sha256": "c9b62554e40c4c0bce727656c68b0754f6bae1b5efaad5739d669808b92b9214",
+      "suites": [
+        {
+          "name": "org.idempiere.test.base.TimeUtilTest",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "6cc6c71cfb9351e22eb8d14cc02d7f703497462d738f4971bfcfef208c981471"
+        },
+        {
+          "name": "org.idempiere.test.base.TrxTest",
+          "tests": 18,
+          "failures": 1,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "d8702bf2ef61bc7798d35d135b1a0e6cdc94f809f8b70eac01299e89e6929f05"
+        },
+        {
+          "name": "org.idempiere.test.base.UtilTest",
+          "tests": 21,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "e0578ebd723397c635d1a41d553905b42805036d055759cd8d4477c8b43acd88"
+        },
+        {
+          "name": "org.idempiere.test.base.ValueNamePairTest",
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "cdfe84641980dc4db52619385e9224cb9447b74d6cf1b81fa9c862c68df4ae32"
+        },
+        {
+          "name": "org.idempiere.test.commission.CommissionRunTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "4a3249f494e4d534b87fcb9b49d87ce6edbe35ee1f97a48873c51ad85bfb7b27"
+        },
+        {
+          "name": "org.idempiere.test.costing.AveragePOCostingTest",
+          "tests": 33,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "afdf3c8957bd18691b9d78a2a4f1e37c2a6ff0963539fcb6fbab3f97dd60257c"
+        }
+      ]
+    },
+    {
+      "name": "remaining-10-release",
+      "status": "tests_completed",
+      "returncode": 0,
+      "seconds": 3566,
+      "tests": 96,
+      "failures": 0,
+      "skipped": 0,
+      "server_aborts": 0,
+      "classes": 1,
+      "expected_test_counts_matched": true,
+      "selected_classes_all_reported": true,
+      "binary_sha256": "261448f7bbec7f66853f5b2d257f5f6bfc5cf89f619e75417b821571125e8f3c",
+      "database_sync_outbox": "off",
+      "diagnostic_unmerged_candidate": false,
+      "jdbc_adapter_sha256": "c9b62554e40c4c0bce727656c68b0754f6bae1b5efaad5739d669808b92b9214",
+      "suites": [
+        {
+          "name": "org.idempiere.test.costing.BackDateAveragePOCostingTest",
+          "tests": 96,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "c1fe4a658d5645819718db66f75ca4db85d742006b878f60148aecd762db3063"
+        }
+      ]
+    },
+    {
+      "name": "remaining-11-release",
+      "status": "tests_failed",
+      "returncode": 1,
+      "seconds": 430,
+      "tests": 96,
+      "failures": 1,
+      "skipped": 0,
+      "server_aborts": 0,
+      "classes": 29,
+      "expected_test_counts_matched": true,
+      "selected_classes_all_reported": true,
+      "binary_sha256": "261448f7bbec7f66853f5b2d257f5f6bfc5cf89f619e75417b821571125e8f3c",
+      "database_sync_outbox": "off",
+      "diagnostic_unmerged_candidate": false,
+      "jdbc_adapter_sha256": "c9b62554e40c4c0bce727656c68b0754f6bae1b5efaad5739d669808b92b9214",
+      "suites": [
+        {
+          "name": "org.idempiere.test.costing.NonStockedExpTypeAvgPOCostingTest",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "1df0e4393b50ed62c95ac8aa6422532c8d726c7a17d57029258867655435634b"
+        },
+        {
+          "name": "org.idempiere.test.costing.NonStockedExpTypeStdCostingTest",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "265cbb337e44cfd30f1c2f36a0fd21bfce1f85e5024e2cbb0d32d2ae4ef8a266"
+        },
+        {
+          "name": "org.idempiere.test.dashboard.FavouriteWidgetTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "3f821d5c2ab5a4435efd88f00855c4d3a6ba726d1fa4b709f6b5a9065cb28421"
+        },
+        {
+          "name": "org.idempiere.test.dunning.DunningRunTest",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "08ca15a13b445a0425374df726adec81b1864a08946f552c17ed84d5e5a4a448"
+        },
+        {
+          "name": "org.idempiere.test.event.EventDelegateAnnotationTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "142c0d195c763eaae0927aff739bd8328059cbb977624181d9353def494f118f"
+        },
+        {
+          "name": "org.idempiere.test.event.EventHandlerTest",
+          "tests": 8,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "2b73d2e34aeb51000a43e7263ca6a40f5cb69fc81a56f3d0ccb2b3ce4f068c4d"
+        },
+        {
+          "name": "org.idempiere.test.form.AllocationFormTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "c2994be3bf6e91de5236812a2af79ae704a6f78640e167f3860b6206b08f99e8"
+        },
+        {
+          "name": "org.idempiere.test.form.ArchiveViewerFormTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "8917f7f1384196e58b473f81b39f432475e098ad83576abdba6eb91f48bb5248"
+        },
+        {
+          "name": "org.idempiere.test.form.BOMDropFormTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "0fb2a571d8236984d874987cf6e4a61678e9107a6d8e6862a473b6b852e350bc"
+        },
+        {
+          "name": "org.idempiere.test.form.BOMViewerFormTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "275f1798d4852982dc7bcf231f07f6c910c7ad84314a6d2be83e98cf01763a9d"
+        },
+        {
+          "name": "org.idempiere.test.form.ChargeFormTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "66c88fefa37ab036331b7f4e90ac915c1a96ce1a4e8119fb77bb2c00356e728f"
+        },
+        {
+          "name": "org.idempiere.test.form.CreateFromDepositBatchFormTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "edebf4bc6268a667a6f81141e8fa2e1639cb53740d6a4810a642a62bdff767ed"
+        },
+        {
+          "name": "org.idempiere.test.form.CreateFromInvoiceFormTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "577511404cda8cd62dc7df45fafb2fb6e587c3a20ed8915da4d357853411fa6e"
+        },
+        {
+          "name": "org.idempiere.test.form.CreateFromPackageShipmentFormTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "5ead9299c00895c5c480aa6d7d8474ff85fc4116c29af82f87ba57334b82ba96"
+        },
+        {
+          "name": "org.idempiere.test.form.CreateFromRMAFormTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "23f467a8f9106431e590573d5e557a4c8e31fd9adbcf1107ef65f8126804e2fb"
+        },
+        {
+          "name": "org.idempiere.test.form.CreateFromShipmentFormTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "9273f67926bf97ddc672b0ce3ad2ba105b5c5454af1e62946c2f05296690d617"
+        },
+        {
+          "name": "org.idempiere.test.form.CreateFromStatementFormTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "840503b7bc2066a576d4a18fc87dc4ef711bf7bfe62e24d05f84ab87230ba796"
+        },
+        {
+          "name": "org.idempiere.test.form.FactReconcileFormTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "ac943dd968882e34d7fc01f1af780ffe05af7a62ea54155df48e104ba3107f7a"
+        },
+        {
+          "name": "org.idempiere.test.form.MatchFormTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "508be8e90025ca8616e646439f4f31ddfe648b2f853177f425d33b7c1016cb88"
+        },
+        {
+          "name": "org.idempiere.test.form.MergeFormTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "1c58988842d222ef52caac9b797712c3be815927f0bff8fa0c156589c3642579"
+        },
+        {
+          "name": "org.idempiere.test.form.PaySelectFormTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "809e42efad8d9c476fd9466a5cafbb150548ad774f4f98434011eb6a4db1e952"
+        },
+        {
+          "name": "org.idempiere.test.form.PaymentFormTest",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "ec53282778052490994c392816a106eff486d7198226fd2e5797f1d5fe22f62b"
+        },
+        {
+          "name": "org.idempiere.test.jasper.PrintWithinProcess",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "c096ec7df5ebc9dff7ad2f7478897faace86f9c12aeac8a23515686566f2175c"
+        },
+        {
+          "name": "org.idempiere.test.model.Allocation2ndAcctSchemaTest",
+          "tests": 21,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "6e1187f43576315ad9a40460e4218f7a38d221edcc3b2f43359cfaa1b756555d"
+        },
+        {
+          "name": "org.idempiere.test.model.AnnotationColumnCalloutFactoryTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "686b9b6cd0048e2c5954692732590c4872b7f53b5d91bdddf630bba8dfead58e"
+        },
+        {
+          "name": "org.idempiere.test.model.CalloutEngineTest",
+          "tests": 10,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "d34cb0d1e5345b503df5d17c159f9918a895b02f3f095c192a94fe305841323f"
+        },
+        {
+          "name": "org.idempiere.test.model.CalloutTest",
+          "tests": 2,
+          "failures": 1,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "b1fadf5d0ec5c039abea5519dfd37df4b8fde4b83db32ccd53d24236cd142a9a"
+        },
+        {
+          "name": "org.idempiere.test.model.FixedAssetsTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "9ae6a6b311ea8c7d2163e55340d853ca96237f8e977db943ca52c57ec314a523"
+        },
+        {
+          "name": "org.idempiere.test.model.FormTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "9d6866ed380118bdde658a2a6606430c90e7849add529ee7c2758634c52599b7"
+        }
+      ]
+    },
+    {
+      "name": "remaining-12-release",
+      "status": "tests_completed",
+      "returncode": 0,
+      "seconds": 141,
+      "tests": 98,
+      "failures": 0,
+      "skipped": 0,
+      "server_aborts": 0,
+      "classes": 22,
+      "expected_test_counts_matched": true,
+      "selected_classes_all_reported": true,
+      "binary_sha256": "261448f7bbec7f66853f5b2d257f5f6bfc5cf89f619e75417b821571125e8f3c",
+      "database_sync_outbox": "off",
+      "diagnostic_unmerged_candidate": false,
+      "jdbc_adapter_sha256": "c9b62554e40c4c0bce727656c68b0754f6bae1b5efaad5739d669808b92b9214",
+      "suites": [
+        {
+          "name": "org.idempiere.test.model.InventoryLineUOMTest",
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "a71294c3a6aaf6a547a55d62053173d5256e369bd490f21e9ebe336b9e6658f0"
+        },
+        {
+          "name": "org.idempiere.test.model.InventoryMoveTest",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "1ec18a6b85a9710f8da8298f3a8f1e574a2d2a16b6a7cff35ae938808e98db71"
+        },
+        {
+          "name": "org.idempiere.test.model.InventoryTest",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "ffb60c7a45c6fa0c4a31e6f958a0e82eb83a1907e23f8b4b1a68bfeaf58ba7f2"
+        },
+        {
+          "name": "org.idempiere.test.model.InventoryTestIsolated",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "043b57108fd54ca5037af596984bcb5ba643d50f27ba9bcd28feeb7ad79ce367"
+        },
+        {
+          "name": "org.idempiere.test.model.MArchiveTest",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "ebafbccc3d5d0fb8cfeee03264ee29905b90dd299a9b2972f5f814d0f7570509"
+        },
+        {
+          "name": "org.idempiere.test.model.MAttachmentFileTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "0aa1c93f6cf35b98ec0d38bab5413731742d5884924aba5fde7cfb98599a834a"
+        },
+        {
+          "name": "org.idempiere.test.model.MAttributeInstanceLineTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "6ab3a9eea31b25948ceb6ca98c52042752272f7a818eb8a44a53abd796d86c5e"
+        },
+        {
+          "name": "org.idempiere.test.model.MAttributeInstanceTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "99108cfa24e9e6cda7278255be30b701e916ca3cd97fd2b91c28d8e87d991923"
+        },
+        {
+          "name": "org.idempiere.test.model.MAttributeSetTest",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "f9836371e364ed97b5076c6d6e91018a2702fbaddf650ae188c18d5822b3ece1"
+        },
+        {
+          "name": "org.idempiere.test.model.MBankTransferTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "156ea19ef8de7b5365937d49f1b47afc80f2b184dd461de2456e851917af4df5"
+        },
+        {
+          "name": "org.idempiere.test.model.MClientTest",
+          "tests": 26,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "bfbbc26f8484967fb48a0cbeb5306029857e66432454912bdcd9616e2de55e0c"
+        },
+        {
+          "name": "org.idempiere.test.model.MDiscountSchemaTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "f8a50229cd4ab9d084b55c3abd94fed9e07b97dc394ebae218a30f590c6931ff"
+        },
+        {
+          "name": "org.idempiere.test.model.MFieldCustomizationTest",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "3d157b91e65861c856de26f61e3925bb4a60718508684eaad5f791b12dad098e"
+        },
+        {
+          "name": "org.idempiere.test.model.MImageTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "6fee74e40753c0f46f555f6e1888e2318e72fe0f1a93cd44437b80184fbce226"
+        },
+        {
+          "name": "org.idempiere.test.model.MInfoWindowTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "259bed9ae435a14bbb7a60acfaa7992011d57df113a58af4904077377270a219"
+        },
+        {
+          "name": "org.idempiere.test.model.MJournalLineASITest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "5a967d056ec113704c0ba52e7dc8abc8475e58d4bd8e80a3c4cc29047b0338d7"
+        },
+        {
+          "name": "org.idempiere.test.model.MOrgTest",
+          "tests": 14,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "51b1fc5a46ee21f701501ac831f2d01ef42a602c338b112f02baeb9a51f3590b"
+        },
+        {
+          "name": "org.idempiere.test.model.MPrintFormatTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "003ddbe11849f4c6f8d47d35ac0c4ccb9a49ab3ec0d8a4a3ad59d18b49ad0bbe"
+        },
+        {
+          "name": "org.idempiere.test.model.MProductTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "15393101dfb43af82ff1fc0562aa2a026619fd642ded8be5576264ed27438a94"
+        },
+        {
+          "name": "org.idempiere.test.model.MProjectTypeTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "440a8c92e28b52e3619b966037ff37262484ae685e9826282fb244d63d766400"
+        },
+        {
+          "name": "org.idempiere.test.model.MRequestTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "59dc8a159f517044206a01c7fbdd8c0783e437dea62e45d6f2e8c1eded7046e5"
+        },
+        {
+          "name": "org.idempiere.test.model.MRoleMockedTest",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "1d8658d47e0d0af93663f49af1e8db7ea429a367e9421d34217d399e6b461755"
+        }
+      ]
+    },
+    {
+      "name": "remaining-13-release",
+      "status": "tests_completed",
+      "returncode": 0,
+      "seconds": 167,
+      "tests": 86,
+      "failures": 0,
+      "skipped": 0,
+      "server_aborts": 0,
+      "classes": 10,
+      "expected_test_counts_matched": true,
+      "selected_classes_all_reported": true,
+      "binary_sha256": "261448f7bbec7f66853f5b2d257f5f6bfc5cf89f619e75417b821571125e8f3c",
+      "database_sync_outbox": "off",
+      "diagnostic_unmerged_candidate": false,
+      "jdbc_adapter_sha256": "c9b62554e40c4c0bce727656c68b0754f6bae1b5efaad5739d669808b92b9214",
+      "suites": [
+        {
+          "name": "org.idempiere.test.model.MRoleTest",
+          "tests": 67,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "e6e6bba60e8a405a88e7ef2b630cfc39df29513ef37b2e84766a766a82fe6061"
+        },
+        {
+          "name": "org.idempiere.test.model.MSchedulerTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "0da1461be6cd249e1895a326147c2e8f573a5f67ba2738d22098967980306615"
+        },
+        {
+          "name": "org.idempiere.test.model.MSequenceTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "08e35c036a65fa200245f7ddb24b69b8124768a6f84b9dc5a6c67c9bec8097ba"
+        },
+        {
+          "name": "org.idempiere.test.model.MStorageOnHandTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "aed804cfe702892c9744de19674fd78f18044dce60d699adf4501f23134133be"
+        },
+        {
+          "name": "org.idempiere.test.model.MStorageOnHandTestIsolated",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "912752c3c2733e503fb5d9272921f67cd777f3660530a2e241a04dd8c753e469"
+        },
+        {
+          "name": "org.idempiere.test.model.MTaxTest",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "361f465c131078486f55130851a65cc213de8c2a5616984d68666611895bbbf7"
+        },
+        {
+          "name": "org.idempiere.test.model.MTestTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "a6f1fafe1c0157a25bc6630e37a51dae42888b36685cdf9161bda5a2c4a9e59c"
+        },
+        {
+          "name": "org.idempiere.test.model.MTestUUTest",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "200cd4f8297b0cb71c50b05249a0179c4e3fd54323ddacd2bde46d5740eb5cc1"
+        },
+        {
+          "name": "org.idempiere.test.model.MToolBarButtonRestrictTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "f6938f403d3f7fa84aa5db356d4c0afa19ef615f111e288b37f6970371701302"
+        },
+        {
+          "name": "org.idempiere.test.model.MUOMConversionTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "cedf089deb60edb2cd33c2b252aadd812403cd808fbc0f609e630c130ec8580e"
+        }
+      ]
+    },
+    {
+      "name": "remaining-14-release",
+      "status": "tests_failed",
+      "returncode": 1,
+      "seconds": 378,
+      "tests": 94,
+      "failures": 1,
+      "skipped": 0,
+      "server_aborts": 0,
+      "classes": 16,
+      "expected_test_counts_matched": true,
+      "selected_classes_all_reported": true,
+      "binary_sha256": "261448f7bbec7f66853f5b2d257f5f6bfc5cf89f619e75417b821571125e8f3c",
+      "database_sync_outbox": "off",
+      "diagnostic_unmerged_candidate": false,
+      "jdbc_adapter_sha256": "c9b62554e40c4c0bce727656c68b0754f6bae1b5efaad5739d669808b92b9214",
+      "suites": [
+        {
+          "name": "org.idempiere.test.model.MUserTest",
+          "tests": 35,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "7c0f7a01efb5550b5ff5bcab32eac8283c9ac0c9e9010ccde6d42e96a01ebad7"
+        },
+        {
+          "name": "org.idempiere.test.model.MappedColumnCalloutFactoryTest",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "9b70d031679bb22b6f868eec4431bd838ac6153f3865bde5e418a990ddee1b89"
+        },
+        {
+          "name": "org.idempiere.test.model.MappedDocumentFactoryTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "f75f78a502cc150ed73a0b1900a0b059fd473f78afb3f81f96bffaf731559601"
+        },
+        {
+          "name": "org.idempiere.test.model.MappedModelFactoryTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "f7098e08983d4c560c7e45ba9178f4d33c799d19ececa973dd9e5e2153646a2c"
+        },
+        {
+          "name": "org.idempiere.test.model.MatchingTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "2fd386dea04b0b2db9826c6539befb2961951494797fa303f4f17a6b9cfcceca"
+        },
+        {
+          "name": "org.idempiere.test.model.ModelClassMappingTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "8d87484b811e97b94fb9b5003dfb21e609668e6bc671ad1082ec7866852a8f63"
+        },
+        {
+          "name": "org.idempiere.test.model.ModelForeignKeyTest",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "0e7368bf2f9c156084dc963c6aac13cc49414c5310f4043ad346e33e45d5112e"
+        },
+        {
+          "name": "org.idempiere.test.model.ModelValidationEngineTest",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "81c5e75e66983f791069bf9c1dce224e41dd3bf48ae621a24e03c912ce76bb01"
+        },
+        {
+          "name": "org.idempiere.test.model.ProcessTest",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "39784b5cbfa3e670301b7597f7ece67bce31195c813762e874d00dbae9602d72"
+        },
+        {
+          "name": "org.idempiere.test.model.ProductionTest",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "97a996029747283e1e20182a447b46100625998f9a64b6eacef39678adec1600"
+        },
+        {
+          "name": "org.idempiere.test.model.ProductionTestIsolated",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "4fd693d52bc168d804108aa504d3f9b16d277a0ee8cc86a46732646a1ddf0475"
+        },
+        {
+          "name": "org.idempiere.test.model.RequisitionTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "0e917cea030d92837a43cc7263e2a68b40ce24fb180ff401f9c871539e2ae7ee"
+        },
+        {
+          "name": "org.idempiere.test.performance.CacheTest",
+          "tests": 21,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "5c7c06178b625ae7c0e8307d788f81b45ed996025a4f218cc350305f2e97ebba"
+        },
+        {
+          "name": "org.idempiere.test.print.ServerReportCtlTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "04e64fdb26b58cf7dda9275e4b8b66f53821cfa3748f55f2b6d0753d21173227"
+        },
+        {
+          "name": "org.idempiere.test.process.ProjectIssueTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "3d1bfb2b5c763600491d733e5c81d429183a2812fd8f4d6be09e6572717b1e18"
+        },
+        {
+          "name": "org.idempiere.test.tracking.AuditTraceContextTest",
+          "tests": 3,
+          "failures": 1,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "af64fcf0cd6e9795d5a9912a33b74181404a544fb8d75e6da068bd35a8f0913e"
+        }
+      ]
+    },
+    {
+      "name": "remaining-15-release",
+      "status": "tests_completed",
+      "returncode": 0,
+      "seconds": 91,
+      "tests": 37,
+      "failures": 0,
+      "skipped": 0,
+      "server_aborts": 0,
+      "classes": 7,
+      "expected_test_counts_matched": true,
+      "selected_classes_all_reported": true,
+      "binary_sha256": "261448f7bbec7f66853f5b2d257f5f6bfc5cf89f619e75417b821571125e8f3c",
+      "database_sync_outbox": "off",
+      "diagnostic_unmerged_candidate": false,
+      "jdbc_adapter_sha256": "c9b62554e40c4c0bce727656c68b0754f6bae1b5efaad5739d669808b92b9214",
+      "suites": [
+        {
+          "name": "org.idempiere.test.ui.FindWindowRelatedSearchTest",
+          "tests": 15,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "d70921895726d05f2e61ee72139afb98541ae4956a0b10ecacc0ed717287aa96"
+        },
+        {
+          "name": "org.idempiere.test.ui.InfoGeneralPanelTest",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "48ed567c778f2b9a157b9ced1188d2a3ec0731789cac90974ea03cbfbd0a286e"
+        },
+        {
+          "name": "org.idempiere.test.ui.InfoWindowTest",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "04581f8efa4f72fc918a426760c9e960b8881bda75bb406fce769fa8dc043fc2"
+        },
+        {
+          "name": "org.idempiere.test.ui.ReportViewerContentRendererFactoryTest",
+          "tests": 10,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "8a13061edbce24ca0b7efe22ca8a77596f66676dfb28d4285dc85f12a61cc57a"
+        },
+        {
+          "name": "org.idempiere.test.ui.ServerPushEndPointTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "be7e35c5dbf1bedf2d9a82058eb35bad1a4ae01395f5eafbad57c9895fb967c0"
+        },
+        {
+          "name": "org.idempiere.test.ui.WProcessParameterFormTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "1e716ac066d56c3920b0590d45b10cdf2b567e4617f4b568255f87a4e3089240"
+        },
+        {
+          "name": "org.idempiere.test.workflow.WFMaterialReceiptTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "report_sha256": "dd6c7a1ca2a3bc531965ac570649c0747457036abffc56ced0cfb980d7ef34dc"
+        }
+      ]
+    }
+  ],
+  "not_claimed": [
+    "standards or vendor conformance",
+    "web application or production deployment",
+    "performance parity"
+  ]
+}

@@ -189,6 +189,28 @@ fn drop_table_cascade_constraints_removes_referencing_foreign_keys() {
     assert!(run_owner(&mut db, "SELECT COUNT(*) FROM gone_t").is_err());
 }
 
+/// RAW values in Oracle routines keep the profile's conversion rules: the
+/// PostgreSQL bytea typing of routine variables does not apply, and RAW
+/// concatenation still requires an explicit conversion.
+#[test]
+fn raw_routine_parameters_keep_oracle_profile_conversions() {
+    let (_root, mut db) = app_database();
+    let created = run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION raw_pair(p IN RAW) RETURN VARCHAR2 AS
+         BEGIN
+           RETURN p || p;
+         END;",
+    );
+    let error = created
+        .and_then(|_| run(&mut db, "SELECT raw_pair(HEXTORAW('0102')) FROM dual"))
+        .unwrap_err();
+    assert!(
+        error.to_string().contains("Oracle concatenation requires"),
+        "{error}"
+    );
+}
+
 #[test]
 fn unique_constraints_are_checked_when_the_statement_ends() {
     let (_root, mut db) = app_database();

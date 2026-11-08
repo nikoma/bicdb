@@ -377,6 +377,82 @@ fn bytea_output_guc_switches_text_rendering_without_changing_storage() {
 }
 
 #[test]
+fn integer_send_functions_return_big_endian_bytes() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let text =
+        |session: &mut SqlSession, sql: &str| session.execute(sql).unwrap().rows[0][0].to_cell();
+    assert_eq!(
+        text(&mut session, "SELECT int8send(258::bigint)"),
+        "\\x0000000000000102"
+    );
+    assert_eq!(text(&mut session, "SELECT int4send(-2)"), "\\xfffffffe");
+    assert_eq!(
+        text(&mut session, "SELECT int2send(1::smallint)"),
+        "\\x0001"
+    );
+    assert_eq!(
+        text(
+            &mut session,
+            "SELECT substring(int8send(1794121292908::bigint) from 3 for 6)"
+        ),
+        "\\x01a1b9f65c6c"
+    );
+    // Inside PL/pgSQL, as UUIDv7 generators use it.
+    session
+        .execute(
+            "CREATE FUNCTION ts_bytes(ms bigint) RETURNS bytea LANGUAGE plpgsql AS $$ \
+             DECLARE b bytea; BEGIN b := substring(int8send(ms) from 3 for 6); RETURN b; END; $$",
+        )
+        .unwrap();
+    assert_eq!(
+        text(&mut session, "SELECT ts_bytes(258)"),
+        "\\x000000000102"
+    );
+    session
+        .execute(
+            r#"CREATE FUNCTION uuid_v7(ts timestamp with time zone DEFAULT clock_timestamp()) RETURNS uuid
+            LANGUAGE plpgsql AS $$
+            DECLARE unix_ts_ms bigint; uuid_bytes bytea; random_part bytea;
+            BEGIN
+              unix_ts_ms := floor(extract(epoch from ts) * 1000)::bigint;
+              unix_ts_ms := unix_ts_ms & x'FFFFFFFFFFFF'::bigint;
+              random_part := decode(replace(gen_random_uuid()::text, '-', ''), 'hex');
+              uuid_bytes :=
+                substring(int8send(unix_ts_ms) from 3 for 6) ||
+                substring(random_part from 7 for 2) ||
+                substring(random_part from 9 for 8);
+              uuid_bytes := set_byte(uuid_bytes, 6, (get_byte(uuid_bytes, 6) & 15) | 112);
+              uuid_bytes := set_byte(uuid_bytes, 8, (get_byte(uuid_bytes, 8) & 63) | 128);
+              RETURN encode(uuid_bytes, 'hex')::uuid;
+            END; $$"#,
+        )
+        .unwrap();
+    let uuid = text(
+        &mut session,
+        "SELECT uuid_v7(timestamptz '2026-11-08 00:00:00+00')",
+    );
+    assert_eq!(uuid.len(), 36, "{uuid}");
+    assert!(uuid.starts_with("01a1b874-6c00-7"), "{uuid}");
+    // bytea variables keep byte semantics in substring and concatenation.
+    session
+        .execute(
+            "CREATE FUNCTION byte_pick(b bytea) RETURNS bytea LANGUAGE plpgsql AS $$ \
+             DECLARE r bytea; BEGIN r := b; \
+             RETURN substring(r from 9 for 2) || substring(b from 1 for 1); END; $$",
+        )
+        .unwrap();
+    assert_eq!(
+        text(
+            &mut session,
+            "SELECT byte_pick(decode('00112233445566778899aabbccddeeff', 'hex'))"
+        ),
+        "\\x889900"
+    );
+}
+
+#[test]
 fn fixed_bit_typmods_literals_operators_casts_functions_and_indexes_match_postgresql() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();

@@ -1423,7 +1423,7 @@ mod tests {
         assert_eq!(
             resolve(
                 &operators,
-                &["public"],
+                &["pg_catalog", "public"],
                 "+",
                 Some("timestamptz"),
                 Some("int4")
@@ -1436,12 +1436,12 @@ mod tests {
     fn unknown_literals_prefer_the_string_category() {
         let operators = Vec::new();
         assert_eq!(
-            resolve(&operators, &["public"], "||", Some("text"), None),
+            resolve(&operators, &["pg_catalog", "public"], "||", Some("text"), None),
             "builtin"
         );
-        assert_eq!(resolve(&operators, &["public"], "=", None, None), "builtin");
+        assert_eq!(resolve(&operators, &["pg_catalog", "public"], "=", None, None), "builtin");
         assert_eq!(
-            resolve(&operators, &["public"], "+", Some("int4"), None),
+            resolve(&operators, &["pg_catalog", "public"], "+", Some("int4"), None),
             "builtin"
         );
     }

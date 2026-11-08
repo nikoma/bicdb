@@ -1,0 +1,55 @@
+852 |                 slot: usize,
+    |                 ^^^^
+
+warning: associated items `from_sql_row` and `values_unprobed` are never used
+   --> crates/bicdb-sql/src/planner.rs:443:19
+    |
+430 | impl OuterSlotRow {
+    | ----------------- associated items in this implementation
+...
+443 |     pub(crate) fn from_sql_row(row: &SqlRow) -> Self {
+    |                   ^^^^^^^^^^^^
+...
+469 |     pub(crate) fn values_unprobed(&self) -> &SlotRow {
+    |                   ^^^^^^^^^^^^^^^
+
+warning: function `has_trusted_identity` is never used
+    --> crates/bicdb-sql/src/eval/value_ops1.rs:1971:15
+     |
+1971 | pub(crate) fn has_trusted_identity(session_gucs: &HashMap<String, String>) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `canonical_jsonb_identity_text` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:1965:15
+     |
+1965 | pub(crate) fn canonical_jsonb_identity_text(value: &JsonValue) -> String {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `pg_timestamp_from_unix_seconds` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:2831:15
+     |
+2831 | pub(crate) fn pg_timestamp_from_unix_seconds(seconds: i64) -> PgTimestamp {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `bicdb-sql` (lib) generated 65 warnings (run `cargo fix --lib -p bicdb-sql` to apply 7 suggestions)
+    Finished `test` profile [unoptimized] target(s) in 1m 35s
+     Running tests/independent_commit_conflicts.rs (/root/carrier-zero-friction-target/debug/deps/independent_commit_conflicts-d2c31ee32d59beec)
+
+running 1 test
+test independent_sql_commit_preserves_absent_key_conflict ... FAILED
+
+failures:
+
+---- independent_sql_commit_preserves_absent_key_conflict stdout ----
+
+thread 'independent_sql_commit_preserves_absent_key_conflict' (3647755) panicked at crates/bicdb-sql/tests/independent_commit_conflicts.rs:39:42:
+called `Result::unwrap_err()` on an `Ok` value: SqlResult { columns: [], rows: [], command_tag: Some("COMMIT"), column_types: [], column_metadata: [], notices: [] }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    independent_sql_commit_preserves_absent_key_conflict
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p bicdb-sql --test independent_commit_conflicts`

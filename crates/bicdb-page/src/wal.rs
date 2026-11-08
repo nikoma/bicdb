@@ -211,6 +211,8 @@ struct WalScanReport {
     valid_bytes: u64,
     truncated_bytes: u64,
     peak_record_bytes: u64,
+    /// LSN of the first valid record of the whole chain.
+    first_lsn: Option<Lsn>,
     last_lsn: Option<Lsn>,
 }
 
@@ -978,10 +980,26 @@ impl Wal {
         &self,
         max_body_bytes: usize,
         truncate_torn_tail: bool,
+        visit: F,
+    ) -> Result<WalScanReport>
+    where
+        F: FnMut(WalRecordView<'_>) -> Result<()>,
+    {
+        self.scan_records_checked(max_body_bytes, truncate_torn_tail, |_| Ok(()), visit)
+    }
+
+    /// [`Self::scan_records`], running `check` on the complete scan before
+    /// any torn tail is truncated, so a rejected log is left untouched.
+    fn scan_records_checked<F, C>(
+        &self,
+        max_body_bytes: usize,
+        truncate_torn_tail: bool,
+        check: C,
         mut visit: F,
     ) -> Result<WalScanReport>
     where
         F: FnMut(WalRecordView<'_>) -> Result<()>,
+        C: FnOnce(&WalScanReport) -> Result<()>,
     {
         let max_body_bytes = max_body_bytes.min(MAX_WAL_RECORD_BYTES - RECORD_HEADER_BYTES);
         let mut file = self.file.lock();
@@ -1038,6 +1056,7 @@ impl Wal {
         )?;
 
         scan.truncated_bytes = file_bytes.saturating_sub(active_valid);
+        check(&scan)?;
         if truncate_torn_tail && scan.truncated_bytes > 0 {
             file.set_len(active_valid)
                 .map_err(|error| PageError::io(&self.path, error))?;
@@ -1381,6 +1400,7 @@ where
             payload: &mut body[RECORD_FIXED_BODY_BYTES..],
         })?;
         first_lsn.get_or_insert(lsn);
+        scan.first_lsn.get_or_insert(lsn);
         scan.records = scan.records.saturating_add(1);
         scan.valid_bytes = scan.valid_bytes.saturating_add(record_bytes as u64);
         scan.peak_record_bytes = scan.peak_record_bytes.max(record_bytes as u64);
@@ -1544,7 +1564,8 @@ pub(crate) fn recover_with_outcomes(
     // Redo point of the last checkpoint record below the horizon: normally
     // the record at `H - 1` that published `H`.
     let mut checkpoint_redo_below_horizon = None;
-    let first = wal.scan_records(max_body_bytes, true, |record| {
+    let check = |scan: &WalScanReport| check_chain_start(wal.path(), horizon, scan.first_lsn);
+    let first = wal.scan_records_checked(max_body_bytes, true, check, |record| {
         // Checkpoint records reuse the transaction field for a redo LSN, so
         // they are excluded; transaction 0 marks structural images. Page
         // images matter here: a crashed transaction that evicted pages left
@@ -1691,6 +1712,35 @@ pub(crate) fn recover_with_outcomes(
     wal.redo_lsn.store(redo_lsn, Ordering::Release);
     report.duration_nanos = u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX);
     Ok((report, outcomes))
+}
+
+/// Refuse a page log whose first record lies above the page file's checkpoint
+/// horizon `horizon` (the superblock's `checkpoint_lsn`).
+///
+/// `Checkpointer::finish_checkpoint` publishes the horizon as the LSN right
+/// after its checkpoint record, once every page image below it is in the page
+/// file. A record at or above the horizon is appended only after that
+/// publication, and `Wal::reset` deletes only records below the horizon of
+/// the checkpoint that precedes it. So a non-empty chain always starts at or
+/// below the horizon: exactly at it after a reset, below it when the reset did
+/// not run (backup pin, unfrozen commits, a crash before the reset) or when
+/// archive retention kept sealed segments. A chain that starts above it has
+/// lost records the page file does not reflect, and replaying the rest would
+/// build pages on a missing prefix. A horizon of 0 (a new store, or one
+/// written before horizons existed) proves nothing and is not checked.
+fn check_chain_start(path: &Path, horizon: Lsn, first_lsn: Option<Lsn>) -> Result<()> {
+    match first_lsn {
+        Some(first) if horizon > 0 && first > horizon => Err(PageError::WalCorruption {
+            path: path.to_path_buf(),
+            lsn: first,
+            reason: format!(
+                "the page log starts at LSN {first} but the page file's checkpoint horizon is \
+                 {horizon}: records {horizon}..{} are missing",
+                first - 1
+            ),
+        }),
+        _ => Ok(()),
+    }
 }
 
 fn unix_time_millis() -> u64 {

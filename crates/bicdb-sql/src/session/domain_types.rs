@@ -462,6 +462,13 @@ impl<'db> SqlSession<'db> {
                         }
                     }
                     let schema_existed = schema.is_some();
+                    // A table's triggers belong to it and are dropped with it.
+                    for trigger in list_triggers(self.db_ref())?
+                        .into_iter()
+                        .filter(|trigger| trigger.table_name.eq_ignore_ascii_case(&table))
+                    {
+                        self.delete_session_trigger(&trigger.name, Some(&trigger.table_name))?;
+                    }
                     let existed = self.drop_session_collection(&table)?;
                     self.delete_session_schema(&table)?;
                     if existed || schema_existed {

@@ -34,7 +34,7 @@ fn transaction_log_only_durability_is_strictly_opt_in() {
     // Default configuration: off, in both storage modes, and no materializer.
     assert!(!DbConfig::default().transaction_log_commit_durability);
     for mode in [StorageMode::ServerPaged, StorageMode::EmbeddedMemory] {
-        let (_dir, db) = open(DbConfig::default().with_storage_mode(mode));
+        let (_dir, db) = open(DbConfig::default().with_storage_mode(mode.clone()));
         commit_rows(&db, 20);
         assert!(
             db.deferred_materialize_stats().is_none(),

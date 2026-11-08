@@ -419,3 +419,14 @@ fn column_named_top_is_an_ordinary_identifier() {
     );
     assert!(run_owner(&mut db, "SELECT TOP 1 id FROM ranking").is_err());
 }
+
+/// The DROP SCHEMA statement of the PostgreSQL profile is not part of this
+/// profile's DDL; it stays refused.
+#[test]
+fn drop_schema_stays_unsupported() {
+    let (_root, mut db) = app_database();
+    let error = SqlSession::new(&mut db)
+        .execute("DROP SCHEMA \"APP\"")
+        .unwrap_err();
+    assert!(format!("{error}").contains("not supported"), "{error}");
+}

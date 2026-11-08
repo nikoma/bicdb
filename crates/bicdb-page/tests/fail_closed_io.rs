@@ -11,7 +11,7 @@
 
 use std::sync::{Arc, Barrier};
 
-use bicdb_page::test_faults::arm_io_failure;
+use bicdb_page::test_faults::{arm_io_failure, arm_io_hook};
 use bicdb_page::wal::transaction_outcomes;
 use bicdb_page::{DurabilityState, PagedStore, PagedStoreOptions, TxStatus, Wal};
 use tempfile::TempDir;
@@ -327,4 +327,60 @@ fn a_failure_during_recovery_replay_fails_the_open_and_a_retry_recovers() {
         }
         reopen_and_verify(&dir, options(), 40);
     }
+}
+
+/// Online extent migration syncs the same segment descriptors the
+/// checkpoint syncs. A failed sync there used to be a plain error: it
+/// consumed the writeback error, so the next checkpoint's sync succeeded and
+/// truncated the log over pages that may have been lost. It must fence.
+#[test]
+fn a_failed_sync_during_online_extent_migration_fences_the_store() {
+    let dir = TempDir::new().unwrap();
+    {
+        let (store, _) = PagedStore::open(dir.path(), options()).unwrap();
+        commit_rows(&store, 0..2_000);
+        store.checkpoint().unwrap();
+        store.begin_extent_migration(64 * 1024).unwrap();
+        let fault = arm_io_failure("page_file.sync", dir.path(), 1, false);
+        let mut failed = None;
+        for _ in 0..1_000 {
+            match store.advance_extent_migration(4) {
+                Ok(report) if report.complete => break,
+                Ok(_) => {}
+                Err(error) => {
+                    failed = Some(error);
+                    break;
+                }
+            }
+        }
+        assert_eq!(fault.fired(), 1, "the migration never synced a segment");
+        let error = failed.expect("the failed migration sync must surface");
+        assert!(error.is_write_failed(), "{error}");
+        assert_eq!(failed_site(store.durability_health().state()), "page_file.sync");
+        // The checkpoint that would have truncated the log is refused.
+        assert!(store.checkpoint().unwrap_err().is_write_failed());
+        assert!(store.advance_extent_migration(4).unwrap_err().is_write_failed());
+    }
+    reopen_and_verify(&dir, options(), 2_000);
+}
+
+/// A failure recorded elsewhere while a page-log fsync is in flight (here: a
+/// torn append on another thread, simulated by a hook at the sync) fences
+/// the log, and the fsync that then succeeds publishes nothing: its target
+/// may name the record that failed.
+#[test]
+fn a_failure_during_an_in_flight_sync_publishes_no_durability() {
+    let dir = TempDir::new().unwrap();
+    let wal = Arc::new(Wal::open(dir.path().join("store.wal"), true).unwrap());
+    wal.commit(1).unwrap();
+    let durable = wal.durable_lsn();
+    let lsn = wal.commit_unsynced(2).unwrap();
+    let health = wal.health().clone();
+    let hook = arm_io_hook("page_log.sync", dir.path(), 1, move || {
+        health.record_failure("page_log.write", &"concurrent torn append");
+    });
+    let error = wal.sync_through(lsn).unwrap_err();
+    assert_eq!(hook.fired(), 1);
+    assert!(error.is_write_failed(), "{error}");
+    assert_eq!(wal.durable_lsn(), durable, "the in-flight sync published");
 }

@@ -1057,8 +1057,12 @@ impl Wal {
     /// the page file. Callers get there through [`Checkpointer::checkpoint`].
     pub fn reset(&self) -> Result<bool> {
         let mut file = self.file.lock();
-        // Discarding the log is only safe on a healthy store: after a failure
-        // the page file's durability is unproven, and the log is the redo.
+        // A fenced store never discards its log: after a failure the page
+        // file's durability is unproven, and the log is the redo. This check
+        // does NOT make a partial reset safe: a removal failure or a crash
+        // part-way through still leaves a state the next recovery mishandles
+        // (see "Known gap" in docs/durability-failure-handling.md, fixed
+        // separately).
         self.health.check()?;
         let retention = self.archive_retention.load(Ordering::Acquire);
         // Under archive retention EVERY record must flow through a sealed
@@ -1093,8 +1097,9 @@ impl Wal {
                 retained.push(sequence);
                 continue;
             }
-            // A sealed segment that survives its checkpoint would be replayed
-            // over newer page states by the next recovery.
+            // Recorded as a durability failure so this handle stops; the
+            // on-disk state a partial removal leaves is the known reset gap,
+            // not something the fence repairs.
             std::fs::remove_file(&path).map_err(|e| self.fail("page_log.reset", &path, e))?;
         }
         let locally_empty = retained.is_empty();

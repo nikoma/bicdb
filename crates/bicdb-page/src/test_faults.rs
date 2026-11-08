@@ -120,6 +120,8 @@ struct IoFaultPlan {
     persistent: bool,
     seen: AtomicU64,
     fired: AtomicU64,
+    /// Instead of failing, run this at the matching call (then do the I/O).
+    hook: Option<Box<dyn Fn() + Send + Sync>>,
 }
 
 fn io_fault_plans() -> &'static Mutex<Vec<Arc<IoFaultPlan>>> {
@@ -127,10 +129,22 @@ fn io_fault_plans() -> &'static Mutex<Vec<Arc<IoFaultPlan>>> {
     PLANS.get_or_init(|| {
         let mut plans = Vec::new();
         if let Ok(spec) = std::env::var("BICDB_TEST_FAIL_IO") {
+            // A test-only knob that makes real I/O fail: never quiet. A
+            // malformed spec is refused outright rather than silently
+            // arming nothing (or the wrong call).
+            crate::health::log_event(&serde_json::json!({
+                "event": "test_faults.io_failure_injection_enabled",
+                "severity": "critical",
+                "spec": spec,
+                "warning": "BICDB_TEST_FAIL_IO is a test-only setting: durable writes will fail on purpose",
+            }));
             for entry in spec.split(',').map(str::trim).filter(|e| !e.is_empty()) {
-                let (site, count) = entry.rsplit_once(':').unwrap_or((entry, "1"));
-                let persistent = count.ends_with('+');
-                let nth = count.trim_end_matches('+').parse().unwrap_or(1u64).max(1);
+                let (site, persistent, nth) = parse_io_fault_entry(entry).unwrap_or_else(|| {
+                    panic!(
+                        "BICDB_TEST_FAIL_IO: malformed entry `{entry}`; expected \
+                         <site>:<n> or <site>:<n>+ with n >= 1"
+                    )
+                });
                 plans.push(Arc::new(IoFaultPlan {
                     site: site.to_string(),
                     scope: None,
@@ -138,6 +152,7 @@ fn io_fault_plans() -> &'static Mutex<Vec<Arc<IoFaultPlan>>> {
                     persistent,
                     seen: AtomicU64::new(0),
                     fired: AtomicU64::new(0),
+                    hook: None,
                 }));
             }
         }
@@ -147,6 +162,26 @@ fn io_fault_plans() -> &'static Mutex<Vec<Arc<IoFaultPlan>>> {
 }
 
 static IO_FAULTS_ARMED: AtomicBool = AtomicBool::new(false);
+
+/// `<site>:<n>` or `<site>:<n>+`, `n >= 1`.
+fn parse_io_fault_entry(entry: &str) -> Option<(&str, bool, u64)> {
+    let (site, count) = entry.rsplit_once(':')?;
+    if site.is_empty() || site.contains(char::is_whitespace) {
+        return None;
+    }
+    let (count, persistent) = match count.strip_suffix('+') {
+        Some(count) => (count, true),
+        None => (count, false),
+    };
+    let nth = count.parse::<u64>().ok().filter(|nth| *nth >= 1)?;
+    Some((site, persistent, nth))
+}
+
+/// A named point where a test can run a hook ([`arm_io_hook`]); performs no
+/// I/O and never fails.
+pub fn io_hook_point(site: &str, path: &Path) {
+    let _ = io_fault(site, path);
+}
 
 /// Removes its fault plan when dropped.
 pub struct IoFaultGuard {
@@ -176,6 +211,29 @@ impl Drop for IoFaultGuard {
 /// Make the `nth` call (1-based) of `site` on a path under `scope` fail with
 /// `EIO`; with `persistent`, every later call fails too.
 pub fn arm_io_failure(site: &str, scope: &Path, nth: u64, persistent: bool) -> IoFaultGuard {
+    arm(site, scope, nth, persistent, None)
+}
+
+/// Run `hook` at the `nth` call of `site` under `scope`, then let the I/O
+/// proceed. Lets a test make something happen *while* an I/O is in flight
+/// (for example, a failure elsewhere during a successful fsync). The hook
+/// must not perform injected I/O itself.
+pub fn arm_io_hook(
+    site: &str,
+    scope: &Path,
+    nth: u64,
+    hook: impl Fn() + Send + Sync + 'static,
+) -> IoFaultGuard {
+    arm(site, scope, nth, false, Some(Box::new(hook)))
+}
+
+fn arm(
+    site: &str,
+    scope: &Path,
+    nth: u64,
+    persistent: bool,
+    hook: Option<Box<dyn Fn() + Send + Sync>>,
+) -> IoFaultGuard {
     let plan = Arc::new(IoFaultPlan {
         site: site.to_string(),
         scope: Some(scope.to_path_buf()),
@@ -183,6 +241,7 @@ pub fn arm_io_failure(site: &str, scope: &Path, nth: u64, persistent: bool) -> I
         persistent,
         seen: AtomicU64::new(0),
         fired: AtomicU64::new(0),
+        hook,
     });
     let mut plans = io_fault_plans().lock().unwrap_or_else(|e| e.into_inner());
     plans.push(plan.clone());
@@ -211,8 +270,26 @@ pub fn io_fault(site: &str, path: &Path) -> std::io::Result<()> {
         let call = plan.seen.fetch_add(1, Ordering::AcqRel) + 1;
         if call == plan.nth || (plan.persistent && call > plan.nth) {
             plan.fired.fetch_add(1, Ordering::AcqRel);
+            if let Some(hook) = &plan.hook {
+                hook();
+                continue;
+            }
             return Err(std::io::Error::from_raw_os_error(libc::EIO));
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_io_fault_entry;
+
+    #[test]
+    fn io_fault_specs_are_parsed_strictly() {
+        assert_eq!(parse_io_fault_entry("page_log.sync:3"), Some(("page_log.sync", false, 3)));
+        assert_eq!(parse_io_fault_entry("page_log.sync:1+"), Some(("page_log.sync", true, 1)));
+        for bad in ["page_log.sync", "page_log.sync:0", "page_log.sync:x", ":3", "a b:1", "s:-1"] {
+            assert_eq!(parse_io_fault_entry(bad), None, "{bad}");
+        }
+    }
 }

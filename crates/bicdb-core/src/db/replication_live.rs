@@ -336,6 +336,10 @@ impl BicDb {
             self.config.fsync,
         )?;
         bicdb_page::test_faults::crash_point("txlog_cut.after_floor");
+        // A concurrent fence between the flush above and the rename below
+        // must stop the cut: the log is the redo of a fenced database.
+        bicdb_page::test_faults::io_hook_point("transaction_log.cut_window", &path);
+        self.check_recovery_state()?;
         let cut = if keep_from >= log_len {
             truncate_log_file(&path, self.config.fsync)
         } else if keep_from > 0 {
@@ -675,7 +679,7 @@ impl SyncQuorum {
         match health.failure() {
             None => Ok(()),
             Some(failure) => Err(BicDbError::CommitOutcomeUnknown {
-                sequence: seq,
+                sequence: Some(seq),
                 transaction_id: None,
                 incarnation: incarnation.clone(),
                 detail: format!(

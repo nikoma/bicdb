@@ -1516,7 +1516,20 @@ impl BicDb {
                 };
                 if let Err(error) = committed {
                     self.fence_durability("paged.commit", &error);
-                    return Err(error);
+                    if durable_decision {
+                        // The caller holds a durable transaction-log
+                        // decision and reports the outcome with its
+                        // commit sequence.
+                        return Err(error);
+                    }
+                    // Here the page-log commit record is the decision, and
+                    // it may have reached the disk: never a refused write.
+                    return Err(BicDbError::CommitOutcomeUnknown {
+                        sequence: None,
+                        transaction_id: None,
+                        incarnation: self.incarnation.clone(),
+                        detail: format!("page transaction {xid} did not commit cleanly: {error}"),
+                    });
                 }
                 Ok(Some(xid))
             }
@@ -1911,6 +1924,13 @@ impl BicDb {
         self.durability.state()
     }
 
+    /// The shared durability state, for fault-injection tests that need to
+    /// fence the database from a hook. Not an operator API.
+    #[doc(hidden)]
+    pub fn durability_health_for_test(&self) -> Arc<bicdb_page::DurabilityHealth> {
+        self.durability.clone()
+    }
+
     /// Move the database to `WriteFailed` (first failure wins). Every later
     /// write, and every read `check_recovery_state` guards, is refused
     /// until the database is reopened.
@@ -1930,7 +1950,7 @@ impl BicDb {
             None => error.to_string(),
         };
         BicDbError::CommitOutcomeUnknown {
-            sequence,
+            sequence: Some(sequence),
             transaction_id: Some(transaction_id),
             incarnation: self.incarnation.clone(),
             detail: format!("{error}; {cause}"),
@@ -1958,9 +1978,18 @@ impl BicDb {
         }));
         let verified = (|| -> Result<()> {
             self.checkpoint_for_resume()?;
+            // Rewrite the transaction log (copy, fsync, rename, directory
+            // fsync) rather than fsync it: after a failed fsync the frames
+            // recovery just read may exist only in the page cache, clean but
+            // never written, and an fsync of clean pages writes nothing. A
+            // copy writes every byte recovery used to a new, synced inode.
+            // Embedded mode, or a cut that kept the whole log, would
+            // otherwise leave such frames exposed to an OS crash.
             let log = self.tx_log_path();
             if log.exists() {
-                storage::sync_file(&log)?;
+                self.tx_log.flush_pending()?;
+                copy_transaction_log_tail(&log, 0, true)?;
+                self.tx_log.invalidate();
             }
             self.check_recovery_state()
         })();
@@ -2490,13 +2519,30 @@ impl BicDb {
         // A durable logical decision precedes every physical/resident apply.
         // A failed sync may still have persisted it, so errors fence the handle
         // and leave the complete redo intact for restart and replication.
-        if let Err(error) = self.tx_log.write_durable(commit_seq) {
-            // The log fenced itself on an I/O failure; anything else (the
-            // enqueue-gap bound) fences here. Either way the outcome is
-            // unknown: some or all of the batch may be on disk.
-            self.fence_durability("transaction_log.write", &error);
-            tx.receipt_recovery_required(commit_seq);
-            return Err(self.commit_outcome_unknown(tx.id.0, commit_seq, &error));
+        match self.tx_log.write_durable(commit_seq) {
+            Ok(()) => {}
+            // A backup-gate timeout (a backup or branch holding the gate)
+            // happens before any byte is written. It must not fence a
+            // healthy primary. Withdraw the commit so no later batch can
+            // write it: it then definitively did not commit, which is an
+            // ordinary, retryable error. If a concurrent batch already made
+            // it durable, it committed and the commit proceeds.
+            Err(error @ BicDbError::Backup(_)) => {
+                if self.tx_log.abandon_unwritten(commit_seq) {
+                    // The empty slot keeps the applied watermark gap-free.
+                    self.mark_committed_seq(commit_seq);
+                    tx.receipt_commit_withdrawn();
+                    return Err(error);
+                }
+            }
+            Err(error) => {
+                // The log fenced itself on an I/O failure; the enqueue-gap
+                // bound fences here. Some or all of the batch may be on
+                // disk: the outcome is unknown.
+                self.fence_durability("transaction_log.write", &error);
+                tx.receipt_recovery_required(commit_seq);
+                return Err(self.commit_outcome_unknown(tx.id.0, commit_seq, &error));
+            }
         }
         bicdb_page::test_faults::crash_point("commit.after_txlog_durable");
         timer.lap(&commit_trace::WAL_ENCODE);

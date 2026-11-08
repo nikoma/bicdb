@@ -13,7 +13,7 @@ use bicdb_core::{
     ReplicationMode, ReplicationTlsConfig, StorageMode, TransactionOutcome,
     DURABILITY_FAILURE_MARKER,
 };
-use bicdb_page::test_faults::arm_io_failure;
+use bicdb_page::test_faults::{arm_io_failure, arm_io_hook};
 use serde_json::json;
 
 fn config(storage: StorageMode) -> DbConfig {
@@ -530,19 +530,19 @@ fn an_unknown_commit_resolves_by_identity_to_what_recovery_kept() {
             assert_eq!(*tx_id, Some(observer.transaction_id().0), "{label}");
             assert_eq!(
                 observer.outcome(),
-                TransactionOutcome::RecoveryRequired { sequence: *seq },
+                TransactionOutcome::RecoveryRequired { sequence: seq.unwrap() },
                 "{label}: the receipt names the same commit"
             );
             let (detail, hint) = error.commit_outcome_identity().unwrap();
-            assert!(detail.contains(&format!("commit_seq={seq}")), "{label}: {detail}");
+            assert!(detail.contains(&format!("commit_seq={}", seq.unwrap())), "{label}: {detail}");
             assert!(hint.contains(inc.as_str()), "{label}: {hint}");
             // The failed handle itself never answers.
             assert_eq!(
-                db.resolve_commit_outcome(inc, *seq).unwrap(),
+                db.resolve_commit_outcome(inc, seq.unwrap()).unwrap(),
                 CommitResolution::Unresolved,
                 "{label}"
             );
-            (incarnation, sequence, transaction_id) = (inc.clone(), *seq, *tx_id);
+            (incarnation, sequence, transaction_id) = (inc.clone(), seq.unwrap(), *tx_id);
         }
         let _ = transaction_id;
         let db = BicDb::open_with_config(dir.path(), config(storage.clone())).unwrap();
@@ -623,4 +623,173 @@ fn a_primary_that_fails_mid_stream_is_replaced_by_a_promoted_standby() {
             "{storage:?}: the old primary must be rebuilt, never streamed"
         );
     }
+}
+
+/// A fence that lands after the commit is durable and visible (here: the
+/// record-audit publication marker's append fails) must not turn the
+/// commit into a refused write: the commit is not ambiguous, and a 58030
+/// would make the client retry and duplicate it. It reports success; the
+/// database is fenced for everything after it; recovery keeps the commit.
+#[test]
+fn a_fence_after_a_durable_commit_does_not_report_the_commit_as_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let acked;
+    {
+        let mut db = BicDb::open_with_config(
+            dir.path(),
+            config(StorageMode::EmbeddedMemory).with_audit_events(true),
+        )
+        .unwrap();
+        acked = seed(&mut db, 3);
+        // Call 1 is the commit's own batch; call 2 is the publication marker.
+        let fault = arm_io_failure("transaction_log.write", dir.path(), 2, false);
+        put(&db, "x").expect("a durable, visible commit is reported committed");
+        assert_eq!(fault.fired(), 1, "the publication marker was never written");
+        assert_eq!(failed_site(&db), "transaction_log.auxiliary");
+        assert_fenced(&db, dir.path(), "after the publication failure");
+    }
+    let db = BicDb::open_with_config(
+        dir.path(),
+        config(StorageMode::EmbeddedMemory).with_audit_events(true),
+    )
+    .unwrap();
+    assert!(db.durability_state().is_healthy());
+    for id in acked.iter().map(String::as_str).chain(["x"]) {
+        assert!(present(&db, id), "{id} lost");
+    }
+    put(&db, "after").unwrap();
+}
+
+/// A bulk load commits only in the page store: its page-log commit record
+/// is the decision, and a failed sync may still have put it on disk. That
+/// is an unknown outcome (08007, no commit sequence), not a refused write.
+/// Recovery keeps the batch all or nothing.
+#[test]
+fn a_failed_bulk_load_commit_reports_an_unknown_outcome() {
+    let dir = tempfile::tempdir().unwrap();
+    {
+        let mut db =
+            BicDb::open_with_config(dir.path(), config(StorageMode::ServerPaged)).unwrap();
+        db.create_collection("bulk").unwrap();
+    }
+    {
+        let mut db =
+            BicDb::open_with_config(dir.path(), config(StorageMode::ServerPaged)).unwrap();
+        let fault = arm_io_failure("page_log.sync", dir.path(), 1, false);
+        let records: Vec<_> = (0..50).map(|i| Record::new(format!("b{i}"))).collect();
+        let error = db.bulk_load_insert("bulk", records).unwrap_err();
+        assert_eq!(fault.fired(), 1);
+        assert!(
+            matches!(
+                error,
+                BicDbError::CommitOutcomeUnknown { sequence: None, .. }
+            ),
+            "{error}"
+        );
+        assert!(db.check_recovery_state().is_err());
+    }
+    let db = BicDb::open_with_config(dir.path(), config(StorageMode::ServerPaged)).unwrap();
+    let present = (0..50)
+        .filter(|i| db.get("bulk", &format!("b{i}")).unwrap().is_some())
+        .count();
+    assert!(present == 0 || present == 50, "a partial batch survived: {present}");
+}
+
+/// A backup-gate timeout (a backup or branch holding the gate too long)
+/// happens before any byte is written. It is an ordinary error: it must not
+/// fence a healthy primary, and the next commit succeeds.
+#[test]
+fn a_backup_gate_timeout_does_not_fence() {
+    for storage in storage_modes() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(dir.path(), config(storage.clone())).unwrap();
+        seed(&mut db, 2);
+        {
+            let fault = arm_io_failure("backup_gate.timeout", dir.path(), 1, false);
+            let mut tx = db.begin_transaction().unwrap();
+            tx.insert("items", Record::new("x")).unwrap();
+            let observer = tx.observe_outcome();
+            let error = tx.commit().unwrap_err();
+            assert_eq!(fault.fired(), 1, "{storage:?}");
+            // Nothing was written and the commit was withdrawn: it did not
+            // commit, and the error is neither 58030 nor 08007.
+            assert!(
+                matches!(error, BicDbError::Backup(_)),
+                "{storage:?}: {error}"
+            );
+            assert_eq!(observer.outcome(), TransactionOutcome::Aborted, "{storage:?}");
+        }
+        assert!(
+            db.durability_state().is_healthy(),
+            "{storage:?}: a gate timeout fenced"
+        );
+        put(&db, "y").unwrap();
+        assert!(present(&db, "y"), "{storage:?}: later commits stay visible");
+        assert!(!present(&db, "x"), "{storage:?}");
+        drop(db);
+        let db = BicDb::open_with_config(dir.path(), config(storage.clone())).unwrap();
+        assert!(present(&db, "a1") && present(&db, "y"), "{storage:?}");
+        assert!(!present(&db, "x"), "{storage:?}: a withdrawn commit came back");
+    }
+}
+
+/// Verification rewrites the transaction log to a new, synced inode (an
+/// fsync of page-cache pages that a failed fsync left clean would write
+/// nothing). A normal open leaves the log alone.
+#[cfg(unix)]
+#[test]
+fn verification_rewrites_the_transaction_log() {
+    use std::os::unix::fs::MetadataExt;
+    for storage in storage_modes() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("transactions.log");
+        let acked;
+        {
+            let mut db = BicDb::open_with_config(dir.path(), config(storage.clone())).unwrap();
+            acked = seed(&mut db, 4);
+        }
+        let inode = || std::fs::metadata(&log).unwrap().ino();
+        let before_normal = inode();
+        drop(BicDb::open_with_config(dir.path(), config(storage.clone())).unwrap());
+        let after_normal = inode();
+        {
+            let db = BicDb::open_with_config(dir.path(), config(storage.clone())).unwrap();
+            let _fault = arm_io_failure("transaction_log.write", dir.path(), 1, false);
+            put(&db, "x").unwrap_err();
+        }
+        let before_verify = inode();
+        let db = reopen_and_verify(dir.path(), storage.clone(), &acked);
+        drop(db);
+        assert_ne!(inode(), before_verify, "{storage:?}: verification did not rewrite the log");
+        if storage == StorageMode::EmbeddedMemory {
+            assert_eq!(before_normal, after_normal, "a normal open rewrote the log");
+        }
+    }
+}
+
+/// A fence that lands while a transaction-log cut is between its flush and
+/// its rename stops the cut: a fenced database's log is its redo.
+#[cfg(unix)]
+#[test]
+fn a_fence_during_a_log_cut_stops_the_rename() {
+    use std::os::unix::fs::MetadataExt;
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open_with_config(dir.path(), config(StorageMode::ServerPaged)).unwrap();
+    let acked = seed(&mut db, 5);
+    let log = dir.path().join("transactions.log");
+    let before = std::fs::metadata(&log).unwrap().ino();
+    let health = db.durability_health_for_test();
+    let hook = arm_io_hook("transaction_log.cut_window", dir.path(), 1, move || {
+        health.record_failure("test.concurrent_fence", &"injected while the cut ran");
+    });
+    let error = db.checkpoint_for_resume().unwrap_err();
+    assert_eq!(hook.fired(), 1, "the cut never reached its window");
+    assert!(matches!(error, BicDbError::WriteFailed { .. }), "{error}");
+    assert_eq!(
+        std::fs::metadata(&log).unwrap().ino(),
+        before,
+        "a fenced database still replaced its log"
+    );
+    drop(db);
+    reopen_and_verify(dir.path(), StorageMode::ServerPaged, &acked);
 }

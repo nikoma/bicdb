@@ -192,26 +192,53 @@ pub enum BicDbError {
     ///
     /// `incarnation` and `sequence` identify the commit for
     /// `BicDb::resolve_commit_outcome` (SQL: `bicdb_commit_outcome`) once
-    /// the database has been reopened; `transaction_id` is informational
-    /// (absent when only the commit sequence is known, as in a quorum wait).
+    /// the database has been reopened. `sequence` is `None` for operations
+    /// that commit only in the page store (bulk load, index builds): those
+    /// are resolved by re-reading their result after the reopen.
+    /// `transaction_id` is informational (absent when only the commit
+    /// sequence is known, as in a quorum wait).
     #[error(
-        "commit outcome unknown: commit_seq={sequence} transaction_id={} incarnation={incarnation}: \
-         {detail}; do not assume it committed or rolled back. Reopen the database, then resolve it \
-         with bicdb_commit_outcome('{incarnation}', {sequence})",
-        transaction_id.map_or_else(|| "unknown".to_string(), |id| id.to_string())
+        "commit outcome unknown: {}: {detail}; do not assume it committed or rolled back. \
+         Reopen the database, then {}",
+        commit_outcome_identity_line(*sequence, *transaction_id, incarnation),
+        commit_outcome_hint(*sequence, incarnation)
     )]
     CommitOutcomeUnknown {
-        sequence: u64,
+        sequence: Option<u64>,
         transaction_id: Option<u64>,
         incarnation: String,
         detail: String,
     },
 }
 
+fn commit_outcome_identity_line(
+    sequence: Option<u64>,
+    transaction_id: Option<u64>,
+    incarnation: &str,
+) -> String {
+    let show = |value: Option<u64>| value.map_or_else(|| "none".to_string(), |v| v.to_string());
+    format!(
+        "commit_seq={} transaction_id={} incarnation={incarnation}",
+        show(sequence),
+        show(transaction_id)
+    )
+}
+
+fn commit_outcome_hint(sequence: Option<u64>, incarnation: &str) -> String {
+    match sequence {
+        Some(sequence) => format!(
+            "resolve it with SELECT bicdb_commit_outcome('{incarnation}', {sequence})"
+        ),
+        None => "re-read the operation's result: it has no commit sequence, and the page \
+                 store's recovery kept it only if its commit record reached the disk"
+            .to_string(),
+    }
+}
+
 impl BicDbError {
     /// For `CommitOutcomeUnknown`: the outcome-resolution identity as a
-    /// machine-readable detail line, and the statement that resolves it.
-    /// pgwire sends them as the error's DETAIL and HINT fields.
+    /// machine-readable detail line, and how to resolve it. pgwire sends
+    /// them as the error's DETAIL and HINT fields.
     pub fn commit_outcome_identity(&self) -> Option<(String, String)> {
         let Self::CommitOutcomeUnknown {
             sequence,
@@ -222,12 +249,9 @@ impl BicDbError {
         else {
             return None;
         };
-        let transaction = transaction_id.map_or_else(|| "unknown".to_string(), |id| id.to_string());
         Some((
-            format!("commit_seq={sequence} transaction_id={transaction} incarnation={incarnation}"),
-            format!(
-                "after reopening the database: SELECT bicdb_commit_outcome('{incarnation}', {sequence})"
-            ),
+            commit_outcome_identity_line(*sequence, *transaction_id, incarnation),
+            format!("after reopening the database, {}", commit_outcome_hint(*sequence, incarnation)),
         ))
     }
 

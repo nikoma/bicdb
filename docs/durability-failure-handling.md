@@ -107,14 +107,74 @@ Metrics (pgwire `/metrics`):
 
 "Outcome unknown" means: do not assume the commit committed, and do not
 assume it rolled back. Recovery decides, and it keeps the commit exactly when
-its decision record reached the disk.
+its decision record reached the disk. Nothing retries an ambiguous commit or
+reinterprets it as rolled back.
+
+### 4.1 Resolving an unknown outcome by identity
+
+Every `08007` carries the identity needed to resolve it
+(`crates/bicdb-core/src/db/commit_resolution.rs`):
+
+| Part | Meaning |
+|---|---|
+| `incarnation` | Random id of the database handle (one per open), `BicDb::incarnation_id()` |
+| `commit_seq` | The commit sequence the transaction reserved. Unique within an incarnation. |
+| `transaction_id` | The transaction id (the receipt's `transaction_id()`). Absent for a quorum-wait `08007`, which knows only the sequence. |
+
+Where it appears:
+
+- **Embedded:** the fields of `BicDbError::CommitOutcomeUnknown`. The
+  transaction's receipt holds `RecoveryRequired { sequence }` for the same
+  `commit_seq`, and `observe_outcome().transaction_id()` for the same
+  transaction id.
+- **pgwire / SQL:** the error DETAIL is
+  `commit_seq=<n> transaction_id=<t|unknown> incarnation=<uuid>`, and the
+  HINT names the resolving statement.
+
+Commit sequences and transaction ids are recovered from the log at open, so a
+later incarnation can reuse the numbers of a commit that never reached the
+disk; the incarnation is what makes the identity unique. Every open appends
+`{incarnation, opened_at, recovered_through_seq}` to `incarnations.log`, with
+`fsync`, after recovery and before the database accepts any commit. A failure
+to write it fails the open. `recovered_through_seq` is the contiguous durable
+prefix that recovery rebuilt.
+
+Resolution of `(incarnation I, commit_seq N)` uses the first open after `I`:
+
+- `N <= recovered_through_seq`: **committed.** Recovery kept it, and within
+  `I` only that transaction held `N`.
+- Otherwise: **not committed.**
+- `I` is still the open handle, no later open is recorded, or `I`'s record
+  was pruned (the journal keeps about 2,000 opens): **unresolved**. It never
+  guesses.
+
+The answer is stable: later commits that reuse `N` do not change it.
+
+How to ask:
+
+- Embedded: `BicDb::resolve_commit_outcome(incarnation, commit_seq)` returns
+  `CommitResolution::{Committed, NotCommitted, Unresolved}`. It is not
+  fenced.
+- SQL (superuser, like every `bicdb_` administrative function):
+  `SELECT bicdb_commit_outcome('<incarnation>', <commit_seq>)` returns
+  `committed`, `not_committed` or `unresolved`.
+
+**After a failover**, the promoted standby's history is the authoritative
+one. A fenced primary ships only its durable prefix, so an uncertain commit
+is never part of the standby's history: it did not commit in the cluster. The
+old primary's own journal describes only its own disk, which may hold the
+uncertain commit (a decision that reached the disk after a failed sync). Such
+a primary has a divergent tail. The promoted primary detects it
+(`standby_resume` answers `Snapshot`), and the old primary must be rebuilt
+from a snapshot or bootstrap, never reopened as a primary. Resolve uncertain
+commits against the promoted primary's history: they are not committed.
 
 ## 5. Error codes
 
 | Error | SQLSTATE | Meaning |
 |---|---|---|
 | `BicDbError::WriteFailed { site, detail }` | `58030` (io_error) | The database is fenced by a durability failure. Reopen it. |
-| `BicDbError::CommitOutcomeUnknown { sequence, detail }` | `08007` (transaction_resolution_unknown) | This commit's outcome is unknown. Reopen; recovery decides. |
+| `BicDbError::CommitOutcomeUnknown { sequence, transaction_id, incarnation, detail }` | `08007` (transaction_resolution_unknown) | This commit's outcome is unknown. Reopen; recovery decides; resolve by identity (section 4.1). DETAIL and HINT carry the identity. |
 | `PageError::WriteFailed { site, detail }` | (page layer) | The page store is fenced; mapped to `BicDbError::WriteFailed`. |
 
 `BicDbError::is_durability_failure()` is true for both database errors. The
@@ -141,9 +201,11 @@ same mapping is used by the SQL engine and by pgwire.
    stays and the database stays closed. Repeat steps 2 to 4. Do not delete
    the marker by hand to get past a failing verification: the marker is what
    makes the next open prove the disk works end to end.
-6. **Reconcile clients.** Every client that received `08007` must re-read
-   the affected rows after the reopen to learn whether its commit survived.
-   Clients that received `58030` made no decision and can retry.
+6. **Reconcile clients.** Every client that received `08007` resolves it
+   after the reopen with `bicdb_commit_outcome(incarnation, commit_seq)`
+   from the error's DETAIL (section 4.1), and acts on `committed` or
+   `not_committed`. After a failover, see the end of section 4.1. Clients
+   that received `58030` made no decision and can retry.
 
 ## 7. Inventory of durability-critical write and sync sites
 
@@ -237,7 +299,7 @@ Injection (`crates/bicdb-page/src/test_faults.rs`):
 |---|---|
 | `bicdb-page` `fail_closed_io::a_failed_log_sync_is_sticky_and_no_later_sync_publishes_durability` | Regression for the qualification finding: after a one-shot `fsync` failure, no later sync is attempted or published, no append is accepted, `durable_lsn` is frozen, and recovery yields a consistent log |
 | `fail_closed_io::a_failed_log_write_fences_the_log` | A failed append fences the log |
-| `fail_closed_io::concurrent_commits_waiting_on_a_failing_sync_all_fail` | 8 group-commit waiters on a one-shot failing sync all fail; exactly one `fsync` is attempted |
+| `fail_closed_io::concurrent_commits_waiting_on_a_failing_sync_all_fail` | 8 and 32 group-commit waiters on a one-shot failing sync all fail; exactly one `fsync` is attempted |
 | `fail_closed_io::a_failed_commit_sync_fences_the_paged_store_until_reopen` | The failed commit is invisible, page reads continue, every write path refuses, reopen recovers every acknowledged row and resumes writes |
 | `fail_closed_io::a_failure_in_each_checkpoint_phase_fences_and_recovers` | Log sync, page-file sync, log append and log reset during a checkpoint, monolithic and segmented |
 | `fail_closed_io::a_failed_segment_seal_fences_the_log` | Seal sync and seal directory sync (the latter used to be ignored) |
@@ -246,11 +308,16 @@ Injection (`crates/bicdb-page/src/test_faults.rs`):
 | `bicdb-core` `durability_fail_closed::a_failed_transaction_log_write_fences_and_reports_an_unknown_outcome` | Embedded and paged: `08007`, receipt, fencing of writes and reads, marker, no retry, reopen and verification |
 | `durability_fail_closed::an_unknown_outcome_resolves_to_what_reached_the_disk` | Sync failure with and without a failed tail repair: absent and present after recovery respectively |
 | `durability_fail_closed::a_durable_decision_whose_page_commit_fails_is_kept_by_recovery` | A durable decision is honoured |
-| `durability_fail_closed::concurrent_commits_around_a_failing_write_never_acknowledge_after_it` | 8 writers: no writer sees `Ok` after its first error, every error is a durability failure, no write is attempted after the failure, every acknowledged commit survives |
+| `durability_fail_closed::concurrent_commits_around_a_failing_write_never_acknowledge_after_it` | 8 and 32 writers, embedded and paged: no writer sees `Ok` after its first error, every error is a durability failure, no write is attempted after the failure, every acknowledged commit survives |
 | `durability_fail_closed::a_failed_checkpoint_fences_and_the_reopen_verifies` | Page-file sync, page-log sync and log reset inside `checkpoint_for_resume` |
 | `durability_fail_closed::a_failed_log_cut_fences_after_the_rename_and_not_before` | The stale-descriptor cut bug; the copy failure before the rename stays retryable |
 | `durability_fail_closed::a_reopen_whose_verification_fails_stays_fenced` | Verification is required, and its failure keeps the marker |
 | `durability_fail_closed::a_fenced_primary_ships_only_its_durable_prefix_and_the_standby_keeps_working` | Shipping stops at the durable prefix, the quorum confirms nothing, the standby stays healthy, and replication resumes after the primary's reopen |
+| `durability_fail_closed::an_unknown_commit_resolves_by_identity_to_what_recovery_kept` | Six fault cases (embedded and paged): the identity in the error matches the receipt and the transaction; the failed handle answers `Unresolved`; after the reopen the answer matches what recovery kept, and stays the same after later commits reuse the sequence |
+| `durability_fail_closed::a_primary_that_fails_mid_stream_is_replaced_by_a_promoted_standby` | The uncertain commit is on the old primary's disk but never shipped; the promoted standby does not have it and takes writes; the old primary's divergent tail is detected (`Snapshot`) |
+| `bicdb-sql` `commit_outcome_resolution` | 08007 DETAIL/HINT over SQL, 58030 afterwards, `bicdb_commit_outcome` after the reopen agrees with the table |
+| `commit_resolution` unit tests | Next-open rule, `Unresolved` cases, torn last record, pruning |
+| `commit_durability_crash::repeat_core_matrices` (ignored; `DURABILITY_ROUNDS`, `DURABILITY_WORKERS`) | Merge-gate repetition of the fail-closed and crash matrices |
 | `durability_fail_closed::a_failing_standby_is_fenced_and_catches_up_after_reopen` | Standby-side failure: its applied position stops, and it catches up after reopen |
 | `commit_durability_crash::*_fails_closed_at_every_io_failure_site*` | Out-of-process matrix with the production path (with and without eviction) and the transaction-log-only path, using `examples/durability_child.rs`: 8 failure specs each. The child reports any acknowledgment after a failure and any non-durability error; the parent requires the marker, then reconciles against the acknowledged-commit ledger twice (every acknowledged commit present, all-or-nothing commits, index equals scan, no resurrected generation, identical second reopen) |
 | `commit_durability_crash` crash matrices (unchanged) | No regression in crash recovery |
@@ -282,6 +349,11 @@ affected outcomes as unknown. Points the reviewer should confirm:
    not a change in what is durable.
 3. **Reads.** Reads that the existing recovery fence guarded are refused on
    a fenced handle, as they already were after a failed materialization.
+
+All three were approved by the owner as proposed. Recovery-dependent reads
+stay fenced for this release; any future safe-read exception needs separate
+qualification. The incarnation journal adds one `fsync`ed append per open,
+never on the commit path.
 
 Not implemented, because each changes the durability contract or adds
 synchronous I/O to a hot path, and needs a decision first:

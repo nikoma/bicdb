@@ -2193,6 +2193,9 @@ impl PageStore {
     /// into the batch being copied wait, for the batch's duration. Call
     /// repeatedly (a maintenance loop) until `complete`.
     pub fn advance_extent_migration(&self, max_pages: u64) -> Result<ExtentMigrationReport> {
+        // The copy syncs segment descriptors the checkpoint also syncs, so a
+        // failure here consumes the same writeback error: it must fence.
+        self.health.check()?;
         let target = self.migration_target_pages.load(Ordering::Acquire);
         if target == 0 {
             return Err(PageError::InvalidMaintenanceLimits {
@@ -2277,9 +2280,18 @@ impl PageStore {
                 .map_err(|e| PageError::io(self.segment_path(segment), e))?;
                 validate_write_completion(cursor, bytes, written)?;
                 if self.fsync {
-                    segments[segment]
-                        .sync_data()
-                        .map_err(|e| PageError::io(self.segment_path(segment), e))?;
+                    // Same descriptor the checkpoint syncs: a failure here
+                    // consumes the writeback error, so a later checkpoint
+                    // sync would succeed over lost pages. Fence.
+                    let path = self.segment_path(segment);
+                    crate::test_faults::io_fault("page_file.sync", &path)
+                        .and_then(|()| segments[segment].sync_data())
+                        .map_err(|e| {
+                            self.health.record_failure(
+                                "page_file.sync",
+                                &format!("{}: {e}", path.display()),
+                            )
+                        })?;
                 }
             }
             cursor += run;

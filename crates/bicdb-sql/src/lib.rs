@@ -5730,14 +5730,14 @@ mod durability_sqlstate_tests {
             detail: "EIO".into(),
         });
         let unknown = SqlError::BicDb(BicDbError::CommitOutcomeUnknown {
-            sequence: 3,
+            sequence: Some(3),
             transaction_id: None,
             incarnation: "inc-2".into(),
             detail: "EIO".into(),
         });
         assert!(unknown.fields().iter().any(|field| matches!(field,
             SqlErrorField::Detail(detail)
-                if detail == "commit_seq=3 transaction_id=unknown incarnation=inc-2")));
+                if detail == "commit_seq=3 transaction_id=none incarnation=inc-2")));
         assert_eq!(refused.sqlstate(), "58030");
         assert_eq!(unknown.sqlstate(), "08007");
     }

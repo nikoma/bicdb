@@ -411,6 +411,22 @@ pub(crate) fn write_raw(handle: &mut AppendHandle, path: &Path, bytes: &[u8]) ->
         return Ok(());
     }
     let _backup_gate = acquire_backup_write_guard(path)?;
+    write_raw_holding_gate(handle, path, bytes)
+}
+
+/// [`write_raw`] for a caller that already holds the backup write gate.
+/// Separating the two lets the transaction log tell a gate timeout (nothing
+/// was written; an ordinary, retryable error) from a failed write or sync
+/// (a durability failure that fences the database).
+pub(crate) fn write_raw_holding_gate(
+    handle: &mut AppendHandle,
+    path: &Path,
+    bytes: &[u8],
+) -> Result<()> {
+    handle.check_writable()?;
+    if bytes.is_empty() {
+        return Ok(());
+    }
     write_raw_with_repair(
         handle,
         bytes,
@@ -563,7 +579,10 @@ fn acquire_backup_gate(path: &Path, exclusive: bool) -> Result<BackupGateGuard> 
             Ok(None) => {}
             Err(error) => return Err(error),
         }
-        if started.elapsed() >= BACKUP_LOCK_WAIT_TIMEOUT {
+        // `backup_gate.timeout` (tests only) takes the timeout branch at once.
+        if started.elapsed() >= BACKUP_LOCK_WAIT_TIMEOUT
+            || bicdb_page::test_faults::io_fault("backup_gate.timeout", path).is_err()
+        {
             return Err(BicDbError::Backup(format!(
                 "timed out waiting for {} backup I/O gate {}",
                 if exclusive { "exclusive" } else { "shared" },

@@ -277,14 +277,24 @@ impl BicDb {
             self.fence_durability("standby.import", &error);
             return Err(error);
         }
+        // The commit is durable from here, but `commit_seq` has not advanced:
+        // a failure in the journal appends would let a retry re-apply a
+        // durable commit over itself. Fence instead; the reopen recovers the
+        // commit from the log and republishes its journal.
         if !journal.is_empty() {
-            {
-                let mut events = self.events.lock();
-                for event in journal {
-                    events.append_imported(event.clone())?;
+            let published = (|| -> Result<()> {
+                {
+                    let mut events = self.events.lock();
+                    for event in journal {
+                        events.append_imported(event.clone())?;
+                    }
                 }
+                self.persist_record_audit_publication(TransactionId(tx_id), journal)
+            })();
+            if let Err(error) = published {
+                self.fence_durability("standby.import", &error);
+                return Err(error);
             }
-            self.persist_record_audit_publication(TransactionId(tx_id), journal)?;
         }
         self.commit_seq.store(commit_seq, AtomicOrdering::SeqCst);
         self.mark_committed_seq(commit_seq);

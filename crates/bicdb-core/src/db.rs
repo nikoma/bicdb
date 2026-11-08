@@ -2707,9 +2707,16 @@ impl TxLogHandle {
             state.file = Some(storage::open_append_handle(&self.path, self.fsync)?);
         }
         let file = state.file.as_mut().expect("tx_log handle present");
+        // The backup gate first: a timeout there wrote nothing, so it is an
+        // ordinary, retryable error and must not fence the database.
+        let _backup_gate = if buffer.is_empty() {
+            None
+        } else {
+            storage::acquire_backup_write_guard(&self.path)?
+        };
         // A failed O_DSYNC write may have put some or all of the batch on
         // disk, and a retried write that succeeds proves nothing about it.
-        if let Err(error) = storage::write_raw(file, &self.path, buffer) {
+        if let Err(error) = storage::write_raw_holding_gate(file, &self.path, buffer) {
             return Err(self.fail("transaction_log.write", error));
         }
         if !buffer.is_empty() {
@@ -2800,6 +2807,19 @@ impl TxLogHandle {
         }
     }
 
+    /// Withdraw commit `seq` when nothing of it was written: its queued
+    /// bytes become an empty slot, so no later batch can make it durable.
+    /// Returns `false` when `seq` is already durable (it committed). Holds
+    /// the writer lock, so no batch carrying `seq` can be in flight.
+    fn abandon_unwritten(&self, seq: u64) -> bool {
+        let state = self.lock_write();
+        if state.written_seq >= seq {
+            return false;
+        }
+        self.lock_pending().insert(seq, Vec::new());
+        true
+    }
+
     /// Flushes every pending entry through the configured sync mode. Used before log truncation/
     /// checkpointing; the caller holds the database write lock, so no new
     /// commits can enqueue concurrently.
@@ -2829,7 +2849,12 @@ impl TxLogHandle {
             state.file = Some(storage::open_append_handle(&self.path, self.fsync)?);
         }
         let file = state.file.as_mut().expect("tx_log handle present");
-        if let Err(error) = storage::write_raw(file, &self.path, bytes) {
+        let _backup_gate = if bytes.is_empty() {
+            None
+        } else {
+            storage::acquire_backup_write_guard(&self.path)?
+        };
+        if let Err(error) = storage::write_raw_holding_gate(file, &self.path, bytes) {
             return Err(self.fail("transaction_log.auxiliary", error));
         }
         if !bytes.is_empty() {
@@ -16998,7 +17023,26 @@ impl Transaction {
             events.append(event.clone())?;
         }
         drop(events);
-        db.persist_record_audit_publication(self.id, &self.pending_record_audit_events)?;
+        match db.persist_record_audit_publication(self.id, &self.pending_record_audit_events) {
+            Ok(()) => {}
+            // The commit is durable and visible: it is not ambiguous, and
+            // reporting it as refused (58030) would make the client retry
+            // and duplicate it. The publication marker is idempotent and
+            // recovery republishes committed entries still pending, so the
+            // accurate answer is success with the failure logged. The
+            // database is fenced either way.
+            Err(error) if error.is_durability_failure() => {
+                bicdb_page::health::log_event(&serde_json::json!({
+                    "event": "durability.audit_publication_deferred",
+                    "severity": "warn",
+                    "transaction_id": self.id.0,
+                    "commit_seq": self.committed_seq,
+                    "error": error.to_string(),
+                    "action": "the commit is durable; recovery republishes its audit entries",
+                }));
+            }
+            Err(error) => return Err(error),
+        }
         self.pending_record_audit_events.clear();
         Ok(())
     }

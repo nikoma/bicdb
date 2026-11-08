@@ -2227,7 +2227,7 @@ mod durability_sqlstate_tests {
             detail: "EIO".into(),
         };
         let unknown = BicDbError::CommitOutcomeUnknown {
-            sequence: 7,
+            sequence: Some(7),
             transaction_id: Some(11),
             incarnation: "inc-1".into(),
             detail: "EIO".into(),

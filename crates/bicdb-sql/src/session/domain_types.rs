@@ -885,6 +885,24 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_alter_table(&mut self, alter_table: &AlterTable) -> Result<SqlResult> {
+        // PostgreSQL accepts ALTER TABLE ... OWNER TO for a view (pg_dump
+        // emits it for every view).
+        if let [AlterTableOperation::OwnerTo { new_owner }] = alter_table.operations.as_slice() {
+            let target = relation_name(&alter_table.name)?;
+            if load_schema(self.db_ref(), &target)?.is_none()
+                && load_view(self.db_ref(), &target)?.is_some()
+            {
+                let owner = match new_owner {
+                    Owner::Ident(ident) => normalize_role_name(&ident_value(ident)),
+                    Owner::CurrentRole | Owner::CurrentUser => {
+                        current_user_from_gucs(&self.session_gucs)
+                    }
+                    Owner::SessionUser => session_user_from_gucs(&self.session_gucs),
+                };
+                self.alter_view_owner(&target, owner)?;
+                return Ok(SqlResult::command("ALTER TABLE"));
+            }
+        }
         // CR-3: ALTER TABLE reaches DISABLE ROW LEVEL SECURITY and OWNER TO,
         // so an ungated path let any user switch off a table's RLS or take it
         // over outright.
@@ -2491,6 +2509,18 @@ impl<'db> SqlSession<'db> {
                 &mut statements,
                 &mut exception_handlers,
             )?;
+        }
+        if !oracle_block {
+            if let Some(path) = crate::search_path::active_path() {
+                crate::search_path::bind_routine_parts(
+                    self.db_ref(),
+                    &mut [],
+                    &mut declarations,
+                    &mut statements,
+                    &mut exception_handlers,
+                    &path,
+                );
+            }
         }
         let symbols = routine_symbol_names(&[], &declarations, &statements, &exception_handlers);
         bind_routine_expressions(

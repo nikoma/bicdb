@@ -194,9 +194,12 @@ pub use runtime::*;
 mod application_copy;
 mod constraint_nulls;
 mod lock_lists;
+mod role_settings;
 mod schema_meta;
+pub mod search_path;
 pub use application_copy::{copy_application_tables, ApplicationCopyReport};
 pub(crate) use constraint_nulls::*;
+pub use role_settings::role_session_settings;
 mod statement_cache;
 pub use schema_meta::*;
 mod catalog_memo;
@@ -3711,6 +3714,9 @@ struct RoleSchema {
     password_set: bool,
     #[serde(default)]
     valid_until: Option<String>,
+    /// Session defaults set by `ALTER ROLE ... SET` (`pg_db_role_setting`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    settings: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -4467,6 +4473,7 @@ struct RoutineIrCacheKey {
     language: String,
     definition: String,
     catalog_scope: Option<RoutineCompilationScope>,
+    search_path: Option<std::sync::Arc<[String]>>,
 }
 
 type RoutineCompilationScope = (u64, u64, u64, u64, u64, u64);

@@ -1893,6 +1893,17 @@ fn initialize_client_with_server_admitted(
     state
         .session_state
         .insert_session_guc("database".to_string(), startup.database.clone());
+    // Role defaults (ALTER ROLE ... SET) apply first; the client's startup
+    // parameters override them.
+    if let Ok(db) = data_server.read_db() {
+        if let Ok(settings) = bicdb_sql::role_session_settings(&db, &state.user) {
+            for (key, value) in settings {
+                if !bicdb_sql::is_protected_security_setting(&key) {
+                    state.session_state.insert_session_guc(key, value);
+                }
+            }
+        }
+    }
     // Merge startup-parameter GUCs without letting them override the
     // authenticated identity seeded by ConnectionState::new.
     for (key, value) in startup.session_gucs {

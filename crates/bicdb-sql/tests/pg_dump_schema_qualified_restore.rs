@@ -100,6 +100,42 @@ fn set_default_nextval_resolves_a_schema_qualified_sequence() {
     );
 }
 
+/// Migration scripts register themselves with `SELECT f('..') FROM dual`,
+/// where `f` writes; function bodies use `=` assignment and RAISE WARNING.
+#[test]
+fn writing_functions_in_select_lists_and_plpgsql_dialect_forms() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE TABLE public.registered (name TEXT)")
+        .unwrap();
+    sql.execute("CREATE VIEW public.one_row AS SELECT 'X' AS dummy")
+        .unwrap();
+    sql.execute(
+        "CREATE FUNCTION public.register(p_name varchar) RETURNS void LANGUAGE plpgsql AS $$ \
+         DECLARE n integer; BEGIN \
+           n = 2; n = n * 3; \
+           RAISE WARNING 'registering % (%)', p_name, n; \
+           RAISE INFO 'info'; \
+           INSERT INTO public.registered VALUES (p_name || n); \
+         END; $$",
+    )
+    .unwrap();
+    sql.execute("SELECT register('a') FROM one_row").unwrap();
+    sql.execute("SELECT register(dummy) FROM one_row WHERE dummy = 'X'")
+        .unwrap();
+    let rows = sql
+        .execute("SELECT name FROM public.registered ORDER BY name")
+        .unwrap()
+        .rows;
+    assert_eq!(
+        rows,
+        vec![
+            vec![SqlValue::String("X6".into())],
+            vec![SqlValue::String("a6".into())]
+        ]
+    );
+}
+
 /// CREATE TABLE with an inline schema-qualified nextval default (the other
 /// spelling pg_dump emits) binds to the same sequence.
 #[test]

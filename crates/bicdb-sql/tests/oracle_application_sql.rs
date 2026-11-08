@@ -116,6 +116,44 @@ END;",
     );
 }
 
+/// PostgreSQL-only PL/pgSQL forms (`=` assignment, RAISE WARNING) and
+/// data-modifying functions in a query's select list keep the Oracle
+/// profile's behaviour: a function that modifies data cannot be called from
+/// a query over a table (Oracle raises ORA-14551), and `x = 1;` is not an
+/// assignment.
+#[test]
+fn postgres_dialect_forms_do_not_apply_to_the_oracle_profile() {
+    let (_root, mut db) = app_database();
+    for source in [
+        "CREATE TABLE audit_rows (id NUMBER)",
+        "CREATE TABLE audit_sources (id NUMBER)",
+        "INSERT INTO audit_sources VALUES (1)",
+        "CREATE OR REPLACE FUNCTION note_row(p_id IN NUMBER) RETURN NUMBER AS
+         BEGIN
+           INSERT INTO audit_rows VALUES (p_id);
+           RETURN p_id;
+         END;",
+    ] {
+        run(&mut db, source).unwrap();
+    }
+    assert!(run(&mut db, "SELECT note_row(id) FROM audit_sources").is_err());
+    assert_eq!(
+        texts(run(&mut db, "SELECT COUNT(*) FROM audit_rows").unwrap()),
+        vec![vec!["0".to_string()]]
+    );
+    assert!(run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION equals_form RETURN NUMBER AS
+           n NUMBER;
+         BEGIN
+           n = 1;
+           RETURN n;
+         END;"
+    )
+    .and_then(|_| run(&mut db, "SELECT equals_form FROM dual"))
+    .is_err());
+}
+
 #[test]
 fn character_patterns_over_joined_column_functions() {
     let (_root, mut db) = app_database();

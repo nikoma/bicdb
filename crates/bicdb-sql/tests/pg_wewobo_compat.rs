@@ -1139,26 +1139,33 @@ END $$"#).unwrap();
         .rows;
     assert_eq!(rows, vec![vec![text("breath-work-2")]]);
     s.execute("ROLLBACK").unwrap();
-    // BicDB boundary (PostgreSQL allows it): a function called per row may not modify data.
-    // The statement fails as a whole instead of writing part of its effects.
+    // A data-modifying function in a select list runs once per source row;
+    // the source rows are those visible when the statement starts, as in
+    // PostgreSQL (3 rows in, 3 inserted).
     s.execute("CREATE FUNCTION touch(i int) RETURNS int LANGUAGE plpgsql AS $$ BEGIN INSERT INTO learning_courses VALUES (i + 100, 'x', NULL); RETURN i; END $$").unwrap();
-    assert!(s.execute("SELECT touch(id) FROM learning_courses").is_err());
+    assert_eq!(
+        s.execute("SELECT touch(id) FROM learning_courses")
+            .unwrap()
+            .rows
+            .len(),
+        3
+    );
     assert_eq!(
         s.execute("SELECT count(*) FROM learning_courses")
             .unwrap()
             .rows,
-        vec![vec![SqlValue::Int(3)]]
+        vec![vec![SqlValue::Int(6)]]
     );
     // Called without FROM it runs in the session and may write.
     assert_eq!(
-        s.execute("SELECT touch(1)").unwrap().rows,
-        vec![vec![SqlValue::Int(1)]]
+        s.execute("SELECT touch(7)").unwrap().rows,
+        vec![vec![SqlValue::Int(7)]]
     );
     assert_eq!(
         s.execute("SELECT count(*) FROM learning_courses")
             .unwrap()
             .rows,
-        vec![vec![SqlValue::Int(4)]]
+        vec![vec![SqlValue::Int(7)]]
     );
 }
 

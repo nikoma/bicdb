@@ -245,6 +245,8 @@ fn unqualified_relations_resolve_through_search_path() {
         ),
         1
     );
+    sql.execute("CREATE UNIQUE INDEX item_name_key ON Item (COALESCE(Name, ''), COALESCE(ID, 0))")
+        .expect("unquoted mixed-case names fold in index expressions");
     sql.execute("INSERT INTO item VALUES (2, 'two')").unwrap();
     sql.execute("UPDATE item SET name = 'deux' WHERE id = 2")
         .unwrap();

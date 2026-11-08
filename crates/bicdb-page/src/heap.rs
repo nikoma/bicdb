@@ -256,16 +256,30 @@ impl HeapFile {
         // Try the free-space ring first.
         let candidates: Vec<PageId> = self.candidates.lock().iter().copied().collect();
         for page_id in candidates {
-            // The ring is only a hint as well: never write a tuple onto a
-            // page that is no longer a heap page.
-            match self.is_heap_page(page_id) {
-                Ok(true) => {}
-                Ok(false) => {
-                    self.candidates.lock().retain(|id| *id != page_id);
-                    continue;
+            // Probe through a read guard first. A write guard marks its page
+            // changed whether or not anything is written, and probing every
+            // candidate with one made a single insert dirty the whole ring.
+            // Under no-steal those pages stay in memory until commit, so the
+            // probe would make one operation's footprint unbounded (GAP-1).
+            // The probe never touches the unlogged flag itself; only the
+            // write guard below, on a page that takes the tuple, sets it. A
+            // page that is no longer a heap page (freed by vacuum) is never
+            // a target. (#54 replaces this probe with an upgradable latch
+            // and the same page-type check; on a conflict, take #54's.)
+            let usable = match self.pool.get(page_id) {
+                Ok(guard) => {
+                    let is_heap = PageType::from_u8(guard.bytes()[6]) == Some(PageType::Heap);
+                    let mut probe = guard.bytes().to_vec();
+                    let heap = SlottedPage::new(&mut probe);
+                    is_heap
+                        && (heap.can_fit(tuple.len())
+                            || heap.reclaimable_space() >= SlottedPage::required_space(tuple.len()))
                 }
                 Err(PageError::PoolExhausted { .. }) => continue,
                 Err(other) => return Err(other),
+            };
+            if !usable {
+                continue;
             }
             let mut guard = match self.pool.get_mut(page_id) {
                 Ok(guard) => guard,
@@ -713,6 +727,50 @@ mod tests {
         (0..len)
             .map(|i| ((i as u8).wrapping_add(seed)) % 251)
             .collect()
+    }
+
+    /// Candidates the insert rejects are probed through a read latch, so
+    /// they are not marked changed: only the page that takes the tuple is.
+    /// (Under no-steal every marked page stays in memory until commit, so
+    /// marking the whole ring made one insert's footprint unbounded.)
+    #[test]
+    fn rejected_candidates_are_not_marked_changed() {
+        let dir = TempDir::new().unwrap();
+        let (_store, heap) = heap(&dir, 1024, 256 * 1024);
+        for seed in 0..40 {
+            heap.insert(&payload(200, seed)).unwrap();
+        }
+        heap.pool.flush_all().unwrap();
+        assert_eq!(heap.pool.unlogged_pages(), 0);
+        // Four 200-byte tuples fill a 1 KiB page, leaving too little for a
+        // 230-byte one (still inline: the limit is a quarter page), so every
+        // candidate is probed and rejected, and a new page takes it.
+        let placed = heap.insert(&payload(230, 7)).unwrap();
+        let marked: Vec<PageId> = heap
+            .pool
+            .pages_needing_log()
+            .into_iter()
+            .map(|(page_id, _)| page_id)
+            .collect();
+        assert_eq!(marked, vec![placed.page_id]);
+    }
+
+    /// A ring candidate that is no longer a heap page (freed by vacuum and
+    /// reused) never receives a tuple, even if its bytes look like room.
+    #[test]
+    fn a_candidate_that_is_no_longer_a_heap_page_is_never_written() {
+        let dir = TempDir::new().unwrap();
+        let (_store, heap) = heap(&dir, 1024, 256 * 1024);
+        let first = heap.insert(&payload(50, 1)).unwrap();
+        {
+            let mut guard = heap.pool.get_mut(first.page_id).unwrap();
+            guard.bytes_mut()[6] = PageType::Overflow as u8;
+        }
+        let second = heap.insert(&payload(50, 2)).unwrap();
+        assert_ne!(
+            second.page_id, first.page_id,
+            "a tuple was written onto a page that is not a heap page"
+        );
     }
 
     #[test]

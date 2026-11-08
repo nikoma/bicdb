@@ -354,6 +354,13 @@ impl PagedRecords {
         self.store.begin_transaction()
     }
 
+    /// Begin a transaction whose redo is already durable in the transaction
+    /// log: a commit's page apply. See `PagedStore::begin_redo_backed`: its
+    /// writes are never refused for buffer-pool pressure.
+    pub fn begin_redo_backed(&self) -> (Xid, Snapshot) {
+        self.store.begin_redo_backed()
+    }
+
     pub fn latest_snapshot(&self) -> Snapshot {
         self.store.latest_snapshot()
     }
@@ -1321,6 +1328,52 @@ impl PagedRecords {
     }
 
     /// Bytes currently held by the buffer pool — the bounded figure.
+    /// Bytes one page-only batch may write so that, even in a small
+    /// configured pool, it stays far below what a transaction may hold
+    /// unlogged before it is refused (GAP-1 no-steal admission keeps an
+    /// eighth of each shard free): a sixteenth of the pool, at least 64 KiB.
+    pub fn page_only_batch_bytes(&self) -> usize {
+        let budget = self.store.buffer_pool().budget_bytes();
+        usize::try_from(budget / 16)
+            .unwrap_or(usize::MAX)
+            .max(64 * 1024)
+    }
+
+    /// Writes (each changing about one page) one page-only batch may make
+    /// within [`Self::page_only_batch_bytes`]: that many bytes of pages.
+    pub fn page_only_batch_writes(&self) -> usize {
+        (self.page_only_batch_bytes() / self.store.page_size() as usize).max(1)
+    }
+
+    /// Split `items` into consecutive ranges, each small enough for one
+    /// page-only transaction: at most [`Self::page_only_batch_writes`] items
+    /// (each assumed to change about one page) and at most
+    /// [`Self::page_only_batch_bytes`] bytes by `bytes_of` (at least one item
+    /// per range, so a single large item still progresses).
+    pub fn page_only_batches<T>(
+        &self,
+        items: &[T],
+        bytes_of: impl Fn(&T) -> usize,
+    ) -> Vec<std::ops::Range<usize>> {
+        let max_items = self.page_only_batch_writes();
+        let max_bytes = self.page_only_batch_bytes();
+        let mut ranges = Vec::new();
+        let mut start = 0;
+        while start < items.len() {
+            let mut end = start;
+            let mut bytes = 0usize;
+            while end < items.len()
+                && (end == start || (end - start < max_items && bytes < max_bytes))
+            {
+                bytes = bytes.saturating_add(bytes_of(&items[end]));
+                end += 1;
+            }
+            ranges.push(start..end);
+            start = end;
+        }
+        ranges
+    }
+
     pub fn resident_bytes(&self) -> u64 {
         self.store.buffer_pool().snapshot().resident_bytes
     }
@@ -6854,7 +6907,11 @@ mod tests {
         )
         .unwrap();
 
-        let (xid, _) = store.begin();
+        // This transaction is many times larger than the deliberately tiny
+        // pool. A refusable one that size is refused (GAP-1 no-steal); this
+        // test is about memory bounds, so it uses a redo-backed one, which is
+        // never refused and may still steal.
+        let (xid, _) = store.begin_redo_backed();
         for index in 0..4_000 {
             store
                 .put(

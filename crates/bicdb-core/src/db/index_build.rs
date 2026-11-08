@@ -39,8 +39,8 @@ impl BicDb {
                 &snapshot,
                 prefix,
                 after.as_deref(),
-                CLEANUP_BATCH_ENTRIES,
-                CLEANUP_BATCH_BYTES,
+                CLEANUP_BATCH_ENTRIES.min(paged.page_only_batch_writes()),
+                CLEANUP_BATCH_BYTES.min(paged.page_only_batch_bytes()),
             )?;
             if keys.is_empty() {
                 break;

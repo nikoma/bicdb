@@ -980,8 +980,16 @@ impl BTree {
         Ok(self.get(key)?.is_some())
     }
 
-    /// Insert or replace a key.
-    pub fn insert(&self, key: &[u8], value: &[u8]) -> Result<()> {
+    /// Whether [`Self::insert`] would accept `key` with a value of
+    /// `value_len` bytes, checked without touching any page. A caller that
+    /// writes elsewhere first (the page store writes the heap version before
+    /// the index entry) checks here, so an oversized key is refused before
+    /// anything is modified.
+    pub fn check_insertable(&self, key: &[u8], value_len: usize) -> Result<()> {
+        self.check_entry(key, &vec![0u8; value_len])
+    }
+
+    fn check_entry(&self, key: &[u8], value: &[u8]) -> Result<()> {
         if key.is_empty() {
             return Err(PageError::ValueTooLarge {
                 page_id: 0,
@@ -1000,6 +1008,12 @@ impl BTree {
                 free: usable / 2,
             });
         }
+        Ok(())
+    }
+
+    /// Insert or replace a key.
+    pub fn insert(&self, key: &[u8], value: &[u8]) -> Result<()> {
+        self.check_entry(key, value)?;
 
         let path = self.descend(key)?;
         let leaf = path.last().unwrap().page_id;
@@ -1107,6 +1121,11 @@ impl BTree {
     ) -> Result<()> {
         let page_size = self.pool.page_size();
         let usable = crate::page::usable_bytes(page_size);
+        // Test hook: fail here, after the split child was rebuilt in place
+        // and before the parent records the split, the torn in-memory state
+        // a failed operation leaves (GAP-1 interim, "poisoned" transactions).
+        crate::test_faults::io_fault("btree.insert_separator", self.pool.store().path())
+            .map_err(|error| PageError::io(self.pool.store().path(), error))?;
 
         if level == 0 {
             // The root split: build a new root above it.
@@ -1126,7 +1145,18 @@ impl BTree {
             // The new root is made durable BEFORE anyone is told about it. A
             // crash in between leaves the old root intact and the new one
             // unreferenced — garbage, but never a dangling root.
-            self.pool.flush_all()?;
+            //
+            // With a log (`PagedStore`), only pages whose changes are already
+            // logged are written. Inside a transaction the split pages, the old
+            // root among them (rebuilt in place with its left half), are
+            // unlogged until commit. Writing them here put uncommitted
+            // structure in the page file, and a crash before commit left it
+            // there with the meta page still naming the old root (GAP-1 in
+            // `docs/recovery-semantics.md`, window W3). They are logged at
+            // commit together with the meta page that names the new root, so
+            // the root change is atomic with the transaction. Without a log
+            // this is `flush_all`.
+            self.pool.flush_logged()?;
             crate::test_faults::crash_point("btree.after_root_split_flush");
             *self.root.lock() = new_root;
             *self.root_changed.lock() = true;

@@ -3098,13 +3098,49 @@ impl<'db> SqlEngine<'db> {
         let Some(predicate) = expr_from_and_terms(candidates.clone()) else {
             return Ok(None);
         };
+        let strategy =
+            self.derive_locator_strategy(table, alias, Some(schema), &augment(predicate.clone()))?;
+        // The row-set locator evaluates eligible keys before choosing its
+        // winning index. Do not introduce unused InitPlan calls through an
+        // alternative index, including one the authored predicate already
+        // supports. Literal-only constraints need no deferred initialization.
+        // A single shared InitPlan is safe only when every available lookup
+        // requires it. Ambiguous shapes retain their original scan/lookup.
+        let mut deferred_values = Vec::new();
+        for candidate in &candidates {
+            let Expr::BinaryOp { right, .. } = candidate else {
+                unreachable!()
+            };
+            if expr_contains_subquery(right) && !deferred_values.contains(&right.as_ref()) {
+                deferred_values.push(right.as_ref());
+            }
+        }
+        if let Some(value) = deferred_values.first() {
+            if deferred_values.len() != 1 {
+                return Ok(None);
+            }
+            if let Some(selection) = selection {
+                let original =
+                    self.derive_locator_strategy(table, alias, Some(schema), selection)?;
+                if original.pk_exprs.iter().any(Option::is_some) || !original.indexes.is_empty() {
+                    return Ok(None);
+                }
+            }
+            if strategy.pk_exprs.iter().any(Option::is_some)
+                || strategy.indexes.is_empty()
+                || strategy
+                    .indexes
+                    .iter()
+                    .any(|index| !index.prefix_exprs.iter().any(|expr| expr == *value))
+            {
+                return Ok(None);
+            }
+        }
         if !fold_values {
             return Ok(Some(augment(predicate)));
         }
         // Initialize only policy values that a real lookup can consume. With
         // no eligible index, preserve the original empty-scan behavior.
-        let strategy =
-            self.derive_locator_strategy(table, alias, Some(schema), &augment(predicate))?;
         let used_values = strategy
             .indexes
             .iter()

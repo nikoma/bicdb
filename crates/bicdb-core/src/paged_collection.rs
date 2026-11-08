@@ -444,6 +444,12 @@ impl PagedRecords {
         self.store.commit(transaction).map_err(page_error)
     }
 
+    /// See `PagedStore::commit_deferred`: the caller's redo must already be
+    /// durable in the transaction log.
+    pub fn commit_deferred(&self, transaction: Xid) -> Result<bicdb_page::Lsn> {
+        self.store.commit_deferred(transaction).map_err(page_error)
+    }
+
     pub fn abort(&self, transaction: Xid) -> Result<()> {
         self.store.abort(transaction).map_err(page_error)
     }

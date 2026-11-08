@@ -203,6 +203,165 @@ AS $$ BEGIN RETURN NEW; END; $$"#,
     );
 }
 
+/// A dump restores into its own schema; the application then names its
+/// relations unqualified and resolves them through `search_path`, including
+/// inside PL/pgSQL bodies, which resolve with the caller's path.
+#[test]
+fn unqualified_relations_resolve_through_search_path() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE TABLE app.item (id INT PRIMARY KEY, name TEXT)")
+        .unwrap();
+    sql.execute("INSERT INTO app.item VALUES (1, 'one')")
+        .unwrap();
+    sql.execute("CREATE TABLE public.only_public (id INT)")
+        .unwrap();
+    sql.execute(
+        "CREATE FUNCTION app.item_count() RETURNS bigint LANGUAGE plpgsql AS $$ \
+         DECLARE n bigint; BEGIN SELECT count(*) INTO n FROM item; RETURN n; END; $$",
+    )
+    .unwrap();
+
+    // Default path ("$user", public) has no schema for this user.
+    assert!(sql.execute("SELECT count(*) FROM item").is_err());
+
+    sql.execute("SET search_path TO app, public").unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM item"), 1);
+    assert_eq!(
+        int_at(&mut sql, "SELECT count(*) FROM item WHERE item.id = 1"),
+        1
+    );
+    // Unquoted mixed-case names fold to lower case, with or without a
+    // predicate, and weak row-lock strengths bind too.
+    assert_eq!(
+        sql.execute("SELECT Name FROM Item").unwrap().rows,
+        vec![vec![SqlValue::String("one".into())]]
+    );
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT ID FROM Item WHERE ID = 1 FOR NO KEY UPDATE"
+        ),
+        1
+    );
+    sql.execute("CREATE UNIQUE INDEX item_name_key ON Item (COALESCE(Name, ''), COALESCE(ID, 0))")
+        .expect("unquoted mixed-case names fold in index expressions");
+    sql.execute("INSERT INTO item VALUES (2, 'two')").unwrap();
+    sql.execute("UPDATE item SET name = 'deux' WHERE id = 2")
+        .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.item"), 2);
+    // A name the first schema lacks falls through to the next one.
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM only_public"), 0);
+    // A CTE shadows a relation of the same name.
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "WITH item AS (SELECT 5 AS id) SELECT id FROM item"
+        ),
+        5
+    );
+    // New relations go to the first schema on the path, and references
+    // (including foreign keys) bind to it.
+    sql.execute("CREATE TABLE line (id INT PRIMARY KEY, item_id INT REFERENCES item (id))")
+        .unwrap();
+    sql.execute("INSERT INTO line VALUES (10, 1)").unwrap();
+    assert!(sql.execute("INSERT INTO line VALUES (11, 99)").is_err());
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.line"), 1);
+    assert!(sql.execute("SELECT count(*) FROM public.line").is_err());
+    sql.execute("CREATE VIEW item_names AS SELECT name FROM item")
+        .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.item_names"), 2);
+    // The body resolves with the caller's path.
+    assert_eq!(int_at(&mut sql, "SELECT app.item_count()"), 2);
+    sql.execute("DELETE FROM item WHERE id = 2").unwrap();
+    sql.execute("DROP VIEW item_names").unwrap();
+    assert!(sql.execute("SELECT count(*) FROM app.item_names").is_err());
+
+    // "$user" expands to the current role.
+    sql.execute("CREATE ROLE app LOGIN SUPERUSER").unwrap();
+    sql.execute("SET search_path TO \"$user\", public").unwrap();
+    assert!(sql.execute("SELECT count(*) FROM item").is_err());
+    sql.execute("SET ROLE app").unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM item"), 1);
+    assert_eq!(int_at(&mut sql, "SELECT app.item_count()"), 1);
+}
+
+/// The documented restore sets the application role's search_path as a
+/// role default, which applies to the role's later sessions.
+#[test]
+fn alter_role_set_records_session_defaults() {
+    let (_dir, mut db) = session_db();
+    {
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("CREATE ROLE app LOGIN").unwrap();
+        sql.execute("ALTER ROLE app SET search_path TO app, pg_catalog")
+            .expect("a list value is a valid role default");
+        sql.execute("ALTER ROLE app SET statement_timeout = '5s'")
+            .unwrap();
+    }
+    assert_eq!(
+        bicdb_sql::role_session_settings(&db, "app").unwrap(),
+        vec![
+            ("search_path".to_string(), "app, pg_catalog".to_string()),
+            ("statement_timeout".to_string(), "5s".to_string()),
+        ]
+    );
+    {
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("ALTER ROLE app RESET statement_timeout")
+            .unwrap();
+    }
+    assert_eq!(
+        bicdb_sql::role_session_settings(&db, "app").unwrap().len(),
+        1
+    );
+    {
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("ALTER ROLE app RESET ALL").unwrap();
+    }
+    assert!(bicdb_sql::role_session_settings(&db, "app")
+        .unwrap()
+        .is_empty());
+}
+
+/// pg_dump emits ALTER TABLE ... OWNER TO for views, and creates triggers on
+/// schema-qualified tables.
+#[test]
+fn restored_view_owners_and_schema_qualified_triggers_work() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE ROLE app_owner LOGIN").unwrap();
+    sql.execute("CREATE VIEW app.due AS SELECT 1 AS due")
+        .unwrap();
+    sql.execute("ALTER TABLE app.due OWNER TO app_owner")
+        .unwrap();
+    assert_eq!(
+        sql.execute("SELECT viewowner FROM pg_views WHERE viewname = 'due'")
+            .unwrap()
+            .rows[0][0]
+            .to_cell(),
+        "app_owner"
+    );
+    sql.execute("CREATE TABLE app.blob (id INT PRIMARY KEY)")
+        .unwrap();
+    sql.execute("CREATE TABLE app.removed (id INT)").unwrap();
+    sql.execute(
+        "CREATE FUNCTION app.note_removed() RETURNS trigger LANGUAGE plpgsql AS $$ \
+         BEGIN INSERT INTO app.removed VALUES (OLD.id); RETURN OLD; END; $$",
+    )
+    .unwrap();
+    sql.execute(
+        "CREATE TRIGGER note BEFORE DELETE ON app.blob FOR EACH ROW \
+         EXECUTE FUNCTION app.note_removed()",
+    )
+    .expect("a schema-qualified trigger table resolves to that schema");
+    sql.execute("INSERT INTO app.blob VALUES (7)").unwrap();
+    sql.execute("DELETE FROM app.blob").unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.removed"), 1);
+}
+
 // ---------------------------------------------------------------------------
 // User-defined operators (`CREATE OPERATOR`), as a pg_dump of an application
 // schema restores them: day arithmetic on timestamps through functions.

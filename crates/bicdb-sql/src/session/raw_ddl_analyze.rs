@@ -1627,6 +1627,13 @@ impl<'db> SqlSession<'db> {
         let Some((name, owner)) = parse_raw_alter_view_owner(sql)? else {
             return Ok(None);
         };
+        self.alter_view_owner(&name, owner).map(Some)
+    }
+
+    /// `ALTER VIEW name OWNER TO`, also reached through `ALTER TABLE`, which
+    /// PostgreSQL accepts for views.
+    pub(crate) fn alter_view_owner(&mut self, name: &str, owner: String) -> Result<SqlResult> {
+        let name = name.to_string();
         ensure_known_role(&list_roles(self.db_ref())?, &owner)?;
         let mut view = load_view(self.db_ref(), &name)?
             .ok_or_else(|| SqlError::InvalidCollection(name.clone()))?;
@@ -1640,7 +1647,7 @@ impl<'db> SqlSession<'db> {
         self.require_settable_new_owner(&owner, &format!("view {name}"))?;
         view.owner = Some(owner);
         self.save_session_view(&view)?;
-        Ok(Some(SqlResult::command("ALTER VIEW")))
+        Ok(SqlResult::command("ALTER VIEW"))
     }
 
     pub(crate) fn execute_create_extension(

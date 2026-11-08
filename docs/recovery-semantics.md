@@ -889,7 +889,7 @@ a committed (or structural, xid 0) record, except for the cases listed under
   (ignored). Every core path through `in_paged_transaction` holds the gate
   from begin to commit, so it is not exposed.
 
-Closing those needs option (b). Its design is proposed separately, for approval before any change to what recovery reconstructs.
+Closing those needs option (b), designed in `docs/gap1-structural-units.md` (proposal, awaiting approval).
 
 **Recommendation (unchanged).**
 1. The interim, as a reviewed PR with the GAP-1 tests un-ignored.

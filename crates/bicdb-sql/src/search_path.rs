@@ -142,6 +142,11 @@ struct Binder<'a> {
     path: &'a [String],
     ctes: Vec<BTreeSet<String>>,
     changed: bool,
+    /// Source positions where a schema qualifier is inserted, so statement
+    /// text is bound in place instead of being re-rendered from the AST.
+    insertions: Vec<(sqlparser::tokenizer::Location, String)>,
+    /// A qualified name had no source position (synthesized AST).
+    positions_missing: bool,
 }
 
 impl Binder<'_> {
@@ -157,7 +162,16 @@ impl Binder<'_> {
     }
 
     fn qualify(&mut self, name: &mut ObjectName, schema: &str) {
-        name.0.insert(0, schema_ident(schema));
+        let part = schema_ident(schema);
+        match name.0.first() {
+            Some(sqlparser::ast::ObjectNamePart::Identifier(ident))
+                if ident.span.start.line > 0 =>
+            {
+                self.insertions.push((ident.span.start, format!("{part}.")));
+            }
+            _ => self.positions_missing = true,
+        }
+        name.0.insert(0, part);
         self.changed = true;
     }
 
@@ -226,7 +240,11 @@ impl sqlparser::ast::VisitorMut for Binder<'_> {
                 for constraint in &mut table.constraints {
                     if let sqlparser::ast::TableConstraint::ForeignKey(foreign_key) = constraint {
                         if own.is_some() && Self::single_part(&foreign_key.foreign_table) == own {
-                            foreign_key.foreign_table = created.clone();
+                            if let [schema, _] = created.0.as_slice() {
+                                let schema = schema.to_string();
+                                let schema = schema.trim_matches('"').to_string();
+                                self.qualify(&mut foreign_key.foreign_table, &schema);
+                            }
                             continue;
                         }
                     }
@@ -309,14 +327,51 @@ pub(crate) fn bind_node<T: sqlparser::ast::VisitMut>(
     node: &mut T,
     path: &[String],
 ) -> bool {
+    run_binder(db, node, path).changed
+}
+
+fn run_binder<'a, T: sqlparser::ast::VisitMut>(
+    db: &'a BicDb,
+    node: &mut T,
+    path: &'a [String],
+) -> Binder<'a> {
     let mut binder = Binder {
         db,
         path,
         ctes: Vec::new(),
         changed: false,
+        insertions: Vec::new(),
+        positions_missing: false,
     };
     let _ = sqlparser::ast::VisitMut::visit(node, &mut binder);
-    binder.changed
+    binder
+}
+
+/// `sql` with each text inserted at its (1-based line and character column)
+/// source position.
+fn insert_at_positions(
+    sql: &str,
+    mut insertions: Vec<(sqlparser::tokenizer::Location, String)>,
+) -> Option<String> {
+    let mut line_starts = vec![0usize];
+    line_starts.extend(sql.match_indices('\n').map(|(index, _)| index + 1));
+    let mut offsets = Vec::with_capacity(insertions.len());
+    for (location, text) in insertions.drain(..) {
+        let start = *line_starts.get(usize::try_from(location.line).ok()?.checked_sub(1)?)?;
+        let column = usize::try_from(location.column).ok()?.checked_sub(1)?;
+        let line = &sql[start..];
+        let offset = match line.char_indices().nth(column) {
+            Some((index, _)) => start + index,
+            None => return None,
+        };
+        offsets.push((offset, text));
+    }
+    offsets.sort_by(|left, right| right.0.cmp(&left.0));
+    let mut out = sql.to_string();
+    for (offset, text) in offsets {
+        out.insert_str(offset, &text);
+    }
+    Some(out)
 }
 
 /// Statement text with unqualified relations bound through `path`, or `None`
@@ -344,16 +399,13 @@ pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Option<St
     }) {
         return None;
     }
-    if !bind_node(db, &mut statements, path) {
+    let binder = run_binder(db, &mut statements, path);
+    if !binder.changed || binder.positions_missing {
         return None;
     }
-    Some(
-        statements
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(";\n"),
-    )
+    // Insert qualifiers into the original text: re-rendering the AST is not
+    // a faithful round trip (string literals with doubled quotes lost one).
+    insert_at_positions(sql, binder.insertions)
 }
 
 /// Binds every SQL statement and expression of a routine body, before its

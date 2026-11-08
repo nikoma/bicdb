@@ -243,6 +243,10 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     }
     let symbol_names =
         routine_symbol_names(&params, &declarations, &statements, &exception_handlers);
+    let user_functions = match db {
+        Some(db) => crate::routine_overloads::user_function_names(db)?,
+        None => Default::default(),
+    };
     bind_routine_expressions(
         &params,
         oracle::preview_routine_language_version(&routine.language).is_none(),
@@ -250,6 +254,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
         &mut declarations,
         &mut statements,
         &mut exception_handlers,
+        user_functions,
     );
     Ok(RoutineIR {
         node_ownership: CompiledNodeOwnership::default(),
@@ -487,6 +492,7 @@ pub(crate) fn bind_routine_expressions(
     declarations: &mut [RoutineDecl],
     statements: &mut [RoutineStmt],
     handlers: &mut [RoutineExceptionHandler],
+    user_functions: std::sync::Arc<FxHashSet<String>>,
 ) {
     let array_vars = declarations
         .iter()
@@ -529,7 +535,8 @@ pub(crate) fn bind_routine_expressions(
     }
     let scope = BoundExprScope::new(&[], symbol_names)
         .with_array_vars(&array_vars)
-        .with_var_types(&types);
+        .with_var_types(&types)
+        .with_user_functions(user_functions);
     for declaration in declarations {
         if let RoutineDecl::Variable {
             default_expr: Some(expr),

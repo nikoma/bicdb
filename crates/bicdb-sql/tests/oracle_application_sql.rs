@@ -509,6 +509,25 @@ fn missing_application_relations_are_not_reported_as_reserved_names() {
     }
 }
 
+/// A user function named like a built-in SQL function does not take
+/// unqualified calls of that name in this profile.
+#[test]
+fn builtin_functions_keep_unqualified_calls_over_user_functions() {
+    let (_root, mut db) = app_database();
+    run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION lower(p_text IN VARCHAR2) RETURN VARCHAR2 AS
+         BEGIN
+           RETURN 'user-lower';
+         END;",
+    )
+    .unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT LOWER('A') FROM dual").unwrap()),
+        vec![vec!["a".to_string()]]
+    );
+}
+
 /// A correlated subquery names a schema-local UPDATE or DELETE target by its
 /// table name in the Oracle profile too.
 #[test]

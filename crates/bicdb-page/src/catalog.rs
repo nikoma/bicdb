@@ -202,11 +202,39 @@ impl Catalog {
     }
 
     /// Remove a page from the catalog entirely.
+    ///
+    /// Every free-space record of the page goes, not only the one
+    /// `free_bytes` implies. Records can drift from the page's current free
+    /// space (an insert placed through the heap's in-memory ring does not
+    /// update the map, and a delete records a guessed previous bucket), and a
+    /// record left behind here names a page vacuum is about to free. An
+    /// insert offered that page used to write a committed row onto it, and
+    /// the row was lost when the page was next allocated.
     pub fn forget_page(&self, page_id: PageId, free_bytes: usize) -> Result<()> {
+        let _ = free_bytes;
         self.tree.remove(&directory_key(page_id))?;
-        let bucket = bucket_for(free_bytes, self.page_size);
-        self.tree.remove(&free_key(bucket, page_id))?;
+        self.forget_free_space(page_id)
+    }
+
+    /// Remove every free-space record naming `page_id`, whatever bucket it
+    /// is under. Point lookups first, so only records that exist are removed
+    /// (a remove of an absent key would still latch the leaf for writing).
+    pub fn forget_free_space(&self, page_id: PageId) -> Result<()> {
+        for bucket in self.free_space_buckets(page_id)? {
+            self.tree.remove(&free_key(bucket, page_id))?;
+        }
         Ok(())
+    }
+
+    /// Every bucket `page_id` has a free-space record under. Read-only.
+    pub fn free_space_buckets(&self, page_id: PageId) -> Result<Vec<u8>> {
+        let mut found = Vec::new();
+        for bucket in 0..FREE_BUCKETS {
+            if self.tree.get(&free_key(bucket, page_id))?.is_some() {
+                found.push(bucket);
+            }
+        }
+        Ok(found)
     }
 
     /// Every registered page of a given type, in ascending page-id order.
@@ -562,5 +590,26 @@ mod tests {
         let pages = catalog.pages_of_type(PageType::Heap).unwrap();
         assert_eq!(pages.len(), 50, "directory scan crossed into free space");
         assert!(pages.iter().all(|id| (1..=50).contains(id)));
+    }
+
+    #[test]
+    fn forgetting_a_page_removes_drifted_free_space_records_too() {
+        let dir = TempDir::new().unwrap();
+        let (_pool, catalog) = catalog(&dir, 1024);
+        catalog.register_page(7, PageType::Heap, 500).unwrap();
+        // A second record the map failed to move: inserts placed through the
+        // heap's ring never update it, and a delete records a guessed
+        // previous bucket, so a page's records drift from its free space.
+        catalog.tree.insert(&free_key(28, 7), &[]).unwrap();
+        assert_eq!(catalog.free_space_buckets(7).unwrap().len(), 2);
+
+        // Vacuum frees the page, reporting its current free space.
+        catalog.forget_page(7, 20).unwrap();
+        assert!(catalog.free_space_buckets(7).unwrap().is_empty());
+        assert_eq!(
+            catalog.find_page_with_room(100).unwrap(),
+            None,
+            "a forgotten page is still offered for inserts"
+        );
     }
 }

@@ -511,6 +511,23 @@ fn correlated_references_name_update_and_delete_targets_by_table_name() {
     );
 }
 
+/// A column named INTERVAL is quoted as an identifier without changing the
+/// statement's other tokens.
+#[test]
+fn interval_identifier_quoting_keeps_string_literals() {
+    let (_root, mut db) = app_database();
+    run(
+        &mut db,
+        "CREATE TABLE schedule (id NUMBER, \"INTERVAL\" NUMBER)",
+    )
+    .unwrap();
+    run(&mut db, "INSERT INTO schedule VALUES (1, 7)").unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT 'it''s', interval FROM schedule").unwrap()),
+        vec![vec!["it's".to_string(), "7".to_string()]]
+    );
+}
+
 /// `TOP` is not row-limit syntax in this profile either: a column named
 /// `top` is an ordinary identifier.
 #[test]

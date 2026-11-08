@@ -920,9 +920,8 @@ fn quote_interval_identifiers(sql: &str) -> Option<String> {
         return None;
     }
     let dialect = sqlparser::dialect::GenericDialect {};
-    let tokens = sqlparser::tokenizer::Tokenizer::new(&dialect, sql)
-        .tokenize()
-        .ok()?;
+    let source = crate::eval::rewrite_helpers::tokens_with_source(&dialect, sql)?;
+    let tokens: Vec<Token> = source.iter().map(|(token, _)| token.clone()).collect();
     let mut changed = false;
     let mut out = String::with_capacity(sql.len() + 8);
     for (index, token) in tokens.iter().enumerate() {
@@ -952,7 +951,7 @@ fn quote_interval_identifiers(sql: &str) -> Option<String> {
                 }
             }
         }
-        out.push_str(&token.to_string());
+        out.push_str(source[index].1);
     }
     changed.then_some(out)
 }

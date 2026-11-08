@@ -70,7 +70,7 @@ pub(crate) fn rewrite(sql: &str) -> Result<Option<String>> {
     Ok(changed.then(|| {
         output
             .iter()
-            .map(ToString::to_string)
+            .map(crate::eval::rewrite_helpers::token_sql)
             .collect::<Vec<_>>()
             .join(" ")
     }))

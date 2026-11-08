@@ -1229,12 +1229,12 @@ impl<'db> SqlSession<'db> {
         }
         let domain_name = tokens[2..operation_index]
             .iter()
-            .map(ToString::to_string)
+            .map(crate::eval::rewrite_helpers::token_sql)
             .collect::<String>();
         let operation_tokens = &tokens[operation_index..];
         let operation_sql = operation_tokens
             .iter()
-            .map(ToString::to_string)
+            .map(crate::eval::rewrite_helpers::token_sql)
             .collect::<Vec<_>>()
             .join(" ");
         let column_operation = operation_tokens.len() >= 2
@@ -1534,7 +1534,7 @@ impl<'db> SqlSession<'db> {
 
         let type_name = tokens[2..operation_index]
             .iter()
-            .map(ToString::to_string)
+            .map(crate::eval::rewrite_helpers::token_sql)
             .collect::<String>();
         let mut operation_tokens = tokens[operation_index..].to_vec();
         if operation_tokens
@@ -1546,7 +1546,7 @@ impl<'db> SqlSession<'db> {
         operation_tokens[1] = Token::make_keyword("COLUMN");
         let operation_sql = operation_tokens
             .iter()
-            .map(ToString::to_string)
+            .map(crate::eval::rewrite_helpers::token_sql)
             .collect::<Vec<_>>()
             .join(" ");
         let transformed = format!("ALTER TABLE {type_name} {operation_sql}");

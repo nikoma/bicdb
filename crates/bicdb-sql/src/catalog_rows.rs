@@ -3757,6 +3757,83 @@ pub(crate) fn filter_catalog_rows_for_role(
     Ok(kept)
 }
 
+/// `information_schema.views` and `information_schema.triggers` list only
+/// relations the role can use, as PostgreSQL's views do: a view the role owns
+/// or holds any privilege on (its definition only to the owner), and triggers
+/// of a relation the role owns or may modify, reference or trigger.
+/// Rows of every other relation are returned unchanged.
+pub(crate) fn filter_information_schema_rows_for_role(
+    db: &BicDb,
+    role: &str,
+    table: &str,
+    rows: Vec<BTreeMap<String, SqlValue>>,
+) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    let (schema_column, name_column, privileges): (_, _, &[&str]) = match table {
+        "information_schema.views" => (
+            "table_schema",
+            "table_name",
+            &[
+                "SELECT",
+                "INSERT",
+                "UPDATE",
+                "DELETE",
+                "TRUNCATE",
+                "REFERENCES",
+                "TRIGGER",
+            ],
+        ),
+        "information_schema.triggers" => (
+            "event_object_schema",
+            "event_object_table",
+            &[
+                "INSERT",
+                "UPDATE",
+                "DELETE",
+                "TRUNCATE",
+                "REFERENCES",
+                "TRIGGER",
+            ],
+        ),
+        _ => return Ok(rows),
+    };
+    if normalize_role_name(role) == BOOTSTRAP_ROLE_NAME || pg_role_is_superuser(db, role)? {
+        return Ok(rows);
+    }
+    let roles = role_privilege_closure(db, role)?;
+    let mut kept = Vec::with_capacity(rows.len());
+    for mut row in rows {
+        let schema = sql_value_text(&virtual_cell(&row, schema_column)).unwrap_or_default();
+        let name = sql_value_text(&virtual_cell(&row, name_column)).unwrap_or_default();
+        let Ok(relation) = relation_name_from_parts(&[schema, name]) else {
+            continue;
+        };
+        let owner = match load_view(db, &relation)? {
+            Some(view) => Some(view.owner.unwrap_or_else(current_role_name)),
+            None => load_schema(db, &relation)?.map(|schema| {
+                schema
+                    .owner
+                    .unwrap_or_else(|| BOOTSTRAP_ROLE_NAME.to_string())
+            }),
+        };
+        let owns = owner.is_some_and(|owner| roles.contains(&normalize_role_name(&owner)));
+        let mut visible = owns;
+        for privilege in privileges {
+            if visible {
+                break;
+            }
+            visible = role_has_table_privilege(db, role, &relation, privilege)?;
+        }
+        if !visible {
+            continue;
+        }
+        if table == "information_schema.views" && !owns {
+            row.insert("view_definition".to_string(), SqlValue::Null);
+        }
+        kept.push(row);
+    }
+    Ok(kept)
+}
+
 pub(crate) fn bicdb_replication_status_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     let watermark = db.replication_watermark();
     let apply_state = db.replication_apply_state();

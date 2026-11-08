@@ -565,7 +565,7 @@ fn set_operation_and_case_types_follow_postgres_common_type_rules() {
     let error = session.execute("SELECT 'a' UNION SELECT 1").unwrap_err();
     assert_eq!(error.sqlstate(), "22P02", "{error}");
     let result = session
-        .execute("SELECT '7' UNION SELECT 1 ORDER BY 1")
+        .execute("SELECT x FROM (SELECT '7' AS x UNION SELECT 1) q ORDER BY x")
         .unwrap();
     assert_eq!(result.column_types, vec![Some("int4".to_string())]);
     assert_eq!(

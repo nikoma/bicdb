@@ -320,6 +320,18 @@ impl BicDb {
             return self.commit_read_only_on_standby(tx);
         }
         let committed = self.commit_transaction_tracked(tx);
+        // A commit that failed before its decision on a database fenced in
+        // the meantime reports the fence (58030), not whatever it tripped
+        // over: rows a failed materialization touched can have resident
+        // versions the page store never committed, and reading one is the
+        // fence, not corruption. Errors after the decision are already
+        // durability failures (08007) and pass through unchanged.
+        let committed = match committed {
+            Err(error) if !error.is_durability_failure() && self.durability.is_failed() => {
+                Err(self.check_recovery_state().unwrap_err())
+            }
+            other => other,
+        };
         if let Ok(seq) = committed {
             if !tx.writes.is_empty() || !tx.imported_record_audit_events.is_empty() {
                 replication_live::note_thread_commit(seq);

@@ -489,6 +489,18 @@ The server's archiver opens a new handle (discard and rewrite) 60 s after a
 failure; until that succeeds it stays failed. A page-log archiver resumes with
 a reopened database.
 
+**Commit stream content (found by the archive crash matrix).**
+`replication_frames_after` checked its resume anchor in one open of
+`transactions.log` and read from the cursor offset in another. A log cut
+renaming a new file over the path in between made the read start at an old
+offset in the new file, and every commit in the range it did not see fell
+through to the empty-frame fallback: the commit-log archive, and a standby,
+received those commits without their writes (observed: 4 to about 100
+commits per occurrence, under concurrent checkpoints). The check, the read
+and the new anchor now use one descriptor; a cut before the open fails the
+anchor check and the new log is rescanned from its start
+(`a_log_cut_between_anchor_check_and_read_never_ships_empty_frames`).
+
 **Restore against a partial or failed archive.**
 
 - Commit-log archive: a gap anywhere (a missing segment or record) is refused

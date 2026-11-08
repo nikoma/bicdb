@@ -580,3 +580,121 @@ synchronous I/O to a hot path, and needs a decision first:
   page-WAL archive's ignored directory sync before
   `mark_wal_archived_through`. (The generic frame appender's tail repair
   and poisoning are in section 7.4.)
+
+## 12. Replication ships only durable frames
+
+A commit's bytes are in `transactions.log` before its O_DSYNC write returns,
+and a failed batch on a fenced primary can leave whole frames in the file.
+Until the write returns, the commit can still be lost: the sync fails and the
+tail repair cuts it back, or the host loses power. A frame shipped in that
+window can leave a standby holding a commit that the primary's recovery
+drops. The two then diverge, and a promoted standby exposes a commit whose
+client was told it failed, or was never told it succeeded.
+
+Rule: every path that ships or exports log content reads the durable bound
+first, `BicDb::replication_shippable_seq()` (`written_seq`, capped by the
+applied watermark), and drops every commit above it. `written_seq` is
+published only after the write returned, and never past a failed write. The
+length of the file is never used as a bound.
+
+### 12.1 Inventory
+
+| Path | Reads | Bound before | Durable? | Now |
+|---|---|---|---|---|
+| Live sender (`replication_frames_after`, pgwire HA sender) | `transactions.log`, read-only reader | `min(written_seq, last_committed_tx)` | Yes | Unchanged; the bound is now the shared `replication_shippable_seq` |
+| Commit-log archive (`archive_commits`) | through `replication_frames_after` | same | Yes | Unchanged |
+| `export_replication_frames_since` / `subscribe_replication_stream`: used by the replication CLI (`replication stream`), consensus proposals (`consensus_propose_local_frames`), Cell replication (`export_replication_commits`) and range catch-up (`export_catch_up`) | `transactions.log`, read-only reader (since 7.4) | **End of file** | **No** | Bounded by `replication_shippable_seq`, read before the file |
+| Range relocation snapshot `Complete` step (`export_snapshot_step_from`, also used by range digests) | MVCC scan | Labelled with `current_commit_seq()`, the reservation counter, read before the scan | **No**: the label could name a commit still being written, so catch-up from it skipped that commit's rows | Labelled with the completed scan's watermark (or the shippable sequence when there are no collections) |
+| Open after a crash (every offline exporter, and commit resolution) | recovery reads every complete frame, including a batch whose write had not returned when the process stopped | Recovered sequence becomes `written_seq` | **No**: those bytes may be only in the page cache | The open syncs `transactions.log` before the recovered sequence is published (`transaction_log.open_sync`); a failed sync fails the open |
+| HA standby bootstrap, base backups, Cell backup, branching, online repository backup | file copy under commit admission | `write_durable(last_applied_commit_seq())` under the admission write lock | Yes | Unchanged |
+| Page-WAL archive, WAL-tail backup | sealed `store.wal.<seq>` segments only | segment sealed after its sync | Yes (with fsync on) | Unchanged |
+| Mesh sync bundles and deltas, broker sinks | in-memory event log | events are added after their synced append; record-audit and broker events after `write_durable` | Yes | Unchanged |
+| `SUBSCRIBE` live queries | re-runs SQL | `replication_feed().durable_seq()` | Yes | Unchanged |
+
+### 12.2 The standby side and leadership changes
+
+- **Durable horizon on the wire.** The HA heartbeat that closes each batch
+  now carries `durable_commit_seq`: the primary's durable sequence, read
+  after the batch was built. The standby refuses the whole batch, before
+  applying any of it, when a frame lies above it
+  (`ensure_frames_within_durable_horizon`;
+  `BicDb::apply_replication_batch_within` for embedded callers). A refused
+  frame is never applied, so it is never visible to readers, never part of
+  the acknowledged position, never shipped onward and never part of a
+  promotion. A heartbeat from a sender that predates the field decodes with
+  no horizon and is accepted: such senders ship only from
+  `replication_frames_after`, which was already bounded by `written_seq`.
+- **Readers during an import.** A standby imports under the database write
+  lock (`&mut self`), so no reader observes a batch mid-apply. Its applied
+  position and visibility watermark advance only after its own log write
+  returned (section 7.1, standby import).
+- **Consensus term change.** A follower used to advance its commit index to
+  `min(leader_commit, last log index)`. After a term change, entries past
+  what the current request verified can be a deposed leader's tail that the
+  new leader never had, and a heartbeat with a larger `leader_commit`
+  committed and applied them. The commit index now advances only to the
+  last index the request proved (`prev_log_index` or its last entry).
+- **Synchronous replication across a promotion.** A commit that becomes
+  durable on the old primary after its standby was promoted never gets its
+  quorum confirmation, so no client is told it succeeded. The promoted
+  primary refuses its late frame, and the old primary, whose tail is longer
+  than the promotion point, is rebuilt (`standby_resume` answers
+  `Snapshot`), never streamed or merged. With asynchronous replication a
+  commit acknowledged by the old primary and not yet shipped is lost on
+  failover; that is the documented RPO of asynchronous mode and unchanged.
+
+### 12.3 Tests
+
+`crates/bicdb-core/tests/replication_durable_frames.rs` pauses a commit
+between its write and its sync's return (an I/O hook on
+`transaction_log.sync`, which runs after the bytes are in the file), and
+collects everything the live cursor, the export and the subscription offer
+inside that window. It then lets the sync succeed, fail with a successful
+repair (the frame is lost), or fail with a failed repair (the frame stays,
+outcome uncertain); a fourth case fails the write itself. The primary handle
+is then dropped and either reopened (recovery, standby catch-up) or replaced
+by a promoted standby. Both storage modes, both shipping APIs. Each case
+reconciles against the acknowledged-commit ledger: every acknowledged commit
+is on the primary and the standby; no standby holds a commit the primary's
+recovery does not; the promoted standby never exposes an unacknowledged
+commit; an old primary that kept an uncertain commit past the promotion
+point is detected as divergent (`Snapshot`).
+
+`distribution_data::tests::range_snapshot_completion_never_labels_a_commit_still_being_written`
+pauses a commit the same way during a range snapshot and requires the
+completion label to be below it, and catch-up from the label to deliver it.
+
+In the same test file: `a_standby_applies_nothing_above_the_primarys_durable_horizon`
+(a batch with a frame above the horizon changes nothing: rows, applied
+position, onward shipping; legacy heartbeat decoding);
+`a_standby_crash_mid_apply_never_diverges_from_the_primary` (the standby's
+own write fails before the write, after it with the bytes lost, and after it
+with the bytes kept; then a reopen and catch-up, or a promotion);
+`promotion_with_a_commit_in_flight_never_acknowledges_or_merges_it`
+(synchronous replication). `consensus::tests::a_term_change_never_commits_a_deposed_leaders_tail`
+covers the follower commit rule.
+
+### 12.4 Not changed here (needs a decision)
+
+- Refusing heartbeats without `durable_commit_seq` would make the standby
+  side independent of the sender's code, but an upgraded standby would then
+  stop following a primary that is not yet upgraded (and stall synchronous
+  commits). Accepted for now.
+- The CLI `replication stream`/`follow` pair and Cell replication objects
+  carry no explicit horizon. Both export through the bounded
+  `export_replication_frames_since`; the CLI stream also runs on an offline
+  open, after the open-time sync.
+
+- With `fsync = false` (a diagnostic mode), `written_seq` follows a buffered
+  write and is not durable; replication still ships it.
+- `sync.log` ops are appended before the commit decision and are visible
+  through `pending_sync_ops()` at once, including ops of a commit that then
+  fails.
+- The consensus log keeps an entry in memory, and ships it, even when
+  persisting it failed.
+- Backups taken without commit admission (`PagedStorageOpsHandle::create_online_backup`,
+  direct `create_backup_from_open_database`) copy a fenced primary's failed
+  batch; restore recovers it as an uncertain commit.
+- `current_commit_seq()` (reserved, not durable) is still reported as the
+  source position in the HA heartbeat, range catch-up and the Cell fence
+  receipt. None of these ships content past the durable bound.

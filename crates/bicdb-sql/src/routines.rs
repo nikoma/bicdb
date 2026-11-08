@@ -1097,6 +1097,10 @@ fn parse_plpgsql_block(
     Vec<RoutineStmt>,
     Vec<RoutineExceptionHandler>,
 )> {
+    let elsif = postgres_dialect_forms()
+        .then(|| elseif_as_elsif(body))
+        .flatten();
+    let body = elsif.as_deref().unwrap_or(body);
     let body = strip_plpgsql_compiler_directives(trim_sql_statement(body))?;
     let Some(begin_idx) = find_top_level_keyword(body, "BEGIN") else {
         return Err(SqlError::UnsupportedPlpgsqlFeature(
@@ -2627,6 +2631,50 @@ impl Drop for PostgresDialectScope {
 
 fn postgres_dialect_forms() -> bool {
     POSTGRES_DIALECT_FORMS.with(std::cell::Cell::get)
+}
+
+/// `body` with the keyword `ELSEIF`, which PL/pgSQL accepts as a spelling of
+/// `ELSIF`, written as `ELSIF`; `None` when there is none. Strings, quoted
+/// identifiers and comments are left alone.
+fn elseif_as_elsif(body: &str) -> Option<String> {
+    if !body.to_ascii_uppercase().contains("ELSEIF") {
+        return None;
+    }
+    let tokens = sqlparser::tokenizer::Tokenizer::new(&PostgreSqlDialect {}, body)
+        .tokenize_with_location()
+        .ok()?;
+    let mut line_starts = vec![0usize];
+    line_starts.extend(body.match_indices('\n').map(|(index, _)| index + 1));
+    let mut edits = Vec::new();
+    for token in &tokens {
+        let sqlparser::tokenizer::Token::Word(word) = &token.token else {
+            continue;
+        };
+        if word.quote_style.is_some() || !word.value.eq_ignore_ascii_case("ELSEIF") {
+            continue;
+        }
+        let line_start = *line_starts.get(
+            usize::try_from(token.span.start.line)
+                .ok()?
+                .checked_sub(1)?,
+        )?;
+        let column = usize::try_from(token.span.start.column)
+            .ok()?
+            .checked_sub(1)?;
+        let start = body[line_start..]
+            .char_indices()
+            .nth(column)
+            .map(|(index, _)| line_start + index)?;
+        edits.push(start);
+    }
+    let mut out = body.to_string();
+    for start in edits.into_iter().rev() {
+        if !out[start..].get(..6)?.eq_ignore_ascii_case("ELSEIF") {
+            return None;
+        }
+        out.replace_range(start..start + 6, "ELSIF");
+    }
+    Some(out)
 }
 
 /// `target = expr` where the target is a variable, field or array element:

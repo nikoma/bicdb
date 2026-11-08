@@ -8442,7 +8442,10 @@ mod tests {
 
         let (store, _) = PagedStore::open(dir.path(), options).unwrap();
         for i in 0..4 {
-            assert_eq!(store.get(&key(0, i)).unwrap().as_deref(), Some(&b"base"[..]));
+            assert_eq!(
+                store.get(&key(0, i)).unwrap().as_deref(),
+                Some(&b"base"[..])
+            );
         }
         let survived = (0..200)
             .map(|i| store.get(&key(1, i)).map(|value| value.is_some()))

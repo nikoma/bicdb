@@ -67,8 +67,10 @@ fn percentile(sorted: &[u64], p: f64) -> u64 {
 fn run(db_dir: &Path, mode: &str, threads: usize, seconds: u64, crash: bool) {
     let mut db = BicDb::open_with_config(db_dir, config(mode)).expect("open");
     db.create_collection("rows").expect("create");
-    db.create_index(index("rows_owner", "owner", false)).expect("index");
-    db.create_index(index("rows_uk", "uk", true)).expect("unique");
+    db.create_index(index("rows_owner", "owner", false))
+        .expect("index");
+    db.create_index(index("rows_uk", "uk", true))
+        .expect("unique");
     for thread in 0..threads {
         let mut tx = db.begin_transaction().expect("begin");
         tx.insert(
@@ -117,7 +119,10 @@ fn run(db_dir: &Path, mode: &str, threads: usize, seconds: u64, crash: bool) {
             .collect();
         std::thread::sleep(Duration::from_secs(seconds));
         stop.store(true, Ordering::Relaxed);
-        workers.into_iter().map(|worker| worker.join().unwrap()).collect()
+        workers
+            .into_iter()
+            .map(|worker| worker.join().unwrap())
+            .collect()
     });
     let elapsed = started.elapsed().as_secs_f64();
     let mut all: Vec<u64> = latencies.into_iter().flatten().collect();

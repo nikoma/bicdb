@@ -44,7 +44,10 @@ fn config(mode: &str) -> DbConfig {
         .with_storage_mode(StorageMode::ServerPaged)
         .with_transaction_log_commit_durability(mode == "transaction-log");
     // A small pool forces eviction and writeback during the workload.
-    match std::env::var("DURABILITY_POOL_BYTES").ok().and_then(|v| v.parse().ok()) {
+    match std::env::var("DURABILITY_POOL_BYTES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+    {
         Some(bytes) => config.with_paged_buffer_pool_bytes(bytes),
         None => config,
     }

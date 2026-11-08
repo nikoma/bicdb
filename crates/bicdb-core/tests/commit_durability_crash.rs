@@ -191,7 +191,10 @@ fn reconcile(db_dir: &Path, ledger: &Path, mode: &str, label: &str) -> BTreeMap<
                  (acknowledged {acknowledged})"
             );
             let unique = db
-                .lookup_index("rows_unique_key", &[IndexValue::String(format!("u-{writer}-{i}"))])
+                .lookup_index(
+                    "rows_unique_key",
+                    &[IndexValue::String(format!("u-{writer}-{i}"))],
+                )
                 .expect("unique lookup");
             let want: Vec<String> = if expected { vec![id.clone()] } else { vec![] };
             assert_eq!(unique, want, "{label}: unique index for {id}");
@@ -205,7 +208,10 @@ fn reconcile(db_dir: &Path, ledger: &Path, mode: &str, label: &str) -> BTreeMap<
             .filter(|(_, metadata)| metadata["owner"].as_u64() == Some(writer as u64))
             .map(|(id, _)| id.clone())
             .collect();
-        assert_eq!(via_index, via_scan, "{label}: owner index != scan for writer {writer}");
+        assert_eq!(
+            via_index, via_scan,
+            "{label}: owner index != scan for writer {writer}"
+        );
     }
     let mut created: BTreeMap<String, u64> = BTreeMap::new();
     for line in ledger_lines(&ledger.join("ddl")) {
@@ -219,7 +225,12 @@ fn reconcile(db_dir: &Path, ledger: &Path, mode: &str, label: &str) -> BTreeMap<
             continue;
         }
         let side = db.scan_collection(&meta.name).expect("scan side");
-        assert!(side.len() <= 1, "{label}: {} holds {} rows", meta.name, side.len());
+        assert!(
+            side.len() <= 1,
+            "{label}: {} holds {} rows",
+            meta.name,
+            side.len()
+        );
         if let Some(record) = side.first() {
             let generation = record.metadata["g"].as_u64().unwrap();
             let floor = created.get(&meta.name).copied().unwrap_or(0);
@@ -281,7 +292,11 @@ impl Drop for KeepOnPanic {
                     .unwrap_or(0)
             ));
             let _ = std::fs::remove_dir_all(&target);
-            let _ = Command::new("cp").arg("-a").arg(&self.0).arg(&target).status();
+            let _ = Command::new("cp")
+                .arg("-a")
+                .arg(&self.0)
+                .arg(&target)
+                .status();
             eprintln!("kept failing case at {}", target.display());
         }
     }
@@ -294,7 +309,10 @@ fn interrupted_recovery_case(mode: &str, crash_at: &str) {
     let temp = tempfile::tempdir().unwrap();
     let db = temp.path().join("db");
     let ledger = temp.path().join("ledger");
-    assert!(matches!(run_child(&db, &ledger, mode, Some(crash_at)), Outcome::Crashed));
+    assert!(matches!(
+        run_child(&db, &ledger, mode, Some(crash_at)),
+        Outcome::Crashed
+    ));
     // Reopen in a child that dies on the second replayed write and does no
     // new work. If fewer than two writes needed replay it simply closes.
     let _ = run_child_with(&db, &ledger, mode, Some("replay.after_write:2"), 0);
@@ -344,14 +362,24 @@ fn run_matrix(cases: Vec<(String, Box<dyn FnOnce() + std::panic::UnwindSafe>)>) 
             failures.push(format!("{label}: {message}"));
         }
     }
-    assert!(failures.is_empty(), "{} failing cases:\n{}", failures.len(), failures.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "{} failing cases:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
 }
 
 fn matrix(mode: &'static str, points: Vec<&'static str>, replays: &[&'static str]) {
-    let mut cases: Vec<(String, Box<dyn FnOnce() + std::panic::UnwindSafe>)> =
-        vec![("no-crash".into(), Box::new(move || crash_case(mode, None, false)))];
+    let mut cases: Vec<(String, Box<dyn FnOnce() + std::panic::UnwindSafe>)> = vec![(
+        "no-crash".into(),
+        Box::new(move || crash_case(mode, None, false)),
+    )];
     for point in points {
-        cases.push((point.into(), Box::new(move || crash_case(mode, Some(point), true))));
+        cases.push((
+            point.into(),
+            Box::new(move || crash_case(mode, Some(point), true)),
+        ));
     }
     for &point in replays {
         cases.push((
@@ -378,8 +406,15 @@ fn production_path_survives_every_crash_point_with_eviction() {
 fn transaction_log_only_path_survives_every_crash_point_with_eviction() {
     matrix(
         "transaction-log+small-pool",
-        COMMON_POINTS.iter().chain(DEFERRED_POINTS).copied().collect(),
-        &["commit.after_page_apply:100", "materialize.after_wal_sync:20"],
+        COMMON_POINTS
+            .iter()
+            .chain(DEFERRED_POINTS)
+            .copied()
+            .collect(),
+        &[
+            "commit.after_page_apply:100",
+            "materialize.after_wal_sync:20",
+        ],
     );
 }
 
@@ -396,8 +431,15 @@ fn production_path_survives_every_crash_point() {
 fn transaction_log_only_path_survives_every_crash_point() {
     matrix(
         "transaction-log",
-        COMMON_POINTS.iter().chain(DEFERRED_POINTS).copied().collect(),
-        &["commit.after_page_apply:100", "materialize.after_wal_sync:20"],
+        COMMON_POINTS
+            .iter()
+            .chain(DEFERRED_POINTS)
+            .copied()
+            .collect(),
+        &[
+            "commit.after_page_apply:100",
+            "materialize.after_wal_sync:20",
+        ],
     );
 }
 

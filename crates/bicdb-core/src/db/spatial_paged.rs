@@ -2418,7 +2418,10 @@ impl BicDb {
         }
         bicdb_page::test_faults::crash_point("commit.after_txlog_durable");
         timer.lap(&commit_trace::WAL_ENCODE);
-        let deferred = self.deferred_materializer.as_ref().map(|handle| &handle.materializer);
+        let deferred = self
+            .deferred_materializer
+            .as_ref()
+            .map(|handle| &handle.materializer);
         let mut deferred_page_commit = None;
         // Record/version/vector apply: per-shard write locks under the shared
         // collection read guard, so disjoint-key commits (even within one

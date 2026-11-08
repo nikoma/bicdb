@@ -43,7 +43,14 @@ fn transaction_log_only_durability_is_strictly_opt_in() {
     }
 
     // Only the exact value enables it; near misses do not.
-    for value in ["1", "on", "true", "TRANSACTION-LOG", "transaction_log", " transaction-log"] {
+    for value in [
+        "1",
+        "on",
+        "true",
+        "TRANSACTION-LOG",
+        "transaction_log",
+        " transaction-log",
+    ] {
         std::env::set_var("BICDB_COMMIT_DURABILITY", value);
         assert!(
             !DbConfig::default().transaction_log_commit_durability,

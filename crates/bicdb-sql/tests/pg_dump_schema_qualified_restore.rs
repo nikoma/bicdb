@@ -456,6 +456,29 @@ fn correlated_references_name_schema_qualified_tables_by_their_bare_name() {
     )
     .unwrap();
     assert_eq!(int_at(&mut sql, "SELECT sum(uom_id) FROM line"), 302);
+    // Siblings: UPDATE ... FROM, a correlated subquery in a select list, and
+    // a correlated reference to a view, all named by the bare name.
+    sql.execute("UPDATE line SET uom_id = 0").unwrap();
+    sql.execute("UPDATE line SET uom_id = product.uom_id FROM product WHERE product.product_id = line.product_id")
+        .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT sum(uom_id) FROM line"), 300);
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT (SELECT uom_id FROM product WHERE product_id = line.product_id) FROM app.line ORDER BY id"
+        ),
+        100
+    );
+    sql.execute("CREATE VIEW app.line_view AS SELECT id, product_id FROM app.line")
+        .unwrap();
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM app.line_view WHERE EXISTS \
+             (SELECT 1 FROM product WHERE product.product_id = line_view.product_id)"
+        ),
+        2
+    );
     sql.execute("DELETE FROM line WHERE EXISTS (SELECT 1 FROM product WHERE product.product_id = line.product_id AND product.uom_id = 200)")
         .unwrap();
     assert_eq!(int_at(&mut sql, "SELECT count(*) FROM line"), 1);

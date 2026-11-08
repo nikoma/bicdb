@@ -71,6 +71,7 @@ impl<'db> SqlSession<'db> {
                 internal_symbol: None,
                 owner: Some(owner),
                 security_definer: routine_definition_is_security_definer(trimmed),
+                overload: None,
             },
             false,
             prefix.contains("replace"),
@@ -203,6 +204,7 @@ impl<'db> SqlSession<'db> {
             internal_symbol: None,
             owner: Some(current_user_from_gucs(&self.session_gucs)),
             security_definer: false,
+            overload: None,
         };
         self.save_session_routine_if_missing(routine, false, false)?;
         Ok(SqlResult::command("CREATE PROCEDURE"))
@@ -263,6 +265,7 @@ impl<'db> SqlSession<'db> {
                 internal_symbol: None,
                 owner: Some(owner),
                 security_definer: routine_definition_is_security_definer(trimmed),
+                overload: None,
             },
             false,
             prefix.contains("replace"),
@@ -555,7 +558,7 @@ impl<'db> SqlSession<'db> {
         action: &str,
     ) -> Result<Option<RoutineSchema>> {
         let (schema, name) = routine_schema_and_name(&object_name(name_ast)?);
-        let routine = load_routine(self.db_ref(), kind, &name)?.filter(|routine| {
+        let in_schema = |routine: &RoutineSchema| {
             let schema = if oracle::preview_routine_language_version(&routine.language)
                 .is_some_and(|version| version >= 2)
             {
@@ -564,37 +567,28 @@ impl<'db> SqlSession<'db> {
                 schema.clone()
             };
             name_ast.0.len() == 1 || routine_schema_name(routine) == schema
-        });
-        if let (Some(routine), Some(signature)) = (&routine, signature) {
-            // DDL naming an obsolete overload must not alter the current routine
-            // merely because its name matches. Identity uses input argument
-            // types, not parameter names, defaults, OUT slots or typmods.
-            let declared = parse_routine_params(&routine.args)?;
-            let inputs = declared
-                .iter()
-                .filter(|arg| arg.mode != RoutineArgMode::Out)
-                .collect::<Vec<_>>();
-            let requested = signature
-                .iter()
-                .filter(|arg| arg.mode != Some(sqlparser::ast::ArgMode::Out))
-                .map(|arg| routine_type_schema(&arg.data_type))
-                .collect::<Result<Vec<_>>>()?;
-            if inputs.len() != requested.len()
-                || !inputs.iter().zip(&requested).all(|(input, requested)| {
-                    input.type_schema.as_ref().is_some_and(|declared| {
-                        match (
-                            pg_type_oid_by_name(&declared.pg_type),
-                            pg_type_oid_by_name(&requested.pg_type),
-                        ) {
-                            (Some(left), Some(right)) => left == right,
-                            _ => declared.pg_type == requested.pg_type,
-                        }
-                    })
-                })
-            {
-                return Ok(None);
+        };
+        let candidates = routines_named(self.db_ref(), kind, &name)?
+            .into_iter()
+            .filter(|routine| in_schema(routine))
+            .collect::<Vec<_>>();
+        let routine = match signature {
+            // DDL naming one signature acts on that overload only. Identity
+            // uses input argument types, not parameter names, defaults, OUT
+            // slots or typmods.
+            Some(signature) => {
+                let requested = requested_input_signature(signature)?;
+                let mut found = None;
+                for candidate in candidates {
+                    if routine_input_signature(&candidate)? == requested {
+                        found = Some(candidate);
+                        break;
+                    }
+                }
+                found
             }
-        }
+            None => candidates.into_iter().next(),
+        };
         if let Some(routine) = &routine {
             let object = match kind {
                 RoutineKind::Function => "function",

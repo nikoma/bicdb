@@ -867,7 +867,7 @@ pub(crate) fn parse_routine_param(arg: &str, index: usize) -> Result<RoutinePara
         {
             mode = RoutineArgMode::InOut;
         }
-    } else if words.len() >= 2 && !is_likely_type_word(&words[0]) {
+    } else if words.len() >= 2 && routine_arg_words_have_name(&words) {
         name = Some(unquote_identifier_word(&words[0]));
     }
     let details = raw_routine_argument_type_details(&arg).ok();
@@ -2636,10 +2636,18 @@ pub(crate) fn save_routine(db: &mut BicDb, routine: &RoutineSchema) -> Result<()
     ensure_routine_collection(db)?;
     db.insert(
         ROUTINE_COLLECTION,
-        Record::new(routine_key(routine.kind, &routine.name))
-            .with_metadata(serde_json::to_value(routine)?),
+        Record::new(routine_storage_key(routine)).with_metadata(serde_json::to_value(routine)?),
     )?;
     Ok(())
+}
+
+/// Deletes exactly this routine (one overload of its name).
+pub(crate) fn delete_routine_schema(db: &mut BicDb, routine: &RoutineSchema) -> Result<bool> {
+    match db.delete(ROUTINE_COLLECTION, &routine_storage_key(routine)) {
+        Ok(existed) => Ok(existed),
+        Err(BicDbError::CollectionNotFound(_)) => Ok(false),
+        Err(error) => Err(error.into()),
+    }
 }
 
 pub(crate) fn delete_routine(db: &mut BicDb, kind: RoutineKind, name: &str) -> Result<bool> {

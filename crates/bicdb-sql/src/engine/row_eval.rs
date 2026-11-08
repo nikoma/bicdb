@@ -1737,7 +1737,7 @@ impl<'db> SqlEngine<'db> {
         if let Some(value) = eval_spatial_function_value(&name, &args, &arg_types)? {
             return Ok(value);
         }
-        if let Some(value) = self.eval_stored_sql_function_value(&name, &args)? {
+        if let Some(value) = self.eval_stored_sql_function_value(&name, &args, &arg_types)? {
             return Ok(value);
         }
         execute_builtin_function(
@@ -3224,7 +3224,7 @@ impl<'db> SqlEngine<'db> {
         if let Some(value) = eval_spatial_function_value(&name, &args, &arg_types)? {
             return Ok(value);
         }
-        if let Some(value) = self.eval_stored_sql_function_value(&name, &args)? {
+        if let Some(value) = self.eval_stored_sql_function_value(&name, &args, &arg_types)? {
             return Ok(value);
         }
         execute_builtin_function(
@@ -3248,8 +3248,10 @@ impl<'db> SqlEngine<'db> {
         &self,
         name: &str,
         args: &[SqlValue],
+        arg_types: &[Option<String>],
     ) -> Result<Option<SqlValue>> {
-        let Some(routine) = resolve_routine_cached(self.db_ref(), RoutineKind::Function, name)?
+        let Some(routine) =
+            resolve_routine_for_call(self.db_ref(), RoutineKind::Function, name, arg_types, args)?
         else {
             return Ok(None);
         };
@@ -3257,7 +3259,7 @@ impl<'db> SqlEngine<'db> {
             // PL/pgSQL runs in the session's interpreter; the host applies the
             // EXECUTE privilege check and SECURITY DEFINER itself.
             return match self.routine_host {
-                Some(host) => host.call_function(self, name, args).map(Some),
+                Some(host) => host.call_function(self, name, args, arg_types).map(Some),
                 None => Ok(None),
             };
         }

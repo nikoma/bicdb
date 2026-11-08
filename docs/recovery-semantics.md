@@ -899,8 +899,8 @@ Closing those needs option (b). Its design is proposed separately, for approval 
 
 ### 14.6 Evidence for the interim
 
-Host s3ny. "Base" is the GAP-2 fix (#67 head, `cd32c73`), with only the new
-tests added; "branch" is the interim.
+Host s3ny, at the interim's code. "Base" is the GAP-2 fix (#67 head,
+`92a49f50`), with only the new core tests added; "branch" is the interim.
 
 | Window | Test (fault and reconciliation) | Base | Branch |
 |---|---|---|---|
@@ -909,19 +909,39 @@ tests added; "branch" is the interim.
 | W3 | `q1_crash_after_an_uncommitted_root_split...`; `w3_an_uncommitted_root_split_never_reaches_the_page_file`; `w3_a_committed_root_split_survives_a_crash`; end to end `gap1_a_crash_after_an_uncommitted_root_split_keeps_acknowledged_rows` | fail (124/150 lost) | pass |
 | W3, the saved P0 crash state (`all-logs`, `pool.after_writeback:40`: reopen refused, "page 6 is beyond the end of the file") | Its page log ends with page transaction 36's images of a split (new leaf 6, new root 7, old leaf 2 pointing at 6) and no commit record; the page file holds those pages: the root-split flush wrote them. Deterministic form: `gap1_a_crash_inside_the_root_split_flush_reopens_and_keeps_acknowledged_rows` (crash at each of the first 8 writebacks of the splitting process). Timing form: 1,200 repeats of the original case | deterministic: fail at writebacks 4-6 (124/150 lost); repeats: 0/1200 (the window needs timing that #55's head had, 2/240) | deterministic: pass; repeats: 0/300 |
 | W2 + W3 + W7 end to end | `gap1_a_crash_at_every_boundary_of_a_splitting_page_apply_keeps_acknowledged_rows`: transaction-log decision, root-split flush, page images logged without commit record, after the page apply; bounded checkpoint worker running next to the transaction | fail at the root-split flush (124/150 lost); `paged.after_page_images` does not exist there | pass |
-| W5 | `w5_an_aborted_split_checkpointed_page_by_page_keeps_committed_keys` (crash after every bounded-checkpoint step after an abort); `w5_an_abort_whose_logging_fails...` (EIO on the abort's page-image write) | caught by M3 | pass |
+| W5 | `w5_an_aborted_split_checkpointed_page_by_page_keeps_committed_keys` (crash after every bounded-checkpoint step after an abort); `w5_an_abort_failing_at_every_log_write_leaves_committed_keys_intact` (EIO at every write of the abort's unit: abort record, each image, the unit's commit record, then a crash) | caught by M3; the sweep catches M8 (images as xid 0, the version review reproduced) | pass |
+| Xid reuse | `an_open_transactions_xid_is_not_reissued_after_a_crash`: B stays open while A commits or aborts, crash, reopen; the next xid must exceed B's and a new commit must not expose B's version | caught by M9 | pass |
+| Refusal reporting | `a_refusal_names_the_transaction_that_holds_the_pool` | new behaviour | pass |
 | W7 | `paged.rs::pages_a_commit_is_logging_stay_out_of_the_page_file_until_its_commit_record`; `a_page_modified_after_its_image_was_logged_stays_unlogged`; crash point `paged.after_page_images` in the core matrices | caught by M5 | pass |
 | Refusal | `a_transaction_that_outgrows_the_pool_is_refused_before_it_steals`; `a_refused_transaction_that_crashes_before_its_abort_leaves_no_trace`; `a_redo_backed_transaction_is_never_refused_and_its_steals_are_counted`; core `bulk_load_insert.rs::a_bulk_load_larger_than_the_buffer_pool_is_refused_whole_and_batches_succeed` | n/a (new behaviour) | pass |
 | Still open (ignored) | `an_open_transaction_interleaved_with_commits_reads_absent_after_a_crash` (W4/W6); `gap1_a_decided_commit_larger_than_the_pool_keeps_acknowledged_rows` (W1-L) | fail | fail, as documented ("page 7 has type 4, expected 5" at reopen) |
 
-Mutations (one mechanism disabled at a time; each must fail at least one
-test): M1 Drain writes unlogged pages (fails W2); M2 root-split `flush_all`
-(fails 3 W3 tests); M3 abort leaves pages unlogged (fails 2 W5 tests and a
-refusal test); M4 eviction steals freely (fails W1); M5 flags cleared before
-the commit record (fails W7); M6 no admission (fails 2 refusal tests); M7 no
-last-resort metadata reclaim (fails `open_does_not_scan_the_file` with
-`PoolExhausted` mid-split: found while implementing, see "metadata" in
-14.5).
+Mutations (one mechanism disabled at a time, at the interim's code; each
+must fail at least one test, and each did):
+
+| Mutation | Tests that fail |
+|---|---|
+| M1 Drain writes unlogged pages | `w2_bounded_drain...` |
+| M2 root-split `flush_all` | `q1_crash_after_an_uncommitted_root_split...`, `w3_an_uncommitted_root_split...`, `a_refused_transaction_that_crashes...` |
+| M3 abort leaves its pages unlogged | both W5 tests, the xid-reuse test, two refusal tests, `abort_exceptions_are_rederived...` |
+| M4 eviction steals freely | `w1_eviction...` |
+| M5 flags cleared before the commit record | `pages_a_commit_is_logging...`, the W5 write-failure sweep |
+| M6 no admission | three refusal tests |
+| M7 no last-resort metadata reclaim | `open_does_not_scan_the_file` (`PoolExhausted` mid-split) |
+| M8 abort unit as xid-0 images (the first version) | the W5 write-failure sweep, `abort_exceptions_are_rederived...` |
+| M9 no xid floor | `an_open_transactions_xid_is_not_reissued_after_a_crash` |
+
+Suites at the interim's code: `bicdb-page` 422 passed, 0 failed, 1 ignored
+(W4/W6); the core crash matrices, paged recovery, and backup/PITR set
+(21 test files) 115 passed, 0 failed, 4 ignored (the three repeat
+diagnostics, which are always ignored, and W1-L).
+
+Benchmark (information only; s3ny, niced, 3 alternating rounds, release,
+fsync on): small row commits with 4 writers ran about 12% slower with a
+higher p99 (630 vs 728 commits/s median; p99 32-42 ms vs 9.6-9.8 ms), not yet
+profiled; bulk and batched loads ran faster (95.7k vs 64.9k and 59.8k vs
+11.5k rows/s), mostly from the heap-probe change, with 26% less page log
+per commit. Memory unchanged.
 
 ## 15. Exposure and detection
 

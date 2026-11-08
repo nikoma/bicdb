@@ -151,6 +151,16 @@ fn postgres_dialect_forms_do_not_apply_to_the_oracle_profile() {
          END;"
     )
     .and_then(|_| run(&mut db, "SELECT equals_form FROM dual"))
+    .is_err()); // ELSEIF is not a spelling of ELSIF in this profile.
+    assert!(run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION elseif_form RETURN NUMBER AS
+         BEGIN
+           IF 1 = 0 THEN RETURN 0; ELSEIF 1 = 1 THEN RETURN 1; END IF;
+           RETURN 2;
+         END;"
+    )
+    .and_then(|_| run(&mut db, "SELECT elseif_form FROM dual"))
     .is_err());
 }
 

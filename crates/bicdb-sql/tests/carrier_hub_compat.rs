@@ -1039,6 +1039,40 @@ fn weak_row_lock_strengths_parse_in_queries_and_routines() {
     assert_eq!(note[0][0].to_cell(), "for key share stays text");
 }
 
+/// PL/pgSQL accepts `ELSEIF` as a spelling of `ELSIF`, in functions and in
+/// DO blocks; the word inside a string literal stays as written.
+#[test]
+fn plpgsql_accepts_elseif_as_elsif() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE TABLE seen (note TEXT)",
+        "CREATE FUNCTION grade(n INT) RETURNS TEXT LANGUAGE plpgsql AS $$
+         BEGIN
+           IF n > 10 THEN RETURN 'big';
+           ELSEIF n > 5 THEN RETURN 'mid ELSEIF';
+           elseif n > 0 THEN
+             IF n = 1 THEN RETURN 'one'; ElseIf n = 2 THEN RETURN 'two'; END IF;
+             RETURN 'small';
+           ELSE RETURN 'none';
+           END IF;
+         END $$",
+        "DO $$ BEGIN IF false THEN NULL; ELSEIF true THEN INSERT INTO seen VALUES ('do'); END IF; END $$",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    let grades = session_rows(
+        &mut session,
+        "SELECT grade(11), grade(6), grade(1), grade(2), grade(3), grade(0)",
+    );
+    assert_eq!(
+        grades[0].iter().map(SqlValue::to_cell).collect::<Vec<_>>(),
+        ["big", "mid ELSEIF", "one", "two", "small", "none"]
+    );
+    assert_eq!(session_rows(&mut session, "SELECT note FROM seen").len(), 1);
+}
+
 /// Statements rebuilt from tokens keep literals and quoted names: ALTER
 /// DOMAIN SET DEFAULT and a multi-relation FOR UPDATE OF list.
 #[test]

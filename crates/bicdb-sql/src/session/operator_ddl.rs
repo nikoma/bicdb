@@ -118,15 +118,17 @@ impl SqlSession<'_> {
         Ok(operators
             .iter()
             .filter(|operator| {
-                operator.function.as_ref().is_some_and(|function| {
-                    function.schema == schema && function.name == name
-                }) && operator
-                    .id
-                    .left
-                    .iter()
-                    .chain(std::iter::once(&operator.id.right))
-                    .map(|pg_type| Some(pg_type.clone()))
-                    .eq(inputs.iter().cloned())
+                operator
+                    .function
+                    .as_ref()
+                    .is_some_and(|function| function.schema == schema && function.name == name)
+                    && operator
+                        .id
+                        .left
+                        .iter()
+                        .chain(std::iter::once(&operator.id.right))
+                        .map(|pg_type| Some(pg_type.clone()))
+                        .eq(inputs.iter().cloned())
             })
             .cloned()
             .collect())

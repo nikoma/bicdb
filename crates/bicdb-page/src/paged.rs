@@ -6157,9 +6157,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
         // This transaction is many times larger than the deliberately tiny
-        // pool. A refusable one that size is refused (GAP-1 no-steal); this
-        // test is about something else, so it uses a redo-backed one, which
-        // is never refused and may still steal.
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
         let (transaction, _) = store.begin_redo_backed();
         for index in 0..200 {
             store
@@ -6343,9 +6342,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
         // This transaction is many times larger than the deliberately tiny
-        // pool. A refusable one that size is refused (GAP-1 no-steal); this
-        // test is about something else, so it uses a redo-backed one, which
-        // is never refused and may still steal.
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
         let (transaction, _) = store.begin_redo_backed();
 
         let count = 400usize;
@@ -6580,9 +6578,8 @@ mod tests {
         .0;
 
         // This transaction is many times larger than the deliberately tiny
-        // pool. A refusable one that size is refused (GAP-1 no-steal); this
-        // test is about something else, so it uses a redo-backed one, which
-        // is never refused and may still steal.
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
         let (transaction, _) = store.begin_redo_backed();
         for index in 0..1_500 {
             store
@@ -6617,9 +6614,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
         // This transaction is many times larger than the deliberately tiny
-        // pool. A refusable one that size is refused (GAP-1 no-steal); this
-        // test is about something else, so it uses a redo-backed one, which
-        // is never refused and may still steal.
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
         let (transaction, _) = store.begin_redo_backed();
         let big: Vec<u8> = (0..50_000).map(|i| (i % 251) as u8).collect();
 
@@ -6639,9 +6635,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
         // This transaction is many times larger than the deliberately tiny
-        // pool. A refusable one that size is refused (GAP-1 no-steal); this
-        // test is about something else, so it uses a redo-backed one, which
-        // is never refused and may still steal.
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
         let (transaction, _) = store.begin_redo_backed();
         for index in 0..300 {
             store
@@ -6733,9 +6728,8 @@ mod tests {
         let store = open(&dir);
 
         // This transaction is many times larger than the deliberately tiny
-        // pool. A refusable one that size is refused (GAP-1 no-steal); this
-        // test is about something else, so it uses a redo-backed one, which
-        // is never refused and may still steal.
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
         let (transaction, _) = store.begin_redo_backed();
         for index in 0..600 {
             store
@@ -6930,9 +6924,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
         // This transaction is many times larger than the deliberately tiny
-        // pool. A refusable one that size is refused (GAP-1 no-steal); this
-        // test is about something else, so it uses a redo-backed one, which
-        // is never refused and may still steal.
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
         let (xid, _) = store.begin_redo_backed();
         for index in 0..600 {
             store
@@ -6997,9 +6990,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
         // This transaction is many times larger than the deliberately tiny
-        // pool. A refusable one that size is refused (GAP-1 no-steal); this
-        // test is about something else, so it uses a redo-backed one, which
-        // is never refused and may still steal.
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
         let (xid, _) = store.begin_redo_backed();
         for index in 0..600 {
             store
@@ -7096,9 +7088,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
         // This transaction is many times larger than the deliberately tiny
-        // pool. A refusable one that size is refused (GAP-1 no-steal); this
-        // test is about something else, so it uses a redo-backed one, which
-        // is never refused and may still steal.
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
         let (xid, _) = store.begin_redo_backed();
         // Enough data to span several heap pages, so the clock can be checked
         // between them.
@@ -7304,9 +7295,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
         // This transaction is many times larger than the deliberately tiny
-        // pool. A refusable one that size is refused (GAP-1 no-steal); this
-        // test is about something else, so it uses a redo-backed one, which
-        // is never refused and may still steal.
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
         let (xid, _) = store.begin_redo_backed();
         for index in 0..300 {
             store
@@ -7371,9 +7361,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
         // This transaction is many times larger than the deliberately tiny
-        // pool. A refusable one that size is refused (GAP-1 no-steal); this
-        // test is about something else, so it uses a redo-backed one, which
-        // is never refused and may still steal.
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
         let (setup, _) = store.begin_redo_backed();
         for index in 0..300u32 {
             store
@@ -7477,9 +7466,8 @@ mod tests {
         .unwrap()
         .0;
         // This transaction is many times larger than the deliberately tiny
-        // pool. A refusable one that size is refused (GAP-1 no-steal); this
-        // test is about something else, so it uses a redo-backed one, which
-        // is never refused and may still steal.
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
         let (xid, _) = store.begin_redo_backed();
         for index in 0..1_200 {
             store
@@ -7529,9 +7517,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
         // This transaction is many times larger than the deliberately tiny
-        // pool. A refusable one that size is refused (GAP-1 no-steal); this
-        // test is about something else, so it uses a redo-backed one, which
-        // is never refused and may still steal.
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
         let (setup, _) = store.begin_redo_backed();
         for index in (0..200).rev() {
             store
@@ -8706,6 +8693,9 @@ mod tests {
         }
         store.persist_status_spill().unwrap();
         store.write_meta().unwrap();
+        // Match the production checkpoint's durable descriptor ordering;
+        // ordinary pool flush no longer logs isolated unlogged images.
+        store.log_checkpoint_descriptor().unwrap();
         store
             .checkpointer
             .checkpoint(store.meta_page)
@@ -8749,6 +8739,9 @@ mod tests {
         }
         store.persist_status_spill().unwrap();
         store.write_meta().unwrap();
+        // Match the production checkpoint's durable descriptor ordering;
+        // ordinary pool flush no longer logs isolated unlogged images.
+        store.log_checkpoint_descriptor().unwrap();
         store
             .checkpointer
             .checkpoint(store.meta_page)

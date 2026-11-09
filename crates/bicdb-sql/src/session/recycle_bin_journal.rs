@@ -573,9 +573,18 @@ mod tests {
             session
                 .execute("INSERT INTO crash_source VALUES(2,'replacement')")
                 .unwrap();
-            if cut == "recreate_commit" {
+            if cut.starts_with("recreate_repeat_") {
+                session.execute("DROP TABLE crash_source").unwrap();
+                session
+                    .execute("CREATE TABLE crash_source(k int PRIMARY KEY,v text)")
+                    .unwrap();
+                session
+                    .execute("INSERT INTO crash_source VALUES(3,'second replacement')")
+                    .unwrap();
+            }
+            if cut.ends_with("_commit") {
                 session.execute("COMMIT").unwrap();
-            } else if cut == "recreate_rollback" {
+            } else if cut.ends_with("_rollback") {
                 session.execute("ROLLBACK TO before_recreate").unwrap();
             }
             std::process::exit(99);
@@ -636,7 +645,18 @@ mod tests {
     #[test]
     fn process_crash_recreated_name_restores_only_its_proven_backing() {
         for paged in [false, true] {
-            for stage in ["recreate_pending", "recreate_commit", "recreate_rollback"] {
+            for stage in [
+                "recreate_intent",
+                "recreate_backing",
+                "recreate_name",
+                "recreate_decision",
+                "recreate_pending",
+                "recreate_commit",
+                "recreate_rollback",
+                "recreate_repeat_pending",
+                "recreate_repeat_commit",
+                "recreate_repeat_rollback",
+            ] {
                 let root = tempfile::tempdir().unwrap();
                 {
                     let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
@@ -667,7 +687,9 @@ mod tests {
                         .unwrap_or_else(|error| panic!("{paged}/{stage}/{reopen}: {error}"));
                     ensure_primary_key_indexes(&mut db).unwrap();
                     let mut sql = SqlSession::new(&mut db);
-                    let (id, value) = if stage == "recreate_commit" {
+                    let (id, value) = if stage == "recreate_repeat_commit" {
+                        (3, "second replacement")
+                    } else if stage == "recreate_commit" {
                         (2, "replacement")
                     } else {
                         (1, "acknowledged")
@@ -677,7 +699,7 @@ mod tests {
                         vec![vec![SqlValue::Int(id), SqlValue::String(value.into())]],
                         "{paged}/{stage}/{reopen}"
                     );
-                    if stage != "recreate_commit" {
+                    if !stage.ends_with("_commit") {
                         assert_restored_metadata(sql.db_ref());
                     }
                     assert_eq!(

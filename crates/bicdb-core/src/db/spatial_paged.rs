@@ -933,7 +933,7 @@ impl BicDb {
 
         let mut events = self.events.lock();
         let mut winners = BTreeMap::<(String, String), (Uuid, AuditOrder, bool, u64)>::new();
-        for stored in events.read(RECORD_AUDIT_STREAM) {
+        for stored in events.read(RECORD_AUDIT_STREAM)? {
             let Some(mutation) = AuditMutation::from_event_based(
                 &self.sync_state.node_id,
                 self.sync_state.origin_position_base,

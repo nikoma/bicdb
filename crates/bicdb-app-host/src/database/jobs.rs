@@ -144,7 +144,7 @@ impl Database {
         )?;
         // The old broker will never be delivered again by this host. Import
         // exact IDs and attempts, including outstanding leases and settled jobs.
-        let dead = legacy.broker().dead_letter_attempts(JOB_QUEUE, JOB_GROUP);
+        let dead = legacy.broker().dead_letter_attempts(JOB_QUEUE, JOB_GROUP)?;
         loop {
             let batch = legacy.broker().delivery_snapshot(
                 JOB_QUEUE,

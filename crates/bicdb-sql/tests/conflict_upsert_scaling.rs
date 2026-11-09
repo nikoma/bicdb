@@ -14,12 +14,16 @@ use bicdb_core::{BicDb, DbConfig, StorageMode};
 use bicdb_sql::{SqlSession, SqlValue};
 
 fn session_db() -> (tempfile::TempDir, BicDb) {
+    session_db_with_mode(StorageMode::ServerPaged)
+}
+
+fn session_db_with_mode(mode: StorageMode) -> (tempfile::TempDir, BicDb) {
     let dir = tempfile::tempdir().unwrap();
     let db = BicDb::open_with_config(
         dir.path(),
         DbConfig::default()
             .with_fsync(false)
-            .with_storage_mode(StorageMode::ServerPaged),
+            .with_storage_mode(mode),
     )
     .unwrap();
     (dir, db)
@@ -159,38 +163,36 @@ fn pending_transaction_writes_still_conflict() {
 /// A row deleted in this transaction must NOT be reported as a conflict even
 /// though the committed index still lists it.
 ///
-/// KNOWN PRE-EXISTING BUG (fails identically before this change): the unique
-/// constraint validation that runs on the insert does not honour the
-/// transaction's pending DELETE, so this raises 23505 instead of inserting.
-/// Recorded here rather than silently omitted; unignore when the constraint
-/// path learns to consult pending deletes.
-#[ignore = "pre-existing: unique validation ignores a pending delete (23505)"]
+/// The recovered ignore was stale: the unchanged assertion passes on main
+/// a9716518 and matches PostgreSQL16. Keep it active in both storage modes.
 #[test]
 fn row_deleted_in_transaction_is_not_a_conflict() {
-    let (_dir, mut db) = session_db();
-    let mut sql = SqlSession::new(&mut db);
-    seed(&mut sql, 50);
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let (_dir, mut db) = session_db_with_mode(mode);
+        let mut sql = SqlSession::new(&mut db);
+        seed(&mut sql, 50);
 
-    sql.execute("BEGIN").unwrap();
-    sql.execute("DELETE FROM landings WHERE source_message_id = 'src-000010'")
-        .unwrap();
-    sql.execute(
+        sql.execute("BEGIN").unwrap();
+        sql.execute("DELETE FROM landings WHERE source_message_id = 'src-000010'")
+            .unwrap();
+        sql.execute(
         "INSERT INTO landings (id, source_message_id, broker_message_id, payload_sha256, payload) \
          VALUES ('id-new10', 'src-000010', 'fresh', 'sha-new', 'p') \
          ON CONFLICT (source_message_id) DO UPDATE \
            SET broker_message_id = EXCLUDED.broker_message_id",
     )
     .unwrap();
-    sql.execute("COMMIT").unwrap();
+        sql.execute("COMMIT").unwrap();
 
-    let rows = sql
-        .execute(
-            "SELECT id, broker_message_id FROM landings WHERE source_message_id = 'src-000010'",
-        )
-        .unwrap();
-    assert_eq!(rows.rows.len(), 1);
-    assert_eq!(rows.rows[0][0], SqlValue::String("id-new10".to_string()));
-    assert_eq!(rows.rows[0][1], SqlValue::String("fresh".to_string()));
+        let rows = sql
+            .execute(
+                "SELECT id, broker_message_id FROM landings WHERE source_message_id = 'src-000010'",
+            )
+            .unwrap();
+        assert_eq!(rows.rows.len(), 1);
+        assert_eq!(rows.rows[0][0], SqlValue::String("id-new10".to_string()));
+        assert_eq!(rows.rows[0][1], SqlValue::String("fresh".to_string()));
+    }
 }
 
 /// The per-statement arbiter memo must never answer from stale catalog

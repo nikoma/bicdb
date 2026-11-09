@@ -722,7 +722,7 @@ fn stream_to_standby(
         if server.is_shutdown_requested() {
             return Ok(());
         }
-        let (frames, status, source_tip, manifest) = {
+        let (frames, status, source_tip, manifest, durable_tip) = {
             let db = server.read_db()?;
             if db.replication_role() != NodeRole::Primary {
                 return Err(refuse(stream, "this node is no longer the primary"));
@@ -765,6 +765,9 @@ fn stream_to_standby(
                 db.ha_node_status(),
                 db.current_commit_seq(),
                 manifest,
+                // Read after the frames were built: the durable sequence only
+                // rises, so it covers every frame in this batch.
+                db.replication_feed().durable_seq(),
             )
         };
         if frames.is_empty() {
@@ -793,6 +796,7 @@ fn stream_to_standby(
                 epoch: status.epoch,
                 primary_sql_address: config.advertise_sql.clone(),
                 epoch_starts: status.epoch_starts.into_iter().collect(),
+                durable_commit_seq: Some(durable_tip),
             },
         )?;
         match receive(stream)? {
@@ -1249,8 +1253,25 @@ fn follow_once(
                 epoch_starts,
                 last_commit_seq: sent_tip,
                 source_commit_seq,
+                durable_commit_seq,
                 ..
             } => {
+                // Apply nothing the primary has not made durable. Senders
+                // that predate the field ship only from their durable prefix
+                // (`replication_frames_after`), so their batches are accepted.
+                if let Some(durable) = durable_commit_seq {
+                    if sent_tip > durable {
+                        return Err(refuse(
+                            stream,
+                            "heartbeat claims commits above the primary's durable sequence",
+                        ));
+                    }
+                    if let Err(error) =
+                        bicdb_core::ensure_frames_within_durable_horizon(&batch, durable)
+                    {
+                        return Err(refuse(stream, &error.to_string()));
+                    }
+                }
                 {
                     let db = server.read_db()?;
                     let known = db.replication_epoch();

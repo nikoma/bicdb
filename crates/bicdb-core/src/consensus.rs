@@ -258,6 +258,17 @@ impl ConsensusState {
                 return Ok(self.append_response(false));
             }
         }
+        // The last index this request proved to match the leader's log. A
+        // follower's entries past it may be a deposed leader's tail that the
+        // current leader never had; they must not become committed just
+        // because `leader_commit` is larger.
+        let verified_through = request
+            .entries
+            .iter()
+            .map(|entry| entry.index)
+            .max()
+            .unwrap_or(request.prev_log_index)
+            .max(request.prev_log_index);
         for incoming in request.entries {
             if let Some(existing) = self.log.iter().find(|entry| entry.index == incoming.index) {
                 if existing.term != incoming.term {
@@ -271,9 +282,12 @@ impl ConsensusState {
                 self.log.push(incoming);
             }
         }
-        self.commit_index = self
-            .commit_index
-            .max(request.leader_commit.min(self.last_log_index()));
+        self.commit_index = self.commit_index.max(
+            request
+                .leader_commit
+                .min(verified_through)
+                .min(self.last_log_index()),
+        );
         Ok(self.append_response(true))
     }
 
@@ -566,5 +580,75 @@ mod tests {
         let frames = leader.apply_committed_prefix();
         assert_eq!(frames.len(), 1);
         assert_eq!(frames[0].commit_seq, 1);
+    }
+
+    /// A term change mid-stream: n2 holds entry 2 from a deposed term-1
+    /// leader that never committed it. The term-2 leader's own entry 2 is a
+    /// different commit. A heartbeat from the new leader that only proves
+    /// the log up to index 1, with `leader_commit = 2`, must not commit (and
+    /// so apply) n2's stale entry 2.
+    #[test]
+    fn a_term_change_never_commits_a_deposed_leaders_tail() {
+        let mut node = ConsensusState::new(&config("n2"));
+        let entry = |index: u64, term: u64, commit_seq: u64| ConsensusLogEntry {
+            index,
+            term,
+            commit_seq,
+            frame: frame(commit_seq),
+        };
+        let from_old = AppendEntries {
+            cluster_id: "c1".to_string(),
+            term: 1,
+            leader_id: "n1".to_string(),
+            prev_log_index: 0,
+            prev_log_term: 0,
+            entries: vec![entry(1, 1, 1), entry(2, 1, 2)],
+            leader_commit: 1,
+        };
+        assert!(node.handle_append_entries(from_old).unwrap().success);
+        assert_eq!(node.apply_committed_prefix().len(), 1);
+
+        let heartbeat = AppendEntries {
+            cluster_id: "c1".to_string(),
+            term: 2,
+            leader_id: "n3".to_string(),
+            prev_log_index: 1,
+            prev_log_term: 1,
+            entries: Vec::new(),
+            leader_commit: 2,
+        };
+        assert!(node.handle_append_entries(heartbeat).unwrap().success);
+        assert!(
+            node.apply_committed_prefix().is_empty(),
+            "the deposed leader's uncommitted entry was applied"
+        );
+
+        // The new leader's entry 2 replaces it and then commits.
+        let replace = AppendEntries {
+            cluster_id: "c1".to_string(),
+            term: 2,
+            leader_id: "n3".to_string(),
+            prev_log_index: 1,
+            prev_log_term: 1,
+            entries: vec![entry(2, 2, 2)],
+            leader_commit: 2,
+        };
+        assert!(node.handle_append_entries(replace).unwrap().success);
+        let applied = node.apply_committed_prefix();
+        assert_eq!(applied.len(), 1);
+        assert_eq!(node.log.last().unwrap().term, 2);
+
+        // A late append from the deposed leader is refused.
+        let stale = AppendEntries {
+            cluster_id: "c1".to_string(),
+            term: 1,
+            leader_id: "n1".to_string(),
+            prev_log_index: 2,
+            prev_log_term: 1,
+            entries: vec![entry(3, 1, 3)],
+            leader_commit: 3,
+        };
+        assert!(!node.handle_append_entries(stale).unwrap().success);
+        assert!(node.apply_committed_prefix().is_empty());
     }
 }

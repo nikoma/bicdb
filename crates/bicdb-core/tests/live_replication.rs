@@ -802,6 +802,7 @@ fn failover_frames_survive_the_wire_encoding() {
             epoch: 3,
             primary_sql_address: Some("db1:5432".to_string()),
             epoch_starts: vec![(2, 7), (3, 9)],
+            durable_commit_seq: Some(9),
         },
         ReplicationFrame::VoteRequest {
             cluster_id: "c".to_string(),

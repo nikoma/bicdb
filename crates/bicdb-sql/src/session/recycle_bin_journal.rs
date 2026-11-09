@@ -45,6 +45,29 @@ pub(super) fn clear(db: &mut BicDb, bin: &str) -> Result<()> {
     tx.commit()?;
     Ok(())
 }
+pub(super) fn clear_restored(session: &mut SqlSession<'_>, bin: &str) -> Result<()> {
+    if session.tx.is_some() {
+        match session.db_ref().get(INTENTS, bin) {
+            Ok(Some(_)) => {}
+            Ok(None) | Err(BicDbError::CollectionNotFound(_)) => return Ok(()),
+            Err(error) => return Err(error.into()),
+        }
+        // The caller may own a pending decision record; never acquire its
+        // lock from an independent cleanup transaction.
+        session.tx.as_mut().unwrap().delete(DECISIONS, bin)?;
+        session.db_mut()?.delete(INTENTS, bin)?;
+        Ok(())
+    } else {
+        clear_if_present(session.db_mut()?, bin)
+    }
+}
+#[inline]
+pub(super) fn stage(_name: &str) {
+    #[cfg(test)]
+    if std::env::var("BICDB_TEST_RECYCLE_CUT").ok().as_deref() == Some(_name) {
+        std::process::exit(99);
+    }
+}
 pub(super) fn clear_if_present(db: &mut BicDb, bin: &str) -> Result<()> {
     match db.get(INTENTS, bin) {
         Ok(Some(_)) => clear(db, bin),
@@ -165,4 +188,130 @@ pub(super) fn recover(db: &mut BicDb) -> Result<usize> {
         repaired += 1;
     }
     Ok(repaired)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process::Command;
+    fn config(paged: bool) -> DbConfig {
+        DbConfig::default().with_storage_mode(if paged {
+            StorageMode::ServerPaged
+        } else {
+            StorageMode::EmbeddedMemory
+        })
+    }
+    #[test]
+    fn crash_cut_child() {
+        let Ok(path) = std::env::var("BICDB_TEST_RECYCLE_PATH") else {
+            return;
+        };
+        let paged = std::env::var("BICDB_TEST_RECYCLE_PAGED").unwrap() == "true";
+        let explicit = std::env::var("BICDB_TEST_RECYCLE_EXPLICIT").unwrap() == "true";
+        let mut db = BicDb::open_with_config(path, config(paged)).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        if explicit {
+            session.execute("BEGIN").unwrap();
+            session.execute("SAVEPOINT before_drop").unwrap();
+            session
+                .execute("UPDATE crash_source SET v='pending' WHERE k=1")
+                .unwrap();
+        }
+        session.execute("DROP TABLE crash_source").unwrap();
+        let stage = std::env::var("BICDB_TEST_RECYCLE_CUT").unwrap();
+        if stage == "commit" {
+            session.execute("COMMIT").unwrap();
+        }
+        if stage == "rollback" {
+            session.execute("ROLLBACK TO before_drop").unwrap();
+        }
+        std::process::exit(99);
+    }
+    #[test]
+    fn process_crash_every_move_stage_and_transaction_decision() {
+        for paged in [false, true] {
+            for explicit in [false, true] {
+                let mut stages = vec![
+                    "intent",
+                    "collection",
+                    "index",
+                    "schema",
+                    "dependents",
+                    "entry",
+                    "decision",
+                ];
+                if explicit {
+                    stages.extend(["commit", "rollback"]);
+                }
+                for stage in stages {
+                    let root = tempfile::tempdir().unwrap();
+                    {
+                        let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
+                        let mut sql = SqlSession::new(&mut db);
+                        for statement in [
+                            "CREATE TABLE crash_source(k int PRIMARY KEY,v text)",
+                            "CREATE INDEX crash_source_v ON crash_source(v)",
+                            "INSERT INTO crash_source VALUES(1,'acknowledged')",
+                        ] {
+                            sql.execute(statement).unwrap();
+                        }
+                    }
+                    let output = Command::new(std::env::current_exe().unwrap())
+                        .args([
+                            "--exact",
+                            "session::recycle_bin_journal::tests::crash_cut_child",
+                            "--nocapture",
+                        ])
+                        .env("BICDB_TEST_RECYCLE_PATH", root.path())
+                        .env("BICDB_TEST_RECYCLE_PAGED", paged.to_string())
+                        .env("BICDB_TEST_RECYCLE_EXPLICIT", explicit.to_string())
+                        .env("BICDB_TEST_RECYCLE_CUT", stage)
+                        .output()
+                        .unwrap();
+                    assert_eq!(
+                        output.status.code(),
+                        Some(99),
+                        "{paged}/{explicit}/{stage}: {} {}",
+                        String::from_utf8_lossy(&output.stdout),
+                        String::from_utf8_lossy(&output.stderr)
+                    );
+                    let committed = stage == "commit" || (!explicit && stage == "decision");
+                    for reopen in 0..2 {
+                        let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
+                        super::super::recycle_bin::recover_interrupted_recycle_bin_renames(&mut db)
+                            .unwrap_or_else(|e| panic!("{paged}/{explicit}/{stage}/{reopen}: {e}"));
+                        ensure_primary_key_indexes(&mut db).unwrap();
+                        let mut sql = SqlSession::new(&mut db);
+                        if committed && reopen == 0 {
+                            assert!(sql.execute("SELECT * FROM crash_source").is_err());
+                            sql.execute("FLASHBACK TABLE crash_source TO BEFORE DROP")
+                                .unwrap();
+                        }
+                        let rows = sql.execute("SELECT k,v FROM crash_source").unwrap().rows;
+                        assert_eq!(
+                            rows,
+                            vec![vec![
+                                SqlValue::Int(1),
+                                SqlValue::String(
+                                    if committed && explicit {
+                                        "pending"
+                                    } else {
+                                        "acknowledged"
+                                    }
+                                    .into()
+                                )
+                            ]],
+                            "{paged}/{explicit}/{stage}/{reopen}"
+                        );
+                        assert_eq!(
+                            sql.execute("INSERT INTO crash_source VALUES(1,'duplicate')")
+                                .unwrap_err()
+                                .sqlstate(),
+                            "23505"
+                        );
+                    }
+                }
+            }
+        }
+    }
 }

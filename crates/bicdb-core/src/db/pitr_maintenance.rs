@@ -3009,7 +3009,9 @@ impl BicDb {
         }
         if let Some(paged) = &self.paged_records {
             let snapshot = paged.latest_snapshot();
-            if paged.index_has_any_posting_blocks(&snapshot, &definition.name)? {
+            if paged.index_has_any_posting_blocks(&snapshot, &definition.name)?
+                || paged.index_has_entries(&snapshot, &definition.name)?
+            {
                 if let Some(state) = self.indexes.get(&definition.name) {
                     state.write().paged_read_through = true;
                 }

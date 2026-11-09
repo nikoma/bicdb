@@ -2293,6 +2293,9 @@ mod tests {
         store.free(a).unwrap();
         store.free(b).unwrap();
         assert_eq!(store.free_list_head(), b);
+        // Publish the free-list head before the later allocation. Dropping
+        // PageStore intentionally does not persist allocator metadata.
+        store.publish_root(0, 0).unwrap();
         let reused = store.allocate(PageType::Heap).unwrap();
         assert_eq!(reused, b);
         let wal = Wal::open(dir.path().join("test.wal"), false).unwrap();
@@ -2337,6 +2340,7 @@ mod tests {
             let b = store.allocate(PageType::Heap).unwrap();
             store.free(a).unwrap();
             store.free(b).unwrap();
+            store.publish_root(0, 0).unwrap();
             b
         };
         let store = store(&dir, page_size);

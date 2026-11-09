@@ -212,7 +212,7 @@ fn metadata_preparation_connection_cache_reuses_across_requests() {
 #[test]
 fn metadata_preparation_connection_cache_observes_ddl_and_rollback() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
-        let (_root, mut db, _) = fixture(mode);
+        let (_root, mut db, _) = fixture(mode.clone());
         let mut cache = SqlSessionCatalogCache::default();
         let describe = |cache: &mut SqlSessionCatalogCache, db: &BicDb| {
             cache

@@ -3094,6 +3094,97 @@ mod snapshot_count_tests {
     use super::*;
 
     #[test]
+    fn count_does_not_parse_or_memoize_a_large_stored_pending_upsert() {
+        let directory = tempfile::tempdir().unwrap();
+        let config = DbConfig::default()
+            .with_fsync(false)
+            .with_storage_mode(StorageMode::ServerPaged);
+        let mut db = BicDb::open_with_config(directory.path(), config.clone()).unwrap();
+        db.create_collection("entries").unwrap();
+        db.insert("entries", Record::new("base")).unwrap();
+        db.close().unwrap();
+        let db = BicDb::open_with_config(directory.path(), config).unwrap();
+        assert!(db.collection_state("entries").unwrap().paged_lazy);
+        let mut tx = db.begin_transaction().unwrap();
+        let row = Arc::new(
+            StoredRecord::from_record(
+                &Record::new("pending")
+                    .with_metadata(serde_json::json!({"large": "x".repeat(4 * 1024 * 1024)})),
+            )
+            .unwrap(),
+        );
+        tx.write_stored_inserts_with_statement_snapshots("entries", [(row, db.last_commit_seq())])
+            .unwrap();
+        assert!(tx
+            .pending_writes_for_collection("entries")
+            .next()
+            .unwrap()
+            .record
+            .get()
+            .is_none());
+        let scope = crate::query_budget::QueryMemoryScope::new(64 * 1024);
+        assert_eq!(
+            tx.try_count_collection_visible_cancellable(
+                "entries",
+                &CancellationToken::uncancelable()
+            )
+            .unwrap(),
+            Some(2)
+        );
+        assert!(scope.peak_bytes() < 64 * 1024);
+        assert!(
+            tx.pending_writes_for_collection("entries")
+                .next()
+                .unwrap()
+                .record
+                .get()
+                .is_none(),
+            "COUNT parsed and retained the pending 4MiB payload outside its identity budget"
+        );
+    }
+
+    #[test]
+    fn retained_transaction_counts_report_a_recovery_fence_even_when_empty() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            for empty in [false, true] {
+                let directory = tempfile::tempdir().unwrap();
+                let config = DbConfig::default()
+                    .with_fsync(false)
+                    .with_storage_mode(mode.clone());
+                let mut db = BicDb::open_with_config(directory.path(), config.clone()).unwrap();
+                db.create_collection("entries").unwrap();
+                db.insert("entries", Record::new("base")).unwrap();
+                if empty {
+                    db.delete("entries", "base").unwrap();
+                }
+                db.close().unwrap();
+                let db = BicDb::open_with_config(directory.path(), config).unwrap();
+                let tx = db.begin_transaction().unwrap();
+                assert_eq!(
+                    tx.try_count_collection_visible_cancellable(
+                        "entries",
+                        &CancellationToken::uncancelable()
+                    )
+                    .unwrap(),
+                    Some(usize::from(!empty))
+                );
+                db.durability_health_for_test()
+                    .record_failure("test.count_fence", &"uncertain durable outcome");
+                assert!(
+                    matches!(
+                        tx.try_count_collection_visible_cancellable(
+                            "entries",
+                            &CancellationToken::uncancelable()
+                        ),
+                        Err(BicDbError::WriteFailed { .. })
+                    ),
+                    "mode={mode:?} empty={empty}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn resident_count_matches_snapshot_and_final_pending_writes() {
         let directory = tempfile::tempdir().unwrap();
         let mut db = BicDb::open_with_config(
@@ -3140,7 +3231,7 @@ mod snapshot_count_tests {
     }
 
     #[test]
-    fn lazy_paged_snapshot_count_explicitly_declines() {
+    fn lazy_paged_snapshot_count_matches_the_scan() {
         let directory = tempfile::tempdir().unwrap();
         let config = DbConfig::default()
             .with_fsync(false)
@@ -3157,7 +3248,7 @@ mod snapshot_count_tests {
                 &CancellationToken::uncancelable()
             )
             .unwrap(),
-            None
+            Some(1)
         );
         assert_eq!(tx.scan_collection("entries").unwrap().len(), 1);
     }

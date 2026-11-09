@@ -17626,9 +17626,10 @@ impl Transaction {
                 validate_record(collection, &record, &mut next_dim)?;
                 let record = Arc::new(record);
                 let image = OldImage::from_record(Some(Arc::clone(&record)));
-                let previous_image = previous_image.or_else(|| {
-                    self.previous_unique_reservation_image(collection, &record_id, None)
-                });
+                let previous_image = match previous_image {
+                    Some(previous) => Some(previous),
+                    None => self.previous_unique_reservation_image(collection, &record_id, None)?,
+                };
                 self.reserve_unique_image(collection, &image, previous_image.as_ref())?;
                 self.lock_row_for_write(tx_id, collection, &record_id, false)?;
                 let statement_snapshot =
@@ -17817,7 +17818,7 @@ impl Transaction {
                     collection,
                     &record_id,
                     previous_stored.as_ref(),
-                );
+                )?;
                 self.reserve_unique_image(collection, &image, previous_image.as_ref())?;
                 if repair.is_none() && !optimistic_inserts {
                     self.lock_row_for_write(tx_id, collection, &record_id, false)?;
@@ -17873,7 +17874,7 @@ impl Transaction {
                 let record = Arc::new(record);
                 let image = OldImage::from_record(Some(Arc::clone(&record)));
                 let previous_image =
-                    self.previous_unique_reservation_image(collection, &record_id, None);
+                    self.previous_unique_reservation_image(collection, &record_id, None)?;
                 self.reserve_unique_image(collection, &image, previous_image.as_ref())?;
                 if repair.is_none() {
                     self.lock_row_for_write(tx_id, collection, &record_id, false)?;

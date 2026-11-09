@@ -129,23 +129,37 @@ impl Transaction {
         collection: &str,
         record_id: &str,
         previous_stored: Option<&Arc<StoredRecord>>,
-    ) -> Option<OldImage> {
+    ) -> Result<Option<OldImage>> {
+        let db = self.db_ref();
+        if db.unique_reservation_index_names(collection).is_empty() {
+            return Ok(None);
+        }
         if let Some(write) = self.last_pending_write(collection, record_id) {
-            return Some(match write.op {
+            return Ok(Some(match write.op {
                 TxWriteOp::Delete => OldImage::none(),
                 TxWriteOp::Upsert => match &write.stored {
                     Some(stored) => OldImage::from_stored(Arc::clone(stored)),
                     None => OldImage::from_record(write.record_opt().cloned()),
                 },
-            });
+            }));
         }
         if let Some(stored) = previous_stored {
-            return Some(OldImage::from_stored(Arc::clone(stored)));
+            return Ok(Some(OldImage::from_stored(Arc::clone(stored))));
         }
-        self.read_images
-            .lock()
-            .get(collection, record_id)
-            .map(|(stored, _)| OldImage::from_stored(stored))
+        if let Some((stored, _)) = self.read_images.lock().get(collection, record_id) {
+            return Ok(Some(OldImage::from_stored(stored)));
+        }
+        // A blind update of a resident row can prove that its unique key is
+        // unchanged without parsing/reading the page store. A speculative
+        // duplicate INSERT must not unnecessarily exclude that update.
+        // This is only a reservation optimization: original statement-version
+        // conflict checks and pre-WAL unique validation remain authoritative.
+        let state = db.collection_state(collection)?;
+        let shard = state.shard(record_id).read();
+        Ok(shard
+            .get_record(record_id)
+            .filter(|entry| entry.record.evicted.is_none())
+            .map(|entry| OldImage::from_stored(Arc::clone(&entry.record))))
     }
 
     /// Called before buffering every native write, including signed and stored

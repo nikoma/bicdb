@@ -55,8 +55,10 @@ keys, external credentials or production data are included.
 
 
 The qualified5d guest used optimized release code, a2MiB paged pool,
-128KiB WAL and32KiB segments. Its2,000+ acknowledged preseed exceeds the
-stress pool before resets begin. Host-fsynced ledgers retain2,472 intents,
+128KiB WAL and32KiB segments. It seeds2,000+ acknowledged transactions before resets begin. The first
+saved crash image's page file is4,775,936 bytes versus the configured2,097,152-byte
+pool; that proves pagefile footprint, not the live working-set size or an
+eviction counter. Acknowledged row count alone is not a pressure-byte proof. Host-fsynced ledgers retain2,472 intents,
 2,448 COMMIT attempts and2,428 acknowledged transactions. Every acknowledged
 row and receipt remains, unacknowledged outcomes are whole and drawn only from
 attempted commits, indexed results reconcile, native transaction IDs do not
@@ -71,3 +73,15 @@ artifact is retained at
 `/root/bicdb-durability-s3/skr/bin/oracle-server-structural-cuts-5d04f91f-vm-qualified`.
 The same-source build's library and integration results are separate evidence;
 this VM campaign does not test all SQL/app behavior or physical power loss.
+
+
+Independent structural verification of all14 saved crash cuts also completed
+clean (exit0) using verifier source26051caf. Each ext4 journal was replayed on
+a separate disposable copy, then the paged directory was extracted and scanned
+without opening the database engine. SHA256 of every extracted store file
+remained unchanged by verification. Original crash-image sizes and mtimes
+remained unchanged. Reports and exact verifier binary hash are retained under
+`runs/campaign-1794195817/independent-verifier-all-cuts.json` and per-cut reports.
+Page-file footprints grew from4,775,936 to5,947,392 bytes. These structural
+checks complement the independent SQL ledgers; neither substitutes for all
+logical index, application or power-loss tests.

@@ -14,6 +14,11 @@ def lines(path):
         return [json.loads(line) for line in stream]
 
 def main():
+    manifest = json.loads((ROOT / "manifest.json").read_text())
+    for name, expected in manifest.items():
+        relative = Path(name)
+        assert not relative.is_absolute() and ".." not in relative.parts
+        assert hashlib.sha256((ROOT / relative).read_bytes()).hexdigest() == expected, name
     output = []
     for directory in sorted((ROOT / "runs").glob("campaign-*")):
         result = json.loads((directory / "result.json").read_text())

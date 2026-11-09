@@ -191,7 +191,7 @@ fn w1_eviction_under_read_pressure_never_writes_an_uncommitted_split() {
             // Crash before commit.
         };
         if steals != 0 {
-            failures.push(format!("{reads} reads: {steals} unlogged frames stolen"));
+            failures.push(format!("{reads} reads: {evictions} unlogged frames stolen"));
         }
         for failure in reconcile(dir.path(), &acknowledged(0..COMMITTED), &crashed) {
             failures.push(format!("{reads} reads: {failure}"));
@@ -653,8 +653,8 @@ fn an_aborted_oversized_transaction_persists_only_complete_invisible_state() {
                 store.put(xid, key.as_bytes(), b"aborted").unwrap();
                 written += 1;
             }
-            // Allocation already wrote empty typed pages (W8); the abort
-            // itself must write only the page log.
+            // Abort makes pending versions durably invisible; any emitted
+            // structure must be a complete recoverable cut.
             store.abort(xid).unwrap();
             assert_eq!(store.buffer_pool().unlogged_pages(), 0);
             assert_eq!(store.buffer_pool().unlogged_steals(), 0);
@@ -668,12 +668,11 @@ fn an_aborted_oversized_transaction_persists_only_complete_invisible_state() {
     }
 }
 
-/// The last-resort steal, explicitly, at the page level: a redo-backed
-/// transaction many times the pool steals; the process crashes right after
-/// the commit that follows `k` steals, and everything must be recovered.
+/// Commit after actual pressure evictions and an internal durable cut;
+/// every newly acknowledged row must survive the crash.
 #[test]
 fn pressure_cuts_with_a_commit_survive_a_crash() {
-    for steals_before_commit in [1u64, 5, 20] {
+    for evictions_before_commit in [1u64, 5, 20] {
         let dir = TempDir::new().unwrap();
         let mut expected = acknowledged(0..100);
         {
@@ -683,7 +682,7 @@ fn pressure_cuts_with_a_commit_survive_a_crash() {
             let initial_evictions = store.buffer_pool().snapshot().evictions;
             let initial_wal = store_files(dir.path()).1.len();
             while store.buffer_pool().snapshot().evictions
-                < initial_evictions + steals_before_commit
+                < initial_evictions + evictions_before_commit
                 || store_files(dir.path()).1.len() == initial_wal
             {
                 let (key, value) = (format!("big-{index:06}").into_bytes(), value(index));
@@ -692,7 +691,7 @@ fn pressure_cuts_with_a_commit_survive_a_crash() {
                 index += 1;
                 assert!(
                     index < 20_000,
-                    "fewer than {steals_before_commit} steals in 20,000 puts"
+                    "fewer than {evictions_before_commit} evictions in 20,000 puts"
                 );
             }
             assert_eq!(store.buffer_pool().unlogged_steals(), 0);
@@ -703,22 +702,19 @@ fn pressure_cuts_with_a_commit_survive_a_crash() {
         assert_no_failures(
             reconcile(dir.path(), &expected, &[])
                 .into_iter()
-                .map(|failure| format!("after {steals_before_commit} steals: {failure}"))
+                .map(|failure| format!("after {evictions_before_commit} evictions: {failure}"))
                 .collect(),
         );
     }
 }
 
-/// The last-resort steal followed by a crash *before* the stealing
-/// transaction commits: GAP-1 W1-L, the case the interim leaves open. A
-/// stolen split moves acknowledged keys the crash can lose, or leaves pages
-/// recovery does not restore. Kept to measure the hole; closing it needs the
-/// structural cuts of option (b). Reads only: on some of these stores
-/// `verify_integrity` does not return (measured after 5 steals).
+/// Crash after pressure evictions and an internal durable cut but before
+/// user commit (the original W1-L window). Acknowledged rows and integrity
+/// survive, and every pending row stays invisible.
 #[test]
 fn pressure_cuts_before_user_commit_keep_acknowledged_keys() {
     let mut failures = Vec::new();
-    for steals in [1u64, 5, 20] {
+    for evictions in [1u64, 5, 20] {
         let dir = TempDir::new().unwrap();
         let mut crashed = Vec::new();
         {
@@ -727,22 +723,25 @@ fn pressure_cuts_before_user_commit_keep_acknowledged_keys() {
             let mut index = 0usize;
             let initial_evictions = store.buffer_pool().snapshot().evictions;
             let initial_wal = store_files(dir.path()).1.len();
-            while store.buffer_pool().snapshot().evictions < initial_evictions + steals
+            while store.buffer_pool().snapshot().evictions < initial_evictions + evictions
                 || store_files(dir.path()).1.len() == initial_wal
             {
                 let key = format!("big-{index:06}").into_bytes();
                 store.put(xid, &key, b"uncommitted").unwrap();
                 crashed.push(key);
                 index += 1;
-                assert!(index < 20_000, "fewer than {steals} steals in 20,000 puts");
+                assert!(
+                    index < 20_000,
+                    "fewer than {evictions} evictions in 20,000 puts"
+                );
             }
             assert_eq!(store.buffer_pool().unlogged_steals(), 0);
-            eprintln!("evictions={steals}: crashing after {index} puts");
+            eprintln!("evictions={evictions}: crashing after {index} puts");
             // Crash before commit.
         }
-        eprintln!("steals={steals}: reconciling");
+        eprintln!("evictions={evictions}: reconciling");
         for failure in reconcile_with(dir.path(), &acknowledged(0..100), &crashed, true) {
-            failures.push(format!("after {steals} steals: {failure}"));
+            failures.push(format!("after {evictions} evictions: {failure}"));
         }
     }
     assert_no_failures(failures);

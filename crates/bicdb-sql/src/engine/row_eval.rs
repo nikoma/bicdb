@@ -328,7 +328,12 @@ impl<'db> SqlEngine<'db> {
                     self.env_or_registered_expr_type(left, env, row.keys().map(String::as_str));
                 let right_type =
                     self.env_or_registered_expr_type(right, env, row.keys().map(String::as_str));
-                reject_undefined_comparison(left_type.as_deref(), op, right_type.as_deref())?;
+                reject_comparison_for_db(
+                    self.db_ref(),
+                    left_type.as_deref(),
+                    op,
+                    right_type.as_deref(),
+                )?;
                 let collation = comparison_collation(left, right, None)?;
                 let pg_type = if matches!(left_type.as_deref(), Some("inet" | "cidr"))
                     && matches!(right_type.as_deref(), Some("inet" | "cidr"))
@@ -575,7 +580,12 @@ impl<'db> SqlEngine<'db> {
                     env,
                     context.column_keys().iter().map(String::as_str),
                 );
-                reject_undefined_comparison(left_type.as_deref(), op, right_type.as_deref())?;
+                reject_comparison_for_db(
+                    self.db_ref(),
+                    left_type.as_deref(),
+                    op,
+                    right_type.as_deref(),
+                )?;
                 let collation = comparison_collation(left, right, None)?;
                 let pg_type = if matches!(left_type.as_deref(), Some("inet" | "cidr"))
                     && matches!(right_type.as_deref(), Some("inet" | "cidr"))
@@ -667,7 +677,12 @@ impl<'db> SqlEngine<'db> {
                     }
                     let left_type = self.row_expr_pg_type(left, context);
                     let right_type = self.row_expr_pg_type(right, context);
-                    reject_undefined_comparison(left_type.as_deref(), op, right_type.as_deref())?;
+                    reject_comparison_for_db(
+                        self.db_ref(),
+                        left_type.as_deref(),
+                        op,
+                        right_type.as_deref(),
+                    )?;
                     let collation = comparison_collation(left, right, None)?;
                     let left = enforce_integer_value_type(
                         self.eval_slot_row_value(row, context, left)?,
@@ -958,6 +973,12 @@ impl<'db> SqlEngine<'db> {
                 // under the two operands' types (a date against timestamps).
                 let value_type = self.row_expr_pg_type(expr, context);
                 let candidate_type = result.column_types.first().cloned().flatten();
+                reject_comparison_for_db(
+                    self.db_ref(),
+                    value_type.as_deref(),
+                    &BinaryOperator::Eq,
+                    candidate_type.as_deref(),
+                )?;
                 let plain = typed_equality_uses_plain_values(
                     value_type.as_deref(),
                     candidate_type.as_deref(),
@@ -1289,6 +1310,22 @@ impl<'db> SqlEngine<'db> {
                 // predicates); otherwise inferred directly.
                 let left_type = self.scoped_slot_row_expr_type(context, left);
                 let right_type = self.scoped_slot_row_expr_type(context, right);
+                if matches!(
+                    op,
+                    BinaryOperator::Eq
+                        | BinaryOperator::NotEq
+                        | BinaryOperator::Lt
+                        | BinaryOperator::LtEq
+                        | BinaryOperator::Gt
+                        | BinaryOperator::GtEq
+                ) {
+                    reject_comparison_for_db(
+                        self.db_ref(),
+                        left_type.as_deref(),
+                        op,
+                        right_type.as_deref(),
+                    )?;
+                }
                 if let Some(value) = eval_range_binary_value_with_db(
                     self.db_ref(),
                     left_value.clone(),
@@ -2146,7 +2183,12 @@ impl<'db> SqlEngine<'db> {
                         self.record_outer_operand_type(table, alias, schema, outer_row, left);
                     let right_type =
                         self.record_outer_operand_type(table, alias, schema, outer_row, right);
-                    reject_undefined_comparison(left_type.as_deref(), op, right_type.as_deref())?;
+                    reject_comparison_for_db(
+                        self.db_ref(),
+                        left_type.as_deref(),
+                        op,
+                        right_type.as_deref(),
+                    )?;
                     let collation = comparison_collation(left, right, None)?;
                     let Some(left) = self
                         .eval_record_outer_value(table, alias, schema, record, outer_row, left)?
@@ -2380,7 +2422,12 @@ impl<'db> SqlEngine<'db> {
                         right,
                         row.keys().map(String::as_str),
                     );
-                    reject_undefined_comparison(left_type.as_deref(), op, right_type.as_deref())?;
+                    reject_comparison_for_db(
+                        self.db_ref(),
+                        left_type.as_deref(),
+                        op,
+                        right_type.as_deref(),
+                    )?;
                     let collation = comparison_collation(left, right, None)?;
                     let left = enforce_integer_value_type(
                         self.eval_row_value(row, left)?,
@@ -2722,6 +2769,12 @@ impl<'db> SqlEngine<'db> {
                 let values = subquery_values(result)?;
                 let value_type =
                     row_columns_expr_pg_type(self.db_ref(), expr, row.keys().map(String::as_str));
+                reject_comparison_for_db(
+                    self.db_ref(),
+                    value_type.as_deref(),
+                    &BinaryOperator::Eq,
+                    candidate_type.as_deref(),
+                )?;
                 let plain = typed_equality_uses_plain_values(
                     value_type.as_deref(),
                     candidate_type.as_deref(),
@@ -2992,6 +3045,22 @@ impl<'db> SqlEngine<'db> {
                 let right_value = self.eval_row_value(row, right)?;
                 let left_type = self.infer_sql_row_expr_type(row, left);
                 let right_type = self.infer_sql_row_expr_type(row, right);
+                if matches!(
+                    op,
+                    BinaryOperator::Eq
+                        | BinaryOperator::NotEq
+                        | BinaryOperator::Lt
+                        | BinaryOperator::LtEq
+                        | BinaryOperator::Gt
+                        | BinaryOperator::GtEq
+                ) {
+                    reject_comparison_for_db(
+                        self.db_ref(),
+                        left_type.as_deref(),
+                        op,
+                        right_type.as_deref(),
+                    )?;
+                }
                 if let Some(value) = eval_range_binary_value_with_db(
                     self.db_ref(),
                     left_value.clone(),

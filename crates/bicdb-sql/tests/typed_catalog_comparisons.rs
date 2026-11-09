@@ -131,3 +131,75 @@ fn operator_catalog_points_to_the_implementing_overload() {
         vec![vec![SqlValue::String("1700 1700".to_string())]]
     );
 }
+
+#[test]
+fn numeric_text_operator_signatures_are_checked_before_scanning_postgres_rows() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "fixtures/typed_comparison/numeric_text_pg16.json"
+    ))
+    .unwrap();
+    let mut failures = Vec::new();
+    for indexed in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session
+            .execute("CREATE TABLE catalog_mixed(id integer PRIMARY KEY,i integer,t text)")
+            .unwrap();
+        session
+            .execute("INSERT INTO catalog_mixed VALUES(1,1,'1'),(2,2,'2')")
+            .unwrap();
+        if indexed {
+            session
+                .execute("CREATE INDEX catalog_mixed_i ON catalog_mixed(i)")
+                .unwrap();
+        }
+        assert_eq!(
+            session
+                .execute("SELECT i='1' FROM catalog_mixed ORDER BY id")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Bool(true)], vec![SqlValue::Bool(false)]]
+        );
+        for empty in [false, true] {
+            if empty {
+                session.execute("DELETE FROM catalog_mixed").unwrap();
+            }
+            for sql in fixture["queries"].as_array().unwrap() {
+                let sql = sql.as_str().unwrap();
+                match session.execute(sql) {
+                    Err(error) if error.sqlstate() == "42883" => {}
+                    other => {
+                        failures.push(format!("indexed={indexed} empty={empty}: {sql}: {other:?}"))
+                    }
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn oracle_keeps_its_vendor_numeric_character_comparison_rule() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    bicdb_sql::oracle::ensure_database_profile(&mut db, bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE)
+        .unwrap();
+    // Independently observed on Oracle23.26.3; PostgreSQL rejects these known
+    // numeric/text pairs rather than applying Oracle's numeric conversion.
+    for sql in [
+        "SELECT CASE WHEN 1=CAST('1' AS VARCHAR2(5)) THEN 1 ELSE 0 END FROM DUAL",
+        "SELECT CASE WHEN CAST('1' AS VARCHAR2(5))=1 THEN 1 ELSE 0 END FROM DUAL",
+    ] {
+        let lowered = bicdb_sql::oracle::lower_session_sql(
+            &db,
+            sql,
+            bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE,
+            None,
+            "bicdb",
+        )
+        .unwrap();
+        let rows = SqlSession::new(&mut db).execute(&lowered).unwrap().rows;
+        assert_eq!(rows[0][0].to_cell(), "1");
+    }
+}

@@ -776,6 +776,10 @@ impl<'db> SqlSession<'db> {
         let (table, target_alias) = table_with_joins_name_and_alias(&update.table)?;
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
         self.require_update_privileges(&table, &update.assignments)?;
+        validate_comparison_signatures(
+            &self.sql_engine_with_ctes(ctes.clone()),
+            ComparisonStatement::Update(update),
+        )?;
         // RETURNING projects the affected rows back to the caller, so it is a
         // read. Without this, an UPDATE-only grant was a full table read.
         if update.returning.is_some() {
@@ -1950,6 +1954,10 @@ impl<'db> SqlSession<'db> {
         let (table, target_alias) = delete_from_table_and_alias(delete)?;
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
         self.require_table_privilege(&table, "DELETE")?;
+        validate_comparison_signatures(
+            &self.sql_engine_with_ctes(ctes.clone()),
+            ComparisonStatement::Delete(delete),
+        )?;
         if delete.returning.is_some() {
             self.require_table_privilege(&table, "SELECT")?;
         }

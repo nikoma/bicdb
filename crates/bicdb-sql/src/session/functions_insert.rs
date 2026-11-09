@@ -760,6 +760,10 @@ impl<'db> SqlSession<'db> {
         let table =
             resolve_session_relation_name_if_exists(self.db_ref(), &relation_name(table_name)?);
         self.require_table_privilege(&table, "INSERT")?;
+        validate_comparison_signatures(
+            &self.sql_engine_with_ctes(ctes.clone()),
+            ComparisonStatement::Insert(insert),
+        )?;
         if insert.returning.is_some() {
             self.require_table_privilege(&table, "SELECT")?;
         }

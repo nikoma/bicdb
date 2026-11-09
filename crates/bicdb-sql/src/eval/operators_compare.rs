@@ -91,6 +91,33 @@ pub(crate) fn reject_undefined_comparison(
     )))
 }
 
+pub(crate) fn reject_comparison_for_db(
+    db: &BicDb,
+    left_type: Option<&str>,
+    op: &BinaryOperator,
+    right_type: Option<&str>,
+) -> Result<()> {
+    reject_undefined_comparison(left_type, op, right_type)?;
+    let (Some(left), Some(right)) = (left_type, right_type) else {
+        return Ok(());
+    };
+    if left == right {
+        return Ok(());
+    }
+    let left = crate::type_codec::comparison_base_type_for_db(db, left)?;
+    let right = crate::type_codec::comparison_base_type_for_db(db, right)?;
+    let numeric = |kind: &str| is_numeric_pg_type(kind) || matches!(kind, "float4" | "float8");
+    let text = |kind: &str| matches!(kind, "text" | "varchar" | "bpchar" | "name");
+    if ((numeric(&left) && text(&right)) || (text(&left) && numeric(&right)))
+        && !crate::oracle::is_oracle_database(db)?
+    {
+        return Err(SqlError::undefined_function(format!(
+            "operator does not exist: {left} {op} {right}"
+        )));
+    }
+    Ok(())
+}
+
 pub(crate) fn comparison_from_ordering(op: &BinaryOperator, ordering: Ordering) -> bool {
     match op {
         BinaryOperator::Eq => ordering == Ordering::Equal,
@@ -1229,6 +1256,12 @@ pub(crate) fn simple_case_expr_values_equal(
             left_type = right_type.clone();
         }
     }
+    reject_comparison_for_db(
+        db,
+        left_type.as_deref(),
+        &BinaryOperator::Eq,
+        right_type.as_deref(),
+    )?;
     simple_case_values_equal(&left, &right, left_type.as_deref(), right_type.as_deref())
 }
 

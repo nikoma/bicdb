@@ -121,7 +121,7 @@ fn nulls_distinct() -> Case {
 fn nulls_not_distinct() -> Case {
     Case {
         schema:
-            "CREATE TABLE arbiter_rows(id INT PRIMARY KEY,k TEXT UNIQUE NULLS NOT DISTINCT,v INT)",
+            "CREATE TABLE arbiter_rows(id INT PRIMARY KEY,k TEXT,v INT,CONSTRAINT arbiter_null_key UNIQUE NULLS NOT DISTINCT(k))",
         expected: vec![vec!["1", "30"]],
         final_rows: vec![vec!["1", "30"]],
         waits: true,

@@ -203,3 +203,23 @@ fn oracle_keeps_its_vendor_numeric_character_comparison_rule() {
         assert_eq!(rows[0][0].to_cell(), "1");
     }
 }
+
+#[test]
+fn known_user_operators_bind_before_builtin_signature_checks() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    for sql in [
+        "CREATE FUNCTION catalog_mixed_eq(a integer,b text) RETURNS boolean LANGUAGE SQL AS $$SELECT a::text=b$$",
+        "CREATE OPERATOR public.= (FUNCTION=catalog_mixed_eq,LEFTARG=integer,RIGHTARG=text)",
+    ] {
+        SqlSession::new(&mut db).execute(sql).unwrap();
+    }
+    let query = "SELECT 1='1'::text";
+    assert!(bicdb_sql::infer_parameter_types(&db, query)
+        .unwrap()
+        .is_empty());
+    assert_eq!(
+        SqlSession::new(&mut db).execute(query).unwrap().rows,
+        vec![vec![SqlValue::Bool(true)]]
+    );
+}

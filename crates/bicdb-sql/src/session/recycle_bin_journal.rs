@@ -3,16 +3,14 @@
 use super::recycle_bin::*;
 use super::*;
 const INTENTS: &str = "__bicdb_recycle_intents";
-const DECISIONS: &str = "__bicdb_recycle_decisions";
 const PURGES: &str = "__bicdb_recycle_purges";
 #[derive(Clone, Serialize, Deserialize)]
 struct MoveIntent {
     entry: RecycleBinEntry,
     definitions: Vec<bicdb_core::IndexDefinition>,
 }
-pub(super) fn prepare(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<()> {
+pub(super) fn prepare(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<u64> {
     db.create_collection(INTENTS)?;
-    db.create_collection(DECISIONS)?;
     let intent = MoveIntent {
         entry: entry.clone(),
         definitions: db
@@ -21,18 +19,18 @@ pub(super) fn prepare(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<()> {
             .filter(|index| index.collection == entry.table)
             .collect(),
     };
-    db.insert(
+    let mut tx = db.begin_transaction()?;
+    tx.insert(
         INTENTS,
         Record::new(entry.bin_name.clone()).with_metadata(serde_json::to_value(intent)?),
     )?;
-    Ok(())
+    Ok(tx.commit_with_sequence()?)
 }
-pub(super) fn decide(session: &mut SqlSession<'_>, bin: &str) -> Result<()> {
-    let record = Record::new(bin);
+pub(super) fn decide(session: &mut SqlSession<'_>, bin: &str, sequence: u64) -> Result<()> {
     match session.tx.as_mut() {
-        Some(tx) => tx.insert(DECISIONS, record)?,
+        Some(tx) => tx.delete_many_with_statement_snapshots(INTENTS, [(bin, sequence)])?,
         None => {
-            session.db_mut()?.insert(DECISIONS, record)?;
+            session.db_mut()?.delete(INTENTS, bin)?;
         }
     }
     Ok(())
@@ -42,25 +40,8 @@ pub(super) fn clear(db: &mut BicDb, bin: &str) -> Result<()> {
     // Both deletes are one decision, avoiding unbounded abandoned markers.
     let mut tx = db.begin_transaction()?;
     tx.delete(INTENTS, bin)?;
-    tx.delete(DECISIONS, bin)?;
     tx.commit()?;
     Ok(())
-}
-pub(super) fn clear_restored(session: &mut SqlSession<'_>, bin: &str) -> Result<()> {
-    if session.tx.is_some() {
-        match session.db_ref().get(INTENTS, bin) {
-            Ok(Some(_)) => {}
-            Ok(None) | Err(BicDbError::CollectionNotFound(_)) => return Ok(()),
-            Err(error) => return Err(error.into()),
-        }
-        // The caller may own a pending decision record; never acquire its
-        // lock from an independent cleanup transaction.
-        session.tx.as_mut().unwrap().delete(DECISIONS, bin)?;
-        session.db_mut()?.delete(INTENTS, bin)?;
-        Ok(())
-    } else {
-        clear_if_present(session.db_mut()?, bin)
-    }
 }
 #[inline]
 pub(super) fn stage(_name: &str) {
@@ -141,28 +122,9 @@ pub(super) fn recover(db: &mut BicDb) -> Result<usize> {
                 "recycle intent identity mismatch".into(),
             ));
         }
-        let committed = db.get(DECISIONS, &entry.bin_name)?.is_some();
         let collections = db.collections();
         let original = collections.iter().any(|c| c.name == entry.table);
         let bin = collections.iter().any(|c| c.name == entry.bin_name);
-        if committed {
-            // Every catalog stage was durable before this marker was staged.
-            // Inconsistent proof is an error, never a reason to prune data.
-            if !bin
-                || original
-                || load_schema(db, &entry.table)?.is_some()
-                || !list_recycle_bin(db)?
-                    .iter()
-                    .any(|e| e.bin_name == entry.bin_name)
-            {
-                return Err(SqlError::InvalidSql(format!(
-                    "committed recycle intent {} has inconsistent catalog state",
-                    entry.bin_name
-                )));
-            }
-            clear(db, &entry.bin_name)?;
-            continue;
-        }
         if original == bin {
             return Err(SqlError::InvalidSql(format!(
                 "ambiguous pending recycle intent {}: expected exactly one backing collection",

@@ -263,7 +263,7 @@ impl<'db> SqlSession<'db> {
                 .map(|(position, original)| (format!("{bin_name}_i{position}"), original.clone()))
                 .collect(),
         };
-        super::recycle_bin_journal::prepare(self.db_mut()?, &entry)?;
+        let intent_sequence = super::recycle_bin_journal::prepare(self.db_mut()?, &entry)?;
         super::recycle_bin_journal::stage("intent");
         let renamed = self.rename_recycle_collection(table, &bin_name);
         match renamed {
@@ -309,7 +309,7 @@ impl<'db> SqlSession<'db> {
         entry.indexes = indexes;
         save_recycle_bin_entry(db, &entry)?;
         super::recycle_bin_journal::stage("entry");
-        super::recycle_bin_journal::decide(self, &bin_name)?;
+        super::recycle_bin_journal::decide(self, &bin_name, intent_sequence)?;
         super::recycle_bin_journal::stage("decision");
         sql_index_definitions_cache_clear();
         if self.tx.is_some() {
@@ -379,6 +379,21 @@ impl<'db> SqlSession<'db> {
         &mut self,
         entry: &RecycleBinEntry,
         target: &str,
+    ) -> Result<()> {
+        self.restore_from_recycle_bin_impl(entry, target, false)
+    }
+    pub(crate) fn restore_from_recycle_bin_undo(
+        &mut self,
+        entry: &RecycleBinEntry,
+        target: &str,
+    ) -> Result<()> {
+        self.restore_from_recycle_bin_impl(entry, target, true)
+    }
+    fn restore_from_recycle_bin_impl(
+        &mut self,
+        entry: &RecycleBinEntry,
+        target: &str,
+        undo: bool,
     ) -> Result<()> {
         require_user_relation_name(target)?;
         // Check every conflict before changing anything.
@@ -500,7 +515,11 @@ impl<'db> SqlSession<'db> {
             save_sequence(db, sequence)?;
         }
         delete_recycle_bin_entry(db, &entry.bin_name)?;
-        super::recycle_bin_journal::clear_restored(self, &entry.bin_name)?;
+        if undo {
+            // The caller already rolled back the outer transaction/mark and
+            // released its pending intent-delete lock before DDL restoration.
+            super::recycle_bin_journal::clear_if_present(self.db_mut()?, &entry.bin_name)?;
+        }
         sql_index_definitions_cache_clear();
         Ok(())
     }

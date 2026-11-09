@@ -4640,7 +4640,7 @@ impl<'db> SqlSession<'db> {
                     .into_iter()
                     .find(|entry| entry.bin_name == bin_name)
                 {
-                    self.restore_from_recycle_bin(&entry, &target)?;
+                    self.restore_from_recycle_bin_undo(&entry, &target)?;
                 }
             }
             DdlUndo::ReturnToRecycleBin { entry, target } => {

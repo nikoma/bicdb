@@ -17250,9 +17250,10 @@ impl Transaction {
     }
 
     pub fn rollback(mut self) -> Result<()> {
-        let mut db = self.db;
-        // Safety: see db_mut; this avoids holding a borrow through `self`.
-        unsafe { db.as_mut() }.rollback_transaction(&mut self)
+        let db = self.db;
+        // Rollback uses shared interior-mutability APIs; a transaction created
+        // from &BicDb must never manufacture an exclusive database borrow.
+        unsafe { db.as_ref() }.rollback_transaction(&mut self)
     }
 
     pub fn write_len(&self) -> usize {

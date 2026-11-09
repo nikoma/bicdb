@@ -1,4 +1,4 @@
-# Selective filters across outer joins
+# Selective filters and preparation metadata
 
 A narrow catalog query with several inner joins and a LEFT JOIN previously
 materialized catalog-wide intermediate rows before applying its base OID filter.
@@ -45,3 +45,33 @@ reference has already been folded. Keep whole-name identity first, then a
 separate unambiguous qualifier-folded lookup that preserves column spelling.
 The original quoted-column and UPDATE FROM assertions remain unchanged, with an
 additional control covering case-distinct aliases and columns together.
+
+Source 0875a692 passed the complete 232-target SQL run (2,368 tests, four
+measurement ignores), the 120-target core run (1,289 tests and 11 recorded
+helper/manual/optional-model ignores), and locked workspace/all-target
+compilation. Its standard optimized build passed the unchanged financial report
+test that previously rejected the catalog join. The background report still
+exceeded its original 10-second wait; AuditTraceContext passed all three tests.
+
+A separate profile of the retained f0976fd4 diagnostic attributed 38.84% of
+sampled backend CPU in a 25-second report window to `load_schema_raw_shared`
+(cumulative samples, overlapping its descendants). Preparation helpers ran
+without the existing execution cache scope. The tests-only 4613dc20 regression
+reproduced 64 decodes of one table definition during a single Oracle lowering
+operation, and two decodes during origin inference. Three controls already
+passed. The earlier f7ed59bf attempt stopped at a missing test import and is
+retained as a compilation failure, not runtime defect evidence.
+
+Preparation now enters the existing nested `SqlSchemaCacheScope`: inferred
+parameters, output types, origins and Oracle rewrites share each loaded schema
+within their operation. An existing outer execution scope keeps ownership;
+otherwise the cache is released when preparation returns. Later preparation
+observes DDL and rollback through a fresh scope. No storage format or protocol
+contract changes.
+
+All five controls pass at 032ab77b with the original assertions retained. Four
+preparation controls run in both storage modes; a further ServerPaged control
+checks description freshness across ALTER and ROLLBACK. These focused results
+do not establish that the original background timeout is resolved. The combined
+version 452 source also includes main 5aa8a5ff's authenticated bounded reads and
+requires its own broad checks and optimized application rerun.

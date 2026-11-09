@@ -3839,7 +3839,9 @@ pub(crate) fn pg_comparison_kind(left: &str, right: &str) -> Option<PgComparison
             "numeric" | "decimal" => Class::Numeric,
             "float4" | "real" | "float8" | "double precision" => Class::Float,
             "date" | "timestamp" | "timestamptz" => Class::Temporal,
-            "bpchar" | "character" | "char" => Class::Bpchar,
+            // Canonical `char` names PostgreSQL's internal one-byte type;
+            // SQL CHAR(n) has already normalized to bpchar.
+            "bpchar" | "character" => Class::Bpchar,
             "varchar" | "character varying" => Class::Varchar,
             "text" | "name" => Class::Text,
             "bool" | "boolean" => Class::Bool,

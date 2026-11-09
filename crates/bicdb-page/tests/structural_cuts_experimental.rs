@@ -106,3 +106,40 @@ fn a_failed_cut_at_every_image_and_decision_never_publishes_partial_pages() {
         }
     }
 }
+
+#[test]
+fn failed_maintenance_cannot_be_persisted_by_a_later_cut() {
+    for sweep in [false, true] {
+        let dir = TempDir::new().unwrap();
+        {
+            let store = fixture(&dir);
+            let xid = store.begin();
+            for i in 0..40 {
+                store.put(xid, format!("doomed-{i:04}").as_bytes(), b"deleted later").unwrap();
+            }
+            store.commit(xid).unwrap();
+            let xid = store.begin();
+            for i in 0..40 {
+                store.delete(xid, format!("doomed-{i:04}").as_bytes()).unwrap();
+            }
+            store.commit(xid).unwrap();
+            store.checkpoint().unwrap();
+            if sweep { store.vacuum(10_000).unwrap(); }
+            let site = if sweep { "experimental.sweep.after_first_mutation" } else { "experimental.vacuum.after_first_mutation" };
+            let fault = bicdb_page::test_faults::arm_io_failure(site, dir.path(), 1, false);
+            let result = if sweep { store.sweep_dead_index_entries(10_000).map(|_| ()) } else { store.vacuum(10_000).map(|_| ()) };
+            assert!(result.is_err(), "the maintenance fault must fire: sweep={sweep}");
+            assert_eq!(fault.fired(), 1);
+            assert!(store.durability_health().check().is_err());
+            assert!(store.checkpoint().is_err(), "a later cut must not publish failed maintenance");
+            drop(fault);
+        }
+        for _ in 0..2 {
+            let (store, _) = PagedStore::open(dir.path(), options()).unwrap();
+            assert_kept(&store);
+            for i in 0..40 {
+                assert_eq!(store.get(format!("doomed-{i:04}").as_bytes()).unwrap(), None);
+            }
+        }
+    }
+}

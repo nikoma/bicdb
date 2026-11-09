@@ -266,3 +266,45 @@ fn unchanged_unique_key_update_does_not_wait_for_a_rival_insert() {
         }
     }
 }
+
+#[test]
+fn native_shared_announcement_waits_cancellably_behind_an_exclusive_arbiter() {
+    let (_dir, db) = setup(StorageMode::ServerPaged, false);
+    let arbiter = db.begin_transaction().unwrap();
+    let key = Record::new("chosen").with_metadata(json!({"k":"same"}));
+    arbiter
+        .reserve_unique_index_record("items_unique", &key)
+        .unwrap();
+    let mut writer = db.begin_transaction().unwrap();
+    let token = CancellationToken::uncancelable();
+    writer.set_blocking_row_waits(Some(token.clone()));
+    let (done, received) = mpsc::channel();
+    let worker = spawn(&db, move || {
+        done.send(writer.insert(
+            "items",
+            Record::new("native").with_metadata(json!({"k":"same"})),
+        ))
+        .unwrap();
+    });
+    let early = received.recv_timeout(Duration::from_millis(30));
+    token.cancel();
+    let result = received.recv_timeout(Duration::from_secs(5));
+    worker.join().unwrap();
+    assert!(
+        early.is_err(),
+        "native writer bypassed SQL arbiter: {early:?}"
+    );
+    assert!(
+        matches!(result, Ok(Err(bicdb_core::BicDbError::QueryCanceled))),
+        "writer ignored cancellation: {result:?}"
+    );
+    let other = db.begin_transaction().unwrap();
+    assert!(
+        matches!(
+            other.reserve_unique_index_record("items_unique", &key),
+            Err(bicdb_core::BicDbError::TransactionConflict(_))
+        ),
+        "cancellation stole arbiter ownership"
+    );
+    arbiter.rollback().unwrap();
+}

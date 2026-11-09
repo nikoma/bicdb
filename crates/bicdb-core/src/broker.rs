@@ -1023,6 +1023,7 @@ impl<'a> Broker<'a> {
         payload: Value,
         headers: Value,
     ) -> Result<PublishReceipt> {
+        self.stream.check_durability()?;
         self.publish_with(
             queue,
             payload,
@@ -1042,6 +1043,7 @@ impl<'a> Broker<'a> {
         payload: Value,
         options: PublishOptions,
     ) -> Result<PublishReceipt> {
+        self.stream.check_durability()?;
         self.publish_inner(queue, payload, options, None)
     }
 
@@ -1399,6 +1401,7 @@ impl<'a> Broker<'a> {
         consumer_id: &str,
         message_id: Uuid,
     ) -> Result<()> {
+        self.stream.check_durability()?;
         self.check_in_flight(queue, group, consumer_id, message_id)?;
         let sequence = self
             .stream
@@ -1424,6 +1427,7 @@ impl<'a> Broker<'a> {
     /// Settle exactly this delivery attempt. A stale worker cannot acknowledge
     /// a later attempt, even when a replacement reuses its consumer name.
     pub fn ack_delivery(&mut self, consumer_id: &str, message: &BrokerMessage) -> Result<()> {
+        self.stream.check_durability()?;
         self.validate_delivery(consumer_id, message)?;
         self.ack(
             &message.queue,
@@ -1440,6 +1444,7 @@ impl<'a> Broker<'a> {
         message: &BrokerMessage,
         options: NackOptions,
     ) -> Result<()> {
+        self.stream.check_durability()?;
         self.validate_delivery(consumer_id, message)?;
         self.nack(
             &message.queue,
@@ -1452,6 +1457,7 @@ impl<'a> Broker<'a> {
 
     /// Validate ownership, exact attempt and unexpired lease without settling.
     pub fn validate_delivery(&self, consumer_id: &str, message: &BrokerMessage) -> Result<()> {
+        self.stream.check_durability()?;
         self.check_in_flight(
             &message.queue,
             &message.group,
@@ -1541,7 +1547,7 @@ impl<'a> Broker<'a> {
     }
 
     /// Dead-lettered message copies for one group, oldest first.
-    pub fn dead_letters(&self, queue: &str, group: &str) -> Vec<StoredEvent> {
+    pub fn dead_letters(&self, queue: &str, group: &str) -> Result<Vec<StoredEvent>> {
         self.stream.read(&dlq_stream(queue, group))
     }
 
@@ -1551,49 +1557,54 @@ impl<'a> Broker<'a> {
         &self,
         queue: &str,
         group: &str,
-    ) -> std::collections::BTreeMap<Uuid, u32> {
-        let stream = dlq_stream(queue, group);
-        let mut attempts = std::collections::BTreeMap::<Uuid, u32>::new();
-        for stored in self.stream.stored_events() {
-            if stored.event.stream != stream || stored.event.event_type != DEAD_LETTER_MESSAGE_EVENT
-            {
-                continue;
+    ) -> Result<std::collections::BTreeMap<Uuid, u32>> {
+        self.stream.checked_snapshot(|_| {
+            let stream = dlq_stream(queue, group);
+            let mut attempts = std::collections::BTreeMap::<Uuid, u32>::new();
+            for stored in self.stream.stored_events() {
+                if stored.event.stream != stream
+                    || stored.event.event_type != DEAD_LETTER_MESSAGE_EVENT
+                {
+                    continue;
+                }
+                let metadata = &stored.event.metadata["broker"];
+                let Some(id) = metadata["original_message_id"]
+                    .as_str()
+                    .and_then(|id| Uuid::parse_str(id).ok())
+                else {
+                    continue;
+                };
+                let attempt = metadata["attempts"]
+                    .as_u64()
+                    .and_then(|value| u32::try_from(value).ok())
+                    .unwrap_or(1);
+                let previous = attempts.entry(id).or_default();
+                *previous = (*previous).max(attempt);
             }
-            let metadata = &stored.event.metadata["broker"];
-            let Some(id) = metadata["original_message_id"]
-                .as_str()
-                .and_then(|id| Uuid::parse_str(id).ok())
-            else {
-                continue;
-            };
-            let attempt = metadata["attempts"]
-                .as_u64()
-                .and_then(|value| u32::try_from(value).ok())
-                .unwrap_or(1);
-            let previous = attempts.entry(id).or_default();
-            *previous = (*previous).max(attempt);
-        }
-        attempts
+            attempts
+        })
     }
 
     /// Durable state summary for one consumer group, if it exists.
-    pub fn group_info(&self, queue: &str, group: &str) -> Option<ConsumerGroupInfo> {
-        let state = self.stream.broker_state.group(queue, group)?;
-        let mut in_flight = 0;
-        let mut pending = 0;
-        for delivery in state.deliveries.values() {
-            match delivery.status {
-                DeliveryStatus::InFlight { .. } => in_flight += 1,
-                DeliveryStatus::Available { .. } => pending += 1,
+    pub fn group_info(&self, queue: &str, group: &str) -> Result<Option<ConsumerGroupInfo>> {
+        self.stream.checked_snapshot(|_| {
+            let state = self.stream.broker_state.group(queue, group)?;
+            let mut in_flight = 0;
+            let mut pending = 0;
+            for delivery in state.deliveries.values() {
+                match delivery.status {
+                    DeliveryStatus::InFlight { .. } => in_flight += 1,
+                    DeliveryStatus::Available { .. } => pending += 1,
+                }
             }
-        }
-        Some(ConsumerGroupInfo {
-            queue: queue.to_string(),
-            group: group.to_string(),
-            created_at: state.created_at,
-            last_delivered_sequence: state.next_sequence.checked_sub(1),
-            in_flight,
-            pending_redelivery: pending,
+            Some(ConsumerGroupInfo {
+                queue: queue.to_string(),
+                group: group.to_string(),
+                created_at: state.created_at,
+                last_delivered_sequence: state.next_sequence.checked_sub(1),
+                in_flight,
+                pending_redelivery: pending,
+            })
         })
     }
 
@@ -1614,6 +1625,7 @@ impl<'a> Broker<'a> {
     where
         F: FnMut(&BrokerMessage) -> std::result::Result<(), String>,
     {
+        self.stream.check_durability()?;
         let mut report = DrainReport::default();
         let batch_size = options.batch_size.max(1);
         loop {
@@ -1667,67 +1679,71 @@ impl<'a> Broker<'a> {
     /// Whether a consume call for this group would hand out at least one
     /// message right now. Cheap poll for worker loops. A group that does not
     /// exist yet is deliverable when the queue retains any available message.
-    pub fn has_deliverable(&self, queue: &str, group: &str) -> bool {
-        let now = now_ms();
-        let state = &self.stream.broker_state;
-        let Some(messages) = state.queues.get(queue) else {
-            return false;
-        };
-        let group_state = state.group(queue, group);
-        if let Some(group_state) = group_state {
-            let due = group_state
-                .deliveries
-                .values()
-                .any(|delivery| match delivery.status {
-                    DeliveryStatus::Available { available_at } => available_at <= now,
-                    DeliveryStatus::InFlight {
-                        visibility_deadline,
-                    } => visibility_deadline <= now,
-                });
-            if due {
-                return true;
+    pub fn has_deliverable(&self, queue: &str, group: &str) -> Result<bool> {
+        self.stream.checked_snapshot(|_| {
+            let now = now_ms();
+            let state = &self.stream.broker_state;
+            let Some(messages) = state.queues.get(queue) else {
+                return false;
+            };
+            let group_state = state.group(queue, group);
+            if let Some(group_state) = group_state {
+                let due = group_state
+                    .deliveries
+                    .values()
+                    .any(|delivery| match delivery.status {
+                        DeliveryStatus::Available { available_at } => available_at <= now,
+                        DeliveryStatus::InFlight {
+                            visibility_deadline,
+                        } => visibility_deadline <= now,
+                    });
+                if due {
+                    return true;
+                }
             }
-        }
-        let cursor = group_state.map(|state| state.next_sequence).unwrap_or(0);
-        let start = messages
-            .entries
-            .partition_point(|(sequence, _)| *sequence < cursor);
-        // Head-of-line semantics: only the first undelivered message counts.
-        messages.entries.get(start).is_some_and(|(_, message_id)| {
-            self.stream
-                .event_by_id(message_id)
-                .is_some_and(|stored| message_fields(&stored.event).available_at <= now)
+            let cursor = group_state.map(|state| state.next_sequence).unwrap_or(0);
+            let start = messages
+                .entries
+                .partition_point(|(sequence, _)| *sequence < cursor);
+            // Head-of-line semantics: only the first undelivered message counts.
+            messages.entries.get(start).is_some_and(|(_, message_id)| {
+                self.stream
+                    .event_by_id(message_id)
+                    .is_some_and(|stored| message_fields(&stored.event).available_at <= now)
+            })
         })
     }
 
     /// Read-only view of up to `max` retained messages of `queue` starting
     /// at `from_sequence` (ascending). Never delivers: group cursors,
     /// visibility, and attempt counters are untouched — observability only.
-    pub fn peek(&self, queue: &str, from_sequence: u64, max: usize) -> Vec<PeekedMessage> {
-        let Some(messages) = self.stream.broker_state.queues.get(queue) else {
-            return Vec::new();
-        };
-        let start = messages
-            .entries
-            .partition_point(|(sequence, _)| *sequence < from_sequence);
-        messages.entries[start..]
-            .iter()
-            .take(max)
-            .filter_map(|(sequence, message_id)| {
-                let stored = self.stream.event_by_id(message_id)?;
-                let fields = message_fields(&stored.event);
-                Some(PeekedMessage {
-                    sequence: *sequence,
-                    message_id: *message_id,
-                    payload: stored.event.payload.clone(),
-                    headers: fields.headers,
-                    idempotency_key: fields.idempotency_key,
-                    created_at: fields.created_at,
-                    available_at: fields.available_at,
-                    max_attempts: fields.max_attempts,
+    pub fn peek(&self, queue: &str, from_sequence: u64, max: usize) -> Result<Vec<PeekedMessage>> {
+        self.stream.checked_snapshot(|_| {
+            let Some(messages) = self.stream.broker_state.queues.get(queue) else {
+                return Vec::new();
+            };
+            let start = messages
+                .entries
+                .partition_point(|(sequence, _)| *sequence < from_sequence);
+            messages.entries[start..]
+                .iter()
+                .take(max)
+                .filter_map(|(sequence, message_id)| {
+                    let stored = self.stream.event_by_id(message_id)?;
+                    let fields = message_fields(&stored.event);
+                    Some(PeekedMessage {
+                        sequence: *sequence,
+                        message_id: *message_id,
+                        payload: stored.event.payload.clone(),
+                        headers: fields.headers,
+                        idempotency_key: fields.idempotency_key,
+                        created_at: fields.created_at,
+                        available_at: fields.available_at,
+                        max_attempts: fields.max_attempts,
+                    })
                 })
-            })
-            .collect()
+                .collect()
+        })
     }
 
     /// Bounded read-only export of retained messages and their exact group
@@ -1740,156 +1756,160 @@ impl<'a> Broker<'a> {
         from_sequence: u64,
         max: usize,
         max_bytes: usize,
-    ) -> Result<Vec<BrokerDeliverySnapshot>> {
-        if max == 0 || max > 1024 || max_bytes == 0 || max_bytes > 64 * 1024 * 1024 {
-            return Err(BicDbError::Broker(
-                "invalid delivery snapshot bounds".into(),
-            ));
-        }
-        struct Count {
-            bytes: usize,
-            limit: usize,
-        }
-        impl std::io::Write for Count {
-            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-                if self.bytes.saturating_add(bytes.len()) > self.limit {
-                    return Err(std::io::Error::other("delivery snapshot byte limit"));
-                }
-                self.bytes += bytes.len();
-                Ok(bytes.len())
+    ) -> Result<Result<Vec<BrokerDeliverySnapshot>>> {
+        self.stream.checked_snapshot(|_| {
+            if max == 0 || max > 1024 || max_bytes == 0 || max_bytes > 64 * 1024 * 1024 {
+                return Err(BicDbError::Broker(
+                    "invalid delivery snapshot bounds".into(),
+                ));
             }
-            fn flush(&mut self) -> std::io::Result<()> {
-                Ok(())
+            struct Count {
+                bytes: usize,
+                limit: usize,
             }
-        }
-        let Some(messages) = self.stream.broker_state.queues.get(queue) else {
-            return Ok(Vec::new());
-        };
-        let state = self.stream.broker_state.group(queue, group);
-        let start = messages
-            .entries
-            .partition_point(|(sequence, _)| *sequence < from_sequence);
-        let mut result = Vec::new();
-        let mut remaining = max_bytes;
-        for (sequence, message_id) in messages.entries[start..].iter().take(max) {
-            let Some(stored) = self.stream.event_by_id(message_id) else {
-                continue;
-            };
-            // Count before cloning a potentially large payload. Reserve room
-            // for group delivery metadata in addition to the serialized event.
-            let mut counter = Count {
-                bytes: 0,
-                limit: remaining.saturating_sub(1024),
-            };
-            if serde_json::to_writer(&mut counter, &stored.event).is_err() || remaining < 1024 {
-                if result.is_empty() {
-                    return Err(BicDbError::Broker(
-                        "one retained message exceeds the delivery snapshot byte limit".into(),
-                    ));
-                }
-                break;
-            }
-            remaining -= counter.bytes + 1024;
-            let fields = message_fields(&stored.event);
-            let message = PeekedMessage {
-                sequence: *sequence,
-                message_id: *message_id,
-                payload: stored.event.payload.clone(),
-                headers: fields.headers,
-                idempotency_key: fields.idempotency_key,
-                created_at: fields.created_at,
-                available_at: fields.available_at,
-                max_attempts: fields.max_attempts,
-            };
-            let delivery = state.and_then(|group| group.deliveries.get(message_id));
-            let status = match delivery {
-                Some(delivery) => match delivery.status {
-                    DeliveryStatus::InFlight {
-                        visibility_deadline,
-                    } => BrokerDeliveryState::InFlight {
-                        consumer: delivery.consumer_id.clone(),
-                        visibility_deadline,
-                    },
-                    DeliveryStatus::Available { available_at } => {
-                        BrokerDeliveryState::Available { available_at }
+            impl std::io::Write for Count {
+                fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                    if self.bytes.saturating_add(bytes.len()) > self.limit {
+                        return Err(std::io::Error::other("delivery snapshot byte limit"));
                     }
-                },
-                None if state.is_some_and(|group| *sequence < group.next_sequence) => {
-                    BrokerDeliveryState::Settled
+                    self.bytes += bytes.len();
+                    Ok(bytes.len())
                 }
-                None => BrokerDeliveryState::Unseen,
+                fn flush(&mut self) -> std::io::Result<()> {
+                    Ok(())
+                }
+            }
+            let Some(messages) = self.stream.broker_state.queues.get(queue) else {
+                return Ok(Vec::new());
             };
-            result.push(BrokerDeliverySnapshot {
-                message,
-                attempts: delivery.map_or(0, |d| d.attempts),
-                delivered_at: delivery.map_or(0, |d| d.delivered_at),
-                state: status,
-            });
-        }
-        Ok(result)
+            let state = self.stream.broker_state.group(queue, group);
+            let start = messages
+                .entries
+                .partition_point(|(sequence, _)| *sequence < from_sequence);
+            let mut result = Vec::new();
+            let mut remaining = max_bytes;
+            for (sequence, message_id) in messages.entries[start..].iter().take(max) {
+                let Some(stored) = self.stream.event_by_id(message_id) else {
+                    continue;
+                };
+                // Count before cloning a potentially large payload. Reserve room
+                // for group delivery metadata in addition to the serialized event.
+                let mut counter = Count {
+                    bytes: 0,
+                    limit: remaining.saturating_sub(1024),
+                };
+                if serde_json::to_writer(&mut counter, &stored.event).is_err() || remaining < 1024 {
+                    if result.is_empty() {
+                        return Err(BicDbError::Broker(
+                            "one retained message exceeds the delivery snapshot byte limit".into(),
+                        ));
+                    }
+                    break;
+                }
+                remaining -= counter.bytes + 1024;
+                let fields = message_fields(&stored.event);
+                let message = PeekedMessage {
+                    sequence: *sequence,
+                    message_id: *message_id,
+                    payload: stored.event.payload.clone(),
+                    headers: fields.headers,
+                    idempotency_key: fields.idempotency_key,
+                    created_at: fields.created_at,
+                    available_at: fields.available_at,
+                    max_attempts: fields.max_attempts,
+                };
+                let delivery = state.and_then(|group| group.deliveries.get(message_id));
+                let status = match delivery {
+                    Some(delivery) => match delivery.status {
+                        DeliveryStatus::InFlight {
+                            visibility_deadline,
+                        } => BrokerDeliveryState::InFlight {
+                            consumer: delivery.consumer_id.clone(),
+                            visibility_deadline,
+                        },
+                        DeliveryStatus::Available { available_at } => {
+                            BrokerDeliveryState::Available { available_at }
+                        }
+                    },
+                    None if state.is_some_and(|group| *sequence < group.next_sequence) => {
+                        BrokerDeliveryState::Settled
+                    }
+                    None => BrokerDeliveryState::Unseen,
+                };
+                result.push(BrokerDeliverySnapshot {
+                    message,
+                    attempts: delivery.map_or(0, |d| d.attempts),
+                    delivered_at: delivery.map_or(0, |d| d.delivered_at),
+                    state: status,
+                });
+            }
+            Ok(result)
+        })
     }
 
     /// Point-in-time snapshot of every queue and group the broker knows
     /// about, for dashboards and health checks.
-    pub fn stats(&self) -> BrokerStats {
-        let state = &self.stream.broker_state;
-        let mut queues: Vec<QueueStats> = state
-            .queues
-            .iter()
-            .map(|(queue, messages)| {
-                let mut groups: Vec<GroupStats> = state
-                    .groups
-                    .get(queue)
-                    .into_iter()
-                    .flatten()
-                    .map(|(group, group_state)| {
-                        let lag = messages
-                            .entries
-                            .partition_point(|(sequence, _)| *sequence < group_state.next_sequence);
-                        GroupStats {
-                            group: group.clone(),
-                            created_at: group_state.created_at,
-                            last_delivered_sequence: group_state.next_sequence.checked_sub(1),
-                            in_flight: group_state
-                                .deliveries
-                                .values()
-                                .filter(|delivery| {
-                                    matches!(delivery.status, DeliveryStatus::InFlight { .. })
-                                })
-                                .count(),
-                            pending_redelivery: group_state
-                                .deliveries
-                                .values()
-                                .filter(|delivery| {
-                                    matches!(delivery.status, DeliveryStatus::Available { .. })
-                                })
-                                .count(),
-                            settled_floor: group_state.settled_floor,
-                            lag: messages.entries.len() - lag,
-                            dead_letters: self
-                                .stream
-                                .stored_events()
-                                .iter()
-                                .filter(|stored| {
-                                    stored.event.stream == dlq_stream(queue, group)
-                                        && stored.event.event_type == DEAD_LETTER_MESSAGE_EVENT
-                                })
-                                .count(),
-                        }
-                    })
-                    .collect();
-                groups.sort_by(|a, b| a.group.cmp(&b.group));
-                QueueStats {
-                    queue: queue.clone(),
-                    retained_messages: messages.entries.len(),
-                    next_sequence: messages.next_sequence,
-                    configured: state.configs.contains_key(queue),
-                    groups,
-                }
-            })
-            .collect();
-        queues.sort_by(|a, b| a.queue.cmp(&b.queue));
-        BrokerStats { queues }
+    pub fn stats(&self) -> Result<BrokerStats> {
+        self.stream.checked_snapshot(|_| {
+            let state = &self.stream.broker_state;
+            let mut queues: Vec<QueueStats> = state
+                .queues
+                .iter()
+                .map(|(queue, messages)| {
+                    let mut groups: Vec<GroupStats> = state
+                        .groups
+                        .get(queue)
+                        .into_iter()
+                        .flatten()
+                        .map(|(group, group_state)| {
+                            let lag = messages.entries.partition_point(|(sequence, _)| {
+                                *sequence < group_state.next_sequence
+                            });
+                            GroupStats {
+                                group: group.clone(),
+                                created_at: group_state.created_at,
+                                last_delivered_sequence: group_state.next_sequence.checked_sub(1),
+                                in_flight: group_state
+                                    .deliveries
+                                    .values()
+                                    .filter(|delivery| {
+                                        matches!(delivery.status, DeliveryStatus::InFlight { .. })
+                                    })
+                                    .count(),
+                                pending_redelivery: group_state
+                                    .deliveries
+                                    .values()
+                                    .filter(|delivery| {
+                                        matches!(delivery.status, DeliveryStatus::Available { .. })
+                                    })
+                                    .count(),
+                                settled_floor: group_state.settled_floor,
+                                lag: messages.entries.len() - lag,
+                                dead_letters: self
+                                    .stream
+                                    .stored_events()
+                                    .iter()
+                                    .filter(|stored| {
+                                        stored.event.stream == dlq_stream(queue, group)
+                                            && stored.event.event_type == DEAD_LETTER_MESSAGE_EVENT
+                                    })
+                                    .count(),
+                            }
+                        })
+                        .collect();
+                    groups.sort_by(|a, b| a.group.cmp(&b.group));
+                    QueueStats {
+                        queue: queue.clone(),
+                        retained_messages: messages.entries.len(),
+                        next_sequence: messages.next_sequence,
+                        configured: state.configs.contains_key(queue),
+                        groups,
+                    }
+                })
+                .collect();
+            queues.sort_by(|a, b| a.queue.cmp(&b.queue));
+            BrokerStats { queues }
+        })
     }
 
     /// Authorizes one access class against the queue's durable ACL.
@@ -1919,6 +1939,7 @@ impl<'a> Broker<'a> {
         access: BrokerAccess,
         caller: BrokerCaller<'_>,
     ) -> Result<()> {
+        self.stream.check_durability()?;
         let (context, superuser) = match caller {
             // The host process IS the trust boundary for the embedded API.
             BrokerCaller::TrustedHost => return Ok(()),
@@ -1967,6 +1988,7 @@ impl<'a> Broker<'a> {
 
     /// Durably sets the queue's configuration (latest write wins).
     pub fn configure_queue(&mut self, queue: &str, config: QueueConfig) -> Result<()> {
+        self.stream.check_durability()?;
         validate_broker_name("queue", queue)?;
         self.stream.append(Event::new(
             format!("{BROKER_STREAM_PREFIX}{queue}"),
@@ -1981,8 +2003,9 @@ impl<'a> Broker<'a> {
     }
 
     /// The queue's durable configuration, if one was ever set.
-    pub fn queue_config(&self, queue: &str) -> Option<QueueConfig> {
-        self.stream.broker_state.configs.get(queue).cloned()
+    pub fn queue_config(&self, queue: &str) -> Result<Option<QueueConfig>> {
+        self.stream
+            .checked_snapshot(|_| self.stream.broker_state.configs.get(queue).cloned())
     }
 
     /// Trims the queue's retained history and rewrites the segment.
@@ -2001,6 +2024,7 @@ impl<'a> Broker<'a> {
     /// their own streams and are not affected; see
     /// [`Self::purge_dead_letters`].
     pub fn trim(&mut self, queue: &str) -> Result<TrimReport> {
+        self.stream.check_durability()?;
         validate_broker_name("queue", queue)?;
         let now = now_ms();
         let state = &self.stream.broker_state;
@@ -2190,6 +2214,7 @@ impl<'a> Broker<'a> {
     /// configuration are left untouched (their history is retained for
     /// future consumer groups unless [`Self::trim`] is called explicitly).
     pub fn trim_configured(&mut self) -> Result<Vec<(String, TrimReport)>> {
+        self.stream.check_durability()?;
         let queues: Vec<String> = self
             .stream
             .broker_state
@@ -2238,6 +2263,7 @@ impl<'a> Broker<'a> {
         group: &str,
         max: usize,
     ) -> Result<Vec<PublishReceipt>> {
+        self.stream.check_durability()?;
         validate_broker_name("queue", queue)?;
         validate_broker_name("group", group)?;
         if max == 0 {
@@ -2251,7 +2277,7 @@ impl<'a> Broker<'a> {
             .unwrap_or_default();
         let candidates: Vec<(Uuid, Value, Value)> = self
             .stream
-            .read(&dlq_stream(queue, group))
+            .read(&dlq_stream(queue, group))?
             .into_iter()
             .filter(|stored| stored.event.event_type == DEAD_LETTER_MESSAGE_EVENT)
             .filter(|stored| !already.contains(&stored.event.id))
@@ -2298,6 +2324,7 @@ impl<'a> Broker<'a> {
     /// from the log entirely, rewriting the segment. Returns how many dead
     /// letters were purged.
     pub fn purge_dead_letters(&mut self, queue: &str, group: &str) -> Result<usize> {
+        self.stream.check_durability()?;
         validate_broker_name("queue", queue)?;
         validate_broker_name("group", group)?;
         let dlq = dlq_stream(queue, group);

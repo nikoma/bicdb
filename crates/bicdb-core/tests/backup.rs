@@ -620,11 +620,11 @@ fn online_backup_during_concurrent_writes_restores_consistent_snapshot() {
         }
         // Keep the source writer open throughout the entire capture, even
         // when the machine finishes the insert loop before encryption/copy.
-        finished.recv_timeout(Duration::from_secs(60)).unwrap();
+        finished.recv().unwrap();
         db.close().unwrap();
     });
 
-    ready.recv_timeout(Duration::from_secs(10)).unwrap();
+    ready.recv().unwrap();
     create_backup(
         source.path(),
         &backup_path,

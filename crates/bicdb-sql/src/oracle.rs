@@ -489,6 +489,11 @@ pub fn ensure_database_profile(db: &mut BicDb, profile: &str) -> Result<()> {
                 "database SQL profile does not match server configuration",
             ));
         }
+        // Recovered before-images may contain legacy case-index definitions.
+        // Resolve catalog moves before deciding that the profile is case-ready.
+        if is_oracle_profile(profile) {
+            recover_interrupted_recycle_bin_renames(db)?;
+        }
         // Upgrade legacy preview foreign keys before serving any sessions.
         // No row values or validation state are changed by this marker upgrade.
         if profile == ORACLE_PREVIEW_PROFILE

@@ -611,7 +611,8 @@ fn lower_profile_sql_in_namespace(
             "Oracle front end requires an Oracle SQL profile",
         ));
     }
-    if postgres_catalog_read(sql)
+    if (profile == ORACLE_PREVIEW_PROFILE && postgres_transport_statement(sql))
+        || postgres_catalog_read(sql)
         || postgres_catalog_context_read(sql)
         || (profile == ORACLE_PREVIEW_PROFILE && postgres_owner_administration(sql))
     {
@@ -705,6 +706,32 @@ fn postgres_catalog_read(sql: &str) -> bool {
 /// native SQL. A quoted identifier, application relation, statement batch, or
 /// other expression must still pass through the selected application profile.
 /// This is a transport extension, not an Oracle SQL compatibility claim.
+// Driver transaction boundaries and session-setting reads do not name
+// application relations. Preserve their native tokens without running the
+// Oracle application-expression and namespace rewrites. Statements with
+// transaction options, savepoint names or additional SQL retain that path.
+fn postgres_transport_statement(sql: &str) -> bool {
+    let trimmed = sql.trim();
+    let command = trimmed.strip_suffix(';').unwrap_or(trimmed).trim_end();
+    if ["BEGIN", "COMMIT", "ROLLBACK"]
+        .iter()
+        .any(|candidate| command.eq_ignore_ascii_case(candidate))
+    {
+        return true;
+    }
+    if !command
+        .split_whitespace()
+        .next()
+        .is_some_and(|word| word.eq_ignore_ascii_case("SHOW"))
+    {
+        return false;
+    }
+    matches!(
+        Parser::parse_sql(&PostgreSqlDialect {}, sql).as_deref(),
+        Ok([Statement::ShowVariable { .. }])
+    )
+}
+
 fn postgres_catalog_context_read(sql: &str) -> bool {
     if !sql
         .as_bytes()
@@ -929,7 +956,8 @@ pub fn lower_session_sql(
     // whose application statements use Oracle syntax. Preserve those native
     // identifiers/operators; literals or mixed application queries do not
     // select this boundary.
-    if postgres_catalog_read(sql)
+    if postgres_transport_statement(sql)
+        || postgres_catalog_read(sql)
         || postgres_catalog_context_read(sql)
         || postgres_owner_administration(sql)
     {
@@ -4093,6 +4121,72 @@ mod tests {
 #[cfg(test)]
 mod postgres_catalog_boundary_tests {
     use super::*;
+    #[test]
+    fn transport_statement_boundary_requires_one_non_application_statement() {
+        for sql in [
+            "BEGIN",
+            " commit ; ",
+            "ROLLBACK;",
+            "SHOW TRANSACTION ISOLATION LEVEL",
+            "show transaction_isolation",
+            "SHOW TimeZone",
+            "SHOW search_path;",
+        ] {
+            assert!(postgres_transport_statement(sql), "{sql}");
+        }
+        for sql in [
+            "BEGIN; SELECT secret FROM app_rows",
+            "BEGIN SELECT 1; END;",
+            "COMMIT AND CHAIN",
+            "ROLLBACK TO SAVEPOINT keep",
+            "SET search_path=app",
+            "SHOW search_path; SELECT 1",
+            "SELECT 'SHOW search_path'",
+            "SELECT begin_value FROM app_rows",
+        ] {
+            assert!(!postgres_transport_statement(sql), "{sql}");
+        }
+    }
+
+    #[test]
+    fn lowering_preserves_native_transport_tokens_and_session_values() {
+        let root = tempfile::tempdir().unwrap();
+        let db = BicDb::open_with_config(
+            root.path(),
+            bicdb_core::DbConfig::default().with_fsync(false),
+        )
+        .unwrap();
+        for sql in [
+            "BEGIN",
+            "commit",
+            "ROLLBACK;",
+            "SHOW TRANSACTION ISOLATION LEVEL",
+            "show transaction_isolation",
+            "SHOW TimeZone",
+            "SHOW search_path;",
+        ] {
+            assert_eq!(
+                lower_profile_sql(&db, sql, ORACLE_PREVIEW_PROFILE).unwrap(),
+                sql
+            );
+            let lowered = lower_session_sql(
+                &db,
+                sql,
+                ORACLE_PREVIEW_PROFILE,
+                Some("unavailable_application_schema"),
+                "transport",
+            )
+            .unwrap();
+            assert_eq!(lowered, sql);
+            if sql.to_ascii_uppercase().starts_with("SHOW ") {
+                let expected = SqlSession::new_shared(&db).execute(sql).unwrap();
+                let actual = SqlSession::new_shared(&db).execute(&lowered).unwrap();
+                assert_eq!(actual.columns, expected.columns);
+                assert_eq!(actual.rows, expected.rows);
+            }
+        }
+    }
+
     #[test]
     fn current_catalog_transport_boundary_requires_relation_free_context_projection() {
         for sql in [

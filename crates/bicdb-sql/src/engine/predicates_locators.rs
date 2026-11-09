@@ -2025,7 +2025,7 @@ impl<'db> SqlEngine<'db> {
                 if !self.expr_is_bound_without_table_row(expr)? {
                     continue 'plans;
                 }
-                if !self.outer_probe_is_exact(schema, plan.fields.get(field_idx), expr) {
+                if !self.index_probe_expr_is_exact(schema, plan.fields.get(field_idx), expr) {
                     continue 'plans;
                 }
                 let value = self.eval_dynamic_bound_expr(expr)?;
@@ -2070,7 +2070,7 @@ impl<'db> SqlEngine<'db> {
                     if !self.expr_is_bound_without_table_row(expr)? {
                         continue 'plans;
                     }
-                    if !self.outer_probe_is_exact(schema, range_field, expr) {
+                    if !self.index_probe_expr_is_exact(schema, range_field, expr) {
                         continue 'plans;
                     }
                     let value = index_value_from_sql(self.eval_dynamic_bound_expr(expr)?)?;
@@ -2302,7 +2302,7 @@ impl<'db> SqlEngine<'db> {
                             if !self.expr_is_bound_without_table_row(expr)? {
                                 continue;
                             }
-                            if !self.outer_probe_is_exact(
+                            if !self.index_probe_expr_is_exact(
                                 schema,
                                 candidate.plan.fields.get(*idx),
                                 expr,
@@ -2855,7 +2855,7 @@ impl<'db> SqlEngine<'db> {
                 if !self.expr_is_bound_without_table_row(expr)? {
                     continue 'plans;
                 }
-                if !self.outer_probe_is_exact(schema, plan.fields.get(field_idx), expr) {
+                if !self.index_probe_expr_is_exact(schema, plan.fields.get(field_idx), expr) {
                     continue 'plans;
                 }
                 let value = self.eval_dynamic_bound_expr(expr)?;
@@ -2882,7 +2882,7 @@ impl<'db> SqlEngine<'db> {
                     if !self.expr_is_bound_without_table_row(expr)? {
                         continue 'plans;
                     }
-                    if !self.outer_probe_is_exact(schema, range_field, expr) {
+                    if !self.index_probe_expr_is_exact(schema, range_field, expr) {
                         continue 'plans;
                     }
                     let value = index_value_from_sql(self.eval_dynamic_bound_expr(expr)?)?;
@@ -2914,7 +2914,7 @@ impl<'db> SqlEngine<'db> {
                         if !self.expr_is_bound_without_table_row(expr)? {
                             continue;
                         }
-                        if !self.outer_probe_is_exact(schema, plan.fields.get(*idx), expr) {
+                        if !self.index_probe_expr_is_exact(schema, plan.fields.get(*idx), expr) {
                             continue;
                         }
                         let value = self.eval_dynamic_bound_expr(expr)?;
@@ -3471,32 +3471,24 @@ impl<'db> SqlEngine<'db> {
         computed
     }
 
-    /// Whether an index probe of `field` with the value of `expr`, a
-    /// reference to the outer row of a correlated query, finds exactly the
-    /// rows the comparison selects (see `index_probe_type_is_exact`).
-    pub(crate) fn outer_probe_is_exact(
+    /// An index probe must preserve the comparison's whole matching set,
+    /// whether the operand is a literal, routine expression or outer column.
+    pub(crate) fn index_probe_expr_is_exact(
         &self,
         schema: Option<&TableSchema>,
         field: Option<&IndexField>,
         expr: &Expr,
     ) -> bool {
-        let Some(outer_row) = self.outer_row.as_ref() else {
-            return true;
-        };
-        if !matches!(
-            unwrap_nested_expr(expr),
-            Expr::Identifier(_) | Expr::CompoundIdentifier(_)
-        ) {
-            return true;
-        }
         let Some(field) = field else {
             return true;
         };
-        let probe_type = row_columns_expr_pg_type(
-            self.db_ref(),
-            expr,
-            outer_row.columns().iter().map(String::as_str),
-        );
+        let columns = self
+            .outer_row
+            .as_ref()
+            .map(|row| row.columns().iter().map(String::as_str))
+            .into_iter()
+            .flatten();
+        let probe_type = row_columns_expr_pg_type(self.db_ref(), expr, columns);
         index_probe_type_is_exact(index_field_pg_type(schema, field), probe_type)
     }
 
@@ -4196,6 +4188,7 @@ impl<'db> SqlEngine<'db> {
             if self.expr_matches_table_index_field(left, table, alias, schema, field)? {
                 if self.expr_references_table(right, table, alias, schema)?
                     || !self.expr_is_bound_without_table_row(right)?
+                    || !self.index_probe_expr_is_exact(schema, Some(field), right)
                 {
                     continue;
                 }
@@ -4216,6 +4209,7 @@ impl<'db> SqlEngine<'db> {
             if self.expr_matches_table_index_field(right, table, alias, schema, field)? {
                 if self.expr_references_table(left, table, alias, schema)?
                     || !self.expr_is_bound_without_table_row(left)?
+                    || !self.index_probe_expr_is_exact(schema, Some(field), left)
                 {
                     continue;
                 }
@@ -4326,6 +4320,7 @@ impl<'db> SqlEngine<'db> {
             if self.expr_matches_table_index_field(left, table, alias, schema, field)? {
                 if self.expr_references_table(right, table, alias, schema)?
                     || !self.expr_is_bound_without_table_row(right)?
+                    || !self.index_probe_expr_is_exact(schema, Some(field), right)
                 {
                     continue;
                 }
@@ -4352,6 +4347,7 @@ impl<'db> SqlEngine<'db> {
             if self.expr_matches_table_index_field(right, table, alias, schema, field)? {
                 if self.expr_references_table(left, table, alias, schema)?
                     || !self.expr_is_bound_without_table_row(left)?
+                    || !self.index_probe_expr_is_exact(schema, Some(field), left)
                 {
                     continue;
                 }
@@ -4392,6 +4388,10 @@ impl<'db> SqlEngine<'db> {
             // the primary-key range path would then incorrectly prove that
             // the whole selection has no candidates.
             Some(expr) if self.expr_is_bound_without_table_row(expr)? => {
+                let field = IndexField::MetadataPath(vec![column.to_string()]);
+                if !self.index_probe_expr_is_exact(schema, Some(&field), expr) {
+                    return Ok(None);
+                }
                 self.eval_dynamic_bound_expr(expr).map(Some)
             }
             Some(_) | None => Ok(None),

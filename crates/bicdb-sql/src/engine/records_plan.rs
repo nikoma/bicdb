@@ -2745,6 +2745,11 @@ impl<'db> SqlEngine<'db> {
             let mut record_ids = Vec::with_capacity(list.len());
             let mut constant = true;
             for element in list {
+                let field = IndexField::MetadataPath(vec![column.clone()]);
+                if !self.index_probe_expr_is_exact(Some(schema), Some(&field), element) {
+                    constant = false;
+                    break;
+                }
                 match eval_constant_expr(element) {
                     Ok(value) if !matches!(value, SqlValue::Null) => {
                         record_ids.push(record_id_from_column_values(
@@ -2812,12 +2817,15 @@ impl<'db> SqlEngine<'db> {
             }
         };
         let mut bound_values = Vec::with_capacity(primary_key_columns.len());
-        for entry in plan.iter() {
+        for (column, entry) in primary_key_columns.iter().zip(plan.iter()) {
+            let field = IndexField::MetadataPath(vec![column.clone()]);
             let value = match entry {
                 Some((term_idx, field_on_left)) => match nth_and_term(selection, *term_idx) {
                     Some(Expr::BinaryOp { left, right, .. }) => {
                         let bound = if *field_on_left { right } else { left };
-                        if self.expr_is_bound_without_table_row(bound)? {
+                        if self.expr_is_bound_without_table_row(bound)?
+                            && self.index_probe_expr_is_exact(Some(schema), Some(&field), bound)
+                        {
                             Some(self.eval_dynamic_bound_expr(bound)?)
                         } else {
                             None

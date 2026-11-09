@@ -408,3 +408,40 @@ fn releasing_unrelated_read_locks_preserves_an_existing_row_capability() {
         .unwrap();
     tx.commit().unwrap();
 }
+
+#[test]
+fn absent_row_capability_cannot_cross_drop_and_recreate_of_the_collection() {
+    let (_dir, mut db) = setup(StorageMode::ServerPaged, false);
+    let mut tx = db.begin_application_transaction(actor()).unwrap();
+    let authority = tx
+        .issue_mutation_grant(grant(MutationOperation::Insert))
+        .unwrap();
+    let token = tx
+        .reserve_authorized_read_committed_row("rows", "one", None)
+        .unwrap();
+    assert!(Arc::get_mut(&mut db)
+        .unwrap()
+        .drop_collection("rows")
+        .unwrap());
+    Arc::get_mut(&mut db)
+        .unwrap()
+        .create_collection("rows")
+        .unwrap();
+    assert!(
+        matches!(
+            tx.read_authorized_reserved_row(&token),
+            Err(BicDbError::TransactionConflict(_))
+        ),
+        "an absent row in a new backing is not the reserved absent row"
+    );
+    assert!(matches!(
+        tx.upsert_reserved_with_grant(
+            authority,
+            token,
+            Record::new("one").with_metadata(json!({"v":99}))
+        ),
+        Err(BicDbError::TransactionConflict(_))
+    ));
+    assert!(db.get("rows", "one").unwrap().is_none());
+    tx.rollback().unwrap();
+}

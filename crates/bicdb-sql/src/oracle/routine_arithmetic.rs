@@ -155,7 +155,11 @@ fn pg_kind(kind: &str) -> Kind {
 fn schema_kind(schema: &RoutineTypeSchema) -> Kind {
     if lobs::is_modifier(schema.type_modifier.as_ref()) {
         Kind::Blob
-    } else if let Some(PgTypeModifier::OracleNationalV1 { fixed, .. }) = &schema.type_modifier {
+    } else if let Some(
+        PgTypeModifier::OracleNationalV1 { fixed, .. }
+        | PgTypeModifier::OracleNationalColumnV1 { fixed, .. },
+    ) = &schema.type_modifier
+    {
         if *fixed {
             Kind::FixedNationalText
         } else {
@@ -257,6 +261,16 @@ impl Resolve<'_> {
             }
             std::borrow::Cow::Borrowed(query)
         });
+        if let Some(fixed) = context
+            .as_deref()
+            .and_then(|query| national_columns::in_query(self.db, query, expr))
+        {
+            return Some(if fixed {
+                Kind::FixedNationalText
+            } else {
+                Kind::NationalText
+            });
+        }
         if let Some(source) = context
             .as_deref()
             .and_then(|query| temporal_columns::logical_in_query(self.db, query, expr))
@@ -293,6 +307,13 @@ impl Resolve<'_> {
         if self.env.statement_provenance && self.queries.is_empty() {
             if let Ok(statements) = parse_statements(&sql) {
                 if let Some(Statement::Query(query)) = statements.first() {
+                    if let Some(fixed) = national_columns::in_query(self.db, query, expr) {
+                        return Some(if fixed {
+                            Kind::FixedNationalText
+                        } else {
+                            Kind::NationalText
+                        });
+                    }
                     if let Some(logical) = temporal_columns::logical_in_query(self.db, query, expr)
                     {
                         return Some(match logical.source {
@@ -461,7 +482,13 @@ impl Resolve<'_> {
                     // Case functions return character data: the argument's
                     // character kind, or text for an untyped bind (or NULL),
                     // which is bound as character.
-                    Some("lower" | "upper" | "initcap") => {
+                    Some(
+                        "lower"
+                        | "upper"
+                        | "initcap"
+                        | "bicdb_oracle_national_upper_v1"
+                        | "bicdb_oracle_national_lower_v1",
+                    ) => {
                         match function_args(function)
                             .first()
                             .map(|arg| (arg, self.kind(arg)))
@@ -806,6 +833,18 @@ impl Resolve<'_> {
         }
         if let Expr::Function(function) = expr {
             let name = object_name_lowercase(&function.name).ok();
+            if let Some(name @ ("upper" | "lower")) = name.as_deref() {
+                let args = function_args(function);
+                if let [arg] = args.as_slice() {
+                    if self.kind(arg).is_national() {
+                        *expr = expression(&format!(
+                            "bicdb_oracle_national_{name}_v1({})",
+                            super::render_sql(arg)
+                        ))?;
+                        return Ok(());
+                    }
+                }
+            }
             if let Some(name @ ("length" | "lengthb" | "lengthc" | "length2" | "length4")) =
                 name.as_deref()
             {

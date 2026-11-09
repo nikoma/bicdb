@@ -93,6 +93,10 @@ pub(crate) fn catalog_type(db: &BicDb, args: &[SqlValue]) -> Result<SqlValue> {
     else {
         return Ok(SqlValue::Null);
     };
+    if let Some(PgTypeModifier::OracleNationalColumnV1 { fixed, length }) = column.type_modifier {
+        let kind = if fixed { "NCHAR" } else { "NVARCHAR2" };
+        return Ok(SqlValue::String(format!("{kind}({length})")));
+    }
     if let Some(PgTypeModifier::OracleCharacterV1 {
         fixed,
         length,

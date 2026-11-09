@@ -3580,6 +3580,20 @@ pub(crate) fn eval_compatibility_function_value(
             };
             Ok(Some(SqlValue::String(trimmed)))
         }
+        "bicdb_oracle_national_upper_v1" | "bicdb_oracle_national_lower_v1" => {
+            require_arg_count(name, args, 1)?;
+            if matches!(args[0], SqlValue::Null) {
+                return Ok(Some(SqlValue::Null));
+            }
+            let text = args[0].to_cell();
+            Ok(Some(SqlValue::String(
+                if name == "bicdb_oracle_national_upper_v1" {
+                    bicdb_core::oracle_simple_national_upper_v1(&text)
+                } else {
+                    bicdb_core::oracle_simple_national_lower_v1(&text)
+                },
+            )))
+        }
         "lower" | "pg_catalog.lower" => {
             require_arg_count("lower", args, 1)?;
             if matches!(args[0], SqlValue::Null) {
@@ -3587,7 +3601,7 @@ pub(crate) fn eval_compatibility_function_value(
             }
             // One function with the `lower(col)` index key: see
             // `bicdb_core::index_key_upper`.
-            Ok(Some(SqlValue::String(bicdb_core::index_key_lower(
+            Ok(Some(SqlValue::String(oracle::simple_case::lower(
                 &args[0].to_cell(),
             ))))
         }
@@ -3596,7 +3610,7 @@ pub(crate) fn eval_compatibility_function_value(
             if matches!(args[0], SqlValue::Null) {
                 return Ok(Some(SqlValue::Null));
             }
-            Ok(Some(SqlValue::String(bicdb_core::index_key_upper(
+            Ok(Some(SqlValue::String(oracle::simple_case::upper(
                 &args[0].to_cell(),
             ))))
         }

@@ -1,0 +1,29 @@
+{
+  "complete": true,
+  "reference_sha256": "d9e5861bd20418a4a25d83436ad886b47ef367f1760e17b8a613cf6c88f5bd4e",
+  "oracle_version": [
+    [
+      "Oracle AI Database 26ai Free",
+      "23.0.0.0.0",
+      "23.26.3.0.0"
+    ]
+  ],
+  "session_nls": [
+    [
+      "NLS_COMP",
+      "BINARY"
+    ],
+    [
+      "NLS_LANGUAGE",
+      "AMERICAN"
+    ],
+    [
+      "NLS_SORT",
+      "BINARY"
+    ]
+  ],
+  "standalone_mapping_keys_and_ascii_plus_random_and_context_string_checks": 3329,
+  "random_seed": 1190147,
+  "random_strings": 256,
+  "scope": "Independent standalone checks for every changed scalar and ASCII, plus fixed context probes and random scalar strings; no application data read or modified."
+}

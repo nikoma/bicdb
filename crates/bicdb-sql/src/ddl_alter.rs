@@ -1509,6 +1509,12 @@ pub(crate) fn column_schema_from_def(db: &BicDb, column: &ColumnDef) -> Result<C
     let (mut pg_type, vector_dim, user_type) =
         if let Some(serial_type) = serial_type(&column.data_type) {
             (serial_type.to_string(), None, None)
+        } else if let Some(modifier) = oracle::national_columns::modifier(db, &column.data_type)? {
+            (
+                oracle::national_columns::physical_type(&modifier).to_string(),
+                None,
+                None,
+            )
         } else if oracle::lob_columns::modifier(db, &column.data_type)?.is_some() {
             ("bytea".to_string(), None, None)
         } else if let Some(user_type) = user_type_column_from_data_type(db, &column.data_type)? {
@@ -1555,8 +1561,13 @@ pub(crate) fn column_schema_from_def(db: &BicDb, column: &ColumnDef) -> Result<C
             } => Some(crate::sql_text::sql_text(expr)),
             _ => None,
         });
-    let mut type_modifier = oracle::lob_columns::modifier(db, &column.data_type)?
-        .or(pg_type_modifier_from_data_type(&column.data_type)?);
+    let mut type_modifier =
+        if let Some(modifier) = oracle::national_columns::modifier(db, &column.data_type)? {
+            Some(modifier)
+        } else {
+            oracle::lob_columns::modifier(db, &column.data_type)?
+                .or(pg_type_modifier_from_data_type(&column.data_type)?)
+        };
     if let Some(source) = oracle::character_columns::modifier(db, &column.data_type)? {
         type_modifier = Some(source);
     }

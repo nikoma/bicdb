@@ -3155,7 +3155,7 @@ fn migration_plan_errors(planned: &[MigrationFilePlan]) -> Vec<String> {
 }
 
 fn apply_migration_file(db: &mut BicDb, file: &MigrationFilePlan) -> Result<()> {
-    bicdb_sql::recover_interrupted_recycle_bin_renames(db)?;
+    bicdb_sql::oracle::initialize_existing_database_profile(db)?;
     let started_at = unix_now();
     save_migration_history_record(
         db,
@@ -11855,25 +11855,26 @@ fn execute_sql_command(
     output: OutputMode,
     slow_query: &SlowQueryOptions,
 ) -> Result<()> {
-    bicdb_sql::recover_interrupted_recycle_bin_renames(db)?;
+    bicdb_sql::oracle::initialize_existing_database_profile(db)?;
     let started = Instant::now();
-    let analytics_error = if should_try_analytics_sql(query) {
-        match run_datafusion_sql(&*db, query) {
-            Ok(result) => {
-                maybe_write_slow_query(
-                    slow_query,
-                    query,
-                    result.rows_as_json().len(),
-                    started.elapsed(),
-                )?;
-                print_analytics_result(&result, output)?;
-                return Ok(());
+    let analytics_error =
+        if !bicdb_sql::oracle::is_oracle_database(db)? && should_try_analytics_sql(query) {
+            match run_datafusion_sql(&*db, query) {
+                Ok(result) => {
+                    maybe_write_slow_query(
+                        slow_query,
+                        query,
+                        result.rows_as_json().len(),
+                        started.elapsed(),
+                    )?;
+                    print_analytics_result(&result, output)?;
+                    return Ok(());
+                }
+                Err(error) => Some(error),
             }
-            Err(error) => Some(error),
-        }
-    } else {
-        None
-    };
+        } else {
+            None
+        };
 
     match SqlSession::new(db).execute(query) {
         Ok(result) => {
@@ -13317,5 +13318,68 @@ mod ddl_startup_recovery_tests {
                 vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(2)]]
             );
         }
+    }
+    fn legacy_oracle_case_fixture(db: &mut BicDb) {
+        {
+            let mut sql = SqlSession::new(db);
+            sql.execute("CREATE TABLE startup_case(id INT PRIMARY KEY,v TEXT); INSERT INTO startup_case VALUES(1,'é'); CREATE INDEX startup_case_upper ON startup_case(upper(v))").unwrap();
+        }
+        db.create_collection("__bicdb_sql_compatibility").unwrap();
+        db.insert(
+            "__bicdb_sql_compatibility",
+            bicdb_core::Record::new("profile").with_metadata(
+                serde_json::json!({"format":1,"profile":bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE}),
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn legacy_oracle_case_profile_is_initialized_before_cli_sql() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        legacy_oracle_case_fixture(&mut db);
+        let slow = SlowQueryOptions {
+            log_path: None,
+            threshold_ms: 0,
+            redaction: RedactionConfig::default(),
+        };
+        execute_sql_command(
+            &mut db,
+            "SELECT upper(v) FROM startup_case",
+            OutputMode::Json,
+            &slow,
+        )
+        .unwrap();
+        assert_eq!(
+            SqlSession::new(&mut db)
+                .execute("SELECT upper(v) FROM startup_case")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::String("É".into())]]
+        );
+    }
+    #[test]
+    fn legacy_oracle_case_profile_is_initialized_before_cli_migration() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path().join("db")).unwrap();
+        legacy_oracle_case_fixture(&mut db);
+        let sql = "UPDATE startup_case SET v='ø' WHERE id=1";
+        let file = root.path().join("oracle.sql");
+        std::fs::write(&file, sql).unwrap();
+        let plan = MigrationFilePlan {
+            id: "oracle".into(),
+            file: file.to_string_lossy().into_owned(),
+            checksum: "legacy-oracle-fixture".into(),
+            statements: plan_migration_sql(sql).unwrap(),
+        };
+        apply_migration_file(&mut db, &plan).unwrap();
+        assert_eq!(
+            SqlSession::new(&mut db)
+                .execute("SELECT upper(v) FROM startup_case")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::String("Ø".into())]]
+        );
     }
 }

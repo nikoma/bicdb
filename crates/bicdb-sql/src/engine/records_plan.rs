@@ -2148,7 +2148,13 @@ impl<'db> SqlEngine<'db> {
             for field in &index.fields {
                 let value = if matches!(
                     field,
-                    IndexField::TimestampDay(_) | IndexField::Upper(_) | IndexField::Lower(_)
+                    IndexField::TimestampDay(_)
+                        | IndexField::Upper(_)
+                        | IndexField::OracleUpperV1(_)
+                        | IndexField::OracleUpperNationalV1(_)
+                        | IndexField::OracleLowerV1(_)
+                        | IndexField::OracleLowerNationalV1(_)
+                        | IndexField::Lower(_)
                 ) {
                     // The static path needs the same schema-aware expression
                     // identity as dynamic joins and the row locator: the
@@ -2245,7 +2251,13 @@ impl<'db> SqlEngine<'db> {
             };
             let bounds = if matches!(
                 field,
-                IndexField::TimestampDay(_) | IndexField::Upper(_) | IndexField::Lower(_)
+                IndexField::TimestampDay(_)
+                    | IndexField::Upper(_)
+                    | IndexField::OracleUpperV1(_)
+                    | IndexField::OracleUpperNationalV1(_)
+                    | IndexField::OracleLowerV1(_)
+                    | IndexField::OracleLowerNationalV1(_)
+                    | IndexField::Lower(_)
             ) {
                 let mut lower = None;
                 let mut upper = None;
@@ -3079,9 +3091,17 @@ pub(super) fn folded_text_equality_prefix(
     alias: &str,
     field: &IndexField,
 ) -> Option<IndexValue> {
-    let (inner, upper) = match field {
-        IndexField::Upper(inner) => (inner.as_ref(), true),
-        IndexField::Lower(inner) => (inner.as_ref(), false),
+    let (inner, mapping): (&IndexField, fn(&str) -> String) = match field {
+        IndexField::Upper(inner) => (inner.as_ref(), bicdb_core::index_key_upper),
+        IndexField::OracleUpperV1(inner) => (inner.as_ref(), bicdb_core::oracle_simple_upper_v1),
+        IndexField::OracleUpperNationalV1(inner) => {
+            (inner.as_ref(), bicdb_core::oracle_simple_national_upper_v1)
+        }
+        IndexField::Lower(inner) => (inner.as_ref(), bicdb_core::index_key_lower),
+        IndexField::OracleLowerV1(inner) => (inner.as_ref(), bicdb_core::oracle_simple_lower_v1),
+        IndexField::OracleLowerNationalV1(inner) => {
+            (inner.as_ref(), bicdb_core::oracle_simple_national_lower_v1)
+        }
         _ => return None,
     };
     let IndexField::MetadataPath(path) = inner else {
@@ -3135,11 +3155,7 @@ pub(super) fn folded_text_equality_prefix(
     })?;
     // The durable core key extractor itself, so the bound is the key of
     // every row whose text equals `value` (see `bicdb_core::index_key_upper`).
-    Some(IndexValue::String(if upper {
-        bicdb_core::index_key_upper(&value)
-    } else {
-        bicdb_core::index_key_lower(&value)
-    }))
+    Some(IndexValue::String(mapping(&value)))
 }
 
 /// Collect, iteratively (never recursively — a hostile query can nest deeply),

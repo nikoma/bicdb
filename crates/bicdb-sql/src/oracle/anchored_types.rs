@@ -135,6 +135,11 @@ pub(super) fn lower(
         }
     }
     let data_type = if preserve_modifiers {
+        if let Some(PgTypeModifier::OracleNationalColumnV1 { fixed, length }) = column.type_modifier
+        {
+            let kind = if fixed { "NCHAR" } else { "NVARCHAR2" };
+            return Ok(Some((format!("{kind}({length})"), used + 2)));
+        }
         if let Some(PgTypeModifier::OracleCharacterV1 {
             fixed,
             length,

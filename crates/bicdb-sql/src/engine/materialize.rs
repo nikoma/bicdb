@@ -3567,6 +3567,8 @@ impl<'db> SqlEngine<'db> {
             | "bicdb_oracle_chr"
             | "bicdb_oracle_national_value"
             | "bicdb_oracle_national_literal"
+            | "bicdb_oracle_national_upper_v1"
+            | "bicdb_oracle_national_lower_v1"
             | "bicdb_oracle_decode_key"
             | "bicdb_oracle_decode_text"
             | "bicdb_oracle_concat"

@@ -2998,7 +2998,8 @@ impl BicDb {
             )?;
             if workspace.is_none() {
                 self.indexes.remove(&definition.name);
-                self.index_generation.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                self.index_generation
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 self.persist_index_catalog()?;
                 self.schema_compatibility.invalidate();
             }
@@ -3016,7 +3017,9 @@ impl BicDb {
                 // resolves those through the compact row-id registry. A table
                 // opened before it had an index has no registry yet.
                 let mut collection = self.collection_state_write(&definition.collection)?;
-                for shard in collection.shards_mut() { shard.track_reverse = true; }
+                for shard in collection.shards_mut() {
+                    shard.track_reverse = true;
+                }
                 for id in paged.scan_ids(&snapshot, &definition.collection)? {
                     let id = id?;
                     collection.shard_mut(&id).rowid_or_alloc(&id);

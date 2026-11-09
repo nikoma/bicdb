@@ -17,7 +17,9 @@ fn fixture(dir: &TempDir) -> PagedStore {
     for batch in 0..10 {
         let xid = store.begin();
         for i in batch * 10..batch * 10 + 10 {
-            store.put(xid, format!("kept-{i:05}").as_bytes(), b"acknowledged").unwrap();
+            store
+                .put(xid, format!("kept-{i:05}").as_bytes(), b"acknowledged")
+                .unwrap();
         }
         store.commit(xid).unwrap();
     }
@@ -27,7 +29,10 @@ fn fixture(dir: &TempDir) -> PagedStore {
 
 fn assert_kept(store: &PagedStore) {
     for i in 0..100 {
-        assert_eq!(store.get(format!("kept-{i:05}").as_bytes()).unwrap(), Some(b"acknowledged".to_vec()));
+        assert_eq!(
+            store.get(format!("kept-{i:05}").as_bytes()).unwrap(),
+            Some(b"acknowledged".to_vec())
+        );
     }
 }
 
@@ -39,14 +44,23 @@ fn cuts_keep_live_versions_invisible_and_never_reissue_their_xids() {
             let store = fixture(&dir);
             let pending = store.begin();
             for i in 0..2_000 {
-                store.put(pending, format!("pending-{i:05}").as_bytes(), b"uncommitted").unwrap();
+                store
+                    .put(
+                        pending,
+                        format!("pending-{i:05}").as_bytes(),
+                        b"uncommitted",
+                    )
+                    .unwrap();
                 if checkpoint && i % 50 == 0 {
                     store.checkpoint().unwrap();
                 }
                 let snapshot = store.buffer_pool().snapshot();
                 // Default BufferPoolOptions uses eight shards. The prototype
                 // admits at most one emergency frame per shard.
-                assert!(snapshot.resident_pages <= snapshot.total_frames + 8, "{snapshot:?}");
+                assert!(
+                    snapshot.resident_pages <= snapshot.total_frames + 8,
+                    "{snapshot:?}"
+                );
                 assert_eq!(snapshot.unlogged_steals, 0);
             }
             assert_kept(&store);
@@ -56,7 +70,11 @@ fn cuts_keep_live_versions_invisible_and_never_reissue_their_xids() {
             let (store, _) = PagedStore::open(dir.path(), options()).unwrap();
             assert_kept(&store);
             for i in 0..2_000 {
-                assert_eq!(store.get(format!("pending-{i:05}").as_bytes()).unwrap(), None, "checkpoint={checkpoint}, reopen={reopen}");
+                assert_eq!(
+                    store.get(format!("pending-{i:05}").as_bytes()).unwrap(),
+                    None,
+                    "checkpoint={checkpoint}, reopen={reopen}"
+                );
             }
             let next = store.begin();
             assert!(next > pending);
@@ -75,8 +93,12 @@ fn a_failed_cut_at_every_image_and_decision_never_publishes_partial_pages() {
         let store = fixture(&dir);
         let xid = store.begin();
         for i in 0..2_000 {
-            if store.buffer_pool().unlogged_pressure().is_some() { break; }
-            store.put(xid, format!("pending-{i:05}").as_bytes(), b"uncommitted").unwrap();
+            if store.buffer_pool().unlogged_pressure().is_some() {
+                break;
+            }
+            store
+                .put(xid, format!("pending-{i:05}").as_bytes(), b"uncommitted")
+                .unwrap();
         }
         assert!(store.buffer_pool().unlogged_pressure().is_some());
         store.buffer_pool().unlogged_pages()
@@ -87,12 +109,23 @@ fn a_failed_cut_at_every_image_and_decision_never_publishes_partial_pages() {
             let store = fixture(&dir);
             let xid = store.begin();
             for i in 0..2_000 {
-                if store.buffer_pool().unlogged_pressure().is_some() { break; }
-                store.put(xid, format!("pending-{i:05}").as_bytes(), b"uncommitted").unwrap();
+                if store.buffer_pool().unlogged_pressure().is_some() {
+                    break;
+                }
+                store
+                    .put(xid, format!("pending-{i:05}").as_bytes(), b"uncommitted")
+                    .unwrap();
             }
-            let fault = bicdb_page::test_faults::arm_io_failure("page_log.write", dir.path(), failing_write, true);
+            let fault = bicdb_page::test_faults::arm_io_failure(
+                "page_log.write",
+                dir.path(),
+                failing_write,
+                true,
+            );
             let result = store.put(xid, b"trigger-cut", b"uncommitted");
-            if failing_write <= dirty + 1 { assert!(result.is_err(), "write {failing_write}"); }
+            if failing_write <= dirty + 1 {
+                assert!(result.is_err(), "write {failing_write}");
+            }
             assert_eq!(store.buffer_pool().unlogged_steals(), 0);
             drop(fault);
         }
@@ -101,7 +134,10 @@ fn a_failed_cut_at_every_image_and_decision_never_publishes_partial_pages() {
             assert_kept(&store);
             assert_eq!(store.get(b"trigger-cut").unwrap(), None);
             for i in 0..2_000 {
-                assert_eq!(store.get(format!("pending-{i:05}").as_bytes()).unwrap(), None);
+                assert_eq!(
+                    store.get(format!("pending-{i:05}").as_bytes()).unwrap(),
+                    None
+                );
             }
         }
     }
@@ -115,30 +151,53 @@ fn failed_maintenance_cannot_be_persisted_by_a_later_cut() {
             let store = fixture(&dir);
             let xid = store.begin();
             for i in 0..40 {
-                store.put(xid, format!("doomed-{i:04}").as_bytes(), b"deleted later").unwrap();
+                store
+                    .put(xid, format!("doomed-{i:04}").as_bytes(), b"deleted later")
+                    .unwrap();
             }
             store.commit(xid).unwrap();
             let xid = store.begin();
             for i in 0..40 {
-                store.delete(xid, format!("doomed-{i:04}").as_bytes()).unwrap();
+                store
+                    .delete(xid, format!("doomed-{i:04}").as_bytes())
+                    .unwrap();
             }
             store.commit(xid).unwrap();
             store.checkpoint().unwrap();
-            if sweep { store.vacuum(10_000).unwrap(); }
-            let site = if sweep { "experimental.sweep.after_first_mutation" } else { "experimental.vacuum.after_first_mutation" };
+            if sweep {
+                store.vacuum(10_000).unwrap();
+            }
+            let site = if sweep {
+                "experimental.sweep.after_first_mutation"
+            } else {
+                "experimental.vacuum.after_first_mutation"
+            };
             let fault = bicdb_page::test_faults::arm_io_failure(site, dir.path(), 1, false);
-            let result = if sweep { store.sweep_dead_index_entries(10_000).map(|_| ()) } else { store.vacuum(10_000).map(|_| ()) };
-            assert!(result.is_err(), "the maintenance fault must fire: sweep={sweep}");
+            let result = if sweep {
+                store.sweep_dead_index_entries(10_000).map(|_| ())
+            } else {
+                store.vacuum(10_000).map(|_| ())
+            };
+            assert!(
+                result.is_err(),
+                "the maintenance fault must fire: sweep={sweep}"
+            );
             assert_eq!(fault.fired(), 1);
             assert!(store.durability_health().check().is_err());
-            assert!(store.checkpoint().is_err(), "a later cut must not publish failed maintenance");
+            assert!(
+                store.checkpoint().is_err(),
+                "a later cut must not publish failed maintenance"
+            );
             drop(fault);
         }
         for _ in 0..2 {
             let (store, _) = PagedStore::open(dir.path(), options()).unwrap();
             assert_kept(&store);
             for i in 0..40 {
-                assert_eq!(store.get(format!("doomed-{i:04}").as_bytes()).unwrap(), None);
+                assert_eq!(
+                    store.get(format!("doomed-{i:04}").as_bytes()).unwrap(),
+                    None
+                );
             }
         }
     }

@@ -486,7 +486,9 @@ impl PagedRecords {
     #[cfg(feature = "experimental-structural-cuts")]
     pub(crate) fn validate_record_before_logical_decision(&self, record: &Record) -> Result<()> {
         let value = self.encode_value(record)?;
-        self.store.validate_put_value_size(value.len()).map_err(page_error)
+        self.store
+            .validate_put_value_size(value.len())
+            .map_err(page_error)
     }
 
     pub fn put(&self, transaction: Xid, collection: &str, record: &Record) -> Result<TupleLocator> {

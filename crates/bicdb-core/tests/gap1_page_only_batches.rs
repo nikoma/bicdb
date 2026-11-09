@@ -98,12 +98,15 @@ fn creating_an_index_whose_backfill_outgrows_the_pool_fails_cleanly() {
             "{label}: unexpected error: {error}"
         );
         assert!(
-            !db.index_definitions().iter().any(|index| index.name == definition.name),
+            !db.index_definitions()
+                .iter()
+                .any(|index| index.name == definition.name),
             "{label}: a refused non-resumable build left a published definition"
         );
         assert_eq!(db.scan_collection("rows").unwrap().len(), ROWS, "{label}");
         if definition.kind == IndexKind::FullText {
-            let error = db.lookup_full_text_term(&definition.name, "common", false)
+            let error = db
+                .lookup_full_text_term(&definition.name, "common", false)
                 .expect_err("a refused build must not answer from a partial index");
             assert!(error.to_string().contains("not found"), "{error}");
         }

@@ -1201,7 +1201,10 @@ mod tests {
             &freed[..],
             "the freed page was written"
         );
-        assert!(!pool.pages_needing_log().iter().any(|&(page, _)| page == doomed));
+        assert!(!pool
+            .pages_needing_log()
+            .iter()
+            .any(|&(page, _)| page == doomed));
         assert!(catalog.free_space_buckets(doomed).unwrap().is_empty());
         assert_eq!(heap.snapshot().non_heap_free_space_records, 1);
         assert_eq!(heap.get(placed).unwrap(), payload(900, 2));

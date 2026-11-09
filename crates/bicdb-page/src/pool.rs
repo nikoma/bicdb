@@ -1566,7 +1566,9 @@ impl BufferPool {
         for index in 0..self.shards.len() {
             let mut shard = self.lock_shard(&self.shards[index]);
             while shard.resident.len() + shard.loading.len() + shard.free.len() > shard.capacity {
-                if shard.free.pop().is_some() { continue; }
+                if shard.free.pop().is_some() {
+                    continue;
+                }
                 match self.evict_one_pass(&mut shard, 0, CacheClass::Search, false) {
                     Ok(buffer) => drop(buffer),
                     Err(PageError::PoolExhausted { .. }) => break,

@@ -2496,9 +2496,15 @@ impl PagedStore {
     /// record is needed. Caller holds the writer gate.
     #[cfg(feature = "experimental-structural-cuts")]
     fn log_checkpoint_meta_for_experiment(&self) -> Result<()> {
-        let logged: Vec<_> = self.pool.pages_needing_log().into_iter()
-            .filter(|&(page, _)| page == self.meta_page).collect();
-        if logged.is_empty() { return Ok(()); }
+        let logged: Vec<_> = self
+            .pool
+            .pages_needing_log()
+            .into_iter()
+            .filter(|&(page, _)| page == self.meta_page)
+            .collect();
+        if logged.is_empty() {
+            return Ok(());
+        }
         let image = self.pool.get(self.meta_page)?.bytes().to_vec();
         let lsn = self.wal.log_page_image(self.meta_page, 0, &image)?;
         self.wal.sync_through(lsn)?;
@@ -2638,7 +2644,9 @@ impl PagedStore {
         field: HeaderStampField,
         expected: Xid,
     ) -> Result<HeaderRepair> {
-        self.experimental_maintenance(|| self.repair_version_header_stamp_inner(key, field, expected))
+        self.experimental_maintenance(|| {
+            self.repair_version_header_stamp_inner(key, field, expected)
+        })
     }
 
     fn repair_version_header_stamp_inner(
@@ -3277,7 +3285,9 @@ impl PagedStore {
         limits: VacuumLimits,
         time_exhausted: impl FnMut() -> bool,
     ) -> Result<VacuumReport> {
-        self.experimental_maintenance(|| self.vacuum_step_with_expiry_inner(cursor, limits, time_exhausted))
+        self.experimental_maintenance(|| {
+            self.vacuum_step_with_expiry_inner(cursor, limits, time_exhausted)
+        })
     }
 
     fn vacuum_step_with_expiry_inner(
@@ -3402,8 +3412,11 @@ impl PagedStore {
                     report.versions_reclaimed += 1;
                     #[cfg(feature = "experimental-structural-cuts")]
                     if report.versions_reclaimed == 1 {
-                        crate::test_faults::io_fault("experimental.vacuum.after_first_mutation", self.pool.store().path())
-                            .map_err(|error| PageError::io(self.pool.store().path(), error))?;
+                        crate::test_faults::io_fault(
+                            "experimental.vacuum.after_first_mutation",
+                            self.pool.store().path(),
+                        )
+                        .map_err(|error| PageError::io(self.pool.store().path(), error))?;
                     }
                 }
             }
@@ -3561,8 +3574,11 @@ impl PagedStore {
                 removed += 1;
                 #[cfg(feature = "experimental-structural-cuts")]
                 if removed == 1 {
-                    crate::test_faults::io_fault("experimental.sweep.after_first_mutation", self.pool.store().path())
-                        .map_err(|error| PageError::io(self.pool.store().path(), error))?;
+                    crate::test_faults::io_fault(
+                        "experimental.sweep.after_first_mutation",
+                        self.pool.store().path(),
+                    )
+                    .map_err(|error| PageError::io(self.pool.store().path(), error))?;
                 }
             }
             #[cfg(feature = "experimental-structural-cuts")]

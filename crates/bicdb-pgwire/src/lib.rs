@@ -2281,15 +2281,66 @@ async fn handle_plain_client_async(
     result
 }
 
+/// A queued notification can contain business data from an earlier callback.
+/// Refuse it after a durability fence, even if its producer ran while healthy.
+fn drain_checked_notifications(
+    server: &PgWireServer,
+    connection_id: u64,
+) -> Result<Vec<(String, String, i32)>> {
+    server.db.read().check_recovery_state()?;
+    let pending = match server.notifications.lock() {
+        Ok(mut bus) => bus.drain(connection_id),
+        Err(_) => return Ok(Vec::new()),
+    };
+    server.db.read().check_recovery_state()?;
+    Ok(pending)
+}
+
+#[cfg(test)]
+mod notification_fence_tests {
+    use super::*;
+
+    #[test]
+    fn queued_notification_is_refused_after_durability_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let server = PgWireServer::open(dir.path(), PgWireConfig::default()).unwrap();
+        {
+            let mut bus = server.notifications.lock().unwrap();
+            bus.listen(7, "business");
+            bus.notify("business", "committed row", 1);
+        }
+        assert_eq!(drain_checked_notifications(&server, 7).unwrap().len(), 1);
+        server
+            .notifications
+            .lock()
+            .unwrap()
+            .notify("business", "queued row", 1);
+        server
+            .db
+            .read()
+            .durability_health_for_test()
+            .record_failure("test.notification_fence", &"injected");
+        assert!(matches!(
+            drain_checked_notifications(&server, 7),
+            Err(PgWireError::BicDb(
+                bicdb_core::BicDbError::WriteFailed { .. }
+            ))
+        ));
+        assert!(matches!(
+            drain_checked_notifications(&server, 8),
+            Err(PgWireError::BicDb(
+                bicdb_core::BicDbError::WriteFailed { .. }
+            ))
+        ));
+    }
+}
+
 async fn flush_notifications_async(
     stream: &mut TokioTcpStream,
     server: &PgWireServer,
     connection_id: u64,
 ) -> Result<()> {
-    let pending = match server.notifications.lock() {
-        Ok(mut bus) => bus.drain(connection_id),
-        Err(_) => return Ok(()),
-    };
+    let pending = drain_checked_notifications(server, connection_id)?;
     if pending.is_empty() {
         return Ok(());
     }
@@ -2305,6 +2356,7 @@ async fn flush_notifications_async(
         buffer.extend_from_slice(&((body.len() + 4) as u32).to_be_bytes());
         buffer.extend_from_slice(&body);
     }
+    server.db.read().check_recovery_state()?;
     stream.write_all(&buffer).await?;
     Ok(())
 }

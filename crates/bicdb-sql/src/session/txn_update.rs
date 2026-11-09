@@ -1925,7 +1925,12 @@ impl<'db> SqlSession<'db> {
                     self.cancellation.check()?;
                 }
                 for right in &row_set.rows {
-                    merged_rows.push(merge_slot_rows(left, &columns, right, &row_set.columns));
+                    merged_rows.push(materialize_join_row(
+                        left,
+                        &columns,
+                        right,
+                        &row_set.columns,
+                    )?);
                 }
             }
             rows = merged_rows;
@@ -2296,7 +2301,12 @@ impl<'db> SqlSession<'db> {
                     self.cancellation.check()?;
                 }
                 for right in &row_set.rows {
-                    merged_rows.push(merge_slot_rows(left, &columns, right, &row_set.columns));
+                    merged_rows.push(materialize_join_row(
+                        left,
+                        &columns,
+                        right,
+                        &row_set.columns,
+                    )?);
                 }
             }
             rows = merged_rows;

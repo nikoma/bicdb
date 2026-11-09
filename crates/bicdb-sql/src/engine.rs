@@ -4456,6 +4456,7 @@ impl<'db> SqlEngine<'db> {
     }
 
     pub fn execute(&self, sql: &str) -> Result<SqlResult> {
+        let _join_budget = crate::join_budget::Scope::enter();
         self.db_ref().check_recovery_state()?;
         let mut profile = SqlProfileScope::new(sql);
         let _schema_cache = SqlSchemaCacheScope::new();
@@ -4904,6 +4905,7 @@ impl<'db> SqlEngine<'db> {
     }
 
     pub(crate) fn execute_query(&self, query: &Query) -> Result<SqlResult> {
+        let _join_budget = crate::join_budget::Scope::enter();
         self.db_ref().check_recovery_state()?;
         let _subqueries = self.subquery_memo.scope();
         let _probes = self.exists_probe_memo.scope(

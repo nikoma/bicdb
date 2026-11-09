@@ -556,21 +556,21 @@ impl<'db> SqlEngine<'db> {
                 };
                 if constraint_matches {
                     matched_left = true;
-                    rows.push(merge_slot_rows(
+                    rows.push(materialize_join_row(
                         left_row,
                         &left.columns,
                         &right_row,
                         &right_columns,
-                    ));
+                    )?);
                 }
             }
             if !matched_left && matches!(kind, RowJoinKind::Left) {
-                rows.push(merge_slot_rows(
+                rows.push(materialize_join_row(
                     left_row,
                     &left.columns,
                     &null_right,
                     &right_columns,
-                ));
+                )?);
             }
         }
 

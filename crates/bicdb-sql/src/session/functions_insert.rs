@@ -1688,6 +1688,12 @@ impl<'db> SqlSession<'db> {
         record: &Record,
         conflict_columns: &[String],
     ) -> Result<Option<(Option<Record>, u64)>> {
+        // Signed writes retain action-specific authority and the existing
+        // explicit retry requirement for snapshot-invisible conflicts. Their
+        // protected write helper does not yet carry a refreshed row version.
+        if self.signed_mutation_grant(table).is_some() {
+            return Ok(None);
+        }
         if !self
             .tx
             .as_ref()

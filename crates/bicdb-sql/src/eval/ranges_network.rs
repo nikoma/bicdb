@@ -3877,6 +3877,15 @@ pub(crate) fn compare_expr_values_resolved(
             }
         }
     }
+    if let Some(truth) = compare_values_by_pg_types(
+        left_expr_type.as_deref(),
+        right_expr_type.as_deref(),
+        left,
+        op,
+        right,
+    )? {
+        return Ok(truth);
+    }
     let left_type = left_expr_type
         .clone()
         .or_else(|| projected_arithmetic_operand_pg_type(left_expr, schema));

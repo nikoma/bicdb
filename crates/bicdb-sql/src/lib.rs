@@ -242,6 +242,7 @@ pub mod extension_runtime;
 #[cfg(feature = "extension-host")]
 pub use extension_runtime::*;
 mod planner;
+mod slot_types;
 pub(crate) use planner::*;
 mod pg_dump_compat;
 pub(crate) use pg_dump_compat::*;

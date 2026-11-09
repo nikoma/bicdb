@@ -252,7 +252,12 @@ pub(super) fn finish_purge(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<()
     }
     stage("purge_collection");
     // Decided purges are already hidden from the public recycle-bin view.
-    if db.get(RECYCLE_BIN_COLLECTION, &entry.bin_name)?.is_some() {
+    let has_entry = match db.get(RECYCLE_BIN_COLLECTION, &entry.bin_name) {
+        Ok(record) => record.is_some(),
+        Err(BicDbError::CollectionNotFound(_)) => false,
+        Err(error) => return Err(error.into()),
+    };
+    if has_entry {
         delete_recycle_bin_entry(db, &entry.bin_name)?;
     }
     stage("purge_entry");

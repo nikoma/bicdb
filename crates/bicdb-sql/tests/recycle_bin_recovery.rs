@@ -311,7 +311,7 @@ fn transactional_purge_keeps_snapshot_rows_until_commit_and_reclaims_its_backing
                 .iter()
                 .any(|meta| meta.name.starts_with("__bicdb_bin_")));
             drop(db);
-            let mut db = BicDb::open_with_config(root.path(), config(mode)).unwrap();
+            let mut db = BicDb::open_with_config(root.path(), config(mode.clone())).unwrap();
             assert_eq!(recover_interrupted_recycle_bin_renames(&mut db).unwrap(), 0);
             assert!(SqlSession::new(&mut db)
                 .execute("SELECT * FROM source")

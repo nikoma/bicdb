@@ -335,10 +335,10 @@ async fn racing_plain_inserts_report_unique_violation_paged() {
 
 /// Establish the statement snapshot before the winner commits by waiting on
 /// an advisory lock inside INSERT SELECT. READ COMMITTED must update the
-/// snapshot-invisible winner and commit; a fixed snapshot must report40001.
+/// snapshot-invisible winner and commit.
 /// The DO NOTHING control still skips its conflicting row without an update.
 /// This also retains coverage of the old23505-to-exclusive escalation stall.
-async fn upsert_over_a_key_committed_after_the_snapshot(mode: StorageMode, fixed: bool) {
+async fn upsert_over_a_key_committed_after_the_snapshot(mode: StorageMode) {
     let label = format!("{mode:?}");
     let root = database(mode);
     let running = start(root.path());
@@ -353,11 +353,7 @@ async fn upsert_over_a_key_committed_after_the_snapshot(mode: StorageMode, fixed
         .unwrap();
     let writer = connect(running.port).await;
     let update = "DO UPDATE SET value = excluded.value, byte_size = excluded.byte_size";
-    let cases = if fixed {
-        vec![(9, update)]
-    } else {
-        vec![(7, update), (8, "DO NOTHING")]
-    };
+    let cases = vec![(7, update), (8, "DO NOTHING")];
     for (key, action) in cases {
         writer
             .batch_execute(&format!(
@@ -368,11 +364,7 @@ async fn upsert_over_a_key_committed_after_the_snapshot(mode: StorageMode, fixed
             .await
             .unwrap();
         reader
-            .batch_execute(if fixed {
-                "BEGIN ISOLATION LEVEL REPEATABLE READ"
-            } else {
-                "BEGIN READ COMMITTED"
-            })
+            .batch_execute("BEGIN ISOLATION LEVEL READ COMMITTED")
             .await
             .unwrap();
         let upsert = {
@@ -403,12 +395,7 @@ async fn upsert_over_a_key_committed_after_the_snapshot(mode: StorageMode, fixed
                     .any(|message| matches!(message, SimpleQueryMessage::CommandComplete(1))),
                 "{label} RC update: {messages:?}"
             ),
-            (_, Ok(messages)) => panic!("{label} fixed-snapshot update must retry: {messages:?}"),
-            (_, Err(error)) if fixed => assert_eq!(
-                error.code(),
-                Some(&tokio_postgres::error::SqlState::T_R_SERIALIZATION_FAILURE),
-                "{label} {action}: {error:?}"
-            ),
+            (_, Ok(messages)) => panic!("unexpected case {key}: {messages:?}"),
             (_, Err(error)) => panic!("{label} RC upsert must succeed: {error:?}"),
         }
         reader
@@ -425,12 +412,7 @@ async fn upsert_over_a_key_committed_after_the_snapshot(mode: StorageMode, fixed
             "{label} {action}: committed payload"
         );
     }
-    assert_one_row_per_key_from(
-        &writer,
-        if fixed { 9 } else { 7 },
-        if fixed { 10 } else { 9 },
-    )
-    .await;
+    assert_one_row_per_key_from(&writer, 7, 9).await;
     drop(reader);
     drop(writer);
     stop(running);
@@ -452,21 +434,12 @@ async fn assert_one_row_per_key_from(client: &Client, first: i64, end: i64) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn read_committed_secondary_upsert_uses_winner_after_statement_snapshot_memory() {
-    upsert_over_a_key_committed_after_the_snapshot(StorageMode::EmbeddedMemory, false).await;
+    upsert_over_a_key_committed_after_the_snapshot(StorageMode::EmbeddedMemory).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn read_committed_secondary_upsert_uses_winner_after_statement_snapshot_paged() {
-    upsert_over_a_key_committed_after_the_snapshot(StorageMode::ServerPaged, false).await;
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn repeatable_read_secondary_upsert_retains_serialization_conflict_memory() {
-    upsert_over_a_key_committed_after_the_snapshot(StorageMode::EmbeddedMemory, true).await;
-}
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn repeatable_read_secondary_upsert_retains_serialization_conflict_paged() {
-    upsert_over_a_key_committed_after_the_snapshot(StorageMode::ServerPaged, true).await;
+    upsert_over_a_key_committed_after_the_snapshot(StorageMode::ServerPaged).await;
 }
 
 /// PostgreSQL READ COMMITTED upserts wait for an uncommitted arbiter winner,

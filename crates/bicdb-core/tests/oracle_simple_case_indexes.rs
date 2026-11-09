@@ -630,6 +630,30 @@ fn oracle_publication_refuses_pending_writes_and_invalid_build_ownership() {
                 before
             );
         }
+        match &shadow {
+            CaseShadow::Paged(state) => {
+                let mut ambiguous = state.clone();
+                ambiguous.definition.name = "LEGACY".into();
+                assert!(db
+                    .publish_oracle_case_v1_index_replacement(&old, &ambiguous)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("ambiguous"));
+            }
+            CaseShadow::Embedded(definition) => {
+                let mut ambiguous = definition.clone();
+                ambiguous.name = "LEGACY".into();
+                assert!(db
+                    .publish_embedded_oracle_case_v1_index_replacement(&old, &ambiguous)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("ambiguous"));
+            }
+        }
+        assert_eq!(
+            std::fs::read(root.path().join("indexes.json")).unwrap(),
+            before
+        );
         publish_case_shadow(&mut db, &old, &shadow).unwrap();
     }
 }

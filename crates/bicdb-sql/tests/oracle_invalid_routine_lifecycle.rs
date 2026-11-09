@@ -9,6 +9,29 @@ fn run(db: &mut BicDb, sql: &str) -> bicdb_sql::Result<bicdb_sql::SqlResult> {
     let sql = lower_session_sql(db, sql, ORACLE_PREVIEW_PROFILE, None, "bicdb")?;
     SqlSession::new(db).execute(&sql)
 }
+
+// Optional artifact for exercising an actual older reader against this format.
+// Capture only a closed, flushed test store, and never overwrite a destination.
+fn capture_invalid_store(source: &std::path::Path) {
+    let Some(destination) = std::env::var_os("BICDB_CAPTURE_ORACLE_INVALID_STORE") else {
+        return;
+    };
+    fn copy_directory(source: &std::path::Path, destination: &std::path::Path) {
+        std::fs::create_dir(destination).unwrap();
+        for entry in std::fs::read_dir(source).unwrap() {
+            let entry = entry.unwrap();
+            let kind = entry.file_type().unwrap();
+            let target = destination.join(entry.file_name());
+            if kind.is_dir() {
+                copy_directory(&entry.path(), &target);
+            } else {
+                assert!(kind.is_file(), "test-store capture refuses special files");
+                std::fs::copy(entry.path(), target).unwrap();
+            }
+        }
+    }
+    copy_directory(source, std::path::Path::new(&destination));
+}
 #[test]
 fn oracle_unknown_return_type_persists_invalid_object_diagnostics_and_call_error() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
@@ -39,6 +62,9 @@ fn oracle_unknown_return_type_persists_invalid_object_diagnostics_and_call_error
             .contains("ORA-06575"));
         db.flush().unwrap();
         drop(db);
+        if mode == StorageMode::ServerPaged {
+            capture_invalid_store(root.path());
+        }
         let mut db = BicDb::open_with_config(root.path(), config).unwrap();
         ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
         assert_eq!(

@@ -3698,12 +3698,46 @@ pub(crate) fn full_text_index_expression_matches(stored: &str, query: &Expr) -> 
     matches
 }
 
+/// The declared type of a column reference as the executing query
+/// registered its relation (`slot_types`): `None` when no relation in the
+/// layout is registered (the caller resolves it by name), `Some(None)` when
+/// the registered relations do not agree on one type.
+fn registered_column_expr_type(expr: &Expr, columns: &[&str]) -> Option<Option<String>> {
+    match expr {
+        Expr::CompoundIdentifier(idents) if idents.len() >= 2 => {
+            let qualifier = ident_value(&idents[idents.len() - 2]);
+            let column = ident_value(&idents[idents.len() - 1]);
+            crate::slot_types::lookup(&qualifier, &column)
+        }
+        Expr::Identifier(ident) => {
+            let mut found: Option<Option<String>> = None;
+            let suffix = format!(".{}", ident_value(ident));
+            for key in columns {
+                if !key.ends_with(&suffix) {
+                    continue;
+                }
+                let registered = crate::slot_types::lookup_key(key)?;
+                found = Some(match found {
+                    None => registered,
+                    Some(previous) if previous == registered => previous,
+                    Some(_) => None,
+                });
+            }
+            found
+        }
+        _ => None,
+    }
+}
+
 pub(crate) fn row_columns_expr_pg_type<'a>(
     db: &BicDb,
     expr: &Expr,
     columns: impl IntoIterator<Item = &'a str>,
 ) -> Option<String> {
     let columns = columns.into_iter().collect::<Vec<_>>();
+    if let Some(registered) = registered_column_expr_type(expr, &columns) {
+        return registered;
+    }
     if let Expr::Nested(inner) | Expr::Collate { expr: inner, .. } = expr {
         return row_columns_expr_pg_type(db, inner, columns.iter().copied());
     }
@@ -3879,6 +3913,16 @@ pub(crate) enum RecordLocators {
 }
 
 const POSTGRES_SYSTEM_COLUMNS: [&str; 6] = ["tableoid", "xmin", "xmax", "cmin", "cmax", "ctid"];
+
+pub(crate) fn postgres_system_column_pg_type(column: &str) -> Option<&'static str> {
+    match column {
+        "tableoid" => Some("oid"),
+        "xmin" | "xmax" => Some("xid"),
+        "cmin" | "cmax" => Some("cid"),
+        "ctid" => Some("tid"),
+        _ => None,
+    }
+}
 
 pub(crate) fn is_postgres_system_column(column: &str) -> bool {
     let name = column.rsplit('.').next().unwrap_or(column);
@@ -4905,6 +4949,7 @@ impl<'db> SqlEngine<'db> {
 
     pub(crate) fn execute_query(&self, query: &Query) -> Result<SqlResult> {
         self.db_ref().check_recovery_state()?;
+        let _slot_types = crate::slot_types::push_frame();
         let _subqueries = self.subquery_memo.scope();
         let _probes = self.exists_probe_memo.scope(
             self.outer_row.is_none() && exists_probe::probe_query_safe(self.db_ref(), query),

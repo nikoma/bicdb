@@ -882,6 +882,44 @@ impl PagedRecords {
             }))
     }
 
+    /// One entry per record key, including invisible/deleted keys. Visibility
+    /// reads only the version header; no record payload is decoded. Emitting
+    /// invisible entries lets upper layers poll cancellation during tombstone runs.
+    pub(crate) fn scan_record_visibility<'a>(
+        &'a self,
+        snapshot: &Snapshot,
+        collection: &str,
+    ) -> Result<impl Iterator<Item = Result<(String, bool)>> + 'a> {
+        let physical = self.physical_collection(collection);
+        let prefix = collection_prefix(&physical);
+        let mut cursor = self
+            .store
+            .scan_visible_key_prefixes_from(snapshot, &prefix, 0)
+            .map_err(page_error)?;
+        let mut done = false;
+        Ok(std::iter::from_fn(move || {
+            if done {
+                return None;
+            }
+            match cursor.next_candidate()? {
+                Ok((key, prefix_value)) => {
+                    if !key.starts_with(&prefix) {
+                        done = true;
+                        return None;
+                    }
+                    Some(
+                        String::from_utf8(key[prefix.len()..].to_vec())
+                            .map(|id| (id, prefix_value.is_some()))
+                            .map_err(|_| {
+                                BicDbError::PagedStorage("record key id is not utf-8".to_string())
+                            }),
+                    )
+                }
+                Err(error) => Some(Err(page_error(error))),
+            }
+        }))
+    }
+
     /// Every record id in a collection, from the index keys alone — no heap
     /// page is read and no value is decoded.
     ///
@@ -1198,8 +1236,8 @@ impl PagedRecords {
     /// Number of rows visible to `snapshot` in a collection.
     ///
     /// Visibility-checked (so tombstoned keys are excluded) but without
-    /// decoding any record — the cost is the heap reads the visibility check
-    /// needs, not the JSON parse a scan would add.
+    /// decoding any record or reading its full overflow body. Only the version
+    /// header is needed to decide snapshot visibility.
     pub fn count_live(&self, snapshot: &Snapshot, collection: &str) -> Result<usize> {
         self.count_live_cancellable(snapshot, collection, &CancellationToken::uncancelable())
     }
@@ -1212,26 +1250,15 @@ impl PagedRecords {
         collection: &str,
         cancellation: &CancellationToken,
     ) -> Result<usize> {
+        cancellation.check()?;
         LIVE_COUNT_WALKS.with(|walks| walks.set(walks.get() + 1));
-        let physical = self.physical_collection(collection);
-        let collection: &str = &physical;
-        let prefix = collection_prefix(collection);
-        let mut cursor = self
-            .store
-            .scan_from(snapshot, &prefix)
-            .map_err(page_error)?;
         let mut count = 0usize;
-        loop {
+        for entry in self.scan_record_visibility(snapshot, collection)? {
             cancellation.check()?;
-            let Some(entry) = cursor.next() else {
-                break;
-            };
-            let (key, _) = entry.map_err(page_error)?;
-            if !key.starts_with(&prefix) {
-                break;
-            }
-            count += 1;
+            let (_, visible) = entry?;
+            count += usize::from(visible);
         }
+        cancellation.check()?;
         Ok(count)
     }
 

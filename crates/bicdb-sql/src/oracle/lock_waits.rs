@@ -199,7 +199,8 @@ mod tests {
             infer_query_result_columns_for_describe(&db, &sql),
         ] {
             let columns = columns.unwrap().unwrap();
-            assert_eq!(columns[0].0, "id");
+            // Oracle lowering quotes its normalized uppercase identifier.
+            assert_eq!(columns[0].0, "ID");
             assert!(columns[0]
                 .1
                 .as_deref()

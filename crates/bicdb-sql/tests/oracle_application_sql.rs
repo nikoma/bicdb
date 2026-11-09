@@ -658,3 +658,33 @@ fn plsql_compares_dates_and_timestamps_as_datetimes() {
         vec![vec!["1".to_string()]]
     );
 }
+
+#[test]
+fn row_and_derived_datetime_comparisons_keep_declared_types() {
+    let (_root, mut db) = app_database();
+    for sql in [
+        "CREATE TABLE DAYS (ID NUMBER PRIMARY KEY, D DATE, T TIMESTAMP)",
+        "INSERT INTO DAYS VALUES (1, DATE '2002-07-04', TIMESTAMP '2002-07-04 00:00:00')",
+        "INSERT INTO DAYS VALUES (2, DATE '2002-07-04', TIMESTAMP '2002-07-04 12:00:00')",
+        "CREATE INDEX DAYS_T ON DAYS (T)",
+    ] {
+        run(&mut db, sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    for sql in [
+        "SELECT ID FROM DAYS WHERE D = T ORDER BY ID",
+        "SELECT ID FROM (SELECT ID, D, T FROM DAYS) S WHERE S.D = S.T ORDER BY ID",
+        "SELECT ID FROM DAYS WHERE CASE WHEN D = T THEN 1 ELSE 0 END = 1 ORDER BY ID",
+        "SELECT O.ID FROM DAYS O WHERE EXISTS (SELECT 1 FROM DAYS I WHERE I.ID = O.ID AND I.T = O.D) ORDER BY O.ID",
+        "SELECT X.ID FROM DAYS X JOIN DAYS Y ON X.ID = Y.ID AND X.D = Y.T ORDER BY X.ID",
+    ] {
+        assert_eq!(
+            texts(run(&mut db, sql).unwrap_or_else(|error| panic!("{sql}: {error}"))),
+            vec![vec!["1"]],
+            "{sql}",
+        );
+    }
+    assert_eq!(
+        texts(run(&mut db, "SELECT ID, CASE WHEN D = T THEN 'equal' WHEN D < T THEN 'before' ELSE 'after' END FROM DAYS ORDER BY ID").unwrap()),
+        vec![vec!["1", "equal"], vec!["2", "before"]],
+    );
+}

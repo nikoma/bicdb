@@ -201,6 +201,82 @@ impl DurabilityHealth {
     }
 }
 
+/// Health of one archiver (the commit-log archive or the page-log archive).
+///
+/// Separate from [`DurabilityHealth`] on purpose: an archive failure does not
+/// make any acknowledged commit uncertain, because commits are acknowledged
+/// on the local logs and the local logs are retained until the archive
+/// confirms a copy. What a failure does make uncertain is the archive copy
+/// itself: a failed `fsync` may drop the dirty pages it could not write, so a
+/// later "successful" retry proves nothing about those bytes. The first
+/// failure therefore stops the archiver for this handle: nothing more is
+/// published as archived and nothing local is released, until a new handle
+/// rewrites every unconfirmed byte from the retained local copy.
+#[derive(Default)]
+pub struct ArchiveHealth {
+    failed: AtomicBool,
+    failure: Mutex<Option<WriteFailure>>,
+}
+
+impl fmt::Debug for ArchiveHealth {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ArchiveHealth")
+            .field("failure", &self.failure())
+            .finish()
+    }
+}
+
+impl ArchiveHealth {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
+
+    pub fn is_failed(&self) -> bool {
+        self.failed.load(Ordering::Acquire)
+    }
+
+    /// The first failure, if any. Nothing clears it.
+    pub fn failure(&self) -> Option<WriteFailure> {
+        if !self.is_failed() {
+            return None;
+        }
+        self.failure.lock().clone()
+    }
+
+    /// Record a failure at `site` (first one wins) and return its record.
+    /// `archive` names the archive in the log event.
+    pub fn record_failure(
+        &self,
+        archive: &str,
+        site: &str,
+        error: &dyn fmt::Display,
+    ) -> WriteFailure {
+        let mut slot = self.failure.lock();
+        if let Some(existing) = slot.as_ref() {
+            return existing.clone();
+        }
+        let failure = WriteFailure {
+            site: site.to_string(),
+            error: error.to_string(),
+            at_unix_millis: unix_millis(),
+        };
+        *slot = Some(failure.clone());
+        self.failed.store(true, Ordering::Release);
+        drop(slot);
+        log_event(&serde_json::json!({
+            "event": "archive.write_failed",
+            "severity": "critical",
+            "archive": archive,
+            "site": failure.site,
+            "error": failure.error,
+            "at_unix_millis": failure.at_unix_millis,
+            "action": "archiving stopped; nothing more is marked archived and the local logs \
+                       are retained; a reopened archiver rewrites every unconfirmed byte",
+        }));
+        failure
+    }
+}
+
 /// Write one JSON event line to stderr, ignoring write errors.
 pub fn log_event(event: &serde_json::Value) {
     use std::io::Write;

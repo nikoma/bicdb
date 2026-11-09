@@ -30,21 +30,277 @@ impl BicDb {
         cursor: &mut ReplicationCursor,
         limit: usize,
     ) -> Result<usize> {
-        // Retry a failed sync before allowing retention to advance.
-        archive.sync()?;
+        // A failed archive is never retried on the same handle: a failed
+        // fsync may have dropped the pages it could not write, and a later
+        // successful one would then confirm bytes that are not on disk. The
+        // hold stays at the last confirmed commit, so the log keeps
+        // everything after it for a new handle to rewrite.
+        archive.check_healthy()?;
         // Hold before reading, so a checkpoint cannot cut what is unread.
         self.prepare_log_archive(archive)?;
         let frames = self.replication_frames_after(cursor, limit)?;
         if let Err(error) = archive.append(&self.config.replication.cluster_id, &frames) {
-            // append may have completed a prefix. Resume from its exact
-            // boundary, not the end of the batch the cursor already read.
+            // Nothing of a failed batch is confirmed; resume from the last
+            // confirmed commit, not the end of the batch the cursor read.
             *cursor = ReplicationCursor::new(archive.last_commit_seq());
             return Err(error);
         }
         if !frames.is_empty() {
+            // Only now are the records (and their directory entries) durable
+            // in the archive: release the log up to them.
             self.hold_log_for_archive(archive.last_commit_seq())?;
         }
         Ok(frames.len())
+    }
+
+    /// Opens the commit log archive in `dir` for a server that feeds it.
+    ///
+    /// Whatever the archive holds past the persisted transaction-log hold was
+    /// never confirmed by the archiver that wrote it (it failed, or crashed
+    /// before advancing the hold), so it is discarded and rewritten from the
+    /// log, which the hold kept. This is what makes a failed archive safe to
+    /// resume: bytes whose `fsync` failed are never trusted, they are
+    /// replaced. When the log no longer holds that suffix (the hold was
+    /// released or never persisted), the archive is kept as it is.
+    ///
+    /// An archive that cannot be opened (damage in its newest segment, an
+    /// I/O error) or whose discard fails comes back as a failed handle, not
+    /// an error: the archiver stays stopped and visible, and the database
+    /// keeps running with the log retained.
+    pub fn open_log_archive(&self, dir: &Path, fsync: bool) -> Result<LogArchive> {
+        let mut archive = match LogArchive::open(dir, fsync) {
+            Ok(archive) => archive,
+            Err(error) => return Ok(LogArchive::failed(dir, fsync, "log_archive.open", &error)),
+        };
+        if let Err(error) = self.reconcile_log_archive(&mut archive) {
+            if archive.failure().is_none() {
+                archive.fail_with("log_archive.open", &error);
+            }
+        }
+        Ok(archive)
+    }
+
+    /// See [`Self::open_log_archive`]. Returns the commits discarded for
+    /// rewriting.
+    pub fn reconcile_log_archive(&self, archive: &mut LogArchive) -> Result<u64> {
+        let discarded = self.reconcile_log_archive_suffix(archive)?;
+        // A recorded verification failure keeps every new handle stopped
+        // until the confirmed prefix reads back intact again.
+        let recorded = crate::archive_guard::load_verification(
+            &self
+                .path
+                .join(crate::archive_guard::COMMIT_LOG_VERIFICATION_FILE),
+        );
+        if recorded.is_some_and(|verification| !verification.ok) {
+            if let Some(dir) = archive.dir().map(Path::to_path_buf) {
+                let verification = self.verify_log_archive(&dir)?;
+                if !verification.ok {
+                    archive.fail_verification(&verification.detail);
+                }
+            }
+        }
+        Ok(discarded)
+    }
+
+    /// Read back the commit-log archive's confirmed prefix (from the
+    /// archive's first commit through the transaction-log hold): every
+    /// record's checksum and the commit-sequence continuity. The result is
+    /// persisted in the database directory. A failed result does not stop
+    /// an archiver by itself; the caller fails its handle (the server's
+    /// archiver does), and every new handle stays failed while it is
+    /// recorded (see [`Self::reconcile_log_archive`]).
+    pub fn verify_log_archive(
+        &self,
+        dir: &Path,
+    ) -> Result<crate::archive_guard::ArchiveVerification> {
+        let hold = self.sync_quorum.holds().get(LOG_ARCHIVE_HOLDER).copied();
+        let meta = fs::read(dir.join("archive.json")).ok().and_then(|bytes| {
+            serde_json::from_slice::<crate::log_archive::LogArchiveMeta>(&bytes).ok()
+        });
+        let (ok, through, detail) = match (meta, hold) {
+            (Some(meta), Some(hold)) if hold >= meta.first_commit_seq => {
+                let mut count = 0u64;
+                let result = read_log_archive(
+                    dir,
+                    meta.first_commit_seq - 1,
+                    ReplayTarget {
+                        commit_seq: Some(hold),
+                        timestamp: None,
+                    },
+                    |_| {
+                        count += 1;
+                        Ok(true)
+                    },
+                );
+                match result {
+                    Ok(()) => (
+                        true,
+                        hold,
+                        format!(
+                            "commits {}..={hold} read back ({count})",
+                            meta.first_commit_seq
+                        ),
+                    ),
+                    Err(error) => (false, hold, error.to_string()),
+                }
+            }
+            (_, hold) => (true, hold.unwrap_or(0), "nothing confirmed yet".to_string()),
+        };
+        let verification = crate::archive_guard::ArchiveVerification {
+            archive: "commit_log".into(),
+            ok,
+            at_unix_millis: crate::archive_guard::unix_millis(),
+            through,
+            detail,
+        };
+        crate::archive_guard::store_verification(
+            &self
+                .path
+                .join(crate::archive_guard::COMMIT_LOG_VERIFICATION_FILE),
+            &verification,
+            self.config.fsync,
+        )?;
+        if !ok {
+            bicdb_page::health::log_event(&serde_json::json!({
+                "event": "archive.verification_failed",
+                "severity": "critical",
+                "archive": "commit_log",
+                "through": through,
+                "detail": verification.detail,
+                "action": "the archiver stops; nothing more is confirmed until the prefix reads back intact",
+            }));
+        }
+        Ok(verification)
+    }
+
+    /// The last persisted commit-log archive verification.
+    pub fn log_archive_verification(&self) -> Option<crate::archive_guard::ArchiveVerification> {
+        crate::archive_guard::load_verification(
+            &self
+                .path
+                .join(crate::archive_guard::COMMIT_LOG_VERIFICATION_FILE),
+        )
+    }
+
+    /// Set the write backpressure (from an [`crate::archive_guard::ArchiveGuard`]
+    /// evaluation). `Refuse` fails write operations with
+    /// [`BicDbError::ArchiveBackpressure`] (SQLSTATE 53100); `Throttle` delays
+    /// each write commit by `delay`; `None` lifts it.
+    pub fn set_archive_backpressure(
+        &self,
+        backpressure: crate::archive_guard::Backpressure,
+        reason: &str,
+        delay: std::time::Duration,
+    ) {
+        self.archive_backpressure.set(backpressure, reason, delay);
+    }
+
+    pub fn archive_backpressure(&self) -> crate::archive_guard::Backpressure {
+        self.archive_backpressure.get()
+    }
+
+    /// Guard inputs for this database: the page-log archive (failure,
+    /// unarchived bytes, its volume), the commit-log archive given by the
+    /// caller (`dir` and its current failure), the bytes of
+    /// `transactions.log` held for it, both verification records and the
+    /// data volume.
+    pub fn archive_guard_inputs(
+        &self,
+        commit_log: Option<(&Path, Option<&crate::WriteFailure>)>,
+    ) -> crate::archive_guard::ArchiveGuardInputs {
+        use crate::archive_guard::volume_space;
+        let mut inputs = crate::archive_guard::ArchiveGuardInputs {
+            now_unix_millis: crate::archive_guard::unix_millis(),
+            data_volume: volume_space(&self.path),
+            ..Default::default()
+        };
+        fn since(
+            inputs: &mut crate::archive_guard::ArchiveGuardInputs,
+            failure: Option<&crate::WriteFailure>,
+        ) {
+            if let Some(failure) = failure {
+                inputs.failure_since_unix_millis = Some(
+                    inputs
+                        .failure_since_unix_millis
+                        .map_or(failure.at_unix_millis, |at| at.min(failure.at_unix_millis)),
+                );
+            }
+        }
+        if let Some(status) = self.wal_archive_status() {
+            since(&mut inputs, status.failure.as_ref());
+            inputs.retained_bytes = inputs
+                .retained_bytes
+                .saturating_add(status.unarchived_bytes);
+            if let Some(destination) = self
+                .paged_records
+                .as_ref()
+                .and_then(|paged| paged.store().wal().archive_destination())
+            {
+                if let Some(space) = volume_space(&destination) {
+                    inputs
+                        .archive_volumes
+                        .push(("page_log_archive".into(), space));
+                }
+            }
+            let recorded = self.paged_records.as_ref().and_then(|paged| {
+                crate::archive_guard::load_verification(
+                    &super::spatial_paged::page_log_verification_path(paged.store().wal().path()),
+                )
+            });
+            inputs.verification_failed |= recorded.is_some_and(|verification| !verification.ok);
+        }
+        if let Some((dir, failure)) = commit_log {
+            since(&mut inputs, failure);
+            // The held log counts only while the archive is behind.
+            let hold = self.sync_quorum.holds().get(LOG_ARCHIVE_HOLDER).copied();
+            if hold.is_some_and(|hold| hold < self.current_commit_seq()) {
+                inputs.retained_bytes = inputs
+                    .retained_bytes
+                    .saturating_add(fs::metadata(self.tx_log_path()).map_or(0, |m| m.len()));
+            }
+            if let Some(space) = volume_space(dir) {
+                inputs
+                    .archive_volumes
+                    .push(("commit_log_archive".into(), space));
+            }
+            inputs.verification_failed |= self
+                .log_archive_verification()
+                .is_some_and(|verification| !verification.ok);
+        }
+        inputs
+    }
+
+    fn reconcile_log_archive_suffix(&self, archive: &mut LogArchive) -> Result<u64> {
+        let Some(hold) = self.sync_quorum.holds().get(LOG_ARCHIVE_HOLDER).copied() else {
+            return Ok(0);
+        };
+        let Some(meta) = archive.meta().cloned() else {
+            return Ok(0);
+        };
+        // The hold can sit below a fresh archive's anchor (it is set before
+        // the anchor is installed); nothing below the anchor is in the
+        // archive to discard.
+        let keep_through = hold.max(meta.first_commit_seq.saturating_sub(1));
+        if archive.last_commit_seq() <= keep_through {
+            return Ok(0);
+        }
+        if read_wal_base(&self.path)? > keep_through {
+            // The log was cut past the hold (the hold was released while
+            // archiving was off): the suffix cannot be rewritten, keep it.
+            return Ok(0);
+        }
+        let discarded = archive.discard_after(keep_through)?;
+        if discarded > 0 {
+            bicdb_page::health::log_event(&serde_json::json!({
+                "event": "archive.unconfirmed_suffix_discarded",
+                "severity": "warning",
+                "archive": "commit_log",
+                "kept_through_commit": keep_through,
+                "discarded_commits": discarded,
+                "action": "rewriting the discarded commits from the transaction log",
+            }));
+        }
+        Ok(discarded)
     }
 
     fn hold_log_for_archive(&self, seq: u64) -> Result<()> {
@@ -58,6 +314,7 @@ impl BicDb {
     /// Validate the archive identity before writing a base into its directory,
     /// and pin its required suffix before a snapshot or export can race retention.
     pub fn prepare_log_archive(&self, archive: &LogArchive) -> Result<()> {
+        archive.check_healthy()?;
         if archive
             .meta()
             .is_some_and(|meta| meta.cluster_id != self.config.replication.cluster_id)
@@ -212,8 +469,13 @@ impl BicDb {
         key: &str,
     ) -> Result<crate::log_archive::ArchivedBaseBackup> {
         // Establish retention before taking the snapshot. Pinning only after
-        // the base is published can lose its new suffix to a checkpoint.
-        self.hold_log_for_archive(0)?;
+        // the base is published can lose its new suffix to a checkpoint. An
+        // existing hold already retains everything after it, which the
+        // base's suffix is; moving it back to 0 would also make a later
+        // reopen treat the whole archive as unconfirmed.
+        if !self.sync_quorum.holds().contains_key(LOG_ARCHIVE_HOLDER) {
+            self.hold_log_for_archive(0)?;
+        }
         let staging = dir.join(format!(".base-{}.partial", uuid::Uuid::new_v4().simple()));
         let (_, commit_seq) = self.create_consistent_backup(
             &staging,

@@ -213,15 +213,39 @@ fn ledger_lines(path: &Path) -> Vec<String> {
 
 /// The reconciled state: a digest of every row, compared across reopens.
 fn reconcile(db_dir: &Path, ledger: &Path, mode: &str, label: &str) -> BTreeMap<String, String> {
-    let db = BicDb::open_with_config(db_dir, config(mode))
+    let floors = (0..WRITERS)
+        .map(|writer| acknowledged(ledger, writer))
+        .collect::<Vec<_>>();
+    reconcile_against(db_dir, ledger, config(mode), &floors, label)
+}
+
+/// Writer `writer`'s last acknowledged commit.
+fn acknowledged(ledger: &Path, writer: usize) -> u64 {
+    ledger_lines(&ledger.join(format!("writer-{writer}")))
+        .last()
+        .map(|line| line.parse::<u64>().unwrap())
+        .unwrap_or(0)
+}
+
+/// [`reconcile`] with an explicit floor per writer: every commit up to the
+/// floor must be present, and the state must be one consistent prefix per
+/// writer. A restore from an archive uses the floor the archive confirmed.
+fn reconcile_against(
+    db_dir: &Path,
+    ledger: &Path,
+    config: DbConfig,
+    floors: &[u64],
+    label: &str,
+) -> BTreeMap<String, String> {
+    let db = BicDb::open_with_config(db_dir, config)
         .unwrap_or_else(|error| panic!("{label}: reopen failed: {error}"));
     let mut digest = BTreeMap::new();
     if !db.collections().iter().any(|meta| meta.name == "rows") {
         // A crash during setup, before the schema was durable, leaves
         // nothing; that is only correct if nothing was acknowledged.
-        for writer in 0..WRITERS {
+        for (writer, floor) in floors.iter().enumerate() {
             assert!(
-                ledger_lines(&ledger.join(format!("writer-{writer}"))).is_empty(),
+                *floor == 0,
                 "{label}: schema missing although writer {writer} has acknowledged commits"
             );
         }
@@ -239,10 +263,7 @@ fn reconcile(db_dir: &Path, ledger: &Path, mode: &str, label: &str) -> BTreeMap<
         digest.insert(format!("rows/{id}"), metadata.to_string());
     }
     for writer in 0..WRITERS {
-        let acknowledged = ledger_lines(&ledger.join(format!("writer-{writer}")))
-            .last()
-            .map(|line| line.parse::<u64>().unwrap())
-            .unwrap_or(0);
+        let acknowledged = floors[writer];
         let durable = by_id
             .get(&format!("hot-{writer}"))
             .map(|metadata| metadata["seq"].as_u64().unwrap())
@@ -1240,4 +1261,280 @@ fn repeat_recovery_convergence() {
 #[test]
 fn experimental_structural_cuts_preserve_large_decided_commits() {
     gap1_a_decided_commit_larger_than_the_pool_keeps_acknowledged_rows();
+}
+
+// Fail-closed archiving (docs/durability-failure-handling.md, section 7.5):
+// the child also feeds the commit-log and page-log archives
+// (`DURABILITY_ARCHIVE`). A crash point or an injected EIO hits an archive
+// step. Then, independently of the child:
+// 1. the database reconciles against every acknowledged commit;
+// 2. a point-in-time restore from each archive AS LEFT reconciles against
+//    the commits that archive confirmed (no false "archived");
+// 3. archiving resumes with new handles, and a restore from each archive
+//    reconciles against every acknowledged commit (nothing acknowledged was
+//    lost to an archive failure, and the archive chain has no gap).
+
+/// Must match `ARCHIVE_KEY` in `examples/durability_child.rs`.
+const ARCHIVE_KEY: &str = "durability-child-archive-passphrase-0123";
+
+fn archive_config(mode: &str) -> DbConfig {
+    config(mode).with_replication(bicdb_core::ReplicationConfig {
+        enabled: true,
+        mode: bicdb_core::ReplicationMode::Primary,
+        cluster_id: "durability-child".to_string(),
+        node_id: "child".to_string(),
+        listen_addr: Some("127.0.0.1:0".to_string()),
+        tls: Some(bicdb_core::ReplicationTlsConfig {
+            cert_path: Default::default(),
+            key_path: Default::default(),
+            ca_path: Default::default(),
+            require_client_cert: true,
+            dev_localhost_plaintext: true,
+        }),
+        ..bicdb_core::ReplicationConfig::default()
+    })
+}
+
+/// The last per-writer floor an archive confirmed (zeros before any).
+fn archived_floor(ledger: &Path, name: &str) -> Vec<u64> {
+    ledger_lines(&ledger.join(name))
+        .last()
+        .map(|line| line.split(' ').map(|v| v.parse().unwrap()).collect())
+        .unwrap_or_else(|| vec![0; WRITERS])
+}
+
+/// Restores both archives into `out` and reconciles each against `floors`.
+fn restore_and_reconcile(
+    archive: &Path,
+    out: &Path,
+    mode: &str,
+    ledger: &Path,
+    commit_floor: &[u64],
+    wal_floor: &[u64],
+    label: &str,
+) -> Vec<BTreeMap<String, String>> {
+    use bicdb_core::BackupRestoreOptions;
+    let mut digests = Vec::new();
+    let restored = out.join("from-commit-log");
+    if !archive.join("commits/archive.json").exists() {
+        // The archiver never confirmed a first append.
+        assert!(commit_floor.iter().all(|seq| *seq == 0), "{label}");
+    } else {
+        bicdb_core::restore_point_in_time(
+            &archive.join("commits"),
+            &restored,
+            ARCHIVE_KEY,
+            true,
+            bicdb_core::log_archive::ReplayTarget::default(),
+        )
+        .unwrap_or_else(|error| panic!("{label}: commit-log restore: {error}"));
+        digests.push(reconcile_against(
+            &restored,
+            ledger,
+            config(mode),
+            commit_floor,
+            &format!("{label} (commit-log restore)"),
+        ));
+    }
+    let restored = out.join("from-page-log");
+    for (artifact, force) in [("base.bicbackup", true), ("tail.bicbackup", false)] {
+        bicdb_core::restore_backup(
+            archive.join(artifact),
+            &restored,
+            BackupRestoreOptions {
+                passphrase: ARCHIVE_KEY.to_string(),
+                force,
+            },
+        )
+        .unwrap_or_else(|error| panic!("{label}: page-log base restore: {error}"));
+    }
+    if archive.join("wal").is_dir() {
+        bicdb_core::apply_archived_wal(&restored, archive.join("wal"))
+            .unwrap_or_else(|error| panic!("{label}: page-log roll-forward: {error}"));
+    }
+    digests.push(reconcile_against(
+        &restored,
+        ledger,
+        config(mode),
+        wal_floor,
+        &format!("{label} (page-log restore)"),
+    ));
+    digests
+}
+
+/// Each writer's newest commit in a reconciled state (its hot row).
+fn hot_seqs(digest: &BTreeMap<String, String>) -> Vec<u64> {
+    (0..WRITERS)
+        .map(|writer| {
+            digest
+                .get(&format!("rows/hot-{writer}"))
+                .map(|metadata| {
+                    serde_json::from_str::<serde_json::Value>(metadata).unwrap()["seq"]
+                        .as_u64()
+                        .unwrap()
+                })
+                .unwrap_or(0)
+        })
+        .collect()
+}
+
+/// No restore may hold a commit the database itself does not: an archive
+/// never makes an uncertain transaction look committed.
+fn assert_within(primary: &[u64], restored: &[BTreeMap<String, String>], label: &str) {
+    for digest in restored {
+        let seqs = hot_seqs(digest);
+        for writer in 0..WRITERS {
+            assert!(
+                seqs[writer] <= primary[writer],
+                "{label}: a restore holds writer {writer} commit {} beyond the database's {}",
+                seqs[writer],
+                primary[writer]
+            );
+        }
+    }
+}
+
+fn archive_case(mode: &str, crash_at: Option<&str>, fail_io: Option<&str>) {
+    let label = format!(
+        "{mode} archive {}",
+        crash_at.or(fail_io).unwrap_or("no-fault")
+    );
+    let temp = tempfile::tempdir().unwrap();
+    let keep = KeepOnPanic(temp.path().to_path_buf(), label.clone());
+    let db = temp.path().join("db");
+    let ledger = temp.path().join("ledger");
+    let archive = temp.path().join("archive");
+    let mut command = Command::new(child_binary());
+    command
+        .arg(&db)
+        .arg(&ledger)
+        .arg(durability(mode))
+        .arg(COMMITS.to_string())
+        .env("DURABILITY_ARCHIVE", &archive)
+        .env("BICDB_TEST_WAL_VOLATILE_TAIL", "1")
+        .env_remove("DURABILITY_POOL_BYTES")
+        .env_remove("BICDB_TEST_CRASH_AT")
+        .env_remove("BICDB_TEST_FAIL_IO");
+    if let Some(point) = crash_at {
+        command.env("BICDB_TEST_CRASH_AT", point);
+    }
+    if let Some(spec) = fail_io {
+        command.env("BICDB_TEST_FAIL_IO", spec);
+    }
+    let output = command.output().expect("run durability child");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if crash_at.is_some() {
+        assert!(
+            !output.status.success() && stderr.contains("bicdb test crash point reached"),
+            "{label}: the crash point was never reached: {}\n{stderr}",
+            output.status
+        );
+    } else {
+        assert!(output.status.success(), "{label}: child failed\n{stderr}");
+    }
+    if fail_io.is_some() {
+        assert_eq!(
+            ledger_lines(&ledger.join("state")),
+            vec!["healthy".to_string()],
+            "{label}: an archive failure must not fence the database"
+        );
+    }
+    if let Some(spec) = fail_io {
+        let site = spec.split(':').next().unwrap();
+        let state = ledger_lines(&ledger.join("archive-state"));
+        assert!(
+            state
+                .iter()
+                .any(|line| line.ends_with(&format!("failed {site}"))),
+            "{label}: the fault was never reached or not reported: {state:?}"
+        );
+    }
+    let violations = ledger_lines(&ledger.join("violations"));
+    assert!(violations.is_empty(), "{label}: {violations:#?}");
+    let acked: Vec<u64> = (0..WRITERS).map(|w| acknowledged(&ledger, w)).collect();
+    assert!(
+        acked.iter().any(|seq| *seq > 0),
+        "{label}: nothing acknowledged"
+    );
+
+    // 1. The database itself.
+    let primary = hot_seqs(&reconcile_against(
+        &db,
+        &ledger,
+        archive_config(mode),
+        &acked,
+        &label,
+    ));
+    // 2. Each archive as the failure or crash left it.
+    let as_left = restore_and_reconcile(
+        &archive,
+        &temp.path().join("as-left"),
+        mode,
+        &ledger,
+        &archived_floor(&ledger, "archived-commits"),
+        &archived_floor(&ledger, "archived-wal"),
+        &label,
+    );
+    assert_within(&primary, &as_left, &label);
+    // 3. Resume with new handles; then everything acknowledged is archived.
+    {
+        let db = BicDb::open_with_config(&db, archive_config(mode)).unwrap();
+        let mut log = db
+            .open_log_archive(&archive.join("commits"), true)
+            .unwrap_or_else(|error| panic!("{label}: reopen commit archive: {error}"));
+        let mut cursor = bicdb_core::ReplicationCursor::new(log.last_commit_seq());
+        while db.archive_commits(&mut log, &mut cursor, 64).unwrap() > 0 {}
+        db.archive_wal_segments(archive.join("wal"))
+            .unwrap_or_else(|error| panic!("{label}: resume page-log archive: {error}"));
+        drop(log);
+        db.close().unwrap();
+    }
+    let resumed = restore_and_reconcile(
+        &archive,
+        &temp.path().join("resumed"),
+        mode,
+        &ledger,
+        &acked,
+        &acked,
+        &format!("{label} (resumed)"),
+    );
+    assert_within(&primary, &resumed, &label);
+    drop(keep);
+}
+
+const ARCHIVE_CRASH_POINTS: &[&str] = &[
+    "log_archive.after_sync:3",
+    "log_archive.after_sync:12",
+    "wal_archive.after_rename:4",
+    "wal_archive.before_mark:3",
+];
+
+const ARCHIVE_FAIL_IO_SPECS: &[&str] = &[
+    "log_archive.write:8",
+    "log_archive.sync:4",
+    "wal_archive.copy:5",
+    "wal_archive.sync:5",
+    "wal_archive.rename:5",
+    "wal_archive.dir_sync:3",
+];
+
+#[test]
+fn archives_fail_closed_and_roll_forward_to_every_acknowledged_commit() {
+    let mut cases: Vec<(String, Box<dyn FnOnce() + std::panic::UnwindSafe>)> = vec![(
+        "no-fault".to_string(),
+        Box::new(|| archive_case("all-logs", None, None)),
+    )];
+    for &point in ARCHIVE_CRASH_POINTS {
+        cases.push((
+            format!("crash {point}"),
+            Box::new(move || archive_case("all-logs", Some(point), None)),
+        ));
+    }
+    for &spec in ARCHIVE_FAIL_IO_SPECS {
+        cases.push((
+            format!("fail-io {spec}"),
+            Box::new(move || archive_case("all-logs", None, Some(spec))),
+        ));
+    }
+    run_matrix(cases);
 }

@@ -1756,7 +1756,7 @@ impl<'a> Broker<'a> {
         from_sequence: u64,
         max: usize,
         max_bytes: usize,
-    ) -> Result<Result<Vec<BrokerDeliverySnapshot>>> {
+    ) -> Result<Vec<BrokerDeliverySnapshot>> {
         self.stream.checked_snapshot(|_| {
             if max == 0 || max > 1024 || max_bytes == 0 || max_bytes > 64 * 1024 * 1024 {
                 return Err(BicDbError::Broker(
@@ -1844,7 +1844,7 @@ impl<'a> Broker<'a> {
                 });
             }
             Ok(result)
-        })
+        })?
     }
 
     /// Point-in-time snapshot of every queue and group the broker knows

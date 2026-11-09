@@ -1684,7 +1684,7 @@ impl BicDb {
         let events = self
             .events
             .lock()
-            .read_since(checkpoint.event_offset)
+            .read_since(checkpoint.event_offset)?
             .into_iter()
             .filter(|event| !self.event_targets_mesh_ineligible_collection(event))
             .collect::<Vec<_>>();

@@ -354,6 +354,12 @@ impl PagedRecords {
         self.store.begin_transaction()
     }
 
+    /// Compatibility spelling for external logical redo. It obeys exactly
+    /// the same structural-cut admission as [`Self::begin`].
+    pub fn begin_redo_backed(&self) -> (Xid, Snapshot) {
+        self.store.begin_redo_backed()
+    }
+
     pub fn latest_snapshot(&self) -> Snapshot {
         self.store.latest_snapshot()
     }
@@ -1347,7 +1353,52 @@ impl PagedRecords {
             .map_err(page_error)
     }
 
-    /// Bytes currently held by the buffer pool — the bounded figure.
+    /// Target bytes per maintenance batch: a sixteenth of the normal pool
+    /// budget, at least 64 KiB. This limits internal cut overhead; it is not
+    /// an acceptance limit on valid larger transactions.
+    pub fn page_only_batch_bytes(&self) -> usize {
+        let budget = self.store.buffer_pool().budget_bytes();
+        usize::try_from(budget / 16)
+            .unwrap_or(usize::MAX)
+            .max(64 * 1024)
+    }
+
+    /// Writes (each changing about one page) one page-only batch may make
+    /// within [`Self::page_only_batch_bytes`]: that many bytes of pages.
+    pub fn page_only_batch_writes(&self) -> usize {
+        (self.page_only_batch_bytes() / self.store.page_size() as usize).max(1)
+    }
+
+    /// Split `items` into consecutive ranges, each small enough for one
+    /// page-only transaction: at most [`Self::page_only_batch_writes`] items
+    /// (each assumed to change about one page) and at most
+    /// [`Self::page_only_batch_bytes`] bytes by `bytes_of` (at least one item
+    /// per range, so a single large item still progresses).
+    pub fn page_only_batches<T>(
+        &self,
+        items: &[T],
+        bytes_of: impl Fn(&T) -> usize,
+    ) -> Vec<std::ops::Range<usize>> {
+        let max_items = self.page_only_batch_writes();
+        let max_bytes = self.page_only_batch_bytes();
+        let mut ranges = Vec::new();
+        let mut start = 0;
+        while start < items.len() {
+            let mut end = start;
+            let mut bytes = 0usize;
+            while end < items.len()
+                && (end == start || (end - start < max_items && bytes < max_bytes))
+            {
+                bytes = bytes.saturating_add(bytes_of(&items[end]));
+                end += 1;
+            }
+            ranges.push(start..end);
+            start = end;
+        }
+        ranges
+    }
+
+    /// Bytes currently held in page frames, including bounded emergency pages.
     pub fn resident_bytes(&self) -> u64 {
         self.store.buffer_pool().snapshot().resident_bytes
     }
@@ -6881,7 +6932,9 @@ mod tests {
         )
         .unwrap();
 
-        let (xid, _) = store.begin();
+        // This compatibility entry point must preserve the same bounded
+        // structural admission as ordinary transactions under tiny-pool pressure.
+        let (xid, _) = store.begin_redo_backed();
         for index in 0..4_000 {
             store
                 .put(

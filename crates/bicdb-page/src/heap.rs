@@ -134,6 +134,7 @@ pub struct HeapFile {
     /// page directory replaces it. Recorded rather than hidden.
     pages: Mutex<Vec<PageId>>,
     metrics: Mutex<HeapSnapshot>,
+    retired_overflow: Mutex<Vec<PageId>>,
 }
 
 impl HeapFile {
@@ -145,6 +146,7 @@ impl HeapFile {
             candidates: Mutex::new(VecDeque::new()),
             pages: Mutex::new(Vec::new()),
             metrics: Mutex::new(HeapSnapshot::default()),
+            retired_overflow: Mutex::new(Vec::new()),
         }
     }
 
@@ -403,25 +405,24 @@ impl HeapFile {
             Some(catalog) => catalog.page_generation_floor(page_id)?,
             None => 0,
         };
-        {
+        let (locator, free_after) = {
             let mut guard = self.pool.get_mut(page_id)?;
             let mut heap =
                 SlottedPage::init_with_floor(guard.bytes_mut(), page_id, page_size, floor);
             let locator = heap.insert(tuple)?;
-
-            let free_after = heap.free_space();
-            self.pages.lock().push(page_id);
-            if let Some(catalog) = self.catalog() {
-                catalog.register_page(page_id, PageType::Heap, free_after)?;
-            }
-            let mut candidates = self.candidates.lock();
-            candidates.push_front(page_id);
-            while candidates.len() > self.options.free_space_candidates {
-                candidates.pop_back();
-            }
-            self.metrics.lock().pages_allocated += 1;
-            Ok(locator)
+            (locator, heap.free_space())
+        };
+        self.pages.lock().push(page_id);
+        if let Some(catalog) = self.catalog() {
+            catalog.register_page(page_id, PageType::Heap, free_after)?;
         }
+        let mut candidates = self.candidates.lock();
+        candidates.push_front(page_id);
+        while candidates.len() > self.options.free_space_candidates {
+            candidates.pop_back();
+        }
+        self.metrics.lock().pages_allocated += 1;
+        Ok(locator)
     }
 
     /// Read a value, collecting it into memory.
@@ -599,10 +600,23 @@ impl HeapFile {
         };
 
         if let OwnedTuple::Overflow { head } = previous {
-            overflow::free_chain_pooled(&self.pool, head)?;
+            self.release_or_retire_overflow(head)?;
         }
         self.metrics.lock().updates += 1;
         Ok(new_locator)
+    }
+
+    fn release_or_retire_overflow(&self, head: PageId) -> Result<()> {
+        if self.pool.manages_transactional_frees() {
+            self.retired_overflow.lock().push(head);
+            return Ok(());
+        }
+        overflow::free_chain_pooled(&self.pool, head)?;
+        Ok(())
+    }
+
+    pub(crate) fn take_retired_overflow(&self) -> Vec<PageId> {
+        std::mem::take(&mut *self.retired_overflow.lock())
     }
 
     /// Remove a value and release any overflow pages it owned.
@@ -632,7 +646,7 @@ impl HeapFile {
             (before, heap.free_space())
         };
         if let OwnedTuple::Overflow { head } = owned {
-            overflow::free_chain_pooled(&self.pool, head)?;
+            self.release_or_retire_overflow(head)?;
         }
 
         if update_catalog {
@@ -822,6 +836,50 @@ mod tests {
         (0..len)
             .map(|i| ((i as u8).wrapping_add(seed)) % 251)
             .collect()
+    }
+
+    /// Candidates the insert rejects are probed through a read latch, so
+    /// they are not marked changed: only the page that takes the tuple is.
+    /// (Under no-steal every marked page stays in memory until commit, so
+    /// marking the whole ring made one insert's footprint unbounded.)
+    #[test]
+    fn rejected_candidates_are_not_marked_changed() {
+        let dir = TempDir::new().unwrap();
+        let (_store, heap) = heap(&dir, 1024, 256 * 1024);
+        for seed in 0..40 {
+            heap.insert(&payload(200, seed)).unwrap();
+        }
+        heap.pool.flush_all().unwrap();
+        assert_eq!(heap.pool.unlogged_pages(), 0);
+        // Four 200-byte tuples fill a 1 KiB page, leaving too little for a
+        // 230-byte one (still inline: the limit is a quarter page), so every
+        // candidate is probed and rejected, and a new page takes it.
+        let placed = heap.insert(&payload(230, 7)).unwrap();
+        let marked: Vec<PageId> = heap
+            .pool
+            .pages_needing_log()
+            .into_iter()
+            .map(|(page_id, _)| page_id)
+            .collect();
+        assert_eq!(marked, vec![placed.page_id]);
+    }
+
+    /// A ring candidate that is no longer a heap page (freed by vacuum and
+    /// reused) never receives a tuple, even if its bytes look like room.
+    #[test]
+    fn a_candidate_that_is_no_longer_a_heap_page_is_never_written() {
+        let dir = TempDir::new().unwrap();
+        let (_store, heap) = heap(&dir, 1024, 256 * 1024);
+        let first = heap.insert(&payload(50, 1)).unwrap();
+        {
+            let mut guard = heap.pool.get_mut(first.page_id).unwrap();
+            guard.bytes_mut()[6] = PageType::Overflow as u8;
+        }
+        let second = heap.insert(&payload(50, 2)).unwrap();
+        assert_ne!(
+            second.page_id, first.page_id,
+            "a tuple was written onto a page that is not a heap page"
+        );
     }
 
     #[test]
@@ -1232,7 +1290,7 @@ mod tests {
     }
 
     fn heap_pages_needing_log(pool: &BufferPool) -> Vec<PageId> {
-        pool.take_pages_needing_log()
+        pool.acknowledge_log_images_for_test()
             .into_iter()
             .filter(|page| page_type_of(pool, *page) == Some(PageType::Heap))
             .collect()
@@ -1250,7 +1308,7 @@ mod tests {
         }
         let full_pages = heap.page_ids();
         assert!(full_pages.len() >= 10, "want many full pages");
-        pool.take_pages_needing_log();
+        pool.acknowledge_log_images_for_test();
         pool.flush_all().unwrap();
         assert!(pool.dirty_page_ids().is_empty());
 
@@ -1288,9 +1346,12 @@ mod tests {
         for index in 0..60 {
             heap.insert(&payload(900, index as u8)).unwrap();
         }
-        heap.pool.take_pages_needing_log();
+        heap.pool.acknowledge_log_images_for_test();
         let placed = heap.insert(&payload(950, 7)).unwrap();
-        assert_eq!(heap.pool.take_pages_needing_log(), vec![placed.page_id]);
+        assert_eq!(
+            heap.pool.acknowledge_log_images_for_test(),
+            vec![placed.page_id]
+        );
     }
 
     #[test]
@@ -1317,11 +1378,14 @@ mod tests {
 
         // Three dead slots remain, one still carrying 900 bytes of length
         // that the compaction already returned.
-        heap.pool.take_pages_needing_log();
+        heap.pool.acknowledge_log_images_for_test();
         let placed = heap.insert(&payload(900, 6)).unwrap();
         assert_ne!(placed.page_id, page);
         assert_eq!(heap.snapshot().compactions, 1, "a useless compaction ran");
-        assert_eq!(heap.pool.take_pages_needing_log(), vec![placed.page_id]);
+        assert_eq!(
+            heap.pool.acknowledge_log_images_for_test(),
+            vec![placed.page_id]
+        );
     }
 
     #[test]
@@ -1337,13 +1401,13 @@ mod tests {
         catalog.repair_free_space_entry(page, real, None).unwrap();
         catalog.record_free_space(page, None, 4000, 4000).unwrap();
         assert!(catalog.recorded_bucket(page, 4000).unwrap().unwrap() > real);
-        pool.take_pages_needing_log();
+        pool.acknowledge_log_images_for_test();
 
         // 900 bytes do not fit the ~400 the page really has.
         let placed = heap.insert(&payload(900, 2)).unwrap();
         assert_ne!(placed.page_id, page);
         assert!(
-            !pool.take_pages_needing_log().contains(&page),
+            !pool.acknowledge_log_images_for_test().contains(&page),
             "the over-claimed page was written although nothing fit"
         );
         assert_eq!(heap.snapshot().stale_free_space_entries, 1);
@@ -1375,11 +1439,11 @@ mod tests {
             .unwrap();
         pool.flush_all().unwrap();
         let before = pool.get(foreign).unwrap().bytes().to_vec();
-        pool.take_pages_needing_log();
+        pool.acknowledge_log_images_for_test();
 
         let placed = heap.insert(&payload(900, 9)).unwrap();
         assert_ne!(placed.page_id, foreign);
-        assert!(!pool.take_pages_needing_log().contains(&foreign));
+        assert!(!pool.acknowledge_log_images_for_test().contains(&foreign));
         assert_eq!(pool.get(foreign).unwrap().bytes(), &before[..]);
         assert!(catalog.free_space_buckets(foreign).unwrap().is_empty());
         assert_eq!(heap.snapshot().non_heap_free_space_records, 1);
@@ -1501,7 +1565,8 @@ mod tests {
         }
         assert_eq!(catalog.find_page_with_room(1000).unwrap(), Some(doomed));
         let freed = pool.get(doomed).unwrap().bytes().to_vec();
-        pool.take_pages_needing_log();
+        let logged = pool.pages_needing_log();
+        pool.mark_logged(&logged);
 
         let placed = heap.insert(&payload(900, 2)).unwrap();
         assert_ne!(
@@ -1517,7 +1582,10 @@ mod tests {
             &freed[..],
             "the freed page was written"
         );
-        assert!(!pool.take_pages_needing_log().contains(&doomed));
+        assert!(!pool
+            .pages_needing_log()
+            .iter()
+            .any(|&(page, _)| page == doomed));
         assert!(catalog.free_space_buckets(doomed).unwrap().is_empty());
         assert_eq!(heap.snapshot().non_heap_free_space_records, 1);
         assert_eq!(heap.get(placed).unwrap(), payload(900, 2));

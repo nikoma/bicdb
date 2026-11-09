@@ -67,7 +67,8 @@ pub fn write_chain_pooled(pool: &crate::pool::BufferPool, value: &[u8]) -> Resul
     let mut head: PageId = 0;
 
     for chunk in chunks.iter().rev() {
-        let page_id = store.allocate(PageType::Overflow)?;
+        let allocated = pool.allocate_unreachable(PageType::Overflow)?;
+        let page_id = allocated.page_id();
         let mut guard = pool.get_mut(page_id)?;
         let page = guard.bytes_mut();
         page.fill(0);
@@ -77,6 +78,9 @@ pub fn write_chain_pooled(pool: &crate::pool::BufferPool, value: &[u8]) -> Resul
         header.encode(page);
         page[PAGE_HEADER_BYTES..PAGE_HEADER_BYTES + chunk.len()].copy_from_slice(chunk);
         drop(guard);
+        if pool.should_stream_unreachable_value(value.len()) {
+            pool.seal_unreachable_page(allocated)?;
+        }
         next = page_id;
         head = page_id;
     }

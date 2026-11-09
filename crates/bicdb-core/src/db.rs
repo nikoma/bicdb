@@ -54,6 +54,7 @@ mod row_lock_waiters;
 mod spatial_paged;
 mod transaction_receipts;
 mod transaction_suspension;
+mod unique_reservations;
 mod wait_graph;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use parking_lot::{Condvar, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -17528,6 +17529,24 @@ impl Transaction {
     where
         I: IntoIterator<Item = (Record, u64)>,
     {
+        self.write_upserts_with_reservation_preimages(
+            collection,
+            records
+                .into_iter()
+                .map(|(record, snapshot)| (record, snapshot, None)),
+            enforce_legacy_access,
+        )
+    }
+
+    fn write_upserts_with_reservation_preimages<I>(
+        &mut self,
+        collection: &str,
+        records: I,
+        enforce_legacy_access: bool,
+    ) -> Result<()>
+    where
+        I: IntoIterator<Item = (Record, u64, Option<OldImage>)>,
+    {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -17551,7 +17570,7 @@ impl Transaction {
                 let state = db.collection_state(collection)?;
                 (state.meta.vector_dim, state.meta.policy.clone())
             };
-            for (mut record, statement_snapshot) in records {
+            for (mut record, statement_snapshot, previous_image) in records {
                 // Field encryption, blind indexes, and fail-closed key checks
                 // for policied collections. The pre-MVCC write path ran this in
                 // prepare_mutations; the transactional path must too, or secure
@@ -17566,6 +17585,12 @@ impl Transaction {
                 }
                 let record_id = record.id.clone();
                 validate_record(collection, &record, &mut next_dim)?;
+                let record = Arc::new(record);
+                let image = OldImage::from_record(Some(Arc::clone(&record)));
+                let previous_image = previous_image.or_else(|| {
+                    self.previous_unique_reservation_image(collection, &record_id, None)
+                });
+                self.reserve_unique_image(collection, &image, previous_image.as_ref())?;
                 self.lock_row_for_write(tx_id, collection, &record_id, false)?;
                 let statement_snapshot =
                     self.conflict_snapshot_for_write(collection, &record_id, statement_snapshot);
@@ -17573,7 +17598,7 @@ impl Transaction {
                     collection: collection.to_string(),
                     op: TxWriteOp::Upsert,
                     record_id,
-                    record: OnceLock::from(Some(record.into())),
+                    record: OnceLock::from(Some(record)),
                     timestamp,
                     statement_snapshot,
                     repair: None,
@@ -17748,6 +17773,13 @@ impl Transaction {
                     stored.vector.as_deref(),
                     &mut next_dim,
                 )?;
+                let image = OldImage::from_stored(Arc::clone(&stored));
+                let previous_image = self.previous_unique_reservation_image(
+                    collection,
+                    &record_id,
+                    previous_stored.as_ref(),
+                );
+                self.reserve_unique_image(collection, &image, previous_image.as_ref())?;
                 if repair.is_none() && !optimistic_inserts {
                     self.lock_row_for_write(tx_id, collection, &record_id, false)?;
                 }
@@ -17799,6 +17831,11 @@ impl Transaction {
             for (record, statement_snapshot, repair) in records {
                 let record_id = record.id.clone();
                 validate_record(collection, &record, &mut next_dim)?;
+                let record = Arc::new(record);
+                let image = OldImage::from_record(Some(Arc::clone(&record)));
+                let previous_image =
+                    self.previous_unique_reservation_image(collection, &record_id, None);
+                self.reserve_unique_image(collection, &image, previous_image.as_ref())?;
                 if repair.is_none() {
                     self.lock_row_for_write(tx_id, collection, &record_id, false)?;
                 }
@@ -17808,7 +17845,7 @@ impl Transaction {
                     collection: collection.to_string(),
                     op: TxWriteOp::Upsert,
                     record_id,
-                    record: OnceLock::from(Some(record.into())),
+                    record: OnceLock::from(Some(record)),
                     timestamp,
                     statement_snapshot,
                     repair: repair.map(Arc::new),

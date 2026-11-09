@@ -1,5 +1,11 @@
 # Recovery semantics (server_paged)
 
+Historical-source specification: the GAP-1 interim and steal/refusal descriptions
+below refer to the revisions named in this document. The replacement ordinary
+engine algorithm is documented in [durable structural cuts](storage/structural-cuts.md).
+Historical failures and proof limits are retained here, rather than relabeled as
+qualification of a changed source.
+
 Status: specification of the code on `main` at `decb9d0` plus the crash points
 added with this document. It builds on
 [commit-durability-invariants.md](commit-durability-invariants.md), which

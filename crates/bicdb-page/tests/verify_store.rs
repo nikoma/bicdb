@@ -1278,9 +1278,12 @@ fn gap1_an_interleaved_open_transaction_leaves_unreadable_referenced_pages() {
     let value = |i: u64, round: u64| {
         format!("v{round}-{}", "x".repeat(((i * 7 + round) % 40) as usize)).into_bytes()
     };
+    // The smaller WAL/heap layout needs more pressure to reproduce the old
+    // unsafe-steal state. At 32 frames this workload still corrupts tree
+    // structure but no longer produces the unreadable references tested here.
     let small = PagedStoreOptions::default()
         .with_page_size(GAP_PAGE)
-        .with_buffer_pool_bytes(32 * u64::from(GAP_PAGE))
+        .with_buffer_pool_bytes(16 * u64::from(GAP_PAGE))
         .with_fsync(false)
         .with_wal_max_bytes(1 << 30);
     let dir = TempDir::new().unwrap();

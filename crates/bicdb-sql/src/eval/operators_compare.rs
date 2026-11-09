@@ -97,6 +97,17 @@ pub(crate) fn reject_comparison_for_db(
     op: &BinaryOperator,
     right_type: Option<&str>,
 ) -> Result<()> {
+    if !matches!(
+        op,
+        BinaryOperator::Eq
+            | BinaryOperator::NotEq
+            | BinaryOperator::Lt
+            | BinaryOperator::LtEq
+            | BinaryOperator::Gt
+            | BinaryOperator::GtEq
+    ) {
+        return Ok(());
+    }
     reject_undefined_comparison(left_type, op, right_type)?;
     let (Some(left), Some(right)) = (left_type, right_type) else {
         return Ok(());

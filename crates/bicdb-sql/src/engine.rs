@@ -98,9 +98,6 @@ pub fn infer_parameter_types(db: &BicDb, sql: &str) -> Result<Vec<Option<String>
     if resolver.types.len() < highest {
         resolver.types.resize(highest, None);
     }
-    if let Some(error) = resolver.comparison_error {
-        return Err(error);
-    }
     Ok(resolver.types)
 }
 
@@ -250,6 +247,7 @@ pub(crate) fn validate_comparison_signatures(
     statement: ComparisonStatement<'_>,
 ) -> Result<()> {
     let mut resolver = ParameterTypeResolver::new(engine);
+    resolver.check_comparisons = true;
     match statement {
         ComparisonStatement::Query(query) => resolver.query(query, None),
         ComparisonStatement::Insert(insert) => resolver.insert(insert),
@@ -264,6 +262,7 @@ struct ParameterTypeResolver<'engine, 'db> {
     types: Vec<Option<String>>,
     ctes: BTreeMap<String, Vec<(String, Option<String>)>>,
     comparison_error: Option<SqlError>,
+    check_comparisons: bool,
 }
 
 impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
@@ -273,6 +272,7 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
             types: Vec::new(),
             ctes: BTreeMap::new(),
             comparison_error: None,
+            check_comparisons: false,
         }
     }
 
@@ -283,7 +283,8 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
         right: &Expr,
         env: &[RelationColumns],
     ) {
-        if self.comparison_error.is_some()
+        if !self.check_comparisons
+            || self.comparison_error.is_some()
             || !matches!(
                 op,
                 BinaryOperator::Eq
@@ -1143,7 +1144,10 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
                 let element_type = right_type
                     .as_deref()
                     .and_then(|pg_type| pg_type.strip_suffix("[]"));
-                if self.comparison_error.is_none() && !crate::planner::is_unknown_literal(left) {
+                if self.check_comparisons
+                    && self.comparison_error.is_none()
+                    && !crate::planner::is_unknown_literal(left)
+                {
                     self.comparison_error = reject_comparison_for_db(
                         self.engine.db_ref(),
                         left_type.as_deref(),
@@ -1175,7 +1179,10 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
                 }
             }
             Expr::InSubquery { expr, subquery, .. } => {
-                if self.comparison_error.is_none() && !crate::planner::is_unknown_literal(expr) {
+                if self.check_comparisons
+                    && self.comparison_error.is_none()
+                    && !crate::planner::is_unknown_literal(expr)
+                {
                     let left = self.expr_type(expr, env);
                     let right = self
                         .engine

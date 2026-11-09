@@ -865,7 +865,13 @@ impl<'db> SqlEngine<'db> {
         let projection_json_srf = json_projection_set_returning_call(&select.projection)?;
         let projection_array_srfs = array_projection_set_returning_calls(&select.projection)?;
         let bounded_row_set = if projection_json_srf.is_none() && projection_array_srfs.is_empty() {
-            self.try_bounded_ordered_index_row_set(from, select, query)?
+            match self.try_bounded_fts_row_set(from, select, query)? {
+                Some(rows) => Some(rows),
+                None => match self.try_bounded_range_row_set(from, select, query)? {
+                    Some(rows) => Some(rows),
+                    None => self.try_bounded_ordered_index_row_set(from, select, query)?,
+                },
+            }
         } else {
             None
         };

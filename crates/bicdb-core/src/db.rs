@@ -7364,6 +7364,18 @@ pub struct IntegrityReport {
     pub paged_storage: Option<crate::PagedIntegrityReport>,
 }
 
+/// A bounded unique-index cursor retaining one durable read snapshot.
+pub struct UniqueIndexRangeCursor {
+    store: Arc<crate::paged_collection::PagedRecords>,
+    snapshot: bicdb_page::Snapshot,
+    physical_index: String,
+    collection: String,
+    prefix: Vec<IndexValue>,
+    lower: (IndexValue, bool),
+    upper: Option<(IndexValue, bool)>,
+    exhausted: bool,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct DbSnapshot {
     tx_id: TransactionId,

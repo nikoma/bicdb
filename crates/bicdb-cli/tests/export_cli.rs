@@ -218,4 +218,12 @@ fn export_does_not_load_unrelated_secondary_indexes() {
     );
     let row: serde_json::Value = serde_json::from_slice(output.stdout.trim_ascii()).unwrap();
     assert_eq!(row["id"], "recoverable");
+    assert_eq!(
+        fs::read(root.path().join("indexes.json")).unwrap(),
+        b"not valid json"
+    );
+    assert_eq!(
+        fs::read(root.path().join("sync.log")).unwrap(),
+        b"not a valid sync log"
+    );
 }

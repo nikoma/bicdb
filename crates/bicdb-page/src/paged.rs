@@ -4211,7 +4211,7 @@ const META_MAGIC: [u8; 8] = *b"BICDBMET";
 
 /// Guard against a corrupt version chain looping. Real chains are bounded by
 /// the number of updates a row has received since the last vacuum.
-const MAX_VERSION_CHAIN: usize = 1_000_000;
+pub(crate) const MAX_VERSION_CHAIN: usize = 1_000_000;
 const VERSION_CHAIN_INLINE_SEEN: usize = 32;
 const VERSION_CHAIN_SAMPLE_LIMIT: usize = 64;
 /// Maximum number of logical keys one MVCC verification step may inspect.
@@ -4294,37 +4294,47 @@ pub fn status_spill_entries_per_page(page_size: u32) -> usize {
 }
 
 /// Read the tree roots from the meta page.
-struct MetaRoots {
-    index_root: PageId,
-    catalog_root: PageId,
-    frozen_xid: Xid,
-    next_xid: Xid,
+pub(crate) struct MetaRoots {
+    pub(crate) index_root: PageId,
+    pub(crate) catalog_root: PageId,
+    pub(crate) frozen_xid: Xid,
+    pub(crate) next_xid: Xid,
     /// Transactions the frozen watermark stepped over. They must keep reading
     /// as aborted once their WAL abort records are truncated.
-    abort_exceptions: Vec<Xid>,
+    pub(crate) abort_exceptions: Vec<Xid>,
     /// Status-spill descriptor: head page of the chain (0 when there is no
     /// spill), number of chained pages, and total retained entries.
-    spill_head: PageId,
-    spill_pages: u64,
-    spill_entries: u64,
+    pub(crate) spill_head: PageId,
+    pub(crate) spill_pages: u64,
+    pub(crate) spill_entries: u64,
     /// Whether the meta page has ever actually been written.
     ///
     /// A published superblock does not imply a written meta page: the
     /// superblock is published at creation so a reopen cannot allocate a second
     /// meta page, but the meta page's *contents* only become durable when
     /// something logs or checkpoints them.
-    initialized: bool,
+    pub(crate) initialized: bool,
     /// The extension region failed validation and was read under the
     /// pre-durable-abort-exceptions layout (`accept_legacy_meta`). The caller
     /// must rewrite the meta page in the current layout and checkpoint before
     /// serving, so the acceptance happens exactly once.
-    legacy: bool,
+    pub(crate) legacy: bool,
 }
 
 fn read_meta(pool: &Arc<BufferPool>, meta_page: PageId, accept_legacy: bool) -> Result<MetaRoots> {
     let guard = pool.get(meta_page)?;
-    let page_size = guard.bytes().len();
-    let body = &guard.bytes()[crate::page::PAGE_HEADER_BYTES..];
+    decode_meta(guard.bytes(), meta_page, accept_legacy)
+}
+
+/// Decode a meta page image exactly as [`PagedStore::open`] does. Shared with
+/// the read-only store verifier, which reads the image without a buffer pool.
+pub(crate) fn decode_meta(
+    page: &[u8],
+    meta_page: PageId,
+    accept_legacy: bool,
+) -> Result<MetaRoots> {
+    let page_size = page.len();
+    let body = &page[crate::page::PAGE_HEADER_BYTES..];
     if body[0..8] != META_MAGIC {
         // A freshly allocated meta page that was never written: both trees are
         // new. Distinguishing this from corruption matters — treating an unset
@@ -4832,7 +4842,7 @@ pub(crate) struct PagedOutcomeSpill {
 }
 
 /// Decode one spill page body: entry count plus ascending, unique outcomes.
-fn parse_spill_page(buffer: &[u8], page_size: u32) -> Result<(u64, Xid, Xid)> {
+pub(crate) fn parse_spill_page(buffer: &[u8], page_size: u32) -> Result<(u64, Xid, Xid)> {
     let usable = crate::page::usable_bytes(page_size);
     let body = &buffer[crate::page::PAGE_HEADER_BYTES..crate::page::PAGE_HEADER_BYTES + usable];
     let count = u64::from_le_bytes(body[0..8].try_into().unwrap());

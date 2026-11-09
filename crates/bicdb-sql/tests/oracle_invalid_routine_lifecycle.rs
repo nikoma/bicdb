@@ -38,7 +38,7 @@ fn oracle_unknown_return_type_persists_invalid_object_diagnostics_and_call_error
         let root = tempfile::tempdir().unwrap();
         let config = DbConfig::default()
             .with_fsync(false)
-            .with_storage_mode(mode);
+            .with_storage_mode(mode.clone());
         let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
         ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
         let result=run(&mut db,"CREATE OR REPLACE FUNCTION compat_bad_return RETURN compat_no_such_type IS BEGIN RETURN 1; END;").unwrap();

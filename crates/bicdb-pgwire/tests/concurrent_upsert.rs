@@ -514,3 +514,61 @@ async fn read_committed_upsert_waits_for_invisible_winner_memory() {
 async fn read_committed_upsert_waits_for_invisible_winner_paged() {
     read_committed_upsert_waits_for_snapshot_invisible_winner(StorageMode::ServerPaged).await;
 }
+
+async fn reversed_composite_arbiter_waits_for_the_correct_row(mode: StorageMode) {
+    let root = database(mode);
+    let running = start(root.path());
+    let setup = connect(running.port).await;
+    setup.batch_execute("CREATE TABLE composite_upsert(a INT,b INT,v INT,PRIMARY KEY(a,b)); INSERT INTO composite_upsert VALUES(2,1,50)").await.unwrap();
+    let writer = connect(running.port).await;
+    writer
+        .batch_execute("BEGIN; INSERT INTO composite_upsert VALUES(1,2,20)")
+        .await
+        .unwrap();
+    let reader = Arc::new(connect(running.port).await);
+    reader
+        .batch_execute("BEGIN ISOLATION LEVEL READ COMMITTED")
+        .await
+        .unwrap();
+    let querying = reader.clone();
+    let mut upsert = tokio::spawn(async move {
+        querying.simple_query("INSERT INTO composite_upsert VALUES(1,2,10) ON CONFLICT(b,a) DO UPDATE SET v=composite_upsert.v+EXCLUDED.v RETURNING a,b,v").await
+    });
+    let early = tokio::time::timeout(std::time::Duration::from_millis(200), &mut upsert).await;
+    assert!(
+        early.is_err(),
+        "must reserve (1,2), not update asymmetric (2,1): {early:?}"
+    );
+    writer.batch_execute("COMMIT").await.unwrap();
+    let messages = tokio::time::timeout(std::time::Duration::from_secs(10), upsert)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let values: Vec<_> = messages
+        .into_iter()
+        .filter_map(|m| match m {
+            SimpleQueryMessage::Row(row) => Some(
+                (0..row.len())
+                    .map(|i| row.get(i).unwrap().to_string())
+                    .collect::<Vec<_>>(),
+            ),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(values, vec![vec!["1", "2", "30"]]);
+    reader.batch_execute("COMMIT").await.unwrap();
+    assert_eq!(
+        rows(&setup, "SELECT a,b,v FROM composite_upsert ORDER BY a,b").await,
+        vec![vec!["1", "2", "30"], vec!["2", "1", "50"]]
+    );
+    stop(running);
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn reversed_composite_arbiter_waits_memory() {
+    reversed_composite_arbiter_waits_for_the_correct_row(StorageMode::EmbeddedMemory).await;
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn reversed_composite_arbiter_waits_paged() {
+    reversed_composite_arbiter_waits_for_the_correct_row(StorageMode::ServerPaged).await;
+}

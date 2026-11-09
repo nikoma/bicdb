@@ -75,6 +75,20 @@ impl Transaction {
         record: &Record,
         cancellation: &CancellationToken,
     ) -> Result<()> {
+        self.reserve_unique_index_record_inner(index, record, Some(cancellation))
+    }
+
+    /// Nonparking sibling for an executor retaining an exclusive DB guard.
+    pub fn reserve_unique_index_record(&self, index: &str, record: &Record) -> Result<()> {
+        self.reserve_unique_index_record_inner(index, record, None)
+    }
+
+    fn reserve_unique_index_record_inner(
+        &self,
+        index: &str,
+        record: &Record,
+        cancellation: Option<&CancellationToken>,
+    ) -> Result<()> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -102,7 +116,12 @@ impl Transaction {
         let Some(encoded) = encoded else {
             return Ok(());
         };
-        self.reserve_integrity_key_cancellable(&namespace(index), &encoded, cancellation)
+        match cancellation {
+            Some(token) => {
+                self.reserve_integrity_key_cancellable(&namespace(index), &encoded, token)
+            }
+            None => self.reserve_integrity_key(&namespace(index), &encoded),
+        }
     }
 
     pub(super) fn previous_unique_reservation_image(

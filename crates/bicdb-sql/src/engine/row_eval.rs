@@ -946,15 +946,17 @@ impl<'db> SqlEngine<'db> {
                 );
                 let mut matched =
                     plain && values().any(|candidate| values_equal(&value, candidate));
-                for candidate in values().filter(|_| !plain) {
-                    if simple_case_values_equal(
-                        &value,
-                        candidate,
-                        value_type.as_deref(),
-                        candidate_type.as_deref(),
-                    )? {
-                        matched = true;
-                        break;
+                if !plain {
+                    for candidate in values() {
+                        if simple_case_values_equal(
+                            &value,
+                            candidate,
+                            value_type.as_deref(),
+                            candidate_type.as_deref(),
+                        )? {
+                            matched = true;
+                            break;
+                        }
                     }
                 }
                 if matched {
@@ -2697,15 +2699,17 @@ impl<'db> SqlEngine<'db> {
                     && values
                         .iter()
                         .any(|candidate| values_equal(&value, candidate));
-                for candidate in values.iter().filter(|_| !plain) {
-                    if simple_case_values_equal(
-                        &value,
-                        candidate,
-                        value_type.as_deref(),
-                        candidate_type.as_deref(),
-                    )? {
-                        matched = true;
-                        break;
+                if !plain {
+                    for candidate in values.iter() {
+                        if simple_case_values_equal(
+                            &value,
+                            candidate,
+                            value_type.as_deref(),
+                            candidate_type.as_deref(),
+                        )? {
+                            matched = true;
+                            break;
+                        }
                     }
                 }
                 if matched {

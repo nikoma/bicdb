@@ -3248,7 +3248,7 @@ impl PagedStore {
         // the current list head — the exact segment adopt_free_pages validates.
         if !orphans.is_empty() {
             let free_adoption = self.prepare_free_adoption(0, &orphans)?;
-            let logged = self.log_dirty_pages(0)?;
+            let logged = self.log_structural_pages_for_experiment()?;
             self.wal.sync()?;
             self.pool.mark_logged(&logged);
             self.pool.flush_all()?;
@@ -3400,6 +3400,10 @@ impl PagedStore {
                     self.heap.delete_for_vacuum(locator)?;
                     report.bytes_examined += release_bytes;
                     report.versions_reclaimed += 1;
+                    #[cfg(feature = "experimental-structural-cuts")]
+                    if report.versions_reclaimed == 1 {
+                        crate::test_faults::io_fault("experimental.vacuum.after_first_mutation", self.pool.store().path())?;
+                    }
                 }
             }
 
@@ -3451,7 +3455,7 @@ impl PagedStore {
                 self.heap.forget_page(*page_id);
             }
             let free_adoption = self.prepare_free_adoption(0, &fully_dead)?;
-            let logged = self.log_dirty_pages(0)?;
+            let logged = self.log_structural_pages_for_experiment()?;
             self.wal.sync()?;
             self.pool.mark_logged(&logged);
             self.pool.flush_all()?;
@@ -3554,6 +3558,10 @@ impl PagedStore {
             self.admit_write(0)?;
             if self.index.remove(key)? {
                 removed += 1;
+                #[cfg(feature = "experimental-structural-cuts")]
+                if removed == 1 {
+                    crate::test_faults::io_fault("experimental.sweep.after_first_mutation", self.pool.store().path())?;
+                }
             }
             #[cfg(feature = "experimental-structural-cuts")]
             self.sync_roots()?;
@@ -3562,6 +3570,18 @@ impl PagedStore {
             self.sync_roots()?;
         }
         Ok(removed)
+    }
+
+    /// Keep the old structural path unchanged by default. The prototype
+    /// groups pool-wide changes under one committed unit so a crash between
+    /// images cannot replay half a catalog split or free-space update.
+    fn log_structural_pages_for_experiment(&self) -> Result<Vec<(PageId, u64)>> {
+        if cfg!(feature = "experimental-structural-cuts") {
+            self.log_unlogged_pages_as_committed_unit()?;
+            Ok(Vec::new())
+        } else {
+            self.log_dirty_pages(0)
+        }
     }
 
     /// Every maintenance mutation must either finish a complete structure,
@@ -3704,7 +3724,7 @@ impl PagedStore {
     fn finalize_structural_frees(&self) -> Result<()> {
         let adoption = self.prepare_free_adoption(0, &[])?;
         if !adoption.is_empty() {
-            let logged = self.log_dirty_pages(0)?;
+            let logged = self.log_structural_pages_for_experiment()?;
             self.wal.sync()?;
             self.pool.mark_logged(&logged);
             self.pool.flush_all()?;

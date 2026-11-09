@@ -242,6 +242,7 @@ fn app_event(index: usize, tag: &str) -> Event {
 fn app_event_tags(db: &BicDb) -> Vec<String> {
     db.events()
         .read("app")
+        .unwrap()
         .into_iter()
         .map(|stored| stored.event.payload["tag"].as_str().unwrap().to_string())
         .collect()
@@ -333,7 +334,7 @@ fn audit_config(storage: &StorageMode) -> DbConfig {
 /// Record-audit events per record id.
 fn audit_counts(db: &BicDb) -> BTreeMap<String, usize> {
     let mut counts = BTreeMap::new();
-    for stored in db.events().read(RECORD_AUDIT_STREAM) {
+    for stored in db.events().read(RECORD_AUDIT_STREAM).unwrap() {
         if let Some(id) = stored.event.payload["record_id"].as_str() {
             *counts.entry(id.to_string()).or_default() += 1;
         }

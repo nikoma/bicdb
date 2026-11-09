@@ -39,6 +39,7 @@ fn sync_into(target: &mut BicDb, source: &mut BicDb) -> SyncImportReport {
 
 fn event_ids(db: &BicDb) -> BTreeSet<Uuid> {
     db.export_events_since(0)
+        .unwrap()
         .into_iter()
         .map(|stored| stored.event.id)
         .collect()

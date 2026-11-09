@@ -83,7 +83,7 @@ fn ack_is_terminal_for_the_group() {
         .is_empty());
     assert!(broker.ack("q", "g", "w1", receipt.message_id).is_err());
 
-    let info = broker.group_info("q", "g").unwrap();
+    let info = broker.group_info("q", "g").unwrap().unwrap();
     assert_eq!(info.last_delivered_sequence, Some(0));
     assert_eq!(info.in_flight, 0);
     assert_eq!(info.pending_redelivery, 0);
@@ -149,7 +149,7 @@ fn nack_requeue_delay_defers_redelivery() {
         .consume("q", "g", "w1", opts(10, 0))
         .unwrap()
         .is_empty());
-    let info = broker.group_info("q", "g").unwrap();
+    let info = broker.group_info("q", "g").unwrap().unwrap();
     assert_eq!(info.pending_redelivery, 1);
 }
 
@@ -207,7 +207,7 @@ fn exhausted_attempts_dead_letter_via_nack_and_via_expiry() {
         .consume("q", "g", "w3", opts(10, 0))
         .unwrap()
         .is_empty());
-    let dead = broker.dead_letters("q", "g");
+    let dead = broker.dead_letters("q", "g").unwrap();
     assert_eq!(dead.len(), 1);
     assert_eq!(dead[0].event.payload, json!({"n": 1}));
     let meta = dead[0].event.metadata.get("broker").unwrap();
@@ -232,7 +232,7 @@ fn exhausted_attempts_dead_letter_via_nack_and_via_expiry() {
         .consume("q2", "g", "w2", opts(10, 0))
         .unwrap()
         .is_empty());
-    let dead = broker.dead_letters("q2", "g");
+    let dead = broker.dead_letters("q2", "g").unwrap();
     assert_eq!(dead.len(), 1);
     let meta = dead[0].event.metadata.get("broker").unwrap();
     assert_eq!(
@@ -266,7 +266,7 @@ fn nack_without_requeue_dead_letters_immediately() {
         .consume("q", "g", "w1", opts(10, 0))
         .unwrap()
         .is_empty());
-    let dead = broker.dead_letters("q", "g");
+    let dead = broker.dead_letters("q", "g").unwrap();
     assert_eq!(dead.len(), 1);
     let meta = dead[0].event.metadata.get("broker").unwrap();
     assert_eq!(
@@ -419,7 +419,7 @@ fn broker_state_survives_reopen() {
     let mut db = BicDb::open_with_config(temp.path(), DbConfig::default()).unwrap();
     let mut broker = db.broker();
 
-    let info = broker.group_info("q", "g").unwrap();
+    let info = broker.group_info("q", "g").unwrap().unwrap();
     assert_eq!(info.last_delivered_sequence, Some(1));
     assert_eq!(info.in_flight, 1);
 
@@ -538,7 +538,7 @@ fn trim_removes_only_what_every_group_settled_and_preserves_sequences() {
     drop(db);
     let mut db = BicDb::open_with_config(temp.path(), DbConfig::default()).unwrap();
     let mut broker = db.broker();
-    let info = broker.group_info("q", "fast").unwrap();
+    let info = broker.group_info("q", "fast").unwrap().unwrap();
     assert_eq!(info.last_delivered_sequence, Some(2));
     let batch = broker.consume("q", "fast", "w", opts(10, 30_000)).unwrap();
     assert_eq!(batch.len(), 1);
@@ -564,6 +564,7 @@ fn trim_rewrites_mixed_delivery_batches_without_replay_ghosts() {
     assert_eq!(report.removed_messages, 2);
     let group = broker
         .stats()
+        .unwrap()
         .queues
         .iter()
         .find(|queue| queue.queue == "q")
@@ -578,6 +579,7 @@ fn trim_rewrites_mixed_delivery_batches_without_replay_ghosts() {
     let group = db
         .broker()
         .stats()
+        .unwrap()
         .queues
         .iter()
         .find(|queue| queue.queue == "q")
@@ -613,7 +615,11 @@ fn retention_policy_trims_unsettled_messages_when_configured() {
         )
         .unwrap();
     assert_eq!(
-        broker.queue_config("q").unwrap().retention_max_messages,
+        broker
+            .queue_config("q")
+            .unwrap()
+            .unwrap()
+            .retention_max_messages,
         Some(1)
     );
 
@@ -680,7 +686,7 @@ fn redrive_republishes_dead_letters_once() {
             },
         )
         .unwrap();
-    assert_eq!(broker.dead_letters("q", "g").len(), 1);
+    assert_eq!(broker.dead_letters("q", "g").unwrap().len(), 1);
 
     let receipts = broker.redrive_dead_letters("q", "g", 10).unwrap();
     assert_eq!(receipts.len(), 1);
@@ -699,7 +705,7 @@ fn redrive_republishes_dead_letters_once() {
         .redrive_dead_letters("q", "g", 10)
         .unwrap()
         .is_empty());
-    assert_eq!(broker.dead_letters("q", "g").len(), 1);
+    assert_eq!(broker.dead_letters("q", "g").unwrap().len(), 1);
 }
 
 #[test]
@@ -713,10 +719,10 @@ fn purge_dead_letters_empties_the_dlq() {
     broker
         .nack("q", "g", "w", receipt.message_id, NackOptions::default())
         .unwrap();
-    assert_eq!(broker.dead_letters("q", "g").len(), 1);
+    assert_eq!(broker.dead_letters("q", "g").unwrap().len(), 1);
 
     assert_eq!(broker.purge_dead_letters("q", "g").unwrap(), 1);
-    assert!(broker.dead_letters("q", "g").is_empty());
+    assert!(broker.dead_letters("q", "g").unwrap().is_empty());
     assert!(broker
         .redrive_dead_letters("q", "g", 10)
         .unwrap()
@@ -726,7 +732,7 @@ fn purge_dead_letters_empties_the_dlq() {
     // Durable across reopen.
     drop(db);
     let mut db = BicDb::open_with_config(temp.path(), DbConfig::default()).unwrap();
-    assert!(db.broker().dead_letters("q", "g").is_empty());
+    assert!(db.broker().dead_letters("q", "g").unwrap().is_empty());
 }
 
 #[test]
@@ -813,8 +819,8 @@ fn drain_pumps_acks_and_retries_through_a_handler() {
     assert_eq!(report.acked, 3);
     assert_eq!(report.nacked, 4);
     assert_eq!(report.delivered, 7);
-    assert_eq!(broker.dead_letters("q", "g").len(), 2);
-    assert!(!broker.has_deliverable("q", "g"));
+    assert_eq!(broker.dead_letters("q", "g").unwrap().len(), 2);
+    assert!(!broker.has_deliverable("q", "g").unwrap());
     // Every rejected message was retried exactly once.
     assert_eq!(
         seen.iter().filter(|(_, attempts)| *attempts == 2).count(),
@@ -843,7 +849,7 @@ fn drain_respects_max_messages() {
         .unwrap();
     assert_eq!(report.delivered, 2);
     assert_eq!(report.acked, 2);
-    assert!(broker.has_deliverable("q", "g"));
+    assert!(broker.has_deliverable("q", "g").unwrap());
 }
 
 #[test]
@@ -851,7 +857,7 @@ fn has_deliverable_tracks_availability_and_delays() {
     let (_temp, mut db) = open_temp();
     let mut broker = db.broker();
 
-    assert!(!broker.has_deliverable("q", "g"));
+    assert!(!broker.has_deliverable("q", "g").unwrap());
     broker
         .publish_with(
             "q",
@@ -864,12 +870,12 @@ fn has_deliverable_tracks_availability_and_delays() {
         .unwrap();
     // Head-of-line delayed message: nothing deliverable yet, even for a
     // group that does not exist.
-    assert!(!broker.has_deliverable("q", "g"));
+    assert!(!broker.has_deliverable("q", "g").unwrap());
 
     broker.publish("q2", json!({"n": 1}), Value::Null).unwrap();
-    assert!(broker.has_deliverable("q2", "g"));
+    assert!(broker.has_deliverable("q2", "g").unwrap());
     let batch = broker.consume("q2", "g", "w", opts(1, 30_000)).unwrap();
-    assert!(!broker.has_deliverable("q2", "g"));
+    assert!(!broker.has_deliverable("q2", "g").unwrap());
     broker
         .nack(
             "q2",
@@ -883,7 +889,7 @@ fn has_deliverable_tracks_availability_and_delays() {
             },
         )
         .unwrap();
-    assert!(broker.has_deliverable("q2", "g"));
+    assert!(broker.has_deliverable("q2", "g").unwrap());
 }
 
 #[test]
@@ -900,7 +906,7 @@ fn stats_snapshot_reports_queues_and_groups() {
         .nack("q", "g", "w", batch[1].message_id, NackOptions::default())
         .unwrap(); // dead-letters (no requeue)
 
-    let stats = broker.stats();
+    let stats = broker.stats().unwrap();
     let queue = stats
         .queues
         .iter()
@@ -939,7 +945,7 @@ fn publish_trims_opportunistically_past_twice_the_retention_bound() {
     }
     // The 6th publish found 5 retained (> 2x2) and trimmed down to the bound
     // before appending.
-    let stats = broker.stats();
+    let stats = broker.stats().unwrap();
     let queue = stats.queues.iter().find(|q| q.queue == "q").unwrap();
     assert_eq!(queue.retained_messages, 3);
     assert_eq!(queue.next_sequence, 6);
@@ -973,7 +979,7 @@ fn database_compaction_enforces_configured_retention() {
     db.compact().unwrap();
 
     let mut broker = db.broker();
-    let stats = broker.stats();
+    let stats = broker.stats().unwrap();
     let trimmed = stats.queues.iter().find(|q| q.queue == "q").unwrap();
     let kept = stats.queues.iter().find(|q| q.queue == "keep").unwrap();
     assert_eq!(trimmed.retained_messages, 1);

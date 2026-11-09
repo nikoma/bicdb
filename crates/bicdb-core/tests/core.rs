@@ -912,7 +912,7 @@ fn admin_bypass_requires_reason_and_records_audit_event() {
             .len(),
         1
     );
-    let events = db.events().read("bicdb.security");
+    let events = db.events().read("bicdb.security").unwrap();
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].event.payload["user_id"], "admin");
     assert_eq!(events[0].event.payload["collection"], "patients");
@@ -1172,7 +1172,10 @@ fn ha_shipping_converges_standby_and_promote_preserves_state() {
         1
     );
     assert!(standby.verify_index("patients_name").unwrap().valid);
-    assert_eq!(standby.events().read(SPATIAL_AUDIT_STREAM).len(), 0);
+    assert_eq!(
+        standby.events().read(SPATIAL_AUDIT_STREAM).unwrap().len(),
+        0
+    );
     assert!(matches!(
         standby.insert("patients", Record::new("p-2")),
         Err(BicDbError::ReadOnlyStandby(_))
@@ -2181,6 +2184,7 @@ fn spatial_v0_1_vertical_slice_survives_reopen_and_uses_event_path() {
 
     let event_types = db
         .export_events_since(0)
+        .unwrap()
         .into_iter()
         .filter(|stored| stored.event.stream == SPATIAL_AUDIT_STREAM)
         .map(|stored| stored.event.event_type)
@@ -2359,12 +2363,15 @@ fn compaction_checkpoints_event_and_sync_logs_consistently() {
     let report = db.compact().unwrap();
     assert!(report.event_log_bytes_before >= report.event_log_bytes_after);
     assert!(report.sync_log_bytes_before >= report.sync_log_bytes_after);
-    assert_eq!(db.events().read("application.audit").len(), 1);
+    assert_eq!(db.events().read("application.audit").unwrap().len(), 1);
     assert_eq!(db.pending_sync_ops().len(), pending_before);
 
     drop(db);
     let reopened = BicDb::open(temp.path()).unwrap();
-    assert_eq!(reopened.events().read("application.audit").len(), 1);
+    assert_eq!(
+        reopened.events().read("application.audit").unwrap().len(),
+        1
+    );
     assert_eq!(reopened.pending_sync_ops().len(), pending_before);
 }
 

@@ -212,7 +212,7 @@ fn deletes_retract_and_lag_is_visible() {
 
     // Before catching up, the projection must ADMIT it is behind rather than
     // silently serving stale numbers.
-    let source_position = AggregateProjection::source_position(&db);
+    let source_position = AggregateProjection::source_position(&db).unwrap();
     assert!(
         projection.lag_events(source_position) > 0,
         "an un-caught-up projection must report lag"

@@ -182,3 +182,48 @@ fn savepoint_rollback_releases_native_unique_announcements() {
         .unwrap();
     worker.join().unwrap();
 }
+
+#[test]
+fn renamed_unique_index_invalidates_cached_reservation_names() {
+    let (_dir, mut db) = setup(StorageMode::EmbeddedMemory, false);
+    {
+        let mut warm = db.begin_transaction().unwrap();
+        warm.insert(
+            "items",
+            Record::new("warm").with_metadata(json!({"k":"warm"})),
+        )
+        .unwrap();
+        warm.rollback().unwrap();
+    }
+    assert!(Arc::get_mut(&mut db)
+        .unwrap()
+        .rename_index("items_unique", "items_renamed")
+        .unwrap());
+    let mut owner = db.begin_transaction().unwrap();
+    owner
+        .insert(
+            "items",
+            Record::new("winner").with_metadata(json!({"k":"same"})),
+        )
+        .unwrap();
+    let waiter = db.begin_transaction().unwrap();
+    let (done, received) = mpsc::channel();
+    let worker = spawn(&db, move || {
+        done.send(waiter.reserve_unique_index_record_cancellable(
+            "items_renamed",
+            &Record::new("candidate").with_metadata(json!({"k":"same"})),
+            &CancellationToken::uncancelable(),
+        ))
+        .unwrap();
+    });
+    assert!(
+        received.recv_timeout(Duration::from_millis(30)).is_err(),
+        "renamed catalog was not announced"
+    );
+    owner.rollback().unwrap();
+    received
+        .recv_timeout(Duration::from_secs(5))
+        .unwrap()
+        .unwrap();
+    worker.join().unwrap();
+}

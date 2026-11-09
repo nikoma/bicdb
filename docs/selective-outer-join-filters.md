@@ -84,3 +84,23 @@ is retained in `crates/bicdb-sql/tests/fixtures/postgres/right_join_scorecard_pg
 The scorecard now requires that native result and classifies the case as
 supported. Its original zero-failures assertion remains, strengthened with an
 explicit supported-case assertion. The original CI failure is retained.
+
+The b307a928 optimized application diagnostic passed seven of eight original
+methods: the financial report and all three audit methods passed, but the report
+background job still exceeded its original 10-second wait. A native profile
+continued to show schema reloads between preparation operations. Parse and
+Describe now borrow the existing connection catalog cache, using the schema
+collection generation to invalidate metadata. Describe holds that scope only
+around inference; its rollback-protected execution fallback remains outside it.
+Parse uses one database read guard, preserving the transaction-progress lock
+path without recursively acquiring the database lock.
+
+The new connection controls cover reuse across requests in both storage modes,
+DDL and rollback freshness, switching databases, and error/panic cleanup. The
+cache scope borrows only metadata fields, preserving the connection's Oracle
+LOB state. The tests-only 8f941f1e source measured four schema decodes (39,908
+bytes) for four requests against one 9,977-byte definition. Its missing-column
+error fixture did not produce a preparation error; 50de920c replaces that fixture
+with malformed SQL. The earlier 99aa15cd attempt stopped at a moved storage-mode
+value and is retained separately as a compilation failure. These controls do
+not substitute for the original application deadline test.

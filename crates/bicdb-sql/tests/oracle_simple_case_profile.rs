@@ -153,3 +153,47 @@ fn postgres_profile_retains_legacy_case_semantics() {
         ]]
     );
 }
+
+#[test]
+fn national_case_uses_al16utf16_for_literals_columns_and_nested_queries() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            DbConfig::default()
+                .with_fsync(false)
+                .with_storage_mode(mode),
+        )
+        .unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let run = |db: &mut BicDb, sql: &str| {
+            let sql = bicdb_sql::oracle::lower_session_sql(
+                db,
+                sql,
+                ORACLE_PREVIEW_PROFILE,
+                None,
+                "bicdb",
+            )
+            .unwrap();
+            SqlSession::new(db).execute(&sql).unwrap().rows
+        };
+        run(&mut db, "CREATE TABLE national_case_rows(v NVARCHAR2(4))");
+        run(&mut db, "INSERT INTO national_case_rows VALUES(N'𐐨')");
+        for sql in [
+            "SELECT upper(N'𐐨') FROM dual",
+            "SELECT upper(v) FROM national_case_rows",
+            "SELECT upper(q.v) FROM (SELECT v FROM national_case_rows) q",
+            "WITH q AS (SELECT v FROM national_case_rows) SELECT upper(v) FROM q",
+        ] {
+            assert_eq!(
+                run(&mut db, sql),
+                vec![vec![SqlValue::String("𐐨".into())]],
+                "{mode:?}: {sql}"
+            );
+        }
+        assert_eq!(
+            run(&mut db, "SELECT upper('𐐨') FROM dual"),
+            vec![vec![SqlValue::String("𐐀".into())]]
+        );
+    }
+}

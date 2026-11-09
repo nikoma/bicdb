@@ -205,3 +205,94 @@ fn national_case_uses_al16utf16_for_literals_columns_and_nested_queries() {
         );
     }
 }
+
+#[test]
+fn national_and_database_case_indexes_keep_distinct_native_keys_and_uniqueness() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let config = DbConfig::default()
+            .with_fsync(false)
+            .with_storage_mode(mode);
+        let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let run = |db: &mut BicDb, sql: &str| {
+            let lowered = bicdb_sql::oracle::lower_session_sql(
+                db,
+                sql,
+                ORACLE_PREVIEW_PROFILE,
+                None,
+                "bicdb",
+            )?;
+            SqlSession::new(db).execute(&lowered)
+        };
+        run(
+            &mut db,
+            "CREATE TABLE case_keys(id NUMBER PRIMARY KEY,v VARCHAR2(8 CHAR),n NVARCHAR2(8))",
+        )
+        .unwrap();
+        run(
+            &mut db,
+            "INSERT INTO case_keys VALUES(1,'ƛ',N'ƛ'),(2,'Ƛ',N'Ƛ')",
+        )
+        .unwrap();
+        run(
+            &mut db,
+            "CREATE UNIQUE INDEX database_case ON case_keys(upper(v))",
+        )
+        .unwrap();
+        let error = run(
+            &mut db,
+            "CREATE UNIQUE INDEX national_collision ON case_keys(upper(n))",
+        )
+        .unwrap_err();
+        assert!(
+            error.to_string().to_lowercase().contains("unique"),
+            "{error}"
+        );
+        run(&mut db, "CREATE INDEX national_case ON case_keys(upper(n))").unwrap();
+        let native = db
+            .index_definitions()
+            .into_iter()
+            .find(|index| index.name.ends_with("NATIONAL_CASE"))
+            .unwrap();
+        assert!(matches!(
+            native.fields[0],
+            bicdb_core::IndexField::OracleUpperNationalV1(_)
+        ));
+        assert_eq!(
+            db.lookup_index(&native.name, &[bicdb_core::IndexValue::String("Ƛ".into())])
+                .unwrap()
+                .len(),
+            2
+        );
+        assert!(db.verify_index(&native.name).unwrap().valid);
+        assert_eq!(
+            run(
+                &mut db,
+                "SELECT count(*) FROM case_keys WHERE upper(n)=N'Ƛ'"
+            )
+            .unwrap()
+            .rows,
+            vec![vec![SqlValue::Int(2)]]
+        );
+        run(
+            &mut db,
+            "BEGIN; UPDATE case_keys SET n=N'x' WHERE id=1; ROLLBACK",
+        )
+        .unwrap();
+        db.flush().unwrap();
+        drop(db);
+        let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        assert_eq!(
+            run(
+                &mut db,
+                "SELECT count(*) FROM case_keys WHERE upper(n)=N'Ƛ'"
+            )
+            .unwrap()
+            .rows,
+            vec![vec![SqlValue::Int(2)]]
+        );
+        assert!(db.verify_index(&native.name).unwrap().valid);
+    }
+}

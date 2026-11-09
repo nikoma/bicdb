@@ -550,7 +550,7 @@ pub fn is_known_profile(profile: &str) -> bool {
 }
 
 /// Whether the durable database profile is one of the second profile's.
-pub(crate) fn is_oracle_database(db: &BicDb) -> Result<bool> {
+pub fn is_oracle_database(db: &BicDb) -> Result<bool> {
     match db.get(PROFILE_COLLECTION, "profile") {
         Err(BicDbError::CollectionNotFound(_)) | Ok(None) => Ok(false),
         Err(error) => Err(error.into()),

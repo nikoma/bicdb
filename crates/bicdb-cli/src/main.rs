@@ -11857,23 +11857,24 @@ fn execute_sql_command(
 ) -> Result<()> {
     bicdb_sql::oracle::initialize_existing_database_profile(db)?;
     let started = Instant::now();
-    let analytics_error = if should_try_analytics_sql(query) {
-        match run_datafusion_sql(&*db, query) {
-            Ok(result) => {
-                maybe_write_slow_query(
-                    slow_query,
-                    query,
-                    result.rows_as_json().len(),
-                    started.elapsed(),
-                )?;
-                print_analytics_result(&result, output)?;
-                return Ok(());
+    let analytics_error =
+        if !bicdb_sql::oracle::is_oracle_database(db)? && should_try_analytics_sql(query) {
+            match run_datafusion_sql(&*db, query) {
+                Ok(result) => {
+                    maybe_write_slow_query(
+                        slow_query,
+                        query,
+                        result.rows_as_json().len(),
+                        started.elapsed(),
+                    )?;
+                    print_analytics_result(&result, output)?;
+                    return Ok(());
+                }
+                Err(error) => Some(error),
             }
-            Err(error) => Some(error),
-        }
-    } else {
-        None
-    };
+        } else {
+            None
+        };
 
     match SqlSession::new(db).execute(query) {
         Ok(result) => {

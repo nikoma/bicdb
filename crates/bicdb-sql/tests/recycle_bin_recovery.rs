@@ -144,3 +144,41 @@ fn recovery_fence_wins_even_when_no_repair_is_needed() {
         ));
     }
 }
+
+#[test]
+fn transactional_rename_requires_own_pending_transaction_and_checks_noop_health() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut own =
+            BicDb::open_with_config(root.path().join("own"), config(mode.clone())).unwrap();
+        let mut other = BicDb::open_with_config(root.path().join("other"), config(mode)).unwrap();
+        own.create_collection("before").unwrap();
+        other.create_collection("before").unwrap();
+        let mut tx = own.begin_transaction().unwrap();
+        assert!(other
+            .rename_collection_preserving_pending_writes(&mut tx, "before", "after")
+            .is_err());
+        assert!(other.collections().iter().any(|meta| meta.name == "before"));
+        own.rename_collection_preserving_pending_writes(&mut tx, "before", "before")
+            .unwrap();
+        own.durability_health_for_test()
+            .record_failure("test.tx_rename", &"injected");
+        for (old, new) in [("before", "before"), ("before", "after")] {
+            assert!(matches!(
+                own.rename_collection_preserving_pending_writes(&mut tx, old, new),
+                Err(bicdb_core::BicDbError::WriteFailed { .. })
+            ));
+        }
+        tx.rollback().unwrap();
+        let mut finished = other.begin_transaction().unwrap();
+        // Obtain a finished transaction without consuming it through a no-op
+        // rollback mark? Commit consumes Transaction, so use a foreign owner
+        // check above for public API and exercise finished state in core units.
+        finished.insert("before", Record::new("pending")).unwrap();
+        other
+            .rename_collection_preserving_pending_writes(&mut finished, "before", "after")
+            .unwrap();
+        finished.commit().unwrap();
+        assert!(other.get("after", "pending").unwrap().is_some());
+    }
+}

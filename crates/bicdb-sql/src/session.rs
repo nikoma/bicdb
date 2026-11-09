@@ -2960,17 +2960,35 @@ impl<'db> SqlSession<'db> {
             self.apply_before_insert_row_triggers(&table, schema.as_ref(), records)?;
         if let Some(schema) = schema.as_ref() {
             self.materialize_generated_columns(&table, schema, &mut records)?;
+        }
+        // As INSERT: the row policies first, so a refused key is not
+        // revealed by a duplicate-key error; earlier rows keep their own
+        // constraint errors.
+        let rls_violation = self.first_rls_write_violation(
+            &table,
+            schema.as_ref(),
+            PolicyAction::Insert,
+            false,
+            &records,
+        )?;
+        if let Some(schema) = schema.as_ref() {
+            let checked = match &rls_violation {
+                Some((index, _)) => &records[..*index],
+                None => &records[..],
+            };
             validate_records_for_write(
                 self.db_ref(),
                 self.tx.as_ref(),
                 &table,
                 schema,
-                &records,
+                checked,
                 false,
                 Some(&self.sql_engine()),
             )?;
         }
-        self.enforce_rls_checks(&table, schema.as_ref(), PolicyAction::Insert, &records)?;
+        if let Some((_, error)) = rls_violation {
+            return Err(error);
+        }
         let count = records.len();
         self.insert_session_records(&table, records.clone())?;
         self.fire_after_insert_triggers(&table, schema.as_ref(), &records)?;

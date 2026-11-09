@@ -307,6 +307,15 @@ impl<'db> SqlEngine<'db> {
         // check — a cross-tenant read of any table by any authenticated role.
         self.require_relation_privilege(&table, "SELECT")?;
         let schema = load_schema(self.db_ref(), &table)?;
+        if let Some(schema) = &schema {
+            // The indexed shortcut does not materialize the right relation,
+            // so register its declared types before binding the join predicate.
+            let schema = Arc::new(schema.clone());
+            crate::slot_types::register_table(&alias_name, &schema);
+            if alias_name != table {
+                crate::slot_types::register_table(&table, &schema);
+            }
+        }
         // Column list and rows come from the same (possibly pruned) field
         // list: `row_output_columns` is exactly this over the wildcard.
         let mut right_fields = FieldRef::wildcard(schema.as_ref());

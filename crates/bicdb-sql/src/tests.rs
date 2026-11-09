@@ -1929,7 +1929,9 @@ fn bound_expr_truth_uses_positional_values_after_binding() {
     let db = BicDb::open(dir.path()).unwrap();
     let columns = vec!["arbitrary_row.quantity_value".to_string()];
     let vars = vec!["limit_value".to_string()];
-    let scope = BoundExprScope::new(&columns, &vars);
+    let scope = BoundExprScope::new(&columns, &vars)
+        .with_column_types(vec![Some("int4".to_string())].into())
+        .with_var_types(&[("limit_value".to_string(), "int4".to_string())]);
     let expr = scope
         .bind(
             &parse_routine_expr(

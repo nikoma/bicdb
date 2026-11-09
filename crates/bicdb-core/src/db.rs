@@ -4328,6 +4328,9 @@ impl Shard {
 #[derive(Debug)]
 struct CollectionState {
     meta: CollectionMeta,
+    // Runtime identity survives catalog-only moves, but a dropped/recreated
+    // backing never inherits a checked row capability from its old name.
+    incarnation: Arc<()>,
     /// Per-key-hash stripes (see [`SHARD_COUNT`]). Box<[..]> so the count is fixed
     /// after construction. Each shard has its own lock; commits to disjoint keys
     /// take only their shards' write locks and proceed concurrently.
@@ -4377,6 +4380,7 @@ impl CollectionState {
             .into_boxed_slice();
         Self {
             meta,
+            incarnation: Arc::new(()),
             shards,
             vector_store: RwLock::new(VectorStore::default()),
             generation: AtomicU64::new(0),
@@ -4400,6 +4404,7 @@ impl CollectionState {
             .into_boxed_slice();
         Self {
             meta,
+            incarnation: Arc::new(()),
             shards,
             vector_store: RwLock::new(VectorStore::default()),
             generation: AtomicU64::new(0),

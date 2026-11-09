@@ -7,6 +7,7 @@ use super::*;
 pub struct ReadCommittedRowReservation {
     transaction: TransactionId,
     health: Arc<bicdb_page::DurabilityHealth>,
+    collection_incarnation: Arc<()>,
     collection: String,
     id: String,
     version: Option<u64>,
@@ -161,6 +162,7 @@ impl Transaction {
         let token = ReadCommittedRowReservation {
             transaction: self.id,
             health: Arc::clone(&db.durability),
+            collection_incarnation: Arc::clone(&db.collection_state(collection)?.incarnation),
             collection: collection.to_owned(),
             id: id.to_owned(),
             version: Self::latest_committed_record_sequence(db, collection, id)?,
@@ -185,6 +187,10 @@ impl Transaction {
         }
         if self.id != token.transaction
             || !Arc::ptr_eq(&db.durability, &token.health)
+            || !Arc::ptr_eq(
+                &db.collection_state(&token.collection)?.incarnation,
+                &token.collection_incarnation,
+            )
             || self
                 .row_reservation_epochs
                 .lock()
@@ -262,8 +268,9 @@ impl Transaction {
         Ok(Some(Arc::new(record)))
     }
 
-    /// Read a reserved row through current native policy. A fence, rollback,
-    /// released/reacquired lock, foreign transaction or stale row is an error.
+    /// Read a reserved row through current native policy. A fence, replaced
+    /// backing, released/reacquired row lock, foreign transaction or changed
+    /// pending/current image is an error. Unrelated lock releases stay valid.
     pub fn read_authorized_reserved_row(
         &self,
         token: &ReadCommittedRowReservation,

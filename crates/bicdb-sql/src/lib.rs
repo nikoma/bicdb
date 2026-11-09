@@ -4443,6 +4443,10 @@ struct RoutineSchema {
     /// first routine, which keeps the plain catalog key.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     overload: Option<String>,
+    /// Catalog identity survives replacement and promotion to the name's
+    /// primary storage key. Older records derive it from their original key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    catalog_oid: Option<i64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

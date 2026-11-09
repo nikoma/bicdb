@@ -706,6 +706,37 @@ impl<'db> SqlEngine<'db> {
         needed_columns: Option<&ReferencedColumns>,
         single_relation: bool,
     ) -> Result<RowSet> {
+        let rows = self.row_set_from_table_factor_with_selection_inner(
+            relation,
+            selection,
+            needed_columns,
+            single_relation,
+        )?;
+        if matches!(
+            relation,
+            TableFactor::UNNEST { .. }
+                | TableFactor::Function { .. }
+                | TableFactor::Table { args: Some(_), .. }
+        ) && flashback::flashback_base_factor(relation).is_none()
+        {
+            let mut env = Vec::new();
+            if self.collect_relation_columns(relation, &mut env).is_some() {
+                for source in env {
+                    let (columns, types): (Vec<_>, Vec<_>) = source.columns.into_iter().unzip();
+                    crate::slot_types::register_columns(&source.alias, &columns, &types);
+                }
+            }
+        }
+        Ok(rows)
+    }
+
+    fn row_set_from_table_factor_with_selection_inner(
+        &self,
+        relation: &TableFactor,
+        selection: Option<&Expr>,
+        needed_columns: Option<&ReferencedColumns>,
+        single_relation: bool,
+    ) -> Result<RowSet> {
         if let Some(call) = json_set_returning_call(relation)? {
             return self.json_set_function_row_set(&call);
         }

@@ -1958,6 +1958,12 @@ impl BoundExprScope {
                     if !expr_may_need_tuple_comparison(left)
                         && !expr_may_need_tuple_comparison(right) =>
                 {
+                    // The compact comparison IR carries types but no locale.
+                    // Keep explicit collation validation and ordering together
+                    // on the evaluator path, including mismatched collations.
+                    if !matches!(comparison_collation(left, right, None), Ok(None)) {
+                        return None;
+                    }
                     let mut left_type = self.known_expr_type(left);
                     let mut right_type = self.known_expr_type(right);
                     let temporal = |kind: &Option<String>| {

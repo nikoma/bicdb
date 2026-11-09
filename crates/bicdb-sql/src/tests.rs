@@ -824,6 +824,7 @@ fn routine_ir_cache_reuses_unchanged_definition_and_recompiles_changes() {
         owner: Some(BOOTSTRAP_ROLE_NAME.to_string()),
         security_definer: false,
         overload: None,
+        catalog_oid: None,
     };
 
     let first = compile_cached_routine_ir(&routine).unwrap();
@@ -879,6 +880,7 @@ fn routine_ir_binds_scalar_expressions_to_var_ids() {
         owner: Some(BOOTSTRAP_ROLE_NAME.to_string()),
         security_definer: false,
         overload: None,
+        catalog_oid: None,
     };
 
     let ir = compile_routine_ir(&routine).unwrap();

@@ -1,0 +1,21 @@
+{
+  "reference": "PostgreSQL16.13",
+  "queries": [
+    "SELECT i=t FROM catalog_mixed",
+    "SELECT count(*) FROM catalog_mixed WHERE i=t",
+    "SELECT i<'1'::text FROM catalog_mixed",
+    "SELECT i='1'::text FROM catalog_mixed WHERE id=1",
+    "SELECT NULL::integer='1'::text",
+    "SELECT 1::numeric='1'::text",
+    "SELECT CASE i WHEN t THEN 1 ELSE 0 END FROM catalog_mixed",
+    "SELECT count(*) FROM (SELECT i,t FROM catalog_mixed) q WHERE i=t",
+    "WITH q AS(SELECT i,t FROM catalog_mixed) SELECT count(*) FROM q WHERE i=t",
+    "SELECT count(*) FROM catalog_mixed a JOIN catalog_mixed b ON a.i=b.t",
+    "SELECT i IN(t) FROM catalog_mixed",
+    "SELECT i IN(SELECT t FROM catalog_mixed) FROM catalog_mixed",
+    "SELECT i=ANY(ARRAY[t]) FROM catalog_mixed",
+    "UPDATE catalog_mixed SET i=2 WHERE i=t",
+    "DELETE FROM catalog_mixed WHERE i=t"
+  ],
+  "sqlstate": "42883"
+}

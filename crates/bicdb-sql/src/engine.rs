@@ -82,11 +82,7 @@ pub fn infer_parameter_types(db: &BicDb, sql: &str) -> Result<Vec<Option<String>
     }
     let statements = parse_inference_statements(db, sql)?;
     let engine = SqlEngine::new(db);
-    let mut resolver = ParameterTypeResolver {
-        engine: &engine,
-        types: Vec::new(),
-        ctes: BTreeMap::new(),
-    };
+    let mut resolver = ParameterTypeResolver::new(&engine);
     for statement in &statements {
         resolver.statement(statement);
     }
@@ -113,11 +109,7 @@ pub(crate) fn infer_routine_host_parameter_types(
     handlers: &[RoutineExceptionHandler],
 ) -> Vec<Option<String>> {
     let engine = SqlEngine::new(db);
-    let mut resolver = ParameterTypeResolver {
-        engine: &engine,
-        types: Vec::new(),
-        ctes: BTreeMap::new(),
-    };
+    let mut resolver = ParameterTypeResolver::new(&engine);
     resolver.routine_block(declarations, statements, handlers, &BTreeMap::new());
     resolver.types
 }
@@ -241,13 +233,79 @@ fn infer_describe_columns(
     Ok(columns)
 }
 
+pub(crate) enum ComparisonStatement<'a> {
+    Query(&'a Query),
+    Insert(&'a Insert),
+    Update(&'a sqlparser::ast::Update),
+    Delete(&'a Delete),
+}
+
+/// Validate known operand signatures before row-dependent execution, including
+/// empty inputs. Reuse parameter inference's CTE/alias/type scopes.
+pub(crate) fn validate_comparison_signatures(
+    engine: &SqlEngine<'_>,
+    statement: ComparisonStatement<'_>,
+) -> Result<()> {
+    let mut resolver = ParameterTypeResolver::new(engine);
+    resolver.check_comparisons = true;
+    match statement {
+        ComparisonStatement::Query(query) => resolver.query(query, None),
+        ComparisonStatement::Insert(insert) => resolver.insert(insert),
+        ComparisonStatement::Update(update) => resolver.update(update),
+        ComparisonStatement::Delete(delete) => resolver.delete(delete),
+    }
+    resolver.comparison_error.map_or(Ok(()), Err)
+}
+
 struct ParameterTypeResolver<'engine, 'db> {
     engine: &'engine SqlEngine<'db>,
     types: Vec<Option<String>>,
     ctes: BTreeMap<String, Vec<(String, Option<String>)>>,
+    comparison_error: Option<SqlError>,
+    check_comparisons: bool,
 }
 
-impl ParameterTypeResolver<'_, '_> {
+impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
+    fn new(engine: &'engine SqlEngine<'db>) -> Self {
+        Self {
+            engine,
+            types: Vec::new(),
+            ctes: BTreeMap::new(),
+            comparison_error: None,
+            check_comparisons: false,
+        }
+    }
+
+    fn comparison(
+        &mut self,
+        left: &Expr,
+        op: &BinaryOperator,
+        right: &Expr,
+        env: &[RelationColumns],
+    ) {
+        if !self.check_comparisons
+            || self.comparison_error.is_some()
+            || !matches!(
+                op,
+                BinaryOperator::Eq
+                    | BinaryOperator::NotEq
+                    | BinaryOperator::Lt
+                    | BinaryOperator::LtEq
+                    | BinaryOperator::Gt
+                    | BinaryOperator::GtEq
+            )
+            || crate::planner::is_unknown_literal(left)
+            || crate::planner::is_unknown_literal(right)
+        {
+            return;
+        }
+        let left = self.expr_type(left, env);
+        let right = self.expr_type(right, env);
+        self.comparison_error =
+            reject_comparison_for_db(self.engine.db_ref(), left.as_deref(), op, right.as_deref())
+                .err();
+    }
+
     fn routine_env(locals: &BTreeMap<String, String>) -> Vec<RelationColumns> {
         vec![RelationColumns {
             alias: String::new(),
@@ -961,6 +1019,7 @@ impl ParameterTypeResolver<'_, '_> {
                 self.expr(inner, env, cast_type.as_deref().or(expected));
             }
             Expr::BinaryOp { left, op, right } => {
+                self.comparison(left, op, right, env);
                 let left_type = self.expr_type(left, env);
                 let right_type = self.expr_type(right, env);
                 let (left_expected, right_expected) =
@@ -1002,6 +1061,9 @@ impl ParameterTypeResolver<'_, '_> {
             } => {
                 if let Some(operand) = operand {
                     self.expr(operand, env, None);
+                    for condition in conditions {
+                        self.comparison(operand, &BinaryOperator::Eq, &condition.condition, env);
+                    }
                 }
                 // PostgreSQL considers ELSE first, then WHEN results, and
                 // resolves an all-unknown CASE to text.
@@ -1031,6 +1093,8 @@ impl ParameterTypeResolver<'_, '_> {
             Expr::Between {
                 expr, low, high, ..
             } => {
+                self.comparison(expr, &BinaryOperator::GtEq, low, env);
+                self.comparison(expr, &BinaryOperator::LtEq, high, env);
                 let value_type = self.expr_type(expr, env);
                 self.expr(expr, env, value_type.as_deref());
                 self.expr(low, env, value_type.as_deref());
@@ -1040,6 +1104,7 @@ impl ParameterTypeResolver<'_, '_> {
                 let value_type = self.expr_type(expr, env);
                 self.expr(expr, env, value_type.as_deref());
                 for item in list {
+                    self.comparison(expr, &BinaryOperator::Eq, item, env);
                     self.expr(item, env, value_type.as_deref());
                 }
             }
@@ -1056,17 +1121,41 @@ impl ParameterTypeResolver<'_, '_> {
             | Expr::IsFalse(inner)
             | Expr::IsNotFalse(inner) => self.expr(inner, env, None),
             Expr::IsDistinctFrom(left, right) | Expr::IsNotDistinctFrom(left, right) => {
+                self.comparison(left, &BinaryOperator::Eq, right, env);
                 let left_type = self.expr_type(left, env);
                 let right_type = self.expr_type(right, env);
                 self.expr(left, env, right_type.as_deref());
                 self.expr(right, env, left_type.as_deref());
             }
-            Expr::AnyOp { left, right, .. } | Expr::AllOp { left, right, .. } => {
+            Expr::AnyOp {
+                left,
+                compare_op,
+                right,
+                ..
+            }
+            | Expr::AllOp {
+                left,
+                compare_op,
+                right,
+                ..
+            } => {
                 let left_type = self.expr_type(left, env);
                 let right_type = self.expr_type(right, env);
                 let element_type = right_type
                     .as_deref()
                     .and_then(|pg_type| pg_type.strip_suffix("[]"));
+                if self.check_comparisons
+                    && self.comparison_error.is_none()
+                    && !crate::planner::is_unknown_literal(left)
+                {
+                    self.comparison_error = reject_comparison_for_db(
+                        self.engine.db_ref(),
+                        left_type.as_deref(),
+                        compare_op,
+                        element_type,
+                    )
+                    .err();
+                }
                 let array_type = right_type
                     .clone()
                     .or_else(|| left_type.as_ref().map(|pg_type| format!("{pg_type}[]")));
@@ -1090,6 +1179,24 @@ impl ParameterTypeResolver<'_, '_> {
                 }
             }
             Expr::InSubquery { expr, subquery, .. } => {
+                if self.check_comparisons
+                    && self.comparison_error.is_none()
+                    && !crate::planner::is_unknown_literal(expr)
+                {
+                    let left = self.expr_type(expr, env);
+                    let right = self
+                        .engine
+                        .query_output_columns(subquery)
+                        .and_then(|columns| columns.into_iter().next())
+                        .and_then(|(_, kind)| kind);
+                    self.comparison_error = reject_comparison_for_db(
+                        self.engine.db_ref(),
+                        left.as_deref(),
+                        &BinaryOperator::Eq,
+                        right.as_deref(),
+                    )
+                    .err();
+                }
                 self.expr(expr, env, None);
                 self.query(subquery, None);
             }
@@ -4954,6 +5061,8 @@ impl<'db> SqlEngine<'db> {
     pub(crate) fn execute_query(&self, query: &Query) -> Result<SqlResult> {
         let join_budget = crate::join_budget::QueryScope::enter();
         self.db_ref().check_recovery_state()?;
+        self.require_from_relations_readable(query)?;
+        validate_comparison_signatures(self, ComparisonStatement::Query(query))?;
         let _slot_types = crate::slot_types::push_frame();
         let _subqueries = self.subquery_memo.scope();
         let _probes = self.exists_probe_memo.scope(

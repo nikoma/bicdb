@@ -862,6 +862,43 @@ pub(crate) fn pg_typed_compare_for_db(
     column_typed_compare(&column, left, right)
 }
 
+/// Domains participate in operator resolution as their base types. Keep this
+/// separate from result metadata, where the declared domain must survive.
+pub(crate) fn comparison_base_type_for_db(db: &BicDb, pg_type: &str) -> Result<String> {
+    if crate::pg_type_oid_by_name(pg_type).is_some() {
+        return Ok(pg_type.to_string());
+    }
+    let Some(user_type) = user_type_column_for_name(db, pg_type)? else {
+        return Ok(pg_type.to_string());
+    };
+    let mut column = enum_runtime_column(user_type);
+    while let Some(user_type) = column.user_type.as_ref() {
+        if !matches!(user_type.kind, UserTypeKind::Domain { .. }) {
+            break;
+        }
+        column = domain_base_runtime_column(user_type);
+    }
+    Ok(column.pg_type)
+}
+
+pub(crate) fn enum_comparison_for_db(
+    db: &BicDb,
+    pg_type: &str,
+    left: &SqlValue,
+    right: &SqlValue,
+) -> Result<Option<Ordering>> {
+    if crate::pg_type_oid_by_name(pg_type).is_some() {
+        return Ok(None);
+    }
+    let Some(user_type) = user_type_column_for_name(db, pg_type)? else {
+        return Ok(None);
+    };
+    if !matches!(user_type.kind, UserTypeKind::Enum { .. }) {
+        return Ok(None);
+    }
+    column_typed_compare(&enum_runtime_column(user_type), left, right).map(Some)
+}
+
 pub(crate) fn pg_typed_index_key_for_db(
     db: &BicDb,
     pg_type: &str,

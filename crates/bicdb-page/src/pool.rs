@@ -1126,6 +1126,42 @@ impl BufferPool {
         Ok(())
     }
 
+    #[cfg(feature = "experimental-structural-cuts")]
+    pub(crate) fn manages_transactional_frees(&self) -> bool {
+        self.wal_managed_frees.load(Ordering::Acquire)
+    }
+
+    /// Caller holds the structure lock and has durably cut every replacement
+    /// reference. This chain is now unreachable, including by old snapshots.
+    #[cfg(feature = "experimental-structural-cuts")]
+    pub(crate) fn retire_overflow_after_durable_cut(&self, head: PageId) -> Result<()> {
+        let mut page_id = head;
+        while page_id != 0 {
+            let next = {
+                let guard = self.get(page_id)?;
+                let header = PageHeader::decode(guard.bytes(), self.store.path())?;
+                if header.page_type != PageType::Overflow {
+                    return Err(PageError::UnexpectedPageType {
+                        page_id, found: header.page_type as u8,
+                        expected: PageType::Overflow as u8,
+                    });
+                }
+                header.next_page
+            };
+            self.free_page_for_transaction(page_id, 0)?;
+            self.seal_unreachable_page(UnreachablePage { page_id })?;
+            page_id = next;
+        }
+        Ok(())
+    }
+
+    /// These are unadopted structural frees: no durable free-list head names
+    /// them, and their previous parent references were already cut durably.
+    #[cfg(feature = "experimental-structural-cuts")]
+    pub(crate) fn seal_unadopted_structural_free(&self, page_id: PageId) -> Result<()> {
+        self.seal_unreachable_page(UnreachablePage { page_id })
+    }
+
     /// Attribute subsequently dirtied pages to `transaction`.
     pub fn set_current_transaction(&self, transaction: u64) {
         self.current_transaction

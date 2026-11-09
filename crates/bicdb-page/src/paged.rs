@@ -1860,6 +1860,8 @@ impl PagedStore {
         let releases = self.pool.write_guard_releases();
         let result = self.put_admitted(transaction, key, value);
         self.poison_if_failed_after_a_change(transaction, releases, &result)?;
+        #[cfg(feature = "experimental-structural-cuts")]
+        if result.is_ok() { self.release_retired_overflow_at_boundary()?; }
         result
     }
 
@@ -2250,6 +2252,8 @@ impl PagedStore {
         let releases = self.pool.write_guard_releases();
         let result = self.delete_admitted(transaction, key);
         self.poison_if_failed_after_a_change(transaction, releases, &result)?;
+        #[cfg(feature = "experimental-structural-cuts")]
+        if result.is_ok() { self.release_retired_overflow_at_boundary()?; }
         result
     }
 
@@ -2696,6 +2700,8 @@ impl PagedStore {
         }
         self.heap.update(locator, &stored)?;
         self.sync_roots()?;
+        #[cfg(feature = "experimental-structural-cuts")]
+        self.release_retired_overflow_at_boundary()?;
         Ok(HeaderRepair::Repaired)
     }
 
@@ -3414,6 +3420,8 @@ impl PagedStore {
                 }
             }
 
+            #[cfg(feature = "experimental-structural-cuts")]
+            self.release_retired_overflow_at_boundary()?;
             let (after_free, live) = {
                 let guard = self.pool.get(page_id)?;
                 let page = crate::slotted::SlottedPageRef::new(guard.bytes());
@@ -3461,6 +3469,8 @@ impl PagedStore {
                 self.catalog.forget_page(*page_id, free_bytes)?;
                 self.heap.forget_page(*page_id);
             }
+            #[cfg(feature = "experimental-structural-cuts")]
+            self.log_unlogged_pages_as_committed_unit()?;
             let free_adoption = self.prepare_free_adoption(0, &fully_dead)?;
             let logged = self.log_structural_pages_for_experiment()?;
             self.wal.sync()?;
@@ -3581,6 +3591,18 @@ impl PagedStore {
             self.sync_roots()?;
         }
         Ok(removed)
+    }
+
+    /// A complete operation changed the owner tuple/index first. While the
+    /// exclusive structure guard still excludes readers, make that replacement
+    /// durable before releasing any page from the old overflow chain.
+    #[cfg(feature = "experimental-structural-cuts")]
+    fn release_retired_overflow_at_boundary(&self) -> Result<()> {
+        let retired = self.heap.take_retired_overflow();
+        if retired.is_empty() { return Ok(()); }
+        self.log_unlogged_pages_as_committed_unit()?;
+        for head in retired { self.pool.retire_overflow_after_durable_cut(head)?; }
+        Ok(())
     }
 
     /// Keep the old structural path unchanged by default. The prototype
@@ -3712,6 +3734,11 @@ impl PagedStore {
                 header.generation = generation;
                 header.next_page = next;
                 header.encode(bytes);
+                drop(guard);
+                #[cfg(feature = "experimental-structural-cuts")]
+                if transaction == 0 {
+                    self.pool.seal_unadopted_structural_free(*page_id)?;
+                }
             }
             segments.push((chunk[0], chunk.len() as u64));
             tail_target = chunk[0];
@@ -3733,6 +3760,8 @@ impl PagedStore {
     /// replacing them is durable, but leaving them only in memory until some
     /// later checkpoint would leak space after a clean shutdown.
     fn finalize_structural_frees(&self) -> Result<()> {
+        #[cfg(feature = "experimental-structural-cuts")]
+        self.log_unlogged_pages_as_committed_unit()?;
         let adoption = self.prepare_free_adoption(0, &[])?;
         if !adoption.is_empty() {
             let logged = self.log_structural_pages_for_experiment()?;

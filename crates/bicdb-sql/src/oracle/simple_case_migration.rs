@@ -128,7 +128,17 @@ fn finish(db: &mut BicDb, key: &str, intent: Intent) -> Result<()> {
                 if state.definition != intent.shadow {
                     return Err(unsupported("Oracle case migration build identity changed"));
                 }
-                state
+                if state.phase != bicdb_core::PagedBTreeBuildPhase::Complete
+                    && state.starting_commit_seq != db.last_commit_seq()
+                {
+                    // Only an owned, unpublished build may be discarded after
+                    // an operator repairs conflicting rows. Published generations
+                    // retain their native identity and idempotent retry path.
+                    db.discard_paged_btree_build(&intent.shadow.name, limits)?;
+                    db.begin_paged_btree_build(intent.shadow.clone(), limits, state.updated_at_ms)?
+                } else {
+                    state
+                }
             }
             Err(BicDbError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
                 db.begin_paged_btree_build(intent.shadow.clone(), limits, 100)?

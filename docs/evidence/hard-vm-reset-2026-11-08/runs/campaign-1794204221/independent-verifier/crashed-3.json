@@ -1,0 +1,96 @@
+{
+  "format_version": 1,
+  "verdict": "clean",
+  "complete": true,
+  "stop_reason": null,
+  "store": {
+    "directory": "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-3/extracted/paged",
+    "page_size": 8192,
+    "layout": "segmented",
+    "page_files": 1,
+    "superblock_page_count": 605,
+    "effective_page_count": 606,
+    "free_list_head": 0,
+    "free_page_count": 0,
+    "checkpoint_lsn": 20445,
+    "meta_page": 1,
+    "meta_initialized": true,
+    "index_root": 418,
+    "catalog_root": 319,
+    "frozen_xid": 2267,
+    "next_xid": 2267,
+    "abort_exceptions": 0,
+    "status_spill_pages": 0,
+    "status_spill_entries": 0
+  },
+  "read_only": {
+    "lock": {
+      "state": "unlocked"
+    },
+    "files_opened_read_only": [
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-3/extracted/paged/store.pages",
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-3/extracted/paged/store.wal.20445",
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-3/extracted/paged/store.wal.20449",
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-3/extracted/paged/store.wal.20452",
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-3/extracted/paged/store.wal.20455",
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-3/extracted/paged/store.wal.20459",
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-3/extracted/paged/store.wal.20462",
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-3/extracted/paged/store.wal"
+    ],
+    "recovery_ran": false,
+    "note": "Files were opened read-only (O_NOFOLLOW, O_NOATIME where permitted); the directory lock was probed with F_GETLK and not taken; recovery was reproduced in memory by reading committed page images from the log."
+  },
+  "log": {
+    "sealed_segments": 6,
+    "sealed_bytes": 148256,
+    "active_bytes": 24736,
+    "reset_shape": {
+      "shape": "normal"
+    },
+    "replay_scope": "full_chain",
+    "records": 24,
+    "first_lsn": 20445,
+    "last_lsn": 20468,
+    "torn_tail_bytes": 0,
+    "checkpoint_records": 0,
+    "redo_lsn": 0,
+    "committed_transactions": 3,
+    "pending_page_images": 21,
+    "distinct_pages_overlaid": 12,
+    "uncommitted_images_skipped": 0,
+    "page_file_truncated_by_recovery_from": null,
+    "open_would_refuse": null,
+    "stale_records_discarded": {
+      "recorded_in_store": false,
+      "segments_a_fixed_open_would_discard": 0,
+      "explanation": "The crash-ordered reset fix reports stale segments it discards (`stale_segments_discarded`) only in the RecoveryReport of that open; it persists nothing, so a store a fixed engine already cleaned up carries no trace of it. `reset_shape` is the same classification computed from these files now."
+    }
+  },
+  "counters": {
+    "index_entries": 12341,
+    "index_tree_pages": 175,
+    "index_tree_height": 3,
+    "catalog_entries": 852,
+    "catalog_tree_pages": 3,
+    "directory_heap_pages": 426,
+    "free_space_records": 426,
+    "versions_examined": 14459,
+    "visible_rows": 10744,
+    "deleted_rows": 1597,
+    "keys_without_committed_version": 0,
+    "vacuumed_links": 0,
+    "heap_pages_swept": 426,
+    "heap_versions_swept": 14459,
+    "reachable_versions_swept": 14459,
+    "key_tree_passes": 1,
+    "pages_read_from_page_files": 1185,
+    "pages_read_from_log": 24,
+    "page_cache_hits": 14885,
+    "bytes_read": 9904128,
+    "slot_bitmap_window_pages": 606,
+    "peak_bitmap_bytes": 77128,
+    "elapsed_millis": 28
+  },
+  "classes": [],
+  "external_evidence": []
+}

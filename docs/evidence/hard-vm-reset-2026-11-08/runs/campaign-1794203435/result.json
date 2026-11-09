@@ -1,0 +1,9 @@
+{
+  "format": 1,
+  "complete": false,
+  "source": "0af1b55e3d586d4a6933098419e7ee46a7ae5a79",
+  "acknowledged": 2252,
+  "attempted": 2297,
+  "error": "RuntimeError(\"guest SQL unavailable: ConnectionLost('connection closed by server')\")",
+  "failures": []
+}

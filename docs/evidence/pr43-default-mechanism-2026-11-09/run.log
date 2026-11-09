@@ -1,0 +1,65 @@
+memory_available_kib=52844536
+   Compiling bicdb-page v1.0.439-beta (/root/bicdb-durability-s3/repo-gap1/crates/bicdb-page)
+warning: unused variable: `blocker`
+    --> crates/bicdb-page/src/paged.rs:8760:17
+     |
+8760 |             let blocker = store.begin();
+     |                 ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_blocker`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: methods `node_kind`, `child_value`, and `child_for` are never used
+   --> crates/bicdb-page/src/btree.rs:376:16
+    |
+337 |         impl $ty {
+    |         -------- methods in this implementation
+...
+376 |             fn node_kind(&self, page_id: PageId) -> Result<bool> {
+    |                ^^^^^^^^^
+...
+389 |             fn child_value(&self, page_id: PageId, index: usize) -> Result<PageId> {
+    |                ^^^^^^^^^^^
+...
+430 |             fn child_for(&self, page_id: PageId, needle: &[u8]) -> Result<PageId> {
+    |                ^^^^^^^^^
+...
+449 | node_reads!(Node<'_>);
+    | --------------------- in this macro invocation
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+    = note: this warning originates in the macro `node_reads` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: methods `free_start`, `free_end`, `page_id`, and `free_space` are never used
+   --> crates/bicdb-page/src/btree.rs:349:16
+    |
+337 |         impl $ty {
+    |         -------- methods in this implementation
+...
+349 |             fn free_start(&self) -> usize {
+    |                ^^^^^^^^^^
+...
+354 |             fn free_end(&self) -> usize {
+    |                ^^^^^^^^
+...
+359 |             fn page_id(&self) -> PageId {
+    |                ^^^^^^^
+...
+442 |             fn free_space(&self) -> usize {
+    |                ^^^^^^^^^^
+...
+450 | node_reads!(NodeRef<'_>);
+    | ------------------------ in this macro invocation
+    |
+    = note: this warning originates in the macro `node_reads` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: `bicdb-page` (lib test) generated 3 warnings (run `cargo fix --lib -p bicdb-page --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized] target(s) in 4.58s
+     Running unittests src/lib.rs (/root/bicdb-durability-s3/target-gap1/debug/deps/bicdb_page-c822eace3ab45948)
+
+running 1 test
+default_appenders_proof read_evictions=554 append_horizon_before=740 append_horizon_after=740
+test paged::tests::normal_read_pressure_produces_no_parallel_page_wal_appender_during_commit_sync ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 340 filtered out; finished in 0.09s
+
+exit=0

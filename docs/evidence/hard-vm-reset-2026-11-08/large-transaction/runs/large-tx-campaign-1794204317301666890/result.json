@@ -1,0 +1,23 @@
+{
+  "format": 1,
+  "complete": true,
+  "source": "6d225c1940cf13ffbb7693f8ebc2917e5abaad82",
+  "guest_server_sha256": "b5331b45dd94c76ea46453db2996736bf1311f91478b0076803d05f30b2ff09e",
+  "hard_vm_kills": 7,
+  "acknowledged_generations": [
+    0
+  ],
+  "attempted_generations": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "row_payload_bytes_per_tx": 3145728,
+  "blob_bytes": 4259840,
+  "pool_bytes": 2097152,
+  "actual_evictions_delta": 14845,
+  "nonempty_raw_image_restore": true,
+  "physical_power_loss": false,
+  "product_online_backup": false
+}

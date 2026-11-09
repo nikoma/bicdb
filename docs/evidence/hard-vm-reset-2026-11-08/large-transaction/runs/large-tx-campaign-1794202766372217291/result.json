@@ -1,0 +1,5 @@
+{
+  "complete": false,
+  "error": "AssertionError(('native txid reused', '20', {0: '10', 1: '19', 2: '20'}))",
+  "source": "2c3503db6b3933139e4a4ac819fd9bda519fcd12"
+}

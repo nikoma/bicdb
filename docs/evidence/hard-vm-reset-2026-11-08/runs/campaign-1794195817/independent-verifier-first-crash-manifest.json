@@ -1,0 +1,23 @@
+{
+  "verifier_source": "26051caf",
+  "command": [
+    "/root/bicdb-durability-s3/target-verify/debug/bicdb",
+    "verify-store",
+    "--read-only",
+    "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817/paged",
+    "--max-memory-mb",
+    "16",
+    "--max-seconds",
+    "30"
+  ],
+  "exit_code": 0,
+  "all_extracted_file_contents_sha256_unchanged": true,
+  "files": {
+    "paged/store.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "paged/store.pages": "b40723b502523e1b0611770036009933c2d5bfc57dfca74ab71d9223081c11a2",
+    "paged/store.wal": "d85fabc6cf3673fea0a57b4c886dd6d92a4fa0b0dda462e3e71f5c23828bf134"
+  },
+  "page_file_bytes": 4775936,
+  "configured_pool_bytes": 2097152,
+  "scope": "pagefile footprint at first crash; not a proof of live working-set size or eviction count"
+}

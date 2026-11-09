@@ -1,0 +1,103 @@
+{
+  "format_version": 1,
+  "verdict": "clean",
+  "complete": true,
+  "stop_reason": null,
+  "store": {
+    "directory": "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut4/paged",
+    "page_size": 8192,
+    "layout": "segmented",
+    "page_files": 1,
+    "superblock_page_count": 611,
+    "effective_page_count": 612,
+    "free_list_head": 0,
+    "free_page_count": 0,
+    "checkpoint_lsn": 20558,
+    "meta_page": 1,
+    "meta_initialized": true,
+    "index_root": 412,
+    "catalog_root": 321,
+    "frozen_xid": 2290,
+    "next_xid": 2290,
+    "abort_exceptions": 1,
+    "status_spill_pages": 0,
+    "status_spill_entries": 0
+  },
+  "read_only": {
+    "lock": {
+      "state": "unlocked"
+    },
+    "files_opened_read_only": [
+      "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut4/paged/store.pages",
+      "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut4/paged/store.wal.20558",
+      "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut4/paged/store.wal.20561",
+      "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut4/paged/store.wal.20565",
+      "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut4/paged/store.wal.20568",
+      "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut4/paged/store.wal.20572",
+      "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut4/paged/store.wal.20575",
+      "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut4/paged/store.wal.20578",
+      "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut4/paged/store.wal.20582",
+      "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut4/paged/store.wal.20585",
+      "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut4/paged/store.wal.20589",
+      "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut4/paged/store.wal.20592",
+      "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut4/paged/store.wal.20595",
+      "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut4/paged/store.wal.20600",
+      "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut4/paged/store.wal"
+    ],
+    "recovery_ran": false,
+    "note": "Files were opened read-only (O_NOFOLLOW, O_NOATIME where permitted); the directory lock was probed with F_GETLK and not taken; recovery was reproduced in memory by reading committed page images from the log."
+  },
+  "log": {
+    "sealed_segments": 13,
+    "sealed_bytes": 321288,
+    "active_bytes": 8272,
+    "reset_shape": {
+      "shape": "normal"
+    },
+    "replay_scope": "full_chain",
+    "records": 47,
+    "first_lsn": 20558,
+    "last_lsn": 20604,
+    "torn_tail_bytes": 0,
+    "checkpoint_records": 0,
+    "redo_lsn": 0,
+    "committed_transactions": 7,
+    "pending_page_images": 40,
+    "distinct_pages_overlaid": 16,
+    "uncommitted_images_skipped": 0,
+    "page_file_truncated_by_recovery_from": null,
+    "open_would_refuse": null,
+    "stale_records_discarded": {
+      "recorded_in_store": false,
+      "segments_a_fixed_open_would_discard": 0,
+      "explanation": "The crash-ordered reset fix reports stale segments it discards (`stale_segments_discarded`) only in the RecoveryReport of that open; it persists nothing, so a store a fixed engine already cleaned up carries no trace of it. `reset_shape` is the same classification computed from these files now."
+    }
+  },
+  "counters": {
+    "index_entries": 12392,
+    "index_tree_pages": 179,
+    "index_tree_height": 3,
+    "catalog_entries": 856,
+    "catalog_tree_pages": 3,
+    "directory_heap_pages": 428,
+    "free_space_records": 428,
+    "versions_examined": 14516,
+    "visible_rows": 10788,
+    "deleted_rows": 1604,
+    "keys_without_committed_version": 0,
+    "vacuumed_links": 0,
+    "heap_pages_swept": 428,
+    "heap_versions_swept": 14516,
+    "reachable_versions_swept": 14516,
+    "key_tree_passes": 1,
+    "pages_read_from_page_files": 2087,
+    "pages_read_from_log": 52,
+    "page_cache_hits": 14026,
+    "bytes_read": 17522688,
+    "slot_bitmap_window_pages": 612,
+    "peak_bitmap_bytes": 77888,
+    "elapsed_millis": 37
+  },
+  "classes": [],
+  "external_evidence": []
+}

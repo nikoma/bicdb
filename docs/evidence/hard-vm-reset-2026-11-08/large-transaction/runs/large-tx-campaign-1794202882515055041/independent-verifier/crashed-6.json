@@ -1,0 +1,90 @@
+{
+  "format_version": 1,
+  "verdict": "clean",
+  "complete": true,
+  "stop_reason": null,
+  "store": {
+    "directory": "/root/bicdb-durability-s3/vm-reset/large-tx-campaign-1794202882515055041/independent-verifier/crashed-6/extracted/paged",
+    "page_size": 8192,
+    "layout": "segmented",
+    "page_files": 1,
+    "superblock_page_count": 5576,
+    "effective_page_count": 5576,
+    "free_list_head": 2491,
+    "free_page_count": 525,
+    "checkpoint_lsn": 102560,
+    "meta_page": 1,
+    "meta_initialized": true,
+    "index_root": 867,
+    "catalog_root": 882,
+    "frozen_xid": 16412,
+    "next_xid": 16412,
+    "abort_exceptions": 1,
+    "status_spill_pages": 0,
+    "status_spill_entries": 0
+  },
+  "read_only": {
+    "lock": {
+      "state": "unlocked"
+    },
+    "files_opened_read_only": [
+      "/root/bicdb-durability-s3/vm-reset/large-tx-campaign-1794202882515055041/independent-verifier/crashed-6/extracted/paged/store.pages",
+      "/root/bicdb-durability-s3/vm-reset/large-tx-campaign-1794202882515055041/independent-verifier/crashed-6/extracted/paged/store.wal"
+    ],
+    "recovery_ran": false,
+    "note": "Files were opened read-only (O_NOFOLLOW, O_NOATIME where permitted); the directory lock was probed with F_GETLK and not taken; recovery was reproduced in memory by reading committed page images from the log."
+  },
+  "log": {
+    "sealed_segments": 0,
+    "sealed_bytes": 0,
+    "active_bytes": 0,
+    "reset_shape": {
+      "shape": "normal"
+    },
+    "replay_scope": "full_chain",
+    "records": 0,
+    "first_lsn": null,
+    "last_lsn": null,
+    "torn_tail_bytes": 0,
+    "checkpoint_records": 0,
+    "redo_lsn": 0,
+    "committed_transactions": 0,
+    "pending_page_images": 0,
+    "distinct_pages_overlaid": 0,
+    "uncommitted_images_skipped": 0,
+    "page_file_truncated_by_recovery_from": null,
+    "open_would_refuse": null,
+    "stale_records_discarded": {
+      "recorded_in_store": false,
+      "segments_a_fixed_open_would_discard": 0,
+      "explanation": "The crash-ordered reset fix reports stale segments it discards (`stale_segments_discarded`) only in the RecoveryReport of that open; it persists nothing, so a store a fixed engine already cleaned up carries no trace of it. `reset_shape` is the same classification computed from these files now."
+    }
+  },
+  "counters": {
+    "index_entries": 73745,
+    "index_tree_pages": 1088,
+    "index_tree_height": 3,
+    "catalog_entries": 3688,
+    "catalog_tree_pages": 17,
+    "directory_heap_pages": 1844,
+    "free_space_records": 1844,
+    "versions_examined": 73748,
+    "visible_rows": 73745,
+    "deleted_rows": 0,
+    "keys_without_committed_version": 0,
+    "vacuumed_links": 0,
+    "heap_pages_swept": 1844,
+    "heap_versions_swept": 73748,
+    "reachable_versions_swept": 73748,
+    "key_tree_passes": 1,
+    "pages_read_from_page_files": 15028,
+    "pages_read_from_log": 0,
+    "page_cache_hits": 69615,
+    "bytes_read": 123109376,
+    "slot_bitmap_window_pages": 5576,
+    "peak_bitmap_bytes": 709568,
+    "elapsed_millis": 244
+  },
+  "classes": [],
+  "external_evidence": []
+}

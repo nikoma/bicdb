@@ -1,0 +1,852 @@
+{
+  "verifier_source": "26051caf",
+  "binary_sha256": "fd1b4ef5d7bcd51bed216125c255c5cad75a5f27903b57beb44bf4900c8f1b01",
+  "scope": "Journal recovery on disposable copies only; engine never opened. Original disk metadata and extracted file bytes/metadata verified unchanged.",
+  "cuts": [
+    {
+      "cut": "crashed-1",
+      "command": [
+        "/root/bicdb-durability-s3/target-verify/debug/bicdb",
+        "verify-store",
+        "--read-only",
+        "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-1/extracted/paged",
+        "--max-memory-mb",
+        "64",
+        "--max-seconds",
+        "60"
+      ],
+      "exit_code": 0,
+      "report_sha256": "d52fe24fac3a689323e52f36c8c941226e9131600b1982e3b3f9c76366e3b5c9",
+      "original_size_mtime_unchanged": true,
+      "extracted_files_unchanged": true,
+      "page_file_bytes": 4726784,
+      "files": {
+        "store.lock": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "mtime_ns": 1794204221000000000
+        },
+        "store.pages": {
+          "sha256": "3852ebe3d4b015a05fac294135d32b44bb0557baba46f26e2636bee80a9e35d0",
+          "size": 4726784,
+          "mtime_ns": 1794204256000000000
+        },
+        "store.wal": {
+          "sha256": "aa123b88cf574b39a0d8c8e8f6b136c1dbaf554434757c3babe8cc96657cb373",
+          "size": 24736,
+          "mtime_ns": 1794204256000000000
+        },
+        "store.wal.19353": {
+          "sha256": "fcbdf1dfacd09472a8be322e00417adf0a4ec25e20116dc802abc75274c54fcc",
+          "size": 24736,
+          "mtime_ns": 1794204256000000000
+        },
+        "store.wal.19357": {
+          "sha256": "caf1f6b5faab180b3a5274d91e0216b00296c70793e8669b10f5db2802ff4817",
+          "size": 24696,
+          "mtime_ns": 1794204256000000000
+        },
+        "store.wal.19360": {
+          "sha256": "c2b8697ba14ebd0f24da25f147c37bfd4d33c39aca0d7b556ac39ccc9bbb3585",
+          "size": 24696,
+          "mtime_ns": 1794204256000000000
+        },
+        "store.wal.19363": {
+          "sha256": "f430e1cc83ab5f2ee4154ab61a864fa2dedb294909b8cd3622080445dcd87fc7",
+          "size": 24696,
+          "mtime_ns": 1794204256000000000
+        },
+        "store.wal.19366": {
+          "sha256": "6752f80ed7797f4ec486071986a4c89459fe86c080b2f18cab9f8f27d0bbe676",
+          "size": 24736,
+          "mtime_ns": 1794204256000000000
+        },
+        "store.wal.19370": {
+          "sha256": "8c81dadadb705776f4d8c9666138d3eaf78bb2d68733a2fb6dba599e44042b8e",
+          "size": 24696,
+          "mtime_ns": 1794204256000000000
+        },
+        "store.wal.19373": {
+          "sha256": "48f1c5e0867f930f45f9d28446720a53772add1c002b72b977eb9d1e29826593",
+          "size": 24736,
+          "mtime_ns": 1794204256000000000
+        },
+        "store.wal.19377": {
+          "sha256": "1405c063cc1af08ba892437076537b3188a07643a3b9d253c24a4928a06de014",
+          "size": 24696,
+          "mtime_ns": 1794204256000000000
+        },
+        "store.wal.19380": {
+          "sha256": "4acf7fbef9988b82713e8d897ac16a41e59e1db28f5acc33a5b2600759728a01",
+          "size": 24696,
+          "mtime_ns": 1794204256000000000
+        },
+        "store.wal.19383": {
+          "sha256": "fe748db429af53a26f73f9b209f1704d7a956db6bf32c882a93eea70234aa0d1",
+          "size": 24776,
+          "mtime_ns": 1794204256000000000
+        }
+      }
+    },
+    {
+      "cut": "crashed-10",
+      "command": [
+        "/root/bicdb-durability-s3/target-verify/debug/bicdb",
+        "verify-store",
+        "--read-only",
+        "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-10/extracted/paged",
+        "--max-memory-mb",
+        "64",
+        "--max-seconds",
+        "60"
+      ],
+      "exit_code": 0,
+      "report_sha256": "4a69ab783618cf93126b6452376cb1d4d300c59551a7a483004d88d102cae129",
+      "original_size_mtime_unchanged": true,
+      "extracted_files_unchanged": true,
+      "page_file_bytes": 5341184,
+      "files": {
+        "store.lock": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "mtime_ns": 1794204221000000000
+        },
+        "store.pages": {
+          "sha256": "467a45a2805a74422a3e54a26efa0c9dbf141afcba715363537322b6221e36c0",
+          "size": 5341184,
+          "mtime_ns": 1794204293000000000
+        },
+        "store.wal": {
+          "sha256": "3a7f3ef4b87dd4292ef774ba3a022f1471523657dc3ba66b56270af8ee274c8e",
+          "size": 8272,
+          "mtime_ns": 1794204293000000000
+        },
+        "store.wal.22335": {
+          "sha256": "21637349398e63ab947b5fc95500ed4e3750510c582be8983021655d034bcf99",
+          "size": 24736,
+          "mtime_ns": 1794204293000000000
+        },
+        "store.wal.22339": {
+          "sha256": "9898ba257bc91942290493239c982ed87c9797484682caa5e69817e5768dac56",
+          "size": 24776,
+          "mtime_ns": 1794204293000000000
+        },
+        "store.wal.22344": {
+          "sha256": "8e49a4e4fb5aabfaf5dfa29151ccd4a9c322e359d7fdf5dcef835117ffb49326",
+          "size": 24736,
+          "mtime_ns": 1794204293000000000
+        },
+        "store.wal.22348": {
+          "sha256": "613ade182aa7289d01c9384a7240b3f9f991cf4b85152da53eb538b317a764e9",
+          "size": 24696,
+          "mtime_ns": 1794204293000000000
+        },
+        "store.wal.22351": {
+          "sha256": "e6cc5e6e8582513d30c8c3e7cd4fd554d3b7a02403d005a8e98b9de03544f421",
+          "size": 24696,
+          "mtime_ns": 1794204293000000000
+        },
+        "store.wal.22354": {
+          "sha256": "f584815d49f7cba443afb25adb3ea75a2cb36bc1a44056720be66cdcaa0a39ae",
+          "size": 24736,
+          "mtime_ns": 1794204293000000000
+        },
+        "store.wal.22358": {
+          "sha256": "2deb230011a14a182c564bf75d0c982e32344790ccaa84b4a90c08e58b9dfb17",
+          "size": 24696,
+          "mtime_ns": 1794204293000000000
+        },
+        "store.wal.22361": {
+          "sha256": "98df5c21e068159de08cb6a5e5f52517cf3e80966f277ac6643411ad6ad79c5e",
+          "size": 24696,
+          "mtime_ns": 1794204293000000000
+        },
+        "store.wal.22364": {
+          "sha256": "8bc85b4c150e7b89d43441d95fd813c8e4c2ef71616359e1fb6cf09dd536e734",
+          "size": 24736,
+          "mtime_ns": 1794204293000000000
+        },
+        "store.wal.22368": {
+          "sha256": "e394fa62cf8da61465267d583992e7a7e5705930ba1450871cffb1bf305358ba",
+          "size": 24696,
+          "mtime_ns": 1794204293000000000
+        },
+        "store.wal.22371": {
+          "sha256": "39e3ed5fb39e57d8a7fcdde76d104233e9269b03f9ee42034eb1ebfead07f2cb",
+          "size": 24696,
+          "mtime_ns": 1794204293000000000
+        },
+        "store.wal.22374": {
+          "sha256": "25bed92950a73e51758c72da915c56bf89d4bc6331268c2ee526f0a644f4ebad",
+          "size": 24736,
+          "mtime_ns": 1794204293000000000
+        },
+        "store.wal.22378": {
+          "sha256": "cc784df21257773782e5c238c384157d9216ed2bcdeb0c23bd54eca2bf7d890a",
+          "size": 24736,
+          "mtime_ns": 1794204293000000000
+        }
+      }
+    },
+    {
+      "cut": "crashed-11",
+      "command": [
+        "/root/bicdb-durability-s3/target-verify/debug/bicdb",
+        "verify-store",
+        "--read-only",
+        "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-11/extracted/paged",
+        "--max-memory-mb",
+        "64",
+        "--max-seconds",
+        "60"
+      ],
+      "exit_code": 0,
+      "report_sha256": "da127327f2bd0f70225bade5c91253ae47c4613efb64a04a5134ed06fb8fe54b",
+      "original_size_mtime_unchanged": true,
+      "extracted_files_unchanged": true,
+      "page_file_bytes": 5423104,
+      "files": {
+        "store.lock": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "mtime_ns": 1794204221000000000
+        },
+        "store.pages": {
+          "sha256": "e766e299cc294dd73eda8589c51b8d41a10dbd961cda22ea3f1a41ec68e118c1",
+          "size": 5423104,
+          "mtime_ns": 1794204297000000000
+        },
+        "store.wal": {
+          "sha256": "8d9407e2febe377f122649822c24abb87f2d8590b6d9cd47ce4f2b65e6d9807d",
+          "size": 16504,
+          "mtime_ns": 1794204297000000000
+        },
+        "store.wal.22725": {
+          "sha256": "2bd0bd71af065e23de8cb0ffad7532b4e98677a7ea1cedbd9c59bc98d42ef50c",
+          "size": 24736,
+          "mtime_ns": 1794204297000000000
+        },
+        "store.wal.22729": {
+          "sha256": "07bf22f840c3a079be04a594f658afce8131c49ce6e9900bc56262b758deea2f",
+          "size": 24696,
+          "mtime_ns": 1794204297000000000
+        },
+        "store.wal.22732": {
+          "sha256": "bfbe63abacbeb2d6a0fbea5089281138552bb2d609699fdf929aa60019e3a304",
+          "size": 24696,
+          "mtime_ns": 1794204297000000000
+        },
+        "store.wal.22735": {
+          "sha256": "a271513f99b527a5cb1b7283bd2262eaf3d73764b3ed2cee3d0e7d3163d87083",
+          "size": 24736,
+          "mtime_ns": 1794204297000000000
+        },
+        "store.wal.22739": {
+          "sha256": "daf3ebdc95937bd8b460bd355e44748e0a8e5fd802c2ea342e84fa65ea4fad6f",
+          "size": 24696,
+          "mtime_ns": 1794204297000000000
+        },
+        "store.wal.22742": {
+          "sha256": "5802bf854a7874d0a66b157852f43e0d20b2ecdce2d2bdf20d62db4014801afb",
+          "size": 24696,
+          "mtime_ns": 1794204297000000000
+        },
+        "store.wal.22745": {
+          "sha256": "b6ea28a2932bcfd697ee4475eb3ac8bf4edf97ffc2185e1240d001aef6477fa0",
+          "size": 24696,
+          "mtime_ns": 1794204297000000000
+        },
+        "store.wal.22748": {
+          "sha256": "452d995ec67b0c4b7a6c002cb05f52c5ebdc2c984804d174fb33ade34216864c",
+          "size": 24736,
+          "mtime_ns": 1794204297000000000
+        },
+        "store.wal.22752": {
+          "sha256": "b9487be824bf684b03e9f21c0f5b634147ad155e0b4c47767f2873169baafc98",
+          "size": 24696,
+          "mtime_ns": 1794204297000000000
+        },
+        "store.wal.22755": {
+          "sha256": "f33f3025d3e3ca18a895a87ef53096beaf5b89d587b1c265bfdff1bca2c2d036",
+          "size": 24696,
+          "mtime_ns": 1794204297000000000
+        },
+        "store.wal.22758": {
+          "sha256": "001d559d99543a292aef787a84f300745d1f5a94684cc1486fe97f589512a23b",
+          "size": 24736,
+          "mtime_ns": 1794204297000000000
+        },
+        "store.wal.22762": {
+          "sha256": "2287777c345df370acf4be73873af0112ed207574969f73e8a0beacab6c1d0db",
+          "size": 24696,
+          "mtime_ns": 1794204297000000000
+        },
+        "store.wal.22765": {
+          "sha256": "2c28b3e041cc07e09f185f3025312d6d8f4cc8edf05431786ed61b0ac1712c46",
+          "size": 24696,
+          "mtime_ns": 1794204297000000000
+        },
+        "store.wal.22768": {
+          "sha256": "69e8ba042c01cdbe11ff0c28d109f7c51b8b5eeec584dc91aec150d8975b4f84",
+          "size": 24776,
+          "mtime_ns": 1794204297000000000
+        }
+      }
+    },
+    {
+      "cut": "crashed-12",
+      "command": [
+        "/root/bicdb-durability-s3/target-verify/debug/bicdb",
+        "verify-store",
+        "--read-only",
+        "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-12/extracted/paged",
+        "--max-memory-mb",
+        "64",
+        "--max-seconds",
+        "60"
+      ],
+      "exit_code": 0,
+      "report_sha256": "a1e312c833383770720cfd6ddcf5c3f201a4f741cce8dc95e21add405a21030b",
+      "original_size_mtime_unchanged": true,
+      "extracted_files_unchanged": true,
+      "page_file_bytes": 5464064,
+      "files": {
+        "store.lock": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "mtime_ns": 1794204221000000000
+        },
+        "store.pages": {
+          "sha256": "7e02bdffc3bfed67c67ae977f72576dce679ea20792ea8afba42e02aea89cce6",
+          "size": 5464064,
+          "mtime_ns": 1794204301000000000
+        },
+        "store.wal": {
+          "sha256": "ac24493d7a0d648054334032f0e7f7d0978923004fbce2768fb7f6b9472fd612",
+          "size": 24736,
+          "mtime_ns": 1794204301000000000
+        }
+      }
+    },
+    {
+      "cut": "crashed-13",
+      "command": [
+        "/root/bicdb-durability-s3/target-verify/debug/bicdb",
+        "verify-store",
+        "--read-only",
+        "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-13/extracted/paged",
+        "--max-memory-mb",
+        "64",
+        "--max-seconds",
+        "60"
+      ],
+      "exit_code": 0,
+      "report_sha256": "1ba544837559c82fe6003f64546cf2d672a0cf27dc4b7685dc171c5ce8e7b740",
+      "original_size_mtime_unchanged": true,
+      "extracted_files_unchanged": true,
+      "page_file_bytes": 5464064,
+      "files": {
+        "store.lock": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "mtime_ns": 1794204221000000000
+        },
+        "store.pages": {
+          "sha256": "1a4ae4d54672095f50768e3964f4a4ade9b8f87b43901b810b5c19b075d727de",
+          "size": 5464064,
+          "mtime_ns": 1794204303000000000
+        },
+        "store.wal": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "mtime_ns": 1794204303000000000
+        }
+      }
+    },
+    {
+      "cut": "crashed-14",
+      "command": [
+        "/root/bicdb-durability-s3/target-verify/debug/bicdb",
+        "verify-store",
+        "--read-only",
+        "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-14/extracted/paged",
+        "--max-memory-mb",
+        "64",
+        "--max-seconds",
+        "60"
+      ],
+      "exit_code": 0,
+      "report_sha256": "2808a1909eb2cffefedb8b9fac08cf46c8e389b98e8b2c980da19d811128265e",
+      "original_size_mtime_unchanged": true,
+      "extracted_files_unchanged": true,
+      "page_file_bytes": 5464064,
+      "files": {
+        "store.lock": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "mtime_ns": 1794204221000000000
+        },
+        "store.pages": {
+          "sha256": "2a230ae935c668703670f80c21ffa92996bd78f7017cfc45c77d258db8df2647",
+          "size": 5464064,
+          "mtime_ns": 1794204305000000000
+        },
+        "store.wal": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "mtime_ns": 1794204305000000000
+        }
+      }
+    },
+    {
+      "cut": "crashed-2",
+      "command": [
+        "/root/bicdb-durability-s3/target-verify/debug/bicdb",
+        "verify-store",
+        "--read-only",
+        "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-2/extracted/paged",
+        "--max-memory-mb",
+        "64",
+        "--max-seconds",
+        "60"
+      ],
+      "exit_code": 0,
+      "report_sha256": "d397f857369424b867f0df3fb0e1ac7269546ed8ff4909cf783747c1ac37c107",
+      "original_size_mtime_unchanged": true,
+      "extracted_files_unchanged": true,
+      "page_file_bytes": 4882432,
+      "files": {
+        "store.lock": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "mtime_ns": 1794204221000000000
+        },
+        "store.pages": {
+          "sha256": "f3d5bdee11a62aefae733da09d6ed4cf1ab9c96ce3cb27d51f40ffe839089788",
+          "size": 4882432,
+          "mtime_ns": 1794204260000000000
+        },
+        "store.wal": {
+          "sha256": "d22c17c47c6326ad542f4feef3340494f9e8e2db29a7344a8b15ce44ac14f734",
+          "size": 8272,
+          "mtime_ns": 1794204260000000000
+        },
+        "store.wal.20007": {
+          "sha256": "ed7f8b33d3b18bb66ce7436fe21a1cdba22ecf39f2cd2aea4f0e959be9cdf349",
+          "size": 24736,
+          "mtime_ns": 1794204260000000000
+        },
+        "store.wal.20011": {
+          "sha256": "ca76630d74b2c7d4b083b9f79eac2f785ac283ab9cb6f5d89f57b73c8601c654",
+          "size": 24696,
+          "mtime_ns": 1794204260000000000
+        },
+        "store.wal.20014": {
+          "sha256": "c23d234ff19b3e76820f88fd89e4cfe57f34241da213806d1c009263afa7367d",
+          "size": 24696,
+          "mtime_ns": 1794204260000000000
+        },
+        "store.wal.20017": {
+          "sha256": "2add3770b43cabd4a584c1ace64ad66fc32c759fd9560dd521b105f28f3e2472",
+          "size": 24736,
+          "mtime_ns": 1794204260000000000
+        },
+        "store.wal.20021": {
+          "sha256": "5b3535a2754e15c24ab966ab48b9eb911bfeb329bad81590199824c83af45aa5",
+          "size": 24696,
+          "mtime_ns": 1794204260000000000
+        },
+        "store.wal.20024": {
+          "sha256": "30d8caddf472066d17c942b3bf027df34061af393165f03e51a566922375e2f6",
+          "size": 24696,
+          "mtime_ns": 1794204260000000000
+        },
+        "store.wal.20027": {
+          "sha256": "cc5fac49b818465c03ecadfdbdafc6b6267f4fe9afa68dfa84ad492116d587de",
+          "size": 24736,
+          "mtime_ns": 1794204260000000000
+        },
+        "store.wal.20031": {
+          "sha256": "a144ac459e8b9359c555da5fdff0e403f34ef8a7f0f472294c9cc22e4aa86002",
+          "size": 24696,
+          "mtime_ns": 1794204260000000000
+        },
+        "store.wal.20034": {
+          "sha256": "11286decda4e912c90b146fd1858a007c70636a6542235b6a958e828059c140a",
+          "size": 24696,
+          "mtime_ns": 1794204260000000000
+        },
+        "store.wal.20037": {
+          "sha256": "215587295f81209564ca80cb61c93e2777eaf3d6e856b40f232c08a21bf90585",
+          "size": 24736,
+          "mtime_ns": 1794204260000000000
+        },
+        "store.wal.20041": {
+          "sha256": "de8dd18f47b2985ff1bc707618d0e20d9ac72c634e59f435ea25536771fa2c84",
+          "size": 24696,
+          "mtime_ns": 1794204260000000000
+        },
+        "store.wal.20044": {
+          "sha256": "e2824b324fc1ea619da268c5acc9d4628f0585e7ca6e5cc376ddb1043a68a360",
+          "size": 24736,
+          "mtime_ns": 1794204260000000000
+        }
+      }
+    },
+    {
+      "cut": "crashed-3",
+      "command": [
+        "/root/bicdb-durability-s3/target-verify/debug/bicdb",
+        "verify-store",
+        "--read-only",
+        "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-3/extracted/paged",
+        "--max-memory-mb",
+        "64",
+        "--max-seconds",
+        "60"
+      ],
+      "exit_code": 0,
+      "report_sha256": "ac226e1069c6fc3239a61838987a96f266c63149eef871bf0e48f27e8bcbfa39",
+      "original_size_mtime_unchanged": true,
+      "extracted_files_unchanged": true,
+      "page_file_bytes": 4964352,
+      "files": {
+        "store.lock": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "mtime_ns": 1794204221000000000
+        },
+        "store.pages": {
+          "sha256": "b6de222cb031d33ad714cf12d9299e72decb677a4daf3eb38f2533567816fe44",
+          "size": 4964352,
+          "mtime_ns": 1794204264000000000
+        },
+        "store.wal": {
+          "sha256": "2ad11105edcc3613bd53705801662dc4e20c8cdb1489da7f2fc821d909fafe38",
+          "size": 24736,
+          "mtime_ns": 1794204264000000000
+        },
+        "store.wal.20445": {
+          "sha256": "8fb022b2a2bd28ed2cff87da5833a4e0fae9009fd666a547a1c9e1fcf9600e17",
+          "size": 24736,
+          "mtime_ns": 1794204263000000000
+        },
+        "store.wal.20449": {
+          "sha256": "779851dccfad36aad1882cb8390a3c0e33bfecf4aebd55d29f05f3ef13b3f3b2",
+          "size": 24696,
+          "mtime_ns": 1794204264000000000
+        },
+        "store.wal.20452": {
+          "sha256": "a5980783a1c5b9605180f1cfb555ede022907466a676c3f9a59cb22a5e3eba4b",
+          "size": 24696,
+          "mtime_ns": 1794204264000000000
+        },
+        "store.wal.20455": {
+          "sha256": "d4a347a1feac84f7ad34ce0127f94b46940b3ddf83488cf5a01c572595c0d9ab",
+          "size": 24736,
+          "mtime_ns": 1794204264000000000
+        },
+        "store.wal.20459": {
+          "sha256": "363d4f08016ff87aa3ab728e7a2f273436e7fdba28cd35efcbfbe6b027188aa0",
+          "size": 24696,
+          "mtime_ns": 1794204264000000000
+        },
+        "store.wal.20462": {
+          "sha256": "054949db7dc5bb55e0565b737683d21ac3ccc7f92eeaa4ca7dedaabbb33561aa",
+          "size": 24696,
+          "mtime_ns": 1794204264000000000
+        }
+      }
+    },
+    {
+      "cut": "crashed-4",
+      "command": [
+        "/root/bicdb-durability-s3/target-verify/debug/bicdb",
+        "verify-store",
+        "--read-only",
+        "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-4/extracted/paged",
+        "--max-memory-mb",
+        "64",
+        "--max-seconds",
+        "60"
+      ],
+      "exit_code": 0,
+      "report_sha256": "b14525b20f442e79a172472bfe84e381d900a83fcb21f70dc1a26dfff283b43c",
+      "original_size_mtime_unchanged": true,
+      "extracted_files_unchanged": true,
+      "page_file_bytes": 5005312,
+      "files": {
+        "store.lock": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "mtime_ns": 1794204221000000000
+        },
+        "store.pages": {
+          "sha256": "90fee0be3c84bf89612cc49819e22e5e6e5dfe8bfc92084cb45d01eb58af4a7b",
+          "size": 5005312,
+          "mtime_ns": 1794204267000000000
+        },
+        "store.wal": {
+          "sha256": "1117ff2c12debbff3d604e4d61e0d4f4e511d67310e443fc2fd97f43c22b500b",
+          "size": 24736,
+          "mtime_ns": 1794204268000000000
+        }
+      }
+    },
+    {
+      "cut": "crashed-5",
+      "command": [
+        "/root/bicdb-durability-s3/target-verify/debug/bicdb",
+        "verify-store",
+        "--read-only",
+        "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-5/extracted/paged",
+        "--max-memory-mb",
+        "64",
+        "--max-seconds",
+        "60"
+      ],
+      "exit_code": 0,
+      "report_sha256": "3730c43f19166d2026975e8a43cf4eeb84402ee188225a82a817c546ed655f56",
+      "original_size_mtime_unchanged": true,
+      "extracted_files_unchanged": true,
+      "page_file_bytes": 5005312,
+      "files": {
+        "store.lock": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "mtime_ns": 1794204221000000000
+        },
+        "store.pages": {
+          "sha256": "1c9e64803d4d4d6b81288274e80b8d5f1e183e60feff7deb06580b241b58c6b8",
+          "size": 5005312,
+          "mtime_ns": 1794204271000000000
+        },
+        "store.wal": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "mtime_ns": 1794204271000000000
+        }
+      }
+    },
+    {
+      "cut": "crashed-6",
+      "command": [
+        "/root/bicdb-durability-s3/target-verify/debug/bicdb",
+        "verify-store",
+        "--read-only",
+        "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-6/extracted/paged",
+        "--max-memory-mb",
+        "64",
+        "--max-seconds",
+        "60"
+      ],
+      "exit_code": 0,
+      "report_sha256": "0cd7ead3e93566885d6b7c2ff9762c68c47536cb934e4c068a99cbf0c7dd1953",
+      "original_size_mtime_unchanged": true,
+      "extracted_files_unchanged": true,
+      "page_file_bytes": 5070848,
+      "files": {
+        "store.lock": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "mtime_ns": 1794204221000000000
+        },
+        "store.pages": {
+          "sha256": "9ca5fa21ecafb9e3b196da40e677c0153a39816b5f46622bad243dd951167aa1",
+          "size": 5070848,
+          "mtime_ns": 1794204278000000000
+        },
+        "store.wal": {
+          "sha256": "24de34e8d1f3236c885649fe09d54a5f3faa051ea8fba765db2f5050e3f0966d",
+          "size": 24736,
+          "mtime_ns": 1794204278000000000
+        },
+        "store.wal.21012": {
+          "sha256": "bec00885f8fbca7e00da7cc2b4b6c4769ffc369f181d9fb20abbba25d7a2ee04",
+          "size": 24736,
+          "mtime_ns": 1794204278000000000
+        },
+        "store.wal.21016": {
+          "sha256": "aa6a56048198815348f84d9e3ba18e1ebe19fcfd81c0bc8e1ab086334b0b7366",
+          "size": 24696,
+          "mtime_ns": 1794204278000000000
+        },
+        "store.wal.21019": {
+          "sha256": "c868ea864a94e2bef84942c488e9c83c4aec498678b738856f02f12a5c61f292",
+          "size": 24696,
+          "mtime_ns": 1794204278000000000
+        }
+      }
+    },
+    {
+      "cut": "crashed-7",
+      "command": [
+        "/root/bicdb-durability-s3/target-verify/debug/bicdb",
+        "verify-store",
+        "--read-only",
+        "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-7/extracted/paged",
+        "--max-memory-mb",
+        "64",
+        "--max-seconds",
+        "60"
+      ],
+      "exit_code": 0,
+      "report_sha256": "361839f604013277b813af3c30ed4661d069dca80334041efe9d5bc00d9fadbc",
+      "original_size_mtime_unchanged": true,
+      "extracted_files_unchanged": true,
+      "page_file_bytes": 5144576,
+      "files": {
+        "store.lock": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "mtime_ns": 1794204221000000000
+        },
+        "store.pages": {
+          "sha256": "7019549bb1c67bc176c41ac5be0d4762f1546fd82684304d93b21d99729c86d2",
+          "size": 5144576,
+          "mtime_ns": 1794204281000000000
+        },
+        "store.wal": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "mtime_ns": 1794204282000000000
+        },
+        "store.wal.21398": {
+          "sha256": "539b8ee889a7c38bbb4e9689f6e27d32c27af48c0328627bf915c05cbe5a7e72",
+          "size": 24736,
+          "mtime_ns": 1794204281000000000
+        },
+        "store.wal.21402": {
+          "sha256": "8dd25fad9b4494aff8989b9b796d6a2823705788a9d3c870833045a1e4f962cb",
+          "size": 24776,
+          "mtime_ns": 1794204282000000000
+        },
+        "store.wal.21407": {
+          "sha256": "520ad5c9f51a33ce1515ebe03bf3eae7747e63afa13fddf04ae4a85620ccb319",
+          "size": 24776,
+          "mtime_ns": 1794204282000000000
+        }
+      }
+    },
+    {
+      "cut": "crashed-8",
+      "command": [
+        "/root/bicdb-durability-s3/target-verify/debug/bicdb",
+        "verify-store",
+        "--read-only",
+        "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-8/extracted/paged",
+        "--max-memory-mb",
+        "64",
+        "--max-seconds",
+        "60"
+      ],
+      "exit_code": 0,
+      "report_sha256": "b220078f453390b1e792cb1b17a52bb243286f8731c58a0a8ca390d25f7b9b99",
+      "original_size_mtime_unchanged": true,
+      "extracted_files_unchanged": true,
+      "page_file_bytes": 5152768,
+      "files": {
+        "store.lock": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "mtime_ns": 1794204221000000000
+        },
+        "store.pages": {
+          "sha256": "c2eac1e331afb190fe38ab887ab127b9bfdad6a302a8d287f62533b1883a112f",
+          "size": 5152768,
+          "mtime_ns": 1794204285000000000
+        },
+        "store.wal": {
+          "sha256": "a8457100ca6bdca76b98eb408b6f9efb815c329d44ae6df0fdc3faec3a76ac26",
+          "size": 24696,
+          "mtime_ns": 1794204285000000000
+        },
+        "store.wal.21493": {
+          "sha256": "08437219c8e3129dad2caeb1925a9b721a91f1fb8a5ef7b7e90a4606f7f49c94",
+          "size": 24736,
+          "mtime_ns": 1794204285000000000
+        },
+        "store.wal.21497": {
+          "sha256": "9398161ff6006b4ff632be5f3671ba157918d62b491fef251f989c920955bcfd",
+          "size": 24696,
+          "mtime_ns": 1794204285000000000
+        }
+      }
+    },
+    {
+      "cut": "crashed-9",
+      "command": [
+        "/root/bicdb-durability-s3/target-verify/debug/bicdb",
+        "verify-store",
+        "--read-only",
+        "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-9/extracted/paged",
+        "--max-memory-mb",
+        "64",
+        "--max-seconds",
+        "60"
+      ],
+      "exit_code": 0,
+      "report_sha256": "a21af4c5cfed29481c5a452c0ca72e8bdbc79bd88a4d338b4f8a978a615f68fe",
+      "original_size_mtime_unchanged": true,
+      "extracted_files_unchanged": true,
+      "page_file_bytes": 5234688,
+      "files": {
+        "store.lock": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0,
+          "mtime_ns": 1794204221000000000
+        },
+        "store.pages": {
+          "sha256": "d0de2f3a4aa8c02e60fa74e814f0391ad5f6a3477eb314ea3abd52adf9d00626",
+          "size": 5234688,
+          "mtime_ns": 1794204289000000000
+        },
+        "store.wal": {
+          "sha256": "cbfc116bff99c7523a149a72860bcf2c76d976a73d736ffdb816595bbbd5b7fe",
+          "size": 24696,
+          "mtime_ns": 1794204289000000000
+        },
+        "store.wal.21854": {
+          "sha256": "3a498c605fa4225240c9e5f608e31787d02d62480e3f51e10365628c9413e56b",
+          "size": 24736,
+          "mtime_ns": 1794204289000000000
+        },
+        "store.wal.21858": {
+          "sha256": "3ad4a9be78d7a90b69b4f4ca19265d57468de980de343a84b94395e2d81ce7d2",
+          "size": 24696,
+          "mtime_ns": 1794204289000000000
+        },
+        "store.wal.21861": {
+          "sha256": "f5ddb0b3b05a96b791103350158d5270eee6885480748c3b8f82abe960ab3d9b",
+          "size": 24696,
+          "mtime_ns": 1794204289000000000
+        },
+        "store.wal.21864": {
+          "sha256": "674ee4c5292b850e45fa6c88f4c029e31989ded3c58c83c4a1de09ff14a90e9a",
+          "size": 24736,
+          "mtime_ns": 1794204289000000000
+        },
+        "store.wal.21868": {
+          "sha256": "c17291e5f4d1a3885285a83455cc776d3d7430ef2533bdf3e62c8ea66681628e",
+          "size": 24696,
+          "mtime_ns": 1794204289000000000
+        },
+        "store.wal.21871": {
+          "sha256": "40c5ef99daa04e99c199711648db13a291972c77bc700a762229be408561393a",
+          "size": 24696,
+          "mtime_ns": 1794204289000000000
+        },
+        "store.wal.21874": {
+          "sha256": "4faa78feef84b14d38573f10c319bf6fd85819aae5337c7c24cc3f29bc5d39a3",
+          "size": 24736,
+          "mtime_ns": 1794204289000000000
+        },
+        "store.wal.21878": {
+          "sha256": "231c1980165eef6f967009e148e208677d0c10a513560052b2f37e678782794a",
+          "size": 24696,
+          "mtime_ns": 1794204289000000000
+        }
+      }
+    }
+  ]
+}

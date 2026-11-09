@@ -1,0 +1,28 @@
+{
+  "main_source": "0af1b55e3d586d4a6933098419e7ee46a7ae5a79",
+  "candidate_source": "6d225c1940cf13ffbb7693f8ebc2917e5abaad82",
+  "writers": [
+    1,
+    16,
+    64
+  ],
+  "repeats": 3,
+  "seconds_per_run": 15,
+  "mode": "all-logs",
+  "storage_mode": "server_paged",
+  "fsync": true,
+  "pool_bytes": 268435456,
+  "sync_outbox": false,
+  "gate_environment": {
+    "BICDB_PAGED_BUFFER_POOL_BYTES": "268435456",
+    "BICDB_PAGED_WAL_SYNC_UNLOCKED": "0",
+    "BICDB_PAGED_COMMIT_SYNC_OUTSIDE_LOCK": "0",
+    "BICDB_PAGE_WAL_DELTAS": "0",
+    "BICDB_SYNC_OUTBOX": "off"
+  },
+  "same_example_source": true,
+  "example_sha256": "cbfa2649c49923e2064f256b33c37c9950e19de2f2ad6fc870e991b98882c661",
+  "runner_sha256": "b5227d8d42530eb3266a69d9982e7157283356f187a90300f0b29284758ba8a1",
+  "order": "for each writer count: main/candidate, candidate/main, main/candidate",
+  "measurement": "COMMIT latency and full worker throughput; process stdout flushed before planned SIGABRT. Every store reopened twice and row count reconciled to commits+writer seed rows. This count check has no independent external ACK ledger."
+}

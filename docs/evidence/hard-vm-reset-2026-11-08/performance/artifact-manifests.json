@@ -1,0 +1,70 @@
+{
+  "main": {
+    "source": "0af1b55e3d586d4a6933098419e7ee46a7ae5a79",
+    "experimental_feature": null,
+    "build_commands": [
+      "cargo build --locked --release -p bicdb-pgwire --example oracle_server",
+      "cargo build --locked --release -p bicdb-core --example commit_durability_bench"
+    ],
+    "profile": "Cargo release, opt-level3, debug=line-tables-only, lto=thin; no release overrides",
+    "cargo_incremental": false,
+    "jobs": 4,
+    "memory_max_gib": 16,
+    "artifacts": {
+      "oracle_server": {
+        "path": "/root/bicdb-durability-s3/skr/bin/oracle-server-main-0af1b55e-release",
+        "sha256": "6f38fe5e6bdbc3d9bda249c4bd3b70086d2206619fbbd0aeb14c9238ea0832e9",
+        "bytes": 195660800,
+        "unstripped": "/root/bicdb-durability-s3/skr/bin/oracle-server-main-0af1b55e-release.unstripped",
+        "unstripped_sha256": "f9f38299a48591f1b5d52f5a1bd9130f5b39edf36359ed2ffd4b99c3cd7999fb",
+        "transformation": "GNU strip --strip-debug; unstripped original retained"
+      },
+      "commit_durability_bench": {
+        "path": "/root/bicdb-durability-s3/skr/bin/commit-bench-main-0af1b55e-release",
+        "sha256": "9cf83ba35684055bf09f77b1e6c1d7cb7b17eef60fcca300c29698e0f64584bb",
+        "bytes": 14580344,
+        "unstripped": "/root/bicdb-durability-s3/skr/bin/commit-bench-main-0af1b55e-release.unstripped",
+        "unstripped_sha256": "811c1d2d9084b46e58723d7e825b2632a155394adab62ef91de152eed05ae201",
+        "transformation": "GNU strip --strip-debug; unstripped original retained"
+      }
+    },
+    "benchmark_source_sha256": "cbfa2649c49923e2064f256b33c37c9950e19de2f2ad6fc870e991b98882c661",
+    "scope": "Stable merged main 0af1b55e qualification control, with known default GAP1. Not a published release or production deployment.",
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0\nLLVM version: 22.1.2\n",
+    "compiler_verification": "Build-CWD rustc and Cargo target .rustc_info.json agree on Rust1.96.0."
+  },
+  "candidate": {
+    "source": "6d225c1940cf13ffbb7693f8ebc2917e5abaad82",
+    "experimental_feature": null,
+    "build_commands": [
+      "cargo build --locked --release -p bicdb-pgwire --example oracle_server",
+      "cargo build --locked --release -p bicdb-core --example commit_durability_bench"
+    ],
+    "profile": "Cargo release, opt-level3, debug=line-tables-only, lto=thin; no release overrides",
+    "cargo_incremental": false,
+    "jobs": 4,
+    "memory_max_gib": 16,
+    "artifacts": {
+      "oracle_server": {
+        "path": "/root/bicdb-durability-s3/skr/bin/oracle-server-default-cuts-6d225c19-release",
+        "sha256": "a9d2f903ffda39b15d90ad5cc45d8a42c48111506b46faf7e50ba33193268ee9",
+        "bytes": 195780456,
+        "unstripped": "/root/bicdb-durability-s3/skr/bin/oracle-server-default-cuts-6d225c19-release.unstripped",
+        "unstripped_sha256": "a0b21839f7dec9b9b351f151ee51b48033601cad2c823c5416a0d4bcae4791f4",
+        "transformation": "GNU strip --strip-debug; unstripped original retained"
+      },
+      "commit_durability_bench": {
+        "path": "/root/bicdb-durability-s3/skr/bin/commit-bench-default-cuts-6d225c19-release",
+        "sha256": "ba020eab5add694507621cc80015ff3cb54eb68972d39c43ae7b5a8a308ad48c",
+        "bytes": 14632632,
+        "unstripped": "/root/bicdb-durability-s3/skr/bin/commit-bench-default-cuts-6d225c19-release.unstripped",
+        "unstripped_sha256": "19d73b285f9bf04c4211c3bc953a4905d2f44cc4b6e7176bdda47be0cd4011a1",
+        "transformation": "GNU strip --strip-debug; unstripped original retained"
+      }
+    },
+    "benchmark_source_sha256": "cbfa2649c49923e2064f256b33c37c9950e19de2f2ad6fc870e991b98882c661",
+    "scope": "Premerge ordinary-default source qualification artifact; not a published release or production deployment. Final actual-head CI, performance and postmerge qualification remain pending.",
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0\nLLVM version: 22.1.2\n",
+    "compiler_verification": "Build-CWD rustc and Cargo target .rustc_info.json agree on Rust1.96.0."
+  }
+}

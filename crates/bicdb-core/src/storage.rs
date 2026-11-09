@@ -1753,30 +1753,34 @@ pub(crate) fn sync_file(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Make every byte currently in the transaction log durable, at open.
+///
+/// Recovery accepts every complete frame it finds, including a batch whose
+/// write had not returned when the previous incarnation stopped. Those bytes
+/// can still be only in the page cache, and the recovered sequence becomes
+/// the durable sequence that replication ships and that commit resolution
+/// reports. Syncing before either can happen keeps that sequence durable.
+/// Uses a read-only descriptor so a read-only directory still opens; a
+/// missing log has nothing to sync.
+pub(crate) fn sync_transaction_log_at_open(path: &Path) -> Result<()> {
+    let file = match File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
+    bicdb_page::test_faults::io_fault("transaction_log.open_sync", path)?;
+    file.sync_data()?;
+    Ok(())
+}
+
 pub(crate) fn write_atomic(path: &Path, bytes: &[u8], fsync: bool) -> Result<()> {
-    ensure_parent(path)?;
-    let tmp_path = tmp_path(path);
-    let result = (|| -> Result<()> {
-        let mut options = OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)]
-        options.custom_flags(libc::O_NOFOLLOW).mode(0o600);
-        let mut file = options.open(&tmp_path)?;
-        file.write_all(bytes)?;
-        if fsync {
-            file.sync_all()?;
-        }
-        drop(file);
-        fs::rename(&tmp_path, path)?;
-        if fsync {
-            sync_parent(path)?;
-        }
-        Ok(())
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&tmp_path);
-    }
-    result
+    replace_durably(
+        path,
+        ReplaceContents::Plain(bytes),
+        fsync,
+        "",
+        FailClosed::No,
+    )
 }
 
 /// Atomically replace one immutable framed object while binding ciphertext to
@@ -1789,26 +1793,225 @@ pub(crate) fn write_frame_atomic(
     fsync: bool,
     encryption: &EncryptionRuntime,
 ) -> Result<()> {
-    ensure_parent(path)?;
+    replace_durably(
+        path,
+        ReplaceContents::Framed {
+            kind,
+            payload,
+            encryption,
+        },
+        fsync,
+        "",
+        FailClosed::No,
+    )
+}
+
+/// What a failure of a durable file replacement means for the database
+/// (see `docs/durability-failure-handling.md`, section 7).
+#[derive(Clone, Copy)]
+pub(crate) enum FailClosed<'a> {
+    /// Never fatal: the error is returned and the handle stays healthy.
+    No,
+    /// Fatal once the rename happened, that is when the directory `fsync`
+    /// after it fails: the new file is live now and may vanish at the next
+    /// power loss, while the caller reports a failure. A failure up to and
+    /// including the rename itself (which is atomic: on error nothing was
+    /// renamed) leaves the old file in place and is not fatal.
+    AfterRename(&'a bicdb_page::DurabilityHealth),
+    /// Fatal at every step: the caller has already changed its memory to
+    /// the new contents, so any failure leaves memory ahead of the disk.
+    Always(&'a bicdb_page::DurabilityHealth),
+}
+
+impl FailClosed<'_> {
+    fn health(&self) -> Option<&bicdb_page::DurabilityHealth> {
+        match self {
+            Self::No => None,
+            Self::AfterRename(health) | Self::Always(health) => Some(health),
+        }
+    }
+}
+
+pub(crate) enum ReplaceContents<'a> {
+    Plain(&'a [u8]),
+    Framed {
+        kind: FrameKind,
+        payload: &'a [u8],
+        encryption: &'a EncryptionRuntime,
+    },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ReplaceStep {
+    Write,
+    Sync,
+    Rename,
+    DirSync,
+}
+
+impl ReplaceStep {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Write => "write",
+            Self::Sync => "sync",
+            Self::Rename => "rename",
+            Self::DirSync => "dir_sync",
+        }
+    }
+}
+
+/// The durable replacement protocol: write a new temporary file, `fsync`
+/// it, rename it over `path`, `fsync` the directory. With `fsync` off only
+/// the write and the rename happen (nothing is crash durable then).
+///
+/// `site` names the file for fault injection and for the recorded failure:
+/// injection sites `<site>.write`, `<site>.sync`, `<site>.rename` and
+/// `<site>.dir_sync` fail the corresponding step, and crash points
+/// `<site>.after_write`, `<site>.after_sync`, `<site>.after_rename` and
+/// `<site>.after_dir_sync` follow each step. An empty site has neither.
+///
+/// Under `policy` a fatal failure fences `health` and returns
+/// [`BicDbError::WriteFailed`] with site `<site>.<step>`; a non-fatal one
+/// returns the I/O error. A health that is already failed refuses the
+/// replacement before anything is written.
+pub(crate) fn replace_durably(
+    path: &Path,
+    contents: ReplaceContents<'_>,
+    fsync: bool,
+    site: &str,
+    policy: FailClosed<'_>,
+) -> Result<()> {
+    if let Some(health) = policy.health() {
+        health.check().map_err(crate::error::durability_error)?;
+    }
+    let result = replace_durably_steps(path, contents, fsync, site);
+    let Err((step, error)) = result else {
+        return Ok(());
+    };
+    let fatal = match policy {
+        FailClosed::No => None,
+        FailClosed::AfterRename(health) => (step == ReplaceStep::DirSync).then_some(health),
+        FailClosed::Always(health) => Some(health),
+    };
+    let Some(health) = fatal else {
+        return Err(error);
+    };
+    let recorded = if site.is_empty() {
+        format!("atomic_file.{}", step.name())
+    } else {
+        format!("{site}.{}", step.name())
+    };
+    let detail = format!("{}: {error}", path.display());
+    health.record_failure(&recorded, &detail);
+    Err(BicDbError::WriteFailed {
+        site: recorded,
+        detail,
+    })
+}
+
+fn replace_durably_steps(
+    path: &Path,
+    contents: ReplaceContents<'_>,
+    fsync: bool,
+    site: &str,
+) -> std::result::Result<(), (ReplaceStep, BicDbError)> {
+    use bicdb_page::test_faults;
+    let inject = |step: ReplaceStep| -> std::result::Result<(), (ReplaceStep, BicDbError)> {
+        if site.is_empty() {
+            return Ok(());
+        }
+        test_faults::io_fault(&format!("{site}.{}", step.name()), path)
+            .map_err(|error| (step, BicDbError::from(error)))
+    };
+    let crash = |point: &str| {
+        if !site.is_empty() {
+            test_faults::crash_point(&format!("{site}.{point}"));
+        }
+    };
+    let at = |step: ReplaceStep| move |error: BicDbError| (step, error);
+    ensure_parent(path).map_err(at(ReplaceStep::Write))?;
     let tmp_path = tmp_path(path);
-    let result = (|| -> Result<()> {
+    let result = (|| -> std::result::Result<(), (ReplaceStep, BicDbError)> {
+        inject(ReplaceStep::Write)?;
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
         #[cfg(unix)]
         options.custom_flags(libc::O_NOFOLLOW).mode(0o600);
-        drop(options.open(&tmp_path)?);
-        append_frames_for_object(
-            &tmp_path,
-            path,
-            kind,
-            &[payload.to_vec()],
-            fsync,
-            &CompressionConfig::disabled(),
-            encryption,
-        )?;
-        fs::rename(&tmp_path, path)?;
+        let file = options
+            .open(&tmp_path)
+            .map_err(|error| (ReplaceStep::Write, error.into()))?;
+        let data_synced = match contents {
+            ReplaceContents::Plain(bytes) => {
+                let mut file = file;
+                file.write_all(bytes)
+                    .map_err(|error| (ReplaceStep::Write, error.into()))?;
+                crash("after_write");
+                if fsync {
+                    inject(ReplaceStep::Sync)?;
+                    file.sync_all()
+                        .map_err(|error| (ReplaceStep::Sync, error.into()))?;
+                    crash("after_sync");
+                }
+                fsync
+            }
+            ReplaceContents::Framed {
+                kind,
+                payload,
+                encryption,
+            } => {
+                drop(file);
+                // The framed appender writes and (with `fsync`) syncs in one
+                // call; a failure is attributed to the write.
+                if fsync {
+                    inject(ReplaceStep::Sync)?;
+                }
+                append_frames_for_object(
+                    &tmp_path,
+                    path,
+                    kind,
+                    &[payload.to_vec()],
+                    fsync,
+                    &CompressionConfig::disabled(),
+                    encryption,
+                )
+                .map_err(|error| {
+                    // The temporary file is discarded whole, so a failed
+                    // tail repair inside it leaves nothing of unknown
+                    // status: drop the frame log's poison and marker for it
+                    // and report an ordinary write failure; the policy
+                    // decides whether that is fatal.
+                    clear_poison(&tmp_path);
+                    let _ = fs::remove_file(append_failure_marker_path(&tmp_path));
+                    let error = match error {
+                        BicDbError::WriteFailed { site, detail } => {
+                            BicDbError::Io(std::io::Error::other(format!("{site}: {detail}")))
+                        }
+                        other => other,
+                    };
+                    (ReplaceStep::Write, error)
+                })?;
+                crash("after_write");
+                if fsync {
+                    crash("after_sync");
+                }
+                fsync
+            }
+        };
+        inject(ReplaceStep::Rename)?;
+        let previous = if test_faults::volatile_dir_enabled() {
+            volatile_previous_link(path)
+        } else {
+            None
+        };
+        fs::rename(&tmp_path, path).map_err(|error| (ReplaceStep::Rename, error.into()))?;
+        if test_faults::volatile_dir_enabled() {
+            test_faults::register_volatile_rename(path, previous, data_synced);
+        }
+        crash("after_rename");
         if fsync {
-            sync_parent(path)?;
+            inject(ReplaceStep::DirSync)?;
+            sync_parent(path).map_err(at(ReplaceStep::DirSync))?;
+            crash("after_dir_sync");
         }
         Ok(())
     })();
@@ -1816,6 +2019,19 @@ pub(crate) fn write_frame_atomic(
         let _ = fs::remove_file(&tmp_path);
     }
     result
+}
+
+/// Power-loss emulation: keep the file a rename is about to replace, so a
+/// crash before the directory `fsync` can put it back.
+fn volatile_previous_link(path: &Path) -> Option<PathBuf> {
+    let link = path.with_file_name(format!(
+        ".{}.{}.volatile-previous",
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("bicdb"),
+        Uuid::new_v4().simple()
+    ));
+    fs::hard_link(path, &link).ok().map(|()| link)
 }
 
 fn encode_header(kind: FrameKind, flags: u16, payload: &[u8]) -> [u8; HEADER_LEN] {
@@ -2096,8 +2312,15 @@ fn sync_parent(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent() {
         let dir = File::open(parent)?;
         dir.sync_all()?;
+        bicdb_page::test_faults::directory_synced(parent);
     }
     Ok(())
+}
+
+/// `fsync` the directory that holds `path` (a no-op where directories
+/// cannot be synced).
+pub(crate) fn sync_parent_directory(path: &Path) -> Result<()> {
+    sync_parent(path)
 }
 
 fn tmp_path(path: &Path) -> PathBuf {
@@ -3000,5 +3223,135 @@ mod tests {
                 assert_eq!(recover_with("buffered", &path).unwrap(), acknowledged);
             }
         }
+    }
+
+    /// Every step of the durable replacement, under every policy: what is
+    /// on disk afterwards, whether the handle is fenced, and that no
+    /// temporary file is left behind.
+    #[test]
+    fn durable_replacement_fails_closed_per_step_and_policy() {
+        use bicdb_page::test_faults::arm_io_failure;
+        for step in ["write", "sync", "rename", "dir_sync"] {
+            for policy_name in ["no", "after_rename", "always"] {
+                let temp = tempfile::tempdir().unwrap();
+                let path = temp.path().join("state.json");
+                write_atomic(&path, b"old", true).unwrap();
+                let health = bicdb_page::DurabilityHealth::new();
+                let policy = match policy_name {
+                    "no" => FailClosed::No,
+                    "after_rename" => FailClosed::AfterRename(&health),
+                    _ => FailClosed::Always(&health),
+                };
+                let fault = arm_io_failure(&format!("unit.{step}"), temp.path(), 1, false);
+                let error =
+                    replace_durably(&path, ReplaceContents::Plain(b"new"), true, "unit", policy)
+                        .unwrap_err();
+                assert_eq!(fault.fired(), 1, "{step}/{policy_name}");
+                let label = format!("{step}/{policy_name}: {error}");
+                let renamed = step == "dir_sync";
+                let fatal = match policy_name {
+                    "no" => false,
+                    "after_rename" => step == "dir_sync",
+                    _ => true,
+                };
+                assert_eq!(health.is_failed(), fatal, "{label}");
+                assert_eq!(
+                    matches!(&error, BicDbError::WriteFailed { site, .. } if site == &format!("unit.{step}")),
+                    fatal,
+                    "{label}"
+                );
+                // The injected rename fails before renaming: the old file is
+                // intact. A failed directory sync follows a real rename.
+                let expected: &[u8] = if renamed { b"new" } else { b"old" };
+                assert_eq!(fs::read(&path).unwrap(), expected, "{label}");
+                let leftovers = fs::read_dir(temp.path())
+                    .unwrap()
+                    .filter_map(|entry| entry.ok())
+                    .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
+                    .count();
+                assert_eq!(leftovers, 0, "{label}: temporary file left behind");
+                // A fenced health refuses the next replacement outright.
+                drop(fault);
+                let again =
+                    replace_durably(&path, ReplaceContents::Plain(b"next"), true, "unit", policy);
+                assert_eq!(
+                    again.is_err(),
+                    fatal,
+                    "{label}: replacement after the failure"
+                );
+            }
+        }
+    }
+
+    /// With `fsync` off nothing is synced, so only the write and rename
+    /// steps exist.
+    #[test]
+    fn durable_replacement_without_fsync_skips_the_sync_steps() {
+        use bicdb_page::test_faults::arm_io_failure;
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("state.json");
+        let sync = arm_io_failure("unit.sync", temp.path(), 1, true);
+        let dir_sync = arm_io_failure("unit.dir_sync", temp.path(), 1, true);
+        let health = bicdb_page::DurabilityHealth::new();
+        replace_durably(
+            &path,
+            ReplaceContents::Plain(b"new"),
+            false,
+            "unit",
+            FailClosed::Always(&health),
+        )
+        .unwrap();
+        assert_eq!(sync.seen() + dir_sync.seen(), 0);
+        assert_eq!(fs::read(&path).unwrap(), b"new");
+    }
+
+    /// A framed (encrypted-sidecar) replacement whose frame append fails and
+    /// whose tail repair fails too: the temporary file is discarded, so the
+    /// frame log's poison and marker do not outlive it, the failure before
+    /// the rename is not fatal, and the next replacement succeeds.
+    #[test]
+    fn a_failed_framed_replacement_leaves_no_poison_or_marker() {
+        use bicdb_page::test_faults::arm_io_failure;
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("sidecar.json");
+        write_atomic(&path, b"old", true).unwrap();
+        let health = bicdb_page::DurabilityHealth::new();
+        let encryption = EncryptionRuntime::disabled();
+        let write = arm_io_failure("frame_log.short_write", temp.path(), 1, false);
+        let repair = arm_io_failure("frame_log.repair", temp.path(), 1, false);
+        let framed = || ReplaceContents::Framed {
+            kind: FrameKind::Index,
+            payload: b"new",
+            encryption: &encryption,
+        };
+        let error = replace_durably(
+            &path,
+            framed(),
+            true,
+            "unit",
+            FailClosed::AfterRename(&health),
+        )
+        .unwrap_err();
+        assert_eq!((write.fired(), repair.fired()), (1, 1), "{error}");
+        assert!(!error.is_durability_failure(), "{error}");
+        assert!(!health.is_failed());
+        assert_eq!(fs::read(&path).unwrap(), b"old");
+        let leftovers: Vec<_> = fs::read_dir(temp.path())
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name != "sidecar.json")
+            .collect();
+        assert!(leftovers.is_empty(), "{leftovers:?}");
+        drop((write, repair));
+        replace_durably(
+            &path,
+            framed(),
+            true,
+            "unit",
+            FailClosed::AfterRename(&health),
+        )
+        .unwrap();
+        assert!(!health.is_failed());
     }
 }

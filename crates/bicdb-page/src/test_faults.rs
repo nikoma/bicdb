@@ -13,6 +13,18 @@
 //! Both variables are read once. With neither set, [`crash_point`] is one
 //! relaxed load.
 //!
+//! `BICDB_TEST_DIR_VOLATILE=1` emulates power loss for **directory
+//! entries and unsynced file data** of durable file replacements (the
+//! temp-file, rename, directory-`fsync` protocol used for state files and
+//! sidecars). A replacement registers itself at its rename with
+//! [`register_volatile_rename`]; an `fsync` of the directory clears every
+//! registration in it ([`directory_synced`]). At a crash point, before the
+//! abort, every replacement still registered is undone: the previous file is
+//! put back (or the new name removed when there was none), and a replacement
+//! whose data was never synced is truncated to zero bytes. This is exactly
+//! what a power cut is allowed to do to an unsynced rename, so a missing
+//! directory `fsync` shows up as a lost state change after the reopen.
+//!
 //! `BICDB_TEST_FAIL_IO=<site>:<n>[+][,<site>:<n>[+]...]` makes the `n`-th
 //! call (1-based) of the named I/O site return `EIO` instead of doing the
 //! I/O. A trailing `+` keeps failing every later call too (a dead disk);
@@ -124,6 +136,7 @@ pub fn crash_now(volatile_tail: bool) -> ! {
 }
 
 fn crash_with(volatile_tail: bool, locked: Option<&Wal>) -> ! {
+    undo_volatile_renames();
     if volatile_tail {
         let wals = registry().lock().unwrap_or_else(|e| e.into_inner());
         for wal in wals.iter().filter_map(Weak::upgrade) {
@@ -303,6 +316,97 @@ pub fn io_fault(site: &str, path: &Path) -> std::io::Result<()> {
         }
     }
     Ok(())
+}
+
+/// Whether directory-entry power-loss emulation is requested for this
+/// process (`BICDB_TEST_DIR_VOLATILE=1`).
+pub fn volatile_dir_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED
+        .get_or_init(|| std::env::var("BICDB_TEST_DIR_VOLATILE").is_ok_and(|value| value == "1"))
+}
+
+struct VolatileRename {
+    target: PathBuf,
+    /// A hard link to the file the rename replaced; `None` when the target
+    /// did not exist before.
+    previous: Option<PathBuf>,
+    data_synced: bool,
+    /// The directory entry was synced; only unsynced data is still at risk.
+    entry_durable: bool,
+}
+
+fn volatile_renames() -> &'static Mutex<Vec<VolatileRename>> {
+    static RENAMES: OnceLock<Mutex<Vec<VolatileRename>>> = OnceLock::new();
+    RENAMES.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+/// Record a rename of a durable replacement onto `target` that no directory
+/// `fsync` has covered yet. `previous` is a hard link to the replaced file.
+/// Only call when [`volatile_dir_enabled`].
+pub fn register_volatile_rename(target: &Path, previous: Option<PathBuf>, data_synced: bool) {
+    let mut renames = volatile_renames().lock().unwrap_or_else(|e| e.into_inner());
+    // A newer rename onto the same name keeps the oldest durable previous
+    // file: undoing both must restore what was there before either.
+    if let Some(existing) = renames.iter_mut().find(|entry| entry.target == target) {
+        if let Some(link) = previous {
+            let _ = std::fs::remove_file(link);
+        }
+        existing.data_synced = data_synced;
+        existing.entry_durable = false;
+        return;
+    }
+    renames.push(VolatileRename {
+        target: target.to_path_buf(),
+        previous,
+        data_synced,
+        entry_durable: false,
+    });
+}
+
+/// An `fsync` of `dir` succeeded: every rename into it is now durable.
+pub fn directory_synced(dir: &Path) {
+    if !volatile_dir_enabled() {
+        return;
+    }
+    let mut renames = volatile_renames().lock().unwrap_or_else(|e| e.into_inner());
+    renames.retain_mut(|entry| {
+        if entry.target.parent() != Some(dir) {
+            return true;
+        }
+        if let Some(link) = entry.previous.take() {
+            let _ = std::fs::remove_file(link);
+        }
+        entry.entry_durable = true;
+        // Data that was never synced can still be lost after the entry is
+        // durable; keep only that part of the emulation.
+        !entry.data_synced
+    });
+}
+
+fn undo_volatile_renames() {
+    if !volatile_dir_enabled() {
+        return;
+    }
+    let renames = volatile_renames().lock().unwrap_or_else(|e| e.into_inner());
+    for entry in renames.iter().rev() {
+        if entry.entry_durable {
+            // The name survives; its unsynced contents do not.
+            let _ = std::fs::OpenOptions::new()
+                .write(true)
+                .open(&entry.target)
+                .and_then(|file| file.set_len(0));
+            continue;
+        }
+        match &entry.previous {
+            Some(link) => {
+                let _ = std::fs::rename(link, &entry.target);
+            }
+            None => {
+                let _ = std::fs::remove_file(&entry.target);
+            }
+        }
+    }
 }
 
 #[cfg(test)]

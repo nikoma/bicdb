@@ -8804,6 +8804,10 @@ pub struct Transaction {
     // transaction WAL; this in-memory copy is published to the event segment
     // only after `write_durable` succeeds.
     pending_record_audit_events: Vec<Event>,
+    // Unit-test crash emulation only: stop before the in-gate publication
+    // boundary while leaving the durable decision available for recovery.
+    #[cfg(test)]
+    skip_commit_outboxes_for_crash_test: bool,
     // Verified incoming journal entries committed with their projection.
     imported_record_audit_events: Vec<Event>,
     // Verified mesh projection: preserve the signed origin events rather than
@@ -30187,6 +30191,7 @@ mod index_maintenance_tests {
                     Record::new("w-1").with_metadata(json!({"score": 7})),
                 )
                 .unwrap();
+                tx.skip_commit_outboxes_for_crash_test = true;
                 let commit_seq = db.commit_buffered_transaction(&mut tx).unwrap();
                 db.tx_log_handle().write_durable(commit_seq).unwrap();
 

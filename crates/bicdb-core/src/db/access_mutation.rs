@@ -880,6 +880,8 @@ impl BicDb {
             tx_states: Arc::clone(&self.tx_states),
             pending_broker_publishes: Mutex::new(Vec::new()),
             pending_record_audit_events: Vec::new(),
+            #[cfg(test)]
+            skip_commit_outboxes_for_crash_test: false,
             imported_record_audit_events: Vec::new(),
             imported_projection: false,
             mutation_actor: None,

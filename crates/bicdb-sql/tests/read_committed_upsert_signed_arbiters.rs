@@ -172,7 +172,13 @@ fn run(kind: &str) {
             })();
             done.send(result).unwrap();
         });
-        let early = received.recv_timeout(Duration::from_millis(100));
+        let early = received.recv_timeout(if c.waits {
+            Duration::from_millis(100)
+        } else {
+            // The owner stays pending throughout: allow scheduler/I/O slack
+            // while proving NULLS DISTINCT can commit independently of it.
+            Duration::from_secs(5)
+        });
         let waited = early.is_err();
         let owner_result = owner.commit();
         let result = match early {

@@ -412,6 +412,23 @@ mod tests {
         let mut db = BicDb::open_with_config(path, config(paged)).unwrap();
         let mut session = SqlSession::new(&mut db);
         let cut = std::env::var("BICDB_TEST_RECYCLE_CUT").unwrap();
+        if cut.starts_with("recreate_") {
+            session.execute("BEGIN").unwrap();
+            session.execute("SAVEPOINT before_recreate").unwrap();
+            session.execute("DROP TABLE crash_source").unwrap();
+            session
+                .execute("CREATE TABLE crash_source(k int PRIMARY KEY,v text)")
+                .unwrap();
+            session
+                .execute("INSERT INTO crash_source VALUES(2,'replacement')")
+                .unwrap();
+            if cut == "recreate_commit" {
+                session.execute("COMMIT").unwrap();
+            } else if cut == "recreate_rollback" {
+                session.execute("ROLLBACK TO before_recreate").unwrap();
+            }
+            std::process::exit(99);
+        }
         if cut.starts_with("restore_") {
             session.execute("DROP TABLE crash_source").unwrap();
             if explicit {
@@ -465,6 +482,66 @@ mod tests {
         }
         std::process::exit(99);
     }
+    #[test]
+    fn process_crash_recreated_name_restores_only_its_proven_backing() {
+        for paged in [false, true] {
+            for stage in ["recreate_pending", "recreate_commit", "recreate_rollback"] {
+                let root = tempfile::tempdir().unwrap();
+                {
+                    let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
+                    seed_crash_source(&mut db);
+                }
+                let output = Command::new(std::env::current_exe().unwrap())
+                    .args([
+                        "--exact",
+                        "session::recycle_bin_journal::tests::crash_cut_child",
+                        "--nocapture",
+                    ])
+                    .env("BICDB_TEST_RECYCLE_PATH", root.path())
+                    .env("BICDB_TEST_RECYCLE_PAGED", paged.to_string())
+                    .env("BICDB_TEST_RECYCLE_EXPLICIT", "true")
+                    .env("BICDB_TEST_RECYCLE_CUT", stage)
+                    .output()
+                    .unwrap();
+                assert_eq!(
+                    output.status.code(),
+                    Some(99),
+                    "{paged}/{stage}: {} {}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                for reopen in 0..2 {
+                    let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
+                    super::super::recycle_bin::recover_interrupted_recycle_bin_renames(&mut db)
+                        .unwrap_or_else(|error| panic!("{paged}/{stage}/{reopen}: {error}"));
+                    ensure_primary_key_indexes(&mut db).unwrap();
+                    let mut sql = SqlSession::new(&mut db);
+                    let (id, value) = if stage == "recreate_commit" {
+                        (2, "replacement")
+                    } else {
+                        (1, "acknowledged")
+                    };
+                    assert_eq!(
+                        sql.execute("SELECT k,v FROM crash_source").unwrap().rows,
+                        vec![vec![SqlValue::Int(id), SqlValue::String(value.into())]],
+                        "{paged}/{stage}/{reopen}"
+                    );
+                    if stage != "recreate_commit" {
+                        assert_restored_metadata(sql.db_ref());
+                    }
+                    assert_eq!(
+                        sql.execute(&format!(
+                            "INSERT INTO crash_source(k,v) VALUES({id},'duplicate')"
+                        ))
+                        .unwrap_err()
+                        .sqlstate(),
+                        "23505"
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn process_crash_every_move_stage_and_transaction_decision() {
         for paged in [false, true] {

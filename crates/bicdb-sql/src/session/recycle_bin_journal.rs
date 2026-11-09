@@ -369,6 +369,39 @@ mod tests {
             StorageMode::EmbeddedMemory
         })
     }
+    fn seed_crash_source(db: &mut BicDb) {
+        let mut sql = SqlSession::new(db);
+        for statement in [
+            "CREATE ROLE cut_reader LOGIN NOSUPERUSER",
+            "CREATE TABLE crash_source(k int PRIMARY KEY,v text,seq_id serial)",
+            "CREATE INDEX crash_source_v ON crash_source(v)",
+            "GRANT SELECT ON crash_source TO cut_reader",
+            "CREATE FUNCTION cut_trigger_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
+            "CREATE TRIGGER cut_trigger BEFORE UPDATE ON crash_source FOR EACH ROW EXECUTE FUNCTION cut_trigger_fn()",
+            "INSERT INTO crash_source(k,v) VALUES(1,'acknowledged')",
+        ] {sql.execute(statement).unwrap_or_else(|error|panic!("{statement}: {error}"));}
+    }
+    fn assert_restored_metadata(db: &BicDb) {
+        assert!(list_privileges(db)
+            .unwrap()
+            .iter()
+            .any(|grant| grant.object_name == "crash_source" && grant.grantee == "cut_reader"));
+        assert!(list_triggers(db)
+            .unwrap()
+            .iter()
+            .any(|trigger| trigger.table_name == "crash_source" && trigger.name == "cut_trigger"));
+        assert!(list_sequences(db).unwrap().iter().any(|sequence| sequence
+            .owned_by_table
+            .as_deref()
+            == Some("crash_source")
+            && sequence.owned_by_column.as_deref() == Some("seq_id")));
+        assert!(load_schema(db, "crash_source")
+            .unwrap()
+            .unwrap()
+            .columns
+            .iter()
+            .any(|column| column.name == "seq_id" && column.default_sequence.is_some()));
+    }
     #[test]
     fn crash_cut_child() {
         let Ok(path) = std::env::var("BICDB_TEST_RECYCLE_PATH") else {
@@ -452,14 +485,7 @@ mod tests {
                     let root = tempfile::tempdir().unwrap();
                     {
                         let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
-                        let mut sql = SqlSession::new(&mut db);
-                        for statement in [
-                            "CREATE TABLE crash_source(k int PRIMARY KEY,v text)",
-                            "CREATE INDEX crash_source_v ON crash_source(v)",
-                            "INSERT INTO crash_source VALUES(1,'acknowledged')",
-                        ] {
-                            sql.execute(statement).unwrap();
-                        }
+                        seed_crash_source(&mut db);
                     }
                     let output = Command::new(std::env::current_exe().unwrap())
                         .args([
@@ -508,8 +534,9 @@ mod tests {
                             ]],
                             "{paged}/{explicit}/{stage}/{reopen}"
                         );
+                        assert_restored_metadata(sql.db_ref());
                         assert_eq!(
-                            sql.execute("INSERT INTO crash_source VALUES(1,'duplicate')")
+                            sql.execute("INSERT INTO crash_source(k,v) VALUES(1,'duplicate')")
                                 .unwrap_err()
                                 .sqlstate(),
                             "23505"
@@ -526,11 +553,7 @@ mod tests {
                 let root = tempfile::tempdir().unwrap();
                 {
                     let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
-                    let mut sql = SqlSession::new(&mut db);
-                    sql.execute("CREATE TABLE crash_source(k int PRIMARY KEY,v text)")
-                        .unwrap();
-                    sql.execute("INSERT INTO crash_source VALUES(1,'acknowledged')")
-                        .unwrap();
+                    seed_crash_source(&mut db);
                 }
                 let output = Command::new(std::env::current_exe().unwrap())
                     .args([
@@ -595,14 +618,7 @@ mod tests {
                     let root = tempfile::tempdir().unwrap();
                     {
                         let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
-                        let mut sql = SqlSession::new(&mut db);
-                        for statement in [
-                            "CREATE TABLE crash_source(k int PRIMARY KEY,v text)",
-                            "CREATE INDEX crash_source_v ON crash_source(v)",
-                            "INSERT INTO crash_source VALUES(1,'acknowledged')",
-                        ] {
-                            sql.execute(statement).unwrap();
-                        }
+                        seed_crash_source(&mut db);
                     }
                     let output = Command::new(std::env::current_exe().unwrap())
                         .args([
@@ -651,8 +667,9 @@ mod tests {
                             ]],
                             "{paged}/{explicit}/{stage}/{reopen}"
                         );
+                        assert_restored_metadata(sql.db_ref());
                         assert_eq!(
-                            sql.execute("INSERT INTO crash_source VALUES(1,'duplicate')")
+                            sql.execute("INSERT INTO crash_source(k,v) VALUES(1,'duplicate')")
                                 .unwrap_err()
                                 .sqlstate(),
                             "23505"

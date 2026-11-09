@@ -1722,6 +1722,12 @@ impl<'db> SqlSession<'db> {
         let Some(arbiter) = self.memoized_unique_arbiter(table, schema, conflict_columns)? else {
             return Ok(None);
         };
+        if unique_key_values(record, schema, &arbiter.key)
+            .iter()
+            .any(|value| matches!(value, SqlValue::Json(_)))
+        {
+            return self.read_committed_json_arbiter_conflict(table, schema, record, &arbiter);
+        }
         if self.signed_mutation_grant(table).is_some() {
             return self.read_committed_signed_arbiter_conflict(table, schema, record, &arbiter);
         }
@@ -1756,6 +1762,122 @@ impl<'db> SqlSession<'db> {
             None
         };
         Ok(Some((latest, snapshot, None)))
+    }
+
+    fn read_committed_json_arbiter_conflict(
+        &mut self,
+        table: &str,
+        schema: &TableSchema,
+        record: &Record,
+        arbiter: &records::UniqueConflictArbiter,
+    ) -> Result<
+        Option<(
+            Option<Record>,
+            u64,
+            Option<bicdb_core::ReadCommittedRowReservation>,
+        )>,
+    > {
+        let Some((scope, key)) =
+            records::canonical_unique_reservation_key(table, schema, arbiter, record)?
+        else {
+            return Ok(None);
+        };
+        let cancellation = self.blocking_row_wait_token();
+        let tx = self.tx.as_ref().expect("RC transaction");
+        match &cancellation {
+            Some(token) => tx.reserve_integrity_key_cancellable(&scope, &key, token)?,
+            None => tx.reserve_integrity_key(&scope, &key)?,
+        }
+        let values = unique_key_values(record, schema, &arbiter.key);
+        let signed = self.signed_mutation_grant(table).is_some();
+        let mut visited = std::collections::HashSet::new();
+        if let Some(index) = &arbiter.index_name {
+            let tx = self.tx.as_ref().expect("RC transaction");
+            match &cancellation {
+                Some(token) => tx.reserve_unique_index_record_cancellable(index, record, token)?,
+                None => tx.reserve_unique_index_record(index, record)?,
+            }
+            // The physical key often already has the canonical representation;
+            // try it before the existing JSON semantic scan fallback.
+            let index_values = unique_key_index_values(schema, &arbiter.key, &values)?;
+            for id in self.db_ref().lookup_index_exact(index, &index_values)? {
+                visited.insert(id.clone());
+                let found = if signed {
+                    self.read_committed_signed_matching_row(
+                        table,
+                        schema,
+                        arbiter,
+                        &values,
+                        &id,
+                        cancellation.as_ref(),
+                    )?
+                } else {
+                    self.read_committed_matching_arbiter_row(table, schema, arbiter, &values, &id)?
+                        .map(|(row, snapshot)| (row, snapshot, None))
+                };
+                if found.is_some() {
+                    return Ok(found);
+                }
+            }
+        }
+        // SQL JSON uniqueness already reserves this exact canonical scope
+        // before checking current committed state. Reuse that contract rather
+        // than refreshing unrelated relations or trusting JSON spelling/order.
+        for candidate in records::current_integrity_records(self.db_ref(), self.tx.as_ref(), table)?
+        {
+            self.cancellation.check()?;
+            if visited.contains(&candidate.id)
+                || !arbiter.applies_to(&candidate)?
+                || !records::unique_key_values_not_distinct(
+                    schema,
+                    &arbiter.key,
+                    &unique_key_values(&candidate, schema, &arbiter.key),
+                    &values,
+                )?
+            {
+                continue;
+            }
+            let found = if signed {
+                self.read_committed_signed_matching_row(
+                    table,
+                    schema,
+                    arbiter,
+                    &values,
+                    &candidate.id,
+                    cancellation.as_ref(),
+                )?
+            } else {
+                self.read_committed_matching_arbiter_row(
+                    table,
+                    schema,
+                    arbiter,
+                    &values,
+                    &candidate.id,
+                )?
+                .map(|(row, snapshot)| (row, snapshot, None))
+            };
+            if found.is_some() {
+                return Ok(found);
+            }
+        }
+        let exclusive = self.exclusive;
+        let tx = self.tx.as_mut().expect("RC transaction");
+        if signed {
+            let token =
+                tx.reserve_authorized_read_committed_row(table, &record.id, cancellation.as_ref())?;
+            Ok(Some((None, 0, Some(token))))
+        } else {
+            let latest = if exclusive {
+                tx.read_committed_update_record_nowait(table, &record.id)?
+            } else {
+                tx.read_committed_update_record(table, &record.id)?
+            };
+            Ok(Some((
+                None,
+                latest.map_or(0, |(_, snapshot)| snapshot),
+                None,
+            )))
+        }
     }
 
     fn read_committed_signed_arbiter_conflict(

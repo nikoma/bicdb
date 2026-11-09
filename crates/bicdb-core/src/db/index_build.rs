@@ -1998,6 +1998,21 @@ impl BicDb {
         Ok(())
     }
 
+    /// Whether a SQL candidate lookup can use this index. An interrupted
+    /// initial build must fall back to exact row evaluation; an unpublished
+    /// replacement can still serve its previous completed generation.
+    pub fn full_text_index_is_ready(&self, name: &str) -> Result<bool> {
+        let state = self
+            .indexes
+            .get(name)
+            .ok_or_else(|| BicDbError::Index(format!("index `{name}` not found")))?
+            .read();
+        if state.definition.kind != IndexKind::FullText {
+            return Err(BicDbError::Index(format!("index `{name}` is not full-text")));
+        }
+        Ok(!state.full_text_build_incomplete)
+    }
+
     pub fn lookup_full_text_term(
         &self,
         name: &str,

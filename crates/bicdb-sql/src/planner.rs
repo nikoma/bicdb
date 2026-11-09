@@ -4527,6 +4527,17 @@ pub(crate) fn merge_novel_right_ordinals(
     })
 }
 
+/// A retained join result must fit before cloning its values into a new row.
+pub(crate) fn materialize_join_row(
+    left: &[SqlValue],
+    left_columns: &[String],
+    right: &[SqlValue],
+    right_columns: &[String],
+) -> Result<SlotRow> {
+    crate::join_budget::retain(left, right)?;
+    Ok(merge_slot_rows(left, left_columns, right, right_columns))
+}
+
 pub(crate) fn merge_slot_rows(
     left: &[SqlValue],
     left_columns: &[String],

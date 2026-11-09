@@ -1632,8 +1632,13 @@ impl<'db> SqlSession<'db> {
                 {
                     continue;
                 }
-                let candidate_row =
-                    merge_slot_rows(&target_row, &target_columns, from_row, &from_rows.columns);
+                // This provisional row can become a retained assignment candidate.
+                let candidate_row = materialize_join_row(
+                    &target_row,
+                    &target_columns,
+                    from_row,
+                    &from_rows.columns,
+                )?;
                 // The predicate recheck through the statement's engine (the
                 // per-candidate engine it replaced had no outer row; clear it
                 // for the evaluation so identifier resolution is identical).
@@ -1925,7 +1930,12 @@ impl<'db> SqlSession<'db> {
                     self.cancellation.check()?;
                 }
                 for right in &row_set.rows {
-                    merged_rows.push(merge_slot_rows(left, &columns, right, &row_set.columns));
+                    merged_rows.push(materialize_join_row(
+                        left,
+                        &columns,
+                        right,
+                        &row_set.columns,
+                    )?);
                 }
             }
             rows = merged_rows;
@@ -2067,12 +2077,12 @@ impl<'db> SqlSession<'db> {
                                 schema.as_ref(),
                                 &record,
                             )?;
-                            let row = merge_slot_rows(
+                            let row = materialize_join_row(
                                 &target_row,
                                 target_columns.as_ref(),
                                 using_row,
                                 &using_rows.columns,
-                            );
+                            )?;
                             records.push(DeleteCandidate {
                                 record,
                                 columns: predicate_columns.clone(),
@@ -2296,7 +2306,12 @@ impl<'db> SqlSession<'db> {
                     self.cancellation.check()?;
                 }
                 for right in &row_set.rows {
-                    merged_rows.push(merge_slot_rows(left, &columns, right, &row_set.columns));
+                    merged_rows.push(materialize_join_row(
+                        left,
+                        &columns,
+                        right,
+                        &row_set.columns,
+                    )?);
                 }
             }
             rows = merged_rows;
@@ -6738,12 +6753,12 @@ impl<'db> SqlSession<'db> {
                         }
                         let from_row = &from_rows.rows[source_positions[position]];
                         candidates.push((
-                            merge_slot_rows(
+                            materialize_join_row(
                                 &target_row,
                                 target_columns,
                                 from_row,
                                 &from_rows.columns,
-                            ),
+                            )?,
                             stored,
                         ));
                     }
@@ -6784,12 +6799,14 @@ impl<'db> SqlSession<'db> {
                             if seen.contains(&stored.id) {
                                 continue;
                             }
-                            let candidate_row = merge_slot_rows(
+                            // This provisional row may become a retained UPDATE
+                            // candidate. Count its clone before predicate evaluation.
+                            let candidate_row = materialize_join_row(
                                 &target_row,
                                 target_columns,
                                 from_row,
                                 &from_rows.columns,
-                            );
+                            )?;
                             // A point-plan hit is the whole predicate: no re-check.
                             let matches = match selection {
                                 None => true,

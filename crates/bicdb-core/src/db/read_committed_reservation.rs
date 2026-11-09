@@ -10,7 +10,7 @@ pub struct ReadCommittedRowReservation {
     collection: String,
     id: String,
     version: Option<u64>,
-    rollback_epoch: u64,
+    lock_epoch: u64,
     pending_write: Option<usize>,
     raw: Option<Arc<Record>>,
 }
@@ -21,13 +21,65 @@ impl std::fmt::Debug for ReadCommittedRowReservation {
     }
 }
 
+#[derive(Debug, Default)]
+pub(super) struct RowReservationEpochs {
+    next: u64,
+    rows: FxHashMap<String, FxHashMap<String, u64>>,
+}
+
 impl Transaction {
-    pub(super) fn invalidate_row_reservations(&self) {
-        let _ = self.row_reservation_epoch.fetch_update(
-            AtomicOrdering::AcqRel,
-            AtomicOrdering::Acquire,
-            |epoch| Some(epoch.saturating_add(1)),
-        );
+    pub(super) fn invalidate_row_reservations(&self, released: &[RecordLockKey]) {
+        if !self.row_reservations_active.load(AtomicOrdering::Acquire) {
+            return;
+        }
+        let mut epochs = self.row_reservation_epochs.lock();
+        for (collection, id) in released {
+            if let Some(rows) = epochs.rows.get_mut(collection) {
+                rows.remove(id);
+                if rows.is_empty() {
+                    epochs.rows.remove(collection);
+                }
+            }
+        }
+    }
+
+    pub(super) fn invalidate_row_reservation_writes(&self, writes: &[TxWrite]) {
+        if !self.row_reservations_active.load(AtomicOrdering::Acquire) {
+            return;
+        }
+        let mut epochs = self.row_reservation_epochs.lock();
+        for write in writes {
+            if let Some(rows) = epochs.rows.get_mut(&write.collection) {
+                rows.remove(&write.record_id);
+                if rows.is_empty() {
+                    epochs.rows.remove(&write.collection);
+                }
+            }
+        }
+    }
+
+    fn register_row_reservation(&self, collection: &str, id: &str) -> Result<u64> {
+        let mut epochs = self.row_reservation_epochs.lock();
+        if let Some(epoch) = epochs
+            .rows
+            .get(collection)
+            .and_then(|rows| rows.get(id))
+            .copied()
+        {
+            return Ok(epoch);
+        }
+        let epoch = epochs.next.checked_add(1).ok_or_else(|| {
+            BicDbError::TransactionConflict("row reservation epochs exhausted".into())
+        })?;
+        epochs.next = epoch;
+        epochs
+            .rows
+            .entry(collection.to_owned())
+            .or_default()
+            .insert(id.to_owned(), epoch);
+        self.row_reservations_active
+            .store(true, AtomicOrdering::Release);
+        Ok(epoch)
     }
 
     /// Reserve a current row for an application transaction's authorized read.
@@ -78,12 +130,6 @@ impl Transaction {
             .checked_sub(now)
             .filter(|value| *value > 0)
             .ok_or(BicDbError::QueryTimedOut)?;
-        let epoch = self.row_reservation_epoch.load(AtomicOrdering::Acquire);
-        if epoch == u64::MAX {
-            return Err(BicDbError::TransactionConflict(
-                "row reservation epoch exhausted".into(),
-            ));
-        }
         if let Some(parent) = cancellation {
             let deadline = std::time::Instant::now()
                 .checked_add(Duration::from_millis(remaining as u64))
@@ -101,6 +147,7 @@ impl Transaction {
                 &self.locked_keys,
             )?;
         }
+        let epoch = self.register_row_reservation(collection, id)?;
         let pending_write = self
             .write_index
             .get(collection)
@@ -117,7 +164,7 @@ impl Transaction {
             collection: collection.to_owned(),
             id: id.to_owned(),
             version: Self::latest_committed_record_sequence(db, collection, id)?,
-            rollback_epoch: epoch,
+            lock_epoch: epoch,
             pending_write,
             raw,
         };
@@ -138,7 +185,14 @@ impl Transaction {
         }
         if self.id != token.transaction
             || !Arc::ptr_eq(&db.durability, &token.health)
-            || self.row_reservation_epoch.load(AtomicOrdering::Acquire) != token.rollback_epoch
+            || self
+                .row_reservation_epochs
+                .lock()
+                .rows
+                .get(&token.collection)
+                .and_then(|rows| rows.get(&token.id))
+                .copied()
+                != Some(token.lock_epoch)
             || !self.holds_record_lock(&token.collection, &token.id)
             || self
                 .write_index

@@ -8798,7 +8798,8 @@ pub struct Transaction {
     /// exclusive database guard may install it: the owner must be able to
     /// reach COMMIT while this transaction waits.
     blocking_row_waits: Mutex<Option<crate::CancellationToken>>,
-    row_reservation_epoch: AtomicU64,
+    row_reservation_epochs: Mutex<read_committed_reservation::RowReservationEpochs>,
+    row_reservations_active: AtomicBool,
     // Own handle to the active-snapshot registry so drop can deregister this
     // transaction's snapshot (unblocking version-chain GC) without touching `db`.
     active_snapshots: Arc<ActiveSnapshots>,
@@ -17028,6 +17029,7 @@ impl Transaction {
             self.db_ref()
                 .detect_buffered_write_conflicts(self, &writes)?;
         }
+        self.invalidate_row_reservation_writes(&writes);
         if !writes.is_empty() && !self.prepared_wal.is_empty() {
             self.prepared_wal.clear();
         }
@@ -17511,7 +17513,7 @@ impl Transaction {
             }
             locked.split_off(mark.lock_len)
         };
-        self.invalidate_row_reservations();
+        self.invalidate_row_reservations(&released);
         release_owned_write_locks(&self.write_locks, self.id, &released);
         Ok(())
     }
@@ -17572,7 +17574,7 @@ impl Transaction {
             !retained.contains(key)
                 && (retained.is_empty() || !integrity_reservations::is_event(key))
         });
-        self.invalidate_row_reservations();
+        self.invalidate_row_reservations(&released);
         release_owned_write_locks(&self.write_locks, self.id, &released);
         Ok(())
     }
@@ -17593,7 +17595,7 @@ impl Transaction {
             let locked = self.locked_keys.get_mut();
             locked.split_off(lock_len)
         };
-        self.invalidate_row_reservations();
+        self.invalidate_row_reservations(&released);
         release_owned_write_locks(&self.write_locks, self.id, &released);
         Ok(())
     }

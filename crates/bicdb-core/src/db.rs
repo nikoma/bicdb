@@ -16191,9 +16191,10 @@ impl Transaction {
             if actor.deadline_unix_ms <= now {
                 return Err(BicDbError::QueryTimedOut);
             }
-            cancellation.child_with_deadline(
-                Instant::now() + Duration::from_millis((actor.deadline_unix_ms - now) as u64),
-            )
+            Instant::now()
+                .checked_add(Duration::from_millis((actor.deadline_unix_ms - now) as u64))
+                .map(|deadline| cancellation.child_with_deadline(deadline))
+                .unwrap_or_else(|| cancellation.clone())
         } else {
             cancellation.clone()
         };

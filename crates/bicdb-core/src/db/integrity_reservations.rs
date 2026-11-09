@@ -50,7 +50,31 @@ impl Table {
         mode: Mode,
         locked_keys: &Mutex<LockedKeys>,
     ) -> Result<()> {
-        self.reserve_inner(transaction, constraint, value, mode, locked_keys, None)
+        let key = (constraint.to_owned(), value.to_owned());
+        let mut shard = self.keys.shards[self.keys.shard_idx(&key)].lock();
+        let owners = shard.entry(key).or_default();
+        let conflict = owners.exclusive.is_some_and(|owner| owner != transaction)
+            || matches!(mode, Mode::Exclusive)
+                && owners.shared.iter().any(|owner| *owner != transaction);
+        if conflict {
+            return Err(BicDbError::TransactionConflict(
+                "constraint key is reserved by another transaction".into(),
+            ));
+        }
+        let prefix = match mode {
+            Mode::Shared => {
+                owners.shared.insert(transaction);
+                SHARED_PREFIX
+            }
+            Mode::Exclusive => {
+                owners.exclusive = Some(transaction);
+                EXCLUSIVE_PREFIX
+            }
+        };
+        locked_keys
+            .lock()
+            .insert((format!("{prefix}{constraint}"), value.to_owned()));
+        Ok(())
     }
 
     pub(super) fn reserve_cancellable(
@@ -61,14 +85,24 @@ impl Table {
         locked_keys: &Mutex<LockedKeys>,
         context: &WaitContext<'_>,
     ) -> Result<()> {
-        self.reserve_inner(
-            transaction,
-            constraint,
-            value,
-            Mode::Exclusive,
-            locked_keys,
-            Some(context),
-        )
+        (context.check_health)()?;
+        context.cancellation.check()?;
+        match self.reserve(transaction, constraint, value, Mode::Exclusive, locked_keys) {
+            Ok(()) => {
+                (context.check_health)()?;
+                context.cancellation.check()?;
+                Ok(())
+            }
+            Err(BicDbError::TransactionConflict(_)) => self.reserve_inner(
+                transaction,
+                constraint,
+                value,
+                Mode::Exclusive,
+                locked_keys,
+                context,
+            ),
+            Err(error) => Err(error),
+        }
     }
 
     fn reserve_inner(
@@ -78,7 +112,7 @@ impl Table {
         value: &str,
         mode: Mode,
         locked_keys: &Mutex<LockedKeys>,
-        context: Option<&WaitContext<'_>>,
+        context: &WaitContext<'_>,
     ) -> Result<()> {
         let key = (constraint.to_owned(), value.to_owned());
         let shard_index = self.keys.shard_idx(&key);
@@ -86,10 +120,8 @@ impl Table {
         let mut edges = Vec::new();
         let mut previous_owners = Vec::new();
         loop {
-            if let Some(context) = context {
-                (context.check_health)()?;
-                context.cancellation.check()?;
-            }
+            (context.check_health)()?;
+            context.cancellation.check()?;
             let mut shard = self.keys.shards[shard_index].lock();
             let owners = shard.entry(key.clone()).or_default();
             let mut blockers = Vec::new();
@@ -106,11 +138,6 @@ impl Table {
                 );
             }
             if !blockers.is_empty() {
-                let Some(context) = context else {
-                    return Err(BicDbError::TransactionConflict(
-                        "constraint key is reserved by another transaction".into(),
-                    ));
-                };
                 if started.elapsed() >= Duration::from_secs(240) {
                     return Err(BicDbError::TransactionConflict(
                         "constraint key wait exceeded its bounded safeguard".into(),
@@ -157,10 +184,8 @@ impl Table {
                 .lock()
                 .insert((format!("{prefix}{constraint}"), value.to_owned()));
             drop(shard);
-            if let Some(context) = context {
-                (context.check_health)()?;
-                context.cancellation.check()?;
-            }
+            (context.check_health)()?;
+            context.cancellation.check()?;
             return Ok(());
         }
     }

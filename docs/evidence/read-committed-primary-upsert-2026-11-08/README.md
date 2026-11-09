@@ -20,11 +20,22 @@ write and savepoint in the waiting transaction. It checks the returned value,
 commits, and verifies both rows. Remote log: `read-committed-upsert-all.log`.
 The earlier simpler primary-key fixture passed2/2 at93f6c2fa.
 
-This is deliberately scoped to primary-key arbiters whose SQL row identity is
-already exact. Secondary-unique and typed-identity arbiters retain their previous
-behavior; the existing secondary-unique after-snapshot regression still expects
+This is deliberately scoped to unsigned primary-key arbiters whose SQL row
+identity is already exact. Signed mutation-grant sessions retain their previous
+action-specific authorization and explicit retry requirement; their protected
+write helper does not yet carry the refreshed row version. Secondary-unique and
+typed-identity arbiters also retain their previous behavior; the existing secondary-unique after-snapshot regression still expects
 a retryable40001 for explicit DO UPDATE. Pending secondary winners need
 transaction-lifetime unique-key reservations across all relevant writers, a
 separate semantic/performance change. This evidence does not close that gap or
 claim all PostgreSQL ON CONFLICT concurrency semantics. Fixed-snapshot isolation
 keeps its existing path. No application acceptance result is claimed here.
+
+Independent review found the initial helper validated UPDATE authority for a
+possible fresh INSERT. Source2f485893 reproduces denial of an INSERT-only signed
+grant (`cannot lock for Update`); the final scope guard excludes signed sessions
+from this optimization rather than changing their native authorization contract.
+New tests cover fresh/conflicting DO UPDATE and DO NOTHING under INSERT-only
+authority in both modes, plus an exact signed snapshot-invisible winner schedule
+that must retain its retry requirement and never overwrite the committed winner.
+See [the remaining work ledger](../../read-committed-upsert-work.md).

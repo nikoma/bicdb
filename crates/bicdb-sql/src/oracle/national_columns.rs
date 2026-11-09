@@ -232,7 +232,24 @@ fn relation_column(
                     );
                 }
             }
-            let schema = load_schema(db, &relation_name(name).ok()?).ok()??;
+            let relation_name = relation_name(name).ok()?;
+            let Some(schema) = load_schema(db, &relation_name).ok()? else {
+                let view = load_view(db, &relation_name).ok()??;
+                let statements = parse_statements(&view.query_sql).ok()?;
+                let [Statement::Query(query)] = statements.as_slice() else {
+                    return None;
+                };
+                let aliases = view
+                    .columns
+                    .iter()
+                    .filter(|column| !column.hidden)
+                    .map(|column| TableAliasColumnDef {
+                        name: Ident::with_quote('"', &column.name),
+                        data_type: None,
+                    })
+                    .collect::<Vec<_>>();
+                return projection_column(db, query, column, &aliases, depth + 1);
+            };
             let mut columns = schema
                 .columns
                 .iter()

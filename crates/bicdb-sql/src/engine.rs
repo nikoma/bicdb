@@ -4608,6 +4608,16 @@ impl<'db> SqlEngine<'db> {
 
     pub fn execute(&self, sql: &str) -> Result<SqlResult> {
         self.db_ref().check_recovery_state()?;
+        // A bare read engine has no surrounding session to publish an empty
+        // search path after public was dropped. Preserve an existing caller
+        // scope; otherwise derive the engine's own path for scalar metadata.
+        let _path_scope = if crate::search_path::active_path().is_none() {
+            Some(crate::search_path::PathScope::enter(
+                crate::search_path::binding_path(self.db_ref(), &self.session_gucs)?,
+            ))
+        } else {
+            None
+        };
         let mut profile = SqlProfileScope::new(sql);
         let _schema_cache = SqlSchemaCacheScope::new();
         let result = self.execute_inner(sql);

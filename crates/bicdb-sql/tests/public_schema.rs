@@ -1,6 +1,6 @@
 //! PostgreSQL16 references retained in public-schema-pg16-reference.json.
 use bicdb_core::{BicDb, DbConfig};
-use bicdb_sql::{SqlSession, SqlValue};
+use bicdb_sql::{SqlEngine, SqlSession, SqlValue};
 fn config() -> DbConfig {
     DbConfig::default().with_fsync(false)
 }
@@ -53,6 +53,13 @@ fn dropping_public_is_persistent_and_creation_follows_the_remaining_search_path(
             .unwrap();
     }
     let mut db = BicDb::open_with_config(root.path(), config()).unwrap();
+    assert_eq!(
+        SqlEngine::new(&db)
+            .execute("SELECT current_schema()")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Null]]
+    );
     let mut s = SqlSession::new(&mut db);
     assert_absent(&mut s);
     s.execute("CREATE SCHEMA alternate").unwrap();

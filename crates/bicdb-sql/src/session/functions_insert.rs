@@ -1510,9 +1510,19 @@ impl<'db> SqlSession<'db> {
                 select_required,
                 std::slice::from_ref(&record),
             )?;
-            if let Some(existing) =
-                self.find_conflict_record(table, schema, &record, &conflict_columns)?
-            {
+            // A READ COMMITTED primary-key upsert must reserve the row before
+            // deciding INSERT versus UPDATE. The winner may commit while this
+            // statement waits, leaving it invisible to the statement snapshot.
+            let refreshed =
+                self.read_committed_primary_conflict(table, schema, &record, &conflict_columns)?;
+            let (existing, conflict_snapshot) = match refreshed {
+                Some((existing, snapshot)) => (existing, snapshot),
+                None => (
+                    self.find_conflict_record(table, schema, &record, &conflict_columns)?,
+                    0,
+                ),
+            };
+            if let Some(existing) = existing {
                 match &on_conflict.action {
                     OnConflictAction::DoNothing => {}
                     OnConflictAction::DoUpdate(update) => {
@@ -1621,7 +1631,10 @@ impl<'db> SqlSession<'db> {
                             true,
                             Some(&self.sql_engine()),
                         )?;
-                        self.update_session_record(table, updated.clone())?;
+                        self.insert_session_records_with_statement_snapshots(
+                            table,
+                            std::iter::once((updated.clone(), conflict_snapshot)),
+                        )?;
                         self.apply_foreign_key_parent_update(table, schema, &existing, &updated)?;
                         self.fire_after_row_triggers(
                             table,
@@ -1664,6 +1677,60 @@ impl<'db> SqlSession<'db> {
             &affected_records,
             affected_records.len(),
         )
+    }
+
+    /// Recheck only the arbiter row; other relations retain the statement's
+    /// original snapshot. Fixed-snapshot isolation keeps its existing conflict.
+    fn read_committed_primary_conflict(
+        &mut self,
+        table: &str,
+        schema: Option<&TableSchema>,
+        record: &Record,
+        conflict_columns: &[String],
+    ) -> Result<Option<(Option<Record>, u64)>> {
+        if !self
+            .tx
+            .as_ref()
+            .is_some_and(|tx| tx.isolation() == bicdb_core::TransactionIsolation::ReadCommitted)
+        {
+            return Ok(None);
+        }
+        let Some(schema) = schema else {
+            return Ok(None);
+        };
+        let Some(arbiter) = self.memoized_unique_arbiter(table, schema, conflict_columns)? else {
+            return Ok(None);
+        };
+        let Some(columns) = primary_key_columns_for_unique_arbiter(schema, &arbiter) else {
+            return Ok(None);
+        };
+        if primary_key_requires_typed_identity(schema) {
+            return Ok(None);
+        }
+        let key = record_column_values(record, schema, conflict_columns);
+        let id = record_id_from_column_values(table, schema, &columns, &key)?;
+        let grant = self.signed_mutation_grant(table);
+        let tx = self.tx.as_mut().expect("checked transaction");
+        let refreshed = match grant {
+            Some(grant) => tx.read_committed_update_record_with_grant(grant, table, &id)?,
+            None => tx.read_committed_update_record(table, &id)?,
+        };
+        let Some((latest, snapshot)) = refreshed else {
+            return Ok(None);
+        };
+        // Apply the same native read policy as ordinary conflict lookup. The
+        // row reservation pins this current committed version while SQL RLS,
+        // trigger and constraint checks decide the update path below.
+        let latest = if latest.is_some() {
+            match self.security_context.as_ref() {
+                Some(context) => self.db_ref().get_with_context(context, table, &id)?,
+                None => self.db_ref().get(table, &id)?,
+            }
+            .map(|record| record.as_ref().clone())
+        } else {
+            None
+        };
+        Ok(Some((latest, snapshot)))
     }
 
     /// An upsert that found no conflicting row under its snapshot can still

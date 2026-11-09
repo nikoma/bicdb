@@ -97,3 +97,22 @@ These fixtures are not iDempiere application acceptance or a general throughput
 claim. Ordinary no-unique-index writes avoid preimage/announcement allocations;
 existing native concurrent preparation and changed-column fast paths retain
 their original assertions.
+
+
+At85a486a6 the complete runtime batch passed1257core tests (11 existing
+ignores),145pgwire library tests,2287SQL tests (4 existing ignores) and
+workspace all-target compilation. Total3689passed,0failed; log
+`read-committed-coherent-broad.log`. This broad result precedes the explicit
+masked-assignment correction below and is not its validation.
+
+Review exposed an actual projected-NULL ambiguity. At1d89815e an authorized
+`ON CONFLICT DO UPDATE SET secret=NULL` committed but a privileged reader
+still saw the original encrypted secret. The new protected fixture failed
+actual101 with original secret versus expected NULL; the earlier untouched
+secret and SQL RLS controls still passed. Red log:
+`signed-explicit-null-repro.log`. The correction carries explicit SQL assignment
+names into the checked core mutation, authorizes those names even when the
+projected values are equal, and applies explicit metadata assignments while
+preserving unassigned hidden fields. The fixture additionally covers denied
+secret assignments with both non-NULL and already-NULL source values. Its
+source-current focused and workspace qualification follows separately.

@@ -328,7 +328,7 @@ fn atomic_case_binding_failure_steps_leave_whole_definition_and_generation_pairs
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         for step in ["write", "sync", "rename", "dir_sync"] {
             let root = tempfile::tempdir().unwrap();
-            let config = mode_config(mode).with_fsync(true);
+            let config = mode_config(mode.clone()).with_fsync(true);
             let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
             db.create_collection("rows").unwrap();
             db.insert("rows", row("one", "é")).unwrap();
@@ -392,7 +392,8 @@ fn atomic_case_binding_crash_child() {
     } else {
         StorageMode::EmbeddedMemory
     };
-    let mut db = BicDb::open_with_config(&root, mode_config(mode).with_fsync(true)).unwrap();
+    let mut db =
+        BicDb::open_with_config(&root, mode_config(mode.clone()).with_fsync(true)).unwrap();
     let old = index("legacy", IndexField::Upper(Box::new(path("value"))), true);
     let shadow = if mode == StorageMode::ServerPaged {
         CaseShadow::Paged(
@@ -426,7 +427,7 @@ fn atomic_case_binding_publication_process_crashes() {
             "after_dir_sync",
         ] {
             let root = tempfile::tempdir().unwrap();
-            let config = mode_config(mode).with_fsync(true);
+            let config = mode_config(mode.clone()).with_fsync(true);
             let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
             db.create_collection("rows").unwrap();
             db.insert("rows", row("one", "é")).unwrap();

@@ -247,16 +247,40 @@ fn q1(db_dir: &Path, ledger: &Path, phase: &str, rows: u64) {
             }
         }
         "split" => {
-            let mut tx = db.begin_transaction().expect("begin");
-            for i in 0..rows {
-                tx.insert(
-                    "q1",
-                    Record::new(format!("a-{i:05}")).with_metadata(json!({"i": i})),
-                )
-                .expect("insert");
-            }
-            tx.commit().expect("commit");
-            append_line(&ledger.join("q1"), "split");
+            // With `DURABILITY_CHECKPOINTS=bounded`, the server's checkpoint
+            // worker runs next to the big transaction's page apply (GAP-1 W2).
+            let done = Arc::new(AtomicBool::new(false));
+            let checkpoints = Arc::new(AtomicU64::new(0));
+            std::thread::scope(|scope| {
+                if bounded_checkpoints() {
+                    let handle = db
+                        .paged_checkpoint_maintenance_handle()
+                        .expect("server_paged");
+                    let done = done.clone();
+                    let checkpoints = checkpoints.clone();
+                    scope.spawn(move || run_bounded_checkpoints(handle, &done, &checkpoints));
+                }
+                let mut tx = db.begin_transaction().expect("begin");
+                for i in 0..rows {
+                    tx.insert(
+                        "q1",
+                        Record::new(format!("a-{i:05}")).with_metadata(json!({"i": i})),
+                    )
+                    .expect("insert");
+                }
+                tx.commit().expect("commit");
+                append_line(&ledger.join("q1"), "split");
+                // How often the page apply took the last-resort steal (a
+                // decided commit larger than the pool), for the steal-path
+                // tests. Recorded only once the commit has returned.
+                if let Ok(Some(snapshot)) = db.paged_storage_snapshot() {
+                    append_line(
+                        &ledger.join("q1-steals"),
+                        &snapshot.buffer_pool.unlogged_steals.to_string(),
+                    );
+                }
+                done.store(true, Ordering::Release);
+            });
         }
         other => panic!("unknown q1 phase {other}"),
     }

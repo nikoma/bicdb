@@ -2987,7 +2987,7 @@ impl BicDb {
                 spatial_tombstones: FxHashSet::default(),
                 spatial_delta_durable: false,
                 paged_read_through: false,
-                full_text_build_incomplete: false,
+                full_text_build_incomplete: true,
             }),
         );
         if let Err(error) = self.persist_index_catalog() {
@@ -2997,7 +2997,28 @@ impl BicDb {
             return Err(error);
         }
 
-        self.backfill_paged_index_entries(&definition)?;
+        if let Err(error) = self.backfill_paged_index_entries(&definition) {
+            // Only an actual external-build workspace makes this definition
+            // resumable. The direct fallback has no checkpoint, so retaining
+            // its placeholder would both block retry and advertise an index
+            // which never completed.
+            let workspace = crate::fts_build::FtsBuildWorkspace::open_existing(
+                &self.path.join(DEFAULT_FTS_BUILD_DIR),
+                &definition.name,
+                self.config.fsync,
+            )?;
+            if workspace.is_none() {
+                self.indexes.remove(&definition.name);
+                self.index_generation
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                self.persist_index_catalog()?;
+                self.schema_compatibility.invalidate();
+            }
+            return Err(error);
+        }
+        if let Some(state) = self.indexes.get(&definition.name) {
+            state.write().full_text_build_incomplete = false;
+        }
         if let Some(paged) = &self.paged_records {
             let snapshot = paged.latest_snapshot();
             let has_blocks = paged.index_has_any_posting_blocks(&snapshot, &definition.name)?;

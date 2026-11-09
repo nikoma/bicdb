@@ -441,3 +441,134 @@ async fn upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failu
     )
     .await;
 }
+
+/// PostgreSQL READ COMMITTED upserts wait for an uncommitted arbiter winner,
+/// then update that row even though it was absent from the statement snapshot.
+async fn read_committed_upsert_waits_for_snapshot_invisible_winner(mode: StorageMode) {
+    for commit_winner in [true, false] {
+        let root = database(mode.clone());
+        let running = start(root.path());
+        let setup = connect(running.port).await;
+        setup
+            .batch_execute("CREATE TABLE invisible_upsert(id INT PRIMARY KEY, val INT)")
+            .await
+            .unwrap();
+        let writer = connect(running.port).await;
+        writer
+            .batch_execute("BEGIN; INSERT INTO invisible_upsert VALUES(1,20)")
+            .await
+            .unwrap();
+        let reader = Arc::new(connect(running.port).await);
+        reader
+            .batch_execute(concat!(
+                "BEGIN ISOLATION LEVEL READ COMMITTED; ",
+                "INSERT INTO invisible_upsert VALUES(2,5); SAVEPOINT prior_work"
+            ))
+            .await
+            .unwrap();
+        let querying = reader.clone();
+        let mut upsert = tokio::spawn(async move {
+            querying.simple_query("INSERT INTO invisible_upsert VALUES(1,10) ON CONFLICT(id) DO UPDATE SET val=invisible_upsert.val+EXCLUDED.val RETURNING val").await
+        });
+        let early = tokio::time::timeout(std::time::Duration::from_millis(200), &mut upsert).await;
+        assert!(
+            early.is_err(),
+            "upsert must wait for the uncommitted unique winner, got {early:?}"
+        );
+        writer
+            .batch_execute(if commit_winner { "COMMIT" } else { "ROLLBACK" })
+            .await
+            .unwrap();
+        let messages = tokio::time::timeout(std::time::Duration::from_secs(10), upsert)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        let values: Vec<_> = messages
+            .into_iter()
+            .filter_map(|message| match message {
+                SimpleQueryMessage::Row(row) => Some(row.get(0).unwrap().to_string()),
+                _ => None,
+            })
+            .collect();
+        let expected = if commit_winner { "30" } else { "10" };
+        assert_eq!(values, [expected]);
+        reader.batch_execute("COMMIT").await.unwrap();
+        assert_eq!(
+            rows(&setup, "SELECT id,val FROM invisible_upsert ORDER BY id").await,
+            vec![
+                vec!["1".to_string(), expected.to_string()],
+                vec!["2".to_string(), "5".to_string()]
+            ]
+        );
+        stop(running);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn read_committed_upsert_waits_for_invisible_winner_memory() {
+    read_committed_upsert_waits_for_snapshot_invisible_winner(StorageMode::EmbeddedMemory).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn read_committed_upsert_waits_for_invisible_winner_paged() {
+    read_committed_upsert_waits_for_snapshot_invisible_winner(StorageMode::ServerPaged).await;
+}
+
+async fn reversed_composite_arbiter_waits_for_the_correct_row(mode: StorageMode) {
+    let root = database(mode);
+    let running = start(root.path());
+    let setup = connect(running.port).await;
+    setup.batch_execute("CREATE TABLE composite_upsert(a INT,b INT,v INT,PRIMARY KEY(a,b)); INSERT INTO composite_upsert VALUES(2,1,50)").await.unwrap();
+    let writer = connect(running.port).await;
+    writer
+        .batch_execute("BEGIN; INSERT INTO composite_upsert VALUES(1,2,20)")
+        .await
+        .unwrap();
+    let reader = Arc::new(connect(running.port).await);
+    reader
+        .batch_execute("BEGIN ISOLATION LEVEL READ COMMITTED")
+        .await
+        .unwrap();
+    let querying = reader.clone();
+    let mut upsert = tokio::spawn(async move {
+        querying.simple_query("INSERT INTO composite_upsert VALUES(1,2,10) ON CONFLICT(b,a) DO UPDATE SET v=composite_upsert.v+EXCLUDED.v RETURNING a,b,v").await
+    });
+    let early = tokio::time::timeout(std::time::Duration::from_millis(200), &mut upsert).await;
+    assert!(
+        early.is_err(),
+        "must reserve (1,2), not update asymmetric (2,1): {early:?}"
+    );
+    writer.batch_execute("COMMIT").await.unwrap();
+    let messages = tokio::time::timeout(std::time::Duration::from_secs(10), upsert)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let values: Vec<_> = messages
+        .into_iter()
+        .filter_map(|m| match m {
+            SimpleQueryMessage::Row(row) => Some(
+                (0..row.len())
+                    .map(|i| row.get(i).unwrap().to_string())
+                    .collect::<Vec<_>>(),
+            ),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(values, vec![vec!["1", "2", "30"]]);
+    reader.batch_execute("COMMIT").await.unwrap();
+    assert_eq!(
+        rows(&setup, "SELECT a,b,v FROM composite_upsert ORDER BY a,b").await,
+        vec![vec!["1", "2", "30"], vec!["2", "1", "50"]]
+    );
+    stop(running);
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn reversed_composite_arbiter_waits_memory() {
+    reversed_composite_arbiter_waits_for_the_correct_row(StorageMode::EmbeddedMemory).await;
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn reversed_composite_arbiter_waits_paged() {
+    reversed_composite_arbiter_waits_for_the_correct_row(StorageMode::ServerPaged).await;
+}

@@ -9,5 +9,5 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-bicdb-extension = { path = "../../../crates/bicdb-extension", version = "1.0.438-beta", default-features = false }
+bicdb-extension = { path = "../../../crates/bicdb-extension", version = "1.0.439-beta", default-features = false }
 serde_json.workspace = true

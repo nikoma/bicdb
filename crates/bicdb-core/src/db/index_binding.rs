@@ -88,11 +88,15 @@ impl BicDb {
             return self.check_recovery_state();
         }
         if current.as_ref() != Some(expected_old)
-            || self
+            || !self
                 .indexes
                 .get(&shadow.definition.name)
-                .map(|state| state.read().definition.clone())
-                != Some(shadow.definition.clone())
+                .is_some_and(|state| {
+                    let state = state.read();
+                    state.definition == shadow.definition
+                        && state.paged_read_through
+                        && !state.full_text_build_incomplete
+                })
             || self
                 .fts_generations
                 .lock()

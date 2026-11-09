@@ -9757,6 +9757,17 @@ impl BicDb {
         tx_recovery.last_commit_seq = tx_recovery
             .last_commit_seq
             .max(read_commit_seq_floor(&path)?);
+        // A checkpoint may have removed every frame naming an acknowledged
+        // logical transaction. Its identity must survive alongside the commit
+        // sequence: SQL txid_current() exposes this allocator, not the page
+        // store's independent MVCC xid allocator.
+        tx_recovery.next_tx_id = tx_recovery.next_tx_id.max(
+            read_transaction_id_floor(&path)?
+                .checked_add(1)
+                .ok_or_else(|| {
+                    BicDbError::FormatCompatibility("transaction id floor exhausted".to_string())
+                })?,
+        );
         // Before anything can commit in this incarnation: the evidence that
         // resolves an earlier incarnation's uncertain commits.
         let incarnation = uuid::Uuid::new_v4().to_string();
@@ -10469,6 +10480,7 @@ impl BicDb {
                     &path,
                     tx_recovery.last_commit_seq,
                     tx_recovery.last_commit_seq,
+                    tx_recovery.next_tx_id.saturating_sub(1),
                     config.fsync,
                 )?;
                 bicdb_page::test_faults::crash_point("open.after_txlog_floor");
@@ -19095,29 +19107,45 @@ pub(crate) const COMMIT_SEQ_FLOOR_FILE: &str = "commit-seq.floor";
 /// out a sequence number twice.
 /// `commit_seq`: every number up to it is in use (a reopen continues above
 /// it). `wal_base`: every commit at or below it may have been dropped from the
-/// log; commits above it are in the log or wrote nothing. Both only rise.
+/// log; commits above it are in the log or wrote nothing. `transaction_id_floor`
+/// retains logical transaction numbers that the cut removes. All only rise.
 pub(crate) fn persist_commit_seq_floor(
     root: &Path,
     commit_seq: u64,
     wal_base: u64,
+    transaction_id_floor: u64,
     fsync: bool,
 ) -> Result<()> {
-    let (floor, base) = read_commit_seq_floor_and_base(root)?;
-    let (next_floor, next_base) = (floor.max(commit_seq), base.max(wal_base));
-    if (next_floor, next_base) == (floor, base) {
+    let (floor, base, tx_floor) = read_sequence_floors(root)?;
+    let (next_floor, next_base, next_tx_floor) = (
+        floor.max(commit_seq),
+        base.max(wal_base),
+        tx_floor.max(transaction_id_floor),
+    );
+    if (next_floor, next_base, next_tx_floor) == (floor, base, tx_floor) {
         return Ok(());
     }
+    bicdb_page::test_faults::crash_point("transaction_id_floor.before_publish");
     storage::write_atomic(
         &root.join(COMMIT_SEQ_FLOOR_FILE),
-        format!("{next_floor} {next_base}\n").as_bytes(),
+        format!("{next_floor} {next_base} {next_tx_floor}\n").as_bytes(),
         fsync,
-    )
+    )?;
+    bicdb_page::test_faults::crash_point("transaction_id_floor.after_publish");
+    Ok(())
 }
 
 fn read_commit_seq_floor_and_base(root: &Path) -> Result<(u64, u64)> {
+    read_sequence_floors(root).map(|(floor, base, _)| (floor, base))
+}
+
+/// The optional third field preserves logical transaction identities across a
+/// WAL cut. Legacy one/two-field markers remain readable; no historical
+/// high-water mark can be reconstructed once an older writer discarded it.
+fn read_sequence_floors(root: &Path) -> Result<(u64, u64, u64)> {
     let text = match fs::read_to_string(root.join(COMMIT_SEQ_FLOOR_FILE)) {
         Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok((0, 0)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok((0, 0, 0)),
         Err(error) => return Err(error.into()),
     };
     let corrupt = |error: std::num::ParseIntError| {
@@ -19133,7 +19161,20 @@ fn read_commit_seq_floor_and_base(root: &Path) -> Result<(u64, u64)> {
         Some(base) => base.parse::<u64>().map_err(corrupt)?,
         None => floor,
     };
-    Ok((floor, base))
+    let transaction_id_floor = match parts.next() {
+        Some(value) => value.parse::<u64>().map_err(corrupt)?,
+        None => 0,
+    };
+    if parts.next().is_some() {
+        return Err(BicDbError::FormatCompatibility(format!(
+            "corrupt {COMMIT_SEQ_FLOOR_FILE}: unexpected fields"
+        )));
+    }
+    Ok((floor, base, transaction_id_floor))
+}
+
+fn read_transaction_id_floor(root: &Path) -> Result<u64> {
+    Ok(read_sequence_floors(root)?.2)
 }
 
 pub(crate) fn read_commit_seq_floor(root: &Path) -> Result<u64> {

@@ -1018,6 +1018,7 @@ struct Verifier<'a> {
     facts: StoreFacts,
     lock: DirectoryLockProbe,
     files_opened: Vec<PathBuf>,
+    retained_file_bytes: u64,
     status: StatusResolver,
     /// Meta page and status-spill pages: typed Heap but not slotted.
     special_pages: FxHashSet<PageId>,
@@ -1131,12 +1132,44 @@ impl<'a> Verifier<'a> {
         let cache_pages = options
             .page_cache_pages
             .min((options.max_memory_bytes / 4 / u64::from(page_size)).max(1) as usize);
+        // These vectors and their path allocations survive every scan pass.
+        // Keep charging them after setup so frontier and sample budgets cannot
+        // reuse memory already occupied by the file inventory.
+        let retained_file_bytes = (files_opened.capacity() as u64)
+            .saturating_mul(std::mem::size_of::<PathBuf>() as u64)
+            .saturating_add(
+                files_opened
+                    .iter()
+                    .map(|p| p.capacity() as u64)
+                    .sum::<u64>(),
+            )
+            .saturating_add(
+                (segments.capacity() as u64)
+                    .saturating_mul(std::mem::size_of::<(PathBuf, File)>() as u64),
+            )
+            .saturating_add(
+                segments
+                    .iter()
+                    .map(|(p, _)| p.capacity() as u64)
+                    .sum::<u64>(),
+            )
+            .saturating_add(
+                (log.files.capacity() as u64)
+                    .saturating_mul(std::mem::size_of::<(PathBuf, File)>() as u64),
+            )
+            .saturating_add(
+                log.files
+                    .iter()
+                    .map(|(p, _)| p.capacity() as u64)
+                    .sum::<u64>(),
+            )
+            .saturating_add(dir.as_os_str().len() as u64);
         let fixed_state = page_count
             .div_ceil(64)
             .saturating_mul(24)
             .saturating_add(log.images.len() as u64 * 128)
             .saturating_add(log.outcomes.len() as u64 * 32)
-            .saturating_add(files_opened.len() as u64 * 512)
+            .saturating_add(retained_file_bytes)
             .saturating_add(cache_pages as u64 * u64::from(page_size))
             .saturating_add(4 * u64::from(page_size));
         ReadOnlyScanLimits::new(options.max_memory_bytes, deadline).check(fixed_state)?;
@@ -1183,6 +1216,7 @@ impl<'a> Verifier<'a> {
             facts,
             lock,
             files_opened,
+            retained_file_bytes,
             status: StatusResolver {
                 frozen_xid: 0,
                 exceptions: Vec::new(),
@@ -1282,6 +1316,7 @@ impl<'a> Verifier<'a> {
             + self.status.spill.capacity() as u64 * 24
             + self.status.exceptions.capacity() as u64 * 8
             + self.sample_bytes
+            + self.retained_file_bytes
             // Temporary decoded pages, entry copies and formatting buffers.
             + 4 * u64::from(self.source.page_size)
     }

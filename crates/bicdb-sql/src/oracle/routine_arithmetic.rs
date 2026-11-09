@@ -284,9 +284,9 @@ impl Resolve<'_> {
                 }
                 ControlFlow::<()>::Continue(())
             });
-            probe.to_string()
+            render_sql(&probe)
         } else if let Some(Some(from)) = self.statement_from.last() {
-            format!("SELECT {expr} FROM {from}")
+            format!("SELECT {} FROM {from}", render_sql(expr))
         } else {
             return None;
         };
@@ -932,7 +932,8 @@ impl Resolve<'_> {
                             "plsql"
                         };
                         *expr = expression(&format!(
-                            "bicdb_oracle_default_to_char({arg},'{kind}','{context}')"
+                            "bicdb_oracle_default_to_char({},'{kind}','{context}')",
+                            render_sql(arg)
                         ))?;
                         return Ok(());
                     }
@@ -1007,12 +1008,18 @@ impl Resolve<'_> {
             ..
         } = expr
         {
-            *expr = expression(&format!("bicdb_oracle_date_coerce({input})"))?;
+            *expr = expression(&format!(
+                "bicdb_oracle_date_coerce({})",
+                render_sql(input.as_ref())
+            ))?;
             return Ok(());
         }
         if let Expr::TypedString(value) = expr {
             if matches!(value.data_type, DataType::Date) {
-                *expr = expression(&format!("bicdb_oracle_date_coerce({})", value.value))?;
+                *expr = expression(&format!(
+                    "bicdb_oracle_date_coerce({})",
+                    render_sql(&value.value)
+                ))?;
                 return Ok(());
             }
         }
@@ -1071,20 +1078,26 @@ impl Resolve<'_> {
             let direction = if *op == BinaryOperator::Minus { -1 } else { 1 };
             if left_kind.temporal() && right_kind.day_operand() {
                 *expr = expression(&format!(
-                    "bicdb_oracle_date_add_days({left},{},{direction})",
+                    "bicdb_oracle_date_add_days({},{},{direction})",
+                    render_sql(left.as_ref()),
                     numeric(right)
                 ))?;
                 return Ok(());
             }
             if *op == BinaryOperator::Plus && right_kind.temporal() && left_kind.day_operand() {
                 *expr = expression(&format!(
-                    "bicdb_oracle_date_add_days({right},{},1)",
+                    "bicdb_oracle_date_add_days({},{},1)",
+                    render_sql(right.as_ref()),
                     numeric(left)
                 ))?;
                 return Ok(());
             }
             if *op == BinaryOperator::Minus && left_kind == Kind::Date && right_kind == Kind::Date {
-                *expr = expression(&format!("bicdb_oracle_date_subtract({left},{right})"))?;
+                *expr = expression(&format!(
+                    "bicdb_oracle_date_subtract({},{})",
+                    render_sql(left.as_ref()),
+                    render_sql(right.as_ref())
+                ))?;
                 return Ok(());
             }
             if *op == BinaryOperator::Minus
@@ -1092,7 +1105,9 @@ impl Resolve<'_> {
                 && matches!(right_kind, Kind::Date | Kind::Timestamp(_))
             {
                 *expr = expression(&format!(
-                    "CAST({left} AS TIMESTAMP)-CAST({right} AS TIMESTAMP)"
+                    "CAST({} AS TIMESTAMP)-CAST({} AS TIMESTAMP)",
+                    render_sql(left.as_ref()),
+                    render_sql(right.as_ref())
                 ))?;
                 return Ok(());
             }
@@ -1217,7 +1232,7 @@ impl sqlparser::ast::VisitorMut for Resolve<'_> {
         self.sql_depth += 1;
         self.statement_from.push(if self.env.decode {
             match statement {
-                Statement::Update(update) => Some(update.table.to_string()),
+                Statement::Update(update) => Some(render_sql(&update.table)),
                 Statement::Delete(delete) if self.env.statement_provenance => {
                     let from = match &delete.from {
                         FromTable::WithFromKeyword(from) | FromTable::WithoutKeyword(from) => from,
@@ -1225,12 +1240,12 @@ impl sqlparser::ast::VisitorMut for Resolve<'_> {
                     Some(
                         from.iter()
                             .chain(delete.using.iter().flatten())
-                            .map(ToString::to_string)
+                            .map(render_sql)
                             .collect::<Vec<_>>()
                             .join(", "),
                     )
                 }
-                Statement::CreateIndex(index) => Some(index.table_name.to_string()),
+                Statement::CreateIndex(index) => Some(render_sql(&index.table_name)),
                 _ => None,
             }
         } else {
@@ -1310,8 +1325,9 @@ impl sqlparser::ast::VisitorMut for Resolve<'_> {
                                 .ok_or_else(|| unsupported("missing LOB scalar argument"))?;
                             blob_input(self.db, self.env, &mut input)?;
                             expression(&format!(
-                                "bicdb_oracle_blob_{}({input})",
-                                operation.to_ascii_lowercase()
+                                "bicdb_oracle_blob_{}({})",
+                                operation.to_ascii_lowercase(),
+                                render_sql(&input)
                             ))
                         })();
                         match lower {
@@ -1416,7 +1432,7 @@ fn visit<T: sqlparser::ast::VisitMut>(db: &BicDb, env: &Environment, node: &mut 
 }
 
 fn record_types(db: &BicDb, env: &Environment, query: &Query) -> BTreeMap<String, Kind> {
-    let mut fields: BTreeMap<_, _> = infer_query_result_columns(db, &query.to_string())
+    let mut fields: BTreeMap<_, _> = infer_query_result_columns(db, &render_sql(query))
         .ok()
         .flatten()
         .unwrap_or_default()
@@ -1506,7 +1522,10 @@ fn blob_input(db: &BicDb, env: &Environment, value: &mut Expr) -> Result<()> {
     match resolve.kind(value) {
         Kind::Blob | Kind::Null => Ok(()),
         Kind::Raw => {
-            *value = expression(&format!("bicdb_oracle_blob_from_raw({value})"))?;
+            *value = expression(&format!(
+                "bicdb_oracle_blob_from_raw({})",
+                render_sql(value)
+            ))?;
             Ok(())
         }
         _ => Err(unsupported(

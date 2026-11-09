@@ -566,6 +566,7 @@ pub(super) fn lower_call(
             type_name(source)?.into()
         };
         super::decode::physical_dates(arg)?;
+        let arg = render_sql(arg);
         converted.push(if target == "text" {
             format!("bicdb_oracle_nvl_convert_text({arg},'{label}','{context}')")
         } else if target == "timestamp" {

@@ -1,0 +1,24 @@
+{
+  "format": 1,
+  "seed": 861250,
+  "source": "8313120f",
+  "experimental": true,
+  "physical_power_loss": false,
+  "hard_vm_reset": true,
+  "guest_ram_mb": 4096,
+  "server_binary_sha256": "62c4190738331e3dea1bd04eeae7db5b80a0bc15e2e2e9b2466e8be4b88cf108",
+  "acknowledged": 2045,
+  "attempted": 2049,
+  "native_transaction_ids_recorded": true,
+  "commit_attempts": 2048,
+  "ddl_tables_attempted": 1,
+  "failures": [
+    {
+      "kind": "unexpected-ddl-error",
+      "table": "vm_ddl_1",
+      "sqlstate": "XX000"
+    }
+  ],
+  "initial_backup_restore_verified": true,
+  "complete": false
+}

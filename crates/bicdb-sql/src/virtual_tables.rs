@@ -350,6 +350,23 @@ pub(crate) fn routine_oid(kind: RoutineKind, name: &str) -> i64 {
     stable_name_hash_wide(base, name, 400_000_000)
 }
 
+pub(crate) fn catalog_routine_oid(routine: &RoutineSchema) -> i64 {
+    routine.catalog_oid.unwrap_or_else(|| {
+        let name = match &routine.overload {
+            Some(signature) => format!("{}({signature})", routine.name),
+            None => routine.name.clone(),
+        };
+        routine_oid(routine.kind, &name)
+    })
+}
+
+pub(crate) fn named_routine_oid(db: &BicDb, kind: RoutineKind, name: &str) -> Result<i64> {
+    Ok(load_routine(db, kind, name)?
+        .as_ref()
+        .map(catalog_routine_oid)
+        .unwrap_or_else(|| routine_oid(kind, name)))
+}
+
 pub(crate) fn trigger_oid(table: &str, name: &str) -> i64 {
     stable_name_hash(150_000, &format!("{table}.{name}"))
 }
@@ -3561,7 +3578,7 @@ pub(crate) fn unnest_source_columns(
 
 pub(crate) fn table_function_source_columns_for_alias(
     alias: Option<&TableAlias>,
-    alias_name: &str,
+    _alias_name: &str,
     source_columns: Vec<String>,
 ) -> Vec<String> {
     let Some(alias) = alias else {
@@ -3570,7 +3587,9 @@ pub(crate) fn table_function_source_columns_for_alias(
     if !alias.columns.is_empty() || source_columns.len() != 1 {
         return source_columns;
     }
-    vec![alias_name.to_string()]
+    // A scalar function's implicit column name is its SQL alias: unquoted
+    // aliases fold, while a quoted alias retains its exact column identity.
+    vec![ident_value(&alias.name)]
 }
 
 pub(crate) fn unnest_values_from_sql(value: SqlValue) -> Result<Vec<SqlValue>> {

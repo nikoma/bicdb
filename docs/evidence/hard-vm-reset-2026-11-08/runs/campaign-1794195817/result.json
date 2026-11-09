@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "seed": 861250,
+  "source": "5d04f91f2189385ec43d0d650be05778f0acdfd1",
+  "experimental": true,
+  "physical_power_loss": false,
+  "hard_vm_reset": true,
+  "guest_ram_mb": 4096,
+  "server_binary_sha256": "0433dacf7964d86d6ba7c909c137069d38ebf9578d451f77767dc76f7df4e683",
+  "acknowledged": 2428,
+  "attempted": 2472,
+  "native_transaction_ids_recorded": true,
+  "commit_attempts": 2448,
+  "ddl_tables_attempted": 123,
+  "failures": [],
+  "initial_backup_restore_verified": true,
+  "complete": true
+}

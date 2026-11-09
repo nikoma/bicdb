@@ -1,0 +1,102 @@
+{
+  "format_version": 1,
+  "verdict": "clean",
+  "complete": true,
+  "stop_reason": null,
+  "store": {
+    "directory": "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-2/extracted/paged",
+    "page_size": 8192,
+    "layout": "segmented",
+    "page_files": 1,
+    "superblock_page_count": 595,
+    "effective_page_count": 596,
+    "free_list_head": 0,
+    "free_page_count": 0,
+    "checkpoint_lsn": 20007,
+    "meta_page": 1,
+    "meta_initialized": true,
+    "index_root": 418,
+    "catalog_root": 319,
+    "frozen_xid": 2197,
+    "next_xid": 2197,
+    "abort_exceptions": 0,
+    "status_spill_pages": 0,
+    "status_spill_entries": 0
+  },
+  "read_only": {
+    "lock": {
+      "state": "unlocked"
+    },
+    "files_opened_read_only": [
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-2/extracted/paged/store.pages",
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-2/extracted/paged/store.wal.20007",
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-2/extracted/paged/store.wal.20011",
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-2/extracted/paged/store.wal.20014",
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-2/extracted/paged/store.wal.20017",
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-2/extracted/paged/store.wal.20021",
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-2/extracted/paged/store.wal.20024",
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-2/extracted/paged/store.wal.20027",
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-2/extracted/paged/store.wal.20031",
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-2/extracted/paged/store.wal.20034",
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-2/extracted/paged/store.wal.20037",
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-2/extracted/paged/store.wal.20041",
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-2/extracted/paged/store.wal.20044",
+      "/root/bicdb-durability-s3/vm-reset/campaign-1794204221/independent-verifier/crashed-2/extracted/paged/store.wal"
+    ],
+    "recovery_ran": false,
+    "note": "Files were opened read-only (O_NOFOLLOW, O_NOATIME where permitted); the directory lock was probed with F_GETLK and not taken; recovery was reproduced in memory by reading committed page images from the log."
+  },
+  "log": {
+    "sealed_segments": 12,
+    "sealed_bytes": 296552,
+    "active_bytes": 8272,
+    "reset_shape": {
+      "shape": "normal"
+    },
+    "replay_scope": "full_chain",
+    "records": 43,
+    "first_lsn": 20007,
+    "last_lsn": 20049,
+    "torn_tail_bytes": 0,
+    "checkpoint_records": 0,
+    "redo_lsn": 0,
+    "committed_transactions": 6,
+    "pending_page_images": 37,
+    "distinct_pages_overlaid": 14,
+    "uncommitted_images_skipped": 0,
+    "page_file_truncated_by_recovery_from": null,
+    "open_would_refuse": null,
+    "stale_records_discarded": {
+      "recorded_in_store": false,
+      "segments_a_fixed_open_would_discard": 0,
+      "explanation": "The crash-ordered reset fix reports stale segments it discards (`stale_segments_discarded`) only in the RecoveryReport of that open; it persists nothing, so a store a fixed engine already cleaned up carries no trace of it. `reset_shape` is the same classification computed from these files now."
+    }
+  },
+  "counters": {
+    "index_entries": 12125,
+    "index_tree_pages": 173,
+    "index_tree_height": 3,
+    "catalog_entries": 836,
+    "catalog_tree_pages": 3,
+    "directory_heap_pages": 418,
+    "free_space_records": 418,
+    "versions_examined": 14213,
+    "visible_rows": 10553,
+    "deleted_rows": 1572,
+    "keys_without_committed_version": 0,
+    "vacuumed_links": 0,
+    "heap_pages_swept": 418,
+    "heap_versions_swept": 14213,
+    "reachable_versions_swept": 14213,
+    "key_tree_passes": 1,
+    "pages_read_from_page_files": 1161,
+    "pages_read_from_log": 28,
+    "page_cache_hits": 14631,
+    "bytes_read": 9740288,
+    "slot_bitmap_window_pages": 596,
+    "peak_bitmap_bytes": 75864,
+    "elapsed_millis": 29
+  },
+  "classes": [],
+  "external_evidence": []
+}

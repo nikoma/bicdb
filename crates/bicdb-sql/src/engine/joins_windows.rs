@@ -223,10 +223,11 @@ impl<'db> SqlEngine<'db> {
                         max = [max[0] + dlon, max[1] + dlat];
                     }
                     let envelope = AABB::from_corners(min, max);
-                    let mut candidates: Vec<usize> = tree
-                        .locate_in_envelope_intersecting(&envelope)
-                        .map(|entry| entry.data)
-                        .collect();
+                    let mut candidates = Vec::new();
+                    for entry in tree.locate_in_envelope_intersecting(&envelope) {
+                        crate::join_budget::retain_bytes(3 * std::mem::size_of::<usize>())?;
+                        candidates.push(entry.data);
+                    }
                     candidates.sort_unstable();
                     for row_index in candidates {
                         let Some(right_geometry) = &right_geometries[row_index] else {
@@ -245,7 +246,11 @@ impl<'db> SqlEngine<'db> {
                         };
                         if hit {
                             matched = true;
-                            let mut row = left_row.clone();
+                            crate::join_budget::retain(left_row, &right.rows[row_index])?;
+                            let mut row = Vec::with_capacity(
+                                left_row.len().saturating_add(right.rows[row_index].len()),
+                            );
+                            row.extend(left_row.iter().cloned());
                             row.extend(right.rows[row_index].iter().cloned());
                             rows.push(row);
                         }
@@ -253,7 +258,9 @@ impl<'db> SqlEngine<'db> {
                 }
             }
             if !matched && matches!(kind, RowJoinKind::Left) {
-                let mut row = left_row.clone();
+                crate::join_budget::retain(left_row, &null_pad)?;
+                let mut row = Vec::with_capacity(left_row.len().saturating_add(null_pad.len()));
+                row.extend(left_row.iter().cloned());
                 row.extend(null_pad.iter().cloned());
                 rows.push(row);
             }
@@ -580,21 +587,21 @@ impl<'db> SqlEngine<'db> {
                 };
                 if constraint_matches {
                     matched_left = true;
-                    rows.push(merge_slot_rows(
+                    rows.push(materialize_join_row(
                         left_row,
                         &left.columns,
                         &right_row,
                         &right_columns,
-                    ));
+                    )?);
                 }
             }
             if !matched_left && matches!(kind, RowJoinKind::Left) {
-                rows.push(merge_slot_rows(
+                rows.push(materialize_join_row(
                     left_row,
                     &left.columns,
                     &null_right,
                     &right_columns,
-                ));
+                )?);
             }
         }
 
@@ -614,6 +621,11 @@ impl<'db> SqlEngine<'db> {
         // lookup. This used to keep the id strings three times over (per
         // left row, a BTreeSet, a BTreeMap keyed by id) and compare strings
         // for every pair.
+        crate::join_budget::retain_bytes(
+            left.rows
+                .len()
+                .saturating_mul(std::mem::size_of::<Option<usize>>()),
+        )?;
         let mut left_slots: Vec<Option<usize>> = Vec::with_capacity(left.rows.len());
         let mut ids: Vec<String> = Vec::new();
         let mut slot_of_id: FxHashMap<String, usize> = FxHashMap::default();
@@ -726,11 +738,21 @@ impl<'db> SqlEngine<'db> {
         // upstream value at every join. Shared right rows stay reusable, while
         // uniquely referenced rows can transfer their values as well.
         let novel = merge_novel_right_ordinals(&left.columns, &prepared.right_columns);
+        crate::join_budget::retain_bytes(
+            right_rows
+                .len()
+                .saturating_mul(std::mem::size_of::<usize>()),
+        )?;
         let mut right_uses = vec![0usize; right_rows.len()];
         for slot in left_slots.iter().flatten() {
             right_uses[*slot] += 1;
         }
         let left_rows = std::mem::take(&mut left.rows);
+        crate::join_budget::retain_bytes(
+            left_rows
+                .len()
+                .saturating_mul(std::mem::size_of::<SlotRow>()),
+        )?;
         let mut rows = Vec::with_capacity(left_rows.len());
         let mut candidate_pairs = 0usize;
         for (left_idx, mut left_row) in left_rows.into_iter().enumerate() {
@@ -773,7 +795,19 @@ impl<'db> SqlEngine<'db> {
                     };
                     if constraint_matches {
                         matched_left = true;
-                        left_row.reserve(novel.len());
+                        crate::join_budget::retain_extension(
+                            left_row.len(),
+                            left_row.capacity(),
+                            novel.len(),
+                            novel.iter().filter_map(|&index| {
+                                (right_uses[slot] != 1)
+                                    .then(|| right_row.get(index))
+                                    .flatten()
+                            }),
+                        )?;
+                        left_row.try_reserve_exact(novel.len()).map_err(|_| {
+                            SqlError::resource_limit("53200", "join row capacity allocation failed")
+                        })?;
                         if right_uses[slot] == 1 {
                             let mut right_row = right_rows[slot].take().expect("visible right row");
                             for &index in novel.iter() {
@@ -795,6 +829,15 @@ impl<'db> SqlEngine<'db> {
                 right_uses[slot] -= 1;
             }
             if !matched_left && matches!(prepared.kind, RowJoinKind::Left) {
+                crate::join_budget::retain_extension(
+                    left_row.len(),
+                    left_row.capacity(),
+                    novel.len(),
+                    std::iter::empty(),
+                )?;
+                left_row.try_reserve_exact(novel.len()).map_err(|_| {
+                    SqlError::resource_limit("53200", "join row capacity allocation failed")
+                })?;
                 left_row.extend(novel.iter().map(|_| SqlValue::Null));
             }
             if matched_left || matches!(prepared.kind, RowJoinKind::Left) {
@@ -3542,5 +3585,151 @@ impl<'db> SqlEngine<'db> {
         }
         self.check_cancellation()?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod join_envelope_path_tests {
+    use super::*;
+    use bicdb_core::query_budget::QueryMemoryScope;
+    use bicdb_core::DbConfig;
+
+    fn join(sql: &str) -> (TableFactor, JoinConstraint) {
+        let Statement::Query(query) = crate::parse_statements(sql).unwrap().remove(0) else {
+            panic!("query");
+        };
+        let SetExpr::Select(select) = query.body.as_ref() else {
+            panic!("select");
+        };
+        let join = &select.from[0].joins[0];
+        let constraint = match &join.join_operator {
+            JoinOperator::Join(constraint) | JoinOperator::Inner(constraint) => constraint,
+            _ => panic!("inner"),
+        };
+        (join.relation.clone(), constraint.clone())
+    }
+
+    #[test]
+    fn spatial_tree_join_enforces_budget_on_its_own_retained_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let db =
+            BicDb::open_with_config(dir.path(), DbConfig::default().with_fsync(false)).unwrap();
+        let engine = SqlEngine::new(&db);
+        let left = RowSet {
+            columns: vec!["a.geom".into(), "a.payload".into()],
+            rows: (0..12)
+                .map(|_| {
+                    vec![
+                        SqlValue::String("POINT (0 0)".into()),
+                        SqlValue::String("x".repeat(2048)),
+                    ]
+                })
+                .collect(),
+        };
+        let right = RowSet {
+            columns: vec!["b.geom".into(), "b.payload".into()],
+            rows: (0..12)
+                .map(|_| {
+                    vec![
+                        SqlValue::String("POINT (0 0)".into()),
+                        SqlValue::String("y".repeat(2048)),
+                    ]
+                })
+                .collect(),
+        };
+        let (_, constraint) = join("SELECT * FROM a JOIN b ON ST_Intersects(a.geom,b.geom)");
+        {
+            let _scope = crate::join_budget::Scope::enter();
+            let _memory = QueryMemoryScope::new(4 * 1024 * 1024);
+            let result = engine
+                .apply_spatial_tree_join(&left, &right, RowJoinKind::Inner, &constraint)
+                .unwrap()
+                .expect("spatial optimization must apply");
+            assert_eq!(result.rows.len(), 144);
+        }
+        {
+            let _scope = crate::join_budget::Scope::enter();
+            let memory = QueryMemoryScope::new(64 * 1024);
+            let error = match engine.apply_spatial_tree_join(
+                &left,
+                &right,
+                RowJoinKind::Inner,
+                &constraint,
+            ) {
+                Err(error) => error,
+                Ok(Some(rows)) => panic!(
+                    "spatial join retained {} rows without rejecting the envelope",
+                    rows.rows.len()
+                ),
+                Ok(None) => panic!("spatial optimization did not apply"),
+            };
+            assert_eq!(error.sqlstate(), "53200");
+            assert!(memory.peak_bytes() <= 64 * 1024 + 16 * 1024);
+        }
+    }
+
+    #[test]
+    fn primary_lookup_transfer_join_bounds_repeated_owned_right_values() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db =
+            BicDb::open_with_config(dir.path(), DbConfig::default().with_fsync(false)).unwrap();
+        SqlSession::new(&mut db).execute("CREATE TABLE budget_right(id INT PRIMARY KEY,payload TEXT); INSERT INTO budget_right VALUES(1,repeat('x',4096))").unwrap();
+        let engine = SqlEngine::new(&db);
+        let left = RowSet {
+            columns: vec!["l.id".into(), "l.fk".into()],
+            rows: (0..100)
+                .map(|id| vec![SqlValue::Int(id), SqlValue::Int(1)])
+                .collect(),
+        };
+        let table = resolve_session_relation_name(&db, "budget_right").unwrap();
+        let schema = load_schema(&db, &table).unwrap().unwrap();
+        let (_, context) = engine.bound_row_context(&left.columns);
+        let lookup = PreparedDynamicRecordLookup::PrimaryKeyExact {
+            schema: schema.clone(),
+            columns: vec!["id".into()],
+            values: vec![PreparedDynamicBoundExpr {
+                expr: BoundExpr::Column(ColumnId(1)),
+                term_idx: 0,
+            }],
+            covered_terms: [0].into_iter().collect(),
+            context,
+        };
+        let fields = FieldRef::wildcard(Some(&schema));
+        let right_columns = row_output_columns_from_fields(&table, "r", &fields);
+        // Exercise the transfer optimization directly; planner fallback has
+        // its own earlier guard and cannot prove this path is bounded.
+        let execute = |left: &mut RowSet| {
+            engine.apply_prepared_primary_key_right_table_join(
+                left,
+                PreparedPrimaryKeyRightJoin {
+                    table: &table,
+                    alias_name: "r",
+                    schema: Some(&schema),
+                    right_columns: right_columns.clone(),
+                    right_fields: fields.clone(),
+                    kind: RowJoinKind::Inner,
+                    lookup: &lookup,
+                    residual_constraint: &JoinConstraint::None,
+                },
+            )
+        };
+        {
+            let _scope = crate::join_budget::Scope::enter();
+            let _memory = QueryMemoryScope::new(4 * 1024 * 1024);
+            assert_eq!(execute(&mut left.clone()).unwrap().rows.len(), 100);
+        }
+        {
+            let _scope = crate::join_budget::Scope::enter();
+            let memory = QueryMemoryScope::new(64 * 1024);
+            let error = match execute(&mut left.clone()) {
+                Err(error) => error,
+                Ok(rows) => panic!(
+                    "point join retained {} rows without rejecting the envelope",
+                    rows.rows.len()
+                ),
+            };
+            assert_eq!(error.sqlstate(), "53200");
+            assert!(memory.peak_bytes() <= 64 * 1024 + 32 * 1024);
+        }
     }
 }

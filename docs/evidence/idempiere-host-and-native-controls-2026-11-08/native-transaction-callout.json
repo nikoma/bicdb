@@ -1,0 +1,65 @@
+{
+  "status": "native_vendor_control_completed",
+  "engine": "Oracle23.26.3.0.0",
+  "isolated_clone": "BICDBAPPCTRL",
+  "protected_source": "FREEPDB1",
+  "protected_source_counts_objects_columns_unchanged_after_app": true,
+  "baseline_three_missing_original_migrations_applied": true,
+  "native_upstream_provider_sha256": "1813c6cd6f4596e8002dacc06ee7dccca0dd5cebe22a1634651d75a8c32d3d0b",
+  "actual_oracle_driver_loaded": true,
+  "sdk_adapter_installed": false,
+  "original_test_sources_classes_assertions_timeouts_unchanged": true,
+  "test_reports": [
+    {
+      "file": "TEST-org.idempiere.test.base.TrxTest.xml",
+      "name": "org.idempiere.test.base.TrxTest",
+      "tests": "18",
+      "errors": "0",
+      "failures": "1",
+      "skipped": "0"
+    },
+    {
+      "file": "TEST-org.idempiere.test.model.CalloutTest.xml",
+      "name": "org.idempiere.test.model.CalloutTest",
+      "tests": "2",
+      "errors": "0",
+      "failures": "1",
+      "skipped": "0"
+    }
+  ],
+  "failures": [
+    {
+      "classname": "org.idempiere.test.model.CalloutTest",
+      "method": "testAnnotatedCallout",
+      "message": "org.adempiere.model.CalloutInfoWindow not found for AD_InfoWindow.AD_Table_ID ==> expected: <true> but was: <false>",
+      "report_sha256": "514a93d9559a9b8e5bdbfbb092011505f7cacca010d069f8ac00ea364c7e234a"
+    },
+    {
+      "classname": "org.idempiere.test.base.TrxTest",
+      "method": "testReleaseSavepoint",
+      "message": "releaseSavepoint should throw SQLException",
+      "report_sha256": "872b6592f8ab3e71f3816e8b23d8670fdc590bbadb977fdac7c436caeacab1ce"
+    }
+  ],
+  "owned_jvm_stopped": true,
+  "full_bicdb_application_qualification": false,
+  "application_record": "/root/.local/state/bicdb/native-oracle-app/application-run.json",
+  "original_class_provenance": [
+    {
+      "classname": "org.idempiere.test.base.TrxTest",
+      "source_sha256": "a4945caebf7a2dbe49598839f9dc17a59c78cb9a65cebbe7cbf1859ea2f0a432",
+      "bytecode_sha256": "4e88f1a9aacaf65f25d2990d1d0344ba1e22464f28059e1c7dcd22b7692e3d17",
+      "source_equals_upstream_commit": "da0730aec42f3e9f5f671e81a70ff71e24d5e534",
+      "jar_class_equals_runtime_target_class": true
+    },
+    {
+      "classname": "org.idempiere.test.model.CalloutTest",
+      "source_sha256": "562ec4661ad8cb7d8fa60b6d27ef8030e956661f52e3533f0ce745d75ea06e06",
+      "bytecode_sha256": "5676c323cc42424a26cba1e5c6012a9b67ae9d09f1ec652195fa148e64bc89a4",
+      "source_equals_upstream_commit": "da0730aec42f3e9f5f671e81a70ff71e24d5e534",
+      "jar_class_equals_runtime_target_class": true
+    }
+  ],
+  "test_jar_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+  "original_runtime_bytecode_matches_prior_matched_bicdb_run": true
+}

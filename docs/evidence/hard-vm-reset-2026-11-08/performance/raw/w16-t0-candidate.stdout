@@ -1,0 +1,1 @@
+{"commit_latency_us":{"max":240336,"p50":21104,"p95":26935,"p99":29447},"commits":11119,"commits_per_second":739.6119361362415,"materializer":null,"mode":"all-logs","page_wal_bytes":553026632,"seconds":15.033559434,"threads":16,"transaction_log_bytes":8382754}

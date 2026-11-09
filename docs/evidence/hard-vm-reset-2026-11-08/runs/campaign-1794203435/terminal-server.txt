@@ -1,0 +1,2 @@
+Error: Sql(InvalidSql("index \"vm_ddl_75_pkey\" already exists with a definition that does not match primary key \"vm_ddl_75_pkey\""))
+debugfs 1.47.0 (5-Feb-2023)

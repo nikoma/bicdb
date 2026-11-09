@@ -31,10 +31,14 @@ pub(super) fn physical_dates(expr: &mut Expr) -> Result<()> {
                 expr,
                 data_type: DataType::Date,
                 ..
-            } => Some(format!("bicdb_oracle_date_coerce({expr})")),
-            Expr::TypedString(value) if value.data_type == DataType::Date => {
-                Some(format!("bicdb_oracle_date_coerce({})", value.value))
-            }
+            } => Some(format!(
+                "bicdb_oracle_date_coerce({})",
+                render_sql(expr.as_ref())
+            )),
+            Expr::TypedString(value) if value.data_type == DataType::Date => Some(format!(
+                "bicdb_oracle_date_coerce({})",
+                render_sql(&value.value)
+            )),
             _ => None,
         };
         if let Some(sql) = sql {

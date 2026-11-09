@@ -1,0 +1,15 @@
+{
+  "format": 1,
+  "seed": 861250,
+  "source": "9ee0a5b3",
+  "experimental": false,
+  "physical_power_loss": false,
+  "hard_vm_reset": true,
+  "guest_ram_mb": 4096,
+  "server_binary_sha256": "7604fa0e211b49519054be6aafaba1b0fef68c2021c58555eca1c083b245fb17",
+  "acknowledged": 2996,
+  "attempted": 3038,
+  "failures": [],
+  "initial_backup_restore_verified": true,
+  "complete": true
+}

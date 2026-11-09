@@ -1,0 +1,13 @@
+PR43 current-default mechanism audit
+
+Default candidate source (unmerged when tested): 68f2a664 (PR119, source version 1.0.439-beta).
+Proof source: afd800e4; the only difference is the attached test-only.patch.
+No unlocked-sync option was implemented or enabled.
+
+The original PR43 benchmark attributed its possible benefit to other page-log appenders proceeding during commit fdatasync. That was an inference, and its page-store group-commit counter stayed zero. Default structural cuts remove the old ordinary single-image eviction logger. PagedStore::commit_with_sync retains its writer gate through Wal::commit/sync; PagedStore::put/delete and complete structural cuts use that same gate. WalWritebackBarrier::before_writeback now refuses an unlogged image. Logged read eviction only invokes sync_deferred_commits, whose default zero horizon returns without appending.
+
+The deterministic test pauses an ordinary fsync-on commit inside page_log.sync. It directly verifies the writer gate is held, reads 256 committed 512-byte values through a 32 KiB pool, observes 554 actual frame evictions, and verifies the append horizon stays exactly 740. A second writer cannot complete or advance that horizon until release. After release both writers succeed, and reopen reconciles both new records and all 256 seed records. Result: one passed, zero failed or ignored. This is a correctness/mechanism test, not a timing benchmark or a simulated power loss.
+
+This resolves the normal all-logs workload's proposed parallel-appender mechanism: releasing only the WAL file mutex cannot let the second page writer pass the still-held writer gate, and committed read eviction supplies no image appender. It does not establish universal lack of benefit. Standalone/public Wal users, explicit backup sealing, and experimental deferred commits can have different concurrency; none was measured here. Promoting PR43 for those workloads would need a separate concrete requirement, current-source safety qualification and measured benefit. Original historical PR43 results remain source-scoped; no old passing test is being presented as qualification of an updated unlocked implementation.
+
+The exact test binary is retained at /root/bicdb-durability-s3/skr/bin/pr43-default-mechanism-afd800e4 on s3ny; SHA256 f7119aee66455dc4d65cb55c89c78521a23d4c193b839539b4ab9b4bac5134d7. Build: Rust 1.96.0, standard debug/test profile with debug info disabled, incremental off, jobs 2, cgroup 8 GiB/no swap and active host-memory monitor. Invoke with --exact paged::tests::normal_read_pressure_produces_no_parallel_page_wal_appender_during_commit_sync --nocapture.

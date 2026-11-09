@@ -838,6 +838,7 @@ impl<'db> SqlSession<'db> {
         // Every relation of the FROM tree needs SELECT before any row is read,
         // whether or not the executor ends up scanning it.
         self.sql_engine().require_from_relations_readable(query)?;
+        validate_comparison_signatures(&self.sql_engine(), ComparisonStatement::Query(query))?;
         if self.oracle_autonomous && query_has_row_locks(query) {
             // A locking read starts an Oracle transaction even if SELECT INTO
             // subsequently raises NO_DATA_FOUND and its handler catches it.
@@ -1052,6 +1053,9 @@ impl<'db> SqlSession<'db> {
             }
             if let Some(update) = set_expr_update(query.body.as_ref()) {
                 return self.execute_update_with_ctes(update, ctes);
+            }
+            if let Some(delete) = set_expr_delete(query.body.as_ref()) {
+                return self.execute_delete_with_ctes(delete, ctes);
             }
             let body = clone_query_without_with(query);
             if let Some(result) = self.try_execute_set_function_query(&body, ctes.clone())? {

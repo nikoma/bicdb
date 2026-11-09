@@ -1,0 +1,127 @@
+diff --git a/crates/bicdb-page/src/paged.rs b/crates/bicdb-page/src/paged.rs
+index 7d7f6601..e7d2a59c 100644
+--- a/crates/bicdb-page/src/paged.rs
++++ b/crates/bicdb-page/src/paged.rs
+@@ -5769,6 +5769,122 @@ mod tests {
+         PagedStore::open(dir.path(), options()).unwrap().0
+     }
+ 
++    #[test]
++    fn normal_read_pressure_produces_no_parallel_page_wal_appender_during_commit_sync() {
++        use std::sync::mpsc;
++        use std::time::Duration;
++        let dir = TempDir::new().unwrap();
++        let opts = options()
++            .with_fsync(true)
++            .with_wal_max_bytes(128 * 1024 * 1024);
++        let store = Arc::new(PagedStore::open(dir.path(), opts.clone()).unwrap().0);
++        let value = vec![0x5a; 512];
++        for batch in 0..32 {
++            let xid = store.begin();
++            for item in batch * 8..batch * 8 + 8 {
++                store
++                    .put(xid, format!("seed-{item:04}").as_bytes(), &value)
++                    .unwrap();
++            }
++            store.commit(xid).unwrap();
++        }
++        let xid = store.begin();
++        store
++            .put(xid, b"first", b"committed-after-release")
++            .unwrap();
++        let (entered_tx, entered_rx) = mpsc::channel();
++        let (resume_tx, resume_rx) = mpsc::channel();
++        let resume_rx = std::sync::Mutex::new(resume_rx);
++        let hook = crate::test_faults::arm_io_hook("page_log.sync", dir.path(), 1, move || {
++            entered_tx.send(()).unwrap();
++            resume_rx
++                .lock()
++                .unwrap()
++                .recv_timeout(Duration::from_secs(10))
++                .unwrap();
++        });
++        struct Resume(mpsc::Sender<()>);
++        impl Drop for Resume {
++            fn drop(&mut self) {
++                let _ = self.0.send(());
++            }
++        }
++        let resume = Resume(resume_tx);
++        let first_store = Arc::clone(&store);
++        let first = std::thread::spawn(move || first_store.commit(xid));
++        entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
++        assert!(
++            store.write_lock.try_lock().is_none(),
++            "normal commit owns writer gate throughout sync"
++        );
++        let horizon = store.wal.next_lsn();
++        let evictions = store.pool.snapshot().evictions;
++        for item in 0..256 {
++            assert_eq!(
++                store.get(format!("seed-{item:04}").as_bytes()).unwrap(),
++                Some(value.clone())
++            );
++        }
++        let eviction_delta = store.pool.snapshot().evictions - evictions;
++        assert!(
++            eviction_delta > 0,
++            "read working set must evict actual frames"
++        );
++        assert_eq!(
++            store.wal.next_lsn(),
++            horizon,
++            "ordinary read eviction appends no page image"
++        );
++        let (second_done_tx, second_done_rx) = mpsc::channel();
++        let second_store = Arc::clone(&store);
++        let second = std::thread::spawn(move || {
++            let xid = second_store.begin();
++            second_store
++                .put(xid, b"second", b"writer-after-release")
++                .unwrap();
++            second_store.commit(xid).unwrap();
++            second_done_tx.send(()).unwrap();
++        });
++        assert!(matches!(
++            second_done_rx.recv_timeout(Duration::from_millis(50)),
++            Err(mpsc::RecvTimeoutError::Timeout)
++        ));
++        assert_eq!(
++            store.wal.next_lsn(),
++            horizon,
++            "queued writer cannot append through the held writer gate"
++        );
++        eprintln!("default_appenders_proof read_evictions={eviction_delta} append_horizon_before={horizon} append_horizon_after={}", store.wal.next_lsn());
++        drop(resume);
++        first.join().unwrap().unwrap();
++        second.join().unwrap();
++        drop(hook);
++        assert_eq!(
++            store.get(b"first").unwrap(),
++            Some(b"committed-after-release".to_vec())
++        );
++        assert_eq!(
++            store.get(b"second").unwrap(),
++            Some(b"writer-after-release".to_vec())
++        );
++        drop(store);
++        let reopened = PagedStore::open(dir.path(), opts).unwrap().0;
++        assert_eq!(
++            reopened.get(b"first").unwrap(),
++            Some(b"committed-after-release".to_vec())
++        );
++        assert_eq!(
++            reopened.get(b"second").unwrap(),
++            Some(b"writer-after-release".to_vec())
++        );
++        for item in 0..256 {
++            assert_eq!(
++                reopened.get(format!("seed-{item:04}").as_bytes()).unwrap(),
++                Some(value.clone())
++            );
++        }
++    }
++
+     /// Direct pool flushing cannot turn one ordinary unlogged image into a
+     /// durable structure. Refusal precedes every such page-file write.
+     #[test]

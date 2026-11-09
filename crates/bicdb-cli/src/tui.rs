@@ -225,7 +225,13 @@ impl TuiApp {
     }
 
     fn refresh_broker(&mut self) {
-        self.broker = self.db.with_broker(|broker| broker.stats());
+        self.broker = match self.db.with_broker(|broker| broker.stats()) {
+            Ok(stats) => stats,
+            Err(error) => {
+                self.set_error(format!("broker refresh failed: {error}"));
+                return;
+            }
+        };
         if self.selected_queue >= self.broker.queues.len() {
             self.selected_queue = self.broker.queues.len().saturating_sub(1);
         }
@@ -245,15 +251,23 @@ impl TuiApp {
             .groups
             .get(self.selected_group)
             .map(|group| group.group.clone());
-        let (peek, config, dead) = self.db.with_broker(|broker| {
-            (
-                broker.peek(&queue_name, from, MAX_PREVIEW_ROWS),
-                broker.queue_config(&queue_name),
-                group_name
-                    .map(|group| broker.dead_letters(&queue_name, &group))
-                    .unwrap_or_default(),
-            )
+        let snapshot = self.db.with_broker(|broker| -> bicdb_core::Result<_> {
+            Ok((
+                broker.peek(&queue_name, from, MAX_PREVIEW_ROWS)?,
+                broker.queue_config(&queue_name)?,
+                match group_name {
+                    Some(group) => broker.dead_letters(&queue_name, &group)?,
+                    None => Vec::new(),
+                },
+            ))
         });
+        let (peek, config, dead) = match snapshot {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                self.set_error(format!("broker refresh failed: {error}"));
+                return;
+            }
+        };
         self.queue_peek = peek;
         self.queue_config = config;
         self.group_dead_letters = dead;

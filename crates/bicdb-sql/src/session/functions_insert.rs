@@ -1713,7 +1713,7 @@ impl<'db> SqlSession<'db> {
         if primary_key_requires_typed_identity(schema) {
             return Ok(None);
         }
-        let key = record_column_values(record, schema, conflict_columns);
+        let key = record_column_values(record, schema, &columns);
         let id = record_id_from_column_values(table, schema, &columns, &key)?;
         let tx = self.tx.as_mut().expect("checked transaction");
         let refreshed = tx.read_committed_update_record(table, &id)?;
@@ -1985,7 +1985,11 @@ impl<'db> SqlSession<'db> {
             if let Some(columns) = primary_key_columns_for_unique_arbiter(schema, &arbiter) {
                 if !primary_key_requires_typed_identity(schema) {
                     sql_profile_index_lookup();
-                    let record_id = record_id_from_column_values(table, schema, &columns, &key)?;
+                    // Conflict targets may list a composite constraint in a
+                    // different order. Row identity uses authoritative PK order.
+                    let primary_values = record_column_values(record, schema, &columns);
+                    let record_id =
+                        record_id_from_column_values(table, schema, &columns, &primary_values)?;
                     return self.conflict_record_by_id(table, &record_id);
                 }
             }

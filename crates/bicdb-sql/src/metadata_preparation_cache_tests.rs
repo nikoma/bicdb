@@ -246,7 +246,7 @@ fn metadata_preparation_connection_cache_recovers_after_error_and_panic() {
     let mut cache = SqlSessionCatalogCache::default();
     assert!(cache
         .with_schema_cache(&db, || {
-            infer_query_result_columns_for_describe(&db, "SELECT missing FROM prep_rows")
+            infer_query_result_columns_for_describe(&db, "SELECT (")
         })
         .is_err());
     let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {

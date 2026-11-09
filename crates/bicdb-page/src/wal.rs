@@ -1537,12 +1537,14 @@ pub(crate) fn recover_with_outcomes(
             // Every record is below the horizon and already in the page file.
             // Replay nothing; finish the reset before anything is appended.
             wal.reset()?;
+            let free_pages_detached = store.detach_stale_free_list_for_recovery()?;
             wal.redo_lsn.store(horizon, Ordering::Release);
             return Ok((
                 RecoveryReport {
                     wal_bytes_scanned,
                     scan_passes: 0,
                     stale_segments_discarded: segments,
+                    free_pages_detached,
                     redo_lsn: horizon,
                     duration_nanos: u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX),
                     ..Default::default()
@@ -1706,6 +1708,11 @@ pub(crate) fn recover_with_outcomes(
         });
     }
     report.peak_record_bytes = report.peak_record_bytes.max(second.peak_record_bytes);
+    if !free_list_detached {
+        // Nothing was replayed, but uncommitted work since the last
+        // checkpoint may still have allocated the published head.
+        report.free_pages_detached = store.detach_stale_free_list_for_recovery()?;
+    }
 
     store.flush()?;
     crate::test_faults::crash_point("page_recovery.after_flush");
@@ -2266,6 +2273,87 @@ mod tests {
         let error = recover(&wal, &store).unwrap_err();
         assert!(matches!(error, PageError::WalCorruption { .. }));
         assert!(error.is_corruption());
+    }
+
+    /// Crash state from recovery evidence: uncommitted work after the last
+    /// superblock write took the free-list head (allocation writes the reused
+    /// page retyped, straight to the file, while the superblock still names it
+    /// as the head) and nothing committed since the last checkpoint, so
+    /// recovery replayed no page and kept the published list. The first
+    /// allocation after the open then failed with `page N has type 2,
+    /// expected 6`.
+    fn crash_after_allocating_the_published_free_list_head(
+        dir: &TempDir,
+        page_size: u32,
+        steal: bool,
+    ) -> (PageId, PageId) {
+        let store = store(dir, page_size);
+        let a = store.allocate(PageType::Heap).unwrap();
+        let b = store.allocate(PageType::Heap).unwrap();
+        store.free(a).unwrap();
+        store.free(b).unwrap();
+        assert_eq!(store.free_list_head(), b);
+        // Publish the free-list head before the later allocation. Dropping
+        // PageStore intentionally does not persist allocator metadata.
+        store.publish_root(0, 0).unwrap();
+        let reused = store.allocate(PageType::Heap).unwrap();
+        assert_eq!(reused, b);
+        let wal = Wal::open(dir.path().join("test.wal"), false).unwrap();
+        if steal {
+            // The page also reached the log as a stolen image of a
+            // transaction that never commits.
+            wal.log_page_image(reused, 7, &page_image(reused, page_size, 1))
+                .unwrap();
+        }
+        (a, b)
+    }
+
+    #[test]
+    fn recovery_with_nothing_to_replay_detaches_a_free_list_whose_head_was_allocated() {
+        for steal in [false, true] {
+            let dir = TempDir::new().unwrap();
+            let page_size = 512u32;
+            let (a, b) =
+                crash_after_allocating_the_published_free_list_head(&dir, page_size, steal);
+
+            let store = store(&dir, page_size);
+            assert_eq!(
+                store.free_list_head(),
+                b,
+                "the stale head is what was published"
+            );
+            let wal = Wal::open(dir.path().join("test.wal"), false).unwrap();
+            let report = recover(&wal, &store).unwrap();
+            assert_eq!(report.pages_replayed, 0);
+            assert_eq!(report.free_pages_detached, 2);
+            assert_eq!(store.free_list_head(), 0);
+
+            // Allocation no longer walks into the retyped page, and neither
+            // listed page is handed out (`b` may hold the crashed work).
+            let page = store.allocate(PageType::Heap).unwrap();
+            assert!(page != a && page != b, "allocated {page}");
+        }
+    }
+
+    #[test]
+    fn recovery_keeps_a_free_list_whose_head_is_still_free() {
+        let dir = TempDir::new().unwrap();
+        let page_size = 512u32;
+        let b = {
+            let store = store(&dir, page_size);
+            let a = store.allocate(PageType::Heap).unwrap();
+            let b = store.allocate(PageType::Heap).unwrap();
+            store.free(a).unwrap();
+            store.free(b).unwrap();
+            store.publish_root(0, 0).unwrap();
+            b
+        };
+        let store = store(&dir, page_size);
+        let wal = Wal::open(dir.path().join("test.wal"), false).unwrap();
+        let report = recover(&wal, &store).unwrap();
+        assert_eq!(report.free_pages_detached, 0);
+        assert_eq!(store.free_list_head(), b);
+        assert_eq!(store.allocate(PageType::Heap).unwrap(), b);
     }
 
     #[test]

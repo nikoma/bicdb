@@ -1757,6 +1757,14 @@ impl PagedStore {
         let Some(pressure) = self.pool.unlogged_pressure() else {
             return Ok(());
         };
+        if cfg!(feature = "experimental-structural-cuts") {
+            // At the operation boundary, every dirty tree/heap/catalog edge
+            // has its destination. Commit the entire closure as one internal
+            // unit; per-page xid-zero images would replay a partial cut.
+            self.log_unlogged_pages_as_committed_unit()?;
+            crate::test_faults::crash_point("structural_cut.after_durable");
+            return Ok(());
+        }
         if self.redo_backed.lock().contains(&transaction) {
             return Ok(());
         }
@@ -1821,6 +1829,17 @@ impl PagedStore {
     ) -> Result<TupleLocator> {
         let _guard = self.write_lock.lock();
         let _structure = self.structure.write();
+        // Bound a single operation's footprint before any page is changed.
+        // The exception in the pool is one frame per shard, never a steal.
+        if cfg!(feature = "experimental-structural-cuts")
+            && value.len() as u64 > self.options.buffer_pool_bytes / 4
+        {
+            return Err(PageError::ValueTooLarge {
+                page_id: 0,
+                len: value.len(),
+                free: (self.options.buffer_pool_bytes / 4) as usize,
+            });
+        }
         self.admit_write(transaction)?;
         // A key the index would refuse is refused before the heap version
         // is written, so that user error never leaves a changed page.
@@ -2636,6 +2655,9 @@ impl PagedStore {
         // flushes frames, so running it alongside a `put` mid-split would
         // checkpoint a half-modified tree.
         let _guard = self.write_lock.lock();
+        if cfg!(feature = "experimental-structural-cuts") {
+            self.log_unlogged_pages_as_committed_unit()?;
+        }
         // Freeze first, so the watermark the meta page records is as advanced as
         // it can safely be. Freezing stops at the oldest still-running
         // transaction, so an in-flight writer is never frozen into visibility.
@@ -2650,6 +2672,9 @@ impl PagedStore {
         // The meta page is written first: the checkpoint makes it durable, so it
         // must already hold the current tree roots and watermarks.
         self.write_meta()?;
+        if cfg!(feature = "experimental-structural-cuts") {
+            self.log_unlogged_pages_as_committed_unit()?;
+        }
 
         // Truncating the log discards every commit record in it. That is only
         // safe once every unfrozen commit is proven somewhere durable: the
@@ -2808,6 +2833,9 @@ impl PagedStore {
             }
             PagedCheckpointPhase::Finalize => {
                 let _guard = self.write_lock.lock();
+                if cfg!(feature = "experimental-structural-cuts") {
+                    self.log_unlogged_pages_as_committed_unit()?;
+                }
                 // Recheck the watermark under the same fence used for final
                 // publication. Commits between the Freeze and Finalize ticks
                 // must either be frozen now or leave the WAL untruncated.
@@ -2876,6 +2904,9 @@ impl PagedStore {
                     // every preceding dirty page is durable. With the writer
                     // gate held, this creates exactly one new dirty meta page.
                     self.write_meta()?;
+                    if cfg!(feature = "experimental-structural-cuts") {
+                        self.log_unlogged_pages_as_committed_unit()?;
+                    }
                     let writeback = self
                         .pool
                         .writeback_step(WritebackCursor::default(), limits.writeback)?;

@@ -12,6 +12,10 @@ rust-version.workspace = true
 # benchmarkable, and licence-auditable on its own, and keeping the edge
 # one-directional stops record semantics leaking into the storage layer.
 
+[features]
+# Unqualified prototype. Disposable stores only; never enabled by default.
+experimental-structural-cuts = []
+
 [dependencies]
 crc32fast.workspace = true
 # `flock` for exclusive store-directory ownership; see src/lock.rs for why an OS

@@ -1243,3 +1243,11 @@ fn repeat_recovery_convergence() {
     let point: &'static str = Box::leak(point.to_string().into_boxed_str());
     recovery_convergence(mode, point, rounds);
 }
+
+/// The experimental closure must recover the previously failing large
+/// decided transaction at every boundary, without accepting an ignored case.
+#[cfg(feature = "experimental-structural-cuts")]
+#[test]
+fn experimental_structural_cuts_preserve_large_decided_commits() {
+    gap1_a_decided_commit_larger_than_the_pool_keeps_acknowledged_rows();
+}

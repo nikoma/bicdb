@@ -11,6 +11,7 @@ rust-version.workspace = true
 # off degrades that capability at runtime with a clear error; it never
 # changes behavior for builds that keep the defaults.
 default = ["embeddings", "tls-replication", "mmap", "osm-import", "compression", "lua"]
+experimental-structural-cuts = ["bicdb-page/experimental-structural-cuts"]
 lua = ["dep:bicdb-lua"]
 embeddings = ["dep:ort", "dep:tokenizers"]
 tls-replication = ["dep:rustls", "dep:rustls-pemfile"]

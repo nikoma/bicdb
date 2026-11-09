@@ -1535,6 +1535,19 @@ impl BufferPool {
         };
         match no_steal_pass {
             Err(PageError::PoolExhausted { .. }) => {
+                if cfg!(feature = "experimental-structural-cuts") {
+                    // A structural cut cannot run in the middle of an
+                    // operation. Permit exactly one extra frame per shard;
+                    // otherwise fail and let PagedStore fence a partial
+                    // operation. Never write an uncommitted image to disk.
+                    if shard.resident.len() + shard.loading.len() < shard.capacity + 1 {
+                        return Ok(Arc::new(RwLock::new(vec![0; self.page_size as usize])));
+                    }
+                    return Err(PageError::PoolExhausted {
+                        page_id: wanted,
+                        frames: shard.capacity + 1,
+                    });
+                }
                 // `try_reclaim` counts a steal only when it actually writes
                 // an unlogged frame; this pass may also find a frame that
                 // became clean in the meantime.

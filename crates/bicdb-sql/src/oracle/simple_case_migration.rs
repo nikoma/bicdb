@@ -202,7 +202,15 @@ pub(super) fn ensure(db: &mut BicDb) -> Result<()> {
     {
         return Err(unsupported("invalid Oracle case readiness marker"));
     }
-    db.enable_oracle_simple_case_v1()?;
+    // A fully initialized standby validates its existing fence without a
+    // write. Missing capabilities still require initialization on a primary.
+    if !db
+        .format_metadata()?
+        .feature_flags
+        .contains(simple_case::READY_ID)
+    {
+        db.enable_oracle_simple_case_v1()?;
+    }
     // Finish owned work before discovering new migrations. Publication retries
     // must retain the original source and exact physical build identity.
     for record in db.scan_collection(PROFILE_COLLECTION)? {

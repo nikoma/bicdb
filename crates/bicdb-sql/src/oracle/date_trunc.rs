@@ -169,9 +169,9 @@ fn rewrite_with_parameters(
                 };
                 select.projection = vec![SelectItem::UnnamedExpr(arg.clone())];
                 query.locks.clear();
-                query.to_string()
+                render_sql(&query)
             } else if let Some(Some(from)) = self.statement_from.last() {
-                format!("SELECT {arg} FROM {from}")
+                format!("SELECT {} FROM {from}", render_sql(arg))
             } else {
                 return direct;
             };
@@ -236,8 +236,8 @@ fn rewrite_with_parameters(
         type Break = SqlError;
         fn pre_visit_statement(&mut self, statement: &mut Statement) -> ControlFlow<SqlError> {
             self.statement_from.push(match statement {
-                Statement::Update(update) => Some(update.table.to_string()),
-                Statement::CreateIndex(index) => Some(index.table_name.to_string()),
+                Statement::Update(update) => Some(render_sql(&update.table)),
+                Statement::CreateIndex(index) => Some(render_sql(&index.table_name)),
                 _ => None,
             });
             ControlFlow::Continue(())
@@ -323,7 +323,11 @@ fn rewrite_with_parameters(
                         && left_type.as_deref() == Some("date")
                         && right_type.as_deref() == Some("date")
                     {
-                        match expression(&format!("bicdb_oracle_date_subtract({left},{right})")) {
+                        match expression(&format!(
+                            "bicdb_oracle_date_subtract({},{})",
+                            render_sql(left.as_ref()),
+                            render_sql(right.as_ref())
+                        )) {
                             Ok(lowered) => *expr = lowered,
                             Err(error) => return ControlFlow::Break(error),
                         }

@@ -103,7 +103,7 @@ pub(crate) fn lower_expression(expr: &mut Expr) -> Result<()> {
             // profile lowering. Two arguments mean no implicit escape.
             let escape = escape_char
                 .as_ref()
-                .map_or(String::new(), |value| format!(", {value}"));
+                .map_or(String::new(), |value| format!(", {}", render_sql(value)));
             *expr = expression(&format!(
                 "{}CAST(pg_catalog.bicdb_oracle_like({}, {}{}) AS BOOLEAN)",
                 if *negated { "NOT " } else { "" },

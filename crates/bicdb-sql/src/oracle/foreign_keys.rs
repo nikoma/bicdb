@@ -57,6 +57,19 @@ fn identifier_end(source: &[Token], mut at: usize) -> Option<usize> {
 pub(super) fn syntax_positions(source: &[Token]) -> BTreeSet<usize> {
     let mut positions = BTreeSet::new();
     let end = source.len() - usize::from(source.last() == Some(&Token::SemiColon));
+    if source.first().is_some_and(|t| word(t, "DROP"))
+        && source.get(1).is_some_and(|t| word(t, "TABLE"))
+    {
+        if let Some(mut at) = identifier_end(source, 2) {
+            if source.get(at).is_some_and(|t| word(t, "CASCADE")) {
+                at += 1;
+            }
+            if at + 1 == end && word(&source[at], "PURGE") {
+                positions.insert(at);
+            }
+        }
+        return positions;
+    }
     if source.first().is_some_and(|t| word(t, "SET"))
         && source.get(1).is_some_and(|t| word(t, "CONSTRAINTS"))
     {

@@ -1054,6 +1054,9 @@ impl<'db> SqlSession<'db> {
             if let Some(update) = set_expr_update(query.body.as_ref()) {
                 return self.execute_update_with_ctes(update, ctes);
             }
+            if let Some(delete) = set_expr_delete(query.body.as_ref()) {
+                return self.execute_delete_with_ctes(delete, ctes);
+            }
             let body = clone_query_without_with(query);
             if let Some(result) = self.try_execute_set_function_query(&body, ctes.clone())? {
                 return Ok(result);

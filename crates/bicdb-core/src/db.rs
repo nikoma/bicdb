@@ -9234,37 +9234,51 @@ impl IndexRecordMutation {
     /// known and disjoint from every column the index reads, on an index
     /// without a predicate or exclusion constraint (those read other columns).
     fn leaves_index_untouched(&self, definition: &IndexDefinition) -> bool {
-        let Some(changed) = self.changed.as_deref() else {
-            return false;
-        };
-        if definition.predicate.is_some() || definition.exclusion.is_some() {
-            return false;
-        }
-        let (Some(old_id), Some(new_id)) = (self.old_record.id(), self.new_record.id()) else {
-            return false;
-        };
-        if old_id != new_id {
-            return false;
-        }
-        fn base_column(field: &IndexField) -> Option<&str> {
-            match field {
-                IndexField::MetadataPath(path) => path.first().map(String::as_str),
-                IndexField::Lower(inner)
-                | IndexField::Upper(inner)
-                | IndexField::Trim(inner)
-                | IndexField::TimestampDay(inner)
-                | IndexField::Coalesce { field: inner, .. } => base_column(inner),
-                // Several base columns: treat any change as relevant.
-                IndexField::FirstNonNull(_) => None,
-                // The id cannot change here; timestamps and geometry are
-                // not top-level keys the writer accounts for.
-                IndexField::Id | IndexField::Timestamp | IndexField::Geometry => None,
-            }
-        }
-        definition.fields.iter().all(|field| {
-            base_column(field).is_some_and(|column| !changed.iter().any(|key| &**key == column))
-        })
+        index_definition_untouched(
+            definition,
+            self.old_record.id(),
+            self.new_record.id(),
+            self.changed.as_deref(),
+        )
     }
+}
+
+fn index_definition_untouched(
+    definition: &IndexDefinition,
+    old_id: Option<&str>,
+    new_id: Option<&str>,
+    changed: Option<&[Box<str>]>,
+) -> bool {
+    let Some(changed) = changed else {
+        return false;
+    };
+    if definition.predicate.is_some() || definition.exclusion.is_some() {
+        return false;
+    }
+    let (Some(old_id), Some(new_id)) = (old_id, new_id) else {
+        return false;
+    };
+    if old_id != new_id {
+        return false;
+    }
+    fn base_column(field: &IndexField) -> Option<&str> {
+        match field {
+            IndexField::MetadataPath(path) => path.first().map(String::as_str),
+            IndexField::Lower(inner)
+            | IndexField::Upper(inner)
+            | IndexField::Trim(inner)
+            | IndexField::TimestampDay(inner)
+            | IndexField::Coalesce { field: inner, .. } => base_column(inner),
+            // Several base columns: treat any change as relevant.
+            IndexField::FirstNonNull(_) => None,
+            // The id cannot change here; timestamps and geometry are
+            // not top-level keys the writer accounts for.
+            IndexField::Id | IndexField::Timestamp | IndexField::Geometry => None,
+        }
+    }
+    definition.fields.iter().all(|field| {
+        base_column(field).is_some_and(|column| !changed.iter().any(|key| &**key == column))
+    })
 }
 
 impl VectorStore {
@@ -16231,6 +16245,35 @@ impl Transaction {
         key: &str,
         cancellation: &CancellationToken,
     ) -> Result<()> {
+        self.reserve_integrity_key_mode_cancellable(
+            constraint,
+            key,
+            cancellation,
+            integrity_reservations::Mode::Exclusive,
+        )
+    }
+
+    fn reserve_integrity_key_shared_cancellable(
+        &self,
+        constraint: &str,
+        key: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<()> {
+        self.reserve_integrity_key_mode_cancellable(
+            constraint,
+            key,
+            cancellation,
+            integrity_reservations::Mode::Shared,
+        )
+    }
+
+    fn reserve_integrity_key_mode_cancellable(
+        &self,
+        constraint: &str,
+        key: &str,
+        cancellation: &CancellationToken,
+        mode: integrity_reservations::Mode,
+    ) -> Result<()> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -16255,6 +16298,7 @@ impl Transaction {
             self.id,
             constraint,
             key,
+            mode,
             &self.locked_keys,
             &integrity_reservations::WaitContext {
                 cancellation: &cancellation,
@@ -17655,7 +17699,7 @@ impl Transaction {
                     Some(previous) => Some(previous),
                     None => self.previous_unique_reservation_image(collection, &record_id, None)?,
                 };
-                self.reserve_unique_image(collection, &image, previous_image.as_ref())?;
+                self.reserve_unique_image(collection, &image, previous_image.as_ref(), None)?;
                 self.lock_row_for_write(tx_id, collection, &record_id, false)?;
                 let statement_snapshot =
                     self.conflict_snapshot_for_write(collection, &record_id, statement_snapshot);
@@ -17844,7 +17888,12 @@ impl Transaction {
                     &record_id,
                     previous_stored.as_ref(),
                 )?;
-                self.reserve_unique_image(collection, &image, previous_image.as_ref())?;
+                self.reserve_unique_image(
+                    collection,
+                    &image,
+                    previous_image.as_ref(),
+                    changed.as_deref(),
+                )?;
                 if repair.is_none() && !optimistic_inserts {
                     self.lock_row_for_write(tx_id, collection, &record_id, false)?;
                 }
@@ -17900,7 +17949,7 @@ impl Transaction {
                 let image = OldImage::from_record(Some(Arc::clone(&record)));
                 let previous_image =
                     self.previous_unique_reservation_image(collection, &record_id, None)?;
-                self.reserve_unique_image(collection, &image, previous_image.as_ref())?;
+                self.reserve_unique_image(collection, &image, previous_image.as_ref(), None)?;
                 if repair.is_none() {
                     self.lock_row_for_write(tx_id, collection, &record_id, false)?;
                 }

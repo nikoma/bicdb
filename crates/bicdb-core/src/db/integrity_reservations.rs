@@ -82,25 +82,21 @@ impl Table {
         transaction: TransactionId,
         constraint: &str,
         value: &str,
+        mode: Mode,
         locked_keys: &Mutex<LockedKeys>,
         context: &WaitContext<'_>,
     ) -> Result<()> {
         (context.check_health)()?;
         context.cancellation.check()?;
-        match self.reserve(transaction, constraint, value, Mode::Exclusive, locked_keys) {
+        match self.reserve(transaction, constraint, value, mode, locked_keys) {
             Ok(()) => {
                 (context.check_health)()?;
                 context.cancellation.check()?;
                 Ok(())
             }
-            Err(BicDbError::TransactionConflict(_)) => self.reserve_inner(
-                transaction,
-                constraint,
-                value,
-                Mode::Exclusive,
-                locked_keys,
-                context,
-            ),
+            Err(BicDbError::TransactionConflict(_)) => {
+                self.reserve_inner(transaction, constraint, value, mode, locked_keys, context)
+            }
             Err(error) => Err(error),
         }
     }

@@ -147,6 +147,7 @@ pub use consensus::{
     ConsensusRole, ConsensusState, ConsensusStatus, RequestVote, VoteResponse,
 };
 pub use db::effective_fts_partitions;
+pub use db::ensure_frames_within_durable_horizon;
 pub use db::index_key_lower;
 pub use db::index_key_upper;
 pub use db::index_predicate_matches;

@@ -1166,6 +1166,44 @@ impl PageStore {
         Ok(detached)
     }
 
+    /// Detach the free list at recovery when its published head is stale.
+    ///
+    /// Allocation from the free list advances the head in memory only and
+    /// writes the reused page, retyped, straight to the file
+    /// ([`Self::allocate`]); the superblock keeps naming that page as the head
+    /// until something republishes it. After a crash in between, the head is a
+    /// page that is no longer typed `Free`, and the link to the rest of the
+    /// list was overwritten with it, so the published list cannot be followed.
+    /// Recovery detaches the list whenever it replays a page
+    /// ([`Self::detach_free_list_for_recovery`]); a crash state with nothing to
+    /// replay (only uncommitted work since the last checkpoint) used to keep
+    /// the stale head, and the first allocation after the open failed with
+    /// `UnexpectedPageType`. Detaching leaks the listed pages, which the
+    /// orphaned-free-page scanner reclaims; it never exposes a live page.
+    ///
+    /// Returns the number of pages detached (0 when the head is sound or the
+    /// list is empty).
+    pub(crate) fn detach_stale_free_list_for_recovery(&self) -> Result<u64> {
+        let head = {
+            let meta = self.meta.lock();
+            validate_free_list_metadata(&meta)?;
+            meta.free_list_head
+        };
+        if head == 0 {
+            return Ok(0);
+        }
+        let stale = match self.read_header(head) {
+            Ok(header) => header.page_type != PageType::Free,
+            // A head page that does not even decode is no more followable.
+            Err(error) if error.is_corruption() => true,
+            Err(error) => return Err(error),
+        };
+        if !stale {
+            return Ok(0);
+        }
+        self.detach_free_list_for_recovery()
+    }
+
     pub fn root_page(&self) -> PageId {
         self.meta.lock().root_page
     }

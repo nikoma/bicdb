@@ -3253,6 +3253,8 @@ impl<'db> SqlEngine<'db> {
                 | "json_array_elements_text"
                 | "jsonb_object_keys"
                 | "json_object_keys"
+                | "current_setting"
+                | "set_config"
         ) {
             return Some("text".to_string());
         }

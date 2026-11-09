@@ -1,0 +1,24 @@
+{
+  "label": "a2",
+  "mode": "strace",
+  "server_env_extra": {},
+  "n": 100,
+  "startup_s": 3.0,
+  "update": {
+    "commit_ms_p50": 28.26,
+    "p95": 34.56,
+    "p99": 65.66,
+    "max": 65.79,
+    "mean": 29.37,
+    "exec_ms_p50": 1.97
+  },
+  "insert": {
+    "commit_ms_p50": 28.33,
+    "p95": 32.8,
+    "p99": 36.47,
+    "max": 36.48,
+    "mean": 28.81,
+    "exec_ms_p50": 0.98
+  },
+  "database_removed": true
+}

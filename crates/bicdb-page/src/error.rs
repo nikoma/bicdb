@@ -153,6 +153,13 @@ pub enum PageError {
     #[error("meta page {page_id} is invalid: {reason}")]
     MetaCorruption { page_id: PageId, reason: String },
 
+    /// A page reached as a B+ tree node is not one the tree could have
+    /// written: an interior entry whose child pointer is not eight bytes, for
+    /// example. The page passed its checksum, so this is a misdirected
+    /// pointer or a node built from foreign bytes, not bit rot.
+    #[error("page {page_id} is not a valid B+ tree node: {reason}")]
+    BTreeNodeCorruption { page_id: PageId, reason: String },
+
     #[error("invalid page size {0}: must be a power of two between 512 and 1048576")]
     InvalidPageSize(u32),
 
@@ -332,6 +339,7 @@ impl PageError {
                 | Self::ShortWrite { .. }
                 | Self::WalCorruption { .. }
                 | Self::MetaCorruption { .. }
+                | Self::BTreeNodeCorruption { .. }
         )
     }
 }

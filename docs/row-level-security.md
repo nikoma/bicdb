@@ -166,6 +166,13 @@ the following documented divergences still apply.
 - Partitions inherit the parent's policies and flags so that scans through
   the parent stay fenced; PostgreSQL instead applies only the queried table's
   policies.
+- `EXPLAIN ANALYZE` omits `ActualRowsFetched` (rows fetched before the
+  policies filter them) when any table the statement read is policy-filtered
+  for the session; `ActualRows` is post-policy and stays. Owners, superusers
+  and `BYPASSRLS` roles keep the line. PostgreSQL is less strict: its
+  `Rows Removed by Filter` counts rows the security quals removed, so it can
+  reveal how many hidden rows a scan visited. BicDB deliberately does not
+  reproduce that count.
 - `MERGE` is unsupported at the statement level, so MERGE-RLS semantics are
   not applicable yet.
 - Statement texts for policy DDL executed through the extended protocol

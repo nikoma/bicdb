@@ -1,5 +1,6 @@
 //! Necessary RLS constraints may narrow candidate reads; they never replace RLS.
 use bicdb_core::{BicDb, DbConfig, SecurityContext};
+use bicdb_sql::plan_diagnostics::{with_plan_diagnostics, DiagnosticsOptions};
 use bicdb_sql::{SqlSession, SqlValue};
 
 fn fixture() -> (tempfile::TempDir, BicDb) {
@@ -60,7 +61,17 @@ fn assert_point_plan(sql: &mut SqlSession<'_>, query: &str) {
         "{output}"
     );
     assert!(output.contains("PrefixKeys 2"), "{output}");
-    assert!(output.contains("ActualRowsFetched 1"), "{output}");
+    // EXPLAIN ANALYZE does not show a policy reader its pre-policy fetch
+    // count; the engine's own trace still proves the narrowed probe.
+    assert!(!output.contains("ActualRowsFetched"), "{output}");
+    let (result, decisions) =
+        with_plan_diagnostics(DiagnosticsOptions::default(), || sql.execute(query));
+    result.unwrap();
+    let fetched = decisions
+        .iter()
+        .rev()
+        .find_map(|decision| decision.rows_fetched);
+    assert_eq!(fetched, Some(1), "{output}\n{decisions:?}");
 }
 #[test]
 fn necessary_policy_equality_reuses_index_and_statement_context_without_dropping_residual_rls() {

@@ -5778,3 +5778,6 @@ mod durability_sqlstate_tests {
         assert_eq!(backpressure.sqlstate(), "53100");
     }
 }
+
+#[cfg(test)]
+mod scalar_index_predicate_tests;

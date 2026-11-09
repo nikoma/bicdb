@@ -10409,6 +10409,7 @@ impl BicDb {
                 // committed publication is resolved. In particular, an old
                 // trim without identity evidence must never be guessed.
                 broker.publish_prepared(pending)?;
+                bicdb_page::test_faults::crash_point("open.broker_republish.after_event");
             }
         }
         let protected_ids = events.broker().outbox_recovery_ids();
@@ -17216,6 +17217,7 @@ impl Transaction {
         }
         let mut events = db.events.lock();
         let mut broker = events.broker();
+        bicdb_page::test_faults::crash_point("commit.before_broker_publish");
         for pending in &publishes {
             if let Err(error) = broker.publish_prepared(pending) {
                 db.fence_durability("broker_outbox.publish", &error);
@@ -17227,6 +17229,7 @@ impl Transaction {
             }
         }
         self.pending_broker_publishes.lock().clear();
+        bicdb_page::test_faults::crash_point("commit.after_broker_publish");
     }
 
     fn disable_memory_jobs_on_commit(&mut self) {

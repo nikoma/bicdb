@@ -2128,6 +2128,7 @@ impl<'a> Broker<'a> {
         let mut removed_messages = 0usize;
         let mut removed_control = 0usize;
         let mut marker_placed = false;
+        bicdb_page::test_faults::crash_point("broker.trim.before_rewrite");
         let (bytes_before, bytes_after) = self.stream.rewrite_events_in_place(|event| {
             if event.stream.starts_with(&group_prefix) {
                 if retain_trimmed_control_event(event, &removed_ids) {
@@ -2173,6 +2174,7 @@ impl<'a> Broker<'a> {
                 true
             }
         })?;
+        bicdb_page::test_faults::crash_point("broker.trim.after_rewrite");
         debug_assert!(marker_placed);
         Ok(TrimReport {
             removed_messages,

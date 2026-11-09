@@ -238,3 +238,179 @@ fn idempotency_aliases_stay_trimmed_but_new_commits_can_reuse_the_key() {
         assert_eq!(batch[0].payload, json!(3));
     }
 }
+
+fn record_acknowledgments(root: &std::path::Path, rows: &[&str]) {
+    use std::io::Write;
+    let mut ledger = std::fs::File::create(root.join("acknowledged.json")).unwrap();
+    ledger
+        .write_all(&serde_json::to_vec(rows).unwrap())
+        .unwrap();
+    ledger.sync_all().unwrap();
+}
+
+#[test]
+#[ignore = "out-of-process crash harness child; invoked by the parent matrix"]
+fn broker_crash_child() {
+    let root = std::path::PathBuf::from(std::env::var("BICDB_BROKER_CHILD_ROOT").unwrap());
+    let mode = if std::env::var("BICDB_BROKER_CHILD_MODE").unwrap() == "paged" {
+        StorageMode::ServerPaged
+    } else {
+        StorageMode::EmbeddedMemory
+    };
+    if std::env::var("BICDB_BROKER_CHILD_ACTION").unwrap() == "reopen" {
+        let _db = BicDb::open_with_config(root.join("db"), config(mode)).unwrap();
+        panic!("the reopen crash point was not reached");
+    }
+    let trim_case = std::env::var("BICDB_BROKER_CHILD_ACTION").unwrap() == "trim";
+    let mut db = BicDb::open_with_config(root.join("db"), config(mode)).unwrap();
+    db.create_collection("items").unwrap();
+    for row in ["first", "second"] {
+        let mut tx = db.begin_transaction().unwrap();
+        tx.insert("items", Record::new(row)).unwrap();
+        let key = if row == "first" || trim_case {
+            "same"
+        } else {
+            "fresh"
+        };
+        tx.buffer_broker_publish(
+            "q",
+            json!({"row": row}),
+            PublishOptions {
+                idempotency_key: Some(key.into()),
+                ..PublishOptions::default()
+            },
+        )
+        .unwrap();
+        tx.commit().unwrap();
+        record_acknowledgments(
+            &root,
+            if row == "first" {
+                &["first"]
+            } else {
+                &["first", "second"]
+            },
+        );
+        if row == "first" && !trim_case {
+            let messages = db.broker().consume("q", "g", "w", consumed()).unwrap();
+            assert_eq!(messages.len(), 1);
+            db.broker()
+                .ack("q", "g", "w", messages[0].message_id)
+                .unwrap();
+            db.broker().trim("q").unwrap();
+        }
+    }
+    let messages = db.broker().consume("q", "g", "w", consumed()).unwrap();
+    assert_eq!(messages.len(), 1);
+    db.broker()
+        .ack("q", "g", "w", messages[0].message_id)
+        .unwrap();
+    db.broker().trim("q").unwrap();
+    panic!("the commit/retention crash point was not reached");
+}
+
+fn crash_child(root: &std::path::Path, mode: &str, action: &str, point: &str) {
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--ignored", "--exact", "broker_crash_child", "--nocapture"])
+        .env("BICDB_BROKER_CHILD_ROOT", root)
+        .env("BICDB_BROKER_CHILD_MODE", mode)
+        .env("BICDB_BROKER_CHILD_ACTION", action)
+        .env("BICDB_TEST_CRASH_AT", point)
+        .env("BICDB_TEST_WAL_VOLATILE_TAIL", "1")
+        .output()
+        .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        assert_eq!(
+            output.status.signal(),
+            Some(libc::SIGABRT),
+            "{mode} {point}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    #[cfg(not(unix))]
+    assert!(!output.status.success(), "{mode} {point}");
+}
+
+#[test]
+fn crashes_reconcile_acknowledged_rows_and_publications_across_retention_and_reopen() {
+    for (name, mode) in [
+        ("embedded", StorageMode::EmbeddedMemory),
+        ("paged", StorageMode::ServerPaged),
+    ] {
+        for point in [
+            "commit.before_broker_publish:2",
+            "commit.after_broker_publish:2",
+            "broker.trim.before_rewrite:1",
+            "broker.trim.after_rewrite:1",
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let trim_case = point.starts_with("broker.trim");
+            crash_child(
+                root.path(),
+                name,
+                if trim_case { "trim" } else { "commit" },
+                point,
+            );
+            let acknowledged: Vec<String> = serde_json::from_slice(
+                &std::fs::read(root.path().join("acknowledged.json")).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(acknowledged.len(), if trim_case { 2 } else { 1 });
+            // Interrupt republication too, after both retained decisions have
+            // been examined and the missing second publication was appended.
+            if point.starts_with("commit.before") {
+                crash_child(
+                    root.path(),
+                    name,
+                    "reopen",
+                    "open.broker_republish.after_event:2",
+                );
+            }
+            for reopen in 0..2 {
+                let mut db =
+                    BicDb::open_with_config(root.path().join("db"), config(mode.clone())).unwrap();
+                for row in &acknowledged {
+                    assert!(
+                        db.get("items", row).unwrap().is_some(),
+                        "{name} {point} lost acknowledged {row}"
+                    );
+                }
+                assert_eq!(
+                    db.scan_collection("items").unwrap().len(),
+                    2,
+                    "{name} {point}"
+                );
+                if trim_case {
+                    assert!(
+                        db.broker()
+                            .consume("q", "g", "w", consumed())
+                            .unwrap()
+                            .is_empty(),
+                        "{name} {point} resurrected an acknowledged message"
+                    );
+                    let retained = db
+                        .broker()
+                        .stats()
+                        .queues
+                        .into_iter()
+                        .find(|queue| queue.queue == "q")
+                        .unwrap()
+                        .retained_messages;
+                    assert_eq!(
+                        retained,
+                        usize::from(point.contains("before_rewrite")),
+                        "{name} {point}"
+                    );
+                } else {
+                    let batch = db
+                        .broker()
+                        .consume("q", &format!("observer-{reopen}"), "w", consumed())
+                        .unwrap();
+                    assert_eq!(batch.len(), 1, "{name} {point}");
+                    assert_eq!(batch[0].payload, json!({"row": "second"}));
+                }
+            }
+        }
+    }
+}

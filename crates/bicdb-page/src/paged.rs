@@ -3402,7 +3402,8 @@ impl PagedStore {
                     report.versions_reclaimed += 1;
                     #[cfg(feature = "experimental-structural-cuts")]
                     if report.versions_reclaimed == 1 {
-                        crate::test_faults::io_fault("experimental.vacuum.after_first_mutation", self.pool.store().path())?;
+                        crate::test_faults::io_fault("experimental.vacuum.after_first_mutation", self.pool.store().path())
+                            .map_err(|error| PageError::io(self.pool.store().path(), error))?;
                     }
                 }
             }
@@ -3560,7 +3561,8 @@ impl PagedStore {
                 removed += 1;
                 #[cfg(feature = "experimental-structural-cuts")]
                 if removed == 1 {
-                    crate::test_faults::io_fault("experimental.sweep.after_first_mutation", self.pool.store().path())?;
+                    crate::test_faults::io_fault("experimental.sweep.after_first_mutation", self.pool.store().path())
+                        .map_err(|error| PageError::io(self.pool.store().path(), error))?;
                 }
             }
             #[cfg(feature = "experimental-structural-cuts")]

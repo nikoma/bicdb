@@ -46,3 +46,46 @@ all audit tests. Focused regressions do not establish application acceptance.
 The af34d117 optimized rerun also passes seven of eight original methods: the
 NULL-bound field lookup falls from 1.1–1.4 seconds to about 2–3 ms, but the
 report's original ten-second wait still fails. Further latency work remains.
+
+## Qualified binary at 7dbfc8b1 (1.0.453-beta)
+
+The stable candidate passes 2,387 SQL tests across 232 targets, with four existing
+ignores, and the locked workspace/all-target compilation check. Independent
+candidate CI reports the same SQL counts. The standard Rust 1.96 release build
+uses the repository's thin-LTO and line-table settings. Its unstripped SHA-256 is
+`49d2f7a52a7842c0baf5c63fe9e5ef383ecbad20c9771df9b14531eafb143a6d`.
+
+The canonical stripped artifact, SHA-256
+`191e9378c02517fa8f3de12fecc6b4702b49fc32985c0a0ef1434796a415dfd8`,
+passes 14 full and seven large-transaction hard VM reset cases. Independent
+read-only verification passes for all 21 saved crash images. The large campaign
+initially stopped before starting because the launcher used a filename outside
+its `large-tx-` safety prefix; that wrapper failure is retained and the campaign
+passes after correcting the launcher. These are VM reset tests, not physical
+power-loss or production deployment evidence. The same canonical artifact passes
+four live JDBC modes: 89 checks each for extended, simple and extended-cache
+queries, plus the expected PostgreSQL-profile rejection check.
+
+The unchanged original eight report/audit methods still pass seven of eight on
+the older pristine database. A separate controlled comparison of all 915
+business tables, every column and complete row multisets finds identical values
+after the newer engine opens the database. Actual relation/routine ownership and
+222 stored routine/view definitions also match. The only reported column-metadata
+differences are the documented #49 timestamp type-name labels: 3,364 `timestamp`
+and three `timestamptz` labels become their full PostgreSQL names. A fresh-copy
+application control after this preparation passes all eight methods once, then
+fails the report deadline on repetition. Preparation does not reliably resolve
+the deadline, and the original first-open failure remains valid evidence.
+
+## Read-only schema borrowing follow-up
+
+A same-run profile of the original report Future wait at 7dbfc8b1 records
+10.000060511 seconds and 411 native CPU samples, with no lost samples. Samples
+under schema cloning include Oracle national/temporal column resolution and
+foreign-key parent validation. Four read-only call sites now use
+`load_schema_shared`, preserving the existing cache generation checks,
+partition reconciliation, validation and errors while avoiding deep copies of
+the complete table definition. This follow-up does not change transaction
+durability or the original application assertions and ten-second waits. Earlier
+7dbfc8b1 qualification belongs to that binary; the follow-up requires its own
+source-pinned checks and application result.

@@ -7702,6 +7702,12 @@ pub(crate) struct TxWrite {
 }
 
 impl TxWrite {
+    /// Presence only: counting a pending upsert must not expand or memoize
+    /// its stored payload merely to decide whether the row exists.
+    fn has_record_payload(&self) -> bool {
+        self.stored.is_some() || self.record.get().is_some_and(Option::is_some)
+    }
+
     /// The write's parsed record, parsed from `stored` on first use when the
     /// write was buffered in its stored form. `None` for deletes.
     pub(crate) fn record(&self) -> Result<Option<&Arc<Record>>> {
@@ -16228,6 +16234,7 @@ impl Transaction {
     ) -> Result<Option<usize>> {
         cancellation.check()?;
         let db = self.db_ref();
+        db.check_recovery_state()?;
         db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
         let state = db.collection_state(collection)?;
         if state.paged_lazy {
@@ -16290,7 +16297,7 @@ impl Transaction {
             for write in self.pending_writes_for_collection(collection) {
                 cancellation.check()?;
                 let visible = match write.op {
-                    TxWriteOp::Upsert if write.record()?.is_some() => true,
+                    TxWriteOp::Upsert if write.has_record_payload() => true,
                     TxWriteOp::Delete => false,
                     _ => continue,
                 };
@@ -16309,6 +16316,7 @@ impl Transaction {
             }
             count += verdicts.values().filter(|visible| **visible).count();
             cancellation.check()?;
+            db.check_recovery_state()?;
             return Ok(Some(count));
         }
         let mut count = 0usize;
@@ -16331,12 +16339,13 @@ impl Transaction {
                 .and_then(|versions| visible_version(versions, self.snapshot_tx))
                 .is_some();
             match write.op {
-                TxWriteOp::Upsert if !was_visible && write.record()?.is_some() => count += 1,
+                TxWriteOp::Upsert if !was_visible && write.has_record_payload() => count += 1,
                 TxWriteOp::Delete if was_visible => count -= 1,
                 _ => {}
             }
         }
         cancellation.check()?;
+        db.check_recovery_state()?;
         Ok(Some(count))
     }
 

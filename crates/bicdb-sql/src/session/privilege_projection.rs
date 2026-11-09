@@ -273,6 +273,7 @@ impl<'db> SqlSession<'db> {
         ) {
             self.create_session_namespace_if_missing(
                 NamespaceSchema {
+                    dropped: false,
                     name: schema_name.clone(),
                     owner: current_user_from_gucs(&self.session_gucs),
                 },

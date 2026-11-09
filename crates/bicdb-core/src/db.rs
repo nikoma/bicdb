@@ -10805,6 +10805,24 @@ impl BicDb {
         self.commit_seq.load(AtomicOrdering::SeqCst)
     }
 
+    /// Persist the compatibility fence before SQL publishes catalog intents.
+    /// Older readers must refuse stores whose pending DDL they cannot recover.
+    pub fn enable_sql_catalog_intents(&mut self) -> Result<()> {
+        self.ensure_writable("enable SQL catalog intents")?;
+        let result = format::enable_sql_catalog_intents(&self.path);
+        self.check_recovery_state()?;
+        result
+    }
+
+    /// Require a healthy, quiescent database before startup catalog repair.
+    /// Includes outstanding row locks as well as pending transaction states.
+    pub fn check_catalog_recovery_quiescent(&self) -> Result<()> {
+        self.check_recovery_state()?;
+        let result = self.ensure_no_pending_transactions();
+        self.check_recovery_state()?;
+        result
+    }
+
     pub fn current_commit_seq(&self) -> u64 {
         self.last_commit_seq()
     }
@@ -17546,9 +17564,10 @@ impl Transaction {
     }
 
     pub fn rollback(mut self) -> Result<()> {
-        let mut db = self.db;
-        // Safety: see db_mut; this avoids holding a borrow through `self`.
-        unsafe { db.as_mut() }.rollback_transaction(&mut self)
+        let db = self.db;
+        // Rollback uses shared interior-mutability APIs; a transaction created
+        // from &BicDb must never manufacture an exclusive database borrow.
+        unsafe { db.as_ref() }.rollback_transaction(&mut self)
     }
 
     pub fn write_len(&self) -> usize {

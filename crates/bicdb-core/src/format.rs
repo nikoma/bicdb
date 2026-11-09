@@ -23,8 +23,10 @@ pub const SERVER_PAGED_FEATURE_FLAG: &str = "server_paged_storage";
 
 pub const ONLINE_BACKUP_EXTENT_FEATURE_FLAG: &str = "online_backup_extent_tracking_v1";
 pub const UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG: &str = "unique_nulls_not_distinct_v1";
+pub const SQL_CATALOG_INTENTS_FEATURE_FLAG: &str = "sql_catalog_intents_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
     UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG,
+    SQL_CATALOG_INTENTS_FEATURE_FLAG,
     "format_metadata_v2",
     SERVER_PAGED_FEATURE_FLAG,
     ONLINE_BACKUP_EXTENT_FEATURE_FLAG,
@@ -545,6 +547,20 @@ pub(crate) fn enable_unique_nulls_not_distinct(root: &Path) -> Result<()> {
     if metadata
         .feature_flags
         .insert(UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG.into())
+    {
+        persist_metadata(root, &metadata, true)?;
+    }
+    Ok(())
+}
+
+/// Fence older SQL runtimes before publishing a transactional catalog intent.
+/// Even an empty journal remains sticky: unknown readers must not skip recovery.
+pub(crate) fn enable_sql_catalog_intents(root: &Path) -> Result<()> {
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if metadata
+        .feature_flags
+        .insert(SQL_CATALOG_INTENTS_FEATURE_FLAG.into())
     {
         persist_metadata(root, &metadata, true)?;
     }

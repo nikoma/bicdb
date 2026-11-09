@@ -182,7 +182,9 @@ impl CacheStore {
         let db_config = DbConfig::default()
             .with_fsync(config.fsync)
             .with_sync_outbox(false);
-        let db = BicDb::open_with_config(path, db_config)?;
+        let mut db = BicDb::open_with_config(path, db_config)?;
+        bicdb_sql::recover_interrupted_recycle_bin_renames(&mut db)
+            .map_err(|error| RespServerError::Command(format!("SQL recovery failed: {error}")))?;
         let mem = config.ephemeral.then(|| {
             (0..NUM_DATABASES)
                 .map(|_| Mutex::new(std::collections::HashMap::new()))
@@ -1044,4 +1046,34 @@ fn parse_float(bytes: &[u8]) -> Result<f64> {
 /// `Display` produces the same human form ("10.6", not "10.59999999999999964").
 fn format_float(value: f64) -> String {
     format!("{value}")
+}
+
+#[cfg(test)]
+mod ddl_startup_recovery_tests {
+    use super::*;
+
+    #[test]
+    fn hotview_store_repairs_catalog_before_sql_queries() {
+        let root = tempfile::tempdir().unwrap();
+        {
+            let mut db =
+                BicDb::open_with_config(root.path(), DbConfig::default().with_fsync(false))
+                    .unwrap();
+            let mut sql = bicdb_sql::SqlSession::new_unprivileged(&mut db, HOTVIEW_SQL_ROLE);
+            sql.execute("CREATE TABLE startup_rows(id int PRIMARY KEY)")
+                .unwrap();
+            sql.execute("INSERT INTO startup_rows VALUES(1)").unwrap();
+            drop(sql);
+            db.rename_collection(
+                "startup_rows",
+                "__bicdb_bin_00000000000000000000000000000001",
+            )
+            .unwrap();
+        }
+        let store = CacheStore::open(root.path(), &CacheStoreConfig::default()).unwrap();
+        assert_eq!(
+            store.query_sql("SELECT id FROM startup_rows").unwrap().rows,
+            vec![vec![bicdb_sql::SqlValue::Int(1)]]
+        );
+    }
 }

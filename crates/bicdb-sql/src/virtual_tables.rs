@@ -1565,9 +1565,7 @@ pub(crate) fn execute_builtin_function(
         )),
         "current_schema" | "pg_catalog.current_schema" => Ok(SqlResult::new(
             vec!["current_schema".to_string()],
-            vec![vec![SqlValue::String(
-                crate::search_path::current_schema_name(),
-            )]],
+            vec![vec![crate::search_path::current_schema_value()]],
         )),
         "current_schemas" | "pg_catalog.current_schemas" => {
             let args = function_args(function)

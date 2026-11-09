@@ -566,3 +566,143 @@ impl BicDb {
         Ok(())
     }
 }
+
+impl BicDb {
+    /// Rename a collection and retain one transaction's writes/read observations
+    /// on that same backing. Catalog mutation requires an exclusive database
+    /// borrow and no other pending transaction or retained row lock; its host
+    /// remains responsible for transactional DDL undo. Native grants retain
+    /// their immutable relation restrictions.
+    pub fn rename_collection_preserving_pending_writes(
+        &mut self,
+        tx: &mut Transaction,
+        old: &str,
+        new: &str,
+    ) -> Result<()> {
+        self.check_recovery_state()?;
+        let result = self.rename_collection_preserving_pending_writes_inner(tx, old, new);
+        self.check_recovery_state()?;
+        result
+    }
+    fn rename_collection_preserving_pending_writes_inner(
+        &mut self,
+        tx: &mut Transaction,
+        old: &str,
+        new: &str,
+    ) -> Result<()> {
+        // Pointer identity plus an owned per-open registry prevents address reuse
+        // from admitting a transaction from another database/health instance.
+        if !std::ptr::eq(tx.db.as_ptr(), self) || !Arc::ptr_eq(&tx.tx_states, &self.tx_states) {
+            return Err(BicDbError::Unsupported(
+                "transaction belongs to a different database instance".into(),
+            ));
+        }
+        if tx.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        if old == new {
+            return Ok(());
+        }
+        // A Transaction retains database access independently of this exclusive
+        // borrow. Only the supplied transaction's overlays are rebound below;
+        // another live transaction would retain the old logical name and lock
+        // identities. Refuse before publishing any catalog change. Check locks
+        // separately because a completed transaction may still be releasing its
+        // locks, and a SELECT FOR UPDATE need not have buffered any writes.
+        let other_pending = self.tx_states.shards.iter().any(|shard| {
+            shard
+                .lock()
+                .iter()
+                .any(|(id, state)| *id != tx.id.0 && *state == TxState::Pending)
+        });
+        let other_locks = self.write_locks.values_any(|owner| *owner != tx.id);
+        if other_pending || other_locks {
+            return Err(BicDbError::TransactionConflict(
+                "cannot rename while another transaction is pending or holds row locks".into(),
+            ));
+        }
+        // Application grants/commit validators are bound to authored relation
+        // names. Rebinding an already-authorized write would change that
+        // authority after validation. Native catalog migration needs its own
+        // explicit contract; refuse before changing either backing or writes.
+        if tx.mutation_actor.is_some() && tx.writes.iter().any(|write| write.collection == old) {
+            return Err(BicDbError::MutationDenied(
+                "cannot rename a collection with pending native application writes".into(),
+            ));
+        }
+        if tx.write_index.contains_key(new) {
+            return Err(BicDbError::Unsupported(
+                "cannot rename onto a name with pending transaction writes".into(),
+            ));
+        }
+        let moved_locks = tx
+            .locked_keys
+            .lock()
+            .order
+            .iter()
+            .filter(|key| key.0 == old)
+            .map(|key| (key.clone(), (new.to_string(), key.1.clone())))
+            .collect::<Vec<_>>();
+        for (source, target) in &moved_locks {
+            if self.write_locks.get_copied(source) != Some(tx.id)
+                || self.write_locks.get_copied(target).is_some()
+            {
+                return Err(BicDbError::TransactionConflict(
+                    "cannot rename inconsistent or occupied transaction row locks".into(),
+                ));
+            }
+        }
+        self.rename_collection(old, new)?;
+        // The logical name is the row-lock identity. Publish the renamed lock
+        // before releasing its former identity, and retain acquisition order
+        // so existing rollback marks still release the same suffix.
+        for (_, target) in &moved_locks {
+            self.write_locks.insert(target.clone(), tx.id);
+        }
+        {
+            let mut locked = tx.locked_keys.lock();
+            for key in &mut locked.order {
+                if key.0 == old {
+                    key.0 = new.to_string();
+                }
+            }
+            for (source, target) in &moved_locks {
+                locked.held.remove(source);
+                locked.held.insert(target.clone());
+            }
+        }
+        for (source, _) in &moved_locks {
+            release_owned_write_locks(&self.write_locks, tx.id, std::slice::from_ref(source));
+        }
+        for write in &mut tx.writes {
+            if write.collection == old {
+                write.collection = new.to_string();
+            }
+        }
+        tx.rebuild_write_index();
+        {
+            let mut versions = tx.observed_record_versions.lock();
+            versions.remove(new);
+            if let Some(rows) = versions.remove(old) {
+                versions.insert(new.to_string(), rows);
+            }
+        }
+        {
+            let mut images = tx.read_images.lock();
+            if let Some(rows) = images.rows.remove(new) {
+                images.len -= rows.len();
+            }
+            if let Some(rows) = images.rows.remove(old) {
+                images.rows.insert(new.to_string(), rows);
+            }
+        }
+        if let Some(generation) = tx.serializable_generation_snapshot.remove(old) {
+            tx.serializable_generation_snapshot
+                .insert(new.to_string(), generation);
+        }
+        if tx.serializable_reads.remove(old) {
+            tx.serializable_reads.insert(new.to_string());
+        }
+        Ok(())
+    }
+}

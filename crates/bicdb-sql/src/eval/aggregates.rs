@@ -1652,6 +1652,12 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         if let Some(pg_type) = crate::xml_function_pg_type(&name) {
             return Some(pg_type.to_string());
         }
+        if matches!(
+            name.as_str(),
+            "to_regnamespace" | "pg_catalog.to_regnamespace"
+        ) {
+            return Some("regnamespace".to_string());
+        }
         if matches!(name.as_str(), "pg_typeof" | "pg_catalog.pg_typeof") {
             return Some("regtype".to_string());
         }

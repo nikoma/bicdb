@@ -1017,6 +1017,7 @@ pub(crate) fn list_schemas(db: &BicDb) -> Result<Vec<TableSchema>> {
 }
 
 pub fn ensure_primary_key_indexes(db: &mut BicDb) -> Result<()> {
+    recover_interrupted_recycle_bin_renames(db)?;
     for schema in list_schemas(db)? {
         ensure_primary_key_index_for_schema(db, &schema)?;
     }
@@ -1349,27 +1350,48 @@ pub(crate) fn save_schema(db: &mut BicDb, schema: &TableSchema) -> Result<()> {
     Ok(())
 }
 
+/// The default public namespace predates explicit catalog records. A dropped
+/// record prevents a legacy empty catalog from resurrecting it on reopen.
+fn initial_public_namespace() -> NamespaceSchema {
+    NamespaceSchema {
+        name: "public".into(),
+        owner: BOOTSTRAP_ROLE_NAME.into(),
+        dropped: false,
+    }
+}
+
 pub(crate) fn list_namespaces(db: &BicDb) -> Result<Vec<NamespaceSchema>> {
     let records = match db.scan_collection(NAMESPACE_COLLECTION) {
         Ok(records) => records,
-        Err(BicDbError::CollectionNotFound(_)) => return Ok(Vec::new()),
+        Err(BicDbError::CollectionNotFound(_)) => Vec::new(),
         Err(error) => return Err(error.into()),
     };
-    records
+    let mut namespaces = records
         .into_iter()
         .map(|record| {
             serde_json::from_value::<NamespaceSchema>(record.metadata).map_err(SqlError::from)
         })
-        .collect()
+        .collect::<Result<Vec<_>>>()?;
+    if !namespaces.iter().any(|n| n.name == "public") {
+        namespaces.push(initial_public_namespace());
+    }
+    namespaces.retain(|n| !n.dropped);
+    Ok(namespaces)
 }
 
 pub(crate) fn load_namespace(db: &BicDb, namespace: &str) -> Result<Option<NamespaceSchema>> {
-    match db.get(NAMESPACE_COLLECTION, namespace) {
-        Ok(Some(record)) => Ok(Some(serde_json::from_value(record.metadata.clone())?)),
-        Ok(None) => Ok(None),
-        Err(BicDbError::CollectionNotFound(_)) => Ok(None),
-        Err(error) => Err(error.into()),
-    }
+    let saved = match db.get(NAMESPACE_COLLECTION, namespace) {
+        Ok(Some(record)) => Some(serde_json::from_value::<NamespaceSchema>(
+            record.metadata.clone(),
+        )?),
+        Ok(None) | Err(BicDbError::CollectionNotFound(_)) => None,
+        Err(error) => return Err(error.into()),
+    };
+    Ok(match saved {
+        Some(namespace) => (!namespace.dropped).then_some(namespace),
+        None if namespace == "public" => Some(initial_public_namespace()),
+        None => None,
+    })
 }
 
 pub(crate) fn save_namespace_if_missing(
@@ -1378,7 +1400,7 @@ pub(crate) fn save_namespace_if_missing(
     if_not_exists: bool,
 ) -> Result<()> {
     ensure_namespace_collection(db)?;
-    match db.get(NAMESPACE_COLLECTION, &namespace.name)? {
+    match load_namespace(db, &namespace.name)? {
         Some(_) if if_not_exists => Ok(()),
         Some(_) => Err(SqlError::InvalidSql(format!(
             "schema \"{}\" already exists",
@@ -1419,6 +1441,14 @@ pub(crate) fn namespace_owner(db: &BicDb, namespace: &str) -> Result<String> {
 }
 
 pub(crate) fn delete_namespace(db: &mut BicDb, namespace: &str) -> Result<bool> {
+    if namespace == "public" {
+        let Some(mut prior) = load_namespace(db, namespace)? else {
+            return Ok(false);
+        };
+        prior.dropped = true;
+        save_namespace(db, prior)?;
+        return Ok(true);
+    }
     match db.delete(NAMESPACE_COLLECTION, namespace) {
         Ok(existed) => Ok(existed),
         Err(BicDbError::CollectionNotFound(_)) => Ok(false),
@@ -2533,7 +2563,10 @@ pub(crate) fn role_can_create_in_schema(
     database: Option<&str>,
 ) -> Result<Option<bool>> {
     let role = normalize_role_name(role);
-    let schema = schema.to_ascii_lowercase();
+    let schema = schema.to_string();
+    if schema == "public" && load_namespace(db, &schema)?.is_none() {
+        return Ok(None);
+    }
     if role_is_superuser(db, &role)? {
         return Ok(Some(true));
     }
@@ -2542,7 +2575,6 @@ pub(crate) fn role_can_create_in_schema(
     }
     let owner = match load_namespace(db, &schema)? {
         Some(namespace) => namespace.owner,
-        None if schema == "public" => BOOTSTRAP_ROLE_NAME.to_string(),
         None => return Ok(None),
     };
     let closure = role_privilege_closure(db, &role)?;
@@ -2896,7 +2928,7 @@ pub(crate) fn grant_targets(
             .iter()
             .map(|schema| {
                 let name = schema_name(schema)?;
-                if !is_known_schema(&name) && load_namespace(db, &name)?.is_none() {
+                if !is_known_schema(db, &name)? && load_namespace(db, &name)?.is_none() {
                     return Err(SqlError::InvalidCollection(name));
                 }
                 Ok((PrivilegeObjectType::Schema, name))
@@ -2980,7 +3012,7 @@ pub(crate) fn grant_targets(
             let mut names = Vec::new();
             for schema in schemas {
                 let schema = schema_name(schema)?;
-                if !is_known_schema(&schema) && load_namespace(db, &schema)?.is_none() {
+                if !is_known_schema(db, &schema)? && load_namespace(db, &schema)?.is_none() {
                     return Err(SqlError::InvalidCollection(schema));
                 }
                 names.push(schema);
@@ -3108,11 +3140,9 @@ pub(crate) fn resolve_relation_name_memoized(db: &BicDb, name: &str) -> Option<S
     resolved
 }
 
-pub(crate) fn is_known_schema(name: &str) -> bool {
-    matches!(
-        name.to_ascii_lowercase().as_str(),
-        "public" | "pg_catalog" | "information_schema"
-    )
+pub(crate) fn is_known_schema(db: &BicDb, name: &str) -> Result<bool> {
+    Ok(matches!(name, "pg_catalog" | "information_schema")
+        || name == "public" && load_namespace(db, name)?.is_some())
 }
 
 pub(crate) fn schema_name(name: &ObjectName) -> Result<String> {
@@ -3326,7 +3356,7 @@ pub(crate) fn has_schema_privilege(db: &BicDb, args: &[SqlValue]) -> Result<bool
         return Ok(false);
     };
     let role = role.unwrap_or_else(current_role_name);
-    if role == current_role_name() && is_known_schema(&schema) {
+    if role == current_role_name() && is_known_schema(db, &schema)? {
         return Ok(true);
     }
     if privilege == "CREATE" {

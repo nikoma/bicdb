@@ -1861,7 +1861,9 @@ impl PagedStore {
         let result = self.put_admitted(transaction, key, value);
         self.poison_if_failed_after_a_change(transaction, releases, &result)?;
         #[cfg(feature = "experimental-structural-cuts")]
-        if result.is_ok() { self.release_retired_overflow_at_boundary()?; }
+        if result.is_ok() {
+            self.release_retired_overflow_at_boundary()?;
+        }
         result
     }
 
@@ -2253,7 +2255,9 @@ impl PagedStore {
         let result = self.delete_admitted(transaction, key);
         self.poison_if_failed_after_a_change(transaction, releases, &result)?;
         #[cfg(feature = "experimental-structural-cuts")]
-        if result.is_ok() { self.release_retired_overflow_at_boundary()?; }
+        if result.is_ok() {
+            self.release_retired_overflow_at_boundary()?;
+        }
         result
     }
 
@@ -3603,9 +3607,13 @@ impl PagedStore {
     #[cfg(feature = "experimental-structural-cuts")]
     fn release_retired_overflow_at_boundary(&self) -> Result<()> {
         let retired = self.heap.take_retired_overflow();
-        if retired.is_empty() { return Ok(()); }
+        if retired.is_empty() {
+            return Ok(());
+        }
         self.log_unlogged_pages_as_committed_unit()?;
-        for head in retired { self.pool.retire_overflow_after_durable_cut(head)?; }
+        for head in retired {
+            self.pool.retire_overflow_after_durable_cut(head)?;
+        }
         Ok(())
     }
 

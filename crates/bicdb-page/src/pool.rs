@@ -864,7 +864,9 @@ pub(crate) struct UnreachablePage {
 }
 
 impl UnreachablePage {
-    pub(crate) fn page_id(&self) -> PageId { self.page_id }
+    pub(crate) fn page_id(&self) -> PageId {
+        self.page_id
+    }
 }
 
 #[cfg(feature = "experimental-structural-cuts")]
@@ -1053,9 +1055,13 @@ impl BufferPool {
             .map(|index| {
                 let frames = per_shard + usize::from(index < remainder);
                 #[cfg(feature = "experimental-structural-cuts")]
-                { AtomicUsize::new(frames) }
+                {
+                    AtomicUsize::new(frames)
+                }
                 #[cfg(not(feature = "experimental-structural-cuts"))]
-                { frames }
+                {
+                    frames
+                }
             })
             .collect::<Vec<_>>()
             .into_boxed_slice();
@@ -1121,7 +1127,9 @@ impl BufferPool {
     }
 
     pub(crate) fn allocate_unreachable(&self, page_type: PageType) -> Result<UnreachablePage> {
-        Ok(UnreachablePage { page_id: self.store.allocate(page_type)? })
+        Ok(UnreachablePage {
+            page_id: self.store.allocate(page_type)?,
+        })
     }
 
     /// Seal a fresh, unrooted allocation before publishing any parent link.
@@ -1131,7 +1139,9 @@ impl BufferPool {
         {
             let page_id = page.page_id;
             let barrier = self.barrier.lock().clone();
-            let Some(barrier) = barrier else { return Ok(()); };
+            let Some(barrier) = barrier else {
+                return Ok(());
+            };
             let guard = self.get(page_id)?;
             let epoch = guard.frame.modifications.load(Ordering::Acquire);
             barrier.before_unreachable_writeback(page_id, guard.bytes())?;
@@ -1159,7 +1169,8 @@ impl BufferPool {
                 let header = PageHeader::decode(guard.bytes(), self.store.path())?;
                 if header.page_type != PageType::Overflow {
                     return Err(PageError::UnexpectedPageType {
-                        page_id, found: header.page_type as u8,
+                        page_id,
+                        found: header.page_type as u8,
                         expected: PageType::Overflow as u8,
                     });
                 }
@@ -1190,7 +1201,10 @@ impl BufferPool {
 
     #[cfg(feature = "experimental-structural-cuts")]
     pub(crate) fn has_pending_frees(&self, transaction: u64) -> bool {
-        self.pending_frees.lock().get(&transaction).is_some_and(|pages| !pages.is_empty())
+        self.pending_frees
+            .lock()
+            .get(&transaction)
+            .is_some_and(|pages| !pages.is_empty())
     }
 
     /// Remove the pages staged as free by `transaction`. The caller must
@@ -1436,28 +1450,32 @@ impl BufferPool {
                 return Err(PageError::PageAlreadyFree { page_id });
             }
             drop(guard);
-            self.pending_frees.lock().entry(transaction).or_default().push(page_id);
+            self.pending_frees
+                .lock()
+                .entry(transaction)
+                .or_default()
+                .push(page_id);
             return Ok(());
         }
         #[cfg(not(feature = "experimental-structural-cuts"))]
         {
-        let mut guard = self.get_mut(page_id)?;
-        let existing = PageHeader::decode(guard.bytes_mut(), self.store.path())?;
-        if existing.page_type == PageType::Free {
-            return Err(PageError::PageAlreadyFree { page_id });
-        }
-        let bytes = guard.bytes_mut();
-        bytes.fill(0);
-        let mut header = PageHeader::new(page_id, PageType::Free, self.page_size);
-        header.generation = existing.generation.saturating_add(1);
-        header.encode(bytes);
-        drop(guard);
-        self.pending_frees
-            .lock()
-            .entry(transaction)
-            .or_default()
-            .push(page_id);
-        Ok(())
+            let mut guard = self.get_mut(page_id)?;
+            let existing = PageHeader::decode(guard.bytes_mut(), self.store.path())?;
+            if existing.page_type == PageType::Free {
+                return Err(PageError::PageAlreadyFree { page_id });
+            }
+            let bytes = guard.bytes_mut();
+            bytes.fill(0);
+            let mut header = PageHeader::new(page_id, PageType::Free, self.page_size);
+            header.generation = existing.generation.saturating_add(1);
+            header.encode(bytes);
+            drop(guard);
+            self.pending_frees
+                .lock()
+                .entry(transaction)
+                .or_default()
+                .push(page_id);
+            Ok(())
         }
     }
 
@@ -1684,12 +1702,26 @@ impl BufferPool {
     /// and try_lock prevents cross-shard lock-order deadlocks. Tiny pools can
     /// otherwise strand clean capacity while one shard needs a split path.
     #[cfg(feature = "experimental-structural-cuts")]
-    fn borrow_logged_frame(&self, target: &mut Shard, wanted: PageId) -> Result<Option<Arc<RwLock<Vec<u8>>>>> {
-        let target_index = self.shards.iter().position(|shard| std::ptr::eq(shard, self.shard_for(wanted))).unwrap();
+    fn borrow_logged_frame(
+        &self,
+        target: &mut Shard,
+        wanted: PageId,
+    ) -> Result<Option<Arc<RwLock<Vec<u8>>>>> {
+        let target_index = self
+            .shards
+            .iter()
+            .position(|shard| std::ptr::eq(shard, self.shard_for(wanted)))
+            .unwrap();
         for (index, lock) in self.shards.iter().enumerate() {
-            if index == target_index { continue; }
-            let Some(mut donor) = lock.try_lock() else { continue; };
-            if donor.capacity <= 1 { continue; }
+            if index == target_index {
+                continue;
+            }
+            let Some(mut donor) = lock.try_lock() else {
+                continue;
+            };
+            if donor.capacity <= 1 {
+                continue;
+            }
             let buffer = if let Some(buffer) = donor.free.pop() {
                 Some(buffer)
             } else {
@@ -1701,9 +1733,15 @@ impl BufferPool {
             };
             if let Some(buffer) = buffer {
                 donor.capacity -= 1;
-                donor.protected_capacity = donor.protected_capacity.min(donor.capacity.saturating_sub(1));
-                donor.streaming_capacity = donor.streaming_capacity.min(donor.capacity.saturating_sub(1));
-                donor.metadata_capacity = donor.metadata_capacity.min(donor.capacity.saturating_sub(1));
+                donor.protected_capacity = donor
+                    .protected_capacity
+                    .min(donor.capacity.saturating_sub(1));
+                donor.streaming_capacity = donor
+                    .streaming_capacity
+                    .min(donor.capacity.saturating_sub(1));
+                donor.metadata_capacity = donor
+                    .metadata_capacity
+                    .min(donor.capacity.saturating_sub(1));
                 target.capacity += 1;
                 self.shard_frames[index].store(donor.capacity, Ordering::Release);
                 self.shard_frames[target_index].store(target.capacity, Ordering::Release);

@@ -1177,7 +1177,7 @@ impl BTree {
                 }
                 node.set_next_page(right_child);
             }
-                // The new root is made durable BEFORE anyone is told about it. A
+            // The new root is made durable BEFORE anyone is told about it. A
             // crash in between leaves the old root intact and the new one
             // unreferenced — garbage, but never a dangling root.
             //

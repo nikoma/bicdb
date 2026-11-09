@@ -324,7 +324,8 @@ impl HeapFile {
         };
         let (locator, free_after) = {
             let mut guard = self.pool.get_mut(page_id)?;
-            let mut heap = SlottedPage::init_with_floor(guard.bytes_mut(), page_id, page_size, floor);
+            let mut heap =
+                SlottedPage::init_with_floor(guard.bytes_mut(), page_id, page_size, floor);
             let locator = heap.insert(tuple)?;
             (locator, heap.free_space())
         };

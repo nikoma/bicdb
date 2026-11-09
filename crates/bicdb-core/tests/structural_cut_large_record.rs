@@ -24,7 +24,8 @@ fn a_large_logical_value_streams_without_stealing_and_survives_recovery() {
         Record::new("oversized").with_metadata(json!({"blob": "x".repeat(100_000)})),
     )
     .unwrap();
-    tx.commit().expect("a logical value larger than the pool reserve must remain supported");
+    tx.commit()
+        .expect("a logical value larger than the pool reserve must remain supported");
     let mut tx = db.begin_transaction().unwrap();
     tx.insert(
         "rows",

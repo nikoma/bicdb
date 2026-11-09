@@ -70,7 +70,9 @@ fn invalid_or_exhausted_native_floor_refuses_open() {
 }
 
 #[test]
+#[cfg(unix)]
 fn a_crash_on_either_side_of_floor_publication_preserves_acknowledged_ids() {
+    use std::os::unix::process::ExitStatusExt;
     for point in [
         "transaction_id_floor.before_publish",
         "transaction_id_floor.after_publish",
@@ -90,9 +92,11 @@ fn a_crash_on_either_side_of_floor_publication_preserves_acknowledged_ids() {
             .env("BICDB_TEST_CRASH_AT", point)
             .output()
             .unwrap();
-        assert!(
-            !child.status.success(),
-            "crash point was not reached: {point}"
+        assert_eq!(
+            child.status.signal(),
+            Some(libc::SIGABRT),
+            "expected a real abort at {point}, not an assertion failure: {}",
+            String::from_utf8_lossy(&child.stderr)
         );
         let ids: Vec<u64> = std::fs::read_to_string(&ledger)
             .unwrap()
@@ -125,6 +129,29 @@ fn a_crash_on_either_side_of_floor_publication_preserves_acknowledged_ids() {
             tx.rollback().unwrap();
         }
     }
+}
+
+#[test]
+fn exhausted_allocator_cannot_return_the_same_id_twice() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = DbConfig::default()
+        .with_storage_mode(StorageMode::ServerPaged)
+        .with_fsync(true)
+        .with_sync_outbox(false);
+    drop(BicDb::open_with_config(dir.path(), config.clone()).unwrap());
+    std::fs::write(
+        dir.path().join("commit-seq.floor"),
+        format!("7 5 {}\n", u64::MAX - 2),
+    )
+    .unwrap();
+    let db = BicDb::open_with_config(dir.path(), config).unwrap();
+    let tx = db.begin_transaction().unwrap();
+    assert_eq!(tx.id().0, u64::MAX - 1);
+    tx.rollback().unwrap();
+    assert!(matches!(
+        db.begin_transaction(),
+        Err(bicdb_core::BicDbError::FormatCompatibility(_))
+    ));
 }
 
 #[test]

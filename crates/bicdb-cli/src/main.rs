@@ -3542,10 +3542,11 @@ fn verify_store_command(
             let parent = std::fs::canonicalize(parent)
                 .with_context(|| format!("findings directory {}", parent.display()))?;
             let store = std::fs::canonicalize(&dir)?;
-            if parent.starts_with(&store) {
+            let requested = std::fs::canonicalize(path)?;
+            if parent.starts_with(&store) || parent.starts_with(&requested) {
                 bail!(
                     "--findings-out must lie outside the store directory {}",
-                    store.display()
+                    requested.display()
                 );
             }
             let file = std::fs::OpenOptions::new()

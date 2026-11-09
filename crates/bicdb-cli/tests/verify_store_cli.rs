@@ -158,6 +158,15 @@ fn verify_store_reads_a_churned_sql_database_without_changing_a_byte() {
     ]);
     assert_ne!(code, 0);
     assert!(stderr.contains("outside the store"), "{stderr}");
+    let (code, _, stderr) = run(&[
+        "verify-store",
+        "--read-only",
+        path.to_str().unwrap(),
+        "--findings-out",
+        path.join("out.jsonl").to_str().unwrap(),
+    ]);
+    assert_ne!(code, 0);
+    assert!(stderr.contains("outside the store"), "{stderr}");
     let (code, _, _) = run(&[
         "verify-store",
         "--read-only",

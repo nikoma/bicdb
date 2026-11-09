@@ -72,7 +72,17 @@ pub const STORE_VERIFY_REPORT_FORMAT_VERSION: u32 = 1;
 pub(crate) fn open_read_only(path: &Path) -> std::io::Result<File> {
     #[cfg(unix)]
     {
+        use std::os::unix::fs::MetadataExt;
         use std::os::unix::fs::OpenOptionsExt;
+        // A hard-linked input could alias this process's live store.lock.
+        // Opening and closing it would release that inode's POSIX locks even
+        // though its name looks like a page/log file in an offline copy.
+        if std::fs::symlink_metadata(path)?.nlink() > 1 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "read-only verification requires inputs without hard links",
+            ));
+        }
         #[cfg(target_os = "linux")]
         {
             match std::fs::OpenOptions::new()
@@ -1323,8 +1333,8 @@ impl<'a> Verifier<'a> {
         let window_pages = self
             .options
             .heap_window_pages
-            .unwrap_or(available * 8 / self.slot_bits_per_page)
-            .min(available * 8 / self.slot_bits_per_page)
+            .unwrap_or(available.saturating_mul(8) / self.slot_bits_per_page)
+            .min(available.saturating_mul(8) / self.slot_bits_per_page)
             .clamp(1, page_count.max(1));
         self.counters.slot_bitmap_window_pages = window_pages;
         self.slots = Bits::new(window_pages * self.slot_bits_per_page);

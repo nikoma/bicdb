@@ -186,6 +186,15 @@ pub fn probe_directory_lock(dir: &Path) -> Result<DirectoryLockProbe> {
         return Ok(DirectoryLockProbe::HeldInThisProcess);
     }
     let path = dir.join(LOCK_FILE);
+    match std::fs::symlink_metadata(&path) {
+        Ok(metadata) if metadata.nlink() > 1 => return Err(PageError::io(&path,
+            std::io::Error::new(std::io::ErrorKind::InvalidInput,
+                "refusing a hard-linked store lock: probing it could release another store's POSIX lock"))),
+        Ok(_) => {},
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound =>
+            return Ok(DirectoryLockProbe::NoLockFile),
+        Err(error) => return Err(PageError::io(&path, error)),
+    }
     let file = match OpenOptions::new()
         .read(true)
         .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
@@ -334,6 +343,46 @@ mod tests {
         // SAFETY: every caller owns the descriptor in this process and closes it
         // at most once. Errors during test cleanup cannot affect lock semantics.
         let _ = unsafe { libc::close(fd) };
+    }
+
+    fn assert_kernel_exclusion(fd: RawFd) {
+        // SAFETY: the child performs only async-signal-safe libc operations.
+        let child = unsafe { libc::fork() };
+        assert!(child >= 0);
+        if child == 0 {
+            let mut lock: libc::flock = unsafe { std::mem::zeroed() };
+            lock.l_type = libc::F_WRLCK as _;
+            lock.l_whence = libc::SEEK_SET as _;
+            let rc = unsafe { libc::fcntl(fd, libc::F_SETLK, &mut lock) };
+            unsafe { libc::_exit(if rc == -1 { 0 } else { 1 }) };
+        }
+        let mut status = 0;
+        // SAFETY: child belongs to this process and status is writable.
+        assert_eq!(unsafe { libc::waitpid(child, &mut status, 0) }, child);
+        assert!(
+            libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
+            "read-only verification released another store's OS lock"
+        );
+    }
+
+    #[test]
+    fn hard_linked_inputs_cannot_release_another_store_lock() {
+        for name in ["store.lock", "store.pages"] {
+            let owner_dir = tempfile::tempdir().unwrap();
+            let copy_dir = tempfile::tempdir().unwrap();
+            let owner = DirectoryLock::acquire(owner_dir.path()).unwrap();
+            std::fs::hard_link(
+                owner_dir.path().join("store.lock"),
+                copy_dir.path().join(name),
+            )
+            .unwrap();
+            assert!(crate::verify_store_read_only(
+                copy_dir.path(),
+                &crate::StoreVerifyOptions::default()
+            )
+            .is_err());
+            assert_kernel_exclusion(owner.file.as_ref().unwrap().as_raw_fd());
+        }
     }
 
     #[test]

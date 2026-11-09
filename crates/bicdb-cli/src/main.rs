@@ -311,7 +311,8 @@ enum Command {
         /// Stop after this many seconds and report an incomplete result.
         #[arg(long)]
         max_seconds: Option<u64>,
-        /// Findings kept in the report per class (counts are always exact).
+        /// Maximum samples per class; the memory budget may retain fewer.
+        /// Counts are exact for completed runs; --findings-out streams all.
         #[arg(long, default_value_t = 20)]
         max_samples: usize,
         /// Read even though another handle holds the store's lock.

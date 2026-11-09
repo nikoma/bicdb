@@ -119,7 +119,8 @@ pub struct StoreVerifyOptions {
     pub max_memory_bytes: u64,
     /// Stop early (and report `complete: false`) after this long.
     pub max_duration: Option<Duration>,
-    /// Findings kept in the report per class. Counts are always exact.
+    /// Maximum findings kept per class; the memory budget may retain fewer.
+    /// Counts are exact when the run completes; the sink receives all findings.
     pub max_samples_per_class: usize,
     /// Versions followed per key before the chain is reported as too long.
     pub max_versions_per_chain: usize,
@@ -1021,6 +1022,7 @@ struct Verifier<'a> {
     pass: u64,
     counters: StoreVerifyCounters,
     summaries: Vec<FindingClassSummary>,
+    sample_bytes: u64,
     complete: bool,
     stop_reason: Option<String>,
     deadline: Option<Instant>,
@@ -1119,6 +1121,15 @@ impl<'a> Verifier<'a> {
         let cache_pages = options
             .page_cache_pages
             .min((options.max_memory_bytes / 4 / u64::from(page_size)).max(1) as usize);
+        let fixed_state = page_count
+            .div_ceil(64)
+            .saturating_mul(24)
+            .saturating_add(log.images.len() as u64 * 128)
+            .saturating_add(log.outcomes.len() as u64 * 32)
+            .saturating_add(files_opened.len() as u64 * 512)
+            .saturating_add(cache_pages as u64 * u64::from(page_size))
+            .saturating_add(4 * u64::from(page_size));
+        ReadOnlyScanLimits::new(options.max_memory_bytes, deadline).check(fixed_state)?;
         let source = PageSource {
             page_size,
             superblock,
@@ -1177,6 +1188,7 @@ impl<'a> Verifier<'a> {
             pass: 0,
             counters: StoreVerifyCounters::default(),
             summaries: Vec::new(),
+            sample_bytes: 0,
             complete: true,
             stop_reason: None,
             deadline,
@@ -1186,18 +1198,19 @@ impl<'a> Verifier<'a> {
     }
 
     fn report(&mut self, finding: StoreFinding) {
-        let retained = self
-            .summaries
-            .iter()
-            .find(|s| s.class == finding.class)
-            .is_none_or(|s| s.samples.len() < self.options.max_samples_per_class);
-        let bytes = if retained {
-            finding_heap_bytes(&finding)
-        } else {
-            0
-        };
-        if !self.within_budget(bytes) {
+        let bytes = finding_heap_bytes(&finding) + 3 * std::mem::size_of::<StoreFinding>() as u64;
+        let retained = self.options.max_samples_per_class > 0
+            && self
+                .summaries
+                .iter()
+                .find(|s| s.class == finding.class)
+                .is_none_or(|s| s.samples.len() < self.options.max_samples_per_class)
+            && self.sample_bytes.saturating_add(bytes) <= self.options.max_memory_bytes / 4;
+        if !self.within_budget(0) {
             return;
+        }
+        if retained {
+            self.sample_bytes += bytes;
         }
         (self.sink)(&finding);
         let limit = self.options.max_samples_per_class;
@@ -1208,7 +1221,7 @@ impl<'a> Verifier<'a> {
         {
             Some(summary) => {
                 summary.count += 1;
-                if summary.samples.len() < limit {
+                if retained && summary.samples.len() < limit {
                     summary.samples.push(finding);
                 }
             }
@@ -1220,7 +1233,11 @@ impl<'a> Verifier<'a> {
                     severity: class.severity(),
                     count: 1,
                     description: class.description().to_string(),
-                    samples: if limit > 0 { vec![finding] } else { Vec::new() },
+                    samples: if retained && limit > 0 {
+                        vec![finding]
+                    } else {
+                        Vec::new()
+                    },
                 });
             }
         }
@@ -1254,7 +1271,7 @@ impl<'a> Verifier<'a> {
             + (self.special_pages.capacity() + self.unreadable_reported.capacity()) as u64 * 64
             + self.status.spill.capacity() as u64 * 24
             + self.status.exceptions.capacity() as u64 * 8
-            + self.summaries.iter().map(|s| s.samples.iter().map(finding_heap_bytes).sum::<u64>() + s.samples.capacity() as u64 * std::mem::size_of::<StoreFinding>() as u64).sum::<u64>()
+            + self.sample_bytes
             // Temporary decoded pages, entry copies and formatting buffers.
             + 4 * u64::from(self.source.page_size)
     }
@@ -1295,12 +1312,9 @@ impl<'a> Verifier<'a> {
 
         // Size the heap slot-bitmap window from what is left of the budget.
         let page_count = self.source.page_count;
-        let fixed = self.tree_pages.bytes()
-            + self.visited.bytes()
-            + self.in_directory.bytes()
-            + self.source.cache.len() as u64 * u64::from(self.source.page_size)
-            + self.source.log.images.len() as u64 * 128
-            + self.source.log.outcomes.len() as u64 * 32;
+        let fixed = self
+            .estimated_state_bytes()
+            .saturating_add(self.options.max_memory_bytes / 4);
         let available = self
             .options
             .max_memory_bytes

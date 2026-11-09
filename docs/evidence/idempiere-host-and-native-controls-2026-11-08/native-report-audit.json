@@ -1,0 +1,53 @@
+{
+  "status": "native_vendor_control_completed",
+  "engine": "Oracle23.26.3.0.0",
+  "isolated_clone": "BICDBAPPREPORT",
+  "protected_source": "FREEPDB1",
+  "protected_source_counts_objects_columns_unchanged_after_app": true,
+  "baseline_three_missing_original_migrations_applied": true,
+  "native_upstream_provider_sha256": "1813c6cd6f4596e8002dacc06ee7dccca0dd5cebe22a1634651d75a8c32d3d0b",
+  "actual_oracle_driver_loaded": true,
+  "sdk_adapter_installed": false,
+  "original_test_sources_classes_assertions_timeouts_unchanged": true,
+  "test_reports": [
+    {
+      "file": "TEST-org.idempiere.test.base.ReportTest.xml",
+      "name": "org.idempiere.test.base.ReportTest",
+      "tests": "5",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0"
+    },
+    {
+      "file": "TEST-org.idempiere.test.tracking.AuditTraceContextTest.xml",
+      "name": "org.idempiere.test.tracking.AuditTraceContextTest",
+      "tests": "3",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0"
+    }
+  ],
+  "failures": [],
+  "owned_jvm_stopped": true,
+  "full_bicdb_application_qualification": false,
+  "application_record": "/root/.local/state/bicdb/native-oracle-report/application-run.json",
+  "original_class_provenance": [
+    {
+      "classname": "org.idempiere.test.base.ReportTest",
+      "source_sha256": "72d66f3dde85bb532107f2bb487e63dbbe7408387ff9df984087e7290efe3661",
+      "bytecode_sha256": "c4198ca9491782bb19d6bbf4db4a3b77e4dd9902db421e32518b253660367b22",
+      "source_equals_upstream_commit": "da0730aec42f3e9f5f671e81a70ff71e24d5e534",
+      "jar_class_equals_runtime_target_class": true
+    },
+    {
+      "classname": "org.idempiere.test.tracking.AuditTraceContextTest",
+      "source_sha256": "67ec8c61c4b7ac5ff2e7ae5fa1f6d5e865fe58ee028ca5ad15e22b2aa8f592d4",
+      "bytecode_sha256": "f75266b5b502bfae744baa4d3ddda68ea86956ee3abf5c3caf741309e0511b16",
+      "source_equals_upstream_commit": "da0730aec42f3e9f5f671e81a70ff71e24d5e534",
+      "jar_class_equals_runtime_target_class": true
+    }
+  ],
+  "test_jar_sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7",
+  "original_runtime_bytecode_matches_prior_matched_bicdb_run": true,
+  "timing_interpretation": "Product diagnostic, not a strict engine benchmark: qualification table counts/migrations warm the live Oracle cache; BicDb starts a fresh process and performs BLOB reconciliation. Cache sizes/configurations and JDBC providers differ. No attribution of full timing ratio solely to engine/planner."
+}

@@ -1,0 +1,108 @@
+{
+  "source_commit": "da0730aec42f3e9f5f671e81a70ff71e24d5e534",
+  "allowlist": [
+    "PO_Record.getTablesWithModelCascade",
+    "MPrintFormat.createItems"
+  ],
+  "runtime_parameter_values_available": false,
+  "runtime_parameter_limitation": "Retained engine traces deliberately redact inline literals; bind_parameters is empty because adapter inlined them. Original runtime tableName/tableId/formatId/reportViewId cannot be recovered exactly from these traces. No parameter values are guessed. Source templates and exact parameter definitions are retained for targeted replay.",
+  "cases": [
+    {
+      "name": "model_cascade",
+      "source_path": "/tmp/bicdb-idempiere-reference-20261101/org.adempiere.base/src/org/compiere/model/PO_Record.java",
+      "source_sha256": "486e816fe70f4929b2dd983358342ab1cdac98d16a66c21e22f8f52880495827",
+      "source_excerpt_start_line": 150,
+      "exact_source_excerpt": "\tprivate static KeyNamePair[] getTablesWithModelCascade(int refId, String tableName, String trxName) {\n\t\tint refTableDirId;\n\t\tint refTableId;\n\t\tint refTableSearchId;\n\t\tif (refId == DisplayType.RecordID) {\n\t\t\trefTableDirId = DisplayType.TableDir;\n\t\t\trefTableId = DisplayType.Table;\n\t\t\trefTableSearchId = DisplayType.Search;\n\t\t} else if (refId == DisplayType.RecordUU) {\n\t\t\trefTableDirId = DisplayType.TableDirUU;\n\t\t\trefTableId = DisplayType.TableUU;\n\t\t\trefTableSearchId = DisplayType.SearchUU;\n\t\t} else {\n\t\t\tthrow new IllegalArgumentException(refId + \" not supported for ID/UUID\");\n\t\t}\n\t\tStringBuilder key = new StringBuilder(MColumn.FKCONSTRAINTTYPE_ModelCascade).append(\"|\").append(refId).append(\"|\").append(tableName);\n\t\tKeyNamePair[] tables = s_po_record_tables_cache.get(key.toString());\n\t\tif (tables != null)\n\t\t\treturn tables;\n\t\tfinal String sql = \"\"\"\n\t\t\tSELECT t.AD_Table_ID, \n\t\t\t       c.ColumnName \n\t\t\tFROM   AD_Column c \n\t\t\t       JOIN AD_Table t ON c.AD_Table_ID = t.AD_Table_ID \n\t\t\t       LEFT JOIN AD_Ref_Table r ON c.AD_Reference_Value_ID = r.AD_Reference_ID \n\t\t\t       LEFT JOIN AD_Table tr ON r.AD_Table_ID = tr.AD_Table_ID \n\t\t\tWHERE  t.IsView = 'N' \n\t\t\t       AND t.IsActive = 'Y' \n\t\t\t       AND c.IsActive = 'Y' \n\t\t\t       AND ( ( c.AD_Reference_ID = ? \n\t\t\t               AND c.ColumnName = ? || '_ID' ) \n\t\t\t              OR ( c.AD_Reference_ID IN (? , ?) \n\t\t\t                   AND ( tr.TableName = ? OR ( tr.TableName IS NULL AND c.ColumnName = ? || '_ID' ) ) ) ) \n\t\t\t       AND c.FKConstraintType = ?\"\"\";\n\t\tList<List<Object>> dependents = DB.getSQLArrayObjectsEx(trxName, sql, \n\t\t\t\trefTableDirId, tableName, refTableId, refTableSearchId, tableName, tableName, MColumn.FKCONSTRAINTTYPE_ModelCascade);\n\t\tif (dependents != null) {\n\t\t\ttables = new KeyNamePair[dependents.size()];\n\t\t\tfor (int i=0; i<dependents.size(); i++) {\n\t\t\t\tList<Object> row = dependents.get(i);\n\t\t\t\tint dependentTableId = ((BigDecimal)row.get(0)).intValue();\n\t\t\t\tString dependentColumnName = (String) row.get(1);\n\t\t\t\tKeyNamePair vnp = new KeyNamePair(dependentTableId, dependentColumnName);\n\t\t\t\ttables[i] = vnp;\n\t\t\t}\n\t\t} else {\n\t\t\ttables = new KeyNamePair[0];\n\t\t}\n\t\ts_po_record_tables_cache.put(key.toString(), tables);\n\t\treturn tables;\n\t}\n\t\n\t/**\n\t * If a referencing Record ID or Record UU exists to the deleted record, set it to NULL.<br/>\n\t * This is model class implementation of the set null option of foreign key constraint. \n\t * @param AD_Table_ID",
+      "source_parameter_bindings": [
+        "refTableDirId (RecordID=>DisplayType.TableDir; RecordUU=>TableDirUU)",
+        "tableName",
+        "refTableId (Table or TableUU)",
+        "refTableSearchId (Search or SearchUU)",
+        "tableName",
+        "tableName",
+        "MColumn.FKCONSTRAINTTYPE_ModelCascade='M'"
+      ],
+      "runs": {
+        "s3-r3": [
+          {
+            "query": "SELECT \"T\".\"AD_TABLE_ID\", \"C\".\"COLUMNNAME\" FROM \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" JOIN \"IDEMPIERE_QUAL\".\"AD_TABLE\" \"T\" ON \"C\".\"AD_TABLE_ID\" = \"T\".\"AD_TABLE_ID\" LEFT JOIN \"IDEMPIERE_QUAL\".\"AD_REF_TABLE\" \"R\" ON \"C\".\"AD_REFERENCE_VALUE_ID\" = \"R\".\"AD_REFERENCE_ID\" LEFT JOIN \"IDEMPIERE_QUAL\".\"AD_TABLE\" \"TR\" ON \"R\".\"AD_TABLE_ID\" = \"TR\".\"AD_TABLE_ID\" WHERE \"T\".\"ISVIEW\" = '[REDACTED]' AND \"T\".\"ISACTIVE\" = '[REDACTED]' AND \"C\".\"ISACTIVE\" = '[REDACTED]' AND ((\"C\".\"AD_REFERENCE_ID\" = [REDACTED] AND \"C\".\"COLUMNNAME\" = nullif(concat('[REDACTED]', '[REDACTED]'), '[REDACTED]')) OR (\"C\".\"AD_REFERENCE_ID\" IN ([REDACTED], [REDACTED]) AND (\"TR\".\"TABLENAME\" = '[REDACTED]' OR (\"TR\".\"TABLENAME\" IS NULL AND \"C\".\"COLUMNNAME\" = nullif(concat('[REDACTED]', '[REDACTED]'), '[REDACTED]'))))) AND \"C\".\"FKCONSTRAINTTYPE\" = '[REDACTED]'",
+            "count": 9,
+            "total_elapsed_ms": 7228,
+            "max_elapsed_ms": 854
+          }
+        ],
+        "s3-r4": [
+          {
+            "query": "SELECT \"T\".\"AD_TABLE_ID\", \"C\".\"COLUMNNAME\" FROM \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" JOIN \"IDEMPIERE_QUAL\".\"AD_TABLE\" \"T\" ON \"C\".\"AD_TABLE_ID\" = \"T\".\"AD_TABLE_ID\" LEFT JOIN \"IDEMPIERE_QUAL\".\"AD_REF_TABLE\" \"R\" ON \"C\".\"AD_REFERENCE_VALUE_ID\" = \"R\".\"AD_REFERENCE_ID\" LEFT JOIN \"IDEMPIERE_QUAL\".\"AD_TABLE\" \"TR\" ON \"R\".\"AD_TABLE_ID\" = \"TR\".\"AD_TABLE_ID\" WHERE \"T\".\"ISVIEW\" = '[REDACTED]' AND \"T\".\"ISACTIVE\" = '[REDACTED]' AND \"C\".\"ISACTIVE\" = '[REDACTED]' AND ((\"C\".\"AD_REFERENCE_ID\" = [REDACTED] AND \"C\".\"COLUMNNAME\" = nullif(concat('[REDACTED]', '[REDACTED]'), '[REDACTED]')) OR (\"C\".\"AD_REFERENCE_ID\" IN ([REDACTED], [REDACTED]) AND (\"TR\".\"TABLENAME\" = '[REDACTED]' OR (\"TR\".\"TABLENAME\" IS NULL AND \"C\".\"COLUMNNAME\" = nullif(concat('[REDACTED]', '[REDACTED]'), '[REDACTED]'))))) AND \"C\".\"FKCONSTRAINTTYPE\" = '[REDACTED]'",
+            "count": 9,
+            "total_elapsed_ms": 7685,
+            "max_elapsed_ms": 948
+          }
+        ],
+        "ny8-r3": [
+          {
+            "query": "SELECT \"T\".\"AD_TABLE_ID\", \"C\".\"COLUMNNAME\" FROM \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" JOIN \"IDEMPIERE_QUAL\".\"AD_TABLE\" \"T\" ON \"C\".\"AD_TABLE_ID\" = \"T\".\"AD_TABLE_ID\" LEFT JOIN \"IDEMPIERE_QUAL\".\"AD_REF_TABLE\" \"R\" ON \"C\".\"AD_REFERENCE_VALUE_ID\" = \"R\".\"AD_REFERENCE_ID\" LEFT JOIN \"IDEMPIERE_QUAL\".\"AD_TABLE\" \"TR\" ON \"R\".\"AD_TABLE_ID\" = \"TR\".\"AD_TABLE_ID\" WHERE \"T\".\"ISVIEW\" = '[REDACTED]' AND \"T\".\"ISACTIVE\" = '[REDACTED]' AND \"C\".\"ISACTIVE\" = '[REDACTED]' AND ((\"C\".\"AD_REFERENCE_ID\" = [REDACTED] AND \"C\".\"COLUMNNAME\" = nullif(concat('[REDACTED]', '[REDACTED]'), '[REDACTED]')) OR (\"C\".\"AD_REFERENCE_ID\" IN ([REDACTED], [REDACTED]) AND (\"TR\".\"TABLENAME\" = '[REDACTED]' OR (\"TR\".\"TABLENAME\" IS NULL AND \"C\".\"COLUMNNAME\" = nullif(concat('[REDACTED]', '[REDACTED]'), '[REDACTED]'))))) AND \"C\".\"FKCONSTRAINTTYPE\" = '[REDACTED]'",
+            "count": 9,
+            "total_elapsed_ms": 8125,
+            "max_elapsed_ms": 1031
+          }
+        ],
+        "ny8-r4": [
+          {
+            "query": "SELECT \"T\".\"AD_TABLE_ID\", \"C\".\"COLUMNNAME\" FROM \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" JOIN \"IDEMPIERE_QUAL\".\"AD_TABLE\" \"T\" ON \"C\".\"AD_TABLE_ID\" = \"T\".\"AD_TABLE_ID\" LEFT JOIN \"IDEMPIERE_QUAL\".\"AD_REF_TABLE\" \"R\" ON \"C\".\"AD_REFERENCE_VALUE_ID\" = \"R\".\"AD_REFERENCE_ID\" LEFT JOIN \"IDEMPIERE_QUAL\".\"AD_TABLE\" \"TR\" ON \"R\".\"AD_TABLE_ID\" = \"TR\".\"AD_TABLE_ID\" WHERE \"T\".\"ISVIEW\" = '[REDACTED]' AND \"T\".\"ISACTIVE\" = '[REDACTED]' AND \"C\".\"ISACTIVE\" = '[REDACTED]' AND ((\"C\".\"AD_REFERENCE_ID\" = [REDACTED] AND \"C\".\"COLUMNNAME\" = nullif(concat('[REDACTED]', '[REDACTED]'), '[REDACTED]')) OR (\"C\".\"AD_REFERENCE_ID\" IN ([REDACTED], [REDACTED]) AND (\"TR\".\"TABLENAME\" = '[REDACTED]' OR (\"TR\".\"TABLENAME\" IS NULL AND \"C\".\"COLUMNNAME\" = nullif(concat('[REDACTED]', '[REDACTED]'), '[REDACTED]'))))) AND \"C\".\"FKCONSTRAINTTYPE\" = '[REDACTED]'",
+            "count": 9,
+            "total_elapsed_ms": 8836,
+            "max_elapsed_ms": 1463
+          }
+        ]
+      }
+    },
+    {
+      "name": "print_field_not_in",
+      "source_path": "/tmp/bicdb-idempiere-reference-20261101/org.adempiere.base/src/org/compiere/print/MPrintFormat.java",
+      "source_sha256": "8e03b8ac72dcbbabe64a56d854e277b080cbc9cce51207ad2d02d180974abcd6",
+      "source_excerpt_start_line": 909,
+      "exact_source_excerpt": "\t * \t@return items\n\t */\n\tstatic private MPrintFormatItem[] createItems (Properties ctx, MPrintFormat format)\n\t{\n\t\tif (s_log.isLoggable(Level.FINE)) s_log.fine (\"From window Tab ...\");\n\t\tArrayList<MPrintFormatItem> list = new ArrayList<MPrintFormatItem>();\n\t\t//\tGet Column List from Tab\n\t\tString sql = \"SELECT AD_Column_ID \" //, Name, IsDisplayed, SeqNo\n\t\t\t+ \"FROM AD_Field \"\n\t\t\t+ \"WHERE IsActive='Y' AND AD_Tab_ID=(SELECT MIN(AD_Tab_ID) FROM AD_Tab WHERE AD_Table_ID=? AND IsActive='Y')\"\n\t\t\t+ \" AND IsEncrypted='N' AND ObscureType IS NULL \"\n\t\t\t+ \" AND AD_Column_ID NOT IN (SELECT pfi.AD_Column_ID FROM AD_PrintFormatItem pfi WHERE pfi.AD_PrintFormat_ID=? AND pfi.AD_Column_ID IS NOT NULL) \"\n\t\t\t+ \" AND (AD_Column_ID IN (SELECT AD_Column_ID FROM AD_ReportView_Column WHERE AD_ReportView_ID=? AND IsActive='Y') \"\n\t\t\t+ \" OR ((SELECT COUNT(*) FROM AD_ReportView_Column WHERE AD_ReportView_ID=? AND IsActive='Y') = 0)) \"\n\t\t\t+ \"ORDER BY COALESCE(IsDisplayed,'N') DESC, SortNo, SeqNo, Name\";\n\t\tPreparedStatement pstmt = null;\n\t\tResultSet rs = null;\n\t\ttry\n\t\t{\n\t\t\tpstmt = DB.prepareStatement(sql, format.get_TrxName());\n\t\t\tpstmt.setInt(1, format.getAD_Table_ID());\n\t\t\tpstmt.setInt(2, format.getAD_PrintFormat_ID());\n\t\t\tpstmt.setInt(3, format.getAD_ReportView_ID());\n\t\t\tpstmt.setInt(4, format.getAD_ReportView_ID());\n\t\t\trs = pstmt.executeQuery();\n\t\t\tint seqNo = 1;\n\t\t\twhile (rs.next())\n\t\t\t{\n\t\t\t\tint columnID = rs.getInt(1);\n\t\t\t\tMColumn column = MColumn.get(ctx, columnID);\n\t\t\t\tif (column.isVirtualUIColumn())\n\t\t\t\t\tcontinue;",
+      "source_parameter_bindings": [
+        "format.getAD_Table_ID()",
+        "format.getAD_PrintFormat_ID()",
+        "format.getAD_ReportView_ID()",
+        "format.getAD_ReportView_ID()"
+      ],
+      "runs": {
+        "s3-r3": [
+          {
+            "query": "SELECT \"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_FIELD\" AS \"AD_FIELD\" WHERE \"ISACTIVE\" = '[REDACTED]' AND \"AD_TAB_ID\" = (SELECT min(\"AD_TAB_ID\") FROM \"IDEMPIERE_QUAL\".\"AD_TAB\" AS \"AD_TAB\" WHERE \"AD_TABLE_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') AND \"ISENCRYPTED\" = '[REDACTED]' AND \"OBSCURETYPE\" IS NULL AND \"AD_COLUMN_ID\" NOT IN (SELECT \"PFI\".\"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM\" \"PFI\" WHERE \"PFI\".\"AD_PRINTFORMAT_ID\" = [REDACTED] AND \"PFI\".\"AD_COLUMN_ID\" IS NOT NULL) AND (\"AD_COLUMN_ID\" IN (SELECT \"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_REPORTVIEW_COLUMN\" AS \"AD_REPORTVIEW_COLUMN\" WHERE \"AD_REPORTVIEW_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') OR ((SELECT count(*) FROM \"IDEMPIERE_QUAL\".\"AD_REPORTVIEW_COLUMN\" AS \"AD_REPORTVIEW_COLUMN\" WHERE \"AD_REPORTVIEW_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') = [REDACTED])) ORDER BY coalesce(\"ISDISPLAYED\", '[REDACTED]') DESC, \"SORTNO\", \"SEQNO\", \"NAME\"",
+            "count": 4,
+            "total_elapsed_ms": 3135,
+            "max_elapsed_ms": 1094
+          }
+        ],
+        "s3-r4": [
+          {
+            "query": "SELECT \"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_FIELD\" AS \"AD_FIELD\" WHERE \"ISACTIVE\" = '[REDACTED]' AND \"AD_TAB_ID\" = (SELECT min(\"AD_TAB_ID\") FROM \"IDEMPIERE_QUAL\".\"AD_TAB\" AS \"AD_TAB\" WHERE \"AD_TABLE_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') AND \"ISENCRYPTED\" = '[REDACTED]' AND \"OBSCURETYPE\" IS NULL AND \"AD_COLUMN_ID\" NOT IN (SELECT \"PFI\".\"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM\" \"PFI\" WHERE \"PFI\".\"AD_PRINTFORMAT_ID\" = [REDACTED] AND \"PFI\".\"AD_COLUMN_ID\" IS NOT NULL) AND (\"AD_COLUMN_ID\" IN (SELECT \"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_REPORTVIEW_COLUMN\" AS \"AD_REPORTVIEW_COLUMN\" WHERE \"AD_REPORTVIEW_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') OR ((SELECT count(*) FROM \"IDEMPIERE_QUAL\".\"AD_REPORTVIEW_COLUMN\" AS \"AD_REPORTVIEW_COLUMN\" WHERE \"AD_REPORTVIEW_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') = [REDACTED])) ORDER BY coalesce(\"ISDISPLAYED\", '[REDACTED]') DESC, \"SORTNO\", \"SEQNO\", \"NAME\"",
+            "count": 4,
+            "total_elapsed_ms": 3139,
+            "max_elapsed_ms": 1082
+          }
+        ],
+        "ny8-r3": [
+          {
+            "query": "SELECT \"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_FIELD\" AS \"AD_FIELD\" WHERE \"ISACTIVE\" = '[REDACTED]' AND \"AD_TAB_ID\" = (SELECT min(\"AD_TAB_ID\") FROM \"IDEMPIERE_QUAL\".\"AD_TAB\" AS \"AD_TAB\" WHERE \"AD_TABLE_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') AND \"ISENCRYPTED\" = '[REDACTED]' AND \"OBSCURETYPE\" IS NULL AND \"AD_COLUMN_ID\" NOT IN (SELECT \"PFI\".\"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM\" \"PFI\" WHERE \"PFI\".\"AD_PRINTFORMAT_ID\" = [REDACTED] AND \"PFI\".\"AD_COLUMN_ID\" IS NOT NULL) AND (\"AD_COLUMN_ID\" IN (SELECT \"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_REPORTVIEW_COLUMN\" AS \"AD_REPORTVIEW_COLUMN\" WHERE \"AD_REPORTVIEW_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') OR ((SELECT count(*) FROM \"IDEMPIERE_QUAL\".\"AD_REPORTVIEW_COLUMN\" AS \"AD_REPORTVIEW_COLUMN\" WHERE \"AD_REPORTVIEW_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') = [REDACTED])) ORDER BY coalesce(\"ISDISPLAYED\", '[REDACTED]') DESC, \"SORTNO\", \"SEQNO\", \"NAME\"",
+            "count": 4,
+            "total_elapsed_ms": 4036,
+            "max_elapsed_ms": 1693
+          }
+        ],
+        "ny8-r4": [
+          {
+            "query": "SELECT \"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_FIELD\" AS \"AD_FIELD\" WHERE \"ISACTIVE\" = '[REDACTED]' AND \"AD_TAB_ID\" = (SELECT min(\"AD_TAB_ID\") FROM \"IDEMPIERE_QUAL\".\"AD_TAB\" AS \"AD_TAB\" WHERE \"AD_TABLE_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') AND \"ISENCRYPTED\" = '[REDACTED]' AND \"OBSCURETYPE\" IS NULL AND \"AD_COLUMN_ID\" NOT IN (SELECT \"PFI\".\"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM\" \"PFI\" WHERE \"PFI\".\"AD_PRINTFORMAT_ID\" = [REDACTED] AND \"PFI\".\"AD_COLUMN_ID\" IS NOT NULL) AND (\"AD_COLUMN_ID\" IN (SELECT \"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_REPORTVIEW_COLUMN\" AS \"AD_REPORTVIEW_COLUMN\" WHERE \"AD_REPORTVIEW_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') OR ((SELECT count(*) FROM \"IDEMPIERE_QUAL\".\"AD_REPORTVIEW_COLUMN\" AS \"AD_REPORTVIEW_COLUMN\" WHERE \"AD_REPORTVIEW_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') = [REDACTED])) ORDER BY coalesce(\"ISDISPLAYED\", '[REDACTED]') DESC, \"SORTNO\", \"SEQNO\", \"NAME\"",
+            "count": 4,
+            "total_elapsed_ms": 3626,
+            "max_elapsed_ms": 1249
+          }
+        ]
+      }
+    }
+  ]
+}

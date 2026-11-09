@@ -1070,6 +1070,12 @@ impl<'db> SqlSession<'db> {
             // statement in one, so its row locks wait on the shared path and
             // the caller commits it, instead of escalating to exclusive access.
             || !self.exclusive
+            // Primary arbitration needs a transaction even on the exclusive
+            // autocommit fallback, so its nonparking row reservation runs
+            // before the legacy direct-write path can wait on another owner.
+            || matches!(statement, Statement::Insert(insert)
+                if matches!(insert.on.as_ref(), Some(OnInsert::OnConflict(conflict))
+                    if matches!(conflict.action, OnConflictAction::DoUpdate(_))))
             || self.mutation_needs_atomic_effects(statement)?)
         {
             return self

@@ -1715,8 +1715,13 @@ impl<'db> SqlSession<'db> {
         }
         let key = record_column_values(record, schema, &columns);
         let id = record_id_from_column_values(table, schema, &columns, &key)?;
+        let exclusive = self.exclusive;
         let tx = self.tx.as_mut().expect("checked transaction");
-        let refreshed = tx.read_committed_update_record(table, &id)?;
+        let refreshed = if exclusive {
+            tx.read_committed_update_record_nowait(table, &id)?
+        } else {
+            tx.read_committed_update_record(table, &id)?
+        };
         let Some((latest, snapshot)) = refreshed else {
             return Ok(None);
         };

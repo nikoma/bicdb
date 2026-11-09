@@ -216,7 +216,10 @@ fn streaming_replacements_keep_old_snapshots_and_crash_visible_values() {
         let (reader, snapshot) = store.begin_transaction();
         let writer = store.begin();
         store.put(writer, b"wide", &replacement).unwrap();
-        assert_eq!(store.get_as_of(&snapshot, b"wide").unwrap(), Some(old.clone()));
+        assert_eq!(
+            store.get_as_of(&snapshot, b"wide").unwrap(),
+            Some(old.clone())
+        );
         store.abort(writer).unwrap();
         assert_eq!(store.get(b"wide").unwrap(), Some(old.clone()));
         store.abort(reader).unwrap();
@@ -235,7 +238,12 @@ fn streaming_replacements_keep_old_snapshots_and_crash_visible_values() {
             store.put(xid, b"wide", &old).unwrap();
             store.commit(xid).unwrap();
             let writer = store.begin();
-            let fault = bicdb_page::test_faults::arm_io_failure("page_log.write", dir.path(), failing_write, true);
+            let fault = bicdb_page::test_faults::arm_io_failure(
+                "page_log.write",
+                dir.path(),
+                failing_write,
+                true,
+            );
             assert!(store.put(writer, b"wide", &replacement).is_err());
             assert_eq!(fault.fired(), 1);
             assert!(store.checkpoint().is_err());
@@ -244,7 +252,11 @@ fn streaming_replacements_keep_old_snapshots_and_crash_visible_values() {
         for _ in 0..2 {
             let (store, _) = PagedStore::open(dir.path(), options()).unwrap();
             assert_kept(&store);
-            assert_eq!(store.get(b"wide").unwrap(), Some(old.clone()), "write {failing_write}");
+            assert_eq!(
+                store.get(b"wide").unwrap(),
+                Some(old.clone()),
+                "write {failing_write}"
+            );
             let xid = store.begin();
             store.put(xid, b"later", b"committed").unwrap();
             store.commit(xid).unwrap();

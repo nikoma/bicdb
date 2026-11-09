@@ -177,7 +177,12 @@ pub fn probe_directory_lock(dir: &Path) -> Result<DirectoryLockProbe> {
         device: metadata.dev(),
         inode: metadata.ino(),
     };
-    if process_locks_guard().contains(&identity) {
+    // Keep acquisition in this process excluded until the probe descriptor has
+    // closed. Closing *any* descriptor for an inode releases this process's
+    // POSIX locks on that inode. A check followed by an unlocked open could
+    // therefore drop a writer's lock if it acquired ownership in between.
+    let process_guard = process_locks_guard();
+    if process_guard.contains(&identity) {
         return Ok(DirectoryLockProbe::HeldInThisProcess);
     }
     let path = dir.join(LOCK_FILE);
@@ -301,7 +306,9 @@ fn open_lock_file(path: &Path) -> Result<File> {
 #[cfg(all(test, unix))]
 mod tests {
     use super::DirectoryLock;
+    use std::os::unix::io::AsRawFd;
     use std::os::unix::io::RawFd;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     fn pipe() -> [RawFd; 2] {
         let mut descriptors = [-1; 2];
@@ -314,6 +321,54 @@ mod tests {
         // SAFETY: every caller owns the descriptor in this process and closes it
         // at most once. Errors during test cleanup cannot affect lock semantics.
         let _ = unsafe { libc::close(fd) };
+    }
+
+    #[test]
+    fn concurrent_read_only_probes_preserve_the_writers_cross_process_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        // Ensure probes can open an existing lock file between ownerships.
+        drop(DirectoryLock::acquire(dir.path()).unwrap());
+        let stop = AtomicBool::new(false);
+        std::thread::scope(|scope| {
+            struct StopOnDrop<'a>(&'a AtomicBool);
+            impl Drop for StopOnDrop<'_> {
+                fn drop(&mut self) {
+                    self.0.store(true, Ordering::Relaxed);
+                }
+            }
+            let _stop_on_exit = StopOnDrop(&stop);
+            for _ in 0..4 {
+                scope.spawn(|| {
+                    while !stop.load(Ordering::Relaxed) {
+                        super::probe_directory_lock(dir.path()).unwrap();
+                    }
+                });
+            }
+            for _ in 0..200 {
+                let owner = DirectoryLock::acquire(dir.path()).unwrap();
+                let fd = owner.file.as_ref().unwrap().as_raw_fd();
+                // SAFETY: the child only calls async-signal-safe libc functions
+                // and never allocates or acquires a Rust lock after fork.
+                let child = unsafe { libc::fork() };
+                assert!(child >= 0);
+                if child == 0 {
+                    let mut lock: libc::flock = unsafe { std::mem::zeroed() };
+                    lock.l_type = libc::F_WRLCK as _;
+                    lock.l_whence = libc::SEEK_SET as _;
+                    let rc = unsafe { libc::fcntl(fd, libc::F_SETLK, &mut lock) };
+                    unsafe { libc::_exit(if rc == -1 { 0 } else { 1 }) };
+                }
+                let mut status = 0;
+                // SAFETY: child is this process's child and status is writable.
+                assert_eq!(unsafe { libc::waitpid(child, &mut status, 0) }, child);
+                if !libc::WIFEXITED(status) || libc::WEXITSTATUS(status) != 0 {
+                    stop.store(true, Ordering::Relaxed);
+                    panic!("a read-only probe released the writer's OS lock");
+                }
+                drop(owner);
+            }
+            stop.store(true, Ordering::Relaxed);
+        });
     }
 
     #[test]

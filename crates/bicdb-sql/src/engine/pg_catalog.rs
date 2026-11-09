@@ -1237,7 +1237,6 @@ impl<'db> SqlEngine<'db> {
         };
         let table = relation_name(name)?;
         if self.cte(&table).is_some()
-            || is_virtual_table(&table)
             || load_view(self.db_ref(), &table)?.is_some()
             || load_sequence(self.db_ref(), &table)?.is_some()
         {
@@ -1247,6 +1246,37 @@ impl<'db> SqlEngine<'db> {
             .as_ref()
             .map(|alias| alias.name.value.clone())
             .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(&table).to_string());
+        if is_virtual_table(&table) {
+            // Known virtual columns permit the same early filtering as a base
+            // table on the preserved side of LEFT joins. Require qualified
+            // references to avoid capturing an ambiguous name from another
+            // input, and retain the existing conservative expression checker.
+            if alias
+                .as_ref()
+                .is_some_and(|alias| !alias.columns.is_empty())
+            {
+                return Ok(None);
+            }
+            let Some(mut columns) = virtual_table_columns(&table) else {
+                return Ok(None);
+            };
+            add_virtual_tableoid_column(&table, &mut columns);
+            let columns = columns
+                .into_iter()
+                .map(|column| format!("{alias_name}.{column}"))
+                .collect::<BTreeSet<_>>();
+            let mut pushdown = None;
+            for term in and_terms(selection) {
+                if !predicate_references_only_columns(term, &columns) {
+                    continue;
+                }
+                pushdown = Some(match pushdown {
+                    Some(existing) => and_expr(existing, term.clone()),
+                    None => term.clone(),
+                });
+            }
+            return Ok(pushdown);
+        }
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
         let schema = load_schema(self.db_ref(), &table)?;
         let mut pushdown = None;

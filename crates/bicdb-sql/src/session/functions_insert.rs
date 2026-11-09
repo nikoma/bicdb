@@ -1707,12 +1707,10 @@ impl<'db> SqlSession<'db> {
         let Some(arbiter) = self.memoized_unique_arbiter(table, schema, conflict_columns)? else {
             return Ok(None);
         };
-        let Some(columns) = primary_key_columns_for_unique_arbiter(schema, &arbiter) else {
-            return Ok(None);
+        let columns = primary_key_columns_for_unique_arbiter(schema, &arbiter);
+        let Some(columns) = columns.filter(|_| !primary_key_requires_typed_identity(schema)) else {
+            return self.read_committed_index_conflict(table, schema, record, &arbiter);
         };
-        if primary_key_requires_typed_identity(schema) {
-            return Ok(None);
-        }
         let key = record_column_values(record, schema, &columns);
         let id = record_id_from_column_values(table, schema, &columns, &key)?;
         let exclusive = self.exclusive;
@@ -1738,6 +1736,119 @@ impl<'db> SqlSession<'db> {
             None
         };
         Ok(Some((latest, snapshot)))
+    }
+
+    fn read_committed_index_conflict(
+        &mut self,
+        table: &str,
+        schema: &TableSchema,
+        record: &Record,
+        arbiter: &records::UniqueConflictArbiter,
+    ) -> Result<Option<(Option<Record>, u64)>> {
+        let Some(index) = arbiter.index_name.as_deref() else {
+            return Ok(None);
+        };
+        let values = unique_key_values(record, schema, &arbiter.key);
+        if arbiter.skips_null_key(&values) || !arbiter.applies_to(record)? {
+            return Ok(None);
+        }
+        // JSON SQL canonical equality has a separate semantic reservation;
+        // retain its existing retry contract until that key bridge is proven.
+        if values
+            .iter()
+            .any(|value| matches!(value, SqlValue::Json(_)))
+        {
+            return Ok(None);
+        }
+        let tx = self.tx.as_ref().expect("checked RC transaction");
+        if self.exclusive {
+            tx.reserve_unique_index_record(index, record)?;
+        } else {
+            tx.reserve_unique_index_record_cancellable(index, record, &self.cancellation)?;
+        }
+        // Native and SQL writers announce the same physical key before
+        // buffering. Once acquired, the committed index is current for this
+        // arbiter; unrelated relations retain the original statement snapshot.
+        let index_values = unique_key_index_values(schema, &arbiter.key, &values)?;
+        let mut candidates = self.db_ref().lookup_index_exact(index, &index_values)?;
+        candidates.sort_unstable();
+        candidates.dedup();
+        let committed: std::collections::HashSet<_> = candidates.iter().cloned().collect();
+        for id in &candidates {
+            if let Some(found) =
+                self.read_committed_matching_arbiter_row(table, schema, arbiter, &values, id)?
+            {
+                return Ok(Some(found));
+            }
+        }
+        for id in self
+            .tx
+            .as_ref()
+            .expect("RC transaction")
+            .pending_record_ids_for_collection(table)
+        {
+            if !committed.contains(&id) {
+                if let Some(found) =
+                    self.read_committed_matching_arbiter_row(table, schema, arbiter, &values, &id)?
+                {
+                    return Ok(Some(found));
+                }
+            }
+        }
+        // A deleted/moved candidate does not authorize overwriting its old
+        // identity. Pin the proposed ID and retain its absence/version boundary.
+        let exclusive = self.exclusive;
+        let tx = self.tx.as_mut().expect("RC transaction");
+        let latest = if exclusive {
+            tx.read_committed_update_record_nowait(table, &record.id)?
+        } else {
+            tx.read_committed_update_record(table, &record.id)?
+        };
+        Ok(Some((None, latest.map_or(0, |(_, snapshot)| snapshot))))
+    }
+
+    fn read_committed_matching_arbiter_row(
+        &mut self,
+        table: &str,
+        schema: &TableSchema,
+        arbiter: &records::UniqueConflictArbiter,
+        values: &[SqlValue],
+        id: &str,
+    ) -> Result<Option<(Option<Record>, u64)>> {
+        self.cancellation.check()?;
+        let exclusive = self.exclusive;
+        let tx = self.tx.as_mut().expect("RC transaction");
+        let refreshed = if exclusive {
+            tx.read_committed_update_record_nowait(table, id)?
+        } else {
+            tx.read_committed_update_record(table, id)?
+        };
+        let (existing, snapshot) = match refreshed {
+            Some((Some(_), snapshot)) => {
+                let current = match self.security_context.as_ref() {
+                    Some(context) => self.db_ref().get_with_context(context, table, id)?,
+                    None => self.db_ref().get(table, id)?,
+                };
+                (current.map(|record| record.as_ref().clone()), snapshot)
+            }
+            Some((None, snapshot)) => (None, snapshot),
+            None => (self.conflict_record_by_id(table, id)?, 0),
+        };
+        let Some(existing) = existing else {
+            return Ok(None);
+        };
+        if arbiter.applies_to(&existing)?
+            && records::unique_key_values_not_distinct(
+                schema,
+                &arbiter.key,
+                &unique_key_values(&existing, schema, &arbiter.key),
+                values,
+            )?
+        {
+            Ok(Some((Some(existing), snapshot)))
+        } else {
+            Ok(None)
+        }
     }
 
     /// An upsert that found no conflicting row under its snapshot can still

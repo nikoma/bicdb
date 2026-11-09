@@ -3306,6 +3306,39 @@ mod tests {
         assert_eq!(promoted, 0, "a streaming page reached the protected queue");
     }
 
+    /// Heap candidate probes stay clean, but their upgrade must participate
+    /// in the same no-steal epoch and partial-operation fencing as get_mut.
+    #[test]
+    fn upgraded_heap_guards_count_changes_and_reject_stale_log_marking() {
+        let (_dir, _store, pool, ids) = setup(20, 16 * 512);
+        let page = ids[0];
+        let before = pool.write_guard_releases();
+        drop(pool.get_upgradable(page).unwrap());
+        assert_eq!(pool.write_guard_releases(), before);
+        assert!(pool.pages_needing_log().is_empty());
+        {
+            let mut guard = pool.get_upgradable(page).unwrap().upgrade();
+            guard.bytes_mut()[100] = 17;
+        }
+        assert_eq!(pool.write_guard_releases(), before + 1);
+        let listed = pool.pages_needing_log();
+        assert_eq!(listed.len(), 1);
+        {
+            let mut guard = pool.get_upgradable(page).unwrap().upgrade();
+            guard.bytes_mut()[100] = 18;
+        }
+        assert_eq!(pool.write_guard_releases(), before + 2);
+        pool.mark_logged(&listed);
+        assert_eq!(
+            pool.pages_needing_log().len(),
+            1,
+            "an earlier image must not release the upgraded dirty page"
+        );
+        assert_eq!(pool.get(page).unwrap().bytes()[100], 18);
+        pool.mark_logged(&pool.pages_needing_log());
+        assert!(pool.pages_needing_log().is_empty());
+    }
+
     /// `mark_logged` must not clear the unlogged flag of a page that was
     /// written back, evicted and reloaded since its modification count was
     /// read, even when the new frame has been modified exactly as often as

@@ -29,15 +29,20 @@ impl RelationTypes {
     /// column but its type is unknown.
     fn column(&self, column: &str) -> Option<Option<String>> {
         match self {
-            Self::Schema(schema) => schema.column(column).map(|column| {
-                // A column with an explicit collation compares by that
-                // collation; its declared type alone does not decide.
-                column
-                    .collation
-                    .as_deref()
-                    .is_none_or(|collation| collation == "default")
-                    .then(|| column.pg_type.clone())
-            }),
+            Self::Schema(schema) => schema
+                .column(column)
+                .map(|column| {
+                    // A column with an explicit collation compares by that
+                    // collation; its declared type alone does not decide.
+                    column
+                        .collation
+                        .as_deref()
+                        .is_none_or(|collation| collation == "default")
+                        .then(|| column.pg_type.clone())
+                })
+                .or_else(|| {
+                    crate::postgres_system_column_pg_type(column).map(|kind| Some(kind.to_string()))
+                }),
             Self::Columns(columns) => columns
                 .iter()
                 .find(|(name, _)| name == column)

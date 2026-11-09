@@ -3914,6 +3914,16 @@ pub(crate) enum RecordLocators {
 
 const POSTGRES_SYSTEM_COLUMNS: [&str; 6] = ["tableoid", "xmin", "xmax", "cmin", "cmax", "ctid"];
 
+pub(crate) fn postgres_system_column_pg_type(column: &str) -> Option<&'static str> {
+    match column {
+        "tableoid" => Some("oid"),
+        "xmin" | "xmax" => Some("xid"),
+        "cmin" | "cmax" => Some("cid"),
+        "ctid" => Some("tid"),
+        _ => None,
+    }
+}
+
 pub(crate) fn is_postgres_system_column(column: &str) -> bool {
     let name = column.rsplit('.').next().unwrap_or(column);
     POSTGRES_SYSTEM_COLUMNS

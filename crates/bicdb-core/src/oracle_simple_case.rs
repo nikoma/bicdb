@@ -7,9 +7,15 @@
 //! Existing ASCII expression index keys keep their original functions/tags.
 
 pub fn oracle_simple_upper_v1(text: &str) -> String {
+    if text.is_ascii() {
+        return text.to_ascii_uppercase();
+    }
     map(text, UPPER)
 }
 pub fn oracle_simple_lower_v1(text: &str) -> String {
+    if text.is_ascii() {
+        return text.to_ascii_lowercase();
+    }
     map(text, LOWER)
 }
 
@@ -3009,6 +3015,11 @@ mod tests {
     use super::*;
     #[test]
     fn frozen_maps_are_ordered_and_contain_only_valid_distinct_scalars() {
+        for code in 0u8..=127 {
+            let text = char::from(code).to_string();
+            assert_eq!(oracle_simple_upper_v1(&text), map(&text, UPPER));
+            assert_eq!(oracle_simple_lower_v1(&text), map(&text, LOWER));
+        }
         for table in [UPPER, LOWER] {
             for pair in table.windows(2) {
                 assert!(pair[0].0 < pair[1].0);

@@ -5715,6 +5715,9 @@ pub fn reconcile_embedded_table_row_policy(
 mod tests;
 
 #[cfg(test)]
+mod metadata_preparation_cache_tests;
+
+#[cfg(test)]
 mod cell_rows_tests;
 
 /// Output column names of a SELECT (PostgreSQL naming: alias, else the

@@ -2429,7 +2429,20 @@ pub(crate) fn normalize_relation_identifier(value: &str) -> String {
 pub(crate) fn parse_message(
     payload: &[u8],
     server: &Arc<PgWireServer>,
-    state: &ConnectionState,
+    state: &mut ConnectionState,
+) -> Result<ParsedStatementMessage> {
+    let db = server.read_db_for_transaction_progress()?;
+    state.catalog_cache.with_schema_cache(&db, || {
+        parse_message_inner(payload, server, &db, &state.session_state, &state.user)
+    })
+}
+
+fn parse_message_inner(
+    payload: &[u8],
+    server: &Arc<PgWireServer>,
+    db: &BicDb,
+    session_state: &SqlSessionGucState,
+    user: &str,
 ) -> Result<ParsedStatementMessage> {
     let mut idx = 0;
     let name = read_cstr(payload, &mut idx)?;
@@ -2438,25 +2451,22 @@ pub(crate) fn parse_message(
     let mut sql = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
         && !is_server_status_query(&sql)
     {
-        let db = server.read_db_for_transaction_progress()?;
         bicdb_sql::oracle::lower_session_sql(
-            &db,
+            db,
             &sql,
             &server.config.sql_profile,
-            state
-                .session_state
+            session_state
                 .session_gucs()
                 .get("search_path")
                 .map(String::as_str),
-            &state.user,
+            user,
         )?
     } else if is_server_status_query(&sql) {
         sql
     } else {
         // Bind unqualified relations through the session's search_path before
         // the statement is described, as execution will.
-        let db = server.read_db_for_transaction_progress()?;
-        bicdb_sql::search_path::bind_session_sql(&db, &sql, state.session_state.session_gucs())?
+        bicdb_sql::search_path::bind_session_sql(db, &sql, session_state.session_gucs())?
             .unwrap_or(sql)
     };
     // Parse describes one prepared statement. Apply this after profile lowering
@@ -2472,9 +2482,8 @@ pub(crate) fn parse_message(
     for _ in 0..param_count {
         param_type_oids.push(read_i32(payload, &mut idx)?);
     }
-    let db = server.read_db_for_transaction_progress()?;
     sql = bicdb_sql::oracle::lower_typed_native_sql(
-        &db,
+        db,
         &sql,
         &server.config.sql_profile,
         &param_type_oids,
@@ -2484,30 +2493,29 @@ pub(crate) fn parse_message(
         .map(|subscribe| subscribe.query)
         .unwrap_or(&sql);
     let oracle_host_block = bicdb_sql::oracle::host_binds::prepare(
-        &db,
+        db,
         &source_sql,
         &sql,
         &server.config.sql_profile,
-        state
-            .session_state
+        session_state
             .session_gucs()
             .get("search_path")
             .map(String::as_str),
-        &state.user,
+        user,
     )?
     .map(Arc::new);
     let inferred = if let Some(block) = &oracle_host_block {
         block.parameter_types().to_vec()
     } else if let Some(copy) = parse_copy_statement(typed_sql)? {
         if let Some(query) = copy.query {
-            infer_parameter_types(&db, &query)?
+            infer_parameter_types(db, &query)?
         } else {
             Vec::new()
         }
     } else {
-        infer_parameter_types(&db, typed_sql)?
+        infer_parameter_types(db, typed_sql)?
     };
-    param_type_oids = resolve_parameter_type_oids(&db, param_type_oids, inferred)?;
+    param_type_oids = resolve_parameter_type_oids(db, param_type_oids, inferred)?;
     Ok(ParsedStatementMessage {
         name,
         statement: PreparedStatement {
@@ -2648,6 +2656,7 @@ pub(crate) fn describe_message(
                     &statement.sql,
                     &state.session_state,
                     state.security_context.as_ref(),
+                    &mut state.catalog_cache,
                 )?;
                 describe_result(stream, server, &result, &[], Some(&statement.sql))?;
             } else if let Some(result) = placeholder_cast_describe_result(&statement.sql) {
@@ -2662,6 +2671,7 @@ pub(crate) fn describe_message(
                     &describe_sql,
                     &state.session_state,
                     state.security_context.as_ref(),
+                    &mut state.catalog_cache,
                 )?;
                 describe_result(stream, server, &result, &[], Some(&statement.sql))?;
             } else if is_describable_query(&statement.sql) {
@@ -2672,6 +2682,7 @@ pub(crate) fn describe_message(
                     &describe_sql,
                     &state.session_state,
                     state.security_context.as_ref(),
+                    &mut state.catalog_cache,
                 )?;
                 describe_result(stream, server, &result, &[], Some(&statement.sql))?;
             } else {
@@ -2720,6 +2731,7 @@ pub(crate) fn describe_message(
                     &portal_sql,
                     &state.session_state,
                     state.security_context.as_ref(),
+                    &mut state.catalog_cache,
                 )?;
                 describe_result(
                     stream,

@@ -248,6 +248,10 @@ fn postgres_compat_report_exports_scorecard_json_and_csv() {
     assert_eq!(report.target_version, "18.4");
     assert!(report.total_cases >= 20);
     assert_eq!(report.failed_cases, 0);
+    assert!(report.cases.iter().any(|case| {
+        case.id == "sql.right_join_null_extension"
+            && case.coverage_state == PostgresCompatCoverageState::Supported
+    }));
     assert!(report.score_percent >= 99.0);
     assert!(report.cases.iter().any(|case| {
         case.id == "transactions.read_committed_visibility"

@@ -5611,8 +5611,8 @@ pub fn run_postgres_compat_suite(
         &mut cases,
         "sql.right_join_null_extension",
         "sql",
-        "RIGHT JOIN currently over-includes null-extended right rows",
-        PostgresCompatExpectation::ExpectedDifference,
+        "RIGHT JOIN null filtering returns only genuinely unmatched right rows",
+        PostgresCompatExpectation::Works,
         || {
             expect_rows(
                 bench_pg_simple_query(
@@ -5625,20 +5625,7 @@ pub fn run_postgres_compat_suite(
                 &mut client,
                 "SELECT patients.name, appointments.doctor FROM patients RIGHT JOIN appointments ON patients.id = appointments.patient_id WHERE patients.id IS NULL ORDER BY appointments.id;",
             )?;
-            if rows
-                == vec![
-                    vec!["".to_string(), "Dr. Rao".to_string()],
-                    vec!["".to_string(), "Dr. Kim".to_string()],
-                    vec!["".to_string(), "Dr. Null".to_string()],
-                ]
-            {
-                Ok("BicDB returned the unmatched right row plus matched right rows with NULL-extended left columns; PostgreSQL would return only Dr. Null".to_string())
-            } else {
-                anyhow::bail!(
-                    "unexpected RIGHT JOIN expected-difference rows {}",
-                    format_rows(&rows)
-                )
-            }
+            expect_rows(rows, &[&["", "Dr. Null"]])
         },
     );
     record_pg_case(

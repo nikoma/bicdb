@@ -513,7 +513,7 @@ mod tests {
                 let mut parse = b"p\0SELECT CAST($1 AS INTEGER)\0".to_vec();
                 parse.extend(1_i16.to_be_bytes());
                 parse.extend(23_i32.to_be_bytes());
-                let parsed = parse_message(&parse, &worker_server, &state).unwrap();
+                let parsed = parse_message(&parse, &worker_server, &mut state).unwrap();
                 let prepared = FxHashMap::from_iter([("p".into(), parsed.statement)]);
                 phase_tx.send("bind").unwrap();
                 let mut bind = b"\0p\0".to_vec();
@@ -529,6 +529,7 @@ mod tests {
                     "SELECT 1",
                     &state.session_state,
                     None,
+                    &mut state.catalog_cache,
                 )
                 .unwrap();
                 let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -3896,6 +3897,42 @@ mod tests {
     }
 
     #[test]
+    fn preparation_preserves_connection_schema_cache_and_refreshes_after_ddl() {
+        let dir = tempfile::tempdir().unwrap();
+        let server = PgWireServer::open(dir.path(), PgWireConfig::default()).unwrap();
+        {
+            let mut db = server.db.write();
+            sql_session_for_server(&server, &mut db)
+                .execute("CREATE TABLE preparation_rows(id INTEGER)")
+                .unwrap();
+        }
+        let mut state = ConnectionState::new(42, "bicdb".into(), None);
+        let mut payload = b"prepared\0SELECT * FROM preparation_rows\0".to_vec();
+        payload.extend(0_i16.to_be_bytes());
+        let parsed = parse_message(&payload, &server, &mut state).unwrap();
+        assert!(state.catalog_cache.schema_cache_len() > 0);
+        let describe = |state: &mut ConnectionState| {
+            execute_server_sql_for_describe_with_session(
+                &server,
+                &parsed.statement.sql,
+                &state.session_state,
+                state.security_context.as_ref(),
+                &mut state.catalog_cache,
+            )
+            .unwrap()
+        };
+        assert_eq!(describe(&mut state).columns, vec!["id"]);
+        {
+            let mut db = server.db.write();
+            sql_session_for_server(&server, &mut db)
+                .execute("ALTER TABLE preparation_rows ADD COLUMN payload TEXT")
+                .unwrap();
+        }
+        assert_eq!(describe(&mut state).columns, vec!["id", "payload"]);
+        assert!(state.catalog_cache.schema_cache_len() > 0);
+    }
+
+    #[test]
     fn select_calling_a_writing_function_retries_with_exclusive_access() {
         let dir = tempfile::tempdir().unwrap();
         let server = PgWireServer::open(dir.path(), PgWireConfig::default()).unwrap();
@@ -3933,6 +3970,7 @@ $$
             "SELECT record_pgwire_function_write(7, 'written')",
             &state.session_state,
             state.security_context.as_ref(),
+            &mut state.catalog_cache,
         )
         .unwrap();
         let before_execute = execute_server_db_sql_for_state(

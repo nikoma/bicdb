@@ -869,7 +869,7 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "bicdb-analytics"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "arrow",
  "bicdb-core",
@@ -885,7 +885,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-app-host"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "anyhow",
  "axum",
@@ -913,7 +913,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-app-runtime"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -968,7 +968,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-bench"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "allocation-counter",
  "anyhow",
@@ -991,7 +991,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-blob-s3"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "base64 0.22.1",
  "bicdb-app-runtime",
@@ -1009,7 +1009,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-cell"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -1044,7 +1044,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-cell-admission"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "ciborium",
  "ed25519-dalek",
@@ -1057,7 +1057,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-cell-device"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "bicdb-core",
  "chacha20poly1305 0.10.1",
@@ -1079,7 +1079,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-cell-grant"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "bicdb-core",
  "chacha20poly1305 0.10.1",
@@ -1099,7 +1099,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-cell-ha"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "bicdb-core",
  "ciborium",
@@ -1116,7 +1116,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-cli"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -1164,7 +1164,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-core"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "argon2",
  "bicdb-lua",
@@ -1208,7 +1208,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-extension"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "axum",
  "semver",
@@ -1232,7 +1232,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-fleet"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "ciborium",
  "ed25519-dalek",
@@ -1248,7 +1248,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-lua"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "mlua",
  "serde_json",
@@ -1257,7 +1257,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-page"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "crc32fast",
  "flate2",
@@ -1275,7 +1275,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-pgwire"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "argon2",
  "axum",
@@ -1315,7 +1315,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-provider-email"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "bicdb-app-runtime",
  "lettre",
@@ -1325,7 +1325,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-provider-embeddings"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "bicdb-app-runtime",
  "bicdb-core",
@@ -1333,7 +1333,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-provider-grpc"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "bicdb-app-runtime",
  "bicdb-extension",
@@ -1350,7 +1350,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-provider-llm"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "bicdb-app-runtime",
  "bicdb-extension",
@@ -1361,7 +1361,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-provider-redis"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "base64 0.22.1",
  "bicdb-app-runtime",
@@ -1373,7 +1373,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-provider-tokenizer"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "bicdb-app-runtime",
  "tempfile",
@@ -1382,7 +1382,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-resp"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "base64 0.22.1",
  "bicdb-core",
@@ -1402,7 +1402,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-script"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "oxc_allocator",
  "oxc_codegen",
@@ -1419,7 +1419,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-sql"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "base64 0.22.1",
  "bicdb-core",
@@ -1463,7 +1463,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-sync"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "bicdb-core",
  "hex",
@@ -1476,7 +1476,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-wasm"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "bicdb-core",
  "bicdb-sql",
@@ -1508,7 +1508,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-workflow"
-version = "1.0.451-beta"
+version = "1.0.452-beta"
 dependencies = [
  "bicdb-core",
  "bicdb-lua",

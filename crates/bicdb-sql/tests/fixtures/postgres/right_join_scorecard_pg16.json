@@ -1,0 +1,7 @@
+{
+  "query": "SHOW server_version;\nBEGIN;\nCREATE TEMP TABLE patients(id TEXT PRIMARY KEY,name TEXT,age INT);\nCREATE TEMP TABLE appointments(id TEXT PRIMARY KEY,patient_id TEXT,doctor TEXT);\nINSERT INTO patients VALUES('p1','John',40),('p4','Jane',35),('p5','No Appointment',29);\nINSERT INTO appointments VALUES('a1','p1','Dr. Rao'),('a2','p4','Dr. Kim'),('a3','missing','Dr. Null');\nSELECT patients.name,appointments.doctor FROM patients RIGHT JOIN appointments ON patients.id=appointments.patient_id WHERE patients.id IS NULL ORDER BY appointments.id;\nROLLBACK;\n",
+  "exit": 0,
+  "stdout": "16.13 (Debian 16.13-1.pgdg13+1)\nBEGIN\nCREATE TABLE\nCREATE TABLE\nINSERT 0 3\nINSERT 0 3\n|Dr. Null\nROLLBACK\n",
+  "stderr": "",
+  "rolled_back": true
+}

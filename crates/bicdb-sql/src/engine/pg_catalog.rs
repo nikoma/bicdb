@@ -4,6 +4,53 @@ use super::*;
 #[allow(unused_imports)]
 use crate::*;
 
+// Keep callback-bearing expressions (including custom operators and casts)
+// after the join. This small pure subset covers selective catalog keys without
+// changing how often a function or domain check runs.
+fn simple_virtual_base_filter(expr: &Expr) -> bool {
+    fn operand(expr: &Expr) -> bool {
+        matches!(
+            unwrap_nested_expr(expr),
+            Expr::Identifier(_) | Expr::CompoundIdentifier(_) | Expr::Value(_)
+        )
+    }
+    match unwrap_nested_expr(expr) {
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::And | BinaryOperator::Or,
+            right,
+        } => simple_virtual_base_filter(left) && simple_virtual_base_filter(right),
+        Expr::BinaryOp {
+            left,
+            op:
+                BinaryOperator::Eq
+                | BinaryOperator::NotEq
+                | BinaryOperator::Lt
+                | BinaryOperator::LtEq
+                | BinaryOperator::Gt
+                | BinaryOperator::GtEq,
+            right,
+        } => operand(left) && operand(right),
+        Expr::IsNull(expr) | Expr::IsNotNull(expr) => operand(expr),
+        Expr::InList { expr, list, .. } => operand(expr) && list.iter().all(operand),
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            expr,
+        } => simple_virtual_base_filter(expr),
+        _ => false,
+    }
+}
+
+fn exact_virtual_base_columns(expr: &Expr, columns: &BTreeSet<String>) -> bool {
+    let mut references = Vec::new();
+    collect_predicate_column_references(expr, &mut references)
+        && !references.is_empty()
+        && references.iter().all(|parts| match parts.as_slice() {
+            [qualifier, column] => columns.contains(&format!("{qualifier}.{column}")),
+            _ => false,
+        })
+}
+
 impl<'db> SqlEngine<'db> {
     pub(crate) fn pg_dump_extension_fk_dependency_query(
         &self,
@@ -1237,7 +1284,6 @@ impl<'db> SqlEngine<'db> {
         };
         let table = relation_name(name)?;
         if self.cte(&table).is_some()
-            || is_virtual_table(&table)
             || load_view(self.db_ref(), &table)?.is_some()
             || load_sequence(self.db_ref(), &table)?.is_some()
         {
@@ -1247,6 +1293,38 @@ impl<'db> SqlEngine<'db> {
             .as_ref()
             .map(|alias| alias.name.value.clone())
             .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(&table).to_string());
+        if is_virtual_table(&table) {
+            // Known virtual columns permit the same early filtering as a base
+            // table on the preserved side of LEFT joins. Require qualified
+            // references to avoid capturing an ambiguous name from another
+            // input, and retain the existing conservative expression checker.
+            if alias
+                .as_ref()
+                .is_some_and(|alias| !alias.columns.is_empty())
+            {
+                return Ok(None);
+            }
+            let Some(mut columns) = virtual_table_columns(&table) else {
+                return Ok(None);
+            };
+            add_virtual_tableoid_column(&table, &mut columns);
+            let columns = columns
+                .into_iter()
+                .map(|column| format!("{alias_name}.{column}"))
+                .collect::<BTreeSet<_>>();
+            let mut pushdown = None;
+            for term in and_terms(selection) {
+                if !simple_virtual_base_filter(term) || !exact_virtual_base_columns(term, &columns)
+                {
+                    continue;
+                }
+                pushdown = Some(match pushdown {
+                    Some(existing) => and_expr(existing, term.clone()),
+                    None => term.clone(),
+                });
+            }
+            return Ok(pushdown);
+        }
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
         let schema = load_schema(self.db_ref(), &table)?;
         let mut pushdown = None;

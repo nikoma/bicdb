@@ -413,6 +413,18 @@ fn journal_replicas_share_author_identity_and_preserve_it_after_promotion() {
             (db.node_id(), db.mesh_verifying_key().unwrap()) == identity
         }) && hosts[0].as_ref().unwrap().writer_lease().active()
     });
+    // A snapshot installs the author identity before the restarted standby
+    // establishes its stream. The initial lease grace is also active without
+    // peer contact. Wait for actual confirmations from both fixture peers;
+    // acknowledge_current() alone cannot do that at the empty commit sequence.
+    let quorum = hosts[0].as_ref().unwrap().database().read().sync_quorum();
+    wait(|| {
+        let status = quorum.status();
+        status.standbys.len() == 2
+            && status.last_heard_ms.len() == 2
+            && status.last_heard_ms.values().all(|elapsed| *elapsed < 500)
+            && hosts[0].as_ref().unwrap().writer_lease().active()
+    });
     // These are independent committed setup operations, not one transaction.
     // Release the engine guard and await the native acknowledgement after each
     // one: holding it across schema and journal setup can starve the peer

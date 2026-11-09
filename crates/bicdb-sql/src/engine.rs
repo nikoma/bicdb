@@ -79,6 +79,7 @@ fn parse_inference_statements(db: &BicDb, sql: &str) -> Result<Vec<Statement>> {
 /// context. Entries remain `None` only when PostgreSQL's unknown-input rules
 /// have no stronger context; the wire layer then applies the protocol default.
 pub fn infer_parameter_types(db: &BicDb, sql: &str) -> Result<Vec<Option<String>>> {
+    let _schemas = SqlSchemaCacheScope::new();
     if oracle::collections::declaration(db, sql)?.is_some() {
         return Ok(Vec::new());
     }
@@ -110,6 +111,7 @@ pub(crate) fn infer_routine_host_parameter_types(
     statements: &[RoutineStmt],
     handlers: &[RoutineExceptionHandler],
 ) -> Vec<Option<String>> {
+    let _schemas = SqlSchemaCacheScope::new();
     let engine = SqlEngine::new(db);
     let mut resolver = ParameterTypeResolver::new(&engine);
     resolver.routine_block(declarations, statements, handlers, &BTreeMap::new());
@@ -130,6 +132,7 @@ pub fn infer_query_result_columns(
     db: &BicDb,
     sql: &str,
 ) -> Result<Option<Vec<(String, Option<String>)>>> {
+    let _schemas = SqlSchemaCacheScope::new();
     if oracle::collections::declaration(db, sql)?.is_some() {
         return Ok(None);
     }
@@ -175,6 +178,7 @@ pub fn infer_query_result_column_metadata(
     db: &BicDb,
     sql: &str,
 ) -> Result<Option<Vec<SqlColumnMetadata>>> {
+    let _schemas = SqlSchemaCacheScope::new();
     if oracle::collections::declaration(db, sql)?.is_some() {
         return Ok(None);
     }
@@ -196,6 +200,7 @@ fn infer_describe_columns(
     sql: &str,
     explicit_from: bool,
 ) -> Result<Option<Vec<(String, Option<String>)>>> {
+    let _schemas = SqlSchemaCacheScope::new();
     if oracle::collections::declaration(db, sql)?.is_some() {
         return Ok(None);
     }

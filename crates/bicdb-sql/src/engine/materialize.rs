@@ -4025,8 +4025,15 @@ impl<'db> SqlEngine<'db> {
         let can_push_join_selection = joins.iter().all(is_reorderable_inner_join);
         let base_pushdown_selection = if can_push_join_selection {
             selection_with_join_transitive_predicates(selection, &relation, &joins)?
-        } else {
+        } else if joins.iter().all(|join| {
+            is_reorderable_inner_join(join) || is_left_join_operator(&join.join_operator)
+        }) {
             self.base_table_selection_with_outer(&relation, selection)?
+        } else {
+            // RIGHT/FULL joins can synthesize a NULL base row. Filtering the
+            // base first could turn a match into a new unmatched row that then
+            // passes a WHERE predicate such as base.column IS NULL.
+            None
         };
         let materialize_selection = if can_push_join_selection {
             base_pushdown_selection.as_ref().or(selection)

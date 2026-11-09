@@ -225,7 +225,7 @@ fn where_predicates_can_filter_nullable_outer_join_rows() {
 }
 
 #[test]
-fn right_join_null_filter_documents_current_null_extension_behavior() {
+fn right_join_null_filter_returns_only_genuinely_unmatched_rows() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(dir.path()).unwrap();
     {
@@ -258,10 +258,10 @@ fn right_join_null_filter_documents_current_null_extension_behavior() {
 
     assert_eq!(
         result.rows,
-        vec![
-            vec![SqlValue::Null, SqlValue::String("Dr. Rao".to_string())],
-            vec![SqlValue::Null, SqlValue::String("Dr. Null".to_string())],
-        ]
+        vec![vec![
+            SqlValue::Null,
+            SqlValue::String("Dr. Null".to_string())
+        ]]
     );
 }
 

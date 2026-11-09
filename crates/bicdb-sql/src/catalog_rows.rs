@@ -8095,9 +8095,10 @@ pub(crate) fn bicdb_recyclebin_storage_rows(db: &BicDb) -> Result<Vec<BTreeMap<S
 
 pub(crate) fn information_schema_schemata(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     let mut namespaces = list_namespaces(db)?;
-    for name in ["public", "pg_catalog", "information_schema"] {
+    for name in ["pg_catalog", "information_schema"] {
         if !namespaces.iter().any(|n| n.name == name) {
             namespaces.push(NamespaceSchema {
+                dropped: false,
                 name: name.into(),
                 owner: BOOTSTRAP_ROLE_NAME.into(),
             });

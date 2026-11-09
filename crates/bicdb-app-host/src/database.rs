@@ -83,10 +83,11 @@ impl Database {
             !path.join(REPLICA_BINDING).exists(),
             "this application is bound to state replication; reopen with its replica configuration"
         );
-        let db = BicDb::open_with_config(
+        let mut db = BicDb::open_with_config(
             path.join("data"),
             recorded_database_config(&path.join("data"))?,
         )?;
+        bicdb_sql::recover_interrupted_recycle_bin_renames(&mut db)?;
         let mut database = Self {
             db: Arc::new(RwLock::new(db)),
             native: None,
@@ -602,5 +603,48 @@ impl Database {
             },
         )?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod ddl_startup_recovery_tests {
+    use super::*;
+
+    #[test]
+    fn standalone_host_recovers_catalog_before_initializing_sql() {
+        for mode in [
+            bicdb_core::StorageMode::EmbeddedMemory,
+            bicdb_core::StorageMode::ServerPaged,
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            {
+                let mut db = BicDb::open_with_config(
+                    root.path().join("data"),
+                    DbConfig::default()
+                        .with_fsync(false)
+                        .with_storage_mode(mode),
+                )
+                .unwrap();
+                let mut sql = SqlSession::new(&mut db);
+                sql.execute("CREATE TABLE startup_rows(id int PRIMARY KEY)")
+                    .unwrap();
+                sql.execute("INSERT INTO startup_rows VALUES(1)").unwrap();
+                drop(sql);
+                db.rename_collection(
+                    "startup_rows",
+                    "__bicdb_bin_00000000000000000000000000000001",
+                )
+                .unwrap();
+            }
+            let host = Database::open(root.path()).unwrap();
+            let db = host.db.read();
+            assert_eq!(
+                SqlSession::new_shared(&db)
+                    .execute("SELECT id FROM startup_rows")
+                    .unwrap()
+                    .rows,
+                vec![vec![SqlValue::Int(1)]]
+            );
+        }
     }
 }

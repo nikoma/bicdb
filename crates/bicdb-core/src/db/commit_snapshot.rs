@@ -321,7 +321,7 @@ impl BicDb {
         Ok(())
     }
 
-    pub(crate) fn rollback_transaction(&mut self, tx: &mut Transaction) -> Result<()> {
+    pub(crate) fn rollback_transaction(&self, tx: &mut Transaction) -> Result<()> {
         if tx.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }

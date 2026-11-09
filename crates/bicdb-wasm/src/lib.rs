@@ -233,11 +233,13 @@ pub unsafe extern "C" fn bicdb_open(
             (None, None) => None,
         };
 
-        let db = match encryption {
+        let mut db = match encryption {
             Some(encryption) => BicDb::open_with_encryption(&path, db_config, encryption),
             None => BicDb::open_with_config(&path, db_config),
         }
         .map_err(|error| error.to_string())?;
+        bicdb_sql::recover_interrupted_recycle_bin_renames(&mut db)
+            .map_err(|error| error.to_string())?;
 
         let id = NEXT_ID.with(|next| {
             let mut next = next.borrow_mut();
@@ -682,6 +684,34 @@ mod tests {
         let bytes = unsafe { std::slice::from_raw_parts(ptr.add(4), len) }.to_vec();
         unsafe { bicdb_free(ptr, 4 + len) };
         serde_json::from_slice(&bytes).expect("envelope is JSON")
+    }
+
+    #[test]
+    fn ddl_startup_recovery_precedes_abi_sql_execution() {
+        let root = tempfile::tempdir().unwrap();
+        {
+            let mut db = BicDb::open_with_config(
+                root.path().join("db"),
+                DbConfig::default().with_fsync(false),
+            )
+            .unwrap();
+            let mut sql = SqlSession::new(&mut db);
+            sql.execute("CREATE TABLE startup_rows(id int PRIMARY KEY)")
+                .unwrap();
+            sql.execute("INSERT INTO startup_rows VALUES(1)").unwrap();
+            drop(sql);
+            db.rename_collection(
+                "startup_rows",
+                "__bicdb_bin_00000000000000000000000000000001",
+            )
+            .unwrap();
+        }
+        let db = open(root.path(), "db");
+        assert_eq!(
+            exec(db, "SELECT id FROM startup_rows")["result"]["rows"],
+            json!([[1]])
+        );
+        assert_eq!(call_json(bicdb_close(db))["ok"], true);
     }
 
     #[test]

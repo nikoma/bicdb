@@ -26,12 +26,12 @@ pub(crate) struct RecycleBinEntry {
     pub(crate) table: String,
     pub(crate) owner: String,
     pub(crate) dropped_at_micros: i64,
-    schema: TableSchema,
-    grants: Vec<PrivilegeGrant>,
-    triggers: Vec<TriggerSchema>,
-    sequences: Vec<SequenceSchema>,
+    pub(super) schema: TableSchema,
+    pub(super) grants: Vec<PrivilegeGrant>,
+    pub(super) triggers: Vec<TriggerSchema>,
+    pub(super) sequences: Vec<SequenceSchema>,
     /// (bin-scoped index name, original index name)
-    indexes: Vec<(String, String)>,
+    pub(super) indexes: Vec<(String, String)>,
 }
 
 impl RecycleBinEntry {
@@ -44,6 +44,104 @@ impl RecycleBinEntry {
 /// True for the collection name of a table held in the recycle bin.
 pub(crate) fn is_recycle_bin_name(name: &str) -> bool {
     name.starts_with(BIN_NAME_PREFIX)
+}
+
+/// Roll back the unacknowledged collection-rename part of a DROP that never
+/// published its recycle-bin entry or removed the original SQL schema.
+/// Core WAL/catalog recovery must run first. Completed drops are excluded by
+/// their durable bin entry; ambiguous states are preserved for diagnosis.
+pub fn recover_interrupted_recycle_bin_renames(db: &mut BicDb) -> Result<usize> {
+    db.check_recovery_state()?;
+    let result = recover_interrupted_recycle_bin_renames_inner(db);
+    // A concurrent/late fence wins even over an empty result or a structural
+    // ambiguity diagnostic: startup must not continue with an unsafe store.
+    db.check_recovery_state()?;
+    result
+}
+
+/// Finish only durably decided purges while the host owns exclusive catalog
+/// access. Unlike startup recovery, this never reverses a live move intent.
+/// Native committers call it after their transaction is durable and released.
+pub fn finish_committed_recycle_bin_purges(db: &mut BicDb) -> Result<usize> {
+    db.check_recovery_state()?;
+    let result = super::recycle_bin_journal::recover_purges(db);
+    db.check_recovery_state()?;
+    result
+}
+
+fn recover_interrupted_recycle_bin_renames_inner(db: &mut BicDb) -> Result<usize> {
+    db.check_catalog_recovery_quiescent()?;
+    let journal_repairs = super::recycle_bin_journal::recover(db)?;
+    let completed = list_recycle_bin(db)?
+        .into_iter()
+        .map(|entry| entry.bin_name)
+        .collect::<BTreeSet<_>>();
+    let collections = db.collections();
+    let schemas = list_schemas(db)?;
+    let indexes = db.index_definitions();
+    let mut repairs = Vec::new();
+    for bin in collections
+        .iter()
+        .filter(|meta| is_recycle_bin_name(&meta.name))
+    {
+        if completed.contains(&bin.name)
+            || uuid::Uuid::parse_str(&bin.name[BIN_NAME_PREFIX.len()..]).is_err()
+        {
+            continue;
+        }
+        let candidates = schemas
+            .iter()
+            .filter(|schema| {
+                schema.name != bin.name
+                    && (bin.renamed_from.as_deref() == Some(schema.name.as_str())
+                        || bin.storage() == schema.name
+                        || primary_key_index_definition_for_schema(schema).is_some_and(
+                            |mut expected| {
+                                expected.collection = bin.name.clone();
+                                indexes.iter().any(|index| {
+                                    index.name == expected.name
+                                        && unique_constraint_index_definition_matches(
+                                            index, &expected,
+                                        )
+                                })
+                            },
+                        ))
+            })
+            .collect::<Vec<_>>();
+        let [schema] = candidates.as_slice() else {
+            if candidates.is_empty() {
+                continue;
+            }
+            return Err(SqlError::InvalidSql(format!(
+                "ambiguous interrupted recycle-bin rename {}: multiple SQL schemas match",
+                bin.name
+            )));
+        };
+        if collections.iter().any(|meta| meta.name == schema.name) {
+            return Err(SqlError::InvalidSql(format!(
+                "ambiguous interrupted recycle-bin rename {}: original collection {} also exists",
+                bin.name, schema.name
+            )));
+        }
+        // Later SQL-stage index renames need their durable mapping. Never
+        // infer one or remove another object's index merely to permit open.
+        if indexes.iter().any(|index| {
+            index.collection == bin.name && index.name.starts_with(&format!("{}_i", bin.name))
+        }) {
+            return Err(SqlError::InvalidSql(format!(
+                "interrupted recycle-bin rename {} has unrecorded index-name changes",
+                bin.name
+            )));
+        }
+        repairs.push((bin.name.clone(), schema.name.clone()));
+    }
+    for (bin, original) in &repairs {
+        db.rename_collection(bin, original)?;
+    }
+    if !repairs.is_empty() {
+        sql_index_definitions_cache_clear();
+    }
+    Ok(journal_repairs + repairs.len())
 }
 
 fn unix_micros_now() -> i64 {
@@ -64,11 +162,17 @@ pub(crate) fn list_recycle_bin(db: &BicDb) -> Result<Vec<RecycleBinEntry>> {
         .map(|record| serde_json::from_value::<RecycleBinEntry>(record.metadata))
         .collect::<std::result::Result<Vec<_>, _>>()
         .map_err(|error| SqlError::InvalidSql(format!("corrupt recycle bin entry: {error}")))?;
-    entries.sort_by_key(|entry| std::cmp::Reverse(entry.dropped_at_micros));
-    Ok(entries)
+    let mut visible = Vec::new();
+    for entry in entries.drain(..) {
+        if !super::recycle_bin_journal::purge_is_decided(db, &entry.bin_name)? {
+            visible.push(entry);
+        }
+    }
+    visible.sort_by_key(|entry| std::cmp::Reverse(entry.dropped_at_micros));
+    Ok(visible)
 }
 
-fn save_recycle_bin_entry(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<()> {
+pub(super) fn save_recycle_bin_entry(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<()> {
     db.create_collection(RECYCLE_BIN_COLLECTION)?;
     let metadata = serde_json::to_value(entry)
         .map_err(|error| SqlError::InvalidSql(format!("recycle bin entry: {error}")))?;
@@ -79,7 +183,7 @@ fn save_recycle_bin_entry(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<()>
     Ok(())
 }
 
-fn delete_recycle_bin_entry(db: &mut BicDb, bin_name: &str) -> Result<()> {
+pub(super) fn delete_recycle_bin_entry(db: &mut BicDb, bin_name: &str) -> Result<()> {
     let mut tx = db.begin_transaction()?;
     tx.delete(RECYCLE_BIN_COLLECTION, bin_name)?;
     tx.commit()?;
@@ -93,7 +197,22 @@ fn index_name_taken(db: &BicDb, name: &str) -> bool {
 }
 
 impl<'db> SqlSession<'db> {
-    fn recycle_bin_enabled(&self) -> bool {
+    pub(super) fn rename_recycle_collection(&mut self, old: &str, new: &str) -> Result<()> {
+        if let Some(mut tx) = self.tx.take() {
+            let result = self.db_mut().and_then(|db| {
+                db.rename_collection_preserving_pending_writes(&mut tx, old, new)
+                    .map_err(SqlError::from)
+            });
+            self.tx = Some(tx);
+            result
+        } else {
+            self.db_mut()?
+                .rename_collection(old, new)
+                .map_err(SqlError::from)
+        }
+    }
+
+    pub(super) fn recycle_bin_enabled(&self) -> bool {
         let setting = self
             .session_gucs
             .get(RECYCLE_BIN_GUC)
@@ -112,8 +231,9 @@ impl<'db> SqlSession<'db> {
         &mut self,
         table: &str,
         schema: &TableSchema,
+        deferred_purge: bool,
     ) -> Result<bool> {
-        if !self.recycle_bin_enabled()
+        if (!deferred_purge && !self.recycle_bin_enabled())
             || schema.partitioning.is_some()
             || schema.partition_of.is_some()
             || table.starts_with("__bicdb_")
@@ -143,32 +263,6 @@ impl<'db> SqlSession<'db> {
             .map(|index| index.name)
             .collect::<Vec<_>>();
 
-        match self.db_mut()?.rename_collection(table, &bin_name) {
-            Ok(()) => {}
-            Err(BicDbError::Unsupported(_)) => return Ok(false),
-            Err(error) => return Err(error.into()),
-        }
-        let mut indexes = Vec::with_capacity(index_names.len());
-        for (position, original) in index_names.into_iter().enumerate() {
-            let scoped = format!("{bin_name}_i{position}");
-            // An index the storage layer cannot rename keeps its name.
-            let renamed = self
-                .db_mut()?
-                .rename_index(&original, &scoped)
-                .unwrap_or(false);
-            indexes.push((if renamed { scoped } else { original.clone() }, original));
-        }
-        let db = self.db_mut()?;
-        delete_schema(db, table)?;
-        for grant in &grants {
-            delete_privilege(db, grant)?;
-        }
-        for trigger in &triggers {
-            delete_trigger(db, &trigger.name, Some(table))?;
-        }
-        for sequence in &sequences {
-            delete_sequence(db, &sequence.name)?;
-        }
         let entry = RecycleBinEntry {
             bin_name: bin_name.clone(),
             table: table.to_string(),
@@ -178,12 +272,66 @@ impl<'db> SqlSession<'db> {
                 .unwrap_or_else(|| BOOTSTRAP_ROLE_NAME.to_string()),
             dropped_at_micros: unix_micros_now(),
             schema: schema.clone(),
-            grants,
-            triggers,
-            sequences,
-            indexes,
+            grants: grants.clone(),
+            triggers: triggers.clone(),
+            sequences: sequences.clone(),
+            indexes: index_names
+                .iter()
+                .enumerate()
+                .map(|(position, original)| (format!("{bin_name}_i{position}"), original.clone()))
+                .collect(),
         };
+        let intent_sequence = super::recycle_bin_journal::prepare(self.db_mut()?, &entry)?;
+        super::recycle_bin_journal::stage("intent");
+        let renamed = self.rename_recycle_collection(table, &bin_name);
+        match renamed {
+            Ok(()) => {}
+            Err(SqlError::BicDb(BicDbError::Unsupported(_))) => {
+                super::recycle_bin_journal::clear(self.db_mut()?, &bin_name)?;
+                return Ok(false);
+            }
+            Err(error) => return Err(error),
+        }
+        super::recycle_bin_journal::stage("collection");
+        let mut indexes = Vec::with_capacity(index_names.len());
+        for (position, original) in index_names.into_iter().enumerate() {
+            let scoped = format!("{bin_name}_i{position}");
+            // An index the storage layer cannot rename keeps its name.
+            let renamed = match self.db_mut()?.rename_index(&original, &scoped) {
+                Ok(true) => true,
+                Err(BicDbError::Unsupported(_)) => false,
+                Ok(false) => {
+                    return Err(SqlError::InvalidSql(format!(
+                        "index {original} disappeared during recycle-bin move"
+                    )))
+                }
+                Err(error) => return Err(error.into()),
+            };
+            indexes.push((if renamed { scoped } else { original.clone() }, original));
+            super::recycle_bin_journal::stage("index");
+        }
+        let db = self.db_mut()?;
+        delete_schema(db, table)?;
+        super::recycle_bin_journal::stage("schema");
+        for grant in &grants {
+            delete_privilege(db, grant)?;
+        }
+        for trigger in &triggers {
+            delete_trigger(db, &trigger.name, Some(table))?;
+        }
+        for sequence in &sequences {
+            delete_sequence(db, &sequence.name)?;
+        }
+        super::recycle_bin_journal::stage("dependents");
+        let mut entry = entry;
+        entry.indexes = indexes;
         save_recycle_bin_entry(db, &entry)?;
+        super::recycle_bin_journal::stage("entry");
+        super::recycle_bin_journal::decide(self, &bin_name, intent_sequence)?;
+        if deferred_purge {
+            super::recycle_bin_journal::schedule_purge(self, &entry)?;
+        }
+        super::recycle_bin_journal::stage("decision");
         sql_index_definitions_cache_clear();
         if self.tx.is_some() {
             self.ddl_undo.push(DdlUndo::RestoreFromRecycleBin {
@@ -238,12 +386,10 @@ impl<'db> SqlSession<'db> {
             Some(target) => relation_name(target)?,
             None => entry.table.clone(),
         };
-        self.restore_from_recycle_bin(&entry, &target)?;
+        let intent_id = self.restore_from_recycle_bin(&entry, &target)?;
         if self.tx.is_some() {
-            self.ddl_undo.push(DdlUndo::ReturnToRecycleBin {
-                entry: Box::new(entry),
-                target,
-            });
+            self.ddl_undo
+                .push(DdlUndo::ReturnToRecycleBin { intent_id });
         }
         Ok(())
     }
@@ -252,7 +398,25 @@ impl<'db> SqlSession<'db> {
         &mut self,
         entry: &RecycleBinEntry,
         target: &str,
+    ) -> Result<String> {
+        Ok(self
+            .restore_from_recycle_bin_impl(entry, target, false)?
+            .expect("authored restore has an intent"))
+    }
+    pub(crate) fn restore_from_recycle_bin_undo(
+        &mut self,
+        entry: &RecycleBinEntry,
+        target: &str,
     ) -> Result<()> {
+        self.restore_from_recycle_bin_impl(entry, target, true)
+            .map(|_| ())
+    }
+    fn restore_from_recycle_bin_impl(
+        &mut self,
+        entry: &RecycleBinEntry,
+        target: &str,
+        undo: bool,
+    ) -> Result<Option<String>> {
         require_user_relation_name(target)?;
         // Check every conflict before changing anything.
         if load_schema(self.db_ref(), target)?.is_some()
@@ -296,7 +460,6 @@ impl<'db> SqlSession<'db> {
             sequences.push(restored);
         }
 
-        self.db_mut()?.rename_collection(&entry.bin_name, target)?;
         let mut schema = entry.schema.clone();
         schema.name = target.to_string();
         for (original, restored) in entry.sequences.iter().zip(&sequences) {
@@ -314,6 +477,13 @@ impl<'db> SqlSession<'db> {
                 }
             }
         }
+        let mut index_renames = Vec::new();
+        let mut reserved = self
+            .db_ref()
+            .index_definitions()
+            .into_iter()
+            .map(|index| index.name)
+            .collect::<BTreeSet<_>>();
         for (scoped, original) in &entry.indexes {
             let mut name = original.clone();
             if scoped != original {
@@ -327,14 +497,15 @@ impl<'db> SqlSession<'db> {
                     );
                     let mut candidate = base.clone();
                     let mut suffix = 1;
-                    while index_name_taken(self.db_ref(), &candidate) {
+                    while reserved.contains(&candidate) {
                         suffix += 1;
                         candidate = format!("{base}{suffix}");
                     }
                     name = candidate;
                 }
-                self.db_mut()?.rename_index(scoped, &name)?;
+                reserved.insert(name.clone());
             }
+            index_renames.push((scoped.clone(), name.clone()));
             if &name != original {
                 for index in &mut schema.indexes {
                     if index.name == *original {
@@ -357,8 +528,35 @@ impl<'db> SqlSession<'db> {
                 }
             }
         }
+        let journal = if undo {
+            None
+        } else {
+            let id = format!("restore_{}", uuid::Uuid::new_v4().simple());
+            let plan = super::recycle_bin_journal::RestorePlan {
+                id: id.clone(),
+                target: target.to_string(),
+                schema: schema.clone(),
+                sequences: sequences.clone(),
+                indexes: index_renames.clone(),
+            };
+            let sequence =
+                super::recycle_bin_journal::prepare_restore(self.db_mut()?, entry, plan)?;
+            super::recycle_bin_journal::stage("restore_intent");
+            Some((id, sequence))
+        };
+        self.rename_recycle_collection(&entry.bin_name, target)?;
+        super::recycle_bin_journal::stage("restore_collection");
+        for (from, to) in &index_renames {
+            if from != to && !self.db_mut()?.rename_index(from, to)? {
+                return Err(SqlError::InvalidSql(format!(
+                    "restore index {from} disappeared"
+                )));
+            }
+            super::recycle_bin_journal::stage("restore_index");
+        }
         let db = self.db_mut()?;
         save_schema(db, &schema)?;
+        super::recycle_bin_journal::stage("restore_schema");
         for grant in &entry.grants {
             let mut grant = grant.clone();
             grant.object_name = target.to_string();
@@ -372,15 +570,27 @@ impl<'db> SqlSession<'db> {
         for sequence in &sequences {
             save_sequence(db, sequence)?;
         }
+        super::recycle_bin_journal::stage("restore_dependents");
         delete_recycle_bin_entry(db, &entry.bin_name)?;
+        super::recycle_bin_journal::stage("restore_entry");
+        if let Some((id, sequence)) = &journal {
+            super::recycle_bin_journal::decide(self, id, *sequence)?;
+            super::recycle_bin_journal::stage("restore_decision");
+        }
+        if undo {
+            // The caller already rolled back the outer transaction/mark and
+            // released its pending intent-delete lock before DDL restoration.
+            super::recycle_bin_journal::clear_if_present(self.db_mut()?, &entry.bin_name)?;
+        }
         sql_index_definitions_cache_clear();
-        Ok(())
+        Ok(journal.map(|(id, _)| id))
     }
 
     fn purge_recycle_bin_entry(&mut self, entry: &RecycleBinEntry) -> Result<()> {
         let db = self.db_mut()?;
-        db.drop_collection(&entry.bin_name)?;
-        delete_recycle_bin_entry(db, &entry.bin_name)?;
+        super::recycle_bin_journal::prepare_purge(db, entry)?;
+        super::recycle_bin_journal::stage("purge_intent");
+        super::recycle_bin_journal::finish_purge(db, entry)?;
         sql_index_definitions_cache_clear();
         Ok(())
     }
@@ -418,6 +628,11 @@ impl<'db> SqlSession<'db> {
 
     /// Purges every entry dropped before `cutoff_micros` (retention).
     pub fn purge_recycle_bin_older_than(&mut self, cutoff_micros: i64) -> Result<usize> {
+        if self.in_transaction() {
+            return Err(SqlError::Unsupported(
+                "PURGE cannot run inside a transaction block".into(),
+            ));
+        }
         let entries = list_recycle_bin(self.db_ref())?
             .into_iter()
             .filter(|entry| entry.dropped_at_micros < cutoff_micros)

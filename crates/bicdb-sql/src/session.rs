@@ -12,7 +12,10 @@ mod merge;
 mod timestamp_day_indexes;
 pub(crate) use merge::UpdateMatchPolicy;
 pub(crate) mod recycle_bin;
+mod recycle_bin_journal;
+pub use recycle_bin::finish_committed_recycle_bin_purges;
 pub(crate) use recycle_bin::is_recycle_bin_name;
+pub use recycle_bin::recover_interrupted_recycle_bin_renames;
 pub use recycle_bin::RECYCLE_BIN_COLLECTION;
 #[cfg(test)]
 mod case_mapped_index_tests;
@@ -1987,6 +1990,7 @@ pub(crate) enum DdlUndo {
     },
     DropCollection {
         name: String,
+        creation_intent: Option<String>,
     },
     RestoreCollection {
         name: String,
@@ -2060,8 +2064,7 @@ pub(crate) enum DdlUndo {
     },
     /// Undo of FLASHBACK TABLE ... TO BEFORE DROP.
     ReturnToRecycleBin {
-        entry: Box<recycle_bin::RecycleBinEntry>,
-        target: String,
+        intent_id: String,
     },
     DeleteDefaultPrivilege {
         grant: DefaultPrivilegeGrant,
@@ -3908,6 +3911,14 @@ impl<'db> SqlSession<'db> {
         self.ddl_undo.clear();
         self.savepoints.clear();
         self.commit_guc_transaction();
+        recycle_bin_journal::stage("deferred_purge_decided");
+        // The purge decision is already in the durable outer commit. A cleanup
+        // error must preserve its marker for startup, never undo committed DDL.
+        // Concurrent/shared COMMIT cannot mutate the collection catalog. Its
+        // durable purge markers remain hidden until exclusive cleanup/startup.
+        if self.exclusive {
+            recycle_bin_journal::recover_purges(self.db_mut()?)?;
+        }
         Ok(SqlResult::command("COMMIT"))
     }
 
@@ -3989,10 +4000,14 @@ impl<'db> SqlSession<'db> {
             .collections()
             .iter()
             .any(|collection| collection.name.eq_ignore_ascii_case(name));
+        if !existed && recycle_bin_journal::create_replacement_collection(self, name)? {
+            return Ok(());
+        }
         self.db_mut()?.create_collection(name)?;
         if self.tx.is_some() && !existed {
             self.ddl_undo.push(DdlUndo::DropCollection {
                 name: name.to_string(),
+                creation_intent: None,
             });
         }
         Ok(())
@@ -4052,7 +4067,7 @@ impl<'db> SqlSession<'db> {
             && (created_in_this_statement
                 || self.ddl_undo.iter().any(|undo| {
                     matches!(undo,
-                DdlUndo::DropCollection { name } if name == &definition.collection)
+                DdlUndo::DropCollection { name, .. } if name == &definition.collection)
                 }));
         let created = if new_empty_table {
             self.db_mut()?.create_empty_btree_index(definition)
@@ -4554,8 +4569,15 @@ impl<'db> SqlSession<'db> {
                     save_role_membership(self.db_mut()?, &membership)?;
                 }
             }
-            DdlUndo::DropCollection { name } => {
-                let _ = self.db_mut()?.drop_collection(&name)?;
+            DdlUndo::DropCollection {
+                name,
+                creation_intent,
+            } => {
+                if let Some(id) = creation_intent {
+                    recycle_bin_journal::undo_creation(self.db_mut()?, &id)?;
+                } else {
+                    let _ = self.db_mut()?.drop_collection(&name)?;
+                }
             }
             DdlUndo::RestoreCollection { name, records } => {
                 self.db_mut()?.create_collection(&name)?;
@@ -4638,18 +4660,11 @@ impl<'db> SqlSession<'db> {
                     .into_iter()
                     .find(|entry| entry.bin_name == bin_name)
                 {
-                    self.restore_from_recycle_bin(&entry, &target)?;
+                    self.restore_from_recycle_bin_undo(&entry, &target)?;
                 }
             }
-            DdlUndo::ReturnToRecycleBin { entry, target } => {
-                if let Some(schema) = load_schema(self.db_ref(), &target)? {
-                    let moved = self.move_table_to_recycle_bin(&target, &schema)?;
-                    debug_assert!(
-                        moved,
-                        "{} restored from the bin can return to it",
-                        entry.bin_name
-                    );
-                }
+            DdlUndo::ReturnToRecycleBin { intent_id } => {
+                recycle_bin_journal::undo_restore(self, &intent_id)?;
             }
             DdlUndo::DeleteDefaultPrivilege { grant } => {
                 delete_default_privilege(self.db_mut()?, &grant)?;
@@ -5037,7 +5052,14 @@ impl<'db> SqlSession<'db> {
     /// CREATE paths create it on the fly) needs CREATE on the database, which
     /// is what `CREATE SCHEMA` itself requires.
     pub(crate) fn require_schema_create_privilege(&self, schema: &str) -> Result<()> {
-        let schema = normalize_object_name(schema);
+        let schema = schema.to_string();
+        if schema == "public" && load_namespace(self.db_ref(), &schema)?.is_none() {
+            return Err(SqlError::data_exception_public(
+                "3F000",
+                "schema \"public\" does not exist",
+                None,
+            ));
+        }
         let role = current_user_from_gucs(&self.session_gucs);
         let database = current_database_from_gucs(&self.session_gucs);
         match role_can_create_in_schema(self.db_ref(), &role, &schema, Some(&database))? {
@@ -5594,7 +5616,7 @@ impl<'db> SqlSession<'db> {
                 self.save_session_user_type(&user_type)?;
             }
             RawAlterUserTypeDdl::SetSchema { schema_name, .. } => {
-                if !is_known_schema(&schema_name)
+                if !is_known_schema(self.db_ref(), &schema_name)?
                     && load_namespace(self.db_ref(), &schema_name)?.is_none()
                 {
                     return Err(SqlError::InvalidCollection(schema_name));

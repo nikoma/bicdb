@@ -2446,6 +2446,56 @@ mod tests {
     }
 
     #[test]
+    fn native_commit_finishes_decided_transactional_purges() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            let dir = tempfile::tempdir().unwrap();
+            {
+                let mut db = BicDb::open_with_config(
+                    dir.path(),
+                    DbConfig::default()
+                        .with_fsync(false)
+                        .with_storage_mode(mode),
+                )
+                .unwrap();
+                let mut sql = SqlSession::new(&mut db);
+                sql.execute("CREATE TABLE purge_rows(id int PRIMARY KEY)")
+                    .unwrap();
+                sql.execute("INSERT INTO purge_rows VALUES(1)").unwrap();
+            }
+            let server = PgWireServer::open(dir.path(), PgWireConfig::default()).unwrap();
+            let mut state = ConnectionState::new(1, "bicdb".to_string(), None);
+            begin_buffered_transaction(&server, &mut state).unwrap();
+            execute_server_sql(&server, &mut state, "DROP TABLE purge_rows PURGE").unwrap();
+            assert!(state.tx.is_some(), "must exercise the native commit branch");
+            assert!(server
+                .read_db()
+                .unwrap()
+                .collections()
+                .iter()
+                .any(|meta| meta.name.starts_with("__bicdb_bin_")));
+            commit_buffered_transaction(&server, &mut state, &CancellationToken::uncancelable())
+                .unwrap();
+            let db = server.read_db().unwrap();
+            assert!(
+                !db.collections()
+                    .iter()
+                    .any(|meta| meta.name.starts_with("__bicdb_bin_")),
+                "committed PURGE retained its retired backing"
+            );
+            assert!(db
+                .scan_collection("__bicdb_recycle_purges")
+                .unwrap()
+                .is_empty());
+            drop(db);
+            assert!(execute_server_sql(&server, &mut state, "SHOW RECYCLEBIN")
+                .unwrap()
+                .rows
+                .is_empty());
+            assert!(execute_server_sql(&server, &mut state, "SELECT * FROM purge_rows").is_err());
+        }
+    }
+
+    #[test]
     fn commit_durability_failure_publishes_cleaned_session_state() {
         let dir = tempfile::tempdir().expect("tempdir");
         {

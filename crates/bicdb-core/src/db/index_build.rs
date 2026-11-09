@@ -916,7 +916,7 @@ impl BicDb {
                 .spatial_meta(&paged.latest_snapshot(), &existing_name)?
                 .is_some()
             {
-                return Err(BicDbError::Index(format!(
+                return Err(BicDbError::Unsupported(format!(
                     "index `{existing_name}` has a packed spatial base and cannot be renamed; \
                      drop and re-create it under the new name, then pack again"
                 )));

@@ -24,6 +24,10 @@ bypasses these checks. A callback already entered before a concurrent fence may
 finish; the API cannot retract data already delivered. Synchronous callbacks
 receive checked outcomes, and failed subscriptions are removed.
 
+Queued PostgreSQL notifications also check the database before draining and
+before writing business payloads to the socket. A failed handle terminates that
+read path instead of serializing a success or forwarding an old queued message.
+
 The low-level stored-event and parser access used to rebuild recovery state
 remains crate-private. There is no public unchecked business-read alternative,
 empty-result fallback, or panic on a durability failure. Reopen verifies the

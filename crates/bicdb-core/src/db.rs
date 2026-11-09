@@ -3840,6 +3840,7 @@ pub struct BicDb {
     // statement or trusting the catalog length alone (a rename keeps the
     // length but changes the names those caches carry).
     index_generation: AtomicU64,
+    unique_reservation_indexes: RwLock<Option<unique_reservations::UniqueIndexCache>>,
     planner_stats: PlannerStatsCatalog,
     model_registry: RwLock<FxHashMap<String, ModelRegistryEntry>>,
     memory_indexes: RwLock<FxHashMap<String, MemoryIndexDefinition>>,
@@ -10591,6 +10592,7 @@ impl BicDb {
             local_index_maintenance: false,
             checkpoint_boundary_seq: AtomicU64::new(0),
             index_generation: AtomicU64::new(0),
+            unique_reservation_indexes: RwLock::new(None),
             serializable_commit_admission: RwLock::new(()),
             auto_checkpoint_running: AtomicBool::new(false),
             commit_lock: Mutex::new(()),

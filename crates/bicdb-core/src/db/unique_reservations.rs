@@ -7,6 +7,63 @@ fn namespace(index: &str) -> String {
     format!("native-unique-index:{index}")
 }
 
+pub(super) struct UniqueIndexCache {
+    generation: u64,
+    collections: FxHashMap<String, Arc<[String]>>,
+}
+
+impl BicDb {
+    // Catalog changes hold the outer exclusive DB guard. Rebuild once per
+    // catalog generation, then visit only this collection's unique indexes
+    // for each row, including when other collections have thousands of them.
+    fn unique_reservation_index_names(&self, collection: &str) -> Arc<[String]> {
+        let generation = self.index_generation();
+        {
+            let cache = self.unique_reservation_indexes.read();
+            if let Some(cache) = cache
+                .as_ref()
+                .filter(|cache| cache.generation == generation)
+            {
+                return cache
+                    .collections
+                    .get(collection)
+                    .cloned()
+                    .unwrap_or_default();
+            }
+        }
+        let mut cache = self.unique_reservation_indexes.write();
+        if cache
+            .as_ref()
+            .is_none_or(|cache| cache.generation != generation)
+        {
+            let mut collections: FxHashMap<String, Vec<String>> = FxHashMap::default();
+            for (name, index) in &self.indexes {
+                let state = index.read();
+                if state.definition.unique {
+                    collections
+                        .entry(state.definition.collection.clone())
+                        .or_default()
+                        .push(name.clone());
+                }
+            }
+            *cache = Some(UniqueIndexCache {
+                generation,
+                collections: collections
+                    .into_iter()
+                    .map(|(name, indexes)| (name, indexes.into()))
+                    .collect(),
+            });
+        }
+        cache
+            .as_ref()
+            .expect("cache initialized")
+            .collections
+            .get(collection)
+            .cloned()
+            .unwrap_or_default()
+    }
+}
+
 impl Transaction {
     /// Reserve the physical unique key this proposed row contributes to an
     /// index. Index latches are released before any wait; the owner can commit.
@@ -82,7 +139,10 @@ impl Transaction {
         let db = self.db_ref();
         db.check_recovery_state()?;
         let mut claims = Vec::new();
-        for index in db.indexes.values() {
+        for name in db.unique_reservation_index_names(collection).iter() {
+            let Some(index) = db.indexes.get(name) else {
+                continue;
+            };
             let state = index.read();
             let definition = &state.definition;
             if !definition.unique

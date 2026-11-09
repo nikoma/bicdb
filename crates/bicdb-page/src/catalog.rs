@@ -40,15 +40,47 @@
 //! # Free-space buckets
 //!
 //! Exact free-byte counts as keys would mean an update on almost every insert.
-//! Instead free space is bucketed into [`FREE_BUCKETS`] classes, and a page only
-//! moves when it changes class. Finding a page with room for `n` bytes is a
-//! range scan starting at `n`'s bucket: everything at or above it certainly
-//! fits, so the first hit is usable without re-checking the page.
+//! Instead free space is bucketed into [`FREE_BUCKETS`] classes. Finding a page
+//! with room for `n` bytes is a range scan starting one class above `n`'s.
 //!
-//! The bucket is a floor, deliberately. A page in bucket `b` has *at least*
-//! `b`'s worth of free space, never less, so a scan can never hand back a page
-//! that turns out to be too full — the failure mode that would send an insert
-//! back to allocation and grow the file anyway.
+//! The recorded bucket is a floor, deliberately. A page recorded in bucket `b`
+//! has *at least* `b`'s worth of free space, never less, so a scan does not
+//! hand back a page that turns out to be too full — the failure mode that would
+//! send an insert back to allocation and grow the file anyway.
+//!
+//! # Hysteresis: the recorded bucket lags the exact one by a bounded amount
+//!
+//! Every class change is a remove plus an insert in a catalog leaf, and under
+//! full-page WAL logging that is a whole leaf image for a few changed bytes.
+//! Moving on every class crossing made the insert-target page cost one catalog
+//! image per commit. So the recorded bucket `r` of a page whose exact class is
+//! `e` is only kept inside a band (see [`settled_bucket`]):
+//!
+//! ```text
+//! e - FREE_SPACE_SLACK <= r <= e        (and r >= 1 whenever e >= 1)
+//! ```
+//!
+//! - **Down** (the page filled): the move is mandatory once `r > e`, because
+//!   the floor would otherwise claim space the page does not have. It goes to
+//!   `e - FREE_SPACE_SLACK`, so the next few class crossings need no move.
+//! - **Up** (space was freed): lazy. The page moves only once the floor
+//!   under-states it by more than `FREE_SPACE_SLACK` classes.
+//! - **Never to 0 while any class is free.** Bucket 0 is invisible to every
+//!   search, so a page with some free space keeps `r >= 1` and stays findable
+//!   for small tuples.
+//!
+//! The price is that a page can under-advertise up to `FREE_SPACE_SLACK`
+//! classes. It never over-advertises, and the heap verifies the page under its
+//! latch before using it and repairs any entry that does (one left by an
+//! older binary, for example).
+//!
+//! # Finding a page's recorded bucket
+//!
+//! Keys are bucket-major, so the bucket a page is recorded under is not
+//! derivable from the page id. Callers pass the page's free space before the
+//! change as a hint ([`Catalog::record_free_space`]); the hint's band is probed
+//! first with point lookups, then every bucket. Lookups are reads: nothing is
+//! dirtied, and so nothing is logged, unless a key actually moves.
 
 use std::sync::Arc;
 
@@ -69,6 +101,29 @@ const NS_GENERATION_FLOOR: u8 = 0x02;
 
 /// Number of free-space size classes.
 pub const FREE_BUCKETS: u8 = 32;
+
+/// How many classes the recorded bucket may lag below the exact one before
+/// the page is moved (see the module docs). 3 classes is 3/32 of a page:
+/// 768 bytes at 8 KiB pages.
+pub const FREE_SPACE_SLACK: u8 = 3;
+
+/// Where a page whose exact class is `exact` should be recorded, given that it
+/// is currently recorded at `recorded`. `None` means leave it where it is.
+///
+/// The returned bucket, and any `recorded` this leaves alone, always satisfy
+/// `exact - FREE_SPACE_SLACK <= r <= exact` and `r >= 1` when `exact >= 1`.
+fn settled_bucket(recorded: Option<u8>, exact: u8) -> Option<u8> {
+    let lowest_allowed = exact.saturating_sub(FREE_SPACE_SLACK).max(exact.min(1));
+    match recorded {
+        Some(r) if r <= exact && r >= lowest_allowed => None,
+        // Over-claims (the page filled): move down, to the bottom of the band
+        // so the next few class crossings are free.
+        Some(r) if r > exact => Some(lowest_allowed),
+        // Under-claims by more than the slack (space was freed), or no record
+        // at all: advertise the exact class.
+        _ => Some(exact),
+    }
+}
 
 /// Which bucket a given number of free bytes belongs to.
 ///
@@ -158,29 +213,108 @@ impl Catalog {
         Ok(())
     }
 
-    /// Update a page's free space, moving it between buckets only when its
-    /// class actually changes.
+    /// Update a page's free space after it changed from `previous_free` to
+    /// `free_bytes`. Equivalent to [`Self::record_free_space`] with no known
+    /// bucket: `previous_free` is only a hint for finding the current record.
     pub fn update_free_space(
         &self,
         page_id: PageId,
         previous_free: usize,
         free_bytes: usize,
     ) -> Result<()> {
-        let previous = bucket_for(previous_free, self.page_size);
-        let current = bucket_for(free_bytes, self.page_size);
-        if previous == current {
-            return Ok(());
+        self.record_free_space(page_id, None, previous_free, free_bytes)?;
+        Ok(())
+    }
+
+    /// Bring a page's free-space record in line with `free_bytes`, moving the
+    /// key only when the hysteresis band requires it (module docs).
+    ///
+    /// `recorded` is the bucket the caller knows the page is recorded under,
+    /// for example from [`Self::find_free_space_entry`]. Without it the record
+    /// is located by point lookups, starting at `previous_free`'s band. A page
+    /// with no record at all is recorded at its exact class.
+    ///
+    /// Returns whether the catalog was modified. When it returns `false` no
+    /// catalog page was latched for writing, so none is dirtied or logged.
+    pub fn record_free_space(
+        &self,
+        page_id: PageId,
+        recorded: Option<u8>,
+        previous_free: usize,
+        free_bytes: usize,
+    ) -> Result<bool> {
+        let exact = bucket_for(free_bytes, self.page_size);
+        let current = match recorded {
+            Some(bucket) => Some(bucket),
+            None => self.recorded_bucket(page_id, previous_free)?,
+        };
+        let Some(target) = settled_bucket(current, exact) else {
+            return Ok(false);
+        };
+        if current == Some(target) {
+            return Ok(false);
         }
-        self.tree.remove(&free_key(previous, page_id))?;
-        self.tree.insert(&free_key(current, page_id), &[])?;
+        if let Some(old) = current {
+            self.tree.remove(&free_key(old, page_id))?;
+        }
+        self.tree.insert(&free_key(target, page_id), &[])?;
+        Ok(true)
+    }
+
+    /// The bucket `page_id` is recorded under, if any. Read-only.
+    ///
+    /// Probes the band a page whose free space was `hint_free` would sit in
+    /// first (almost always a hit), then every other bucket.
+    pub fn recorded_bucket(&self, page_id: PageId, hint_free: usize) -> Result<Option<u8>> {
+        let hint = bucket_for(hint_free, self.page_size);
+        let low = hint.saturating_sub(FREE_SPACE_SLACK);
+        for bucket in (low..=hint).rev() {
+            if self.tree.get(&free_key(bucket, page_id))?.is_some() {
+                return Ok(Some(bucket));
+            }
+        }
+        for bucket in (0..FREE_BUCKETS).filter(|b| *b < low || *b > hint) {
+            if self.tree.get(&free_key(bucket, page_id))?.is_some() {
+                return Ok(Some(bucket));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Drop one free-space entry that turned out to be wrong when the heap
+    /// checked the page it named: the page is no longer a heap page, or it has
+    /// less room than the entry claimed. `actual_free` is the page's real free
+    /// space when it is still a heap page; it is then recorded correctly.
+    pub fn repair_free_space_entry(
+        &self,
+        page_id: PageId,
+        bucket: u8,
+        actual_free: Option<usize>,
+    ) -> Result<()> {
+        if self.tree.get(&free_key(bucket, page_id))?.is_some() {
+            self.tree.remove(&free_key(bucket, page_id))?;
+        }
+        if let Some(actual_free) = actual_free {
+            self.record_free_space(page_id, None, actual_free, actual_free)?;
+        }
         Ok(())
     }
 
     /// A page with at least `needed` free bytes, if the catalog knows of one.
-    ///
-    /// Scans upward from `needed`'s bucket. Because the bucket is a floor, the
-    /// first hit is guaranteed to fit — no re-reading the page to confirm.
     pub fn find_page_with_room(&self, needed: usize) -> Result<Option<PageId>> {
+        Ok(self
+            .find_free_space_entry(needed)?
+            .map(|(page_id, _)| page_id))
+    }
+
+    /// Like [`Self::find_page_with_room`], also returning the bucket the page
+    /// is recorded under, so the caller can update the record without looking
+    /// it up again.
+    ///
+    /// Scans upward from one bucket above `needed`'s. Because a recorded bucket
+    /// is a floor, the first hit should fit; the heap still checks the page
+    /// under its latch and repairs the entry if it does not.
+    pub fn find_free_space_entry(&self, needed: usize) -> Result<Option<(PageId, u8)>> {
         // Start one bucket above the exact class: a page in `needed`'s own
         // bucket has *at least* the bucket floor free, which may be less than
         // `needed` itself. Starting a class higher keeps the guarantee exact.
@@ -195,10 +329,10 @@ impl Catalog {
         let Some((key, _)) = self.tree.first_at_or_after(&start)? else {
             return Ok(None);
         };
-        if key.first() != Some(&NS_FREE_SPACE) {
+        if key.first() != Some(&NS_FREE_SPACE) || key.len() != 10 {
             return Ok(None);
         }
-        Ok(page_id_from_free_key(&key))
+        Ok(page_id_from_free_key(&key).map(|page_id| (page_id, key[1])))
     }
 
     /// Remove a page from the catalog entirely.
@@ -590,6 +724,89 @@ mod tests {
         let pages = catalog.pages_of_type(PageType::Heap).unwrap();
         assert_eq!(pages.len(), 50, "directory scan crossed into free space");
         assert!(pages.iter().all(|id| (1..=50).contains(id)));
+    }
+
+    #[test]
+    fn the_settled_bucket_stays_inside_the_band() {
+        for exact in 0..FREE_BUCKETS {
+            let lowest = exact.saturating_sub(FREE_SPACE_SLACK).max(exact.min(1));
+            for recorded in (0..FREE_BUCKETS).map(Some).chain([None]) {
+                let settled = settled_bucket(recorded, exact).or(recorded).unwrap();
+                assert!(
+                    settled <= exact,
+                    "{recorded:?}/{exact} -> {settled} over-claims"
+                );
+                assert!(
+                    settled >= lowest,
+                    "{recorded:?}/{exact} -> {settled} lags too far"
+                );
+                if let Some(r) = recorded {
+                    if r <= exact && r >= lowest {
+                        assert_eq!(settled_bucket(recorded, exact), None, "{r}/{exact} moved");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_page_filling_inside_the_band_does_not_touch_the_catalog() {
+        let dir = TempDir::new().unwrap();
+        let (pool, catalog) = catalog(&dir, 1024);
+        let span = 1024 / FREE_BUCKETS as usize;
+        catalog.register_page(9, PageType::Heap, 1000).unwrap();
+        pool.take_pages_needing_log();
+
+        // Filling the page one class at a time moves it only once per
+        // FREE_SPACE_SLACK + 1 classes, and a call that does not move it
+        // latches no catalog page for writing.
+        let mut free = 1000usize;
+        let mut moves = 0;
+        while free > span {
+            let next = free - span;
+            let moved = catalog.record_free_space(9, None, free, next).unwrap();
+            let logged = pool.take_pages_needing_log();
+            assert_eq!(
+                moved,
+                !logged.is_empty(),
+                "free {free} -> {next}: {logged:?}"
+            );
+            moves += usize::from(moved);
+            let r = catalog.recorded_bucket(9, next).unwrap().unwrap() as usize;
+            assert!(r * span <= next, "record {r} over-claims {next} free bytes");
+            free = next;
+        }
+        let crossings = (1000 / span) - 1;
+        // One move per band, plus the forced drops near the bottom.
+        assert!(
+            moves <= crossings / (FREE_SPACE_SLACK as usize + 1) + 2,
+            "{moves} moves for {crossings} class crossings"
+        );
+        assert_eq!(catalog.free_space_buckets(9).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn freed_space_is_advertised_lazily_but_never_lost() {
+        let dir = TempDir::new().unwrap();
+        let (_pool, catalog) = catalog(&dir, 1024);
+        let span = 1024 / FREE_BUCKETS as usize;
+        catalog.register_page(4, PageType::Heap, 10 * span).unwrap();
+        // A small gain stays inside the band: not advertised.
+        catalog
+            .record_free_space(4, None, 10 * span, 12 * span)
+            .unwrap();
+        assert_eq!(catalog.free_space_buckets(4).unwrap(), vec![10]);
+        // A gain past the slack is.
+        catalog
+            .record_free_space(4, None, 12 * span, 20 * span)
+            .unwrap();
+        assert_eq!(catalog.free_space_buckets(4).unwrap(), vec![20]);
+        // A page with any class of free space stays findable for small tuples.
+        catalog
+            .record_free_space(4, None, 20 * span, span + 3)
+            .unwrap();
+        assert_eq!(catalog.free_space_buckets(4).unwrap(), vec![1]);
+        assert_eq!(catalog.find_page_with_room(span - 1).unwrap(), Some(4));
     }
 
     #[test]

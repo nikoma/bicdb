@@ -234,6 +234,44 @@ fn transactional_rename_preserves_other_transaction_writes_and_read_locks() {
 }
 
 #[test]
+fn transactional_rename_keeps_retained_locks_on_the_renamed_backing() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(root.path(), config(mode)).unwrap();
+        db.create_collection("before").unwrap();
+        db.insert("before", Record::new("existing")).unwrap();
+        let mut owner = db.begin_transaction().unwrap();
+        assert!(owner
+            .try_lock_visible_record(None, "before", "existing")
+            .unwrap());
+        owner.insert("before", Record::new("pending")).unwrap();
+        let locks = owner.lock_len();
+        db.rename_collection_preserving_pending_writes(&mut owner, "before", "after")
+            .unwrap();
+        assert_eq!(owner.lock_len(), locks);
+        assert!(owner.holds_record_lock("after", "existing"));
+        assert!(owner.holds_record_lock("after", "pending"));
+        let challenger = db.begin_transaction().unwrap();
+        assert!(!challenger
+            .try_lock_visible_record(None, "after", "existing")
+            .unwrap());
+        challenger.commit().unwrap();
+        // A rollback rename must preserve acquisition order and release every
+        // retained identity, including locks acquired without a row mutation.
+        db.rename_collection_preserving_pending_writes(&mut owner, "after", "before")
+            .unwrap();
+        assert_eq!(owner.lock_len(), locks);
+        assert!(owner.holds_record_lock("before", "existing"));
+        owner.rollback().unwrap();
+        assert!(db.get("before", "pending").unwrap().is_none());
+        let next = db.begin_transaction().unwrap();
+        assert!(next
+            .try_lock_visible_record(None, "before", "existing")
+            .unwrap());
+    }
+}
+
+#[test]
 fn crash_recovery_never_reverses_a_live_transaction() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();

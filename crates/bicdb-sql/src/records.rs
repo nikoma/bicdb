@@ -2561,7 +2561,7 @@ pub(crate) fn validate_foreign_key_constraint(
             return Ok(());
         }
         let parent =
-            load_schema(db, foreign_table)?.ok_or_else(|| foreign_key_violation(table, name))?;
+            load_schema_shared(db, foreign_table)?.ok_or_else(|| foreign_key_violation(table, name))?;
         // Reserve the same key now as immediate FK checks and parent writes.
         // Delaying the reservation would permit a concurrent parent deletion.
         if let Err(error) = reserve_foreign_key(tx, &parent, referred_columns, &key) {
@@ -2600,7 +2600,7 @@ pub(crate) fn validate_foreign_key_constraint_immediate(
     if key.iter().any(|value| matches!(value, SqlValue::Null)) {
         return Ok(());
     }
-    let Some(foreign_schema) = load_schema(db, foreign_table)? else {
+    let Some(foreign_schema) = load_schema_shared(db, foreign_table)? else {
         return Err(foreign_key_violation(table, name));
     };
     let domain_error = |error: SqlError| {

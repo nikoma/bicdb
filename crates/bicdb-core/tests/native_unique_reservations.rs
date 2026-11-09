@@ -227,3 +227,42 @@ fn renamed_unique_index_invalidates_cached_reservation_names() {
         .unwrap();
     worker.join().unwrap();
 }
+
+#[test]
+fn unchanged_unique_key_update_does_not_wait_for_a_rival_insert() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for read_first in [false, true] {
+            let (_dir, mut db) = setup(mode.clone(), false);
+            Arc::get_mut(&mut db)
+                .unwrap()
+                .insert(
+                    "items",
+                    Record::new("existing").with_metadata(json!({"k":"same","v":0})),
+                )
+                .unwrap();
+            let mut rival = db.begin_transaction().unwrap();
+            rival
+                .insert(
+                    "items",
+                    Record::new("rival").with_metadata(json!({"k":"same","v":20})),
+                )
+                .unwrap();
+            let mut updater = db.begin_transaction().unwrap();
+            if read_first {
+                updater.get("items", "existing").unwrap().unwrap();
+            }
+            updater
+                .update(
+                    "items",
+                    Record::new("existing").with_metadata(json!({"k":"same","v":1})),
+                )
+                .expect("unchanged key must not reserve a rival's incoming identity");
+            updater.commit().unwrap();
+            rival.rollback().unwrap();
+            assert_eq!(
+                db.get("items", "existing").unwrap().unwrap().metadata["v"],
+                json!(1)
+            );
+        }
+    }
+}

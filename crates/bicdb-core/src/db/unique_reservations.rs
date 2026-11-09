@@ -1,4 +1,6 @@
-//! Transaction-lifetime announcements of native unique-index keys. Commit's
+//! Shared transaction-lifetime announcements of native unique-index keys.
+//! Writers may prepare duplicate keys concurrently; an SQL arbiter takes an
+//! exclusive reservation and waits for every pending writer before choosing. Commit's
 //! existing pre-WAL unique claims remain authoritative; these reservations let
 //! READ COMMITTED SQL wait for a not-yet-committed key before arbitration.
 use super::*;
@@ -169,6 +171,7 @@ impl Transaction {
         collection: &str,
         image: &OldImage,
         previous: Option<&OldImage>,
+        changed: Option<&[Box<str>]>,
     ) -> Result<()> {
         let db = self.db_ref();
         db.check_recovery_state()?;
@@ -179,6 +182,14 @@ impl Transaction {
             };
             let state = index.read();
             let definition = &state.definition;
+            if index_definition_untouched(
+                definition,
+                previous.and_then(OldImage::id),
+                image.id(),
+                changed,
+            ) {
+                continue;
+            }
             if !definition.unique
                 || definition.collection != collection
                 || image.matches_predicate(definition)? != Some(true)
@@ -213,7 +224,7 @@ impl Transaction {
                 token.check()?;
             }
             let scope = namespace(&name);
-            match self.reserve_integrity_key(&scope, &encoded) {
+            match self.reserve_integrity_key_shared(&scope, &encoded) {
                 Ok(()) => {}
                 Err(BicDbError::TransactionConflict(_)) => {
                     // A cold paged blind update may have no resident preimage.
@@ -237,9 +248,9 @@ impl Transaction {
                     };
                     if !unchanged {
                         match &cancellation {
-                            Some(token) => {
-                                self.reserve_integrity_key_cancellable(&scope, &encoded, token)?
-                            }
+                            Some(token) => self.reserve_integrity_key_shared_cancellable(
+                                &scope, &encoded, token,
+                            )?,
                             None => {
                                 return Err(BicDbError::TransactionConflict(
                                     "constraint key is reserved by another transaction".into(),

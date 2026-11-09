@@ -867,6 +867,11 @@ impl UnreachablePage {
     pub(crate) fn page_id(&self) -> PageId { self.page_id }
 }
 
+#[cfg(feature = "experimental-structural-cuts")]
+type ShardFrameBudget = AtomicUsize;
+#[cfg(not(feature = "experimental-structural-cuts"))]
+type ShardFrameBudget = usize;
+
 /// A bounded cache of pages over a [`PageStore`].
 #[derive(Debug)]
 pub struct BufferPool {
@@ -892,7 +897,7 @@ pub struct BufferPool {
     no_steal: AtomicBool,
     /// Per shard: its frame count and its count of unlogged frames, readable
     /// without the shard lock.
-    shard_frames: Box<[usize]>,
+    shard_frames: Box<[ShardFrameBudget]>,
     shard_unlogged: Box<[Arc<AtomicUsize>]>,
     /// Source of `Frame::modifications` epochs.
     frame_epochs: AtomicU64,
@@ -1045,7 +1050,13 @@ impl BufferPool {
             .collect::<Vec<_>>()
             .into_boxed_slice();
         let shard_frames = (0..shard_count)
-            .map(|index| per_shard + usize::from(index < remainder))
+            .map(|index| {
+                let frames = per_shard + usize::from(index < remainder);
+                #[cfg(feature = "experimental-structural-cuts")]
+                { AtomicUsize::new(frames) }
+                #[cfg(not(feature = "experimental-structural-cuts"))]
+                { frames }
+            })
             .collect::<Vec<_>>()
             .into_boxed_slice();
 
@@ -1633,6 +1644,10 @@ impl BufferPool {
         };
         match no_steal_pass {
             Err(PageError::PoolExhausted { .. }) => {
+                #[cfg(feature = "experimental-structural-cuts")]
+                if let Some(buffer) = self.borrow_logged_frame(shard, wanted)? {
+                    return Ok(buffer);
+                }
                 if cfg!(feature = "experimental-structural-cuts") {
                     // A structural cut cannot run in the middle of an
                     // operation. Permit exactly one extra frame per shard;
@@ -1641,7 +1656,6 @@ impl BufferPool {
                     if shard.resident.len() + shard.loading.len() < shard.capacity + 1 {
                         return Ok(Arc::new(RwLock::new(vec![0; self.page_size as usize])));
                     }
-                    eprintln!("TEMP class={class:?} wanted={wanted} probationary={:?} protected={:?} streaming={:?} metadata={:?} resident={:?}", shard.probationary, shard.protected, shard.streaming, shard.metadata, shard.resident.iter().map(|(id,f)|(*id,f.pins.load(Ordering::Acquire),f.needs_log.load(Ordering::Acquire),f.data.try_read().map(|b|b[6]))).collect::<Vec<_>>());
                     return Err(PageError::PoolExhausted {
                         page_id: wanted,
                         frames: shard.capacity + 1,
@@ -1657,6 +1671,40 @@ impl BufferPool {
             }
             other => other,
         }
+    }
+
+    /// Transfer an existing logged/clean frame and its budget from another
+    /// shard. No new memory is allocated, unlogged frames are never stolen,
+    /// and try_lock prevents cross-shard lock-order deadlocks. Tiny pools can
+    /// otherwise strand clean capacity while one shard needs a split path.
+    #[cfg(feature = "experimental-structural-cuts")]
+    fn borrow_logged_frame(&self, target: &mut Shard, wanted: PageId) -> Result<Option<Arc<RwLock<Vec<u8>>>>> {
+        let target_index = self.shards.iter().position(|shard| std::ptr::eq(shard, self.shard_for(wanted))).unwrap();
+        for (index, lock) in self.shards.iter().enumerate() {
+            if index == target_index { continue; }
+            let Some(mut donor) = lock.try_lock() else { continue; };
+            if donor.capacity <= 1 { continue; }
+            let buffer = if let Some(buffer) = donor.free.pop() {
+                Some(buffer)
+            } else {
+                match self.evict_one_pass(&mut donor, wanted, CacheClass::Search, false) {
+                    Ok(buffer) => Some(buffer),
+                    Err(PageError::PoolExhausted { .. }) => self.evict_from_metadata(&mut donor)?,
+                    Err(error) => return Err(error),
+                }
+            };
+            if let Some(buffer) = buffer {
+                donor.capacity -= 1;
+                donor.protected_capacity = donor.protected_capacity.min(donor.capacity.saturating_sub(1));
+                donor.streaming_capacity = donor.streaming_capacity.min(donor.capacity.saturating_sub(1));
+                donor.metadata_capacity = donor.metadata_capacity.min(donor.capacity.saturating_sub(1));
+                target.capacity += 1;
+                self.shard_frames[index].store(donor.capacity, Ordering::Release);
+                self.shard_frames[target_index].store(target.capacity, Ordering::Release);
+                return Ok(Some(buffer));
+            }
+        }
+        Ok(None)
     }
 
     /// Return the emergency frames once a structural cut made them evictable.
@@ -2114,7 +2162,11 @@ impl BufferPool {
             .iter()
             .zip(self.shard_unlogged.iter())
             .enumerate()
-            .filter_map(|(shard, (&frames, unlogged))| {
+            .filter_map(|(shard, (frames, unlogged))| {
+                #[cfg(feature = "experimental-structural-cuts")]
+                let frames = frames.load(Ordering::Acquire);
+                #[cfg(not(feature = "experimental-structural-cuts"))]
+                let frames = *frames;
                 let unlogged = unlogged.load(Ordering::Acquire);
                 (unlogged.saturating_add(unlogged_reserve(frames)) > frames).then_some(
                     UnloggedPressure {

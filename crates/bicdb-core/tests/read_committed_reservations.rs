@@ -301,3 +301,56 @@ fn masked_native_fields_are_preserved_and_foreign_tenant_cannot_be_overwritten()
     }
     std::env::remove_var("BICDB_PROTECTED_FIELD_ENCRYPTION_KEY");
 }
+
+#[test]
+fn concurrent_fence_overrides_midoperation_constructor_and_stale_token_errors() {
+    {
+        let (dir, db) = setup(StorageMode::EmbeddedMemory, false);
+        let mut tx = db.begin_application_transaction(actor()).unwrap();
+        tx.set_snapshot_isolation(true, 0).unwrap();
+        let health = db.durability_health_for_test();
+        let hook = bicdb_page::test_faults::arm_io_hook(
+            "read_committed.reservation.begin",
+            dir.path(),
+            1,
+            move || {
+                health.record_failure(
+                    "test.reservation_constructor",
+                    &"concurrent terminal failure",
+                )
+            },
+        );
+        assert!(
+            matches!(
+                tx.reserve_authorized_read_committed_row("rows", "one", None),
+                Err(BicDbError::WriteFailed { .. })
+            ),
+            "fence must override fixed-isolation argument error after entry"
+        );
+        assert_eq!(hook.fired(), 1);
+    }
+    {
+        let (dir, db) = setup(StorageMode::EmbeddedMemory, true);
+        let mut tx = db.begin_application_transaction(actor()).unwrap();
+        let mark = tx.rollback_mark();
+        let token = tx
+            .reserve_authorized_read_committed_row("rows", "one", None)
+            .unwrap();
+        tx.rollback_to_mark(mark).unwrap();
+        let health = db.durability_health_for_test();
+        let hook = bicdb_page::test_faults::arm_io_hook(
+            "read_committed.reservation.validate",
+            dir.path(),
+            1,
+            move || health.record_failure("test.reservation_read", &"concurrent terminal failure"),
+        );
+        assert!(
+            matches!(
+                tx.read_authorized_reserved_row(&token),
+                Err(BicDbError::WriteFailed { .. })
+            ),
+            "fence must override stale-token error after validation entry"
+        );
+        assert_eq!(hook.fired(), 1);
+    }
+}

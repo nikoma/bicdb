@@ -1,5 +1,5 @@
 //! Keep signed mutation authority action-specific while the ordinary primary
-//! arbiter optimization evolves. Protected races are explicitly not repaired.
+//! arbitration evolves. Current protected winners require checked preimages.
 use bicdb_core::{
     BicDb, DbConfig, MutationActor, MutationGrantSpec, MutationOperation, MutationPolicy,
     StorageMode,
@@ -101,8 +101,8 @@ fn insert_only_signed_grants_preserve_upsert_action_authorization() {
 }
 
 #[test]
-fn signed_invisible_winner_retains_explicit_retry_requirement_without_overwrite() {
-    use bicdb_core::{BicDbError, Record};
+fn signed_invisible_winner_uses_checked_current_preimage_and_commits() {
+    use bicdb_core::Record;
     use bicdb_sql::SqlValue;
     use serde_json::json;
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
@@ -153,11 +153,8 @@ fn signed_invisible_winner_retains_explicit_retry_requirement_without_overwrite(
             let (rows, commit) = done_rx
                 .recv_timeout(std::time::Duration::from_secs(10))
                 .unwrap();
-            assert_eq!(rows, vec![vec![SqlValue::Int(10)]]);
-            assert!(
-                matches!(commit, Err(BicDbError::TransactionConflict(_))),
-                "protected stale arbitration must still require retry: {commit:?}"
-            );
+            assert_eq!(rows, vec![vec![SqlValue::Int(30)]]);
+            commit.expect("checked protected arbitration must commit its current update");
             worker.join().unwrap();
         });
         assert_eq!(
@@ -165,7 +162,7 @@ fn signed_invisible_winner_retains_explicit_retry_requirement_without_overwrite(
                 .execute("SELECT value FROM signed_upsert WHERE id='one'")
                 .unwrap()
                 .rows,
-            vec![vec![SqlValue::Int(20)]]
+            vec![vec![SqlValue::Int(30)]]
         );
     }
 }

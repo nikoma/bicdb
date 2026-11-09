@@ -40,8 +40,21 @@ impl Transaction {
         id: &str,
         cancellation: Option<&CancellationToken>,
     ) -> Result<ReadCommittedRowReservation> {
+        self.db_ref().check_recovery_state()?;
+        let result = self.reserve_authorized_read_committed_row_inner(collection, id, cancellation);
+        self.fenced(result)
+    }
+
+    fn reserve_authorized_read_committed_row_inner(
+        &mut self,
+        collection: &str,
+        id: &str,
+        cancellation: Option<&CancellationToken>,
+    ) -> Result<ReadCommittedRowReservation> {
         let db = self.db_ref();
         db.check_recovery_state()?;
+        #[cfg(debug_assertions)]
+        bicdb_page::test_faults::io_hook_point("read_committed.reservation.begin", &db.path);
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -118,6 +131,8 @@ impl Transaction {
     fn validate_row_reservation(&self, token: &ReadCommittedRowReservation) -> Result<()> {
         let db = self.db_ref();
         db.check_recovery_state()?;
+        #[cfg(debug_assertions)]
+        bicdb_page::test_faults::io_hook_point("read_committed.reservation.validate", &db.path);
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -199,8 +214,11 @@ impl Transaction {
         &self,
         token: &ReadCommittedRowReservation,
     ) -> Result<Option<Arc<Record>>> {
-        self.validate_row_reservation(token)?;
-        let result = self.project_reserved_authorized_record(&token.collection, token.raw.clone());
+        self.db_ref().check_recovery_state()?;
+        let result = (|| {
+            self.validate_row_reservation(token)?;
+            self.project_reserved_authorized_record(&token.collection, token.raw.clone())
+        })();
         self.fenced(result)
     }
 

@@ -194,7 +194,7 @@ pub(super) fn ensure(db: &mut BicDb) -> Result<()> {
     if !is_oracle_database(db)? {
         return Ok(());
     }
-    db.check_recovery_state()?;
+    db.check_catalog_recovery_quiescent()?;
     let marker = db.get(PROFILE_COLLECTION, simple_case::READY_ID)?;
     if marker
         .as_ref()

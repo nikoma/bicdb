@@ -145,7 +145,7 @@ fn projected(db: &BicDb, query: &Query, expr: &Expr, depth: usize) -> Option<boo
         }
         Expr::Function(function) => {
             let name = object_name_lowercase(&function.name).ok()?;
-            match name.as_str() {
+            match name.as_ref() {
                 "bicdb_oracle_national_literal" => return Some(true),
                 "bicdb_oracle_national_value"
                 | "bicdb_oracle_national_upper_v1"

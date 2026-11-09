@@ -48,3 +48,16 @@ both fresh and conflicting cases. The protected race returns10, rejects COMMIT
 with TransactionConflict, and leaves winner20 intact, explicitly retaining that
 open repair. Log: `read-committed-grant-scoped-fixed.log`. The initial grant
 review failure is `read-committed-grant-review-repro.log` at2f485893.
+
+Composite constraint review found that reversed conflict target columns bypassed
+ordered arbiter inference. At03e7d654 the committed asymmetric control already
+passed, but both racing modes returned(1,2,10) instead of(1,2,30). A value-order-only
+patch at7c66e649 remained red; the full repair confines unordered column-set
+inference to ON CONFLICT and keeps the chosen arbiter's canonical encoding
+order. Both primary row-ID shortcuts derive their values from authoritative PK
+column order. At427099dc the static composite test1, signed authority tests2,
+and complete concurrent protocol target10 all passed,0fail. Log:
+`read-committed-composite-complete.log`; preserved red logs
+`read-committed-composite-review-repro.log` and `read-committed-composite-scoped.log`.
+The separate PostgreSQL asymmetric reference is stored alongside the original.
+Final broad and CI results must be scoped after this grouped correction.

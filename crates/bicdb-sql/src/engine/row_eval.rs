@@ -958,16 +958,23 @@ impl<'db> SqlEngine<'db> {
                 // under the two operands' types (a date against timestamps).
                 let value_type = self.row_expr_pg_type(expr, context);
                 let candidate_type = result.column_types.first().cloned().flatten();
-                let mut matched = false;
-                for candidate in values() {
-                    if simple_case_values_equal(
-                        &value,
-                        candidate,
-                        value_type.as_deref(),
-                        candidate_type.as_deref(),
-                    )? {
-                        matched = true;
-                        break;
+                let plain = typed_equality_uses_plain_values(
+                    value_type.as_deref(),
+                    candidate_type.as_deref(),
+                );
+                let mut matched =
+                    plain && values().any(|candidate| values_equal(&value, candidate));
+                if !plain {
+                    for candidate in values() {
+                        if simple_case_values_equal(
+                            &value,
+                            candidate,
+                            value_type.as_deref(),
+                            candidate_type.as_deref(),
+                        )? {
+                            matched = true;
+                            break;
+                        }
                     }
                 }
                 if matched {
@@ -2715,16 +2722,25 @@ impl<'db> SqlEngine<'db> {
                 let values = subquery_values(result)?;
                 let value_type =
                     row_columns_expr_pg_type(self.db_ref(), expr, row.keys().map(String::as_str));
-                let mut matched = false;
-                for candidate in &values {
-                    if simple_case_values_equal(
-                        &value,
-                        candidate,
-                        value_type.as_deref(),
-                        candidate_type.as_deref(),
-                    )? {
-                        matched = true;
-                        break;
+                let plain = typed_equality_uses_plain_values(
+                    value_type.as_deref(),
+                    candidate_type.as_deref(),
+                );
+                let mut matched = plain
+                    && values
+                        .iter()
+                        .any(|candidate| values_equal(&value, candidate));
+                if !plain {
+                    for candidate in values.iter() {
+                        if simple_case_values_equal(
+                            &value,
+                            candidate,
+                            value_type.as_deref(),
+                            candidate_type.as_deref(),
+                        )? {
+                            matched = true;
+                            break;
+                        }
                     }
                 }
                 if matched {

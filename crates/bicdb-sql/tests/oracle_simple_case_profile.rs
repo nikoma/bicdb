@@ -275,11 +275,20 @@ fn national_and_database_case_indexes_keep_distinct_native_keys_and_uniqueness()
             .rows,
             vec![vec![SqlValue::Int(2)]]
         );
-        run(
-            &mut db,
-            "BEGIN; UPDATE case_keys SET n=N'x' WHERE id=1; ROLLBACK",
+        let update = bicdb_sql::oracle::lower_session_sql(
+            &db,
+            "UPDATE case_keys SET n=N'x' WHERE id=1",
+            ORACLE_PREVIEW_PROFILE,
+            None,
+            "bicdb",
         )
         .unwrap();
+        {
+            let mut session = SqlSession::new(&mut db);
+            session.execute("BEGIN").unwrap();
+            session.execute(&update).unwrap();
+            session.execute("ROLLBACK").unwrap();
+        }
         db.flush().unwrap();
         drop(db);
         let mut db = BicDb::open_with_config(root.path(), config).unwrap();

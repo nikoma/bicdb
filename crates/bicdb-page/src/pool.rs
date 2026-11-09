@@ -1149,7 +1149,6 @@ impl BufferPool {
                 header.next_page
             };
             self.free_page_for_transaction(page_id, 0)?;
-            self.seal_unreachable_page(UnreachablePage { page_id })?;
             page_id = next;
         }
         Ok(())
@@ -1170,6 +1169,11 @@ impl BufferPool {
 
     pub(crate) fn enable_wal_managed_frees(&self) {
         self.wal_managed_frees.store(true, Ordering::Release);
+    }
+
+    #[cfg(feature = "experimental-structural-cuts")]
+    pub(crate) fn has_pending_frees(&self, transaction: u64) -> bool {
+        self.pending_frees.lock().get(&transaction).is_some_and(|pages| !pages.is_empty())
     }
 
     /// Remove the pages staged as free by `transaction`. The caller must
@@ -1405,6 +1409,21 @@ impl BufferPool {
                 return Err(PageError::PageAlreadyFree { page_id });
             }
         }
+        #[cfg(feature = "experimental-structural-cuts")]
+        {
+            // Stage only the identity. The old bytes remain intact until a
+            // complete parent-reference cut is durable at preparation time.
+            let guard = self.get(page_id)?;
+            let header = PageHeader::decode(guard.bytes(), self.store.path())?;
+            if header.page_type == PageType::Free {
+                return Err(PageError::PageAlreadyFree { page_id });
+            }
+            drop(guard);
+            self.pending_frees.lock().entry(transaction).or_default().push(page_id);
+            return Ok(());
+        }
+        #[cfg(not(feature = "experimental-structural-cuts"))]
+        {
         let mut guard = self.get_mut(page_id)?;
         let existing = PageHeader::decode(guard.bytes_mut(), self.store.path())?;
         if existing.page_type == PageType::Free {
@@ -1422,6 +1441,7 @@ impl BufferPool {
             .or_default()
             .push(page_id);
         Ok(())
+        }
     }
 
     /// Resolve a page to a pinned frame.

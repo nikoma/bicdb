@@ -2330,6 +2330,10 @@ impl PagedStore {
                     &format!("transaction {transaction}"),
                 ));
             }
+            #[cfg(feature = "experimental-structural-cuts")]
+            if self.pool.has_pending_frees(transaction) {
+                self.log_unlogged_pages_as_committed_unit()?;
+            }
             let free_adoption = self.prepare_free_adoption(transaction, &[])?;
             let logged = self.log_dirty_pages(transaction)?;
             let lsn = if sync || !free_adoption.is_empty() {
@@ -3736,9 +3740,7 @@ impl PagedStore {
                 header.encode(bytes);
                 drop(guard);
                 #[cfg(feature = "experimental-structural-cuts")]
-                if transaction == 0 {
-                    self.pool.seal_unadopted_structural_free(*page_id)?;
-                }
+                self.pool.seal_unadopted_structural_free(*page_id)?;
             }
             segments.push((chunk[0], chunk.len() as u64));
             tail_target = chunk[0];

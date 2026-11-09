@@ -14,7 +14,7 @@ fn fresh_oracle_profile_has_ready_scalar_case_semantics() {
             root.path(),
             DbConfig::default()
                 .with_fsync(false)
-                .with_storage_mode(mode),
+                .with_storage_mode(mode.clone()),
         )
         .unwrap();
         ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
@@ -38,7 +38,7 @@ fn legacy_oracle_profile_migrates_case_indexes_before_sql_is_served() {
         let root = tempfile::tempdir().unwrap();
         let config = DbConfig::default()
             .with_fsync(false)
-            .with_storage_mode(mode);
+            .with_storage_mode(mode.clone());
         let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
         // Construct the old durable profile: its UPPER keys used ASCII semantics.
         SqlSession::new(&mut db).execute("CREATE TABLE case_rows(id INT PRIMARY KEY,v TEXT); INSERT INTO case_rows VALUES(1,'é'),(2,'É'); CREATE INDEX case_upper ON case_rows(upper(v))").unwrap();
@@ -87,7 +87,7 @@ fn legacy_unique_case_collision_fences_sql_and_can_resume_after_native_repair() 
         let root = tempfile::tempdir().unwrap();
         let config = DbConfig::default()
             .with_fsync(false)
-            .with_storage_mode(mode);
+            .with_storage_mode(mode.clone());
         let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
         SqlSession::new(&mut db).execute("CREATE TABLE unique_case_rows(id INT PRIMARY KEY,v TEXT); INSERT INTO unique_case_rows VALUES(1,'é'),(2,'É'); CREATE UNIQUE INDEX unique_case_upper ON unique_case_rows(upper(v))").unwrap();
         db.create_collection("__bicdb_sql_compatibility").unwrap();
@@ -162,7 +162,7 @@ fn national_case_uses_al16utf16_for_literals_columns_and_nested_queries() {
             root.path(),
             DbConfig::default()
                 .with_fsync(false)
-                .with_storage_mode(mode),
+                .with_storage_mode(mode.clone()),
         )
         .unwrap();
         ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();

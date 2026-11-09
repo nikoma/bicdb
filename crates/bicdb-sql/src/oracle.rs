@@ -472,6 +472,26 @@ pub(crate) fn validate_routine_language(db: &BicDb, language: &str) -> Result<()
 
 /// Persist the non-default profile with the database, including native backups.
 /// Existing PostgreSQL databases cannot be silently converted by a serve flag.
+/// Initialize the profile already recorded by this store before exposing SQL.
+/// This never chooses a new profile for an unprovisioned database.
+pub fn initialize_existing_database_profile(db: &mut BicDb) -> Result<()> {
+    recover_interrupted_recycle_bin_renames(db)?;
+    let profile = match db.get(PROFILE_COLLECTION, "profile") {
+        Err(BicDbError::CollectionNotFound(_)) => return Ok(()),
+        Err(error) => return Err(error.into()),
+        Ok(None) => return Err(unsupported("SQL profile marker is missing")),
+        Ok(Some(record)) => record
+            .metadata
+            .get("profile")
+            .and_then(JsonValue::as_str)
+            .map(str::to_string)
+            .ok_or_else(|| unsupported("SQL profile marker has no profile identity"))?,
+    };
+    ensure_database_profile(db, &profile)?;
+    db.check_recovery_state()?;
+    Ok(())
+}
+
 pub fn ensure_database_profile(db: &mut BicDb, profile: &str) -> Result<()> {
     if !is_known_profile(profile) {
         return Err(unsupported(format!("unknown SQL profile {profile}")));

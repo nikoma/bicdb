@@ -238,7 +238,7 @@ pub unsafe extern "C" fn bicdb_open(
             None => BicDb::open_with_config(&path, db_config),
         }
         .map_err(|error| error.to_string())?;
-        bicdb_sql::recover_interrupted_recycle_bin_renames(&mut db)
+        bicdb_sql::oracle::initialize_existing_database_profile(&mut db)
             .map_err(|error| error.to_string())?;
 
         let id = NEXT_ID.with(|next| {

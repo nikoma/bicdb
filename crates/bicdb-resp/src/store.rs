@@ -183,7 +183,7 @@ impl CacheStore {
             .with_fsync(config.fsync)
             .with_sync_outbox(false);
         let mut db = BicDb::open_with_config(path, db_config)?;
-        bicdb_sql::recover_interrupted_recycle_bin_renames(&mut db)
+        bicdb_sql::oracle::initialize_existing_database_profile(&mut db)
             .map_err(|error| RespServerError::Command(format!("SQL recovery failed: {error}")))?;
         let mem = config.ephemeral.then(|| {
             (0..NUM_DATABASES)

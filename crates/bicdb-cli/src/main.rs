@@ -3155,7 +3155,7 @@ fn migration_plan_errors(planned: &[MigrationFilePlan]) -> Vec<String> {
 }
 
 fn apply_migration_file(db: &mut BicDb, file: &MigrationFilePlan) -> Result<()> {
-    bicdb_sql::recover_interrupted_recycle_bin_renames(db)?;
+    bicdb_sql::oracle::initialize_existing_database_profile(db)?;
     let started_at = unix_now();
     save_migration_history_record(
         db,
@@ -11855,7 +11855,7 @@ fn execute_sql_command(
     output: OutputMode,
     slow_query: &SlowQueryOptions,
 ) -> Result<()> {
-    bicdb_sql::recover_interrupted_recycle_bin_renames(db)?;
+    bicdb_sql::oracle::initialize_existing_database_profile(db)?;
     let started = Instant::now();
     let analytics_error = if should_try_analytics_sql(query) {
         match run_datafusion_sql(&*db, query) {

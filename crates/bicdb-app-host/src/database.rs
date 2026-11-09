@@ -87,7 +87,7 @@ impl Database {
             path.join("data"),
             recorded_database_config(&path.join("data"))?,
         )?;
-        bicdb_sql::recover_interrupted_recycle_bin_renames(&mut db)?;
+        bicdb_sql::oracle::initialize_existing_database_profile(&mut db)?;
         let mut database = Self {
             db: Arc::new(RwLock::new(db)),
             native: None,

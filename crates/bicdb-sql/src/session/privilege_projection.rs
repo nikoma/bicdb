@@ -544,10 +544,10 @@ impl<'db> SqlSession<'db> {
         };
         self.save_session_schema(&schema)?;
         if let Some(definition) = primary_key_index_definition_for_schema(&schema) {
-            self.create_session_index(definition)?;
+            self.create_new_table_index(definition)?;
         }
         for definition in unique_constraint_index_definitions_for_schema(&schema) {
-            self.create_session_index(definition)?;
+            self.create_new_table_index(definition)?;
         }
         Ok(SqlResult::command("CREATE TABLE"))
     }

@@ -10,6 +10,7 @@
 use crate::*;
 mod bounded_primary_key;
 pub(crate) mod column_check;
+mod eager_privileges;
 mod exists_probe;
 pub(crate) mod flashback;
 use exists_probe::{ExistsCandidate, ExistsProbeMemo};

@@ -62,10 +62,10 @@ identities are preserved. The original failing results remain in the local
 qualification evidence, rather than being replaced by weaker assertions.
 
 The versioned source `4663f20f` starts full SQL qualification across 224 Cargo
-targets. Its library run found 11 actual shared-session regressions caused by
-unconditional exclusive purge cleanup on COMMIT (807 passed, four existing
-ignores). The correction restricts physical reclamation to exclusive sessions;
-the original broad run continues collecting other evidence. A new shared-COMMIT
+targets. The full run completed with 2,297 passed, 36 failed and four existing
+ignores across all 224 targets. All 36 failures came from unconditional exclusive
+purge cleanup on shared COMMIT; its library alone had 807 passes and 11 failures. The correction restricts physical reclamation to exclusive sessions;
+the full original failing result is preserved. A new shared-COMMIT
 regression checks durable visibility, hidden purge entries and startup cleanup.
 Validation of the corrected source is still pending. Its broad result, workspace compilation, final head CI and remote merge
 are separate gates; focused results alone do not establish them. The merge order

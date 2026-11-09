@@ -1448,13 +1448,20 @@ impl<'db> SqlEngine<'db> {
             let result = result?;
             let executed = ExecutedAccess::from_decisions(&decisions);
             let mut lines = explain_access_lines(&plan, planner_lines, executed.as_ref());
-            if let Some(fetched) = decisions
+            // Rows fetched are counted before the row policies filter them:
+            // for a reader under a policy that count would reveal how many
+            // rows it may not see (another tenant's matching rows). It is
+            // omitted whenever any table the statement read is policy
+            // filtered for this session; ActualRows is post-policy.
+            let fetched = decisions
                 .iter()
                 .rev()
                 .find(|decision| decision.chooser != "planner" || decision.rows_fetched.is_some())
-                .and_then(|decision| decision.rows_fetched)
-            {
-                lines.push(format!("ActualRowsFetched {fetched}"));
+                .and_then(|decision| decision.rows_fetched);
+            if let Some(fetched) = fetched {
+                if !self.any_policy_filtered_read(&decisions)? {
+                    lines.push(format!("ActualRowsFetched {fetched}"));
+                }
             }
             lines.push(format!("ActualRows {}", result.rows.len()));
             lines.push(format!(
@@ -3194,6 +3201,38 @@ fn collect_query_relations(
 }
 
 impl SqlEngine<'_> {
+    /// Whether the session reads any table of `decisions` through a row
+    /// policy filter (not the owner, not superuser/BYPASSRLS, RLS enabled).
+    /// Fails closed: a table whose policies cannot be prepared counts as
+    /// filtered.
+    fn any_policy_filtered_read(
+        &self,
+        decisions: &[crate::plan_diagnostics::DecisionTrace],
+    ) -> Result<bool> {
+        for decision in decisions {
+            if is_virtual_table(&decision.collection) {
+                continue;
+            }
+            let schema = match load_schema_shared(self.db_ref(), &decision.collection) {
+                Ok(schema) => schema,
+                Err(_) => return Ok(true),
+            };
+            let prepared = prepare_rls_with_schema(
+                self.db_ref(),
+                &decision.collection,
+                PolicyAction::Select,
+                schema.as_deref(),
+                &self.session_gucs,
+                self.security_context.as_ref(),
+                false,
+            );
+            if !matches!(prepared, Ok(PreparedRls::Allow)) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     /// Authorize SELECT on every base table a query reads, BEFORE any physical
     /// path is chosen — a plan referencing an unauthorized base table cannot
     /// execute. Defense in depth alongside the per-path gates; the per-path

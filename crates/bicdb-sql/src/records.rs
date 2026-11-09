@@ -3507,8 +3507,36 @@ pub(crate) fn expr_references_stored_columns(expr: &Expr) -> bool {
                     .is_some_and(expr_references_stored_columns)
         }
         Expr::Tuple(items) => items.iter().any(expr_references_stored_columns),
+        Expr::Subquery(query)
+        | Expr::Exists {
+            subquery: query, ..
+        } => query_may_reference_outer_columns(query),
+        Expr::InSubquery { expr, subquery, .. } => {
+            expr_references_stored_columns(expr) || query_may_reference_outer_columns(subquery)
+        }
         _ => true,
     }
+}
+
+// Whether a subquery may read the outer (target) row. Only a FROM-less
+// single SELECT whose clauses read no column is known not to: there every
+// column reference is an outer reference. Anything else counts as a read.
+fn query_may_reference_outer_columns(query: &Query) -> bool {
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return true;
+    };
+    !(query.with.is_none()
+        && query.order_by.is_none()
+        && select.from.is_empty()
+        && select
+            .selection
+            .as_ref()
+            .is_none_or(|expr| !expr_references_stored_columns(expr))
+        && select
+            .having
+            .as_ref()
+            .is_none_or(|expr| !expr_references_stored_columns(expr))
+        && !select_items_reference_stored_columns(&select.projection))
 }
 
 pub(crate) fn select_items_reference_stored_columns(items: &[SelectItem]) -> bool {
@@ -3551,11 +3579,16 @@ pub(crate) fn rls_check_denied(table: &str, verdict: &RlsRowVerdict) -> SqlError
 }
 
 // PostgreSQL's ON CONFLICT DO UPDATE message variant: the conflicting
-// existing row failed the UPDATE policy's USING expression.
-pub(crate) fn rls_using_denied(table: &str) -> SqlError {
-    SqlError::BicDb(BicDbError::Authorization(format!(
-        "new row violates row-level security policy (USING expression) for table \"{table}\""
-    )))
+// existing row failed the UPDATE or SELECT policies' USING expression.
+pub(crate) fn rls_using_denied(table: &str, verdict: &RlsRowVerdict) -> SqlError {
+    SqlError::BicDb(BicDbError::Authorization(match verdict {
+        RlsRowVerdict::Denied(Some(policy)) => format!(
+            "new row violates row-level security policy \"{policy}\" (USING expression) for table \"{table}\""
+        ),
+        _ => format!(
+            "new row violates row-level security policy (USING expression) for table \"{table}\""
+        ),
+    }))
 }
 
 thread_local! {

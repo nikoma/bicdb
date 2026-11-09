@@ -1,0 +1,152 @@
+{
+  "format_version": 1,
+  "verdict": "inconsistent",
+  "complete": true,
+  "stop_reason": null,
+  "store": {
+    "directory": "/root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db/paged",
+    "page_size": 8192,
+    "layout": "segmented",
+    "page_files": 1,
+    "superblock_page_count": 623,
+    "effective_page_count": 625,
+    "free_list_head": 0,
+    "free_page_count": 0,
+    "checkpoint_lsn": 28248,
+    "meta_page": 1,
+    "meta_initialized": true,
+    "index_root": 353,
+    "catalog_root": 371,
+    "frozen_xid": 812,
+    "next_xid": 812,
+    "abort_exceptions": 0,
+    "status_spill_pages": 0,
+    "status_spill_entries": 0
+  },
+  "read_only": {
+    "lock": {
+      "state": "unlocked"
+    },
+    "files_opened_read_only": [
+      "/root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db/paged/store.pages",
+      "/root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db/paged/store.wal.28248",
+      "/root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db/paged/store.wal.28264",
+      "/root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db/paged/store.wal.28280",
+      "/root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db/paged/store.wal.28295",
+      "/root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db/paged/store.wal.28310",
+      "/root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db/paged/store.wal.28325",
+      "/root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db/paged/store.wal.28340",
+      "/root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db/paged/store.wal.28356",
+      "/root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db/paged/store.wal.28371",
+      "/root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db/paged/store.wal.28386",
+      "/root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db/paged/store.wal.28401",
+      "/root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db/paged/store.wal.28416",
+      "/root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db/paged/store.wal.28433",
+      "/root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db/paged/store.wal.28449",
+      "/root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db/paged/store.wal.28464",
+      "/root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db/paged/store.wal.28479",
+      "/root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db/paged/store.wal.28494",
+      "/root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db/paged/store.wal"
+    ],
+    "recovery_ran": false,
+    "note": "Files were opened read-only (O_NOFOLLOW, O_NOATIME where permitted); the directory lock was probed with F_GETLK and not taken; recovery was reproduced in memory by reading committed page images from the log."
+  },
+  "log": {
+    "sealed_segments": 17,
+    "sealed_bytes": 2099400,
+    "active_bytes": 0,
+    "reset_shape": {
+      "shape": "normal"
+    },
+    "replay_scope": "full_chain",
+    "records": 261,
+    "first_lsn": 28248,
+    "last_lsn": 28508,
+    "torn_tail_bytes": 0,
+    "checkpoint_records": 0,
+    "redo_lsn": 0,
+    "committed_transactions": 6,
+    "pending_page_images": 186,
+    "distinct_pages_overlaid": 95,
+    "uncommitted_images_skipped": 69,
+    "page_file_truncated_by_recovery_from": null,
+    "open_would_refuse": null,
+    "stale_records_discarded": {
+      "recorded_in_store": false,
+      "segments_a_fixed_open_would_discard": 0,
+      "explanation": "The crash-ordered reset fix reports stale segments it discards (`stale_segments_discarded`) only in the RecoveryReport of that open; it persists nothing, so a store a fixed engine already cleaned up carries no trace of it. `reset_shape` is the same classification computed from these files now."
+    }
+  },
+  "counters": {
+    "index_entries": 9474,
+    "index_tree_pages": 178,
+    "index_tree_height": 3,
+    "catalog_entries": 758,
+    "catalog_tree_pages": 3,
+    "directory_heap_pages": 378,
+    "free_space_records": 380,
+    "versions_examined": 10268,
+    "visible_rows": 8850,
+    "deleted_rows": 624,
+    "keys_without_committed_version": 0,
+    "vacuumed_links": 0,
+    "heap_pages_swept": 378,
+    "heap_versions_swept": 10268,
+    "reachable_versions_swept": 10268,
+    "key_tree_passes": 1,
+    "pages_read_from_page_files": 1057,
+    "pages_read_from_log": 190,
+    "page_cache_hits": 10648,
+    "bytes_read": 10215424,
+    "slot_bitmap_window_pages": 625,
+    "peak_bitmap_bytes": 79544,
+    "elapsed_millis": 4
+  },
+  "classes": [
+    {
+      "class": "tree_page_out_of_bounds",
+      "family": "heap_reachability",
+      "severity": "inconsistent",
+      "count": 1,
+      "description": "a tree edge leads beyond the page count",
+      "samples": [
+        {
+          "class": "tree_page_out_of_bounds",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 625,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": null,
+          "xmax": null,
+          "detail": "key tree edge at depth 2 leads to page 625; the page count is 625; unreachable keys [00000100376576725f7772697465722e5f5f62747265652e30316131626331652d663436312d373037302d383334312d373264336433393731313839028000ff00ff00ff00ff00ff00ff03000077332d3132353a31, 00000100376576725f7772697465722e5f5f62747265652e30316131626331652d663436312d373037302d383334312d373264336433393731313839028000ff00ff00ff00ff00ff00ff03000077332d31393a30)"
+        }
+      ]
+    },
+    {
+      "class": "tree_key_out_of_range",
+      "family": "heap_reachability",
+      "severity": "inconsistent",
+      "count": 1,
+      "description": "a key lies outside its parent's separator range",
+      "samples": [
+        {
+          "class": "tree_key_out_of_range",
+          "severity": "inconsistent",
+          "key": "00000100376576725f7772697465722e5f5f62747265652e30316131626331652d663436312d373037302d383334312d373264336433393731313839028000ff00ff00ff00ff00ff00ff03000077332d3132353a31",
+          "page_id": 564,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": null,
+          "xmax": null,
+          "detail": "key tree entry 38 at depth 2"
+        }
+      ]
+    }
+  ],
+  "external_evidence": []
+}
+
+--stderr--

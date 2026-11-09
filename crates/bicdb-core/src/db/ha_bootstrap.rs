@@ -144,11 +144,35 @@ pub fn stage_standby_bootstrap(path: &Path, archive: &Path, key: &str, fsync: bo
     Ok(())
 }
 
+/// Fault-injection and failure site of the bootstrap install (steps
+/// `bootstrap.rename` and `bootstrap.dir_sync`).
+pub const BOOTSTRAP_SITE: &str = "bootstrap";
+
 /// Installs a staged standby bootstrap of `path`, if one is complete, and
 /// discards an incomplete one. Returns true when a bootstrap was installed.
+///
+/// The install renames the old directory aside, renames the staging
+/// directory into place, and `fsync`s the parent before anything is
+/// deleted, so a power loss leaves either the old database or the complete
+/// new one. `BOOTSTRAP_READY` stays inside the installed directory until
+/// that `fsync` succeeded: an install whose directory sync failed (the open
+/// fails with `WriteFailed`, site `bootstrap.dir_sync`) is completed by the
+/// next open, which syncs again before it removes the marker and the old
+/// directory.
 pub fn finish_standby_bootstrap(path: &Path) -> Result<bool> {
     let staging = standby_bootstrap_staging(path);
     if !staging.exists() {
+        if path.join(BOOTSTRAP_READY).exists() {
+            // Renamed into place by an earlier open whose sync did not
+            // complete.
+            let _lock = bicdb_page::DirectoryLock::acquire(path).map_err(|error| {
+                BicDbError::Replication(format!(
+                    "cannot complete a bootstrap install over an open database: {error}"
+                ))
+            })?;
+            complete_bootstrap_install(path)?;
+            return Ok(true);
+        }
         return Ok(false);
     }
     if !staging.join(BOOTSTRAP_READY).exists() {
@@ -172,24 +196,49 @@ pub fn finish_standby_bootstrap(path: &Path) -> Result<bool> {
     })?;
     let replaced = sibling_path(path, "replaced");
     if replaced.exists() {
+        // Left by an earlier install that completed (its marker is gone),
+        // or by one interrupted between its two renames, in which case the
+        // staging directory is the complete database to install.
         fs::remove_dir_all(&replaced)?;
     }
-    if path.exists() {
-        fs::rename(path, &replaced)?;
-    }
-    fs::rename(&staging, path)?;
-    fs::remove_file(path.join(BOOTSTRAP_READY))?;
-    if let Some(parent) = path.parent() {
-        if let Ok(dir) = File::open(parent) {
-            let _ = dir.sync_all();
-        }
-    }
-    if replaced.exists() {
-        fs::remove_dir_all(&replaced)?;
-    }
+    let renamed = bicdb_page::test_faults::io_fault(&format!("{BOOTSTRAP_SITE}.rename"), path)
+        .map_err(BicDbError::from)
+        .and_then(|()| {
+            if path.exists() {
+                fs::rename(path, &replaced)?;
+            }
+            fs::rename(&staging, path)?;
+            Ok(())
+        });
+    renamed.map_err(|error| BicDbError::WriteFailed {
+        site: format!("{BOOTSTRAP_SITE}.rename"),
+        detail: format!("{}: {error}", path.display()),
+    })?;
+    bicdb_page::test_faults::crash_point(&format!("{BOOTSTRAP_SITE}.after_rename"));
+    complete_bootstrap_install(path)?;
     eprintln!(
         "bicdb replication: installed a snapshot of the primary into {}",
         path.display()
     );
     Ok(true)
+}
+
+/// The durable tail of an install: the parent directory `fsync` (the commit
+/// point), then the marker and the old directory go.
+fn complete_bootstrap_install(path: &Path) -> Result<()> {
+    let synced = bicdb_page::test_faults::io_fault(&format!("{BOOTSTRAP_SITE}.dir_sync"), path)
+        .map_err(BicDbError::from)
+        .and_then(|()| storage::sync_parent_directory(path));
+    synced.map_err(|error| BicDbError::WriteFailed {
+        site: format!("{BOOTSTRAP_SITE}.dir_sync"),
+        detail: format!("{}: {error}", path.display()),
+    })?;
+    bicdb_page::test_faults::crash_point(&format!("{BOOTSTRAP_SITE}.after_dir_sync"));
+    fs::remove_file(path.join(BOOTSTRAP_READY))?;
+    storage::sync_parent_directory(&path.join(BOOTSTRAP_READY))?;
+    let replaced = sibling_path(path, "replaced");
+    if replaced.exists() {
+        fs::remove_dir_all(&replaced)?;
+    }
+    Ok(())
 }

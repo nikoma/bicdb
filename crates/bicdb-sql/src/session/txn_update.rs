@@ -1292,6 +1292,17 @@ impl<'db> SqlSession<'db> {
             updated_record_snapshots.push(statement_snapshot);
             updated += 1;
         }
+        // The new rows pass UPDATE WITH CHECK and, when the statement reads
+        // the existing rows, SELECT USING (an updated row must stay visible
+        // to its writer), before their constraints and unique keys:
+        // PostgreSQL's order, so a refused key is not revealed by 23505.
+        let rls_violation = self.first_rls_write_violation(
+            &table,
+            schema.as_deref(),
+            PolicyAction::Update,
+            reads_existing,
+            &updated_records,
+        )?;
         if let Some(schema) = schema.as_deref() {
             let assigned_columns = update
                 .assignments
@@ -1301,23 +1312,24 @@ impl<'db> SqlSession<'db> {
                 })
                 .map(relation_name)
                 .collect::<Result<Vec<_>>>()?;
+            let checked = match &rls_violation {
+                Some((index, _)) => &updated_records[..*index],
+                None => &updated_records[..],
+            };
             validate_updated_records(
                 self.db_ref(),
                 self.tx.as_ref(),
                 &table,
                 schema,
-                &updated_records,
+                checked,
                 &before_after_records,
                 Some(&self.sql_engine()),
                 &assigned_columns,
             )?;
         }
-        self.enforce_rls_checks(
-            &table,
-            schema.as_deref(),
-            PolicyAction::Update,
-            &updated_records,
-        )?;
+        if let Some((_, error)) = rls_violation {
+            return Err(error);
+        }
         // The updated records are only read again for a RETURNING clause without
         // a FROM (the FROM case projects from slot rows, and a plain UPDATE never
         // reads them again). Project that result now, while the records are
@@ -2698,6 +2710,17 @@ impl<'db> SqlSession<'db> {
                 arg_types.first().and_then(Option::as_ref),
                 args.first(),
             ));
+        }
+        if crate::routine_overloads::user_function_takes_builtin_call(
+            self.db_ref(),
+            &self.session_gucs,
+            &name,
+            &arg_types,
+            &args,
+        )? {
+            if let Some(value) = self.eval_stored_function_value_typed(&name, &args, &arg_types)? {
+                return Ok(value);
+            }
         }
         if matches!(name.as_ref(), "txid_current" | "pg_catalog.txid_current") {
             require_arg_count("txid_current", &args, 0)?;

@@ -421,12 +421,18 @@ impl BicDb {
         {
             return Ok(());
         }
+        // The durable redo of a catalog frame on a standby: once the rename
+        // happened and its directory sync failed, the next open may or may
+        // not redo the frame, so the outcome is unknown and the standby is
+        // fenced.
         write_sidecar(
             &self.path.join(PENDING_CATALOG),
             FrameKind::Index,
             &serde_json::to_vec(frame)?,
             self.config.fsync,
             &self.encryption,
+            "pending_catalog",
+            storage::FailClosed::AfterRename(&self.durability),
         )
     }
 

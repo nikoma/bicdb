@@ -357,13 +357,31 @@ pub fn restore_snapshot_archive_atomic(
             }
             fs::remove_dir_all(target)?;
         }
+        // Every file is synced as it is written; the directories that name
+        // them are synced before the rename, and the parent after it, so a
+        // power loss cannot leave a target with missing entries.
+        sync_directory_tree(&staging)?;
         fs::rename(&staging, target)?;
+        crate::storage::sync_parent_directory(target)?;
         Ok(())
     });
     if result.is_err() {
         let _ = fs::remove_dir_all(&staging);
     }
     result
+}
+
+/// `fsync` `dir` and every directory below it, deepest first.
+fn sync_directory_tree(dir: &Path) -> Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
+            sync_directory_tree(&entry.path())?;
+        }
+    }
+    #[cfg(unix)]
+    File::open(dir)?.sync_all()?;
+    Ok(())
 }
 
 fn restore_snapshot_archive_to_dir(archive: &mut impl Read, target: &Path) -> Result<()> {

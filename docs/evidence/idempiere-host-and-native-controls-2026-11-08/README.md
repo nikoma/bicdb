@@ -19,13 +19,13 @@ All four runs had zero errors and skips; owned servers/JVMs stopped, with remote
 
 ## Native Oracle controls
 
-Two separate physical hot clones of protected `FREEPDB1` ran on Oracle23.26.3. Each clone independently matched all915 table counts (185,471 rows), object/status metadata and column metadata before applying the same three missing original upstream Oracle migrations. Protected source metadata/counts were checked again after each application run and were unchanged. Each task-owned clone was closed afterward; its datafiles and evidence remain separate from the protected source.
+Two separate physical hot clones of protected `FREEPDB1` ran on Oracle 23.26.3. Each clone independently matched all 915 table counts (185,471 rows), object/status metadata and column metadata before applying the same three missing original upstream Oracle migrations. Protected source metadata/counts were checked again after each application run and were unchanged. Each task-owned clone was closed afterward; its datafiles and evidence remain separate from the protected source.
 
-The native runs used the original upstream Oracle-provider source, independently compiled unchanged, SHA256 `1813c6cd6f4596e8002dacc06ee7dccca0dd5cebe22a1634651d75a8c32d3d0b`. Class-load evidence confirms the real wrapped Oracle JDBC23.26 driver. The BicDb SDK adapter and `-Dbicdb` flags were absent. Java sources match upstream commit `da0730aec42f3e9f5f671e81a70ff71e24d5e534`; packed test bytecode matches runtime classes and the BicDb runs' test jar SHA256 `261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7`. Assertions, original class selections and the5400s runner budget were unchanged.
+The native runs used the original upstream Oracle-provider source, independently compiled unchanged, SHA256 `1813c6cd6f4596e8002dacc06ee7dccca0dd5cebe22a1634651d75a8c32d3d0b`. Class-load evidence confirms the real wrapped Oracle JDBC 23.26 driver. The BicDb SDK adapter and `-Dbicdb` flags were absent. Java sources match upstream commit `da0730aec42f3e9f5f671e81a70ff71e24d5e534`; packed test bytecode matches runtime classes and the BicDb runs' test jar SHA256 `261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7`. Assertions, original class selections and the 5400s runner budget were unchanged.
 
-- TrxTest:17/18 passed. `testReleaseSavepoint` failed with “releaseSavepoint should throw SQLException”.
-- CalloutTest:1/2 passed. `testAnnotatedCallout` failed because `CalloutInfoWindow` was not found. These are the same two assertions previously failing against BicDb and are now vendor-app reproduced.
-- ReportTest:5/5 passed; AuditTraceContextTest:3/3 passed. Zero errors/skips. The remaining BicDb report timeout is therefore not dismissed as an upstream failure by this evidence.
+- TrxTest: 17/18 passed. `testReleaseSavepoint` failed with “releaseSavepoint should throw SQLException”.
+- CalloutTest: 1/2 passed. `testAnnotatedCallout` failed because `CalloutInfoWindow` was not found. These are the same two assertions previously failing against BicDb and are now vendor-app reproduced.
+- ReportTest: 5/5 passed; AuditTraceContextTest: 3/3 passed. Zero errors/skips. The remaining BicDb report timeout is therefore not dismissed as an upstream failure by this evidence.
 
 | Whole ReportTest method | Native Oracle | BicDb ny8 repeats | BicDb s3 repeats |
 |---|---:|---:|---:|
@@ -35,6 +35,6 @@ The native runs used the original upstream Oracle-provider source, independently
 | Financial report | 1.755s | 15.875–15.908s | 10.578–11.529s |
 | PDF filename | 0.369s | 3.349–3.902s | 1.690–2.315s |
 
-These are complete method times including setup, not the internal10s job-wait interval. The native timing is a product diagnostic rather than a strict engine benchmark: clone qualification counts and migrations warm Oracle's live cache; BicDb starts a fresh server and performs BLOB reconciliation. Cache sizes/configurations and JDBC providers differ. The full timing ratio cannot be attributed solely to the SQL engine or planner.
+These are complete method times including setup, not the internal 10s job-wait interval. The native timing is a product diagnostic rather than a strict engine benchmark: clone qualification counts and migrations warm Oracle's live cache; BicDb starts a fresh server and performs BLOB reconciliation. Cache sizes/configurations and JDBC providers differ. The full timing ratio cannot be attributed solely to the SQL engine or planner.
 
 A first native harness startup accidentally selected an older template provider containing a BicDb transport branch. It ran no application tests, was stopped and retained as a harness failure. All native results above use the verified native-only provider and real driver.

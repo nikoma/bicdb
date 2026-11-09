@@ -94,20 +94,21 @@ pub(crate) fn binding_path(
     let user = current_user_from_gucs(gucs);
     let mut schemas = Vec::new();
     let mut other = false;
+    let public_exists = load_namespace(db, "public")?.is_some();
     for schema in parse_search_path(path, &user) {
         if matches!(schema.as_str(), "pg_catalog" | "information_schema")
             || schema.starts_with("pg_temp")
         {
             continue;
         }
-        if schema == "public" {
+        if schema == "public" && public_exists {
             schemas.push(schema);
         } else if load_namespace(db, &schema)?.is_some() {
             other = true;
             schemas.push(schema);
         }
     }
-    Ok(other.then(|| schemas.into()))
+    Ok((other || !public_exists).then(|| schemas.into()))
 }
 
 fn relation_exists(db: &BicDb, name: &str) -> bool {
@@ -712,12 +713,16 @@ pub fn bind_session_sql(
     }
 }
 
-/// `current_schema`: the first existing schema on the search_path of the
-/// running statement (`public` when the path names no other schema).
-pub(crate) fn current_schema_name() -> String {
-    active_path()
-        .and_then(|path| path.first().cloned())
-        .unwrap_or_else(|| "public".to_string())
+/// `current_schema`: the first existing schema, or NULL for an empty path.
+pub(crate) fn current_schema_value() -> SqlValue {
+    match active_path() {
+        Some(path) => path
+            .first()
+            .cloned()
+            .map(SqlValue::String)
+            .unwrap_or(SqlValue::Null),
+        None => SqlValue::String("public".into()),
+    }
 }
 
 /// `current_schemas(include_implicit)`: the existing schemas on the path in

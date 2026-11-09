@@ -5031,7 +5031,14 @@ impl<'db> SqlSession<'db> {
     /// CREATE paths create it on the fly) needs CREATE on the database, which
     /// is what `CREATE SCHEMA` itself requires.
     pub(crate) fn require_schema_create_privilege(&self, schema: &str) -> Result<()> {
-        let schema = normalize_object_name(schema);
+        let schema = schema.to_string();
+        if schema == "public" && load_namespace(self.db_ref(), &schema)?.is_none() {
+            return Err(SqlError::data_exception_public(
+                "3F000",
+                "schema \"public\" does not exist",
+                None,
+            ));
+        }
         let role = current_user_from_gucs(&self.session_gucs);
         let database = current_database_from_gucs(&self.session_gucs);
         match role_can_create_in_schema(self.db_ref(), &role, &schema, Some(&database))? {
@@ -5588,7 +5595,7 @@ impl<'db> SqlSession<'db> {
                 self.save_session_user_type(&user_type)?;
             }
             RawAlterUserTypeDdl::SetSchema { schema_name, .. } => {
-                if !is_known_schema(&schema_name)
+                if !is_known_schema(self.db_ref(), &schema_name)?
                     && load_namespace(self.db_ref(), &schema_name)?.is_none()
                 {
                     return Err(SqlError::InvalidCollection(schema_name));

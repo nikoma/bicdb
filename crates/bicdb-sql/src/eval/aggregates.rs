@@ -561,7 +561,7 @@ impl Aggregate {
 /// can't be determined statically.
 /// One FROM relation's typed columns for row-path type resolution: the relation's
 /// binding alias (lowercased) plus its visible columns in wildcard order, each as
-/// `(unqualified name lowercased, logical pg type)`.
+/// `(unqualified normalized name, logical pg type)`.
 #[derive(Clone, Debug)]
 pub(crate) struct RelationColumns {
     pub(crate) alias: String,
@@ -595,7 +595,6 @@ pub(crate) fn rename_relation_columns(
 /// only when the name resolves to exactly one column (ambiguous names, which
 /// PostgreSQL would reject, resolve to `None` -> value-independent fallback).
 pub(crate) fn env_lookup_unqualified(env: &[RelationColumns], name: &str) -> Option<String> {
-    let needle = name.to_ascii_lowercase();
     let mut found: Option<Option<String>> = None;
     for relation in env {
         let mut found_in_relation = false;
@@ -603,7 +602,7 @@ pub(crate) fn env_lookup_unqualified(env: &[RelationColumns], name: &str) -> Opt
             // Aliased base rows carry a second block for the physical-table
             // qualifier. Both entries name the same column, rather than two
             // ambiguous FROM sources. Derived-table duplicates remain errors.
-            if column.eq_ignore_ascii_case(&needle) {
+            if column == name {
                 if found_in_relation && relation.row_type.is_some() {
                     continue;
                 }
@@ -628,7 +627,7 @@ pub(crate) fn env_lookup_qualified(
         .find(|relation| relation.alias == qualifier)?
         .columns
         .iter()
-        .find(|(name, _)| name.eq_ignore_ascii_case(column))
+        .find(|(name, _)| name == column)
         .and_then(|(_, ty)| ty.clone())
 }
 

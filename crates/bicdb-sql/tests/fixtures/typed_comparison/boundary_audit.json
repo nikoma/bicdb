@@ -12,7 +12,10 @@
     "CREATE TABLE audit_s1.same (v date)",
     "CREATE TABLE audit_s2.same (v timestamp)",
     "INSERT INTO audit_s1.same VALUES('2002-07-04')",
-    "INSERT INTO audit_s2.same VALUES('2002-07-04 00:00:00')"
+    "INSERT INTO audit_s2.same VALUES('2002-07-04 00:00:00')",
+    "CREATE TABLE audit_wide(k bigint PRIMARY KEY)",
+    "INSERT INTO audit_wide VALUES(9007199254740992),(9007199254740993)",
+    "PREPARE audit_parameter(float8) AS SELECT k FROM audit_wide WHERE k=$1 ORDER BY k"
   ],
   "cases": [
     {
@@ -439,6 +442,39 @@
       "rows": [
         [
           "true"
+        ]
+      ]
+    },
+    {
+      "label": "quoted_dotted_column",
+      "sql": "SELECT q.\"a.b\"=q.c FROM (SELECT 9007199254740993::numeric AS \"a.b\",9007199254740992::float8 AS c) q",
+      "rows": [
+        [
+          "true"
+        ]
+      ]
+    },
+    {
+      "label": "quoted_dotted_probe",
+      "sql": "SELECT w.k FROM (SELECT 9007199254740992::float8 AS \"a.b\") p JOIN audit_wide w ON w.k=p.\"a.b\" ORDER BY w.k",
+      "rows": [
+        [
+          "9007199254740992"
+        ],
+        [
+          "9007199254740993"
+        ]
+      ]
+    },
+    {
+      "label": "prepared_widened_parameter",
+      "sql": "EXECUTE audit_parameter(9007199254740992::float8)",
+      "rows": [
+        [
+          "9007199254740992"
+        ],
+        [
+          "9007199254740993"
         ]
       ]
     },

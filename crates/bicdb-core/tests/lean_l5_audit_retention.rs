@@ -42,13 +42,13 @@ fn trim_drops_superseded_history_and_keeps_state() {
             .unwrap();
         }
     }
-    let before = db.export_events_since(0).len();
+    let before = db.export_events_since(0).unwrap().len();
     let report = db.trim_event_horizon(SyncCheckpoint::new(0)).unwrap();
     assert_eq!(
         report.superseded_dropped, 160,
         "4 superseded rounds x 40 records"
     );
-    let after = db.export_events_since(0).len();
+    let after = db.export_events_since(0).unwrap().len();
     assert_eq!(after, before - 160);
 
     // State intact: latest round everywhere.

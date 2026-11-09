@@ -313,7 +313,10 @@ pub unsafe extern "C" fn bicdb_exec(db: u32, sql_ptr: *const u8, sql_len: usize)
 pub extern "C" fn bicdb_trim_events(db: u32) -> *mut u8 {
     guarded(move || {
         with_db(db, |db| {
-            let acknowledged = db.sync_status().last_export_checkpoint;
+            let acknowledged = db
+                .sync_status()
+                .map_err(|error| error.to_string())?
+                .last_export_checkpoint;
             let report = db
                 .trim_event_horizon(acknowledged)
                 .map_err(|error| error.to_string())?;
@@ -523,7 +526,7 @@ pub unsafe extern "C" fn bicdb_sync_export(
 pub extern "C" fn bicdb_sync_status(db: u32) -> *mut u8 {
     guarded(move || {
         with_db(db, |db| {
-            let status = db.sync_status();
+            let status = db.sync_status().map_err(|error| error.to_string())?;
             let status = serde_json::to_value(&status).map_err(|error| error.to_string())?;
             Ok(ok(json!({ "status": status })))
         })
@@ -589,7 +592,10 @@ fn bundle_envelope(bundle: &SyncBundle) -> Result<*mut u8, String> {
 pub extern "C" fn bicdb_sync_export_pending(db: u32) -> *mut u8 {
     guarded(move || {
         with_db(db, |db| {
-            let since = db.sync_status().last_export_checkpoint;
+            let since = db
+                .sync_status()
+                .map_err(|error| error.to_string())?
+                .last_export_checkpoint;
             let bundle = db
                 .export_sync_bundle_since(since)
                 .map_err(|error| error.to_string())?;

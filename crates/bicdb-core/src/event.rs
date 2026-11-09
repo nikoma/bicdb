@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -73,7 +73,7 @@ pub struct StoredEvent {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct SubscriptionId(Uuid);
 
-type SyncHandler = Arc<dyn Fn(&StoredEvent) + Send + Sync + 'static>;
+type SyncHandler = Arc<dyn Fn(Result<StoredEvent>) + Send + Sync + 'static>;
 
 struct Subscriber {
     id: SubscriptionId,
@@ -149,6 +149,20 @@ pub struct DeviceView {
 }
 
 impl EventStream {
+    pub(crate) fn check_durability(&self) -> Result<()> {
+        if let Some(health) = &self.durability {
+            health.check().map_err(crate::error::durability_error)?;
+        }
+        Ok(())
+    }
+
+    fn rebuild_broker_state(&mut self) -> Result<()> {
+        let mut state = BrokerState::rebuild(&self.events)?;
+        state.preserve_recovery_protection(&self.broker_state, &self.event_indexes);
+        self.broker_state = state;
+        Ok(())
+    }
+
     pub(crate) fn events_iter(&self) -> impl Iterator<Item = &StoredEvent> {
         self.events.iter()
     }
@@ -200,7 +214,7 @@ impl EventStream {
                 let index = events.len();
                 event_indexes.insert(event.id, index);
                 let stored = StoredEvent { offset, event };
-                broker_state.apply(&stored);
+                broker_state.apply(&stored)?;
                 events.push(stored);
                 Ok(())
             })?;
@@ -242,89 +256,138 @@ impl EventStream {
         Ok(inserted)
     }
 
-    pub fn read(&self, stream_name: &str) -> Vec<StoredEvent> {
-        self.events
-            .iter()
-            .filter(|event| event.event.stream == stream_name)
-            .cloned()
-            .collect()
+    pub(crate) fn checked_snapshot<T>(&self, read: impl FnOnce(&Self) -> T) -> Result<T> {
+        self.check_durability()?;
+        let result = read(self);
+        self.check_durability()?;
+        Ok(result)
     }
 
-    pub fn read_since(&self, offset: u64) -> Vec<StoredEvent> {
-        self.events
-            .iter()
-            .filter(|event| event.offset >= offset)
-            .cloned()
-            .collect()
+    pub fn read(&self, stream_name: &str) -> Result<Vec<StoredEvent>> {
+        self.checked_snapshot(|stream| {
+            stream
+                .events
+                .iter()
+                .filter(|event| event.event.stream == stream_name)
+                .cloned()
+                .collect()
+        })
     }
 
-    /// Highest offset in one stream without cloning the stream. Following a
-    /// stream needs the head cheaply; `read(...).last()` clones every event
-    /// to find it.
-    pub fn stream_head_offset(&self, stream_name: &str) -> u64 {
-        self.events
-            .iter()
-            .rev()
-            .find(|event| event.event.stream == stream_name)
-            .map(|event| event.offset)
-            .unwrap_or(0)
+    pub fn read_since(&self, offset: u64) -> Result<Vec<StoredEvent>> {
+        self.checked_snapshot(|stream| {
+            stream
+                .events
+                .iter()
+                .filter(|event| event.offset >= offset)
+                .cloned()
+                .collect()
+        })
     }
 
-    pub fn read_stream_since(&self, stream_name: &str, offset: u64) -> Vec<StoredEvent> {
-        self.events
-            .iter()
-            .filter(|event| event.event.stream == stream_name && event.offset >= offset)
-            .cloned()
-            .collect()
+    /// Highest offset without cloning the stream; refuses a fenced handle.
+    pub fn stream_head_offset(&self, stream_name: &str) -> Result<u64> {
+        self.checked_snapshot(|stream| {
+            stream
+                .events
+                .iter()
+                .rev()
+                .find(|event| event.event.stream == stream_name)
+                .map(|event| event.offset)
+                .unwrap_or(0)
+        })
     }
 
-    pub fn replay(&self, stream_name: &str) -> Vec<StoredEvent> {
+    pub fn read_stream_since(&self, stream_name: &str, offset: u64) -> Result<Vec<StoredEvent>> {
+        self.checked_snapshot(|stream| {
+            stream
+                .events
+                .iter()
+                .filter(|event| event.event.stream == stream_name && event.offset >= offset)
+                .cloned()
+                .collect()
+        })
+    }
+
+    pub fn replay(&self, stream_name: &str) -> Result<Vec<StoredEvent>> {
         self.read(stream_name)
     }
 
-    pub fn replay_from(&self, stream_name: &str, offset: u64) -> Vec<StoredEvent> {
+    pub fn replay_from(&self, stream_name: &str, offset: u64) -> Result<Vec<StoredEvent>> {
         self.read_stream_since(stream_name, offset)
     }
 
-    pub fn subscribe<F>(&mut self, stream_name: &str, handler: F) -> SubscriptionId
+    pub fn subscribe<F>(&mut self, stream_name: &str, handler: F) -> Result<SubscriptionId>
     where
-        F: Fn(&StoredEvent) + Send + Sync + 'static,
+        F: Fn(Result<StoredEvent>) + Send + Sync + 'static,
     {
+        self.check_durability()?;
         let id = SubscriptionId(Uuid::new_v4());
         self.subscribers.push(Subscriber {
             id,
             filter: SubscriberFilter::Exact(stream_name.to_string()),
             kind: SubscriberKind::Sync(Arc::new(handler)),
         });
-        id
+        if let Err(error) = self.check_durability() {
+            self.subscribers.retain(|subscriber| subscriber.id != id);
+            return Err(error);
+        }
+        Ok(id)
     }
 
     /// Subscribes a synchronous handler to every stream whose name starts
     /// with `prefix` (e.g. `queue:` to observe all broker queue publishes).
     /// The handler runs inline on the appending thread; keep it cheap.
-    pub fn subscribe_prefix<F>(&mut self, prefix: &str, handler: F) -> SubscriptionId
+    pub fn subscribe_prefix<F>(&mut self, prefix: &str, handler: F) -> Result<SubscriptionId>
     where
-        F: Fn(&StoredEvent) + Send + Sync + 'static,
+        F: Fn(Result<StoredEvent>) + Send + Sync + 'static,
     {
+        self.check_durability()?;
         let id = SubscriptionId(Uuid::new_v4());
         self.subscribers.push(Subscriber {
             id,
             filter: SubscriberFilter::Prefix(prefix.to_string()),
             kind: SubscriberKind::Sync(Arc::new(handler)),
         });
-        id
+        if let Err(error) = self.check_durability() {
+            self.subscribers.retain(|subscriber| subscriber.id != id);
+            return Err(error);
+        }
+        Ok(id)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn subscribe_async<F>(&mut self, stream_name: &str, handler: F) -> SubscriptionId
+    pub fn subscribe_async<F>(&mut self, stream_name: &str, handler: F) -> Result<SubscriptionId>
     where
-        F: Fn(StoredEvent) + Send + 'static,
+        F: Fn(Result<StoredEvent>) + Send + 'static,
     {
+        self.check_durability()?;
         let id = SubscriptionId(Uuid::new_v4());
         let (sender, receiver) = mpsc::channel::<StoredEvent>();
+        let health = self.durability.clone();
         thread::spawn(move || {
-            for event in receiver {
-                handler(event);
+            let check = || -> Result<()> {
+                if let Some(health) = &health {
+                    health.check().map_err(crate::error::durability_error)?;
+                }
+                Ok(())
+            };
+            loop {
+                if let Err(error) = check() {
+                    handler(Err(error));
+                    break;
+                }
+                match receiver.recv_timeout(Duration::from_millis(100)) {
+                    Ok(event) => match check() {
+                        Ok(()) => handler(Ok(event)),
+                        Err(error) => {
+                            handler(Err(error));
+                            break;
+                        }
+                    },
+                    Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                }
             }
         });
         self.subscribers.push(Subscriber {
@@ -332,23 +395,32 @@ impl EventStream {
             filter: SubscriberFilter::Exact(stream_name.to_string()),
             kind: SubscriberKind::Async(sender),
         });
-        id
+        if let Err(error) = self.check_durability() {
+            self.subscribers.retain(|subscriber| subscriber.id != id);
+            return Err(error);
+        }
+        Ok(id)
     }
 
     /// wasm has no background threads; "async" delivery degrades to inline
     /// delivery on the appending thread, preserving the at-least-once contract.
     #[cfg(target_arch = "wasm32")]
-    pub fn subscribe_async<F>(&mut self, stream_name: &str, handler: F) -> SubscriptionId
+    pub fn subscribe_async<F>(&mut self, stream_name: &str, handler: F) -> Result<SubscriptionId>
     where
-        F: Fn(StoredEvent) + Send + Sync + 'static,
+        F: Fn(Result<StoredEvent>) + Send + Sync + 'static,
     {
+        self.check_durability()?;
         let id = SubscriptionId(Uuid::new_v4());
         self.subscribers.push(Subscriber {
             id,
             filter: SubscriberFilter::Exact(stream_name.to_string()),
-            kind: SubscriberKind::Sync(Arc::new(move |event: &StoredEvent| handler(event.clone()))),
+            kind: SubscriberKind::Sync(Arc::new(handler)),
         });
-        id
+        if let Err(error) = self.check_durability() {
+            self.subscribers.retain(|subscriber| subscriber.id != id);
+            return Err(error);
+        }
+        Ok(id)
     }
 
     pub fn rebuild_projection<P>(&self, stream_name: &str) -> Result<P>
@@ -363,9 +435,10 @@ impl EventStream {
         P: EventProjection,
     {
         let mut projection = P::default();
-        for event in self.read_stream_since(stream_name, offset) {
+        for event in self.read_stream_since(stream_name, offset)? {
             projection.apply(&event)?;
         }
+        self.check_durability()?;
         Ok(projection)
     }
 
@@ -374,11 +447,12 @@ impl EventStream {
         P: EventProjection,
     {
         let mut projection = P::default();
-        for event in self.read(stream_name) {
+        for event in self.read(stream_name)? {
             if event.event.timestamp <= timestamp {
                 projection.apply(&event)?;
             }
         }
+        self.check_durability()?;
         Ok(projection)
     }
 
@@ -398,8 +472,8 @@ impl EventStream {
     /// an echo?" test for sync direction policies (a client re-pushing
     /// server-authored events after compaction carries only ids the server
     /// already has; forged events cannot).
-    pub fn contains_event(&self, id: &Uuid) -> bool {
-        self.event_indexes.contains_key(id)
+    pub fn contains_event(&self, id: &Uuid) -> Result<bool> {
+        self.checked_snapshot(|stream| stream.event_indexes.contains_key(id))
     }
 
     pub(crate) fn event_by_id(&self, id: &Uuid) -> Option<&StoredEvent> {
@@ -419,6 +493,7 @@ impl EventStream {
     /// either the old or the new segment intact. Returns (bytes_before,
     /// bytes_after).
     pub(crate) fn rewrite_events(&mut self, events: Vec<Event>) -> Result<(u64, u64)> {
+        self.check_durability()?;
         let bytes_before = match fs::metadata(&self.path) {
             Ok(metadata) => metadata.len(),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
@@ -442,7 +517,7 @@ impl EventStream {
                 .insert(stored.event.id, self.events.len());
             self.events.push(stored);
         }
-        self.broker_state = BrokerState::rebuild(&self.events);
+        self.rebuild_broker_state()?;
         let bytes_after = match fs::metadata(&self.path) {
             Ok(metadata) => metadata.len(),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
@@ -458,11 +533,12 @@ impl EventStream {
         &mut self,
         mut retain: impl FnMut(&mut Event) -> bool,
     ) -> Result<(u64, u64)> {
+        self.check_durability()?;
         self.events.retain_mut(|stored| retain(&mut stored.event));
         let result = self.compact();
         match result {
             Ok(report) => {
-                self.broker_state = BrokerState::rebuild(&self.events);
+                self.rebuild_broker_state()?;
                 Ok(report)
             }
             Err(error) => {
@@ -478,7 +554,9 @@ impl EventStream {
                 ) {
                     self.events = recovered.events;
                     self.event_indexes = recovered.event_indexes;
-                    self.broker_state = recovered.broker_state;
+                    let mut state = recovered.broker_state;
+                    state.preserve_recovery_protection(&self.broker_state, &self.event_indexes);
+                    self.broker_state = state;
                 }
                 Err(error)
             }
@@ -490,6 +568,7 @@ impl EventStream {
     }
 
     pub(crate) fn compact(&mut self) -> Result<(u64, u64)> {
+        self.check_durability()?;
         let bytes_before = match fs::metadata(&self.path) {
             Ok(metadata) => metadata.len(),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
@@ -538,7 +617,9 @@ impl EventStream {
     }
 
     fn append_event(&mut self, event: Event) -> Result<(StoredEvent, bool)> {
+        self.check_durability()?;
         validate_event(&event)?;
+        self.broker_state.validate_event(&event)?;
         if let Some(index) = self.event_indexes.get(&event.id).copied() {
             return Ok((self.events[index].clone(), false));
         }
@@ -564,7 +645,7 @@ impl EventStream {
         self.event_indexes
             .insert(stored.event.id, self.events.len());
         self.events.push(stored.clone());
-        self.broker_state.apply(&stored);
+        self.broker_state.apply(&stored)?;
         Ok((stored, true))
     }
 
@@ -576,7 +657,13 @@ impl EventStream {
             }
 
             match &subscriber.kind {
-                SubscriberKind::Sync(handler) => handler(event),
+                SubscriberKind::Sync(handler) => {
+                    let result = self.checked_snapshot(|_| event.clone());
+                    if result.is_err() {
+                        closed.push(subscriber.id);
+                    }
+                    handler(result);
+                }
                 SubscriberKind::Async(sender) => {
                     if sender.send(event.clone()).is_err() {
                         closed.push(subscriber.id);
@@ -591,9 +678,10 @@ impl EventStream {
         }
     }
 
-    fn consume_queue(&mut self, queue: &str, max_messages: usize) -> Vec<StoredEvent> {
+    fn consume_queue(&mut self, queue: &str, max_messages: usize) -> Result<Vec<StoredEvent>> {
+        self.check_durability()?;
         if max_messages == 0 {
-            return Vec::new();
+            return Ok(Vec::new());
         }
 
         let stream = queue_stream(queue);
@@ -610,12 +698,13 @@ impl EventStream {
             .cloned()
             .collect::<Vec<_>>();
 
+        self.check_durability()?;
         if let Some(last) = messages.last() {
             self.queue_offsets
                 .insert(queue.to_string(), last.offset.saturating_add(1));
         }
 
-        messages
+        Ok(messages)
     }
 }
 
@@ -627,7 +716,7 @@ impl EventQueue<'_> {
     }
 
     pub fn consume(&mut self, max_messages: usize) -> Result<Vec<StoredEvent>> {
-        Ok(self.stream.consume_queue(&self.name, max_messages))
+        self.stream.consume_queue(&self.name, max_messages)
     }
 }
 

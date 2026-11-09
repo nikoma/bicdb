@@ -29,7 +29,7 @@
 //! - `attempts` counts deliveries. When a redelivery would exceed the
 //!   message's `max_attempts`, the message is dead-lettered instead.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -462,6 +462,29 @@ pub(crate) struct BrokerState {
     idempotency: HashMap<(String, String), (Uuid, u64)>,
     /// queue -> durable configuration (latest write wins)
     configs: HashMap<String, QueueConfig>,
+    // Retention must not erase the identity of a transactional publication
+    // whose decision can still be replayed from the transaction log.
+    trimmed_outbox: HashMap<String, BTreeMap<Uuid, u64>>,
+    legacy_trimmed: HashSet<String>,
+    // Old retained messages lack the persisted transactional metadata bit.
+    // Recovery identifies those messages before exposing the broker. Keep
+    // this bounded; if it overflows, trimming safely refuses until reopen.
+    legacy_prepared: HashSet<Uuid>,
+    legacy_prepared_overflow: bool,
+    // A transaction can deduplicate onto a different message UUID through an
+    // idempotency key. Until retention durably records that alias, recovery
+    // reconstructs it from the retained original message and transaction log.
+    outbox_aliases: HashMap<Uuid, (String, Uuid, u64)>,
+}
+
+const MAX_OUTBOX_RECEIPTS: usize = 65_536;
+
+fn outbox_corruption(message: String) -> BicDbError {
+    BicDbError::Corruption {
+        path: std::path::PathBuf::from(crate::event::DEFAULT_EVENTS_DIR)
+            .join(crate::event::DEFAULT_EVENTS_SEGMENT),
+        message,
+    }
 }
 
 /// Where a broker operation came from.
@@ -486,20 +509,95 @@ pub enum BrokerCaller<'a> {
 }
 
 impl BrokerState {
+    pub(crate) fn validate_event(&self, event: &Event) -> Result<()> {
+        if event.event_type != QUEUE_TRIMMED_EVENT
+            || !event.stream.starts_with(BROKER_STREAM_PREFIX)
+        {
+            return Ok(());
+        }
+        let Some(raw) = event.payload.get("outbox_receipts") else {
+            return Ok(()); // Legacy trim: handled conservatively by recovery.
+        };
+        let receipts = raw
+            .as_array()
+            .ok_or_else(|| outbox_corruption("broker trim has malformed outbox receipts".into()))?;
+        if receipts.len() > MAX_OUTBOX_RECEIPTS {
+            return Err(outbox_corruption(
+                "broker outbox receipt limit exceeded".into(),
+            ));
+        }
+        let queue = event
+            .payload
+            .get("queue")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let existing = self.trimmed_outbox.get(queue);
+        let mut added = HashSet::new();
+        for receipt in receipts {
+            let id = receipt
+                .get(0)
+                .and_then(Value::as_str)
+                .and_then(|id| Uuid::parse_str(id).ok());
+            let sequence = receipt.get(1).and_then(Value::as_u64);
+            let (Some(id), Some(sequence)) = (id, sequence) else {
+                return Err(outbox_corruption(
+                    "broker trim has malformed outbox receipt".into(),
+                ));
+            };
+            if let Some(original) = existing.and_then(|known| known.get(&id)) {
+                if *original != sequence {
+                    return Err(outbox_corruption(
+                        "broker outbox receipt sequence changed".into(),
+                    ));
+                }
+            } else {
+                added.insert(id);
+            }
+        }
+        let total: usize = self.trimmed_outbox.values().map(BTreeMap::len).sum();
+        if total.saturating_add(added.len()) > MAX_OUTBOX_RECEIPTS {
+            return Err(outbox_corruption(
+                "broker outbox receipt limit exceeded".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn preserve_recovery_protection(
+        &mut self,
+        previous: &Self,
+        event_indexes: &HashMap<Uuid, usize>,
+    ) {
+        self.legacy_prepared = previous
+            .legacy_prepared
+            .iter()
+            .filter(|id| event_indexes.contains_key(id))
+            .copied()
+            .collect();
+        self.legacy_prepared_overflow = previous.legacy_prepared_overflow;
+        self.outbox_aliases = previous
+            .outbox_aliases
+            .iter()
+            .filter(|(_, (_, original, _))| event_indexes.contains_key(original))
+            .map(|(id, receipt)| (*id, receipt.clone()))
+            .collect();
+    }
+
     /// Replays the ordered event log into broker state. Used at open; the
     /// live paths apply the same transitions incrementally as they append.
-    pub(crate) fn rebuild(events: &[StoredEvent]) -> Self {
+    pub(crate) fn rebuild(events: &[StoredEvent]) -> Result<Self> {
         let mut state = Self::default();
         for stored in events {
-            state.apply(stored);
+            state.apply(stored)?;
         }
-        state
+        Ok(state)
     }
 
     /// Applies one appended event to the projection. Must stay in lockstep
     /// with what the `Broker` methods append so that replay reproduces the
     /// live state exactly.
-    pub(crate) fn apply(&mut self, stored: &StoredEvent) {
+    pub(crate) fn apply(&mut self, stored: &StoredEvent) -> Result<()> {
+        self.validate_event(&stored.event)?;
         let event = &stored.event;
         if let Some(queue) = event.stream.strip_prefix("queue:") {
             if event.event_type == QUEUE_MESSAGE_EVENT {
@@ -516,18 +614,34 @@ impl BrokerState {
                         .or_insert((event.id, sequence));
                 }
             }
-            return;
+            return Ok(());
         }
         if !event.stream.starts_with(BROKER_STREAM_PREFIX) {
-            return;
+            return Ok(());
         }
         let payload = &event.payload;
         let Some(queue) = payload.get("queue").and_then(Value::as_str) else {
-            return;
+            return Ok(());
         };
         // Queue-level control events carry no group.
         match event.event_type.as_str() {
             QUEUE_TRIMMED_EVENT => {
+                if let Some(receipts) = payload.get("outbox_receipts").and_then(Value::as_array) {
+                    let known = self.trimmed_outbox.entry(queue.to_string()).or_default();
+                    for receipt in receipts {
+                        if let (Some(id), Some(sequence)) = (
+                            receipt
+                                .get(0)
+                                .and_then(Value::as_str)
+                                .and_then(|id| Uuid::parse_str(id).ok()),
+                            receipt.get(1).and_then(Value::as_u64),
+                        ) {
+                            known.insert(id, sequence);
+                        }
+                    }
+                } else {
+                    self.legacy_trimmed.insert(queue.to_string());
+                }
                 let through = payload
                     .get("through_sequence")
                     .and_then(Value::as_u64)
@@ -540,19 +654,19 @@ impl BrokerState {
                         group_state.apply_trim(through);
                     }
                 }
-                return;
+                return Ok(());
             }
             QUEUE_CONFIGURED_EVENT => {
                 self.configs.insert(
                     queue.to_string(),
                     queue_config_from_json(payload.get("config").unwrap_or(&Value::Null)),
                 );
-                return;
+                return Ok(());
             }
             _ => {}
         }
         let Some(group) = payload.get("group").and_then(Value::as_str) else {
-            return;
+            return Ok(());
         };
         match event.event_type.as_str() {
             GROUP_CREATED_EVENT => {
@@ -579,7 +693,7 @@ impl BrokerState {
             }
             DELIVERED_EVENT => {
                 let Some(state) = self.group_mut(queue, group) else {
-                    return;
+                    return Ok(());
                 };
                 let consumer_id = payload
                     .get("consumer_id")
@@ -642,10 +756,10 @@ impl BrokerState {
             }
             NACKED_EVENT => {
                 let Some(state) = self.group_mut(queue, group) else {
-                    return;
+                    return Ok(());
                 };
                 let Some(message_id) = payload_message_id(payload) else {
-                    return;
+                    return Ok(());
                 };
                 if let Some(delivery) = state.deliveries.get_mut(&message_id) {
                     delivery.status = DeliveryStatus::Available {
@@ -676,7 +790,7 @@ impl BrokerState {
             }
             REDRIVEN_EVENT => {
                 let Some(state) = self.group_mut(queue, group) else {
-                    return;
+                    return Ok(());
                 };
                 for id in payload
                     .get("dlq_event_ids")
@@ -690,6 +804,7 @@ impl BrokerState {
             }
             _ => {}
         }
+        Ok(())
     }
 
     fn group_mut(&mut self, queue: &str, group: &str) -> Option<&mut GroupState> {
@@ -828,6 +943,75 @@ pub struct Broker<'a> {
 }
 
 impl<'a> Broker<'a> {
+    pub(crate) fn outbox_receipt_ids(&self) -> HashSet<Uuid> {
+        self.stream
+            .broker_state
+            .trimmed_outbox
+            .values()
+            .flat_map(|known| known.keys().copied())
+            .collect()
+    }
+
+    pub(crate) fn outbox_recovery_ids(&self) -> HashSet<Uuid> {
+        let mut ids = self.outbox_receipt_ids();
+        ids.extend(self.stream.broker_state.legacy_prepared.iter().copied());
+        ids.extend(self.stream.broker_state.outbox_aliases.keys().copied());
+        ids
+    }
+
+    /// `retained` is established by complete recovery, or is empty after a
+    /// durable full transaction-log cut under exclusive commit admission.
+    /// Never infer it from the last broker sequence: publications can arrive
+    /// in a different order from the transactions' commit sequences.
+    pub(crate) fn prune_outbox_receipts(&mut self, retained: &HashSet<Uuid>) -> Result<()> {
+        self.stream
+            .broker_state
+            .legacy_prepared
+            .retain(|id| retained.contains(id));
+        self.stream
+            .broker_state
+            .outbox_aliases
+            .retain(|id, _| retained.contains(id));
+        if retained.is_empty() {
+            self.stream.broker_state.legacy_prepared_overflow = false;
+        }
+        let state = &self.stream.broker_state;
+        if state.legacy_trimmed.is_empty()
+            && state
+                .trimmed_outbox
+                .values()
+                .all(|known| known.keys().all(|id| retained.contains(id)))
+        {
+            return Ok(());
+        }
+        self.stream.rewrite_events_in_place(|event| {
+            if event.event_type == QUEUE_TRIMMED_EVENT
+                && event.stream.starts_with(BROKER_STREAM_PREFIX)
+            {
+                let receipts = event
+                    .payload
+                    .get("outbox_receipts")
+                    .and_then(Value::as_array)
+                    .map(|raw| {
+                        raw.iter()
+                            .filter(|receipt| {
+                                receipt
+                                    .get(0)
+                                    .and_then(Value::as_str)
+                                    .and_then(|id| Uuid::parse_str(id).ok())
+                                    .is_some_and(|id| retained.contains(&id))
+                            })
+                            .cloned()
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                event.payload["outbox_receipts"] = Value::Array(receipts);
+            }
+            true
+        })?;
+        Ok(())
+    }
+
     pub(crate) fn new(stream: &'a mut EventStream) -> Self {
         Self { stream }
     }
@@ -839,6 +1023,7 @@ impl<'a> Broker<'a> {
         payload: Value,
         headers: Value,
     ) -> Result<PublishReceipt> {
+        self.stream.check_durability()?;
         self.publish_with(
             queue,
             payload,
@@ -858,6 +1043,7 @@ impl<'a> Broker<'a> {
         payload: Value,
         options: PublishOptions,
     ) -> Result<PublishReceipt> {
+        self.stream.check_durability()?;
         self.publish_inner(queue, payload, options, None)
     }
 
@@ -868,6 +1054,93 @@ impl<'a> Broker<'a> {
         &mut self,
         pending: &PendingBrokerPublish,
     ) -> Result<PublishReceipt> {
+        if let Some(sequence) = self
+            .stream
+            .broker_state
+            .trimmed_outbox
+            .get(&pending.queue)
+            .and_then(|known| known.get(&pending.message_id))
+        {
+            return Ok(PublishReceipt {
+                message_id: pending.message_id,
+                sequence: *sequence,
+                deduplicated: true,
+            });
+        }
+        if let Some(key) = pending.options.idempotency_key.as_ref() {
+            if let Some(&(original, sequence)) = self
+                .stream
+                .broker_state
+                .idempotency
+                .get(&(pending.queue.clone(), key.clone()))
+            {
+                if original != pending.message_id {
+                    let state = &mut self.stream.broker_state;
+                    if state.legacy_prepared.contains(&pending.message_id)
+                        || state.outbox_aliases.contains_key(&pending.message_id)
+                        || state
+                            .legacy_prepared
+                            .len()
+                            .saturating_add(state.outbox_aliases.len())
+                            < MAX_OUTBOX_RECEIPTS
+                    {
+                        state.outbox_aliases.insert(
+                            pending.message_id,
+                            (pending.queue.clone(), original, sequence),
+                        );
+                    } else {
+                        state.legacy_prepared_overflow = true;
+                    }
+                    return Ok(PublishReceipt {
+                        message_id: original,
+                        sequence,
+                        deduplicated: true,
+                    });
+                }
+            }
+        }
+        if let Some(event) = self.stream.event_by_id(&pending.message_id) {
+            let marked = broker_meta(&event.event.metadata)
+                .and_then(|meta| meta.get("transactional_outbox"))
+                .and_then(Value::as_bool)
+                == Some(true);
+            if !marked {
+                let state = &mut self.stream.broker_state;
+                if state.legacy_prepared.contains(&pending.message_id)
+                    || state.outbox_aliases.contains_key(&pending.message_id)
+                    || state
+                        .legacy_prepared
+                        .len()
+                        .saturating_add(state.outbox_aliases.len())
+                        < MAX_OUTBOX_RECEIPTS
+                {
+                    state.legacy_prepared.insert(pending.message_id);
+                } else {
+                    state.legacy_prepared_overflow = true;
+                }
+            }
+        } else if self
+            .stream
+            .broker_state
+            .legacy_trimmed
+            .contains(&pending.queue)
+            && !pending.options.idempotency_key.as_ref().is_some_and(|key| {
+                self.stream
+                    .broker_state
+                    .idempotency
+                    .contains_key(&(pending.queue.clone(), key.clone()))
+            })
+        {
+            // Older trim markers erased publication identities. The retained
+            // decision alone cannot distinguish a missing publication from a
+            // previously delivered-and-trimmed message. Refuse the ambiguous
+            // recovery instead of publishing the business event twice.
+            return Err(outbox_corruption(format!(
+                "broker outbox {} in queue {} has an ambiguous legacy trim; \
+                 publication requires independent evidence or restore",
+                pending.message_id, pending.queue
+            )));
+        }
         self.publish_inner(
             &pending.queue,
             pending.payload.clone(),
@@ -883,6 +1156,7 @@ impl<'a> Broker<'a> {
         options: PublishOptions,
         prepared_id: Option<Uuid>,
     ) -> Result<PublishReceipt> {
+        self.stream.check_durability()?;
         validate_broker_name("queue", queue)?;
         if let Some(key) = options.idempotency_key.as_deref() {
             if let Some(&(message_id, sequence)) = self
@@ -923,6 +1197,9 @@ impl<'a> Broker<'a> {
             "available_at_ms": available_at,
             "max_attempts": max_attempts,
         });
+        if prepared_id.is_some() {
+            broker_meta["transactional_outbox"] = Value::Bool(true);
+        }
         if let Some(key) = options.idempotency_key.as_deref() {
             broker_meta["idempotency_key"] = Value::String(key.to_string());
         }
@@ -963,6 +1240,7 @@ impl<'a> Broker<'a> {
         consumer_id: &str,
         options: ConsumeOptions,
     ) -> Result<Vec<BrokerMessage>> {
+        self.stream.check_durability()?;
         validate_broker_name("queue", queue)?;
         validate_broker_name("group", group)?;
         validate_broker_name("consumer", consumer_id)?;
@@ -1123,6 +1401,7 @@ impl<'a> Broker<'a> {
         consumer_id: &str,
         message_id: Uuid,
     ) -> Result<()> {
+        self.stream.check_durability()?;
         self.check_in_flight(queue, group, consumer_id, message_id)?;
         let sequence = self
             .stream
@@ -1148,6 +1427,7 @@ impl<'a> Broker<'a> {
     /// Settle exactly this delivery attempt. A stale worker cannot acknowledge
     /// a later attempt, even when a replacement reuses its consumer name.
     pub fn ack_delivery(&mut self, consumer_id: &str, message: &BrokerMessage) -> Result<()> {
+        self.stream.check_durability()?;
         self.validate_delivery(consumer_id, message)?;
         self.ack(
             &message.queue,
@@ -1164,6 +1444,7 @@ impl<'a> Broker<'a> {
         message: &BrokerMessage,
         options: NackOptions,
     ) -> Result<()> {
+        self.stream.check_durability()?;
         self.validate_delivery(consumer_id, message)?;
         self.nack(
             &message.queue,
@@ -1176,6 +1457,7 @@ impl<'a> Broker<'a> {
 
     /// Validate ownership, exact attempt and unexpired lease without settling.
     pub fn validate_delivery(&self, consumer_id: &str, message: &BrokerMessage) -> Result<()> {
+        self.stream.check_durability()?;
         self.check_in_flight(
             &message.queue,
             &message.group,
@@ -1265,7 +1547,7 @@ impl<'a> Broker<'a> {
     }
 
     /// Dead-lettered message copies for one group, oldest first.
-    pub fn dead_letters(&self, queue: &str, group: &str) -> Vec<StoredEvent> {
+    pub fn dead_letters(&self, queue: &str, group: &str) -> Result<Vec<StoredEvent>> {
         self.stream.read(&dlq_stream(queue, group))
     }
 
@@ -1275,49 +1557,54 @@ impl<'a> Broker<'a> {
         &self,
         queue: &str,
         group: &str,
-    ) -> std::collections::BTreeMap<Uuid, u32> {
-        let stream = dlq_stream(queue, group);
-        let mut attempts = std::collections::BTreeMap::<Uuid, u32>::new();
-        for stored in self.stream.stored_events() {
-            if stored.event.stream != stream || stored.event.event_type != DEAD_LETTER_MESSAGE_EVENT
-            {
-                continue;
+    ) -> Result<std::collections::BTreeMap<Uuid, u32>> {
+        self.stream.checked_snapshot(|_| {
+            let stream = dlq_stream(queue, group);
+            let mut attempts = std::collections::BTreeMap::<Uuid, u32>::new();
+            for stored in self.stream.stored_events() {
+                if stored.event.stream != stream
+                    || stored.event.event_type != DEAD_LETTER_MESSAGE_EVENT
+                {
+                    continue;
+                }
+                let metadata = &stored.event.metadata["broker"];
+                let Some(id) = metadata["original_message_id"]
+                    .as_str()
+                    .and_then(|id| Uuid::parse_str(id).ok())
+                else {
+                    continue;
+                };
+                let attempt = metadata["attempts"]
+                    .as_u64()
+                    .and_then(|value| u32::try_from(value).ok())
+                    .unwrap_or(1);
+                let previous = attempts.entry(id).or_default();
+                *previous = (*previous).max(attempt);
             }
-            let metadata = &stored.event.metadata["broker"];
-            let Some(id) = metadata["original_message_id"]
-                .as_str()
-                .and_then(|id| Uuid::parse_str(id).ok())
-            else {
-                continue;
-            };
-            let attempt = metadata["attempts"]
-                .as_u64()
-                .and_then(|value| u32::try_from(value).ok())
-                .unwrap_or(1);
-            let previous = attempts.entry(id).or_default();
-            *previous = (*previous).max(attempt);
-        }
-        attempts
+            attempts
+        })
     }
 
     /// Durable state summary for one consumer group, if it exists.
-    pub fn group_info(&self, queue: &str, group: &str) -> Option<ConsumerGroupInfo> {
-        let state = self.stream.broker_state.group(queue, group)?;
-        let mut in_flight = 0;
-        let mut pending = 0;
-        for delivery in state.deliveries.values() {
-            match delivery.status {
-                DeliveryStatus::InFlight { .. } => in_flight += 1,
-                DeliveryStatus::Available { .. } => pending += 1,
+    pub fn group_info(&self, queue: &str, group: &str) -> Result<Option<ConsumerGroupInfo>> {
+        self.stream.checked_snapshot(|_| {
+            let state = self.stream.broker_state.group(queue, group)?;
+            let mut in_flight = 0;
+            let mut pending = 0;
+            for delivery in state.deliveries.values() {
+                match delivery.status {
+                    DeliveryStatus::InFlight { .. } => in_flight += 1,
+                    DeliveryStatus::Available { .. } => pending += 1,
+                }
             }
-        }
-        Some(ConsumerGroupInfo {
-            queue: queue.to_string(),
-            group: group.to_string(),
-            created_at: state.created_at,
-            last_delivered_sequence: state.next_sequence.checked_sub(1),
-            in_flight,
-            pending_redelivery: pending,
+            Some(ConsumerGroupInfo {
+                queue: queue.to_string(),
+                group: group.to_string(),
+                created_at: state.created_at,
+                last_delivered_sequence: state.next_sequence.checked_sub(1),
+                in_flight,
+                pending_redelivery: pending,
+            })
         })
     }
 
@@ -1338,6 +1625,7 @@ impl<'a> Broker<'a> {
     where
         F: FnMut(&BrokerMessage) -> std::result::Result<(), String>,
     {
+        self.stream.check_durability()?;
         let mut report = DrainReport::default();
         let batch_size = options.batch_size.max(1);
         loop {
@@ -1391,67 +1679,71 @@ impl<'a> Broker<'a> {
     /// Whether a consume call for this group would hand out at least one
     /// message right now. Cheap poll for worker loops. A group that does not
     /// exist yet is deliverable when the queue retains any available message.
-    pub fn has_deliverable(&self, queue: &str, group: &str) -> bool {
-        let now = now_ms();
-        let state = &self.stream.broker_state;
-        let Some(messages) = state.queues.get(queue) else {
-            return false;
-        };
-        let group_state = state.group(queue, group);
-        if let Some(group_state) = group_state {
-            let due = group_state
-                .deliveries
-                .values()
-                .any(|delivery| match delivery.status {
-                    DeliveryStatus::Available { available_at } => available_at <= now,
-                    DeliveryStatus::InFlight {
-                        visibility_deadline,
-                    } => visibility_deadline <= now,
-                });
-            if due {
-                return true;
+    pub fn has_deliverable(&self, queue: &str, group: &str) -> Result<bool> {
+        self.stream.checked_snapshot(|_| {
+            let now = now_ms();
+            let state = &self.stream.broker_state;
+            let Some(messages) = state.queues.get(queue) else {
+                return false;
+            };
+            let group_state = state.group(queue, group);
+            if let Some(group_state) = group_state {
+                let due = group_state
+                    .deliveries
+                    .values()
+                    .any(|delivery| match delivery.status {
+                        DeliveryStatus::Available { available_at } => available_at <= now,
+                        DeliveryStatus::InFlight {
+                            visibility_deadline,
+                        } => visibility_deadline <= now,
+                    });
+                if due {
+                    return true;
+                }
             }
-        }
-        let cursor = group_state.map(|state| state.next_sequence).unwrap_or(0);
-        let start = messages
-            .entries
-            .partition_point(|(sequence, _)| *sequence < cursor);
-        // Head-of-line semantics: only the first undelivered message counts.
-        messages.entries.get(start).is_some_and(|(_, message_id)| {
-            self.stream
-                .event_by_id(message_id)
-                .is_some_and(|stored| message_fields(&stored.event).available_at <= now)
+            let cursor = group_state.map(|state| state.next_sequence).unwrap_or(0);
+            let start = messages
+                .entries
+                .partition_point(|(sequence, _)| *sequence < cursor);
+            // Head-of-line semantics: only the first undelivered message counts.
+            messages.entries.get(start).is_some_and(|(_, message_id)| {
+                self.stream
+                    .event_by_id(message_id)
+                    .is_some_and(|stored| message_fields(&stored.event).available_at <= now)
+            })
         })
     }
 
     /// Read-only view of up to `max` retained messages of `queue` starting
     /// at `from_sequence` (ascending). Never delivers: group cursors,
     /// visibility, and attempt counters are untouched — observability only.
-    pub fn peek(&self, queue: &str, from_sequence: u64, max: usize) -> Vec<PeekedMessage> {
-        let Some(messages) = self.stream.broker_state.queues.get(queue) else {
-            return Vec::new();
-        };
-        let start = messages
-            .entries
-            .partition_point(|(sequence, _)| *sequence < from_sequence);
-        messages.entries[start..]
-            .iter()
-            .take(max)
-            .filter_map(|(sequence, message_id)| {
-                let stored = self.stream.event_by_id(message_id)?;
-                let fields = message_fields(&stored.event);
-                Some(PeekedMessage {
-                    sequence: *sequence,
-                    message_id: *message_id,
-                    payload: stored.event.payload.clone(),
-                    headers: fields.headers,
-                    idempotency_key: fields.idempotency_key,
-                    created_at: fields.created_at,
-                    available_at: fields.available_at,
-                    max_attempts: fields.max_attempts,
+    pub fn peek(&self, queue: &str, from_sequence: u64, max: usize) -> Result<Vec<PeekedMessage>> {
+        self.stream.checked_snapshot(|_| {
+            let Some(messages) = self.stream.broker_state.queues.get(queue) else {
+                return Vec::new();
+            };
+            let start = messages
+                .entries
+                .partition_point(|(sequence, _)| *sequence < from_sequence);
+            messages.entries[start..]
+                .iter()
+                .take(max)
+                .filter_map(|(sequence, message_id)| {
+                    let stored = self.stream.event_by_id(message_id)?;
+                    let fields = message_fields(&stored.event);
+                    Some(PeekedMessage {
+                        sequence: *sequence,
+                        message_id: *message_id,
+                        payload: stored.event.payload.clone(),
+                        headers: fields.headers,
+                        idempotency_key: fields.idempotency_key,
+                        created_at: fields.created_at,
+                        available_at: fields.available_at,
+                        max_attempts: fields.max_attempts,
+                    })
                 })
-            })
-            .collect()
+                .collect()
+        })
     }
 
     /// Bounded read-only export of retained messages and their exact group
@@ -1465,155 +1757,159 @@ impl<'a> Broker<'a> {
         max: usize,
         max_bytes: usize,
     ) -> Result<Vec<BrokerDeliverySnapshot>> {
-        if max == 0 || max > 1024 || max_bytes == 0 || max_bytes > 64 * 1024 * 1024 {
-            return Err(BicDbError::Broker(
-                "invalid delivery snapshot bounds".into(),
-            ));
-        }
-        struct Count {
-            bytes: usize,
-            limit: usize,
-        }
-        impl std::io::Write for Count {
-            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-                if self.bytes.saturating_add(bytes.len()) > self.limit {
-                    return Err(std::io::Error::other("delivery snapshot byte limit"));
-                }
-                self.bytes += bytes.len();
-                Ok(bytes.len())
+        self.stream.checked_snapshot(|_| {
+            if max == 0 || max > 1024 || max_bytes == 0 || max_bytes > 64 * 1024 * 1024 {
+                return Err(BicDbError::Broker(
+                    "invalid delivery snapshot bounds".into(),
+                ));
             }
-            fn flush(&mut self) -> std::io::Result<()> {
-                Ok(())
+            struct Count {
+                bytes: usize,
+                limit: usize,
             }
-        }
-        let Some(messages) = self.stream.broker_state.queues.get(queue) else {
-            return Ok(Vec::new());
-        };
-        let state = self.stream.broker_state.group(queue, group);
-        let start = messages
-            .entries
-            .partition_point(|(sequence, _)| *sequence < from_sequence);
-        let mut result = Vec::new();
-        let mut remaining = max_bytes;
-        for (sequence, message_id) in messages.entries[start..].iter().take(max) {
-            let Some(stored) = self.stream.event_by_id(message_id) else {
-                continue;
-            };
-            // Count before cloning a potentially large payload. Reserve room
-            // for group delivery metadata in addition to the serialized event.
-            let mut counter = Count {
-                bytes: 0,
-                limit: remaining.saturating_sub(1024),
-            };
-            if serde_json::to_writer(&mut counter, &stored.event).is_err() || remaining < 1024 {
-                if result.is_empty() {
-                    return Err(BicDbError::Broker(
-                        "one retained message exceeds the delivery snapshot byte limit".into(),
-                    ));
-                }
-                break;
-            }
-            remaining -= counter.bytes + 1024;
-            let fields = message_fields(&stored.event);
-            let message = PeekedMessage {
-                sequence: *sequence,
-                message_id: *message_id,
-                payload: stored.event.payload.clone(),
-                headers: fields.headers,
-                idempotency_key: fields.idempotency_key,
-                created_at: fields.created_at,
-                available_at: fields.available_at,
-                max_attempts: fields.max_attempts,
-            };
-            let delivery = state.and_then(|group| group.deliveries.get(message_id));
-            let status = match delivery {
-                Some(delivery) => match delivery.status {
-                    DeliveryStatus::InFlight {
-                        visibility_deadline,
-                    } => BrokerDeliveryState::InFlight {
-                        consumer: delivery.consumer_id.clone(),
-                        visibility_deadline,
-                    },
-                    DeliveryStatus::Available { available_at } => {
-                        BrokerDeliveryState::Available { available_at }
+            impl std::io::Write for Count {
+                fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                    if self.bytes.saturating_add(bytes.len()) > self.limit {
+                        return Err(std::io::Error::other("delivery snapshot byte limit"));
                     }
-                },
-                None if state.is_some_and(|group| *sequence < group.next_sequence) => {
-                    BrokerDeliveryState::Settled
+                    self.bytes += bytes.len();
+                    Ok(bytes.len())
                 }
-                None => BrokerDeliveryState::Unseen,
+                fn flush(&mut self) -> std::io::Result<()> {
+                    Ok(())
+                }
+            }
+            let Some(messages) = self.stream.broker_state.queues.get(queue) else {
+                return Ok(Vec::new());
             };
-            result.push(BrokerDeliverySnapshot {
-                message,
-                attempts: delivery.map_or(0, |d| d.attempts),
-                delivered_at: delivery.map_or(0, |d| d.delivered_at),
-                state: status,
-            });
-        }
-        Ok(result)
+            let state = self.stream.broker_state.group(queue, group);
+            let start = messages
+                .entries
+                .partition_point(|(sequence, _)| *sequence < from_sequence);
+            let mut result = Vec::new();
+            let mut remaining = max_bytes;
+            for (sequence, message_id) in messages.entries[start..].iter().take(max) {
+                let Some(stored) = self.stream.event_by_id(message_id) else {
+                    continue;
+                };
+                // Count before cloning a potentially large payload. Reserve room
+                // for group delivery metadata in addition to the serialized event.
+                let mut counter = Count {
+                    bytes: 0,
+                    limit: remaining.saturating_sub(1024),
+                };
+                if serde_json::to_writer(&mut counter, &stored.event).is_err() || remaining < 1024 {
+                    if result.is_empty() {
+                        return Err(BicDbError::Broker(
+                            "one retained message exceeds the delivery snapshot byte limit".into(),
+                        ));
+                    }
+                    break;
+                }
+                remaining -= counter.bytes + 1024;
+                let fields = message_fields(&stored.event);
+                let message = PeekedMessage {
+                    sequence: *sequence,
+                    message_id: *message_id,
+                    payload: stored.event.payload.clone(),
+                    headers: fields.headers,
+                    idempotency_key: fields.idempotency_key,
+                    created_at: fields.created_at,
+                    available_at: fields.available_at,
+                    max_attempts: fields.max_attempts,
+                };
+                let delivery = state.and_then(|group| group.deliveries.get(message_id));
+                let status = match delivery {
+                    Some(delivery) => match delivery.status {
+                        DeliveryStatus::InFlight {
+                            visibility_deadline,
+                        } => BrokerDeliveryState::InFlight {
+                            consumer: delivery.consumer_id.clone(),
+                            visibility_deadline,
+                        },
+                        DeliveryStatus::Available { available_at } => {
+                            BrokerDeliveryState::Available { available_at }
+                        }
+                    },
+                    None if state.is_some_and(|group| *sequence < group.next_sequence) => {
+                        BrokerDeliveryState::Settled
+                    }
+                    None => BrokerDeliveryState::Unseen,
+                };
+                result.push(BrokerDeliverySnapshot {
+                    message,
+                    attempts: delivery.map_or(0, |d| d.attempts),
+                    delivered_at: delivery.map_or(0, |d| d.delivered_at),
+                    state: status,
+                });
+            }
+            Ok(result)
+        })?
     }
 
     /// Point-in-time snapshot of every queue and group the broker knows
     /// about, for dashboards and health checks.
-    pub fn stats(&self) -> BrokerStats {
-        let state = &self.stream.broker_state;
-        let mut queues: Vec<QueueStats> = state
-            .queues
-            .iter()
-            .map(|(queue, messages)| {
-                let mut groups: Vec<GroupStats> = state
-                    .groups
-                    .get(queue)
-                    .into_iter()
-                    .flatten()
-                    .map(|(group, group_state)| {
-                        let lag = messages
-                            .entries
-                            .partition_point(|(sequence, _)| *sequence < group_state.next_sequence);
-                        GroupStats {
-                            group: group.clone(),
-                            created_at: group_state.created_at,
-                            last_delivered_sequence: group_state.next_sequence.checked_sub(1),
-                            in_flight: group_state
-                                .deliveries
-                                .values()
-                                .filter(|delivery| {
-                                    matches!(delivery.status, DeliveryStatus::InFlight { .. })
-                                })
-                                .count(),
-                            pending_redelivery: group_state
-                                .deliveries
-                                .values()
-                                .filter(|delivery| {
-                                    matches!(delivery.status, DeliveryStatus::Available { .. })
-                                })
-                                .count(),
-                            settled_floor: group_state.settled_floor,
-                            lag: messages.entries.len() - lag,
-                            dead_letters: self
-                                .stream
-                                .stored_events()
-                                .iter()
-                                .filter(|stored| {
-                                    stored.event.stream == dlq_stream(queue, group)
-                                        && stored.event.event_type == DEAD_LETTER_MESSAGE_EVENT
-                                })
-                                .count(),
-                        }
-                    })
-                    .collect();
-                groups.sort_by(|a, b| a.group.cmp(&b.group));
-                QueueStats {
-                    queue: queue.clone(),
-                    retained_messages: messages.entries.len(),
-                    next_sequence: messages.next_sequence,
-                    configured: state.configs.contains_key(queue),
-                    groups,
-                }
-            })
-            .collect();
-        queues.sort_by(|a, b| a.queue.cmp(&b.queue));
-        BrokerStats { queues }
+    pub fn stats(&self) -> Result<BrokerStats> {
+        self.stream.checked_snapshot(|_| {
+            let state = &self.stream.broker_state;
+            let mut queues: Vec<QueueStats> = state
+                .queues
+                .iter()
+                .map(|(queue, messages)| {
+                    let mut groups: Vec<GroupStats> = state
+                        .groups
+                        .get(queue)
+                        .into_iter()
+                        .flatten()
+                        .map(|(group, group_state)| {
+                            let lag = messages.entries.partition_point(|(sequence, _)| {
+                                *sequence < group_state.next_sequence
+                            });
+                            GroupStats {
+                                group: group.clone(),
+                                created_at: group_state.created_at,
+                                last_delivered_sequence: group_state.next_sequence.checked_sub(1),
+                                in_flight: group_state
+                                    .deliveries
+                                    .values()
+                                    .filter(|delivery| {
+                                        matches!(delivery.status, DeliveryStatus::InFlight { .. })
+                                    })
+                                    .count(),
+                                pending_redelivery: group_state
+                                    .deliveries
+                                    .values()
+                                    .filter(|delivery| {
+                                        matches!(delivery.status, DeliveryStatus::Available { .. })
+                                    })
+                                    .count(),
+                                settled_floor: group_state.settled_floor,
+                                lag: messages.entries.len() - lag,
+                                dead_letters: self
+                                    .stream
+                                    .stored_events()
+                                    .iter()
+                                    .filter(|stored| {
+                                        stored.event.stream == dlq_stream(queue, group)
+                                            && stored.event.event_type == DEAD_LETTER_MESSAGE_EVENT
+                                    })
+                                    .count(),
+                            }
+                        })
+                        .collect();
+                    groups.sort_by(|a, b| a.group.cmp(&b.group));
+                    QueueStats {
+                        queue: queue.clone(),
+                        retained_messages: messages.entries.len(),
+                        next_sequence: messages.next_sequence,
+                        configured: state.configs.contains_key(queue),
+                        groups,
+                    }
+                })
+                .collect();
+            queues.sort_by(|a, b| a.queue.cmp(&b.queue));
+            BrokerStats { queues }
+        })
     }
 
     /// Authorizes one access class against the queue's durable ACL.
@@ -1643,6 +1939,7 @@ impl<'a> Broker<'a> {
         access: BrokerAccess,
         caller: BrokerCaller<'_>,
     ) -> Result<()> {
+        self.stream.check_durability()?;
         let (context, superuser) = match caller {
             // The host process IS the trust boundary for the embedded API.
             BrokerCaller::TrustedHost => return Ok(()),
@@ -1691,6 +1988,7 @@ impl<'a> Broker<'a> {
 
     /// Durably sets the queue's configuration (latest write wins).
     pub fn configure_queue(&mut self, queue: &str, config: QueueConfig) -> Result<()> {
+        self.stream.check_durability()?;
         validate_broker_name("queue", queue)?;
         self.stream.append(Event::new(
             format!("{BROKER_STREAM_PREFIX}{queue}"),
@@ -1705,8 +2003,9 @@ impl<'a> Broker<'a> {
     }
 
     /// The queue's durable configuration, if one was ever set.
-    pub fn queue_config(&self, queue: &str) -> Option<QueueConfig> {
-        self.stream.broker_state.configs.get(queue).cloned()
+    pub fn queue_config(&self, queue: &str) -> Result<Option<QueueConfig>> {
+        self.stream
+            .checked_snapshot(|_| self.stream.broker_state.configs.get(queue).cloned())
     }
 
     /// Trims the queue's retained history and rewrites the segment.
@@ -1725,6 +2024,7 @@ impl<'a> Broker<'a> {
     /// their own streams and are not affected; see
     /// [`Self::purge_dead_letters`].
     pub fn trim(&mut self, queue: &str) -> Result<TrimReport> {
+        self.stream.check_durability()?;
         validate_broker_name("queue", queue)?;
         let now = now_ms();
         let state = &self.stream.broker_state;
@@ -1792,6 +2092,45 @@ impl<'a> Broker<'a> {
         if removed_ids.is_empty() {
             return Ok(TrimReport::default());
         }
+        if state.legacy_prepared_overflow {
+            return Err(BicDbError::Compaction(
+                "broker retention refused: legacy outbox tracking limit reached; checkpoint and reopen to verify retention".into(),
+            ));
+        }
+        let mut outbox_receipts = state.trimmed_outbox.get(queue).cloned().unwrap_or_default();
+        for (sequence, message_id) in messages
+            .entries
+            .iter()
+            .take_while(|(sequence, _)| *sequence <= through)
+        {
+            let transactional = state.legacy_prepared.contains(message_id)
+                || self
+                    .stream
+                    .event_by_id(message_id)
+                    .and_then(|stored| broker_meta(&stored.event.metadata))
+                    .and_then(|meta| meta.get("transactional_outbox"))
+                    .and_then(Value::as_bool)
+                    == Some(true);
+            if transactional {
+                outbox_receipts.insert(*message_id, *sequence);
+            }
+        }
+        let other_receipts: usize = state
+            .trimmed_outbox
+            .iter()
+            .filter(|(name, _)| name.as_str() != queue)
+            .map(|(_, known)| known.len())
+            .sum();
+        for (alias, (name, original, sequence)) in &state.outbox_aliases {
+            if name == queue && removed_ids.contains(original) {
+                outbox_receipts.insert(*alias, *sequence);
+            }
+        }
+        if other_receipts.saturating_add(outbox_receipts.len()) > MAX_OUTBOX_RECEIPTS {
+            return Err(BicDbError::Compaction(
+                "broker retention refused: transactional outbox receipt limit reached; checkpoint or reopen to verify log retention".into(),
+            ));
+        }
 
         // Build the surviving event list. The trim marker replaces the first
         // removed event so that on replay it applies BEFORE any surviving
@@ -1807,11 +2146,13 @@ impl<'a> Broker<'a> {
                 "queue": queue,
                 "through_sequence": through,
                 "at_ms": now,
+                "outbox_receipts": outbox_receipts.into_iter().collect::<Vec<_>>(),
             }),
         );
         let mut removed_messages = 0usize;
         let mut removed_control = 0usize;
         let mut marker_placed = false;
+        bicdb_page::test_faults::crash_point("broker.trim.before_rewrite");
         let (bytes_before, bytes_after) = self.stream.rewrite_events_in_place(|event| {
             if event.stream.starts_with(&group_prefix) {
                 if retain_trimmed_control_event(event, &removed_ids) {
@@ -1857,6 +2198,7 @@ impl<'a> Broker<'a> {
                 true
             }
         })?;
+        bicdb_page::test_faults::crash_point("broker.trim.after_rewrite");
         debug_assert!(marker_placed);
         Ok(TrimReport {
             removed_messages,
@@ -1872,6 +2214,7 @@ impl<'a> Broker<'a> {
     /// configuration are left untouched (their history is retained for
     /// future consumer groups unless [`Self::trim`] is called explicitly).
     pub fn trim_configured(&mut self) -> Result<Vec<(String, TrimReport)>> {
+        self.stream.check_durability()?;
         let queues: Vec<String> = self
             .stream
             .broker_state
@@ -1920,6 +2263,7 @@ impl<'a> Broker<'a> {
         group: &str,
         max: usize,
     ) -> Result<Vec<PublishReceipt>> {
+        self.stream.check_durability()?;
         validate_broker_name("queue", queue)?;
         validate_broker_name("group", group)?;
         if max == 0 {
@@ -1933,7 +2277,7 @@ impl<'a> Broker<'a> {
             .unwrap_or_default();
         let candidates: Vec<(Uuid, Value, Value)> = self
             .stream
-            .read(&dlq_stream(queue, group))
+            .read(&dlq_stream(queue, group))?
             .into_iter()
             .filter(|stored| stored.event.event_type == DEAD_LETTER_MESSAGE_EVENT)
             .filter(|stored| !already.contains(&stored.event.id))
@@ -1980,6 +2324,7 @@ impl<'a> Broker<'a> {
     /// from the log entirely, rewriting the segment. Returns how many dead
     /// letters were purged.
     pub fn purge_dead_letters(&mut self, queue: &str, group: &str) -> Result<usize> {
+        self.stream.check_durability()?;
         validate_broker_name("queue", queue)?;
         validate_broker_name("group", group)?;
         let dlq = dlq_stream(queue, group);
@@ -2119,5 +2464,158 @@ impl<'a> Broker<'a> {
                 "at_ms": now,
             }),
         )
+    }
+}
+
+#[cfg(test)]
+mod outbox_retention_tests {
+    use super::*;
+    use crate::{BicDb, DbConfig, StorageMode};
+
+    fn publish(db: &BicDb) -> Uuid {
+        let tx = db.begin_transaction().unwrap();
+        let id = tx
+            .buffer_broker_publish(
+                "q",
+                json!(1),
+                PublishOptions {
+                    idempotency_key: Some("unit-key".into()),
+                    ..PublishOptions::default()
+                },
+            )
+            .unwrap();
+        tx.commit().unwrap();
+        id
+    }
+
+    fn settle(db: &mut BicDb, id: Uuid) {
+        let mut broker = db.broker();
+        let batch = broker
+            .consume(
+                "q",
+                "g",
+                "w",
+                ConsumeOptions {
+                    max_messages: 10,
+                    visibility_timeout_ms: 30_000,
+                },
+            )
+            .unwrap();
+        assert_eq!(batch.len(), 1);
+        assert_eq!(batch[0].message_id, id);
+        broker.ack("q", "g", "w", id).unwrap();
+    }
+
+    #[test]
+    fn legacy_trim_without_publication_evidence_refuses_ambiguous_recovery() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let id = publish(&db);
+        settle(&mut db, id);
+        db.broker().trim("q").unwrap();
+        db.events()
+            .rewrite_events_in_place(|event| {
+                if event.event_type == QUEUE_TRIMMED_EVENT {
+                    event
+                        .payload
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("outbox_receipts");
+                }
+                true
+            })
+            .unwrap();
+        let path = db.events().path().to_path_buf();
+        let before = std::fs::read(&path).unwrap();
+        drop(db);
+        let error = match BicDb::open(root.path()) {
+            Ok(_) => panic!("legacy recovery was guessed"),
+            Err(error) => error,
+        };
+        assert!(matches!(error, BicDbError::Corruption { .. }), "{error}");
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+
+    #[test]
+    fn legacy_retained_outbox_protection_survives_other_queue_rewrites() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let id = publish(&db);
+        db.events()
+            .rewrite_events_in_place(|event| {
+                if event.id == id {
+                    event.metadata["broker"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("transactional_outbox");
+                }
+                true
+            })
+            .unwrap();
+        drop(db);
+        let mut db = BicDb::open(root.path()).unwrap();
+        let other = db.broker().publish("other", json!(2), Value::Null).unwrap();
+        db.broker()
+            .configure_queue(
+                "other",
+                QueueConfig {
+                    retention_max_messages: Some(0),
+                    ..QueueConfig::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(db.broker().trim("other").unwrap().removed_messages, 1);
+        assert!(db.broker().stream.event_by_id(&other.message_id).is_none());
+        settle(&mut db, id);
+        db.broker().trim("q").unwrap();
+        drop(db);
+        let mut db = BicDb::open(root.path()).unwrap();
+        assert!(db
+            .broker()
+            .consume(
+                "q",
+                "g",
+                "w",
+                ConsumeOptions {
+                    max_messages: 10,
+                    visibility_timeout_ms: 30_000
+                }
+            )
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn receipt_capacity_refuses_trim_before_forgetting_a_publication() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let id = publish(&db);
+        settle(&mut db, id);
+        let mut broker = db.broker();
+        let full = (0..MAX_OUTBOX_RECEIPTS)
+            .map(|n| (Uuid::from_u128(n as u128), n as u64))
+            .collect();
+        broker
+            .stream
+            .broker_state
+            .trimmed_outbox
+            .insert("full".into(), full);
+        let before = std::fs::read(broker.stream.path()).unwrap();
+        assert!(matches!(broker.trim("q"), Err(BicDbError::Compaction(_))));
+        assert_eq!(std::fs::read(broker.stream.path()).unwrap(), before);
+        assert!(broker.stream.event_by_id(&id).is_some());
+    }
+
+    #[test]
+    fn a_durable_full_log_cut_reclaims_receipt_capacity() {
+        let root = tempfile::tempdir().unwrap();
+        let config = DbConfig::default().with_storage_mode(StorageMode::ServerPaged);
+        let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+        let id = publish(&db);
+        settle(&mut db, id);
+        db.broker().trim("q").unwrap();
+        assert_eq!(db.broker().outbox_receipt_ids().len(), 1);
+        db.checkpoint_for_resume().unwrap();
+        assert!(db.broker().outbox_receipt_ids().is_empty());
     }
 }

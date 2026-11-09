@@ -2648,6 +2648,13 @@ impl TxLogHandle {
         self.health.check().map_err(crate::error::durability_error)
     }
 
+    /// Check the shared database fence without reacquiring the database lock.
+    /// Protocol delivery uses this handle while a transaction may need to
+    /// finish ahead of an already queued exclusive database writer.
+    pub fn check_recovery_state(&self) -> Result<()> {
+        self.check_health()
+    }
+
     /// Record a failed write or sync of this log and fence the database.
     fn fail(&self, site: &str, error: BicDbError) -> BicDbError {
         crate::error::durability_error(
@@ -8806,6 +8813,10 @@ pub struct Transaction {
     // transaction WAL; this in-memory copy is published to the event segment
     // only after `write_durable` succeeds.
     pending_record_audit_events: Vec<Event>,
+    // Unit-test crash emulation only: stop before the in-gate publication
+    // boundary while leaving the durable decision available for recovery.
+    #[cfg(test)]
+    skip_commit_outboxes_for_crash_test: bool,
     // Verified incoming journal entries committed with their projection.
     imported_record_audit_events: Vec<Event>,
     // Verified mesh projection: preserve the signed origin events rather than
@@ -9755,6 +9766,17 @@ impl BicDb {
         tx_recovery.last_commit_seq = tx_recovery
             .last_commit_seq
             .max(read_commit_seq_floor(&path)?);
+        // A checkpoint may have removed every frame naming an acknowledged
+        // logical transaction. Its identity must survive alongside the commit
+        // sequence: SQL txid_current() exposes this allocator, not the page
+        // store's independent MVCC xid allocator.
+        tx_recovery.next_tx_id = tx_recovery.next_tx_id.max(
+            read_transaction_id_floor(&path)?
+                .checked_add(1)
+                .ok_or_else(|| {
+                    BicDbError::FormatCompatibility("transaction id floor exhausted".to_string())
+                })?,
+        );
         // Before anything can commit in this incarnation: the evidence that
         // resolves an earlier incarnation's uncertain commits.
         let incarnation = uuid::Uuid::new_v4().to_string();
@@ -10404,19 +10426,23 @@ impl BicDb {
             encryption.clone(),
         )?;
         let recovered_broker_publishes = tx_recovery.committed_broker_publishes();
-        let mut broker_outbox_flushed = true;
         if !recovered_broker_publishes.is_empty() {
             let mut broker = events.broker();
             for pending in &recovered_broker_publishes {
-                if let Err(error) = broker.publish_prepared(pending) {
-                    broker_outbox_flushed = false;
-                    eprintln!(
-                        "bicdb: retained committed broker outbox message {} for retry: {error}",
-                        pending.message_id
-                    );
-                }
+                // Recovery-dependent reads and writes stay fenced until every
+                // committed publication is resolved. In particular, an old
+                // trim without identity evidence must never be guessed.
+                broker.publish_prepared(pending)?;
+                bicdb_page::test_faults::crash_point("open.broker_republish.after_event");
             }
         }
+        let protected_ids = events.broker().outbox_recovery_ids();
+        let retained_receipts = recovered_broker_publishes
+            .iter()
+            .map(|pending| pending.message_id)
+            .filter(|id| protected_ids.contains(id))
+            .collect();
+        events.broker().prune_outbox_receipts(&retained_receipts)?;
         // Record-audit events are a transaction-WAL outbox. A process may die
         // after the row commit becomes durable but before its event-segment
         // copy. Replay every committed entry here; UUID deduplication makes an
@@ -10455,7 +10481,7 @@ impl BicDb {
             bicdb_page::test_faults::crash_point("open.after_sync_republish");
         }
         // A replication primary keeps its log at open: standbys resume from it.
-        if paged_records.is_some() && broker_outbox_flushed && !config.replication.enabled {
+        if paged_records.is_some() && !config.replication.enabled {
             let log_path = path.join(DEFAULT_TRANSACTION_LOG);
             let log_len = file_len(&log_path)?;
             if log_len > 0 {
@@ -10463,6 +10489,7 @@ impl BicDb {
                     &path,
                     tx_recovery.last_commit_seq,
                     tx_recovery.last_commit_seq,
+                    tx_recovery.next_tx_id.saturating_sub(1),
                     config.fsync,
                 )?;
                 bicdb_page::test_faults::crash_point("open.after_txlog_floor");
@@ -14598,7 +14625,7 @@ impl SecureBicDb<'_> {
         }
         let mut events_by_stream = HashMap::new();
         for stream in projection.stream_names() {
-            events_by_stream.insert(stream.clone(), self.db.events.lock().read(&stream));
+            events_by_stream.insert(stream.clone(), self.db.events.lock().read(&stream)?);
         }
         GraphProjectionData::build(projection, &records_by_collection, &events_by_stream)
     }
@@ -17284,16 +17311,26 @@ impl Transaction {
             return;
         }
         let db = unsafe { self.db.as_ref() };
+        if db.durability.is_failed() {
+            // A failed publication keeps its redo for verified recovery;
+            // do not retry against a fenced handle.
+            return;
+        }
         let mut events = db.events.lock();
         let mut broker = events.broker();
+        bicdb_page::test_faults::crash_point("commit.before_broker_publish");
         for pending in &publishes {
             if let Err(error) = broker.publish_prepared(pending) {
+                db.fence_durability("broker_outbox.publish", &error);
                 eprintln!(
                     "bicdb: committed broker outbox message {} retained for recovery retry: {error}",
                     pending.message_id
                 );
+                return;
             }
         }
+        self.pending_broker_publishes.lock().clear();
+        bicdb_page::test_faults::crash_point("commit.after_broker_publish");
     }
 
     fn disable_memory_jobs_on_commit(&mut self) {
@@ -19120,29 +19157,45 @@ pub(crate) const COMMIT_SEQ_FLOOR_FILE: &str = "commit-seq.floor";
 /// out a sequence number twice.
 /// `commit_seq`: every number up to it is in use (a reopen continues above
 /// it). `wal_base`: every commit at or below it may have been dropped from the
-/// log; commits above it are in the log or wrote nothing. Both only rise.
+/// log; commits above it are in the log or wrote nothing. `transaction_id_floor`
+/// retains logical transaction numbers that the cut removes. All only rise.
 pub(crate) fn persist_commit_seq_floor(
     root: &Path,
     commit_seq: u64,
     wal_base: u64,
+    transaction_id_floor: u64,
     fsync: bool,
 ) -> Result<()> {
-    let (floor, base) = read_commit_seq_floor_and_base(root)?;
-    let (next_floor, next_base) = (floor.max(commit_seq), base.max(wal_base));
-    if (next_floor, next_base) == (floor, base) {
+    let (floor, base, tx_floor) = read_sequence_floors(root)?;
+    let (next_floor, next_base, next_tx_floor) = (
+        floor.max(commit_seq),
+        base.max(wal_base),
+        tx_floor.max(transaction_id_floor),
+    );
+    if (next_floor, next_base, next_tx_floor) == (floor, base, tx_floor) {
         return Ok(());
     }
+    bicdb_page::test_faults::crash_point("transaction_id_floor.before_publish");
     storage::write_atomic(
         &root.join(COMMIT_SEQ_FLOOR_FILE),
-        format!("{next_floor} {next_base}\n").as_bytes(),
+        format!("{next_floor} {next_base} {next_tx_floor}\n").as_bytes(),
         fsync,
-    )
+    )?;
+    bicdb_page::test_faults::crash_point("transaction_id_floor.after_publish");
+    Ok(())
 }
 
 fn read_commit_seq_floor_and_base(root: &Path) -> Result<(u64, u64)> {
+    read_sequence_floors(root).map(|(floor, base, _)| (floor, base))
+}
+
+/// The optional third field preserves logical transaction identities across a
+/// WAL cut. Legacy one/two-field markers remain readable; no historical
+/// high-water mark can be reconstructed once an older writer discarded it.
+fn read_sequence_floors(root: &Path) -> Result<(u64, u64, u64)> {
     let text = match fs::read_to_string(root.join(COMMIT_SEQ_FLOOR_FILE)) {
         Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok((0, 0)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok((0, 0, 0)),
         Err(error) => return Err(error.into()),
     };
     let corrupt = |error: std::num::ParseIntError| {
@@ -19158,7 +19211,20 @@ fn read_commit_seq_floor_and_base(root: &Path) -> Result<(u64, u64)> {
         Some(base) => base.parse::<u64>().map_err(corrupt)?,
         None => floor,
     };
-    Ok((floor, base))
+    let transaction_id_floor = match parts.next() {
+        Some(value) => value.parse::<u64>().map_err(corrupt)?,
+        None => 0,
+    };
+    if parts.next().is_some() {
+        return Err(BicDbError::FormatCompatibility(format!(
+            "corrupt {COMMIT_SEQ_FLOOR_FILE}: unexpected fields"
+        )));
+    }
+    Ok((floor, base, transaction_id_floor))
+}
+
+fn read_transaction_id_floor(root: &Path) -> Result<u64> {
+    Ok(read_sequence_floors(root)?.2)
 }
 
 pub(crate) fn read_commit_seq_floor(root: &Path) -> Result<u64> {
@@ -27755,7 +27821,7 @@ mod event_horizon_tests {
         );
 
         // User streams untouched.
-        assert_eq!(db.events().read("app.audit").len(), 1);
+        assert_eq!(db.events().read("app.audit").unwrap().len(), 1);
 
         // A fresh device bootstraps from a snapshot, not from the trimmed
         // log. Trimming drops the very events whose positions the survivors'
@@ -30350,12 +30416,13 @@ mod index_maintenance_tests {
                     Record::new("w-1").with_metadata(json!({"score": 7})),
                 )
                 .unwrap();
+                tx.skip_commit_outboxes_for_crash_test = true;
                 let commit_seq = db.commit_buffered_transaction(&mut tx).unwrap();
                 db.tx_log_handle().write_durable(commit_seq).unwrap();
 
                 // Model process death in the narrow window after commit WAL
                 // durability but before the caller publishes the audit outbox.
-                assert!(db.events().read(RECORD_AUDIT_STREAM).is_empty());
+                assert!(db.events().read(RECORD_AUDIT_STREAM).unwrap().is_empty());
                 drop(tx);
             }
 
@@ -30371,7 +30438,7 @@ mod index_maintenance_tests {
                 db.get("widgets", "w-1").unwrap().unwrap().metadata["score"],
                 7
             );
-            let audit = db.events().read(RECORD_AUDIT_STREAM);
+            let audit = db.events().read(RECORD_AUDIT_STREAM).unwrap();
             assert_eq!(audit.len(), 1);
             assert_eq!(audit[0].event.payload["record_id"], "w-1");
         }

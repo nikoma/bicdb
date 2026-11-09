@@ -34,7 +34,7 @@ fn delivery_export_preserves_group_state_without_consuming_or_acknowledging() {
             },
         )
         .unwrap();
-    let before = db.broker().group_info("work", "group").unwrap();
+    let before = db.broker().group_info("work", "group").unwrap().unwrap();
     let snapshot = db
         .broker()
         .delivery_snapshot("work", "group", 0, 4, 1024 * 1024)
@@ -55,7 +55,10 @@ fn delivery_export_preserves_group_state_without_consuming_or_acknowledging() {
     );
     assert_eq!(snapshot[2].delivered_at, messages[2].delivered_at);
     assert_eq!(snapshot[3].state, BrokerDeliveryState::Unseen);
-    assert_eq!(db.broker().group_info("work", "group").unwrap(), before);
+    assert_eq!(
+        db.broker().group_info("work", "group").unwrap().unwrap(),
+        before
+    );
     assert_eq!(
         db.broker()
             .delivery_snapshot("work", "group", 1, 2, 1024 * 1024)
@@ -69,7 +72,7 @@ fn delivery_export_preserves_group_state_without_consuming_or_acknowledging() {
             .state,
         BrokerDeliveryState::Unseen
     );
-    assert!(db.broker().group_info("work", "absent").is_none());
+    assert!(db.broker().group_info("work", "absent").unwrap().is_none());
     assert!(db
         .broker()
         .delivery_snapshot("work", "group", 0, 4, 1)

@@ -193,7 +193,9 @@ pub(crate) fn eval_broker_function_value(
             let queue = text_arg(name, args, 0)?;
             let group = text_arg(name, args, 1)?;
             authorize(&queue, BrokerAccess::Consume)?;
-            let info = db.with_broker(|broker| broker.group_info(&queue, &group));
+            let info = db
+                .with_broker(|broker| broker.group_info(&queue, &group))
+                .map_err(SqlError::from)?;
             Ok(Some(match info {
                 Some(info) => SqlValue::json(
                     json!({
@@ -214,7 +216,9 @@ pub(crate) fn eval_broker_function_value(
             let queue = text_arg(name, args, 0)?;
             let group = text_arg(name, args, 1)?;
             authorize(&queue, BrokerAccess::Consume)?;
-            let dead = db.with_broker(|broker| broker.dead_letters(&queue, &group));
+            let dead = db
+                .with_broker(|broker| broker.dead_letters(&queue, &group))
+                .map_err(SqlError::from)?;
             Ok(Some(SqlValue::Json(
                 JsonValue::Array(
                     dead.iter()
@@ -259,7 +263,9 @@ pub(crate) fn eval_broker_function_value(
             expect_args(name, args, 1, 1)?;
             let queue = text_arg(name, args, 0)?;
             authorize(&queue, BrokerAccess::Admin)?;
-            let config = db.with_broker(|broker| broker.queue_config(&queue));
+            let config = db
+                .with_broker(|broker| broker.queue_config(&queue))
+                .map_err(SqlError::from)?;
             Ok(Some(match config {
                 Some(config) => SqlValue::json(
                     json!({
@@ -312,7 +318,9 @@ pub(crate) fn eval_broker_function_value(
             let from_sequence = optional_int_arg(name, args, 1)?.unwrap_or(0).max(0) as u64;
             let max = optional_int_arg(name, args, 2)?.unwrap_or(50).max(0) as usize;
             authorize(&queue, BrokerAccess::Consume)?;
-            let messages = db.with_broker(|broker| broker.peek(&queue, from_sequence, max));
+            let messages = db
+                .with_broker(|broker| broker.peek(&queue, from_sequence, max))
+                .map_err(SqlError::from)?;
             Ok(Some(SqlValue::Json(
                 JsonValue::Array(
                     messages
@@ -336,7 +344,9 @@ pub(crate) fn eval_broker_function_value(
         }
         "broker_stats" => {
             expect_args(name, args, 0, 0)?;
-            let mut stats = db.with_broker(|broker| broker.stats());
+            let mut stats = db
+                .with_broker(|broker| broker.stats())
+                .map_err(SqlError::from)?;
             // Every SQL caller sees only the queues it may consume from. This
             // was gated on `security_context.is_some()`, so a session without
             // one — which is every ordinary pgwire client on a server with no

@@ -20,9 +20,9 @@ finish every retained committed broker publication before returning a usable
 handle. An interrupted reopen is safe to repeat.
 
 This moves existing work inside admission; it adds no commit-path fsync and does
-not enable experimental commit modes. Direct EventStream snapshots remain a
-low-level in-memory inspection API; SQL and broker operations use their ordinary
-health checks.
+not enable experimental commit modes. SQL and broker operations check handle health. The existing plain-`Vec`
+EventStream snapshot-read API is unchanged; this fix does not claim full P0 read
+fencing for that API.
 
 ## Retention receipts
 
@@ -53,8 +53,9 @@ A durable full transaction-log cut clears obsolete evidence; verified reopen can
 also prune receipts absent from its complete recovered transaction log. Partial
 log cuts conservatively retain receipts until verified reopen. Receipt pruning
 may rewrite the event segment at checkpoint/open, outside the commit hot path.
-Failure of optional cleanup retains conservative evidence rather than licensing
-republication.
+If optional cleanup fails, either the old or newly pruned complete segment is
+safe: removed receipts were proved no longer replayable before rewriting.
+Housekeeping can retry without licensing republication.
 
 ## Older stores
 

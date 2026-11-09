@@ -471,9 +471,21 @@ pub(crate) struct BrokerState {
     // this bounded; if it overflows, trimming safely refuses until reopen.
     legacy_prepared: HashSet<Uuid>,
     legacy_prepared_overflow: bool,
+    // A transaction can deduplicate onto a different message UUID through an
+    // idempotency key. Until retention durably records that alias, recovery
+    // reconstructs it from the retained original message and transaction log.
+    outbox_aliases: HashMap<Uuid, (String, Uuid, u64)>,
 }
 
 const MAX_OUTBOX_RECEIPTS: usize = 65_536;
+
+fn outbox_corruption(message: String) -> BicDbError {
+    BicDbError::Corruption {
+        path: std::path::PathBuf::from(crate::event::DEFAULT_EVENTS_DIR)
+            .join(crate::event::DEFAULT_EVENTS_SEGMENT),
+        message,
+    }
+}
 
 /// Where a broker operation came from.
 ///
@@ -506,11 +518,11 @@ impl BrokerState {
         let Some(raw) = event.payload.get("outbox_receipts") else {
             return Ok(()); // Legacy trim: handled conservatively by recovery.
         };
-        let receipts = raw.as_array().ok_or_else(|| {
-            BicDbError::Corruption("broker trim has malformed outbox receipts".into())
-        })?;
+        let receipts = raw
+            .as_array()
+            .ok_or_else(|| outbox_corruption("broker trim has malformed outbox receipts".into()))?;
         if receipts.len() > MAX_OUTBOX_RECEIPTS {
-            return Err(BicDbError::Corruption(
+            return Err(outbox_corruption(
                 "broker outbox receipt limit exceeded".into(),
             ));
         }
@@ -528,13 +540,13 @@ impl BrokerState {
                 .and_then(|id| Uuid::parse_str(id).ok());
             let sequence = receipt.get(1).and_then(Value::as_u64);
             let (Some(id), Some(sequence)) = (id, sequence) else {
-                return Err(BicDbError::Corruption(
+                return Err(outbox_corruption(
                     "broker trim has malformed outbox receipt".into(),
                 ));
             };
             if let Some(original) = existing.and_then(|known| known.get(&id)) {
                 if *original != sequence {
-                    return Err(BicDbError::Corruption(
+                    return Err(outbox_corruption(
                         "broker outbox receipt sequence changed".into(),
                     ));
                 }
@@ -544,7 +556,7 @@ impl BrokerState {
         }
         let total: usize = self.trimmed_outbox.values().map(BTreeMap::len).sum();
         if total.saturating_add(added.len()) > MAX_OUTBOX_RECEIPTS {
-            return Err(BicDbError::Corruption(
+            return Err(outbox_corruption(
                 "broker outbox receipt limit exceeded".into(),
             ));
         }
@@ -563,6 +575,12 @@ impl BrokerState {
             .copied()
             .collect();
         self.legacy_prepared_overflow = previous.legacy_prepared_overflow;
+        self.outbox_aliases = previous
+            .outbox_aliases
+            .iter()
+            .filter(|(_, (_, original, _))| event_indexes.contains_key(original))
+            .map(|(id, receipt)| (*id, receipt.clone()))
+            .collect();
     }
 
     /// Replays the ordered event log into broker state. Used at open; the
@@ -934,11 +952,29 @@ impl<'a> Broker<'a> {
             .collect()
     }
 
+    pub(crate) fn outbox_recovery_ids(&self) -> HashSet<Uuid> {
+        let mut ids = self.outbox_receipt_ids();
+        ids.extend(self.stream.broker_state.legacy_prepared.iter().copied());
+        ids.extend(self.stream.broker_state.outbox_aliases.keys().copied());
+        ids
+    }
+
     /// `retained` is established by complete recovery, or is empty after a
     /// durable full transaction-log cut under exclusive commit admission.
     /// Never infer it from the last broker sequence: publications can arrive
     /// in a different order from the transactions' commit sequences.
     pub(crate) fn prune_outbox_receipts(&mut self, retained: &HashSet<Uuid>) -> Result<()> {
+        self.stream
+            .broker_state
+            .legacy_prepared
+            .retain(|id| retained.contains(id));
+        self.stream
+            .broker_state
+            .outbox_aliases
+            .retain(|id, _| retained.contains(id));
+        if retained.is_empty() {
+            self.stream.broker_state.legacy_prepared_overflow = false;
+        }
         let state = &self.stream.broker_state;
         if state.legacy_trimmed.is_empty()
             && state
@@ -1029,6 +1065,38 @@ impl<'a> Broker<'a> {
                 deduplicated: true,
             });
         }
+        if let Some(key) = pending.options.idempotency_key.as_ref() {
+            if let Some(&(original, sequence)) = self
+                .stream
+                .broker_state
+                .idempotency
+                .get(&(pending.queue.clone(), key.clone()))
+            {
+                if original != pending.message_id {
+                    let state = &mut self.stream.broker_state;
+                    if state.legacy_prepared.contains(&pending.message_id)
+                        || state.outbox_aliases.contains_key(&pending.message_id)
+                        || state
+                            .legacy_prepared
+                            .len()
+                            .saturating_add(state.outbox_aliases.len())
+                            < MAX_OUTBOX_RECEIPTS
+                    {
+                        state.outbox_aliases.insert(
+                            pending.message_id,
+                            (pending.queue.clone(), original, sequence),
+                        );
+                    } else {
+                        state.legacy_prepared_overflow = true;
+                    }
+                    return Ok(PublishReceipt {
+                        message_id: original,
+                        sequence,
+                        deduplicated: true,
+                    });
+                }
+            }
+        }
         if let Some(event) = self.stream.event_by_id(&pending.message_id) {
             let marked = broker_meta(&event.event.metadata)
                 .and_then(|meta| meta.get("transactional_outbox"))
@@ -1036,7 +1104,14 @@ impl<'a> Broker<'a> {
                 == Some(true);
             if !marked {
                 let state = &mut self.stream.broker_state;
-                if state.legacy_prepared.len() < MAX_OUTBOX_RECEIPTS {
+                if state.legacy_prepared.contains(&pending.message_id)
+                    || state.outbox_aliases.contains_key(&pending.message_id)
+                    || state
+                        .legacy_prepared
+                        .len()
+                        .saturating_add(state.outbox_aliases.len())
+                        < MAX_OUTBOX_RECEIPTS
+                {
                     state.legacy_prepared.insert(pending.message_id);
                 } else {
                     state.legacy_prepared_overflow = true;
@@ -1058,7 +1133,7 @@ impl<'a> Broker<'a> {
             // decision alone cannot distinguish a missing publication from a
             // previously delivered-and-trimmed message. Refuse the ambiguous
             // recovery instead of publishing the business event twice.
-            return Err(BicDbError::Corruption(format!(
+            return Err(outbox_corruption(format!(
                 "broker outbox {} in queue {} has an ambiguous legacy trim; \
                  publication requires independent evidence or restore",
                 pending.message_id, pending.queue
@@ -2022,6 +2097,11 @@ impl<'a> Broker<'a> {
             .filter(|(name, _)| name.as_str() != queue)
             .map(|(_, known)| known.len())
             .sum();
+        for (alias, (name, original, sequence)) in &state.outbox_aliases {
+            if name == queue && removed_ids.contains(original) {
+                outbox_receipts.insert(*alias, *sequence);
+            }
+        }
         if other_receipts.saturating_add(outbox_receipts.len()) > MAX_OUTBOX_RECEIPTS {
             return Err(BicDbError::Compaction(
                 "broker retention refused: transactional outbox receipt limit reached; checkpoint or reopen to verify log retention".into(),
@@ -2366,7 +2446,14 @@ mod outbox_retention_tests {
     fn publish(db: &BicDb) -> Uuid {
         let tx = db.begin_transaction().unwrap();
         let id = tx
-            .buffer_broker_publish("q", json!(1), PublishOptions::default())
+            .buffer_broker_publish(
+                "q",
+                json!(1),
+                PublishOptions {
+                    idempotency_key: Some("unit-key".into()),
+                    ..PublishOptions::default()
+                },
+            )
             .unwrap();
         tx.commit().unwrap();
         id
@@ -2416,7 +2503,7 @@ mod outbox_retention_tests {
             Ok(_) => panic!("legacy recovery was guessed"),
             Err(error) => error,
         };
-        assert!(matches!(error, BicDbError::Corruption(_)), "{error}");
+        assert!(matches!(error, BicDbError::Corruption { .. }), "{error}");
         assert_eq!(std::fs::read(&path).unwrap(), before);
     }
 

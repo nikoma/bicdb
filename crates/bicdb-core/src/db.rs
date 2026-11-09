@@ -10398,12 +10398,6 @@ impl BicDb {
             encryption.clone(),
         )?;
         let recovered_broker_publishes = tx_recovery.committed_broker_publishes();
-        let receipt_ids = events.broker().outbox_receipt_ids();
-        let retained_receipts = recovered_broker_publishes
-            .iter()
-            .map(|pending| pending.message_id)
-            .filter(|id| receipt_ids.contains(id))
-            .collect();
         if !recovered_broker_publishes.is_empty() {
             let mut broker = events.broker();
             for pending in &recovered_broker_publishes {
@@ -10413,6 +10407,12 @@ impl BicDb {
                 broker.publish_prepared(pending)?;
             }
         }
+        let protected_ids = events.broker().outbox_recovery_ids();
+        let retained_receipts = recovered_broker_publishes
+            .iter()
+            .map(|pending| pending.message_id)
+            .filter(|id| protected_ids.contains(id))
+            .collect();
         events.broker().prune_outbox_receipts(&retained_receipts)?;
         // Record-audit events are a transaction-WAL outbox. A process may die
         // after the row commit becomes durable but before its event-segment

@@ -184,3 +184,57 @@ fn a_failed_committed_broker_publication_fences_until_verified_recovery() {
         }
     }
 }
+
+#[test]
+fn idempotency_aliases_stay_trimmed_but_new_commits_can_reuse_the_key() {
+    use bicdb_core::{DEFAULT_EVENTS_DIR, DEFAULT_EVENTS_SEGMENT};
+    use bicdb_page::test_faults::arm_io_failure;
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let config = config(mode.clone());
+        let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+        let options = PublishOptions {
+            idempotency_key: Some("business-key".into()),
+            ..PublishOptions::default()
+        };
+        let mut ids = Vec::new();
+        for value in [1, 2] {
+            let tx = db.begin_transaction().unwrap();
+            ids.push(
+                tx.buffer_broker_publish("q", json!(value), options.clone())
+                    .unwrap(),
+            );
+            tx.commit().unwrap();
+        }
+        let batch = db.broker().consume("q", "g", "w", consumed()).unwrap();
+        assert_eq!(batch.len(), 1);
+        assert_eq!(batch[0].message_id, ids[0]);
+        db.broker().ack("q", "g", "w", ids[0]).unwrap();
+        db.broker().trim("q").unwrap();
+        drop(db);
+        let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+        assert!(db
+            .broker()
+            .consume("q", "g", "w", consumed())
+            .unwrap()
+            .is_empty());
+        // A fresh committed publication may reuse the key after retention,
+        // even if it crashes before reaching the broker. Old aliases must
+        // not be confused with this new transaction's distinct UUID.
+        let log = root
+            .path()
+            .join(DEFAULT_EVENTS_DIR)
+            .join(DEFAULT_EVENTS_SEGMENT);
+        let fault = arm_io_failure("frame_log.write", &log, 1, false);
+        let tx = db.begin_transaction().unwrap();
+        let fresh = tx.buffer_broker_publish("q", json!(3), options).unwrap();
+        tx.commit().unwrap();
+        drop(fault);
+        drop(db);
+        let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+        let batch = db.broker().consume("q", "g", "w", consumed()).unwrap();
+        assert_eq!(batch.len(), 1, "{mode:?}: {batch:?}");
+        assert_eq!(batch[0].message_id, fresh);
+        assert_eq!(batch[0].payload, json!(3));
+    }
+}

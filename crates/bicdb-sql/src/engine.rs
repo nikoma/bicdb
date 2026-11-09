@@ -4908,13 +4908,13 @@ impl<'db> SqlEngine<'db> {
     }
 
     pub(crate) fn execute_query(&self, query: &Query) -> Result<SqlResult> {
-        let _join_budget = crate::join_budget::Scope::enter();
+        let join_budget = crate::join_budget::QueryScope::enter();
         self.db_ref().check_recovery_state()?;
         let _subqueries = self.subquery_memo.scope();
         let _probes = self.exists_probe_memo.scope(
             self.outer_row.is_none() && exists_probe::probe_query_safe(self.db_ref(), query),
         );
-        self.execute_query_unscoped(query)
+        join_budget.finish(self.execute_query_unscoped(query))
     }
 
     fn execute_query_unscoped(&self, query: &Query) -> Result<SqlResult> {

@@ -10,7 +10,10 @@ The default extra ceiling is 512 MiB. Set
 `BICDB_MAX_JOIN_MATERIALIZED_BYTES` to another byte count when the process
 starts. `0` disables this extra ceiling; a tighter host/role
 `QueryMemoryScope` still applies. Nested query and routine execution inherits
-the same counter. A fresh top-level execution starts a fresh counter, including
+the same envelope. Nested queries release their intermediate charges when
+execution ends and transfer returned result storage into the caller, including shared
+payloads retained by that result (deduplicated within each result). A fresh
+top-level execution starts a fresh counter, including
 after an error. Guards cannot be transferred between threads.
 
 A rejected allocation returns SQLSTATE `53200`. The query does not fall back to
@@ -20,8 +23,10 @@ deadline-only scopes return `57014`. Normal SQL transaction error and rollback
 rules apply. The connection remains usable after the appropriate rollback.
 
 This is a cooperative, conservative materialization-work envelope, not a hard
-RSS or allocator quota. It accumulates prior intermediate allocations even
-when those intermediates have been freed. Provisional joined DML candidates
+RSS or allocator quota. It conservatively accumulates prior intermediate
+allocations within a query pipeline. Completed child-query intermediates are
+released, so a correlated query does not accumulate every past child pipeline
+as though they were all still resident. Provisional joined DML candidates
 are counted before predicate evaluation because they may become retained
 rows. It includes new slot storage, cloned owned payloads, selected scratch
 vectors and spatial candidate offsets. The optimized primary-key join charges

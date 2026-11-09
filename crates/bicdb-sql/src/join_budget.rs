@@ -3,7 +3,7 @@
 //! This is a cooperative materialization envelope, not an allocator/RSS limit.
 //! Counting prior intermediates conservatively even after they are freed also
 //! bounds nested pipelines without needing allocation ownership in every RowSet.
-use crate::{Result, SqlError, SqlValue};
+use crate::{Result, SqlError, SqlResult, SqlValue};
 use std::{cell::Cell, marker::PhantomData, rc::Rc, sync::OnceLock};
 
 thread_local! {
@@ -35,6 +35,129 @@ impl Drop for Scope {
         if self.root {
             RETAINED.with(|bytes| bytes.set(None));
         }
+    }
+}
+
+/// A nested query releases its intermediate work on return. Only its owned
+/// result survives in the caller; charging every past child pipeline would
+/// reject small correlated queries whose total work exceeds their live state.
+pub(crate) struct QueryScope {
+    _execution: Scope,
+    baseline: usize,
+    finished: bool,
+}
+impl QueryScope {
+    pub(crate) fn enter() -> Self {
+        let execution = Scope::enter();
+        let baseline = RETAINED.with(|bytes| bytes.get().unwrap_or(0));
+        Self {
+            _execution: execution,
+            baseline,
+            finished: false,
+        }
+    }
+    pub(crate) fn finish(mut self, result: Result<SqlResult>) -> Result<SqlResult> {
+        let materialized = RETAINED.with(|bytes| bytes.get().unwrap_or(0) > self.baseline);
+        RETAINED.with(|bytes| bytes.set(Some(self.baseline)));
+        self.finished = true;
+        if let Ok(value) = &result {
+            if materialized {
+                retain_bytes(result_owned_bytes(value))?;
+            }
+        }
+        result
+    }
+}
+impl Drop for QueryScope {
+    fn drop(&mut self) {
+        if !self.finished {
+            RETAINED.with(|bytes| bytes.set(Some(self.baseline)));
+        }
+    }
+}
+
+fn result_owned_bytes(result: &SqlResult) -> usize {
+    let mut shared = rustc_hash::FxHashSet::default();
+    let mut bytes = result
+        .rows
+        .capacity()
+        .saturating_mul(std::mem::size_of::<Vec<SqlValue>>())
+        .saturating_add(
+            result
+                .columns
+                .capacity()
+                .saturating_mul(std::mem::size_of::<String>()),
+        )
+        .saturating_add(
+            result
+                .column_types
+                .capacity()
+                .saturating_mul(std::mem::size_of::<Option<String>>()),
+        )
+        .saturating_add(
+            result
+                .column_metadata
+                .capacity()
+                .saturating_mul(std::mem::size_of::<crate::SqlColumnMetadata>()),
+        );
+    for row in &result.rows {
+        bytes = bytes.saturating_add(
+            row.capacity()
+                .saturating_mul(std::mem::size_of::<SqlValue>()),
+        );
+        for value in row {
+            bytes = bytes.saturating_add(result_value_heap_bytes(value, 0, &mut shared));
+        }
+    }
+    for column in &result.columns {
+        bytes = bytes.saturating_add(column.len());
+    }
+    for kind in result.column_types.iter().flatten() {
+        bytes = bytes.saturating_add(kind.len());
+    }
+    if let Some(tag) = &result.command_tag {
+        bytes = bytes.saturating_add(tag.len());
+    }
+    for notice in &result.notices {
+        bytes = bytes.saturating_add(notice.memory_estimate());
+    }
+    bytes
+}
+
+// Returned shared payloads remain live after child intermediates disappear.
+// Count them once per result, even though cloning their Arc itself was cheap.
+fn result_value_heap_bytes(
+    value: &SqlValue,
+    depth: usize,
+    shared: &mut rustc_hash::FxHashSet<(u8, usize)>,
+) -> usize {
+    if depth >= 128 {
+        return usize::MAX;
+    }
+    match value {
+        SqlValue::Json(value) => {
+            if shared.insert((0, std::sync::Arc::as_ptr(value) as usize)) {
+                std::mem::size_of::<serde_json::Value>().saturating_add(json_heap(value, depth + 1))
+            } else {
+                0
+            }
+        }
+        SqlValue::OracleLob(value) => {
+            if shared.insert((1, std::sync::Arc::as_ptr(value) as usize)) {
+                value.bytes().len()
+            } else {
+                0
+            }
+        }
+        SqlValue::Composite(value) => {
+            value.fields.iter().fold(value.type_name.len(), |n, field| {
+                n.saturating_add(std::mem::size_of::<crate::SqlCompositeField>())
+                    .saturating_add(field.name.len())
+                    .saturating_add(field.pg_type.len())
+                    .saturating_add(result_value_heap_bytes(&field.value, depth + 1, shared))
+            })
+        }
+        _ => clone_heap_bytes(value, depth),
     }
 }
 

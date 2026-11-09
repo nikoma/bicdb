@@ -211,3 +211,22 @@ fn memory_scopes_with_only_a_deadline_also_interrupt_join_execution() {
     }
     assert_eq!(session.execute("SELECT 1").unwrap().rows.len(), 1);
 }
+
+#[test]
+fn correlated_queries_release_child_work_and_charge_only_returned_results() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db =
+        BicDb::open_with_config(dir.path(), DbConfig::default().with_fsync(false)).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let _memory = QueryMemoryScope::new(128 * 1024);
+    let result=session.execute("SELECT a.x,(SELECT count(*) FROM generate_series(1,30) b(x) JOIN generate_series(1,30) c(y) ON b.x=c.y WHERE b.x<=a.x) FROM generate_series(1,100) a(x) ORDER BY a.x").unwrap();
+    let expected = (1..=100)
+        .map(|i| {
+            vec![
+                bicdb_sql::SqlValue::Int(i),
+                bicdb_sql::SqlValue::Int(i.min(30)),
+            ]
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(result.rows, expected);
+}

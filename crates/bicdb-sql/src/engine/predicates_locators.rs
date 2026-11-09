@@ -7495,6 +7495,16 @@ impl<'db> SqlEngine<'db> {
         select: &Select,
         query: &Query,
     ) -> Result<SqlResult> {
+        let budget = crate::join_budget::QueryScope::enter();
+        budget.finish(self.execute_cached_point_join_unscoped(template, select, query))
+    }
+
+    fn execute_cached_point_join_unscoped(
+        &self,
+        template: &PointJoinTemplate,
+        select: &Select,
+        query: &Query,
+    ) -> Result<SqlResult> {
         self.check_cancellation()?;
         let (_, context) = self.bound_row_context(&[]);
         let empty_row: SlotRow = Vec::new();

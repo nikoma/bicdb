@@ -663,7 +663,7 @@ fn national_case_keys_preserve_the_distinct_character_family_through_reopen() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         for (upper, original, folded) in [(true, "ɡ", "Ɡ"), (false, "Ⱥ", "ⱥ")] {
             let root = tempfile::tempdir().unwrap();
-            let config = mode_config(mode);
+            let config = mode_config(mode.clone());
             let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
             db.create_collection("rows").unwrap();
             db.insert("rows", row("a", original)).unwrap();

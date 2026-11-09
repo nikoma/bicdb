@@ -116,3 +116,16 @@ projected values are equal, and applies explicit metadata assignments while
 preserving unassigned hidden fields. The fixture additionally covers denied
 secret assignments with both non-NULL and already-NULL source values. Its
 source-current focused and workspace qualification follows separately.
+
+
+At26f26f51 the explicit-assignment correction passed32 focused test functions:
+10checked capability,5native mutation grants,17SQL primary/grant/signed cases.
+The protected SQL function runs10storage-mode/policy combinations, including
+allowed explicit NULL, denied secret columns with non-NULL and already-NULL
+values, unchanged secret preservation and SQL RLS denial. Workspace all-target
+compilation passed. Log: `signed-explicit-null-fixed.log`.
+
+The final source integrates predecessor52b8c82c (version443) and advances the
+coordinated source version to1.0.444-beta. Version consistency and licensing
+source checks pass; final integrated qualification and actual GitHub checks
+are separate from the earlier85a and26f results above.

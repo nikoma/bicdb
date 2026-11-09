@@ -236,3 +236,24 @@ fn widened_float_comparisons_keep_all_primary_key_matches() {
         assert_eq!(session.execute(sql).unwrap().rows, vec![vec![SqlValue::Int(9007199254740992)],vec![SqlValue::Int(9007199254740993)]], "{sql}");
     }
 }
+
+#[test]
+fn simple_case_user_types_keep_catalog_aware_fallback() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open_with_config(
+        root.path(),
+        bicdb_core::DbConfig::default().with_fsync(false),
+    )
+    .unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE TYPE case_mood AS ENUM ('ok', 'happy')",
+        "CREATE DOMAIN case_label AS text",
+        "CREATE TABLE custom_cases (m case_mood, label case_label)",
+        "INSERT INTO custom_cases VALUES ('ok', 'ok')",
+    ] {
+        session.execute(sql).unwrap();
+    }
+    assert_eq!(session.execute("SELECT CASE m WHEN 'ok' THEN 'yes' ELSE 'no' END, CASE label WHEN 'ok' THEN 'yes' ELSE 'no' END FROM custom_cases").unwrap().rows,
+        vec![vec![SqlValue::String("yes".into()); 2]]);
+}

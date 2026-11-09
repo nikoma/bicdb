@@ -174,6 +174,17 @@ fn rollback_reacquisition_and_foreign_transactions_cannot_reuse_capabilities() {
         other.read_authorized_reserved_row(&old),
         Err(BicDbError::TransactionConflict(_))
     ));
+    let (_other_dir, other_db) = setup(StorageMode::ServerPaged, true);
+    let other_database_tx = other_db.begin_application_transaction(actor()).unwrap();
+    assert_eq!(
+        other_database_tx.id(),
+        tx.id(),
+        "fixture must test the same numeric TxID on another handle"
+    );
+    assert!(matches!(
+        other_database_tx.read_authorized_reserved_row(&old),
+        Err(BicDbError::TransactionConflict(_))
+    ));
     tx.rollback_to_mark(mark).unwrap();
     let fresh = tx
         .reserve_authorized_read_committed_row("rows", "one", None)
@@ -303,7 +314,7 @@ fn masked_native_fields_are_preserved_and_foreign_tenant_cannot_be_overwritten()
 }
 
 #[test]
-fn concurrent_fence_overrides_midoperation_constructor_and_stale_token_errors() {
+fn concurrent_fence_overrides_constructor_error_after_entry() {
     {
         let (dir, db) = setup(StorageMode::EmbeddedMemory, false);
         let mut tx = db.begin_application_transaction(actor()).unwrap();
@@ -329,6 +340,10 @@ fn concurrent_fence_overrides_midoperation_constructor_and_stale_token_errors() 
         );
         assert_eq!(hook.fired(), 1);
     }
+}
+
+#[test]
+fn concurrent_fence_overrides_stale_token_error_after_validation_entry() {
     {
         let (dir, db) = setup(StorageMode::EmbeddedMemory, true);
         let mut tx = db.begin_application_transaction(actor()).unwrap();

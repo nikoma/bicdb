@@ -61,22 +61,24 @@ repeated name reuse, and the outer purge decision. Conflicting physical backing
 identities are preserved. The original failing results remain in the local
 qualification evidence, rather than being replaced by weaker assertions.
 
-The versioned source `4663f20f` starts full SQL qualification across 224 Cargo
-targets. The full run completed with 2,297 passed, 36 failed and four existing
+The full 224-target SQL run at versioned source `4663f20f` completed with 2,297 passed, 36 failed and four existing
 ignores across all 224 targets. All 36 failures came from unconditional exclusive
-purge cleanup on shared COMMIT; its library alone had 807 passes and 11 failures. The correction restricts physical reclamation to exclusive sessions;
+purge cleanup on shared COMMIT; its library alone had 807 passes and 11 failures.
+The correction restricts physical reclamation to exclusive sessions;
 the full original failing result is preserved. A new shared-COMMIT
 regression checks durable visibility, hidden purge entries and startup cleanup.
 Corrected source `5e3a9454` passed 959 tests across the full SQL library and nine
 integration targets, with zero failures and four existing ignores. The complete
-224-target SQL rerun is active at `c53ec0a9`; later changes here only update this
-document. Its broad result, workspace compilation, final head CI and remote merge
-are separate gates; focused results alone do not establish them. The merge order
+224-target SQL rerun is scoped to `c53ec0a9`; later changes here only update this
+document. The final source-scoped results and artifacts are tracked in
+[PR126](https://github.com/nikoma/bicdb/pull/126). Broad regression, workspace
+compilation, final head CI and remote merge are separate gates; focused results
+alone do not establish them. The merge order
 reserves this version after predecessor `1.0.444-beta`.
 
 The prior actual VM-cut recovery proof remains pinned to `823f9726`; it is not a
-test of this integrated candidate. A rebuilt final artifact and VM qualification
-are still required. Generic transactional catalog operations outside these
+test of this integrated candidate. Qualification requires a rebuilt final artifact and a VM campaign against its
+exact source; the prior proof does not establish these gates. Generic transactional catalog operations outside these
 journaled moves, partitioned-table physical-drop compensation, replicated or
 distributed catalog changes, and complete application acceptance retain their
 separate requirements. This document makes no universal transactional-DDL or

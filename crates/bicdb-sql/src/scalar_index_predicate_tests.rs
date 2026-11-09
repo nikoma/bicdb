@@ -71,3 +71,41 @@ fn null_scalar_aggregate_index_bound_does_not_materialize_the_table() {
 fn null_scalar_projection_index_bound_does_not_materialize_the_table() {
     check_scalar_index_bound("(SELECT CAST(NULL AS NUMERIC))", Vec::new());
 }
+
+#[test]
+fn correlated_scalar_null_preserves_later_bindings_and_outer_join_rows() {
+    for mode in [
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            bicdb_core::DbConfig::default()
+                .with_storage_mode(mode)
+                .with_fsync(false),
+        )
+        .unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session
+            .execute(
+                "CREATE TABLE outer_choices(id INT PRIMARY KEY,wanted INT);
+            CREATE TABLE target_matches(id INT PRIMARY KEY,lookup_key INT);
+            CREATE INDEX target_lookup ON target_matches(lookup_key);
+            INSERT INTO outer_choices VALUES(1,NULL),(2,2),(3,3);
+            INSERT INTO target_matches VALUES(10,2),(11,3)",
+            )
+            .unwrap();
+        let expected = vec![
+            vec![SqlValue::Int(1), SqlValue::Null],
+            vec![SqlValue::Int(2), SqlValue::Int(10)],
+            vec![SqlValue::Int(3), SqlValue::Int(11)],
+        ];
+        for query in [
+            "SELECT o.id,t.id FROM outer_choices o LEFT JOIN target_matches t ON t.lookup_key=(SELECT o.wanted) ORDER BY o.id,t.id",
+            "SELECT o.id,t.id FROM outer_choices o LEFT JOIN LATERAL (SELECT r.id FROM target_matches r WHERE r.lookup_key=(SELECT o.wanted))t ON TRUE ORDER BY o.id,t.id",
+        ] {
+            assert_eq!(session.execute(query).unwrap().rows,expected,"{query}");
+        }
+    }
+}

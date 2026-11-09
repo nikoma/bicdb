@@ -185,3 +185,82 @@ fn metadata_preparation_does_not_retain_schema_across_ddl_or_rollback() {
         32
     );
 }
+
+#[test]
+fn metadata_preparation_connection_cache_reuses_across_requests() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let (_root, db, bytes) = fixture(mode);
+        let mut cache = SqlSessionCatalogCache::default();
+        let (_, stats) = measured(|| {
+            for _ in 0..4 {
+                let columns = cache
+                    .with_schema_cache(&db, || {
+                        infer_query_result_columns_for_describe(&db, "SELECT * FROM prep_rows")
+                    })
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(columns.len(), 32);
+            }
+        });
+        assert!(
+            stats.schema_load_bytes <= bytes,
+            "{stats:?}; one schema is {bytes} bytes"
+        );
+    }
+}
+
+#[test]
+fn metadata_preparation_connection_cache_observes_ddl_and_rollback() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let (_root, mut db, _) = fixture(mode);
+        let mut cache = SqlSessionCatalogCache::default();
+        let describe = |cache: &mut SqlSessionCatalogCache, db: &BicDb| {
+            cache
+                .with_schema_cache(db, || {
+                    infer_query_result_columns_for_describe(db, "SELECT * FROM prep_rows")
+                })
+                .unwrap()
+                .unwrap()
+                .len()
+        };
+        assert_eq!(describe(&mut cache, &db), 32);
+        let mut session = SqlSession::new(&mut db);
+        session
+            .execute("BEGIN; ALTER TABLE prep_rows ADD COLUMN extra TEXT")
+            .unwrap();
+        assert_eq!(describe(&mut cache, session.db_ref()), 33);
+        session.execute("ROLLBACK").unwrap();
+        assert_eq!(describe(&mut cache, session.db_ref()), 32);
+        let (_other_root, mut other, _) = fixture(mode);
+        SqlSession::new(&mut other)
+            .execute("ALTER TABLE prep_rows ADD COLUMN other TEXT")
+            .unwrap();
+        assert_eq!(describe(&mut cache, &other), 33);
+        assert_eq!(describe(&mut cache, &db), 32);
+    }
+}
+
+#[test]
+fn metadata_preparation_connection_cache_recovers_after_error_and_panic() {
+    let (_root, db, _) = fixture(StorageMode::ServerPaged);
+    let mut cache = SqlSessionCatalogCache::default();
+    assert!(cache
+        .with_schema_cache(&db, || {
+            infer_query_result_columns_for_describe(&db, "SELECT missing FROM prep_rows")
+        })
+        .is_err());
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        cache.with_schema_cache(&db, || {
+            infer_query_result_columns_for_describe(&db, "SELECT * FROM prep_rows").unwrap();
+            panic!("preparation interrupted")
+        });
+    }));
+    assert!(panic.is_err());
+    let columns = cache
+        .with_schema_cache(&db, || {
+            infer_query_result_columns_for_describe(&db, "SELECT * FROM prep_rows")
+        })
+        .unwrap()
+        .unwrap();
+    assert_eq!(columns.len(), 32);
+}

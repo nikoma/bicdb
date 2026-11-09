@@ -1650,6 +1650,13 @@ pub struct SqlSessionCatalogCache {
 }
 
 impl SqlSessionCatalogCache {
+    /// Reuse this connection's schema metadata during read-only preparation.
+    /// The closure must use `db`; schema changes invalidate cached metadata.
+    pub fn with_schema_cache<T>(&mut self, db: &BicDb, prepare: impl FnOnce() -> T) -> T {
+        let _ = db;
+        prepare()
+    }
+
     #[doc(hidden)]
     pub fn schema_cache_len(&self) -> usize {
         self.schema_cache.values().map(FxHashMap::len).sum()

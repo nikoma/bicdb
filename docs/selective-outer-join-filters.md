@@ -75,3 +75,12 @@ checks description freshness across ALTER and ROLLBACK. These focused results
 do not establish that the original background timeout is resolved. The combined
 version 452 source also includes main 5aa8a5ff's authenticated bounded reads and
 requires its own broad checks and optimized application rerun.
+
+The b307a928 remaining-workspace CI job reached a second stale expectation in
+the compatibility scorecard. It classified the same incorrect RIGHT JOIN rows
+as an expected difference. The exact scorecard fixture, including two matched
+right rows, returns only `Dr. Null` on PostgreSQL 16.13; the rolled-back control
+is retained in `crates/bicdb-sql/tests/fixtures/postgres/right_join_scorecard_pg16.json`.
+The scorecard now requires that native result and classifies the case as
+supported. Its original zero-failures assertion remains, strengthened with an
+explicit supported-case assertion. The original CI failure is retained.

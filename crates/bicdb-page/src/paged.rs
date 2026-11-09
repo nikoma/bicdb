@@ -3836,23 +3836,37 @@ pub struct VisibleKeyPrefixScan<'a> {
     value_prefix_bytes: usize,
 }
 
+impl VisibleKeyPrefixScan<'_> {
+    /// Advance exactly one indexed key, including a key invisible to the
+    /// snapshot. A visible key has `Some(prefix)` (possibly empty); an
+    /// invisible key has `None`. Callers can therefore check cancellation
+    /// even across long runs of deleted or uncommitted keys.
+    pub fn next_candidate(&mut self) -> Option<Result<(Vec<u8>, Option<Vec<u8>>)>> {
+        let _structure = self.store.structure.read();
+        let (key, value) = match self.entries.next()? {
+            Ok(entry) => entry,
+            Err(error) => return Some(Err(error)),
+        };
+        Some(
+            self.store
+                .visible_value_prefix_as_of(
+                    &self.snapshot,
+                    TupleLocator::decode(&value),
+                    self.value_prefix_bytes,
+                )
+                .map(|prefix| (key, prefix)),
+        )
+    }
+}
+
 impl Iterator for VisibleKeyPrefixScan<'_> {
     type Item = Result<(Vec<u8>, Vec<u8>)>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let _structure = self.store.structure.read();
-            let (key, value) = match self.entries.next()? {
-                Ok(entry) => entry,
-                Err(error) => return Some(Err(error)),
-            };
-            match self.store.visible_value_prefix_as_of(
-                &self.snapshot,
-                TupleLocator::decode(&value),
-                self.value_prefix_bytes,
-            ) {
-                Ok(Some(prefix)) => return Some(Ok((key, prefix))),
-                Ok(None) => continue,
+            match self.next_candidate()? {
+                Ok((key, Some(prefix))) => return Some(Ok((key, prefix))),
+                Ok((_, None)) => continue,
                 Err(error) => return Some(Err(error)),
             }
         }
@@ -5386,6 +5400,65 @@ mod tests {
 
     fn open(dir: &TempDir) -> PagedStore {
         PagedStore::open(dir.path(), options()).unwrap().0
+    }
+
+    #[test]
+    fn prefix_candidates_preserve_snapshot_visibility_and_include_invisible_keys() {
+        let dir = TempDir::new().unwrap();
+        let store = open(&dir);
+        let first = store.begin();
+        store.put(first, b"a", b"old").unwrap();
+        store.commit(first).unwrap();
+        let old = store.latest_snapshot();
+        let later = store.begin();
+        store.delete(later, b"a").unwrap();
+        store.put(later, b"b", b"new").unwrap();
+        store.commit(later).unwrap();
+        let pending = store.begin();
+        store.put(pending, b"c", b"pending").unwrap();
+        let latest = store.latest_snapshot();
+        for (snapshot, expected) in [
+            (&old, vec![true, false, false]),
+            (&latest, vec![false, true, false]),
+        ] {
+            let mut scan = store
+                .scan_visible_key_prefixes_from(snapshot, b"", 0)
+                .unwrap();
+            let mut observed = Vec::new();
+            while let Some(entry) = scan.next_candidate() {
+                let (key, prefix) = entry.unwrap();
+                if let Some(prefix) = &prefix {
+                    assert!(prefix.is_empty());
+                }
+                observed.push((key, prefix.is_some()));
+            }
+            assert_eq!(
+                observed
+                    .iter()
+                    .map(|(k, _)| k.as_slice())
+                    .collect::<Vec<_>>(),
+                vec![b"a".as_slice(), b"b".as_slice(), b"c".as_slice()]
+            );
+            assert_eq!(
+                observed
+                    .into_iter()
+                    .map(|(_, visible)| visible)
+                    .collect::<Vec<_>>(),
+                expected
+            );
+            let ordinary = store
+                .scan_visible_key_prefixes_from(snapshot, b"", 0)
+                .unwrap()
+                .map(|entry| entry.unwrap().0)
+                .collect::<Vec<_>>();
+            let visible = if snapshot.xmax == old.xmax {
+                b"a"
+            } else {
+                b"b"
+            };
+            assert_eq!(ordinary, vec![visible.to_vec()]);
+        }
+        store.abort(pending).unwrap();
     }
 
     /// The production follow-up: the floor advance refused (an abort wall

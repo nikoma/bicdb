@@ -24,6 +24,7 @@ mod foreign_keys;
 mod function_attributes;
 pub(crate) mod hierarchy;
 pub mod host_binds;
+pub(crate) mod invalid_routines;
 pub(crate) mod lob_columns;
 pub(crate) mod lob_storage;
 pub mod lobs;
@@ -971,6 +972,7 @@ pub fn lower_session_sql(
     let mut statements = parse_statements(&lowered)?;
     output::lower_calls(&mut statements)?;
     storage_catalog::lower(db, &mut statements, &schema)?;
+    invalid_routines::lower(db, &mut statements, &schema)?;
     partitioning::lower_views(db, &mut statements, &schema)?;
     namespaces::qualify_with_calls(&mut statements, &schema);
     collections::lower_constructors(db, &mut statements, Some(&schema))?;

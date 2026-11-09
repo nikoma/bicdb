@@ -53,6 +53,7 @@ fn bind_relations<T: sqlparser::ast::VisitMut>(
     }
     if let Some(db) = db {
         super::storage_catalog::lower(db, node, schema)?;
+        super::invalid_routines::lower(db, node, schema)?;
         super::partitioning::lower_views(db, node, schema)?;
     }
     if calls {

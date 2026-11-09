@@ -5143,6 +5143,12 @@ impl<'db> SqlEngine<'db> {
             .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(table).to_string());
         let source_rows = if oracle::storage_catalog::is_relation(table) {
             self.storage_free_space_rows()?
+        } else if oracle::invalid_routines::is_relation(table) {
+            oracle::invalid_routines::rows(
+                self.db_ref(),
+                table,
+                &current_user_from_gucs(&self.session_gucs),
+            )?
         } else {
             self.filter_virtual_rows_for_role(table, virtual_rows(self.db_ref(), table)?)?
         };

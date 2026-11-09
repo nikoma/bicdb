@@ -889,6 +889,12 @@ fn gitlab_create_function_options_are_metadata_only() {
     let mut db = BicDb::open(dir.path()).unwrap();
     let mut session = SqlSession::new(&mut db);
 
+    // The composite return type must exist, as PostgreSQL requires. This
+    // fixture exercises function options rather than an undefined type.
+    session
+        .execute("CREATE TABLE namespaces (id BIGINT PRIMARY KEY)")
+        .unwrap();
+
     assert_eq!(
         session
             .execute(

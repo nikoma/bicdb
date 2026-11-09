@@ -801,6 +801,7 @@ fn routine_statement_profile_signature_avoids_nested_body_debug_dump() {
 fn routine_ir_cache_reuses_unchanged_definition_and_recompiles_changes() {
     ROUTINE_IR_CACHE.with(|cache| cache.borrow_mut().clear());
     let routine = RoutineSchema {
+        oracle_invalid: None,
         name: "arbitrary_cached_routine".to_string(),
         schema: "public".to_string(),
         kind: RoutineKind::Function,
@@ -848,6 +849,7 @@ fn routine_ir_cache_reuses_unchanged_definition_and_recompiles_changes() {
 #[test]
 fn routine_ir_binds_scalar_expressions_to_var_ids() {
     let routine = RoutineSchema {
+        oracle_invalid: None,
         schema: "public".to_string(),
         name: "arbitrary_bound_scalar_routine".to_string(),
         kind: RoutineKind::Function,

@@ -1,0 +1,7 @@
+{
+  "query": "\nBEGIN;\nCREATE SCHEMA bicdb_return_fixture_control;\nSET LOCAL search_path=bicdb_return_fixture_control,pg_catalog;\nDO $control$\nBEGIN\n BEGIN\n  EXECUTE $ddl$CREATE FUNCTION find_namespaces_by_id(namespaces_id bigint) RETURNS namespaces LANGUAGE plpgsql STABLE COST 1 PARALLEL SAFE AS 'BEGIN RETURN NULL; END'$ddl$;\n  RAISE EXCEPTION 'unknown return type was accepted';\n EXCEPTION WHEN undefined_object THEN\n  RAISE NOTICE 'unknown_return_type_SQLSTATE=%', SQLSTATE;\n END;\nEND\n$control$;\nCREATE TABLE namespaces(id bigint PRIMARY KEY);\nCREATE FUNCTION find_namespaces_by_id(namespaces_id bigint) RETURNS namespaces LANGUAGE plpgsql STABLE COST 1 PARALLEL SAFE AS $$BEGIN RETURN NULL; END$$;\nSELECT pg_typeof(find_namespaces_by_id(1));\nROLLBACK;\n",
+  "exit": 0,
+  "stdout": "BEGIN\nCREATE SCHEMA\nSET\nDO\nCREATE TABLE\nCREATE FUNCTION\nnamespaces\nROLLBACK\n",
+  "stderr": "NOTICE:  unknown_return_type_SQLSTATE=42704\n",
+  "fixture_changes_rolled_back": true
+}

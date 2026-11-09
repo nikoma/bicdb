@@ -212,7 +212,24 @@ impl<'db> SqlSession<'db> {
                 }
             }
         }
-        self.save_session_routine(&routine)
+        if let Some(previous) = existing
+            .iter()
+            .find(|previous| previous.overload == routine.overload)
+        {
+            self.require_object_ownership(
+                previous.owner(),
+                &format!("routine {}", routine.name),
+                "replace it",
+            )?;
+            // CREATE OR REPLACE preserves ownership; ALTER OWNER has its own gate.
+            routine.owner = previous.owner.clone();
+        }
+        let notice = oracle::invalid_routines::classify(self.db_ref(), &mut routine)?;
+        self.save_session_routine(&routine)?;
+        if let Some(notice) = notice {
+            crate::statement_context::note_notice(notice)?;
+        }
+        Ok(())
     }
 
     pub(crate) fn delete_session_routine(&mut self, routine: &RoutineSchema) -> Result<bool> {

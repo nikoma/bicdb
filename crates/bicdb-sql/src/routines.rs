@@ -61,6 +61,7 @@ pub(crate) fn compile_routine_ir(routine: &RoutineSchema) -> Result<RoutineIR> {
 }
 
 fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) -> Result<RoutineIR> {
+    oracle::invalid_routines::check_executable(routine)?;
     let _lobs = oracle::lobs::Scope::new(
         oracle::preview_routine_language_version(&routine.language).is_some_and(|v| v >= 29),
     );
@@ -317,6 +318,7 @@ pub(crate) fn compile_cached_routine_ir_in_catalog(
     routine: &RoutineSchema,
     db: Option<&BicDb>,
 ) -> Result<Arc<RoutineIR>> {
+    oracle::invalid_routines::check_executable(routine)?;
     let mut key = routine_ir_cache_key(routine);
     if let (Some(db), Some(path)) = (db, crate::search_path::active_path()) {
         // The bound body depends on the path and on which relations exist.
@@ -2796,11 +2798,18 @@ pub(crate) fn list_routines(db: &BicDb) -> Result<Vec<RoutineSchema>> {
                 .map_err(SqlError::from)
         })
         .collect::<Result<Vec<_>>>()?;
+    for routine in &routines {
+        oracle::invalid_routines::validate(db, routine)?;
+    }
     routines.sort_by(|left, right| left.name.cmp(&right.name));
     Ok(routines)
 }
 
 pub(crate) fn save_routine(db: &mut BicDb, routine: &RoutineSchema) -> Result<()> {
+    if routine.oracle_invalid.is_some() {
+        db.enable_oracle_invalid_routines_v1()?;
+    }
+    oracle::invalid_routines::validate(db, routine)?;
     if oracle::preview_routine_language_version(&routine.language).is_some() {
         let body = plpgsql_body_from_definition(&routine.definition)?;
         oracle::prepare_hierarchy_save(db, &body)?;

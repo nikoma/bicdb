@@ -4417,6 +4417,8 @@ struct ViewSchema {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct RoutineSchema {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    oracle_invalid: Option<oracle::invalid_routines::InvalidReturnType>,
     name: String,
     kind: RoutineKind,
     #[serde(default)]
@@ -4542,6 +4544,9 @@ impl RoutineSchema {
         // Stored flags from older writers may have classified body literals as
         // attributes. The declaration is authoritative in both directions.
         self.security_definer = routine_definition_is_security_definer(&self.definition);
+        if self.oracle_invalid.is_some() {
+            return self;
+        }
         // Custom return identities in older records may have been flattened
         // and case-folded. Their saved declaration remains authoritative. Do
         // not rederive builtin physical DATE/national metadata from this path.

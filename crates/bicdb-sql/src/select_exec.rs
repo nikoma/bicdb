@@ -3628,7 +3628,10 @@ pub(crate) fn single_function_expr(function: &Function) -> Result<Expr> {
 pub(crate) const PROJECTION_RELATION_PREFIX: &str = "bicdb_projection.";
 
 pub(crate) fn is_virtual_table(table: &str) -> bool {
-    if oracle::storage_catalog::is_relation(table) || oracle::partitioning::is_relation(table) {
+    if oracle::storage_catalog::is_relation(table)
+        || oracle::partitioning::is_relation(table)
+        || oracle::invalid_routines::is_relation(table)
+    {
         return true;
     }
     if table.starts_with(PROJECTION_RELATION_PREFIX) || table == "bicdb_projections" {
@@ -3815,6 +3818,11 @@ pub(crate) fn is_virtual_table(table: &str) -> bool {
 }
 
 pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    if oracle::invalid_routines::is_relation(table) {
+        return Err(SqlError::BicDb(BicDbError::Authorization(
+            "routine dictionary requires a session identity".into(),
+        )));
+    }
     if oracle::storage_catalog::is_relation(table) {
         return Err(SqlError::BicDb(BicDbError::Authorization(
             "storage inventory requires a session identity".into(),
@@ -4037,6 +4045,9 @@ fn pg_default_acl_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
 }
 
 pub(crate) fn virtual_table_columns(table: &str) -> Option<Vec<String>> {
+    if let Some(columns) = oracle::invalid_routines::columns(table) {
+        return Some(columns.iter().map(|(name, _)| name.to_string()).collect());
+    }
     if let Some(columns) = oracle::partitioning::columns(table) {
         return Some(columns.into_iter().map(|(name, _)| name).collect());
     }
@@ -5066,6 +5077,14 @@ pub(crate) fn virtual_table_columns(table: &str) -> Option<Vec<String>> {
 }
 
 pub(crate) fn virtual_table_column_types(table: &str) -> Option<Vec<(String, Option<String>)>> {
+    if let Some(columns) = oracle::invalid_routines::columns(table) {
+        return Some(
+            columns
+                .iter()
+                .map(|(name, kind)| (name.to_string(), Some(kind.to_string())))
+                .collect(),
+        );
+    }
     if let Some(columns) = oracle::partitioning::columns(table) {
         return Some(columns);
     }

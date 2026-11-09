@@ -1,0 +1,59 @@
+{
+  "service": "BICDBAPPCTRL",
+  "protected_source_untouched": true,
+  "cases": [
+    {
+      "sql": "CREATE FUNCTION BICDB_INVALID_2123967 RETURN BICDB_INVALID_2123967_NO_TYPE IS BEGIN RETURN 1; END;",
+      "warning": {
+        "code": 0,
+        "message": "DPY-7000: creation succeeded with compilation errors"
+      },
+      "objects": [
+        [
+          "FUNCTION",
+          "INVALID"
+        ]
+      ],
+      "diagnostics": [
+        [
+          1,
+          1,
+          39,
+          "ERROR",
+          201,
+          "PLS-00201: identifier 'BICDB_INVALID_2123967_NO_TYPE' must be declared"
+        ],
+        [
+          2,
+          0,
+          0,
+          "ERROR",
+          0,
+          "PL/SQL: Compilation unit analysis terminated"
+        ]
+      ],
+      "call_error": {
+        "code": 6575,
+        "message": "ORA-06575: Package or function BICDB_INVALID_2123967 is in an invalid state\nHelp: https://docs.oracle.com/error-help/db/ora-06575/"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE FUNCTION BICDB_INVALID_2123967 RETURN NUMBER IS BEGIN RETURN 3; END;",
+      "warning": null,
+      "objects": [
+        [
+          "FUNCTION",
+          "VALID"
+        ]
+      ],
+      "diagnostics": [],
+      "call_rows": [
+        [
+          3
+        ]
+      ]
+    }
+  ],
+  "database_version": "23.26.3.0.0",
+  "objects_after_drop": 0
+}

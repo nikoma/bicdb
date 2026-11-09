@@ -2,9 +2,10 @@
 
 Status: implemented for the page log, the page file, checkpoints, the
 transaction log (`transactions.log`), the transaction-log cut, commit
-outcomes, standby import and the synchronous-quorum confirmation. The
-remaining sites in the inventory (section 7) are listed with their current
-behaviour and are the scope of a follow-up change.
+outcomes, standby import and the synchronous-quorum confirmation, and for
+the generic frame logs (`sync.log`, the event log, record segments; section
+7.4). The remaining sites in the inventory (section 7.3) are listed with
+their current behaviour and are the scope of follow-up changes.
 
 ## 1. Why
 
@@ -229,7 +230,7 @@ what recovery does. Line numbers are at the time of writing.
 | Page-log append (`page_log.write`) | `Wal::append`, `crates/bicdb-page/src/wal.rs:593` | Error | Yes: next append followed a torn record → No | Torn tail truncated; stops at the first bad record |
 | Page-log sync (`page_log.sync`) | `Wal::sync_through`, `wal.rs:772` | Error to the syncer; **waiters retried their own fsync** | **Yes** (the qualification finding) → No; waiters fail; `durable_lsn` frozen | Replays committed images after the redo point |
 | Segment seal sync / rename / directory sync (`page_log.seal_sync`, `page_log.seal_rename`, `page_log.seal_dir_sync`) | `Wal::seal_active_locked`, `wal.rs:523` | Error for sync and rename; **directory sync ignored** | Yes → No | Sealed segments discovered and replayed in order |
-| Log reset at checkpoint (`page_log.reset`) | `Wal::reset`, `wal.rs:1058` | Error | Yes → No | A sealed segment left behind would be replayed over newer pages; now fenced |
+| Log reset at checkpoint (`page_log.reset_unlink`, `page_log.reset_dir_sync`, `page_log.reset`, `page_log.reset_sync`) | `Wal::reset` | Error | Yes → No | Crash-ordered (`docs/recovery-semantics.md`, GAP-2): sealed segments are deleted oldest first and the directory synced before the active file, which holds the checkpoint record, is truncated and synced. A failure or crash at any step leaves a chain that still reaches the checkpoint record, or an empty log. A stale chain left by an older engine is recognised at recovery and the reset finished |
 | Checkpoint record | `Wal::checkpoint`, `wal.rs:856` (append + sync) | Error | Yes → No | Redo point from the superblock horizon |
 | `finish_checkpoint` | `wal.rs:1524` (log sync, page flush, record, `publish_root`, reset) | Error | Yes → No | As above |
 | Page-file sync (`page_file.sync`) | `PageStore::sync_data_observed`, `crates/bicdb-page/src/manager.rs:2466`; used by `flush`, `publish_root` (superblock), `flush_all`, tail reclaim | Error; dirty set kept for a retry | **Yes** (a retried sync could succeed and let the checkpoint truncate the log) → No | Replays the log from the redo point |
@@ -260,10 +261,11 @@ what recovery does. Line numbers are at the time of writing.
 
 ### 7.3 Remaining sites (follow-up; behaviour unchanged here)
 
+The generic frame logs (`sync.log`, event segments, record-segment deltas,
+the open-time audit publication) were listed here; section 7.4 covers them.
+
 | Site | Code | Caller told | Later acks possible? | Recovery |
 |---|---|---|---|---|
-| `sync.log` appends | `SyncLog::append_ops` / `mark_synced`, `crates/bicdb-core/src/sync.rs:103`, `:142` → `storage::append_frames_with_sync_mode`, `storage.rs:231` | Error before the commit sequence is reserved (the commit aborts) | Yes. No torn-tail repair and no poison: the next append lands after a torn prefix. | `read_frames` truncates at the first bad frame, which also drops every later frame reported as written |
-| Other generic frame appends (event segments, record-segment deltas, open-time audit publication) | `storage::append_frames*`, callers `event.rs:536`, `db/commit_snapshot.rs` (record segments), `db.rs` (audit publication at open) | Error | Yes (same as `sync.log`) | Same as `sync.log` |
 | Sidecars: catalog, index catalog, planner stats, model registry, memory index | `storage::write_atomic` (`storage.rs:1307`), `write_frame_atomic` (`:1336`), `write_sidecar` (`db.rs:20698`) | Error. If the directory sync fails after the rename, the new file is already live while memory is rolled back. | Yes | Whatever file is in the directory |
 | HA state, consensus state | `persist_ha_state` (`db.rs:18400`), `persist_consensus_state` (`db.rs:18480`) | Error, except `let _ = persist_ha_state(...)` on an apply-error path (`db.rs:18563`) | Yes | No directory `fsync` after the rename |
 | HA bootstrap install | `db/ha_bootstrap.rs:184` | Directory sync ignored | — | Crash ordering after the ignored sync is not guaranteed |
@@ -271,6 +273,117 @@ what recovery does. Line numbers are at the time of writing.
 | Page-WAL archive | `archive_wal_segments`, `db/spatial_paged.rs:1755`; directory sync ignored at `:1825` | Copy, sync and rename errors propagated | `mark_wal_archived_through` runs even when the directory sync failed, so local segments can be released before the archive is durable | — |
 | FTS segment manifest | `crates/bicdb-core/src/fts_segment.rs:1867` | Directory sync ignored | — | Manifest re-read at open |
 | Page-store relayout / migration | `crates/bicdb-page/src/manager.rs:2823` | Directory sync ignored | Offline tool | — |
+
+### 7.4 Generic frame logs: tail repair, poisoning and mid-file damage
+
+Every file written by `storage::append_frames*` (the "generic frame
+appender", `crates/bicdb-core/src/storage.rs:231`) and read back by the
+recovery readers `read_frames`, `stream_frames` and `read_frames_from`.
+
+**Inventory**
+
+| User | Writer | Reader at open | Acknowledged when | Before this change | Now |
+|---|---|---|---|---|---|
+| `sync.log`, the CDC outbox | `SyncLog::append_ops` (`sync.rs:113`), called before the commit decision (`db/spatial_paged.rs:2444`); `SyncLog::mark_synced` (`sync.rs:156`) | `read_frames` in `SyncLog::open` | An op: its commit returns `Ok`. An ack: `mark_synced` returns `Ok`. | A failed or short append left a torn prefix and the log stayed usable. The next commit's ops landed after it, and the reopen truncated at the torn frame, dropping them (measured: 6 acknowledged ops lost, and 3 complete frames of the *aborted* commit reported as pending ops). A failed `mark_synced` likewise lost the next acknowledgment. | Tail cut back; the commit aborts with an ordinary error; nothing of it stays in the outbox. On a failed cut-back: poisoned, fenced (`frame_log.repair`), and the reopen cuts to the recorded acknowledged length. |
+| `events/events.seg`, the event log (user events, broker, geofence and spatial events, the record-audit outbox) | `EventStream::append_event` (`event.rs:540`) | `stream_frames` in `EventStream::open_with_encryption` | The append returns `Ok`. | Same failure: every later event lost at the reopen (measured: 5 of 5). | Same repair and poisoning. |
+| Record-audit publication behind a commit | `Transaction::finalize_committed_record_audit_events` (`db.rs`): event-log appends, then a `RecordAuditPublished` marker in the transaction log | Transaction-log recovery republishes unmarked outboxes | The commit's decision was already durable. | The commit returned an ordinary error and the handle stayed usable. A checkpoint on that handle then cut the transaction log past the unpublished outbox, and the committed row's audit event was lost for good (measured). | Fences (`record_audit.publish`). The commit is durable and visible, so it is reported as committed, with the failure logged, as for a failed publication marker (section 4). The fenced handle refuses the checkpoint, and the reopen republishes the outbox. The standby journal import already fences (`standby.import`). |
+| `segments/<collection>.seg`, record segments (embedded storage) | Checkpoint delta append, `checkpoint_write_segments` (`db/commit_snapshot.rs:2419`) | `read_frames` / `read_frames_from` (snapshot tail) at open | The checkpoint succeeds, then cuts the transaction log. | A failed delta append left a torn prefix; the retried checkpoint appended after it and cut the transaction log; the reopen truncated at the torn frame (measured: acknowledged rows lost). | Same repair and poisoning; a failed cut-back fences. |
+| `transactions.log`, open-time audit publication markers | `append_frames` at open (`db.rs:10393`) | `stream_frames` in `recover_transaction_log` (`db.rs:19134`) | Markers only; republishing is idempotent. | No repair; a failure fails the open, and the next open truncates the torn tail. | Same repair; a failed cut-back leaves the marker file, which the next open applies. |
+| Atomic rewrites: `rewrite_frame_file`, `rewrite_frame_file_iter`, `rewrite_record_segment_streamed` (`db.rs:18225-18306`), `write_frame_atomic` | Append into a fresh temporary file, then rename | — | After the rename. | A failed append abandoned the temporary file; the live file was untouched. | Unchanged in effect (the temporary file is cut back or abandoned). |
+| Binary snapshot `records.snap` | Snapshot publication | `read_frames` in `snapshot.rs:415` | — (a cache of the segments) | — | Mid-file damage now reads as "snapshot unusable", and the open falls back to the segments. |
+| `transactions.log`, live readers for replication | — | `replication_retention_status` (`db.rs:11199`) and `replication_commits_from_retained_wal` (`db.rs:11421`, behind `export_replication_frames_since`) | — | **Used the recovery readers on the live log.** A commit mid-write looked like a torn tail, was truncated under the writer, and the writer then acknowledged it. | Read-only readers (`stream_frames_live`, `read_frames_readonly_from`) that stop before an incomplete frame and never truncate. |
+
+Not users of the generic appender, and unchanged: the commit-log archive
+(`log_archive.rs`, its own format and repair, section 7.3) and the cluster
+backup journal (`distribution_backup_run.rs`).
+
+**Failed append (writer side).** `append_frames_with_sync_mode` now goes
+through the transaction log's `write_raw_with_repair`. Any failure (an error
+before writing, a short write, or a failed sync after a complete write)
+cuts the file back to its length before the batch, and syncs that cut when
+the append was durable. Nothing in the batch was acknowledged, so nothing
+acknowledged is removed, and the next append starts on a frame boundary.
+The error is ordinary (retryable), not a fence: every earlier
+acknowledged append was synced before it was acknowledged, so a failed
+`fsync` cannot have dropped acknowledged data in these files, and the
+failed bytes no longer exist. The database-level consequences are handled
+by each caller: a `sync.log` failure aborts its commit before the decision;
+an audit-publication failure fences (above); a segment failure fails the
+checkpoint, which retries.
+
+**Failed cut-back.** When the cut-back fails too, the file has bytes of
+unknown status after its last acknowledged frame, possibly including
+complete frames of the failed batch. Then:
+
+1. The path is poisoned in this process: every later append to it is
+   refused with `WriteFailed { site: "frame_log.repair" }` and writes
+   nothing, so no acknowledged frame is ever placed behind the damage. The
+   generic appender opens the file per call, so the poison set is
+   process-wide, keyed by path; a recovery reader clears it.
+2. `<file>.append-failed` records the length before the failed append
+   (best effort: the disk is already failing). The next open's recovery
+   reader cuts the file to that length before reading, so complete frames
+   of the failed batch are not accepted. A `sync.log` append belongs to a
+   commit that aborted, and its ops must not reach a CDC consumer. While the
+   marker exists, the appender refuses that file in any process, which
+   covers a log that the open does not read (a disabled `sync.log`).
+3. `SyncLog`, `EventStream` and the checkpoint's segment write record the
+   failure in the database's `DurabilityHealth`, so the database is fenced
+   and the reopen runs verification (section 6).
+
+**Recovery (reader side).** A recovery walk ends at the first frame that is
+incomplete, has an unknown header, the wrong kind, an oversized length or
+a bad checksum. Before truncating there, the reader now scans the rest of
+the file for a complete, checksum-valid frame (`first_valid_frame_after`,
+`storage.rs:1123`; only on this rare path):
+
+- None found: a torn tail. Appends are sequential, and a failed append cuts
+  itself back or poisons the file, so a crash or failure leaves only a torn
+  suffix. It is truncated and the truncation synced (`settle_recovered_tail`,
+  `storage.rs:1090`).
+- One found: damage in the middle (media corruption, or a file written by a
+  version without the repair). Truncating would silently drop that frame
+  and every later one. The reader returns `Corruption` ("a valid frame
+  follows at offset N"), and the file is left unchanged. This closes GAP-3
+  of `docs/recovery-semantics.md` for these logs and for the transaction
+  log, which uses the same reader; the page log (`store.wal`) is not
+  affected.
+
+Frame headers start with a 4-byte magic and a version byte that serialized
+JSON payloads cannot contain (control bytes are escaped), and a match must
+also pass the CRC, so the scan does not mistake payload bytes for a frame.
+
+**Operator recovery for mid-file damage.** `bicdb_core::salvage_frame_log`
+(`storage.rs:1191`), with the database closed, keeps every frame before the
+damage, copies the damage and everything after it to
+`<file>.damaged-<offset>` (synced before the log is cut), and truncates the
+log there. It is the explicit decision to give up those frames, for when no
+backup can restore them.
+
+**Residual assumptions.**
+
+- *Out-of-order writeback on power loss.* A torn suffix is the only damage a
+  crash leaves when the file system persists a file's appended data in
+  order. Some file systems may persist a later page of an unsynced append
+  before an earlier one. Power loss in the middle of the final, unsynced
+  append could then leave a hole followed by valid frames of that same
+  append. Recovery reports this as mid-file damage and refuses the open
+  rather than guessing. Nothing in that append was acknowledged, so
+  `salvage_frame_log` loses nothing acknowledged in that case, but it needs
+  an operator. With `fsync` off, the unsynced window is larger.
+- *The marker is best effort.* When it cannot be written, the reopen
+  accepts whatever complete frames of the failed batch reached the disk.
+- *`sync.log` is written before the commit decision*
+  (`db/spatial_paged.rs:2444`, the existing TODO). A crash, or a commit
+  that aborts (a failed decision write, or `08007` resolved as absent),
+  after its ops were appended leaves those ops pending for a commit that
+  did not happen. This change does not alter that ordering; it needs the
+  outbox to move behind the decision, with recovery republishing from the
+  transaction log as the audit outbox does.
+- *Replication export reads the file, not the durable prefix.*
+  `export_replication_frames_since` can return a complete frame whose
+  `O_DSYNC` write has not returned yet. This change only stops that reader
+  from truncating; bounding it by the written sequence is separate.
 
 ## 8. Site names and fault injection
 
@@ -280,7 +393,9 @@ The recorded `site` and the injection name are the same strings.
 |---|---|
 | `page_log.write`, `page_log.sync` | `Wal::append`, `Wal::sync_through` |
 | `page_log.seal_sync`, `page_log.seal_dir_sync` | `Wal::seal_active_locked` (rename failures record `page_log.seal_rename`) |
-| `page_log.reset` | `Wal::reset` (truncate; sealed-segment removal records the same site) |
+| `page_log.reset_unlink` | `Wal::reset`, each sealed-segment deletion |
+| `page_log.reset_dir_sync` | `Wal::reset`, the directory sync after the deletions |
+| `page_log.reset`, `page_log.reset_sync` | `Wal::reset`, the active-file truncation and its sync |
 | `page_file.write` | `PageStore::write_page_raw` (not fatal) |
 | `page_file.sync` | `PageStore::sync_data_observed` |
 | `transaction_log.write` | `storage::write_raw`, before the write |
@@ -292,8 +407,14 @@ The recorded `site` and the injection name are the same strings.
 | `backup_gate.timeout` | the backup write-gate wait reports its timeout at once (not fatal) |
 | `transaction_log.cut_window` | hook point only (`arm_io_hook`), between the cut's flush and its rename |
 
+| `frame_log.write` | `storage::append_frames*`, before the write (scoped by the file's path) |
+| `frame_log.short_write` | the same, after writing about half the batch, ending inside a frame |
+| `frame_log.sync` | the same, after the whole batch was written, when the append is durable |
+| `frame_log.repair` | the cut-back after a failed append (recorded as `frame_log.repair` when it fails) |
+
 Other recorded sites: `transaction_log.auxiliary`, `paged.commit`,
-`paged.abort`, `commit.materialize`, `standby.import`, `open.verify`.
+`paged.abort`, `commit.materialize`, `standby.import`, `open.verify`,
+`record_audit.publish`.
 
 Injection (`crates/bicdb-page/src/test_faults.rs`):
 
@@ -353,6 +474,21 @@ Injection (`crates/bicdb-page/src/test_faults.rs`):
 | `commit_durability_crash` crash matrices (unchanged) | No regression in crash recovery |
 | `db::tx_log_write_failure_tests::partial_append_retry_keeps_every_acknowledged_frame_recoverable` | Updated: a real kernel short write (`RLIMIT_FSIZE`) is repaired, the failed handle refuses to retry, and a new handle (the reopen) appends cleanly over the repaired tail |
 | pgwire and SQL `durability_sqlstate_tests` | `58030` and `08007` mappings |
+| `storage::tests::a_torn_or_damaged_last_frame_at_every_byte_offset_is_cut_to_the_last_good_frame` | A last frame cut at every byte offset inside it, and a complete last frame with any one byte damaged, for each of the four recovery readers (buffered, mmap, streaming, snapshot tail): exactly the last frame is cut, every earlier frame kept, appends resume on the boundary |
+| `storage::tests::damage_followed_by_valid_frames_is_corruption_and_the_file_is_left_unchanged` | Every byte of a middle frame, a zeroed run, and a torn frame followed by complete ones, for each reader: `Corruption`, file byte-for-byte unchanged; `salvage_frame_log` keeps the prefix and preserves the rest |
+| `storage::tests::a_failed_short_or_unsynced_append_is_cut_back_and_later_appends_survive` | `frame_log.write`, `frame_log.short_write`, `frame_log.sync`, with and without `fsync` |
+| `storage::tests::a_failed_repair_poisons_the_log_until_recovery_cuts_the_failed_bytes` | Poison refuses appends and writes nothing; each recovery reader applies the marker, so complete frames of the failed batch are not accepted |
+| `storage::tests::live_readers_never_truncate_an_in_flight_frame` | The live readers stop before an incomplete frame and never change the file |
+| `frame_log_torn_tail::a_failed_sync_log_append_aborts_its_commit_and_later_commits_survive_reopen` | Embedded and paged, three failure kinds: the commit aborts with an ordinary error, the database stays healthy, and the CDC outbox equals exactly the acknowledged commits' ops before and after two reopens |
+| `frame_log_torn_tail::a_failed_sync_log_repair_fences_and_recovery_never_reports_the_aborted_ops` | A failed cut-back fences (`frame_log.repair`); the reopen verifies and reports no op of the aborted commit |
+| `frame_log_torn_tail::a_failed_sync_acknowledgment_keeps_the_ops_pending_and_the_log_clean` | `mark_synced` failures |
+| `frame_log_torn_tail::a_failed_event_append_is_cut_back_and_later_events_survive_reopen`, `a_failed_event_log_repair_fences_and_recovery_keeps_only_acknowledged_events` | The event log, both storage modes |
+| `frame_log_torn_tail::audit_events_behind_a_commit_survive_a_failed_event_append` | Audit outbox: the commit is reported committed, the database fenced (`record_audit.publish`), the checkpoint refused on the fenced handle, the reopen republishes; after more commits, a checkpoint and two reopens every committed row has exactly one audit event |
+| `frame_log_torn_tail::a_failed_segment_append_during_checkpoint_loses_no_acknowledged_row` | Record-segment delta append during a checkpoint, then a checkpoint that cuts the transaction log, then two reopens |
+| `frame_log_torn_tail::damage_in_the_middle_of_a_frame_log_refuses_the_open_until_salvaged` | `sync.log` and the event log, both modes: the open refuses, the file is unchanged, salvage, the open succeeds |
+| `frame_log_torn_tail::replication_readers_never_truncate_the_live_transaction_log` | `replication_retention_status` and `export_replication_frames_since` with a frame mid-write |
+| `commit_durability_crash::transaction_log_only_path_survives_every_crash_point_with_eviction` (`materialize.torn_markers`) | The crash hook now holds the transaction log's writer lock across its torn write and the crash. It used to release the lock in between, so a concurrent commit could append complete frames behind the torn ones, a state no crash can produce; recovery, which used to drop those frames silently, now refuses it. Passed 3 of 3 repeats after the change |
+| `core::intentional_frame_corruption_is_detected_and_not_silently_repaired` | Updated: offset-0 damage in a log with later frames refuses the open (it used to truncate the whole log); salvage, then the open succeeds |
 
 Mutation checks (each mutation applied alone; the named tests must fail):
 
@@ -361,16 +497,19 @@ Mutation checks (each mutation applied alone; the named tests must fail):
 | The page log's sync loop no longer checks the health state (waiters retry, a later sync publishes) | `a_failed_log_sync_is_sticky_and_no_later_sync_publishes_durability`, `a_failed_log_write_fences_the_log`, `concurrent_commits_waiting_on_a_failing_sync_all_fail` |
 | The transaction log's `write_durable` and `flush_buffer` no longer check the health state | `concurrent_commits_around_a_failing_write_never_acknowledge_after_it` (writes after the failure: 31 instead of 25) |
 | The cut no longer fences after a failed rename or sync | `a_failed_log_cut_fences_after_the_rename_and_not_before` |
+| Generic appender: the cut-back after a failed append is a no-op | `a_failed_short_or_unsynced_append_is_cut_back_and_later_appends_survive` and 5 `frame_log_torn_tail` tests |
+| Recovery readers: no mid-file detection (always truncate) | `damage_followed_by_valid_frames_is_corruption_and_the_file_is_left_unchanged`, `stream_frames_matches_read_frames_across_recovery_shapes`, `damage_in_the_middle_of_a_frame_log_refuses_the_open_until_salvaged`, `core::intentional_frame_corruption_is_detected_and_not_silently_repaired` |
+| Both of the above (the old behaviour), with the cut-back length checks relaxed so the reconciliation runs | Acknowledged data lost at the reopen: record rows (`delta-0` …), 5 of 5 later events, 6 later CDC ops plus 3 ops of the aborted commit reported, a CDC acknowledgment |
+| Replication readers use the recovery readers again | `replication_readers_never_truncate_the_live_transaction_log` |
+| The append-failure marker is ignored | `a_failed_repair_poisons_the_log_until_recovery_cuts_the_failed_bytes`, `a_failed_sync_log_repair_fences_and_recovery_never_reports_the_aborted_ops`, `a_failed_event_log_repair_fences_and_recovery_keeps_only_acknowledged_events` |
+| A failed event-log append during audit publication no longer fences (and the test's fence check relaxed) | `audit_events_behind_a_commit_survive_a_failed_event_append`: the checkpoint cut the outbox, and the committed row's audit event was lost |
 
 ## 10. Known gaps (outside this change)
 
-- **Partial page-log reset.** If removing the sealed segments fails part way
-  through `Wal::reset`, or the process crashes there, the next recovery can
-  lose checkpointed pages. Fencing stops this handle, but it does **not**
-  make the on-disk state a partial reset leaves safe. Until the
-  recovery-side fix (follow-up 1, "GAP-2") lands, treat a `page_log.reset`
-  failure as needing that fix or a restore. It is scheduled to land
-  directly after this change.
+- **Partial page-log reset: fixed** (GAP-2, `docs/recovery-semantics.md`
+  4.4). `Wal::reset` is crash-ordered: segments deleted, directory synced,
+  active file truncated and synced last. Recovery finishes an interrupted
+  reset, and refuses any other short chain.
 - **Reopening mid-migration.** A store whose online extent migration
   stopped before it had created every segment its page count implies does
   not reopen (`SegmentMissing`). This happens whether the migration step
@@ -410,11 +549,25 @@ affected outcomes as unknown. Points the reviewer should confirm:
    not a change in what is durable.
 3. **Reads.** Reads that the existing recovery fence guarded are refused on
    a fenced handle, as they already were after a failed materialization.
-
 All three were approved by the owner as proposed. Recovery-dependent reads
 stay fenced for this release; any future safe-read exception needs separate
 qualification. The incarnation journal adds one `fsync`ed append per open,
 never on the commit path.
+
+The frame-log follow-up (section 7.4) adds two points for review:
+
+4. **Mid-file damage refuses the open.** Damage in a frame log that has
+   valid frames after it used to be truncated silently at open; it is now
+   `Corruption`, and the open fails until the file is restored or salvaged.
+   This trades availability for not losing acknowledged frames. It applies
+   to the transaction log too, which shares the reader.
+5. **A failed event-log append during audit publication fences.** It used
+   to return an ordinary error on a usable handle, and a checkpoint on that
+   handle could then cut the unpublished outbox out of the transaction log.
+   It now follows the rule of section 4 for a failed publication marker:
+   the commit, durable and visible, is reported as committed, the failure
+   is logged (`durability.audit_publication_deferred`), and the database is
+   fenced, so the next checkpoint is refused and the reopen republishes.
 
 Not implemented, because each changes the durability contract or adds
 synchronous I/O to a hot path, and needs a decision first:
@@ -423,7 +576,7 @@ synchronous I/O to a hot path, and needs a decision first:
   directory `fsync` after removing sealed segments).
 - Adding the missing directory `fsync` to HA and consensus state files, and
   failing closed on the sidecar directory syncs.
-- A torn-tail repair and poison for the generic frame appender
-  (`sync.log`, event segments), and fail-closed handling of the commit-log
-  archive's retried `sync()` and the page-WAL archive's ignored directory
-  sync before `mark_wal_archived_through`.
+- Fail-closed handling of the commit-log archive's retried `sync()` and the
+  page-WAL archive's ignored directory sync before
+  `mark_wal_archived_through`. (The generic frame appender's tail repair
+  and poisoning are in section 7.4.)

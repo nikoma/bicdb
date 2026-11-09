@@ -151,6 +151,16 @@ fn postgres_dialect_forms_do_not_apply_to_the_oracle_profile() {
          END;"
     )
     .and_then(|_| run(&mut db, "SELECT equals_form FROM dual"))
+    .is_err()); // ELSEIF is not a spelling of ELSIF in this profile.
+    assert!(run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION elseif_form RETURN NUMBER AS
+         BEGIN
+           IF 1 = 0 THEN RETURN 0; ELSEIF 1 = 1 THEN RETURN 1; END IF;
+           RETURN 2;
+         END;"
+    )
+    .and_then(|_| run(&mut db, "SELECT elseif_form FROM dual"))
     .is_err());
 }
 
@@ -314,6 +324,25 @@ fn driver_metadata_presets_are_published() {
             .rows;
         assert_eq!(texts(rows), vec![vec!["32"]], "{profile}");
     }
+}
+
+/// Query rewrite rules are a PostgreSQL feature: the Oracle profile keeps
+/// rejecting CREATE RULE, and its DML is never rewritten.
+#[test]
+fn rules_are_not_available_in_the_oracle_profile() {
+    let (_root, mut db) = app_database();
+    run(&mut db, "CREATE TABLE ruled (id NUMBER)").unwrap();
+    assert!(run(
+        &mut db,
+        "CREATE RULE keep AS ON DELETE TO ruled DO INSTEAD NOTHING"
+    )
+    .is_err());
+    run(&mut db, "INSERT INTO ruled VALUES (1)").unwrap();
+    run(&mut db, "DELETE FROM ruled").unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT COUNT(*) FROM ruled").unwrap()),
+        vec![vec!["0".to_string()]]
+    );
 }
 
 #[test]
@@ -480,6 +509,25 @@ fn missing_application_relations_are_not_reported_as_reserved_names() {
     }
 }
 
+/// A user function named like a built-in SQL function does not take
+/// unqualified calls of that name in this profile.
+#[test]
+fn builtin_functions_keep_unqualified_calls_over_user_functions() {
+    let (_root, mut db) = app_database();
+    run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION lower(p_text IN VARCHAR2) RETURN VARCHAR2 AS
+         BEGIN
+           RETURN 'user-lower';
+         END;",
+    )
+    .unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT LOWER('A') FROM dual").unwrap()),
+        vec![vec!["a".to_string()]]
+    );
+}
+
 /// A correlated subquery names a schema-local UPDATE or DELETE target by its
 /// table name in the Oracle profile too.
 #[test]
@@ -508,6 +556,23 @@ fn correlated_references_name_update_and_delete_targets_by_table_name() {
     assert_eq!(
         texts(run(&mut db, "SELECT COUNT(*) FROM line").unwrap()),
         vec![vec!["1".to_string()]]
+    );
+}
+
+/// A column named INTERVAL is quoted as an identifier without changing the
+/// statement's other tokens.
+#[test]
+fn interval_identifier_quoting_keeps_string_literals() {
+    let (_root, mut db) = app_database();
+    run(
+        &mut db,
+        "CREATE TABLE schedule (id NUMBER, \"INTERVAL\" NUMBER)",
+    )
+    .unwrap();
+    run(&mut db, "INSERT INTO schedule VALUES (1, 7)").unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT 'it''s', interval FROM schedule").unwrap()),
+        vec![vec!["it's".to_string(), "7".to_string()]]
     );
 }
 
@@ -571,4 +636,25 @@ fn oracle_standalone_functions_are_replaced_not_overloaded() {
         vec![vec!["3".to_string()]]
     );
     assert!(run(&mut db, "SELECT pick(1) FROM dual").is_err());
+}
+
+/// PL/SQL compares DATE with TIMESTAMP values as date/time values.
+#[test]
+fn plsql_compares_dates_and_timestamps_as_datetimes() {
+    let (_root, mut db) = app_database();
+    run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION same_instant(p_days IN NUMBER) RETURN NUMBER AS
+           d DATE := TO_DATE('2002-07-04', 'YYYY-MM-DD');
+           t TIMESTAMP := TO_TIMESTAMP('2002-07-04 00:00:00', 'YYYY-MM-DD HH24:MI:SS');
+         BEGIN
+           IF d = t AND NOT d <> t AND d < t + p_days THEN RETURN 1; END IF;
+           RETURN 0;
+         END;",
+    )
+    .unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT same_instant(1) FROM dual").unwrap()),
+        vec![vec!["1".to_string()]]
+    );
 }

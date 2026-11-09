@@ -63,14 +63,28 @@ fn child_binary() -> PathBuf {
 /// Small enough that the workload evicts and writes back pages.
 const SMALL_POOL_BYTES: u64 = 256 * 1024;
 
-/// A case's mode is `all-logs` or `transaction-log`, optionally suffixed
-/// `+small-pool`.
+/// Page-log segment size for `+segments` cases: small enough that the page
+/// log seals several `store.wal.<lsn>` segments between checkpoints.
+const SMALL_SEGMENT_BYTES: u64 = 64 * 1024;
+
+/// Page-log threshold for `+bounded` cases. Those run the server's bounded
+/// checkpoint supervisor instead of resume checkpoints, and with this
+/// threshold the commits also advance their own bounded checkpoint
+/// (`checkpoint_step`), one phase per commit.
+const SMALL_WAL_MAX_BYTES: u64 = 256 * 1024;
+
+/// A case's mode is `all-logs` or `transaction-log`, optionally followed by
+/// `+small-pool`, `+segments` and `+bounded` (any order).
 fn durability(mode: &str) -> &str {
-    mode.trim_end_matches("+small-pool")
+    mode.split('+').next().unwrap_or(mode)
+}
+
+fn has_flag(mode: &str, flag: &str) -> bool {
+    mode.split('+').skip(1).any(|part| part == flag)
 }
 
 fn small_pool(mode: &str) -> bool {
-    mode.ends_with("+small-pool")
+    has_flag(mode, "small-pool")
 }
 
 fn config(mode: &str) -> DbConfig {
@@ -116,10 +130,28 @@ fn run_child_with(
     } else {
         command.env_remove("DURABILITY_POOL_BYTES");
     }
+    if has_flag(mode, "segments") {
+        command.env(
+            "DURABILITY_WAL_SEGMENT_BYTES",
+            SMALL_SEGMENT_BYTES.to_string(),
+        );
+    } else {
+        command.env_remove("DURABILITY_WAL_SEGMENT_BYTES");
+    }
+    if has_flag(mode, "bounded") {
+        command
+            .env("DURABILITY_WAL_MAX_BYTES", SMALL_WAL_MAX_BYTES.to_string())
+            .env("DURABILITY_CHECKPOINTS", "bounded");
+    } else {
+        command
+            .env_remove("DURABILITY_WAL_MAX_BYTES")
+            .env_remove("DURABILITY_CHECKPOINTS");
+    }
     if let Some(point) = crash_at {
         command.env("BICDB_TEST_CRASH_AT", point);
     }
-    let output = command.output().expect("run durability child");
+    let output = output_with_deadline(command, CHILD_DEADLINE)
+        .unwrap_or_else(|| panic!("durability child hung ({mode}, {crash_at:?})"));
     if output.status.success() {
         return Outcome::Completed;
     }
@@ -130,6 +162,45 @@ fn run_child_with(
         output.status
     );
     Outcome::Crashed
+}
+
+/// A child that runs longer than this is killed and reported as hung (a
+/// deadlock at a crash point, for example), instead of stalling the matrix.
+const CHILD_DEADLINE: std::time::Duration = std::time::Duration::from_secs(600);
+
+fn output_with_deadline(
+    mut command: Command,
+    deadline: std::time::Duration,
+) -> Option<std::process::Output> {
+    use std::io::Read;
+    let mut child = command
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn durability child");
+    let mut stderr = child.stderr.take().expect("child stderr");
+    let reader = std::thread::spawn(move || {
+        let mut text = Vec::new();
+        let _ = stderr.read_to_end(&mut text);
+        text
+    });
+    let started = std::time::Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("wait for durability child") {
+            break status;
+        }
+        if started.elapsed() > deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    Some(std::process::Output {
+        status,
+        stdout: Vec::new(),
+        stderr: reader.join().unwrap_or_default(),
+    })
 }
 
 fn ledger_lines(path: &Path) -> Vec<String> {
@@ -485,6 +556,14 @@ fn fail_io_case(mode: &str, spec: &str) {
     } else {
         command.env_remove("DURABILITY_POOL_BYTES");
     }
+    if has_flag(mode, "segments") {
+        command.env(
+            "DURABILITY_WAL_SEGMENT_BYTES",
+            SMALL_SEGMENT_BYTES.to_string(),
+        );
+    } else {
+        command.env_remove("DURABILITY_WAL_SEGMENT_BYTES");
+    }
     let output = command.output().expect("run durability child");
     assert!(
         output.status.success(),
@@ -514,9 +593,38 @@ fn fail_io_case(mode: &str, spec: &str) {
     drop(keep);
 }
 
+/// Every step of the page-log reset, with sealed segments present: a failed
+/// segment unlink (first and a later one), directory sync, truncation and
+/// truncation sync. Each must fence the database and recover every
+/// acknowledged commit. Opening a new database resets the log twice (the
+/// fresh store's checkpoint and the recovery checkpoint), so truncation
+/// counts start above that.
+const RESET_FAIL_IO_SPECS: &[&str] = &[
+    "page_log.reset_unlink:1",
+    "page_log.reset_unlink:4",
+    "page_log.reset_dir_sync:1",
+    "page_log.reset_dir_sync:3",
+    "page_log.reset:4",
+    "page_log.reset_sync:4",
+];
+
+#[test]
+fn production_path_fails_closed_at_every_log_reset_step() {
+    run_specs("all-logs+segments", RESET_FAIL_IO_SPECS);
+}
+
+#[test]
+fn production_path_fails_closed_at_every_log_reset_step_with_eviction() {
+    run_specs("all-logs+small-pool+segments", RESET_FAIL_IO_SPECS);
+}
+
 fn fail_io_matrix(mode: &'static str) {
+    run_specs(mode, FAIL_IO_SPECS);
+}
+
+fn run_specs(mode: &'static str, specs: &'static [&'static str]) {
     run_matrix(
-        FAIL_IO_SPECS
+        specs
             .iter()
             .map(|&spec| {
                 (
@@ -649,4 +757,349 @@ fn repeat_core_matrices() {
         failures.len(),
         failures.join("\n")
     );
+}
+
+// ---------------------------------------------------------------------------
+// Recovery semantics (`docs/recovery-semantics.md`): every checkpoint phase
+// interrupted, recovery itself interrupted, and convergence of an interrupted
+// recovery to the uninterrupted one.
+
+/// Phases of the full checkpoint (`PagedStore::checkpoint`, the resume
+/// checkpoint's page half) and of the page-log seal.
+const FULL_CHECKPOINT_POINTS: &[&str] = &[
+    "checkpoint.after_status_spill:5",
+    "checkpoint.after_status_spill:14",
+    "checkpoint.after_wal_sync:6",
+    "checkpoint.after_page_flush:7",
+    "checkpoint.after_publish:8",
+    "checkpoint.after_wal_reset:10",
+    "checkpoint.after_tail_reclaim:4",
+    "checkpoint.after_structural_frees:9",
+    "checkpoint.after_structural_frees:16",
+    "wal_seal.after_rename:1",
+    "wal_seal.after_rename:5",
+];
+
+/// Phases of the bounded checkpoint (`PagedStore::checkpoint_step`), driven
+/// by the supervisor and by the commits themselves.
+const BOUNDED_CHECKPOINT_POINTS: &[&str] = &[
+    "checkpoint_step.after_drain:2",
+    "checkpoint_step.after_drain:12",
+    "checkpoint_step.after_freeze:2",
+    "checkpoint_step.after_freeze:8",
+    "checkpoint_step.after_finalize_drain:2",
+    "checkpoint_step.after_status_spill:2",
+    "checkpoint_step.after_meta_writeback:3",
+    "checkpoint_step.after_finish:1",
+    "checkpoint_step.after_finish:5",
+    "checkpoint_step.after_tail_reclaim:2",
+    // Shared with the full path (`Checkpointer::finish_checkpoint`). Hit 1 is
+    // the full checkpoint at open.
+    "checkpoint.after_publish:3",
+    "checkpoint.after_wal_reset:3",
+];
+
+#[test]
+fn production_path_survives_interrupted_full_checkpoints() {
+    matrix("all-logs+segments", FULL_CHECKPOINT_POINTS.to_vec(), &[]);
+}
+
+#[test]
+fn production_path_survives_interrupted_full_checkpoints_with_eviction() {
+    matrix(
+        "all-logs+small-pool+segments",
+        FULL_CHECKPOINT_POINTS.to_vec(),
+        &[],
+    );
+}
+
+#[test]
+fn production_path_survives_interrupted_bounded_checkpoints() {
+    matrix("all-logs+bounded", BOUNDED_CHECKPOINT_POINTS.to_vec(), &[]);
+}
+
+#[test]
+fn production_path_survives_interrupted_bounded_checkpoints_with_eviction() {
+    matrix(
+        "all-logs+small-pool+bounded",
+        BOUNDED_CHECKPOINT_POINTS.to_vec(),
+        &[],
+    );
+}
+
+#[test]
+fn transaction_log_only_path_survives_interrupted_checkpoints() {
+    matrix(
+        "transaction-log+segments",
+        FULL_CHECKPOINT_POINTS.to_vec(),
+        &[],
+    );
+    matrix(
+        "transaction-log+bounded",
+        BOUNDED_CHECKPOINT_POINTS.to_vec(),
+        &[],
+    );
+}
+
+/// GAP-2: a crash at every step of the page-log reset while sealed segments
+/// exist. The reset used to truncate the active file before deleting the
+/// sealed segments, and a crash in between replayed a stale chain over newer
+/// pages (3 of 4 cases lost acknowledged commits). It now deletes the
+/// segments first and truncates the active file last.
+#[test]
+fn production_path_survives_an_interrupted_log_reset() {
+    matrix(
+        "all-logs+segments",
+        vec![
+            "wal_reset.after_segment_delete:1",
+            "wal_reset.after_segment_delete:4",
+            "wal_reset.after_segments_removed:2",
+            "wal_reset.after_segments_removed:6",
+            "wal_reset.after_active_truncate:2",
+            "wal_reset.after_active_truncate:6",
+        ],
+        &[],
+    );
+}
+
+#[test]
+fn production_path_survives_an_interrupted_log_reset_with_eviction() {
+    matrix(
+        "all-logs+small-pool+segments",
+        vec![
+            "wal_reset.after_segment_delete:2",
+            "wal_reset.after_segments_removed:3",
+            "wal_reset.after_active_truncate:4",
+        ],
+        &[],
+    );
+}
+
+/// GAP-1 end to end on the production row-commit path. 150 rows commit one
+/// by one and are acknowledged; the database closes cleanly, so every one of
+/// them is only in the page file. One transaction then inserts 2,000 rows
+/// whose keys sort first. Its page apply splits the B-tree root, and the
+/// root-split flush writes the split root in place while the transaction is
+/// still uncommitted in the page store. The crash lands right after that
+/// flush. The transaction is durable in the transaction log (its decision
+/// precedes the page apply), so recovery replays it. Every acknowledged row
+/// must survive, and the big transaction must be all or nothing.
+#[test]
+#[ignore = "GAP-1: steal without undo of an uncommitted root split"]
+fn gap1_a_crash_after_an_uncommitted_root_split_keeps_acknowledged_rows() {
+    let temp = tempfile::tempdir().unwrap();
+    let keep = KeepOnPanic(temp.path().to_path_buf(), "gap1 root split".into());
+    let db_dir = temp.path().join("db");
+    let ledger = temp.path().join("ledger");
+    assert!(matches!(
+        run_child_with(&db_dir, &ledger, "q1-setup", None, 150),
+        Outcome::Completed
+    ));
+    assert!(
+        matches!(
+            run_child_with(
+                &db_dir,
+                &ledger,
+                "q1-split",
+                Some("btree.after_root_split_flush:1"),
+                2_000,
+            ),
+            Outcome::Crashed
+        ),
+        "the big transaction must split the root"
+    );
+    let acknowledged: Vec<String> = ledger_lines(&ledger.join("q1"))
+        .into_iter()
+        .filter(|line| line.starts_with("r-"))
+        .collect();
+    assert_eq!(acknowledged.len(), 150);
+    let db = BicDb::open_with_config(&db_dir, config("all-logs"))
+        .unwrap_or_else(|error| panic!("reopen after the split crash failed: {error}"));
+    let mut missing = Vec::new();
+    for id in &acknowledged {
+        match db.get("q1", id) {
+            Ok(Some(_)) => {}
+            Ok(None) => missing.push(format!("{id}: absent")),
+            Err(error) => missing.push(format!("{id}: {error}")),
+        }
+    }
+    let replayed = db
+        .scan_collection("q1")
+        .map(|rows| rows.iter().filter(|row| row.id.starts_with("a-")).count())
+        .unwrap_or_else(|error| panic!("scan after the split crash failed: {error}"));
+    db.close().expect("close");
+    assert!(
+        missing.is_empty(),
+        "{} of 150 acknowledged rows lost, e.g. {:?}",
+        missing.len(),
+        &missing[..missing.len().min(5)]
+    );
+    assert!(
+        replayed == 0 || replayed == 2_000,
+        "the big transaction is partial after recovery: {replayed} of 2000 rows"
+    );
+    drop(keep);
+}
+
+/// Reopens of a crashed database that do no new work, each a chain: the
+/// first reopen crashes at the first point, the next at the second, and so
+/// on. A point a reopen never reaches lets that reopen finish normally.
+const RECOVERY_CRASH_CHAINS: &[&[&str]] = &[
+    &["page_recovery.after_scan:1"],
+    &["page_recovery.after_page_replay:1"],
+    &["page_recovery.after_page_replay:20"],
+    &["page_recovery.after_flush:1"],
+    &["replay.after_write:1"],
+    &["replay.after_write:3"],
+    &["checkpoint.after_status_spill:1"],
+    &["checkpoint.after_page_flush:1"],
+    &["checkpoint.after_publish:1"],
+    &["checkpoint.after_wal_reset:1"],
+    &["open.after_recovery_checkpoint:1"],
+    &["open.after_txlog_floor:1"],
+    &[
+        "replay.after_write:2",
+        "page_recovery.after_page_replay:2",
+        "replay.after_write:1",
+        "checkpoint.after_publish:1",
+        "open.after_txlog_floor:1",
+    ],
+];
+
+fn copy_dir(from: &Path, to: &Path) {
+    let status = Command::new("cp")
+        .arg("-a")
+        .arg(from)
+        .arg(to)
+        .status()
+        .expect("cp");
+    assert!(
+        status.success(),
+        "copy {} -> {}",
+        from.display(),
+        to.display()
+    );
+}
+
+fn digest_difference(a: &BTreeMap<String, String>, b: &BTreeMap<String, String>) -> String {
+    let mut lines = Vec::new();
+    for (key, value) in a {
+        match b.get(key) {
+            Some(other) if other == value => {}
+            other => lines.push(format!("{key}: {value} vs {other:?}")),
+        }
+    }
+    for key in b.keys().filter(|key| !a.contains_key(*key)) {
+        lines.push(format!("{key}: absent vs {:?}", b[key]));
+    }
+    let total = lines.len();
+    lines.truncate(4);
+    format!("{total} differing entries, e.g. {}", lines.join("; "))
+}
+
+/// Crash a workload at `workload_point`, then recover the same crashed state
+/// once without interruption (the baseline) and once per recovery chain. Every
+/// interrupted recovery must reconcile against the ledger and end in exactly
+/// the baseline state, and reopening it again must change nothing. `rounds`
+/// repeats the whole procedure with fresh crash states.
+fn recovery_convergence(mode: &'static str, workload_point: &'static str, rounds: usize) {
+    let mut failures = Vec::new();
+    for round in 0..rounds {
+        let temp = tempfile::tempdir().unwrap();
+        let crashed = temp.path().join("crashed");
+        let ledger = temp.path().join("ledger");
+        assert!(
+            matches!(
+                run_child(&crashed, &ledger, mode, Some(workload_point)),
+                Outcome::Crashed
+            ),
+            "{mode} {workload_point}: workload crash point never reached"
+        );
+        let base = temp.path().join("baseline");
+        copy_dir(&crashed, &base);
+        let label = format!("{mode} {workload_point} round {round}");
+        let baseline = reconcile(&base, &ledger, mode, &format!("{label} baseline"));
+        for (index, chain) in RECOVERY_CRASH_CHAINS.iter().enumerate() {
+            let db = temp.path().join(format!("case-{index}"));
+            copy_dir(&crashed, &db);
+            let case = format!("{label} recovery {chain:?}");
+            let outcome = std::panic::catch_unwind(|| {
+                let mut reached = Vec::new();
+                for point in chain.iter() {
+                    if matches!(
+                        run_child_with(&db, &ledger, mode, Some(point), 0),
+                        Outcome::Crashed
+                    ) {
+                        reached.push(*point);
+                    }
+                }
+                let case = format!("{case} (crashed at {reached:?})");
+                let first = reconcile(&db, &ledger, mode, &case);
+                let again = reconcile(&db, &ledger, mode, &format!("{case} (reopen)"));
+                (case, first, again)
+            });
+            match outcome {
+                Err(panic) => failures.push(
+                    panic
+                        .downcast_ref::<String>()
+                        .cloned()
+                        .unwrap_or_else(|| format!("{case}: panicked")),
+                ),
+                Ok((case, first, again)) => {
+                    if first != baseline {
+                        failures.push(format!(
+                            "{case}: differs from the uninterrupted recovery: {}",
+                            digest_difference(&baseline, &first)
+                        ));
+                    }
+                    if again != first {
+                        failures.push(format!("{case}: a further reopen changed the state"));
+                    }
+                }
+            }
+            let _ = std::fs::remove_dir_all(&db);
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "{} failures:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn interrupted_recovery_converges_after_an_unmarked_page_commit() {
+    recovery_convergence("all-logs", "commit.after_page_apply:100", 1);
+}
+
+#[test]
+fn interrupted_recovery_converges_after_a_replay_only_commit_with_eviction() {
+    recovery_convergence("all-logs+small-pool", "commit.after_txlog_durable:150", 1);
+}
+
+#[test]
+fn interrupted_recovery_converges_after_an_interrupted_checkpoint() {
+    recovery_convergence("all-logs+segments", "checkpoint.after_page_flush:9", 1);
+}
+
+#[test]
+fn interrupted_recovery_converges_in_transaction_log_only_mode() {
+    recovery_convergence("transaction-log", "materialize.after_wal_sync:20", 1);
+}
+
+/// Diagnostic: `recovery_convergence` for `DURABILITY_CASE=<mode>/<point>`,
+/// `DURABILITY_REPEAT=<rounds>` times.
+#[test]
+#[ignore]
+fn repeat_recovery_convergence() {
+    let spec = std::env::var("DURABILITY_CASE").expect("DURABILITY_CASE=<mode>/<point>");
+    let rounds: usize = std::env::var("DURABILITY_REPEAT")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(5);
+    let (mode, point) = spec.split_once('/').expect("<mode>/<point>");
+    let mode: &'static str = Box::leak(mode.to_string().into_boxed_str());
+    let point: &'static str = Box::leak(point.to_string().into_boxed_str());
+    recovery_convergence(mode, point, rounds);
 }

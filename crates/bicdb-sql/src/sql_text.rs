@@ -1,0 +1,48 @@
+//! SQL text for parsed statements and expressions that reads back as the
+//! same tree.
+//!
+//! sqlparser's `Display` accepts both escaped and decoded string values, and
+//! treats a quote that is already doubled (or follows a backslash) as escaped.
+//! Our parser decodes values, so a literal whose value holds two adjacent
+//! quotes or a backslash before a quote would be written back wrong. Every
+//! quote is doubled on a rendering-only copy first, which `Display` then
+//! writes verbatim. Text that is stored in the catalog, parsed again or
+//! executed must be produced here, never by `to_string()`.
+use sqlparser::ast::{Value, ValueWithSpan, VisitMut, VisitorMut};
+use std::ops::ControlFlow;
+
+struct EscapeValues;
+
+impl VisitorMut for EscapeValues {
+    type Break = ();
+
+    fn pre_visit_value(&mut self, value: &mut ValueWithSpan) -> ControlFlow<()> {
+        match &mut value.value {
+            Value::SingleQuotedString(text) | Value::NationalStringLiteral(text) => {
+                *text = text.replace('\'', "''");
+            }
+            Value::DoubleQuotedString(text) => *text = text.replace('"', "\"\""),
+            _ => {}
+        }
+        ControlFlow::Continue(())
+    }
+}
+
+/// `node`'s `Display` text where that text identifies it, else `sql_text`:
+/// for keys. Only text holding `''` or `\'` can stand for two trees, so the
+/// common case keeps the cheap rendering.
+pub fn sql_key<T: Clone + VisitMut + std::fmt::Display>(node: &T) -> String {
+    let text = node.to_string();
+    if text.contains("''") || text.contains("\\'") {
+        sql_text(node)
+    } else {
+        text
+    }
+}
+
+/// SQL text for `node` that parses back to the same tree.
+pub fn sql_text<T: Clone + VisitMut + std::fmt::Display>(node: &T) -> String {
+    let mut copy = node.clone();
+    let _ = copy.visit(&mut EscapeValues);
+    copy.to_string()
+}

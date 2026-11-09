@@ -3397,9 +3397,21 @@ pub(crate) fn eval_compatibility_function_value(
                         ))
                     },
                 )??;
-                return Ok(Some(SqlValue::String(round_decimal_half_away(
-                    value, scale,
-                ))));
+                // The result has exactly `scale` fractional digits, as
+                // PostgreSQL's numeric round does: round(1.2, 2) is 1.20.
+                let mut rounded = round_decimal_half_away(value, scale);
+                if let Ok(scale) = usize::try_from(scale.clamp(0, 1000)) {
+                    let digits = rounded
+                        .split_once('.')
+                        .map_or(0, |(_, fraction)| fraction.len());
+                    if digits < scale {
+                        if digits == 0 {
+                            rounded.push('.');
+                        }
+                        rounded.extend(std::iter::repeat_n('0', scale - digits));
+                    }
+                }
+                return Ok(Some(SqlValue::String(rounded)));
             }
             require_arg_count("round", args, 1)?;
             if matches!(args[0], SqlValue::Null) {

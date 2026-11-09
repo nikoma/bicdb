@@ -1,0 +1,10 @@
+--- a/crates/bicdb-pgwire/tests/embedded_ha.rs
++++ b/crates/bicdb-pgwire/tests/embedded_ha.rs
+@@ -419,6 +419,7 @@
+         .with_write(|db| {
+             SqlSession::new(db).execute("CREATE TABLE entries (id TEXT PRIMARY KEY, value INT)")?;
+             db.set_collection_mesh_sync_enabled("entries", true)?;
++            std::thread::sleep(Duration::from_secs(2));
+             SqlSession::new(db).execute("INSERT INTO entries VALUES ('before', 1)")?;
+             Ok(())
+         })

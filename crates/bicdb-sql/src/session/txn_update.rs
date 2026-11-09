@@ -2510,6 +2510,90 @@ impl<'db> SqlSession<'db> {
         }
     }
 
+    /// A comparison in a PL/pgSQL body with a date/time variable on one side
+    /// compares as date/time, as PostgreSQL's typed comparison does, not as
+    /// text (`date '2002-07-04' <> timestamp '2002-07-04 00:00'` is false).
+    /// An operand whose type the body does not declare (a record field, a
+    /// function result) takes the date/time type its value spells.
+    fn routine_temporal_comparison(
+        &self,
+        left: &Expr,
+        op: &BinaryOperator,
+        right: &Expr,
+        left_value: &SqlValue,
+        right_value: &SqlValue,
+    ) -> Result<Option<Option<bool>>> {
+        if !matches!(
+            op,
+            BinaryOperator::Eq
+                | BinaryOperator::NotEq
+                | BinaryOperator::Lt
+                | BinaryOperator::LtEq
+                | BinaryOperator::Gt
+                | BinaryOperator::GtEq
+        ) || self.oracle_routine_frame()
+            || self.routine_slots.is_none()
+        {
+            return Ok(None);
+        }
+        fn datetime(pg_type: Option<&str>) -> bool {
+            matches!(pg_type, Some("date" | "timestamp" | "timestamptz"))
+        }
+        fn spelled(value: &SqlValue) -> Option<String> {
+            let SqlValue::String(text) = value else {
+                return None;
+            };
+            parse_temporal_seconds(text)?;
+            Some(
+                if timestamp_has_iso_offset(text) {
+                    "timestamptz"
+                } else if text.trim().len() > 10 {
+                    "timestamp"
+                } else {
+                    "date"
+                }
+                .to_string(),
+            )
+        }
+        let (left_type, right_type) = (
+            self.routine_unary_operand_type(left),
+            self.routine_unary_operand_type(right),
+        );
+        let temporal_text = |pg_type: &Option<String>| {
+            pg_type.as_deref().is_some_and(|pg_type| {
+                let lower = pg_type.to_ascii_lowercase();
+                lower.contains("date") || lower.contains("time")
+            })
+        };
+        if !temporal_text(&left_type) && !temporal_text(&right_type) {
+            return Ok(None);
+        }
+        let canonical = |pg_type: Option<String>| {
+            pg_type.map(|pg_type| crate::pg_operators::canonical_type(&pg_type))
+        };
+        let mut left_type = canonical(left_type);
+        let mut right_type = canonical(right_type);
+        if !datetime(left_type.as_deref()) && !datetime(right_type.as_deref()) {
+            return Ok(None);
+        }
+        if left_type.is_none() {
+            left_type = spelled(left_value);
+        }
+        if right_type.is_none() {
+            right_type = spelled(right_value);
+        }
+        if !datetime(left_type.as_deref()) || !datetime(right_type.as_deref()) {
+            return Ok(None);
+        }
+        compare_temporal_values(
+            left_type.as_deref(),
+            right_type.as_deref(),
+            left_value,
+            op,
+            right_value,
+        )
+    }
+
     fn routine_unary_operand_type(&self, expr: &Expr) -> Option<String> {
         let name = match expr {
             Expr::Identifier(ident) => Some(ident.value.as_str()),
@@ -2614,6 +2698,17 @@ impl<'db> SqlSession<'db> {
                 arg_types.first().and_then(Option::as_ref),
                 args.first(),
             ));
+        }
+        if crate::routine_overloads::user_function_takes_builtin_call(
+            self.db_ref(),
+            &self.session_gucs,
+            &name,
+            &arg_types,
+            &args,
+        )? {
+            if let Some(value) = self.eval_stored_function_value_typed(&name, &args, &arg_types)? {
+                return Ok(value);
+            }
         }
         if matches!(name.as_ref(), "txid_current" | "pg_catalog.txid_current") {
             require_arg_count("txid_current", &args, 0)?;
@@ -3029,6 +3124,11 @@ impl<'db> SqlSession<'db> {
             Expr::BinaryOp { left, op, right } => {
                 let left_value = self.eval_session_expr(left)?;
                 let right_value = self.eval_session_expr(right)?;
+                if let Some(truth) =
+                    self.routine_temporal_comparison(left, op, right, &left_value, &right_value)?
+                {
+                    return Ok(truth.map(SqlValue::Bool).unwrap_or(SqlValue::Null));
+                }
                 let mut types = self.routine_binary_expr_types(left, op, right);
                 if matches!(op, BinaryOperator::StringConcat)
                     && !self.oracle_routine_frame()

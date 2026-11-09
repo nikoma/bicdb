@@ -124,9 +124,8 @@ pub(crate) fn routine_overloads(
     kind: RoutineKind,
     name: &str,
 ) -> Result<Option<Arc<Vec<RoutineSchema>>>> {
-    if db.collection_generation(ROUTINE_COLLECTION) == 0 {
-        return Ok(None);
-    }
+    // A generation of 0 does not mean "no routines": a collection not yet
+    // read in this process reports 0 too. The map is cached per generation.
     Ok(overload_map(db)?.get(&routine_key(kind, name)).cloned())
 }
 
@@ -251,6 +250,11 @@ pub(crate) fn overload_return_type(
     name: &str,
     static_types: &[Option<String>],
 ) -> Option<String> {
+    // Without every argument's type the call's overload is not known until
+    // it runs; guessing would report the name's first routine's type.
+    if static_types.iter().any(Option::is_none) {
+        return None;
+    }
     let overloads = routine_overloads(db, RoutineKind::Function, name).ok()??;
     select_overload(&overloads, static_types, &[]).map(|routine| routine.return_type.clone())
 }
@@ -286,4 +290,202 @@ pub(crate) fn resolve_routine_for_call(
         compilation_scope,
         search_path,
     }))
+}
+
+thread_local! {
+    /// Names of every user-defined function, per database and routine
+    /// catalog generation.
+    static FUNCTION_NAMES: RefCell<Option<(u64, u64, Arc<FxHashSet<String>>)>> =
+        const { RefCell::new(None) };
+}
+
+/// Names of every user-defined function in `db`.
+pub(crate) fn user_function_names(db: &BicDb) -> Result<Arc<FxHashSet<String>>> {
+    let database_id = db.instance_id();
+    let generation = db.collection_generation(ROUTINE_COLLECTION);
+    if let Some(names) = FUNCTION_NAMES.with(|cache| {
+        cache.borrow().as_ref().and_then(|(id, cached, names)| {
+            (*id == database_id && *cached == generation).then(|| names.clone())
+        })
+    }) {
+        return Ok(names);
+    }
+    let names: FxHashSet<String> = list_routines(db)?
+        .into_iter()
+        .filter(|routine| routine.kind == RoutineKind::Function)
+        .map(|routine| routine.name.to_ascii_lowercase())
+        .collect();
+    let names = Arc::new(names);
+    FUNCTION_NAMES
+        .with(|cache| *cache.borrow_mut() = Some((database_id, generation, names.clone())));
+    Ok(names)
+}
+
+fn static_oid(pg_type: &str) -> Option<i32> {
+    pg_type_oid_by_name(pg_type)
+        .or_else(|| type_identity(pg_type).parse().ok())
+        .filter(|oid| *oid != 705)
+}
+
+/// Declared input oids of `candidate` for a call with `count` arguments, or
+/// `None` when it cannot take that many.
+fn candidate_oids(candidate: &RoutineSchema, count: usize) -> Option<Vec<Option<i32>>> {
+    let inputs = declared_inputs(candidate).ok()?;
+    let required = inputs.iter().filter(|(_, optional)| !optional).count();
+    if count < required || count > inputs.len() {
+        return None;
+    }
+    Some(
+        inputs
+            .iter()
+            .take(count)
+            .map(|(pg_type, _)| pg_type.as_deref().and_then(static_oid))
+            .collect(),
+    )
+}
+
+/// Whether the session's search_path reaches `pg_catalog` before `schema`.
+/// `pg_catalog` not named on the path is searched first.
+fn pg_catalog_precedes(gucs: &HashMap<String, String>, schema: &str) -> bool {
+    let path = crate::search_path::parse_search_path(
+        gucs.get("search_path")
+            .map(String::as_str)
+            .unwrap_or("\"$user\", public"),
+        &current_user_from_gucs(gucs),
+    );
+    let schema = if schema.is_empty() { "public" } else { schema };
+    let position = |name: &str| path.iter().position(|entry| entry == name);
+    match (position("pg_catalog"), position(schema)) {
+        (Some(catalog), Some(own)) => catalog < own,
+        _ => true,
+    }
+}
+
+/// Whether `pg_catalog` has a function `name` with exactly these input types.
+fn builtin_has_signature(name: &str, oids: &[i32]) -> bool {
+    use crate::builtin_signatures::PG_CATALOG_FUNCTION_SIGNATURES as SIGNATURES;
+    let signature = oids
+        .iter()
+        .map(i32::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    let start = SIGNATURES.partition_point(|(candidate, _)| *candidate < name);
+    SIGNATURES[start..]
+        .iter()
+        .take_while(|(candidate, _)| *candidate == name)
+        .any(|(_, types)| *types == signature)
+}
+
+/// Whether an unqualified call of a function name that is also built in runs
+/// a user-defined function of that name instead, as PostgreSQL resolves it:
+/// a user function whose declared input types match the arguments' types
+/// exactly is chosen over a built-in that needs a conversion; with argument
+/// types unknown, a user function the argument values fit is. Otherwise the
+/// built-in keeps the call.
+///
+/// When a built-in has the very same signature, the search_path decides:
+/// the user function wins only when its schema precedes `pg_catalog` (which
+/// is searched first unless the path names it).
+pub(crate) fn user_function_takes_builtin_call(
+    db: &BicDb,
+    gucs: &HashMap<String, String>,
+    name: &str,
+    static_types: &[Option<String>],
+    args: &[SqlValue],
+) -> Result<bool> {
+    Ok(chosen_user_function(db, gucs, name, static_types, Some(args))?.is_some())
+}
+
+/// Result type of a call of a built-in name that a user-defined function
+/// takes by the arguments' static types (see
+/// [`user_function_takes_builtin_call`]), for type inference before the call
+/// runs.
+pub(crate) fn user_function_result_type(
+    db: &BicDb,
+    gucs: &HashMap<String, String>,
+    name: &str,
+    static_types: &[Option<String>],
+) -> Option<String> {
+    chosen_user_function(db, gucs, name, static_types, None)
+        .ok()
+        .flatten()
+        .map(|routine| routine.return_type)
+}
+
+fn chosen_user_function(
+    db: &BicDb,
+    gucs: &HashMap<String, String>,
+    name: &str,
+    static_types: &[Option<String>],
+    values: Option<&[SqlValue]>,
+) -> Result<Option<RoutineSchema>> {
+    let lowered;
+    let name = if name.bytes().any(|byte| byte.is_ascii_uppercase()) {
+        lowered = name.to_ascii_lowercase();
+        lowered.as_str()
+    } else {
+        name
+    };
+    if name.contains('.') || !user_function_names(db)?.contains(name) {
+        return Ok(None);
+    }
+    // The second profile keeps built-in functions ahead of user functions
+    // of the same name; those are reached by qualified calls.
+    if oracle::is_oracle_database(db)? {
+        return Ok(None);
+    }
+    let count = values.map_or(static_types.len(), <[SqlValue]>::len);
+    let candidates = routines_named(db, RoutineKind::Function, name)?;
+    let actual: Vec<Option<i32>> = (0..count)
+        .map(|index| {
+            static_types
+                .get(index)
+                .and_then(Option::as_deref)
+                .and_then(static_oid)
+        })
+        .collect();
+    let mut by_value = None;
+    for candidate in &candidates {
+        let Some(declared) = candidate_oids(candidate, count) else {
+            continue;
+        };
+        // A built-in of the same signature found first on the path hides it.
+        if declared.iter().all(Option::is_some) {
+            let oids: Vec<i32> = declared.iter().flatten().copied().collect();
+            if builtin_has_signature(name, &oids) && pg_catalog_precedes(gucs, &candidate.schema) {
+                continue;
+            }
+        }
+        if actual
+            .iter()
+            .zip(&declared)
+            .all(|(actual, declared)| actual.is_some() && actual == declared)
+        {
+            return Ok(Some(candidate.clone()));
+        }
+        let Some(values) = values else {
+            continue;
+        };
+        if by_value.is_none()
+            && actual.iter().any(Option::is_none)
+            && actual
+                .iter()
+                .zip(&declared)
+                .zip(values)
+                .all(|((actual, declared), value)| match (actual, declared) {
+                    (Some(actual), Some(declared)) => {
+                        actual == declared || same_category(*actual, *declared)
+                    }
+                    (Some(_), None) => true,
+                    (None, declared) => {
+                        !matches!(value, SqlValue::Null)
+                            && argument_score(*declared, None, value)
+                                .is_some_and(|score| score >= 2)
+                    }
+                })
+        {
+            by_value = Some(candidate.clone());
+        }
+    }
+    Ok(by_value)
 }

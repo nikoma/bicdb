@@ -170,6 +170,65 @@ fn create_table_inline_nextval_default_resolves_schema_qualified() {
     );
 }
 
+/// pg_dump restores rewrite rules; an INSERT on a table with a DO INSTEAD
+/// rule runs the rule's action once per row, with NEW bound to that row.
+#[test]
+fn instead_rules_replace_the_rewritten_statement() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE TABLE app.requests (tablename TEXT, amount INT)")
+        .unwrap();
+    sql.execute("CREATE TABLE app.applied (tablename TEXT, amount INT)")
+        .unwrap();
+    sql.execute(
+        "CREATE FUNCTION app.apply_request(t text, n integer) RETURNS void LANGUAGE plpgsql AS $$ \
+         BEGIN INSERT INTO app.applied VALUES (t, n * 2); END; $$",
+    )
+    .unwrap();
+    sql.execute(
+        "CREATE RULE apply_rule AS\n    ON INSERT TO app.requests DO INSTEAD  \
+         SELECT app.apply_request(new.tablename || '''', new.amount) AS apply_request",
+    )
+    .unwrap();
+    sql.execute("CREATE TABLE app.locked (id INT)").unwrap();
+    sql.execute("INSERT INTO app.locked VALUES (1)").unwrap();
+    sql.execute("CREATE RULE keep AS ON DELETE TO app.locked DO INSTEAD NOTHING")
+        .unwrap();
+
+    sql.execute("INSERT INTO app.requests VALUES ('a', 1), ('b', 5)")
+        .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.requests"), 0);
+    assert_eq!(
+        int_at(&mut sql, "SELECT sum(amount) FROM app.applied"),
+        12,
+        "the rule action ran once per row"
+    );
+    // The action keeps its literals exactly (a doubled quote stays one quote).
+    assert_eq!(
+        int_at(
+            &mut sql,
+            r#"SELECT count(*) FROM app.applied WHERE tablename = 'a'''"#
+        ),
+        1
+    );
+    sql.execute("DELETE FROM app.locked").unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.locked"), 1);
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_rules WHERE schemaname = 'app' AND tablename = 'locked'"
+        ),
+        1
+    );
+    sql.execute("DROP RULE keep ON app.locked").unwrap();
+    sql.execute("DELETE FROM app.locked").unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.locked"), 0);
+    assert!(sql
+        .execute("CREATE RULE r AS ON INSERT TO app.locked WHERE new.id > 1 DO INSTEAD NOTHING")
+        .is_err());
+}
+
 /// Regression: a pg_dump restore creates a trigger function in a
 /// non-public schema and then a trigger that calls it schema-qualified.
 /// Routines key on the bare name everywhere, but the AST CREATE FUNCTION
@@ -386,6 +445,56 @@ fn search_path_binding_preserves_statement_text() {
     assert_eq!(
         sql.execute("SELECT body FROM registered").unwrap().rows,
         vec![vec![SqlValue::String("x''y".into())]]
+    );
+}
+
+/// Every statement form a schema restore and its migrations use binds its
+/// unqualified relation names through the search_path. Binding never falls
+/// back to running a statement unbound: a name without a source position is
+/// an error, so each of these forms must carry positions.
+#[test]
+fn search_path_binding_covers_restore_and_migration_statement_forms() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("SET search_path TO app, public").unwrap();
+    for statement in [
+        "CREATE TABLE parent (id INT PRIMARY KEY, name VARCHAR(20) DEFAULT 'it''s')",
+        "CREATE TABLE child (id INT, parent_id INT, CONSTRAINT child_parent FOREIGN KEY (parent_id) REFERENCES parent (id))",
+        "CREATE TABLE tree (id INT PRIMARY KEY, up INT REFERENCES tree (id))",
+        "ALTER TABLE child ADD COLUMN note TEXT",
+        "ALTER TABLE ONLY child ADD CONSTRAINT child_pk PRIMARY KEY (id)",
+        "CREATE INDEX child_parent_idx ON child (parent_id)",
+        "CREATE UNIQUE INDEX parent_name_idx ON parent (name)",
+        "CREATE VIEW parent_names AS SELECT p.id, p.name FROM parent p",
+        "INSERT INTO parent (id, name) VALUES (1, 'a''b'), (2, 'c')",
+        "INSERT INTO child SELECT id, id, NULL FROM parent",
+        "UPDATE child SET note = (SELECT name FROM parent WHERE parent.id = child.parent_id)",
+        "UPDATE child c SET note = p.name || '''' FROM parent p WHERE p.id = c.parent_id",
+        "WITH gone AS (SELECT id FROM parent WHERE id = 2) UPDATE child SET note = 'gone' WHERE id IN (SELECT id FROM gone)",
+        "DELETE FROM child WHERE NOT EXISTS (SELECT 1 FROM parent_names v WHERE v.id = child.parent_id)",
+        "COMMENT ON TABLE parent IS 'parents'",
+        "TRUNCATE TABLE tree",
+        "DROP VIEW parent_names",
+        "DROP INDEX child_parent_idx",
+    ] {
+        sql.execute(statement)
+            .unwrap_or_else(|error| panic!("{statement}: {error}"));
+    }
+    assert_eq!(
+        sql.execute("SELECT id, note FROM app.child ORDER BY id")
+            .unwrap()
+            .rows,
+        vec![
+            vec![SqlValue::Int(1), SqlValue::String("a'b'".into())],
+            vec![SqlValue::Int(2), SqlValue::String("gone".into())],
+        ]
+    );
+    assert_eq!(
+        sql.execute("SELECT name FROM app.parent WHERE id = 1")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String("a'b".into())]]
     );
 }
 
@@ -1257,5 +1366,144 @@ fn drop_schema_restricts_on_and_cascades_to_operators() {
             "SELECT count(*) FROM pg_operator WHERE oprnamespace <> 11"
         ),
         0
+    );
+}
+
+#[test]
+fn drop_function_restricts_on_and_cascades_to_its_operators() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    create_day_operators(&mut sql);
+    // An overload of an operator function: only operators of this signature
+    // depend on it.
+    sql.execute(
+        "CREATE FUNCTION app.adddays(inter interval, days numeric) RETURNS integer \
+         LANGUAGE plpgsql AS $$ BEGIN RETURN days::int; END; $$",
+    )
+    .unwrap();
+    sql.execute(
+        "CREATE OPERATOR app.* (FUNCTION = app.adddays, LEFTARG = interval, RIGHTARG = numeric)",
+    )
+    .unwrap();
+    assert_eq!(app_operator_count(&mut sql), 8);
+
+    let error = sql
+        .execute("DROP FUNCTION app.intervaldays(interval, numeric)")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "2BP01", "{error}");
+    assert!(error.to_string().contains("operator app."), "{error}");
+    assert_eq!(app_operator_count(&mut sql), 8);
+
+    // CASCADE drops both operators implemented by the function; the shell
+    // they named as commutator stays, unlinked, as in PostgreSQL.
+    sql.execute("DROP FUNCTION app.intervaldays(interval, numeric) CASCADE")
+        .unwrap();
+    assert_eq!(app_operator_count(&mut sql), 6);
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_operator WHERE oprname = '-' AND oprleft = 1700 \
+             AND oprright = 1186 AND oprcom = 0"
+        ),
+        1
+    );
+
+    sql.execute("DROP FUNCTION app.adddays(interval, numeric) CASCADE")
+        .unwrap();
+    assert_eq!(app_operator_count(&mut sql), 5);
+    // The timestamptz overload and its operator are untouched.
+    sql.execute("SET search_path TO app, pg_catalog").unwrap();
+    let value = text_at(
+        &mut sql,
+        "SELECT (timestamptz '2020-01-01 00:00:00+00' + 1)::text",
+    );
+    assert!(value.starts_with("2020-01-02 00:00:00"), "{value}");
+}
+
+/// PL/pgSQL expressions resolve user-defined operators by the routine's
+/// declared types: parameters, variables and query-loop records, in
+/// assignments, conditions, loop bounds and RETURN. Values match
+/// PostgreSQL 16 running the same functions.
+#[test]
+fn routine_bodies_bind_user_operators_by_declared_types() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    create_day_operators(&mut sql);
+    sql.execute("SET search_path TO app, pg_catalog").unwrap();
+    for statement in [
+        "CREATE TABLE app.terms (id int, netdays numeric, grace numeric)",
+        "INSERT INTO app.terms VALUES (1, 30, 2), (2, 10, 0)",
+        // Record field from a query loop, as in the payment-term functions.
+        "CREATE FUNCTION app.due(term int, docdate timestamp with time zone) \
+         RETURNS timestamp with time zone LANGUAGE plpgsql AS $$ \
+         DECLARE due timestamp with time zone; p record; \
+         BEGIN \
+           FOR p IN SELECT netdays, grace FROM app.terms WHERE id = term LOOP \
+             due := docdate + p.netdays + p.grace; \
+           END LOOP; \
+           RETURN due; \
+         END; $$",
+        // Variables in a condition, a WHILE loop and RETURN.
+        "CREATE FUNCTION app.skip(d timestamp with time zone, n numeric) \
+         RETURNS timestamp with time zone LANGUAGE plpgsql AS $$ \
+         DECLARE v timestamp with time zone := d; k int := 0; \
+         BEGIN \
+           IF d + n > d THEN v := v + 1; END IF; \
+           WHILE v - n < d LOOP v := v + 1; k := k + 1; END LOOP; \
+           RETURN v - 1; \
+         END; $$",
+        // interval + numeric has no built-in meaning: only the user
+        // operator (a day count) gives a value.
+        "CREATE FUNCTION app.idays(i interval, n numeric) RETURNS integer \
+         LANGUAGE plpgsql AS $$ BEGIN RETURN i + n; END; $$",
+        // A FOR bound and a RAISE argument.
+        "CREATE FUNCTION app.loops(i interval, n numeric) RETURNS int LANGUAGE plpgsql AS $$ \
+         DECLARE c int := 0; \
+         BEGIN \
+           FOR k IN 1 .. i + n LOOP c := c + 1; END LOOP; \
+           RAISE NOTICE 'due %', timestamptz '2020-01-01 00:00:00+00' + n; \
+           RETURN c; \
+         END; $$",
+        // A date variable plus an integer stays date arithmetic.
+        "CREATE FUNCTION app.nextday(d date) RETURNS date LANGUAGE plpgsql AS $$ \
+         DECLARE v date := d; BEGIN v := v + 1; RETURN v; END; $$",
+    ] {
+        sql.execute(statement)
+            .unwrap_or_else(|error| panic!("`{statement}` failed: {error}"));
+    }
+    let value = text_at(
+        &mut sql,
+        "SELECT app.due(1, timestamptz '2020-01-01 00:00:00+00')::text",
+    );
+    assert!(value.starts_with("2020-02-02 00:00:00"), "{value}");
+    let value = text_at(
+        &mut sql,
+        "SELECT app.due(2, timestamptz '2020-01-01 00:00:00+00')::text",
+    );
+    assert!(value.starts_with("2020-01-11 00:00:00"), "{value}");
+    let value = text_at(
+        &mut sql,
+        "SELECT app.skip(timestamptz '2020-01-01 00:00:00+00', 3)::text",
+    );
+    assert!(value.starts_with("2020-01-03 00:00:00"), "{value}");
+    assert_eq!(
+        text_at(&mut sql, "SELECT app.nextday(date '2020-02-28')::text"),
+        "2020-02-29"
+    );
+    assert_eq!(
+        int_at(&mut sql, "SELECT app.idays(interval '3 days', 2)"),
+        5
+    );
+    let result = sql
+        .execute("SELECT app.loops(interval '3 days', 2)")
+        .unwrap();
+    assert_eq!(result.rows, vec![vec![SqlValue::Int(5)]]);
+    assert_eq!(result.notices.len(), 1);
+    assert!(
+        result.notices[0]
+            .message
+            .starts_with("due 2020-01-03 00:00:00"),
+        "{}",
+        result.notices[0].message
     );
 }

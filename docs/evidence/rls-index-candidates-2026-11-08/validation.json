@@ -1,0 +1,106 @@
+{
+  "source_commit": "b4e0142437a0518dac5deb176b9dccf088987d51",
+  "main_base": "3f3f9a781030b895e068cfdfdbf7a19fb507aa94",
+  "verified_tracked_source_files": 3623,
+  "binary": {
+    "path": "/root/carrier-zero-friction/bin/bicdb-rls-index-b4e0142",
+    "sha256": "45ae4fc04e68351373f86156c87d929aa5515c5d1658df539e012409de57255d"
+  },
+  "final_source_checks": {
+    "format": "passed",
+    "cli_build": "passed",
+    "sql_security_upstream": {
+      "passed": 592,
+      "failed": 0,
+      "ignored": 0,
+      "binaries": [
+        {
+          "name": "tests/binary_storage.rs",
+          "passed": 8
+        },
+        {
+          "name": "tests/catalog_and_admin_authorization.rs",
+          "passed": 13
+        },
+        {
+          "name": "tests/commit_outcome_resolution.rs",
+          "passed": 1
+        },
+        {
+          "name": "tests/deferred_trigger_rollback.rs",
+          "passed": 2
+        },
+        {
+          "name": "tests/no_context_no_authority.rs",
+          "passed": 2
+        },
+        {
+          "name": "tests/object_ddl_authorization.rs",
+          "passed": 5
+        },
+        {
+          "name": "tests/oracle_application_sql.rs",
+          "passed": 16
+        },
+        {
+          "name": "tests/pg_dump_schema_qualified_restore.rs",
+          "passed": 23
+        },
+        {
+          "name": "tests/pg_wewobo_compat.rs",
+          "passed": 60
+        },
+        {
+          "name": "tests/rls_index_candidates.rs",
+          "passed": 17
+        },
+        {
+          "name": "tests/routine_row_transaction_identity.rs",
+          "passed": 5
+        },
+        {
+          "name": "tests/routine_table_emission.rs",
+          "passed": 5
+        },
+        {
+          "name": "tests/select_row_locks.rs",
+          "passed": 6
+        },
+        {
+          "name": "tests/sql/main.rs",
+          "passed": 419
+        },
+        {
+          "name": "tests/streaming_rls_guard.rs",
+          "passed": 2
+        },
+        {
+          "name": "tests/write_path_authorization.rs",
+          "passed": 8
+        }
+      ]
+    }
+  },
+  "reused_unchanged_core_page_checks": {
+    "source_commit": "07b15b22b5b3fab3c968c27a4458f410c252a2a5",
+    "passed": 46,
+    "failed": 0,
+    "ignored_original_repeat_helpers": 2,
+    "reason": "Later changes affect SQL lookup inference, search_path, raw-index dispatch, and SQL tests; core/page durability code and dependencies are unchanged."
+  },
+  "execution_environment": {
+    "host": "64.20.52.186",
+    "cargo_jobs": 4,
+    "test_threads": 4,
+    "dev_debug": 0,
+    "incremental": 0,
+    "cargo_lock": "/tmp/carrier-zero-friction-cargo.lock",
+    "active_minimum_available_ram_gib": 8,
+    "active_minimum_available_disk_gib": 10
+  },
+  "excluded_incomplete_phases": [
+    "07b full batch resource-interrupted after completed core/page gates; remaining SQL gate rerun on final source",
+    "gin-keys-red cancellation raced with flock acquisition and source synchronization; no RED/GREEN claim from that phase"
+  ],
+  "qualification_stage": "Initial non-FTS b4 candidate; generated-FTS qualification is validation-a5bbadc.json"
+}

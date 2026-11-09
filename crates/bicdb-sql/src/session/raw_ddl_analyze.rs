@@ -1034,6 +1034,9 @@ impl<'db> SqlSession<'db> {
             None => None,
         };
         let statement = bound.as_ref().unwrap_or(statement);
+        if let Some(result) = self.apply_instead_rule(statement)? {
+            return Ok(result);
+        }
         if matches!(statement, Statement::Merge(_)) {
             return self
                 .with_statement_transaction(|session| session.execute_statement_inner(statement));

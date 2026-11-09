@@ -36,7 +36,7 @@ pub(super) fn drop_cascade_constraints(sql: &str) -> Option<String> {
             .iter()
             .enumerate()
             .filter(|(at, _)| *at != constraints)
-            .map(|(_, token)| token.to_string())
+            .map(|(_, token)| crate::eval::rewrite_helpers::token_sql(token))
             .collect(),
     )
 }

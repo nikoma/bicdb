@@ -82,7 +82,15 @@ pub struct HeapSnapshot {
     pub compactions: u64,
     /// Inserts that had to allocate because no candidate page had room.
     pub candidate_misses: u64,
+    /// Free-space records found naming a page that is no longer a heap page
+    /// (freed by vacuum, possibly reused), dropped instead of written to.
+    #[serde(default)]
+    pub non_heap_free_space_records: u64,
 }
+
+/// How many stale free-space records one insert drops before it stops
+/// consulting the catalog and falls back to the ring.
+const STALE_RECORD_ATTEMPTS: usize = 4;
 
 /// A heap of variable-size tuples.
 #[derive(Debug)]
@@ -130,6 +138,12 @@ impl HeapFile {
 
     fn catalog(&self) -> Option<Arc<Catalog>> {
         self.catalog.lock().clone()
+    }
+
+    /// Whether `page_id` currently holds a heap page. Read latch only.
+    fn is_heap_page(&self, page_id: PageId) -> Result<bool> {
+        let guard = self.pool.get(page_id)?;
+        Ok(PageType::from_u8(guard.bytes()[6]) == Some(PageType::Heap))
     }
 
     /// Free space on a page, for catalog bookkeeping.
@@ -207,7 +221,24 @@ impl HeapFile {
         // every page, not just the recently-touched ones, so it finds space the
         // in-memory ring would have forgotten.
         if let Some(catalog) = self.catalog() {
-            if let Some(page_id) = catalog.find_page_with_room(needed)? {
+            // A free-space record can outlive its page: vacuum frees a fully
+            // dead heap page, and a record the map failed to remove still
+            // names it. A freed page is zero-filled with a header whose slot
+            // fields describe an empty page, so it passes `can_fit`, and a
+            // tuple written there is lost when the page is next allocated.
+            // Check the page type first (under a read latch, so a refused
+            // page is not dirtied), drop every record naming a non-heap page,
+            // and look again. Bounded: one insert repairs a few records at
+            // most, never walks the whole map.
+            for _ in 0..STALE_RECORD_ATTEMPTS {
+                let Some(page_id) = catalog.find_page_with_room(needed)? else {
+                    break;
+                };
+                if !self.is_heap_page(page_id)? {
+                    self.metrics.lock().non_heap_free_space_records += 1;
+                    catalog.forget_free_space(page_id)?;
+                    continue;
+                }
                 let before = self.free_space_of(page_id)?;
                 let mut guard = self.pool.get_mut(page_id)?;
                 let mut heap = SlottedPage::new(guard.bytes_mut());
@@ -218,12 +249,24 @@ impl HeapFile {
                     catalog.update_free_space(page_id, before, after)?;
                     return Ok(locator);
                 }
+                break;
             }
         }
 
         // Try the free-space ring first.
         let candidates: Vec<PageId> = self.candidates.lock().iter().copied().collect();
         for page_id in candidates {
+            // The ring is only a hint as well: never write a tuple onto a
+            // page that is no longer a heap page.
+            match self.is_heap_page(page_id) {
+                Ok(true) => {}
+                Ok(false) => {
+                    self.candidates.lock().retain(|id| *id != page_id);
+                    continue;
+                }
+                Err(PageError::PoolExhausted { .. }) => continue,
+                Err(other) => return Err(other),
+            }
             let mut guard = match self.pool.get_mut(page_id) {
                 Ok(guard) => guard,
                 // A full pool is a reason to try another page, not to fail:
@@ -1043,5 +1086,65 @@ mod tests {
         })
         .unwrap();
         assert_eq!(count, 10_000);
+    }
+
+    #[test]
+    fn an_insert_never_writes_to_a_page_that_was_freed() {
+        let dir = TempDir::new().unwrap();
+        let store = Arc::new(
+            PageStore::open(
+                dir.path().join("h.pages"),
+                PageStoreOptions::default()
+                    .with_page_size(4096)
+                    .with_fsync(false),
+            )
+            .unwrap(),
+        );
+        let pool = Arc::new(
+            BufferPool::new(
+                store.clone(),
+                BufferPoolOptions::default()
+                    .with_budget_bytes(4 * 1024 * 1024)
+                    .with_shards(2),
+            )
+            .unwrap(),
+        );
+        let catalog = Arc::new(Catalog::create(pool.clone()).unwrap());
+        let heap = HeapFile::with_defaults(pool.clone());
+        heap.set_catalog(catalog.clone());
+
+        let doomed = heap.insert(&payload(900, 1)).unwrap().page_id;
+        // Free the page the way vacuum does (zero it under a Free header),
+        // but leave its free-space record behind, as main's forget_page left
+        // a record that had drifted from the page's free space.
+        heap.forget_page(doomed);
+        {
+            let mut guard = pool.get_mut(doomed).unwrap();
+            let bytes = guard.bytes_mut();
+            bytes.fill(0);
+            crate::page::PageHeader::new(doomed, PageType::Free, 4096).encode(bytes);
+        }
+        assert_eq!(catalog.find_page_with_room(1000).unwrap(), Some(doomed));
+        let freed = pool.get(doomed).unwrap().bytes().to_vec();
+        pool.take_pages_needing_log();
+
+        let placed = heap.insert(&payload(900, 2)).unwrap();
+        assert_ne!(
+            placed.page_id, doomed,
+            "a committed row was placed on a freed page"
+        );
+        assert_eq!(
+            pool.get(placed.page_id).unwrap().bytes()[6],
+            PageType::Heap as u8
+        );
+        assert_eq!(
+            pool.get(doomed).unwrap().bytes(),
+            &freed[..],
+            "the freed page was written"
+        );
+        assert!(!pool.take_pages_needing_log().contains(&doomed));
+        assert!(catalog.free_space_buckets(doomed).unwrap().is_empty());
+        assert_eq!(heap.snapshot().non_heap_free_space_records, 1);
+        assert_eq!(heap.get(placed).unwrap(), payload(900, 2));
     }
 }

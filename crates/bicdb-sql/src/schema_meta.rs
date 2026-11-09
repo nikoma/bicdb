@@ -504,7 +504,7 @@ pub fn plan_migration_sql(sql: &str) -> Result<Vec<MigrationStatementPlan>> {
             let (safety, reason) = classify_migration_statement(statement);
             MigrationStatementPlan {
                 ordinal: idx + 1,
-                sql: statement.to_string(),
+                sql: crate::sql_text::sql_text(statement),
                 safety,
                 reason,
             }

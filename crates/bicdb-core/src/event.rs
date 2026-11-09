@@ -117,6 +117,9 @@ pub struct EventStream {
     /// Durable-broker projection, rebuilt from the log at open and kept in
     /// lockstep by `append_event`. See the `broker` module.
     pub(crate) broker_state: BrokerState,
+    /// The database's fail-closed state: a failed tail repair of this log
+    /// fences the database (`storage::fence_on_frame_log_failure`).
+    durability: Option<std::sync::Arc<bicdb_page::DurabilityHealth>>,
 }
 
 impl fmt::Debug for EventStream {
@@ -212,7 +215,15 @@ impl EventStream {
             subscribers: Vec::new(),
             queue_offsets: HashMap::new(),
             broker_state,
+            durability: None,
         })
+    }
+
+    pub(crate) fn attach_durability(
+        &mut self,
+        health: std::sync::Arc<bicdb_page::DurabilityHealth>,
+    ) {
+        self.durability = Some(health);
     }
 
     pub fn append(&mut self, event: Event) -> Result<u64> {
@@ -533,6 +544,10 @@ impl EventStream {
         }
 
         let payload = serde_json::to_vec(&event)?;
+        // A failed append cuts its bytes back before returning (or, when that
+        // fails too, fences the database). The event is then neither in the
+        // log nor in memory; an audit event behind a commit stays in the
+        // transaction log's outbox and is republished by recovery.
         let offsets = storage::append_frames(
             &self.path,
             FrameKind::Event,
@@ -540,7 +555,8 @@ impl EventStream {
             self.fsync,
             &self.compression,
             &self.encryption,
-        )?;
+        )
+        .map_err(|error| storage::fence_on_frame_log_failure(self.durability.as_ref(), error))?;
         let stored = StoredEvent {
             offset: offsets[0],
             event,

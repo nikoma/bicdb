@@ -1,0 +1,59 @@
+{
+  "ci_failure": {
+    "run": 42487385141,
+    "job": 128752124882,
+    "head_commit": "40d4a3a23e1e48aabf16a4fbafd17b54cc1a712a",
+    "test": "journal_replicas_share_author_identity_and_preserve_it_after_promotion",
+    "result": "ReadOnlyStandby before INSERT: no live standby confirmations within1.5s"
+  },
+  "unmodified_remote_repetition": {
+    "rounds": 3,
+    "passed": 18,
+    "failed": 0,
+    "ignored": 0,
+    "conclusion": "Does not reproduce scheduling-sensitive CI failure without an explicit pause"
+  },
+  "controlled_scheduling": {
+    "pause_seconds": 2,
+    "location": "Between mesh setup and INSERT, while original callback holds guard; between acknowledged callbacks in split arm",
+    "original_arm": {
+      "passed": 0,
+      "failed": 1,
+      "error": "ReadOnlyStandby: no live standby confirmations within1.5s"
+    },
+    "split_arm": {
+      "passed": 1,
+      "failed": 0
+    },
+    "purpose": "Isolate database guard starvation; not a benchmark timing measurement"
+  },
+  "final_fixture_without_pause": {
+    "rounds": 3,
+    "passed": 18,
+    "failed": 0,
+    "ignored": 0,
+    "production_changes": false,
+    "lease_changed": false,
+    "assertions_changed": false,
+    "retries_added": false
+  },
+  "variant_sha256": {
+    "controlled-green.rs": "8d1b0a776b8fec4fd59a541547da23737aeaf80a7f8f8f936507e7c38031000c",
+    "controlled-red.rs": "b920768ca0b47c629617e5dc4fce695e02b8b71afbf355992aa344db839e0398",
+    "final.rs": "24b6318ad270c8bc874f1864cccca728cf73a7a543cb2e5bc02f0bcc533b10ac",
+    "original.rs": "9ea3a90bd7c7a76db124c544bf5661c51dd3592ca5ba175fe11e997fa68b52e6"
+  },
+  "raw_artifact_sha256": {
+    "pgwire-128752124882.log": "a02b6120510e8073e323a6783d0a6740fdb813c83c3faee138f55263a807dc6e",
+    "rails-42487385153.log": "c9f3ec171eaf62ca585e62849799028c8e0becbe865a23758507a6c6949043cd",
+    "rls-index-ha-pause-green-memory.log": "fe985d6d14d3d80acf2a2e234501fe08d2b14be630453ec561cd3203def7c75b",
+    "rls-index-ha-pause-green.log": "f0e46c54874b2726eb27660bfcf4f03cd89fd6f4dde2338918e8c03f7a00d7db",
+    "rls-index-ha-pause-red-memory.log": "362594138f4dd822eb9ee923251ac093e96453d2b30dae84cd9cfdc51452c0ab",
+    "rls-index-ha-pause-red.log": "6d4722b020dc65edfe5d96c41ccf13b73e53460cb2da9676859564a417a45d57",
+    "rls-index-ha-setup-green-memory.log": "abbcb2ee59fd35af8b65ded0bbf802cb993865ea7cfdd7346596753b8e4275e4",
+    "rls-index-ha-setup-green.log": "4b33262ad114a2cc540fca28b3495d1d00e7507d7fd39fe76066c9aed9f5ace7",
+    "rls-index-ha-setup-red-resumed-memory.log": "8f886cb42bdaacd0e4084007c3563899935c431281ee7c2a3e3530fb2f0e0cba",
+    "rls-index-ha-setup-red-resumed.log": "3ad22ab17416bc67730164b0e18ad807b5b868468d48f42d04711adcaa1b03cd",
+    "sql-128752124883.log": "87901ea62eddf351d2e5b304684d9eb6930c25a217835b814eff07cb79110859"
+  }
+}

@@ -2410,6 +2410,12 @@ impl BicDb {
                     // Append the delta to the existing segment (created on first
                     // append). Recovery replays frames in order, last-write-wins, so
                     // appended frames supersede older ones for the same record id.
+                    // A failed append cuts its bytes back, so the retried
+                    // checkpoint appends on a frame boundary and the
+                    // transaction log is not cut past rows recovery could
+                    // not then read. When the cut-back fails too, the
+                    // database is fenced and the segment accepts nothing
+                    // more until recovery.
                     storage::append_frames(
                         &self.segment_path(collection),
                         FrameKind::Record,
@@ -2417,7 +2423,10 @@ impl BicDb {
                         self.config.fsync,
                         &self.config.compression,
                         &self.encryption,
-                    )?;
+                    )
+                    .map_err(|error| {
+                        storage::fence_on_frame_log_failure(Some(&self.durability), error)
+                    })?;
                     base + frames.len() as u64
                 }
                 SegmentWrite::Rewrite(records) => {

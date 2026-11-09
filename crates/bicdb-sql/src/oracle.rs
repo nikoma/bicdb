@@ -487,6 +487,19 @@ pub fn is_known_profile(profile: &str) -> bool {
     profile == POSTGRES_PROFILE || is_oracle_profile(profile)
 }
 
+/// Whether the durable database profile is one of the second profile's.
+pub(crate) fn is_oracle_database(db: &BicDb) -> Result<bool> {
+    match db.get(PROFILE_COLLECTION, "profile") {
+        Err(BicDbError::CollectionNotFound(_)) | Ok(None) => Ok(false),
+        Err(error) => Err(error.into()),
+        Ok(Some(record)) => Ok(record
+            .metadata
+            .get("profile")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(is_oracle_profile)),
+    }
+}
+
 /// Constraint semantics follow the durable database profile, never a mutable
 /// connection setting.
 pub(crate) fn is_preview_database(db: &BicDb) -> Result<bool> {
@@ -920,9 +933,8 @@ fn quote_interval_identifiers(sql: &str) -> Option<String> {
         return None;
     }
     let dialect = sqlparser::dialect::GenericDialect {};
-    let tokens = sqlparser::tokenizer::Tokenizer::new(&dialect, sql)
-        .tokenize()
-        .ok()?;
+    let source = crate::eval::rewrite_helpers::tokens_with_source(&dialect, sql)?;
+    let tokens: Vec<Token> = source.iter().map(|(token, _)| token.clone()).collect();
     let mut changed = false;
     let mut out = String::with_capacity(sql.len() + 8);
     for (index, token) in tokens.iter().enumerate() {
@@ -952,7 +964,7 @@ fn quote_interval_identifiers(sql: &str) -> Option<String> {
                 }
             }
         }
-        out.push_str(&token.to_string());
+        out.push_str(source[index].1);
     }
     changed.then_some(out)
 }
@@ -1161,20 +1173,10 @@ fn render_token(token: &Token) -> String {
 /// sqlparser's generic Display accepts both escaped and decoded values and
 /// treats adjacent quotes as already escaped. Our parser uses decoded values;
 /// double every quote on a serialization-only copy before invoking Display.
-fn render_sql<T: Clone + sqlparser::ast::VisitMut + std::fmt::Display>(node: &T) -> String {
-    let mut copy = node.clone();
-    let _ = visit_expressions_mut(&mut copy, |expr| {
-        if let Expr::Value(value) = expr {
-            match &mut value.value {
-                Value::SingleQuotedString(text) | Value::NationalStringLiteral(text) => {
-                    *text = text.replace('\'', "''")
-                }
-                _ => {}
-            }
-        }
-        ControlFlow::<()>::Continue(())
-    });
-    copy.to_string()
+pub(crate) fn render_sql<T: Clone + sqlparser::ast::VisitMut + std::fmt::Display>(
+    node: &T,
+) -> String {
+    crate::sql_text::sql_text(node)
 }
 
 fn join(tokens: &[Token]) -> String {

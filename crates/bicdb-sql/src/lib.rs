@@ -65,8 +65,10 @@ use thiserror::Error;
 pub type Result<T> = std::result::Result<T, SqlError>;
 
 mod aggregate_evaluation;
+mod builtin_signatures;
 mod identity;
 pub mod oracle;
+pub mod sql_text;
 pub use identity::{
     bicdb_version_banner, postgres_version_banner, BICDB_VERSION, POSTGRES_COMPATIBILITY_VERSION,
     POSTGRES_COMPATIBILITY_VERSION_NUM,
@@ -195,6 +197,7 @@ pub use runtime::*;
 mod application_copy;
 mod constraint_nulls;
 mod lock_lists;
+mod query_rules;
 mod role_settings;
 mod routine_overloads;
 mod schema_meta;
@@ -4622,7 +4625,7 @@ struct RoutineIrCacheKey {
     search_path: Option<std::sync::Arc<[String]>>,
 }
 
-type RoutineCompilationScope = (u64, u64, u64, u64, u64, u64);
+type RoutineCompilationScope = (u64, u64, u64, u64, u64, u64, u64);
 
 thread_local! {
     static ROUTINE_IR_CACHE: RefCell<FxHashMap<RoutineIrCacheKey, Arc<RoutineIR>>> = RefCell::new(FxHashMap::default());

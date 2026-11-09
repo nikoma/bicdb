@@ -2842,6 +2842,24 @@ impl TxLogHandle {
     /// commit sequence. The caller has already crossed the relevant commit's
     /// `write_durable` boundary. Sharing the writer lock prevents an outbox
     /// acknowledgement from interleaving bytes with concurrent group commit.
+    /// Crash-test hook: write `torn` (a prefix of a frame batch) and reach
+    /// crash `point` while still holding the writer lock. A real crash during
+    /// a write leaves the torn bytes as the log's tail, because appends are
+    /// serialized under this lock; writing the prefix through
+    /// `append_auxiliary` and crashing after it let a concurrent commit
+    /// append complete frames behind the torn ones, a state no crash can
+    /// produce (and one recovery rightly refuses as mid-file damage).
+    pub(crate) fn append_torn_then_crash_for_test(&self, torn: &[u8], point: &str) {
+        let mut state = self.lock_write();
+        if state.file.is_none() {
+            state.file = storage::open_append_handle(&self.path, self.fsync).ok();
+        }
+        if let Some(file) = state.file.as_mut() {
+            let _ = storage::write_raw(file, &self.path, torn);
+        }
+        bicdb_page::test_faults::crash_point(point);
+    }
+
     fn append_auxiliary(&self, bytes: &[u8]) -> Result<()> {
         let mut state = self.lock_write();
         self.check_health()?;
@@ -10281,6 +10299,7 @@ impl BicDb {
         // again — duplicate-version noise, never loss.
         if let Some(paged) = &paged_records {
             paged.checkpoint()?;
+            bicdb_page::test_faults::crash_point("open.after_recovery_checkpoint");
         }
         open_trace!("apply_unmaterialized_tx");
         // Legacy empty indexes use a completeness sentinel but have neither
@@ -10411,6 +10430,7 @@ impl BicDb {
                     tx_recovery.last_commit_seq,
                     config.fsync,
                 )?;
+                bicdb_page::test_faults::crash_point("open.after_txlog_floor");
                 copy_transaction_log_tail(&log_path, log_len, config.fsync)?;
             }
         }
@@ -10555,6 +10575,10 @@ impl BicDb {
             tx_log,
             deferred_materializer,
         };
+        // A frame log whose failed append could not be repaired fences the
+        // database like a failed transaction-log write does.
+        db.sync_log.get_mut().attach_durability(durability.clone());
+        db.events.get_mut().attach_durability(durability.clone());
         if db.config.replication.record_journal {
             for (tx_id, events) in &recovered_audit_outboxes {
                 db.persist_record_audit_publication(*tx_id, events)?;
@@ -11213,7 +11237,10 @@ impl BicDb {
         }
         let mut commits: Vec<(u64, u64)> = Vec::new();
         let mut aborted: FxHashSet<u64> = FxHashSet::default();
-        storage::stream_frames(
+        // The log is live: a commit may be mid-write. A recovery reader would
+        // take its partial frame for a torn tail and truncate it under the
+        // writer, deleting a commit that is then acknowledged.
+        storage::stream_frames_live(
             &self.tx_log_path(),
             FrameKind::Transaction,
             &self.encryption,
@@ -11412,17 +11439,20 @@ impl BicDb {
     }
 
     fn replication_commits_from_retained_wal(&self) -> Result<Vec<RetainedReplicationCommit>> {
-        let recovered = storage::read_frames(
+        // The log is live: read it without the recovery reader's tail
+        // truncation, which would cut off a commit that is mid-write (see
+        // `replication_retention_status`).
+        let frames = storage::read_frames_readonly_from(
             &self.tx_log_path(),
+            0,
             FrameKind::Transaction,
-            self.config.read_mode,
             &self.encryption,
         )?;
         let mut writes: BTreeMap<u64, Vec<TxWrite>> = BTreeMap::new();
         let mut audit: BTreeMap<u64, Vec<Event>> = BTreeMap::new();
         let mut commits: Vec<(u64, u64, i64)> = Vec::new();
-        for frame in recovered.frames {
-            let tx_frame = decode_tx_frame(&frame.payload)?;
+        for (_, _, payload) in frames {
+            let tx_frame = decode_tx_frame(&payload)?;
             match tx_frame {
                 TxFrame::Write { tx_id, write } => {
                     writes.entry(tx_id.0).or_default().push(*write);
@@ -17044,11 +17074,37 @@ impl Transaction {
             return Ok(());
         }
         let db = unsafe { self.db.as_ref() };
-        let mut events = db.events.lock();
-        for event in &self.pending_record_audit_events {
-            events.append(event.clone())?;
+        let (transaction_id, commit_seq) = (self.id.0, self.committed_seq);
+        let deferred = |error: &BicDbError| {
+            bicdb_page::health::log_event(&serde_json::json!({
+                "event": "durability.audit_publication_deferred",
+                "severity": "warn",
+                "transaction_id": transaction_id,
+                "commit_seq": commit_seq,
+                "error": error.to_string(),
+                "action": "the commit is durable; recovery republishes its audit entries",
+            }));
+        };
+        let appended = (|| -> Result<()> {
+            let mut events = db.events.lock();
+            for event in &self.pending_record_audit_events {
+                events.append(event.clone())?;
+            }
+            Ok(())
+        })();
+        if let Err(error) = appended {
+            // The event-log append failed (its bytes were cut back, or the
+            // log is fenced). The outbox now exists only in the transaction
+            // log, and a checkpoint on this handle would cut the log past it
+            // and lose it. Fence, so only a reopen, whose recovery
+            // republishes the outbox, moves past this point. The commit
+            // itself is durable and visible, so it is reported as success
+            // for the same reason as a failed marker below.
+            db.fence_durability("record_audit.publish", &error);
+            deferred(&error);
+            self.pending_record_audit_events.clear();
+            return Ok(());
         }
-        drop(events);
         match db.persist_record_audit_publication(self.id, &self.pending_record_audit_events) {
             Ok(()) => {}
             // The commit is durable and visible: it is not ambiguous, and
@@ -17057,16 +17113,7 @@ impl Transaction {
             // recovery republishes committed entries still pending, so the
             // accurate answer is success with the failure logged. The
             // database is fenced either way.
-            Err(error) if error.is_durability_failure() => {
-                bicdb_page::health::log_event(&serde_json::json!({
-                    "event": "durability.audit_publication_deferred",
-                    "severity": "warn",
-                    "transaction_id": self.id.0,
-                    "commit_seq": self.committed_seq,
-                    "error": error.to_string(),
-                    "action": "the commit is durable; recovery republishes its audit entries",
-                }));
-            }
+            Err(error) if error.is_durability_failure() => deferred(&error),
             Err(error) => return Err(error),
         }
         self.pending_record_audit_events.clear();

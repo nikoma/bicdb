@@ -2294,6 +2294,14 @@ pub(crate) fn projected_binary_expr_pg_type_with_types(
     if vector_distance_operator(op).is_some() {
         return Some("float8".to_string());
     }
+    // numeric ^ numeric when either side is NUMERIC, else float8.
+    if matches!(op, BinaryOperator::PGExp) {
+        return match (left_type.as_deref(), right_type.as_deref()) {
+            (Some("numeric"), _) | (_, Some("numeric")) => Some("numeric".to_string()),
+            (Some(_), Some(_)) => Some("float8".to_string()),
+            _ => None,
+        };
+    }
     if let Some(pg_type) =
         network_binary_result_pg_type(op, left_type.as_deref(), right_type.as_deref())
     {

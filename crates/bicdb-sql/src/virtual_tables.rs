@@ -34,6 +34,7 @@ pub(crate) fn is_internal_sql_collection(name: &str) -> bool {
         VIEW_COLLECTION,
         ROUTINE_COLLECTION,
         crate::pg_operators::OPERATOR_COLLECTION,
+        crate::query_rules::RULE_COLLECTION,
         TRIGGER_COLLECTION,
         NOTIFICATION_COLLECTION,
         ROLE_COLLECTION,
@@ -5853,18 +5854,33 @@ pub(crate) fn comparison_term(
     ) {
         return Ok(None);
     }
+    let constant_index_value = |expr: &Expr| -> Result<Option<IndexValue>> {
+        match eval_constant_expr(expr) {
+            // Stored/contextual calls can be valid row expressions without
+            // being static index constants. EXPLAIN must not reject or execute
+            // them; retain the normal residual predicate instead.
+            Err(SqlError::Unsupported(_)) => Ok(None),
+            result => result.and_then(index_value_from_sql).map(Some),
+        }
+    };
     if let Ok(field) = predicate_index_field_from_expr(left) {
         return Ok(Some((
             field,
             op.clone(),
-            index_value_from_sql(eval_constant_expr(right)?)?,
+            match constant_index_value(right)? {
+                Some(value) => value,
+                None => return Ok(None),
+            },
         )));
     }
     if let Ok(field) = predicate_index_field_from_expr(right) {
         return Ok(Some((
             field,
             reverse_comparison(op),
-            index_value_from_sql(eval_constant_expr(left)?)?,
+            match constant_index_value(left)? {
+                Some(value) => value,
+                None => return Ok(None),
+            },
         )));
     }
     Ok(None)

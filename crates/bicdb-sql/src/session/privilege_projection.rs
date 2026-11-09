@@ -1128,7 +1128,7 @@ impl<'db> SqlSession<'db> {
             });
             constraints.push(DomainConstraintSchema {
                 name: constraint_name,
-                expression: check.expr.to_string(),
+                expression: crate::sql_text::sql_text(&*check.expr),
                 validated: true,
             });
         }
@@ -1146,7 +1146,10 @@ impl<'db> SqlSession<'db> {
                 base_user_type: base_user_type.map(Box::new),
                 type_modifier,
                 collation,
-                default_expr: create_domain.default.as_ref().map(ToString::to_string),
+                default_expr: create_domain
+                    .default
+                    .as_ref()
+                    .map(crate::sql_text::sql_text),
                 not_null,
                 not_null_constraint_name,
                 constraints,
@@ -1229,12 +1232,12 @@ impl<'db> SqlSession<'db> {
         }
         let domain_name = tokens[2..operation_index]
             .iter()
-            .map(ToString::to_string)
+            .map(crate::eval::rewrite_helpers::token_sql)
             .collect::<String>();
         let operation_tokens = &tokens[operation_index..];
         let operation_sql = operation_tokens
             .iter()
-            .map(ToString::to_string)
+            .map(crate::eval::rewrite_helpers::token_sql)
             .collect::<Vec<_>>()
             .join(" ");
         let column_operation = operation_tokens.len() >= 2
@@ -1280,7 +1283,7 @@ impl<'db> SqlSession<'db> {
                     let UserTypeKind::Domain { default_expr, .. } = &mut user_type.kind else {
                         unreachable!()
                     };
-                    *default_expr = Some(value.to_string());
+                    *default_expr = Some(crate::sql_text::sql_text(&value));
                 }
                 AlterColumnOperation::DropDefault => {
                     let UserTypeKind::Domain { default_expr, .. } = &mut user_type.kind else {
@@ -1385,7 +1388,7 @@ impl<'db> SqlSession<'db> {
                         Some(constraint_name),
                     ));
                 }
-                let expression = check.expr.to_string();
+                let expression = crate::sql_text::sql_text(&*check.expr);
                 parse_check_expression(&expression)?;
                 constraints.push(DomainConstraintSchema {
                     name: constraint_name,
@@ -1534,7 +1537,7 @@ impl<'db> SqlSession<'db> {
 
         let type_name = tokens[2..operation_index]
             .iter()
-            .map(ToString::to_string)
+            .map(crate::eval::rewrite_helpers::token_sql)
             .collect::<String>();
         let mut operation_tokens = tokens[operation_index..].to_vec();
         if operation_tokens
@@ -1546,7 +1549,7 @@ impl<'db> SqlSession<'db> {
         operation_tokens[1] = Token::make_keyword("COLUMN");
         let operation_sql = operation_tokens
             .iter()
-            .map(ToString::to_string)
+            .map(crate::eval::rewrite_helpers::token_sql)
             .collect::<Vec<_>>()
             .join(" ");
         let transformed = format!("ALTER TABLE {type_name} {operation_sql}");

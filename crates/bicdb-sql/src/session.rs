@@ -709,9 +709,11 @@ fn parse_base_type_definition(
             UserDefinedTypeSqlDefinitionOption::Preferred(preferred) => {
                 definition.preferred = *preferred;
             }
-            UserDefinedTypeSqlDefinitionOption::Default(expr) => {
-                set_base_type_option(&mut definition.default_expr, expr.to_string(), "DEFAULT")?
-            }
+            UserDefinedTypeSqlDefinitionOption::Default(expr) => set_base_type_option(
+                &mut definition.default_expr,
+                crate::sql_text::sql_text(expr),
+                "DEFAULT",
+            )?,
             UserDefinedTypeSqlDefinitionOption::Element(data_type) => {
                 let element_type = pg_type_from_data_type(data_type)?.0;
                 set_base_type_option(&mut definition.element_type, element_type, "ELEMENT")?;
@@ -905,7 +907,7 @@ fn rewrite_routine_definition_type_identity(
     for (index, argument) in function.args.iter_mut().flatten().enumerate() {
         if relocate(&mut argument.data_type, previous, updated) {
             if let Some(declaration) = routine.args.get_mut(index) {
-                *declaration = argument.to_string();
+                *declaration = crate::sql_text::sql_text(argument);
             }
             if let (Some(saved), Ok(rewritten)) = (
                 routine.arg_types.get_mut(index),
@@ -931,7 +933,7 @@ fn rewrite_routine_definition_type_identity(
     if changed {
         // Loading routine metadata reparses this declaration. Keep its typed
         // header current while preserving the body as its original SQL value.
-        routine.definition = statements[0].to_string();
+        routine.definition = crate::sql_text::sql_text(&statements[0]);
     }
     changed
 }
@@ -2985,9 +2987,10 @@ impl<'db> SqlSession<'db> {
         // statement sees the path and schemas earlier statements set up.
         let per_statement = crate::search_path::statements_bound_separately(sql, path.is_some());
         let path = if per_statement.is_some() { None } else { path };
-        let bound = path
-            .as_deref()
-            .and_then(|path| crate::search_path::bind_sql_text(self.db_ref(), sql, path));
+        let bound = match path.as_deref() {
+            Some(path) => crate::search_path::bind_sql_text(self.db_ref(), sql, path)?,
+            None => None,
+        };
         let _path_scope = crate::search_path::PathScope::enter(path);
         let sql = bound.as_deref().unwrap_or(sql);
         // A per-row routine call reaches raw SQL only through dynamic EXECUTE
@@ -3013,9 +3016,14 @@ impl<'db> SqlSession<'db> {
                                 session.db_ref(),
                                 &session.session_gucs,
                             )?;
-                            let bound = path.as_deref().and_then(|path| {
-                                crate::search_path::bind_sql_text(session.db_ref(), statement, path)
-                            });
+                            let bound = match path.as_deref() {
+                                Some(path) => crate::search_path::bind_sql_text(
+                                    session.db_ref(),
+                                    statement,
+                                    path,
+                                )?,
+                                None => None,
+                            };
                             let _path_scope = crate::search_path::PathScope::enter(path);
                             session.conflict_arbiter_memo.borrow_mut().take();
                             last =
@@ -3245,6 +3253,12 @@ impl<'db> SqlSession<'db> {
             return Ok(result);
         }
         if let Some(result) = self.execute_raw_alter_role_settings(sql)? {
+            return Ok(result);
+        }
+        if let Some(result) = self.execute_raw_create_rule(sql)? {
+            return Ok(result);
+        }
+        if let Some(result) = self.execute_raw_drop_rule(sql)? {
             return Ok(result);
         }
         if let Some(result) = self.execute_raw_reset(sql)? {
@@ -3726,6 +3740,9 @@ impl<'db> SqlSession<'db> {
 
     fn execute_parsed_statement_in_sql(&mut self, statement: &Statement) -> Result<SqlResult> {
         self.ensure_read_only_statement(statement)?;
+        if let Some(result) = self.apply_instead_rule(statement)? {
+            return Ok(result);
+        }
         // Earlier statements in a batch can change temporal output settings.
         let _temporal_scope = self.temporal_scope();
         self.db_ref().check_recovery_state()?;

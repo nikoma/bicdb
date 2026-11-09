@@ -678,14 +678,81 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
 /// weak lock would take is still taken, so correctness is unchanged and only
 /// concurrency can be lower. Works on tokens, so strings, dollar-quoted bodies
 /// and comments are left alone.
+/// SQL text for one token that reads back as the same token. A token's
+/// `Display` writes a decoded string or quoted identifier without escaping
+/// its quotes, so it is not valid SQL for values that contain them.
+pub(crate) fn token_sql(token: &Token) -> String {
+    fn quoted(prefix: &str, value: &str) -> String {
+        format!("{prefix}'{}'", value.replace('\'', "''"))
+    }
+    match token {
+        Token::SingleQuotedString(value) | Token::UnicodeStringLiteral(value) => quoted("", value),
+        Token::NationalStringLiteral(value) => quoted("N", value),
+        Token::EscapedStringLiteral(value) => {
+            format!("E'{}'", value.replace('\\', "\\\\").replace('\'', "\\'"))
+        }
+        Token::DoubleQuotedString(value) => format!("\"{}\"", value.replace('"', "\"\"")),
+        Token::Word(word) => match word.quote_style {
+            Some(quote) => {
+                let end = if quote == '[' { ']' } else { quote };
+                format!(
+                    "{quote}{}{end}",
+                    word.value.replace(end, &format!("{end}{end}"))
+                )
+            }
+            None => word.value.clone(),
+        },
+        token => token.to_string(),
+    }
+}
+
+/// Each token of `input` with the exact source text it was read from, for
+/// rewrites that re-emit tokens: a token's `Display` is not its source text
+/// (a doubled quote or an escape-string escape is lost).
+pub(crate) fn tokens_with_source<'a>(
+    dialect: &dyn sqlparser::dialect::Dialect,
+    input: &'a str,
+) -> Option<Vec<(Token, &'a str)>> {
+    let spanned = Tokenizer::new(dialect, input)
+        .tokenize_with_location()
+        .ok()?;
+    let mut line_starts = vec![0usize];
+    line_starts.extend(input.match_indices('\n').map(|(index, _)| index + 1));
+    let offset = |location: sqlparser::tokenizer::Location| -> Option<usize> {
+        let start = *line_starts.get(usize::try_from(location.line).ok()?.checked_sub(1)?)?;
+        let column = usize::try_from(location.column).ok()?.checked_sub(1)?;
+        input[start..]
+            .char_indices()
+            .map(|(index, _)| start + index)
+            .chain(std::iter::once(input.len()))
+            .nth(column)
+    };
+    let starts = spanned
+        .iter()
+        .map(|token| offset(token.span.start))
+        .collect::<Option<Vec<_>>>()?;
+    if starts.first().is_some_and(|start| *start != 0) {
+        return None;
+    }
+    let mut tokens = Vec::with_capacity(spanned.len());
+    for (index, token) in spanned.into_iter().enumerate() {
+        let start = starts[index];
+        let end = starts.get(index + 1).copied().unwrap_or(input.len());
+        if end <= start {
+            return None;
+        }
+        tokens.push((token.token, &input[start..end]));
+    }
+    Some(tokens)
+}
+
 pub(crate) fn rewrite_weak_lock_strengths(input: &str) -> Option<String> {
     let lower = input.to_ascii_lowercase();
     if !lower.contains("key") || !lower.contains("for") {
         return None;
     }
-    let tokens = Tokenizer::new(&PostgreSqlDialect {}, input)
-        .tokenize()
-        .ok()?;
+    let source = tokens_with_source(&PostgreSqlDialect {}, input)?;
+    let tokens: Vec<Token> = source.iter().map(|(token, _)| token.clone()).collect();
     let word = |token: &Token| -> Option<String> {
         match token {
             Token::Word(word) if word.quote_style.is_none() => {
@@ -730,7 +797,7 @@ pub(crate) fn rewrite_weak_lock_strengths(input: &str) -> Option<String> {
                 }
             }
         }
-        out.push_str(&tokens[index].to_string());
+        out.push_str(source[index].1);
         index += 1;
     }
     changed.then_some(out)
@@ -750,9 +817,8 @@ pub(crate) fn rewrite_locking_clause_before_limit(input: &str) -> Option<String>
     {
         return None;
     }
-    let tokens = Tokenizer::new(&PostgreSqlDialect {}, input)
-        .tokenize()
-        .ok()?;
+    let source = tokens_with_source(&PostgreSqlDialect {}, input)?;
+    let tokens: Vec<Token> = source.iter().map(|(token, _)| token.clone()).collect();
     let word = |token: &Token| -> Option<String> {
         match token {
             Token::Word(word) if word.quote_style.is_none() => {
@@ -764,7 +830,7 @@ pub(crate) fn rewrite_locking_clause_before_limit(input: &str) -> Option<String>
     let next_significant = |from: usize| -> Option<usize> {
         (from..tokens.len()).find(|index| !matches!(tokens[*index], Token::Whitespace(_)))
     };
-    let mut output: Vec<Token> = Vec::with_capacity(tokens.len() + 2);
+    let mut output: Vec<&str> = Vec::with_capacity(tokens.len() + 2);
     let mut changed = false;
     let mut index = 0;
     while index < tokens.len() {
@@ -773,7 +839,7 @@ pub(crate) fn rewrite_locking_clause_before_limit(input: &str) -> Option<String>
                 .and_then(|next| word(&tokens[next]))
                 .is_some_and(|next| matches!(next.as_str(), "UPDATE" | "SHARE" | "NO" | "KEY"));
         if !is_lock_start {
-            output.push(tokens[index].clone());
+            output.push(source[index].1);
             index += 1;
             continue;
         }
@@ -806,7 +872,7 @@ pub(crate) fn rewrite_locking_clause_before_limit(input: &str) -> Option<String>
             cursor += 1;
         }
         let Some(limit_start) = limit_start else {
-            output.extend(tokens[lock_start..cursor].iter().cloned());
+            output.extend(source[lock_start..cursor].iter().map(|(_, text)| *text));
             index = cursor;
             continue;
         };
@@ -828,29 +894,27 @@ pub(crate) fn rewrite_locking_clause_before_limit(input: &str) -> Option<String>
             }
             limit_end += 1;
         }
-        let mut lock = tokens[lock_start..limit_start].to_vec();
-        while matches!(lock.last(), Some(Token::Whitespace(_))) {
-            lock.pop();
+        let is_space = |index: usize| matches!(tokens[index], Token::Whitespace(_));
+        let mut lock_end = limit_start;
+        while lock_end > lock_start && is_space(lock_end - 1) {
+            lock_end -= 1;
         }
-        let mut limit = tokens[limit_start..limit_end].to_vec();
-        let trailing: Vec<Token> = {
-            let mut trailing = Vec::new();
-            while matches!(limit.last(), Some(Token::Whitespace(_))) {
-                trailing.insert(0, limit.pop().unwrap());
-            }
-            trailing
-        };
-        output.extend(limit);
-        output.push(Token::Whitespace(sqlparser::tokenizer::Whitespace::Space));
-        output.extend(lock);
-        output.extend(trailing);
+        let mut limit_trim = limit_end;
+        while limit_trim > limit_start && is_space(limit_trim - 1) {
+            limit_trim -= 1;
+        }
+        let text = |range: std::ops::Range<usize>| source[range].iter().map(|(_, text)| *text);
+        output.extend(text(limit_start..limit_trim));
+        output.push(" ");
+        output.extend(text(lock_start..lock_end));
+        output.extend(text(limit_trim..limit_end));
         changed = true;
         index = limit_end;
     }
     if !changed {
         return None;
     }
-    Some(output.iter().map(ToString::to_string).collect())
+    Some(output.concat())
 }
 
 pub(crate) fn rewrite_variadic_builtin_calls(input: &str) -> Option<String> {

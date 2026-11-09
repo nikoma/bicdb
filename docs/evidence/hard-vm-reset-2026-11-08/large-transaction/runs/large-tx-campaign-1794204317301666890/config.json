@@ -1,0 +1,23 @@
+{
+  "BICDB_VM_SOURCE": "6d225c1940cf13ffbb7693f8ebc2917e5abaad82",
+  "BICDB_VM_BINARY": "/root/bicdb-durability-s3/skr/bin/oracle-server-default-cuts-6d225c19-release",
+  "BICDB_VM_POOL": "2097152",
+  "BICDB_VM_WAL": "131072",
+  "BICDB_VM_SEGMENT": "32768",
+  "BICDB_VM_DISK": "/root/bicdb-durability-s3/vm-reset/large-tx-default6d.raw",
+  "format": 1,
+  "guest_server_sha256": "b5331b45dd94c76ea46453db2996736bf1311f91478b0076803d05f30b2ff09e",
+  "row_count_per_tx": 8192,
+  "row_payload_bytes": 3145728,
+  "blob_bytes": 4259840,
+  "dependencies_sha256": {
+    "launch.sh": "f3d73ac3fb8d6561d623a5894ef81cd305f4a3fd9d158a8ffc6381fd3826fa84",
+    "prepare.py": "99ffee69817007a4f47a220d2f47fb253f4811d43a568a861e35b5b3501b5960",
+    "pgw.py": "43065a0e9befe6f26ae1a5b3766fc414568bc36da57e63b8b98354a7b16f309e",
+    "proxy.c": "2cf8aeca27a382c0a62ef9f5a40559c8932ec2926bcab7fd4d7bbbace430efba",
+    "proxy": "86bcef1d0b5094d7faf83366b2fa6ac481de653334d819da12ca67eaf0cefffe",
+    "initroot/init": "cf53dd3427a98bc2d3a12a2be22e0b3741916e7a66745b6c49e053dc9a81d289",
+    "initrd.gz": "c8f94e483c768a61ee2b1de000b2b93d7593a55a2ed2fb2059221147e0426b86",
+    "vmlinuz": "41ba36d860aa0b0cd995f4ca8856d80249b244577e704929b55be13fbd1ebd2f"
+  }
+}

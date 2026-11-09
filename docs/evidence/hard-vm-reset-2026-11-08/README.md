@@ -30,6 +30,7 @@ Older v1 results do not cover newly added assertions.
 | 1794191086 | 1a9e3d56 | server_paged, experimental | 2,089 | incomplete: acknowledged native SQL IDs reused after checkpoint/reopen; source fix #114 |
 | 1794195817 | 5d04f91f | server_paged, experimental | 2,428 | complete: preseed, native IDs, 123 DDL attempts, 12 writer resets +2 repeated recoveries, initial backup restore; zero violations |
 | 1794203435 | 0af1b55e | server_paged, ordinary main | 2,252 | incomplete: startup failed after 12th writer kill with mismatched `vm_ddl_75_pkey`; generic DDL catalog crash boundary under investigation |
+| 1794204221 | 6d225c19 | server_paged, ordinary-default candidate | 2,275 | complete: preseed, native IDs, 84 DDL attempts, 12 writer resets +2 repeated recoveries, initial backup restore; zero violations |
 
 All incomplete campaigns retain `complete: false`. Their acknowledged
 row/index/receipt checks passed up to the reported failures; this does not make
@@ -54,8 +55,11 @@ Experimental source is not promoted or deployed by these results.
 A preliminary **ordinary-default** candidate at2c3503db separately passed the
 [large-transaction campaign](large-transaction/README.md), including actual
 eviction pressure, values larger than the pool, seven hard VM kills and
-independent structural checks. Final integrated-source and postmerge
-qualification remain separate.
+independent structural checks. The exact final premerge source at6d225c19 also passed both the full14-reset
+and large-transaction7-kill campaigns; all21 saved cuts independently verified
+complete and clean. Postmerge qualification and production deployment remain
+separate. Passing this randomized workload does not close the control
+recycle-bin stage-boundary defect.
 
 Initial assumptions about the first CLI run's storage mode were wrong. Its
 persisted `format.json` proves `embedded_memory`. Each retained format record

@@ -1,4 +1,35 @@
-# Default-candidate transactions and values larger than the buffer pool
+# Exact default candidate: final premerge qualification
+
+Source `6d225c1940cf13ffbb7693f8ebc2917e5abaad82` passed the same large
+transaction workload in campaign `1794204317301666890`. It preserved the
+acknowledged 8,192-row batch and 4,259,840-byte value with a 2 MiB pool,
+recording 14,845 evictions and zero unlogged steals. Uncertain generations 1
+and 2 were absent; generation 3 committed wholly without a client response.
+All 16,384 final rows, index results, receipt and blob agreed through repeated
+recovery. The nonempty disk image restored the exact original batch and value.
+All seven saved crash cuts independently verified complete and clean.
+
+The release input SHA-256 is
+`a9d2f903ffda39b15d90ad5cc45d8a42c48111506b46faf7e50ba33193268ee9`;
+the actual additionally stripped guest SHA-256 is
+`b5331b45dd94c76ea46453db2996736bf1311f91478b0076803d05f30b2ff09e`,
+retained at `/root/bicdb-durability-s3/skr/bin/oracle-server-default-cuts-6d225c19-vm-qualified`.
+The same exact binary also passed the separate full 14-reset campaign,
+retaining 2,275 acknowledged transactions and exercising 84 DDL attempts.
+Together, all 21 saved crash cuts independently verified clean. This is
+premerge source qualification; merge, postmerge testing and deployment remain
+separate. The control's interrupted generic recycle-bin move remains a separate
+known defect; passing randomized DDL churn does not prove that boundary fixed.
+
+The audit permits reuse of an absent, uncommitted transaction allocation:
+this run allocated ID 20 for absent generation 2, then for generation 3.
+It explicitly rejects reuse of any identity already proven committed at the
+previous recovery. Committed identities 10 and 20 are distinct and stable.
+The reusable harness checks this inline, and portable audit checks the same
+chronology independently. This distinction preserves the actual durability
+contract without inventing a per-BEGIN fsync guarantee.
+
+# Preliminary candidate evidence
 
 Preliminary ordinary-default source `2c3503db6b3933139e4a4ac819fd9bda519fcd12`
 passed campaign `1794202882515055041`: seven hard QEMU kills, an acknowledged

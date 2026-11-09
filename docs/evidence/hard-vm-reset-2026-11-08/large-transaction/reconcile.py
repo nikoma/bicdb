@@ -8,12 +8,7 @@ def lines(run,name):
  p=run/(name+'.jsonl.gz')
  return [json.loads(line) for line in gzip.decompress(p.read_bytes()).decode().splitlines()] if p.exists() else []
 def digest(value):return hashlib.sha256(value).hexdigest()
-def main():
- manifest=json.loads((ROOT/'runs/manifest.json').read_text())
- for name,h in manifest.items():
-  p=ROOT/'runs'/name;assert p.resolve().is_relative_to((ROOT/'runs').resolve())
-  assert digest(p.read_bytes())==h,name
- run=ROOT/'runs/large-tx-campaign-1794202882515055041'
+def audit_run(run):
  result=json.loads((run/'result.json').read_text());config=json.loads((run/'config.json').read_text())
  assert result['complete'] and result['hard_vm_kills']==7
  assert result['row_payload_bytes_per_tx']>result['pool_bytes']
@@ -22,10 +17,13 @@ def main():
  ack={v['generation'] for v in lines(run,'acks')};attempts={v['generation'] for v in lines(run,'commit-attempts')}
  assert ack==set(result['acknowledged_generations'])=={0}
  assert attempts==set(result['attempted_generations'])=={0,1,2,3}
- # All four observed IDs happen to be distinct in this run. Absent/uncommitted
- # allocations are not promised a durable reservation across a crash.
- assert len(native)==len(set(native.values()))
  recoveries=lines(run,'recoveries');durable=set()
+ stages={v['label']:set(v['generations']) for v in recoveries}
+ for g,tid in native.items():
+  if g==0:continue
+  prior=stages['base-recovery' if g==1 else f'uncertain-{g-1}']
+  assert tid not in {native[p] for p in prior},('durable identity reused',g,tid)
+
  for v in recoveries:
   generations=set(v['generations'])
   if v['label']=='nonempty-raw-image-restore':assert generations=={0}
@@ -39,7 +37,8 @@ def main():
   assert digest(json.dumps(expected,separators=(',',':')).encode())==v['rows_sha256']
   blob=(f'blob-generation-{max(generations)}-'+'0123456789abcdef'*((result['blob_bytes']//16)+1))[:result['blob_bytes']]
   assert digest(blob.encode())==v['blob_sha256']
- assert durable=={0,2,3}
+ assert 0 in durable and durable<=attempts
+ assert len({native[g] for g in durable})==len(durable)
  assert {'repeat-0','repeat-1','nonempty-raw-image-restore'}<={v['label'] for v in recoveries}
  pools=lines(run,'pool')
  for v in pools:
@@ -52,7 +51,18 @@ def main():
   assert cut['exit_code']==0 and cut['extracted_files_unchanged'] and cut['original_size_mtime_unchanged']
   p=run/'independent-verifier'/(cut['cut']+'.json');assert digest(p.read_bytes())==cut['report_sha256']
   report=json.loads(p.read_text());assert report['complete'] and report['verdict']=='clean'
- failed=json.loads((ROOT/'runs/large-tx-campaign-1794202766372217291/result.json').read_text())
- assert not failed['complete'] and 'native txid reused' in failed['error']
- print(json.dumps({'complete':True,'source':config['BICDB_VM_SOURCE'],'acknowledged_rows':8192,'recovered_rows':24576,'independent_clean_cuts':7,'actual_evictions':14845}))
+ return {'source':config['BICDB_VM_SOURCE'],'acknowledged_rows':8192,'recovered_rows':next(v['rows'] for v in recoveries if v['label']=='final'),'independent_clean_cuts':7,'actual_evictions':result['actual_evictions_delta']}
+
+def main():
+ manifest=json.loads((ROOT/'runs/manifest.json').read_text())
+ for name,h in manifest.items():
+  p=ROOT/'runs'/name;assert p.resolve().is_relative_to((ROOT/'runs').resolve())
+  assert digest(p.read_bytes())==h,name
+ output=[]
+ for run in sorted((ROOT/'runs').glob('large-tx-campaign-*')):
+  result=json.loads((run/'result.json').read_text())
+  if result['complete']:output.append(audit_run(run))
+  else:assert run.name=='large-tx-campaign-1794202766372217291' and 'native txid reused' in result['error']
+ assert len(output)==2
+ print(json.dumps({'complete':True,'runs':output}))
 if __name__=='__main__':main()

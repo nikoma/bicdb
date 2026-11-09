@@ -86,5 +86,17 @@
     "duplicate_acknowledged_native_ids": 0,
     "complete": false,
     "failure_kinds": []
+  },
+  {
+    "run": "campaign-1794204221",
+    "source": "6d225c1940cf13ffbb7693f8ebc2917e5abaad82",
+    "storage_mode": "server_paged",
+    "acknowledged": 2275,
+    "attempted": 2319,
+    "hard_resets": 12,
+    "recoveries": 16,
+    "duplicate_acknowledged_native_ids": 0,
+    "complete": true,
+    "failure_kinds": []
   }
 ]

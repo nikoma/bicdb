@@ -4,6 +4,7 @@ use super::recycle_bin::*;
 use super::*;
 const INTENTS: &str = "__bicdb_recycle_intents";
 const DECISIONS: &str = "__bicdb_recycle_decisions";
+const PURGES: &str = "__bicdb_recycle_purges";
 #[derive(Clone, Serialize, Deserialize)]
 struct MoveIntent {
     entry: RecycleBinEntry,
@@ -75,13 +76,63 @@ pub(super) fn clear_if_present(db: &mut BicDb, bin: &str) -> Result<()> {
         Err(error) => Err(error.into()),
     }
 }
-pub(super) fn recover(db: &mut BicDb) -> Result<usize> {
-    let records = match db.scan_collection(INTENTS) {
+pub(super) fn prepare_purge(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<()> {
+    db.create_collection(PURGES)?;
+    db.insert(
+        PURGES,
+        Record::new(entry.bin_name.clone()).with_metadata(serde_json::to_value(entry)?),
+    )?;
+    Ok(())
+}
+pub(super) fn finish_purge(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<()> {
+    if db
+        .collections()
+        .iter()
+        .any(|meta| meta.name == entry.bin_name)
+    {
+        db.drop_collection(&entry.bin_name)?;
+    }
+    stage("purge_collection");
+    if list_recycle_bin(db)?
+        .iter()
+        .any(|saved| saved.bin_name == entry.bin_name)
+    {
+        delete_recycle_bin_entry(db, &entry.bin_name)?;
+    }
+    stage("purge_entry");
+    clear_if_present(db, &entry.bin_name)?;
+    db.delete(PURGES, &entry.bin_name)?;
+    Ok(())
+}
+fn recover_purges(db: &mut BicDb) -> Result<usize> {
+    let records = match db.scan_collection(PURGES) {
         Ok(records) => records,
         Err(BicDbError::CollectionNotFound(_)) => return Ok(0),
         Err(error) => return Err(error.into()),
     };
-    let mut repaired = 0;
+    let count = records.len();
+    for record in records {
+        let entry: RecycleBinEntry = serde_json::from_value(record.metadata)?;
+        if record.id != entry.bin_name
+            || !entry.bin_name.starts_with("__bicdb_bin_")
+            || uuid::Uuid::parse_str(&entry.bin_name["__bicdb_bin_".len()..]).is_err()
+        {
+            return Err(SqlError::InvalidSql(
+                "invalid recycle purge intent identity".into(),
+            ));
+        }
+        finish_purge(db, &entry)?;
+    }
+    Ok(count)
+}
+pub(super) fn recover(db: &mut BicDb) -> Result<usize> {
+    let purge_repairs = recover_purges(db)?;
+    let records = match db.scan_collection(INTENTS) {
+        Ok(records) => records,
+        Err(BicDbError::CollectionNotFound(_)) => return Ok(purge_repairs),
+        Err(error) => return Err(error.into()),
+    };
+    let mut repaired = purge_repairs;
     for record in records {
         let intent: MoveIntent = serde_json::from_value(record.metadata)?;
         let entry = &intent.entry;
@@ -220,6 +271,9 @@ mod tests {
         }
         session.execute("DROP TABLE crash_source").unwrap();
         let stage = std::env::var("BICDB_TEST_RECYCLE_CUT").unwrap();
+        if stage.starts_with("purge_") {
+            session.execute("PURGE RECYCLEBIN").unwrap();
+        }
         if stage == "commit" {
             session.execute("COMMIT").unwrap();
         }
@@ -311,6 +365,56 @@ mod tests {
                             "23505"
                         );
                     }
+                }
+            }
+        }
+    }
+    #[test]
+    fn process_crash_purge_intent_finishes_without_startup_blocker() {
+        for paged in [false, true] {
+            for stage in ["purge_intent", "purge_collection", "purge_entry"] {
+                let root = tempfile::tempdir().unwrap();
+                {
+                    let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
+                    let mut sql = SqlSession::new(&mut db);
+                    sql.execute("CREATE TABLE crash_source(k int PRIMARY KEY,v text)")
+                        .unwrap();
+                    sql.execute("INSERT INTO crash_source VALUES(1,'acknowledged')")
+                        .unwrap();
+                }
+                let output = Command::new(std::env::current_exe().unwrap())
+                    .args([
+                        "--exact",
+                        "session::recycle_bin_journal::tests::crash_cut_child",
+                        "--nocapture",
+                    ])
+                    .env("BICDB_TEST_RECYCLE_PATH", root.path())
+                    .env("BICDB_TEST_RECYCLE_PAGED", paged.to_string())
+                    .env("BICDB_TEST_RECYCLE_EXPLICIT", "false")
+                    .env("BICDB_TEST_RECYCLE_CUT", stage)
+                    .output()
+                    .unwrap();
+                assert_eq!(
+                    output.status.code(),
+                    Some(99),
+                    "{paged}/{stage}: {} {}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                for _ in 0..2 {
+                    let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
+                    super::super::recycle_bin::recover_interrupted_recycle_bin_renames(&mut db)
+                        .unwrap();
+                    ensure_primary_key_indexes(&mut db).unwrap();
+                    assert!(list_recycle_bin(&db).unwrap().is_empty());
+                    assert!(!db
+                        .collections()
+                        .iter()
+                        .any(|meta| meta.name == "crash_source"
+                            || meta.name.starts_with("__bicdb_bin_")));
+                    assert!(SqlSession::new(&mut db)
+                        .execute("SELECT * FROM crash_source")
+                        .is_err());
                 }
             }
         }

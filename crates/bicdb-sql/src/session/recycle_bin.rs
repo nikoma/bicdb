@@ -507,9 +507,9 @@ impl<'db> SqlSession<'db> {
 
     fn purge_recycle_bin_entry(&mut self, entry: &RecycleBinEntry) -> Result<()> {
         let db = self.db_mut()?;
-        db.drop_collection(&entry.bin_name)?;
-        delete_recycle_bin_entry(db, &entry.bin_name)?;
-        super::recycle_bin_journal::clear_restored(self, &entry.bin_name)?;
+        super::recycle_bin_journal::prepare_purge(db, entry)?;
+        super::recycle_bin_journal::stage("purge_intent");
+        super::recycle_bin_journal::finish_purge(db, entry)?;
         sql_index_definitions_cache_clear();
         Ok(())
     }
@@ -547,6 +547,11 @@ impl<'db> SqlSession<'db> {
 
     /// Purges every entry dropped before `cutoff_micros` (retention).
     pub fn purge_recycle_bin_older_than(&mut self, cutoff_micros: i64) -> Result<usize> {
+        if self.in_transaction() {
+            return Err(SqlError::Unsupported(
+                "PURGE cannot run inside a transaction block".into(),
+            ));
+        }
         let entries = list_recycle_bin(self.db_ref())?
             .into_iter()
             .filter(|entry| entry.dropped_at_micros < cutoff_micros)

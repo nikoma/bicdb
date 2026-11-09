@@ -375,3 +375,34 @@ fn sql_case_matches_every_saved_native_character_set_difference() {
         "saved vendor reference changed; review both character sets"
     );
 }
+
+#[test]
+fn national_column_anchors_preserve_utf16_buffers_and_case_provenance() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+    let run = |db: &mut BicDb, sql: &str| {
+        let sql =
+            bicdb_sql::oracle::lower_session_sql(db, sql, ORACLE_PREVIEW_PROFILE, None, "bicdb")?;
+        SqlSession::new(db).execute(&sql)
+    };
+    run(&mut db, "CREATE TABLE national_anchor(n NVARCHAR2(4))").unwrap();
+    run(&mut db,"CREATE FUNCTION anchored_national(p NVARCHAR2) RETURN NVARCHAR2 IS v national_anchor.n%TYPE; BEGIN v:=p; RETURN UPPER(v); END;").unwrap();
+    assert_eq!(
+        run(&mut db, "SELECT anchored_national(N'ƛ') FROM dual")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String("Ƛ".into())]]
+    );
+    assert!(run(&mut db, "SELECT anchored_national(N'𐐀𐐀𐐀') FROM dual")
+        .unwrap_err()
+        .to_string()
+        .contains("ORA-06502"));
+    assert_eq!(
+        SqlSession::new(&mut db)
+            .execute("SELECT bicdb_oracle_column_type('\"public\".\"NATIONAL_ANCHOR\"','N')")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String("NVARCHAR2(4)".into())]]
+    );
+}

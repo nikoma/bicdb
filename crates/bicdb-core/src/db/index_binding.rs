@@ -36,6 +36,28 @@ pub(super) fn load_btree_bindings(
 }
 
 impl BicDb {
+    fn validate_oracle_replacement_names(&self, old: &str, shadow: &str) -> Result<()> {
+        if old.eq_ignore_ascii_case(shadow)
+            || self
+                .indexes
+                .keys()
+                .filter(|name| name.eq_ignore_ascii_case(old))
+                .count()
+                != 1
+            || self
+                .indexes
+                .keys()
+                .filter(|name| name.eq_ignore_ascii_case(shadow))
+                .count()
+                > 1
+        {
+            return Err(BicDbError::Index(
+                "ambiguous Oracle replacement source or shadow name".into(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Refuse older readers before publishing Oracle-v1 profile metadata, even
     /// when the database has no expression indexes yet.
     pub fn enable_oracle_simple_case_v1(&mut self) -> Result<()> {
@@ -56,6 +78,7 @@ impl BicDb {
     ) -> Result<()> {
         self.ensure_writable("publish Oracle simple-case v1 index")?;
         self.ensure_no_pending_transactions()?;
+        self.validate_oracle_replacement_names(&expected_old.name, &shadow.definition.name)?;
         shadow.validate()?;
         let durable = self.load_paged_btree_build(&shadow.definition.name, shadow.limits)?;
         if durable != *shadow || shadow.phase != PagedBTreeBuildPhase::Complete {
@@ -162,6 +185,7 @@ impl BicDb {
     ) -> Result<()> {
         self.ensure_writable("publish embedded Oracle simple-case v1 index")?;
         self.ensure_no_pending_transactions()?;
+        self.validate_oracle_replacement_names(&expected_old.name, &shadow.name)?;
         if self.paged_records.is_some() {
             return Err(BicDbError::Index(
                 "embedded index publication requires embedded storage".into(),

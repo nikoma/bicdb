@@ -3079,7 +3079,7 @@ impl<'db> SqlEngine<'db> {
                     relation
                         .columns
                         .iter()
-                        .any(|(name, _)| name == &ident_value(ident))
+                        .any(|(name, _)| name.eq_ignore_ascii_case(&ident_value(ident)))
                 }) {
                     env_lookup_unqualified(env, &ident_value(ident))
                 } else {

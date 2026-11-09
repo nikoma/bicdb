@@ -3549,7 +3549,7 @@ pub(crate) fn unnest_source_columns(
     if with_offset {
         columns.push(
             with_offset_alias
-                .map(ident_value)
+                .map(|alias| alias.value.clone())
                 .unwrap_or_else(|| "offset".to_string()),
         );
     }
@@ -3561,7 +3561,7 @@ pub(crate) fn unnest_source_columns(
 
 pub(crate) fn table_function_source_columns_for_alias(
     alias: Option<&TableAlias>,
-    _alias_name: &str,
+    alias_name: &str,
     source_columns: Vec<String>,
 ) -> Vec<String> {
     let Some(alias) = alias else {
@@ -3570,7 +3570,7 @@ pub(crate) fn table_function_source_columns_for_alias(
     if !alias.columns.is_empty() || source_columns.len() != 1 {
         return source_columns;
     }
-    vec![ident_value(&alias.name)]
+    vec![alias_name.to_string()]
 }
 
 pub(crate) fn unnest_values_from_sql(value: SqlValue) -> Result<Vec<SqlValue>> {

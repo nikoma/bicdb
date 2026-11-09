@@ -4669,6 +4669,24 @@ pub(crate) struct RoutineCacheEntry {
     pub(crate) procedure: Option<Option<CachedRoutine>>,
 }
 
+// Keep field identities separate from scalar-variable type keys. A quoted
+// field may contain dots or differ from another field only by letter case.
+fn routine_record_field_type_prefix(target: &str) -> String {
+    format!(
+        "\0bicdb:record-field-type:{}:",
+        serde_json::to_string(&normalized_object_name_ref(target).to_ascii_lowercase())
+            .expect("identifier JSON")
+    )
+}
+
+pub(crate) fn routine_record_field_type_key(target: &str, column: &str) -> String {
+    format!(
+        "{}{}",
+        routine_record_field_type_prefix(target),
+        serde_json::to_string(column).expect("column JSON")
+    )
+}
+
 impl RoutineFrame {
     #[allow(dead_code)]
     pub(crate) fn new(params: &[RoutineParam], args: &[SqlValue]) -> Result<Self> {
@@ -4776,6 +4794,48 @@ impl RoutineFrame {
             }
         }
         Ok(())
+    }
+
+    /// A record loop variable's fields take the types of the query's
+    /// columns (`rec.field` compares as its column's type, not as text).
+    /// Field keys retain quoted identity separately from scalar variable names.
+    pub(crate) fn set_record_field_types(
+        &mut self,
+        target: &str,
+        columns: &[String],
+        types: &[Option<String>],
+    ) {
+        let prefix = routine_record_field_type_prefix(target);
+        let fields = columns
+            .iter()
+            .zip(types)
+            .filter_map(|(column, pg_type)| {
+                Some((
+                    routine_record_field_type_key(target, column),
+                    pg_type.as_ref()?.clone(),
+                ))
+            })
+            .collect::<BTreeMap<_, _>>();
+        let current = self
+            .assignment_types
+            .iter()
+            .filter(|(name, _)| name.starts_with(&prefix))
+            .map(|(name, kind)| (name.clone(), kind.pg_type.clone()))
+            .collect::<BTreeMap<_, _>>();
+        if current == fields {
+            return;
+        }
+        let types = Arc::make_mut(&mut self.assignment_types);
+        types.retain(|name, _| !name.starts_with(&prefix));
+        for (key, pg_type) in fields {
+            types.insert(
+                key,
+                RoutineTypeSchema {
+                    pg_type,
+                    type_modifier: None,
+                },
+            );
+        }
     }
 
     /// A query FOR target can be a scalar, or a record receiving the whole row.

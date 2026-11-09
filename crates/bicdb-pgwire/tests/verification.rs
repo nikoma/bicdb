@@ -17,6 +17,7 @@ async fn scheduled_restore_results_are_available_through_the_protocol() {
         base_backup_key: Some("verification-integration-key".into()),
         base_backup_interval: Duration::from_secs(3600),
         keep_base_backups: 2,
+        guard: None,
     });
     config.verification = Some(VerificationConfig {
         interval: Duration::from_millis(100),
@@ -175,6 +176,7 @@ async fn archive_failure_is_published_instead_of_suppressing_verification() {
         base_backup_key: Some("verification-integration-key".into()),
         base_backup_interval: Duration::from_secs(3600),
         keep_base_backups: 2,
+        guard: None,
     });
     config.verification = Some(VerificationConfig {
         interval: Duration::from_millis(100),

@@ -80,6 +80,7 @@ mod resource_governor;
 // (no sockets there), and it carries the rustls dependency.
 pub mod aggregate_projection;
 pub mod aggregate_sketch;
+pub mod archive_guard;
 pub mod log_archive;
 pub mod query_budget;
 #[cfg(feature = "tls-replication")]
@@ -232,6 +233,7 @@ pub use db::{
     CommitAdmission, CommitAdmissionIntent, CommitAdmissionMutation, CommitAdmissionTicket,
 };
 pub use db::{CommitResolution, INCARNATION_JOURNAL};
+pub use db::{WalArchiveReport, WalArchiveStatus};
 pub use distribution::{
     build_failure_repair_plan, build_rebalance_plan, distribution_key_token,
     filter_commit_frame_for_range, load_distribution_config, provision_cluster_member_directory,

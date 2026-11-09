@@ -13989,3 +13989,59 @@ async fn startup_configuration_snapshot_requires_current_superuser_for_simple_an
     task.await.unwrap();
     thread.join().unwrap().unwrap();
 }
+
+#[test]
+fn typed_float_parameter_keeps_all_widened_integer_primary_key_matches() {
+    let dir = tempfile::tempdir().unwrap();
+    {
+        let mut db = BicDb::open_with_config(
+            dir.path(),
+            bicdb_core::DbConfig::default().with_fsync(false),
+        )
+        .unwrap();
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("CREATE TABLE wide_keys(k bigint PRIMARY KEY)")
+            .unwrap();
+        sql.execute("INSERT INTO wide_keys VALUES(9007199254740992),(9007199254740993)")
+            .unwrap();
+    }
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+    let mut client = TcpStream::connect(address).unwrap();
+    client
+        .set_read_timeout(Some(Duration::from_secs(30)))
+        .unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    for (index, query) in [
+        "SELECT k FROM wide_keys WHERE k=$1 ORDER BY k",
+        "SELECT k FROM wide_keys WHERE k<=$1 ORDER BY k",
+        "SELECT k FROM wide_keys WHERE k IN ($1) ORDER BY k",
+        "SELECT k FROM wide_keys WHERE k IN (SELECT $1) ORDER BY k",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let name = format!("wide_{index}");
+        send_parse(&mut client, &name, query, &[701]);
+        send_bind(&mut client, "", &name, &["9007199254740992"]);
+        send_describe_portal(&mut client, "");
+        send_execute(&mut client, "");
+        send_sync(&mut client);
+        assert_eq!(
+            read_query_rows(&mut client),
+            vec![
+                vec!["9007199254740992".to_string()],
+                vec!["9007199254740993".to_string()]
+            ],
+            "{query}"
+        );
+    }
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}

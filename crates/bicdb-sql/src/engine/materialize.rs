@@ -2020,13 +2020,12 @@ impl<'db> SqlEngine<'db> {
                 .iter()
                 .map(|item| match item {
                     SelectItem::UnnamedExpr(expr) => Some((
-                        select_expr_column_name(expr).to_ascii_lowercase(),
+                        select_expr_column_name(expr),
                         self.infer_env_expr_type(expr, &env),
                     )),
-                    SelectItem::ExprWithAlias { expr, alias } => Some((
-                        alias.value.to_ascii_lowercase(),
-                        self.infer_env_expr_type(expr, &env),
-                    )),
+                    SelectItem::ExprWithAlias { expr, alias } => {
+                        Some((ident_value(alias), self.infer_env_expr_type(expr, &env)))
+                    }
                     _ => None,
                 })
                 .collect();
@@ -2057,13 +2056,12 @@ impl<'db> SqlEngine<'db> {
                     }
                 }
                 SelectItem::UnnamedExpr(expr) => out.push((
-                    row_expr_column_name(expr).to_ascii_lowercase(),
+                    row_expr_column_name(expr),
                     self.infer_env_expr_type(expr, &env),
                 )),
-                SelectItem::ExprWithAlias { expr, alias } => out.push((
-                    alias.value.to_ascii_lowercase(),
-                    self.infer_env_expr_type(expr, &env),
-                )),
+                SelectItem::ExprWithAlias { expr, alias } => {
+                    out.push((ident_value(alias), self.infer_env_expr_type(expr, &env)))
+                }
                 _ => return None,
             }
         }
@@ -2428,7 +2426,7 @@ impl<'db> SqlEngine<'db> {
             let mut columns = columns
                 .into_iter()
                 .zip(output_types)
-                .map(|(column, pg_type)| (column.to_ascii_lowercase(), Some(pg_type)))
+                .map(|(column, pg_type)| (column, Some(pg_type)))
                 .collect::<Vec<_>>();
             // `jsonb_array_elements(x) AS item` (no column list): the single
             // output column is also reachable as `item`, typed like the
@@ -2486,7 +2484,7 @@ impl<'db> SqlEngine<'db> {
                     .enumerate()
                     .map(|(index, expr)| {
                         (
-                            source_columns[index].to_ascii_lowercase(),
+                            source_columns[index].clone(),
                             self.infer_env_expr_type(expr, prior).and_then(|pg_type| {
                                 pg_type.strip_suffix("[]").map(str::to_string).or_else(|| {
                                     match pg_type.as_str() {
@@ -2503,7 +2501,7 @@ impl<'db> SqlEngine<'db> {
                     source_columns
                         .iter()
                         .skip(columns.len())
-                        .map(|name| (name.to_ascii_lowercase(), Some("int8".to_string()))),
+                        .map(|name| (name.clone(), Some("int8".to_string()))),
                 );
                 let alias_columns = alias
                     .as_ref()
@@ -2545,10 +2543,7 @@ impl<'db> SqlEngine<'db> {
                     vec!["generate_series".to_string()],
                 )
                 .remove(0);
-                let columns = vec![(
-                    column.to_ascii_lowercase(),
-                    generate_series_output_pg_type(&argument_types),
-                )];
+                let columns = vec![(column, generate_series_output_pg_type(&argument_types))];
                 env.push(RelationColumns {
                     alias: alias_name.to_ascii_lowercase(),
                     row_type: None,
@@ -2612,7 +2607,7 @@ impl<'db> SqlEngine<'db> {
                     .enumerate()
                     .map(|(index, expr)| {
                         (
-                            source_columns[index].to_ascii_lowercase(),
+                            source_columns[index].clone(),
                             self.infer_env_expr_type(expr, prior).and_then(|pg_type| {
                                 pg_type.strip_suffix("[]").map(str::to_string).or_else(|| {
                                     match pg_type.as_str() {
@@ -2629,7 +2624,7 @@ impl<'db> SqlEngine<'db> {
                     source_columns
                         .iter()
                         .skip(columns.len())
-                        .map(|name| (name.to_ascii_lowercase(), Some("int8".to_string()))),
+                        .map(|name| (name.clone(), Some("int8".to_string()))),
                 );
                 let alias_columns = alias
                     .as_ref()
@@ -2749,7 +2744,7 @@ impl<'db> SqlEngine<'db> {
         }
     }
 
-    /// Typed visible columns (unqualified, lowercased names) of a named relation,
+    /// Typed visible columns (unqualified, normalized names) of a named relation,
     /// resolving CTEs, views and base tables in the same precedence the executor
     /// uses. `None` for virtual/catalog tables, sequences and schemaless
     /// collections — those fall back to the value-independent default.
@@ -2765,7 +2760,7 @@ impl<'db> SqlEngine<'db> {
                 .columns
                 .iter()
                 .enumerate()
-                .map(|(idx, name)| (name.to_ascii_lowercase(), cte.column_type(idx)))
+                .map(|(idx, name)| (name.clone(), cte.column_type(idx)))
                 .collect();
             return Some((rename_relation_columns(columns, alias_cols)?, false));
         }
@@ -2774,12 +2769,7 @@ impl<'db> SqlEngine<'db> {
                 .columns
                 .iter()
                 .filter(|column| !column.hidden)
-                .map(|column| {
-                    (
-                        column.name.to_ascii_lowercase(),
-                        Some(column.pg_type.clone()),
-                    )
-                })
+                .map(|column| (column.name.clone(), Some(column.pg_type.clone())))
                 .collect();
             return Some((rename_relation_columns(columns, alias_cols)?, false));
         }
@@ -2803,12 +2793,7 @@ impl<'db> SqlEngine<'db> {
             .columns
             .iter()
             .filter(|column| !column.hidden)
-            .map(|column| {
-                (
-                    column.name.to_ascii_lowercase(),
-                    Some(column.pg_type.clone()),
-                )
-            })
+            .map(|column| (column.name.clone(), Some(column.pg_type.clone())))
             .collect();
         Some((columns, true))
     }
@@ -3095,9 +3080,9 @@ impl<'db> SqlEngine<'db> {
                     relation
                         .columns
                         .iter()
-                        .any(|(name, _)| name.eq_ignore_ascii_case(&ident.value))
+                        .any(|(name, _)| name.eq_ignore_ascii_case(&ident_value(ident)))
                 }) {
-                    env_lookup_unqualified(env, &ident.value)
+                    env_lookup_unqualified(env, &ident_value(ident))
                 } else {
                     env.iter()
                         .find(|relation| relation.alias.eq_ignore_ascii_case(&ident.value))
@@ -3105,7 +3090,7 @@ impl<'db> SqlEngine<'db> {
                 }
             }
             Expr::CompoundIdentifier(parts) => {
-                let column = parts.last()?.value.to_ascii_lowercase();
+                let column = ident_value(parts.last()?);
                 let qualifier = parts
                     .get(parts.len().checked_sub(2)?)?
                     .value
@@ -3814,6 +3799,15 @@ impl<'db> SqlEngine<'db> {
                         && matches!(op, BinaryOperator::Minus))
                 {
                     return Some("timetz".to_string());
+                }
+                if (left.as_deref() == Some("date")
+                    && right_interval
+                    && matches!(op, BinaryOperator::Plus | BinaryOperator::Minus))
+                    || (left_interval
+                        && right.as_deref() == Some("date")
+                        && matches!(op, BinaryOperator::Plus))
+                {
+                    return Some("timestamp".to_string());
                 }
                 let timestamp_interval_plus = matches!(op, BinaryOperator::Plus)
                     && ((left.as_deref() == Some("timestamp")

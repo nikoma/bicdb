@@ -175,21 +175,41 @@ impl BicDb {
         }
         let target = shippable.min(cursor.sent_seq.saturating_add(limit.max(1) as u64));
         let path = self.tx_log_path();
+        // One descriptor for the anchor check, the read and the new anchor.
+        // A transaction-log cut renames a new file over the path at any
+        // moment; checking the anchor in one inode and reading from the
+        // cursor offset in another used to skip commits, and every skipped
+        // commit in the range was then shipped as an EMPTY frame (the
+        // fallback for sequences without frames below), silently dropping
+        // its writes on standbys and in the commit-log archive.
+        let mut log = match File::open(&path) {
+            Ok(file) => Some(file),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => return Err(error.into()),
+        };
         if let Some((start, header)) = &cursor.anchor {
-            let still_there = storage::read_bytes_at(&path, *start, storage::HEADER_LEN)?;
+            let still_there = match log.as_mut() {
+                Some(file) => storage::read_bytes_at_file(file, *start, storage::HEADER_LEN)?,
+                None => None,
+            };
             if still_there.as_deref() != Some(header.as_slice()) {
                 // The log was truncated or rewritten under us: rescan it.
                 cursor.offset = 0;
                 cursor.anchor = None;
             }
         }
+        bicdb_page::test_faults::io_hook_point("replication.frames_read", &path);
         let from_start = cursor.offset == 0;
-        let frames = storage::read_frames_readonly_from(
-            &path,
-            cursor.offset,
-            FrameKind::Transaction,
-            &self.encryption,
-        )?;
+        let frames = match log.as_mut() {
+            Some(file) => storage::read_frames_readonly_from_file(
+                file,
+                &path,
+                cursor.offset,
+                FrameKind::Transaction,
+                &self.encryption,
+            )?,
+            None => Vec::new(),
+        };
 
         let mut writes: FxHashMap<u64, Vec<TxWrite>> = FxHashMap::default();
         let mut audit: FxHashMap<u64, Vec<Event>> = FxHashMap::default();
@@ -300,8 +320,11 @@ impl BicDb {
             cursor.anchor = None;
         } else if let Some((start, end)) = new_anchor {
             cursor.offset = end;
-            cursor.anchor = storage::read_bytes_at(&path, start, storage::HEADER_LEN)?
-                .map(|header| (start, header));
+            cursor.anchor = match log.as_mut() {
+                Some(file) => storage::read_bytes_at_file(file, start, storage::HEADER_LEN)?,
+                None => None,
+            }
+            .map(|header| (start, header));
         }
         Ok(out)
     }

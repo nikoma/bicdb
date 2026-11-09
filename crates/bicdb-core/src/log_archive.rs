@@ -41,13 +41,25 @@ pub struct LogArchiveMeta {
 }
 
 /// An archive open for appending.
+///
+/// Fail-closed: a commit counts as archived (and the caller may advance the
+/// transaction-log hold past it) only once its record AND every directory
+/// entry it depends on are durable, confirmed by this handle's own fsyncs.
+/// The first failed write, fsync, rename or directory fsync stops this
+/// handle for good ([`Self::failure`]): a failed `fsync` may drop the dirty
+/// pages it could not write and then report success on a retry, so nothing
+/// this handle wrote after its last confirmed point is trusted again. A new
+/// handle opened through `BicDb::open_log_archive` discards the unconfirmed
+/// suffix and rewrites it from the retained transaction log.
 #[derive(Debug)]
 pub struct LogArchive {
     dir: PathBuf,
     meta: Option<LogArchiveMeta>,
+    /// Last commit whose record is confirmed durable (or, for a handle that
+    /// was just opened, present on disk).
     last_commit_seq: u64,
     segment: Option<(File, u64)>,
-    poisoned: bool,
+    health: std::sync::Arc<bicdb_page::ArchiveHealth>,
     fsync: bool,
 }
 
@@ -110,11 +122,33 @@ fn read_record(reader: &mut impl Read) -> std::result::Result<Option<CommitFrame
     Ok(Some(frame))
 }
 
+/// One fault-injectable archive I/O step.
+fn step<T>(site: &str, path: &Path, op: impl FnOnce() -> std::io::Result<T>) -> std::io::Result<T> {
+    bicdb_page::test_faults::io_fault(site, path)?;
+    op()
+}
+
+fn sync_dir(site: &str, dir: &Path) -> std::io::Result<()> {
+    step(site, dir, || File::open(dir)?.sync_all())
+}
+
 impl LogArchive {
     /// Opens (or creates) the archive in `dir`, repairing a torn tail.
+    ///
+    /// The handle trusts what is on disk. A server reopening an archive it
+    /// was appending to should use `BicDb::open_log_archive`, which also
+    /// discards and rewrites whatever the transaction-log hold never
+    /// confirmed.
     pub fn open(dir: impl AsRef<Path>, fsync: bool) -> Result<Self> {
         let dir = dir.as_ref().to_path_buf();
-        fs::create_dir_all(&dir)?;
+        if !dir.is_dir() {
+            fs::create_dir_all(&dir)?;
+            if fsync {
+                if let Some(parent) = dir.parent().filter(|p| !p.as_os_str().is_empty()) {
+                    sync_dir("log_archive.dir_sync", parent)?;
+                }
+            }
+        }
         let meta = match fs::read(dir.join(META_FILE)) {
             Ok(bytes) => Some(serde_json::from_slice::<LogArchiveMeta>(&bytes)?),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
@@ -125,42 +159,18 @@ impl LogArchive {
             meta,
             last_commit_seq: 0,
             segment: None,
-            poisoned: false,
+            health: bicdb_page::ArchiveHealth::new(),
             fsync,
         };
         if let Some((first, path)) = segments(&archive.dir)?.pop() {
             // Find the last whole record of the newest segment.
             let mut file = OpenOptions::new().read(true).write(true).open(&path)?;
-            let mut reader = BufReader::new(&mut file);
-            let mut good = 0u64;
-            let mut last = first.saturating_sub(1);
-            loop {
-                match read_record(&mut reader) {
-                    Ok(Some(frame)) => {
-                        if frame.commit_seq != last + 1 || frame.previous_commit_seq != last {
-                            return Err(archive_error("non-consecutive frames in archive tail"));
-                        }
-                        if archive
-                            .meta
-                            .as_ref()
-                            .is_none_or(|meta| meta.cluster_id != frame.cluster_id)
-                        {
-                            return Err(archive_error("archive frame identity mismatch"));
-                        }
-                        last = frame.commit_seq;
-                        good = reader.stream_position()?;
-                    }
-                    Ok(None) => break,
-                    Err(error) if error.starts_with("torn record") => break,
-                    Err(error) => {
-                        return Err(archive_error(format!("{}: {error}", path.display())))
-                    }
-                }
-            }
-            drop(reader);
+            let (good, last) = archive.scan_segment(&mut file, first, &path, None)?;
             if good < file.metadata()?.len() {
-                file.set_len(good)?;
-                file.sync_all()?;
+                step("log_archive.repair", &path, || {
+                    file.set_len(good)?;
+                    file.sync_all()
+                })?;
             }
             file.seek(SeekFrom::Start(good))?;
             archive.last_commit_seq = last;
@@ -171,19 +181,155 @@ impl LogArchive {
         Ok(archive)
     }
 
+    /// Reads the records of one segment, checking sequence and identity.
+    /// Returns the offset after the last whole record (or after the record
+    /// of commit `stop_after`, when given) and that record's commit.
+    fn scan_segment(
+        &self,
+        file: &mut File,
+        first: u64,
+        path: &Path,
+        stop_after: Option<u64>,
+    ) -> Result<(u64, u64)> {
+        file.seek(SeekFrom::Start(0))?;
+        let mut reader = BufReader::new(file);
+        let mut good = 0u64;
+        let mut last = first.saturating_sub(1);
+        if stop_after.is_some_and(|stop| stop <= last) {
+            return Ok((good, last));
+        }
+        loop {
+            match read_record(&mut reader) {
+                Ok(Some(frame)) => {
+                    if frame.commit_seq != last + 1 || frame.previous_commit_seq != last {
+                        return Err(archive_error("non-consecutive frames in archive tail"));
+                    }
+                    if self
+                        .meta
+                        .as_ref()
+                        .is_none_or(|meta| meta.cluster_id != frame.cluster_id)
+                    {
+                        return Err(archive_error("archive frame identity mismatch"));
+                    }
+                    last = frame.commit_seq;
+                    good = reader.stream_position()?;
+                    if stop_after == Some(last) {
+                        break;
+                    }
+                }
+                Ok(None) => break,
+                Err(error) if error.starts_with("torn record") => break,
+                Err(error) => return Err(archive_error(format!("{}: {error}", path.display()))),
+            }
+        }
+        Ok((good, last))
+    }
+
     pub fn meta(&self) -> Option<&LogArchiveMeta> {
         self.meta.as_ref()
     }
 
-    /// Last recoverable prefix, including a fresh archive's initial base backup.
+    /// Last commit the archive holds durably: confirmed by this handle, or
+    /// present on disk when it was opened. Including a fresh archive's
+    /// initial base backup.
     pub fn last_commit_seq(&self) -> u64 {
         self.last_commit_seq
+    }
+
+    /// The first failure of this handle, if any. Once set, nothing more is
+    /// appended or confirmed through this handle.
+    pub fn failure(&self) -> Option<crate::WriteFailure> {
+        self.health.failure()
+    }
+
+    /// A handle that failed before it could be used (see
+    /// `BicDb::open_log_archive`): every append and hold refuses.
+    pub fn failed(dir: &Path, fsync: bool, site: &str, error: &dyn std::fmt::Display) -> Self {
+        let archive = Self {
+            dir: dir.to_path_buf(),
+            meta: None,
+            last_commit_seq: 0,
+            segment: None,
+            health: bicdb_page::ArchiveHealth::new(),
+            fsync,
+        };
+        archive.fail_with(site, error);
+        archive
+    }
+
+    /// Stop this handle with a failure at `site`.
+    pub fn fail_with(&self, site: &str, error: &dyn std::fmt::Display) {
+        self.health.record_failure(
+            "commit_log",
+            site,
+            &format!("{}: {error}", self.dir.display()),
+        );
+    }
+
+    /// The archive directory, when it is open on disk.
+    pub fn dir(&self) -> Option<&Path> {
+        Some(&self.dir)
+    }
+
+    /// Stop this handle because its confirmed prefix did not read back
+    /// intact (`log_archive.verify`).
+    pub fn fail_verification(&self, detail: &str) {
+        self.health
+            .record_failure("commit_log", "log_archive.verify", &detail);
+    }
+
+    /// `Err` once this handle failed.
+    pub fn check_healthy(&self) -> Result<()> {
+        match self.health.failure() {
+            None => Ok(()),
+            Some(failure) => Err(failure_error(failure)),
+        }
+    }
+
+    fn fail(&self, site: &str, path: &Path, error: impl std::fmt::Display) -> BicDbError {
+        failure_error(self.health.record_failure(
+            "commit_log",
+            site,
+            &format!("{}: {error}", path.display()),
+        ))
+    }
+
+    /// Writes `archive.json` atomically and durably.
+    fn write_meta(&self, meta: &LogArchiveMeta) -> Result<()> {
+        let path = self.dir.join(META_FILE);
+        let tmp = self.dir.join(format!("{META_FILE}.tmp"));
+        let bytes = serde_json::to_vec_pretty(meta)?;
+        let result = (|| -> std::result::Result<(), (&'static str, std::io::Error)> {
+            let file = step("log_archive.meta_write", &tmp, || {
+                let mut file = File::create(&tmp)?;
+                file.write_all(&bytes)?;
+                Ok(file)
+            })
+            .map_err(|error| ("log_archive.meta_write", error))?;
+            if self.fsync {
+                step("log_archive.meta_sync", &tmp, || file.sync_all())
+                    .map_err(|error| ("log_archive.meta_sync", error))?;
+            }
+            drop(file);
+            step("log_archive.rename", &path, || fs::rename(&tmp, &path))
+                .map_err(|error| ("log_archive.rename", error))?;
+            if self.fsync {
+                sync_dir("log_archive.dir_sync", &self.dir)
+                    .map_err(|error| ("log_archive.dir_sync", error))?;
+            }
+            Ok(())
+        })();
+        result.map_err(|(site, error)| {
+            let _ = fs::remove_file(&tmp);
+            self.fail(site, &path, error)
+        })
     }
 
     /// Anchor a fresh archive at an already-published consistent base backup.
     /// Existing archive histories must never be rebased over a missing suffix.
     pub fn initialize_from_base(&mut self, cluster_id: &str, base_commit_seq: u64) -> Result<()> {
-        if self.poisoned || self.meta.is_some() || self.segment.is_some() {
+        self.check_healthy()?;
+        if self.meta.is_some() || self.segment.is_some() {
             return Err(archive_error(
                 "only an uninitialized archive can start from a base backup",
             ));
@@ -195,23 +341,18 @@ impl LogArchive {
             cluster_id: cluster_id.into(),
             first_commit_seq,
         };
-        crate::storage::write_atomic(
-            &self.dir.join(META_FILE),
-            &serde_json::to_vec_pretty(&meta)?,
-            self.fsync,
-        )?;
+        self.write_meta(&meta)?;
         self.meta = Some(meta);
         self.last_commit_seq = base_commit_seq;
         Ok(())
     }
 
-    /// Appends consecutive commit frames durably.
+    /// Appends consecutive commit frames durably. On `Ok`, every frame is
+    /// confirmed and [`Self::last_commit_seq`] covers it; on `Err`, nothing
+    /// past the previous confirmed commit counts, and an I/O failure stops
+    /// this handle.
     pub fn append(&mut self, cluster_id: &str, frames: &[CommitFrame]) -> Result<()> {
-        if self.poisoned {
-            return Err(archive_error(
-                "archive append rollback failed; reopen the archive before appending",
-            ));
-        }
+        self.check_healthy()?;
         let Some(first) = frames.first() else {
             if let Some(meta) = &self.meta {
                 if meta.cluster_id != cluster_id {
@@ -222,14 +363,10 @@ impl LogArchive {
                     cluster_id: cluster_id.into(),
                     first_commit_seq: self.last_commit_seq + 1,
                 };
-                crate::storage::write_atomic(
-                    &self.dir.join(META_FILE),
-                    &serde_json::to_vec_pretty(&meta)?,
-                    self.fsync,
-                )?;
+                self.write_meta(&meta)?;
                 self.meta = Some(meta);
             }
-            return self.sync();
+            return Ok(());
         };
         // Reject the entire input before changing metadata or writing a prefix.
         let mut previous = first
@@ -269,32 +406,34 @@ impl LogArchive {
                     cluster_id: cluster_id.to_string(),
                     first_commit_seq: first.commit_seq,
                 };
-                crate::storage::write_atomic(
-                    &self.dir.join(META_FILE),
-                    &serde_json::to_vec_pretty(&meta)?,
-                    self.fsync,
-                )?;
+                self.write_meta(&meta)?;
                 self.meta = Some(meta);
                 self.last_commit_seq = first.commit_seq - 1;
             }
         }
+        // Written but not yet confirmed.
+        let mut written = self.last_commit_seq;
         for frame in frames {
-            if frame.commit_seq != self.last_commit_seq + 1 {
-                return Err(archive_error(format!(
-                    "frames are not consecutive at commit {}",
-                    frame.commit_seq
-                )));
-            }
             let rotate = self
                 .segment
                 .as_ref()
                 .is_none_or(|(_, bytes)| *bytes >= SEGMENT_BYTES);
             if rotate {
+                // The finished segment's records were confirmed by earlier
+                // syncs, but this one must pass before any record of the new
+                // segment is written: the new segment is only reachable once
+                // the old one is complete.
                 self.finish_segment()?;
                 let path = self.dir.join(segment_name(frame.commit_seq));
-                let file = OpenOptions::new().create(true).append(true).open(&path)?;
+                let file = step("log_archive.create", &path, || {
+                    OpenOptions::new().create(true).append(true).open(&path)
+                })
+                .map_err(|error| self.fail("log_archive.create", &path, error))?;
                 if self.fsync {
-                    File::open(&self.dir)?.sync_all()?;
+                    // Without the entry, every record in the segment is lost
+                    // on a crash, however well its data was synced.
+                    sync_dir("log_archive.dir_sync", &self.dir)
+                        .map_err(|error| self.fail("log_archive.dir_sync", &self.dir, error))?;
                 }
                 self.segment = Some((file, 0));
             }
@@ -303,28 +442,30 @@ impl LogArchive {
             record.extend_from_slice(&(body.len() as u32).to_be_bytes());
             record.extend_from_slice(&crc32fast::hash(&body).to_be_bytes());
             record.extend_from_slice(&body);
+            let path = self.dir.join(segment_name(frame.commit_seq));
             let (file, bytes) = self.segment.as_mut().unwrap();
-            if let Err(error) = file.write_all(&record) {
-                // A retry must append at a record boundary, never after a torn
-                // prefix which would hide all subsequently archived commits.
-                if let Err(rollback) = file.set_len(*bytes) {
-                    self.poisoned = true;
-                    return Err(archive_error(format!(
-                        "append failed: {error}; rollback failed: {rollback}; reopen required"
-                    )));
-                }
-                return Err(error.into());
+            let wrote = step("log_archive.write", &path, || file.write_all(&record));
+            if let Err(error) = wrote {
+                // A torn prefix may now sit at the tail. This handle stops;
+                // a reopen cuts the tail back to the last whole record and
+                // the unconfirmed suffix is rewritten from the log.
+                return Err(self.fail("log_archive.write", &path, error));
             }
             *bytes += record.len() as u64;
-            self.last_commit_seq = frame.commit_seq;
+            written = frame.commit_seq;
         }
-        self.sync()
+        self.sync()?;
+        // Crash matrix: records durable, nothing confirmed to the caller yet.
+        bicdb_page::test_faults::crash_point("log_archive.after_sync");
+        self.last_commit_seq = written;
+        Ok(())
     }
 
-    pub(crate) fn sync(&self) -> Result<()> {
+    fn sync(&self) -> Result<()> {
         if self.fsync {
             if let Some((file, _)) = &self.segment {
-                file.sync_data()?;
+                step("log_archive.sync", &self.dir, || file.sync_data())
+                    .map_err(|error| self.fail("log_archive.sync", &self.dir, error))?;
             }
         }
         Ok(())
@@ -333,11 +474,77 @@ impl LogArchive {
     fn finish_segment(&mut self) -> Result<()> {
         if self.fsync {
             if let Some((file, _)) = &self.segment {
-                file.sync_all()?;
+                step("log_archive.sync", &self.dir, || file.sync_all())
+                    .map_err(|error| self.fail("log_archive.sync", &self.dir, error))?;
             }
         }
         self.segment = None;
         Ok(())
+    }
+
+    /// Discards every record after commit `keep_through` (whole later
+    /// segments are removed, the segment holding it is cut after it), so the
+    /// caller can rewrite that suffix from a source that is known durable.
+    /// Returns how many commits were discarded.
+    pub fn discard_after(&mut self, keep_through: u64) -> Result<u64> {
+        self.check_healthy()?;
+        let Some(meta) = self.meta.clone() else {
+            return Err(archive_error(
+                "an uninitialized archive has nothing to discard",
+            ));
+        };
+        if keep_through + 1 < meta.first_commit_seq {
+            return Err(archive_error(format!(
+                "cannot discard below the archive start (commit {})",
+                meta.first_commit_seq
+            )));
+        }
+        let discarded = self.last_commit_seq.saturating_sub(keep_through);
+        self.segment = None;
+        let all = segments(&self.dir)?;
+        let mut removed = false;
+        for (first, path) in all.iter().filter(|(first, _)| *first > keep_through) {
+            let _ = first;
+            step("log_archive.truncate", path, || fs::remove_file(path))
+                .map_err(|error| self.fail("log_archive.truncate", path, error))?;
+            removed = true;
+        }
+        if removed && self.fsync {
+            sync_dir("log_archive.dir_sync", &self.dir)
+                .map_err(|error| self.fail("log_archive.dir_sync", &self.dir, error))?;
+        }
+        if let Some((first, path)) = all.iter().rev().find(|(first, _)| *first <= keep_through) {
+            let mut file = OpenOptions::new().read(true).write(true).open(path)?;
+            let (good, last) = self.scan_segment(&mut file, *first, path, Some(keep_through))?;
+            if last != keep_through {
+                return Err(archive_error(format!(
+                    "{} ends at commit {last}, before commit {keep_through}",
+                    path.display()
+                )));
+            }
+            if good < file.metadata()?.len() {
+                step("log_archive.truncate", path, || {
+                    file.set_len(good)?;
+                    if self.fsync {
+                        file.sync_all()?;
+                    }
+                    Ok(())
+                })
+                .map_err(|error| self.fail("log_archive.truncate", path, error))?;
+            }
+            file.seek(SeekFrom::Start(good))?;
+            self.segment = Some((file, good));
+        }
+        self.last_commit_seq = keep_through;
+        Ok(discarded)
+    }
+}
+
+fn failure_error(failure: crate::WriteFailure) -> BicDbError {
+    BicDbError::ArchiveFailed {
+        archive: "commit_log".into(),
+        site: failure.site,
+        detail: failure.error,
     }
 }
 
@@ -443,6 +650,22 @@ pub fn read_log_archive(
             expected - 1,
             target.commit_seq.unwrap()
         )));
+    }
+    // A time target counts as reached only when the archive holds a commit
+    // past it (that commit stopped the replay above) or the commit target
+    // was reached. An archive that simply ends before the time may be
+    // missing commits made up to it (a failed or lagging archiver), so
+    // restoring "to that time" from it would silently restore to a gap.
+    if let Some(time) = target.timestamp {
+        let commit_reached = target.commit_seq.is_some_and(|seq| expected > seq);
+        if !commit_reached {
+            return Err(archive_error(format!(
+                "archive ends at commit {} without reaching the requested time {time}; commits \
+                 made up to that time may be missing from the archive. Restore without a target \
+                 to restore to the end of the archive",
+                expected - 1
+            )));
+        }
     }
     Ok(())
 }

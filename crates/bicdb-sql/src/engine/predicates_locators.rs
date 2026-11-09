@@ -769,6 +769,7 @@ impl<'db> SqlEngine<'db> {
                     .unwrap_or(&[]),
                 &result.columns,
             )?;
+            crate::slot_types::register_columns(&alias_name, &columns, &result.column_types);
             let rows = result
                 .rows
                 .iter()
@@ -888,6 +889,7 @@ impl<'db> SqlEngine<'db> {
                     .unwrap_or(&[]),
                 &cte.columns,
             )?;
+            crate::slot_types::register_cte(&alias_name, &columns, cte);
             let rows = cte
                 .rows
                 .iter()
@@ -924,6 +926,7 @@ impl<'db> SqlEngine<'db> {
                     .unwrap_or(&[]),
                 &cte.columns,
             )?;
+            crate::slot_types::register_cte(&alias_name, &columns, &cte);
             let rows = cte
                 .rows
                 .iter()
@@ -1010,6 +1013,12 @@ impl<'db> SqlEngine<'db> {
 
         let table = resolve_session_relation_name(self.db_ref(), &table)?;
         self.require_relation_privilege(&table, "SELECT")?;
+        if let Some(schema) = load_schema_shared(self.db_ref(), &table)? {
+            crate::slot_types::register_table(&alias_name, &schema);
+            if alias_name != table {
+                crate::slot_types::register_table(&table, &schema);
+            }
+        }
 
         if self.heap_lock_identity {
             if let Some(schema) = load_schema_shared(self.db_ref(), &table)?.as_deref() {
@@ -1733,6 +1742,13 @@ impl<'db> SqlEngine<'db> {
             if result.columns.len() != 1 {
                 return Ok(None);
             }
+            let field = IndexField::MetadataPath(vec![column.clone()]);
+            if !index_probe_type_is_exact(
+                index_field_pg_type(Some(schema), &field),
+                result.column_types.first().cloned().flatten(),
+            ) {
+                return Ok(None);
+            }
             let mut pks = Vec::with_capacity(result.rows.len());
             for row in result.rows {
                 let Some(value) = row.into_iter().next() else {
@@ -2016,6 +2032,9 @@ impl<'db> SqlEngine<'db> {
                 if !self.expr_is_bound_without_table_row(expr)? {
                     continue 'plans;
                 }
+                if !self.index_probe_expr_is_exact(schema, plan.fields.get(field_idx), expr) {
+                    continue 'plans;
+                }
                 let value = self.eval_dynamic_bound_expr(expr)?;
                 // An unjoined input currently evaluates to NULL. It cannot
                 // narrow this table to an index's NULL keys: defer the
@@ -2056,6 +2075,9 @@ impl<'db> SqlEngine<'db> {
                 let range_field = plan.fields.get(prefix.len());
                 for (op, expr) in &plan.range_bounds {
                     if !self.expr_is_bound_without_table_row(expr)? {
+                        continue 'plans;
+                    }
+                    if !self.index_probe_expr_is_exact(schema, range_field, expr) {
                         continue 'plans;
                     }
                     let value = index_value_from_sql(self.eval_dynamic_bound_expr(expr)?)?;
@@ -2285,6 +2307,13 @@ impl<'db> SqlEngine<'db> {
                         let mut filters = Vec::with_capacity(candidate.plan.filters.len());
                         for (idx, expr) in &candidate.plan.filters {
                             if !self.expr_is_bound_without_table_row(expr)? {
+                                continue;
+                            }
+                            if !self.index_probe_expr_is_exact(
+                                schema,
+                                candidate.plan.fields.get(*idx),
+                                expr,
+                            ) {
                                 continue;
                             }
                             let value = self.eval_dynamic_bound_expr(expr)?;
@@ -2833,6 +2862,9 @@ impl<'db> SqlEngine<'db> {
                 if !self.expr_is_bound_without_table_row(expr)? {
                     continue 'plans;
                 }
+                if !self.index_probe_expr_is_exact(schema, plan.fields.get(field_idx), expr) {
+                    continue 'plans;
+                }
                 let value = self.eval_dynamic_bound_expr(expr)?;
                 if matches!(value, SqlValue::Null)
                     || !case_mapped_probe_value_is_text(plan.fields.get(field_idx), &value)
@@ -2855,6 +2887,9 @@ impl<'db> SqlEngine<'db> {
                 let range_field = plan.fields.get(prefix.len());
                 for (op, expr) in &plan.range_bounds {
                     if !self.expr_is_bound_without_table_row(expr)? {
+                        continue 'plans;
+                    }
+                    if !self.index_probe_expr_is_exact(schema, range_field, expr) {
                         continue 'plans;
                     }
                     let value = index_value_from_sql(self.eval_dynamic_bound_expr(expr)?)?;
@@ -2884,6 +2919,9 @@ impl<'db> SqlEngine<'db> {
                     let mut filters = Vec::with_capacity(plan.filters.len());
                     for (idx, expr) in &plan.filters {
                         if !self.expr_is_bound_without_table_row(expr)? {
+                            continue;
+                        }
+                        if !self.index_probe_expr_is_exact(schema, plan.fields.get(*idx), expr) {
                             continue;
                         }
                         let value = self.eval_dynamic_bound_expr(expr)?;
@@ -3438,6 +3476,27 @@ impl<'db> SqlEngine<'db> {
             cache.insert(key, computed.clone());
         });
         computed
+    }
+
+    /// An index probe must preserve the comparison's whole matching set,
+    /// whether the operand is a literal, routine expression or outer column.
+    pub(crate) fn index_probe_expr_is_exact(
+        &self,
+        schema: Option<&TableSchema>,
+        field: Option<&IndexField>,
+        expr: &Expr,
+    ) -> bool {
+        let Some(field) = field else {
+            return true;
+        };
+        let columns = self
+            .outer_row
+            .as_ref()
+            .map(|row| row.columns().iter().map(String::as_str))
+            .into_iter()
+            .flatten();
+        let probe_type = row_columns_expr_pg_type(self.db_ref(), expr, columns);
+        index_probe_type_is_exact(index_field_pg_type(schema, field), probe_type)
     }
 
     pub(crate) fn expr_is_bound_without_table_row(&self, expr: &Expr) -> Result<bool> {
@@ -4136,6 +4195,7 @@ impl<'db> SqlEngine<'db> {
             if self.expr_matches_table_index_field(left, table, alias, schema, field)? {
                 if self.expr_references_table(right, table, alias, schema)?
                     || !self.expr_is_bound_without_table_row(right)?
+                    || !self.index_probe_expr_is_exact(schema, Some(field), right)
                 {
                     continue;
                 }
@@ -4156,6 +4216,7 @@ impl<'db> SqlEngine<'db> {
             if self.expr_matches_table_index_field(right, table, alias, schema, field)? {
                 if self.expr_references_table(left, table, alias, schema)?
                     || !self.expr_is_bound_without_table_row(left)?
+                    || !self.index_probe_expr_is_exact(schema, Some(field), left)
                 {
                     continue;
                 }
@@ -4197,7 +4258,9 @@ impl<'db> SqlEngine<'db> {
         // normalized so the column is on the left) for both the located and
         // the evaluated planners.
         for (op, expr) in self.dynamic_range_bound_exprs(selection, table, alias, schema, field)? {
-            if !self.expr_is_bound_without_table_row(&expr)? {
+            if !self.expr_is_bound_without_table_row(&expr)?
+                || !self.index_probe_expr_is_exact(schema, Some(field), &expr)
+            {
                 continue;
             }
             let value = self.eval_dynamic_bound_expr(&expr)?;
@@ -4266,6 +4329,7 @@ impl<'db> SqlEngine<'db> {
             if self.expr_matches_table_index_field(left, table, alias, schema, field)? {
                 if self.expr_references_table(right, table, alias, schema)?
                     || !self.expr_is_bound_without_table_row(right)?
+                    || !self.index_probe_expr_is_exact(schema, Some(field), right)
                 {
                     continue;
                 }
@@ -4292,6 +4356,7 @@ impl<'db> SqlEngine<'db> {
             if self.expr_matches_table_index_field(right, table, alias, schema, field)? {
                 if self.expr_references_table(left, table, alias, schema)?
                     || !self.expr_is_bound_without_table_row(left)?
+                    || !self.index_probe_expr_is_exact(schema, Some(field), left)
                 {
                     continue;
                 }
@@ -4332,6 +4397,10 @@ impl<'db> SqlEngine<'db> {
             // the primary-key range path would then incorrectly prove that
             // the whole selection has no candidates.
             Some(expr) if self.expr_is_bound_without_table_row(expr)? => {
+                let field = IndexField::MetadataPath(vec![column.to_string()]);
+                if !self.index_probe_expr_is_exact(schema, Some(&field), expr) {
+                    return Ok(None);
+                }
                 self.eval_dynamic_bound_expr(expr).map(Some)
             }
             Some(_) | None => Ok(None),
@@ -5268,17 +5337,37 @@ impl<'db> SqlEngine<'db> {
                     JoinConstraint::On(expr)
                         if matches!(unwrap_nested_expr(expr), Expr::BinaryOp { op: BinaryOperator::Eq, .. })
                 );
-            if simple_equality
-                || (self.join_key_values_are_integers(left_key, &left)
-                    && self.join_key_values_are_integers(right_key, &right))
-            {
+            // Both keys hash under one type: the type PostgreSQL compares
+            // them in. Keys of different types whose comparison is not a
+            // plain cast of both sides (CHAR against text) are left to the
+            // nested loop, which compares each pair by its types.
+            let left_key_type = self.infer_slot_row_expr_type(&left.columns, left_key);
+            let key_types = match (left_key_type.as_deref(), right_key_type.as_deref()) {
+                (Some(left_type), Some(right_type)) if left_type != right_type => {
+                    hash_join_common_key_type(left_type, right_type)
+                        .map(|common| (common, left_key_type.clone(), right_key_type.clone()))
+                }
+                _ => right_key_type
+                    .clone()
+                    .map(|right_type| (right_type, None, None))
+                    .or(Some((String::new(), None, None))),
+            };
+            if let Some((key_type, left_cast_from, right_cast_from)) = key_types.filter(|_| {
+                simple_equality
+                    || (self.join_key_values_are_integers(left_key, &left)
+                        && self.join_key_values_are_integers(right_key, &right))
+            }) {
                 return self.apply_inner_hash_join(
                     left,
                     right,
                     effective_constraint,
                     left_key,
                     right_key,
-                    right_key_type.as_deref(),
+                    HashJoinKeyTypes {
+                        key: (!key_type.is_empty()).then_some(key_type.as_str()),
+                        left_cast_from: left_cast_from.as_deref(),
+                        right_cast_from: right_cast_from.as_deref(),
+                    },
                     kind,
                 );
             }
@@ -6296,9 +6385,10 @@ impl<'db> SqlEngine<'db> {
         constraint: &JoinConstraint,
         left_key: &Expr,
         right_key: &Expr,
-        pg_type: Option<&str>,
+        key_types: HashJoinKeyTypes<'_>,
         kind: RowJoinKind,
     ) -> Result<RowSet> {
+        let pg_type = key_types.key;
         // LEFT JOIN: a left row without a match keeps one NULL-extended row.
         let null_right =
             matches!(kind, RowJoinKind::Left).then(|| null_slot_row_for_columns(&right.columns));
@@ -6318,6 +6408,7 @@ impl<'db> SqlEngine<'db> {
                 })?,
                 None => self.eval_slot_row_value(right_row, &right_context, right_key)?,
             };
+            let value = key_types.cast(value, key_types.right_cast_from)?;
             let key = match (pg_type, value) {
                 (_, SqlValue::Null) => None,
                 (Some(pg_type), value) => {
@@ -6348,6 +6439,7 @@ impl<'db> SqlEngine<'db> {
                 })?,
                 None => self.eval_slot_row_value(left_row, &left_context, left_key)?,
             };
+            let value = key_types.cast(value, key_types.left_cast_from)?;
             let key = match (pg_type, value) {
                 (_, SqlValue::Null) => None,
                 (Some(pg_type), value) => {
@@ -6549,6 +6641,10 @@ impl<'db> SqlEngine<'db> {
             };
             if self.expr_matches_table_index_field(left, table, alias, schema, field)?
                 && !self.expr_references_table(right, table, alias, schema)?
+                && index_probe_type_is_exact(
+                    index_field_pg_type(schema, field),
+                    scope.known_expr_type(right),
+                )
             {
                 if let Some(bound) = scope.bind(right) {
                     return Ok(Some(PreparedDynamicBoundExpr {
@@ -6559,6 +6655,10 @@ impl<'db> SqlEngine<'db> {
             }
             if self.expr_matches_table_index_field(right, table, alias, schema, field)?
                 && !self.expr_references_table(left, table, alias, schema)?
+                && index_probe_type_is_exact(
+                    index_field_pg_type(schema, field),
+                    scope.known_expr_type(left),
+                )
             {
                 if let Some(bound) = scope.bind(left) {
                     return Ok(Some(PreparedDynamicBoundExpr {
@@ -7905,4 +8005,97 @@ pub(crate) fn selection_has_false_term(selection: &Expr) -> bool {
         integer(left) && integer(right)
             && eval_constant_expr(term).is_ok_and(|value| matches!(value, SqlValue::Bool(false)))
     })
+}
+
+/// The single type an equi-join hashes both keys under, and the declared
+/// types of keys whose values must be cast to it first.
+#[derive(Clone, Copy)]
+pub(crate) struct HashJoinKeyTypes<'a> {
+    pub(crate) key: Option<&'a str>,
+    pub(crate) left_cast_from: Option<&'a str>,
+    pub(crate) right_cast_from: Option<&'a str>,
+}
+
+impl HashJoinKeyTypes<'_> {
+    fn cast(&self, value: SqlValue, from: Option<&str>) -> Result<SqlValue> {
+        match (self.key, from) {
+            (Some(key), Some(from)) if key != from && !matches!(value, SqlValue::Null) => {
+                cast_value_to_pg_type(value, key)
+            }
+            _ => Ok(value),
+        }
+    }
+}
+
+/// The type PostgreSQL compares two equi-join keys of different declared
+/// types in, when that comparison is both keys cast to one type (so equal
+/// keys hash equally under it): integers as int8, NUMERIC with integers as
+/// numeric, any float as float8, date/timestamp/timestamptz as the wider.
+/// `None` = no such type (the nested loop compares each pair).
+pub(crate) fn hash_join_common_key_type(left: &str, right: &str) -> Option<String> {
+    Some(match pg_comparison_kind(left, right)? {
+        PgComparisonKind::Integer => "int8".to_string(),
+        PgComparisonKind::Numeric => "numeric".to_string(),
+        PgComparisonKind::Float => "float8".to_string(),
+        PgComparisonKind::Temporal => {
+            let rank = |pg_type: &str| match pg_type {
+                "date" => 0,
+                "timestamp" => 1,
+                _ => 2,
+            };
+            if rank(left) >= rank(right) {
+                left
+            } else {
+                right
+            }
+            .to_string()
+        }
+        _ => return None,
+    })
+}
+
+/// The declared type of a plain-column index field.
+fn index_field_pg_type(schema: Option<&TableSchema>, field: &IndexField) -> Option<String> {
+    let IndexField::MetadataPath(path) = field else {
+        return None;
+    };
+    let [column] = path.as_slice() else {
+        return None;
+    };
+    schema?.column(column).map(|column| column.pg_type.clone())
+}
+
+/// Whether probing an index on a `column_type` key with a value of
+/// `probe_type` finds exactly the rows `column = probe` selects. The probe
+/// value is cast to the key type; that is exact only when the cast loses
+/// nothing (a date probing a timestamp index, an int4 probing an int8
+/// one). A timestamp probing a date index would match every timestamp of
+/// that day, a numeric probing an integer index its rounded value. Unknown
+/// types keep the existing probe.
+pub(crate) fn index_probe_type_is_exact(
+    column_type: Option<String>,
+    probe_type: Option<String>,
+) -> bool {
+    let (Some(column_type), Some(probe_type)) = (column_type, probe_type) else {
+        return true;
+    };
+    if column_type == probe_type {
+        return true;
+    }
+    let int_rank = |pg_type: &str| match pg_type {
+        "int2" => Some(0),
+        "int4" => Some(1),
+        "int8" => Some(2),
+        _ => None,
+    };
+    match (column_type.as_str(), probe_type.as_str()) {
+        (column, probe) if int_rank(column).is_some() && int_rank(probe).is_some() => {
+            int_rank(probe) <= int_rank(column)
+        }
+        ("numeric", probe) => int_rank(probe).is_some(),
+        ("float8", probe) => int_rank(probe).is_some() || probe == "float4",
+        ("timestamp", "date") | ("timestamptz", "date" | "timestamp") => true,
+        ("text", "varchar") | ("varchar", "text") => true,
+        _ => false,
+    }
 }

@@ -2280,13 +2280,18 @@ impl PagedStore {
     }
 
     /// See [`crate::wal::Wal::enable_archive_retention`].
-    pub fn enable_wal_archive_retention(&self) {
-        self.wal.enable_archive_retention();
+    pub fn enable_wal_archive_retention(&self) -> Result<()> {
+        self.wal.enable_archive_retention()
+    }
+
+    /// See [`crate::wal::Wal::disable_archive_retention`].
+    pub fn disable_wal_archive_retention(&self) -> Result<()> {
+        self.wal.disable_archive_retention()
     }
 
     /// See [`crate::wal::Wal::mark_archived_through`].
-    pub fn mark_wal_archived_through(&self, sequence: u64) {
-        self.wal.mark_archived_through(sequence);
+    pub fn mark_wal_archived_through(&self, sequence: u64) -> Result<()> {
+        self.wal.mark_archived_through(sequence)
     }
 
     /// Seal the active WAL file into an immutable segment, returning the

@@ -3359,6 +3359,23 @@ pub struct WalArchiveReport {
     pub skipped: usize,
 }
 
+/// Page-log archive state of one handle ([`BicDb::wal_archive_status`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WalArchiveStatus {
+    /// Checkpoints keep unarchived sealed segments (persisted setting).
+    pub retention_enabled: bool,
+    /// Highest sealed segment this handle confirmed archived (0: none).
+    pub archived_through: u64,
+    /// Sealed segments on disk this handle has not confirmed archived:
+    /// what retention keeps locally until the archiver catches up.
+    pub unarchived_segments: u64,
+    /// Their total size in bytes: the local disk cost of a lagging or
+    /// failed archiver.
+    pub unarchived_bytes: u64,
+    /// The archiver's first failure on this handle, if any.
+    pub failure: Option<crate::WriteFailure>,
+}
+
 /// The two chained artifacts of [`BicDb::create_online_backup`].
 #[derive(Clone, Debug)]
 pub struct OnlineBackupReport {
@@ -3886,6 +3903,9 @@ pub struct BicDb {
     commit_seq: Arc<AtomicU64>,
     // Synchronous replication: commits wait here for standby confirmations.
     sync_quorum: Arc<SyncQuorum>,
+    /// Write backpressure set by the archive guard (section 7.6 of
+    /// `docs/durability-failure-handling.md`).
+    archive_backpressure: Arc<crate::archive_guard::BackpressureGate>,
     // Runtime replication role, epoch and persisted standby positions.
     ha_node: Arc<ha_node::HaNode>,
     // Index catalog last announced to standbys (primary).
@@ -10632,6 +10652,7 @@ impl BicDb {
                 quorum.seed_holds(ha_node.read(|file| file.holds.clone()));
                 Arc::new(quorum)
             },
+            archive_backpressure: Arc::default(),
             ha_node: Arc::new(ha_node),
             announced_index_catalog: Mutex::new(None),
             local_index_maintenance: false,

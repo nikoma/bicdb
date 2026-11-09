@@ -1241,6 +1241,23 @@ pub(crate) fn simple_case_values_equal(
     Ok(values_equal(left, right))
 }
 
+/// Resolve the equality strategy once for an IN result, rather than running
+/// the type dispatcher for every candidate of every outer row. These types
+/// already have the same equality in their canonical runtime values.
+pub(crate) fn typed_equality_uses_plain_values(
+    left_type: Option<&str>,
+    right_type: Option<&str>,
+) -> bool {
+    let (Some(left), Some(right)) = (left_type, right_type) else {
+        return false;
+    };
+    (left == "uuid" && right == "uuid")
+        || matches!(
+            pg_comparison_kind(left, right),
+            Some(PgComparisonKind::Integer | PgComparisonKind::Text | PgComparisonKind::Bool)
+        )
+}
+
 #[cfg(test)]
 mod simple_case_tests {
     use super::*;

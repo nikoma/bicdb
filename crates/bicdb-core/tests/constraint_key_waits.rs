@@ -8,6 +8,18 @@ use std::{
 
 static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+fn spawn<T: Send + 'static>(
+    db: &Arc<BicDb>,
+    run: impl FnOnce() -> T + Send + 'static,
+) -> thread::JoinHandle<T> {
+    let database = Arc::clone(db);
+    thread::spawn(move || {
+        let result = run();
+        drop(database);
+        result
+    })
+}
+
 fn wait_until(mut ready: impl FnMut() -> bool) {
     let deadline = Instant::now() + Duration::from_secs(5);
     while !ready() {
@@ -27,7 +39,7 @@ fn cancelled_constraint_wait_releases_graph_edges_without_stealing_owner_keys() 
     let cancel = CancellationToken::uncancelable();
     let child = cancel.clone();
     let (done, received) = mpsc::channel();
-    let worker = thread::spawn(move || {
+    let worker = spawn(&db, move || {
         let result = waiter.reserve_integrity_key_cancellable("u", "b", &child);
         done.send((waiter, result)).unwrap();
     });
@@ -45,7 +57,7 @@ fn cancelled_constraint_wait_releases_graph_edges_without_stealing_owner_keys() 
     // If the cancelled A->B edge leaked, this legitimate B->A wait would be
     // falsely declared a deadlock even though A is about to roll back.
     let (done, received) = mpsc::channel();
-    let worker = thread::spawn(move || {
+    let worker = spawn(&db, move || {
         let result =
             owner.reserve_integrity_key_cancellable("u", "a", &CancellationToken::uncancelable());
         done.send(result).unwrap();
@@ -68,7 +80,7 @@ fn constraint_cycle_is_detected_and_winner_can_finish() {
     a.reserve_integrity_key("u", "a").unwrap();
     b.reserve_integrity_key("u", "b").unwrap();
     let (done, received) = mpsc::channel();
-    let worker = thread::spawn(move || {
+    let worker = spawn(&db, move || {
         let result =
             a.reserve_integrity_key_cancellable("u", "b", &CancellationToken::uncancelable());
         done.send(result).unwrap();
@@ -99,7 +111,7 @@ fn savepoint_release_wakes_waiter_without_releasing_earlier_key() {
     owner.reserve_integrity_key("u", "released").unwrap();
     let waiter = db.begin_transaction().unwrap();
     let (done, received) = mpsc::channel();
-    let worker = thread::spawn(move || {
+    let worker = spawn(&db, move || {
         done.send(waiter.reserve_integrity_key_cancellable(
             "u",
             "released",
@@ -131,7 +143,7 @@ fn exclusive_wait_observes_all_shared_reference_owners() {
     b.reserve_integrity_key_shared("u", "key").unwrap();
     let waiter = db.begin_transaction().unwrap();
     let (done, received) = mpsc::channel();
-    let worker = thread::spawn(move || {
+    let worker = spawn(&db, move || {
         done.send(waiter.reserve_integrity_key_cancellable(
             "u",
             "key",
@@ -194,7 +206,7 @@ fn durability_fence_terminates_a_constraint_key_wait() {
     owner.reserve_integrity_key("u", "key").unwrap();
     let waiter = db.begin_transaction().unwrap();
     let (done, received) = mpsc::channel();
-    let worker = thread::spawn(move || {
+    let worker = spawn(&db, move || {
         done.send(waiter.reserve_integrity_key_cancellable(
             "u",
             "key",

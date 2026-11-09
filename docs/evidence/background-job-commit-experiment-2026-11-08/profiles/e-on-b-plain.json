@@ -1,0 +1,26 @@
+{
+  "label": "e-on-b",
+  "mode": "plain",
+  "server_env_extra": {
+    "BICDB_COMMIT_DURABILITY": "transaction-log"
+  },
+  "n": 200,
+  "startup_s": 3.5,
+  "update": {
+    "commit_ms_p50": 18.66,
+    "p95": 25.06,
+    "p99": 29.73,
+    "max": 37.39,
+    "mean": 19.06,
+    "exec_ms_p50": 1.53
+  },
+  "insert": {
+    "commit_ms_p50": 18.8,
+    "p95": 27.53,
+    "p99": 33.29,
+    "max": 40.78,
+    "mean": 19.67,
+    "exec_ms_p50": 0.68
+  },
+  "database_removed": true
+}

@@ -7431,6 +7431,15 @@ pub(crate) enum TxFrame {
     /// undone by stale transaction WAL.
     #[serde(rename = "tx_record_audit_published")]
     RecordAuditPublished { tx_id: TransactionId },
+    /// Change-capture ops of this transaction, committed by the same decision
+    /// as its rows. `sync.log` receives them only after the commit is durable
+    /// and visible; recovery copies any it is missing (by op id). An aborted
+    /// transaction therefore never produces an op a consumer can see.
+    #[serde(rename = "tx_sync_ops")]
+    SyncOps {
+        tx_id: TransactionId,
+        ops: Vec<SyncOp>,
+    },
     #[serde(rename = "tx_commit")]
     Commit {
         tx_id: TransactionId,
@@ -7465,6 +7474,7 @@ enum TxFrameKind {
     TxRecordAudit,
     TxRecordAuditOrigin,
     TxRecordAuditPublished,
+    TxSyncOps,
     TxCommit,
     TxCommitMaterialized,
     TxAbort,
@@ -7487,6 +7497,8 @@ struct TxFrameWire {
     event: Option<Box<RawValue>>,
     #[serde(default)]
     envelope: Option<Box<RawValue>>,
+    #[serde(default)]
+    ops: Option<Box<RawValue>>,
     #[serde(default)]
     len: Option<usize>,
     #[serde(default)]
@@ -7535,6 +7547,10 @@ fn decode_tx_frame(payload: &[u8]) -> Result<TxFrame> {
             )?,
         },
         TxFrameKind::TxRecordAuditPublished => TxFrame::RecordAuditPublished { tx_id: wire.tx_id },
+        TxFrameKind::TxSyncOps => TxFrame::SyncOps {
+            tx_id: wire.tx_id,
+            ops: serde_json::from_str(wire.ops.ok_or_else(|| missing("ops"))?.get())?,
+        },
         TxFrameKind::TxCommit => TxFrame::Commit {
             tx_id: wire.tx_id,
             timestamp: wire.timestamp.ok_or_else(|| missing("timestamp"))?,
@@ -7965,6 +7981,11 @@ enum TxFrameRef<'a> {
     RecordAudit {
         tx_id: TransactionId,
         event: &'a Event,
+    },
+    #[serde(rename = "tx_sync_ops")]
+    SyncOps {
+        tx_id: TransactionId,
+        ops: &'a [SyncOp],
     },
     #[serde(rename = "tx_commit")]
     Commit {
@@ -9715,13 +9736,17 @@ impl BicDb {
         }
 
         let ha_state = load_ha_state(&path)?;
-        let consensus_state = load_consensus_state(&path, &config.consensus)?;
+        let consensus_state = load_consensus_state(&path, &config.consensus, config.fsync)?;
         let mut tx_recovery = recover_transaction_log(
             &path.join(DEFAULT_TRANSACTION_LOG),
             config.read_mode,
             &encryption,
             effective_mode == StorageMode::ServerPaged,
         )?;
+        // What recovery read becomes the durable sequence below; make it so.
+        if config.fsync {
+            storage::sync_transaction_log_at_open(&path.join(DEFAULT_TRANSACTION_LOG))?;
+        }
         // The log can be truncated below the newest commit (checkpoints); the
         // persisted floor keeps commit sequence numbers monotonic across
         // restarts, which replication relies on.
@@ -10399,6 +10424,7 @@ impl BicDb {
         for (tx_id, audit_events) in &recovered_audit_outboxes {
             for event in audit_events {
                 events.append_imported(event.clone())?;
+                bicdb_page::test_faults::crash_point("open.audit_republish.after_event");
             }
             // Journal-enabled recovery records the original envelopes after
             // loading the database identity and signer below. Until then no
@@ -10418,6 +10444,13 @@ impl BicDb {
                 &CompressionConfig::disabled(),
                 &encryption,
             )?;
+        }
+        // Change-capture ops: the same outbox discipline. Before the open-time
+        // log cut below, which would drop the transaction log's copy.
+        let mut sync_log = sync_log;
+        if config.sync_outbox {
+            sync_log.republish_committed(&tx_recovery.committed_sync_ops())?;
+            bicdb_page::test_faults::crash_point("open.after_sync_republish");
         }
         // A replication primary keeps its log at open: standbys resume from it.
         if paged_records.is_some() && broker_outbox_flushed && !config.replication.enabled {
@@ -10486,6 +10519,7 @@ impl BicDb {
                 NodeRole::Primary
             },
             config.fsync,
+            durability.clone(),
         )?;
         let last_committed_tx = Arc::new(AtomicU64::new(tx_recovery.last_commit_seq));
         let deferred_materializer = match &paged_records {
@@ -10592,7 +10626,10 @@ impl BicDb {
         Ok(db)
     }
 
-    /// Highest durable commit sequence assigned so far. Monotonic and gap-free.
+    /// Highest commit sequence assigned so far. Monotonic and gap-free. On a
+    /// primary this is the reservation counter: it can name a commit whose
+    /// log write has not returned. Shipping and snapshot labels use
+    /// `replication_shippable_seq` instead.
     pub fn last_commit_seq(&self) -> u64 {
         self.commit_seq.load(AtomicOrdering::SeqCst)
     }
@@ -11155,6 +11192,7 @@ impl BicDb {
             &self.model_registry.read(),
             self.config.fsync,
             &self.encryption,
+            storage::FailClosed::AfterRename(&self.durability),
         )
     }
 
@@ -11164,6 +11202,7 @@ impl BicDb {
             &self.memory_indexes.read(),
             self.config.fsync,
             &self.encryption,
+            storage::FailClosed::AfterRename(&self.durability),
         )
     }
 
@@ -11173,6 +11212,7 @@ impl BicDb {
             &self.memory_index_jobs.read(),
             self.config.fsync,
             &self.encryption,
+            storage::FailClosed::AfterRename(&self.durability),
         )
     }
 
@@ -11276,7 +11316,11 @@ impl BicDb {
     ) -> Result<Vec<CommitFrame>> {
         let limit = limit.max(1);
         self.ensure_replication_frames_retained()?;
-        let commits = self.replication_commits_from_retained_wal()?;
+        // Bound by the durable sequence BEFORE reading the file: the file may
+        // already hold a batch whose write has not returned (or a fenced
+        // primary's failed batch), and such a commit can still be lost.
+        let shippable = self.replication_shippable_seq();
+        let commits = self.replication_commits_from_retained_wal(shippable)?;
         if let Some(oldest) = commits.first().map(|commit| commit.commit_seq) {
             if commit_seq < oldest.saturating_sub(1) {
                 return Err(replication_error(format!(
@@ -11348,34 +11392,51 @@ impl BicDb {
         )))
     }
 
-    pub fn consensus_start_election(&mut self) -> Result<RequestVote> {
+    /// Run one consensus state change and make it durable before its result
+    /// (a vote, a term, an appended entry, an acknowledgement) is returned.
+    ///
+    /// The term, the vote and the log are a promise to other nodes: a vote
+    /// granted and then lost to a crash allows two votes in one term. So the
+    /// new state is persisted with the durable replacement protocol, and on
+    /// any error memory is put back to the state before the change, so it
+    /// never runs ahead of what the disk holds. A failed directory `fsync`
+    /// after the rename leaves the file's outcome unknown and fences the
+    /// database (`consensus_state.dir_sync`); a fenced database makes no
+    /// consensus state change until it is reopened.
+    fn consensus_transition<T>(
+        &mut self,
+        change: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
         self.ensure_consensus_enabled()?;
-        let request = self.consensus_state.become_candidate();
-        self.persist_consensus_state()?;
-        Ok(request)
+        self.check_recovery_state()?;
+        let before = self.consensus_state.clone();
+        let result = change(self).and_then(|value| {
+            self.persist_consensus_state()?;
+            Ok(value)
+        });
+        if result.is_err() {
+            self.consensus_state = before;
+        }
+        result
+    }
+
+    pub fn consensus_start_election(&mut self) -> Result<RequestVote> {
+        self.consensus_transition(|db| Ok(db.consensus_state.become_candidate()))
     }
 
     pub fn consensus_become_leader(&mut self) -> Result<()> {
-        self.ensure_consensus_enabled()?;
-        self.consensus_state.become_leader()?;
-        self.persist_consensus_state()
+        self.consensus_transition(|db| db.consensus_state.become_leader())
     }
 
     pub fn consensus_handle_request_vote(&mut self, request: RequestVote) -> Result<VoteResponse> {
-        self.ensure_consensus_enabled()?;
-        let response = self.consensus_state.handle_request_vote(request)?;
-        self.persist_consensus_state()?;
-        Ok(response)
+        self.consensus_transition(|db| db.consensus_state.handle_request_vote(request))
     }
 
     pub fn consensus_handle_append_entries(
         &mut self,
         request: AppendEntries,
     ) -> Result<AppendResponse> {
-        self.ensure_consensus_enabled()?;
-        let response = self.consensus_state.handle_append_entries(request)?;
-        self.persist_consensus_state()?;
-        Ok(response)
+        self.consensus_transition(|db| db.consensus_state.handle_append_entries(request))
     }
 
     pub fn consensus_append_local_commit(
@@ -11384,9 +11445,7 @@ impl BicDb {
     ) -> Result<crate::consensus::ConsensusLogEntry> {
         self.ensure_consensus_enabled()?;
         frame.verify_checksum()?;
-        let entry = self.consensus_state.append_local_commit(frame)?;
-        self.persist_consensus_state()?;
-        Ok(entry)
+        self.consensus_transition(|db| db.consensus_state.append_local_commit(frame))
     }
 
     pub fn consensus_record_append_response(
@@ -11394,12 +11453,7 @@ impl BicDb {
         node_id: &str,
         response: &AppendResponse,
     ) -> Result<u64> {
-        self.ensure_consensus_enabled()?;
-        let commit_index = self
-            .consensus_state
-            .record_append_response(node_id, response)?;
-        self.persist_consensus_state()?;
-        Ok(commit_index)
+        self.consensus_transition(|db| db.consensus_state.record_append_response(node_id, response))
     }
 
     pub fn consensus_append_entries_from(&self, next_index: u64) -> Result<AppendEntries> {
@@ -11408,23 +11462,24 @@ impl BicDb {
     }
 
     pub fn consensus_apply_committed(&mut self) -> Result<ReplicationApplyReport> {
-        self.ensure_consensus_enabled()?;
-        let frames = self.consensus_state.apply_committed_prefix();
-        let expected_cluster = self.config.consensus.cluster_id.clone();
-        let mut applied = 0usize;
-        let mut duplicates = 0usize;
-        for frame in &frames {
-            let report = self.apply_replication_frame_inner(frame, false, &expected_cluster)?;
-            applied += report.applied;
-            duplicates += report.duplicates;
-        }
-        let report = ReplicationApplyReport {
-            applied,
-            duplicates,
-            last_applied_commit_seq: self.last_applied_commit_seq(),
-        };
-        self.persist_consensus_state()?;
-        Ok(report)
+        // On an error `last_applied` goes back with the rest of the state, so
+        // the frames are offered again (applying one twice is a duplicate).
+        self.consensus_transition(|db| {
+            let frames = db.consensus_state.apply_committed_prefix();
+            let expected_cluster = db.config.consensus.cluster_id.clone();
+            let mut applied = 0usize;
+            let mut duplicates = 0usize;
+            for frame in &frames {
+                let report = db.apply_replication_frame_inner(frame, false, &expected_cluster)?;
+                applied += report.applied;
+                duplicates += report.duplicates;
+            }
+            Ok(ReplicationApplyReport {
+                applied,
+                duplicates,
+                last_applied_commit_seq: db.last_applied_commit_seq(),
+            })
+        })
     }
 
     fn ensure_consensus_enabled(&self) -> Result<()> {
@@ -11438,7 +11493,13 @@ impl BicDb {
         self.ha_state.role == HaRole::Standby || self.ha_node.role() == NodeRole::Standby
     }
 
-    fn replication_commits_from_retained_wal(&self) -> Result<Vec<RetainedReplicationCommit>> {
+    /// Commits retained in the transaction log, up to and including
+    /// `through_seq`. Callers pass [`Self::replication_shippable_seq`], read
+    /// before this call, so no commit past the durable prefix is returned.
+    fn replication_commits_from_retained_wal(
+        &self,
+        through_seq: u64,
+    ) -> Result<Vec<RetainedReplicationCommit>> {
         // The log is live: read it without the recovery reader's tail
         // truncation, which would cut off a commit that is mid-write (see
         // `replication_retention_status`).
@@ -11473,7 +11534,12 @@ impl BicDb {
                     timestamp,
                     commit_seq,
                 } => {
-                    commits.push((commit_seq, tx_id.0, timestamp));
+                    if commit_seq <= through_seq {
+                        commits.push((commit_seq, tx_id.0, timestamp));
+                    } else {
+                        writes.remove(&tx_id.0);
+                        audit.remove(&tx_id.0);
+                    }
                 }
                 TxFrame::Abort { tx_id, .. } => {
                     writes.remove(&tx_id.0);
@@ -11488,7 +11554,8 @@ impl BicDb {
                 TxFrame::Begin { .. }
                 | TxFrame::CommitMaterialized { .. }
                 | TxFrame::BrokerPublish { .. }
-                | TxFrame::RecordAuditPublished { .. } => {}
+                | TxFrame::RecordAuditPublished { .. }
+                | TxFrame::SyncOps { .. } => {}
             }
         }
         commits.sort_unstable_by_key(|(commit_seq, _, _)| *commit_seq);
@@ -11514,6 +11581,20 @@ impl BicDb {
             });
         }
         Ok(retained)
+    }
+
+    /// Apply frames from a primary whose durable commit sequence, when it
+    /// sent them, was `primary_durable_seq`. Refuses the whole batch, before
+    /// applying any of it, when a frame lies above that horizon: the
+    /// primary had not established a durable commit decision for it, so the
+    /// standby must neither expose it nor ship it onward.
+    pub fn apply_replication_batch_within(
+        &mut self,
+        frames: &[CommitFrame],
+        primary_durable_seq: u64,
+    ) -> Result<ReplicationApplyReport> {
+        ensure_frames_within_durable_horizon(frames, primary_durable_seq)?;
+        self.apply_replication_batch(frames)
     }
 
     pub fn apply_replication_batch(
@@ -18511,7 +18592,11 @@ fn load_memory_index_jobs(
     }
 }
 
-fn load_consensus_state(path: &Path, config: &ConsensusConfig) -> Result<ConsensusState> {
+fn load_consensus_state(
+    path: &Path,
+    config: &ConsensusConfig,
+    fsync: bool,
+) -> Result<ConsensusState> {
     let state_path = path.join(DEFAULT_CONSENSUS_STATE);
     let mut state = match fs::read(&state_path) {
         Ok(bytes) => serde_json::from_slice::<ConsensusState>(&bytes)?,
@@ -18520,6 +18605,14 @@ fn load_consensus_state(path: &Path, config: &ConsensusConfig) -> Result<Consens
         }
         Err(error) => return Err(error.into()),
     };
+    if fsync {
+        // The term and vote this node is about to act on may come from a
+        // rename the previous process never synced; make them durable first.
+        storage::sync_parent_directory(&state_path).map_err(|error| BicDbError::WriteFailed {
+            site: format!("{CONSENSUS_STATE_SITE}.dir_sync"),
+            detail: format!("{}: {error}", state_path.display()),
+        })?;
+    }
     if config.enabled {
         if state.cluster_id != config.cluster_id {
             return Err(crate::consensus::consensus_error(format!(
@@ -18541,19 +18634,30 @@ fn load_consensus_state(path: &Path, config: &ConsensusConfig) -> Result<Consens
     Ok(state)
 }
 
+/// `last_apply_error` of a standby whose file-shipping apply started and has
+/// not finished.
+const HA_APPLY_IN_PROGRESS: &str =
+    "an apply was in progress and did not finish; re-run the apply or promote with force";
+
+/// Fault-injection and failure site of [`DEFAULT_HA_STATE`].
+pub const HA_STATE_SITE: &str = "ha_state";
+/// Fault-injection and failure site of [`DEFAULT_CONSENSUS_STATE`].
+pub const CONSENSUS_STATE_SITE: &str = "consensus_state";
+
+/// The file-shipping HA state (role, promotion, apply progress) of the
+/// database at `path`. Written with the durable replacement protocol. No
+/// open handle owns this file in the shipping and promotion flows, so a
+/// failure is returned to the operation, which is then not acknowledged;
+/// there is no database state to fence.
 fn persist_ha_state(path: &Path, state: &HaState, fsync: bool) -> Result<()> {
     fs::create_dir_all(path)?;
-    let state_path = path.join(DEFAULT_HA_STATE);
-    let tmp_path = state_path.with_extension("json.tmp");
-    fs::write(&tmp_path, serde_json::to_vec_pretty(state)?)?;
-    if fsync {
-        storage::sync_file(&tmp_path)?;
-    }
-    fs::rename(&tmp_path, &state_path)?;
-    if fsync {
-        storage::sync_file(&state_path)?;
-    }
-    Ok(())
+    storage::replace_durably(
+        &path.join(DEFAULT_HA_STATE),
+        storage::ReplaceContents::Plain(&serde_json::to_vec_pretty(state)?),
+        fsync,
+        HA_STATE_SITE,
+        storage::FailClosed::No,
+    )
 }
 
 fn persist_replication_state(
@@ -18574,6 +18678,7 @@ fn persist_model_registry(
     registry: &FxHashMap<String, ModelRegistryEntry>,
     fsync: bool,
     encryption: &EncryptionRuntime,
+    policy: storage::FailClosed<'_>,
 ) -> Result<()> {
     let mut entries = registry.values().cloned().collect::<Vec<_>>();
     entries.sort_by(|left, right| left.name.cmp(&right.name));
@@ -18584,6 +18689,8 @@ fn persist_model_registry(
         &serde_json::to_vec_pretty(&entries)?,
         fsync,
         encryption,
+        "model_registry",
+        policy,
     )
 }
 
@@ -18592,6 +18699,7 @@ fn persist_memory_index_catalog(
     catalog: &FxHashMap<String, MemoryIndexDefinition>,
     fsync: bool,
     encryption: &EncryptionRuntime,
+    policy: storage::FailClosed<'_>,
 ) -> Result<()> {
     let mut entries = catalog.values().cloned().collect::<Vec<_>>();
     entries.sort_by(|left, right| left.name.cmp(&right.name));
@@ -18602,6 +18710,8 @@ fn persist_memory_index_catalog(
         &serde_json::to_vec_pretty(&entries)?,
         fsync,
         encryption,
+        "memory_index_catalog",
+        policy,
     )
 }
 
@@ -18610,6 +18720,7 @@ fn persist_memory_index_jobs(
     jobs: &[MemoryIndexJob],
     fsync: bool,
     encryption: &EncryptionRuntime,
+    policy: storage::FailClosed<'_>,
 ) -> Result<()> {
     fs::create_dir_all(path)?;
     write_sidecar(
@@ -18618,22 +18729,25 @@ fn persist_memory_index_jobs(
         &serde_json::to_vec_pretty(jobs)?,
         fsync,
         encryption,
+        "memory_index_jobs",
+        policy,
     )
 }
 
-fn persist_consensus_state(path: &Path, state: &ConsensusState, fsync: bool) -> Result<()> {
+fn persist_consensus_state(
+    path: &Path,
+    state: &ConsensusState,
+    fsync: bool,
+    policy: storage::FailClosed<'_>,
+) -> Result<()> {
     fs::create_dir_all(path)?;
-    let state_path = path.join(DEFAULT_CONSENSUS_STATE);
-    let tmp_path = state_path.with_extension("json.tmp");
-    fs::write(&tmp_path, serde_json::to_vec_pretty(state)?)?;
-    if fsync {
-        storage::sync_file(&tmp_path)?;
-    }
-    fs::rename(&tmp_path, &state_path)?;
-    if fsync {
-        storage::sync_file(&state_path)?;
-    }
-    Ok(())
+    storage::replace_durably(
+        &path.join(DEFAULT_CONSENSUS_STATE),
+        storage::ReplaceContents::Plain(&serde_json::to_vec_pretty(state)?),
+        fsync,
+        CONSENSUS_STATE_SITE,
+        policy,
+    )
 }
 
 fn ship_to_standby(source_path: &Path, standby_path: &Path) -> Result<HaApplyReport> {
@@ -18660,6 +18774,26 @@ fn ship_to_standby(source_path: &Path, standby_path: &Path) -> Result<HaApplyRep
     collect_ha_files(&source_path, &source_path, &mut files)?;
     let mut files_copied = 0;
 
+    // Before the first file of the standby is replaced, record durably that
+    // an apply is in progress. A crash in the middle of the copy, or a
+    // failure to record the copy's own error below, then leaves a standby
+    // that refuses promotion without `force`, instead of one whose older
+    // state file still says the last apply succeeded while its files are a
+    // mix of two checkpoints.
+    persist_ha_state(
+        &standby_path,
+        &HaState {
+            role: HaRole::Standby,
+            source_path: Some(source_path.clone()),
+            source_checkpoint_bytes,
+            applied_checkpoint_bytes: 0,
+            last_apply_at: Some(unix_timestamp()),
+            last_apply_error: Some(HA_APPLY_IN_PROGRESS.to_string()),
+            promoted_at: None,
+        },
+        true,
+    )?;
+
     let apply = (|| -> Result<()> {
         for relative in &files {
             let source = source_path.join(relative);
@@ -18669,6 +18803,7 @@ fn ship_to_standby(source_path: &Path, standby_path: &Path) -> Result<HaApplyRep
             }
             copy_ha_regular_file(&source, &target)?;
             files_copied += 1;
+            bicdb_page::test_faults::crash_point("ha_ship.after_file");
         }
         remove_standby_orphan_files(&standby_path, &files)?;
         Ok(())
@@ -18704,6 +18839,9 @@ fn ship_to_standby(source_path: &Path, standby_path: &Path) -> Result<HaApplyRep
         }
         Err(error) => {
             state.last_apply_error = Some(error.to_string());
+            // Deliberately best effort: the copy's error is what the caller
+            // must see, and if this write fails the durable in-progress
+            // record written before the copy still refuses promotion.
             let _ = persist_ha_state(&standby_path, &state, true);
             Err(error)
         }
@@ -18834,6 +18972,7 @@ fn sync_parent_dir(_path: &Path) -> Result<()> {
 fn sync_parent_dir(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::File::open(parent)?.sync_all()?;
+        bicdb_page::test_faults::directory_synced(parent);
     }
     Ok(())
 }
@@ -19054,6 +19193,8 @@ struct TxRecovery {
     broker_publishes: BTreeMap<u64, Vec<crate::broker::PendingBrokerPublish>>,
     record_audit_events: BTreeMap<u64, Vec<Event>>,
     record_audit_published: FxHashSet<u64>,
+    /// Change-capture ops per transaction (`TxFrame::SyncOps`).
+    sync_ops: BTreeMap<u64, Vec<SyncOp>>,
     materialized_commits: FxHashSet<u64>,
     /// commit_seq assigned to each committed transaction (from its WAL Commit
     /// frame). MVCC version stamps are commit_seq values, so replay must stamp
@@ -19104,6 +19245,25 @@ impl TxRecovery {
             .collect()
     }
 
+    /// Change-capture ops of committed transactions, with their commit
+    /// sequence, in commit order. Ops of a transaction without a commit
+    /// decision in the log (aborted, or interrupted before its decision) are
+    /// never returned.
+    fn committed_sync_ops(&self) -> Vec<(u64, Vec<SyncOp>)> {
+        let mut committed = self
+            .sync_ops
+            .iter()
+            .filter(|(tx_id, _)| self.states.get(tx_id) == Some(&TxState::Committed))
+            .filter_map(|(tx_id, ops)| {
+                self.commit_seq_by_tx
+                    .get(tx_id)
+                    .map(|commit_seq| (*commit_seq, ops.clone()))
+            })
+            .collect::<Vec<_>>();
+        committed.sort_by_key(|(commit_seq, _)| *commit_seq);
+        committed
+    }
+
     fn committed_record_audit_outboxes(&self) -> Vec<(TransactionId, Vec<Event>)> {
         let mut committed = self
             .record_audit_events
@@ -19151,6 +19311,24 @@ impl SegmentReplayIndex {
     }
 }
 
+/// Refuses frames above the primary's durable commit sequence.
+pub fn ensure_frames_within_durable_horizon(
+    frames: &[CommitFrame],
+    primary_durable_seq: u64,
+) -> Result<()> {
+    if let Some(frame) = frames
+        .iter()
+        .find(|frame| frame.commit_seq > primary_durable_seq)
+    {
+        return Err(replication_error(format!(
+            "commit_seq {} is above the primary's durable commit sequence {primary_durable_seq}; \
+             a frame without a durable commit decision is never applied",
+            frame.commit_seq
+        )));
+    }
+    Ok(())
+}
+
 fn recover_transaction_log(
     path: &Path,
     _read_mode: SegmentReadMode,
@@ -19163,6 +19341,7 @@ fn recover_transaction_log(
         BTreeMap::new();
     let mut record_audit_events: BTreeMap<u64, Vec<Event>> = BTreeMap::new();
     let mut record_audit_published = FxHashSet::default();
+    let mut sync_ops: BTreeMap<u64, Vec<SyncOp>> = BTreeMap::new();
     let mut materialized_commits = FxHashSet::default();
     let mut commit_seq_by_tx: BTreeMap<u64, u64> = BTreeMap::new();
     let mut max_tx = 0_u64;
@@ -19218,6 +19397,11 @@ fn recover_transaction_log(
                 max_tx = max_tx.max(tx_id.0);
                 record_audit_published.insert(tx_id.0);
             }
+            TxFrame::SyncOps { tx_id, ops } => {
+                max_tx = max_tx.max(tx_id.0);
+                sync_ops.entry(tx_id.0).or_default().extend(ops);
+                states.entry(tx_id.0).or_insert(TxState::Pending);
+            }
             TxFrame::Commit {
                 tx_id, commit_seq, ..
             } => {
@@ -19250,6 +19434,7 @@ fn recover_transaction_log(
                 broker_publishes.remove(&tx_id.0);
                 record_audit_events.remove(&tx_id.0);
                 record_audit_published.remove(&tx_id.0);
+                sync_ops.remove(&tx_id.0);
             }
         }
         Ok(())
@@ -19271,6 +19456,7 @@ fn recover_transaction_log(
         broker_publishes,
         record_audit_events,
         record_audit_published,
+        sync_ops,
         materialized_commits,
         commit_seq_by_tx,
         next_tx_id: max_tx.saturating_add(1).max(1),
@@ -20839,18 +21025,29 @@ fn read_optional_sidecar(
     read_immutable_sidecar(path, kind, encryption).map(Some)
 }
 
+/// Replace a sidecar (catalog, index catalog, registries, statistics) with
+/// the durable replacement protocol. `site` names it for fault injection
+/// and failure reports; `policy` says which failures fence the database
+/// (`docs/durability-failure-handling.md`, section 7).
 fn write_sidecar(
     path: &Path,
     kind: FrameKind,
     bytes: &[u8],
     fsync: bool,
     encryption: &EncryptionRuntime,
+    site: &str,
+    policy: storage::FailClosed<'_>,
 ) -> Result<()> {
-    if encryption.bound_object_cipher().is_some() {
-        storage::write_frame_atomic(path, kind, bytes, fsync, encryption)
+    let contents = if encryption.bound_object_cipher().is_some() {
+        storage::ReplaceContents::Framed {
+            kind,
+            payload: bytes,
+            encryption,
+        }
     } else {
-        storage::write_atomic(path, bytes, fsync)
-    }
+        storage::ReplaceContents::Plain(bytes)
+    };
+    storage::replace_durably(path, contents, fsync, site, policy)
 }
 
 fn graph_projection_path_for(path: &Path, projection: &str) -> PathBuf {

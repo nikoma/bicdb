@@ -1,0 +1,27 @@
+{
+  "label": "d",
+  "mode": "plain",
+  "server_env_extra": {
+    "BICDB_PAGED_COMMIT_SYNC_OUTSIDE_LOCK": "1",
+    "BICDB_PAGED_WAL_SYNC_UNLOCKED": "1"
+  },
+  "n": 200,
+  "startup_s": 3.0,
+  "update": {
+    "commit_ms_p50": 27.4,
+    "p95": 33.41,
+    "p99": 41.94,
+    "max": 56.31,
+    "mean": 28.41,
+    "exec_ms_p50": 1.64
+  },
+  "insert": {
+    "commit_ms_p50": 27.42,
+    "p95": 34.42,
+    "p99": 40.37,
+    "max": 45.23,
+    "mean": 28.33,
+    "exec_ms_p50": 0.7
+  },
+  "database_removed": true
+}

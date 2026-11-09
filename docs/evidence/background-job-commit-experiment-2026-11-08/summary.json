@@ -1,0 +1,241 @@
+{
+  "format": 1,
+  "diagnostic_only": true,
+  "application_qualified": false,
+  "production_promotion": false,
+  "full_batch_runs": 70,
+  "junit_records_crosschecked": 70,
+  "target_tests_passed": 0,
+  "target_tests_failed": 70,
+  "other_invocations_passed": 6615,
+  "summary": [
+    {
+      "variant": "a",
+      "plan": "remaining-08",
+      "runs": 5,
+      "passes": 0,
+      "source_commit": "decb9d02dbd753b6d13163dd8a2cf99d57c5c8f1",
+      "binary_sha256": "34b3b120a5290ba252214930fc9ec4c75bd4ee2013f2011046f9f685bee86b19",
+      "medians": {
+        "test_time_s": 11.38,
+        "job_censored_after_s": 10.798,
+        "window_statement_ms_sum": 7074,
+        "window_commit_throughput_per_s": 13.3,
+        "commit_n": 146,
+        "commit_p50": 31,
+        "commit_p95": 38,
+        "commit_p99": 48,
+        "commit_sum_ms": 4497
+      }
+    },
+    {
+      "variant": "a",
+      "plan": "remaining-14",
+      "runs": 5,
+      "passes": 0,
+      "source_commit": "decb9d02dbd753b6d13163dd8a2cf99d57c5c8f1",
+      "binary_sha256": "34b3b120a5290ba252214930fc9ec4c75bd4ee2013f2011046f9f685bee86b19",
+      "medians": {
+        "test_time_s": 10.338,
+        "job_censored_after_s": 10.065,
+        "window_statement_ms_sum": 6845,
+        "window_commit_throughput_per_s": 12.92,
+        "commit_n": 130,
+        "commit_p50": 32,
+        "commit_p95": 60,
+        "commit_p99": 66,
+        "commit_sum_ms": 4789
+      }
+    },
+    {
+      "variant": "a2",
+      "plan": "remaining-08",
+      "runs": 10,
+      "passes": 0,
+      "source_commit": "3f3f9a781030b895e068cfdfdbf7a19fb507aa94",
+      "binary_sha256": "8c791626574d3ef0e7fd8e8c09e83c17233f02fb5b735308b3b06cdb921209ab",
+      "medians": {
+        "test_time_s": 11.067,
+        "job_censored_after_s": 10.476,
+        "window_statement_ms_sum": 6617.0,
+        "window_commit_throughput_per_s": 13.76,
+        "commit_n": 144.0,
+        "commit_p50": 31.0,
+        "commit_p95": 38.5,
+        "commit_p99": 49.5,
+        "commit_sum_ms": 4370.0
+      }
+    },
+    {
+      "variant": "a2",
+      "plan": "remaining-14",
+      "runs": 10,
+      "passes": 0,
+      "source_commit": "3f3f9a781030b895e068cfdfdbf7a19fb507aa94",
+      "binary_sha256": "8c791626574d3ef0e7fd8e8c09e83c17233f02fb5b735308b3b06cdb921209ab",
+      "medians": {
+        "test_time_s": 10.323,
+        "job_censored_after_s": 10.079,
+        "window_statement_ms_sum": 6622.0,
+        "window_commit_throughput_per_s": 14.375,
+        "commit_n": 145.0,
+        "commit_p50": 31.0,
+        "commit_p95": 49.5,
+        "commit_p99": 62.0,
+        "commit_sum_ms": 4583.0
+      }
+    },
+    {
+      "variant": "b",
+      "plan": "remaining-08",
+      "runs": 5,
+      "passes": 0,
+      "source_commit": "49d0464fbce5c1f4b4e4a9055920aabee6d39fae",
+      "binary_sha256": "caadd94276199003ba0a880883da4592a075f6f57b8d4cdba92e33ccca9c2c62",
+      "medians": {
+        "test_time_s": 11.058,
+        "job_censored_after_s": 10.439,
+        "window_statement_ms_sum": 6655,
+        "window_commit_throughput_per_s": 12.84,
+        "commit_n": 134,
+        "commit_p50": 32,
+        "commit_p95": 43,
+        "commit_p99": 59,
+        "commit_sum_ms": 4463
+      }
+    },
+    {
+      "variant": "b",
+      "plan": "remaining-14",
+      "runs": 5,
+      "passes": 0,
+      "source_commit": "49d0464fbce5c1f4b4e4a9055920aabee6d39fae",
+      "binary_sha256": "caadd94276199003ba0a880883da4592a075f6f57b8d4cdba92e33ccca9c2c62",
+      "medians": {
+        "test_time_s": 10.323,
+        "job_censored_after_s": 10.068,
+        "window_statement_ms_sum": 6810,
+        "window_commit_throughput_per_s": 13.21,
+        "commit_n": 133,
+        "commit_p50": 31,
+        "commit_p95": 59,
+        "commit_p99": 67,
+        "commit_sum_ms": 4739
+      }
+    },
+    {
+      "variant": "c",
+      "plan": "remaining-08",
+      "runs": 5,
+      "passes": 0,
+      "source_commit": "e505e80f27a2f23e6738338793f8182d563d7112",
+      "binary_sha256": "91831718fa321764039ffe4a13e07951435e600a3b1dc7e055603f7c8a7aab8a",
+      "medians": {
+        "test_time_s": 10.999,
+        "job_censored_after_s": 10.422,
+        "window_statement_ms_sum": 6541,
+        "window_commit_throughput_per_s": 13.82,
+        "commit_n": 144,
+        "commit_p50": 31,
+        "commit_p95": 39,
+        "commit_p99": 51,
+        "commit_sum_ms": 4353
+      }
+    },
+    {
+      "variant": "c",
+      "plan": "remaining-14",
+      "runs": 5,
+      "passes": 0,
+      "source_commit": "e505e80f27a2f23e6738338793f8182d563d7112",
+      "binary_sha256": "91831718fa321764039ffe4a13e07951435e600a3b1dc7e055603f7c8a7aab8a",
+      "medians": {
+        "test_time_s": 10.316,
+        "job_censored_after_s": 10.066,
+        "window_statement_ms_sum": 6651,
+        "window_commit_throughput_per_s": 14.51,
+        "commit_n": 146,
+        "commit_p50": 30,
+        "commit_p95": 52,
+        "commit_p99": 59,
+        "commit_sum_ms": 4579
+      }
+    },
+    {
+      "variant": "d",
+      "plan": "remaining-08",
+      "runs": 5,
+      "passes": 0,
+      "source_commit": "88c2d473397114fe151bd64246f95f9ba75344fe",
+      "binary_sha256": "047e9cdb24d858b3e235410ddac11ecb6d4043d2d8a6a1acfac6798b3fdc66bc",
+      "medians": {
+        "test_time_s": 11.013,
+        "job_censored_after_s": 10.439,
+        "window_statement_ms_sum": 6603,
+        "window_commit_throughput_per_s": 13.6,
+        "commit_n": 144,
+        "commit_p50": 31,
+        "commit_p95": 39,
+        "commit_p99": 44,
+        "commit_sum_ms": 4366
+      }
+    },
+    {
+      "variant": "d",
+      "plan": "remaining-14",
+      "runs": 5,
+      "passes": 0,
+      "source_commit": "88c2d473397114fe151bd64246f95f9ba75344fe",
+      "binary_sha256": "047e9cdb24d858b3e235410ddac11ecb6d4043d2d8a6a1acfac6798b3fdc66bc",
+      "medians": {
+        "test_time_s": 10.332,
+        "job_censored_after_s": 10.076,
+        "window_statement_ms_sum": 6611,
+        "window_commit_throughput_per_s": 14.39,
+        "commit_n": 145,
+        "commit_p50": 31,
+        "commit_p95": 51,
+        "commit_p99": 67,
+        "commit_sum_ms": 4599
+      }
+    },
+    {
+      "variant": "e",
+      "plan": "remaining-08",
+      "runs": 5,
+      "passes": 0,
+      "source_commit": "3f3f9a781030b895e068cfdfdbf7a19fb507aa94",
+      "binary_sha256": "8c791626574d3ef0e7fd8e8c09e83c17233f02fb5b735308b3b06cdb921209ab",
+      "medians": {
+        "test_time_s": 10.959,
+        "job_censored_after_s": 10.407,
+        "window_statement_ms_sum": 5291,
+        "window_commit_throughput_per_s": 17.9,
+        "commit_n": 188,
+        "commit_p50": 14,
+        "commit_p95": 20,
+        "commit_p99": 25,
+        "commit_sum_ms": 2806
+      }
+    },
+    {
+      "variant": "e",
+      "plan": "remaining-14",
+      "runs": 5,
+      "passes": 0,
+      "source_commit": "3f3f9a781030b895e068cfdfdbf7a19fb507aa94",
+      "binary_sha256": "8c791626574d3ef0e7fd8e8c09e83c17233f02fb5b735308b3b06cdb921209ab",
+      "medians": {
+        "test_time_s": 10.24,
+        "job_censored_after_s": 10.037,
+        "window_statement_ms_sum": 5254,
+        "window_commit_throughput_per_s": 19.12,
+        "commit_n": 192,
+        "commit_p50": 14,
+        "commit_p95": 20,
+        "commit_p99": 27,
+        "commit_sum_ms": 2830
+      }
+    }
+  ]
+}

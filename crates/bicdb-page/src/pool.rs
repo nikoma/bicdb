@@ -1087,6 +1087,23 @@ impl BufferPool {
         self.no_steal.store(true, Ordering::Release);
     }
 
+    /// Seal one newly allocated, unreachable overflow page. Its next link
+    /// names only an earlier sealed page (the chain is built tail-first).
+    /// No heap tuple or index points to this new page yet, so its own image
+    /// is the entire newly reachable closure. A crash can leak this chain,
+    /// but cannot replace a committed value or expose an uncommitted row.
+    #[cfg(feature = "experimental-structural-cuts")]
+    pub(crate) fn seal_unreachable_overflow_page(&self, page_id: PageId) -> Result<()> {
+        let barrier = self.barrier.lock().clone();
+        let Some(barrier) = barrier else { return Ok(()); };
+        let guard = self.get(page_id)?;
+        let epoch = guard.frame.modifications.load(Ordering::Acquire);
+        barrier.before_writeback(page_id, 0, guard.bytes())?;
+        drop(guard);
+        self.mark_logged(&[(page_id, epoch)]);
+        Ok(())
+    }
+
     /// Attribute subsequently dirtied pages to `transaction`.
     pub fn set_current_transaction(&self, transaction: u64) {
         self.current_transaction

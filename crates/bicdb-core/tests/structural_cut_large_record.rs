@@ -2,7 +2,7 @@
 use bicdb_core::{BicDb, DbConfig, Record, StorageMode};
 use serde_json::json;
 #[test]
-fn an_oversized_value_is_rejected_before_a_logical_decision_and_never_blocks_recovery() {
+fn a_large_logical_value_streams_without_stealing_and_survives_recovery() {
     let root = tempfile::tempdir().unwrap();
     let config = DbConfig::default()
         .with_fsync(true)
@@ -24,14 +24,11 @@ fn an_oversized_value_is_rejected_before_a_logical_decision_and_never_blocks_rec
         Record::new("oversized").with_metadata(json!({"blob": "x".repeat(100_000)})),
     )
     .unwrap();
-    let error = tx
-        .commit()
-        .expect_err("size must be rejected before its logical decision");
-    assert!(error.to_string().contains("does not fit"), "{error}");
+    tx.commit().expect("a logical value larger than the pool reserve must remain supported");
     let mut tx = db.begin_transaction().unwrap();
     tx.insert(
         "rows",
-        Record::new("after-rejection").with_metadata(json!({"v": 2})),
+        Record::new("after-large-value").with_metadata(json!({"v": 2})),
     )
     .unwrap();
     tx.commit().unwrap();
@@ -39,8 +36,9 @@ fn an_oversized_value_is_rejected_before_a_logical_decision_and_never_blocks_rec
     for _ in 0..2 {
         let db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
         assert!(db.get("rows", "acknowledged").unwrap().is_some());
-        assert!(db.get("rows", "after-rejection").unwrap().is_some());
-        assert!(db.get("rows", "oversized").unwrap().is_none());
+        assert!(db.get("rows", "after-large-value").unwrap().is_some());
+        let large = db.get("rows", "oversized").unwrap().unwrap();
+        assert_eq!(large.metadata["blob"].as_str().unwrap().len(), 100_000);
         db.close().unwrap();
     }
 }

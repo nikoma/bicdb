@@ -104,18 +104,6 @@ impl BicDb {
         prepared: PreparedWal,
         timestamp: i64,
     ) -> Result<Vec<u8>> {
-        // Every decision producer uses this encoder before enqueueing any
-        // durable frame. Reject an oversized prototype value here as well as
-        // at the page API; rejecting only during page apply would strand a
-        // durable logical transaction that recovery could never materialize.
-        #[cfg(feature = "experimental-structural-cuts")]
-        if let Some(paged) = &self.paged_records {
-            for write in writes {
-                if let Some(record) = write.record()? {
-                    paged.validate_record_before_logical_decision(record)?;
-                }
-            }
-        }
         if !self.config.replication.enabled
             && writes.is_empty()
             && broker_publishes.is_empty()

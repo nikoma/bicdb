@@ -106,68 +106,85 @@ async fn schedule(mode: StorageMode, case: Case) {
     task.join().unwrap().unwrap();
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn secondary_unique_pending_winner_is_updated_under_read_committed() {
-    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
-        schedule(mode, Case {
-            schema:"CREATE TABLE arbiter_rows(id INT PRIMARY KEY,k TEXT UNIQUE,v INT)",
-            winner:"INSERT INTO arbiter_rows VALUES(1,'same',20)",
-            upsert:"INSERT INTO arbiter_rows VALUES(2,'same',10) ON CONFLICT(k) DO UPDATE SET v=arbiter_rows.v+EXCLUDED.v RETURNING id,k,v",
-            expected:vec![vec!["1","same","30"]], verify:"SELECT id,k,v FROM arbiter_rows ORDER BY id", final_rows:vec![vec!["1","same","30"]], waits:true,
-        }).await;
+fn secondary() -> Case {
+    Case { schema:"CREATE TABLE arbiter_rows(id INT PRIMARY KEY,k TEXT UNIQUE,v INT)",winner:"INSERT INTO arbiter_rows VALUES(1,'same',20)",upsert:"INSERT INTO arbiter_rows VALUES(2,'same',10) ON CONFLICT(k) DO UPDATE SET v=arbiter_rows.v+EXCLUDED.v RETURNING id,k,v",expected:vec![vec!["1","same","30"]],verify:"SELECT id,k,v FROM arbiter_rows ORDER BY id",final_rows:vec![vec!["1","same","30"]],waits:true }
+}
+fn char_primary() -> Case {
+    Case { schema:"CREATE TABLE arbiter_rows(id CHAR(4) PRIMARY KEY,v INT)",winner:"INSERT INTO arbiter_rows VALUES('ab',20)",upsert:"INSERT INTO arbiter_rows VALUES('ab  ',10) ON CONFLICT(id) DO UPDATE SET v=arbiter_rows.v+EXCLUDED.v RETURNING v",expected:vec![vec!["30"]],verify:"SELECT v FROM arbiter_rows",final_rows:vec![vec!["30"]],waits:true }
+}
+fn numeric_primary() -> Case {
+    Case { schema:"CREATE TABLE arbiter_rows(id NUMERIC(10,2) PRIMARY KEY,v INT)",winner:"INSERT INTO arbiter_rows VALUES(1.0,20)",upsert:"INSERT INTO arbiter_rows VALUES(1.00,10) ON CONFLICT(id) DO UPDATE SET v=arbiter_rows.v+EXCLUDED.v RETURNING v",expected:vec![vec!["30"]],verify:"SELECT v FROM arbiter_rows",final_rows:vec![vec!["30"]],waits:true }
+}
+fn nulls_distinct() -> Case {
+    Case { schema:"CREATE TABLE arbiter_rows(id INT PRIMARY KEY,k TEXT UNIQUE,v INT)",winner:"INSERT INTO arbiter_rows VALUES(1,NULL,20)",upsert:"INSERT INTO arbiter_rows VALUES(2,NULL,10) ON CONFLICT(k) DO UPDATE SET v=arbiter_rows.v+EXCLUDED.v RETURNING id,v",expected:vec![vec!["2","10"]],verify:"SELECT id,v FROM arbiter_rows ORDER BY id",final_rows:vec![vec!["1","20"],vec!["2","10"]],waits:false }
+}
+fn nulls_not_distinct() -> Case {
+    Case {
+        schema:
+            "CREATE TABLE arbiter_rows(id INT PRIMARY KEY,k TEXT UNIQUE NULLS NOT DISTINCT,v INT)",
+        expected: vec![vec!["1", "30"]],
+        final_rows: vec![vec!["1", "30"]],
+        waits: true,
+        ..nulls_distinct()
     }
 }
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn typed_primary_pending_winner_is_updated_under_read_committed() {
-    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
-        for (schema,winner,upsert) in [
-            ("CREATE TABLE arbiter_rows(id CHAR(4) PRIMARY KEY,v INT)","INSERT INTO arbiter_rows VALUES('ab',20)","INSERT INTO arbiter_rows VALUES('ab  ',10) ON CONFLICT(id) DO UPDATE SET v=arbiter_rows.v+EXCLUDED.v RETURNING v"),
-            ("CREATE TABLE arbiter_rows(id NUMERIC(10,2) PRIMARY KEY,v INT)","INSERT INTO arbiter_rows VALUES(1.0,20)","INSERT INTO arbiter_rows VALUES(1.00,10) ON CONFLICT(id) DO UPDATE SET v=arbiter_rows.v+EXCLUDED.v RETURNING v"),
-        ] {
-            schedule(mode.clone(), Case { schema,winner,upsert,expected:vec![vec!["30"]],verify:"SELECT v FROM arbiter_rows",final_rows:vec![vec!["30"]],waits:true }).await;
+fn key_deleted() -> Case {
+    Case { schema:"CREATE TABLE arbiter_rows(id INT PRIMARY KEY,k TEXT UNIQUE,v INT); INSERT INTO arbiter_rows VALUES(1,'same',20)",winner:"DELETE FROM arbiter_rows WHERE id=1",expected:vec![vec!["2","same","10"]],final_rows:vec![vec!["2","same","10"]],..secondary() }
+}
+fn key_moved() -> Case {
+    Case {
+        winner: "UPDATE arbiter_rows SET k='other' WHERE id=1",
+        final_rows: vec![vec!["1", "other", "20"], vec!["2", "same", "10"]],
+        ..key_deleted()
+    }
+}
+macro_rules! arbiter_test {
+    ($name:ident,$mode:expr,$case:ident) => {
+        #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+        async fn $name() {
+            schedule($mode, $case()).await;
         }
-    }
+    };
 }
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn unique_nulls_not_distinct_waits_but_distinct_nulls_do_not() {
-    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
-        for (constraint, waits, expected, final_rows) in [
-            (
-                "UNIQUE NULLS NOT DISTINCT",
-                true,
-                vec![vec!["1", "30"]],
-                vec![vec!["1", "30"]],
-            ),
-            (
-                "UNIQUE",
-                false,
-                vec![vec!["2", "10"]],
-                vec![vec!["1", "20"], vec!["2", "10"]],
-            ),
-        ] {
-            let schema: &'static str = if constraint == "UNIQUE" {
-                "CREATE TABLE arbiter_rows(id INT PRIMARY KEY,k TEXT UNIQUE,v INT)"
-            } else {
-                "CREATE TABLE arbiter_rows(id INT PRIMARY KEY,k TEXT UNIQUE NULLS NOT DISTINCT,v INT)"
-            };
-            schedule(mode.clone(), Case { schema,winner:"INSERT INTO arbiter_rows VALUES(1,NULL,20)",upsert:"INSERT INTO arbiter_rows VALUES(2,NULL,10) ON CONFLICT(k) DO UPDATE SET v=arbiter_rows.v+EXCLUDED.v RETURNING id,v",expected,verify:"SELECT id,v FROM arbiter_rows ORDER BY id",final_rows,waits }).await;
-        }
-    }
-}
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn secondary_unique_key_vacated_by_waited_delete_or_move_inserts_new_identity() {
-    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
-        for (winner, final_rows) in [
-            (
-                "DELETE FROM arbiter_rows WHERE id=1",
-                vec![vec!["2", "same", "10"]],
-            ),
-            (
-                "UPDATE arbiter_rows SET k='other' WHERE id=1",
-                vec![vec!["1", "other", "20"], vec!["2", "same", "10"]],
-            ),
-        ] {
-            schedule(mode.clone(), Case { schema:"CREATE TABLE arbiter_rows(id INT PRIMARY KEY,k TEXT UNIQUE,v INT); INSERT INTO arbiter_rows VALUES(1,'same',20)",winner,upsert:"INSERT INTO arbiter_rows VALUES(2,'same',10) ON CONFLICT(k) DO UPDATE SET v=arbiter_rows.v+EXCLUDED.v RETURNING id,k,v",expected:vec![vec!["2","same","10"]],verify:"SELECT id,k,v FROM arbiter_rows ORDER BY id",final_rows,waits:true }).await;
-        }
-    }
-}
+arbiter_test!(secondary_memory, StorageMode::EmbeddedMemory, secondary);
+arbiter_test!(secondary_paged, StorageMode::ServerPaged, secondary);
+arbiter_test!(
+    char_primary_memory,
+    StorageMode::EmbeddedMemory,
+    char_primary
+);
+arbiter_test!(char_primary_paged, StorageMode::ServerPaged, char_primary);
+arbiter_test!(
+    numeric_primary_memory,
+    StorageMode::EmbeddedMemory,
+    numeric_primary
+);
+arbiter_test!(
+    numeric_primary_paged,
+    StorageMode::ServerPaged,
+    numeric_primary
+);
+arbiter_test!(
+    nulls_distinct_memory,
+    StorageMode::EmbeddedMemory,
+    nulls_distinct
+);
+arbiter_test!(
+    nulls_distinct_paged,
+    StorageMode::ServerPaged,
+    nulls_distinct
+);
+arbiter_test!(
+    nulls_not_distinct_memory,
+    StorageMode::EmbeddedMemory,
+    nulls_not_distinct
+);
+arbiter_test!(
+    nulls_not_distinct_paged,
+    StorageMode::ServerPaged,
+    nulls_not_distinct
+);
+arbiter_test!(key_deleted_memory, StorageMode::EmbeddedMemory, key_deleted);
+arbiter_test!(key_deleted_paged, StorageMode::ServerPaged, key_deleted);
+arbiter_test!(key_moved_memory, StorageMode::EmbeddedMemory, key_moved);
+arbiter_test!(key_moved_paged, StorageMode::ServerPaged, key_moved);

@@ -3456,6 +3456,10 @@ impl<'db> SqlEngine<'db> {
     /// base table of that name. Unknown columns stay `None`; the binder then
     /// leaves their comparisons to the typed row evaluator.
     pub(crate) fn slot_column_types(&self, columns: &[String]) -> Arc<[Option<String>]> {
+        // Resolve a layout's types against one shared definition per table.
+        // Keep this scope inside metadata lookup: row expressions and policy
+        // subqueries must execute after it drops so their visibility is fresh.
+        let _schema_cache = SqlSchemaCacheScope::new();
         columns
             .iter()
             .map(|column| self.slot_column_type(column))

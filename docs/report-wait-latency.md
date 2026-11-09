@@ -89,3 +89,21 @@ the complete table definition. This follow-up does not change transaction
 durability or the original application assertions and ten-second waits. Earlier
 7dbfc8b1 qualification belongs to that binary; the follow-up requires its own
 source-pinned checks and application result.
+
+Three further cold controls of the same 7dbfc8b1 binary on the S3 validation host
+pass all eight original methods each time. The complete report methods take
+7.903, 8.375 and 8.457 seconds; the audit methods take 1.719, 1.561 and 1.683
+seconds. Original test bytecode and the 10,000 ms waits are unchanged. A separate
+three-barrier durability control measures a median 26.6685 ms on the original
+host and 1.2096 ms on S3. These results establish a host-dependent deadline
+outcome, not a universal latency guarantee. The original host failures remain
+valid evidence. An initial S3 run failed because a font library was missing;
+that failed run is retained separately from the three repaired-environment runs.
+
+The PostgreSQL seed import also exposes repeated table-definition decoding in
+row-slot type resolution. Each column of one layout loads the same definition
+when the caller has no metadata scope. Type resolution now creates a scope
+around those pure metadata lookups only. It ends before evaluating row
+expressions or policy subqueries. The regression measures one decode for a
+32-column layout in both storage modes and checks schema visibility across DDL
+and rollback. Original COPY input and constraint assertions remain unchanged.

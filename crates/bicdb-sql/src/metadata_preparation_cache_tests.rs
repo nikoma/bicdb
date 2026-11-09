@@ -31,6 +31,44 @@ fn measured<T>(operation: impl FnOnce() -> T) -> (T, SqlProfileStats) {
 }
 
 #[test]
+fn metadata_preparation_row_slots_decode_each_table_once_and_refresh_after_ddl() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let (_root, mut db, bytes) = fixture(mode);
+        let columns = (0..32)
+            .map(|n| format!("prep_rows.c{n}"))
+            .collect::<Vec<_>>();
+        let (types, stats) = measured(|| SqlEngine::new(&db).slot_column_types(&columns));
+        assert_eq!(types.as_ref(), vec![Some("int4".to_string()); 32]);
+        assert!(
+            stats.schema_load_bytes <= bytes,
+            "{stats:?}; one schema is {bytes} bytes"
+        );
+        let extra = vec!["prep_rows.extra".to_string()];
+        assert_eq!(
+            SqlEngine::new(&db).slot_column_types(&extra).as_ref(),
+            [None]
+        );
+        let mut session = SqlSession::new(&mut db);
+        session
+            .execute("BEGIN; ALTER TABLE prep_rows ADD COLUMN extra TEXT")
+            .unwrap();
+        assert_eq!(
+            SqlEngine::new(session.db_ref())
+                .slot_column_types(&extra)
+                .as_ref(),
+            [Some("text".to_string())]
+        );
+        session.execute("ROLLBACK").unwrap();
+        assert_eq!(
+            SqlEngine::new(session.db_ref())
+                .slot_column_types(&extra)
+                .as_ref(),
+            [None]
+        );
+    }
+}
+
+#[test]
 fn metadata_preparation_description_decodes_each_table_once() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let (_root, db, bytes) = fixture(mode);

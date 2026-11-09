@@ -63,6 +63,14 @@ national integration tests. Core code and dependencies are unchanged by these
 startup/dispatch additions. Updated workspace and final-head CI remain separate
 gates; the earlier full SQL run is not an exact test of changed startup code.
 
+Exact-head CI at `8a7d972a` found one real standby startup regression: the
+pgwire library passed 145 tests but failed the original standby session-setting
+test because initialization rewrote an already-present format fence. The fix
+validates an existing fence without a write and retains explicit recovery/
+quiescence checks. Source `17f3f53f` passes the complete pgwire library (146 tests),
+all nine SQL profile/national integrations and locked workspace/all-target
+compilation. No original assertion was changed. Final-head CI is required again.
+
 Qualification is recorded by source revision. The recovered native foundations
 have their own older mapping/publication evidence under
 [oracle-simple-case-v1](evidence/oracle-simple-case-v1/); those results do not

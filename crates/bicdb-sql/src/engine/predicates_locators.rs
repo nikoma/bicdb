@@ -1529,10 +1529,34 @@ impl<'db> SqlEngine<'db> {
             record(kind, &index_name, records.len());
             return Ok(Some(records));
         }
-        // Full-text search is deliberately absent: it has dedicated execution
-        // paths (ranking, interrupted-build handling) outside the row-set
-        // executor, and the row path's scan is the oracle they are tested
-        // against.
+        // Pgwire executes ordinary SELECTs inside a transaction, so the
+        // transaction-free FTS fast paths cannot serve them. Use the same
+        // conservative candidate superset as the planner, then let the caller
+        // recheck the complete predicate (including phrases and tenant filters).
+        // Pending writes and fixed snapshots require the exact scan: current
+        // postings need not contain a transaction's historical term values.
+        if self.tx.is_none_or(|tx| {
+            tx.isolation() == bicdb_core::TransactionIsolation::ReadCommitted
+                && !tx.has_pending_writes(table)
+        }) {
+            if let Some((index, candidate)) =
+                self.full_text_index_candidate(table, alias, schema, selection)?
+            {
+                if self.db_ref().full_text_index_is_ready(&index)? {
+                    // Do not catch budget/cancellation errors and fall back
+                    // to a broader scan. Only an unready index declines.
+                    let ids = self.full_text_candidate_ids(&index, &candidate)?;
+                    sql_profile_index_lookup();
+                    let records = self.records_for_ids_with_schema(
+                        table,
+                        &ids.into_iter().collect::<Vec<_>>(),
+                        schema,
+                    )?;
+                    record("FullTextIndexScan", &index, records.len());
+                    return Ok(Some(records));
+                }
+            }
+        }
         Ok(None)
     }
 

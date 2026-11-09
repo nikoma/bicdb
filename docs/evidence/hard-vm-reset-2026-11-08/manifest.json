@@ -124,7 +124,7 @@
   "runs/campaign-1794203435/recoveries.jsonl.gz": "adea0bd59fd0de38820a573396e75ca120b482564a7473f4ecf28d56073fda40",
   "runs/campaign-1794203435/resets.jsonl.gz": "65c88a06afedd0a7b0dea5ba8cea28bd8bfc6d7fe5524e5498ab03c7d988fe29",
   "runs/campaign-1794203435/result.json": "e6082b5e1c0a0980835fe37a32978d160ec59d9094233945845f0c3b23373d20",
-  "runs/campaign-1794203435/terminal-server.log": "f7ebe7b626eeb99fd269df3d883a0644ffb3850266eace556fa18bc9895c5f21",
+  "runs/campaign-1794203435/terminal-server.txt": "f7ebe7b626eeb99fd269df3d883a0644ffb3850266eace556fa18bc9895c5f21",
   "runs/campaign-1794203435/tx-identities.jsonl.gz": "6b0a18fcdc26c4b5c6bcb83adb5ea7a2345f8183a05bc747395544c6097fb305",
   "summary.json": "a5dcddd4f92cad16e370d65e8e71846424fd15585db37b1d32f8a2ffa4aca75d"
 }

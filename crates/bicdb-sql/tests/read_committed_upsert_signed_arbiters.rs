@@ -271,11 +271,12 @@ fn signed_native_projection_and_sql_rls_apply_to_the_current_conflict_row() {
     // no protected columns and do not read or mutate this environment key.
     std::env::set_var("BICDB_PROTECTED_FIELD_ENCRYPTION_KEY", "11".repeat(32));
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
-        for (allowed, clear_secret, grant_secret) in [
-            (true, false, false),
-            (false, false, false),
-            (true, true, true),
-            (true, true, false),
+        for (allowed, clear_secret, grant_secret, initial_null) in [
+            (true, false, false, false),
+            (false, false, false, false),
+            (true, true, true, false),
+            (true, true, false, false),
+            (true, true, false, true),
         ] {
             let succeeds = allowed && (!clear_secret || grant_secret);
             let dir = tempfile::tempdir().unwrap();
@@ -328,8 +329,15 @@ fn signed_native_projection_and_sql_rls_apply_to_the_current_conflict_row() {
                     authority,
                 )]));
             session.execute("SET ROLE signed_runtime").unwrap();
+            let initial_secret = if initial_null {
+                "NULL"
+            } else {
+                "'winner-private-secret'"
+            };
             session
-                .execute("INSERT INTO signed_arbiters VALUES('one','t',20,'winner-private-secret')")
+                .execute(&format!(
+                    "INSERT INTO signed_arbiters VALUES('one','t',20,{initial_secret})"
+                ))
                 .unwrap();
             let owner = session.take_pending_transaction().unwrap();
             drop(session);
@@ -410,7 +418,7 @@ fn signed_native_projection_and_sql_rls_apply_to_the_current_conflict_row() {
                 .unwrap();
             assert_eq!(
                 actual.metadata["secret"],
-                if succeeds && clear_secret {
+                if initial_null || succeeds && clear_secret {
                     serde_json::Value::Null
                 } else {
                     serde_json::json!("winner-private-secret")

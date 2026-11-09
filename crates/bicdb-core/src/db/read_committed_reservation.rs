@@ -304,8 +304,22 @@ impl Transaction {
         token: ReadCommittedRowReservation,
         record: Record,
     ) -> Result<()> {
+        self.upsert_reserved_with_grant_columns(grant, token, record, &[])
+    }
+
+    /// Apply explicit metadata assignments even when their requested value equals
+    /// its masked projection (for example, SET secret=NULL). Every named column
+    /// must be authorized by the actual grant, including unchanged assignments.
+    /// Unassigned hidden fields remain private and unchanged.
+    pub fn upsert_reserved_with_grant_columns(
+        &mut self,
+        grant: MutationGrantId,
+        token: ReadCommittedRowReservation,
+        record: Record,
+        explicit_columns: &[String],
+    ) -> Result<()> {
         self.db_ref().check_recovery_state()?;
-        let result = self.upsert_reserved_with_grant_inner(grant, token, record);
+        let result = self.upsert_reserved_with_grant_inner(grant, token, record, explicit_columns);
         self.fenced(result)
     }
 
@@ -314,8 +328,23 @@ impl Transaction {
         grant: MutationGrantId,
         token: ReadCommittedRowReservation,
         mut record: Record,
+        explicit_columns: &[String],
     ) -> Result<()> {
         self.validate_row_reservation(&token)?;
+        if !explicit_columns.is_empty() {
+            let authority = self.mutation_grants.get(&grant).ok_or_else(|| {
+                BicDbError::MutationDenied("unknown or consumed MutationGrant".into())
+            })?;
+            let denied: Vec<_> = explicit_columns
+                .iter()
+                .filter(|column| !authority.spec.allowed_columns.contains(column.as_str()))
+                .collect();
+            if !denied.is_empty() {
+                return Err(BicDbError::MutationDenied(format!(
+                    "MutationGrant does not allow columns {denied:?}"
+                )));
+            }
+        }
         if record.id != token.id {
             return Err(BicDbError::TransactionConflict(
                 "reserved row identity differs from mutation".into(),
@@ -345,13 +374,15 @@ impl Transaction {
                 .flatten()
                 .map(|(field, _)| field)
                 .chain(new.into_iter().flatten().map(|(field, _)| field))
+                .chain(explicit_columns.iter())
                 .collect();
             let metadata = merged.metadata.as_object_mut().ok_or_else(|| {
                 BicDbError::CommitValidation("reserved row metadata is not an object".into())
             })?;
             for field in fields {
-                if old.and_then(|values| values.get(field))
-                    != new.and_then(|values| values.get(field))
+                if explicit_columns.contains(field)
+                    || old.and_then(|values| values.get(field))
+                        != new.and_then(|values| values.get(field))
                 {
                     match new.and_then(|values| values.get(field)) {
                         Some(value) => {

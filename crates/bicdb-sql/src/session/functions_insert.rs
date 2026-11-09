@@ -1554,6 +1554,7 @@ impl<'db> SqlSession<'db> {
                         self.enforce_rls_conflict_check(table, schema, &existing)?;
 
                         let mut updated = existing.clone();
+                        let mut assigned_columns = Vec::with_capacity(update.assignments.len());
                         for assignment in &update.assignments {
                             let AssignmentTarget::ColumnName(column_name) = &assignment.target
                             else {
@@ -1575,6 +1576,7 @@ impl<'db> SqlSession<'db> {
                                     "column \"{column}\" can only be updated to DEFAULT"
                                 )));
                             }
+                            assigned_columns.push(column.clone());
                             let mut value =
                                 row_engine.eval_row_value(&update_row, &assignment.value)?;
                             if schema
@@ -1637,6 +1639,7 @@ impl<'db> SqlSession<'db> {
                                 table,
                                 reservation,
                                 updated.clone(),
+                                &assigned_columns,
                             )?;
                         } else {
                             self.insert_session_records_with_statement_snapshots(
@@ -1673,7 +1676,7 @@ impl<'db> SqlSession<'db> {
             }
             let inserted = match conflict_reservation {
                 Some(reservation) => {
-                    self.insert_reserved_session_record(table, reservation, record.clone())
+                    self.insert_reserved_session_record(table, reservation, record.clone(), &[])
                 }
                 None => self.insert_session_records(table, vec![record.clone()]),
             };

@@ -1962,6 +1962,7 @@ impl<'db> SqlSession<'db> {
         table: &str,
         reservation: bicdb_core::ReadCommittedRowReservation,
         mut record: Record,
+        explicit_columns: &[String],
     ) -> Result<()> {
         let grant = self.signed_mutation_grant(table).ok_or_else(|| {
             SqlError::BicDb(BicDbError::Authorization(
@@ -1974,7 +1975,7 @@ impl<'db> SqlSession<'db> {
         self.tx
             .as_mut()
             .ok_or_else(|| SqlError::BicDb(BicDbError::TransactionNotPending))?
-            .upsert_reserved_with_grant(grant, reservation, record)?;
+            .upsert_reserved_with_grant_columns(grant, reservation, record, explicit_columns)?;
         sql_profile_write_elapsed(started);
         sql_profile_write_batch(1);
         self.record_blob_writes(events)

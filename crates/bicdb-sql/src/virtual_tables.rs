@@ -3105,7 +3105,10 @@ pub(crate) fn index_field_from_expr_for_schema(
             return coalesce_index_field(expr, function, Some(schema))
                 .or_else(|error| first_non_null_index_field(schema, function).ok_or(error))
         }
-        Expr::Function(function) if function_name_is(function, "upper") => {
+        Expr::Function(function)
+            if function_name_is(function, "upper")
+                || function_name_is(function, "bicdb_oracle_national_upper_v1") =>
+        {
             let Some(args) = positional_function_args(&function.args) else {
                 return Err(SqlError::Unsupported(
                     "upper index expression requires positional arguments".to_string(),
@@ -3117,11 +3120,15 @@ pub(crate) fn index_field_from_expr_for_schema(
                     args.len()
                 )));
             }
-            return Ok(oracle::simple_case::upper_field(
+            return Ok(oracle::simple_case::upper_field_for_schema(
+                schema,
                 index_field_from_expr_for_schema(schema, args[0])?,
             ));
         }
-        Expr::Function(function) if function_name_is(function, "lower") => {
+        Expr::Function(function)
+            if function_name_is(function, "lower")
+                || function_name_is(function, "bicdb_oracle_national_lower_v1") =>
+        {
             let Some(args) = positional_function_args(&function.args) else {
                 return Err(SqlError::Unsupported(
                     "lower index expression requires positional arguments".to_string(),
@@ -3133,7 +3140,8 @@ pub(crate) fn index_field_from_expr_for_schema(
                     args.len()
                 )));
             }
-            return Ok(oracle::simple_case::lower_field(
+            return Ok(oracle::simple_case::lower_field_for_schema(
+                schema,
                 index_field_from_expr_for_schema(schema, args[0])?,
             ));
         }

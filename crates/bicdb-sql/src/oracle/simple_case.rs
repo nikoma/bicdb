@@ -77,3 +77,18 @@ pub(crate) fn lower_field(field: IndexField) -> IndexField {
         IndexField::Lower(Box::new(field))
     }
 }
+
+pub(crate) fn upper_field_for_schema(schema: &TableSchema, field: IndexField) -> IndexField {
+    if enabled() && super::simple_case_migration::national_field(Some(schema), &field) {
+        IndexField::OracleUpperNationalV1(Box::new(field))
+    } else {
+        upper_field(field)
+    }
+}
+pub(crate) fn lower_field_for_schema(schema: &TableSchema, field: IndexField) -> IndexField {
+    if enabled() && super::simple_case_migration::national_field(Some(schema), &field) {
+        IndexField::OracleLowerNationalV1(Box::new(field))
+    } else {
+        lower_field(field)
+    }
+}

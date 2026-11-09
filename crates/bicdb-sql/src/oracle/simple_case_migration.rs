@@ -16,7 +16,7 @@ struct Intent {
     shadow: IndexDefinition,
 }
 
-fn national(schema: Option<&TableSchema>, field: &IndexField) -> bool {
+pub(super) fn national_field(schema: Option<&TableSchema>, field: &IndexField) -> bool {
     match field {
         IndexField::MetadataPath(path) if path.len() == 1 => schema.is_some_and(|schema| {
             schema.columns.iter().any(|column| {
@@ -31,13 +31,15 @@ fn national(schema: Option<&TableSchema>, field: &IndexField) -> bool {
         IndexField::Lower(inner)
         | IndexField::Upper(inner)
         | IndexField::Trim(inner)
-        | IndexField::Coalesce { field: inner, .. } => national(schema, inner),
-        IndexField::FirstNonNull(fields) => fields.iter().any(|field| national(schema, field)),
+        | IndexField::Coalesce { field: inner, .. } => national_field(schema, inner),
+        IndexField::FirstNonNull(fields) => {
+            fields.iter().any(|field| national_field(schema, field))
+        }
         _ => false,
     }
 }
 fn convert_field(schema: Option<&TableSchema>, field: &mut IndexField) {
-    let is_national = national(schema, field);
+    let is_national = national_field(schema, field);
     match field {
         IndexField::Upper(inner) => {
             convert_field(schema, inner);

@@ -1641,6 +1641,7 @@ impl BufferPool {
                     if shard.resident.len() + shard.loading.len() < shard.capacity + 1 {
                         return Ok(Arc::new(RwLock::new(vec![0; self.page_size as usize])));
                     }
+                    eprintln!("TEMP class={class:?} wanted={wanted} probationary={:?} protected={:?} streaming={:?} metadata={:?} resident={:?}", shard.probationary, shard.protected, shard.streaming, shard.metadata, shard.resident.iter().map(|(id,f)|(*id,f.pins.load(Ordering::Acquire),f.needs_log.load(Ordering::Acquire),f.data.try_read().map(|b|b[6]))).collect::<Vec<_>>());
                     return Err(PageError::PoolExhausted {
                         page_id: wanted,
                         frames: shard.capacity + 1,

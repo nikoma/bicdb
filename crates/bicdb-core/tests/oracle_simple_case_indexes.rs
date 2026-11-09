@@ -75,6 +75,9 @@ fn unicode_and_legacy_keys_stay_distinct_through_backfill_mutation_rollback_and_
             .unwrap()
             .iter()
             .any(|v| v == "oracle_simple_case_v1"));
+        if db.is_server_paged() {
+            capture_old_reader_fixture(root.path());
+        }
         db.drop_index("unicode").unwrap();
         db.flush().unwrap();
         drop(db);
@@ -153,4 +156,39 @@ fn partial_predicate_case_mapping_alone_requires_the_sticky_reader_fence() {
             .iter()
             .any(|v| v == "oracle_simple_case_v1"));
     }
+}
+
+// Optional external-binary qualification artifact. Never enabled in ordinary CI.
+// Keep raw generated identity material outside repository evidence.
+fn capture_old_reader_fixture(source: &std::path::Path) {
+    let Some(destination) = std::env::var_os("BICDB_ORACLE_CASE_OLD_READER_FIXTURE") else {
+        return;
+    };
+    let destination = std::path::PathBuf::from(destination);
+    assert_eq!(
+        destination.parent(),
+        Some(std::path::Path::new(
+            "/root/bicdb-durability-s3/oracle-case-oldreader-proof"
+        ))
+    );
+    assert!(
+        !destination.exists(),
+        "refuse to replace an existing proof artifact"
+    );
+    fn copy(source: &std::path::Path, destination: &std::path::Path) {
+        std::fs::create_dir(destination).unwrap();
+        for entry in std::fs::read_dir(source).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            let target = destination.join(entry.file_name());
+            let metadata = std::fs::symlink_metadata(&path).unwrap();
+            assert!(!metadata.file_type().is_symlink());
+            if metadata.is_dir() {
+                copy(&path, &target);
+            } else {
+                std::fs::copy(&path, &target).unwrap();
+            }
+        }
+    }
+    copy(source, &destination);
 }

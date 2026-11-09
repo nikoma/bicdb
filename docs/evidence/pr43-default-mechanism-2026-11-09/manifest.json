@@ -1,0 +1,16 @@
+{
+  "test_source": "afd800e4",
+  "source_version": "1.0.439-beta",
+  "passed": 1,
+  "failed": 0,
+  "ignored": 0,
+  "read_evictions": 554,
+  "append_horizon_before": 740,
+  "append_horizon_after": 740,
+  "files": {
+    "README.md": "be2210f8ab1fc70c799d84cc93ccd7ec9a9c28c11389ace1e1a9e629c278816c",
+    "run.log": "9e457d9c80ec9ee084d67e5af447bf334be3b6d9483d5ea6f6f411c1e90651e3",
+    "test-only.patch": "e8fc2ce9bd5d2056c76336b377ea34546cf8f3d1af465025ae7c0fcf0b49ea90"
+  },
+  "default_candidate_source": "68f2a664"
+}

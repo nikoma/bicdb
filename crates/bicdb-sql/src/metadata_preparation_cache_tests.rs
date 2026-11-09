@@ -264,3 +264,84 @@ fn metadata_preparation_connection_cache_recovers_after_error_and_panic() {
         .unwrap();
     assert_eq!(columns.len(), 32);
 }
+
+fn deferred_cache_fixture(mode: StorageMode) -> (tempfile::TempDir, BicDb) {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open_with_config(
+        root.path(),
+        bicdb_core::DbConfig::default()
+            .with_storage_mode(mode)
+            .with_fsync(false),
+    )
+    .unwrap();
+    SqlSession::new(&mut db)
+        .execute(
+            "CREATE TABLE cache_parent(id INT PRIMARY KEY);
+        CREATE TABLE cache_child(id INT PRIMARY KEY,parent_id INT,
+            FOREIGN KEY(parent_id) REFERENCES cache_parent(id) DEFERRABLE INITIALLY DEFERRED);
+        INSERT INTO cache_parent VALUES(1)",
+        )
+        .unwrap();
+    (root, db)
+}
+
+#[test]
+fn deferred_commit_schema_cache_reuses_warmed_connection_metadata() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let (_root, db) = deferred_cache_fixture(mode);
+        let mut cache = SqlSessionCatalogCache::default();
+        for id in 1..=2 {
+            let tx = db.begin_transaction().unwrap();
+            let mut session = SqlSession::new_shared(&db)
+                .with_catalog_cache(cache)
+                .with_pending_transaction(tx)
+                .with_deferred_commit();
+            session
+                .execute(&format!("INSERT INTO cache_child VALUES({id},1)"))
+                .unwrap();
+            let (result, stats) = measured(|| session.fire_deferred_row_triggers());
+            result.unwrap();
+            let tx = session.take_pending_transaction().unwrap();
+            cache = session.into_catalog_cache();
+            tx.commit().unwrap();
+            if id == 2 {
+                assert_eq!(
+                    stats.schema_load_bytes, 0,
+                    "{stats:?}; deferred checks should reuse connection metadata"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn deferred_commit_schema_cache_preserves_missing_parent_error_and_rollback() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let (_root, db) = deferred_cache_fixture(mode);
+        let mut cache = SqlSessionCatalogCache::default();
+        for (id, parent) in [(1, 999), (2, 1)] {
+            let tx = db.begin_transaction().unwrap();
+            let mut session = SqlSession::new_shared(&db)
+                .with_catalog_cache(cache)
+                .with_pending_transaction(tx)
+                .with_deferred_commit();
+            session
+                .execute(&format!("INSERT INTO cache_child VALUES({id},{parent})"))
+                .unwrap();
+            let result = session.fire_deferred_row_triggers();
+            let tx = session.take_pending_transaction().unwrap();
+            cache = session.into_catalog_cache();
+            if parent == 999 {
+                assert_eq!(result.unwrap_err().sqlstate(), "23503");
+                tx.rollback().unwrap();
+            } else {
+                result.unwrap();
+                tx.commit().unwrap();
+            }
+        }
+        let rows = SqlSession::new_shared(&db)
+            .execute("SELECT id FROM cache_child ORDER BY id")
+            .unwrap();
+        assert_eq!(rows.rows, vec![vec![SqlValue::Int(2)]]);
+    }
+}

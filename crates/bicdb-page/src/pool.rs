@@ -1638,6 +1638,7 @@ impl BufferPool {
                     if shard.resident.len() + shard.loading.len() < shard.capacity + 1 {
                         return Ok(Arc::new(RwLock::new(vec![0; self.page_size as usize])));
                     }
+                    eprintln!("TEMP structural pressure wanted={wanted} resident={:?}", shard.resident.iter().map(|(id, frame)| (*id, frame.pins.load(Ordering::Acquire), frame.needs_log.load(Ordering::Acquire), frame.data.try_read().map(|bytes| bytes[6]))).collect::<Vec<_>>());
                     return Err(PageError::PoolExhausted {
                         page_id: wanted,
                         frames: shard.capacity + 1,

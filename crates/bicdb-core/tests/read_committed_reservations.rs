@@ -367,3 +367,44 @@ fn concurrent_fence_overrides_stale_token_error_after_validation_entry() {
         );
     }
 }
+
+#[test]
+fn releasing_unrelated_read_locks_preserves_an_existing_row_capability() {
+    let (_dir, db) = setup(StorageMode::ServerPaged, true);
+    let mut tx = db.begin_application_transaction(actor()).unwrap();
+    let grant = tx
+        .issue_mutation_grant(grant(MutationOperation::Update))
+        .unwrap();
+    let retained = tx
+        .reserve_authorized_read_committed_row("rows", "one", None)
+        .unwrap();
+    let mark = tx.rollback_mark();
+    let released = tx
+        .reserve_authorized_read_committed_row("rows", "other", None)
+        .unwrap();
+    tx.release_read_locks_since(mark).unwrap();
+    let mut current = tx
+        .read_authorized_reserved_row(&retained)
+        .expect("unrelated read-lock release must preserve the retained capability")
+        .unwrap()
+        .as_ref()
+        .clone();
+    assert!(matches!(
+        tx.read_authorized_reserved_row(&released),
+        Err(BicDbError::TransactionConflict(_))
+    ));
+    let _reacquired = tx
+        .reserve_authorized_read_committed_row("rows", "other", None)
+        .unwrap();
+    assert!(
+        matches!(
+            tx.read_authorized_reserved_row(&released),
+            Err(BicDbError::TransactionConflict(_))
+        ),
+        "released row capability must stay stale after another acquisition"
+    );
+    current.metadata["v"] = json!(25);
+    tx.upsert_reserved_with_grant(grant, retained, current)
+        .unwrap();
+    tx.commit().unwrap();
+}

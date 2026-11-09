@@ -649,6 +649,11 @@ pub(crate) enum BoundExpr {
         /// Both operands resolve to types whose combination is NUMERIC:
         /// compare by value, so `2` equals `2.000`.
         numeric: bool,
+        /// The comparison PostgreSQL's operator resolution picks for the two
+        /// resolved operand types (`pg_comparison_kind`); `None` keeps the
+        /// untyped comparison, which the binder only allows for operands
+        /// that are not row columns of unknown type.
+        kind: Option<PgComparisonKind>,
     },
     And(Box<BoundExpr>, Box<BoundExpr>),
     Or(Box<BoundExpr>, Box<BoundExpr>),
@@ -678,6 +683,19 @@ pub(crate) enum BoundExpr {
         name: String,
         args: Vec<BoundExpr>,
     },
+}
+
+/// A literal whose type PostgreSQL leaves unknown until the other operand
+/// decides it (a quoted string, NULL), possibly parenthesized.
+pub(crate) fn is_unknown_literal(expr: &Expr) -> bool {
+    match expr {
+        Expr::Nested(inner) => is_unknown_literal(inner),
+        Expr::Value(value) => matches!(
+            value.value,
+            Value::Null | Value::SingleQuotedString(_) | Value::DoubleQuotedString(_)
+        ),
+        _ => false,
+    }
 }
 
 /// Builtins a bound expression may call: pure functions of their argument
@@ -777,6 +795,11 @@ pub(crate) struct BoundExprScope {
     /// User-defined function names: an unqualified call of a built-in name
     /// among them is resolved by argument types at run time, not bound here.
     pub(crate) user_functions: Arc<FxHashSet<String>>,
+    /// Declared types of the input columns, by `ColumnId` (see
+    /// `slot_types`); `None` entries and a `None` vector are unknown. A
+    /// comparison reading a column of unknown type does not bind: the typed
+    /// row evaluator resolves it instead of comparing text.
+    pub(crate) column_types: Option<Arc<[Option<String>]>>,
 }
 
 #[allow(dead_code)]
@@ -1262,6 +1285,7 @@ impl InsertValuesTemplate {
             array_vars: Arc::new(FxHashSet::default()),
             var_types: None,
             user_functions: Arc::new(FxHashSet::default()),
+            column_types: None,
         };
         Self::build(schema, columns, &values, &scope)
     }
@@ -1663,6 +1687,20 @@ impl BoundExprScope {
         self
     }
 
+            column_types: None,
+        }
+    }
+
+    /// Attach the input columns' declared types (aligned with the columns).
+    pub(crate) fn with_column_types(mut self, types: Arc<[Option<String>]>) -> Self {
+        self.column_types = types.iter().any(Option::is_some).then_some(types);
+        self
+    }
+
+    fn column_type(&self, id: ColumnId) -> Option<String> {
+        self.column_types.as_ref()?.get(id.0).cloned().flatten()
+    }
+
     pub(crate) fn with_var_types(mut self, types: &[(String, String)]) -> Self {
         let mut merged = self.var_types.as_deref().cloned().unwrap_or_default();
         merged.extend(
@@ -1702,8 +1740,15 @@ impl BoundExprScope {
         match expr {
             Expr::Identifier(ident) => match self.bind_identifier(&[ident_value(ident)])? {
                 BoundExpr::Var(id) => self.var_types.as_ref()?.get(&id).cloned(),
+                BoundExpr::Column(id) => self.column_type(id),
                 _ => None,
             },
+            Expr::CompoundIdentifier(idents) => {
+                match self.bind_identifier(&idents.iter().map(ident_value).collect::<Vec<_>>()) {
+                    Some(BoundExpr::Column(id)) => self.column_type(id),
+                    _ => projected_expr_pg_type(expr, None),
+                }
+            }
             Expr::Value(value) if matches!(value.value, Value::Placeholder(_)) => {
                 let Value::Placeholder(name) = &value.value else {
                     unreachable!()
@@ -1736,12 +1781,39 @@ impl BoundExprScope {
                 }
                 select_common_builtin_projected_type(&types)
             }
-            Expr::BinaryOp { left, op, right } => temporal_binary_result_type(
-                self.known_expr_type(left).as_deref(),
-                op,
-                self.known_expr_type(right).as_deref(),
-            )
-            .map(str::to_string),
+            Expr::BinaryOp { left, op, right } => {
+                let left = self.known_expr_type(left);
+                let right = self.known_expr_type(right);
+                if let Some(temporal) =
+                    temporal_binary_result_type(left.as_deref(), op, right.as_deref())
+                {
+                    return Some(temporal.to_string());
+                }
+                // Arithmetic over two resolved numbers keeps the numeric
+                // family PostgreSQL's operators return for it.
+                let numeric = |pg_type: &Option<String>| {
+                    pg_type.as_deref().is_some_and(|pg_type| {
+                        numeric_combine_pg_type(Some(pg_type), None).is_some()
+                    })
+                };
+                (matches!(
+                    op,
+                    BinaryOperator::Plus
+                        | BinaryOperator::Minus
+                        | BinaryOperator::Multiply
+                        | BinaryOperator::Divide
+                        | BinaryOperator::Modulo
+                ) && numeric(&left)
+                    && numeric(&right))
+                .then(|| numeric_combine_pg_type(left.as_deref(), right.as_deref()))
+                .flatten()
+            }
+            Expr::UnaryOp {
+                op: UnaryOperator::Minus | UnaryOperator::Plus,
+                expr: inner,
+            } if self.references_row_column(inner) => self
+                .known_expr_type(inner)
+                .filter(|pg_type| numeric_combine_pg_type(Some(pg_type), None).is_some()),
             _ => projected_expr_pg_type(expr, None),
         }
     }
@@ -1904,37 +1976,71 @@ impl BoundExprScope {
                             )
                         })
                     };
-                    // An unresolved column needs the row evaluator's schema.
-                    // Only unknown literals may inherit the other operand's
-                    // temporal type; an unknown slot is not a SQL literal.
-                    if temporal(&left_type) && right_type.is_none() {
-                        if !matches!(right.as_ref(), Expr::Value(_)) {
-                            return None;
-                        }
+                    // An unknown-typed literal takes the other operand's
+                    // type, as PostgreSQL resolves `col = '...'`.
+                    if left_type.is_some() && is_unknown_literal(right) && !is_unknown_literal(left)
+                    {
                         right_type = left_type.clone();
                     }
-                    if temporal(&right_type) && left_type.is_none() {
-                        if !matches!(left.as_ref(), Expr::Value(_)) {
-                            return None;
-                        }
+                    if right_type.is_some() && is_unknown_literal(left) && !is_unknown_literal(right)
+                    {
                         left_type = right_type.clone();
                     }
-                    // NUMERIC travels as decimal text. Against an operand
-                    // this scope cannot type (a row column), the untyped
-                    // comparison would compare `2` and `2.000` as text; the
-                    // row evaluator resolves the column's declared type.
-                    let numeric =
-                        numeric_comparison_types(left_type.as_deref(), right_type.as_deref());
-                    if !numeric
-                        && (left_type.as_deref() == Some("numeric")
-                            && right_type.is_none()
-                            && self.references_row_column(right)
-                            || right_type.as_deref() == Some("numeric")
-                                && left_type.is_none()
-                                && self.references_row_column(left))
+                    // A row column whose declared type this scope does not
+                    // know (a derived-table column the executor could not
+                    // type) cannot be compared by value here: a date and a
+                    // timestamp both travel as text. The typed row
+                    // evaluator resolves it.
+                    if (left_type.is_none() && self.references_row_column(left))
+                        || (right_type.is_none() && self.references_row_column(right))
                     {
                         return None;
                     }
+                    let kind = match (left_type.as_deref(), right_type.as_deref()) {
+                        (Some(left_kind), Some(right_kind)) => {
+                            match pg_comparison_kind(left_kind, right_kind) {
+                                Some(kind) => Some(kind),
+                                // Same-type temporal operands (time, interval)
+                                // keep the temporal comparison below.
+                                None if left_kind == right_kind && temporal(&left_type) => None,
+                                // A resolved pair this table does not cover
+                                // (enums, domains, mixed families): the typed
+                                // evaluator decides, including its errors.
+                                None => return None,
+                            }
+                        }
+                        // One side resolved, the other an expression this
+                        // scope cannot type (a routine variable declared
+                        // without a type, say).
+                        (Some(known), None) | (None, Some(known)) => {
+                            // An unresolved slot is not a SQL literal: a
+                            // temporal comparison needs both types.
+                            if temporal(&left_type) || temporal(&right_type) {
+                                return None;
+                            }
+                            // CHAR(n) ignores trailing blanks against any
+                            // string, as the typed evaluator compares it.
+                            matches!(
+                                pg_comparison_kind(known, known),
+                                Some(PgComparisonKind::Bpchar)
+                            )
+                            .then_some(PgComparisonKind::Bpchar)
+                        }
+                        (None, None) => None,
+                    };
+                    let numeric = kind.is_none()
+                        && numeric_comparison_types(left_type.as_deref(), right_type.as_deref());
+                    // The adopted type of an untyped side is not its
+                    // declared type; keep only the resolved one.
+                    let (left_type, right_type) = match kind {
+                        Some(PgComparisonKind::Bpchar)
+                            if left_type.is_none() || right_type.is_none() =>
+                        {
+                            let known = left_type.clone().or_else(|| right_type.clone());
+                            (known.clone(), known)
+                        }
+                        _ => (left_type, right_type),
+                    };
                     Some(BoundExpr::Compare {
                         left: Box::new(self.bind_in(left, ctx)?),
                         op: op.clone(),
@@ -1942,6 +2048,7 @@ impl BoundExprScope {
                         left_type,
                         right_type,
                         numeric,
+                        kind,
                     })
                 }
                 BinaryOperator::Arrow | BinaryOperator::LongArrow => None,
@@ -2043,6 +2150,31 @@ impl BoundExprScope {
                         })
                     {
                         return None;
+                    }
+                    // `CASE x WHEN v` compares with plain value equality:
+                    // only for operand types whose values compare exactly
+                    // that way.
+                    let plain = |kind: Option<PgComparisonKind>| {
+                        matches!(
+                            kind,
+                            Some(
+                                PgComparisonKind::Integer
+                                    | PgComparisonKind::Text
+                                    | PgComparisonKind::Bool
+                            )
+                        )
+                    };
+                    if let Some(operand_type) = self.known_expr_type(operand) {
+                        if !plain(pg_comparison_kind(&operand_type, &operand_type))
+                            || conditions.iter().any(|branch| {
+                                self.known_expr_type(&branch.condition)
+                                    .is_some_and(|when| {
+                                        !plain(pg_comparison_kind(&operand_type, &when))
+                                    })
+                            })
+                        {
+                            return None;
+                        }
                     }
                 }
                 if !ctx
@@ -2475,9 +2607,20 @@ impl BoundExpr {
                 left_type,
                 right_type,
                 numeric,
+                kind,
             } => {
                 let left = left.eval_borrowed(frame)?;
                 let right = right.eval_borrowed(frame)?;
+                if let Some(kind) = kind {
+                    return compare_values_by_kind(
+                        *kind,
+                        left_type.as_deref().unwrap_or_default(),
+                        right_type.as_deref().unwrap_or_default(),
+                        left.as_ref(),
+                        op,
+                        right.as_ref(),
+                    );
+                }
                 if *numeric {
                     return compare_numeric_values(left.as_ref(), op, right.as_ref());
                 }

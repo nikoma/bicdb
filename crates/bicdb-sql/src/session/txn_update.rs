@@ -2510,6 +2510,47 @@ impl<'db> SqlSession<'db> {
         }
     }
 
+    /// A comparison in a PL/pgSQL body whose operands both have declared
+    /// types (variables, parameters, record fields, typed literals)
+    /// compares under PostgreSQL's rules for that type pair.
+    fn routine_typed_comparison(
+        &self,
+        left: &Expr,
+        op: &BinaryOperator,
+        right: &Expr,
+        left_value: &SqlValue,
+        right_value: &SqlValue,
+    ) -> Result<Option<Option<bool>>> {
+        if !matches!(
+            op,
+            BinaryOperator::Eq
+                | BinaryOperator::NotEq
+                | BinaryOperator::Lt
+                | BinaryOperator::LtEq
+                | BinaryOperator::Gt
+                | BinaryOperator::GtEq
+        ) || self.oracle_routine_frame()
+            || self.routine_slots.is_none()
+            || crate::planner::is_unknown_literal(left)
+            || crate::planner::is_unknown_literal(right)
+        {
+            return Ok(None);
+        }
+        let left_type = self
+            .routine_unary_operand_type(left)
+            .map(|pg_type| crate::pg_operators::canonical_type(&pg_type));
+        let right_type = self
+            .routine_unary_operand_type(right)
+            .map(|pg_type| crate::pg_operators::canonical_type(&pg_type));
+        compare_values_by_pg_types(
+            left_type.as_deref(),
+            right_type.as_deref(),
+            left_value,
+            op,
+            right_value,
+        )
+    }
+
     /// A comparison in a PL/pgSQL body with a date/time variable on one side
     /// compares as date/time, as PostgreSQL's typed comparison does, not as
     /// text (`date '2002-07-04' <> timestamp '2002-07-04 00:00'` is false).
@@ -2595,6 +2636,17 @@ impl<'db> SqlSession<'db> {
     }
 
     fn routine_unary_operand_type(&self, expr: &Expr) -> Option<String> {
+        if let Expr::CompoundIdentifier(idents) = expr {
+            // A record field (`rec.field`), typed by the record's query.
+            let key = idents
+                .iter()
+                .map(|ident| ident.value.to_ascii_lowercase())
+                .collect::<Vec<_>>()
+                .join(".");
+            if let Some(schema) = self.routine_slots.as_ref()?.types.get(&key) {
+                return Some(schema.pg_type.clone());
+            }
+        }
         let name = match expr {
             Expr::Identifier(ident) => Some(ident.value.as_str()),
             Expr::Value(value) => match &value.value {
@@ -3124,6 +3176,11 @@ impl<'db> SqlSession<'db> {
             Expr::BinaryOp { left, op, right } => {
                 let left_value = self.eval_session_expr(left)?;
                 let right_value = self.eval_session_expr(right)?;
+                if let Some(truth) =
+                    self.routine_typed_comparison(left, op, right, &left_value, &right_value)?
+                {
+                    return Ok(truth.map(SqlValue::Bool).unwrap_or(SqlValue::Null));
+                }
                 if let Some(truth) =
                     self.routine_temporal_comparison(left, op, right, &left_value, &right_value)?
                 {
@@ -4954,6 +5011,9 @@ impl<'db> SqlSession<'db> {
                     }
                 }
             }
+        }
+        if !scalar_target {
+            frame.set_record_field_types(target, &result.columns, &result.column_types);
         }
         for row in result.rows {
             self.cancellation.check()?;

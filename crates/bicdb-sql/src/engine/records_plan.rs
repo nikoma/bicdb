@@ -3430,6 +3430,20 @@ fn coerce_set_branch(mut branch: SqlResult, column_types: &[Option<String>]) -> 
             }
         }
     }
+    // character(n) to text, varchar or name drops the trailing blanks the
+    // fixed width added, as PostgreSQL's bpchar casts do.
+    for (index, common) in column_types.iter().enumerate() {
+        let from_bpchar = branch.column_types.get(index).cloned().flatten().as_deref()
+            == Some("bpchar");
+        if from_bpchar && matches!(common.as_deref(), Some("text" | "varchar" | "name")) {
+            for row in &mut branch.rows {
+                if let Some(SqlValue::String(text)) = row.get_mut(index) {
+                    let trimmed = text.trim_end_matches(' ').len();
+                    text.truncate(trimmed);
+                }
+            }
+        }
+    }
     branch.column_types = column_types.to_vec();
     Ok(branch)
 }

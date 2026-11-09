@@ -186,6 +186,31 @@ impl<'db> SqlEngine<'db> {
         Ok(self.eval_row_truth(row, expr)?.unwrap_or(false))
     }
 
+    /// An operand's type from the FROM environment, else (a column of an
+    /// enclosing query's relation, say) as the executing query registered
+    /// that relation. An unknown operand is not an unknown literal: it
+    /// must not take the other operand's type.
+    fn env_or_registered_expr_type<'c>(
+        &self,
+        expr: &Expr,
+        env: &[RelationColumns],
+        columns: impl Iterator<Item = &'c str>,
+    ) -> Option<String> {
+        self.infer_env_expr_type(expr, env).or_else(|| {
+            if !matches!(
+                unwrap_nested_expr(expr),
+                Expr::Identifier(_) | Expr::CompoundIdentifier(_)
+            ) {
+                return None;
+            }
+            let mut keys = columns.map(str::to_string).collect::<Vec<_>>();
+            if let Some(outer) = self.outer_row.as_ref() {
+                keys.extend(outer.columns().iter().cloned());
+            }
+            row_columns_expr_pg_type(self.db_ref(), expr, keys.iter().map(String::as_str))
+        })
+    }
+
     pub(crate) fn eval_row_truth_typed(
         &self,
         row: &SqlRow,
@@ -299,8 +324,8 @@ impl<'db> SqlEngine<'db> {
                         | BinaryOperator::LtEq
                 ) =>
             {
-                let left_type = self.infer_env_expr_type(left, env);
-                let right_type = self.infer_env_expr_type(right, env);
+                let left_type = self.env_or_registered_expr_type(left, env, row.keys().map(String::as_str));
+                let right_type = self.env_or_registered_expr_type(right, env, row.keys().map(String::as_str));
                 reject_undefined_comparison(left_type.as_deref(), op, right_type.as_deref())?;
                 let pg_type = if matches!(left_type.as_deref(), Some("inet" | "cidr"))
                     && matches!(right_type.as_deref(), Some("inet" | "cidr"))
@@ -330,6 +355,15 @@ impl<'db> SqlEngine<'db> {
                 )?;
                 if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
                     return Ok(None);
+                }
+                if let Some(truth) = compare_values_by_pg_types(
+                    left_type.as_deref(),
+                    right_type.as_deref(),
+                    &left,
+                    op,
+                    &right,
+                )? {
+                    return Ok(truth);
                 }
                 if let Some(truth) = compare_temporal_values(
                     left_type.as_deref(),
@@ -508,8 +542,8 @@ impl<'db> SqlEngine<'db> {
                         | BinaryOperator::LtEq
                 ) =>
             {
-                let left_type = self.infer_env_expr_type(left, env);
-                let right_type = self.infer_env_expr_type(right, env);
+                let left_type = self.env_or_registered_expr_type(left, env, context.column_keys().iter().map(String::as_str));
+                let right_type = self.env_or_registered_expr_type(right, env, context.column_keys().iter().map(String::as_str));
                 reject_undefined_comparison(left_type.as_deref(), op, right_type.as_deref())?;
                 let pg_type = if matches!(left_type.as_deref(), Some("inet" | "cidr"))
                     && matches!(right_type.as_deref(), Some("inet" | "cidr"))
@@ -539,6 +573,15 @@ impl<'db> SqlEngine<'db> {
                 )?;
                 if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
                     return Ok(None);
+                }
+                if let Some(truth) = compare_values_by_pg_types(
+                    left_type.as_deref(),
+                    right_type.as_deref(),
+                    &left,
+                    op,
+                    &right,
+                )? {
+                    return Ok(truth);
                 }
                 if let Some(truth) = compare_temporal_values(
                     left_type.as_deref(),
@@ -596,6 +639,15 @@ impl<'db> SqlEngine<'db> {
                         self.eval_slot_row_value(row, context, right)?,
                         right_type.as_deref(),
                     )?;
+                    if let Some(truth) = compare_values_by_pg_types(
+                        left_type.as_deref(),
+                        right_type.as_deref(),
+                        &left,
+                        op,
+                        &right,
+                    )? {
+                        return Ok(truth);
+                    }
                     if let Some(truth) = compare_temporal_values(
                         left_type.as_deref(),
                         right_type.as_deref(),
@@ -859,7 +911,22 @@ impl<'db> SqlEngine<'db> {
                         .iter()
                         .map(|row| row.first().unwrap_or(&SqlValue::Null))
                 };
-                let matched = values().any(|candidate| values_equal(&value, candidate));
+                // `x IN (SELECT y ...)` is `x = ANY`: each candidate compares
+                // under the two operands' types (a date against timestamps).
+                let value_type = self.row_expr_pg_type(expr, context);
+                let candidate_type = result.column_types.first().cloned().flatten();
+                let mut matched = false;
+                for candidate in values() {
+                    if simple_case_values_equal(
+                        &value,
+                        candidate,
+                        value_type.as_deref(),
+                        candidate_type.as_deref(),
+                    )? {
+                        matched = true;
+                        break;
+                    }
+                }
                 if matched {
                     Ok(Some(!*negated))
                 } else if matches!(value, SqlValue::Null)
@@ -1943,6 +2010,37 @@ impl<'db> SqlEngine<'db> {
         )?))
     }
 
+    /// The type of an operand of a predicate over `table`'s records and an
+    /// outer row: a reference to an outer relation takes that relation's
+    /// column type, never the inner table's same-named column.
+    fn record_outer_operand_type(
+        &self,
+        table: &str,
+        alias: &str,
+        schema: Option<&TableSchema>,
+        outer_row: &OuterSlotRow,
+        expr: &Expr,
+    ) -> Option<String> {
+        if let Expr::CompoundIdentifier(parts) = unwrap_nested_expr(expr) {
+            if let [.., qualifier, _] = parts.as_slice() {
+                let inner = qualifier.value.eq_ignore_ascii_case(alias)
+                    || qualifier.value.eq_ignore_ascii_case(table)
+                    || table
+                        .rsplit('.')
+                        .next()
+                        .is_some_and(|short| qualifier.value.eq_ignore_ascii_case(short));
+                if !inner {
+                    return row_columns_expr_pg_type(
+                        self.db_ref(),
+                        expr,
+                        outer_row.columns().iter().map(String::as_str),
+                    );
+                }
+            }
+        }
+        projected_expr_pg_type(expr, schema)
+    }
+
     pub(crate) fn eval_record_outer_predicate(
         &self,
         table: &str,
@@ -1994,8 +2092,10 @@ impl<'db> SqlEngine<'db> {
                 | BinaryOperator::GtEq
                 | BinaryOperator::Lt
                 | BinaryOperator::LtEq => {
-                    let left_type = projected_expr_pg_type(left, schema);
-                    let right_type = projected_expr_pg_type(right, schema);
+                    let left_type =
+                        self.record_outer_operand_type(table, alias, schema, outer_row, left);
+                    let right_type =
+                        self.record_outer_operand_type(table, alias, schema, outer_row, right);
                     reject_undefined_comparison(left_type.as_deref(), op, right_type.as_deref())?;
                     let Some(left) = self
                         .eval_record_outer_value(table, alias, schema, record, outer_row, left)?
@@ -2007,6 +2107,15 @@ impl<'db> SqlEngine<'db> {
                     else {
                         return Ok(None);
                     };
+                    if let Some(truth) = compare_values_by_pg_types(
+                        left_type.as_deref(),
+                        right_type.as_deref(),
+                        &left,
+                        op,
+                        &right,
+                    )? {
+                        return Ok(truth);
+                    }
                     if let Some(truth) = compare_temporal_values(
                         left_type.as_deref(),
                         right_type.as_deref(),
@@ -2224,6 +2333,15 @@ impl<'db> SqlEngine<'db> {
                         self.eval_row_value(row, right)?,
                         right_type.as_deref(),
                     )?;
+                    if let Some(truth) = compare_values_by_pg_types(
+                        left_type.as_deref(),
+                        right_type.as_deref(),
+                        &left,
+                        op,
+                        &right,
+                    )? {
+                        return Ok(truth);
+                    }
                     if let Some(truth) = compare_temporal_values(
                         left_type.as_deref(),
                         right_type.as_deref(),
@@ -2537,10 +2655,23 @@ impl<'db> SqlEngine<'db> {
                     return Ok(truth);
                 }
                 let value = self.eval_row_value(row, expr)?;
-                let values = self.execute_correlated_subquery_values(row, subquery)?;
-                let matched = values
-                    .iter()
-                    .any(|candidate| values_equal(&value, candidate));
+                let result = self.execute_correlated_query(row, subquery)?;
+                let candidate_type = result.column_types.first().cloned().flatten();
+                let values = subquery_values(result)?;
+                let value_type =
+                    row_columns_expr_pg_type(self.db_ref(), expr, row.keys().map(String::as_str));
+                let mut matched = false;
+                for candidate in &values {
+                    if simple_case_values_equal(
+                        &value,
+                        candidate,
+                        value_type.as_deref(),
+                        candidate_type.as_deref(),
+                    )? {
+                        matched = true;
+                        break;
+                    }
+                }
                 if matched {
                     Ok(Some(!*negated))
                 } else if matches!(value, SqlValue::Null)

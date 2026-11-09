@@ -4782,6 +4782,41 @@ impl RoutineFrame {
     /// Do not infer that distinction from the value: both start as NULL, and a
     /// JSON scalar may itself contain an object. Undeclared implicit loop records
     /// (including Oracle cursor records) retain the existing record behavior.
+    /// A record loop variable's fields take the types of the query's
+    /// columns (`rec.field` compares as its column's type, not as text).
+    /// Recorded under `rec.field` beside the declared variable types.
+    pub(crate) fn set_record_field_types(
+        &mut self,
+        target: &str,
+        columns: &[String],
+        types: &[Option<String>],
+    ) {
+        let target = normalized_object_name_ref(target).to_ascii_lowercase();
+        let fields = columns
+            .iter()
+            .zip(types)
+            .filter_map(|(column, pg_type)| {
+                let key = format!("{target}.{}", column.to_ascii_lowercase());
+                let pg_type = pg_type.as_ref()?;
+                (self.assignment_types.get(&key).map(|schema| &schema.pg_type) != Some(pg_type))
+                    .then(|| (key, pg_type.clone()))
+            })
+            .collect::<Vec<_>>();
+        if fields.is_empty() {
+            return;
+        }
+        let types = Arc::make_mut(&mut self.assignment_types);
+        for (key, pg_type) in fields {
+            types.insert(
+                key,
+                RoutineTypeSchema {
+                    pg_type,
+                    type_modifier: None,
+                },
+            );
+        }
+    }
+
     pub(crate) fn query_loop_target_is_scalar(&self, name: &str) -> bool {
         fn is_row_type(kind: &UserTypeColumnSchema) -> bool {
             if kind.array {

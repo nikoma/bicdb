@@ -841,6 +841,7 @@ pub(crate) fn is_unambiguous_interval_text(value: &str) -> bool {
         || value.split_whitespace().count() > 1
 }
 
+#[track_caller]
 pub(crate) fn compare_values(
     left: &SqlValue,
     op: &BinaryOperator,
@@ -849,6 +850,7 @@ pub(crate) fn compare_values(
     if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
         return Ok(None);
     }
+    debug_untyped(left, right, std::panic::Location::caller());
     if let (SqlValue::Composite(left), SqlValue::Composite(right)) = (left, right) {
         let left = left
             .fields
@@ -905,6 +907,16 @@ pub(crate) fn compare_numeric_values(
 
 /// `compare_values` for operands with resolved types: NUMERIC combinations
 /// compare by value; everything else keeps the untyped comparison.
+pub(crate) fn debug_untyped(left: &SqlValue, right: &SqlValue, at: &std::panic::Location<'_>) {
+    if std::env::var_os("TC_DEBUG").is_none() { return; }
+    let date = |v: &SqlValue| matches!(v, SqlValue::String(s) if s.len() == 10 && s.as_bytes()[4] == b'-');
+    let ts = |v: &SqlValue| matches!(v, SqlValue::String(s) if s.len() > 10 && s.as_bytes()[4] == b'-' && s.as_bytes()[10] == b' ');
+    if (date(left) && ts(right)) || (ts(left) && date(right)) {
+        eprintln!("UNTYPED {left:?} vs {right:?} at {at}");
+    }
+}
+
+#[track_caller]
 pub(crate) fn compare_values_with_types(
     left_type: Option<&str>,
     right_type: Option<&str>,
@@ -923,6 +935,7 @@ pub(crate) fn compare_values_with_types(
             return Ok(truth);
         }
     }
+    debug_untyped(left, right, std::panic::Location::caller());
     compare_values(left, op, right)
 }
 
@@ -1149,7 +1162,9 @@ pub(crate) fn row_value_length_error() -> SqlError {
     SqlError::InvalidSql("row value expressions must have the same number of fields".to_string())
 }
 
+#[track_caller]
 pub(crate) fn values_equal(left: &SqlValue, right: &SqlValue) -> bool {
+    debug_untyped(left, right, std::panic::Location::caller());
     match (left, right) {
         (SqlValue::Null, _) | (_, SqlValue::Null) => false,
         (SqlValue::Composite(left), SqlValue::Composite(right)) => {
@@ -1188,6 +1203,11 @@ pub(crate) fn simple_case_values_equal(
 ) -> Result<bool> {
     if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
         return Ok(false);
+    }
+    if let Some(truth) =
+        compare_values_by_pg_types(left_type, right_type, left, &BinaryOperator::Eq, right)?
+    {
+        return Ok(truth == Some(true));
     }
     if left_type == Some("bpchar") && matches!(right_type, Some("bpchar") | None)
         || right_type == Some("bpchar") && left_type.is_none()
@@ -3730,4 +3750,195 @@ mod between_type_tests {
             SqlValue::Int(2)
         );
     }
+}
+
+/// How PostgreSQL compares two operands of the given (resolved) types:
+/// the operator its resolution rules pick and the conversions that apply
+/// to each side. `None` for type pairs this table does not cover; callers
+/// keep their own handling for those.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PgComparisonKind {
+    /// Integer with integer (any width): exact integer comparison.
+    Integer,
+    /// NUMERIC with NUMERIC or an integer: exact decimal comparison.
+    Numeric,
+    /// A float with any number: both sides as float8, NaN equal to itself
+    /// and above every other value.
+    Float,
+    /// date / timestamp / timestamptz: both sides promoted to the wider type
+    /// (timestamptz in the session time zone).
+    Temporal,
+    /// character(n) with character(n) or varchar: trailing blanks are
+    /// insignificant on both sides.
+    Bpchar,
+    /// character(n) with text: the character side loses its trailing blanks
+    /// (the bpchar-to-text cast) and the comparison is text's.
+    BpcharText { left_bpchar: bool },
+    /// text / varchar / name with one another: plain text comparison.
+    Text,
+    Bool,
+}
+
+pub(crate) fn pg_comparison_kind(left: &str, right: &str) -> Option<PgComparisonKind> {
+    #[derive(PartialEq)]
+    enum Class {
+        Int,
+        Numeric,
+        Float,
+        Temporal,
+        Bpchar,
+        Varchar,
+        Text,
+        Bool,
+    }
+    fn class(pg_type: &str) -> Option<Class> {
+        Some(match pg_type {
+            "int2" | "smallint" | "int4" | "int" | "integer" | "int8" | "bigint" => Class::Int,
+            "numeric" | "decimal" => Class::Numeric,
+            "float4" | "real" | "float8" | "double precision" => Class::Float,
+            "date" | "timestamp" | "timestamptz" => Class::Temporal,
+            "bpchar" | "character" | "char" => Class::Bpchar,
+            "varchar" | "character varying" => Class::Varchar,
+            "text" | "name" => Class::Text,
+            "bool" | "boolean" => Class::Bool,
+            _ => return None,
+        })
+    }
+    use PgComparisonKind as Kind;
+    let (left, right) = (class(left)?, class(right)?);
+    Some(match (&left, &right) {
+        (Class::Int, Class::Int) => Kind::Integer,
+        (Class::Numeric, Class::Int | Class::Numeric) | (Class::Int, Class::Numeric) => {
+            Kind::Numeric
+        }
+        (Class::Float, Class::Int | Class::Numeric | Class::Float)
+        | (Class::Int | Class::Numeric, Class::Float) => Kind::Float,
+        (Class::Temporal, Class::Temporal) => Kind::Temporal,
+        (Class::Bpchar, Class::Bpchar | Class::Varchar) | (Class::Varchar, Class::Bpchar) => {
+            Kind::Bpchar
+        }
+        (Class::Bpchar, Class::Text) => Kind::BpcharText { left_bpchar: true },
+        (Class::Text, Class::Bpchar) => Kind::BpcharText { left_bpchar: false },
+        (Class::Varchar | Class::Text, Class::Varchar | Class::Text) => Kind::Text,
+        (Class::Bool, Class::Bool) => Kind::Bool,
+        _ => return None,
+    })
+}
+
+/// A float8 operand value: integers and decimal text widen, `NaN` and the
+/// infinities in any spelling PostgreSQL accepts.
+fn comparison_float_value(value: &SqlValue) -> Result<f64> {
+    match value {
+        SqlValue::Int(value) => Ok(*value as f64),
+        SqlValue::Float(value) => Ok(*value),
+        SqlValue::String(text) => {
+            let trimmed = text.trim();
+            match trimmed.to_ascii_lowercase().as_str() {
+                "nan" => Ok(f64::NAN),
+                "infinity" | "+infinity" | "inf" | "+inf" => Ok(f64::INFINITY),
+                "-infinity" | "-inf" => Ok(f64::NEG_INFINITY),
+                _ => trimmed.parse::<f64>().map_err(|_| {
+                    SqlError::invalid_text_representation(
+                        "double precision",
+                        format!("\"{text}\""),
+                    )
+                }),
+            }
+        }
+        other => sql_value_f64(other).ok_or_else(|| {
+            SqlError::invalid_text_representation(
+                "double precision",
+                format!("\"{}\"", other.to_cell()),
+            )
+        }),
+    }
+}
+
+/// PostgreSQL's float8 ordering: NaN equals NaN and sorts above every
+/// other value; -0 equals 0.
+fn float8_ordering(left: f64, right: f64) -> Ordering {
+    match (left.is_nan(), right.is_nan()) {
+        (true, true) => Ordering::Equal,
+        (true, false) => Ordering::Greater,
+        (false, true) => Ordering::Less,
+        (false, false) => left.partial_cmp(&right).unwrap_or(Ordering::Equal),
+    }
+}
+
+fn comparison_text(value: &SqlValue) -> std::borrow::Cow<'_, str> {
+    match value {
+        SqlValue::String(text) => std::borrow::Cow::Borrowed(text.as_str()),
+        other => std::borrow::Cow::Owned(other.to_cell()),
+    }
+}
+
+/// Compare two non-NULL-checked values under `kind`, with SQL NULL
+/// semantics. `left_type`/`right_type` are the operands' resolved types
+/// (needed for the temporal promotion).
+pub(crate) fn compare_values_by_kind(
+    kind: PgComparisonKind,
+    left_type: &str,
+    right_type: &str,
+    left: &SqlValue,
+    op: &BinaryOperator,
+    right: &SqlValue,
+) -> Result<Option<bool>> {
+    if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
+        return Ok(None);
+    }
+    use PgComparisonKind as Kind;
+    let ordering = match kind {
+        Kind::Integer => match (left, right) {
+            (SqlValue::Int(left), SqlValue::Int(right)) => left.cmp(right),
+            _ => pg_typed_compare("numeric", left, right)?,
+        },
+        Kind::Numeric => pg_typed_compare("numeric", left, right)?,
+        Kind::Float => float8_ordering(
+            comparison_float_value(left)?,
+            comparison_float_value(right)?,
+        ),
+        Kind::Temporal => {
+            return compare_temporal_values(Some(left_type), Some(right_type), left, op, right)
+                .map(|truth| truth.flatten());
+        }
+        Kind::Bpchar => {
+            let left = comparison_text(left);
+            let right = comparison_text(right);
+            left.trim_end_matches(' ').cmp(right.trim_end_matches(' '))
+        }
+        Kind::BpcharText { left_bpchar } => {
+            let left_text = comparison_text(left);
+            let right_text = comparison_text(right);
+            let (left_text, right_text) = if left_bpchar {
+                (left_text.trim_end_matches(' '), right_text.as_ref())
+            } else {
+                (left_text.as_ref(), right_text.trim_end_matches(' '))
+            };
+            left_text.cmp(right_text)
+        }
+        Kind::Text => comparison_text(left).cmp(&comparison_text(right)),
+        Kind::Bool => match (left, right) {
+            (SqlValue::Bool(left), SqlValue::Bool(right)) => left.cmp(right),
+            _ => return compare_values(left, op, right),
+        },
+    };
+    Ok(Some(comparison_from_ordering(op, ordering)))
+}
+
+/// `compare_values_by_kind` when both operand types are resolved and the
+/// pair is one `pg_comparison_kind` covers; `None` otherwise.
+pub(crate) fn compare_values_by_pg_types(
+    left_type: Option<&str>,
+    right_type: Option<&str>,
+    left: &SqlValue,
+    op: &BinaryOperator,
+    right: &SqlValue,
+) -> Result<Option<Option<bool>>> {
+    let (Some(left_type), Some(right_type)) = (left_type, right_type) else {
+        return Ok(None);
+    };
+    let Some(kind) = pg_comparison_kind(left_type, right_type) else {
+        return Ok(None);
+    };
+    compare_values_by_kind(kind, left_type, right_type, left, op, right).map(Some)
 }

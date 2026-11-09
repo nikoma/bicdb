@@ -36,7 +36,7 @@ use super::procir::{ProcHost, ProcIr, ProcModule, ProcStmt};
 use super::ExecutionSignature;
 
 use crate::{
-    normalize_object_name, BoundExpr, RoutineArgMode, RoutineAssignmentTarget, RoutineDecl,
+    normalize_object_name, BoundExpr, PgComparisonKind, RoutineArgMode, RoutineAssignmentTarget, RoutineDecl,
     RoutineExpr, RoutineIR, RoutineStmt, SqlResult, SqlSession, SqlValue, VarId,
 };
 
@@ -318,8 +318,13 @@ fn lower_bound(be: &BoundExpr) -> Option<IrExpr> {
             left_type,
             right_type,
             numeric,
+            kind,
         } => {
-            if *numeric {
+            if *numeric
+                || kind.is_some_and(|kind| {
+                    !matches!(kind, PgComparisonKind::Integer | PgComparisonKind::Bool)
+                })
+            {
                 // NUMERIC operands compare by decimal value, not IR scalars.
                 return None;
             }

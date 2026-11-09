@@ -3697,12 +3697,48 @@ pub(crate) fn full_text_index_expression_matches(stored: &str, query: &Expr) -> 
     matches
 }
 
+/// The declared type of a column reference as the executing query
+/// registered its relation (`slot_types`): `None` when no relation in the
+/// layout is registered (the caller resolves it by name), `Some(None)` when
+/// the registered relations do not agree on one type.
+fn registered_column_expr_type(expr: &Expr, columns: &[&str]) -> Option<Option<String>> {
+    match expr {
+        Expr::CompoundIdentifier(idents) if idents.len() >= 2 => {
+            let qualifier = &idents[idents.len() - 2].value;
+            let column = &idents[idents.len() - 1].value;
+            crate::slot_types::lookup(qualifier, column)
+        }
+        Expr::Identifier(ident) => {
+            let mut found: Option<Option<String>> = None;
+            for key in columns {
+                let Some((qualifier, name)) = key.rsplit_once('.') else {
+                    continue;
+                };
+                if !name.eq_ignore_ascii_case(&ident.value) {
+                    continue;
+                }
+                let registered = crate::slot_types::lookup(qualifier, name)?;
+                found = Some(match found {
+                    None => registered,
+                    Some(previous) if previous == registered => previous,
+                    Some(_) => None,
+                });
+            }
+            found
+        }
+        _ => None,
+    }
+}
+
 pub(crate) fn row_columns_expr_pg_type<'a>(
     db: &BicDb,
     expr: &Expr,
     columns: impl IntoIterator<Item = &'a str>,
 ) -> Option<String> {
     let columns = columns.into_iter().collect::<Vec<_>>();
+    if let Some(registered) = registered_column_expr_type(expr, &columns) {
+        return registered;
+    }
     if let Expr::Nested(inner) | Expr::Collate { expr: inner, .. } = expr {
         return row_columns_expr_pg_type(db, inner, columns.iter().copied());
     }
@@ -4904,6 +4940,7 @@ impl<'db> SqlEngine<'db> {
 
     pub(crate) fn execute_query(&self, query: &Query) -> Result<SqlResult> {
         self.db_ref().check_recovery_state()?;
+        let _slot_types = crate::slot_types::push_frame();
         let _subqueries = self.subquery_memo.scope();
         let _probes = self.exists_probe_memo.scope(
             self.outer_row.is_none() && exists_probe::probe_query_safe(self.db_ref(), query),

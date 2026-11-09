@@ -566,3 +566,79 @@ impl BicDb {
         Ok(())
     }
 }
+
+impl BicDb {
+    /// Rename a collection and retain one transaction's writes/read observations
+    /// on that same backing. Catalog mutation requires an exclusive database
+    /// borrow; its host remains responsible for transactional DDL undo. Native
+    /// grants retain their immutable relation restrictions.
+    pub fn rename_collection_preserving_pending_writes(
+        &mut self,
+        tx: &mut Transaction,
+        old: &str,
+        new: &str,
+    ) -> Result<()> {
+        self.check_recovery_state()?;
+        let result = self.rename_collection_preserving_pending_writes_inner(tx, old, new);
+        self.check_recovery_state()?;
+        result
+    }
+    fn rename_collection_preserving_pending_writes_inner(
+        &mut self,
+        tx: &mut Transaction,
+        old: &str,
+        new: &str,
+    ) -> Result<()> {
+        // Pointer identity plus an owned per-open registry prevents address reuse
+        // from admitting a transaction from another database/health instance.
+        if !std::ptr::eq(tx.db.as_ptr(), self) || !Arc::ptr_eq(&tx.tx_states, &self.tx_states) {
+            return Err(BicDbError::Unsupported(
+                "transaction belongs to a different database instance".into(),
+            ));
+        }
+        if tx.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        if old == new {
+            return Ok(());
+        }
+        if tx.write_index.contains_key(new) {
+            return Err(BicDbError::Unsupported(
+                "cannot rename onto a name with pending transaction writes".into(),
+            ));
+        }
+        self.rename_collection(old, new)?;
+        for write in &mut tx.writes {
+            if write.collection == old {
+                write.collection = new.to_string();
+            }
+        }
+        tx.rebuild_write_index();
+        {
+            let mut versions = tx.observed_record_versions.lock();
+            versions.remove(new);
+            if let Some(rows) = versions.remove(old) {
+                versions.insert(new.to_string(), rows);
+            }
+        }
+        {
+            let mut images = tx.read_images.lock();
+            if let Some(rows) = images.rows.remove(new) {
+                images.len -= rows.len();
+            }
+            if let Some(rows) = images.rows.remove(old) {
+                images.rows.insert(new.to_string(), rows);
+            }
+        }
+        if let Some(generation) = tx.serializable_generation_snapshot.remove(old) {
+            tx.serializable_generation_snapshot
+                .insert(new.to_string(), generation);
+        }
+        if tx.serializable_reads.remove(old) {
+            tx.serializable_reads.insert(new.to_string());
+        }
+        // Keep the exact acquired lock identities so rollback/commit releases
+        // every lock it took before the rename. No lock ownership is invented.
+        Ok(())
+    }
+}

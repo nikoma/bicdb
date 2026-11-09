@@ -180,6 +180,21 @@ fn index_name_taken(db: &BicDb, name: &str) -> bool {
 }
 
 impl<'db> SqlSession<'db> {
+    fn rename_recycle_collection(&mut self, old: &str, new: &str) -> Result<()> {
+        if let Some(mut tx) = self.tx.take() {
+            let result = self.db_mut().and_then(|db| {
+                db.rename_collection_preserving_pending_writes(&mut tx, old, new)
+                    .map_err(SqlError::from)
+            });
+            self.tx = Some(tx);
+            result
+        } else {
+            self.db_mut()?
+                .rename_collection(old, new)
+                .map_err(SqlError::from)
+        }
+    }
+
     fn recycle_bin_enabled(&self) -> bool {
         let setting = self
             .session_gucs
@@ -250,17 +265,14 @@ impl<'db> SqlSession<'db> {
         };
         super::recycle_bin_journal::prepare(self.db_mut()?, &entry)?;
         super::recycle_bin_journal::stage("intent");
-        let renamed = match self.tx.as_mut() {
-            Some(tx) => tx.rename_collection_preserving_pending_writes(table, &bin_name),
-            None => self.db_mut()?.rename_collection(table, &bin_name),
-        };
+        let renamed = self.rename_recycle_collection(table, &bin_name);
         match renamed {
             Ok(()) => {}
-            Err(BicDbError::Unsupported(_)) => {
+            Err(SqlError::BicDb(BicDbError::Unsupported(_))) => {
                 super::recycle_bin_journal::clear(self.db_mut()?, &bin_name)?;
                 return Ok(false);
             }
-            Err(error) => return Err(error.into()),
+            Err(error) => return Err(error),
         }
         super::recycle_bin_journal::stage("collection");
         let mut indexes = Vec::with_capacity(index_names.len());
@@ -411,10 +423,7 @@ impl<'db> SqlSession<'db> {
             sequences.push(restored);
         }
 
-        match self.tx.as_mut() {
-            Some(tx) => tx.rename_collection_preserving_pending_writes(&entry.bin_name, target)?,
-            None => self.db_mut()?.rename_collection(&entry.bin_name, target)?,
-        }
+        self.rename_recycle_collection(&entry.bin_name, target)?;
         let mut schema = entry.schema.clone();
         schema.name = target.to_string();
         for (original, restored) in entry.sequences.iter().zip(&sequences) {

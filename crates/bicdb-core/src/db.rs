@@ -14688,64 +14688,6 @@ impl Transaction {
             .map(|(_, value)| *value)
     }
 
-    /// Rename a collection while retaining this transaction's buffered writes
-    /// and read observations on the same backing collection. Catalog rename is
-    /// durable immediately; the SQL host remains responsible for DDL undo.
-    /// Native grants keep their original relation restrictions and are never
-    /// widened or rebound by this operation.
-    pub fn rename_collection_preserving_pending_writes(
-        &mut self,
-        old: &str,
-        new: &str,
-    ) -> Result<()> {
-        if self.state != TxState::Pending {
-            return Err(BicDbError::TransactionNotPending);
-        }
-        if old == new {
-            return Ok(());
-        }
-        if self.write_index.contains_key(new) {
-            return Err(BicDbError::Unsupported(
-                "cannot rename onto a name with pending transaction writes".into(),
-            ));
-        }
-        // The pointer is the same exclusively owned host database used by
-        // commit. This method, like commit, requires the host database lock.
-        unsafe { self.db.as_mut() }.rename_collection(old, new)?;
-        for write in &mut self.writes {
-            if write.collection == old {
-                write.collection = new.to_string();
-            }
-        }
-        self.rebuild_write_index();
-        {
-            let mut versions = self.observed_record_versions.lock();
-            versions.remove(new);
-            if let Some(rows) = versions.remove(old) {
-                versions.insert(new.to_string(), rows);
-            }
-        }
-        {
-            let mut images = self.read_images.lock();
-            if let Some(rows) = images.rows.remove(new) {
-                images.len -= rows.len();
-            }
-            if let Some(rows) = images.rows.remove(old) {
-                images.rows.insert(new.to_string(), rows);
-            }
-        }
-        if let Some(generation) = self.serializable_generation_snapshot.remove(old) {
-            self.serializable_generation_snapshot
-                .insert(new.to_string(), generation);
-        }
-        if self.serializable_reads.remove(old) {
-            self.serializable_reads.insert(new.to_string());
-        }
-        // Keep the exact acquired lock identities so rollback/commit releases
-        // every lock it took before the rename. No lock ownership is invented.
-        Ok(())
-    }
-
     pub fn id(&self) -> TransactionId {
         self.id
     }

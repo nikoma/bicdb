@@ -760,3 +760,54 @@ fn national_partial_predicate_alone_enables_the_reader_fence() {
             .any(|v| v == "oracle_simple_case_v1"));
     }
 }
+
+#[test]
+fn atomic_replacement_preserves_the_national_upper_and_lower_families() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for (upper, original, folded) in [(true, "ɡ", "Ɡ"), (false, "Ⱥ", "ⱥ")] {
+            let root = tempfile::tempdir().unwrap();
+            let config = mode_config(mode.clone());
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            db.create_collection("rows").unwrap();
+            db.insert("rows", row("one", original)).unwrap();
+            let old_field = if upper {
+                IndexField::Upper(Box::new(path("value")))
+            } else {
+                IndexField::Lower(Box::new(path("value")))
+            };
+            let new_field = if upper {
+                IndexField::OracleUpperNationalV1(Box::new(path("value")))
+            } else {
+                IndexField::OracleLowerNationalV1(Box::new(path("value")))
+            };
+            let old = index("legacy", old_field, true);
+            db.create_index(old.clone()).unwrap();
+            let definition = index("owned-shadow", new_field, true);
+            let shadow = if mode == StorageMode::ServerPaged {
+                CaseShadow::Paged(completed_shadow(&mut db, definition))
+            } else {
+                db.create_index(definition.clone()).unwrap();
+                CaseShadow::Embedded(definition)
+            };
+            publish_case_shadow(&mut db, &old, &shadow).unwrap();
+            assert_eq!(
+                db.lookup_index("legacy", &key(folded)).unwrap(),
+                vec!["one"]
+            );
+            assert!(db
+                .lookup_index("legacy", &key(original))
+                .unwrap()
+                .is_empty());
+            assert!(db.insert("rows", row("duplicate", folded)).is_err());
+            db.flush().unwrap();
+            drop(db);
+            let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+            publish_case_shadow(&mut db, &old, &shadow).unwrap();
+            assert_eq!(
+                db.lookup_index("legacy", &key(folded)).unwrap(),
+                vec!["one"]
+            );
+            assert!(db.verify_index("legacy").unwrap().valid);
+        }
+    }
+}

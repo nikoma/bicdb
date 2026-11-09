@@ -242,10 +242,16 @@ impl BicDb {
 fn oracle_case_v1_replacement_matches(old: &IndexDefinition, new: &IndexDefinition) -> bool {
     fn field(old: &IndexField, new: &mut IndexField) {
         match (old, &mut *new) {
-            (IndexField::Upper(_), IndexField::OracleUpperV1(inner)) => {
+            (
+                IndexField::Upper(_),
+                IndexField::OracleUpperV1(inner) | IndexField::OracleUpperNationalV1(inner),
+            ) => {
                 *new = IndexField::Upper(inner.clone());
             }
-            (IndexField::Lower(_), IndexField::OracleLowerV1(inner)) => {
+            (
+                IndexField::Lower(_),
+                IndexField::OracleLowerV1(inner) | IndexField::OracleLowerNationalV1(inner),
+            ) => {
                 *new = IndexField::Lower(inner.clone());
             }
             _ => {}
@@ -255,6 +261,8 @@ fn oracle_case_v1_replacement_matches(old: &IndexDefinition, new: &IndexDefiniti
             | (IndexField::Lower(a), IndexField::Lower(b))
             | (IndexField::OracleUpperV1(a), IndexField::OracleUpperV1(b))
             | (IndexField::OracleLowerV1(a), IndexField::OracleLowerV1(b))
+            | (IndexField::OracleUpperNationalV1(a), IndexField::OracleUpperNationalV1(b))
+            | (IndexField::OracleLowerNationalV1(a), IndexField::OracleLowerNationalV1(b))
             | (IndexField::Trim(a), IndexField::Trim(b))
             | (IndexField::TimestampDay(a), IndexField::TimestampDay(b))
             | (IndexField::Coalesce { field: a, .. }, IndexField::Coalesce { field: b, .. }) => {
@@ -337,6 +345,8 @@ fn oracle_case_v1_definition(mut definition: IndexDefinition) -> IndexDefinition
             }
             IndexField::OracleUpperV1(inner)
             | IndexField::OracleLowerV1(inner)
+            | IndexField::OracleUpperNationalV1(inner)
+            | IndexField::OracleLowerNationalV1(inner)
             | IndexField::Trim(inner)
             | IndexField::TimestampDay(inner)
             | IndexField::Coalesce { field: inner, .. } => field(inner),
@@ -442,6 +452,20 @@ mod tests {
         }
         assert!(!oracle_case_v1_replacement_matches(&old, &changed));
         assert!(!oracle_case_v1_replacement_matches(&old, &old));
+        let mut national = replacement.clone();
+        national.fields[0] =
+            IndexField::OracleUpperNationalV1(Box::new(IndexField::MetadataPath(vec![
+                "value".into()
+            ])));
+        assert!(oracle_case_v1_replacement_matches(&old, &national));
+        let mut opposite = national.clone();
+        opposite.fields[0] =
+            IndexField::OracleLowerNationalV1(Box::new(IndexField::MetadataPath(vec![
+                "value".into()
+            ])));
+        assert!(!oracle_case_v1_replacement_matches(&old, &opposite));
+        // A preexisting v1 expression cannot silently change its family.
+        assert!(!oracle_case_v1_replacement_matches(&replacement, &national));
     }
 
     #[test]

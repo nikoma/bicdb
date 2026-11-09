@@ -486,11 +486,29 @@ impl<'db> SqlSession<'db> {
                     // A row can be updated repeatedly. Check its final state
                     // once per batch; triggers may enqueue a fresh later batch.
                     if checked_foreign_keys.insert(hook.to_string()) {
-                        super::deferred_constraints::validate_foreign_key_hook(
+                        // Retain warmed metadata for this check, but end its
+                        // statement-local policy memo before any trigger body
+                        // can change data read by a subsequent policy query.
+                        let generation = self.db_ref().collection_generation(SCHEMA_COLLECTION);
+                        let mut cache = SqlSchemaSessionCacheScope::new(
+                            generation,
+                            &mut self.schema_cache_generation,
+                            &mut self.schema_cache,
+                            &mut self.schema_list_cache,
+                        );
+                        let result = super::deferred_constraints::validate_foreign_key_hook(
                             self.db_ref(),
                             self.tx.as_ref(),
                             &hook,
-                        )?;
+                        );
+                        let generation = self.db_ref().collection_generation(SCHEMA_COLLECTION);
+                        cache.finish(
+                            generation,
+                            &mut self.schema_cache_generation,
+                            &mut self.schema_cache,
+                            &mut self.schema_list_cache,
+                        );
+                        result?;
                     }
                     continue;
                 }

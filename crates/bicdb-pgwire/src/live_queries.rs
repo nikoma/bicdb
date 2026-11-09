@@ -1385,6 +1385,7 @@ pub(crate) fn run_subscription(
                     None,
                     first && describe_rows,
                     false,
+                    None,
                 )?;
             }
         }

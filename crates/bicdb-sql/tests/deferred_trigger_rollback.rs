@@ -108,3 +108,60 @@ fn drop_table_drops_its_triggers() {
         SqlValue::Int(1)
     );
 }
+
+#[test]
+fn direct_deferred_drain_refreshes_policy_results_between_trigger_calls() {
+    for mode in [
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            bicdb_core::DbConfig::default()
+                .with_storage_mode(mode.clone())
+                .with_fsync(false),
+        )
+        .unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for sql in [
+            "CREATE ROLE deferred_probe_reader_af34 NOSUPERUSER NOBYPASSRLS",
+            "CREATE TABLE memo_gate_af34 (allowed BOOLEAN)",
+            "INSERT INTO memo_gate_af34 VALUES (true)",
+            "CREATE TABLE memo_protected_af34 (id INT)",
+            "INSERT INTO memo_protected_af34 VALUES (1)",
+            "CREATE TABLE memo_queue_af34 (id INT)",
+            "CREATE TABLE memo_seen_af34 (id INT, n BIGINT)",
+            "CREATE FUNCTION memo_allow_af34() RETURNS BOOLEAN LANGUAGE SQL STABLE AS $$ SELECT allowed FROM memo_gate_af34 $$",
+            "ALTER TABLE memo_protected_af34 ENABLE ROW LEVEL SECURITY",
+            "CREATE POLICY memo_read_af34 ON memo_protected_af34 FOR SELECT TO deferred_probe_reader_af34 USING ((SELECT memo_allow_af34()))",
+            "GRANT ALL ON TABLE memo_gate_af34,memo_protected_af34,memo_queue_af34,memo_seen_af34 TO deferred_probe_reader_af34",
+            "GRANT EXECUTE ON FUNCTION memo_allow_af34() TO deferred_probe_reader_af34",
+            "CREATE FUNCTION memo_trigger_af34() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN INSERT INTO memo_seen_af34 SELECT NEW.id,count(*) FROM memo_protected_af34; UPDATE memo_gate_af34 SET allowed=false; RETURN NEW; END $$",
+            "CREATE CONSTRAINT TRIGGER memo_deferred_af34 AFTER INSERT ON memo_queue_af34 DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION memo_trigger_af34()",
+            "GRANT EXECUTE ON FUNCTION memo_trigger_af34() TO deferred_probe_reader_af34",
+        ] { session.execute(sql).unwrap(); }
+        session
+            .execute("SET ROLE deferred_probe_reader_af34")
+            .unwrap();
+        session.execute("BEGIN").unwrap();
+        session
+            .execute("INSERT INTO memo_queue_af34 VALUES(1),(2)")
+            .unwrap();
+        // Pgwire drains through this direct API before committing its buffered transaction.
+        session.fire_deferred_row_triggers().unwrap();
+        session.execute("COMMIT").unwrap();
+        session.execute("RESET ROLE").unwrap();
+        assert_eq!(
+            session
+                .execute("SELECT * FROM memo_seen_af34 ORDER BY id")
+                .unwrap()
+                .rows,
+            vec![
+                vec![SqlValue::Int(1), SqlValue::Int(1)],
+                vec![SqlValue::Int(2), SqlValue::Int(0)]
+            ],
+            "{mode:?}"
+        );
+    }
+}

@@ -2318,6 +2318,7 @@ pub(crate) fn write_query_result(
     source_sql: Option<&str>,
     include_row_description: bool,
     include_command_complete: bool,
+    catalog_cache: Option<&mut bicdb_sql::SqlSessionCatalogCache>,
 ) -> Result<StreamWriteStats> {
     // Synchronous replication: a statement that committed is acknowledged
     // only once its synchronous standbys have it (every commit path ends here).
@@ -2331,7 +2332,11 @@ pub(crate) fn write_query_result(
     if !result.columns.is_empty() {
         let db = server.read_db_for_transaction_progress()?;
         validate_format_arity(result_formats, result.columns.len(), "result")?;
-        let column_types = result_column_types_with_db(&db, result, source_sql)?;
+        let column_types = match catalog_cache {
+            Some(cache) => cache
+                .with_schema_cache(&db, || result_column_types_with_db(&db, result, source_sql))?,
+            None => result_column_types_with_db(&db, result, source_sql)?,
+        };
         // Element-oid resolution is constant per column but consults the type
         // and schema catalogs on every non-builtin miss; memoize it across the
         // row loop so a large result resolves each column once, not per cell.
@@ -2376,13 +2381,18 @@ pub(crate) fn describe_result(
     result: &SqlResult,
     result_formats: &[i16],
     source_sql: Option<&str>,
+    catalog_cache: Option<&mut bicdb_sql::SqlSessionCatalogCache>,
 ) -> Result<()> {
     if result.columns.is_empty() {
         no_data(stream)
     } else {
         let db = server.read_db_for_transaction_progress()?;
         validate_format_arity(result_formats, result.columns.len(), "result")?;
-        let column_types = result_column_types_with_db(&db, result, source_sql)?;
+        let column_types = match catalog_cache {
+            Some(cache) => cache
+                .with_schema_cache(&db, || result_column_types_with_db(&db, result, source_sql))?,
+            None => result_column_types_with_db(&db, result, source_sql)?,
+        };
         row_description_with_db(stream, &db, result, &column_types, result_formats)
     }
 }

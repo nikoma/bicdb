@@ -538,8 +538,15 @@ mod tests {
                 let result = SqlResult::new(vec!["n".into()], vec![vec![SqlValue::Int(1)]])
                     .with_column_types(vec![Some("integer".into())]);
                 phase_tx.send("describe-result").unwrap();
-                describe_result(&mut stream, &worker_server, &result, &[], Some("SELECT 1"))
-                    .unwrap();
+                describe_result(
+                    &mut stream,
+                    &worker_server,
+                    &result,
+                    &[],
+                    Some("SELECT 1"),
+                    Some(&mut state.catalog_cache),
+                )
+                .unwrap();
                 phase_tx.send("encode-result").unwrap();
                 write_query_result(
                     &mut stream,
@@ -549,6 +556,7 @@ mod tests {
                     Some("SELECT 1"),
                     true,
                     true,
+                    Some(&mut state.catalog_cache),
                 )
                 .unwrap();
                 phase_tx.send("simple-commit").unwrap();
@@ -3894,6 +3902,67 @@ mod tests {
             first_cache_len,
             "short-lived pgwire SQL sessions should preserve connection catalog cache entries"
         );
+    }
+
+    #[test]
+    fn result_encoding_reuses_catalog_cache_and_refreshes_wire_types_after_ddl() {
+        let dir = tempfile::tempdir().unwrap();
+        let server = PgWireServer::open(dir.path(), PgWireConfig::default()).unwrap();
+        {
+            let mut db = server.db.write();
+            sql_session_for_server(&server, &mut db)
+                .execute("CREATE TABLE encoding_rows(id INTEGER)")
+                .unwrap();
+        }
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut peer = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        peer.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+        let mut stream = ClientStream::plain(listener.accept().unwrap().0);
+        let mut state = ConnectionState::new(42, "bicdb".into(), None);
+        let result = SqlResult::new(vec!["id".into()], vec![]);
+        let read_type = |peer: &mut TcpStream| {
+            let mut header = [0_u8; 5];
+            peer.read_exact(&mut header).unwrap();
+            assert_eq!(header[0], b'T');
+            let length = i32::from_be_bytes(header[1..].try_into().unwrap()) as usize;
+            let mut payload = vec![0; length - 4];
+            peer.read_exact(&mut payload).unwrap();
+            assert_eq!(i16::from_be_bytes(payload[..2].try_into().unwrap()), 1);
+            let name_end = 2 + payload[2..].iter().position(|b| *b == 0).unwrap();
+            let oid = name_end + 1 + 4 + 2;
+            i32::from_be_bytes(payload[oid..oid + 4].try_into().unwrap())
+        };
+        write_query_result(
+            &mut stream,
+            &server,
+            &result,
+            &[],
+            Some("SELECT id FROM encoding_rows"),
+            true,
+            false,
+            Some(&mut state.catalog_cache),
+        )
+        .unwrap();
+        stream.flush().unwrap();
+        assert_eq!(read_type(&mut peer), 23);
+        assert!(state.catalog_cache.schema_cache_len() > 0);
+        {
+            let mut db = server.db.write();
+            sql_session_for_server(&server, &mut db)
+                .execute("ALTER TABLE encoding_rows ALTER COLUMN id TYPE BIGINT")
+                .unwrap();
+        }
+        describe_result(
+            &mut stream,
+            &server,
+            &result,
+            &[],
+            Some("SELECT id FROM encoding_rows"),
+            Some(&mut state.catalog_cache),
+        )
+        .unwrap();
+        stream.flush().unwrap();
+        assert_eq!(read_type(&mut peer), 20);
     }
 
     #[test]

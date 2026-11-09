@@ -14,7 +14,7 @@ pub(crate) fn inbound_foreign_key_update_constraints_uncached(
     table: &str,
 ) -> Result<Vec<InboundForeignKeyUpdate>> {
     let mut constraints = Vec::new();
-    for child_schema in list_schemas(db)? {
+    for child_schema in list_schemas_shared(db)?.iter() {
         for constraint in &child_schema.constraints {
             let ConstraintSchema::ForeignKey {
                 name,
@@ -47,7 +47,7 @@ pub(crate) fn inbound_foreign_key_delete_constraints_uncached(
 ) -> Result<Vec<InboundForeignKeyDelete>> {
     sql_profile_foreign_key_parent_delete_schema_scan();
     let mut constraints = Vec::new();
-    for child_schema in list_schemas(db)? {
+    for child_schema in list_schemas_shared(db)?.iter() {
         for constraint in &child_schema.constraints {
             let ConstraintSchema::ForeignKey {
                 name,

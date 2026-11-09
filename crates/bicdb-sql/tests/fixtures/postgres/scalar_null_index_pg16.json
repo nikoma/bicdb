@@ -1,0 +1,226 @@
+{
+  "engine": "PostgreSQL",
+  "version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "fixture": "temporary tables; numeric scalar bound plus residual membership; all original source tables untouched",
+  "transaction": "ROLLBACK",
+  "result": {
+    "version": "16.13 (Debian 16.13-1.pgdg13+1)",
+    "nonnull_rows": 50,
+    "null_aggregate_rows": 0,
+    "null_projection_rows": 0
+  },
+  "null_aggregate_plan": [
+    {
+      "Plan": {
+        "Node Type": "Sort",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Startup Cost": 143.56,
+        "Total Cost": 143.59,
+        "Plan Rows": 13,
+        "Plan Width": 37,
+        "Actual Startup Time": 0.005,
+        "Actual Total Time": 0.006,
+        "Actual Rows": 0,
+        "Actual Loops": 1,
+        "Sort Key": [
+          "(COALESCE(scalar_null_fields.active, 'Y'::bpchar)) DESC",
+          "scalar_null_fields.id"
+        ],
+        "Sort Method": "quicksort",
+        "Sort Space Used": 25,
+        "Sort Space Type": "Memory",
+        "Plans": [
+          {
+            "Node Type": "Aggregate",
+            "Strategy": "Plain",
+            "Partial Mode": "Simple",
+            "Parent Relationship": "InitPlan",
+            "Subplan Name": "InitPlan 1 (returns $1)",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 28.0,
+            "Total Cost": 28.01,
+            "Plan Rows": 1,
+            "Plan Width": 32,
+            "Actual Startup Time": 0.002,
+            "Actual Total Time": 0.003,
+            "Actual Rows": 1,
+            "Actual Loops": 1,
+            "Plans": [
+              {
+                "Node Type": "Seq Scan",
+                "Parent Relationship": "Outer",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Relation Name": "scalar_null_sections",
+                "Alias": "scalar_null_sections",
+                "Startup Cost": 0.0,
+                "Total Cost": 28.0,
+                "Plan Rows": 1,
+                "Plan Width": 16,
+                "Actual Startup Time": 0.002,
+                "Actual Total Time": 0.002,
+                "Actual Rows": 0,
+                "Actual Loops": 1,
+                "Filter": "((scope_id = '404'::numeric) AND (active = 'Y'::bpchar))",
+                "Rows Removed by Filter": 3
+              }
+            ]
+          },
+          {
+            "Node Type": "Aggregate",
+            "Strategy": "Plain",
+            "Partial Mode": "Simple",
+            "Parent Relationship": "InitPlan",
+            "Subplan Name": "InitPlan 4 (returns $4)",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 27.02,
+            "Total Cost": 27.03,
+            "Plan Rows": 1,
+            "Plan Width": 8,
+            "Actual Startup Time": 0.0,
+            "Actual Total Time": 0.0,
+            "Actual Rows": 0,
+            "Actual Loops": 0,
+            "Plans": [
+              {
+                "Node Type": "Seq Scan",
+                "Parent Relationship": "Outer",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Relation Name": "scalar_null_visible",
+                "Alias": "scalar_null_visible_1",
+                "Startup Cost": 0.0,
+                "Total Cost": 27.0,
+                "Plan Rows": 7,
+                "Plan Width": 0,
+                "Actual Startup Time": 0.0,
+                "Actual Total Time": 0.0,
+                "Actual Rows": 0,
+                "Actual Loops": 0,
+                "Filter": "(scope_id = '11'::numeric)",
+                "Rows Removed by Filter": 0
+              }
+            ]
+          },
+          {
+            "Node Type": "Bitmap Heap Scan",
+            "Parent Relationship": "Outer",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Relation Name": "scalar_null_fields",
+            "Alias": "scalar_null_fields",
+            "Startup Cost": 58.7,
+            "Total Cost": 88.28,
+            "Plan Rows": 13,
+            "Plan Width": 37,
+            "Actual Startup Time": 0.004,
+            "Actual Total Time": 0.004,
+            "Actual Rows": 0,
+            "Actual Loops": 1,
+            "Recheck Cond": "(section_id = $1)",
+            "Rows Removed by Index Recheck": 0,
+            "Filter": "((hidden IS NULL) AND (NOT (hashed SubPlan 2)) AND (active = 'Y'::bpchar) AND ((hashed SubPlan 3) OR ($4 = 0)))",
+            "Rows Removed by Filter": 0,
+            "Exact Heap Blocks": 0,
+            "Lossy Heap Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Bitmap Index Scan",
+                "Parent Relationship": "Outer",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Index Name": "scalar_null_fields_section_id_id_idx",
+                "Startup Cost": 0.0,
+                "Total Cost": 4.66,
+                "Plan Rows": 50,
+                "Plan Width": 0,
+                "Actual Startup Time": 0.003,
+                "Actual Total Time": 0.003,
+                "Actual Rows": 0,
+                "Actual Loops": 1,
+                "Index Cond": "(section_id = $1)"
+              },
+              {
+                "Node Type": "Seq Scan",
+                "Parent Relationship": "SubPlan",
+                "Subplan Name": "SubPlan 2",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Relation Name": "scalar_null_seen",
+                "Alias": "scalar_null_seen",
+                "Startup Cost": 0.0,
+                "Total Cost": 27.0,
+                "Plan Rows": 7,
+                "Plan Width": 16,
+                "Actual Startup Time": 0.0,
+                "Actual Total Time": 0.0,
+                "Actual Rows": 0,
+                "Actual Loops": 0,
+                "Filter": "((id IS NOT NULL) AND (scope_id = '11'::numeric))",
+                "Rows Removed by Filter": 0
+              },
+              {
+                "Node Type": "Seq Scan",
+                "Parent Relationship": "SubPlan",
+                "Subplan Name": "SubPlan 3",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Relation Name": "scalar_null_visible",
+                "Alias": "scalar_null_visible",
+                "Startup Cost": 0.0,
+                "Total Cost": 27.0,
+                "Plan Rows": 7,
+                "Plan Width": 16,
+                "Actual Startup Time": 0.0,
+                "Actual Total Time": 0.0,
+                "Actual Rows": 0,
+                "Actual Loops": 0,
+                "Filter": "(scope_id = '11'::numeric)",
+                "Rows Removed by Filter": 0
+              }
+            ]
+          }
+        ]
+      },
+      "Planning Time": 0.079,
+      "Triggers": [],
+      "Execution Time": 0.029
+    }
+  ],
+  "sql": "BEGIN;\nCREATE TEMP TABLE scalar_null_sections(id NUMERIC(10) PRIMARY KEY,scope_id NUMERIC(10),active CHAR(1));\nCREATE TEMP TABLE scalar_null_fields(id NUMERIC(10) PRIMARY KEY,section_id NUMERIC(10),active CHAR(1),hidden VARCHAR(1));\nCREATE UNIQUE INDEX ON scalar_null_fields(section_id,id) NULLS NOT DISTINCT;\nCREATE TEMP TABLE scalar_null_seen(id NUMERIC(10),scope_id NUMERIC(10));\nCREATE TEMP TABLE scalar_null_visible(id NUMERIC(10),scope_id NUMERIC(10));\nINSERT INTO scalar_null_sections VALUES(3,7,'Y'),(9,7,'Y'),(1,8,'Y');\nINSERT INTO scalar_null_fields SELECT i,(i-1)%100+1,'Y',NULL FROM generate_series(1,5000)i;\nANALYZE scalar_null_fields;\nSELECT jsonb_build_object('version',current_setting('server_version'),'nonnull_rows',(SELECT count(*) FROM (SELECT id FROM scalar_null_fields WHERE active='Y' AND section_id=(SELECT min(id) FROM scalar_null_sections WHERE scope_id=7 AND active='Y') AND hidden IS NULL AND id NOT IN(SELECT id FROM scalar_null_seen WHERE scope_id=11 AND id IS NOT NULL) AND (id IN(SELECT id FROM scalar_null_visible WHERE scope_id=11) OR (SELECT count(*) FROM scalar_null_visible WHERE scope_id=11)=0) ORDER BY coalesce(active,'Y') DESC,id)s),'null_aggregate_rows',(SELECT count(*) FROM (SELECT id FROM scalar_null_fields WHERE active='Y' AND section_id=(SELECT min(id) FROM scalar_null_sections WHERE scope_id=404 AND active='Y') AND hidden IS NULL AND id NOT IN(SELECT id FROM scalar_null_seen WHERE scope_id=11 AND id IS NOT NULL) AND (id IN(SELECT id FROM scalar_null_visible WHERE scope_id=11) OR (SELECT count(*) FROM scalar_null_visible WHERE scope_id=11)=0) ORDER BY coalesce(active,'Y') DESC,id)s),'null_projection_rows',(SELECT count(*) FROM scalar_null_fields WHERE section_id=(SELECT CAST(NULL AS NUMERIC))));\nEXPLAIN(ANALYZE,FORMAT JSON) SELECT id FROM scalar_null_fields WHERE active='Y' AND section_id=(SELECT min(id) FROM scalar_null_sections WHERE scope_id=404 AND active='Y') AND hidden IS NULL AND id NOT IN(SELECT id FROM scalar_null_seen WHERE scope_id=11 AND id IS NOT NULL) AND (id IN(SELECT id FROM scalar_null_visible WHERE scope_id=11) OR (SELECT count(*) FROM scalar_null_visible WHERE scope_id=11)=0) ORDER BY coalesce(active,'Y') DESC,id;\nROLLBACK;\n",
+  "correlated_controls": {
+    "left_join": [
+      [
+        1,
+        null
+      ],
+      [
+        2,
+        10
+      ],
+      [
+        3,
+        11
+      ]
+    ],
+    "lateral_left_join": [
+      [
+        1,
+        null
+      ],
+      [
+        2,
+        10
+      ],
+      [
+        3,
+        11
+      ]
+    ],
+    "sql": "BEGIN;\nCREATE TEMP TABLE outer_choices(id INT PRIMARY KEY,wanted INT);\nCREATE TEMP TABLE target_matches(id INT PRIMARY KEY,lookup_key INT);\nCREATE INDEX ON target_matches(lookup_key);\nINSERT INTO outer_choices VALUES(1,NULL),(2,2),(3,3);\nINSERT INTO target_matches VALUES(10,2),(11,3);\nSELECT jsonb_agg(jsonb_build_array(id,matched) ORDER BY id) FROM (SELECT o.id,t.id AS matched FROM outer_choices o LEFT JOIN target_matches t ON t.lookup_key=(SELECT o.wanted))s;\nSELECT jsonb_agg(jsonb_build_array(id,matched) ORDER BY id) FROM (SELECT o.id,t.id AS matched FROM outer_choices o LEFT JOIN LATERAL (SELECT r.id FROM target_matches r WHERE r.lookup_key=(SELECT o.wanted))t ON TRUE)s;\nROLLBACK;\n",
+    "transaction": "ROLLBACK"
+  }
+}

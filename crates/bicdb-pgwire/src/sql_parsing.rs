@@ -2647,9 +2647,23 @@ pub(crate) fn describe_message(
                     &state.session_state,
                     state.security_context.as_ref(),
                 )?;
-                describe_result(stream, server, &result, &[], None)?;
+                describe_result(
+                    stream,
+                    server,
+                    &result,
+                    &[],
+                    None,
+                    Some(&mut state.catalog_cache),
+                )?;
             } else if let Some(result) = returning_describe_result(server, &statement.sql)? {
-                describe_result(stream, server, &result, &[], Some(&statement.sql))?;
+                describe_result(
+                    stream,
+                    server,
+                    &result,
+                    &[],
+                    Some(&statement.sql),
+                    Some(&mut state.catalog_cache),
+                )?;
             } else if is_describable_query(&statement.sql) && !statement.sql.contains('$') {
                 let result = execute_server_sql_for_describe_with_session(
                     server,
@@ -2658,9 +2672,23 @@ pub(crate) fn describe_message(
                     state.security_context.as_ref(),
                     &mut state.catalog_cache,
                 )?;
-                describe_result(stream, server, &result, &[], Some(&statement.sql))?;
+                describe_result(
+                    stream,
+                    server,
+                    &result,
+                    &[],
+                    Some(&statement.sql),
+                    Some(&mut state.catalog_cache),
+                )?;
             } else if let Some(result) = placeholder_cast_describe_result(&statement.sql) {
-                describe_result(stream, server, &result, &[], Some(&statement.sql))?;
+                describe_result(
+                    stream,
+                    server,
+                    &result,
+                    &[],
+                    Some(&statement.sql),
+                    Some(&mut state.catalog_cache),
+                )?;
             } else if let Some(describe_sql) = mutating_with_describe_sql(&statement.sql) {
                 // `WITH x AS (INSERT/UPDATE/DELETE ... RETURNING ...) SELECT ...`:
                 // describe the read-only equivalent; the DML never runs here.
@@ -2673,7 +2701,14 @@ pub(crate) fn describe_message(
                     state.security_context.as_ref(),
                     &mut state.catalog_cache,
                 )?;
-                describe_result(stream, server, &result, &[], Some(&statement.sql))?;
+                describe_result(
+                    stream,
+                    server,
+                    &result,
+                    &[],
+                    Some(&statement.sql),
+                    Some(&mut state.catalog_cache),
+                )?;
             } else if is_describable_query(&statement.sql) {
                 let null_params = vec!["NULL".to_string(); statement.param_type_oids.len()];
                 let describe_sql = substitute_parameters(&statement.sql, &null_params)?;
@@ -2684,7 +2719,14 @@ pub(crate) fn describe_message(
                     state.security_context.as_ref(),
                     &mut state.catalog_cache,
                 )?;
-                describe_result(stream, server, &result, &[], Some(&statement.sql))?;
+                describe_result(
+                    stream,
+                    server,
+                    &result,
+                    &[],
+                    Some(&statement.sql),
+                    Some(&mut state.catalog_cache),
+                )?;
             } else {
                 no_data(stream)?;
             }
@@ -2710,7 +2752,14 @@ pub(crate) fn describe_message(
                     &state.session_state,
                     state.security_context.as_ref(),
                 )?;
-                describe_result(stream, server, &result, &portal_result_formats, None)?;
+                describe_result(
+                    stream,
+                    server,
+                    &result,
+                    &portal_result_formats,
+                    None,
+                    Some(&mut state.catalog_cache),
+                )?;
             } else if parse_copy_statement(&portal_sql)?.is_some() {
                 // COPY's stream description is sent by Execute, never by
                 // running the mutation during Describe.
@@ -2724,6 +2773,7 @@ pub(crate) fn describe_message(
                     &result,
                     &portal_result_formats,
                     Some(&portal_source_sql),
+                    Some(&mut state.catalog_cache),
                 )?;
             } else if is_describable_query(&portal_sql) {
                 let result = execute_server_sql_for_describe_with_session(
@@ -2739,6 +2789,7 @@ pub(crate) fn describe_message(
                     &result,
                     &portal_result_formats,
                     Some(&portal_source_sql),
+                    Some(&mut state.catalog_cache),
                 )?;
             } else {
                 let materialization_watermark = region_reads::snapshot_watermark(server, state);
@@ -2749,6 +2800,7 @@ pub(crate) fn describe_message(
                     &result,
                     &portal_result_formats,
                     Some(&portal_source_sql),
+                    Some(&mut state.catalog_cache),
                 )?;
                 if let Some(portal) = state.portals.get_mut(&name) {
                     portal.replica_watermark = materialization_watermark;

@@ -589,3 +589,47 @@ fn owned_shadow_collision_refuses_publication_without_changing_legacy_constraint
         .discard_paged_btree_build("owned-shadow", limits)
         .unwrap());
 }
+
+#[test]
+fn oracle_publication_refuses_pending_writes_and_invalid_build_ownership() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(root.path(), mode_config(mode.clone())).unwrap();
+        db.create_collection("rows").unwrap();
+        let old = index("legacy", IndexField::Upper(Box::new(path("value"))), true);
+        db.create_index(old.clone()).unwrap();
+        let definition = index(
+            "owned-shadow",
+            IndexField::OracleUpperV1(Box::new(path("value"))),
+            true,
+        );
+        let shadow = if mode == StorageMode::ServerPaged {
+            CaseShadow::Paged(completed_shadow(&mut db, definition))
+        } else {
+            db.create_index(definition.clone()).unwrap();
+            CaseShadow::Embedded(definition)
+        };
+        let before = std::fs::read(root.path().join("indexes.json")).unwrap();
+        let mut tx = db.begin_transaction().unwrap();
+        tx.insert("rows", row("pending", "é")).unwrap();
+        assert!(publish_case_shadow(&mut db, &old, &shadow).is_err());
+        assert!(db.enable_oracle_simple_case_v1().is_err());
+        assert_eq!(
+            std::fs::read(root.path().join("indexes.json")).unwrap(),
+            before
+        );
+        tx.rollback().unwrap();
+        if let CaseShadow::Paged(state) = &shadow {
+            let mut unrelated = state.clone();
+            unrelated.run_id = uuid::Uuid::now_v7();
+            assert!(db
+                .publish_oracle_case_v1_index_replacement(&old, &unrelated)
+                .is_err());
+            assert_eq!(
+                std::fs::read(root.path().join("indexes.json")).unwrap(),
+                before
+            );
+        }
+        publish_case_shadow(&mut db, &old, &shadow).unwrap();
+    }
+}

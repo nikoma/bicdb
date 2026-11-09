@@ -706,7 +706,10 @@ pub struct PagedStore {
     checkpointer: Checkpointer,
     options: PagedStoreOptions,
     next_transaction: AtomicU64,
+    #[cfg(not(feature = "experimental-structural-cuts"))]
     transactions: TransactionTable,
+    #[cfg(feature = "experimental-structural-cuts")]
+    transactions: Arc<TransactionTable>,
     /// Disk-backed terminal outcomes above a pinned watermark.
     spill: Arc<PagedOutcomeSpill>,
     /// The snapshot each live transaction began with.
@@ -1044,6 +1047,7 @@ impl PagedStore {
 
         let checkpointer = Checkpointer::new(pool.clone(), wal.clone());
         // Eviction must not outrun the log. See `WritebackBarrier`.
+        #[cfg(not(feature = "experimental-structural-cuts"))]
         pool.set_barrier(Arc::new(WalWritebackBarrier { wal: wal.clone() }));
 
         // Checkpointed watermarks first, then final log outcomes on top:
@@ -1053,6 +1057,8 @@ impl PagedStore {
         // set.
         let transactions =
             TransactionTable::with_exception_capacity(abort_exception_capacity(options.page_size));
+        #[cfg(feature = "experimental-structural-cuts")]
+        let transactions = Arc::new(transactions);
         // The spill is loaded before outcomes are installed: anything it
         // retains is visible to `status` immediately, and the open-time
         // freeze below can only shrink what it needs to cover.
@@ -1074,6 +1080,12 @@ impl PagedStore {
         // This is what keeps crash-orphaned row versions from reading as an
         // eternal concurrent writer once the exception region is full.
         transactions.seal_previous_incarnations();
+        #[cfg(feature = "experimental-structural-cuts")]
+        pool.set_barrier(Arc::new(WalWritebackBarrier {
+            wal: wal.clone(),
+            transactions: transactions.clone(),
+            durable_floor: Mutex::new(0),
+        }));
 
         // Nothing is in flight at open, so every recovered xid is terminal or
         // crash-dead. Advance the watermark across everything representable
@@ -5743,12 +5755,35 @@ impl crate::mvcc::OutcomeSpill for PagedOutcomeSpill {
 #[derive(Debug)]
 struct WalWritebackBarrier {
     wal: Arc<Wal>,
+    #[cfg(feature = "experimental-structural-cuts")]
+    transactions: Arc<TransactionTable>,
+    #[cfg(feature = "experimental-structural-cuts")]
+    durable_floor: Mutex<Xid>,
 }
 
 impl crate::pool::WritebackBarrier for WalWritebackBarrier {
     fn before_writeback(&self, page_id: PageId, transaction: u64, bytes: &[u8]) -> Result<()> {
         let lsn = self.wal.log_page_image(page_id, transaction, bytes)?;
         self.wal.sync_through(lsn)
+    }
+
+    #[cfg(feature = "experimental-structural-cuts")]
+    fn before_unreachable_writeback(&self, page_id: PageId, bytes: &[u8]) -> Result<()> {
+        // Even an unrooted image may contain live version headers. Persist
+        // a fresh higher xid BEFORE appending a recoverable xid-zero image;
+        // recovery must never reissue any xid found in those bytes.
+        let mut floor = self.durable_floor.lock();
+        let highest_assigned = self.transactions.next_xid().saturating_sub(1);
+        if *floor < highest_assigned {
+            let (marker, _) = self.transactions.begin();
+            if let Err(error) = self.wal.commit(marker) {
+                self.transactions.abort(marker);
+                return Err(error);
+            }
+            self.transactions.commit(marker);
+            *floor = marker;
+        }
+        self.before_writeback(page_id, 0, bytes)
     }
 
     fn before_logged_writeback(&self, _page_id: PageId) -> Result<()> {

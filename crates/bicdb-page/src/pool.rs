@@ -422,6 +422,11 @@ pub trait WritebackBarrier: Send + Sync + std::fmt::Debug {
     /// Ensure `bytes` for `page_id` are recoverable before they reach disk.
     fn before_writeback(&self, page_id: PageId, transaction: u64, bytes: &[u8]) -> Result<()>;
 
+    #[cfg(feature = "experimental-structural-cuts")]
+    fn before_unreachable_writeback(&self, page_id: PageId, bytes: &[u8]) -> Result<()> {
+        self.before_writeback(page_id, 0, bytes)
+    }
+
     /// Ensure a dirty page whose after-image is ALREADY logged (no new record
     /// is needed) may reach disk: every log record that could describe it
     /// must be durable. The default suits owners whose logged images are
@@ -1099,7 +1104,7 @@ impl BufferPool {
         let Some(barrier) = barrier else { return Ok(()); };
         let guard = self.get(page_id)?;
         let epoch = guard.frame.modifications.load(Ordering::Acquire);
-        barrier.before_writeback(page_id, 0, guard.bytes())?;
+        barrier.before_unreachable_writeback(page_id, guard.bytes())?;
         drop(guard);
         self.mark_logged(&[(page_id, epoch)]);
         Ok(())

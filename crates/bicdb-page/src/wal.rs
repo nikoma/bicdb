@@ -2313,10 +2313,15 @@ mod tests {
         for steal in [false, true] {
             let dir = TempDir::new().unwrap();
             let page_size = 512u32;
-            let (a, b) = crash_after_allocating_the_published_free_list_head(&dir, page_size, steal);
+            let (a, b) =
+                crash_after_allocating_the_published_free_list_head(&dir, page_size, steal);
 
             let store = store(&dir, page_size);
-            assert_eq!(store.free_list_head(), b, "the stale head is what was published");
+            assert_eq!(
+                store.free_list_head(),
+                b,
+                "the stale head is what was published"
+            );
             let wal = Wal::open(dir.path().join("test.wal"), false).unwrap();
             let report = recover(&wal, &store).unwrap();
             assert_eq!(report.pages_replayed, 0);

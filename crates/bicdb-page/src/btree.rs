@@ -2752,7 +2752,11 @@ mod tests {
         };
         corrupt(tree.get(&key(0)).unwrap_err());
         corrupt(tree.insert(&key(0), b"again").unwrap_err());
-        corrupt(tree.range(&key(0)).err().expect("a range must refuse the descent"));
+        corrupt(
+            tree.range(&key(0))
+                .err()
+                .expect("a range must refuse the descent"),
+        );
         corrupt(tree.height().unwrap_err());
     }
 

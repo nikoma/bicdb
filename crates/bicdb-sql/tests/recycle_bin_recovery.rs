@@ -127,3 +127,20 @@ fn normal_transaction_and_savepoint_rollback_keep_recycle_rows_visible() {
     drop(s);
     assert_row(&mut db);
 }
+
+#[test]
+fn recovery_fence_wins_even_when_no_repair_is_needed() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(root.path(), config(mode)).unwrap();
+        assert_eq!(recover_interrupted_recycle_bin_renames(&mut db).unwrap(), 0);
+        db.durability_health_for_test()
+            .record_failure("test.sql_catalog_recovery", &"injected");
+        assert!(matches!(
+            recover_interrupted_recycle_bin_renames(&mut db),
+            Err(bicdb_sql::SqlError::BicDb(
+                bicdb_core::BicDbError::WriteFailed { .. }
+            ))
+        ));
+    }
+}

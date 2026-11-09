@@ -51,6 +51,15 @@ pub(crate) fn is_recycle_bin_name(name: &str) -> bool {
 /// Core WAL/catalog recovery must run first. Completed drops are excluded by
 /// their durable bin entry; ambiguous states are preserved for diagnosis.
 pub fn recover_interrupted_recycle_bin_renames(db: &mut BicDb) -> Result<usize> {
+    db.check_recovery_state()?;
+    let result = recover_interrupted_recycle_bin_renames_inner(db);
+    // A concurrent/late fence wins even over an empty result or a structural
+    // ambiguity diagnostic: startup must not continue with an unsafe store.
+    db.check_recovery_state()?;
+    result
+}
+
+fn recover_interrupted_recycle_bin_renames_inner(db: &mut BicDb) -> Result<usize> {
     let completed = list_recycle_bin(db)?
         .into_iter()
         .map(|entry| entry.bin_name)

@@ -3532,9 +3532,19 @@ mod join_envelope_path_tests {
         {
             let _scope = crate::join_budget::Scope::enter();
             let memory = QueryMemoryScope::new(64 * 1024);
-            let error = engine
-                .apply_spatial_tree_join(&left, &right, RowJoinKind::Inner, &constraint)
-                .unwrap_err();
+            let error = match engine.apply_spatial_tree_join(
+                &left,
+                &right,
+                RowJoinKind::Inner,
+                &constraint,
+            ) {
+                Err(error) => error,
+                Ok(Some(rows)) => panic!(
+                    "spatial join retained {} rows without rejecting the envelope",
+                    rows.rows.len()
+                ),
+                Ok(None) => panic!("spatial optimization did not apply"),
+            };
             assert_eq!(error.sqlstate(), "53200");
             assert!(memory.peak_bytes() <= 64 * 1024 + 16 * 1024);
         }
@@ -3572,15 +3582,20 @@ mod join_envelope_path_tests {
         {
             let _scope = crate::join_budget::Scope::enter();
             let memory = QueryMemoryScope::new(64 * 1024);
-            let error = engine
-                .apply_indexed_right_table_join(
-                    &mut left.clone(),
-                    &right,
-                    RowJoinKind::Inner,
-                    &constraint,
-                    None,
-                )
-                .unwrap_err();
+            let error = match engine.apply_indexed_right_table_join(
+                &mut left.clone(),
+                &right,
+                RowJoinKind::Inner,
+                &constraint,
+                None,
+            ) {
+                Err(error) => error,
+                Ok(Some(rows)) => panic!(
+                    "point join retained {} rows without rejecting the envelope",
+                    rows.rows.len()
+                ),
+                Ok(None) => panic!("indexed optimization did not apply"),
+            };
             assert_eq!(error.sqlstate(), "53200");
             assert!(memory.peak_bytes() <= 64 * 1024 + 32 * 1024);
         }

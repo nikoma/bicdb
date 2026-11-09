@@ -175,6 +175,7 @@ fn national_case_uses_al16utf16_for_literals_columns_and_nested_queries() {
                 "bicdb",
             )
             .unwrap();
+            eprintln!("LOWERED {sql}");
             SqlSession::new(db).execute(&sql).unwrap().rows
         };
         run(&mut db, "CREATE TABLE national_case_rows(v NVARCHAR2(4))");

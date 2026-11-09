@@ -286,6 +286,22 @@ pub(crate) fn pg_operator_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlVal
         .collect::<Vec<_>>();
     for operator in user_operators(db)?.iter() {
         let link = |id: &Option<OperatorRef>| id.as_ref().map(operator_oid).unwrap_or(0);
+        let function_oid = if let Some(function) = &operator.function {
+            let candidates = routines_named(db, RoutineKind::Function, &function.name)?;
+            let argument_types = operator
+                .id
+                .left
+                .iter()
+                .chain(std::iter::once(&operator.id.right))
+                .cloned()
+                .map(Some)
+                .collect::<Vec<_>>();
+            select_overload(&candidates, &argument_types, &[])
+                .map(catalog_routine_oid)
+                .unwrap_or(routine_oid(RoutineKind::Function, &function.name))
+        } else {
+            0
+        };
         rows.push(virtual_row([
             ("oid", SqlValue::Int(operator.oid())),
             ("oprname", SqlValue::String(operator.id.name.clone())),
@@ -317,16 +333,7 @@ pub(crate) fn pg_operator_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlVal
             ),
             ("oprcom", SqlValue::Int(link(&operator.commutator))),
             ("oprnegate", SqlValue::Int(link(&operator.negator))),
-            (
-                "oprcode",
-                SqlValue::Int(
-                    operator
-                        .function
-                        .as_ref()
-                        .map(|function| routine_oid(RoutineKind::Function, &function.name))
-                        .unwrap_or(0),
-                ),
-            ),
+            ("oprcode", SqlValue::Int(function_oid)),
             ("oprrest", SqlValue::Int(0)),
             ("oprjoin", SqlValue::Int(0)),
         ]));

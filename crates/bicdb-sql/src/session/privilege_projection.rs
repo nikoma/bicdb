@@ -192,6 +192,7 @@ impl<'db> SqlSession<'db> {
                         )));
                     }
                     routine.overload = same.overload.clone();
+                    routine.catalog_oid = Some(catalog_routine_oid(same));
                 }
                 None if routine.kind == RoutineKind::Function
                     && oracle::preview_routine_language_version(&routine.language).is_none() =>
@@ -233,6 +234,7 @@ impl<'db> SqlSession<'db> {
             if let Some(next) = successor {
                 delete_routine_schema(self.db_mut()?, &next)?;
                 let mut promoted = next.clone();
+                promoted.catalog_oid = Some(catalog_routine_oid(&next));
                 promoted.overload = None;
                 save_routine(self.db_mut()?, &promoted)?;
                 if self.tx.is_some() {
@@ -878,11 +880,7 @@ impl<'db> SqlSession<'db> {
                             "range canonical function {canonical} must be a one-argument registered {expected_symbol} hook for {type_name}"
                         )));
                     }
-                    (
-                        Some(canonical),
-                        routine_oid(routine.kind, &routine.name),
-                        true,
-                    )
+                    (Some(canonical), catalog_routine_oid(&routine), true)
                 } else {
                     (None, 0, false)
                 };
@@ -919,7 +917,7 @@ impl<'db> SqlSession<'db> {
                                         "range subtype diff function {subtype_diff} does not exist"
                                     ))
                                     })?;
-                            (Some(subtype_diff), routine_oid(routine.kind, &routine.name))
+                            (Some(subtype_diff), catalog_routine_oid(&routine))
                         }
                     } else {
                         (None, 0)

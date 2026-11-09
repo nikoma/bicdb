@@ -3951,8 +3951,16 @@ pub(crate) fn compare_expr_values_resolved(
         || (right_expr_type.as_deref() == Some("char")
             && matches!(left_expr_type.as_deref(), Some("text" | "varchar")))
     {
-        let left = cast_value_to_pg_type(left.clone(), "text")?;
-        let right = cast_value_to_pg_type(right.clone(), "text")?;
+        let as_text = |value: &SqlValue, kind: Option<&str>| {
+            if kind == Some("char") {
+                if let Some(byte) = pg_internal_char_byte(value) {
+                    return SqlValue::String(pg_internal_char_text(byte));
+                }
+            }
+            value.clone()
+        };
+        let left = as_text(left, left_expr_type.as_deref());
+        let right = as_text(right, right_expr_type.as_deref());
         return Ok(Some(comparison_from_ordering(
             op,
             pg_typed_compare("text", &left, &right)?,

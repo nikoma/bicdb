@@ -3627,6 +3627,7 @@ impl<'db> SqlSession<'db> {
             owner: Some(current_user_from_gucs(&self.session_gucs)),
             security_definer: matches!(create_function.security, Some(FunctionSecurity::Definer)),
             overload: None,
+            catalog_oid: None,
         };
         if create_function.or_replace
             && list_user_types(self.db_ref())?

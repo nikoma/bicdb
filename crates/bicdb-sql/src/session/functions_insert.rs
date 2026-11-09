@@ -72,6 +72,7 @@ impl<'db> SqlSession<'db> {
                 owner: Some(owner),
                 security_definer: routine_definition_is_security_definer(trimmed),
                 overload: None,
+                catalog_oid: None,
             },
             false,
             prefix.contains("replace"),
@@ -210,6 +211,7 @@ impl<'db> SqlSession<'db> {
             owner: Some(current_user_from_gucs(&self.session_gucs)),
             security_definer: false,
             overload: None,
+            catalog_oid: None,
         };
         self.save_session_routine_if_missing(routine, false, false)?;
         Ok(SqlResult::command("CREATE PROCEDURE"))
@@ -271,6 +273,7 @@ impl<'db> SqlSession<'db> {
                 owner: Some(owner),
                 security_definer: routine_definition_is_security_definer(trimmed),
                 overload: None,
+                catalog_oid: None,
             },
             false,
             prefix.contains("replace"),

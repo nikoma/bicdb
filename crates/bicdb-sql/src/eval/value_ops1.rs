@@ -1594,7 +1594,7 @@ pub(crate) fn pg_get_function_result(db: &BicDb, args: &[SqlValue]) -> Result<Sq
 pub(crate) fn routine_for_oid(db: &BicDb, oid: i64) -> Result<Option<RoutineSchema>> {
     Ok(list_routines(db)?
         .into_iter()
-        .find(|routine| routine_oid(routine.kind, &routine.name) == oid))
+        .find(|routine| catalog_routine_oid(&routine) == oid))
 }
 
 pub(crate) fn pg_builtin_proc_return_type_oid(oid: i64) -> Option<i64> {

@@ -73,7 +73,8 @@ async fn schedule(mode: StorageMode, case: Case) {
         .await
         .unwrap();
     let querying = reader.clone();
-    let mut upsert = tokio::spawn(async move { querying.simple_query(case.upsert).await });
+    let upsert_sql = case.upsert;
+    let mut upsert = tokio::spawn(async move { querying.simple_query(upsert_sql).await });
     let messages = if case.waits {
         let early = tokio::time::timeout(Duration::from_millis(200), &mut upsert).await;
         assert!(

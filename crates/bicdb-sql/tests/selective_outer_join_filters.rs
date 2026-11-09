@@ -41,7 +41,7 @@ fn indexed_right_filters_preserve_outer_rows_quoted_bindings_and_function_calls(
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();
     let mut session = SqlSession::new(&mut db);
-    session.execute("CREATE TABLE filter_guard_l(id INTEGER PRIMARY KEY,v TEXT); CREATE TABLE filter_guard_r(id INTEGER PRIMARY KEY,v TEXT); INSERT INTO filter_guard_l VALUES(1,NULL),(2,'left'),(3,'orphan'); INSERT INTO filter_guard_r VALUES(1,'right'),(2,'right'); CREATE SEQUENCE filter_guard_calls").unwrap();
+    session.execute("CREATE TABLE filter_guard_l(id INTEGER PRIMARY KEY,v TEXT); CREATE TABLE filter_guard_r(id INTEGER PRIMARY KEY,v TEXT); INSERT INTO filter_guard_l VALUES(1,NULL),(2,'left'),(3,'orphan'); INSERT INTO filter_guard_r VALUES(1,'right'),(2,'right'); CREATE SEQUENCE filter_guard_calls; CREATE FUNCTION filter_guard_tick() RETURNS BIGINT LANGUAGE plpgsql VOLATILE AS $$ BEGIN RETURN nextval('filter_guard_calls'); END $$").unwrap();
     assert_eq!(
         session.execute("SELECT l.id FROM filter_guard_l l LEFT JOIN filter_guard_r r ON l.id=r.id WHERE r.v IS NULL ORDER BY l.id").unwrap().rows,
         vec![vec![SqlValue::Int(3)]]
@@ -51,7 +51,7 @@ fn indexed_right_filters_preserve_outer_rows_quoted_bindings_and_function_calls(
         vec![vec![SqlValue::Int(1)]]
     );
     assert_eq!(
-        session.execute("SELECT l.id FROM filter_guard_l l JOIN filter_guard_r r ON l.id=r.id WHERE r.v='right' AND nextval('filter_guard_calls')>0 ORDER BY l.id").unwrap().rows,
+        session.execute("SELECT l.id FROM filter_guard_l l JOIN filter_guard_r r ON l.id=r.id WHERE r.v='right' AND filter_guard_tick()>0 ORDER BY l.id").unwrap().rows,
         vec![vec![SqlValue::Int(1)],vec![SqlValue::Int(2)]]
     );
     assert_eq!(

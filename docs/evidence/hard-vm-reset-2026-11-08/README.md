@@ -86,7 +86,7 @@ pool; that proves pagefile footprint, not the live working-set size or an
 eviction counter. Acknowledged row count alone is not a pressure-byte proof. Host-fsynced ledgers retain2,472 intents,
 2,448 COMMIT attempts and2,428 acknowledged transactions. Every acknowledged
 row and receipt remains, unacknowledged outcomes are whole and drawn only from
-attempted commits, indexed results reconcile, native transaction IDs do not
+attempted commits, indexed results reconcile, acknowledged native transaction IDs do not
 repeat, and acknowledged CREATE/INSERT/DROP outcomes agree after recovery.
 The run includes123 attempted DDL tables. Unknown outcomes are reconciled;
 they are not counted as lost acknowledged writes.
@@ -110,3 +110,10 @@ remained unchanged. Reports and exact verifier binary hash are retained under
 Page-file footprints grew from4,775,936 to5,947,392 bytes. These structural
 checks complement the independent SQL ledgers; neither substitutes for all
 logical index, application or power-loss tests.
+
+
+The [matched commit timing evidence](performance/README.md) retains all18
+alternating runs and36 planned-abort recoveries for actual main0af versus
+default6d. Wide ranges and mixed paired directions make the performance
+effect inconclusive; no outliers were removed. This is not an iDempiere
+application benchmark or an independent acknowledgment-ledger campaign.

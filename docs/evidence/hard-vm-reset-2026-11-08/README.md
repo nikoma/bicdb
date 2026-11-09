@@ -29,7 +29,7 @@ Older v1 results do not cover newly added assertions.
 | 1794189323 | 8313120f | server_paged, experimental | 2,045 | incomplete: concurrent fresh table constraint creation XX000; source fix #111 |
 | 1794191086 | 1a9e3d56 | server_paged, experimental | 2,089 | incomplete: acknowledged native SQL IDs reused after checkpoint/reopen; source fix #114 |
 | 1794195817 | 5d04f91f | server_paged, experimental | 2,428 | complete: preseed, native IDs, 123 DDL attempts, 12 writer resets +2 repeated recoveries, initial backup restore; zero violations |
-| 1794203435 | 0af1b55e | server_paged, ordinary main | 2,252 | incomplete: startup failed after 12th writer kill with orphan/mismatched `vm_ddl_75_pkey`; generic DDL catalog crash boundary under investigation |
+| 1794203435 | 0af1b55e | server_paged, ordinary main | 2,252 | incomplete: startup failed after 12th writer kill with mismatched `vm_ddl_75_pkey`; generic DDL catalog crash boundary under investigation |
 
 All incomplete campaigns retain `complete: false`. Their acknowledged
 row/index/receipt checks passed up to the reported failures; this does not make
@@ -40,8 +40,12 @@ The explicit `server_paged` production-main control at0af1b55e failed:
 11 writer-reset recoveries reconciled without row/index/receipt errors, then
 the next restart refused an existing `vm_ddl_75_pkey` definition. The client
 had acknowledged table creation and its row, attempted DROP, and received no
-DROP acknowledgment. Inspection found the index pointing at a missing
-`__bicdb_bin_*` collection. Recycle-bin behavior also applies to the PostgreSQL
+DROP acknowledgment. Exact JSON inspection confirms that the renamed `__bicdb_bin_*` collection
+and its original `storage_name=vm_ddl_75` backing remain. An initial quick
+name filter incorrectly classified that collection as missing; that inference
+is retracted. The interrupted move remapped the index collection, while SQL
+schema/index naming had not completed, causing startup primary-key backfill
+to collide with the retained index. Recycle-bin behavior also applies to the PostgreSQL
 profile used by this VM; this is a generic transactional DDL/catalog boundary,
 not an Oracle-only or typed-catalog regression. The exact source and terminal
 error are preserved. No success is inferred from earlier clean recoveries.

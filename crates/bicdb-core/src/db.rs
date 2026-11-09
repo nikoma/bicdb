@@ -17717,12 +17717,16 @@ impl Transaction {
                 let record_id = record.id.clone();
                 validate_record(collection, &record, &mut next_dim)?;
                 let record = Arc::new(record);
-                let image = OldImage::from_record(Some(Arc::clone(&record)));
-                let previous_image = match previous_image {
-                    Some(previous) => Some(previous),
-                    None => self.previous_unique_reservation_image(collection, &record_id, None)?,
-                };
-                self.reserve_unique_image(collection, &image, previous_image.as_ref(), None)?;
+                if db.has_unique_reservation_indexes(collection) {
+                    let image = OldImage::from_record(Some(Arc::clone(&record)));
+                    let previous_image = match previous_image {
+                        Some(previous) => Some(previous),
+                        None => {
+                            self.previous_unique_reservation_image(collection, &record_id, None)?
+                        }
+                    };
+                    self.reserve_unique_image(collection, &image, previous_image.as_ref(), None)?;
+                }
                 self.lock_row_for_write(tx_id, collection, &record_id, false)?;
                 let statement_snapshot =
                     self.conflict_snapshot_for_write(collection, &record_id, statement_snapshot);
@@ -17905,18 +17909,20 @@ impl Transaction {
                     stored.vector.as_deref(),
                     &mut next_dim,
                 )?;
-                let image = OldImage::from_stored(Arc::clone(&stored));
-                let previous_image = self.previous_unique_reservation_image(
-                    collection,
-                    &record_id,
-                    previous_stored.as_ref(),
-                )?;
-                self.reserve_unique_image(
-                    collection,
-                    &image,
-                    previous_image.as_ref(),
-                    changed.as_deref(),
-                )?;
+                if db.has_unique_reservation_indexes(collection) {
+                    let image = OldImage::from_stored(Arc::clone(&stored));
+                    let previous_image = self.previous_unique_reservation_image(
+                        collection,
+                        &record_id,
+                        previous_stored.as_ref(),
+                    )?;
+                    self.reserve_unique_image(
+                        collection,
+                        &image,
+                        previous_image.as_ref(),
+                        changed.as_deref(),
+                    )?;
+                }
                 if repair.is_none() && !optimistic_inserts {
                     self.lock_row_for_write(tx_id, collection, &record_id, false)?;
                 }
@@ -17969,10 +17975,12 @@ impl Transaction {
                 let record_id = record.id.clone();
                 validate_record(collection, &record, &mut next_dim)?;
                 let record = Arc::new(record);
-                let image = OldImage::from_record(Some(Arc::clone(&record)));
-                let previous_image =
-                    self.previous_unique_reservation_image(collection, &record_id, None)?;
-                self.reserve_unique_image(collection, &image, previous_image.as_ref(), None)?;
+                if db.has_unique_reservation_indexes(collection) {
+                    let image = OldImage::from_record(Some(Arc::clone(&record)));
+                    let previous_image =
+                        self.previous_unique_reservation_image(collection, &record_id, None)?;
+                    self.reserve_unique_image(collection, &image, previous_image.as_ref(), None)?;
+                }
                 if repair.is_none() {
                     self.lock_row_for_write(tx_id, collection, &record_id, false)?;
                 }

@@ -16,6 +16,25 @@ pub(super) struct UniqueIndexCache {
 }
 
 impl BicDb {
+    // Avoid constructing row-image caches (or allocating an empty Arc slice)
+    // on the ordinary path for collections without a native unique index.
+    pub(super) fn has_unique_reservation_indexes(&self, collection: &str) -> bool {
+        if self.indexes.is_empty() {
+            return false;
+        }
+        let generation = self.index_generation();
+        {
+            let cache = self.unique_reservation_indexes.read();
+            if let Some(cache) = cache
+                .as_ref()
+                .filter(|cache| cache.generation == generation)
+            {
+                return cache.collections.contains_key(collection);
+            }
+        }
+        !self.unique_reservation_index_names(collection).is_empty()
+    }
+
     // Catalog changes hold the outer exclusive DB guard. Rebuild once per
     // catalog generation, then visit only this collection's unique indexes
     // for each row, including when other collections have thousands of them.
@@ -133,9 +152,6 @@ impl Transaction {
         previous_stored: Option<&Arc<StoredRecord>>,
     ) -> Result<Option<OldImage>> {
         let db = self.db_ref();
-        if db.unique_reservation_index_names(collection).is_empty() {
-            return Ok(None);
-        }
         if let Some(write) = self.last_pending_write(collection, record_id) {
             return Ok(Some(match write.op {
                 TxWriteOp::Delete => OldImage::none(),

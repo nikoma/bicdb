@@ -5763,6 +5763,27 @@ pub(crate) fn predicate_references_only_columns(expr: &Expr, columns: &BTreeSet<
     if !collect_predicate_column_references(expr, &mut references) || references.is_empty() {
         return false;
     }
+    // A quoted qualifier may distinguish two inputs whose names differ only
+    // by case. Never push that input's predicate into its case-folded peer.
+    let quoted_mismatch = sqlparser::ast::visit_expressions(expr, |expr| {
+        if let Expr::CompoundIdentifier(parts) = expr {
+            if parts.iter().any(|part| part.quote_style.is_some())
+                && (parts.len() < 2
+                    || !columns.contains(&format!(
+                        "{}.{}",
+                        parts[parts.len() - 2].value,
+                        parts[parts.len() - 1].value
+                    )))
+            {
+                return std::ops::ControlFlow::Break(());
+            }
+        }
+        std::ops::ControlFlow::Continue(())
+    })
+    .is_break();
+    if quoted_mismatch {
+        return false;
+    }
     references
         .iter()
         .all(|reference| column_reference_matches(reference, columns))

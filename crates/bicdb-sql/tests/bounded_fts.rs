@@ -2,6 +2,50 @@ use bicdb_core::{BicDb, DbConfig, StorageMode};
 use bicdb_sql::{SqlSession, SqlValue};
 
 #[test]
+fn authenticated_reader_uses_bounded_fts_and_missing_select_is_still_denied() {
+    use bicdb_core::{AuthenticationStrength, SecurityContext};
+    use bicdb_sql::plan_diagnostics::{with_plan_diagnostics, DiagnosticsOptions};
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open_with_config(
+        root.path(),
+        DbConfig::default()
+            .with_storage_mode(StorageMode::ServerPaged)
+            .with_fsync(false),
+    )
+    .unwrap();
+    SqlSession::new(&mut db).execute("CREATE ROLE page_reader NOSUPERUSER; CREATE TABLE docs(id text PRIMARY KEY, body text);
+        INSERT INTO docs SELECT 'k'||lpad(g::text,5,'0'),'shared term' FROM generate_series(1,1000) g;
+        CREATE INDEX docs_fts ON docs USING GIN(to_tsvector('simple',COALESCE(body,'')));
+        GRANT SELECT ON docs TO page_reader").unwrap();
+    let context = SecurityContext::authenticated(
+        "page_reader",
+        "fixture",
+        AuthenticationStrength::ScramSha256,
+    );
+    let gucs = std::collections::HashMap::from([
+        ("role".into(), "page_reader".into()),
+        ("session_authorization".into(), "page_reader".into()),
+    ]);
+    let q="SELECT id FROM docs WHERE id>'k00500' AND to_tsvector('simple',COALESCE(body,'')) @@ to_tsquery('simple','shared') ORDER BY id LIMIT 3";
+    let mut sql =
+        SqlSession::new_shared_secure(&db, context.clone()).with_session_gucs(gucs.clone());
+    let (result, decisions) =
+        with_plan_diagnostics(DiagnosticsOptions::default(), || sql.execute(q));
+    assert_eq!(result.unwrap().rows.len(), 3);
+    assert!(
+        decisions.iter().any(|d| d.rows_fetched == Some(3)),
+        "{decisions:?}"
+    );
+    drop(sql);
+    SqlSession::new(&mut db)
+        .execute("REVOKE SELECT ON docs FROM page_reader")
+        .unwrap();
+    let mut sql = SqlSession::new_shared_secure(&db, context).with_session_gucs(gucs);
+    assert!(sql.execute(q).is_err());
+    assert!(sql.execute(&q.replace("LIMIT 3", "LIMIT 0")).is_err());
+}
+
+#[test]
 fn paged_fts_hydrates_only_the_requested_page_and_rechecks_all_predicates() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open_with_config(

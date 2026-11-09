@@ -38,8 +38,6 @@ impl<'db> SqlEngine<'db> {
         query: &Query,
     ) -> Result<Option<RowSet>> {
         if crate::plan_diagnostics::forced_signature().is_some()
-            || self.security_context.is_some()
-            || !session_role_is_superuser(self.db_ref(), &self.session_gucs)
             || self.tx.is_some_and(|tx| {
                 tx.write_len() != 0
                     || tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted

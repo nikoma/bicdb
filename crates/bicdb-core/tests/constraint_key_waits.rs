@@ -6,6 +6,8 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
+static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn wait_until(mut ready: impl FnMut() -> bool) {
     let deadline = Instant::now() + Duration::from_secs(5);
     while !ready() {
@@ -15,6 +17,7 @@ fn wait_until(mut ready: impl FnMut() -> bool) {
 }
 #[test]
 fn cancelled_constraint_wait_releases_graph_edges_without_stealing_owner_keys() {
+    let _serial = SERIAL.lock().unwrap();
     let dir = tempfile::tempdir().unwrap();
     let db = Arc::new(BicDb::open(dir.path()).unwrap());
     let owner = db.begin_transaction().unwrap();
@@ -57,6 +60,7 @@ fn cancelled_constraint_wait_releases_graph_edges_without_stealing_owner_keys() 
 }
 #[test]
 fn constraint_cycle_is_detected_and_winner_can_finish() {
+    let _serial = SERIAL.lock().unwrap();
     let dir = tempfile::tempdir().unwrap();
     let db = Arc::new(BicDb::open(dir.path()).unwrap());
     let a = db.begin_transaction().unwrap();
@@ -86,6 +90,7 @@ fn constraint_cycle_is_detected_and_winner_can_finish() {
 }
 #[test]
 fn savepoint_release_wakes_waiter_without_releasing_earlier_key() {
+    let _serial = SERIAL.lock().unwrap();
     let dir = tempfile::tempdir().unwrap();
     let db = Arc::new(BicDb::open(dir.path()).unwrap());
     let mut owner = db.begin_transaction().unwrap();
@@ -117,6 +122,7 @@ fn savepoint_release_wakes_waiter_without_releasing_earlier_key() {
 }
 #[test]
 fn exclusive_wait_observes_all_shared_reference_owners() {
+    let _serial = SERIAL.lock().unwrap();
     let dir = tempfile::tempdir().unwrap();
     let db = Arc::new(BicDb::open(dir.path()).unwrap());
     let a = db.begin_transaction().unwrap();
@@ -145,6 +151,7 @@ fn exclusive_wait_observes_all_shared_reference_owners() {
 }
 #[test]
 fn query_deadline_and_native_actor_deadline_bound_key_waits() {
+    let _serial = SERIAL.lock().unwrap();
     let dir = tempfile::tempdir().unwrap();
     let db = BicDb::open(dir.path()).unwrap();
     let owner = db.begin_transaction().unwrap();
@@ -180,6 +187,7 @@ fn query_deadline_and_native_actor_deadline_bound_key_waits() {
 }
 #[test]
 fn durability_fence_terminates_a_constraint_key_wait() {
+    let _serial = SERIAL.lock().unwrap();
     let dir = tempfile::tempdir().unwrap();
     let db = Arc::new(BicDb::open(dir.path()).unwrap());
     let owner = db.begin_transaction().unwrap();

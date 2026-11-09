@@ -1,4 +1,3 @@
-#![cfg(feature = "experimental-structural-cuts")]
 use bicdb_core::{BicDb, DbConfig, Record, StorageMode};
 use serde_json::json;
 #[test]

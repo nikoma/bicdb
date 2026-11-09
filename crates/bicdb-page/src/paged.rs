@@ -706,9 +706,6 @@ pub struct PagedStore {
     checkpointer: Checkpointer,
     options: PagedStoreOptions,
     next_transaction: AtomicU64,
-    #[cfg(not(feature = "experimental-structural-cuts"))]
-    transactions: TransactionTable,
-    #[cfg(feature = "experimental-structural-cuts")]
     transactions: Arc<TransactionTable>,
     /// Disk-backed terminal outcomes above a pinned watermark.
     spill: Arc<PagedOutcomeSpill>,
@@ -720,9 +717,6 @@ pub struct PagedStore {
     /// transactions were running then. Bounded by the number of live
     /// transactions, and dropped at commit or abort.
     snapshots: Mutex<BTreeMap<Xid, Snapshot>>,
-    /// Live transactions begun by [`PagedStore::begin_redo_backed`]: their
-    /// operations are never refused for buffer-pool pressure.
-    redo_backed: Mutex<BTreeSet<Xid>>,
     /// Live transactions that have written (a `put` or `delete`), so their
     /// versions may be in pages another transaction's commit logs. See
     /// [`PagedStore::log_xid_floor_above`].
@@ -731,8 +725,6 @@ pub struct PagedStore {
     /// their in-memory pages may hold a half-done structure. See
     /// `PagedStore::poison_if_failed_after_a_change`.
     poisoned: Mutex<BTreeSet<Xid>>,
-    /// Write operations refused by [`PagedStore::admit_write`].
-    refused_for_unlogged_pressure: AtomicU64,
     /// Inclusive cursor for the one bounded checkpoint step opportunistically
     /// advanced by commits after the WAL trigger is crossed. This is only a
     /// latency-safety fallback; the durable core supervisor owns production
@@ -1047,8 +1039,6 @@ impl PagedStore {
 
         let checkpointer = Checkpointer::new(pool.clone(), wal.clone());
         // Eviction must not outrun the log. See `WritebackBarrier`.
-        #[cfg(not(feature = "experimental-structural-cuts"))]
-        pool.set_barrier(Arc::new(WalWritebackBarrier { wal: wal.clone() }));
 
         // Checkpointed watermarks first, then final log outcomes on top:
         // anything the checkpoint froze is committed unless excepted, and the
@@ -1057,7 +1047,6 @@ impl PagedStore {
         // set.
         let transactions =
             TransactionTable::with_exception_capacity(abort_exception_capacity(options.page_size));
-        #[cfg(feature = "experimental-structural-cuts")]
         let transactions = Arc::new(transactions);
         // The spill is loaded before outcomes are installed: anything it
         // retains is visible to `status` immediately, and the open-time
@@ -1080,7 +1069,6 @@ impl PagedStore {
         // This is what keeps crash-orphaned row versions from reading as an
         // eternal concurrent writer once the exception region is full.
         transactions.seal_previous_incarnations();
-        #[cfg(feature = "experimental-structural-cuts")]
         pool.set_barrier(Arc::new(WalWritebackBarrier {
             wal: wal.clone(),
             transactions: transactions.clone(),
@@ -1121,10 +1109,8 @@ impl PagedStore {
             transactions,
             spill,
             snapshots: Mutex::new(BTreeMap::new()),
-            redo_backed: Mutex::new(BTreeSet::new()),
             live_writers: Mutex::new(BTreeSet::new()),
             poisoned: Mutex::new(BTreeSet::new()),
-            refused_for_unlogged_pressure: AtomicU64::new(0),
             automatic_checkpoint_cursor: Mutex::new(PagedCheckpointCursor::default()),
             last_recovery: recovery,
             backup_pins: AtomicU64::new(0),
@@ -1608,7 +1594,6 @@ impl PagedStore {
 
             let (transaction, _) = self.begin_transaction();
             self.admit_write(transaction)?;
-            #[cfg(feature = "experimental-structural-cuts")]
             let releases = self.pool.write_guard_releases();
             self.pool.set_current_transaction(transaction);
             let header = VersionHeader::new(transaction);
@@ -1619,7 +1604,6 @@ impl PagedStore {
                 Ok(locator) => locator,
                 Err(error) => {
                     let failure: Result<()> = Err(error);
-                    #[cfg(feature = "experimental-structural-cuts")]
                     self.poison_if_failed_after_a_change(transaction, releases, &failure)?;
                     let _ = self.abort(transaction);
                     return Err(failure.unwrap_err());
@@ -1631,7 +1615,6 @@ impl PagedStore {
                 .and_then(|_| self.sync_roots())
             {
                 let failure: Result<()> = Err(error);
-                #[cfg(feature = "experimental-structural-cuts")]
                 self.poison_if_failed_after_a_change(transaction, releases, &failure)?;
                 let _ = self.abort(transaction);
                 return Err(failure.unwrap_err());
@@ -1740,72 +1723,22 @@ impl PagedStore {
         Ok(())
     }
 
-    /// Begin a transaction whose complete redo is already durable in another
-    /// log (a row commit's page apply, whose decision is in the transaction
-    /// log). Its write operations are never refused for buffer-pool
-    /// pressure ([`Self::admit_write`]): refusing one would fail a commit
-    /// that is already decided, and the replay at the next open would be
-    /// refused the same way. When such a transaction outgrows the pool,
-    /// eviction may still steal one of its pages as a last resort, counted
-    /// in `BufferPoolSnapshot::unlogged_steals` (GAP-1, still open for it).
+    /// Compatibility spelling for a transaction whose logical redo is
+    /// already durable. Structural admission treats every writer identically;
+    /// external redo is never an exemption from no-steal.
     pub fn begin_redo_backed(&self) -> (Xid, Snapshot) {
-        let (xid, snapshot) = self.begin_transaction();
-        self.redo_backed.lock().insert(xid);
-        (xid, snapshot)
+        self.begin_transaction()
     }
 
-    /// Admit one write operation of `transaction`, or refuse it before it
-    /// modifies anything.
-    ///
-    /// No-steal (GAP-1 in `docs/recovery-semantics.md`): pages a transaction
-    /// modifies stay in memory until its commit logs them. A transaction that
-    /// outgrows a buffer-pool shard would force eviction to write one of them
-    /// to the page file before commit, where recovery skips it but cannot
-    /// undo it. Rather than steal, its next operation is refused with
-    /// `TransactionExceedsBufferPool`, while enough of the shard is left for
-    /// the operation in progress and for concurrent reads. The caller aborts.
-    /// A transaction from [`Self::begin_redo_backed`] is never refused.
-    ///
-    /// Admission is per shard, not per transaction: with one transaction at
-    /// the limit, any other refusable transaction's next write is refused too
-    /// until the first commits or aborts. Admitting it could need a steal in
-    /// that shard, so correctness wins; the error names the transaction that
-    /// holds the most frames (`holder`).
-    fn admit_write(&self, transaction: Xid) -> Result<()> {
-        // A fenced store (a failed write, or a failed operation that left a
-        // half-done structure) takes no new changes, even in memory.
+    /// At an operation boundary, durably log the complete unlogged closure
+    /// before admitting more mutations. No transaction is exempt.
+    fn admit_write(&self, _transaction: Xid) -> Result<()> {
         self.wal.health().check()?;
-        let Some(pressure) = self.pool.unlogged_pressure() else {
-            return Ok(());
-        };
-        if cfg!(feature = "experimental-structural-cuts") {
-            // At the operation boundary, every dirty tree/heap/catalog edge
-            // has its destination. Commit the entire closure as one internal
-            // unit; per-page xid-zero images would replay a partial cut.
+        if self.pool.unlogged_pressure().is_some() {
             self.log_unlogged_pages_as_committed_unit()?;
             crate::test_faults::crash_point("structural_cut.after_durable");
-            return Ok(());
         }
-        if self.redo_backed.lock().contains(&transaction) {
-            return Ok(());
-        }
-        self.refused_for_unlogged_pressure
-            .fetch_add(1, Ordering::Relaxed);
-        let (holder, holder_frames) = self.pool.unlogged_holder().unwrap_or((transaction, 0));
-        Err(PageError::TransactionExceedsBufferPool {
-            transaction,
-            shard: pressure.shard,
-            unlogged_frames: pressure.unlogged_frames,
-            shard_frames: pressure.shard_frames,
-            holder,
-            holder_frames,
-        })
-    }
-
-    /// Write operations refused because the buffer pool held too many
-    /// uncommitted changes ([`PageError::TransactionExceedsBufferPool`]).
-    pub fn refused_for_unlogged_pressure(&self) -> u64 {
-        self.refused_for_unlogged_pressure.load(Ordering::Relaxed)
+        Ok(())
     }
 
     /// The snapshot a live transaction began with.
@@ -1860,7 +1793,6 @@ impl PagedStore {
         let releases = self.pool.write_guard_releases();
         let result = self.put_admitted(transaction, key, value);
         self.poison_if_failed_after_a_change(transaction, releases, &result)?;
-        #[cfg(feature = "experimental-structural-cuts")]
         if result.is_ok() {
             self.release_retired_overflow_at_boundary()?;
         }
@@ -2254,7 +2186,6 @@ impl PagedStore {
         let releases = self.pool.write_guard_releases();
         let result = self.delete_admitted(transaction, key);
         self.poison_if_failed_after_a_change(transaction, releases, &result)?;
-        #[cfg(feature = "experimental-structural-cuts")]
         if result.is_ok() {
             self.release_retired_overflow_at_boundary()?;
         }
@@ -2334,7 +2265,6 @@ impl PagedStore {
                     &format!("transaction {transaction}"),
                 ));
             }
-            #[cfg(feature = "experimental-structural-cuts")]
             if self.pool.has_pending_frees(transaction) {
                 self.log_unlogged_pages_as_committed_unit()?;
             }
@@ -2350,9 +2280,7 @@ impl PagedStore {
             // record is appended (and synced, or covered by the deferred-commit
             // sync that `before_logged_writeback` runs before such a write).
             self.pool.mark_logged(&logged);
-            #[cfg(feature = "experimental-structural-cuts")]
-            self.pool.trim_experimental_frames()?;
-            self.redo_backed.lock().remove(&transaction);
+            self.pool.trim_emergency_frames()?;
             self.live_writers.lock().remove(&transaction);
             if !free_adoption.is_empty() {
                 self.pool.flush_all()?;
@@ -2437,7 +2365,6 @@ impl PagedStore {
         // abort does not mutate a page, but it does append to the same WAL a
         // checkpoint may truncate.
         let _guard = self.write_lock.lock();
-        self.redo_backed.lock().remove(&transaction);
         let wrote = self.live_writers.lock().remove(&transaction);
         if self.poisoned.lock().remove(&transaction) {
             // Its pages may hold a half-done structure: log nothing. The
@@ -2475,8 +2402,7 @@ impl PagedStore {
         match logged {
             Ok(logged) => {
                 self.pool.mark_logged(&logged);
-                #[cfg(feature = "experimental-structural-cuts")]
-                self.pool.trim_experimental_frames()?;
+                self.pool.trim_emergency_frames()?;
                 self.transactions.commit(unit);
                 self.snapshots.lock().remove(&unit);
                 Ok(())
@@ -2499,8 +2425,7 @@ impl PagedStore {
     /// would create a new outcome after the spill and forever pin WAL reset.
     /// The descriptor records next_xid itself, so no separate xid-floor
     /// record is needed. Caller holds the writer gate.
-    #[cfg(feature = "experimental-structural-cuts")]
-    fn log_checkpoint_meta_for_experiment(&self) -> Result<()> {
+    fn log_checkpoint_descriptor(&self) -> Result<()> {
         let logged: Vec<_> = self
             .pool
             .pages_needing_log()
@@ -2514,7 +2439,7 @@ impl PagedStore {
         let lsn = self.wal.log_page_image(self.meta_page, 0, &image)?;
         self.wal.sync_through(lsn)?;
         self.pool.mark_logged(&logged);
-        self.pool.trim_experimental_frames()?;
+        self.pool.trim_emergency_frames()?;
         Ok(())
     }
 
@@ -2649,9 +2574,7 @@ impl PagedStore {
         field: HeaderStampField,
         expected: Xid,
     ) -> Result<HeaderRepair> {
-        self.experimental_maintenance(|| {
-            self.repair_version_header_stamp_inner(key, field, expected)
-        })
+        self.guarded_maintenance(|| self.repair_version_header_stamp_inner(key, field, expected))
     }
 
     fn repair_version_header_stamp_inner(
@@ -2708,7 +2631,6 @@ impl PagedStore {
         }
         self.heap.update(locator, &stored)?;
         self.sync_roots()?;
-        #[cfg(feature = "experimental-structural-cuts")]
         self.release_retired_overflow_at_boundary()?;
         Ok(HeaderRepair::Repaired)
     }
@@ -2718,9 +2640,7 @@ impl PagedStore {
         // flushes frames, so running it alongside a `put` mid-split would
         // checkpoint a half-modified tree.
         let _guard = self.write_lock.lock();
-        if cfg!(feature = "experimental-structural-cuts") {
-            self.log_unlogged_pages_as_committed_unit()?;
-        }
+        self.log_unlogged_pages_as_committed_unit()?;
         // Freeze first, so the watermark the meta page records is as advanced as
         // it can safely be. Freezing stops at the oldest still-running
         // transaction, so an in-flight writer is never frozen into visibility.
@@ -2735,8 +2655,7 @@ impl PagedStore {
         // The meta page is written first: the checkpoint makes it durable, so it
         // must already hold the current tree roots and watermarks.
         self.write_meta()?;
-        #[cfg(feature = "experimental-structural-cuts")]
-        self.log_checkpoint_meta_for_experiment()?;
+        self.log_checkpoint_descriptor()?;
 
         // Truncating the log discards every commit record in it. That is only
         // safe once every unfrozen commit is proven somewhere durable: the
@@ -2895,9 +2814,7 @@ impl PagedStore {
             }
             PagedCheckpointPhase::Finalize => {
                 let _guard = self.write_lock.lock();
-                if cfg!(feature = "experimental-structural-cuts") {
-                    self.log_unlogged_pages_as_committed_unit()?;
-                }
+                self.log_unlogged_pages_as_committed_unit()?;
                 // Recheck the watermark under the same fence used for final
                 // publication. Commits between the Freeze and Finalize ticks
                 // must either be frozen now or leave the WAL untruncated.
@@ -2966,8 +2883,7 @@ impl PagedStore {
                     // every preceding dirty page is durable. With the writer
                     // gate held, this creates exactly one new dirty meta page.
                     self.write_meta()?;
-                    #[cfg(feature = "experimental-structural-cuts")]
-                    self.log_checkpoint_meta_for_experiment()?;
+                    self.log_checkpoint_descriptor()?;
                     let writeback = self
                         .pool
                         .writeback_step(WritebackCursor::default(), limits.writeback)?;
@@ -3263,9 +3179,8 @@ impl PagedStore {
         // the current list head — the exact segment adopt_free_pages validates.
         if !orphans.is_empty() {
             let free_adoption = self.prepare_free_adoption(0, &orphans)?;
-            let logged = self.log_structural_pages_for_experiment()?;
+            self.log_unlogged_pages_as_committed_unit()?;
             self.wal.sync()?;
-            self.pool.mark_logged(&logged);
             self.pool.flush_all()?;
             self.adopt_free_segments(&free_adoption)?;
             report.pages_reclaimed = orphans.len() as u64;
@@ -3292,7 +3207,7 @@ impl PagedStore {
         limits: VacuumLimits,
         time_exhausted: impl FnMut() -> bool,
     ) -> Result<VacuumReport> {
-        self.experimental_maintenance(|| {
+        self.guarded_maintenance(|| {
             self.vacuum_step_with_expiry_inner(cursor, limits, time_exhausted)
         })
     }
@@ -3357,7 +3272,6 @@ impl PagedStore {
                 report.next_cursor.next_page_id = Some(page_id);
                 break;
             }
-            #[cfg(feature = "experimental-structural-cuts")]
             self.admit_write(0)?;
             report.pages_scanned += 1;
             report.bytes_examined += page_size;
@@ -3417,7 +3331,6 @@ impl PagedStore {
                     self.heap.delete_for_vacuum(locator)?;
                     report.bytes_examined += release_bytes;
                     report.versions_reclaimed += 1;
-                    #[cfg(feature = "experimental-structural-cuts")]
                     if report.versions_reclaimed == 1 {
                         crate::test_faults::io_fault(
                             "experimental.vacuum.after_first_mutation",
@@ -3428,7 +3341,6 @@ impl PagedStore {
                 }
             }
 
-            #[cfg(feature = "experimental-structural-cuts")]
             self.release_retired_overflow_at_boundary()?;
             let (after_free, live) = {
                 let guard = self.pool.get(page_id)?;
@@ -3477,12 +3389,10 @@ impl PagedStore {
                 self.catalog.forget_page(*page_id, free_bytes)?;
                 self.heap.forget_page(*page_id);
             }
-            #[cfg(feature = "experimental-structural-cuts")]
             self.log_unlogged_pages_as_committed_unit()?;
             let free_adoption = self.prepare_free_adoption(0, &fully_dead)?;
-            let logged = self.log_structural_pages_for_experiment()?;
+            self.log_unlogged_pages_as_committed_unit()?;
             self.wal.sync()?;
-            self.pool.mark_logged(&logged);
             self.pool.flush_all()?;
             self.adopt_free_segments(&free_adoption)?;
             report.pages_freed = fully_dead.len() as u64;
@@ -3549,7 +3459,7 @@ impl PagedStore {
     /// interleave, so remove-while-iterating is safe via the two-phase
     /// collect-then-remove below. Returns the number of keys removed.
     pub fn sweep_dead_index_entries(&self, max_keys: usize) -> Result<u64> {
-        self.experimental_maintenance(|| self.sweep_dead_index_entries_inner(max_keys))
+        self.guarded_maintenance(|| self.sweep_dead_index_entries_inner(max_keys))
     }
 
     fn sweep_dead_index_entries_inner(&self, max_keys: usize) -> Result<u64> {
@@ -3579,11 +3489,9 @@ impl PagedStore {
         // Phase 2: remove.
         let mut removed = 0u64;
         for key in &removable {
-            #[cfg(feature = "experimental-structural-cuts")]
             self.admit_write(0)?;
             if self.index.remove(key)? {
                 removed += 1;
-                #[cfg(feature = "experimental-structural-cuts")]
                 if removed == 1 {
                     crate::test_faults::io_fault(
                         "experimental.sweep.after_first_mutation",
@@ -3592,7 +3500,6 @@ impl PagedStore {
                     .map_err(|error| PageError::io(self.pool.store().path(), error))?;
                 }
             }
-            #[cfg(feature = "experimental-structural-cuts")]
             self.sync_roots()?;
         }
         if removed > 0 {
@@ -3604,7 +3511,6 @@ impl PagedStore {
     /// A complete operation changed the owner tuple/index first. While the
     /// exclusive structure guard still excludes readers, make that replacement
     /// durable before releasing any page from the old overflow chain.
-    #[cfg(feature = "experimental-structural-cuts")]
     fn release_retired_overflow_at_boundary(&self) -> Result<()> {
         let retired = self.heap.take_retired_overflow();
         if retired.is_empty() {
@@ -3617,29 +3523,13 @@ impl PagedStore {
         Ok(())
     }
 
-    /// Keep the old structural path unchanged by default. The prototype
-    /// groups pool-wide changes under one committed unit so a crash between
-    /// images cannot replay half a catalog split or free-space update.
-    fn log_structural_pages_for_experiment(&self) -> Result<Vec<(PageId, u64)>> {
-        if cfg!(feature = "experimental-structural-cuts") {
-            self.log_unlogged_pages_as_committed_unit()?;
-            Ok(Vec::new())
-        } else {
-            self.log_dirty_pages(0)
-        }
-    }
-
     /// Every maintenance mutation must either finish a complete structure,
     /// or fence before a later cut could persist its partial result.
-    fn experimental_maintenance<T>(&self, operation: impl FnOnce() -> Result<T>) -> Result<T> {
-        #[cfg(feature = "experimental-structural-cuts")]
+    fn guarded_maintenance<T>(&self, operation: impl FnOnce() -> Result<T>) -> Result<T> {
         let _guard = self.write_lock.lock();
-        #[cfg(feature = "experimental-structural-cuts")]
         self.admit_write(0)?;
-        #[cfg(feature = "experimental-structural-cuts")]
         let releases = self.pool.write_guard_releases();
         let result = operation();
-        #[cfg(feature = "experimental-structural-cuts")]
         self.poison_if_failed_after_a_change(0, releases, &result)?;
         result
     }
@@ -3747,7 +3637,6 @@ impl PagedStore {
                 header.next_page = next;
                 header.encode(bytes);
                 drop(guard);
-                #[cfg(feature = "experimental-structural-cuts")]
                 self.pool.seal_unadopted_structural_free(*page_id)?;
             }
             segments.push((chunk[0], chunk.len() as u64));
@@ -3770,13 +3659,11 @@ impl PagedStore {
     /// replacing them is durable, but leaving them only in memory until some
     /// later checkpoint would leak space after a clean shutdown.
     fn finalize_structural_frees(&self) -> Result<()> {
-        #[cfg(feature = "experimental-structural-cuts")]
         self.log_unlogged_pages_as_committed_unit()?;
         let adoption = self.prepare_free_adoption(0, &[])?;
         if !adoption.is_empty() {
-            let logged = self.log_structural_pages_for_experiment()?;
+            self.log_unlogged_pages_as_committed_unit()?;
             self.wal.sync()?;
-            self.pool.mark_logged(&logged);
             self.pool.flush_all()?;
             self.adopt_free_segments(&adoption)?;
             if !self.transactions.has_unfrozen_commits() && !self.backup_pinned() {
@@ -5776,43 +5663,35 @@ impl crate::mvcc::OutcomeSpill for PagedOutcomeSpill {
     }
 }
 
-/// Makes a page recoverable before it is allowed to reach disk.
-///
-/// Logging here rather than only at commit is what lets the pool evict freely:
-/// recovery filters page images by whether their transaction committed, so an
-/// evicted-but-uncommitted page is written to the file yet never replayed.
-///
-/// # Known limitation
-///
-/// That leaves the classic **steal without undo** gap: an uncommitted page
-/// evicted to the page file stays there, and this store has no UNDO log to roll
-/// it back. In practice a crash before commit therefore leaves such a page's
-/// bytes on disk, unreferenced by the index (whose own pages are governed by the
-/// same rule). It is safe for the commit-or-crash model this prototype supports,
-/// and it is exactly what the rest of Phase 2 — version chains and rollback —
-/// has to close. Recorded here rather than left for someone to find.
+/// Enforces durable closure before ordinary page-file writeback. Logging one
+/// uncommitted image alone cannot protect the committed structure it replaces.
+/// Only a consumed unreachable-page capability may stream an individual image;
+/// its publication and reclamation are ordered by PagedStore's writer gate.
 #[derive(Debug)]
 struct WalWritebackBarrier {
     wal: Arc<Wal>,
-    #[cfg(feature = "experimental-structural-cuts")]
     transactions: Arc<TransactionTable>,
-    #[cfg(feature = "experimental-structural-cuts")]
     durable_floor: Mutex<Xid>,
 }
 
-impl crate::pool::WritebackBarrier for WalWritebackBarrier {
-    fn before_writeback(&self, page_id: PageId, transaction: u64, bytes: &[u8]) -> Result<()> {
-        let lsn = self.wal.log_page_image(page_id, transaction, bytes)?;
+impl WalWritebackBarrier {
+    fn append_owned_image(&self, page_id: PageId, bytes: &[u8]) -> Result<()> {
+        let lsn = self.wal.log_page_image(page_id, 0, bytes)?;
         self.wal.sync_through(lsn)
     }
+}
 
-    #[cfg(feature = "experimental-structural-cuts")]
+impl crate::pool::WritebackBarrier for WalWritebackBarrier {
+    fn before_writeback(&self, page_id: PageId, _transaction: u64, _bytes: &[u8]) -> Result<()> {
+        Err(PageError::UnloggedWritebackNeedsCut { page_id })
+    }
+
     fn before_unreachable_writeback(&self, page_id: PageId, bytes: &[u8]) -> Result<()> {
         // A Free header contains no MVCC version or xid-bearing payload.
         // Retirement must not allocate another marker after checkpoint status
         // publication: that marker would pin the very reset retiring the page.
         if bytes[6] == crate::page::PageType::Free as u8 {
-            return self.before_writeback(page_id, 0, bytes);
+            return self.append_owned_image(page_id, bytes);
         }
         // Even an unrooted image may contain live version headers. Persist
         // a fresh higher xid BEFORE appending a recoverable xid-zero image;
@@ -5828,7 +5707,7 @@ impl crate::pool::WritebackBarrier for WalWritebackBarrier {
             self.transactions.commit(marker);
             *floor = marker;
         }
-        self.before_writeback(page_id, 0, bytes)
+        self.append_owned_image(page_id, bytes)
     }
 
     fn before_logged_writeback(&self, _page_id: PageId) -> Result<()> {
@@ -5854,6 +5733,59 @@ mod tests {
 
     fn open(dir: &TempDir) -> PagedStore {
         PagedStore::open(dir.path(), options()).unwrap().0
+    }
+
+    /// Direct pool flushing cannot turn one ordinary unlogged image into a
+    /// durable structure. Refusal precedes every such page-file write.
+    #[test]
+    fn ordinary_unlogged_flush_refuses_before_changing_page_file_bytes() {
+        let dir = TempDir::new().unwrap();
+        let config = options().with_buffer_pool_bytes(1024 * 512);
+        {
+            let store = PagedStore::open(dir.path(), config.clone()).unwrap().0;
+            let xid = store.begin();
+            store.put(xid, b"a", b"acknowledged-a").unwrap();
+            store.put(xid, b"b", b"acknowledged-b").unwrap();
+            store.commit(xid).unwrap();
+            store.checkpoint().unwrap();
+            let xid = store.begin();
+            store.put(xid, b"a", b"uncommitted-replacement").unwrap();
+            let unlogged = store.pool.pages_needing_log();
+            assert!(!unlogged.is_empty());
+            let before = std::fs::read(dir.path().join("store.pages")).unwrap();
+            let result = store.pool.flush_all();
+            let after = std::fs::read(dir.path().join("store.pages")).unwrap();
+            let changed = unlogged
+                .iter()
+                .filter(|(id, _)| {
+                    let range = (*id as usize * 512)..((*id as usize + 1) * 512);
+                    before.get(range.clone()) != after.get(range)
+                })
+                .count();
+            eprintln!("ordinary flush result={result:?}; changed unlogged disk pages={changed}");
+            assert!(matches!(
+                result,
+                Err(PageError::UnloggedWritebackNeedsCut { .. })
+            ));
+            assert_eq!(changed, 0);
+            assert!(!store.durability_health().is_failed());
+            // Simulated process crash before commit or abort.
+        }
+        let store = PagedStore::open(dir.path(), config).unwrap().0;
+        assert_eq!(
+            store.get(b"a").unwrap().as_deref(),
+            Some(&b"acknowledged-a"[..])
+        );
+        assert_eq!(
+            store.get(b"b").unwrap().as_deref(),
+            Some(&b"acknowledged-b"[..])
+        );
+        let xid = store.begin();
+        store.put(xid, b"a", b"committed-after-recovery").unwrap();
+        store.commit(xid).unwrap();
+        store.checkpoint().unwrap();
+        store.pool.flush_all().unwrap();
+        assert!(store.verify_integrity(4).unwrap().valid);
     }
 
     /// GAP-1, the commit's own logging window. A commit logs its pages'

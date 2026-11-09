@@ -1,6 +1,6 @@
-//! GAP-1 interim (no-steal): one test per closed window of
-//! `docs/recovery-semantics.md` section 14.1, plus the refusal that replaces
-//! the last-resort steal for refusable transactions.
+//! GAP-1 structural closure: each original crash window remains exercised.
+//! Pressure now makes complete invisible cuts instead of refusing valid work.
+//! The historical interim refusal assertions are preserved in the PR81 source.
 //!
 //! A crash is a `drop` without checkpoint: nothing is flushed on drop, so the
 //! page file holds exactly what writeback put there and the log holds exactly
@@ -483,99 +483,69 @@ fn an_open_transactions_xid_is_not_reissued_after_a_crash() {
     }
 }
 
-/// The last-resort steal, replaced for refusable transactions. A page-only
-/// transaction that keeps writing into a small pool is refused before an
-/// operation could need to steal, with nothing of that operation written.
-/// The caller aborts; the pool is usable again at once, nothing was stolen,
-/// and a crash keeps every acknowledged key and none of the refused ones.
+/// Oversized page-only work uses complete cuts, then aborts invisibly.
 #[test]
-fn a_transaction_that_outgrows_the_pool_is_refused_before_it_steals() {
+fn a_transaction_that_outgrows_the_pool_aborts_without_stealing() {
     let dir = TempDir::new().unwrap();
-    let big: Vec<Vec<u8>> = (0..20_000)
+    let big: Vec<Vec<u8>> = (0..2_000)
         .map(|j| format!("big-{j:05}-{}", "x".repeat(40)).into_bytes())
         .collect();
-    let mut written = 0usize;
     {
         let store = committed_and_checkpointed(dir.path(), medium(), 0..100);
         let xid = store.begin();
-        let refusal = loop {
-            match store.put(xid, &big[written], b"too large a transaction") {
-                Ok(()) => written += 1,
-                Err(error) => break error,
-            }
-            assert!(written < big.len(), "never refused");
-        };
-        assert!(
-            matches!(
-                refusal,
-                PageError::TransactionExceedsBufferPool { transaction, .. } if transaction == xid
-            ),
-            "{refusal}"
-        );
-        assert!(written > 10, "refused too early: after {written} puts");
+        for key in &big {
+            store.put(xid, key, b"too large a transaction").unwrap();
+        }
         assert_eq!(store.buffer_pool().unlogged_steals(), 0);
-        assert!(store.refused_for_unlogged_pressure() >= 1);
         store.abort(xid).unwrap();
         assert_eq!(store.buffer_pool().unlogged_pages(), 0);
-
-        // Not wedged: the next transaction commits.
         let next = store.begin();
         store.put(next, &key(100), &value(100)).unwrap();
         store.commit(next).unwrap();
         assert_eq!(store.buffer_pool().unlogged_steals(), 0);
-        // Crash.
     }
-    assert_no_failures(reconcile(
-        dir.path(),
-        &acknowledged(0..101),
-        &big[..written],
-    ));
+    assert_no_failures(reconcile(dir.path(), &acknowledged(0..101), &big));
 }
 
-/// Admission is per shard, so with one refusable transaction at the limit a
-/// small unrelated one is refused too; the error names the transaction that
-/// holds the pool, not only the one refused.
+/// A large pending writer does not prevent an unrelated writer from committing.
 #[test]
-fn a_refusal_names_the_transaction_that_holds_the_pool() {
+fn a_large_pending_writer_allows_an_unrelated_small_commit() {
     let dir = TempDir::new().unwrap();
     let store = committed_and_checkpointed(dir.path(), medium(), 0..100);
     let big = store.begin();
-    let mut index = 0usize;
-    while store
-        .put(
-            big,
-            format!("big-{index:06}-{}", "x".repeat(40)).as_bytes(),
-            b"v",
-        )
-        .is_ok()
-    {
-        index += 1;
-        assert!(index < 50_000, "never refused");
+    for index in 0..2_000 {
+        store
+            .put(
+                big,
+                format!("big-{index:06}-{}", "x".repeat(40)).as_bytes(),
+                b"v",
+            )
+            .unwrap();
     }
     let small = store.begin();
-    match store.put(small, b"small", b"v") {
-        Err(PageError::TransactionExceedsBufferPool {
-            transaction,
-            holder,
-            holder_frames,
-            ..
-        }) => {
-            assert_eq!(transaction, small);
-            assert_eq!(holder, big, "the holder must be the big transaction");
-            assert!(holder_frames > 0);
-        }
-        other => panic!("expected a refusal naming the holder, got {other:?}"),
-    }
-    store.abort(big).unwrap();
-    // With the holder gone, the small transaction is admitted.
     store.put(small, b"small", b"v").unwrap();
     store.commit(small).unwrap();
+    assert_eq!(
+        store
+            .get(b"big-000000-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+            .unwrap(),
+        None
+    );
+    store.abort(big).unwrap();
     assert_eq!(store.get(b"small").unwrap().as_deref(), Some(&b"v"[..]));
+    drop(store);
+    let mut expected = acknowledged(0..100);
+    expected.push((b"small".to_vec(), b"v".to_vec()));
+    assert_no_failures(reconcile(
+        dir.path(),
+        &expected,
+        &[b"big-000000-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx".to_vec()],
+    ));
 }
 
-/// The same refusal followed by a crash before the caller could abort.
+/// Large pending work followed by a crash before the caller can abort.
 #[test]
-fn a_refused_transaction_that_crashes_before_its_abort_leaves_no_trace() {
+fn a_large_transaction_that_crashes_before_its_abort_leaves_no_visible_trace() {
     let dir = TempDir::new().unwrap();
     let big: Vec<Vec<u8>> = (0..20_000)
         .map(|j| format!("big-{j:05}-{}", "x".repeat(40)).into_bytes())
@@ -584,7 +554,8 @@ fn a_refused_transaction_that_crashes_before_its_abort_leaves_no_trace() {
     {
         let store = committed_and_checkpointed(dir.path(), medium(), 0..100);
         let xid = store.begin();
-        while store.put(xid, &big[written], b"refused").is_ok() {
+        for key in big.iter().take(2_000) {
+            store.put(xid, key, b"pending").unwrap();
             written += 1;
         }
         // Readers keep working and do not steal.
@@ -601,12 +572,10 @@ fn a_refused_transaction_that_crashes_before_its_abort_leaves_no_trace() {
     ));
 }
 
-/// A transaction whose redo is durable elsewhere (a row commit's page apply)
-/// is never refused. If it outgrows the pool, eviction steals as a last
-/// resort and counts it: GAP-1 stays open for it until the structural log
-/// (option (b)). A commit followed by a crash recovers all of it.
+/// External logical redo grants no permission to steal unlogged pages.
+/// A committed transaction larger than the pool recovers every row.
 #[test]
-fn a_redo_backed_transaction_is_never_refused_and_its_steals_are_counted() {
+fn a_redo_backed_transaction_larger_than_the_pool_never_steals() {
     let dir = TempDir::new().unwrap();
     let rows: Vec<(Vec<u8>, Vec<u8>)> = (0..2_000)
         .map(|j| (format!("big-{j:05}").into_bytes(), value(j)))
@@ -617,8 +586,7 @@ fn a_redo_backed_transaction_is_never_refused_and_its_steals_are_counted() {
         for (key, value) in &rows {
             store.put(xid, key, value).unwrap();
         }
-        assert!(store.buffer_pool().unlogged_steals() > 0);
-        assert_eq!(store.refused_for_unlogged_pressure(), 0);
+        assert_eq!(store.buffer_pool().unlogged_steals(), 0);
         store.commit(xid).unwrap();
         // Crash after commit.
     }
@@ -633,46 +601,6 @@ fn store_files(dir: &Path) -> (Vec<u8>, Vec<u8>) {
     (read("store.pages"), read("store.wal"))
 }
 
-/// Pages other than the superblock whose bytes changed and that hold more
-/// than an empty typed page: a header (`PAGE_HEADER_BYTES`), zeros, and a
-/// trailer (`PAGE_TRAILER_BYTES`).
-fn pages_with_data_changed(before: &[u8], after: &[u8]) -> Vec<usize> {
-    let page = PAGE_SIZE as usize;
-    let body = bicdb_page::PAGE_HEADER_BYTES..page - bicdb_page::PAGE_TRAILER_BYTES;
-    (1..before.len().max(after.len()) / page)
-        .filter(|&index| {
-            let a = before.get(index * page..(index + 1) * page);
-            let b = after.get(index * page..(index + 1) * page);
-            a != b && b.is_some_and(|b| b[body.clone()].iter().any(|&byte| byte != 0))
-        })
-        .collect()
-}
-
-/// What differs between two copies of the page file: lengths and the
-/// differing pages, with their page types (`page_type` byte at offset 6).
-fn describe_page_file_difference(before: &[u8], after: &[u8]) -> String {
-    let page = PAGE_SIZE as usize;
-    let mut differing = Vec::new();
-    for index in 0..before.len().max(after.len()) / page {
-        let a = before.get(index * page..(index + 1) * page);
-        let b = after.get(index * page..(index + 1) * page);
-        if a != b {
-            differing.push(format!(
-                "page {index}: {:?} -> {:?}",
-                a.map(|p| p[6]),
-                b.map(|p| p[6])
-            ));
-        }
-    }
-    format!(
-        "length {} -> {}; {} pages differ, e.g. {:?}",
-        before.len(),
-        after.len(),
-        differing.len(),
-        &differing[..differing.len().min(8)]
-    )
-}
-
 /// Every visible key and value, by a full scan.
 fn visible(dir: &Path) -> Vec<(Vec<u8>, Vec<u8>)> {
     let (store, _) = PagedStore::open(dir, roomy()).unwrap();
@@ -685,97 +613,58 @@ fn visible(dir: &Path) -> Vec<(Vec<u8>, Vec<u8>)> {
     rows
 }
 
-/// An oversized operation refused with `TransactionExceedsBufferPool`, and
-/// the process crashing before the caller aborts: nothing of the
-/// transaction may persist. Its pages never left memory (no-steal) and it
-/// logged nothing, so the page file and the page log are byte-identical to
-/// the state before it began, and the reopened store holds exactly the
-/// acknowledged keys.
+/// Cuts may persist complete invisible structure, but never expose pending rows.
 #[test]
-fn a_refused_oversized_transaction_leaves_the_files_byte_identical() {
+fn an_oversized_pending_transaction_persists_only_invisible_complete_cuts() {
     let dir = TempDir::new().unwrap();
+    let mut absent = Vec::new();
     {
         let store = committed_and_checkpointed(dir.path(), medium(), 0..100);
-        let before = store_files(dir.path());
+        let before_wal = store_files(dir.path()).1.len();
+        let before_evictions = store.buffer_pool().snapshot().evictions;
         let xid = store.begin();
-        let mut written = 0usize;
-        loop {
-            let key = format!("big-{written:06}-{}", "x".repeat(40));
-            match store.put(xid, key.as_bytes(), b"refused") {
-                Ok(()) => written += 1,
-                Err(PageError::TransactionExceedsBufferPool { .. }) => break,
-                Err(other) => panic!("{other}"),
-            }
+        for written in 0..2_000 {
+            let key = format!("big-{written:06}-{}", "x".repeat(40)).into_bytes();
+            store.put(xid, &key, b"pending").unwrap();
+            absent.push(key);
         }
-        assert!(written > 10);
         assert_eq!(store.buffer_pool().unlogged_steals(), 0);
-        let after = store_files(dir.path());
-        assert_eq!(
-            after.1, before.1,
-            "the refused transaction wrote the page log"
-        );
-        // What the page file may show (GAP-1 W8, docs/recovery-semantics.md
-        // 14.5): `PageStore::allocate` writes each page it hands out, zeroed
-        // with its type header, so that a reused id never exposes a
-        // predecessor's bytes. Those empty pages, and the superblock, are the
-        // only changes allowed: no page may carry a byte of the refused
-        // transaction's tuples or entries.
-        let data_pages = pages_with_data_changed(&before.0, &after.0);
-        assert!(
-            data_pages.is_empty(),
-            "the refused transaction's data reached the page file: {data_pages:?} ({})",
-            describe_page_file_difference(&before.0, &after.0)
-        );
-        // Crash before the abort.
+        assert!(store.buffer_pool().snapshot().evictions > before_evictions);
+        assert!(store_files(dir.path()).1.len() > before_wal);
     }
     assert_eq!(visible(dir.path()), acknowledged(0..100));
-    assert_no_failures(reconcile(dir.path(), &acknowledged(0..100), &[]));
+    for _ in 0..2 {
+        assert_no_failures(reconcile(dir.path(), &acknowledged(0..100), &absent));
+    }
 }
 
-/// The same refusal, and also an abort after partial work without any
-/// refusal, each followed by the abort and a crash. The abort writes only
-/// the page log, so the page file is byte-identical until recovery. The log
-/// holds one complete unit: the abort record, the changed pages under a
-/// fresh transaction, and that transaction's commit record. Recovery
-/// applies it whole, so the aborted operations persist only as complete,
-/// consistent pages whose versions are invisible (like dead tuples, which
-/// vacuum reclaims): the visible state is exactly the acknowledged keys,
-/// the structure verifies, and a second recovery changes nothing.
+/// Both small and oversized aborts preserve only complete invisible state.
+/// Repeated recovery retains exactly the earlier acknowledged rows.
 #[test]
 fn an_aborted_oversized_transaction_persists_only_complete_invisible_state() {
-    for refused in [true, false] {
+    for limit in [60, 2_000] {
         let dir = TempDir::new().unwrap();
         {
             let store = committed_and_checkpointed(dir.path(), medium(), 0..100);
             let xid = store.begin();
-            let limit = if refused { usize::MAX } else { 60 };
             let mut written = 0usize;
             while written < limit {
                 let key = format!("big-{written:06}-{}", "x".repeat(40));
-                match store.put(xid, key.as_bytes(), b"aborted") {
-                    Ok(()) => written += 1,
-                    Err(PageError::TransactionExceedsBufferPool { .. }) => break,
-                    Err(other) => panic!("{other}"),
-                }
+                store.put(xid, key.as_bytes(), b"aborted").unwrap();
+                written += 1;
             }
             // Allocation already wrote empty typed pages (W8); the abort
             // itself must write only the page log.
-            let (pages_before_abort, _) = store_files(dir.path());
             store.abort(xid).unwrap();
             assert_eq!(store.buffer_pool().unlogged_pages(), 0);
-            let (pages_after_abort, _) = store_files(dir.path());
-            assert!(
-                pages_after_abort == pages_before_abort,
-                "refused={refused}: the abort wrote the page file: {}",
-                describe_page_file_difference(&pages_before_abort, &pages_after_abort)
-            );
+            assert_eq!(store.buffer_pool().unlogged_steals(), 0);
             // Crash.
         }
         let first = visible(dir.path());
-        assert_eq!(first, acknowledged(0..100), "refused={refused}");
+        assert_eq!(first, acknowledged(0..100), "limit={limit}");
         assert_no_failures(reconcile(dir.path(), &acknowledged(0..100), &[]));
         // A second recovery (of the already recovered store) changes nothing.
-        assert_eq!(visible(dir.path()), first, "refused={refused}");
+        assert_eq!(visible(dir.path()), first, "limit={limit}");
     }
 }
 
@@ -783,7 +672,7 @@ fn an_aborted_oversized_transaction_persists_only_complete_invisible_state() {
 /// transaction many times the pool steals; the process crashes right after
 /// the commit that follows `k` steals, and everything must be recovered.
 #[test]
-fn the_last_resort_steal_path_with_a_commit_survives_a_crash() {
+fn pressure_cuts_with_a_commit_survive_a_crash() {
     for steals_before_commit in [1u64, 5, 20] {
         let dir = TempDir::new().unwrap();
         let mut expected = acknowledged(0..100);
@@ -791,7 +680,12 @@ fn the_last_resort_steal_path_with_a_commit_survives_a_crash() {
             let store = committed_and_checkpointed(dir.path(), small(), 0..100);
             let (xid, _) = store.begin_redo_backed();
             let mut index = 0usize;
-            while store.buffer_pool().unlogged_steals() < steals_before_commit {
+            let initial_evictions = store.buffer_pool().snapshot().evictions;
+            let initial_wal = store_files(dir.path()).1.len();
+            while store.buffer_pool().snapshot().evictions
+                < initial_evictions + steals_before_commit
+                || store_files(dir.path()).1.len() == initial_wal
+            {
                 let (key, value) = (format!("big-{index:06}").into_bytes(), value(index));
                 store.put(xid, &key, &value).unwrap();
                 expected.push((key, value));
@@ -801,6 +695,7 @@ fn the_last_resort_steal_path_with_a_commit_survives_a_crash() {
                     "fewer than {steals_before_commit} steals in 20,000 puts"
                 );
             }
+            assert_eq!(store.buffer_pool().unlogged_steals(), 0);
             store.commit(xid).unwrap();
             // Crash after the commit.
         }
@@ -821,8 +716,7 @@ fn the_last_resort_steal_path_with_a_commit_survives_a_crash() {
 /// structural cuts of option (b). Reads only: on some of these stores
 /// `verify_integrity` does not return (measured after 5 steals).
 #[test]
-#[ignore = "GAP-1 W1-L: a redo-backed transaction's last-resort steal before its commit; needs option (b)"]
-fn the_last_resort_steal_path_before_its_commit_keeps_acknowledged_keys() {
+fn pressure_cuts_before_user_commit_keep_acknowledged_keys() {
     let mut failures = Vec::new();
     for steals in [1u64, 5, 20] {
         let dir = TempDir::new().unwrap();
@@ -831,18 +725,23 @@ fn the_last_resort_steal_path_before_its_commit_keeps_acknowledged_keys() {
             let store = committed_and_checkpointed(dir.path(), small(), 0..100);
             let (xid, _) = store.begin_redo_backed();
             let mut index = 0usize;
-            while store.buffer_pool().unlogged_steals() < steals {
+            let initial_evictions = store.buffer_pool().snapshot().evictions;
+            let initial_wal = store_files(dir.path()).1.len();
+            while store.buffer_pool().snapshot().evictions < initial_evictions + steals
+                || store_files(dir.path()).1.len() == initial_wal
+            {
                 let key = format!("big-{index:06}").into_bytes();
                 store.put(xid, &key, b"uncommitted").unwrap();
                 crashed.push(key);
                 index += 1;
                 assert!(index < 20_000, "fewer than {steals} steals in 20,000 puts");
             }
-            eprintln!("steals={steals}: crashing after {index} puts");
+            assert_eq!(store.buffer_pool().unlogged_steals(), 0);
+            eprintln!("evictions={steals}: crashing after {index} puts");
             // Crash before commit.
         }
         eprintln!("steals={steals}: reconciling");
-        for failure in reconcile_with(dir.path(), &acknowledged(0..100), &crashed, false) {
+        for failure in reconcile_with(dir.path(), &acknowledged(0..100), &crashed, true) {
             failures.push(format!("after {steals} steals: {failure}"));
         }
     }
@@ -857,7 +756,6 @@ fn the_last_resort_steal_path_before_its_commit_keeps_acknowledged_keys() {
 /// again: the next transaction must commit, and every acknowledged key must
 /// read back.
 #[test]
-#[ignore = "GAP-1 W8: allocation retypes a free-list page on disk before commit; the next allocation fails after a crash with nothing to replay"]
 fn a_crash_after_an_uncommitted_transaction_reused_free_pages_leaves_a_writable_store() {
     let dir = TempDir::new().unwrap();
     let survivors = acknowledged(0..50);

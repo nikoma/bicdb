@@ -108,73 +108,9 @@ fn indexed_collections_fall_back_to_the_checked_path() {
     assert_eq!(row.metadata["value"], json!(7));
 }
 
-/// GAP-1 no-steal: a bulk load is one page transaction with no other redo,
-/// so one larger than the buffer pool is refused cleanly instead of writing
-/// its uncommitted pages to the page file. The load fails as a whole,
-/// nothing of it is visible before or after a reopen, the rows committed
-/// before it are intact, and the next load in pool-sized batches succeeds.
-#[test]
-#[cfg(not(feature = "experimental-structural-cuts"))]
-fn a_bulk_load_larger_than_the_buffer_pool_is_refused_whole_and_batches_succeed() {
-    let dir = tempfile::tempdir().unwrap();
-    let small = || config().with_paged_buffer_pool_bytes(256 * 1024);
-    {
-        let mut db = BicDb::open_with_config(dir.path(), small()).unwrap();
-        db.create_collection("places").unwrap();
-        db.close().unwrap();
-    }
-    let mut db = BicDb::open_with_config(dir.path(), small()).unwrap();
-    db.bulk_load_insert(
-        "places",
-        (0..50u64).map(|index| record(&format!("before-{index:05}"), index)),
-    )
-    .unwrap();
-    let error = db
-        .bulk_load_insert(
-            "places",
-            (0..20_000u64).map(|index| record(&format!("big-{index:05}"), index)),
-        )
-        .expect_err("a load of many times the pool must be refused");
-    assert!(
-        error.to_string().contains("refused"),
-        "unexpected error: {error}"
-    );
-    assert_eq!(db.get("places", "big-00000").unwrap(), None);
-    for chunk in (0..2_000u64).collect::<Vec<_>>().chunks(100) {
-        db.bulk_load_insert(
-            "places",
-            chunk
-                .iter()
-                .map(|index| record(&format!("batched-{index:05}"), *index)),
-        )
-        .unwrap();
-    }
-    db.close().unwrap();
-
-    let db = BicDb::open_with_config(dir.path(), config()).unwrap();
-    let rows = db.scan_collection("places").unwrap();
-    assert_eq!(
-        rows.iter().filter(|row| row.id.starts_with("big-")).count(),
-        0
-    );
-    assert_eq!(
-        rows.iter()
-            .filter(|row| row.id.starts_with("before-"))
-            .count(),
-        50
-    );
-    assert_eq!(
-        rows.iter()
-            .filter(|row| row.id.starts_with("batched-"))
-            .count(),
-        2_000
-    );
-}
-
 /// The structural-cut option removes the interim whole-load refusal. Every
 /// acknowledged row, including its payload, must survive repeated recovery.
 #[test]
-#[cfg(feature = "experimental-structural-cuts")]
 fn structural_cuts_accept_a_whole_bulk_load_larger_than_the_buffer_pool() {
     let dir = tempfile::tempdir().unwrap();
     let small = || config().with_paged_buffer_pool_bytes(256 * 1024);

@@ -1,5 +1,3 @@
-#![cfg(feature = "experimental-structural-cuts")]
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
 use std::sync::{Arc, Barrier, Mutex};

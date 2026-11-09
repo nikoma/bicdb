@@ -1050,9 +1050,6 @@ fn the_last_resort_steal_path_recovers_after_the_stealing_commit() {
         .last()
         .and_then(|line| line.parse().ok())
         .expect("the child records its steal count");
-    #[cfg(not(feature = "experimental-structural-cuts"))]
-    assert!(steals > 0, "the decided commit did not take the steal path");
-    #[cfg(feature = "experimental-structural-cuts")]
     assert_eq!(steals, 0, "structural cuts must never steal unlogged pages");
 
     let mut cases: Vec<(String, Box<dyn FnOnce() + std::panic::UnwindSafe>)> = Vec::new();
@@ -1065,17 +1062,9 @@ fn the_last_resort_steal_path_recovers_after_the_stealing_commit() {
     run_matrix(cases);
 }
 
-/// Still open after the interim (GAP-1 W1 for redo-backed transactions):
-/// with a 32-frame pool the 2,000-row page apply cannot fit, and it is a
-/// decided commit, so it is never refused; eviction steals its pages as a
-/// last resort (`unlogged_steals`). A crash before its page commit can then
-/// lose acknowledged rows that its splits moved. Closing this needs the
-/// structural-unit log (option (b) in `docs/recovery-semantics.md` 14.3).
+/// A decided logical commit larger than the pool must preserve earlier acknowledgements.
 #[test]
-#[cfg_attr(
-    not(feature = "experimental-structural-cuts"),
-    ignore = "GAP-1 W1: a decided commit larger than the buffer pool still steals; needs option (b)"
-)]
+
 fn gap1_a_decided_commit_larger_than_the_pool_keeps_acknowledged_rows() {
     let mut cases: Vec<(String, Box<dyn FnOnce() + std::panic::UnwindSafe>)> = Vec::new();
     for point in [
@@ -1256,7 +1245,6 @@ fn repeat_recovery_convergence() {
 
 /// The experimental closure must recover the previously failing large
 /// decided transaction at every boundary, without accepting an ignored case.
-#[cfg(feature = "experimental-structural-cuts")]
 #[test]
 fn experimental_structural_cuts_preserve_large_decided_commits() {
     gap1_a_decided_commit_larger_than_the_pool_keeps_acknowledged_rows();

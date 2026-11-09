@@ -425,7 +425,6 @@ pub trait WritebackBarrier: Send + Sync + std::fmt::Debug {
     /// Ensure `bytes` for `page_id` are recoverable before they reach disk.
     fn before_writeback(&self, page_id: PageId, transaction: u64, bytes: &[u8]) -> Result<()>;
 
-    #[cfg(feature = "experimental-structural-cuts")]
     fn before_unreachable_writeback(&self, page_id: PageId, bytes: &[u8]) -> Result<()> {
         self.before_writeback(page_id, 0, bytes)
     }
@@ -721,10 +720,6 @@ struct Shard {
     capacity: usize,
     /// Frames of this shard with unlogged changes (`Frame::needs_log`).
     unlogged: Arc<AtomicUsize>,
-    /// While set, reclaim skips a dirty frame with unlogged changes: a page
-    /// an uncommitted transaction modified (GAP-1). Only the last-resort pass
-    /// of [`BufferPool::evict_one`] clears it.
-    avoid_unlogged: bool,
 }
 
 #[derive(Debug)]
@@ -880,7 +875,7 @@ pub struct BufferPoolSnapshot {
     pub writeback_pinned_skips: u64,
     /// Resident frames holding changes no log record describes yet: pages of
     /// in-flight transactions. They are not written to the page file before
-    /// their transaction commits, except by a last-resort steal.
+    /// their complete structural cut is durable.
     #[serde(default)]
     pub unlogged_pages: u64,
     /// Evictions that had to write an unlogged frame (see `unlogged_pages`).
@@ -935,9 +930,9 @@ pub struct UnloggedPressure {
     pub shard_frames: u64,
 }
 
-/// Frames of a shard kept available to eviction without stealing: an
-/// eighth, and at least one. A write operation of a refusable transaction
-/// is admitted only while every shard's unlogged frames leave this many.
+/// Frames reserved for an operation's allocation and concurrent reads:
+/// an eighth per shard, and at least one. PagedStore cuts the complete
+/// unlogged closure before the next mutation when this reserve is reached.
 pub fn unlogged_reserve(shard_frames: usize) -> usize {
     (shard_frames / 8).max(1)
 }
@@ -955,10 +950,7 @@ impl UnreachablePage {
     }
 }
 
-#[cfg(feature = "experimental-structural-cuts")]
 type ShardFrameBudget = AtomicUsize;
-#[cfg(not(feature = "experimental-structural-cuts"))]
-type ShardFrameBudget = usize;
 
 /// A bounded cache of pages over a [`PageStore`].
 #[derive(Debug)]
@@ -1132,7 +1124,6 @@ impl BufferPool {
                     metadata_capacity,
                     capacity,
                     unlogged,
-                    avoid_unlogged: true,
                 })
             })
             .collect::<Vec<_>>()
@@ -1140,13 +1131,8 @@ impl BufferPool {
         let shard_frames = (0..shard_count)
             .map(|index| {
                 let frames = per_shard + usize::from(index < remainder);
-                #[cfg(feature = "experimental-structural-cuts")]
                 {
                     AtomicUsize::new(frames)
-                }
-                #[cfg(not(feature = "experimental-structural-cuts"))]
-                {
-                    frames
                 }
             })
             .collect::<Vec<_>>()
@@ -1207,9 +1193,7 @@ impl BufferPool {
     }
 
     pub(crate) fn should_stream_unreachable_value(&self, len: usize) -> bool {
-        cfg!(feature = "experimental-structural-cuts")
-            && self.wal_managed_frees.load(Ordering::Acquire)
-            && len as u64 > self.budget_bytes / 4
+        self.wal_managed_frees.load(Ordering::Acquire) && len as u64 > self.budget_bytes / 4
     }
 
     pub(crate) fn allocate_unreachable(&self, page_type: PageType) -> Result<UnreachablePage> {
@@ -1221,7 +1205,6 @@ impl BufferPool {
     /// Seal a fresh, unrooted allocation before publishing any parent link.
     /// Consuming the allocation capability enforces the caller lifecycle.
     pub(crate) fn seal_unreachable_page(&self, page: UnreachablePage) -> Result<()> {
-        #[cfg(feature = "experimental-structural-cuts")]
         {
             let page_id = page.page_id;
             let barrier = self.barrier.lock().clone();
@@ -1234,19 +1217,15 @@ impl BufferPool {
             drop(guard);
             self.mark_logged(&[(page_id, epoch)]);
         }
-        #[cfg(not(feature = "experimental-structural-cuts"))]
-        let _ = page;
         Ok(())
     }
 
-    #[cfg(feature = "experimental-structural-cuts")]
     pub(crate) fn manages_transactional_frees(&self) -> bool {
         self.wal_managed_frees.load(Ordering::Acquire)
     }
 
     /// Caller holds the structure lock and has durably cut every replacement
     /// reference. This chain is now unreachable, including by old snapshots.
-    #[cfg(feature = "experimental-structural-cuts")]
     pub(crate) fn retire_overflow_after_durable_cut(&self, head: PageId) -> Result<()> {
         let mut page_id = head;
         while page_id != 0 {
@@ -1270,7 +1249,6 @@ impl BufferPool {
 
     /// These are unadopted structural frees: no durable free-list head names
     /// them, and their previous parent references were already cut durably.
-    #[cfg(feature = "experimental-structural-cuts")]
     pub(crate) fn seal_unadopted_structural_free(&self, page_id: PageId) -> Result<()> {
         self.seal_unreachable_page(UnreachablePage { page_id })
     }
@@ -1285,7 +1263,6 @@ impl BufferPool {
         self.wal_managed_frees.store(true, Ordering::Release);
     }
 
-    #[cfg(feature = "experimental-structural-cuts")]
     pub(crate) fn has_pending_frees(&self, transaction: u64) -> bool {
         self.pending_frees
             .lock()
@@ -1556,7 +1533,6 @@ impl BufferPool {
                 return Err(PageError::PageAlreadyFree { page_id });
             }
         }
-        #[cfg(feature = "experimental-structural-cuts")]
         {
             // Stage only the identity. The old bytes remain intact until a
             // complete parent-reference cut is durable at preparation time.
@@ -1572,26 +1548,6 @@ impl BufferPool {
                 .or_default()
                 .push(page_id);
             return Ok(());
-        }
-        #[cfg(not(feature = "experimental-structural-cuts"))]
-        {
-            let mut guard = self.get_mut(page_id)?;
-            let existing = PageHeader::decode(guard.bytes_mut(), self.store.path())?;
-            if existing.page_type == PageType::Free {
-                return Err(PageError::PageAlreadyFree { page_id });
-            }
-            let bytes = guard.bytes_mut();
-            bytes.fill(0);
-            let mut header = PageHeader::new(page_id, PageType::Free, self.page_size);
-            header.generation = existing.generation.saturating_add(1);
-            header.encode(bytes);
-            drop(guard);
-            self.pending_frees
-                .lock()
-                .entry(transaction)
-                .or_default()
-                .push(page_id);
-            Ok(())
         }
     }
 
@@ -1749,17 +1705,9 @@ impl BufferPool {
         }
     }
 
-    /// Free one frame in this shard, writing it back if dirty.
-    ///
-    /// No-steal (GAP-1 in `docs/recovery-semantics.md`): a frame with unlogged
-    /// changes, that is a page an in-flight transaction modified, is chosen
-    /// only when the shard has no other victim. Writing it would put
-    /// uncommitted bytes in the page file, which recovery skips but cannot
-    /// undo. Such a last-resort steal is counted in `unlogged_steals`.
-    /// `PagedStore` refuses a refusable transaction's next operation before
-    /// a shard gets that full ([`Self::unlogged_pressure`]), so a steal is
-    /// left only to an operation already under way, a transaction whose redo
-    /// is durable in another log, and reads during either.
+    /// Reclaim a frame while preserving write-ahead ordering. WAL-managed
+    /// unlogged pages are never victims: operation-boundary structural cuts
+    /// make their whole reachability closure recoverable first.
     fn evict_one(
         &self,
         shard: &mut Shard,
@@ -1771,7 +1719,7 @@ impl BufferPool {
         }
         // Every frame unlogged: a no-steal pass cannot succeed, so skip its
         // O(shard) walk.
-        // A feature-on shard can temporarily have one extra resident frame.
+        // A shard can temporarily have one extra resident frame.
         // Two unlogged frames in a two-frame budget do not imply that every
         // resident frame is unlogged: the emergency frame may be clean.
         let no_steal_pass = if shard.unlogged.load(Ordering::Acquire) >= shard.resident.len() {
@@ -1784,30 +1732,22 @@ impl BufferPool {
         };
         match no_steal_pass {
             Err(PageError::PoolExhausted { .. }) => {
-                #[cfg(feature = "experimental-structural-cuts")]
                 if let Some(buffer) = self.borrow_logged_frame(shard, wanted)? {
                     return Ok(buffer);
                 }
-                if cfg!(feature = "experimental-structural-cuts") {
-                    // A structural cut cannot run in the middle of an
-                    // operation. Permit exactly one extra frame per shard;
-                    // otherwise fail and let PagedStore fence a partial
-                    // operation. Never write an uncommitted image to disk.
-                    if shard.resident.len() + shard.loading.len() < shard.capacity + 1 {
-                        return Ok(Arc::new(RwLock::new(vec![0; self.page_size as usize])));
-                    }
-                    return Err(PageError::PoolExhausted {
-                        page_id: wanted,
-                        frames: shard.capacity + 1,
-                    });
+                // A structural cut cannot run inside an operation. Exactly
+                // one emergency frame per shard is permitted; otherwise fail
+                // closed through the caller's partial-operation fence.
+                if shard.resident.len() + shard.loading.len() < shard.capacity + 1 {
+                    return Ok(Arc::new(RwLock::new(vec![0; self.page_size as usize])));
                 }
-                // `try_reclaim` counts a steal only when it actually writes
-                // an unlogged frame; this pass may also find a frame that
-                // became clean in the meantime.
-                shard.avoid_unlogged = false;
-                let result = self.evict_one_pass(shard, wanted, class, true);
-                shard.avoid_unlogged = true;
-                result
+                self.metrics
+                    .admission_failures
+                    .fetch_add(1, Ordering::Relaxed);
+                Err(PageError::PoolExhausted {
+                    page_id: wanted,
+                    frames: shard.capacity + 1,
+                })
             }
             other => other,
         }
@@ -1817,7 +1757,6 @@ impl BufferPool {
     /// shard. No new memory is allocated, unlogged frames are never stolen,
     /// and try_lock prevents cross-shard lock-order deadlocks. Tiny pools can
     /// otherwise strand clean capacity while one shard needs a split path.
-    #[cfg(feature = "experimental-structural-cuts")]
     fn borrow_logged_frame(
         &self,
         target: &mut Shard,
@@ -1868,8 +1807,7 @@ impl BufferPool {
     }
 
     /// Return the emergency frames once a structural cut made them evictable.
-    #[cfg(feature = "experimental-structural-cuts")]
-    pub(crate) fn trim_experimental_frames(&self) -> Result<()> {
+    pub(crate) fn trim_emergency_frames(&self) -> Result<()> {
         for index in 0..self.shards.len() {
             let mut shard = self.lock_shard(&self.shards[index]);
             while shard.resident.len() + shard.loading.len() + shard.free.len() > shard.capacity {
@@ -2130,20 +2068,12 @@ impl BufferPool {
         if frame.pins.load(Ordering::Acquire) > 0 {
             return Ok(None);
         }
-        // No-steal: a page with unlogged changes is treated like a pinned
-        // one, except by the last-resort pass of `evict_one`.
-        if shard.avoid_unlogged
-            && self.no_steal.load(Ordering::Acquire)
-            && frame.needs_log.load(Ordering::Acquire)
-        {
+        // No-steal is unconditional for WAL-managed frames. No second pass
+        // may waive it, including for transactions with external logical redo.
+        if self.no_steal.load(Ordering::Acquire) && frame.needs_log.load(Ordering::Acquire) {
             return Ok(None);
         }
         if frame.dirty.load(Ordering::Acquire) {
-            let steal =
-                self.no_steal.load(Ordering::Acquire) && frame.needs_log.load(Ordering::Acquire);
-            if steal {
-                self.metrics.unlogged_steals.fetch_add(1, Ordering::Relaxed);
-            }
             // This flush still runs under the caller's shard lock: eviction
             // must hand a free buffer to the in-progress acquire, and the
             // caller's candidate loop owns the shard state. That is tolerable
@@ -2309,11 +2239,10 @@ impl BufferPool {
     /// The fullest shard, if its unlogged frames leave fewer than
     /// [`unlogged_reserve`] frames that eviction may take without stealing.
     ///
-    /// `PagedStore` checks this before each write operation of a refusable
-    /// transaction and refuses the operation, before it modifies anything,
-    /// when it returns `Some`. The reserve is what the operation itself and
-    /// concurrent reads can then use without a steal. Always `None` without a
-    /// barrier.
+    /// `PagedStore` checks this before every write operation and makes a
+    /// complete durable structural cut when it returns `Some`. The reserve
+    /// accommodates that operation and concurrent reads without stealing.
+    /// Always `None` without a barrier.
     pub fn unlogged_pressure(&self) -> Option<UnloggedPressure> {
         if !self.no_steal.load(Ordering::Acquire) {
             return None;
@@ -2323,10 +2252,7 @@ impl BufferPool {
             .zip(self.shard_unlogged.iter())
             .enumerate()
             .filter_map(|(shard, (frames, unlogged))| {
-                #[cfg(feature = "experimental-structural-cuts")]
                 let frames = frames.load(Ordering::Acquire);
-                #[cfg(not(feature = "experimental-structural-cuts"))]
-                let frames = *frames;
                 let unlogged = unlogged.load(Ordering::Acquire);
                 (unlogged.saturating_add(unlogged_reserve(frames)) > frames).then_some(
                     UnloggedPressure {

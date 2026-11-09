@@ -851,7 +851,6 @@ fn promotion_with_a_commit_in_flight_never_acknowledges_or_merges_it() {
 /// recovery must preserve its older acknowledged prefix and the new batch must
 /// stay whole, catch up exactly, and remain whole through promotion/reopening.
 #[test]
-#[cfg(feature = "experimental-structural-cuts")]
 fn structural_cuts_replicate_large_batches_through_apply_failure_and_promotion() {
     let small = |mode| {
         config(StorageMode::ServerPaged)

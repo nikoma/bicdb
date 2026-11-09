@@ -74,62 +74,6 @@ fn loaded(dir: &std::path::Path, config: DbConfig, collection: &str, rows: usize
     BicDb::open_with_config(dir, config).unwrap()
 }
 
-/// A behaviour change of the interim, pinned here: the backfill of a new
-/// index over existing rows (`backfill_paged_index_entries`, used by
-/// CREATE INDEX for B-tree indexes and, when the external full-text build
-/// does not complete the job, for full-text ones) is one page transaction:
-/// its entries appear atomically, and nothing marks a partial backfill. On a
-/// collection whose entries outgrow the pool, CREATE INDEX now fails cleanly
-/// instead of succeeding by stealing pages (with a crash window that could
-/// lose other rows). The failure leaves every row intact and no published
-/// index. These direct builds have no resumable workspace. With a larger
-/// pool the same CREATE INDEX completes with correct results.
-#[test]
-#[cfg(not(feature = "experimental-structural-cuts"))]
-fn creating_an_index_whose_backfill_outgrows_the_pool_fails_cleanly() {
-    const ROWS: usize = 30_000;
-    for (label, definition) in [("b-tree", btree("rows")), ("full-text", full_text("rows"))] {
-        let dir = tempfile::tempdir().unwrap();
-        let mut db = loaded(dir.path(), small_pool(), "rows", ROWS);
-        let error = db
-            .create_index(definition.clone())
-            .expect_err("a backfill many times the pool must be refused");
-        assert!(
-            error.to_string().contains("refused"),
-            "{label}: unexpected error: {error}"
-        );
-        assert!(
-            !db.index_definitions()
-                .iter()
-                .any(|index| index.name == definition.name),
-            "{label}: a refused non-resumable build left a published definition"
-        );
-        assert_eq!(db.scan_collection("rows").unwrap().len(), ROWS, "{label}");
-        if definition.kind == IndexKind::FullText {
-            let error = db
-                .lookup_full_text_term(&definition.name, "common", false)
-                .expect_err("a refused build must not answer from a partial index");
-            assert!(error.to_string().contains("not found"), "{error}");
-        }
-        db.close().unwrap();
-
-        let mut db = BicDb::open_with_config(dir.path(), roomy()).unwrap();
-        assert_eq!(db.scan_collection("rows").unwrap().len(), ROWS, "{label}");
-        db.create_index(definition.clone())
-            .unwrap_or_else(|error| panic!("{label} with a larger pool: {error}"));
-        if definition.kind == IndexKind::FullText {
-            assert_eq!(
-                db.lookup_full_text_term(&definition.name, "common", false)
-                    .unwrap()
-                    .len(),
-                ROWS,
-                "{label}: the resumed build is incomplete"
-            );
-        }
-        db.close().unwrap();
-    }
-}
-
 /// A row commit whose page apply fails halfway through a B-tree split (the
 /// test hook between rebuilding the split leaf and recording the split in
 /// its parent). The page store poisons the transaction and fails closed, so
@@ -218,7 +162,6 @@ fn a_page_apply_that_fails_mid_split_recovers_every_acknowledged_row() {
 /// Structural cuts replace the interim refusal with complete atomic backfill.
 /// Check every ID through the index immediately and after repeated recovery.
 #[test]
-#[cfg(feature = "experimental-structural-cuts")]
 fn structural_cuts_complete_index_backfills_larger_than_the_pool() {
     const ROWS: usize = 30_000;
     let expected = (0..ROWS)

@@ -1,5 +1,4 @@
 //! Proof obligations for the disabled, disposable-store-only prototype.
-#![cfg(feature = "experimental-structural-cuts")]
 
 use bicdb_page::{PagedStore, PagedStoreOptions};
 use tempfile::TempDir;

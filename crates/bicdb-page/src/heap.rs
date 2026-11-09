@@ -134,7 +134,6 @@ pub struct HeapFile {
     /// page directory replaces it. Recorded rather than hidden.
     pages: Mutex<Vec<PageId>>,
     metrics: Mutex<HeapSnapshot>,
-    #[cfg(feature = "experimental-structural-cuts")]
     retired_overflow: Mutex<Vec<PageId>>,
 }
 
@@ -147,7 +146,6 @@ impl HeapFile {
             candidates: Mutex::new(VecDeque::new()),
             pages: Mutex::new(Vec::new()),
             metrics: Mutex::new(HeapSnapshot::default()),
-            #[cfg(feature = "experimental-structural-cuts")]
             retired_overflow: Mutex::new(Vec::new()),
         }
     }
@@ -609,7 +607,6 @@ impl HeapFile {
     }
 
     fn release_or_retire_overflow(&self, head: PageId) -> Result<()> {
-        #[cfg(feature = "experimental-structural-cuts")]
         if self.pool.manages_transactional_frees() {
             self.retired_overflow.lock().push(head);
             return Ok(());
@@ -618,7 +615,6 @@ impl HeapFile {
         Ok(())
     }
 
-    #[cfg(feature = "experimental-structural-cuts")]
     pub(crate) fn take_retired_overflow(&self) -> Vec<PageId> {
         std::mem::take(&mut *self.retired_overflow.lock())
     }

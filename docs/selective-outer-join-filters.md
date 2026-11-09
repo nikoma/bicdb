@@ -104,3 +104,13 @@ error fixture did not produce a preparation error; 50de920c replaces that fixtur
 with malformed SQL. The earlier 99aa15cd attempt stopped at a moved storage-mode
 value and is retained separately as a compilation failure. These controls do
 not substitute for the original application deadline test.
+
+Current-head CI at 77403dca passed the core suite and pgwire's complete 147-test
+library, then failed the embedded HA journal integration fixture's first CREATE.
+The fixture had observed matching identities from copied snapshots and an active
+initial lease grace period, but the primary still reported zero live standby
+confirmations. It now waits for fresh native confirmations from both fixture
+peers before starting setup writes. The lease, synchronous acknowledgement
+requirement, timeouts, journal identity assertions and promotion assertions stay
+unchanged. The original CI log is retained; this readiness change requires its
+own focused HA run and fresh current-head CI.

@@ -602,6 +602,15 @@ impl BicDb {
         if old == new {
             return Ok(());
         }
+        // Application grants/commit validators are bound to authored relation
+        // names. Rebinding an already-authorized write would change that
+        // authority after validation. Native catalog migration needs its own
+        // explicit contract; refuse before changing either backing or writes.
+        if tx.mutation_actor.is_some() && tx.writes.iter().any(|write| write.collection == old) {
+            return Err(BicDbError::MutationDenied(
+                "cannot rename a collection with pending native application writes".into(),
+            ));
+        }
         if tx.write_index.contains_key(new) {
             return Err(BicDbError::Unsupported(
                 "cannot rename onto a name with pending transaction writes".into(),

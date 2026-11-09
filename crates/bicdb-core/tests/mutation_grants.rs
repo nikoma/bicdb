@@ -451,11 +451,18 @@ fn transactional_catalog_rename_does_not_widen_native_mutation_grants() {
         record("doc-1", "tenant-a", "workspace-a", 1, "pending"),
     )
     .unwrap();
-    db.rename_collection_preserving_pending_writes(&mut tx, "documents", "renamed")
-        .unwrap();
-    assert!(matches!(tx.commit(), Err(BicDbError::MutationDenied(_))));
+    assert!(matches!(
+        db.rename_collection_preserving_pending_writes(&mut tx, "documents", "renamed"),
+        Err(BicDbError::MutationDenied(_))
+    ));
+    assert!(db.collections().iter().any(|meta| meta.name == "documents"));
+    assert!(!db.collections().iter().any(|meta| meta.name == "renamed"));
+    tx.commit().unwrap();
     let reader = db
         .begin_application_transaction(actor("tenant-a", "workspace-a"))
         .unwrap();
-    assert!(reader.get_authorized("renamed", "doc-1").unwrap().is_none());
+    assert!(reader
+        .get_authorized("documents", "doc-1")
+        .unwrap()
+        .is_some());
 }

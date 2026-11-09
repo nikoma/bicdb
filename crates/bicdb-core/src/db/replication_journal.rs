@@ -190,6 +190,7 @@ mod tests {
         let before = cursor.sent_seq();
         let mut transaction = db.begin_transaction().unwrap();
         transaction.insert("items", Record::new("one")).unwrap();
+        transaction.skip_commit_outboxes_for_crash_test = true;
         let committed = db.commit_transaction(&mut transaction).unwrap();
         db.tx_log.write_durable(committed).unwrap();
         assert!(db

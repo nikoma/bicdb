@@ -2702,6 +2702,12 @@ impl BicDb {
         }
         tx.state = TxState::Committed;
         tx.committed_seq = Some(commit_seq);
+        // The decision is already durable. Complete the outboxes while this
+        // commit still holds admission: a checkpoint must not cut their redo
+        // between the durable decision and publication. The caller's legacy
+        // finalizer calls remain safe, idempotent no-ops afterwards.
+        tx.finalize_committed_record_audit_events()?;
+        tx.finalize_committed_broker_outbox();
         tx.receipt_commit_finished(commit_seq);
         timer.lap(&commit_trace::BOOKKEEPING);
         commit_trace::tick();

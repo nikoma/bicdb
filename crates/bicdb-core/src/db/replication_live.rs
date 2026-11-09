@@ -357,6 +357,19 @@ impl BicDb {
             return Err(error);
         }
         self.tx_log.invalidate();
+        if keep_from >= log_len {
+            // A durable empty log proves no trimmed transactional publication
+            // can be replayed. Older or newer receipt markers are both safe
+            // if this optional cleanup fails; retain the conservative ledger.
+            if let Err(error) = self
+                .events
+                .lock()
+                .broker()
+                .prune_outbox_receipts(&Default::default())
+            {
+                eprintln!("bicdb: broker outbox receipt pruning deferred: {error}");
+            }
+        }
         Ok(())
     }
 

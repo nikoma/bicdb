@@ -10398,19 +10398,22 @@ impl BicDb {
             encryption.clone(),
         )?;
         let recovered_broker_publishes = tx_recovery.committed_broker_publishes();
-        let mut broker_outbox_flushed = true;
+        let receipt_ids = events.broker().outbox_receipt_ids();
+        let retained_receipts = recovered_broker_publishes
+            .iter()
+            .map(|pending| pending.message_id)
+            .filter(|id| receipt_ids.contains(id))
+            .collect();
         if !recovered_broker_publishes.is_empty() {
             let mut broker = events.broker();
             for pending in &recovered_broker_publishes {
-                if let Err(error) = broker.publish_prepared(pending) {
-                    broker_outbox_flushed = false;
-                    eprintln!(
-                        "bicdb: retained committed broker outbox message {} for retry: {error}",
-                        pending.message_id
-                    );
-                }
+                // Recovery-dependent reads and writes stay fenced until every
+                // committed publication is resolved. In particular, an old
+                // trim without identity evidence must never be guessed.
+                broker.publish_prepared(pending)?;
             }
         }
+        events.broker().prune_outbox_receipts(&retained_receipts)?;
         // Record-audit events are a transaction-WAL outbox. A process may die
         // after the row commit becomes durable but before its event-segment
         // copy. Replay every committed entry here; UUID deduplication makes an
@@ -10449,7 +10452,7 @@ impl BicDb {
             bicdb_page::test_faults::crash_point("open.after_sync_republish");
         }
         // A replication primary keeps its log at open: standbys resume from it.
-        if paged_records.is_some() && broker_outbox_flushed && !config.replication.enabled {
+        if paged_records.is_some() && !config.replication.enabled {
             let log_path = path.join(DEFAULT_TRANSACTION_LOG);
             let log_len = file_len(&log_path)?;
             if log_len > 0 {
@@ -17202,16 +17205,24 @@ impl Transaction {
             return;
         }
         let db = unsafe { self.db.as_ref() };
+        if db.durability.is_failed() {
+            // A failed publication keeps its redo for verified recovery;
+            // do not retry against a fenced handle.
+            return;
+        }
         let mut events = db.events.lock();
         let mut broker = events.broker();
         for pending in &publishes {
             if let Err(error) = broker.publish_prepared(pending) {
+                db.fence_durability("broker_outbox.publish", &error);
                 eprintln!(
                     "bicdb: committed broker outbox message {} retained for recovery retry: {error}",
                     pending.message_id
                 );
+                return;
             }
         }
+        self.pending_broker_publishes.lock().clear();
     }
 
     fn disable_memory_jobs_on_commit(&mut self) {

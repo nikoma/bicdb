@@ -149,6 +149,13 @@ pub struct DeviceView {
 }
 
 impl EventStream {
+    fn rebuild_broker_state(&mut self) -> Result<()> {
+        let mut state = BrokerState::rebuild(&self.events)?;
+        state.preserve_recovery_protection(&self.broker_state, &self.event_indexes);
+        self.broker_state = state;
+        Ok(())
+    }
+
     pub(crate) fn events_iter(&self) -> impl Iterator<Item = &StoredEvent> {
         self.events.iter()
     }
@@ -200,7 +207,7 @@ impl EventStream {
                 let index = events.len();
                 event_indexes.insert(event.id, index);
                 let stored = StoredEvent { offset, event };
-                broker_state.apply(&stored);
+                broker_state.apply(&stored)?;
                 events.push(stored);
                 Ok(())
             })?;
@@ -442,7 +449,7 @@ impl EventStream {
                 .insert(stored.event.id, self.events.len());
             self.events.push(stored);
         }
-        self.broker_state = BrokerState::rebuild(&self.events);
+        self.rebuild_broker_state()?;
         let bytes_after = match fs::metadata(&self.path) {
             Ok(metadata) => metadata.len(),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
@@ -462,7 +469,7 @@ impl EventStream {
         let result = self.compact();
         match result {
             Ok(report) => {
-                self.broker_state = BrokerState::rebuild(&self.events);
+                self.rebuild_broker_state()?;
                 Ok(report)
             }
             Err(error) => {
@@ -478,7 +485,9 @@ impl EventStream {
                 ) {
                     self.events = recovered.events;
                     self.event_indexes = recovered.event_indexes;
-                    self.broker_state = recovered.broker_state;
+                    let mut state = recovered.broker_state;
+                    state.preserve_recovery_protection(&self.broker_state, &self.event_indexes);
+                    self.broker_state = state;
                 }
                 Err(error)
             }
@@ -539,6 +548,7 @@ impl EventStream {
 
     fn append_event(&mut self, event: Event) -> Result<(StoredEvent, bool)> {
         validate_event(&event)?;
+        self.broker_state.validate_event(&event)?;
         if let Some(index) = self.event_indexes.get(&event.id).copied() {
             return Ok((self.events[index].clone(), false));
         }
@@ -564,7 +574,7 @@ impl EventStream {
         self.event_indexes
             .insert(stored.event.id, self.events.len());
         self.events.push(stored.clone());
-        self.broker_state.apply(&stored);
+        self.broker_state.apply(&stored)?;
         Ok((stored, true))
     }
 

@@ -29,7 +29,7 @@
 //! - `attempts` counts deliveries. When a redelivery would exceed the
 //!   message's `max_attempts`, the message is dead-lettered instead.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -462,7 +462,18 @@ pub(crate) struct BrokerState {
     idempotency: HashMap<(String, String), (Uuid, u64)>,
     /// queue -> durable configuration (latest write wins)
     configs: HashMap<String, QueueConfig>,
+    // Retention must not erase the identity of a transactional publication
+    // whose decision can still be replayed from the transaction log.
+    trimmed_outbox: HashMap<String, BTreeMap<Uuid, u64>>,
+    legacy_trimmed: HashSet<String>,
+    // Old retained messages lack the persisted transactional metadata bit.
+    // Recovery identifies those messages before exposing the broker. Keep
+    // this bounded; if it overflows, trimming safely refuses until reopen.
+    legacy_prepared: HashSet<Uuid>,
+    legacy_prepared_overflow: bool,
 }
+
+const MAX_OUTBOX_RECEIPTS: usize = 65_536;
 
 /// Where a broker operation came from.
 ///
@@ -486,20 +497,89 @@ pub enum BrokerCaller<'a> {
 }
 
 impl BrokerState {
+    pub(crate) fn validate_event(&self, event: &Event) -> Result<()> {
+        if event.event_type != QUEUE_TRIMMED_EVENT
+            || !event.stream.starts_with(BROKER_STREAM_PREFIX)
+        {
+            return Ok(());
+        }
+        let Some(raw) = event.payload.get("outbox_receipts") else {
+            return Ok(()); // Legacy trim: handled conservatively by recovery.
+        };
+        let receipts = raw.as_array().ok_or_else(|| {
+            BicDbError::Corruption("broker trim has malformed outbox receipts".into())
+        })?;
+        if receipts.len() > MAX_OUTBOX_RECEIPTS {
+            return Err(BicDbError::Corruption(
+                "broker outbox receipt limit exceeded".into(),
+            ));
+        }
+        let queue = event
+            .payload
+            .get("queue")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let existing = self.trimmed_outbox.get(queue);
+        let mut added = HashSet::new();
+        for receipt in receipts {
+            let id = receipt
+                .get(0)
+                .and_then(Value::as_str)
+                .and_then(|id| Uuid::parse_str(id).ok());
+            let sequence = receipt.get(1).and_then(Value::as_u64);
+            let (Some(id), Some(sequence)) = (id, sequence) else {
+                return Err(BicDbError::Corruption(
+                    "broker trim has malformed outbox receipt".into(),
+                ));
+            };
+            if let Some(original) = existing.and_then(|known| known.get(&id)) {
+                if *original != sequence {
+                    return Err(BicDbError::Corruption(
+                        "broker outbox receipt sequence changed".into(),
+                    ));
+                }
+            } else {
+                added.insert(id);
+            }
+        }
+        let total: usize = self.trimmed_outbox.values().map(BTreeMap::len).sum();
+        if total.saturating_add(added.len()) > MAX_OUTBOX_RECEIPTS {
+            return Err(BicDbError::Corruption(
+                "broker outbox receipt limit exceeded".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn preserve_recovery_protection(
+        &mut self,
+        previous: &Self,
+        event_indexes: &HashMap<Uuid, usize>,
+    ) {
+        self.legacy_prepared = previous
+            .legacy_prepared
+            .iter()
+            .filter(|id| event_indexes.contains_key(id))
+            .copied()
+            .collect();
+        self.legacy_prepared_overflow = previous.legacy_prepared_overflow;
+    }
+
     /// Replays the ordered event log into broker state. Used at open; the
     /// live paths apply the same transitions incrementally as they append.
-    pub(crate) fn rebuild(events: &[StoredEvent]) -> Self {
+    pub(crate) fn rebuild(events: &[StoredEvent]) -> Result<Self> {
         let mut state = Self::default();
         for stored in events {
-            state.apply(stored);
+            state.apply(stored)?;
         }
-        state
+        Ok(state)
     }
 
     /// Applies one appended event to the projection. Must stay in lockstep
     /// with what the `Broker` methods append so that replay reproduces the
     /// live state exactly.
-    pub(crate) fn apply(&mut self, stored: &StoredEvent) {
+    pub(crate) fn apply(&mut self, stored: &StoredEvent) -> Result<()> {
+        self.validate_event(&stored.event)?;
         let event = &stored.event;
         if let Some(queue) = event.stream.strip_prefix("queue:") {
             if event.event_type == QUEUE_MESSAGE_EVENT {
@@ -516,18 +596,34 @@ impl BrokerState {
                         .or_insert((event.id, sequence));
                 }
             }
-            return;
+            return Ok(());
         }
         if !event.stream.starts_with(BROKER_STREAM_PREFIX) {
-            return;
+            return Ok(());
         }
         let payload = &event.payload;
         let Some(queue) = payload.get("queue").and_then(Value::as_str) else {
-            return;
+            return Ok(());
         };
         // Queue-level control events carry no group.
         match event.event_type.as_str() {
             QUEUE_TRIMMED_EVENT => {
+                if let Some(receipts) = payload.get("outbox_receipts").and_then(Value::as_array) {
+                    let known = self.trimmed_outbox.entry(queue.to_string()).or_default();
+                    for receipt in receipts {
+                        if let (Some(id), Some(sequence)) = (
+                            receipt
+                                .get(0)
+                                .and_then(Value::as_str)
+                                .and_then(|id| Uuid::parse_str(id).ok()),
+                            receipt.get(1).and_then(Value::as_u64),
+                        ) {
+                            known.insert(id, sequence);
+                        }
+                    }
+                } else {
+                    self.legacy_trimmed.insert(queue.to_string());
+                }
                 let through = payload
                     .get("through_sequence")
                     .and_then(Value::as_u64)
@@ -540,19 +636,19 @@ impl BrokerState {
                         group_state.apply_trim(through);
                     }
                 }
-                return;
+                return Ok(());
             }
             QUEUE_CONFIGURED_EVENT => {
                 self.configs.insert(
                     queue.to_string(),
                     queue_config_from_json(payload.get("config").unwrap_or(&Value::Null)),
                 );
-                return;
+                return Ok(());
             }
             _ => {}
         }
         let Some(group) = payload.get("group").and_then(Value::as_str) else {
-            return;
+            return Ok(());
         };
         match event.event_type.as_str() {
             GROUP_CREATED_EVENT => {
@@ -579,7 +675,7 @@ impl BrokerState {
             }
             DELIVERED_EVENT => {
                 let Some(state) = self.group_mut(queue, group) else {
-                    return;
+                    return Ok(());
                 };
                 let consumer_id = payload
                     .get("consumer_id")
@@ -642,10 +738,10 @@ impl BrokerState {
             }
             NACKED_EVENT => {
                 let Some(state) = self.group_mut(queue, group) else {
-                    return;
+                    return Ok(());
                 };
                 let Some(message_id) = payload_message_id(payload) else {
-                    return;
+                    return Ok(());
                 };
                 if let Some(delivery) = state.deliveries.get_mut(&message_id) {
                     delivery.status = DeliveryStatus::Available {
@@ -676,7 +772,7 @@ impl BrokerState {
             }
             REDRIVEN_EVENT => {
                 let Some(state) = self.group_mut(queue, group) else {
-                    return;
+                    return Ok(());
                 };
                 for id in payload
                     .get("dlq_event_ids")
@@ -690,6 +786,7 @@ impl BrokerState {
             }
             _ => {}
         }
+        Ok(())
     }
 
     fn group_mut(&mut self, queue: &str, group: &str) -> Option<&mut GroupState> {
@@ -828,6 +925,57 @@ pub struct Broker<'a> {
 }
 
 impl<'a> Broker<'a> {
+    pub(crate) fn outbox_receipt_ids(&self) -> HashSet<Uuid> {
+        self.stream
+            .broker_state
+            .trimmed_outbox
+            .values()
+            .flat_map(|known| known.keys().copied())
+            .collect()
+    }
+
+    /// `retained` is established by complete recovery, or is empty after a
+    /// durable full transaction-log cut under exclusive commit admission.
+    /// Never infer it from the last broker sequence: publications can arrive
+    /// in a different order from the transactions' commit sequences.
+    pub(crate) fn prune_outbox_receipts(&mut self, retained: &HashSet<Uuid>) -> Result<()> {
+        let state = &self.stream.broker_state;
+        if state.legacy_trimmed.is_empty()
+            && state
+                .trimmed_outbox
+                .values()
+                .all(|known| known.keys().all(|id| retained.contains(id)))
+        {
+            return Ok(());
+        }
+        self.stream.rewrite_events_in_place(|event| {
+            if event.event_type == QUEUE_TRIMMED_EVENT
+                && event.stream.starts_with(BROKER_STREAM_PREFIX)
+            {
+                let receipts = event
+                    .payload
+                    .get("outbox_receipts")
+                    .and_then(Value::as_array)
+                    .map(|raw| {
+                        raw.iter()
+                            .filter(|receipt| {
+                                receipt
+                                    .get(0)
+                                    .and_then(Value::as_str)
+                                    .and_then(|id| Uuid::parse_str(id).ok())
+                                    .is_some_and(|id| retained.contains(&id))
+                            })
+                            .cloned()
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                event.payload["outbox_receipts"] = Value::Array(receipts);
+            }
+            true
+        })?;
+        Ok(())
+    }
+
     pub(crate) fn new(stream: &'a mut EventStream) -> Self {
         Self { stream }
     }
@@ -868,6 +1016,54 @@ impl<'a> Broker<'a> {
         &mut self,
         pending: &PendingBrokerPublish,
     ) -> Result<PublishReceipt> {
+        if let Some(sequence) = self
+            .stream
+            .broker_state
+            .trimmed_outbox
+            .get(&pending.queue)
+            .and_then(|known| known.get(&pending.message_id))
+        {
+            return Ok(PublishReceipt {
+                message_id: pending.message_id,
+                sequence: *sequence,
+                deduplicated: true,
+            });
+        }
+        if let Some(event) = self.stream.event_by_id(&pending.message_id) {
+            let marked = broker_meta(&event.event.metadata)
+                .and_then(|meta| meta.get("transactional_outbox"))
+                .and_then(Value::as_bool)
+                == Some(true);
+            if !marked {
+                let state = &mut self.stream.broker_state;
+                if state.legacy_prepared.len() < MAX_OUTBOX_RECEIPTS {
+                    state.legacy_prepared.insert(pending.message_id);
+                } else {
+                    state.legacy_prepared_overflow = true;
+                }
+            }
+        } else if self
+            .stream
+            .broker_state
+            .legacy_trimmed
+            .contains(&pending.queue)
+            && !pending.options.idempotency_key.as_ref().is_some_and(|key| {
+                self.stream
+                    .broker_state
+                    .idempotency
+                    .contains_key(&(pending.queue.clone(), key.clone()))
+            })
+        {
+            // Older trim markers erased publication identities. The retained
+            // decision alone cannot distinguish a missing publication from a
+            // previously delivered-and-trimmed message. Refuse the ambiguous
+            // recovery instead of publishing the business event twice.
+            return Err(BicDbError::Corruption(format!(
+                "broker outbox {} in queue {} has an ambiguous legacy trim; \
+                 publication requires independent evidence or restore",
+                pending.message_id, pending.queue
+            )));
+        }
         self.publish_inner(
             &pending.queue,
             pending.payload.clone(),
@@ -923,6 +1119,9 @@ impl<'a> Broker<'a> {
             "available_at_ms": available_at,
             "max_attempts": max_attempts,
         });
+        if prepared_id.is_some() {
+            broker_meta["transactional_outbox"] = Value::Bool(true);
+        }
         if let Some(key) = options.idempotency_key.as_deref() {
             broker_meta["idempotency_key"] = Value::String(key.to_string());
         }
@@ -1792,6 +1991,40 @@ impl<'a> Broker<'a> {
         if removed_ids.is_empty() {
             return Ok(TrimReport::default());
         }
+        if state.legacy_prepared_overflow {
+            return Err(BicDbError::Compaction(
+                "broker retention refused: legacy outbox tracking limit reached; checkpoint and reopen to verify retention".into(),
+            ));
+        }
+        let mut outbox_receipts = state.trimmed_outbox.get(queue).cloned().unwrap_or_default();
+        for (sequence, message_id) in messages
+            .entries
+            .iter()
+            .take_while(|(sequence, _)| *sequence <= through)
+        {
+            let transactional = state.legacy_prepared.contains(message_id)
+                || self
+                    .stream
+                    .event_by_id(message_id)
+                    .and_then(|stored| broker_meta(&stored.event.metadata))
+                    .and_then(|meta| meta.get("transactional_outbox"))
+                    .and_then(Value::as_bool)
+                    == Some(true);
+            if transactional {
+                outbox_receipts.insert(*message_id, *sequence);
+            }
+        }
+        let other_receipts: usize = state
+            .trimmed_outbox
+            .iter()
+            .filter(|(name, _)| name.as_str() != queue)
+            .map(|(_, known)| known.len())
+            .sum();
+        if other_receipts.saturating_add(outbox_receipts.len()) > MAX_OUTBOX_RECEIPTS {
+            return Err(BicDbError::Compaction(
+                "broker retention refused: transactional outbox receipt limit reached; checkpoint or reopen to verify log retention".into(),
+            ));
+        }
 
         // Build the surviving event list. The trim marker replaces the first
         // removed event so that on replay it applies BEFORE any surviving
@@ -1807,6 +2040,7 @@ impl<'a> Broker<'a> {
                 "queue": queue,
                 "through_sequence": through,
                 "at_ms": now,
+                "outbox_receipts": outbox_receipts.into_iter().collect::<Vec<_>>(),
             }),
         );
         let mut removed_messages = 0usize;

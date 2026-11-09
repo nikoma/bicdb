@@ -87,6 +87,13 @@ fn case(kind: &str) -> Case {
             case.returned = vec![row(&[30])];
             case.final_rows = vec![row(&[30])];
         }
+        "unrelated_snapshot" => {
+            case.schema="CREATE TABLE signed_arbiters(id INT PRIMARY KEY,k TEXT UNIQUE,v INT); CREATE TABLE signed_aux(id INT PRIMARY KEY,v INT); INSERT INTO signed_aux VALUES(1,1)";
+            case.owner="INSERT INTO signed_arbiters VALUES(1,'same',20); UPDATE signed_aux SET v=99 WHERE id=1";
+            case.waiter="INSERT INTO signed_arbiters VALUES(2,'same',10) ON CONFLICT(k) DO UPDATE SET v=signed_arbiters.v+EXCLUDED.v+(SELECT v FROM signed_aux WHERE id=1) RETURNING id,v";
+            case.returned = vec![row(&[1, 31])];
+            case.final_rows = vec![row(&[1, 31])];
+        }
         "json_secondary" => {
             case.schema = "CREATE TABLE signed_arbiters(id INT PRIMARY KEY,k JSONB UNIQUE,v INT)";
             case.owner = r#"INSERT INTO signed_arbiters VALUES(1,'{"a":1,"b":2}',20)"#;
@@ -250,6 +257,10 @@ schedule!(
 schedule!(signed_deleted_key_inserts_new_identity, "delete");
 schedule!(signed_moved_key_inserts_new_identity, "move");
 
+schedule!(
+    signed_other_relation_keeps_statement_snapshot,
+    "unrelated_snapshot"
+);
 schedule!(signed_json_secondary_current_winner, "json_secondary");
 schedule!(signed_json_primary_current_winner, "json_primary");
 

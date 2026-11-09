@@ -138,6 +138,9 @@ fn key_moved() -> Case {
         ..key_deleted()
     }
 }
+fn unrelated_snapshot() -> Case {
+    Case { schema: "CREATE TABLE arbiter_rows(id INT PRIMARY KEY,k TEXT UNIQUE,v INT); CREATE TABLE arbiter_aux(id INT PRIMARY KEY,v INT); INSERT INTO arbiter_aux VALUES(1,1)", winner: "INSERT INTO arbiter_rows VALUES(1,'same',20); UPDATE arbiter_aux SET v=99 WHERE id=1", upsert: "INSERT INTO arbiter_rows VALUES(2,'same',10) ON CONFLICT(k) DO UPDATE SET v=arbiter_rows.v+EXCLUDED.v+(SELECT v FROM arbiter_aux WHERE id=1) RETURNING id,v", expected: vec![vec!["1","31"]], verify: "SELECT id,v FROM arbiter_rows ORDER BY id", final_rows: vec![vec!["1","31"]], waits: true }
+}
 fn json_secondary() -> Case {
     Case {
         schema: "CREATE TABLE arbiter_rows(id INT PRIMARY KEY,k JSONB UNIQUE,v INT)",
@@ -227,3 +230,14 @@ arbiter_test!(
     json_primary
 );
 arbiter_test!(json_primary_paged, StorageMode::ServerPaged, json_primary);
+
+arbiter_test!(
+    unrelated_snapshot_memory,
+    StorageMode::EmbeddedMemory,
+    unrelated_snapshot
+);
+arbiter_test!(
+    unrelated_snapshot_paged,
+    StorageMode::ServerPaged,
+    unrelated_snapshot
+);

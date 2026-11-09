@@ -1,0 +1,37 @@
+{
+  "reference": "PostgreSQL16.13",
+  "setup": [
+    "CREATE TABLE target(id INT PRIMARY KEY,k TEXT UNIQUE,v INT)",
+    "CREATE TABLE aux(id INT PRIMARY KEY,v INT)",
+    "INSERT INTO aux VALUES(1,1)"
+  ],
+  "winner": [
+    "INSERT INTO target VALUES(1,'same',20)",
+    "UPDATE aux SET v=99 WHERE id=1"
+  ],
+  "upsert": "INSERT INTO target VALUES(2,'same',10) ON CONFLICT(k) DO UPDATE SET v=target.v+EXCLUDED.v+(SELECT v FROM aux WHERE id=1) RETURNING id,v",
+  "observed_wait": [
+    "Lock",
+    "transactionid"
+  ],
+  "returning": {
+    "rows": [
+      [
+        1,
+        31
+      ]
+    ]
+  },
+  "final": [
+    [
+      1,
+      31
+    ]
+  ],
+  "final_aux": [
+    [
+      99
+    ]
+  ],
+  "protected_baselines_untouched": true
+}

@@ -13222,3 +13222,98 @@ fn run_planned_switchover(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod ddl_startup_recovery_tests {
+    use super::*;
+
+    fn interrupted_drop(path: &Path, mode: bicdb_core::StorageMode) {
+        let mut db = BicDb::open_with_config(
+            path,
+            DbConfig::default()
+                .with_fsync(false)
+                .with_storage_mode(mode),
+        )
+        .unwrap();
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("CREATE TABLE startup_rows(id int PRIMARY KEY)")
+            .unwrap();
+        sql.execute("INSERT INTO startup_rows VALUES(1)").unwrap();
+        drop(sql);
+        db.rename_collection(
+            "startup_rows",
+            "__bicdb_bin_00000000000000000000000000000001",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn cli_sql_recovers_catalog_before_query_or_analytics_dispatch() {
+        for mode in [
+            bicdb_core::StorageMode::EmbeddedMemory,
+            bicdb_core::StorageMode::ServerPaged,
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            interrupted_drop(root.path(), mode.clone());
+            let mut db = BicDb::open_with_config(
+                root.path(),
+                DbConfig::default()
+                    .with_fsync(false)
+                    .with_storage_mode(mode),
+            )
+            .unwrap();
+            let slow = SlowQueryOptions {
+                log_path: None,
+                threshold_ms: 0,
+                redaction: RedactionConfig::default(),
+            };
+            execute_sql_command(
+                &mut db,
+                "SELECT id FROM startup_rows",
+                OutputMode::Json,
+                &slow,
+            )
+            .unwrap();
+            assert!(db
+                .collections()
+                .iter()
+                .any(|meta| meta.name == "startup_rows"));
+        }
+    }
+
+    #[test]
+    fn cli_migration_recovers_catalog_before_applying_sql() {
+        for mode in [
+            bicdb_core::StorageMode::EmbeddedMemory,
+            bicdb_core::StorageMode::ServerPaged,
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let data = root.path().join("db");
+            interrupted_drop(&data, mode.clone());
+            let mut db = BicDb::open_with_config(
+                &data,
+                DbConfig::default()
+                    .with_fsync(false)
+                    .with_storage_mode(mode),
+            )
+            .unwrap();
+            let sql = "INSERT INTO startup_rows VALUES(2)";
+            let file = root.path().join("recover.sql");
+            std::fs::write(&file, sql).unwrap();
+            let plan = MigrationFilePlan {
+                id: "recover".into(),
+                file: file.to_string_lossy().into_owned(),
+                checksum: "recovery-fixture".into(),
+                statements: plan_migration_sql(sql).unwrap(),
+            };
+            apply_migration_file(&mut db, &plan).unwrap();
+            assert_eq!(
+                SqlSession::new(&mut db)
+                    .execute("SELECT id FROM startup_rows ORDER BY id")
+                    .unwrap()
+                    .rows,
+                vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(2)]]
+            );
+        }
+    }
+}

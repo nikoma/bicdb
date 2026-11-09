@@ -271,7 +271,13 @@ fn signed_native_projection_and_sql_rls_apply_to_the_current_conflict_row() {
     // no protected columns and do not read or mutate this environment key.
     std::env::set_var("BICDB_PROTECTED_FIELD_ENCRYPTION_KEY", "11".repeat(32));
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
-        for allowed in [true, false] {
+        for (allowed, clear_secret, grant_secret) in [
+            (true, false, false),
+            (false, false, false),
+            (true, true, true),
+            (true, true, false),
+        ] {
+            let succeeds = allowed && (!clear_secret || grant_secret);
             let dir = tempfile::tempdir().unwrap();
             let mut db = BicDb::open_with_config(
                 dir.path(),
@@ -333,6 +339,9 @@ fn signed_native_projection_and_sql_rls_apply_to_the_current_conflict_row() {
             spec.bulk = false;
             spec.record_id = Some("one".into());
             spec.allowed_columns = BTreeSet::from(["v".into()]);
+            if grant_secret {
+                spec.allowed_columns.insert("secret".into());
+            }
             let authority = waiter.issue_mutation_grant(spec).unwrap();
             let (done, received) = mpsc::channel();
             let keep = db.clone();
@@ -348,9 +357,10 @@ fn signed_native_projection_and_sql_rls_apply_to_the_current_conflict_row() {
                     session
                         .execute("SET ROLE signed_runtime")
                         .map_err(|error| error.to_string())?;
-                    let result=session.execute("INSERT INTO signed_arbiters VALUES('one','t',10,'excluded-must-not-overwrite-secret') ON CONFLICT(id) DO UPDATE SET v=signed_arbiters.v+EXCLUDED.v RETURNING v,secret");
+                    let assignment = if clear_secret { ",secret=NULL" } else { "" };
+                    let result=session.execute(&format!("INSERT INTO signed_arbiters VALUES('one','t',10,'excluded-must-not-overwrite-secret') ON CONFLICT(id) DO UPDATE SET v=signed_arbiters.v+EXCLUDED.v{assignment} RETURNING v,secret"));
                     let tx = session.take_pending_transaction().unwrap();
-                    if allowed {
+                    if succeeds {
                         let rows = result.map_err(|error| error.to_string())?.rows;
                         assert_eq!(
                             rows,
@@ -361,9 +371,13 @@ fn signed_native_projection_and_sql_rls_apply_to_the_current_conflict_row() {
                         tx.commit().map_err(|error| error.to_string())?;
                     } else {
                         let error = result
-                            .expect_err("SQL RLS UPDATE USING must reject the current winner");
+                            .expect_err("RLS or mutation columns must reject the current winner");
                         assert!(
-                            error.to_string().contains("row-level security"),
+                            error.to_string().contains(if allowed {
+                                "does not allow columns"
+                            } else {
+                                "row-level security"
+                            }),
                             "wrong denial: {error}"
                         );
                         assert_eq!(
@@ -396,11 +410,15 @@ fn signed_native_projection_and_sql_rls_apply_to_the_current_conflict_row() {
                 .unwrap();
             assert_eq!(
                 actual.metadata["secret"],
-                serde_json::json!("winner-private-secret")
+                if succeeds && clear_secret {
+                    serde_json::Value::Null
+                } else {
+                    serde_json::json!("winner-private-secret")
+                }
             );
             assert_eq!(
                 actual.metadata["v"],
-                serde_json::json!(if allowed { 30 } else { 20 })
+                serde_json::json!(if succeeds { 30 } else { 20 })
             );
         }
     }

@@ -140,3 +140,47 @@ fn cross_type_comparisons_match_postgres_in_every_context() {
 fn cross_type_comparisons_match_postgres_with_indexes() {
     assert_matrix(true);
 }
+
+#[test]
+fn explicit_text_operand_does_not_inherit_char_blank_padding() {
+    for indexed in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            bicdb_core::DbConfig::default().with_fsync(false),
+        )
+        .unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session
+            .execute("CREATE TABLE x(id int primary key,c char(4))")
+            .unwrap();
+        session
+            .execute("INSERT INTO x VALUES(1,'ab'),(2,'ab  '),(3,'x'),(4,NULL)")
+            .unwrap();
+        if indexed {
+            session.execute("CREATE INDEX x_c ON x(c)").unwrap();
+        }
+        for sql in [
+            "SELECT count(*) FROM x WHERE c = 'ab '::text",
+            "SELECT count(*) FROM (SELECT c FROM x) q WHERE c = 'ab '::text",
+            "SELECT count(*) FROM x WHERE CASE WHEN c = 'ab '::text THEN true ELSE false END",
+        ] {
+            assert_eq!(
+                session.execute(sql).unwrap().rows,
+                vec![vec![SqlValue::Int(0)]],
+                "indexed={indexed} {sql}"
+            );
+        }
+        assert_eq!(
+            session
+                .execute("SELECT c = 'ab '::text FROM x WHERE id < 4 ORDER BY id")
+                .unwrap()
+                .rows,
+            vec![
+                vec![SqlValue::Bool(false)],
+                vec![SqlValue::Bool(false)],
+                vec![SqlValue::Bool(false)]
+            ]
+        );
+    }
+}

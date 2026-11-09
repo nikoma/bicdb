@@ -2036,7 +2036,9 @@ impl BicDb {
             .ok_or_else(|| BicDbError::Index(format!("index `{name}` not found")))?
             .read();
         if state.definition.kind != IndexKind::FullText {
-            return Err(BicDbError::Index(format!("index `{name}` is not full-text")));
+            return Err(BicDbError::Index(format!(
+                "index `{name}` is not full-text"
+            )));
         }
         Ok(!state.full_text_build_incomplete)
     }

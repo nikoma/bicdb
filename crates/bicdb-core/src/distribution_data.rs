@@ -1930,9 +1930,14 @@ impl ClusterDataNodeService {
         options: &RangeSnapshotOptions,
     ) -> Result<SnapshotSourceStep> {
         options.validate()?;
-        let (collections, source_commit_sequence) = {
+        // A watermark the target may resume catch-up from: every commit at
+        // or below it is durable and applied here. `current_commit_seq` is
+        // the reservation counter and can name a commit still being written
+        // (or one that will fail): labelling a snapshot with it lets
+        // catch-up skip that commit's rows.
+        let (collections, empty_snapshot_commit_sequence) = {
             let source = try_database_read(&self.db)?;
-            (source.collections(), source.current_commit_seq())
+            (source.collections(), source.replication_shippable_seq())
         };
         let cursor = resume_after_key.map(decode_cursor).transpose()?;
         let collection_index = match cursor.as_ref() {
@@ -1947,7 +1952,7 @@ impl ClusterDataNodeService {
                 })?,
             None if collections.is_empty() => {
                 return Ok(SnapshotSourceStep::Complete {
-                    source_snapshot_commit_sequence: source_commit_sequence,
+                    source_snapshot_commit_sequence: empty_snapshot_commit_sequence,
                 });
             }
             None => 0,
@@ -1987,8 +1992,10 @@ impl ClusterDataNodeService {
                 source_snapshot_commit_sequence: export.snapshot_commit_sequence,
             });
         }
+        // The watermark of the scan that just completed: the rows exported
+        // are exactly those visible at it.
         Ok(SnapshotSourceStep::Complete {
-            source_snapshot_commit_sequence: source_commit_sequence,
+            source_snapshot_commit_sequence: export.snapshot_commit_sequence,
         })
     }
 
@@ -2771,5 +2778,99 @@ mod tests {
         assert!(service
             .advance_persisted_range_digest(&range, &node_id, session_id, None, &limits, 1_000,)
             .is_err());
+    }
+
+    /// A range snapshot's completion watermark is where the target resumes
+    /// catch-up. It must not name a commit that is still being written: the
+    /// scan does not see that commit's rows, and catch-up from the label
+    /// would skip them. The commit is paused between its log write and the
+    /// return of its sync (sequence reserved, nothing applied).
+    /// (Replication stays off here: with it on, the resident catalog-log
+    /// collection makes a bounded range export refuse, before and after this
+    /// change.)
+    #[test]
+    fn range_snapshot_completion_never_labels_a_commit_still_being_written() {
+        use std::sync::Barrier;
+        let directory = tempfile::tempdir().unwrap();
+        let db_root = directory.path().join("database");
+        let cluster_root = directory.path().join("cluster");
+        std::fs::create_dir_all(&cluster_root).unwrap();
+        let mut db = BicDb::open_with_config(
+            &db_root,
+            DbConfig::default()
+                .with_fsync(true)
+                .with_storage_mode(StorageMode::ServerPaged),
+        )
+        .unwrap();
+        db.create_collection("patients").unwrap();
+        drop(db);
+        // Reopened, the collection is paged (lazy), as a range export needs.
+        let db = BicDb::open_with_config(
+            &db_root,
+            DbConfig::default()
+                .with_fsync(true)
+                .with_storage_mode(StorageMode::ServerPaged),
+        )
+        .unwrap();
+        let durable_before = db.replication_shippable_seq();
+        let node_id = ClusterNodeId::new("node-a").unwrap();
+        let range = whole_keyspace_range(&node_id);
+        let shared = Arc::new(RwLock::new(db));
+        let service = ClusterDataNodeService::open(
+            ClusterId::new("label-cluster").unwrap(),
+            node_id,
+            &cluster_root,
+            shared.clone(),
+            false,
+        )
+        .unwrap();
+
+        let paused = Arc::new(Barrier::new(2));
+        let resume = Arc::new(Barrier::new(2));
+        let hook = {
+            let (paused, resume) = (paused.clone(), resume.clone());
+            bicdb_page::test_faults::arm_io_hook("transaction_log.sync", &db_root, 1, move || {
+                paused.wait();
+                resume.wait();
+            })
+        };
+        let committer = {
+            let shared = shared.clone();
+            std::thread::spawn(move || {
+                let db = shared.read();
+                let mut tx = db.begin_transaction()?;
+                tx.insert(
+                    "patients",
+                    Record::new("in-flight").with_metadata(json!({"tenant": "tenant-a"})),
+                )?;
+                tx.commit()
+            })
+        };
+        paused.wait();
+        let in_flight = shared.read().current_commit_seq();
+        // Release the commit before unwrapping anything: a panic here would
+        // leave it parked in the hook, which holds the fault registry.
+        let step =
+            service.export_snapshot_step_from(&range, None, &RangeSnapshotOptions::default());
+        resume.wait();
+        committer.join().unwrap().unwrap();
+        let step = step.unwrap();
+        assert!(
+            in_flight > durable_before,
+            "the commit reserved its sequence"
+        );
+        assert_eq!(hook.fired(), 1);
+        let SnapshotSourceStep::Complete {
+            source_snapshot_commit_sequence: label,
+        } = step
+        else {
+            panic!("an empty range completes in one step: {step:?}");
+        };
+        assert!(
+            label < in_flight,
+            "snapshot labelled {label}, which includes commit {in_flight} whose rows it does not hold"
+        );
+        // Catch-up resumes after the label (`export_catch_up` ships frames
+        // above it), so a label below the commit delivers it.
     }
 }

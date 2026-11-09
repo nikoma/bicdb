@@ -145,6 +145,22 @@ impl BicDb {
         }
     }
 
+    /// Highest commit sequence that may leave this node: durable in the
+    /// transaction log and applied here.
+    ///
+    /// `written_seq` advances only after the O_DSYNC write (or write plus
+    /// sync) of the batch holding the commit returned, and never past a
+    /// failed write: a fenced primary stays at its durable prefix. The file
+    /// itself can be longer (a batch being written, a failed batch on a
+    /// fenced primary), so every path that ships or exports log content must
+    /// read this bound before reading the file and drop anything past it.
+    pub(crate) fn replication_shippable_seq(&self) -> u64 {
+        self.tx_log
+            .written_seq
+            .load(AtomicOrdering::Acquire)
+            .min(self.last_committed_tx.load(AtomicOrdering::Acquire))
+    }
+
     /// Next frames after `cursor` (at most `limit` commit sequence numbers),
     /// advancing the cursor past them. Empty when nothing new is shippable.
     pub fn replication_frames_after(
@@ -153,11 +169,7 @@ impl BicDb {
         limit: usize,
     ) -> Result<Vec<CommitFrame>> {
         self.ensure_replication_frames_retained()?;
-        let shippable = self
-            .tx_log
-            .written_seq
-            .load(AtomicOrdering::Acquire)
-            .min(self.last_committed_tx.load(AtomicOrdering::Acquire));
+        let shippable = self.replication_shippable_seq();
         if cursor.sent_seq >= shippable {
             return Ok(Vec::new());
         }

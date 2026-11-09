@@ -86,15 +86,9 @@ impl BicDb {
                 "Oracle replacement shadow is not the owned completed build".into(),
             ));
         }
-        let replacement = oracle_case_v1_definition(expected_old.clone());
-        if replacement == *expected_old || replacement.kind != IndexKind::BTree {
-            return Err(BicDbError::Index(
-                "Oracle replacement requires a legacy case-expression B-tree".into(),
-            ));
-        }
-        let mut renamed_shadow = shadow.definition.clone();
-        renamed_shadow.name.clone_from(&expected_old.name);
-        if replacement != renamed_shadow || shadow.definition.name == expected_old.name {
+        let mut replacement = shadow.definition.clone();
+        replacement.name.clone_from(&expected_old.name);
+        if !oracle_case_v1_replacement_matches(expected_old, &replacement) {
             return Err(BicDbError::Index(
                 "Oracle replacement changes more than case semantics".into(),
             ));
@@ -191,14 +185,9 @@ impl BicDb {
                 "embedded index publication requires embedded storage".into(),
             ));
         }
-        let replacement = oracle_case_v1_definition(expected_old.clone());
-        let mut renamed_shadow = shadow.clone();
-        renamed_shadow.name.clone_from(&expected_old.name);
-        if replacement == *expected_old
-            || replacement.kind != IndexKind::BTree
-            || replacement != renamed_shadow
-            || shadow.name == expected_old.name
-        {
+        let mut replacement = shadow.clone();
+        replacement.name.clone_from(&expected_old.name);
+        if !oracle_case_v1_replacement_matches(expected_old, &replacement) {
             return Err(BicDbError::Index(
                 "Oracle replacement changes more than case semantics".into(),
             ));
@@ -247,6 +236,94 @@ impl BicDb {
     }
 }
 
+/// Normalize only corresponding typed case-expression nodes. Exact definition
+/// equality then protects every unrelated field, literal, predicate operator,
+/// uniqueness policy and collection identity. Existing v1 nodes stay intact.
+fn oracle_case_v1_replacement_matches(old: &IndexDefinition, new: &IndexDefinition) -> bool {
+    fn field(old: &IndexField, new: &mut IndexField) {
+        match (old, &mut *new) {
+            (IndexField::Upper(_), IndexField::OracleUpperV1(inner)) => {
+                *new = IndexField::Upper(inner.clone());
+            }
+            (IndexField::Lower(_), IndexField::OracleLowerV1(inner)) => {
+                *new = IndexField::Lower(inner.clone());
+            }
+            _ => {}
+        }
+        match (old, new) {
+            (IndexField::Upper(a), IndexField::Upper(b))
+            | (IndexField::Lower(a), IndexField::Lower(b))
+            | (IndexField::OracleUpperV1(a), IndexField::OracleUpperV1(b))
+            | (IndexField::OracleLowerV1(a), IndexField::OracleLowerV1(b))
+            | (IndexField::Trim(a), IndexField::Trim(b))
+            | (IndexField::TimestampDay(a), IndexField::TimestampDay(b))
+            | (IndexField::Coalesce { field: a, .. }, IndexField::Coalesce { field: b, .. }) => {
+                field(a, b)
+            }
+            (IndexField::FirstNonNull(a), IndexField::FirstNonNull(b)) => {
+                for (a, b) in a.iter().zip(b.iter_mut()) {
+                    field(a, b);
+                }
+            }
+            _ => {}
+        }
+    }
+    fn predicate(old: &IndexPredicate, new: &mut IndexPredicate) {
+        match (old, new) {
+            (IndexPredicate::Field { field: a }, IndexPredicate::Field { field: b }) => field(a, b),
+            (IndexPredicate::Unary { value: a, .. }, IndexPredicate::Unary { value: b, .. }) => {
+                predicate(a, b)
+            }
+            (
+                IndexPredicate::Binary {
+                    left: a, right: b, ..
+                },
+                IndexPredicate::Binary {
+                    left: c, right: d, ..
+                },
+            ) => {
+                predicate(a, c);
+                predicate(b, d);
+            }
+            _ => {}
+        }
+    }
+    if new.kind != IndexKind::BTree || new == old || !new.uses_oracle_simple_case_v1() {
+        return false;
+    }
+    let mut normalized = new.clone();
+    for (a, b) in old.fields.iter().zip(normalized.fields.iter_mut()) {
+        field(a, b);
+    }
+    if let (Some(a), Some(b)) = (&old.predicate, &mut normalized.predicate) {
+        predicate(a, b);
+    }
+    if let (Some(a), Some(b)) = (&old.exclusion, &mut normalized.exclusion) {
+        for (a, b) in a.elements.iter().zip(b.elements.iter_mut()) {
+            match (a, b) {
+                (
+                    IndexExclusionElement::Equal { field: a },
+                    IndexExclusionElement::Equal { field: b },
+                ) => field(a, b),
+                (
+                    IndexExclusionElement::Overlaps {
+                        start: a, end: b, ..
+                    },
+                    IndexExclusionElement::Overlaps {
+                        start: c, end: d, ..
+                    },
+                ) => {
+                    field(a, c);
+                    field(b, d);
+                }
+                _ => {}
+            }
+        }
+    }
+    normalized == *old
+}
+
+#[cfg(test)]
 fn oracle_case_v1_definition(mut definition: IndexDefinition) -> IndexDefinition {
     fn field(value: &mut IndexField) {
         match value {

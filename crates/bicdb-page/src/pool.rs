@@ -1560,6 +1560,23 @@ impl BufferPool {
         }
     }
 
+    /// Return the emergency frames once a structural cut made them evictable.
+    #[cfg(feature = "experimental-structural-cuts")]
+    pub(crate) fn trim_experimental_frames(&self) -> Result<()> {
+        for index in 0..self.shards.len() {
+            let mut shard = self.lock_shard(index);
+            while shard.resident.len() + shard.loading.len() + shard.free.len() > shard.capacity {
+                if shard.free.pop().is_some() { continue; }
+                match self.evict_one_pass(&mut shard, 0, CacheClass::Search, false) {
+                    Ok(buffer) => drop(buffer),
+                    Err(PageError::PoolExhausted { .. }) => break,
+                    Err(error) => return Err(error),
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// One eviction pass. `final_pass` is false for the no-steal pass that
     /// a last-resort pass may follow; only a final pass counts an admission
     /// failure, so one failed admission is counted once.

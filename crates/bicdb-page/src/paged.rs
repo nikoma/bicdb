@@ -2328,6 +2328,8 @@ impl PagedStore {
             // record is appended (and synced, or covered by the deferred-commit
             // sync that `before_logged_writeback` runs before such a write).
             self.pool.mark_logged(&logged);
+            #[cfg(feature = "experimental-structural-cuts")]
+            self.pool.trim_experimental_frames()?;
             self.redo_backed.lock().remove(&transaction);
             self.live_writers.lock().remove(&transaction);
             if !free_adoption.is_empty() {
@@ -2451,6 +2453,8 @@ impl PagedStore {
         match logged {
             Ok(logged) => {
                 self.pool.mark_logged(&logged);
+                #[cfg(feature = "experimental-structural-cuts")]
+                self.pool.trim_experimental_frames()?;
                 self.transactions.commit(unit);
                 self.snapshots.lock().remove(&unit);
                 Ok(())

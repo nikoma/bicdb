@@ -1805,6 +1805,21 @@ impl PagedStore {
         &self.transactions
     }
 
+    /// Check the prototype's per-operation size limit before a caller makes
+    /// a separate logical commit decision durable.
+    pub fn validate_put_value_size(&self, len: usize) -> Result<()> {
+        if cfg!(feature = "experimental-structural-cuts")
+            && len as u64 > self.options.buffer_pool_bytes / 4
+        {
+            return Err(PageError::ValueTooLarge {
+                page_id: 0,
+                len,
+                free: (self.options.buffer_pool_bytes / 4) as usize,
+            });
+        }
+        Ok(())
+    }
+
     /// Store a value under `key` as a new version.
     ///
     /// The previous version is retained and marked deleted by this transaction,
@@ -1831,15 +1846,7 @@ impl PagedStore {
         let _structure = self.structure.write();
         // Bound a single operation's footprint before any page is changed.
         // The exception in the pool is one frame per shard, never a steal.
-        if cfg!(feature = "experimental-structural-cuts")
-            && value.len() as u64 > self.options.buffer_pool_bytes / 4
-        {
-            return Err(PageError::ValueTooLarge {
-                page_id: 0,
-                len: value.len(),
-                free: (self.options.buffer_pool_bytes / 4) as usize,
-            });
-        }
+        self.validate_put_value_size(value.len())?;
         self.admit_write(transaction)?;
         // A key the index would refuse is refused before the heap version
         // is written, so that user error never leaves a changed page.

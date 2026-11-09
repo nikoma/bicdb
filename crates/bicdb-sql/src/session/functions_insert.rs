@@ -1777,11 +1777,10 @@ impl<'db> SqlSession<'db> {
             Option<bicdb_core::ReadCommittedRowReservation>,
         )>,
     > {
-        let Some((scope, key)) =
-            records::canonical_unique_reservation_key(table, schema, arbiter, record)?
-        else {
+        let Some(key) = records::canonical_unique_reservation_key(schema, arbiter, record)? else {
             return Ok(None);
         };
+        let scope = records::unique_arbiter_reservation_scope(table, arbiter)?;
         let cancellation = self.blocking_row_wait_token();
         let tx = self.tx.as_ref().expect("RC transaction");
         match &cancellation {

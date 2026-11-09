@@ -93,7 +93,7 @@ pub use paged::{
 };
 pub use pool::{
     unlogged_reserve, BufferPool, BufferPoolOptions, BufferPoolSnapshot, PageGuard, PageGuardMut,
-    PageReadSource, ReadAheadLimits, ReadAheadStepReport, ReadAheadStopReason,
+    PageGuardUpgradable, PageReadSource, ReadAheadLimits, ReadAheadStepReport, ReadAheadStopReason,
     ReadAheadSubmitReport, UnloggedPressure, WritebackCursor, WritebackLimits, WritebackStepReport,
     WritebackStopReason, MAX_READ_AHEAD_CANDIDATES_PER_STEP,
     MAX_READ_AHEAD_DURATION_MILLIS_PER_STEP, MAX_READ_AHEAD_IO_BYTES_PER_STEP,

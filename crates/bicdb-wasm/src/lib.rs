@@ -233,11 +233,13 @@ pub unsafe extern "C" fn bicdb_open(
             (None, None) => None,
         };
 
-        let db = match encryption {
+        let mut db = match encryption {
             Some(encryption) => BicDb::open_with_encryption(&path, db_config, encryption),
             None => BicDb::open_with_config(&path, db_config),
         }
         .map_err(|error| error.to_string())?;
+        bicdb_sql::recover_interrupted_recycle_bin_renames(&mut db)
+            .map_err(|error| error.to_string())?;
 
         let id = NEXT_ID.with(|next| {
             let mut next = next.borrow_mut();

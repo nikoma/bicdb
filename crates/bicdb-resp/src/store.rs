@@ -182,7 +182,9 @@ impl CacheStore {
         let db_config = DbConfig::default()
             .with_fsync(config.fsync)
             .with_sync_outbox(false);
-        let db = BicDb::open_with_config(path, db_config)?;
+        let mut db = BicDb::open_with_config(path, db_config)?;
+        bicdb_sql::recover_interrupted_recycle_bin_renames(&mut db)
+            .map_err(|error| RespServerError::Command(format!("SQL recovery failed: {error}")))?;
         let mem = config.ephemeral.then(|| {
             (0..NUM_DATABASES)
                 .map(|_| Mutex::new(std::collections::HashMap::new()))

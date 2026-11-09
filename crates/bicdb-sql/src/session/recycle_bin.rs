@@ -46,6 +46,83 @@ pub(crate) fn is_recycle_bin_name(name: &str) -> bool {
     name.starts_with(BIN_NAME_PREFIX)
 }
 
+/// Roll back the unacknowledged collection-rename part of a DROP that never
+/// published its recycle-bin entry or removed the original SQL schema.
+/// Core WAL/catalog recovery must run first. Completed drops are excluded by
+/// their durable bin entry; ambiguous states are preserved for diagnosis.
+pub fn recover_interrupted_recycle_bin_renames(db: &mut BicDb) -> Result<usize> {
+    let completed = list_recycle_bin(db)?
+        .into_iter()
+        .map(|entry| entry.bin_name)
+        .collect::<BTreeSet<_>>();
+    let collections = db.collections();
+    let schemas = list_schemas(db)?;
+    let indexes = db.index_definitions();
+    let mut repairs = Vec::new();
+    for bin in collections
+        .iter()
+        .filter(|meta| is_recycle_bin_name(&meta.name))
+    {
+        if completed.contains(&bin.name)
+            || uuid::Uuid::parse_str(&bin.name[BIN_NAME_PREFIX.len()..]).is_err()
+        {
+            continue;
+        }
+        let candidates = schemas
+            .iter()
+            .filter(|schema| {
+                schema.name != bin.name
+                    && (bin.renamed_from.as_deref() == Some(schema.name.as_str())
+                        || bin.storage() == schema.name
+                        || primary_key_index_definition_for_schema(schema).is_some_and(
+                            |mut expected| {
+                                expected.collection = bin.name.clone();
+                                indexes.iter().any(|index| {
+                                    index.name == expected.name
+                                        && unique_constraint_index_definition_matches(
+                                            index, &expected,
+                                        )
+                                })
+                            },
+                        ))
+            })
+            .collect::<Vec<_>>();
+        let [schema] = candidates.as_slice() else {
+            if candidates.is_empty() {
+                continue;
+            }
+            return Err(SqlError::InvalidSql(format!(
+                "ambiguous interrupted recycle-bin rename {}: multiple SQL schemas match",
+                bin.name
+            )));
+        };
+        if collections.iter().any(|meta| meta.name == schema.name) {
+            return Err(SqlError::InvalidSql(format!(
+                "ambiguous interrupted recycle-bin rename {}: original collection {} also exists",
+                bin.name, schema.name
+            )));
+        }
+        // Later SQL-stage index renames need their durable mapping. Never
+        // infer one or remove another object's index merely to permit open.
+        if indexes.iter().any(|index| {
+            index.collection == bin.name && index.name.starts_with(&format!("{}_i", bin.name))
+        }) {
+            return Err(SqlError::InvalidSql(format!(
+                "interrupted recycle-bin rename {} has unrecorded index-name changes",
+                bin.name
+            )));
+        }
+        repairs.push((bin.name.clone(), schema.name.clone()));
+    }
+    for (bin, original) in &repairs {
+        db.rename_collection(bin, original)?;
+    }
+    if !repairs.is_empty() {
+        sql_index_definitions_cache_clear();
+    }
+    Ok(repairs.len())
+}
+
 fn unix_micros_now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -152,10 +229,16 @@ impl<'db> SqlSession<'db> {
         for (position, original) in index_names.into_iter().enumerate() {
             let scoped = format!("{bin_name}_i{position}");
             // An index the storage layer cannot rename keeps its name.
-            let renamed = self
-                .db_mut()?
-                .rename_index(&original, &scoped)
-                .unwrap_or(false);
+            let renamed = match self.db_mut()?.rename_index(&original, &scoped) {
+                Ok(true) => true,
+                Err(BicDbError::Unsupported(_)) => false,
+                Ok(false) => {
+                    return Err(SqlError::InvalidSql(format!(
+                        "index {original} disappeared during recycle-bin move"
+                    )))
+                }
+                Err(error) => return Err(error.into()),
+            };
             indexes.push((if renamed { scoped } else { original.clone() }, original));
         }
         let db = self.db_mut()?;

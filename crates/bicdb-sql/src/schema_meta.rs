@@ -1017,6 +1017,7 @@ pub(crate) fn list_schemas(db: &BicDb) -> Result<Vec<TableSchema>> {
 }
 
 pub fn ensure_primary_key_indexes(db: &mut BicDb) -> Result<()> {
+    recover_interrupted_recycle_bin_renames(db)?;
     for schema in list_schemas(db)? {
         ensure_primary_key_index_for_schema(db, &schema)?;
     }

@@ -50,11 +50,13 @@ mod fts_query;
 mod index_build;
 mod integrity_reservations;
 mod pitr_maintenance;
+mod read_committed_reservation;
 mod row_lock_waiters;
 mod spatial_paged;
 mod transaction_receipts;
 mod transaction_suspension;
 mod unique_reservations;
+pub use read_committed_reservation::ReadCommittedRowReservation;
 mod wait_graph;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use parking_lot::{Condvar, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -8796,6 +8798,7 @@ pub struct Transaction {
     /// exclusive database guard may install it: the owner must be able to
     /// reach COMMIT while this transaction waits.
     blocking_row_waits: Mutex<Option<crate::CancellationToken>>,
+    row_reservation_epoch: AtomicU64,
     // Own handle to the active-snapshot registry so drop can deregister this
     // transaction's snapshot (unblocking version-chain GC) without touching `db`.
     active_snapshots: Arc<ActiveSnapshots>,
@@ -14961,6 +14964,17 @@ impl Transaction {
         operation: MutationOperation,
         records: &[Record],
     ) -> Result<Option<crate::broker::PendingBrokerPublish>> {
+        self.authorize_mutation_with_preimage(grant_id, collection, operation, records, None)
+    }
+
+    fn authorize_mutation_with_preimage(
+        &mut self,
+        grant_id: MutationGrantId,
+        collection: &str,
+        operation: MutationOperation,
+        records: &[Record],
+        checked_preimage: Option<(&str, Option<Arc<Record>>)>,
+    ) -> Result<Option<crate::broker::PendingBrokerPublish>> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -15049,7 +15063,15 @@ impl Transaction {
                     record.id
                 )));
             }
-            let existing = self.get_visible_unchecked(collection, &record.id)?;
+            let existing = match &checked_preimage {
+                Some((id, before)) if records.len() == 1 && *id == record.id => before.clone(),
+                Some(_) => {
+                    return Err(BicDbError::TransactionConflict(
+                        "checked mutation preimage does not match its row".into(),
+                    ))
+                }
+                None => self.get_visible_unchecked(collection, &record.id)?,
+            };
             let columns = mutation_changed_columns(operation, existing.as_deref(), record);
             if operation != MutationOperation::Delete
                 && !columns.is_subset(&grant.spec.allowed_columns)
@@ -17445,6 +17467,7 @@ impl Transaction {
             }
             locked.split_off(mark.lock_len)
         };
+        self.invalidate_row_reservations();
         release_owned_write_locks(&self.write_locks, self.id, &released);
         Ok(())
     }
@@ -17505,6 +17528,7 @@ impl Transaction {
             !retained.contains(key)
                 && (retained.is_empty() || !integrity_reservations::is_event(key))
         });
+        self.invalidate_row_reservations();
         release_owned_write_locks(&self.write_locks, self.id, &released);
         Ok(())
     }
@@ -17525,6 +17549,7 @@ impl Transaction {
             let locked = self.locked_keys.get_mut();
             locked.split_off(lock_len)
         };
+        self.invalidate_row_reservations();
         release_owned_write_locks(&self.write_locks, self.id, &released);
         Ok(())
     }

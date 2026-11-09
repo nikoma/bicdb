@@ -878,6 +878,7 @@ impl BicDb {
             write_locks: Arc::clone(&self.write_locks),
             locked_keys: Mutex::new(LockedKeys::default()),
             blocking_row_waits: Mutex::new(None),
+            row_reservation_epoch: AtomicU64::new(0),
             active_snapshots: Arc::clone(&self.active_snapshots),
             tx_states: Arc::clone(&self.tx_states),
             pending_broker_publishes: Mutex::new(Vec::new()),

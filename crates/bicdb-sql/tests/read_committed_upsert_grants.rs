@@ -1,5 +1,5 @@
 //! Keep signed mutation authority action-specific while the ordinary primary
-//! arbiter optimization evolves. Protected races are explicitly not repaired.
+//! arbitration evolves. Current protected winners require checked preimages.
 use bicdb_core::{
     BicDb, DbConfig, MutationActor, MutationGrantSpec, MutationOperation, MutationPolicy,
     StorageMode,
@@ -101,8 +101,8 @@ fn insert_only_signed_grants_preserve_upsert_action_authorization() {
 }
 
 #[test]
-fn signed_invisible_winner_retains_explicit_retry_requirement_without_overwrite() {
-    use bicdb_core::{BicDbError, Record};
+fn signed_invisible_winner_uses_checked_current_preimage_and_commits() {
+    use bicdb_core::Record;
     use bicdb_sql::SqlValue;
     use serde_json::json;
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
@@ -153,11 +153,8 @@ fn signed_invisible_winner_retains_explicit_retry_requirement_without_overwrite(
             let (rows, commit) = done_rx
                 .recv_timeout(std::time::Duration::from_secs(10))
                 .unwrap();
-            assert_eq!(rows, vec![vec![SqlValue::Int(10)]]);
-            assert!(
-                matches!(commit, Err(BicDbError::TransactionConflict(_))),
-                "protected stale arbitration must still require retry: {commit:?}"
-            );
+            assert_eq!(rows, vec![vec![SqlValue::Int(30)]]);
+            commit.expect("checked protected arbitration must commit its current update");
             worker.join().unwrap();
         });
         assert_eq!(
@@ -165,7 +162,56 @@ fn signed_invisible_winner_retains_explicit_retry_requirement_without_overwrite(
                 .execute("SELECT value FROM signed_upsert WHERE id='one'")
                 .unwrap()
                 .rows,
-            vec![vec![SqlValue::Int(20)]]
+            vec![vec![SqlValue::Int(30)]]
+        );
+    }
+}
+
+#[test]
+fn exhausted_signed_budget_allows_noop_without_an_extra_audit_or_mutation() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            dir.path(),
+            DbConfig::default()
+                .with_fsync(false)
+                .with_storage_mode(mode),
+        )
+        .unwrap();
+        SqlSession::new(&mut db).execute("CREATE TABLE signed_upsert(id TEXT PRIMARY KEY,value INT); INSERT INTO signed_upsert VALUES('one',20)").unwrap();
+        let mut policy = MutationPolicy::grants_required();
+        policy.audit_required = true;
+        db.set_mutation_policy("signed_upsert", policy).unwrap();
+        let mut tx = db.begin_application_transaction(actor()).unwrap();
+        let mut spec = grant("one");
+        spec.operation = MutationOperation::Bulk;
+        spec.bulk = true;
+        spec.audit_metadata
+            .insert("proof".into(), "one actual mutation".into());
+        let authority = tx.issue_mutation_grant(spec).unwrap();
+        let mut session = SqlSession::new_shared(&db)
+            .with_pending_transaction(tx)
+            .with_signed_mutation_grants(BTreeMap::from([("signed_upsert".into(), authority)]));
+        session.execute("INSERT INTO signed_upsert VALUES('one',10) ON CONFLICT(id) DO UPDATE SET value=signed_upsert.value+EXCLUDED.value").unwrap();
+        let tx = session.take_pending_transaction().unwrap();
+        assert_eq!(tx.broker_publish_len(), 1);
+        let mut session = SqlSession::new_shared(&db)
+            .with_pending_transaction(tx)
+            .with_signed_mutation_grants(BTreeMap::from([("signed_upsert".into(), authority)]));
+        session.execute("INSERT INTO signed_upsert VALUES('one',100) ON CONFLICT(id) DO UPDATE SET value=EXCLUDED.value WHERE false").unwrap();
+        let tx = session.take_pending_transaction().unwrap();
+        assert_eq!(
+            tx.broker_publish_len(),
+            1,
+            "no-op must not spend another audit/budget"
+        );
+        tx.commit().unwrap();
+        assert_eq!(
+            SqlSession::new_shared(&db)
+                .execute("SELECT value FROM signed_upsert WHERE id='one'")
+                .unwrap()
+                .rows,
+            vec![vec![bicdb_sql::SqlValue::Int(30)]]
         );
     }
 }

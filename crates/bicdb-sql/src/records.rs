@@ -1099,6 +1099,29 @@ fn committed_ids_still_present(
 /// the stored representation. Reserve the SQL key before checking *current*
 /// committed rows so overlapping transactions cannot both pass a scan, even
 /// when their snapshots precede another inserter's commit.
+pub(crate) fn unique_arbiter_reservation_scope(
+    table: &str,
+    arbiter: &UniqueConflictArbiter,
+) -> Result<String> {
+    Ok(serde_json::to_string(&(table, &arbiter.name))?)
+}
+
+pub(crate) fn canonical_unique_reservation_key(
+    schema: &TableSchema,
+    arbiter: &UniqueConflictArbiter,
+    record: &Record,
+) -> Result<Option<String>> {
+    let values = unique_key_values(record, schema, &arbiter.key);
+    if arbiter.skips_null_key(&values) || !arbiter.applies_to(record)? {
+        return Ok(None);
+    }
+    Ok(Some(serde_json::to_string(&typed_unique_key_label(
+        schema,
+        &arbiter.key,
+        &values,
+    )?)?))
+}
+
 fn json_unique_existing_records(
     db: &BicDb,
     tx: Option<&Transaction>,
@@ -1108,12 +1131,9 @@ fn json_unique_existing_records(
     records: &[Record],
 ) -> Result<Vec<Record>> {
     if let Some(tx) = tx {
-        let constraint = serde_json::to_string(&(table, &arbiter.name))?;
+        let constraint = unique_arbiter_reservation_scope(table, arbiter)?;
         for record in records {
-            let values = unique_key_values(record, schema, &arbiter.key);
-            if !arbiter.skips_null_key(&values) && arbiter.applies_to(record)? {
-                let key =
-                    serde_json::to_string(&typed_unique_key_label(schema, &arbiter.key, &values)?)?;
+            if let Some(key) = canonical_unique_reservation_key(schema, arbiter, record)? {
                 tx.reserve_integrity_key(&constraint, &key)?;
             }
         }

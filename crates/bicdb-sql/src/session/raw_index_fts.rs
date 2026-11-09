@@ -1961,6 +1961,30 @@ impl<'db> SqlSession<'db> {
         result
     }
 
+    pub(crate) fn insert_reserved_session_record(
+        &mut self,
+        table: &str,
+        reservation: bicdb_core::ReadCommittedRowReservation,
+        mut record: Record,
+        explicit_columns: &[String],
+    ) -> Result<()> {
+        let grant = self.signed_mutation_grant(table).ok_or_else(|| {
+            SqlError::BicDb(BicDbError::Authorization(
+                "reserved signed mutation requires its actual grant".into(),
+            ))
+        })?;
+        let events = self.prepare_blob_records(table, std::slice::from_mut(&mut record), None)?;
+        self.materialize_full_text_projections(table, std::slice::from_mut(&mut record))?;
+        let started = Instant::now();
+        self.tx
+            .as_mut()
+            .ok_or_else(|| SqlError::BicDb(BicDbError::TransactionNotPending))?
+            .upsert_reserved_with_grant_columns(grant, reservation, record, explicit_columns)?;
+        sql_profile_write_elapsed(started);
+        sql_profile_write_batch(1);
+        self.record_blob_writes(events)
+    }
+
     pub(crate) fn insert_session_records_with_statement_snapshots<I>(
         &mut self,
         table: &str,

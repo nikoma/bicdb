@@ -333,19 +333,12 @@ async fn racing_plain_inserts_report_unique_violation_paged() {
     racing_plain_inserts_fail_with_unique_violation(StorageMode::ServerPaged).await;
 }
 
-/// The statement-time half of the race, made deterministic. The upsert's
-/// statement snapshot is taken, then the statement waits on an advisory lock
-/// while another transaction commits the conflict key. The upsert cannot see
-/// that row under its snapshot. That is a serialization failure (40001),
-/// which a client retries, and which an autocommit statement retries
-/// internally under a fresh snapshot. It is not a unique violation (23505).
-/// For an autocommit statement, 23505 escaped that retry and sent the
-/// statement to the exclusive path. There it waited on row locks held by
-/// transactions that could not commit until the wait budget expired, which
-/// stalled every writer for seconds.
-async fn upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failure(
-    mode: StorageMode,
-) {
+/// Establish the statement snapshot before the winner commits by waiting on
+/// an advisory lock inside INSERT SELECT. READ COMMITTED must update the
+/// snapshot-invisible winner and commit.
+/// The DO NOTHING control still skips its conflicting row without an update.
+/// This also retains coverage of the old23505-to-exclusive escalation stall.
+async fn upsert_over_a_key_committed_after_the_snapshot(mode: StorageMode) {
     let label = format!("{mode:?}");
     let root = database(mode);
     let running = start(root.path());
@@ -359,13 +352,9 @@ async fn upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failu
         .await
         .unwrap();
     let writer = connect(running.port).await;
-    for (key, action) in [
-        (
-            7,
-            "DO UPDATE SET value = excluded.value, byte_size = excluded.byte_size",
-        ),
-        (8, "DO NOTHING"),
-    ] {
+    let update = "DO UPDATE SET value = excluded.value, byte_size = excluded.byte_size";
+    let cases = vec![(7, update), (8, "DO NOTHING")];
+    for (key, action) in cases {
         writer
             .batch_execute(&format!(
                 "BEGIN; SELECT pg_advisory_xact_lock(42); \
@@ -374,7 +363,10 @@ async fn upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failu
             ))
             .await
             .unwrap();
-        reader.batch_execute("BEGIN").await.unwrap();
+        reader
+            .batch_execute("BEGIN ISOLATION LEVEL READ COMMITTED")
+            .await
+            .unwrap();
         let upsert = {
             let reader = Arc::clone(&reader);
             let sql = format!(
@@ -397,14 +389,28 @@ async fn upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failu
                     .any(|message| matches!(message, SimpleQueryMessage::CommandComplete(0))),
                 "{label} {action}: {messages:?}"
             ),
-            (_, Ok(messages)) => panic!("{label} {action}: the row is invisible: {messages:?}"),
-            (_, Err(error)) => assert_eq!(
-                error.code(),
-                Some(&tokio_postgres::error::SqlState::T_R_SERIALIZATION_FAILURE),
-                "{label} {action}: {error:?}"
+            (7, Ok(messages)) => assert!(
+                messages
+                    .iter()
+                    .any(|message| matches!(message, SimpleQueryMessage::CommandComplete(1))),
+                "{label} RC update: {messages:?}"
             ),
+            (_, Ok(messages)) => panic!("unexpected case {key}: {messages:?}"),
+            (_, Err(error)) => panic!("{label} RC upsert must succeed: {error:?}"),
         }
-        reader.batch_execute("ROLLBACK").await.unwrap();
+        reader
+            .batch_execute(if key == 7 { "COMMIT" } else { "ROLLBACK" })
+            .await
+            .unwrap();
+        assert_eq!(
+            rows(
+                &writer,
+                &format!("SELECT encode(value,'hex') FROM cache_entries WHERE key_hash={key}")
+            )
+            .await,
+            vec![vec![if key == 7 { "02" } else { "01" }.to_string()]],
+            "{label} {action}: committed payload"
+        );
     }
     assert_one_row_per_key_from(&writer, 7, 9).await;
     drop(reader);
@@ -427,19 +433,13 @@ async fn assert_one_row_per_key_from(client: &Client, first: i64, end: i64) {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failure_in_memory() {
-    upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failure(
-        StorageMode::EmbeddedMemory,
-    )
-    .await;
+async fn read_committed_secondary_upsert_uses_winner_after_statement_snapshot_memory() {
+    upsert_over_a_key_committed_after_the_snapshot(StorageMode::EmbeddedMemory).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failure_paged() {
-    upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failure(
-        StorageMode::ServerPaged,
-    )
-    .await;
+async fn read_committed_secondary_upsert_uses_winner_after_statement_snapshot_paged() {
+    upsert_over_a_key_committed_after_the_snapshot(StorageMode::ServerPaged).await;
 }
 
 /// PostgreSQL READ COMMITTED upserts wait for an uncommitted arbiter winner,

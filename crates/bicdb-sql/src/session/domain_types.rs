@@ -461,7 +461,14 @@ impl<'db> SqlSession<'db> {
                     if let Some(schema) = &schema {
                         self.drop_table_inbound_foreign_keys(schema, &dropping, cascade)?;
                         self.drop_table_row_type_dependents(schema, cascade)?;
-                        if !purge && self.move_table_to_recycle_bin(&table, schema)? {
+                        // Keep the exact backing until an explicit transaction
+                        // decides. Copying rows back on rollback assigns newer
+                        // versions that its retained snapshot cannot see.
+                        let deferred_purge =
+                            self.tx.is_some() && (purge || !self.recycle_bin_enabled());
+                        if (!purge || deferred_purge)
+                            && self.move_table_to_recycle_bin(&table, schema, deferred_purge)?
+                        {
                             continue;
                         }
                     }

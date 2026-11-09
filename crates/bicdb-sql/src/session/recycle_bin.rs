@@ -152,8 +152,14 @@ pub(crate) fn list_recycle_bin(db: &BicDb) -> Result<Vec<RecycleBinEntry>> {
         .map(|record| serde_json::from_value::<RecycleBinEntry>(record.metadata))
         .collect::<std::result::Result<Vec<_>, _>>()
         .map_err(|error| SqlError::InvalidSql(format!("corrupt recycle bin entry: {error}")))?;
-    entries.sort_by_key(|entry| std::cmp::Reverse(entry.dropped_at_micros));
-    Ok(entries)
+    let mut visible = Vec::new();
+    for entry in entries.drain(..) {
+        if !super::recycle_bin_journal::purge_is_decided(db, &entry.bin_name)? {
+            visible.push(entry);
+        }
+    }
+    visible.sort_by_key(|entry| std::cmp::Reverse(entry.dropped_at_micros));
+    Ok(visible)
 }
 
 pub(super) fn save_recycle_bin_entry(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<()> {
@@ -196,7 +202,7 @@ impl<'db> SqlSession<'db> {
         }
     }
 
-    fn recycle_bin_enabled(&self) -> bool {
+    pub(super) fn recycle_bin_enabled(&self) -> bool {
         let setting = self
             .session_gucs
             .get(RECYCLE_BIN_GUC)
@@ -215,8 +221,9 @@ impl<'db> SqlSession<'db> {
         &mut self,
         table: &str,
         schema: &TableSchema,
+        deferred_purge: bool,
     ) -> Result<bool> {
-        if !self.recycle_bin_enabled()
+        if (!deferred_purge && !self.recycle_bin_enabled())
             || schema.partitioning.is_some()
             || schema.partition_of.is_some()
             || table.starts_with("__bicdb_")
@@ -311,6 +318,9 @@ impl<'db> SqlSession<'db> {
         save_recycle_bin_entry(db, &entry)?;
         super::recycle_bin_journal::stage("entry");
         super::recycle_bin_journal::decide(self, &bin_name, intent_sequence)?;
+        if deferred_purge {
+            super::recycle_bin_journal::schedule_purge(self, &entry)?;
+        }
         super::recycle_bin_journal::stage("decision");
         sql_index_definitions_cache_clear();
         if self.tx.is_some() {

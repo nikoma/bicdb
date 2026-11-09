@@ -227,6 +227,21 @@ pub(super) fn prepare_purge(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<(
     )?;
     Ok(())
 }
+pub(super) fn schedule_purge(session: &mut SqlSession<'_>, entry: &RecycleBinEntry) -> Result<()> {
+    session.db_mut()?.create_collection(PURGES)?;
+    session.tx.as_mut().expect("transactional purge").insert(
+        PURGES,
+        Record::new(&entry.bin_name).with_metadata(serde_json::to_value(entry)?),
+    )?;
+    Ok(())
+}
+pub(super) fn purge_is_decided(db: &BicDb, bin: &str) -> Result<bool> {
+    match db.get(PURGES, bin) {
+        Ok(record) => Ok(record.is_some()),
+        Err(BicDbError::CollectionNotFound(_)) => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
 pub(super) fn finish_purge(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<()> {
     if db
         .collections()
@@ -236,10 +251,8 @@ pub(super) fn finish_purge(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<()
         db.drop_collection(&entry.bin_name)?;
     }
     stage("purge_collection");
-    if list_recycle_bin(db)?
-        .iter()
-        .any(|saved| saved.bin_name == entry.bin_name)
-    {
+    // Decided purges are already hidden from the public recycle-bin view.
+    if db.get(RECYCLE_BIN_COLLECTION, &entry.bin_name)?.is_some() {
         delete_recycle_bin_entry(db, &entry.bin_name)?;
     }
     stage("purge_entry");
@@ -247,7 +260,7 @@ pub(super) fn finish_purge(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<()
     db.delete(PURGES, &entry.bin_name)?;
     Ok(())
 }
-fn recover_purges(db: &mut BicDb) -> Result<usize> {
+pub(super) fn recover_purges(db: &mut BicDb) -> Result<usize> {
     let records = match db.scan_collection(PURGES) {
         Ok(records) => records,
         Err(BicDbError::CollectionNotFound(_)) => return Ok(0),

@@ -21,6 +21,26 @@ again. A commit, feature branch, draft PR, or built binary alone is not completi
   Report unavailable CI separately from tests that actually ran and failed.
 
 
+## Bump the source version on every merge
+
+The owner's standing instruction is to bump the BicDB source version with every
+merge into `main`, so the newest source is unambiguous. This applies to code,
+tests, documentation and evidence merges.
+
+- Include the bump in the change being merged; do not leave versioning to a later
+  unmerged branch. Use `python3 scripts/bump-version.py NEXT_VERSION`, then run
+  `python3 scripts/bump-version.py --check` and the relevant version-identity checks.
+- Keep crate package versions, internal path-dependency requirements, tracked
+  lockfiles and the current-source compatibility document synchronized. Preserve
+  historical evidence and published-release download links at their actual versions.
+- Coordinate merge order with other agents. Immediately before merging, verify
+  that the candidate version is the next unused patch version above remote `main`.
+  Do not reuse a parallel branch's version or overwrite a newer version.
+- Validate the versioned final head, push, and verify remote `main` contains both
+  the change and its new version. Report version and commit together. A source
+  version bump does not imply a binary, release or deployment was produced.
+
+
 ## Batch fixes before broad validation
 
 Group related fixes into a coherent implementation batch before running broad

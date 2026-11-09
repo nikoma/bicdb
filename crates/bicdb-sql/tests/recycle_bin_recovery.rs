@@ -244,6 +244,7 @@ fn transactional_rename_keeps_retained_locks_on_the_renamed_backing() {
         assert!(owner
             .try_lock_visible_record(None, "before", "existing")
             .unwrap());
+        let mark = owner.rollback_mark();
         owner.insert("before", Record::new("pending")).unwrap();
         let locks = owner.lock_len();
         db.rename_collection_preserving_pending_writes(&mut owner, "before", "after")
@@ -256,11 +257,16 @@ fn transactional_rename_keeps_retained_locks_on_the_renamed_backing() {
             .try_lock_visible_record(None, "after", "existing")
             .unwrap());
         challenger.commit().unwrap();
+        owner.rollback_to_mark(mark).unwrap();
+        assert_eq!(owner.lock_len(), 1);
+        assert!(owner.holds_record_lock("after", "existing"));
+        assert!(!owner.holds_record_lock("after", "pending"));
+        assert!(owner.get("after", "pending").unwrap().is_none());
         // A rollback rename must preserve acquisition order and release every
         // retained identity, including locks acquired without a row mutation.
         db.rename_collection_preserving_pending_writes(&mut owner, "after", "before")
             .unwrap();
-        assert_eq!(owner.lock_len(), locks);
+        assert_eq!(owner.lock_len(), 1);
         assert!(owner.holds_record_lock("before", "existing"));
         owner.rollback().unwrap();
         assert!(db.get("before", "pending").unwrap().is_none());

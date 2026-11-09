@@ -964,6 +964,7 @@ mod tests {
             &signed_call(&claims, KEY),
             &state.session_state,
             state.security_context.as_ref(),
+            &mut state.catalog_cache,
         )
         .unwrap();
         assert!(state.delegated_identity.is_none());

@@ -529,6 +529,7 @@ mod tests {
                     "SELECT 1",
                     &state.session_state,
                     None,
+                    &mut state.catalog_cache,
                 )
                 .unwrap();
                 let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -3969,6 +3970,7 @@ $$
             "SELECT record_pgwire_function_write(7, 'written')",
             &state.session_state,
             state.security_context.as_ref(),
+            &mut state.catalog_cache,
         )
         .unwrap();
         let before_execute = execute_server_db_sql_for_state(

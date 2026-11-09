@@ -632,6 +632,7 @@ pub(crate) fn describe_subscription(
         query,
         session_state,
         security_context,
+        &mut SqlSessionCatalogCache::default(),
     )?;
     Ok(batch(&template, Vec::new()))
 }

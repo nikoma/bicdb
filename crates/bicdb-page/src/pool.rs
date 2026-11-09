@@ -7,15 +7,14 @@
 //! - "`buffer_pool_bytes` a hard admission budget with observable current,
 //!   dirty, pinned, evictable, hit, miss, eviction, and wait counters".
 //!
-//! # The budget is a hard ceiling
+//! # The normal budget and bounded operation reserve
 //!
-//! Frames are allocated once at construction and never grown. The pool cannot
-//! exceed `budget_bytes` under any access pattern, which is what makes the
-//! roadmap's memory envelope (`buffer_pool + query budgets + engine overhead`)
-//! meaningful rather than aspirational. When every frame in a shard is pinned,
-//! admission *fails* with [`PageError::PoolExhausted`] rather than allocating
-//! one more page — a bounded pool that quietly grows under pressure is not
-//! bounded.
+//! Construction allocates the normal frame budget. A WAL-managed operation
+//! that cannot yet make a complete structural cut may temporarily allocate
+//! exactly one emergency page per shard. A durable boundary trims unpinned
+//! extras; exhaustion beyond that reserve returns [`PageError::PoolExhausted`].
+//! The maximum extra page data is `shard_count * page_size`, not an unlimited
+//! operation-sized allocation. Metadata and query working memory are separate.
 //!
 //! # Scan resistance
 //!
@@ -103,8 +102,9 @@ pub enum CacheClass {
 /// Buffer pool configuration.
 #[derive(Clone, Copy, Debug)]
 pub struct BufferPoolOptions {
-    /// Hard ceiling on bytes held in frames. Rounded down to a whole number of
-    /// pages, then divided across shards.
+    /// Normal frame-byte budget, rounded down to whole pages and divided
+    /// across shards. WAL-managed operations may temporarily retain at most
+    /// one emergency page per shard, trimmed after a durable structural cut.
     pub budget_bytes: u64,
     /// Independent lock domains. More shards reduce contention; fewer make the
     /// budget divide more evenly across a small pool.

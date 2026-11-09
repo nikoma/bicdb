@@ -347,7 +347,9 @@ impl PagedStoreSnapshot {
 #[derive(Clone, Debug)]
 pub struct PagedStoreOptions {
     pub page_size: u32,
-    /// Hard ceiling on cached pages. This is `buffer_pool_bytes`.
+    /// Normal frame-byte budget. During a WAL-managed operation, at most
+    /// one emergency page per shard may temporarily exceed it; a durable
+    /// boundary trims unpinned extras. This excludes frame/container metadata.
     pub buffer_pool_bytes: u64,
     /// Hard ceiling on deduplicated speculative page requests. This bounds
     /// read-ahead metadata independently of database size.

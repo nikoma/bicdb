@@ -1,0 +1,452 @@
+{
+  "setup": [
+    "CREATE TYPE audit_mood AS ENUM ('z', 'a')",
+    "CREATE DOMAIN audit_label AS text",
+    "CREATE DOMAIN audit_number AS numeric CHECK (VALUE >= 0)",
+    "CREATE TABLE audit_b (id int PRIMARY KEY, i int, n numeric, d date, t timestamp, a int[], m audit_mood, label audit_label, dn audit_number, c text COLLATE \"C\", e text COLLATE \"en-x-icu\", \"K\" numeric, k float8)",
+    "INSERT INTO audit_b VALUES (1,1,2.00,'2002-07-04','2002-07-04 00:00:00',ARRAY[1,2],'z','ok',2.00,'a','Z',9007199254740993,9007199254740992),(2,NULL,NULL,NULL,NULL,ARRAY[NULL]::int[],'a',NULL,NULL,'Z','a',NULL,NULL)",
+    "CREATE VIEW audit_case_view AS SELECT \"K\",k FROM audit_b WHERE id=1",
+    "CREATE FUNCTION audit_rec() RETURNS text LANGUAGE plpgsql AS $$DECLARE r record; BEGIN FOR r IN SELECT \"K\",k FROM audit_b WHERE id=1 LOOP RETURN (r.\"K\" = r.k)::text; END LOOP; RETURN 'none'; END$$",
+    "CREATE SCHEMA audit_s1",
+    "CREATE SCHEMA audit_s2",
+    "CREATE TABLE audit_s1.same (v date)",
+    "CREATE TABLE audit_s2.same (v timestamp)",
+    "INSERT INTO audit_s1.same VALUES('2002-07-04')",
+    "INSERT INTO audit_s2.same VALUES('2002-07-04 00:00:00')"
+  ],
+  "cases": [
+    {
+      "label": "enum_base_case",
+      "sql": "SELECT CASE m WHEN 'z' THEN 'yes' ELSE 'no' END FROM audit_b WHERE id=1",
+      "rows": [
+        [
+          "yes"
+        ]
+      ]
+    },
+    {
+      "label": "enum_derived_case",
+      "sql": "SELECT CASE m WHEN 'z' THEN 'yes' ELSE 'no' END FROM (SELECT * FROM audit_b) q WHERE id=1",
+      "rows": [
+        [
+          "yes"
+        ]
+      ]
+    },
+    {
+      "label": "enum_null_case",
+      "sql": "SELECT CASE m WHEN NULL THEN 'bad' ELSE 'null' END FROM audit_b WHERE id=2",
+      "rows": [
+        [
+          "null"
+        ]
+      ]
+    },
+    {
+      "label": "domain_text_base_case",
+      "sql": "SELECT CASE label WHEN 'ok' THEN 'yes' ELSE 'no' END FROM audit_b WHERE id=1",
+      "rows": [
+        [
+          "yes"
+        ]
+      ]
+    },
+    {
+      "label": "domain_text_derived_case",
+      "sql": "SELECT CASE label WHEN 'ok' THEN 'yes' ELSE 'no' END FROM (SELECT * FROM audit_b) q WHERE id=1",
+      "rows": [
+        [
+          "yes"
+        ]
+      ]
+    },
+    {
+      "label": "domain_text_null_case",
+      "sql": "SELECT CASE label WHEN NULL THEN 'bad' ELSE 'null' END FROM audit_b WHERE id=2",
+      "rows": [
+        [
+          "null"
+        ]
+      ]
+    },
+    {
+      "label": "domain_numeric_base_case",
+      "sql": "SELECT CASE dn WHEN '2.000' THEN 'yes' ELSE 'no' END FROM audit_b WHERE id=1",
+      "rows": [
+        [
+          "yes"
+        ]
+      ]
+    },
+    {
+      "label": "domain_numeric_derived_case",
+      "sql": "SELECT CASE dn WHEN '2.000' THEN 'yes' ELSE 'no' END FROM (SELECT * FROM audit_b) q WHERE id=1",
+      "rows": [
+        [
+          "yes"
+        ]
+      ]
+    },
+    {
+      "label": "domain_numeric_null_case",
+      "sql": "SELECT CASE dn WHEN NULL THEN 'bad' ELSE 'null' END FROM audit_b WHERE id=2",
+      "rows": [
+        [
+          "null"
+        ]
+      ]
+    },
+    {
+      "label": "array_base_case",
+      "sql": "SELECT CASE a WHEN '{1,2}' THEN 'yes' ELSE 'no' END FROM audit_b WHERE id=1",
+      "rows": [
+        [
+          "yes"
+        ]
+      ]
+    },
+    {
+      "label": "array_derived_case",
+      "sql": "SELECT CASE a WHEN '{1,2}' THEN 'yes' ELSE 'no' END FROM (SELECT * FROM audit_b) q WHERE id=1",
+      "rows": [
+        [
+          "yes"
+        ]
+      ]
+    },
+    {
+      "label": "array_null_case",
+      "sql": "SELECT CASE a WHEN NULL THEN 'bad' ELSE 'null' END FROM audit_b WHERE id=2",
+      "rows": [
+        [
+          "null"
+        ]
+      ]
+    },
+    {
+      "label": "int_base_case",
+      "sql": "SELECT CASE i WHEN '1' THEN 'yes' ELSE 'no' END FROM audit_b WHERE id=1",
+      "rows": [
+        [
+          "yes"
+        ]
+      ]
+    },
+    {
+      "label": "int_derived_case",
+      "sql": "SELECT CASE i WHEN '1' THEN 'yes' ELSE 'no' END FROM (SELECT * FROM audit_b) q WHERE id=1",
+      "rows": [
+        [
+          "yes"
+        ]
+      ]
+    },
+    {
+      "label": "int_null_case",
+      "sql": "SELECT CASE i WHEN NULL THEN 'bad' ELSE 'null' END FROM audit_b WHERE id=2",
+      "rows": [
+        [
+          "null"
+        ]
+      ]
+    },
+    {
+      "label": "numeric_base_case",
+      "sql": "SELECT CASE n WHEN '2.000' THEN 'yes' ELSE 'no' END FROM audit_b WHERE id=1",
+      "rows": [
+        [
+          "yes"
+        ]
+      ]
+    },
+    {
+      "label": "numeric_derived_case",
+      "sql": "SELECT CASE n WHEN '2.000' THEN 'yes' ELSE 'no' END FROM (SELECT * FROM audit_b) q WHERE id=1",
+      "rows": [
+        [
+          "yes"
+        ]
+      ]
+    },
+    {
+      "label": "numeric_null_case",
+      "sql": "SELECT CASE n WHEN NULL THEN 'bad' ELSE 'null' END FROM audit_b WHERE id=2",
+      "rows": [
+        [
+          "null"
+        ]
+      ]
+    },
+    {
+      "label": "date_base_case",
+      "sql": "SELECT CASE d WHEN '2002-07-04' THEN 'yes' ELSE 'no' END FROM audit_b WHERE id=1",
+      "rows": [
+        [
+          "yes"
+        ]
+      ]
+    },
+    {
+      "label": "date_derived_case",
+      "sql": "SELECT CASE d WHEN '2002-07-04' THEN 'yes' ELSE 'no' END FROM (SELECT * FROM audit_b) q WHERE id=1",
+      "rows": [
+        [
+          "yes"
+        ]
+      ]
+    },
+    {
+      "label": "date_null_case",
+      "sql": "SELECT CASE d WHEN NULL THEN 'bad' ELSE 'null' END FROM audit_b WHERE id=2",
+      "rows": [
+        [
+          "null"
+        ]
+      ]
+    },
+    {
+      "label": "timestamp_base_case",
+      "sql": "SELECT CASE t WHEN '2002-07-04' THEN 'yes' ELSE 'no' END FROM audit_b WHERE id=1",
+      "rows": [
+        [
+          "yes"
+        ]
+      ]
+    },
+    {
+      "label": "timestamp_derived_case",
+      "sql": "SELECT CASE t WHEN '2002-07-04' THEN 'yes' ELSE 'no' END FROM (SELECT * FROM audit_b) q WHERE id=1",
+      "rows": [
+        [
+          "yes"
+        ]
+      ]
+    },
+    {
+      "label": "timestamp_null_case",
+      "sql": "SELECT CASE t WHEN NULL THEN 'bad' ELSE 'null' END FROM audit_b WHERE id=2",
+      "rows": [
+        [
+          "null"
+        ]
+      ]
+    },
+    {
+      "label": "null_eq",
+      "sql": "SELECT d=NULL, NULL=t, n=NULL, NULL=i, a=NULL, NULL=m FROM audit_b ORDER BY id",
+      "rows": [
+        [
+          "<null>",
+          "<null>",
+          "<null>",
+          "<null>",
+          "<null>",
+          "<null>"
+        ],
+        [
+          "<null>",
+          "<null>",
+          "<null>",
+          "<null>",
+          "<null>",
+          "<null>"
+        ]
+      ]
+    },
+    {
+      "label": "null_logic",
+      "sql": "SELECT d=t, NOT(d=t), (d=t) OR true, (d=t) AND false FROM audit_b WHERE id=2",
+      "rows": [
+        [
+          "<null>",
+          "<null>",
+          "true",
+          "false"
+        ]
+      ]
+    },
+    {
+      "label": "array_equal",
+      "sql": "SELECT a=ARRAY[1,2], a=ARRAY[NULL]::int[] FROM audit_b ORDER BY id",
+      "rows": [
+        [
+          "true",
+          "false"
+        ],
+        [
+          "false",
+          "true"
+        ]
+      ]
+    },
+    {
+      "label": "array_derived",
+      "sql": "SELECT x.a=y.a FROM (SELECT a FROM audit_b WHERE id=1) x JOIN (SELECT a FROM audit_b WHERE id=1) y ON true",
+      "rows": [
+        [
+          "true"
+        ]
+      ]
+    },
+    {
+      "label": "enum_same",
+      "sql": "SELECT x.m=y.m FROM audit_b x JOIN audit_b y ON x.id=y.id ORDER BY x.id",
+      "rows": [
+        [
+          "true"
+        ],
+        [
+          "true"
+        ]
+      ]
+    },
+    {
+      "label": "enum_order",
+      "sql": "SELECT x.m<y.m FROM audit_b x JOIN audit_b y ON x.id=1 AND y.id=2",
+      "rows": [
+        [
+          "true"
+        ]
+      ]
+    },
+    {
+      "label": "quoted_base",
+      "sql": "SELECT \"K\"=k FROM audit_b WHERE id=1",
+      "rows": [
+        [
+          "true"
+        ]
+      ]
+    },
+    {
+      "label": "quoted_derived",
+      "sql": "SELECT q.\"K\"=q.k FROM (SELECT \"K\",k FROM audit_b WHERE id=1) q",
+      "rows": [
+        [
+          "true"
+        ]
+      ]
+    },
+    {
+      "label": "quoted_cte",
+      "sql": "WITH q AS (SELECT \"K\",k FROM audit_b WHERE id=1) SELECT q.\"K\"=q.k FROM q",
+      "rows": [
+        [
+          "true"
+        ]
+      ]
+    },
+    {
+      "label": "quoted_view",
+      "sql": "SELECT \"K\"=k FROM audit_case_view",
+      "rows": [
+        [
+          "true"
+        ]
+      ]
+    },
+    {
+      "label": "quoted_list",
+      "sql": "SELECT q.\"K\"=q.k FROM (SELECT \"K\",k FROM audit_b WHERE id=1) q(\"K\",k)",
+      "rows": [
+        [
+          "true"
+        ]
+      ]
+    },
+    {
+      "label": "quoted_routine",
+      "sql": "SELECT audit_rec()",
+      "rows": [
+        [
+          "true"
+        ]
+      ]
+    },
+    {
+      "label": "schema_alias",
+      "sql": "SELECT x.v=y.v FROM audit_s1.same x JOIN audit_s2.same y ON true",
+      "rows": [
+        [
+          "true"
+        ]
+      ]
+    },
+    {
+      "label": "alias_shadow",
+      "sql": "SELECT count(*) FROM audit_b o WHERE EXISTS (SELECT 1 FROM (SELECT d AS x,t AS y FROM audit_b WHERE id=1) o WHERE o.x=o.y)",
+      "rows": [
+        [
+          "2"
+        ]
+      ]
+    },
+    {
+      "label": "alias_cache_temporal",
+      "sql": "SELECT q.a=q.b FROM (SELECT date '2002-07-04' AS a,timestamp '2002-07-04 00:00:00' AS b) q",
+      "rows": [
+        [
+          "true"
+        ]
+      ]
+    },
+    {
+      "label": "alias_cache_numeric",
+      "sql": "SELECT q.a=q.b FROM (SELECT 9007199254740993::numeric AS a,9007199254740992::float8 AS b) q",
+      "rows": [
+        [
+          "true"
+        ]
+      ]
+    },
+    {
+      "label": "collation_c",
+      "sql": "SELECT id FROM audit_b WHERE c<e COLLATE \"C\" ORDER BY id",
+      "rows": [
+        [
+          "2"
+        ]
+      ]
+    },
+    {
+      "label": "collation_icu",
+      "sql": "SELECT id FROM audit_b WHERE c COLLATE \"en-x-icu\"<e ORDER BY id",
+      "rows": [
+        [
+          "1"
+        ]
+      ]
+    },
+    {
+      "label": "collation_icu_column",
+      "sql": "SELECT id FROM audit_b WHERE e<c COLLATE \"en-x-icu\" ORDER BY id",
+      "rows": [
+        [
+          "2"
+        ]
+      ]
+    },
+    {
+      "label": "collation_icu_projection",
+      "sql": "SELECT c COLLATE \"en-x-icu\"<e FROM audit_b ORDER BY id",
+      "rows": [
+        [
+          "true"
+        ],
+        [
+          "false"
+        ]
+      ]
+    },
+    {
+      "label": "collation_mismatch",
+      "sql": "SELECT id FROM audit_b WHERE c COLLATE \"C\"=e COLLATE \"en-x-icu\"",
+      "sqlstate": "42P21"
+    },
+    {
+      "label": "collation_mismatch_projection",
+      "sql": "SELECT c COLLATE \"C\"=e COLLATE \"en-x-icu\" FROM audit_b",
+      "sqlstate": "42P21"
+    }
+  ]
+}

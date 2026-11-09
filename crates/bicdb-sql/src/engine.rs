@@ -1126,12 +1126,32 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
                 self.expr(left, env, right_type.as_deref());
                 self.expr(right, env, left_type.as_deref());
             }
-            Expr::AnyOp { left, right, .. } | Expr::AllOp { left, right, .. } => {
+            Expr::AnyOp {
+                left,
+                compare_op,
+                right,
+                ..
+            }
+            | Expr::AllOp {
+                left,
+                compare_op,
+                right,
+                ..
+            } => {
                 let left_type = self.expr_type(left, env);
                 let right_type = self.expr_type(right, env);
                 let element_type = right_type
                     .as_deref()
                     .and_then(|pg_type| pg_type.strip_suffix("[]"));
+                if self.comparison_error.is_none() && !crate::planner::is_unknown_literal(left) {
+                    self.comparison_error = reject_comparison_for_db(
+                        self.engine.db_ref(),
+                        left_type.as_deref(),
+                        compare_op,
+                        element_type,
+                    )
+                    .err();
+                }
                 let array_type = right_type
                     .clone()
                     .or_else(|| left_type.as_ref().map(|pg_type| format!("{pg_type}[]")));
@@ -1155,6 +1175,21 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
                 }
             }
             Expr::InSubquery { expr, subquery, .. } => {
+                if self.comparison_error.is_none() && !crate::planner::is_unknown_literal(expr) {
+                    let left = self.expr_type(expr, env);
+                    let right = self
+                        .engine
+                        .query_output_columns(subquery)
+                        .and_then(|columns| columns.into_iter().next())
+                        .and_then(|(_, kind)| kind);
+                    self.comparison_error = reject_comparison_for_db(
+                        self.engine.db_ref(),
+                        left.as_deref(),
+                        &BinaryOperator::Eq,
+                        right.as_deref(),
+                    )
+                    .err();
+                }
                 self.expr(expr, env, None);
                 self.query(subquery, None);
             }

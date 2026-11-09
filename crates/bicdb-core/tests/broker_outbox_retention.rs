@@ -1,6 +1,6 @@
 use bicdb_core::{
-    BicDb, ConsumeOptions, DbConfig, PublishOptions, ReplicationConfig, ReplicationMode,
-    ReplicationTlsConfig, StorageMode,
+    BicDb, ConsumeOptions, DbConfig, PublishOptions, Record, ReplicationConfig, ReplicationMode,
+    ReplicationTlsConfig, StorageMode, RECORD_AUDIT_STREAM,
 };
 use serde_json::json;
 
@@ -82,4 +82,51 @@ fn trimmed_transactional_message_is_not_republished_in_memory() {
 #[test]
 fn trimmed_transactional_message_is_not_republished_paged() {
     trimmed_outbox_stays_trimmed(StorageMode::ServerPaged);
+}
+
+#[test]
+fn a_checkpoint_between_core_commit_and_caller_finalization_keeps_committed_outboxes() {
+    let root = tempfile::tempdir().unwrap();
+    let config = DbConfig::default()
+        .with_storage_mode(StorageMode::ServerPaged)
+        .with_fsync(true)
+        .with_audit_events(true);
+    let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+    db.create_collection("items").unwrap();
+    let mut tx = db.begin_transaction().unwrap();
+    tx.insert("items", Record::new("acknowledged-business-row"))
+        .unwrap();
+    tx.buffer_broker_publish(
+        "business-events",
+        json!({"committed": 1}),
+        PublishOptions::default(),
+    )
+    .unwrap();
+    // The core decision is now durable. A shared SQL caller releases its
+    // database read lock here, before invoking the separate finalizers.
+    db.commit_buffered_transaction(&mut tx).unwrap();
+    db.checkpoint_for_resume().unwrap();
+    drop(tx);
+    drop(db);
+    let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+    assert!(db
+        .get("items", "acknowledged-business-row")
+        .unwrap()
+        .is_some());
+    let messages = db
+        .broker()
+        .consume("business-events", "consumer", "worker", consumed())
+        .unwrap()
+        .len();
+    let audit = db
+        .events()
+        .read(RECORD_AUDIT_STREAM)
+        .iter()
+        .filter(|entry| entry.event.payload["record_id"] == "acknowledged-business-row")
+        .count();
+    assert_eq!(
+        (messages, audit),
+        (1, 1),
+        "a durable business row must keep both committed outboxes across a checkpoint"
+    );
 }

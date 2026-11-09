@@ -3474,6 +3474,7 @@ impl<'db> SqlEngine<'db> {
 mod join_envelope_path_tests {
     use super::*;
     use bicdb_core::query_budget::QueryMemoryScope;
+    use bicdb_core::DbConfig;
 
     fn join(sql: &str) -> (TableFactor, JoinConstraint) {
         let Statement::Query(query) = crate::parse_statements(sql).unwrap().remove(0) else {
@@ -3483,8 +3484,9 @@ mod join_envelope_path_tests {
             panic!("select");
         };
         let join = &select.from[0].joins[0];
-        let JoinOperator::Inner(constraint) = &join.join_operator else {
-            panic!("inner");
+        let constraint = match &join.join_operator {
+            JoinOperator::Join(constraint) | JoinOperator::Inner(constraint) => constraint,
+            _ => panic!("inner"),
         };
         (join.relation.clone(), constraint.clone())
     }

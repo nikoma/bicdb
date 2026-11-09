@@ -1632,8 +1632,13 @@ impl<'db> SqlSession<'db> {
                 {
                     continue;
                 }
-                let candidate_row =
-                    merge_slot_rows(&target_row, &target_columns, from_row, &from_rows.columns);
+                // This provisional row can become a retained assignment candidate.
+                let candidate_row = materialize_join_row(
+                    &target_row,
+                    &target_columns,
+                    from_row,
+                    &from_rows.columns,
+                )?;
                 // The predicate recheck through the statement's engine (the
                 // per-candidate engine it replaced had no outer row; clear it
                 // for the evaluation so identifier resolution is identical).

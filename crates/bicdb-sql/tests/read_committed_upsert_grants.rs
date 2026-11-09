@@ -190,7 +190,7 @@ fn exhausted_signed_budget_allows_noop_without_an_extra_audit_or_mutation() {
         spec.operation = MutationOperation::Bulk;
         spec.bulk = true;
         spec.audit_metadata
-            .insert("proof".into(), serde_json::json!("one actual mutation"));
+            .insert("proof".into(), "one actual mutation".into());
         let authority = tx.issue_mutation_grant(spec).unwrap();
         let mut session = SqlSession::new_shared(&db)
             .with_pending_transaction(tx)

@@ -2007,7 +2007,9 @@ pub(crate) fn index_field_pg_type(schema: &TableSchema, field: &IndexField) -> O
         IndexField::Lower(_)
         | IndexField::Upper(_)
         | IndexField::OracleUpperV1(_)
+        | IndexField::OracleUpperNationalV1(_)
         | IndexField::OracleLowerV1(_)
+        | IndexField::OracleLowerNationalV1(_)
         | IndexField::Trim(_) => Some("text".to_string()),
         IndexField::MetadataPath(_) => None,
     }
@@ -2214,6 +2216,14 @@ pub(crate) fn record_index_field_sql_value(
                 value => SqlValue::String(bicdb_core::oracle_simple_upper_v1(&value.to_cell())),
             }
         }
+        IndexField::OracleUpperNationalV1(inner) => {
+            match record_index_field_sql_value(record, inner, schema) {
+                SqlValue::Null => SqlValue::Null,
+                value => SqlValue::String(bicdb_core::oracle_simple_national_upper_v1(
+                    &value.to_cell(),
+                )),
+            }
+        }
         IndexField::Lower(inner) => match record_index_field_sql_value(record, inner, schema) {
             SqlValue::Null => SqlValue::Null,
             value => SqlValue::String(bicdb_core::index_key_lower(&value.to_cell())),
@@ -2222,6 +2232,14 @@ pub(crate) fn record_index_field_sql_value(
             match record_index_field_sql_value(record, inner, schema) {
                 SqlValue::Null => SqlValue::Null,
                 value => SqlValue::String(bicdb_core::oracle_simple_lower_v1(&value.to_cell())),
+            }
+        }
+        IndexField::OracleLowerNationalV1(inner) => {
+            match record_index_field_sql_value(record, inner, schema) {
+                SqlValue::Null => SqlValue::Null,
+                value => SqlValue::String(bicdb_core::oracle_simple_national_lower_v1(
+                    &value.to_cell(),
+                )),
             }
         }
         IndexField::Trim(inner) => match record_index_field_sql_value(record, inner, schema) {

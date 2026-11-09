@@ -6613,7 +6613,9 @@ impl<'db> SqlEngine<'db> {
                 IndexField::Upper(_)
                     | IndexField::Lower(_)
                     | IndexField::OracleUpperV1(_)
+                    | IndexField::OracleUpperNationalV1(_)
                     | IndexField::OracleLowerV1(_)
+                    | IndexField::OracleLowerNationalV1(_)
             ) {
                 break;
             }

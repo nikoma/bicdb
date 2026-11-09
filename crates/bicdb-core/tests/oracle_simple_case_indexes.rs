@@ -192,3 +192,106 @@ fn capture_old_reader_fixture(source: &std::path::Path) {
     }
     copy(source, &destination);
 }
+
+#[test]
+fn national_case_keys_preserve_the_distinct_character_family_through_reopen() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for (upper, original, folded) in [(true, "ɡ", "Ɡ"), (false, "Ⱥ", "ⱥ")] {
+            let root = tempfile::tempdir().unwrap();
+            let config = mode_config(mode);
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            db.create_collection("rows").unwrap();
+            db.insert("rows", row("a", original)).unwrap();
+            db.insert("rows", row("b", folded)).unwrap();
+            let character = if upper {
+                IndexField::OracleUpperV1(Box::new(path("value")))
+            } else {
+                IndexField::OracleLowerV1(Box::new(path("value")))
+            };
+            let national = if upper {
+                IndexField::OracleUpperNationalV1(Box::new(path("value")))
+            } else {
+                IndexField::OracleLowerNationalV1(Box::new(path("value")))
+            };
+            db.create_index(index("character", character, true))
+                .unwrap();
+            assert!(db
+                .create_index(index("national_unique", national.clone(), true))
+                .is_err());
+            assert!(!db
+                .index_definitions()
+                .iter()
+                .any(|d| d.name == "national_unique"));
+            db.create_index(index("national", national, false)).unwrap();
+            assert_eq!(
+                db.lookup_index("character", &key(original)).unwrap(),
+                vec!["a"]
+            );
+            let mut actual = db.lookup_index("national", &key(folded)).unwrap();
+            actual.sort();
+            assert_eq!(actual, vec!["a", "b"]);
+            db.insert("rows", row("b", "unrelated")).unwrap();
+            let mut tx = db.begin_transaction().unwrap();
+            tx.insert("rows", row("a", "rolled back")).unwrap();
+            tx.rollback().unwrap();
+            assert_eq!(
+                db.lookup_index("national", &key(folded)).unwrap(),
+                vec!["a"]
+            );
+            db.flush().unwrap();
+            drop(db);
+            let db = BicDb::open_with_config(root.path(), config).unwrap();
+            assert_eq!(
+                db.lookup_index("national", &key(folded)).unwrap(),
+                vec!["a"]
+            );
+            assert_eq!(
+                db.lookup_index("character", &key(original)).unwrap(),
+                vec!["a"]
+            );
+            assert!(db.verify_index("national").unwrap().valid);
+        }
+    }
+}
+
+#[test]
+fn national_partial_predicate_alone_enables_the_reader_fence() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let config = mode_config(mode);
+        let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+        db.create_collection("rows").unwrap();
+        db.insert("rows", row("one", "ɡ")).unwrap();
+        let mut definition = index("national_partial", IndexField::Id, false);
+        definition.predicate = Some(IndexPredicate::Binary {
+            operator: IndexPredicateBinaryOperator::Equal,
+            left: Box::new(IndexPredicate::Field {
+                field: IndexField::OracleUpperNationalV1(Box::new(path("value"))),
+            }),
+            right: Box::new(IndexPredicate::Literal {
+                value: json!("Ɡ")
+            }),
+            value_type: IndexPredicateValueType::String,
+        });
+        db.create_index(definition).unwrap();
+        assert_eq!(
+            db.lookup_index("national_partial", &key("one")).unwrap(),
+            vec!["one"]
+        );
+        db.flush().unwrap();
+        drop(db);
+        let db = BicDb::open_with_config(root.path(), config).unwrap();
+        assert_eq!(
+            db.lookup_index("national_partial", &key("one")).unwrap(),
+            vec!["one"]
+        );
+        let format: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(root.path().join("format.json")).unwrap())
+                .unwrap();
+        assert!(format["feature_flags"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|v| v == "oracle_simple_case_v1"));
+    }
+}

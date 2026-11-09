@@ -1214,7 +1214,7 @@ pub(crate) fn simple_case_expr_values_equal(
     if crate::planner::is_unknown_literal(right_expr) {
         if let Some(kind) = left_type
             .as_deref()
-            .filter(|kind| pg_comparison_kind(kind, kind).is_some())
+            .filter(|kind| *kind == "char" || pg_comparison_kind(kind, kind).is_some())
         {
             right = cast_value_to_pg_type(right, kind)?;
             right_type = left_type.clone();
@@ -1223,7 +1223,7 @@ pub(crate) fn simple_case_expr_values_equal(
     if crate::planner::is_unknown_literal(left_expr) {
         if let Some(kind) = right_type
             .as_deref()
-            .filter(|kind| pg_comparison_kind(kind, kind).is_some())
+            .filter(|kind| *kind == "char" || pg_comparison_kind(kind, kind).is_some())
         {
             left = cast_value_to_pg_type(left, kind)?;
             left_type = right_type.clone();

@@ -87,6 +87,9 @@ pub(crate) struct ColumnLookups {
     /// case-insensitive fallback. Quoted aliases and columns with different
     /// case must occupy different slots.
     case_exact: FxHashMap<String, ColumnId>,
+    /// Fold only the qualifier for legacy layouts with unnormalized aliases;
+    /// never merge case-distinct column names or override an exact alias.
+    case_folded_qualifier: FxHashMap<String, Option<ColumnId>>,
     case_unqualified: FxHashMap<String, ColumnId>,
     case_scope_unqualified: FxHashMap<String, Option<ColumnId>>,
     /// Lowercased full column name -> id (last definition wins, matching prior
@@ -105,12 +108,19 @@ pub(crate) struct ColumnLookups {
 }
 
 fn case_qualified_column_key(key: &str) -> std::borrow::Cow<'_, str> {
-    std::borrow::Cow::Borrowed(key)
+    match key.rsplit_once('.') {
+        Some((qualifier, column)) if qualifier.bytes().any(|byte| byte.is_ascii_uppercase()) => {
+            std::borrow::Cow::Owned(format!("{}.{}", qualifier.to_ascii_lowercase(), column))
+        }
+        _ => std::borrow::Cow::Borrowed(key),
+    }
 }
 
 impl ColumnLookups {
     pub(crate) fn build(columns: &[String]) -> Self {
         let mut case_exact = FxHashMap::with_capacity_and_hasher(columns.len(), Default::default());
+        let mut case_folded_qualifier =
+            FxHashMap::with_capacity_and_hasher(columns.len(), Default::default());
         let mut case_unqualified =
             FxHashMap::with_capacity_and_hasher(columns.len(), Default::default());
         let mut case_scope_unqualified =
@@ -129,7 +139,11 @@ impl ColumnLookups {
                     .and_modify(|existing| *existing = None)
                     .or_insert(Some(id));
             }
-            case_exact.insert(case_qualified_column_key(column).into_owned(), id);
+            case_exact.insert(column.clone(), id);
+            case_folded_qualifier
+                .entry(case_qualified_column_key(column).into_owned())
+                .and_modify(|existing: &mut Option<ColumnId>| *existing = None)
+                .or_insert(Some(id));
             let case_short = column.rsplit('.').next().unwrap_or(column).to_string();
             case_unqualified.entry(case_short.clone()).or_insert(id);
             case_scope_unqualified
@@ -159,6 +173,7 @@ impl ColumnLookups {
         Self {
             columns: columns.to_vec(),
             case_exact,
+            case_folded_qualifier,
             case_unqualified,
             case_scope_unqualified,
             exact,
@@ -166,6 +181,15 @@ impl ColumnLookups {
             scope_unqualified,
             qualifiers,
         }
+    }
+
+    fn qualified_case_id(&self, key: &str) -> Option<ColumnId> {
+        self.case_exact.get(key).copied().or_else(|| {
+            self.case_folded_qualifier
+                .get(case_qualified_column_key(key).as_ref())
+                .copied()
+                .flatten()
+        })
     }
 
     /// The columns `alias` qualifies: `None` = none, `Some(None)` = several,
@@ -249,9 +273,8 @@ impl SlotRowLookup {
     pub(crate) fn slot_for_key(&self, key: &str) -> Option<usize> {
         if let Some(id) = self
             .cols
-            .case_exact
-            .get(case_qualified_column_key(key).as_ref())
-            .or_else(|| self.cols.case_unqualified.get(key))
+            .qualified_case_id(key)
+            .or_else(|| self.cols.case_unqualified.get(key).copied())
         {
             return Some(id.0);
         }
@@ -268,9 +291,8 @@ impl SlotRowLookup {
     pub(crate) fn value_for_key<'a>(&self, row: &'a [SqlValue], key: &str) -> Option<&'a SqlValue> {
         if let Some(value) = self
             .cols
-            .case_exact
-            .get(case_qualified_column_key(key).as_ref())
-            .or_else(|| self.cols.case_unqualified.get(key))
+            .qualified_case_id(key)
+            .or_else(|| self.cols.case_unqualified.get(key).copied())
             .and_then(|id| row.get(id.0))
         {
             return Some(value);
@@ -2306,29 +2328,20 @@ impl BoundExprScope {
     pub(crate) fn column_id(&self, parts: &[String]) -> Option<ColumnId> {
         let [single] = parts else {
             let full = parts.join(".");
-            if let Some(id) = self
-                .cols
-                .case_exact
-                .get(case_qualified_column_key(&full).as_ref())
-            {
-                return Some(*id);
+            if let Some(id) = self.cols.qualified_case_id(&full) {
+                return Some(id);
             }
             if let Some(id) = self.cols.exact.get(&full.to_ascii_lowercase()) {
                 return Some(*id);
             }
             if parts.len() >= 2 {
                 let qualified = format!("{}.{}", parts[parts.len() - 2], parts[parts.len() - 1]);
-                return self
-                    .cols
-                    .case_exact
-                    .get(case_qualified_column_key(&qualified).as_ref())
-                    .copied()
-                    .or_else(|| {
-                        self.cols
-                            .exact
-                            .get(&qualified.to_ascii_lowercase())
-                            .copied()
-                    });
+                return self.cols.qualified_case_id(&qualified).or_else(|| {
+                    self.cols
+                        .exact
+                        .get(&qualified.to_ascii_lowercase())
+                        .copied()
+                });
             }
             return None;
         };
@@ -5466,6 +5479,25 @@ mod relation_alias_lookup_tests {
 #[cfg(test)]
 mod case_preserving_slot_tests {
     use super::*;
+
+    #[test]
+    fn slot_and_bound_lookup_keep_case_distinct_qualifiers_and_columns() {
+        let columns = ["c.Key", "c.key", "C.Key", "C.key"].map(String::from);
+        let row = (1..=4).map(SqlValue::Int).collect::<Vec<_>>();
+        let lookup = SlotRowLookup::new(&columns);
+        let scope = BoundExprScope::new(&columns, &[]);
+        for (index, column) in columns.iter().enumerate() {
+            let (qualifier, name) = column.split_once('.').unwrap();
+            assert_eq!(lookup.value_for_key(&row, column), Some(&row[index]));
+            let expr = Expr::CompoundIdentifier(vec![
+                Ident::with_quote('"', qualifier),
+                Ident::with_quote('"', name),
+            ]);
+            assert!(
+                matches!(scope.bind(&expr), Some(BoundExpr::Column(ColumnId(id))) if id == index)
+            );
+        }
+    }
 
     #[test]
     fn slot_and_bound_lookup_keep_distinct_quoted_column_names() {

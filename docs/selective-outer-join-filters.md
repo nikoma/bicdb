@@ -38,3 +38,10 @@ Virtual filter eligibility uses exact bound column spelling, and materialized
 column lookup preserves a complete exact identity before its legacy folded
 fallback. A separate LEFT JOIN control checks that a nullable-side predicate
 cannot be captured by a case-distinct base alias.
+
+The broad run at b6af29cd exposed two existing lookup regressions:
+legacy UPDATE layouts can retain an uppercase qualifier even though an unquoted
+reference has already been folded. Keep whole-name identity first, then a
+separate unambiguous qualifier-folded lookup that preserves column spelling.
+The original quoted-column and UPDATE FROM assertions remain unchanged, with an
+additional control covering case-distinct aliases and columns together.

@@ -61,3 +61,25 @@ and complete concurrent protocol target10 all passed,0fail. Log:
 `read-committed-composite-review-repro.log` and `read-committed-composite-scoped.log`.
 The separate PostgreSQL asymmetric reference is stored alongside the original.
 Final broad and CI results must be scoped after this grouped correction.
+
+
+Exclusive execution review found a distinct progress boundary: a waiting
+arbitration must not retain the outer DB write guard while its owner needs a
+shared guard to commit. The deterministic pgwire regression forces the real
+exclusive fallback using the existing scheduler credits, stages a pending owner,
+observes the exclusive guard, then requires the owner's actual COMMIT to finish
+within one second. Its escape drops only the test-owned transaction before
+joining threads, preserving a finite failure without weakening assertions.
+
+The original reproduction at4409a90a and a partial zero-attempt-only correction
+at03ef7f97 both failed with the owner's COMMIT timed out. The latter exposed that
+exclusive autocommit conflict writes skipped statement transactions, so the new
+reservation helper saw no transaction and fell through to the direct writer.
+At6872f99b DO UPDATE uses a statement transaction even under exclusive execution;
+the ordinary primary reservation takes zero lock retries there and reports the
+existing retryable conflict when busy. Shared sessions keep their waiting path.
+The unchanged-owner-COMMIT proof passed in0.03s and the complete10-case protocol
+target passed in1.92s. Preserved source-scoped logs:
+`read-committed-exclusive-repro.log`, `read-committed-exclusive-fixed.log`, and
+`read-committed-exclusive-transaction-fixed.log`. Final broad qualification and
+actual CI must include this execution-path correction before merging.

@@ -1653,8 +1653,25 @@ impl SqlSessionCatalogCache {
     /// Reuse this connection's schema metadata during read-only preparation.
     /// The closure must use `db`; schema changes invalidate cached metadata.
     pub fn with_schema_cache<T>(&mut self, db: &BicDb, prepare: impl FnOnce() -> T) -> T {
-        let _ = db;
-        prepare()
+        // A cache belongs to one connection/database. Switching databases must
+        // discard earlier generations, even when their counters happen to match.
+        let instance = db.instance_id();
+        self.schema_cache.retain(|id, _| *id == instance);
+        self.schema_list_cache.retain(|id, _| *id == instance);
+        let mut scope = SqlSchemaSessionCacheScope::new(
+            db.collection_generation(SCHEMA_COLLECTION),
+            &mut self.schema_cache_generation,
+            &mut self.schema_cache,
+            &mut self.schema_list_cache,
+        );
+        let result = prepare();
+        scope.finish(
+            db.collection_generation(SCHEMA_COLLECTION),
+            &mut self.schema_cache_generation,
+            &mut self.schema_cache,
+            &mut self.schema_list_cache,
+        );
+        result
     }
 
     #[doc(hidden)]

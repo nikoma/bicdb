@@ -3865,7 +3865,13 @@ fn sql_prepared_parameter(expr: &Expr, oid: i32) -> Result<String> {
 
 fn execute_server_sql_for_describe(server: &Arc<PgWireServer>, sql: &str) -> Result<SqlResult> {
     let _permit = server.acquire_query(query_kind_for_sql(sql))?;
-    execute_server_sql_for_describe_inner(server, sql, &SqlSessionGucState::default(), None)
+    execute_server_sql_for_describe_inner(
+        server,
+        sql,
+        &SqlSessionGucState::default(),
+        None,
+        &mut SqlSessionCatalogCache::default(),
+    )
 }
 
 fn execute_server_sql_for_describe_with_session(
@@ -3873,6 +3879,7 @@ fn execute_server_sql_for_describe_with_session(
     sql: &str,
     session_state: &SqlSessionGucState,
     security_context: Option<&SecurityContext>,
+    catalog_cache: &mut SqlSessionCatalogCache,
 ) -> Result<SqlResult> {
     let user = session_state
         .session_gucs()
@@ -3892,8 +3899,13 @@ fn execute_server_sql_for_describe_with_session(
     };
     region_reads::check(server, session_state, None)?;
     let _permit = server.acquire_query(query_kind_for_sql(sql))?;
-    let result =
-        execute_server_sql_for_describe_inner(server, sql, session_state, security_context)?;
+    let result = execute_server_sql_for_describe_inner(
+        server,
+        sql,
+        session_state,
+        security_context,
+        catalog_cache,
+    )?;
     bicdb_core::query_budget::observe(result.memory_estimate());
     bicdb_core::query_budget::check()?;
     Ok(result)
@@ -3904,6 +3916,7 @@ fn execute_server_sql_for_describe_inner(
     sql: &str,
     session_state: &SqlSessionGucState,
     security_context: Option<&SecurityContext>,
+    catalog_cache: &mut SqlSessionCatalogCache,
 ) -> Result<SqlResult> {
     let _description = bicdb_sql::SqlDescriptionScope::enter();
     if let Some(result) = delegation::delegation_description(sql)? {
@@ -3914,12 +3927,19 @@ fn execute_server_sql_for_describe_inner(
     }
     {
         let db = server.read_db_for_transaction_progress()?;
-        if let Some(columns) = infer_query_result_columns_for_describe(&db, sql)? {
-            let (names, types): (Vec<_>, Vec<_>) = columns.into_iter().unzip();
-            let mut result = SqlResult::empty(names).with_column_types(types);
-            if let Some(metadata) = infer_query_result_column_metadata(&db, sql)? {
-                result = result.with_column_metadata(metadata);
-            }
+        let description =
+            catalog_cache.with_schema_cache(&db, || -> Result<Option<SqlResult>> {
+                if let Some(columns) = infer_query_result_columns_for_describe(&db, sql)? {
+                    let (names, types): (Vec<_>, Vec<_>) = columns.into_iter().unzip();
+                    let mut result = SqlResult::empty(names).with_column_types(types);
+                    if let Some(metadata) = infer_query_result_column_metadata(&db, sql)? {
+                        result = result.with_column_metadata(metadata);
+                    }
+                    return Ok(Some(result));
+                }
+                Ok(None)
+            })?;
+        if let Some(result) = description {
             return Ok(result);
         }
     }

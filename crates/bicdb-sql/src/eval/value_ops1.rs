@@ -3563,7 +3563,7 @@ pub(crate) fn eval_compatibility_function_value(
             }
             // One function with the `lower(col)` index key: see
             // `bicdb_core::index_key_upper`.
-            Ok(Some(SqlValue::String(bicdb_core::index_key_lower(
+            Ok(Some(SqlValue::String(oracle::simple_case::lower(
                 &args[0].to_cell(),
             ))))
         }
@@ -3572,7 +3572,7 @@ pub(crate) fn eval_compatibility_function_value(
             if matches!(args[0], SqlValue::Null) {
                 return Ok(Some(SqlValue::Null));
             }
-            Ok(Some(SqlValue::String(bicdb_core::index_key_upper(
+            Ok(Some(SqlValue::String(oracle::simple_case::upper(
                 &args[0].to_cell(),
             ))))
         }

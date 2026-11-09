@@ -2880,6 +2880,7 @@ impl<'db> SqlSession<'db> {
         columns: &[String],
         rows: Vec<Vec<Option<String>>>,
     ) -> Result<usize> {
+        let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.require_transaction_write()?;
         self.with_implicit_guc_statement(|session| {
             session.with_statement_transaction(|session| {
@@ -2996,6 +2997,7 @@ impl<'db> SqlSession<'db> {
     }
 
     pub fn execute(&mut self, sql: &str) -> Result<SqlResult> {
+        let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.statement_error_recovered = false;
         self.db_ref().check_recovery_state()?;
         // Unqualified relations resolve through the session's search_path;
@@ -3219,6 +3221,7 @@ impl<'db> SqlSession<'db> {
     /// diagnostics that want to preserve normal statement semantics without
     /// measuring parser or SQL-string construction cost.
     pub fn execute_statement_ast(&mut self, statement: &Statement) -> Result<SqlResult> {
+        let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.statement_error_recovered = false;
         let _clock = oracle::current_time::StatementScope::new();
         self.db_ref().check_recovery_state()?;
@@ -3238,6 +3241,7 @@ impl<'db> SqlSession<'db> {
     /// Execute a stored procedure directly from its already-typed arguments,
     /// bypassing SQL text parsing and `CALL` AST construction.
     pub fn call_procedure(&mut self, name: &str, args: &[SqlValue]) -> Result<SqlResult> {
+        let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.statement_error_recovered = false;
         self.db_ref().check_recovery_state()?;
         let effects = crate::statement_context::StatementScope::enter();

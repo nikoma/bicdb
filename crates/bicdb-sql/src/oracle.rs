@@ -66,6 +66,8 @@ pub fn invalid_savepoint_error(name: &str) -> SqlError {
     )
 }
 
+pub(crate) mod simple_case;
+
 pub(crate) const PROFILE_COLLECTION: &str = "__bicdb_sql_compatibility";
 
 fn metadata_v2() -> JsonValue {

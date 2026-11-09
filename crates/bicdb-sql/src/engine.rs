@@ -4513,6 +4513,7 @@ impl<'db> SqlEngine<'db> {
     }
 
     pub fn execute(&self, sql: &str) -> Result<SqlResult> {
+        let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.db_ref().check_recovery_state()?;
         let mut profile = SqlProfileScope::new(sql);
         let _schema_cache = SqlSchemaCacheScope::new();

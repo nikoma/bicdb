@@ -2989,7 +2989,9 @@ pub(crate) fn index_field_from_expr(expr: &Expr) -> Result<IndexField> {
                     args.len()
                 )));
             }
-            return Ok(IndexField::Upper(Box::new(index_field_from_expr(args[0])?)));
+            return Ok(oracle::simple_case::upper_field(index_field_from_expr(
+                args[0],
+            )?));
         }
         Expr::Function(function) if function_name_is(function, "lower") => {
             let Some(args) = positional_function_args(&function.args) else {
@@ -3003,7 +3005,9 @@ pub(crate) fn index_field_from_expr(expr: &Expr) -> Result<IndexField> {
                     args.len()
                 )));
             }
-            return Ok(IndexField::Lower(Box::new(index_field_from_expr(args[0])?)));
+            return Ok(oracle::simple_case::lower_field(index_field_from_expr(
+                args[0],
+            )?));
         }
         Expr::Trim {
             trim_where,
@@ -3094,9 +3098,9 @@ pub(crate) fn index_field_from_expr_for_schema(
                     args.len()
                 )));
             }
-            return Ok(IndexField::Upper(Box::new(
+            return Ok(oracle::simple_case::upper_field(
                 index_field_from_expr_for_schema(schema, args[0])?,
-            )));
+            ));
         }
         Expr::Function(function) if function_name_is(function, "lower") => {
             let Some(args) = positional_function_args(&function.args) else {
@@ -3110,9 +3114,9 @@ pub(crate) fn index_field_from_expr_for_schema(
                     args.len()
                 )));
             }
-            return Ok(IndexField::Lower(Box::new(
+            return Ok(oracle::simple_case::lower_field(
                 index_field_from_expr_for_schema(schema, args[0])?,
-            )));
+            ));
         }
         Expr::Trim {
             trim_where,

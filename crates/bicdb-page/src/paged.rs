@@ -1163,7 +1163,7 @@ impl PagedStore {
     fn write_meta(&self) -> Result<()> {
         let mut guard = self.pool.get_mut(self.meta_page)?;
         let page = guard.bytes_mut();
-        let mut header = crate::page::PageHeader::new(
+        let header = crate::page::PageHeader::new(
             self.meta_page,
             crate::page::PageType::Heap,
             self.options.page_size,
@@ -3097,7 +3097,10 @@ impl PagedStore {
         // must reach the file first or a recently freed page could be read in
         // its pre-free state. `free_list_members` likewise reads each member's
         // on-disk header and treats a not-yet-Flushed Free page as corruption,
-        // so the flush is a prerequisite for both.
+        // so the flush is a prerequisite for both. First make the complete
+        // closure durable, including versions owned by still-pending writers.
+        // Their visibility remains unchanged while the writer gate is held.
+        self.log_unlogged_pages_as_committed_unit()?;
         self.pool.flush_all()?;
         let page_count = store.page_count();
 
@@ -3236,7 +3239,7 @@ impl PagedStore {
             .catalog
             .scan_pages(crate::page::PageType::Heap, cursor.next_page_id)?;
 
-        'pages: loop {
+        loop {
             let Some(page_id) = pages.next().transpose()? else {
                 report.complete = true;
                 report.stop_reason = VacuumStopReason::Complete;
@@ -8375,6 +8378,40 @@ mod tests {
         header.next_page = 0;
         header.encode(&mut image);
         page_store.write_page(page_id, &mut image).unwrap();
+    }
+
+    #[test]
+    fn orphan_reclaim_cuts_pending_structure_without_publishing_its_rows() {
+        let dir = TempDir::new().unwrap();
+        {
+            let store = open(&dir);
+            let committed = store.begin();
+            store.put(committed, b"ack", b"old").unwrap();
+            store.commit(committed).unwrap();
+            store.checkpoint().unwrap();
+            let pending = store.begin();
+            store.put(pending, b"ack", b"pending replacement").unwrap();
+            store.put(pending, b"pending", b"invisible").unwrap();
+            let stranded = store
+                .pool
+                .store()
+                .allocate(crate::page::PageType::Heap)
+                .unwrap();
+            orphan_free_page(&store, stranded);
+            let report = store
+                .reclaim_orphaned_free_pages_step(FreeReclaimCursor::default(), Default::default())
+                .unwrap();
+            assert_eq!(report.pages_reclaimed, 1);
+            assert_eq!(store.get(b"ack").unwrap().as_deref(), Some(&b"old"[..]));
+            assert_eq!(store.get(b"pending").unwrap(), None);
+            assert_eq!(store.pool.unlogged_steals(), 0);
+        }
+        for _ in 0..2 {
+            let store = open(&dir);
+            assert_eq!(store.get(b"ack").unwrap().as_deref(), Some(&b"old"[..]));
+            assert_eq!(store.get(b"pending").unwrap(), None);
+            assert!(store.verify_integrity(4).unwrap().valid);
+        }
     }
 
     #[test]

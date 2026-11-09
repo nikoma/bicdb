@@ -1,4 +1,4 @@
-//! Proof obligations for the disabled, disposable-store-only prototype.
+//! Structural-cut proof obligations run with the ordinary default engine.
 
 use bicdb_page::{PagedStore, PagedStoreOptions};
 use tempfile::TempDir;
@@ -54,7 +54,7 @@ fn cuts_keep_live_versions_invisible_and_never_reissue_their_xids() {
                     store.checkpoint().unwrap();
                 }
                 let snapshot = store.buffer_pool().snapshot();
-                // Default BufferPoolOptions uses eight shards. The prototype
+                // Default BufferPoolOptions uses eight shards. Admission
                 // admits at most one emergency frame per shard.
                 assert!(
                     snapshot.resident_pages <= snapshot.total_frames + 8,

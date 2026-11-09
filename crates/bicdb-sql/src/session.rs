@@ -1989,6 +1989,7 @@ pub(crate) enum DdlUndo {
     },
     DropCollection {
         name: String,
+        creation_intent: Option<String>,
     },
     RestoreCollection {
         name: String,
@@ -3990,10 +3991,14 @@ impl<'db> SqlSession<'db> {
             .collections()
             .iter()
             .any(|collection| collection.name.eq_ignore_ascii_case(name));
+        if !existed && recycle_bin_journal::create_replacement_collection(self, name)? {
+            return Ok(());
+        }
         self.db_mut()?.create_collection(name)?;
         if self.tx.is_some() && !existed {
             self.ddl_undo.push(DdlUndo::DropCollection {
                 name: name.to_string(),
+                creation_intent: None,
             });
         }
         Ok(())
@@ -4053,7 +4058,7 @@ impl<'db> SqlSession<'db> {
             && (created_in_this_statement
                 || self.ddl_undo.iter().any(|undo| {
                     matches!(undo,
-                DdlUndo::DropCollection { name } if name == &definition.collection)
+                DdlUndo::DropCollection { name, .. } if name == &definition.collection)
                 }));
         let created = if new_empty_table {
             self.db_mut()?.create_empty_btree_index(definition)
@@ -4555,8 +4560,15 @@ impl<'db> SqlSession<'db> {
                     save_role_membership(self.db_mut()?, &membership)?;
                 }
             }
-            DdlUndo::DropCollection { name } => {
-                let _ = self.db_mut()?.drop_collection(&name)?;
+            DdlUndo::DropCollection {
+                name,
+                creation_intent,
+            } => {
+                if let Some(id) = creation_intent {
+                    recycle_bin_journal::undo_creation(self.db_mut()?, &id)?;
+                } else {
+                    let _ = self.db_mut()?.drop_collection(&name)?;
+                }
             }
             DdlUndo::RestoreCollection { name, records } => {
                 self.db_mut()?.create_collection(&name)?;

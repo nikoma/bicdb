@@ -4,6 +4,126 @@ use super::recycle_bin::*;
 use super::*;
 const INTENTS: &str = "__bicdb_recycle_intents";
 const PURGES: &str = "__bicdb_recycle_purges";
+const CREATIONS: &str = "__bicdb_recycle_creations";
+const CREATED_PREFIX: &str = "__bicdb_created_";
+#[derive(Clone, Serialize, Deserialize)]
+struct CreationIntent {
+    table: String,
+    storage: String,
+    order: u64,
+}
+
+// A reused logical name alone cannot prove that startup owns its backing.
+// Allocate an unreachable, unique backing only after its identity is durable.
+// The outer transaction removes this intent in the same decision as its rows.
+pub(super) fn create_replacement_collection(
+    session: &mut SqlSession<'_>,
+    name: &str,
+) -> Result<bool> {
+    if session.tx.is_none()
+        || !session.ddl_undo.iter().any(
+            |undo| matches!(undo, DdlUndo::RestoreFromRecycleBin { target, .. } if target == name),
+        )
+    {
+        return Ok(false);
+    }
+    let storage = format!("{CREATED_PREFIX}{}", uuid::Uuid::new_v4().simple());
+    let sequence = {
+        let db = session.db_mut()?;
+        db.enable_sql_catalog_intents()?;
+        db.create_collection(CREATIONS)?;
+        let mut tx = db.begin_transaction()?;
+        let intent = CreationIntent {
+            table: name.to_string(),
+            storage: storage.clone(),
+            order: tx.id().0,
+        };
+        tx.insert(
+            CREATIONS,
+            Record::new(&storage).with_metadata(serde_json::to_value(intent)?),
+        )?;
+        tx.commit_with_sequence()?
+    };
+    session.ddl_undo.push(DdlUndo::DropCollection {
+        name: name.to_string(),
+        creation_intent: Some(storage.clone()),
+    });
+    stage("recreate_intent");
+    session.db_mut()?.create_collection(&storage)?;
+    stage("recreate_backing");
+    session.db_mut()?.rename_collection(&storage, name)?;
+    stage("recreate_name");
+    session
+        .tx
+        .as_mut()
+        .expect("explicit replacement transaction")
+        .delete_many_with_statement_snapshots(CREATIONS, [(&storage, sequence)])?;
+    stage("recreate_decision");
+    Ok(true)
+}
+
+fn validate_creation(intent: &CreationIntent, id: &str) -> Result<()> {
+    require_user_relation_name(&intent.table)?;
+    if intent.storage != id
+        || !id.starts_with(CREATED_PREFIX)
+        || uuid::Uuid::parse_str(&id[CREATED_PREFIX.len()..]).is_err()
+    {
+        return Err(SqlError::InvalidSql(
+            "invalid replacement creation intent identity".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn rollback_creation(db: &mut BicDb, intent: &CreationIntent) -> Result<()> {
+    let collections = db.collections();
+    let target = collections.iter().find(|meta| meta.name == intent.table);
+    let staged = collections.iter().find(|meta| meta.name == intent.storage);
+    if target.is_some() && staged.is_some()
+        || target.is_some_and(|meta| meta.storage() != intent.storage)
+        || staged.is_some_and(|meta| meta.storage() != intent.storage)
+    {
+        return Err(SqlError::InvalidSql(format!(
+            "ambiguous replacement backing for {}",
+            intent.table
+        )));
+    }
+    if target.is_some() {
+        // Every removed object belongs to the independently proven backing;
+        // never prune a collection merely because its logical name was reused.
+        delete_schema(db, &intent.table)?;
+        for grant in list_privileges(db)? {
+            if grant.object_type == PrivilegeObjectType::Table && grant.object_name == intent.table
+            {
+                delete_privilege(db, &grant)?;
+            }
+        }
+        for trigger in list_triggers(db)? {
+            if trigger.table_name == intent.table {
+                delete_trigger(db, &trigger.name, Some(&intent.table))?;
+            }
+        }
+        for sequence in list_sequences(db)? {
+            if sequence.owned_by_table.as_deref() == Some(&intent.table) {
+                delete_sequence(db, &sequence.name)?;
+            }
+        }
+        db.drop_collection(&intent.table)?;
+    } else if staged.is_some() {
+        db.drop_collection(&intent.storage)?;
+    }
+    db.delete(CREATIONS, &intent.storage)?;
+    Ok(())
+}
+
+pub(super) fn undo_creation(db: &mut BicDb, id: &str) -> Result<()> {
+    let record = db
+        .get(CREATIONS, id)?
+        .ok_or_else(|| SqlError::InvalidSql("missing replacement creation intent".into()))?;
+    let intent: CreationIntent = serde_json::from_value(record.metadata.clone())?;
+    validate_creation(&intent, id)?;
+    rollback_creation(db, &intent)
+}
 #[derive(Clone, Serialize, Deserialize)]
 struct MoveIntent {
     entry: RecycleBinEntry,
@@ -152,7 +272,7 @@ pub(super) fn recover(db: &mut BicDb) -> Result<usize> {
     let purge_repairs = recover_purges(db)?;
     let records = match db.scan_collection(INTENTS) {
         Ok(records) => records,
-        Err(BicDbError::CollectionNotFound(_)) => return Ok(purge_repairs),
+        Err(BicDbError::CollectionNotFound(_)) => Vec::new(),
         Err(error) => return Err(error.into()),
     };
     let mut intents = records
@@ -172,9 +292,40 @@ pub(super) fn recover(db: &mut BicDb) -> Result<usize> {
             Ok(intent)
         })
         .collect::<Result<Vec<_>>>()?;
-    intents.sort_by_key(|intent| std::cmp::Reverse(intent.order));
+    let creations = match db.scan_collection(CREATIONS) {
+        Ok(records) => records,
+        Err(BicDbError::CollectionNotFound(_)) => Vec::new(),
+        Err(error) => return Err(error.into()),
+    };
+    enum PendingIntent {
+        Move(MoveIntent),
+        Creation(CreationIntent),
+    }
+    let mut pending = intents
+        .drain(..)
+        .map(PendingIntent::Move)
+        .collect::<Vec<_>>();
+    for record in creations {
+        let creation: CreationIntent = serde_json::from_value(record.metadata)?;
+        validate_creation(&creation, &record.id)?;
+        pending.push(PendingIntent::Creation(creation));
+    }
+    pending.sort_by_key(|intent| {
+        std::cmp::Reverse(match intent {
+            PendingIntent::Move(intent) => intent.order,
+            PendingIntent::Creation(intent) => intent.order,
+        })
+    });
     let mut repaired = purge_repairs;
-    for intent in intents {
+    for intent in pending {
+        let intent = match intent {
+            PendingIntent::Move(intent) => intent,
+            PendingIntent::Creation(intent) => {
+                rollback_creation(db, &intent)?;
+                repaired += 1;
+                continue;
+            }
+        };
         if intent.restore.is_some() {
             rollback_restore(db, &intent)?;
             repaired += 1;

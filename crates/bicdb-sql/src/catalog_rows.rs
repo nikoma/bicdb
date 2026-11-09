@@ -3524,7 +3524,7 @@ pub(crate) fn pg_trigger_rows_filtered(
     relids: Option<&BTreeSet<i64>>,
 ) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     let table_oids = table_oids(db);
-    Ok(list_triggers(db)?
+    list_triggers(db)?
         .into_iter()
         .filter(|trigger| catalog_name_matches(names, &trigger.name))
         .filter(|trigger| {
@@ -3535,7 +3535,7 @@ pub(crate) fn pg_trigger_rows_filtered(
             })
         })
         .map(|trigger| {
-            virtual_row([
+            Ok(virtual_row([
                 (
                     "oid",
                     SqlValue::Int(trigger_oid(&trigger.table_name, &trigger.name)),
@@ -3597,9 +3597,9 @@ pub(crate) fn pg_trigger_rows_filtered(
                 ("tgqual", SqlValue::Null),
                 ("tgoldtable", SqlValue::Null),
                 ("tgnewtable", SqlValue::Null),
-            ])
+            ]))
         })
-        .collect())
+        .collect()
 }
 
 pub(crate) fn bicdb_notification_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {

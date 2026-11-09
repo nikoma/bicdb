@@ -166,7 +166,7 @@ fn replay_after_restart_is_inert_and_watermark_never_leads() {
             "replay after restart changed the cells"
         );
         assert!(
-            reopened.projection_position() <= AggregateProjection::source_position(&db),
+            reopened.projection_position() <= AggregateProjection::source_position(&db).unwrap(),
             "watermark got ahead of the source"
         );
         reopened.save(state.path(), true).unwrap();

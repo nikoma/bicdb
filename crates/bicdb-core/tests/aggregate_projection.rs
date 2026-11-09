@@ -141,7 +141,7 @@ fn replayed_events_do_not_drift_the_cells() {
     assert!(projection.reconcile(&db).unwrap().is_clean());
 
     // Re-applying individual events one at a time is likewise inert.
-    for stored in db.events().read(bicdb_core::RECORD_AUDIT_STREAM) {
+    for stored in db.events().read(bicdb_core::RECORD_AUDIT_STREAM).unwrap() {
         assert!(!projection.apply_event(&stored).unwrap());
     }
     assert!(projection.reconcile(&db).unwrap().is_clean());
@@ -164,7 +164,7 @@ fn out_of_order_events_are_ignored() {
     )
     .unwrap();
 
-    let events = db.events().read(bicdb_core::RECORD_AUDIT_STREAM);
+    let events = db.events().read(bicdb_core::RECORD_AUDIT_STREAM).unwrap();
     let mut projection = projection();
     // Deliver newest first, then the stale one.
     for stored in events.iter().rev() {
@@ -212,7 +212,7 @@ fn deletes_retract_and_lag_is_visible() {
 
     // Before catching up, the projection must ADMIT it is behind rather than
     // silently serving stale numbers.
-    let source_position = AggregateProjection::source_position(&db);
+    let source_position = AggregateProjection::source_position(&db).unwrap();
     assert!(
         projection.lag_events(source_position) > 0,
         "an un-caught-up projection must report lag"
@@ -334,7 +334,7 @@ fn cell_states_merge_associatively() {
     let whole_cell = whole.cell(&key("UK", "dentist", "Hostinger")).unwrap();
 
     // Two disjoint "shards" over the same rows.
-    let events = db.events().read(bicdb_core::RECORD_AUDIT_STREAM);
+    let events = db.events().read(bicdb_core::RECORD_AUDIT_STREAM).unwrap();
     let (left_events, right_events) = events.split_at(events.len() / 2);
     let mut left = projection();
     let mut right = projection();

@@ -1,0 +1,163 @@
+   Compiling bicdb-page v1.0.438-beta (/root/bicdb-durability-s3/repo-verify/crates/bicdb-page)
+warning: unused label
+    --> crates/bicdb-page/src/paged.rs:2990:9
+     |
+2990 |         'pages: loop {
+     |         ^^^^^^
+     |
+     = note: `#[warn(unused_labels)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+    --> crates/bicdb-page/src/paged.rs:1151:13
+     |
+1151 |         let mut header = crate::page::PageHeader::new(
+     |             ----^^^^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `blocker`
+    --> crates/bicdb-page/src/paged.rs:7989:17
+     |
+7989 |             let blocker = store.begin();
+     |                 ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_blocker`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `child_for` is never used
+   --> crates/bicdb-page/src/btree.rs:409:16
+    |
+337 |         impl $ty {
+    |         -------- method in this implementation
+...
+409 |             fn child_for(&self, needle: &[u8]) -> PageId {
+    |                ^^^^^^^^^
+...
+429 | node_reads!(Node<'_>);
+    | --------------------- in this macro invocation
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+    = note: this warning originates in the macro `node_reads` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: methods `free_start`, `free_end`, `page_id`, and `free_space` are never used
+   --> crates/bicdb-page/src/btree.rs:349:16
+    |
+337 |         impl $ty {
+    |         -------- methods in this implementation
+...
+349 |             fn free_start(&self) -> usize {
+    |                ^^^^^^^^^^
+...
+354 |             fn free_end(&self) -> usize {
+    |                ^^^^^^^^
+...
+359 |             fn page_id(&self) -> PageId {
+    |                ^^^^^^^
+...
+422 |             fn free_space(&self) -> usize {
+    |                ^^^^^^^^^^
+...
+430 | node_reads!(NodeRef<'_>);
+    | ------------------------ in this macro invocation
+    |
+    = note: this warning originates in the macro `node_reads` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: `bicdb-page` (lib test) generated 5 warnings (run `cargo fix --lib -p bicdb-page --tests` to apply 2 suggestions)
+    Finished `test` profile [unoptimized] target(s) in 3.67s
+     Running unittests src/lib.rs (/root/bicdb-durability-s3/target-verify/debug/deps/bicdb_page-e1349a6093ddf170)
+
+running 1 test
+test lock::tests::concurrent_read_only_probes_preserve_the_writers_cross_process_lock ... FAILED
+
+failures:
+
+---- lock::tests::concurrent_read_only_probes_preserve_the_writers_cross_process_lock stdout ----
+
+thread 'lock::tests::concurrent_read_only_probes_preserve_the_writers_cross_process_lock' (1847214) panicked at crates/bicdb-page/src/lock.rs:365:21:
+a read-only probe released the writer's OS lock
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    lock::tests::concurrent_read_only_probes_preserve_the_writers_cross_process_lock
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 315 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p bicdb-page --lib`
+NEGATIVE_CONTROL_EXIT 101
+   Compiling bicdb-page v1.0.438-beta (/root/bicdb-durability-s3/repo-verify/crates/bicdb-page)
+warning: unused label
+    --> crates/bicdb-page/src/paged.rs:2990:9
+     |
+2990 |         'pages: loop {
+     |         ^^^^^^
+     |
+     = note: `#[warn(unused_labels)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+    --> crates/bicdb-page/src/paged.rs:1151:13
+     |
+1151 |         let mut header = crate::page::PageHeader::new(
+     |             ----^^^^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `blocker`
+    --> crates/bicdb-page/src/paged.rs:7989:17
+     |
+7989 |             let blocker = store.begin();
+     |                 ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_blocker`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `child_for` is never used
+   --> crates/bicdb-page/src/btree.rs:409:16
+    |
+337 |         impl $ty {
+    |         -------- method in this implementation
+...
+409 |             fn child_for(&self, needle: &[u8]) -> PageId {
+    |                ^^^^^^^^^
+...
+429 | node_reads!(Node<'_>);
+    | --------------------- in this macro invocation
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+    = note: this warning originates in the macro `node_reads` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: methods `free_start`, `free_end`, `page_id`, and `free_space` are never used
+   --> crates/bicdb-page/src/btree.rs:349:16
+    |
+337 |         impl $ty {
+    |         -------- methods in this implementation
+...
+349 |             fn free_start(&self) -> usize {
+    |                ^^^^^^^^^^
+...
+354 |             fn free_end(&self) -> usize {
+    |                ^^^^^^^^
+...
+359 |             fn page_id(&self) -> PageId {
+    |                ^^^^^^^
+...
+422 |             fn free_space(&self) -> usize {
+    |                ^^^^^^^^^^
+...
+430 | node_reads!(NodeRef<'_>);
+    | ------------------------ in this macro invocation
+    |
+    = note: this warning originates in the macro `node_reads` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: `bicdb-page` (lib test) generated 5 warnings (run `cargo fix --lib -p bicdb-page --tests` to apply 2 suggestions)
+    Finished `test` profile [unoptimized] target(s) in 3.77s
+     Running unittests src/lib.rs (/root/bicdb-durability-s3/target-verify/debug/deps/bicdb_page-e1349a6093ddf170)
+
+running 1 test
+test lock::tests::concurrent_read_only_probes_preserve_the_writers_cross_process_lock ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 315 filtered out; finished in 0.03s
+
+RESTORED_EXIT 0

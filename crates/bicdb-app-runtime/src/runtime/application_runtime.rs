@@ -2308,22 +2308,26 @@ impl ApplicationRuntime {
         queue: &str,
         from_sequence: u64,
         max: usize,
-    ) -> Vec<bicdb_core::PeekedMessage> {
+    ) -> Result<Vec<bicdb_core::PeekedMessage>> {
         self.db
             .read()
             .with_broker(|broker| broker.peek(queue, from_sequence, max))
+            .map_err(Into::into)
     }
 
-    pub(crate) fn realtime_queue_last_sequence(&self, queue: &str) -> u64 {
-        self.db.read().with_broker(|broker| {
-            broker
-                .stats()
-                .queues
-                .into_iter()
-                .find(|candidate| candidate.queue == queue)
-                .map(|candidate| candidate.next_sequence)
-                .unwrap_or_default()
-        })
+    pub(crate) fn realtime_queue_last_sequence(&self, queue: &str) -> Result<u64> {
+        self.db
+            .read()
+            .with_broker(|broker| -> bicdb_core::Result<u64> {
+                Ok(broker
+                    .stats()?
+                    .queues
+                    .into_iter()
+                    .find(|candidate| candidate.queue == queue)
+                    .map(|candidate| candidate.next_sequence)
+                    .unwrap_or_default())
+            })
+            .map_err(Into::into)
     }
 
     /// Generates OpenAPI from the exact signed contracts in the active

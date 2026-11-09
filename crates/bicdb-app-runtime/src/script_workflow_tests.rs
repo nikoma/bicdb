@@ -602,6 +602,7 @@ fn eligibility_hot_activation_keeps_queued_rules_and_worker_settlement_is_durabl
             .broker()
             .group_info(bicdb_workflow::QUEUE, "workers")
             .unwrap()
+            .unwrap()
             .pending_redelivery,
         1
     );
@@ -616,6 +617,7 @@ fn eligibility_hot_activation_keeps_queued_rules_and_worker_settlement_is_durabl
         reopened
             .broker()
             .group_info(bicdb_workflow::QUEUE, "workers")
+            .unwrap()
             .unwrap()
             .pending_redelivery,
         1

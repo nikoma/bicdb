@@ -78,7 +78,9 @@ pub fn write_chain_pooled(pool: &crate::pool::BufferPool, value: &[u8]) -> Resul
         header.encode(page);
         page[PAGE_HEADER_BYTES..PAGE_HEADER_BYTES + chunk.len()].copy_from_slice(chunk);
         drop(guard);
-        pool.seal_unreachable_page(allocated)?;
+        if pool.should_stream_unreachable_value(value.len()) {
+            pool.seal_unreachable_page(allocated)?;
+        }
         next = page_id;
         head = page_id;
     }

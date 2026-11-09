@@ -1114,6 +1114,12 @@ impl BufferPool {
         self.no_steal.store(true, Ordering::Release);
     }
 
+    pub(crate) fn should_stream_unreachable_value(&self, len: usize) -> bool {
+        cfg!(feature = "experimental-structural-cuts")
+            && self.wal_managed_frees.load(Ordering::Acquire)
+            && len as u64 > self.budget_bytes / 4
+    }
+
     pub(crate) fn allocate_unreachable(&self, page_type: PageType) -> Result<UnreachablePage> {
         Ok(UnreachablePage { page_id: self.store.allocate(page_type)? })
     }

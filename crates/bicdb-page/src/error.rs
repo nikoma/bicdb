@@ -170,28 +170,6 @@ pub enum PageError {
     )]
     PoolExhausted { page_id: PageId, frames: usize },
 
-    /// A write operation of transaction `transaction` was refused before it
-    /// modified anything: a buffer-pool shard holds so many changes not yet
-    /// covered by a commit that the operation could need to write one to the
-    /// page file before its transaction commits, which recovery could not
-    /// undo (GAP-1). `holder` is the transaction holding the most such
-    /// frames, pool-wide; it may not be `transaction`, because admission is
-    /// decided per shard, not per transaction. The caller aborts.
-    #[error(
-        "transaction {transaction} refused: {unlogged_frames} of {shard_frames} frames in buffer-pool \
-         shard {shard} hold uncommitted changes, and writing more could force one into the page \
-         file before commit. Transaction {holder} holds the most ({holder_frames} frames). Commit \
-         in smaller transactions or raise buffer_pool_bytes"
-    )]
-    TransactionExceedsBufferPool {
-        transaction: u64,
-        shard: usize,
-        unlogged_frames: u64,
-        shard_frames: u64,
-        holder: u64,
-        holder_frames: u64,
-    },
-
     #[error(
         "page {page_id} belongs to a read-only page source; writable guards are disabled for this buffer pool"
     )]

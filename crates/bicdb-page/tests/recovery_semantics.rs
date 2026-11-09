@@ -513,10 +513,9 @@ fn repeated_recovery_of_one_crash_state_converges() {
 /// This is windows W4 and W6 of section 14.1: page transactions interleaved
 /// between operations, without the writer gate held across them, each
 /// commit logging the other's pages, and stolen images tagged with whichever
-/// transaction touched the page last. The interim does not close them; with
-/// it, the open transaction is refused for pool pressure partway instead.
+/// transaction touched the page last. Complete structural cuts must recover
+/// the acknowledged state while keeping all pending versions invisible.
 #[test]
-#[ignore = "GAP-1 W4/W6: interleaved page transactions without the writer gate; not closed by the no-steal interim"]
 fn an_open_transaction_interleaved_with_commits_reads_absent_after_a_crash() {
     let key = |i: u64| format!("key-{i:05}").into_bytes();
     let value =

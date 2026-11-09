@@ -1016,23 +1016,15 @@ fn gap1_a_crash_at_every_boundary_of_a_splitting_page_apply_keeps_acknowledged_r
 /// Replay at open of a decided commit larger than the pool. The crash lands
 /// right after the 2,000-row transaction's decision is durable in the
 /// transaction log and before its page apply; the next open replays it into
-/// a 32-frame pool. The replay is a decided commit, so it is begun
-/// redo-backed and never refused: with an ordinary (refusable) begin, the
-/// open itself would fail with `TransactionExceedsBufferPool`.
+/// a 32-frame pool. The replay must complete through structural cuts,
+/// preserving every previously acknowledged row.
 #[test]
 fn a_decided_commit_larger_than_the_pool_replays_at_open() {
     gap1_split_case_with("all-logs+small-pool", "commit.after_txlog_durable:1", true);
 }
 
-/// The last-resort steal path, explicitly. A decided commit (a row commit's
-/// page apply, begun redo-backed and never refused) of 2,000 rows into a
-/// 32-frame pool must steal: a run without a crash records how many
-/// unlogged frames it stole (`q1-steals` in the ledger) and must find more
-/// than zero. Then the process crashes at each boundary after that page
-/// apply has stolen and committed, and recovery must keep every
-/// acknowledged row and the big transaction whole. (A crash *before* its
-/// page commit is the hole the interim leaves open: see the ignored
-/// `gap1_a_decided_commit_larger_than_the_pool_keeps_acknowledged_rows`.)
+/// The former last-resort path must now report zero unlogged steals.
+/// Crash after its complete page apply and recover every acknowledged row.
 #[test]
 fn the_last_resort_steal_path_recovers_after_the_stealing_commit() {
     let temp = tempfile::tempdir().unwrap();

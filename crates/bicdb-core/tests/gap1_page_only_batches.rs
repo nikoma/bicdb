@@ -1,7 +1,6 @@
-//! GAP-1 no-steal interim: page-only work in a small buffer pool. A page
-//! transaction without other redo that outgrows the pool is refused
-//! (`TransactionExceedsBufferPool`, `docs/recovery-semantics.md` 14.5), so
-//! the core's page-only batches must stay below that, or fail cleanly.
+//! GAP-1 page-only work in a small buffer pool. Complete structural cuts
+//! preserve atomic oversized backfills and whole bulk operations without
+//! requiring external logical redo or refusing valid work.
 
 use bicdb_core::{BicDb, DbConfig, IndexDefinition, IndexField, IndexKind, Record, StorageMode};
 use serde_json::json;

@@ -211,6 +211,17 @@ impl Transaction {
         &mut self,
         grant: MutationGrantId,
         token: ReadCommittedRowReservation,
+        record: Record,
+    ) -> Result<()> {
+        self.db_ref().check_recovery_state()?;
+        let result = self.upsert_reserved_with_grant_inner(grant, token, record);
+        self.fenced(result)
+    }
+
+    fn upsert_reserved_with_grant_inner(
+        &mut self,
+        grant: MutationGrantId,
+        token: ReadCommittedRowReservation,
         mut record: Record,
     ) -> Result<()> {
         self.validate_row_reservation(&token)?;
@@ -235,31 +246,43 @@ impl Transaction {
             // Preserve fields hidden/masked by read policy. Only changes from
             // the authorized projection are applied to the raw preimage; actual
             // grant validation below still authorizes every resulting change.
-            let changes =
-                mutation_changed_columns(MutationOperation::Update, Some(projected), &record);
             let mut merged = raw.as_ref().clone();
-            for field in changes {
-                match field.as_str() {
-                    "vector" => merged.vector = record.vector.clone(),
-                    "geometry" => merged.geometry = record.geometry.clone(),
-                    "timestamp" => merged.timestamp = record.timestamp,
-                    "payload" => merged.payload = record.payload.clone(),
-                    _ => {
-                        let metadata = merged.metadata.as_object_mut().ok_or_else(|| {
-                            BicDbError::CommitValidation(
-                                "reserved row metadata is not an object".into(),
-                            )
-                        })?;
-                        match record.metadata.get(&field) {
-                            Some(value) => {
-                                metadata.insert(field, value.clone());
-                            }
-                            None => {
-                                metadata.remove(&field);
-                            }
+            let old = projected.metadata.as_object();
+            let new = record.metadata.as_object();
+            let fields: BTreeSet<_> = old
+                .into_iter()
+                .flatten()
+                .map(|(field, _)| field)
+                .chain(new.into_iter().flatten().map(|(field, _)| field))
+                .collect();
+            let metadata = merged.metadata.as_object_mut().ok_or_else(|| {
+                BicDbError::CommitValidation("reserved row metadata is not an object".into())
+            })?;
+            for field in fields {
+                if old.and_then(|values| values.get(field))
+                    != new.and_then(|values| values.get(field))
+                {
+                    match new.and_then(|values| values.get(field)) {
+                        Some(value) => {
+                            metadata.insert(field.clone(), value.clone());
+                        }
+                        None => {
+                            metadata.remove(field);
                         }
                     }
                 }
+            }
+            if projected.vector != record.vector {
+                merged.vector = record.vector.clone();
+            }
+            if projected.geometry != record.geometry {
+                merged.geometry = record.geometry.clone();
+            }
+            if projected.timestamp != record.timestamp {
+                merged.timestamp = record.timestamp;
+            }
+            if projected.payload != record.payload {
+                merged.payload = record.payload.clone();
             }
             record = merged;
         }

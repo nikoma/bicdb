@@ -14,6 +14,10 @@ pub(crate) fn index_field_is_expression(field: &IndexField) -> bool {
         field,
         IndexField::Lower(_)
             | IndexField::Upper(_)
+            | IndexField::OracleUpperV1(_)
+            | IndexField::OracleUpperNationalV1(_)
+            | IndexField::OracleLowerV1(_)
+            | IndexField::OracleLowerNationalV1(_)
             | IndexField::Trim(_)
             | IndexField::TimestampDay(_)
             | IndexField::Coalesce { .. }
@@ -2931,6 +2935,10 @@ fn coalesce_index_field(
             field,
             IndexField::Lower(_)
                 | IndexField::Upper(_)
+                | IndexField::OracleUpperV1(_)
+                | IndexField::OracleUpperNationalV1(_)
+                | IndexField::OracleLowerV1(_)
+                | IndexField::OracleLowerNationalV1(_)
                 | IndexField::Trim(_)
                 | IndexField::TimestampDay(_)
         ) =>
@@ -3000,7 +3008,9 @@ pub(crate) fn index_field_from_expr(expr: &Expr) -> Result<IndexField> {
                     args.len()
                 )));
             }
-            return Ok(IndexField::Upper(Box::new(index_field_from_expr(args[0])?)));
+            return Ok(oracle::simple_case::upper_field(index_field_from_expr(
+                args[0],
+            )?));
         }
         Expr::Function(function) if function_name_is(function, "lower") => {
             let Some(args) = positional_function_args(&function.args) else {
@@ -3014,7 +3024,9 @@ pub(crate) fn index_field_from_expr(expr: &Expr) -> Result<IndexField> {
                     args.len()
                 )));
             }
-            return Ok(IndexField::Lower(Box::new(index_field_from_expr(args[0])?)));
+            return Ok(oracle::simple_case::lower_field(index_field_from_expr(
+                args[0],
+            )?));
         }
         Expr::Trim {
             trim_where,
@@ -3105,9 +3117,9 @@ pub(crate) fn index_field_from_expr_for_schema(
                     args.len()
                 )));
             }
-            return Ok(IndexField::Upper(Box::new(
+            return Ok(oracle::simple_case::upper_field(
                 index_field_from_expr_for_schema(schema, args[0])?,
-            )));
+            ));
         }
         Expr::Function(function) if function_name_is(function, "lower") => {
             let Some(args) = positional_function_args(&function.args) else {
@@ -3121,9 +3133,9 @@ pub(crate) fn index_field_from_expr_for_schema(
                     args.len()
                 )));
             }
-            return Ok(IndexField::Lower(Box::new(
+            return Ok(oracle::simple_case::lower_field(
                 index_field_from_expr_for_schema(schema, args[0])?,
-            )));
+            ));
         }
         Expr::Trim {
             trim_where,
@@ -4062,6 +4074,18 @@ pub(crate) fn canonical_index_field_for_schema(
         IndexField::Upper(inner) => {
             IndexField::Upper(Box::new(canonical_index_field_for_schema(schema, *inner)))
         }
+        IndexField::OracleUpperV1(inner) => {
+            IndexField::OracleUpperV1(Box::new(canonical_index_field_for_schema(schema, *inner)))
+        }
+        IndexField::OracleUpperNationalV1(inner) => IndexField::OracleUpperNationalV1(Box::new(
+            canonical_index_field_for_schema(schema, *inner),
+        )),
+        IndexField::OracleLowerV1(inner) => {
+            IndexField::OracleLowerV1(Box::new(canonical_index_field_for_schema(schema, *inner)))
+        }
+        IndexField::OracleLowerNationalV1(inner) => IndexField::OracleLowerNationalV1(Box::new(
+            canonical_index_field_for_schema(schema, *inner),
+        )),
         IndexField::Lower(inner) => {
             IndexField::Lower(Box::new(canonical_index_field_for_schema(schema, *inner)))
         }
@@ -5534,6 +5558,10 @@ pub(crate) fn index_field_matches(left: &IndexField, right: &IndexField) -> bool
             },
         ) => lv == rv && li == ri && index_field_matches(left, right),
         (IndexField::Upper(left), IndexField::Upper(right))
+        | (IndexField::OracleUpperV1(left), IndexField::OracleUpperV1(right))
+        | (IndexField::OracleUpperNationalV1(left), IndexField::OracleUpperNationalV1(right))
+        | (IndexField::OracleLowerV1(left), IndexField::OracleLowerV1(right))
+        | (IndexField::OracleLowerNationalV1(left), IndexField::OracleLowerNationalV1(right))
         | (IndexField::Lower(left), IndexField::Lower(right))
         | (IndexField::TimestampDay(left), IndexField::TimestampDay(right))
         | (IndexField::Trim(left), IndexField::Trim(right)) => index_field_matches(left, right),

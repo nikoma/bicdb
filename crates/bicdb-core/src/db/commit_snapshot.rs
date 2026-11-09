@@ -1650,6 +1650,16 @@ impl BicDb {
         )
     }
 
+    pub(crate) fn enable_index_format_capabilities(
+        &self,
+        definition: &IndexDefinition,
+    ) -> Result<()> {
+        if definition.uses_oracle_simple_case_v1() {
+            format::enable_oracle_simple_case_v1(&self.path)?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn persist_index_catalog(&self) -> Result<()> {
         self.deferred_materialize_barrier()?;
         let mut indexes = self.index_definitions();
@@ -1657,7 +1667,20 @@ impl BicDb {
         if indexes.iter().any(|index| index.nulls_not_distinct) {
             format::enable_unique_nulls_not_distinct(&self.path)?;
         }
-        let catalog = IndexCatalog { indexes };
+        for definition in &indexes {
+            self.enable_index_format_capabilities(definition)?;
+        }
+        let btree_bindings = self
+            .btree_bindings
+            .lock()
+            .iter()
+            .filter(|(name, _)| indexes.iter().any(|definition| &definition.name == *name))
+            .map(|(name, physical)| (name.clone(), physical.clone()))
+            .collect();
+        let catalog = IndexCatalog {
+            indexes,
+            btree_bindings,
+        };
         let bytes = serde_json::to_vec_pretty(&catalog)?;
         write_sidecar(
             &self.path.join(DEFAULT_INDEX_CATALOG),
@@ -1667,7 +1690,9 @@ impl BicDb {
             &self.encryption,
             "index_catalog",
             storage::FailClosed::Always(&self.durability),
-        )
+        )?;
+        *self.btree_bindings.lock() = catalog.btree_bindings;
+        Ok(())
     }
 
     /// Recompute every index's `size_bytes` (and entry count) from the live

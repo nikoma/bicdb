@@ -2790,6 +2790,7 @@ impl BicDb {
         validate_index_definition(&definition)?;
         self.ensure_collection(&definition.collection)?;
         self.validate_secure_index_definition(&definition)?;
+        self.enable_index_format_capabilities(&definition)?;
         if self.indexes.contains_key(&definition.name) {
             if self.is_server_paged()
                 && definition.kind == IndexKind::BTree

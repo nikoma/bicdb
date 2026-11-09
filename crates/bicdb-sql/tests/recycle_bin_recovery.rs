@@ -42,14 +42,14 @@ fn interrupted_collection_rename_rolls_back_before_primary_key_backfill_and_repe
         let root = tempfile::tempdir().unwrap();
         let bin = format!("__bicdb_bin_{}", uuid::Uuid::new_v4().simple());
         {
-            let mut db = BicDb::open_with_config(root.path(), config(mode)).unwrap();
+            let mut db = BicDb::open_with_config(root.path(), config(mode.clone())).unwrap();
             seed(&mut db);
             // Core rename has completed, while SQL schema/index names remain
             // at the point immediately before the rest of DROP executes.
             db.rename_collection("source", &bin).unwrap();
         }
         {
-            let mut db = BicDb::open_with_config(root.path(), config(mode)).unwrap();
+            let mut db = BicDb::open_with_config(root.path(), config(mode.clone())).unwrap();
             assert_eq!(recover_interrupted_recycle_bin_renames(&mut db).unwrap(), 1);
             ensure_primary_key_indexes(&mut db).unwrap();
             assert_row(&mut db);
@@ -60,7 +60,7 @@ fn interrupted_collection_rename_rolls_back_before_primary_key_backfill_and_repe
                 .all(|i| i.collection == "source"));
             assert_eq!(recover_interrupted_recycle_bin_renames(&mut db).unwrap(), 0);
         }
-        let mut db = BicDb::open_with_config(root.path(), config(mode)).unwrap();
+        let mut db = BicDb::open_with_config(root.path(), config(mode.clone())).unwrap();
         ensure_primary_key_indexes(&mut db).unwrap();
         assert_row(&mut db);
     }

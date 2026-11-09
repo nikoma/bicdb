@@ -19625,9 +19625,9 @@ fn apply_unmaterialized_transaction_log(
             let paged_ctx = match paged {
                 Some(paged) => {
                     let _guard = paged.write_guard();
-                    // A decided commit: never refused for pool pressure (GAP-1 no-steal),
-                    // or the store could not open.
-                    let (xid, _) = paged.begin_redo_backed();
+                    // Logical replay uses the same structural admission as
+                    // every writer; durable redo never grants a steal waiver.
+                    let (xid, _) = paged.begin();
                     let index_defs = paged_durable_defs
                         .get(&write.collection)
                         .map(Vec::as_slice)
@@ -21614,9 +21614,8 @@ fn sweep_stale_spatial_generations(
         let mut after = None::<Vec<u8>>;
         loop {
             let snapshot = paged.latest_snapshot();
-            // Also bounded by the pool: each delete changes about one page,
-            // and a page-only transaction that outgrows the pool is refused
-            // (GAP-1 no-steal), which here, at open, would stop the open.
+            // Bound maintenance work near the normal frame budget to avoid
+            // excessive internal cuts while opening a large store.
             let keys = paged.raw_keys_with_prefix_batch_after(
                 &snapshot,
                 &prefix,

@@ -1513,16 +1513,9 @@ impl BicDb {
         // transactions that do not contain their own rows.
         let _guard = paged.write_guard();
         self.check_recovery_state()?;
-        // A decided commit's page apply must not be refused for buffer-pool
-        // pressure: the transaction log already holds its decision, and its
-        // replay at the next open would be refused the same way. Every other
-        // paged transaction is refused cleanly, with nothing written, once it
-        // outgrows the pool (GAP-1 no-steal, `PagedStore::admit_write`).
-        let (xid, _) = if durable_decision {
-            paged.begin_redo_backed()
-        } else {
-            paged.begin()
-        };
+        // Every page apply uses the same structural admission. The logical
+        // decision controls recovery/error handling, never an eviction waiver.
+        let (xid, _) = paged.begin();
         match apply(paged, xid) {
             Ok(()) => {
                 let committed = match deferred_page_commit {

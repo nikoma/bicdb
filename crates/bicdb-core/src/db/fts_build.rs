@@ -611,8 +611,8 @@ impl BicDb {
         if self.paged_records.is_none() {
             return Ok(());
         }
-        // Pool-bounded transactions (GAP-1 no-steal refuses a page-only
-        // transaction that outgrows the pool); at most 4,096 as before.
+        // Keep maintenance batches near the normal pool budget to limit
+        // internal cut overhead; at most 4,096 documents as before.
         let paged = Arc::clone(self.paged_records.as_ref().expect("checked above"));
         for range in paged.page_only_batches(blobs, |(pk, blob)| pk.len() + blob.len()) {
             for chunk in blobs[range].chunks(4_096) {

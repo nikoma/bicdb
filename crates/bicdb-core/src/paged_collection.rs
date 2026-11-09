@@ -354,9 +354,8 @@ impl PagedRecords {
         self.store.begin_transaction()
     }
 
-    /// Begin a transaction whose redo is already durable in the transaction
-    /// log: a commit's page apply. See `PagedStore::begin_redo_backed`: its
-    /// writes are never refused for buffer-pool pressure.
+    /// Compatibility spelling for external logical redo. It obeys exactly
+    /// the same structural-cut admission as [`Self::begin`].
     pub fn begin_redo_backed(&self) -> (Xid, Snapshot) {
         self.store.begin_redo_backed()
     }
@@ -1327,11 +1326,9 @@ impl PagedRecords {
             .map_err(page_error)
     }
 
-    /// Bytes currently held by the buffer pool — the bounded figure.
-    /// Bytes one page-only batch may write so that, even in a small
-    /// configured pool, it stays far below what a transaction may hold
-    /// unlogged before it is refused (GAP-1 no-steal admission keeps an
-    /// eighth of each shard free): a sixteenth of the pool, at least 64 KiB.
+    /// Target bytes per maintenance batch: a sixteenth of the normal pool
+    /// budget, at least 64 KiB. This limits internal cut overhead; it is not
+    /// an acceptance limit on valid larger transactions.
     pub fn page_only_batch_bytes(&self) -> usize {
         let budget = self.store.buffer_pool().budget_bytes();
         usize::try_from(budget / 16)
@@ -1374,6 +1371,7 @@ impl PagedRecords {
         ranges
     }
 
+    /// Bytes currently held in page frames, including bounded emergency pages.
     pub fn resident_bytes(&self) -> u64 {
         self.store.buffer_pool().snapshot().resident_bytes
     }
@@ -6907,10 +6905,8 @@ mod tests {
         )
         .unwrap();
 
-        // This transaction is many times larger than the deliberately tiny
-        // pool. A refusable one that size is refused (GAP-1 no-steal); this
-        // test is about memory bounds, so it uses a redo-backed one, which is
-        // never refused and may still steal.
+        // This compatibility entry point must preserve the same bounded
+        // structural admission as ordinary transactions under tiny-pool pressure.
         let (xid, _) = store.begin_redo_backed();
         for index in 0..4_000 {
             store

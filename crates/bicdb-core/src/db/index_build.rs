@@ -39,8 +39,8 @@ impl BicDb {
                 &snapshot,
                 prefix,
                 after.as_deref(),
-                CLEANUP_BATCH_ENTRIES,
-                CLEANUP_BATCH_BYTES,
+                CLEANUP_BATCH_ENTRIES.min(paged.page_only_batch_writes()),
+                CLEANUP_BATCH_BYTES.min(paged.page_only_batch_bytes()),
             )?;
             if keys.is_empty() {
                 break;
@@ -62,6 +62,12 @@ impl BicDb {
         logical: &str,
         physical: &str,
     ) -> Result<Option<String>> {
+        if self.btree_bindings.lock().contains_key(logical) {
+            return Err(BicDbError::Index(
+                "cannot retarget an authoritative B-tree binding through the legacy alias file"
+                    .into(),
+            ));
+        }
         let mut catalog = self.fts_generations.lock();
         let old = catalog
             .indexes
@@ -93,6 +99,16 @@ impl BicDb {
         paged: &Arc<crate::paged_collection::PagedRecords>,
         physical: &str,
     ) -> Result<()> {
+        if self
+            .btree_bindings
+            .lock()
+            .values()
+            .any(|bound| bound == physical)
+        {
+            return Err(BicDbError::Index(
+                "refusing to reclaim an authoritative B-tree generation".into(),
+            ));
+        }
         // The packed segment goes with the generation. Readers holding the
         // old Arc keep their open file handles across the unlink.
         paged.drop_fts_segment(physical);
@@ -935,6 +951,12 @@ impl BicDb {
         self.index_generation
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.indexes.insert(new_name.to_string(), state);
+        {
+            let mut bindings = self.btree_bindings.lock();
+            if let Some(physical) = bindings.remove(&existing_name) {
+                bindings.insert(new_name.to_string(), physical);
+            }
+        }
         self.persist_index_catalog()?;
         {
             let mut generations = self.fts_generations.lock();
@@ -942,6 +964,10 @@ impl BicDb {
                 generations
                     .indexes
                     .insert(new_name.to_string(), physical.clone());
+                if let Some(paged) = &self.paged_records {
+                    paged.remove_index_alias(&existing_name);
+                    paged.set_index_alias(new_name, &physical);
+                }
                 let bytes = serde_json::to_vec_pretty(&*generations)?;
                 storage::write_atomic(
                     &self.path.join(DEFAULT_FTS_GENERATION_CATALOG),

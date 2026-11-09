@@ -612,13 +612,18 @@ impl BicDb {
         if self.paged_records.is_none() {
             return Ok(());
         }
-        for chunk in blobs.chunks(4_096) {
-            self.in_paged_transaction(|paged, xid| {
-                for (pk, blob) in chunk {
-                    paged.put_doc_terms(xid, index, pk, blob)?;
-                }
-                Ok(())
-            })?;
+        // Keep maintenance batches near the normal pool budget to limit
+        // internal cut overhead; at most 4,096 documents as before.
+        let paged = Arc::clone(self.paged_records.as_ref().expect("checked above"));
+        for range in paged.page_only_batches(blobs, |(pk, blob)| pk.len() + blob.len()) {
+            for chunk in blobs[range].chunks(4_096) {
+                self.in_paged_transaction(|paged, xid| {
+                    for (pk, blob) in chunk {
+                        paged.put_doc_terms(xid, index, pk, blob)?;
+                    }
+                    Ok(())
+                })?;
+            }
         }
         Ok(())
     }
@@ -632,8 +637,19 @@ impl BicDb {
         if self.paged_records.is_none() {
             return Ok(());
         }
-        for (chunk_index, chunk) in blobs.chunks(4_096).enumerate() {
-            let chunk_first = first_document_id + (chunk_index * 4_096) as u64;
+        let paged = Arc::clone(self.paged_records.as_ref().expect("checked above"));
+        let ranges: Vec<std::ops::Range<usize>> = paged
+            .page_only_batches(blobs, |(pk, _)| pk.len() + 64)
+            .into_iter()
+            .flat_map(|range| {
+                (range.start..range.end)
+                    .step_by(4_096)
+                    .map(move |start| start..(start + 4_096).min(range.end))
+            })
+            .collect();
+        for range in ranges {
+            let chunk = &blobs[range.clone()];
+            let chunk_first = first_document_id + range.start as u64;
             self.in_paged_transaction(|paged, xid| {
                 for (offset, (pk, blob)) in chunk.iter().enumerate() {
                     let document_id = chunk_first + offset as u64;
@@ -997,8 +1013,21 @@ impl BicDb {
         let Some(_) = self.paged_records else {
             return Ok(());
         };
-        for (chunk_index, chunk) in stored_text.chunks(4_096).enumerate() {
-            let chunk_first = first_document_id + (chunk_index * 4_096) as u64;
+        let paged = Arc::clone(self.paged_records.as_ref().expect("checked above"));
+        let ranges: Vec<std::ops::Range<usize>> = paged
+            .page_only_batches(stored_text, |value| {
+                value.as_ref().map_or(16, |value| value.len() + 16)
+            })
+            .into_iter()
+            .flat_map(|range| {
+                (range.start..range.end)
+                    .step_by(4_096)
+                    .map(move |start| start..(start + 4_096).min(range.end))
+            })
+            .collect();
+        for range in ranges {
+            let chunk = &stored_text[range.clone()];
+            let chunk_first = first_document_id + range.start as u64;
             self.in_paged_transaction(|paged, xid| {
                 for (offset, value) in chunk.iter().enumerate() {
                     if let Some(value) = value {

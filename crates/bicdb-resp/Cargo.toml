@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-resp"
-version = "1.0.438-beta"
+version = "1.0.439-beta"
 edition.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
@@ -11,13 +11,13 @@ default = ["full-sql"]
 full-sql = ["bicdb-sql/default"]
 
 [dependencies]
-bicdb-lua = { path = "../bicdb-lua", version = "1.0.438-beta" }
+bicdb-lua = { path = "../bicdb-lua", version = "1.0.439-beta" }
 serde.workspace = true
 sha1.workspace = true
 ciborium.workspace = true
 base64.workspace = true
-bicdb-core = { path = "../bicdb-core", version = "1.0.438-beta", default-features = false, features = ["lua", "mmap", "compression"] }
-bicdb-sql = { path = "../bicdb-sql", version = "1.0.438-beta", default-features = false }
+bicdb-core = { path = "../bicdb-core", version = "1.0.439-beta", default-features = false, features = ["lua", "mmap", "compression"] }
+bicdb-sql = { path = "../bicdb-sql", version = "1.0.439-beta", default-features = false }
 parking_lot.workspace = true
 sha2.workspace = true
 subtle.workspace = true

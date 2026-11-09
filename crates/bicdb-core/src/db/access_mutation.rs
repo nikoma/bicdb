@@ -654,18 +654,20 @@ impl BicDb {
 
     /// Atomically allocates a unique, monotonically increasing transaction id.
     /// Safe to call from concurrent transaction begins.
-    pub(crate) fn allocate_tx_id(&self) -> TransactionId {
+    pub(crate) fn allocate_tx_id(&self) -> Result<TransactionId> {
         let mut current = self.next_tx_id.load(AtomicOrdering::SeqCst);
         loop {
             let id = current.max(1);
-            let next = id.saturating_add(1);
+            let next = id.checked_add(1).ok_or_else(|| {
+                BicDbError::FormatCompatibility("transaction id allocator exhausted".to_string())
+            })?;
             match self.next_tx_id.compare_exchange_weak(
                 current,
                 next,
                 AtomicOrdering::SeqCst,
                 AtomicOrdering::SeqCst,
             ) {
-                Ok(_) => return TransactionId(id),
+                Ok(_) => return Ok(TransactionId(id)),
                 Err(observed) => current = observed,
             }
         }
@@ -833,7 +835,7 @@ impl BicDb {
         // A standby may begin transactions to read; any write is refused when
         // it is buffered and a read-only commit takes no sequence number (see
         // `commit_transaction`).
-        let tx_id = self.allocate_tx_id();
+        let tx_id = self.allocate_tx_id()?;
         self.tx_states.insert(tx_id.0, TxState::Pending);
         let mut applied_watermark = self.last_committed_tx.load(AtomicOrdering::SeqCst);
         let mut snapshot_tx = TransactionId(applied_watermark.max(min_snapshot));
@@ -1513,27 +1515,27 @@ impl BicDb {
         SyncMesh { db: self }
     }
 
-    pub fn pending_changes(&self) -> SyncPendingChanges {
+    pub fn pending_changes(&self) -> Result<SyncPendingChanges> {
         let pending_events = self
             .events
             .lock()
-            .read_since(self.sync_state.last_export_offset)
+            .read_since(self.sync_state.last_export_offset)?
             .len();
-        SyncPendingChanges {
+        Ok(SyncPendingChanges {
             node_id: self.node_id(),
             pending_events,
             from_checkpoint: SyncCheckpoint::new(self.sync_state.last_export_offset),
-        }
+        })
     }
 
-    pub fn sync_status(&self) -> SyncStatus {
-        let total_events = self.events.lock().read_since(0).len();
+    pub fn sync_status(&self) -> Result<SyncStatus> {
+        let total_events = self.events.lock().read_since(0)?.len();
         let pending_events = self
             .events
             .lock()
-            .read_since(self.sync_state.last_export_offset)
+            .read_since(self.sync_state.last_export_offset)?
             .len();
-        SyncStatus {
+        Ok(SyncStatus {
             node_id: self.node_id(),
             total_events,
             pending_events,
@@ -1541,7 +1543,7 @@ impl BicDb {
             last_import_at: self.sync_state.last_import_at,
             last_sync_at: self.sync_state.last_sync_at,
             last_export_checkpoint: SyncCheckpoint::new(self.sync_state.last_export_offset),
-        }
+        })
     }
 
     pub fn last_sync(&self) -> Option<i64> {
@@ -1633,13 +1635,14 @@ impl BicDb {
         f(&mut events.broker())
     }
 
-    pub fn export_events_since(&self, offset: u64) -> Vec<StoredEvent> {
-        self.events
+    pub fn export_events_since(&self, offset: u64) -> Result<Vec<StoredEvent>> {
+        Ok(self
+            .events
             .lock()
-            .read_since(offset)
+            .read_since(offset)?
             .into_iter()
             .filter(|event| !self.event_targets_mesh_ineligible_collection(event))
-            .collect()
+            .collect())
     }
 
     pub(crate) fn backup_event_bounds(&self) -> (Option<i64>, Option<i64>, usize) {
@@ -1683,7 +1686,7 @@ impl BicDb {
         let events = self
             .events
             .lock()
-            .read_since(checkpoint.event_offset)
+            .read_since(checkpoint.event_offset)?
             .into_iter()
             .filter(|event| !self.event_targets_mesh_ineligible_collection(event))
             .collect::<Vec<_>>();
@@ -2391,7 +2394,7 @@ impl BicDb {
     ) -> Result<Option<RecordConflict>> {
         self.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
         let mut mutations = Vec::new();
-        for stored in self.events.lock().read(RECORD_AUDIT_STREAM) {
+        for stored in self.events.lock().read(RECORD_AUDIT_STREAM)? {
             let Some(mutation) = AuditMutation::from_event_based(
                 &self.sync_state.node_id,
                 self.sync_state.origin_position_base,
@@ -2415,7 +2418,7 @@ impl BicDb {
     pub fn list_record_conflicts(&self, collection: &str) -> Result<Vec<RecordConflict>> {
         self.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
         let mut mutations_by_record = BTreeMap::<String, Vec<AuditMutation>>::new();
-        for stored in self.events.lock().read(RECORD_AUDIT_STREAM) {
+        for stored in self.events.lock().read(RECORD_AUDIT_STREAM)? {
             let Some(mutation) = AuditMutation::from_event_based(
                 &self.sync_state.node_id,
                 self.sync_state.origin_position_base,
@@ -2442,7 +2445,7 @@ impl BicDb {
     pub fn snapshot_at(&self, timestamp: i64) -> Result<DbSnapshot> {
         let mut snapshot = DbSnapshot::default();
 
-        for stored in self.events.lock().read(RECORD_AUDIT_STREAM) {
+        for stored in self.events.lock().read(RECORD_AUDIT_STREAM)? {
             if stored.event.timestamp > timestamp {
                 continue;
             }

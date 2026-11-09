@@ -3913,7 +3913,11 @@ impl<'db> SqlSession<'db> {
         recycle_bin_journal::stage("deferred_purge_decided");
         // The purge decision is already in the durable outer commit. A cleanup
         // error must preserve its marker for startup, never undo committed DDL.
-        recycle_bin_journal::recover_purges(self.db_mut()?)?;
+        // Concurrent/shared COMMIT cannot mutate the collection catalog. Its
+        // durable purge markers remain hidden until exclusive cleanup/startup.
+        if self.exclusive {
+            recycle_bin_journal::recover_purges(self.db_mut()?)?;
+        }
         Ok(SqlResult::command("COMMIT"))
     }
 

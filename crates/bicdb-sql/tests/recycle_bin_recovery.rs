@@ -321,6 +321,47 @@ fn transactional_purge_keeps_snapshot_rows_until_commit_and_reclaims_its_backing
 }
 
 #[test]
+fn shared_commit_keeps_decided_purge_hidden_until_exclusive_cleanup() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(root.path(), config(mode.clone())).unwrap();
+        seed(&mut db);
+        let mut exclusive = SqlSession::new(&mut db);
+        exclusive.execute("BEGIN").unwrap();
+        exclusive.execute("DROP TABLE source PURGE").unwrap();
+        let pending = exclusive.take_pending_transaction().unwrap();
+        let undo = exclusive.take_ddl_undo_log();
+        drop(exclusive);
+        let mut shared = SqlSession::new_shared(&db)
+            .with_pending_transaction(pending)
+            .with_ddl_undo_log(undo);
+        shared.execute("COMMIT").unwrap();
+        assert!(shared.execute("SELECT * FROM source").is_err());
+        assert!(shared
+            .execute("FLASHBACK TABLE source TO BEFORE DROP")
+            .is_err());
+        drop(shared);
+        // Physical reclamation is deferred, while the durable SQL decision is
+        // already effective. Startup must finish it without resurrecting data.
+        assert!(db
+            .collections()
+            .iter()
+            .any(|meta| meta.name.starts_with("__bicdb_bin_")));
+        drop(db);
+        let mut db = BicDb::open_with_config(root.path(), config(mode)).unwrap();
+        assert_eq!(recover_interrupted_recycle_bin_renames(&mut db).unwrap(), 1);
+        assert!(!db
+            .collections()
+            .iter()
+            .any(|meta| meta.name.starts_with("__bicdb_bin_")));
+        assert_eq!(recover_interrupted_recycle_bin_renames(&mut db).unwrap(), 0);
+        assert!(SqlSession::new(&mut db)
+            .execute("SELECT * FROM source")
+            .is_err());
+    }
+}
+
+#[test]
 fn crash_recovery_never_reverses_a_live_transaction() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();

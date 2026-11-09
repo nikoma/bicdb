@@ -1,0 +1,119 @@
+{
+  "complete": true,
+  "writer_source": "f039cdf0",
+  "reader_source": "0af1b55e3d586d4a6933098419e7ee46a7ae5a79",
+  "reader_binary_sha256": "9cf83ba35684055bf09f77b1e6c1d7cb7b17eef60fcca300c29698e0f64584bb",
+  "command": [
+    "/root/bicdb-durability-s3/skr/bin/commit-bench-main-0af1b55e-release",
+    "recover",
+    "/root/bicdb-durability-s3/oracle-case-oldreader-proof/fixture",
+    "all-logs"
+  ],
+  "exit_code": 101,
+  "unknown_feature_refusal": true,
+  "all_file_sha256_size_mtime_and_listing_unchanged": true,
+  "files": {
+    ".backup-write.lock": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0,
+      "mtime_ns": 1794206178567193600
+    },
+    "btree-index-builds/2fcf76a4c3c75b1fb5288d83d62dd114dc556d16fba206ab35d38bfe294a2857.json": {
+      "sha256": "6a053778684572dd5f8896b92c2a6878fc3e572d9ffb45d96677d2fb42832f61",
+      "size": 846,
+      "mtime_ns": 1794206178567193600
+    },
+    "btree-index-builds/c49fea7425fa7f8699897a97c159c6690267d9003bb78c53fafa8fc15c325d84.json": {
+      "sha256": "9e1445e7be72a2850a6437bbc67b223f6282740888436860f2060dcdeb1f158e",
+      "size": 834,
+      "mtime_ns": 1794206178567193600
+    },
+    "collections.json": {
+      "sha256": "f299f876a281cd020db9c53bd8aa21f5d3bd832785666f8b97a6b1c90c90ff4a",
+      "size": 145,
+      "mtime_ns": 1794206178567193600
+    },
+    "commit-seq.floor": {
+      "sha256": "96c671dff08033e909e8744500506f9033e60dfcef58d9aa7b9d49e7499f1b35",
+      "size": 6,
+      "mtime_ns": 1794206178567193600
+    },
+    "events/events.seg": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0,
+      "mtime_ns": 1794206178568193614
+    },
+    "format.json": {
+      "sha256": "9c4dc60acb4cf6d0e17d810765b7fc953426f2b6fae61483e48c494cb46a8265",
+      "size": 221,
+      "mtime_ns": 1794206178567193600
+    },
+    "fts-index-generations.json": {
+      "sha256": "732bd43f185f1c05b6fb86a87ef6fea39fc5378ceab88fc7a67a74c61407870c",
+      "size": 161,
+      "mtime_ns": 1794206178567193600
+    },
+    "ha-state.json": {
+      "sha256": "d76cb8de7f5a8cff18d471bab998349944012e08a97a595ccb7d61fff132fde1",
+      "size": 187,
+      "mtime_ns": 1794206178568193614
+    },
+    "incarnations.log": {
+      "sha256": "cdeca83eba3314440eef99f445bd55fb5dae2a6d40be98e31e43136f63e02c1e",
+      "size": 238,
+      "mtime_ns": 1794206178568193614
+    },
+    "indexes.json": {
+      "sha256": "0645aac1af10c2e01d17211d690e401bc7068274b9212af54503a0925b6a147f",
+      "size": 544,
+      "mtime_ns": 1794206178568193614
+    },
+    "mesh_signing_key.json": {
+      "sha256": "0596fd98bfadbdf33685f438add8a74312bfec6e03a026e034ecafcf1b4343ca",
+      "size": 127,
+      "mtime_ns": 1794206178567193600
+    },
+    "paged/store.lock": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0,
+      "mtime_ns": 1794206178567193600
+    },
+    "paged/store.pages": {
+      "sha256": "f1050394b4557c2b20e295e584e8735a0c25c60cf0ec9547d6e475ea838b0709",
+      "size": 40960,
+      "mtime_ns": 1794206178567193600
+    },
+    "paged/store.wal": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0,
+      "mtime_ns": 1794206178567193600
+    },
+    "segments/rows.seg": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0,
+      "mtime_ns": 1794206178567193600
+    },
+    "store.lock": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0,
+      "mtime_ns": 1794206178567193600
+    },
+    "sync.log": {
+      "sha256": "775144c5c86a0f8bc1873fe2b07e61406ee69fad823384be7dfec53fc6f46245",
+      "size": 478,
+      "mtime_ns": 1794206178567193600
+    },
+    "sync_state.json": {
+      "sha256": "b5ef7ed82bdd4f3836d3b64249bda8d964c76348ea379c3d8780c786854dbf5a",
+      "size": 340,
+      "mtime_ns": 1794206178568193614
+    },
+    "transactions.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0,
+      "mtime_ns": 1794206178567193600
+    }
+  },
+  "stderr": "\nthread 'main' (3223626) panicked at crates/bicdb-core/examples/commit_durability_bench.rs:165:60:\nrecover: FormatCompatibility(\"database requires unknown format feature flag `oracle_simple_case_v1`\")\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+  "scope": "Real old native database open of a store with actual persisted Oracle-v1 and legacy indexes. Raw generated signing material is retained outside repository evidence."
+}

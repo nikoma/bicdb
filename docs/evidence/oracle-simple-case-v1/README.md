@@ -17,3 +17,24 @@ Reference SHA-256: `76de86121dd9dee1275a954ba60a98966cf0c5d0e5fed5cec6110ac09252
 This is a versioned compatibility table, not a dependency on future host
 Unicode/locale data. It must not change existing ASCII Upper/Lower index keys.
 The implementation and persistence fences must be qualified separately.
+
+The native key foundation at `39f6c197` passed three integration regressions
+(each in embedded-memory and server-paged modes), two mapping units and the
+SQL crate compile check. It preserves legacy ASCII keys through backfill,
+mutation, rollback and reopen; new Unicode unique keys reject actual Unicode
+collisions; a Unicode expression used only in a partial predicate also enables
+the sticky format capability. Source `f039cdf0` repeats these checks and adds
+only an optional synthetic fixture capture hook.
+
+A real old native reader at `0af1b55e` opened that captured store and refused
+`oracle_simple_case_v1` with exit 101. Every file's contents, size and mtime,
+and the complete listing, remained unchanged. The proof contains hashes and
+an error message; generated signing material stays in the private task store.
+The format fence is persisted before a native build checkpoint can contain a
+new definition, and remains after index DROP.
+
+This is **not yet the Oracle SQL UPPER/LOWER fix**. Front-end execution and safe
+migration of existing Oracle expression and partial indexes remain necessary.
+Merely bypassing an old ASCII index in the planner would leave its uniqueness
+constraint with different semantics. Existing native ASCII key tags and
+PostgreSQL C-locale behavior must remain unchanged.

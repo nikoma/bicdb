@@ -1,0 +1,595 @@
+{
+  "service": "BICDBAPPCTRL",
+  "protected_source_untouched": true,
+  "cases": [
+    {
+      "type": "NCHAR(1)",
+      "assignments": [
+        {
+          "value": "A",
+          "utf16_units": 1,
+          "rows": [
+            [
+              "A",
+              1,
+              1,
+              1,
+              2
+            ]
+          ]
+        },
+        {
+          "value": "A ",
+          "utf16_units": 2,
+          "error": {
+            "code": 12899,
+            "message": "ORA-12899: value too large for column \"IDEMPIERE_QUAL\".\"COMPAT_NATIONAL_COLUMN\".\"V\" (actual: 2, maximum: 1)\nHelp: https://docs.oracle.com/error-help/db/ora-12899/"
+          }
+        },
+        {
+          "value": "AB",
+          "utf16_units": 2,
+          "error": {
+            "code": 12899,
+            "message": "ORA-12899: value too large for column \"IDEMPIERE_QUAL\".\"COMPAT_NATIONAL_COLUMN\".\"V\" (actual: 2, maximum: 1)\nHelp: https://docs.oracle.com/error-help/db/ora-12899/"
+          }
+        },
+        {
+          "value": "𐐀",
+          "utf16_units": 2,
+          "error": {
+            "code": 12899,
+            "message": "ORA-12899: value too large for column \"IDEMPIERE_QUAL\".\"COMPAT_NATIONAL_COLUMN\".\"V\" (actual: 2, maximum: 1)\nHelp: https://docs.oracle.com/error-help/db/ora-12899/"
+          }
+        },
+        {
+          "value": "𐐀A",
+          "utf16_units": 3,
+          "error": {
+            "code": 12899,
+            "message": "ORA-12899: value too large for column \"IDEMPIERE_QUAL\".\"COMPAT_NATIONAL_COLUMN\".\"V\" (actual: 3, maximum: 1)\nHelp: https://docs.oracle.com/error-help/db/ora-12899/"
+          }
+        },
+        {
+          "value": "",
+          "utf16_units": 0,
+          "rows": [
+            [
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          ]
+        }
+      ],
+      "metadata": [
+        "NCHAR",
+        2,
+        1,
+        "C"
+      ]
+    },
+    {
+      "type": "NCHAR(2)",
+      "assignments": [
+        {
+          "value": "A",
+          "utf16_units": 1,
+          "rows": [
+            [
+              "A ",
+              2,
+              2,
+              2,
+              4
+            ]
+          ]
+        },
+        {
+          "value": "A ",
+          "utf16_units": 2,
+          "rows": [
+            [
+              "A ",
+              2,
+              2,
+              2,
+              4
+            ]
+          ]
+        },
+        {
+          "value": "AB",
+          "utf16_units": 2,
+          "rows": [
+            [
+              "AB",
+              2,
+              2,
+              2,
+              4
+            ]
+          ]
+        },
+        {
+          "value": "𐐀",
+          "utf16_units": 2,
+          "rows": [
+            [
+              "𐐀",
+              2,
+              2,
+              1,
+              4
+            ]
+          ]
+        },
+        {
+          "value": "𐐀A",
+          "utf16_units": 3,
+          "error": {
+            "code": 12899,
+            "message": "ORA-12899: value too large for column \"IDEMPIERE_QUAL\".\"COMPAT_NATIONAL_COLUMN\".\"V\" (actual: 3, maximum: 2)\nHelp: https://docs.oracle.com/error-help/db/ora-12899/"
+          }
+        },
+        {
+          "value": "",
+          "utf16_units": 0,
+          "rows": [
+            [
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          ]
+        }
+      ],
+      "metadata": [
+        "NCHAR",
+        4,
+        2,
+        "C"
+      ]
+    },
+    {
+      "type": "NCHAR(3)",
+      "assignments": [
+        {
+          "value": "A",
+          "utf16_units": 1,
+          "rows": [
+            [
+              "A  ",
+              3,
+              3,
+              3,
+              6
+            ]
+          ]
+        },
+        {
+          "value": "A ",
+          "utf16_units": 2,
+          "rows": [
+            [
+              "A  ",
+              3,
+              3,
+              3,
+              6
+            ]
+          ]
+        },
+        {
+          "value": "AB",
+          "utf16_units": 2,
+          "rows": [
+            [
+              "AB ",
+              3,
+              3,
+              3,
+              6
+            ]
+          ]
+        },
+        {
+          "value": "𐐀",
+          "utf16_units": 2,
+          "rows": [
+            [
+              "𐐀 ",
+              3,
+              3,
+              2,
+              6
+            ]
+          ]
+        },
+        {
+          "value": "𐐀A",
+          "utf16_units": 3,
+          "rows": [
+            [
+              "𐐀A",
+              3,
+              3,
+              2,
+              6
+            ]
+          ]
+        },
+        {
+          "value": "",
+          "utf16_units": 0,
+          "rows": [
+            [
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          ]
+        }
+      ],
+      "metadata": [
+        "NCHAR",
+        6,
+        3,
+        "C"
+      ]
+    },
+    {
+      "type": "NCHAR(1000)",
+      "assignments": [
+        {
+          "value": "A",
+          "utf16_units": 1,
+          "rows": [
+            [
+              "A                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       ",
+              1000,
+              1000,
+              1000,
+              2000
+            ]
+          ]
+        },
+        {
+          "value": "A ",
+          "utf16_units": 2,
+          "rows": [
+            [
+              "A                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       ",
+              1000,
+              1000,
+              1000,
+              2000
+            ]
+          ]
+        },
+        {
+          "value": "AB",
+          "utf16_units": 2,
+          "rows": [
+            [
+              "AB                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      ",
+              1000,
+              1000,
+              1000,
+              2000
+            ]
+          ]
+        },
+        {
+          "value": "𐐀",
+          "utf16_units": 2,
+          "rows": [
+            [
+              "𐐀                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      ",
+              1000,
+              1000,
+              999,
+              2000
+            ]
+          ]
+        },
+        {
+          "value": "𐐀A",
+          "utf16_units": 3,
+          "rows": [
+            [
+              "𐐀A                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     ",
+              1000,
+              1000,
+              999,
+              2000
+            ]
+          ]
+        },
+        {
+          "value": "",
+          "utf16_units": 0,
+          "rows": [
+            [
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          ]
+        }
+      ],
+      "metadata": [
+        "NCHAR",
+        2000,
+        1000,
+        "C"
+      ]
+    },
+    {
+      "type": "NCHAR(1001)",
+      "assignments": [],
+      "create_error": {
+        "code": 910,
+        "message": "ORA-00910: specified length too long for its datatype\nHelp: https://docs.oracle.com/error-help/db/ora-00910/"
+      }
+    },
+    {
+      "type": "NVARCHAR2(1)",
+      "assignments": [
+        {
+          "value": "A",
+          "utf16_units": 1,
+          "rows": [
+            [
+              "A",
+              1,
+              1,
+              1,
+              2
+            ]
+          ]
+        },
+        {
+          "value": "A ",
+          "utf16_units": 2,
+          "error": {
+            "code": 12899,
+            "message": "ORA-12899: value too large for column \"IDEMPIERE_QUAL\".\"COMPAT_NATIONAL_COLUMN\".\"V\" (actual: 2, maximum: 1)\nHelp: https://docs.oracle.com/error-help/db/ora-12899/"
+          }
+        },
+        {
+          "value": "AB",
+          "utf16_units": 2,
+          "error": {
+            "code": 12899,
+            "message": "ORA-12899: value too large for column \"IDEMPIERE_QUAL\".\"COMPAT_NATIONAL_COLUMN\".\"V\" (actual: 2, maximum: 1)\nHelp: https://docs.oracle.com/error-help/db/ora-12899/"
+          }
+        },
+        {
+          "value": "𐐀",
+          "utf16_units": 2,
+          "error": {
+            "code": 12899,
+            "message": "ORA-12899: value too large for column \"IDEMPIERE_QUAL\".\"COMPAT_NATIONAL_COLUMN\".\"V\" (actual: 2, maximum: 1)\nHelp: https://docs.oracle.com/error-help/db/ora-12899/"
+          }
+        },
+        {
+          "value": "𐐀A",
+          "utf16_units": 3,
+          "error": {
+            "code": 12899,
+            "message": "ORA-12899: value too large for column \"IDEMPIERE_QUAL\".\"COMPAT_NATIONAL_COLUMN\".\"V\" (actual: 3, maximum: 1)\nHelp: https://docs.oracle.com/error-help/db/ora-12899/"
+          }
+        },
+        {
+          "value": "",
+          "utf16_units": 0,
+          "rows": [
+            [
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          ]
+        }
+      ],
+      "metadata": [
+        "NVARCHAR2",
+        2,
+        1,
+        "C"
+      ]
+    },
+    {
+      "type": "NVARCHAR2(2)",
+      "assignments": [
+        {
+          "value": "A",
+          "utf16_units": 1,
+          "rows": [
+            [
+              "A",
+              1,
+              1,
+              1,
+              2
+            ]
+          ]
+        },
+        {
+          "value": "A ",
+          "utf16_units": 2,
+          "rows": [
+            [
+              "A ",
+              2,
+              2,
+              2,
+              4
+            ]
+          ]
+        },
+        {
+          "value": "AB",
+          "utf16_units": 2,
+          "rows": [
+            [
+              "AB",
+              2,
+              2,
+              2,
+              4
+            ]
+          ]
+        },
+        {
+          "value": "𐐀",
+          "utf16_units": 2,
+          "rows": [
+            [
+              "𐐀",
+              2,
+              2,
+              1,
+              4
+            ]
+          ]
+        },
+        {
+          "value": "𐐀A",
+          "utf16_units": 3,
+          "error": {
+            "code": 12899,
+            "message": "ORA-12899: value too large for column \"IDEMPIERE_QUAL\".\"COMPAT_NATIONAL_COLUMN\".\"V\" (actual: 3, maximum: 2)\nHelp: https://docs.oracle.com/error-help/db/ora-12899/"
+          }
+        },
+        {
+          "value": "",
+          "utf16_units": 0,
+          "rows": [
+            [
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          ]
+        }
+      ],
+      "metadata": [
+        "NVARCHAR2",
+        4,
+        2,
+        "C"
+      ]
+    },
+    {
+      "type": "NVARCHAR2(2000)",
+      "assignments": [
+        {
+          "value": "A",
+          "utf16_units": 1,
+          "rows": [
+            [
+              "A",
+              1,
+              1,
+              1,
+              2
+            ]
+          ]
+        },
+        {
+          "value": "A ",
+          "utf16_units": 2,
+          "rows": [
+            [
+              "A ",
+              2,
+              2,
+              2,
+              4
+            ]
+          ]
+        },
+        {
+          "value": "AB",
+          "utf16_units": 2,
+          "rows": [
+            [
+              "AB",
+              2,
+              2,
+              2,
+              4
+            ]
+          ]
+        },
+        {
+          "value": "𐐀",
+          "utf16_units": 2,
+          "rows": [
+            [
+              "𐐀",
+              2,
+              2,
+              1,
+              4
+            ]
+          ]
+        },
+        {
+          "value": "𐐀A",
+          "utf16_units": 3,
+          "rows": [
+            [
+              "𐐀A",
+              3,
+              3,
+              2,
+              6
+            ]
+          ]
+        },
+        {
+          "value": "",
+          "utf16_units": 0,
+          "rows": [
+            [
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          ]
+        }
+      ],
+      "metadata": [
+        "NVARCHAR2",
+        4000,
+        2000,
+        "C"
+      ]
+    },
+    {
+      "type": "NVARCHAR2(2001)",
+      "assignments": [],
+      "create_error": {
+        "code": 910,
+        "message": "ORA-00910: specified length too long for its datatype\nHelp: https://docs.oracle.com/error-help/db/ora-00910/"
+      }
+    }
+  ]
+}

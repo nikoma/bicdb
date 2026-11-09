@@ -2499,6 +2499,9 @@ pub(crate) fn apply_pg_type_modifier_with_context(
     {
         return oracle::routine_characters::coerce(value, *fixed, *length, *unit);
     }
+    if let Some(PgTypeModifier::OracleNationalColumnV1 { fixed, length }) = modifier {
+        return oracle::national_columns::coerce(value, *fixed, *length);
+    }
     if let Some(PgTypeModifier::OracleCharacterV1 {
         fixed,
         length,

@@ -30,6 +30,7 @@ pub mod lobs;
 pub(crate) mod lock_waits;
 mod namespaces;
 pub(crate) mod national;
+pub(crate) mod national_columns;
 pub(crate) mod number_formats;
 mod numeric_casts;
 mod nvl;
@@ -108,11 +109,39 @@ fn metadata_v8() -> JsonValue {
         .push(serde_json::json!("oracle_foreign_key_assignments_v1"));
     value
 }
+fn metadata_v9() -> JsonValue {
+    let mut value = metadata_v8();
+    value["format"] = serde_json::json!(9);
+    value["features"]
+        .as_array_mut()
+        .expect("feature array")
+        .push(serde_json::json!("oracle_national_columns_al16utf16_v1"));
+    value
+}
+fn metadata_v9_enabled(db: &BicDb) -> Result<bool> {
+    match db.get(PROFILE_COLLECTION, "profile") {
+        Ok(record) => Ok(record.is_some_and(|record| record.metadata == metadata_v9())),
+        Err(BicDbError::CollectionNotFound(_)) => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
+fn enable_metadata_v9(db: &mut BicDb) -> Result<()> {
+    enable_metadata_v8(db)?;
+    if !metadata_v9_enabled(db)? {
+        db.insert(
+            PROFILE_COLLECTION,
+            Record::new("profile").with_metadata(metadata_v9()),
+        )?;
+    }
+    Ok(())
+}
 fn metadata_v8_enabled(db: &BicDb) -> Result<bool> {
     match db.get(PROFILE_COLLECTION, "profile") {
         Err(BicDbError::CollectionNotFound(_)) => Ok(false),
         Err(error) => Err(error.into()),
-        Ok(record) => Ok(record.is_some_and(|record| record.metadata == metadata_v8())),
+        Ok(record) => Ok(record.is_some_and(|record| {
+            (record.metadata == metadata_v8() || record.metadata == metadata_v9())
+        })),
     }
 }
 fn enable_metadata_v8(db: &mut BicDb) -> Result<()> {
@@ -153,7 +182,8 @@ fn metadata_v7_enabled(db: &BicDb) -> Result<bool> {
         Err(BicDbError::CollectionNotFound(_)) => Ok(false),
         Err(error) => Err(error.into()),
         Ok(record) => Ok(record.is_some_and(|record| {
-            record.metadata == metadata_v7() || record.metadata == metadata_v8()
+            record.metadata == metadata_v7()
+                || (record.metadata == metadata_v8() || record.metadata == metadata_v9())
         })),
     }
 }
@@ -185,7 +215,7 @@ fn metadata_v6_enabled(db: &BicDb) -> Result<bool> {
         Ok(record) => Ok(record.is_some_and(|r| {
             r.metadata == metadata_v6()
                 || r.metadata == metadata_v7()
-                || r.metadata == metadata_v8()
+                || (r.metadata == metadata_v8() || r.metadata == metadata_v9())
         })),
     }
 }
@@ -210,7 +240,8 @@ fn metadata_v5_enabled(db: &BicDb) -> Result<bool> {
         Ok(record) => Ok(record.is_some_and(|r| {
             r.metadata == metadata_v5()
                 || (r.metadata == metadata_v6()
-                    || (r.metadata == metadata_v7() || r.metadata == metadata_v8()))
+                    || (r.metadata == metadata_v7()
+                        || (r.metadata == metadata_v8() || r.metadata == metadata_v9())))
         })),
     }
 }
@@ -253,7 +284,8 @@ fn metadata_v3_enabled(db: &BicDb) -> Result<bool> {
             || r.metadata == metadata_v4()
             || r.metadata == metadata_v5()
             || (r.metadata == metadata_v6()
-                || (r.metadata == metadata_v7() || r.metadata == metadata_v8()))
+                || (r.metadata == metadata_v7()
+                    || (r.metadata == metadata_v8() || r.metadata == metadata_v9())))
     }))
 }
 fn enable_metadata_v3(db: &mut BicDb) -> Result<()> {
@@ -278,7 +310,8 @@ fn matches_profile(metadata: &JsonValue, profile: &str) -> bool {
                 || *metadata == metadata_v4()
                 || *metadata == metadata_v5()
                 || (*metadata == metadata_v6()
-                    || (*metadata == metadata_v7() || *metadata == metadata_v8())))
+                    || (*metadata == metadata_v7()
+                        || (*metadata == metadata_v8() || *metadata == metadata_v9()))))
 }
 
 fn metadata_v2_enabled(db: &BicDb) -> Result<bool> {
@@ -288,7 +321,8 @@ fn metadata_v2_enabled(db: &BicDb) -> Result<bool> {
             || record.metadata == metadata_v4()
             || record.metadata == metadata_v5()
             || (record.metadata == metadata_v6()
-                || (record.metadata == metadata_v7() || record.metadata == metadata_v8()))),
+                || (record.metadata == metadata_v7()
+                    || (record.metadata == metadata_v8() || record.metadata == metadata_v9())))),
         Ok(None) | Err(BicDbError::CollectionNotFound(_)) => Ok(false),
         Err(error) => Err(error.into()),
     }

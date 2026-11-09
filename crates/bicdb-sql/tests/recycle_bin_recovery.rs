@@ -181,6 +181,49 @@ fn transactional_rename_requires_own_pending_transaction_and_checks_noop_health(
 }
 
 #[test]
+fn transactional_rename_preserves_other_transaction_writes_and_read_locks() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for read_lock_only in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open_with_config(root.path(), config(mode.clone())).unwrap();
+            db.create_collection("before").unwrap();
+            db.insert("before", Record::new("existing")).unwrap();
+            let mut other = db.begin_transaction().unwrap();
+            if read_lock_only {
+                assert!(other.try_lock_visible_record(None, "before", "existing").unwrap());
+                assert_eq!(other.write_len(), 0);
+            } else {
+                other.insert("before", Record::new("other-pending")).unwrap();
+            }
+            let mut owner = db.begin_transaction().unwrap();
+            owner.insert("before", Record::new("owner-pending")).unwrap();
+            assert!(db
+                .rename_collection_preserving_pending_writes(&mut owner, "before", "after")
+                .is_err(), "rename admitted another transaction's state: {mode:?}, read_lock_only={read_lock_only}");
+            assert!(db.collections().iter().any(|meta| meta.name == "before"));
+            assert!(!db.collections().iter().any(|meta| meta.name == "after"));
+            assert!(owner.get("before", "owner-pending").unwrap().is_some());
+            if read_lock_only {
+                assert!(!owner.try_lock_visible_record(None, "before", "existing").unwrap());
+            } else {
+                assert!(other.get("before", "other-pending").unwrap().is_some());
+            }
+            other.commit().unwrap();
+            db.rename_collection_preserving_pending_writes(&mut owner, "before", "after")
+                .unwrap();
+            owner.commit().unwrap();
+            assert!(db.get("after", "existing").unwrap().is_some());
+            assert!(db.get("after", "owner-pending").unwrap().is_some());
+            if !read_lock_only {
+                assert!(db.get("after", "other-pending").unwrap().is_some());
+            }
+            let next = db.begin_transaction().unwrap();
+            assert!(next.try_lock_visible_record(None, "after", "existing").unwrap());
+        }
+    }
+}
+
+#[test]
 fn crash_recovery_never_reverses_a_live_transaction() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();

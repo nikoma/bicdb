@@ -1678,6 +1678,7 @@ impl BoundExprScope {
             exact_vars: Arc::new(exact_vars),
             array_vars: Arc::new(FxHashSet::default()),
             var_types: None,
+            column_types: None,
             user_functions: Arc::new(FxHashSet::default()),
         }
     }
@@ -1685,10 +1686,6 @@ impl BoundExprScope {
     pub(crate) fn with_user_functions(mut self, names: Arc<FxHashSet<String>>) -> Self {
         self.user_functions = names;
         self
-    }
-
-            column_types: None,
-        }
     }
 
     /// Attach the input columns' declared types (aligned with the columns).
@@ -1982,7 +1979,9 @@ impl BoundExprScope {
                     {
                         right_type = left_type.clone();
                     }
-                    if right_type.is_some() && is_unknown_literal(left) && !is_unknown_literal(right)
+                    if right_type.is_some()
+                        && is_unknown_literal(left)
+                        && !is_unknown_literal(right)
                     {
                         left_type = right_type.clone();
                     }
@@ -2167,10 +2166,9 @@ impl BoundExprScope {
                     if let Some(operand_type) = self.known_expr_type(operand) {
                         if !plain(pg_comparison_kind(&operand_type, &operand_type))
                             || conditions.iter().any(|branch| {
-                                self.known_expr_type(&branch.condition)
-                                    .is_some_and(|when| {
-                                        !plain(pg_comparison_kind(&operand_type, &when))
-                                    })
+                                self.known_expr_type(&branch.condition).is_some_and(|when| {
+                                    !plain(pg_comparison_kind(&operand_type, &when))
+                                })
                             })
                         {
                             return None;

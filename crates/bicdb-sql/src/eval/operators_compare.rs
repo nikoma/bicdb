@@ -841,7 +841,6 @@ pub(crate) fn is_unambiguous_interval_text(value: &str) -> bool {
         || value.split_whitespace().count() > 1
 }
 
-#[track_caller]
 pub(crate) fn compare_values(
     left: &SqlValue,
     op: &BinaryOperator,
@@ -850,7 +849,6 @@ pub(crate) fn compare_values(
     if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
         return Ok(None);
     }
-    debug_untyped(left, right, std::panic::Location::caller());
     if let (SqlValue::Composite(left), SqlValue::Composite(right)) = (left, right) {
         let left = left
             .fields
@@ -907,16 +905,6 @@ pub(crate) fn compare_numeric_values(
 
 /// `compare_values` for operands with resolved types: NUMERIC combinations
 /// compare by value; everything else keeps the untyped comparison.
-pub(crate) fn debug_untyped(left: &SqlValue, right: &SqlValue, at: &std::panic::Location<'_>) {
-    if std::env::var_os("TC_DEBUG").is_none() { return; }
-    let date = |v: &SqlValue| matches!(v, SqlValue::String(s) if s.len() == 10 && s.as_bytes()[4] == b'-');
-    let ts = |v: &SqlValue| matches!(v, SqlValue::String(s) if s.len() > 10 && s.as_bytes()[4] == b'-' && s.as_bytes()[10] == b' ');
-    if (date(left) && ts(right)) || (ts(left) && date(right)) {
-        eprintln!("UNTYPED {left:?} vs {right:?} at {at}");
-    }
-}
-
-#[track_caller]
 pub(crate) fn compare_values_with_types(
     left_type: Option<&str>,
     right_type: Option<&str>,
@@ -935,7 +923,6 @@ pub(crate) fn compare_values_with_types(
             return Ok(truth);
         }
     }
-    debug_untyped(left, right, std::panic::Location::caller());
     compare_values(left, op, right)
 }
 
@@ -1162,9 +1149,7 @@ pub(crate) fn row_value_length_error() -> SqlError {
     SqlError::InvalidSql("row value expressions must have the same number of fields".to_string())
 }
 
-#[track_caller]
 pub(crate) fn values_equal(left: &SqlValue, right: &SqlValue) -> bool {
-    debug_untyped(left, right, std::panic::Location::caller());
     match (left, right) {
         (SqlValue::Null, _) | (_, SqlValue::Null) => false,
         (SqlValue::Composite(left), SqlValue::Composite(right)) => {
@@ -3773,7 +3758,9 @@ pub(crate) enum PgComparisonKind {
     Bpchar,
     /// character(n) with text: the character side loses its trailing blanks
     /// (the bpchar-to-text cast) and the comparison is text's.
-    BpcharText { left_bpchar: bool },
+    BpcharText {
+        left_bpchar: bool,
+    },
     /// text / varchar / name with one another: plain text comparison.
     Text,
     Bool,
@@ -3838,10 +3825,7 @@ fn comparison_float_value(value: &SqlValue) -> Result<f64> {
                 "infinity" | "+infinity" | "inf" | "+inf" => Ok(f64::INFINITY),
                 "-infinity" | "-inf" => Ok(f64::NEG_INFINITY),
                 _ => trimmed.parse::<f64>().map_err(|_| {
-                    SqlError::invalid_text_representation(
-                        "double precision",
-                        format!("\"{text}\""),
-                    )
+                    SqlError::invalid_text_representation("double precision", format!("\"{text}\""))
                 }),
             }
         }

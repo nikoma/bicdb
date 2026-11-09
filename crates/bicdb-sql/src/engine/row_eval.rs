@@ -324,8 +324,10 @@ impl<'db> SqlEngine<'db> {
                         | BinaryOperator::LtEq
                 ) =>
             {
-                let left_type = self.env_or_registered_expr_type(left, env, row.keys().map(String::as_str));
-                let right_type = self.env_or_registered_expr_type(right, env, row.keys().map(String::as_str));
+                let left_type =
+                    self.env_or_registered_expr_type(left, env, row.keys().map(String::as_str));
+                let right_type =
+                    self.env_or_registered_expr_type(right, env, row.keys().map(String::as_str));
                 reject_undefined_comparison(left_type.as_deref(), op, right_type.as_deref())?;
                 let pg_type = if matches!(left_type.as_deref(), Some("inet" | "cidr"))
                     && matches!(right_type.as_deref(), Some("inet" | "cidr"))
@@ -542,8 +544,16 @@ impl<'db> SqlEngine<'db> {
                         | BinaryOperator::LtEq
                 ) =>
             {
-                let left_type = self.env_or_registered_expr_type(left, env, context.column_keys().iter().map(String::as_str));
-                let right_type = self.env_or_registered_expr_type(right, env, context.column_keys().iter().map(String::as_str));
+                let left_type = self.env_or_registered_expr_type(
+                    left,
+                    env,
+                    context.column_keys().iter().map(String::as_str),
+                );
+                let right_type = self.env_or_registered_expr_type(
+                    right,
+                    env,
+                    context.column_keys().iter().map(String::as_str),
+                );
                 reject_undefined_comparison(left_type.as_deref(), op, right_type.as_deref())?;
                 let pg_type = if matches!(left_type.as_deref(), Some("inet" | "cidr"))
                     && matches!(right_type.as_deref(), Some("inet" | "cidr"))

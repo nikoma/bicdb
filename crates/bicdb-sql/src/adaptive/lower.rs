@@ -36,8 +36,8 @@ use super::procir::{ProcHost, ProcIr, ProcModule, ProcStmt};
 use super::ExecutionSignature;
 
 use crate::{
-    normalize_object_name, BoundExpr, PgComparisonKind, RoutineArgMode, RoutineAssignmentTarget, RoutineDecl,
-    RoutineExpr, RoutineIR, RoutineStmt, SqlResult, SqlSession, SqlValue, VarId,
+    normalize_object_name, BoundExpr, PgComparisonKind, RoutineArgMode, RoutineAssignmentTarget,
+    RoutineDecl, RoutineExpr, RoutineIR, RoutineStmt, SqlResult, SqlSession, SqlValue, VarId,
 };
 
 fn bx(e: IrExpr) -> Box<IrExpr> {

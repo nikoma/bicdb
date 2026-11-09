@@ -92,7 +92,10 @@ fn run_matrix(indexed: bool) -> (usize, Vec<String>) {
         let passed = matches!(&actual, Ok(rows) if *rows == expected);
         let context = case["context"].as_str().unwrap().to_string();
         let pair = case["pair"].as_str().unwrap().to_string();
-        for (key, map) in [(context.clone(), &mut by_context), (pair.clone(), &mut by_pair)] {
+        for (key, map) in [
+            (context.clone(), &mut by_context),
+            (pair.clone(), &mut by_pair),
+        ] {
             let entry = map.entry(key).or_default();
             entry.1 += 1;
             if passed {

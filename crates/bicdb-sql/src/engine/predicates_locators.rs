@@ -2302,7 +2302,11 @@ impl<'db> SqlEngine<'db> {
                             if !self.expr_is_bound_without_table_row(expr)? {
                                 continue;
                             }
-                            if !self.outer_probe_is_exact(schema, candidate.plan.fields.get(*idx), expr) {
+                            if !self.outer_probe_is_exact(
+                                schema,
+                                candidate.plan.fields.get(*idx),
+                                expr,
+                            ) {
                                 continue;
                             }
                             let value = self.eval_dynamic_bound_expr(expr)?;
@@ -6628,7 +6632,10 @@ impl<'db> SqlEngine<'db> {
             };
             if self.expr_matches_table_index_field(left, table, alias, schema, field)?
                 && !self.expr_references_table(right, table, alias, schema)?
-                && index_probe_type_is_exact(index_field_pg_type(schema, field), scope.known_expr_type(right))
+                && index_probe_type_is_exact(
+                    index_field_pg_type(schema, field),
+                    scope.known_expr_type(right),
+                )
             {
                 if let Some(bound) = scope.bind(right) {
                     return Ok(Some(PreparedDynamicBoundExpr {
@@ -6639,7 +6646,10 @@ impl<'db> SqlEngine<'db> {
             }
             if self.expr_matches_table_index_field(right, table, alias, schema, field)?
                 && !self.expr_references_table(left, table, alias, schema)?
-                && index_probe_type_is_exact(index_field_pg_type(schema, field), scope.known_expr_type(left))
+                && index_probe_type_is_exact(
+                    index_field_pg_type(schema, field),
+                    scope.known_expr_type(left),
+                )
             {
                 if let Some(bound) = scope.bind(left) {
                     return Ok(Some(PreparedDynamicBoundExpr {
@@ -8024,7 +8034,12 @@ pub(crate) fn hash_join_common_key_type(left: &str, right: &str) -> Option<Strin
                 "timestamp" => 1,
                 _ => 2,
             };
-            if rank(left) >= rank(right) { left } else { right }.to_string()
+            if rank(left) >= rank(right) {
+                left
+            } else {
+                right
+            }
+            .to_string()
         }
         _ => return None,
     })

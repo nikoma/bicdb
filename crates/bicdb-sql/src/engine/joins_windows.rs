@@ -841,14 +841,16 @@ impl<'db> SqlEngine<'db> {
             else {
                 return false;
             };
-            [(left, right), (right, left)].into_iter().any(|(column, other)| {
-                right_column_type(column).is_some_and(|column_type| {
-                    !super::predicates_locators::index_probe_type_is_exact(
-                        Some(column_type),
-                        scope.known_expr_type(other),
-                    )
+            [(left, right), (right, left)]
+                .into_iter()
+                .any(|(column, other)| {
+                    right_column_type(column).is_some_and(|column_type| {
+                        !super::predicates_locators::index_probe_type_is_exact(
+                            Some(column_type),
+                            scope.known_expr_type(other),
+                        )
+                    })
                 })
-            })
         })
     }
 
@@ -3420,7 +3422,9 @@ impl<'db> SqlEngine<'db> {
                 .position(|candidate| candidate.eq_ignore_ascii_case(name))?;
             return cte.column_type(index);
         }
-        let schema = load_schema_shared(self.db_ref(), qualifier).ok().flatten()?;
+        let schema = load_schema_shared(self.db_ref(), qualifier)
+            .ok()
+            .flatten()?;
         let column = schema.column(name)?;
         column
             .collation

@@ -4798,8 +4798,12 @@ impl RoutineFrame {
             .filter_map(|(column, pg_type)| {
                 let key = format!("{target}.{}", column.to_ascii_lowercase());
                 let pg_type = pg_type.as_ref()?;
-                (self.assignment_types.get(&key).map(|schema| &schema.pg_type) != Some(pg_type))
-                    .then(|| (key, pg_type.clone()))
+                (self
+                    .assignment_types
+                    .get(&key)
+                    .map(|schema| &schema.pg_type)
+                    != Some(pg_type))
+                .then(|| (key, pg_type.clone()))
             })
             .collect::<Vec<_>>();
         if fields.is_empty() {

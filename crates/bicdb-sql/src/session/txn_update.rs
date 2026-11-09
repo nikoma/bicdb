@@ -2072,12 +2072,12 @@ impl<'db> SqlSession<'db> {
                                 schema.as_ref(),
                                 &record,
                             )?;
-                            let row = merge_slot_rows(
+                            let row = materialize_join_row(
                                 &target_row,
                                 target_columns.as_ref(),
                                 using_row,
                                 &using_rows.columns,
-                            );
+                            )?;
                             records.push(DeleteCandidate {
                                 record,
                                 columns: predicate_columns.clone(),
@@ -6689,12 +6689,12 @@ impl<'db> SqlSession<'db> {
                         }
                         let from_row = &from_rows.rows[source_positions[position]];
                         candidates.push((
-                            merge_slot_rows(
+                            materialize_join_row(
                                 &target_row,
                                 target_columns,
                                 from_row,
                                 &from_rows.columns,
-                            ),
+                            )?,
                             stored,
                         ));
                     }
@@ -6735,12 +6735,14 @@ impl<'db> SqlSession<'db> {
                             if seen.contains(&stored.id) {
                                 continue;
                             }
-                            let candidate_row = merge_slot_rows(
+                            // This provisional row may become a retained UPDATE
+                            // candidate. Count its clone before predicate evaluation.
+                            let candidate_row = materialize_join_row(
                                 &target_row,
                                 target_columns,
                                 from_row,
                                 &from_rows.columns,
-                            );
+                            )?;
                             // A point-plan hit is the whole predicate: no re-check.
                             let matches = match selection {
                                 None => true,

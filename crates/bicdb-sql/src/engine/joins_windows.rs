@@ -223,10 +223,11 @@ impl<'db> SqlEngine<'db> {
                         max = [max[0] + dlon, max[1] + dlat];
                     }
                     let envelope = AABB::from_corners(min, max);
-                    let mut candidates: Vec<usize> = tree
-                        .locate_in_envelope_intersecting(&envelope)
-                        .map(|entry| entry.data)
-                        .collect();
+                    let mut candidates = Vec::new();
+                    for entry in tree.locate_in_envelope_intersecting(&envelope) {
+                        crate::join_budget::retain_bytes(3 * std::mem::size_of::<usize>())?;
+                        candidates.push(entry.data);
+                    }
                     candidates.sort_unstable();
                     for row_index in candidates {
                         let Some(right_geometry) = &right_geometries[row_index] else {
@@ -245,7 +246,11 @@ impl<'db> SqlEngine<'db> {
                         };
                         if hit {
                             matched = true;
-                            let mut row = left_row.clone();
+                            crate::join_budget::retain(left_row, &right.rows[row_index])?;
+                            let mut row = Vec::with_capacity(
+                                left_row.len().saturating_add(right.rows[row_index].len()),
+                            );
+                            row.extend(left_row.iter().cloned());
                             row.extend(right.rows[row_index].iter().cloned());
                             rows.push(row);
                         }
@@ -253,7 +258,9 @@ impl<'db> SqlEngine<'db> {
                 }
             }
             if !matched && matches!(kind, RowJoinKind::Left) {
-                let mut row = left_row.clone();
+                crate::join_budget::retain(left_row, &null_pad)?;
+                let mut row = Vec::with_capacity(left_row.len().saturating_add(null_pad.len()));
+                row.extend(left_row.iter().cloned());
                 row.extend(null_pad.iter().cloned());
                 rows.push(row);
             }
@@ -590,6 +597,11 @@ impl<'db> SqlEngine<'db> {
         // lookup. This used to keep the id strings three times over (per
         // left row, a BTreeSet, a BTreeMap keyed by id) and compare strings
         // for every pair.
+        crate::join_budget::retain_bytes(
+            left.rows
+                .len()
+                .saturating_mul(std::mem::size_of::<Option<usize>>()),
+        )?;
         let mut left_slots: Vec<Option<usize>> = Vec::with_capacity(left.rows.len());
         let mut ids: Vec<String> = Vec::new();
         let mut slot_of_id: FxHashMap<String, usize> = FxHashMap::default();
@@ -702,11 +714,21 @@ impl<'db> SqlEngine<'db> {
         // upstream value at every join. Shared right rows stay reusable, while
         // uniquely referenced rows can transfer their values as well.
         let novel = merge_novel_right_ordinals(&left.columns, &prepared.right_columns);
+        crate::join_budget::retain_bytes(
+            right_rows
+                .len()
+                .saturating_mul(std::mem::size_of::<usize>()),
+        )?;
         let mut right_uses = vec![0usize; right_rows.len()];
         for slot in left_slots.iter().flatten() {
             right_uses[*slot] += 1;
         }
         let left_rows = std::mem::take(&mut left.rows);
+        crate::join_budget::retain_bytes(
+            left_rows
+                .len()
+                .saturating_mul(std::mem::size_of::<SlotRow>()),
+        )?;
         let mut rows = Vec::with_capacity(left_rows.len());
         let mut candidate_pairs = 0usize;
         for (left_idx, mut left_row) in left_rows.into_iter().enumerate() {
@@ -749,7 +771,19 @@ impl<'db> SqlEngine<'db> {
                     };
                     if constraint_matches {
                         matched_left = true;
-                        left_row.reserve(novel.len());
+                        crate::join_budget::retain_extension(
+                            left_row.len(),
+                            left_row.capacity(),
+                            novel.len(),
+                            novel.iter().filter_map(|&index| {
+                                (right_uses[slot] != 1)
+                                    .then(|| right_row.get(index))
+                                    .flatten()
+                            }),
+                        )?;
+                        left_row.try_reserve_exact(novel.len()).map_err(|_| {
+                            SqlError::resource_limit("53200", "join row capacity allocation failed")
+                        })?;
                         if right_uses[slot] == 1 {
                             let mut right_row = right_rows[slot].take().expect("visible right row");
                             for &index in novel.iter() {
@@ -771,6 +805,15 @@ impl<'db> SqlEngine<'db> {
                 right_uses[slot] -= 1;
             }
             if !matched_left && matches!(prepared.kind, RowJoinKind::Left) {
+                crate::join_budget::retain_extension(
+                    left_row.len(),
+                    left_row.capacity(),
+                    novel.len(),
+                    std::iter::empty(),
+                )?;
+                left_row.try_reserve_exact(novel.len()).map_err(|_| {
+                    SqlError::resource_limit("53200", "join row capacity allocation failed")
+                })?;
                 left_row.extend(novel.iter().map(|_| SqlValue::Null));
             }
             if matched_left || matches!(prepared.kind, RowJoinKind::Left) {

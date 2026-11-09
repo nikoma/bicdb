@@ -1,4 +1,4 @@
-//! Bound cumulative owned row allocations while executing a join pipeline.
+//! Bound cumulative owned allocations while executing a join pipeline.
 //!
 //! This is a cooperative materialization envelope, not an allocator/RSS limit.
 //! Counting prior intermediates conservatively even after they are freed also
@@ -65,6 +65,12 @@ pub(crate) fn retain(left: &[SqlValue], right: &[SqlValue]) -> Result<()> {
             .saturating_add(std::mem::size_of::<SqlValue>())
             .saturating_add(clone_heap_bytes(value, 0));
     }
+    retain_bytes(bytes)
+}
+
+/// Charge a known new allocation before reserving its backing storage.
+pub(crate) fn retain_bytes(bytes: usize) -> Result<()> {
+    let limit = bicdb_core::query_budget::limit(configured_limit());
     let total = RETAINED.with(|retained| {
         let previous = retained.get().ok_or_else(|| {
             SqlError::resource_limit(
@@ -87,6 +93,26 @@ pub(crate) fn retain(left: &[SqlValue], right: &[SqlValue]) -> Result<()> {
         ));
     }
     bicdb_core::query_budget::check().map_err(Into::into)
+}
+
+/// The batched point join transfers its left row and sometimes its right
+/// payload. Charge only new slot storage and payloads actually cloned.
+pub(crate) fn retain_extension<'a>(
+    row_len: usize,
+    capacity: usize,
+    additional: usize,
+    cloned_values: impl IntoIterator<Item = &'a SqlValue>,
+) -> Result<()> {
+    let required = row_len.saturating_add(additional);
+    let slots = if required > capacity {
+        required.saturating_mul(std::mem::size_of::<SqlValue>())
+    } else {
+        0
+    };
+    let bytes = cloned_values.into_iter().fold(slots, |n, value| {
+        n.saturating_add(clone_heap_bytes(value, 0))
+    });
+    retain_bytes(bytes)
 }
 
 fn clone_heap_bytes(value: &SqlValue, depth: usize) -> usize {
@@ -114,12 +140,14 @@ fn json_heap(value: &serde_json::Value, depth: usize) -> usize {
         return usize::MAX;
     }
     match value {
+        // arbitrary_precision stores Number's digit text in an owned String.
+        serde_json::Value::Number(number) => number.as_str().len(),
         serde_json::Value::String(text) => text.len(),
         serde_json::Value::Array(values) => values.iter().fold(0usize, |n, v| {
             n.saturating_add(std::mem::size_of::<serde_json::Value>())
                 .saturating_add(json_heap(v, depth + 1))
         }),
-        serde_json::Value::Object(values) => values.iter().fold(0usize, |n, (key, v)| {
+        serde_json::Value::Object(values) => values.iter().fold(1024usize, |n, (key, v)| {
             n.saturating_add(128)
                 .saturating_add(key.len())
                 .saturating_add(json_heap(v, depth + 1))
@@ -180,5 +208,26 @@ fn geometry_heap(value: &bicdb_core::Geometry, depth: usize) -> usize {
             n.saturating_add(std::mem::size_of_val(value))
                 .saturating_add(geometry_heap(value, depth + 1))
         }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn numeric_json_text_pays_for_both_owned_copies_but_jsonb_stays_shared() {
+        let _scope = Scope::enter();
+        let digits = "1".repeat(4096);
+        let value = crate::PgJsonText::parse(digits.clone()).unwrap();
+        let parsed = value.parsed().clone();
+        let _memory = bicdb_core::query_budget::QueryMemoryScope::new(6000);
+        // Raw spelling and arbitrary-precision parsed digits each own 4096B.
+        assert!(retain(&[SqlValue::JsonText(value)], &[]).is_err());
+        // A new execution scope is needed after resource rejection.
+        drop(_memory);
+        drop(_scope);
+        let _scope = Scope::enter();
+        let _memory = bicdb_core::query_budget::QueryMemoryScope::new(6000);
+        assert!(retain(&[SqlValue::Json(std::sync::Arc::new(parsed))], &[]).is_ok());
     }
 }

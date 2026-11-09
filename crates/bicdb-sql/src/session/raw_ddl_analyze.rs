@@ -330,7 +330,7 @@ impl<'db> SqlSession<'db> {
         // Moving a relation is a change to it, and PostgreSQL requires
         // ownership. Ungated, any role could relocate another tenant's table.
         self.require_table_ownership(&change.table, "set its schema")?;
-        if !is_known_schema(&change.schema_name)
+        if !is_known_schema(self.db_ref(), &change.schema_name)?
             && load_namespace(self.db_ref(), &change.schema_name)?.is_none()
         {
             return Err(SqlError::InvalidSql(format!(
@@ -402,6 +402,7 @@ impl<'db> SqlSession<'db> {
         ) {
             self.create_session_namespace_if_missing(
                 NamespaceSchema {
+                    dropped: false,
                     name: definition.schema_name.clone(),
                     owner: current_user_from_gucs(&self.session_gucs),
                 },
@@ -540,6 +541,7 @@ impl<'db> SqlSession<'db> {
         ) {
             self.create_session_namespace_if_missing(
                 NamespaceSchema {
+                    dropped: false,
                     name: partition.partition_schema.clone(),
                     owner: current_user_from_gucs(&self.session_gucs),
                 },
@@ -1572,7 +1574,14 @@ impl<'db> SqlSession<'db> {
                 owner
             }
         };
-        self.create_session_namespace_if_missing(NamespaceSchema { name, owner }, if_not_exists)?;
+        self.create_session_namespace_if_missing(
+            NamespaceSchema {
+                name,
+                owner,
+                dropped: false,
+            },
+            if_not_exists,
+        )?;
         Ok(SqlResult::command("CREATE SCHEMA"))
     }
 
@@ -1595,6 +1604,7 @@ impl<'db> SqlSession<'db> {
         save_namespace(
             self.db_mut()?,
             NamespaceSchema {
+                dropped: false,
                 name: name.clone(),
                 owner,
             },

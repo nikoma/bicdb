@@ -249,7 +249,7 @@ pub(crate) fn eval_value(record: &Record, expr: &Expr) -> Result<SqlValue> {
             Ok(SqlValue::String("bicdb".to_string()))
         }
         Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("current_schema") => {
-            Ok(SqlValue::String(crate::search_path::current_schema_name()))
+            Ok(crate::search_path::current_schema_value())
         }
         Expr::Identifier(_) | Expr::CompoundIdentifier(_) | Expr::JsonAccess { .. } => {
             FieldRef::from_expr(expr)?.value(record)
@@ -525,7 +525,7 @@ pub(crate) fn eval_constant_expr(expr: &Expr) -> Result<SqlValue> {
             Ok(SqlValue::String("bicdb".to_string()))
         }
         Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("current_schema") => {
-            Ok(SqlValue::String(crate::search_path::current_schema_name()))
+            Ok(crate::search_path::current_schema_value())
         }
         Expr::Value(value) => literal_to_value(value),
         Expr::TypedString(value) => typed_string_to_value(value),
@@ -1607,10 +1607,7 @@ fn resolve_regtype_name(db: &BicDb, oid: i64) -> Result<Option<String>> {
 
 fn resolve_regnamespace_oid(db: &BicDb, value: &str) -> Result<Option<u32>> {
     let name = normalize_alias_name(value);
-    if matches!(
-        name.as_str(),
-        "public" | "pg_catalog" | "information_schema"
-    ) {
+    if is_known_schema(db, &name)? {
         return Ok(u32::try_from(namespace_oid(&name)).ok());
     }
     let exists = list_namespaces(db)?
@@ -1626,7 +1623,7 @@ fn resolve_regnamespace_oid(db: &BicDb, value: &str) -> Result<Option<u32>> {
 
 fn resolve_regnamespace_name(db: &BicDb, oid: i64) -> Result<Option<String>> {
     for name in ["public", "pg_catalog", "information_schema"] {
-        if namespace_oid(name) == oid {
+        if is_known_schema(db, name)? && namespace_oid(name) == oid {
             return Ok(Some(name.to_string()));
         }
     }

@@ -784,11 +784,6 @@ impl<'db> SqlSession<'db> {
                     "cannot drop schema {schema} because it is required by the database system"
                 )));
             }
-            if schema == "public" {
-                return Err(SqlError::Unsupported(
-                    "DROP SCHEMA public is not supported".to_string(),
-                ));
-            }
             if targets.iter().any(|target| target.namespace.name == schema) {
                 continue;
             }

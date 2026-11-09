@@ -1226,7 +1226,7 @@ impl<'db> SqlEngine<'db> {
                     return Ok(SqlValue::String(unix_now_date_string()));
                 }
                 if ident.value.eq_ignore_ascii_case("current_schema") {
-                    return Ok(SqlValue::String(crate::search_path::current_schema_name()));
+                    return Ok(crate::search_path::current_schema_value());
                 }
                 if ident.quote_style.is_none() {
                     if let Some(value) = self.session_identity_value(&ident.value) {
@@ -2979,7 +2979,7 @@ impl<'db> SqlEngine<'db> {
                     return Ok(SqlValue::String(unix_now_date_string()));
                 }
                 if ident.value.eq_ignore_ascii_case("current_schema") {
-                    return Ok(SqlValue::String(crate::search_path::current_schema_name()));
+                    return Ok(crate::search_path::current_schema_value());
                 }
                 if ident.quote_style.is_none() {
                     if let Some(value) = self.session_identity_value(&ident.value) {

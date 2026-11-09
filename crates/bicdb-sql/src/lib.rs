@@ -3932,6 +3932,8 @@ pub enum DatabaseDdl {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct NamespaceSchema {
     name: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    dropped: bool,
     #[serde(default = "current_role_name")]
     owner: String,
 }

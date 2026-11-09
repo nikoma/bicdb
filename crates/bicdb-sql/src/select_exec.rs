@@ -3850,13 +3850,9 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "pg_database" => pg_database_rows(db),
         "pg_namespace" => {
             let privileges = list_privileges(db)?;
-            let mut namespace_names = [
-                "public".to_string(),
-                "pg_catalog".to_string(),
-                "information_schema".to_string(),
-            ]
-            .into_iter()
-            .collect::<BTreeSet<_>>();
+            let mut namespace_names = ["pg_catalog".to_string(), "information_schema".to_string()]
+                .into_iter()
+                .collect::<BTreeSet<_>>();
             for namespace in list_namespaces(db)? {
                 namespace_names.insert(namespace.name);
             }

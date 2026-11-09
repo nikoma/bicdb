@@ -25,7 +25,9 @@ finish; the API cannot retract data already delivered. Synchronous callbacks
 receive checked outcomes, and failed subscriptions are removed.
 
 Queued PostgreSQL notifications also check the database before draining and
-before writing business payloads to the socket. A failed handle terminates that
+before writing business payloads to the socket. Checks use the already-shared
+transaction-log health handle and acquire no database lock, so a queued
+exclusive writer cannot stall transaction completion. A failed handle terminates that
 read path instead of serializing a success or forwarding an old queued message.
 
 The low-level stored-event and parser access used to rebuild recovery state

@@ -2647,6 +2647,13 @@ impl TxLogHandle {
         self.health.check().map_err(crate::error::durability_error)
     }
 
+    /// Check the shared database fence without reacquiring the database lock.
+    /// Protocol delivery uses this handle while a transaction may need to
+    /// finish ahead of an already queued exclusive database writer.
+    pub fn check_recovery_state(&self) -> Result<()> {
+        self.check_health()
+    }
+
     /// Record a failed write or sync of this log and fence the database.
     fn fail(&self, site: &str, error: BicDbError) -> BicDbError {
         crate::error::durability_error(

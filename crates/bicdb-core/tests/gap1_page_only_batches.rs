@@ -234,7 +234,25 @@ fn structural_cuts_complete_index_backfills_larger_than_the_pool() {
                 db.lookup_full_text_term(&definition.name, "common", false)
                     .unwrap()
             } else {
-                db.lookup_index(&definition.name, &[]).unwrap()
+                (0..ROWS)
+                    .map(|i| {
+                        let ids = db
+                            .lookup_index(
+                                &definition.name,
+                                &[bicdb_core::IndexValue::from(format!(
+                                    "v-{:08}",
+                                    (i * 7919) % 1_000_003
+                                ))],
+                            )
+                            .unwrap();
+                        assert_eq!(
+                            ids,
+                            vec![format!("doc-{i:06}")],
+                            "{label}: recovery {recovery}"
+                        );
+                        ids.into_iter().next().unwrap()
+                    })
+                    .collect::<Vec<_>>()
             };
             assert_eq!(ids.len(), ROWS, "{label}: recovery {recovery}");
             assert_eq!(

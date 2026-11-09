@@ -1072,7 +1072,10 @@ fn the_last_resort_steal_path_recovers_after_the_stealing_commit() {
 /// lose acknowledged rows that its splits moved. Closing this needs the
 /// structural-unit log (option (b) in `docs/recovery-semantics.md` 14.3).
 #[test]
-#[ignore = "GAP-1 W1: a decided commit larger than the buffer pool still steals; needs option (b)"]
+#[cfg_attr(
+    not(feature = "experimental-structural-cuts"),
+    ignore = "GAP-1 W1: a decided commit larger than the buffer pool still steals; needs option (b)"
+)]
 fn gap1_a_decided_commit_larger_than_the_pool_keeps_acknowledged_rows() {
     let mut cases: Vec<(String, Box<dyn FnOnce() + std::panic::UnwindSafe>)> = Vec::new();
     for point in [

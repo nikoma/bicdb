@@ -2798,6 +2798,48 @@ impl BicDb {
         Ok(self.rowids_to_pks(&collection, &rowids))
     }
 
+    /// Pin one durable index generation and snapshot for an ascending unique
+    /// suffix range. Each cursor batch retains the same view across commits.
+    pub fn unique_index_range_cursor(
+        &self,
+        name: &str,
+        prefix: &[IndexValue],
+        lower: (IndexValue, bool),
+        upper: Option<(IndexValue, bool)>,
+    ) -> Result<UniqueIndexRangeCursor> {
+        let state = self
+            .indexes
+            .get(name)
+            .ok_or_else(|| BicDbError::Index(format!("index `{name}` not found")))?
+            .read();
+        if !state.paged_read_through
+            || state.definition.kind != IndexKind::BTree
+            || !state.definition.unique
+            || state.definition.predicate.is_some()
+            || prefix.is_empty()
+            || prefix.len() + 1 != state.definition.fields.len()
+            || prefix.iter().any(|v| matches!(v, IndexValue::Null))
+            || matches!(lower.0, IndexValue::Null)
+        {
+            return Err(BicDbError::Index("cursor requires a paged unique B-tree with a non-null equality prefix and one bounded suffix".into()));
+        }
+        let store = self
+            .paged_records
+            .as_ref()
+            .ok_or_else(|| BicDbError::Index("paged index lost its page store".into()))?
+            .clone();
+        Ok(UniqueIndexRangeCursor {
+            snapshot: store.latest_snapshot(),
+            physical_index: store.resolve_index_name(name),
+            collection: state.definition.collection.clone(),
+            store,
+            prefix: prefix.to_vec(),
+            lower,
+            upper,
+            exhausted: false,
+        })
+    }
+
     pub fn spatial_radius_index(
         &self,
         name: &str,
@@ -3730,5 +3772,62 @@ impl BicDb {
             });
         }
         Ok(results)
+    }
+}
+
+impl UniqueIndexRangeCursor {
+    /// Return at most `limit` record keys without fetching record payloads.
+    pub fn next_batch(&mut self, limit: usize) -> Result<Vec<String>> {
+        if self.exhausted || limit == 0 {
+            return Ok(Vec::new());
+        }
+        let mut start = self.prefix.clone();
+        start.push(self.lower.0.clone());
+        let encoded_start = encode_index_key(&start);
+        let field = self.prefix.len();
+        let mut keys = Vec::with_capacity(limit.min(4096));
+        let mut last = None;
+        for entry in
+            self.store
+                .scan_index_from_refs(&self.snapshot, &self.physical_index, &encoded_start)?
+        {
+            let (encoded, entry_ref, entry_value) = entry?;
+            let key = decode_index_key(&encoded);
+            if !key.starts_with(&self.prefix) {
+                break;
+            }
+            let value = &key[field];
+            if value < &self.lower.0 || (!self.lower.1 && value == &self.lower.0) {
+                continue;
+            }
+            if self
+                .upper
+                .as_ref()
+                .is_some_and(|(bound, inclusive)| value > bound || !inclusive && value == bound)
+            {
+                break;
+            }
+            keys.push(resolve_paged_entry_pk(
+                &self.store,
+                &self.snapshot,
+                &self.collection,
+                &self.physical_index,
+                entry_ref,
+                &entry_value,
+                paged_tid_hints_enabled(),
+            )?);
+            last = Some(value.clone());
+            if keys.len() == limit {
+                break;
+            }
+        }
+        if keys.len() < limit {
+            self.exhausted = true;
+        }
+        if let Some(last) = last {
+            self.lower = (last, false);
+        }
+        index_trace::record_scan(&index_trace::ORDERED, keys.len());
+        Ok(keys)
     }
 }

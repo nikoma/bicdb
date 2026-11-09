@@ -647,4 +647,36 @@ mod ddl_startup_recovery_tests {
             );
         }
     }
+    fn legacy_oracle_case_fixture(db: &mut BicDb) {
+        {
+            let mut sql = SqlSession::new(db);
+            sql.execute("CREATE TABLE startup_case(id INT PRIMARY KEY,v TEXT); INSERT INTO startup_case VALUES(1,'é'); CREATE INDEX startup_case_upper ON startup_case(upper(v))").unwrap();
+        }
+        db.create_collection("__bicdb_sql_compatibility").unwrap();
+        db.insert(
+            "__bicdb_sql_compatibility",
+            bicdb_core::Record::new("profile").with_metadata(
+                serde_json::json!({"format":1,"profile":bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE}),
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn legacy_oracle_case_profile_is_initialized_before_host_sql() {
+        let root = tempfile::tempdir().unwrap();
+        {
+            let mut db = BicDb::open(root.path().join("data")).unwrap();
+            legacy_oracle_case_fixture(&mut db);
+        }
+        let host = Database::open(root.path()).unwrap();
+        let db = host.db.read();
+        assert_eq!(
+            SqlSession::new_shared(&db)
+                .execute("SELECT upper(v) FROM startup_case")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::String("É".into())]]
+        );
+    }
 }

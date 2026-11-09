@@ -13318,4 +13318,67 @@ mod ddl_startup_recovery_tests {
             );
         }
     }
+    fn legacy_oracle_case_fixture(db: &mut BicDb) {
+        {
+            let mut sql = SqlSession::new(db);
+            sql.execute("CREATE TABLE startup_case(id INT PRIMARY KEY,v TEXT); INSERT INTO startup_case VALUES(1,'é'); CREATE INDEX startup_case_upper ON startup_case(upper(v))").unwrap();
+        }
+        db.create_collection("__bicdb_sql_compatibility").unwrap();
+        db.insert(
+            "__bicdb_sql_compatibility",
+            bicdb_core::Record::new("profile").with_metadata(
+                serde_json::json!({"format":1,"profile":bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE}),
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn legacy_oracle_case_profile_is_initialized_before_cli_sql() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        legacy_oracle_case_fixture(&mut db);
+        let slow = SlowQueryOptions {
+            log_path: None,
+            threshold_ms: 0,
+            redaction: RedactionConfig::default(),
+        };
+        execute_sql_command(
+            &mut db,
+            "SELECT upper(v) FROM startup_case",
+            OutputMode::Json,
+            &slow,
+        )
+        .unwrap();
+        assert_eq!(
+            SqlSession::new(&mut db)
+                .execute("SELECT upper(v) FROM startup_case")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::String("É".into())]]
+        );
+    }
+    #[test]
+    fn legacy_oracle_case_profile_is_initialized_before_cli_migration() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path().join("db")).unwrap();
+        legacy_oracle_case_fixture(&mut db);
+        let sql = "UPDATE startup_case SET v='ø' WHERE id=1";
+        let file = root.path().join("oracle.sql");
+        std::fs::write(&file, sql).unwrap();
+        let plan = MigrationFilePlan {
+            id: "oracle".into(),
+            file: file.to_string_lossy().into_owned(),
+            checksum: "legacy-oracle-fixture".into(),
+            statements: plan_migration_sql(sql).unwrap(),
+        };
+        apply_migration_file(&mut db, &plan).unwrap();
+        assert_eq!(
+            SqlSession::new(&mut db)
+                .execute("SELECT upper(v) FROM startup_case")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::String("Ø".into())]]
+        );
+    }
 }

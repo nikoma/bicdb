@@ -9,6 +9,50 @@ fn setup(db: &mut BicDb) {
 }
 
 #[test]
+fn authenticated_reader_uses_bounded_ranges_without_bypassing_select_grants() {
+    use bicdb_core::{AuthenticationStrength, SecurityContext};
+    use bicdb_sql::plan_diagnostics::{with_plan_diagnostics, DiagnosticsOptions};
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open_with_config(
+        root.path(),
+        DbConfig::default()
+            .with_storage_mode(StorageMode::ServerPaged)
+            .with_fsync(false),
+    )
+    .unwrap();
+    setup(&mut db);
+    SqlSession::new(&mut db)
+        .execute("CREATE ROLE range_reader NOSUPERUSER; GRANT SELECT ON members TO range_reader")
+        .unwrap();
+    let context = SecurityContext::authenticated(
+        "range_reader",
+        "fixture",
+        AuthenticationStrength::ScramSha256,
+    );
+    let gucs = std::collections::HashMap::from([
+        ("role".into(), "range_reader".into()),
+        ("session_authorization".into(), "range_reader".into()),
+    ]);
+    let q="SELECT uid FROM members WHERE owner='alice' AND box='inbox' AND uid>1500 AND removed IS NULL ORDER BY uid LIMIT 3";
+    let mut sql =
+        SqlSession::new_shared_secure(&db, context.clone()).with_session_gucs(gucs.clone());
+    let (result, decisions) =
+        with_plan_diagnostics(DiagnosticsOptions::default(), || sql.execute(q));
+    assert_eq!(result.unwrap().rows[0][0], SqlValue::Int(1501));
+    assert!(
+        decisions.iter().any(|d| d.rows_fetched == Some(3)),
+        "{decisions:?}"
+    );
+    drop(sql);
+    SqlSession::new(&mut db)
+        .execute("REVOKE SELECT ON members FROM range_reader")
+        .unwrap();
+    let mut sql = SqlSession::new_shared_secure(&db, context).with_session_gucs(gucs);
+    assert!(sql.execute(q).is_err());
+    assert!(sql.execute(&q.replace("LIMIT 3", "LIMIT 0")).is_err());
+}
+
+#[test]
 fn paged_range_limit_filters_tombstones_and_visibility_before_counting_rows() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open_with_config(

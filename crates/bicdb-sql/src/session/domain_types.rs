@@ -304,7 +304,11 @@ impl<'db> SqlSession<'db> {
                 }
             }
         }
-        apply_catalog_view_column_types(&view, &create_view.query.to_string(), &mut columns);
+        apply_catalog_view_column_types(
+            &view,
+            &crate::sql_text::sql_text(&create_view.query),
+            &mut columns,
+        );
 
         let mut security_invoker = false;
         let mut security_barrier = false;
@@ -359,7 +363,7 @@ impl<'db> SqlSession<'db> {
             name: view,
             row_type_oid: Some(row_type_oid),
             row_array_type_oid: Some(row_array_type_oid),
-            query_sql: create_view.query.to_string(),
+            query_sql: crate::sql_text::sql_text(&create_view.query),
             columns,
             materialized: create_view.materialized,
             indexes: Vec::new(),
@@ -462,6 +466,13 @@ impl<'db> SqlSession<'db> {
                         }
                     }
                     let schema_existed = schema.is_some();
+                    // A table's triggers belong to it and are dropped with it.
+                    for trigger in list_triggers(self.db_ref())?
+                        .into_iter()
+                        .filter(|trigger| trigger.table_name.eq_ignore_ascii_case(&table))
+                    {
+                        self.delete_session_trigger(&trigger.name, Some(&trigger.table_name))?;
+                    }
                     let existed = self.drop_session_collection(&table)?;
                     self.delete_session_schema(&table)?;
                     if existed || schema_existed {
@@ -760,6 +771,7 @@ impl<'db> SqlSession<'db> {
             sequences: Vec<String>,
             routines: Vec<RoutineSchema>,
             types: Vec<UserTypeSchema>,
+            operators: Vec<crate::pg_operators::OperatorSchema>,
         }
         let mut targets: Vec<Contents> = Vec::new();
         for name in names {
@@ -821,6 +833,7 @@ impl<'db> SqlSession<'db> {
                 .into_iter()
                 .filter(|user_type| user_type.schema_name == schema)
                 .collect::<Vec<_>>();
+            let operators = self.schema_operators(&schema)?;
             targets.push(Contents {
                 namespace,
                 tables,
@@ -828,6 +841,7 @@ impl<'db> SqlSession<'db> {
                 sequences,
                 routines,
                 types,
+                operators,
             });
         }
         for target in &targets {
@@ -856,6 +870,12 @@ impl<'db> SqlSession<'db> {
                         .types
                         .iter()
                         .map(|user_type| format!("type {schema}.{}", user_type.name)),
+                )
+                .chain(
+                    target
+                        .operators
+                        .iter()
+                        .map(|operator| format!("operator {}", operator.id.display())),
                 );
             if !cascade {
                 if let Some(first) = objects.next() {
@@ -896,6 +916,13 @@ impl<'db> SqlSession<'db> {
                 self.require_object_ownership(
                     &user_type.owner,
                     &format!("type {schema}.{}", user_type.name),
+                    "drop it",
+                )?;
+            }
+            for operator in &target.operators {
+                self.require_object_ownership(
+                    &operator.owner(),
+                    &format!("operator {}.{}", operator.id.schema, operator.id.name),
                     "drop it",
                 )?;
             }
@@ -943,7 +970,18 @@ impl<'db> SqlSession<'db> {
             if !sequences.is_empty() {
                 self.execute_drop(ObjectType::Sequence, true, &sequences, true, true)?;
             }
-            for routine in &target.routines {
+            // Operators go before the functions that implement them.
+            let operators = target
+                .operators
+                .iter()
+                .map(|operator| operator.id.clone())
+                .collect::<Vec<_>>();
+            self.drop_operators(&operators)?;
+            // Further overloads first: dropping a name's first routine moves
+            // its next overload to the name's plain catalog key.
+            let mut routines = target.routines.iter().collect::<Vec<_>>();
+            routines.sort_by_key(|routine| routine.overload.is_none());
+            for routine in routines {
                 self.delete_session_routine(routine)?;
             }
             let types = target
@@ -2431,7 +2469,7 @@ impl<'db> SqlSession<'db> {
             ));
         }
         validate_policy_expression_columns(schema, expr)?;
-        let text = format!("({expr})");
+        let text = format!("({})", crate::sql_text::sql_text(expr));
         // Guarantee the stored text round-trips through the policy-expression
         // parser used at enforcement time.
         parse_policy_expression(&text)?;
@@ -2672,7 +2710,10 @@ impl<'db> SqlSession<'db> {
         let _dynamic = oracle::dynamic_sql::Scope::new(
             oracle::preview_routine_language_version(&language).is_some_and(|v| v >= 16),
         );
-        let (mut declarations, mut statements, mut exception_handlers) = parse_plpgsql_body(&body)?;
+        let (mut declarations, mut statements, mut exception_handlers) = {
+            let _dialect = routines::PostgresDialectScope::new(!oracle_block);
+            parse_plpgsql_body(&body)?
+        };
         routines::parameterized_cursors::validate_capabilities(
             &language,
             &declarations,
@@ -2770,6 +2811,7 @@ impl<'db> SqlSession<'db> {
             &mut declarations,
             &mut statements,
             &mut exception_handlers,
+            crate::routine_overloads::user_function_names(self.db_ref())?,
         );
         let owns_transaction = self.tx.is_none()
             && (routine_declarations_may_write(&declarations)
@@ -2931,7 +2973,7 @@ impl<'db> SqlSession<'db> {
         let expression = create_index
             .columns
             .iter()
-            .map(ToString::to_string)
+            .map(crate::sql_text::sql_text)
             .collect::<Vec<_>>()
             .join(", ");
         let collations = create_index
@@ -3117,7 +3159,7 @@ impl<'db> SqlSession<'db> {
                     &pg_type,
                     &mut records,
                 )?;
-                source_expressions.push(expression_ast.to_string());
+                source_expressions.push(crate::sql_text::sql_text(&expression_ast));
                 operator_classes.push(
                     column
                         .operator_class
@@ -3247,7 +3289,7 @@ impl<'db> SqlSession<'db> {
                 name: index_name,
                 expression,
                 source_expressions: if trigram {
-                    vec![expression_ast.to_string()]
+                    vec![crate::sql_text::sql_text(&expression_ast)]
                 } else {
                     Vec::new()
                 },
@@ -3271,7 +3313,7 @@ impl<'db> SqlSession<'db> {
             // and compression are engine-owned and parallel; SQL only
             // evaluates the declared expression for each bounded row batch.
             if self.tx.is_none() && self.db_ref().is_server_paged() {
-                let signature = expression_ast.to_string();
+                let signature = crate::sql_text::sql_text(&expression_ast);
                 let progress = self
                     .db_ref()
                     .prepare_full_text_build(&index_name, &table, &signature)
@@ -3448,7 +3490,7 @@ impl<'db> SqlSession<'db> {
         let predicate_text = predicate
             .as_ref()
             .and(create_index.predicate.as_ref())
-            .map(|predicate| predicate.to_string());
+            .map(crate::sql_text::sql_text);
         self.create_session_index(IndexDefinition {
             nulls_not_distinct: create_index.nulls_distinct == Some(false),
             name: index_name.clone(),
@@ -3505,7 +3547,8 @@ impl<'db> SqlSession<'db> {
             )
             .is_some_and(|v| v >= 29),
         );
-        let (function_schema, name) = routine_schema_and_name(&object_name(&create_function.name)?);
+        let (function_schema, name) =
+            routine_creation_schema_and_name(&object_name(&create_function.name)?);
         let (return_type, returns_set) = create_function
             .return_type
             .as_ref()
@@ -3571,7 +3614,7 @@ impl<'db> SqlSession<'db> {
             args: create_function
                 .args
                 .as_ref()
-                .map(|args| args.iter().map(ToString::to_string).collect())
+                .map(|args| args.iter().map(crate::sql_text::sql_text).collect())
                 .unwrap_or_default(),
             arg_types,
             return_type,
@@ -3579,10 +3622,11 @@ impl<'db> SqlSession<'db> {
             return_type_declaration: Some(return_type_declaration),
             returns_set,
             language,
-            definition: create_function.to_string(),
+            definition: crate::sql_text::sql_text(create_function),
             internal_symbol,
             owner: Some(current_user_from_gucs(&self.session_gucs)),
             security_definer: matches!(create_function.security, Some(FunctionSecurity::Definer)),
+            overload: None,
         };
         if create_function.or_replace
             && list_user_types(self.db_ref())?

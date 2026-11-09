@@ -1709,6 +1709,30 @@ fn simple_query_sql_prepare_execute_and_deallocate_are_supported() {
 }
 
 #[test]
+fn sql_prepare_keeps_quotes_in_literals() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+
+    let mut client = TcpStream::connect(address).unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+
+    send_query(&mut client, "PREPARE quoted AS SELECT 'a''''b';");
+    assert!(read_query_rows(&mut client).is_empty());
+    send_query(&mut client, "EXECUTE quoted;");
+    assert_eq!(read_query_rows(&mut client), vec![vec!["a''b".to_string()]]);
+
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
+#[test]
 fn simple_query_sql_prepare_accepts_typed_set_returning_function_alias() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

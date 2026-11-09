@@ -774,6 +774,9 @@ pub(crate) struct BoundExprScope {
     /// binds for (a jsonb-typed variable subscripts differently).
     pub(crate) array_vars: Arc<FxHashSet<VarId>>,
     pub(crate) var_types: Option<Arc<FxHashMap<VarId, String>>>,
+    /// User-defined function names: an unqualified call of a built-in name
+    /// among them is resolved by argument types at run time, not bound here.
+    pub(crate) user_functions: Arc<FxHashSet<String>>,
 }
 
 #[allow(dead_code)]
@@ -1258,6 +1261,7 @@ impl InsertValuesTemplate {
             exact_vars: Arc::new(FxHashMap::default()),
             array_vars: Arc::new(FxHashSet::default()),
             var_types: None,
+            user_functions: Arc::new(FxHashSet::default()),
         };
         Self::build(schema, columns, &values, &scope)
     }
@@ -1650,7 +1654,13 @@ impl BoundExprScope {
             exact_vars: Arc::new(exact_vars),
             array_vars: Arc::new(FxHashSet::default()),
             var_types: None,
+            user_functions: Arc::new(FxHashSet::default()),
         }
+    }
+
+    pub(crate) fn with_user_functions(mut self, names: Arc<FxHashSet<String>>) -> Self {
+        self.user_functions = names;
+        self
     }
 
     pub(crate) fn with_var_types(mut self, types: &[(String, String)]) -> Self {
@@ -2068,6 +2078,9 @@ impl BoundExprScope {
                 let Some(name) = bound_builtin_name(&function.name) else {
                     return self.bind_user_call(function, ctx);
                 };
+                if self.user_functions.contains(&name) && function.name.0.len() == 1 {
+                    return None;
+                }
                 // Names with type-dispatched overloads (trunc on macaddr) bind
                 // only when the argument's shape rules the overload out: a
                 // bare column or variable could carry any type.

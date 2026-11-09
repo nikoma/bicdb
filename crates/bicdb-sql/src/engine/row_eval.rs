@@ -1088,7 +1088,7 @@ impl<'db> SqlEngine<'db> {
                     return Ok(SqlValue::String(unix_now_date_string()));
                 }
                 if ident.value.eq_ignore_ascii_case("current_schema") {
-                    return Ok(SqlValue::String("public".to_string()));
+                    return Ok(SqlValue::String(crate::search_path::current_schema_name()));
                 }
                 if ident.quote_style.is_none() {
                     if let Some(value) = self.session_identity_value(&ident.value) {
@@ -1650,6 +1650,17 @@ impl<'db> SqlEngine<'db> {
                 args.first(),
             ));
         }
+        if crate::routine_overloads::user_function_takes_builtin_call(
+            self.db_ref(),
+            &self.session_gucs,
+            &name,
+            &arg_types,
+            &args,
+        )? {
+            if let Some(value) = self.eval_stored_sql_function_value(&name, &args, &arg_types)? {
+                return Ok(value);
+            }
+        }
         if let Some(value) = eval_network_function_value(&name, &args, &arg_types)?
             .or(eval_user_range_function_value(
                 self.db_ref(),
@@ -1737,7 +1748,7 @@ impl<'db> SqlEngine<'db> {
         if let Some(value) = eval_spatial_function_value(&name, &args, &arg_types)? {
             return Ok(value);
         }
-        if let Some(value) = self.eval_stored_sql_function_value(&name, &args)? {
+        if let Some(value) = self.eval_stored_sql_function_value(&name, &args, &arg_types)? {
             return Ok(value);
         }
         execute_builtin_function(
@@ -2713,7 +2724,7 @@ impl<'db> SqlEngine<'db> {
                     return Ok(SqlValue::String(unix_now_date_string()));
                 }
                 if ident.value.eq_ignore_ascii_case("current_schema") {
-                    return Ok(SqlValue::String("public".to_string()));
+                    return Ok(SqlValue::String(crate::search_path::current_schema_name()));
                 }
                 if ident.quote_style.is_none() {
                     if let Some(value) = self.session_identity_value(&ident.value) {
@@ -3152,6 +3163,17 @@ impl<'db> SqlEngine<'db> {
                 args.first(),
             ));
         }
+        if crate::routine_overloads::user_function_takes_builtin_call(
+            self.db_ref(),
+            &self.session_gucs,
+            &name,
+            &arg_types,
+            &args,
+        )? {
+            if let Some(value) = self.eval_stored_sql_function_value(&name, &args, &arg_types)? {
+                return Ok(value);
+            }
+        }
         if let Some(value) = eval_network_function_value(&name, &args, &arg_types)?
             .or(eval_user_range_function_value(
                 self.db_ref(),
@@ -3224,7 +3246,7 @@ impl<'db> SqlEngine<'db> {
         if let Some(value) = eval_spatial_function_value(&name, &args, &arg_types)? {
             return Ok(value);
         }
-        if let Some(value) = self.eval_stored_sql_function_value(&name, &args)? {
+        if let Some(value) = self.eval_stored_sql_function_value(&name, &args, &arg_types)? {
             return Ok(value);
         }
         execute_builtin_function(
@@ -3248,8 +3270,10 @@ impl<'db> SqlEngine<'db> {
         &self,
         name: &str,
         args: &[SqlValue],
+        arg_types: &[Option<String>],
     ) -> Result<Option<SqlValue>> {
-        let Some(routine) = resolve_routine_cached(self.db_ref(), RoutineKind::Function, name)?
+        let Some(routine) =
+            resolve_routine_for_call(self.db_ref(), RoutineKind::Function, name, arg_types, args)?
         else {
             return Ok(None);
         };
@@ -3257,7 +3281,7 @@ impl<'db> SqlEngine<'db> {
             // PL/pgSQL runs in the session's interpreter; the host applies the
             // EXECUTE privilege check and SECURITY DEFINER itself.
             return match self.routine_host {
-                Some(host) => host.call_function(self, name, args).map(Some),
+                Some(host) => host.call_function(self, name, args, arg_types).map(Some),
                 None => Ok(None),
             };
         }

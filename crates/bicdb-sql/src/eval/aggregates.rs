@@ -792,6 +792,17 @@ pub(crate) fn coerce_common_json_value(value: SqlValue, pg_type: Option<&str>) -
     }
 }
 
+/// A type as PostgreSQL's messages spell it (`integer`, `timestamp without
+/// time zone`); user-defined types keep their own names.
+pub(crate) fn common_type_display(pg_type: &str) -> String {
+    if let Some(element) = pg_type.strip_suffix("[]") {
+        return format!("{}[]", common_type_display(element));
+    }
+    pg_type_spec(pg_type)
+        .map(|spec| spec.display_name.to_string())
+        .unwrap_or_else(|| pg_type.to_string())
+}
+
 pub(crate) fn common_type_implicit_direction(from: &str, to: &str) -> bool {
     pg_cast_allows(from, to, PgCastContext::Implicit)
 }
@@ -896,11 +907,13 @@ pub(crate) fn select_common_pg_type(
             "42804",
             format!(
                 "{construct} types {} and {} cannot be matched",
-                flattened[0],
-                flattened
-                    .iter()
-                    .find(|pg_type| common_type_category(db, pg_type).ok() != Some(category))
-                    .unwrap_or(&flattened[1])
+                common_type_display(&flattened[0]),
+                common_type_display(
+                    flattened
+                        .iter()
+                        .find(|pg_type| common_type_category(db, pg_type).ok() != Some(category))
+                        .unwrap_or(&flattened[1])
+                )
             ),
             None,
         ));
@@ -925,11 +938,13 @@ pub(crate) fn select_common_pg_type(
             "42804",
             format!(
                 "{construct} types {} and {} cannot be matched",
-                candidate,
-                flattened
-                    .iter()
-                    .find(|pg_type| !common_type_implicit_direction(pg_type, &candidate))
-                    .unwrap_or(&flattened[0])
+                common_type_display(&candidate),
+                common_type_display(
+                    flattened
+                        .iter()
+                        .find(|pg_type| !common_type_implicit_direction(pg_type, &candidate))
+                        .unwrap_or(&flattened[0])
+                )
             ),
             None,
         ));
@@ -1766,6 +1781,9 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
                 | "digest"
                 | "gen_random_bytes"
                 | "hmac"
+                | "int2send"
+                | "int4send"
+                | "int8send"
                 | "set_byte"
                 | "sha224"
                 | "sha256"
@@ -2227,6 +2245,18 @@ fn projected_expr_pg_type_with_db_uncached(db: &BicDb, expr: &Expr) -> Option<St
     }
     if let Expr::Function(function) = expr {
         let name = object_name(&function.name).ok()?;
+        if routine_overloads(db, RoutineKind::Function, &name)
+            .ok()
+            .flatten()
+            .is_some()
+        {
+            let args = function_arg_list(function);
+            let arg_types = args
+                .iter()
+                .map(|arg| projected_expr_pg_type_with_db_uncached(db, arg))
+                .collect::<Vec<_>>();
+            return overload_return_type(db, &name, &arg_types);
+        }
         return load_routine(db, RoutineKind::Function, &name)
             .ok()
             .flatten()
@@ -2263,6 +2293,14 @@ pub(crate) fn projected_binary_expr_pg_type_with_types(
     }
     if vector_distance_operator(op).is_some() {
         return Some("float8".to_string());
+    }
+    // numeric ^ numeric when either side is NUMERIC, else float8.
+    if matches!(op, BinaryOperator::PGExp) {
+        return match (left_type.as_deref(), right_type.as_deref()) {
+            (Some("numeric"), _) | (_, Some("numeric")) => Some("numeric".to_string()),
+            (Some(_), Some(_)) => Some("float8".to_string()),
+            _ => None,
+        };
     }
     if let Some(pg_type) =
         network_binary_result_pg_type(op, left_type.as_deref(), right_type.as_deref())

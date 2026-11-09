@@ -1,0 +1,114 @@
+{
+  "qualification_stage": "FTS-qualified pre-merge source",
+  "source_commit": "a5bbadca5e2eb253d887fd33554e67e1f3f8e4fb",
+  "core_main_base": "3f3f9a781030b895e068cfdfdbf7a19fb507aa94",
+  "verified_tracked_files": 3649,
+  "binary_sha256": "466a8c5aae1a5c17530757d8b74c0d92dfb331dc5af1b45913d030f762f406d7",
+  "format": "passed",
+  "cli_build": "passed",
+  "tests": {
+    "binaries": 21,
+    "passed": 622,
+    "failed": 0,
+    "ignored": 0,
+    "targets": [
+      {
+        "name": "tests/authorization_canary.rs",
+        "passed": 2
+      },
+      {
+        "name": "tests/binary_storage.rs",
+        "passed": 8
+      },
+      {
+        "name": "tests/catalog_and_admin_authorization.rs",
+        "passed": 13
+      },
+      {
+        "name": "tests/commit_outcome_resolution.rs",
+        "passed": 1
+      },
+      {
+        "name": "tests/deferred_trigger_rollback.rs",
+        "passed": 2
+      },
+      {
+        "name": "tests/explain_matches_execution.rs",
+        "passed": 2
+      },
+      {
+        "name": "tests/fts_direct_build.rs",
+        "passed": 19
+      },
+      {
+        "name": "tests/fts_query_budgets.rs",
+        "passed": 2
+      },
+      {
+        "name": "tests/no_context_no_authority.rs",
+        "passed": 2
+      },
+      {
+        "name": "tests/object_ddl_authorization.rs",
+        "passed": 5
+      },
+      {
+        "name": "tests/oracle_application_sql.rs",
+        "passed": 16
+      },
+      {
+        "name": "tests/pg_dump_schema_qualified_restore.rs",
+        "passed": 23
+      },
+      {
+        "name": "tests/pg_wewobo_compat.rs",
+        "passed": 60
+      },
+      {
+        "name": "tests/ranked_fts_topk.rs",
+        "passed": 4
+      },
+      {
+        "name": "tests/rls_index_candidates.rs",
+        "passed": 18
+      },
+      {
+        "name": "tests/routine_row_transaction_identity.rs",
+        "passed": 5
+      },
+      {
+        "name": "tests/routine_table_emission.rs",
+        "passed": 5
+      },
+      {
+        "name": "tests/select_row_locks.rs",
+        "passed": 6
+      },
+      {
+        "name": "tests/sql/main.rs",
+        "passed": 419
+      },
+      {
+        "name": "tests/streaming_rls_guard.rs",
+        "passed": 2
+      },
+      {
+        "name": "tests/write_path_authorization.rs",
+        "passed": 8
+      }
+    ]
+  },
+  "full_text_regression": {
+    "before": "dd3ec90b test against unchanged b4 production:17passed1failed, full scan despite generated FTS + composite key",
+    "after": "a5:18passed0failed; tenant point lookup + original authored FTS path"
+  },
+  "native_fts_probe": {
+    "script_sha256": "90150f911bada16d4dfef08d4f1a9e2fb1451bb8c6fd0e72b48fc0c0036abf49",
+    "before_source": "b4e0142437a0518dac5deb176b9dccf088987d51",
+    "after_source": "a5bbadca5e2eb253d887fd33554e67e1f3f8e4fb",
+    "before_goal_met": false,
+    "after_goal_met": true
+  },
+  "independent_review": "LINQ specialist reviewed all planner/row-ID/scan FTS extractors; no blocking source concern. Review is not execution evidence.",
+  "upstream_note": "Main advanced independently to64251c3 (durability PR67/74). Both have9greenchecks; disjoint core/page scope. Those changes are NOT in this a5 executable; merged-main qualification is separate."
+}

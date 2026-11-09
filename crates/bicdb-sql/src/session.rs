@@ -24,6 +24,7 @@ mod catalog_join_tests;
 mod driver_metadata_tests;
 pub(crate) mod functions_insert;
 mod join_lookup_tests;
+mod operator_ddl;
 #[cfg(test)]
 mod primary_key_range_tests;
 mod primary_key_updates;
@@ -708,9 +709,11 @@ fn parse_base_type_definition(
             UserDefinedTypeSqlDefinitionOption::Preferred(preferred) => {
                 definition.preferred = *preferred;
             }
-            UserDefinedTypeSqlDefinitionOption::Default(expr) => {
-                set_base_type_option(&mut definition.default_expr, expr.to_string(), "DEFAULT")?
-            }
+            UserDefinedTypeSqlDefinitionOption::Default(expr) => set_base_type_option(
+                &mut definition.default_expr,
+                crate::sql_text::sql_text(expr),
+                "DEFAULT",
+            )?,
             UserDefinedTypeSqlDefinitionOption::Element(data_type) => {
                 let element_type = pg_type_from_data_type(data_type)?.0;
                 set_base_type_option(&mut definition.element_type, element_type, "ELEMENT")?;
@@ -904,7 +907,7 @@ fn rewrite_routine_definition_type_identity(
     for (index, argument) in function.args.iter_mut().flatten().enumerate() {
         if relocate(&mut argument.data_type, previous, updated) {
             if let Some(declaration) = routine.args.get_mut(index) {
-                *declaration = argument.to_string();
+                *declaration = crate::sql_text::sql_text(argument);
             }
             if let (Some(saved), Ok(rewritten)) = (
                 routine.arg_types.get_mut(index),
@@ -930,7 +933,7 @@ fn rewrite_routine_definition_type_identity(
     if changed {
         // Loading routine metadata reparses this declaration. Keep its typed
         // header current while preserving the body as its original SQL value.
-        routine.definition = statements[0].to_string();
+        routine.definition = crate::sql_text::sql_text(&statements[0]);
     }
     changed
 }
@@ -2067,11 +2070,14 @@ pub(crate) enum DdlUndo {
         grant: DefaultPrivilegeGrant,
     },
     DeleteRoutine {
-        kind: RoutineKind,
-        name: String,
+        routine: RoutineSchema,
     },
     RestoreRoutine {
         routine: RoutineSchema,
+    },
+    RestoreOperator {
+        id: crate::pg_operators::OperatorRef,
+        previous: Option<Box<crate::pg_operators::OperatorSchema>>,
     },
     DeleteNamespace {
         namespace: String,
@@ -2954,17 +2960,35 @@ impl<'db> SqlSession<'db> {
             self.apply_before_insert_row_triggers(&table, schema.as_ref(), records)?;
         if let Some(schema) = schema.as_ref() {
             self.materialize_generated_columns(&table, schema, &mut records)?;
+        }
+        // As INSERT: the row policies first, so a refused key is not
+        // revealed by a duplicate-key error; earlier rows keep their own
+        // constraint errors.
+        let rls_violation = self.first_rls_write_violation(
+            &table,
+            schema.as_ref(),
+            PolicyAction::Insert,
+            false,
+            &records,
+        )?;
+        if let Some(schema) = schema.as_ref() {
+            let checked = match &rls_violation {
+                Some((index, _)) => &records[..*index],
+                None => &records[..],
+            };
             validate_records_for_write(
                 self.db_ref(),
                 self.tx.as_ref(),
                 &table,
                 schema,
-                &records,
+                checked,
                 false,
                 Some(&self.sql_engine()),
             )?;
         }
-        self.enforce_rls_checks(&table, schema.as_ref(), PolicyAction::Insert, &records)?;
+        if let Some((_, error)) = rls_violation {
+            return Err(error);
+        }
         let count = records.len();
         self.insert_session_records(&table, records.clone())?;
         self.fire_after_insert_triggers(&table, schema.as_ref(), &records)?;
@@ -2981,9 +3005,10 @@ impl<'db> SqlSession<'db> {
         // statement sees the path and schemas earlier statements set up.
         let per_statement = crate::search_path::statements_bound_separately(sql, path.is_some());
         let path = if per_statement.is_some() { None } else { path };
-        let bound = path
-            .as_deref()
-            .and_then(|path| crate::search_path::bind_sql_text(self.db_ref(), sql, path));
+        let bound = match path.as_deref() {
+            Some(path) => crate::search_path::bind_sql_text(self.db_ref(), sql, path)?,
+            None => None,
+        };
         let _path_scope = crate::search_path::PathScope::enter(path);
         let sql = bound.as_deref().unwrap_or(sql);
         // A per-row routine call reaches raw SQL only through dynamic EXECUTE
@@ -3009,9 +3034,14 @@ impl<'db> SqlSession<'db> {
                                 session.db_ref(),
                                 &session.session_gucs,
                             )?;
-                            let bound = path.as_deref().and_then(|path| {
-                                crate::search_path::bind_sql_text(session.db_ref(), statement, path)
-                            });
+                            let bound = match path.as_deref() {
+                                Some(path) => crate::search_path::bind_sql_text(
+                                    session.db_ref(),
+                                    statement,
+                                    path,
+                                )?,
+                                None => None,
+                            };
                             let _path_scope = crate::search_path::PathScope::enter(path);
                             session.conflict_arbiter_memo.borrow_mut().take();
                             last =
@@ -3241,6 +3271,12 @@ impl<'db> SqlSession<'db> {
             return Ok(result);
         }
         if let Some(result) = self.execute_raw_alter_role_settings(sql)? {
+            return Ok(result);
+        }
+        if let Some(result) = self.execute_raw_create_rule(sql)? {
+            return Ok(result);
+        }
+        if let Some(result) = self.execute_raw_drop_rule(sql)? {
             return Ok(result);
         }
         if let Some(result) = self.execute_raw_reset(sql)? {
@@ -3722,6 +3758,9 @@ impl<'db> SqlSession<'db> {
 
     fn execute_parsed_statement_in_sql(&mut self, statement: &Statement) -> Result<SqlResult> {
         self.ensure_read_only_statement(statement)?;
+        if let Some(result) = self.apply_instead_rule(statement)? {
+            return Ok(result);
+        }
         // Earlier statements in a batch can change temporal output settings.
         let _temporal_scope = self.temporal_scope();
         self.db_ref().check_recovery_state()?;
@@ -4605,12 +4644,16 @@ impl<'db> SqlSession<'db> {
             DdlUndo::RestoreDefaultPrivilege { grant } => {
                 save_default_privilege(self.db_mut()?, &grant)?;
             }
-            DdlUndo::DeleteRoutine { kind, name } => {
-                delete_routine(self.db_mut()?, kind, &name)?;
+            DdlUndo::DeleteRoutine { routine } => {
+                delete_routine_schema(self.db_mut()?, &routine)?;
             }
             DdlUndo::RestoreRoutine { routine } => {
                 save_routine(self.db_mut()?, &routine)?;
             }
+            DdlUndo::RestoreOperator { id, previous } => match previous {
+                Some(previous) => crate::pg_operators::save_operator(self.db_mut()?, &previous)?,
+                None => crate::pg_operators::delete_operator(self.db_mut()?, &id)?,
+            },
             DdlUndo::DeleteNamespace { namespace } => {
                 delete_namespace(self.db_mut()?, &namespace)?;
             }

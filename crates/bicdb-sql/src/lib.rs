@@ -65,8 +65,10 @@ use thiserror::Error;
 pub type Result<T> = std::result::Result<T, SqlError>;
 
 mod aggregate_evaluation;
+mod builtin_signatures;
 mod identity;
 pub mod oracle;
+pub mod sql_text;
 pub use identity::{
     bicdb_version_banner, postgres_version_banner, BICDB_VERSION, POSTGRES_COMPATIBILITY_VERSION,
     POSTGRES_COMPATIBILITY_VERSION_NUM,
@@ -96,6 +98,7 @@ mod fts;
 mod geometric;
 mod pg_casts;
 mod pg_opclasses;
+mod pg_operators;
 mod trigram;
 use trigram::*;
 pub mod pg_types;
@@ -194,12 +197,15 @@ pub use runtime::*;
 mod application_copy;
 mod constraint_nulls;
 mod lock_lists;
+mod query_rules;
 mod role_settings;
+mod routine_overloads;
 mod schema_meta;
 pub mod search_path;
 pub use application_copy::{copy_application_tables, ApplicationCopyReport};
 pub(crate) use constraint_nulls::*;
 pub use role_settings::role_session_settings;
+pub(crate) use routine_overloads::*;
 mod statement_cache;
 pub use schema_meta::*;
 mod catalog_memo;
@@ -2229,6 +2235,12 @@ impl SqlError {
                     .into_iter()
                     .collect()
             }
+            Self::BicDb(error @ BicDbError::CommitOutcomeUnknown { .. }) => error
+                .commit_outcome_identity()
+                .map(|(detail, hint)| {
+                    vec![SqlErrorField::Detail(detail), SqlErrorField::Hint(hint)]
+                })
+                .unwrap_or_default(),
             _ => Vec::new(),
         }
     }
@@ -2258,6 +2270,11 @@ fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
         BicDbError::TransactionConflict(_) => "40001",
         BicDbError::TransactionDeadlock(_) => "40P01",
         BicDbError::TransactionNotPending => "25P01",
+        // Durability fence: io_error for refused writes, and
+        // transaction_resolution_unknown for a commit whose outcome the
+        // failure made unknown. See docs/durability-failure-handling.md.
+        BicDbError::WriteFailed { .. } => "58030",
+        BicDbError::CommitOutcomeUnknown { .. } => "08007",
         BicDbError::ReadOnlyStandby(_) => "25006",
         BicDbError::QueryCanceled | BicDbError::QueryTimedOut => "57014",
         BicDbError::Flashback(message) => bicdb_core::flashback_error_sqlstate(message),
@@ -4416,6 +4433,10 @@ struct RoutineSchema {
     owner: Option<String>,
     #[serde(default)]
     security_definer: bool,
+    /// Input signature of a further overload of `name`; `None` for the name's
+    /// first routine, which keeps the plain catalog key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    overload: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -4604,7 +4625,7 @@ struct RoutineIrCacheKey {
     search_path: Option<std::sync::Arc<[String]>>,
 }
 
-type RoutineCompilationScope = (u64, u64, u64, u64, u64, u64);
+type RoutineCompilationScope = (u64, u64, u64, u64, u64, u64, u64);
 
 thread_local! {
     static ROUTINE_IR_CACHE: RefCell<FxHashMap<RoutineIrCacheKey, Arc<RoutineIR>>> = RefCell::new(FxHashMap::default());
@@ -4757,6 +4778,8 @@ enum RoutineStmt {
         iterator: String,
         lower: RoutineExpr,
         upper: RoutineExpr,
+        /// `FOR i IN REVERSE high .. low`: count down from `lower` to `upper`.
+        reverse: bool,
         body: Vec<RoutineStmt>,
     },
     ForeachLoop {
@@ -5010,7 +5033,10 @@ fn statement_may_write(statement: &Statement) -> bool {
         | Statement::DropProcedure { .. }
         | Statement::DropTrigger(_)
         | Statement::AlterTable(_)
-        | Statement::AlterFunction(_) => true,
+        | Statement::AlterFunction(_)
+        | Statement::CreateOperator(_)
+        | Statement::AlterOperator(_)
+        | Statement::DropOperator(_) => true,
         _ => false,
     }
 }
@@ -5696,4 +5722,28 @@ pub fn query_output_column_names(sql: &str) -> Option<Vec<String>> {
             _ => None,
         })
         .collect()
+}
+
+#[cfg(test)]
+mod durability_sqlstate_tests {
+    use super::*;
+
+    #[test]
+    fn durability_failures_keep_their_sqlstates_through_sql_errors() {
+        let refused = SqlError::BicDb(BicDbError::WriteFailed {
+            site: "transaction_log.write".into(),
+            detail: "EIO".into(),
+        });
+        let unknown = SqlError::BicDb(BicDbError::CommitOutcomeUnknown {
+            sequence: Some(3),
+            transaction_id: None,
+            incarnation: "inc-2".into(),
+            detail: "EIO".into(),
+        });
+        assert!(unknown.fields().iter().any(|field| matches!(field,
+            SqlErrorField::Detail(detail)
+                if detail == "commit_seq=3 transaction_id=none incarnation=inc-2")));
+        assert_eq!(refused.sqlstate(), "58030");
+        assert_eq!(unknown.sqlstate(), "08007");
+    }
 }

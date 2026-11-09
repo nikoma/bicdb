@@ -241,9 +241,10 @@ fn append_frames_with_sync_mode(
         return Ok(Vec::new());
     }
 
+    check_not_poisoned(write_path)?;
     let _backup_gate = acquire_backup_write_guard(write_path)?;
     ensure_parent(write_path)?;
-    let (mut file, sync_after_write) = open_append_file(write_path, sync_mode)?;
+    let (file, sync_after_write) = open_append_file(write_path, sync_mode)?;
 
     let mut offsets = Vec::with_capacity(payloads.len());
     let mut next_offset = file.metadata()?.len();
@@ -265,13 +266,225 @@ fn append_frames_with_sync_mode(
         offsets.push(offset);
         next_offset = next_offset.saturating_add((header.len() + stored_payload.len()) as u64);
     }
-    file.write_all(&write_buffer)?;
 
-    if sync_after_write {
-        file.sync_data()?;
+    // The same append-or-repair discipline as the transaction log
+    // (`write_raw`): a failed or short write, or a failed sync, may have
+    // left some or all of the batch in the file. Nothing in the batch was
+    // acknowledged, so the tail is cut back to the frame boundary it started
+    // at (and that cut is synced) before the error is returned. Without
+    // this, the next append lands after the torn prefix, and recovery,
+    // which stops at the first bad frame, would later drop every frame
+    // written after it, including acknowledged ones.
+    let handle_len_before = file.metadata()?.len();
+    let mut handle = AppendHandle {
+        file,
+        sync_after_write,
+        durable: sync_mode != AppendSyncMode::None,
+        failed_repair: None,
+    };
+    let result = write_raw_with_repair(
+        &mut handle,
+        &write_buffer,
+        |file, bytes, sync_after_write| {
+            // Fault injection (tests only; one atomic load otherwise), scoped
+            // by path. `frame_log.write` fails before any byte is written.
+            // `frame_log.short_write` writes about half of the batch, always
+            // ending inside a frame, and then fails, as a write cut short by a
+            // full disk or a signal does: the file gets complete frames of the
+            // failed batch (when it has several) and a torn one.
+            // `frame_log.sync` writes the whole batch and then fails its
+            // sync: the bytes may or may not be durable.
+            bicdb_page::test_faults::io_fault("frame_log.write", write_path)?;
+            if bicdb_page::test_faults::io_fault("frame_log.short_write", write_path).is_err() {
+                let mut cut = bytes.len() / 2;
+                if offsets
+                    .iter()
+                    .any(|offset| offset - handle_len_before == cut as u64)
+                {
+                    cut += 1;
+                }
+                file.write_all(&bytes[..cut])?;
+                return Err(std::io::Error::from_raw_os_error(libc::EIO));
+            }
+            file.write_all(bytes)?;
+            if sync_mode != AppendSyncMode::None {
+                bicdb_page::test_faults::io_fault("frame_log.sync", write_path)?;
+            }
+            if sync_after_write {
+                file.sync_data()?;
+            }
+            Ok(())
+        },
+        |file, len, durable| {
+            // `frame_log.repair` fails the tail repair too, leaving the torn
+            // bytes in place.
+            bicdb_page::test_faults::io_fault("frame_log.repair", write_path)?;
+            file.set_len(len)?;
+            if durable {
+                file.sync_all()?;
+            }
+            Ok(())
+        },
+    );
+    if let Err(error) = result {
+        if let Some(reason) = handle.failed_repair {
+            // The file now holds bytes of unknown status after its last
+            // acknowledged frame. Appending after them would put later,
+            // acknowledged frames behind damage, so the file accepts no
+            // more appends until recovery (the next open) re-establishes
+            // its tail. The caller reports a durability failure.
+            //
+            // The bytes may include complete frames of the failed batch,
+            // which nobody acknowledged. A marker records where the log's
+            // acknowledged content ends, so recovery cuts them off rather
+            // than accepting them (a failed sync.log append, for example,
+            // belongs to a commit that aborted). Writing it is best effort:
+            // the disk is already failing.
+            poison(write_path, &reason);
+            let marker = match write_append_failure_marker(write_path, handle_len_before) {
+                Ok(()) => String::new(),
+                Err(error) => format!("; the append-failure marker was not written: {error}"),
+            };
+            return Err(BicDbError::WriteFailed {
+                site: FRAME_LOG_REPAIR_SITE.into(),
+                detail: format!("{}: {reason}{marker}", write_path.display()),
+            });
+        }
+        return Err(error);
     }
 
     Ok(offsets)
+}
+
+/// Record a frame log's durability failure (a failed tail repair, or an
+/// append refused because of one) in the database's fail-closed state, and
+/// hand the error back. Other errors pass through: a failed append whose
+/// tail was repaired is an ordinary error, because nothing it wrote remains
+/// and nothing acknowledged depended on it.
+pub(crate) fn fence_on_frame_log_failure(
+    health: Option<&std::sync::Arc<bicdb_page::DurabilityHealth>>,
+    error: BicDbError,
+) -> BicDbError {
+    if let (Some(health), BicDbError::WriteFailed { site, detail }) = (health, &error) {
+        health.record_failure(site, detail);
+    }
+    error
+}
+
+/// The site recorded when a generic frame log could not repair its tail
+/// after a failed append. See `docs/durability-failure-handling.md`.
+pub(crate) const FRAME_LOG_REPAIR_SITE: &str = "frame_log.repair";
+
+/// Frame files whose tail repair failed in this process, with the reason.
+/// The set is process-wide because the generic appender holds no handle:
+/// each call opens the file. An entry blocks every later append to that path
+/// until a recovery reader ([`read_frames`], [`stream_frames`],
+/// [`read_frames_from`]) or [`salvage_frame_log`] re-establishes a tail that
+/// ends on a frame boundary.
+fn poisoned_frame_logs() -> &'static parking_lot::Mutex<std::collections::HashMap<PathBuf, String>>
+{
+    static POISONED: std::sync::OnceLock<
+        parking_lot::Mutex<std::collections::HashMap<PathBuf, String>>,
+    > = std::sync::OnceLock::new();
+    POISONED.get_or_init(Default::default)
+}
+
+static ANY_FRAME_LOG_POISONED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+fn poison(path: &Path, reason: &str) {
+    let mut poisoned = poisoned_frame_logs().lock();
+    poisoned.insert(path.to_path_buf(), reason.to_string());
+    ANY_FRAME_LOG_POISONED.store(true, std::sync::atomic::Ordering::Release);
+}
+
+fn clear_poison(path: &Path) {
+    if !ANY_FRAME_LOG_POISONED.load(std::sync::atomic::Ordering::Acquire) {
+        return;
+    }
+    let mut poisoned = poisoned_frame_logs().lock();
+    poisoned.remove(path);
+    ANY_FRAME_LOG_POISONED.store(!poisoned.is_empty(), std::sync::atomic::Ordering::Release);
+}
+
+/// `<log>.append-failed`: written when a failed append could not be cut
+/// back. Holds the log's length before that append, which is where its
+/// acknowledged content ends.
+pub(crate) fn append_failure_marker_path(path: &Path) -> PathBuf {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("frames");
+    path.with_file_name(format!("{name}.append-failed"))
+}
+
+#[derive(Serialize, Deserialize)]
+struct AppendFailureMarker {
+    acknowledged_len: u64,
+}
+
+fn write_append_failure_marker(path: &Path, acknowledged_len: u64) -> Result<()> {
+    let bytes = serde_json::to_vec(&AppendFailureMarker { acknowledged_len })?;
+    write_atomic(&append_failure_marker_path(path), &bytes, true)
+}
+
+/// Recovery's first step for a log whose earlier append failed and could not
+/// be cut back: cut it now, to the length recorded before that append. In
+/// the process that failed, the log was poisoned, so nothing was appended
+/// after the failed bytes; and every open runs recovery before it appends.
+/// So everything past the recorded length belongs to failed appends.
+fn apply_append_failure_marker(file: &File, path: &Path) -> Result<()> {
+    let marker_path = append_failure_marker_path(path);
+    let bytes = match fs::read(&marker_path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
+    let marker: AppendFailureMarker =
+        serde_json::from_slice(&bytes).map_err(|error| BicDbError::Corruption {
+            path: marker_path.clone(),
+            message: format!("unreadable append-failure marker: {error}"),
+        })?;
+    if marker.acknowledged_len < file.metadata()?.len() {
+        file.set_len(marker.acknowledged_len)?;
+        file.sync_all()?;
+    }
+    fs::remove_file(&marker_path)?;
+    sync_parent(path)?;
+    Ok(())
+}
+
+fn check_not_poisoned(path: &Path) -> Result<()> {
+    // A marker left by an earlier process means the file still ends in
+    // failed bytes that no recovery read has cut yet (a log the open does not
+    // read, such as a disabled `sync.log`). Appending after them would put
+    // acknowledged frames behind damage.
+    let marker = append_failure_marker_path(path);
+    if marker.exists() {
+        return Err(BicDbError::WriteFailed {
+            site: FRAME_LOG_REPAIR_SITE.into(),
+            detail: format!(
+                "{}: refusing to append while {} records an unrepaired failed append; \
+                 open the database with this log enabled so recovery cuts the failed bytes",
+                path.display(),
+                marker.display()
+            ),
+        });
+    }
+    if !ANY_FRAME_LOG_POISONED.load(std::sync::atomic::Ordering::Acquire) {
+        return Ok(());
+    }
+    match poisoned_frame_logs().lock().get(path) {
+        Some(reason) => Err(BicDbError::WriteFailed {
+            site: FRAME_LOG_REPAIR_SITE.into(),
+            detail: format!(
+                "{}: refusing to append after an unrepaired failed append ({reason}); \
+                 reopen the database so recovery re-establishes the log's tail",
+                path.display()
+            ),
+        }),
+        None => Ok(()),
+    }
 }
 
 /// Cached append descriptor and its platform-specific durability obligation.
@@ -411,13 +624,38 @@ pub(crate) fn write_raw(handle: &mut AppendHandle, path: &Path, bytes: &[u8]) ->
         return Ok(());
     }
     let _backup_gate = acquire_backup_write_guard(path)?;
+    write_raw_holding_gate(handle, path, bytes)
+}
+
+/// [`write_raw`] for a caller that already holds the backup write gate.
+/// Separating the two lets the transaction log tell a gate timeout (nothing
+/// was written; an ordinary, retryable error) from a failed write or sync
+/// (a durability failure that fences the database).
+pub(crate) fn write_raw_holding_gate(
+    handle: &mut AppendHandle,
+    path: &Path,
+    bytes: &[u8],
+) -> Result<()> {
+    handle.check_writable()?;
+    if bytes.is_empty() {
+        return Ok(());
+    }
     write_raw_with_repair(
         handle,
         bytes,
         |file, bytes, sync_after_write| {
-            append_and_sync(file, bytes, sync_after_write, File::sync_data)
+            // Fault injection (tests only; one atomic load otherwise).
+            // `transaction_log.write` fails before any byte is written.
+            // `transaction_log.sync` writes the bytes and then fails, as an
+            // O_DSYNC write whose data sync failed does: the bytes may or may
+            // not be durable. `transaction_log.repair` then fails the tail
+            // repair too, so the bytes stay in the file.
+            bicdb_page::test_faults::io_fault("transaction_log.write", path)?;
+            append_and_sync(file, bytes, sync_after_write, File::sync_data)?;
+            bicdb_page::test_faults::io_fault("transaction_log.sync", path)
         },
         |file, len, durable| {
+            bicdb_page::test_faults::io_fault("transaction_log.repair", path)?;
             file.set_len(len)?;
             // O_DSYNC covers writes, not a subsequent ftruncate. Persist the
             // repaired boundary before permitting another acknowledged batch.
@@ -533,6 +771,15 @@ pub(crate) fn acquire_backup_write_guard(path: &Path) -> Result<Option<BackupGat
         // an opened database. Real database opens always initialize the gate.
         return Ok(None);
     };
+    // `backup_gate.timeout` (tests only), keyed by the file about to be
+    // written: report the timeout at once, as if a backup had held the
+    // gate for the whole wait.
+    if bicdb_page::test_faults::io_fault("backup_gate.timeout", path).is_err() {
+        return Err(BicDbError::Backup(format!(
+            "timed out waiting for shared backup I/O gate {}",
+            gate.display()
+        )));
+    }
     acquire_backup_gate(&gate, false).map(Some)
 }
 
@@ -661,9 +908,11 @@ pub(crate) fn read_frames(
         .read(true)
         .write(true)
         .open(path)?;
+    apply_append_failure_marker(&file, path)?;
 
     let file_len = file.metadata()?.len();
     if file_len == 0 {
+        clear_poison(path);
         return Ok(RecoveredFrames {
             frames: Vec::new(),
             truncated_bytes: 0,
@@ -701,18 +950,53 @@ pub(crate) fn stream_frames(
     path: &Path,
     expected_kind: FrameKind,
     encryption: &EncryptionRuntime,
-    mut visit: impl FnMut(u64, Vec<u8>) -> Result<()>,
+    visit: impl FnMut(u64, Vec<u8>) -> Result<()>,
 ) -> Result<u64> {
-    const READ_CHUNK: usize = 8 * 1024 * 1024;
     ensure_parent(path)?;
-    let mut file = OpenOptions::new()
+    let file = OpenOptions::new()
         .create(true)
         .truncate(false)
         .read(true)
         .write(true)
         .open(path)?;
+    apply_append_failure_marker(&file, path)?;
+    stream_frames_from_file(file, path, expected_kind, encryption, true, visit)
+}
+
+/// [`stream_frames`] for a log another thread may be appending to: the walk
+/// ends at the first frame that is not complete and valid, and the file is
+/// never truncated or created. A frame still being written is the normal
+/// state of a live log's tail; a recovery reader would mistake it for a torn
+/// tail and cut it off under the writer, which then reports the write as
+/// successful.
+pub(crate) fn stream_frames_live(
+    path: &Path,
+    expected_kind: FrameKind,
+    encryption: &EncryptionRuntime,
+    visit: impl FnMut(u64, Vec<u8>) -> Result<()>,
+) -> Result<()> {
+    let file = match File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
+    stream_frames_from_file(file, path, expected_kind, encryption, false, visit).map(|_| ())
+}
+
+fn stream_frames_from_file(
+    mut file: File,
+    path: &Path,
+    expected_kind: FrameKind,
+    encryption: &EncryptionRuntime,
+    recover: bool,
+    mut visit: impl FnMut(u64, Vec<u8>) -> Result<()>,
+) -> Result<u64> {
+    const READ_CHUNK: usize = 8 * 1024 * 1024;
     let file_len = file.metadata()?.len();
     if file_len == 0 {
+        if recover {
+            clear_poison(path);
+        }
         return Ok(0);
     }
 
@@ -782,11 +1066,186 @@ pub(crate) fn stream_frames(
         visit(offset, payload)?;
     }
 
+    if recover {
+        settle_recovered_tail(&file, path, valid_up_to, file_len)?;
+    }
+    Ok(file_len.saturating_sub(valid_up_to))
+}
+
+/// The end of a recovery walk that stopped at `valid_up_to`, the end of the
+/// last complete, valid frame.
+///
+/// A crash or a failed append can only leave a torn *suffix*: appends are
+/// sequential, and a failed append cuts its own bytes back (or poisons the
+/// file so nothing is appended after them). So when no valid frame starts
+/// anywhere after the stop point, the bytes after it are a torn tail: they
+/// were never acknowledged, and they are truncated (and the truncation is
+/// synced) so the next append starts on a frame boundary.
+///
+/// When a valid frame does start after the stop point, the damage is in the
+/// middle of the log: truncating would silently drop that frame and every
+/// one after it, any of which may have been acknowledged. The file is left
+/// unchanged and the open fails with `Corruption`. [`salvage_frame_log`] is
+/// the explicit operator action that accepts the loss.
+fn settle_recovered_tail(file: &File, path: &Path, valid_up_to: u64, file_len: u64) -> Result<()> {
     if valid_up_to < file_len {
+        if let Some(next) = first_valid_frame_after(file, valid_up_to, file_len)? {
+            return Err(mid_file_damage(path, valid_up_to, next, file_len));
+        }
         file.set_len(valid_up_to)?;
         file.sync_data()?;
     }
-    Ok(file_len.saturating_sub(valid_up_to))
+    // The tail now ends on a frame boundary: appends may resume.
+    clear_poison(path);
+    Ok(())
+}
+
+fn mid_file_damage(path: &Path, damaged_at: u64, next_valid: u64, file_len: u64) -> BicDbError {
+    BicDbError::Corruption {
+        path: path.to_path_buf(),
+        message: format!(
+            "frame log is damaged at offset {damaged_at}, and a valid frame follows at offset \
+             {next_valid} ({} bytes after the damage). This is not a torn tail: truncating \
+             would silently drop frames that may have been acknowledged, so the file is left \
+             unchanged. Restore it from a backup, or accept the loss of everything from offset \
+             {damaged_at} with salvage_frame_log, which keeps those bytes in a side file",
+            file_len.saturating_sub(damaged_at)
+        ),
+    }
+}
+
+/// The offset of the first complete, checksum-valid frame of any kind that
+/// starts after `damaged_at`, or `None`. Only runs on the rare path where a
+/// recovery walk stopped before the end of the file. A frame header begins
+/// with a 4-byte magic and a version byte, and serialized JSON payloads
+/// never contain that byte sequence (control bytes are escaped), so a match
+/// that also passes the CRC is a real frame.
+fn first_valid_frame_after(file: &File, damaged_at: u64, file_len: u64) -> Result<Option<u64>> {
+    const CHUNK: usize = 1024 * 1024;
+    let mut reader = file.try_clone()?;
+    let mut window = vec![0_u8; CHUNK];
+    let mut position = damaged_at.saturating_add(1);
+    while position.saturating_add(HEADER_LEN as u64) <= file_len {
+        let want = ((file_len - position) as usize).min(CHUNK);
+        reader.seek(SeekFrom::Start(position))?;
+        reader.read_exact(&mut window[..want])?;
+        let bytes = &window[..want];
+        let mut search = 0;
+        while let Some(found) = bytes[search..]
+            .windows(MAGIC.len())
+            .position(|candidate| candidate == MAGIC)
+        {
+            let candidate = position + (search + found) as u64;
+            if frame_is_valid_at(&mut reader, candidate, file_len)? {
+                return Ok(Some(candidate));
+            }
+            search += found + 1;
+        }
+        if want < CHUNK {
+            break;
+        }
+        // Overlap by the magic's length minus one so a magic that straddles
+        // two windows is still found.
+        position += (want - (MAGIC.len() - 1)) as u64;
+    }
+    Ok(None)
+}
+
+fn frame_is_valid_at(reader: &mut File, offset: u64, file_len: u64) -> Result<bool> {
+    if offset.saturating_add(HEADER_LEN as u64) > file_len {
+        return Ok(false);
+    }
+    let mut header = [0_u8; HEADER_LEN];
+    reader.seek(SeekFrom::Start(offset))?;
+    reader.read_exact(&mut header)?;
+    let Some((kind, flags, len, expected_checksum)) = decode_header(&header) else {
+        return Ok(false);
+    };
+    if len > MAX_PAYLOAD_LEN || offset + (HEADER_LEN + len) as u64 > file_len {
+        return Ok(false);
+    }
+    let mut payload = vec![0_u8; len];
+    reader.read_exact(&mut payload)?;
+    Ok(checksum(kind, flags, len as u32, &payload) == expected_checksum)
+}
+
+/// What [`salvage_frame_log`] did.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FrameLogSalvage {
+    /// Bytes kept: the log now ends after its last valid frame before the
+    /// first damage.
+    pub kept_bytes: u64,
+    /// Bytes moved out of the log (the damage and everything after it).
+    pub moved_bytes: u64,
+    /// Where the moved bytes were preserved, when any were moved.
+    pub moved_to: Option<PathBuf>,
+}
+
+/// Operator recovery for a frame log that recovery refused because of
+/// damage in the middle (`Corruption`, "a valid frame follows"). Keeps every
+/// frame before the first damaged one, copies the damage and everything after
+/// it to `<file>.damaged-<offset>` next to the log (synced before the log is
+/// cut), and truncates the log there. This deliberately gives up the frames
+/// after the damage; use it only when no backup can restore them. Run it
+/// with the database closed. A log without damage is left unchanged.
+pub fn salvage_frame_log(path: &Path) -> Result<FrameLogSalvage> {
+    let mut file = OpenOptions::new().read(true).write(true).open(path)?;
+    apply_append_failure_marker(&file, path)?;
+    let file_len = file.metadata()?.len();
+    // Walk the same way recovery does: frames of the log's own kind (the
+    // first frame's), complete, with a valid checksum.
+    let mut offset = 0_u64;
+    let mut log_kind = None;
+    while offset + HEADER_LEN as u64 <= file_len {
+        let mut header = [0_u8; HEADER_LEN];
+        file.seek(SeekFrom::Start(offset))?;
+        file.read_exact(&mut header)?;
+        let Some((kind, _, len, _)) = decode_header(&header) else {
+            break;
+        };
+        if *log_kind.get_or_insert(kind) != kind || !frame_is_valid_at(&mut file, offset, file_len)?
+        {
+            break;
+        }
+        offset += (HEADER_LEN + len) as u64;
+    }
+    if offset == file_len {
+        clear_poison(path);
+        return Ok(FrameLogSalvage {
+            kept_bytes: file_len,
+            moved_bytes: 0,
+            moved_to: None,
+        });
+    }
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("frames");
+    let mut side = path.with_file_name(format!("{file_name}.damaged-{offset}"));
+    if side.exists() {
+        side = path.with_file_name(format!(
+            "{file_name}.damaged-{offset}-{}",
+            Uuid::new_v4().simple()
+        ));
+    }
+    {
+        let mut out = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&side)?;
+        file.seek(SeekFrom::Start(offset))?;
+        std::io::copy(&mut (&mut file).take(file_len - offset), &mut out)?;
+        out.sync_all()?;
+    }
+    sync_parent(path)?;
+    file.set_len(offset)?;
+    file.sync_all()?;
+    clear_poison(path);
+    Ok(FrameLogSalvage {
+        kept_bytes: offset,
+        moved_bytes: file_len - offset,
+        moved_to: Some(side),
+    })
 }
 
 fn read_fully(file: &mut File, buffer: &mut [u8]) -> Result<usize> {
@@ -1009,9 +1468,8 @@ fn read_frames_buffered(
     }
 
     drop(data);
-    if !strict && (valid_up_to as u64) < file_len {
-        file.set_len(valid_up_to as u64)?;
-        file.sync_data()?;
+    if !strict {
+        settle_recovered_tail(&file, path, valid_up_to as u64, file_len)?;
     }
 
     Ok((
@@ -1038,8 +1496,12 @@ pub(crate) fn read_frames_from(
     encryption: &EncryptionRuntime,
 ) -> Result<RecoveredFrames> {
     let mut file = OpenOptions::new().read(true).write(true).open(path)?;
+    apply_append_failure_marker(&file, path)?;
     let file_len = file.metadata()?.len();
     if start_offset >= file_len {
+        if start_offset == file_len {
+            clear_poison(path);
+        }
         return Ok(RecoveredFrames {
             frames: Vec::new(),
             truncated_bytes: file_len.saturating_sub(start_offset),
@@ -1091,10 +1553,7 @@ pub(crate) fn read_frames_from(
     // later append never lands after dead bytes (which a future full recovery would
     // otherwise cut, taking the good appends with it).
     let absolute_valid = start_offset + valid_up_to as u64;
-    if absolute_valid < file_len {
-        file.set_len(absolute_valid)?;
-        file.sync_data()?;
-    }
+    settle_recovered_tail(&file, path, absolute_valid, file_len)?;
 
     Ok(RecoveredFrames {
         frames,
@@ -1269,9 +1728,8 @@ fn read_frames_mmap(
     }
 
     drop(mmap);
-    if !strict && (valid_up_to as u64) < file_len {
-        file.set_len(valid_up_to as u64)?;
-        file.sync_data()?;
+    if !strict {
+        settle_recovered_tail(&file, path, valid_up_to as u64, file_len)?;
     }
 
     Ok((
@@ -1296,29 +1754,13 @@ pub(crate) fn sync_file(path: &Path) -> Result<()> {
 }
 
 pub(crate) fn write_atomic(path: &Path, bytes: &[u8], fsync: bool) -> Result<()> {
-    ensure_parent(path)?;
-    let tmp_path = tmp_path(path);
-    let result = (|| -> Result<()> {
-        let mut options = OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)]
-        options.custom_flags(libc::O_NOFOLLOW).mode(0o600);
-        let mut file = options.open(&tmp_path)?;
-        file.write_all(bytes)?;
-        if fsync {
-            file.sync_all()?;
-        }
-        drop(file);
-        fs::rename(&tmp_path, path)?;
-        if fsync {
-            sync_parent(path)?;
-        }
-        Ok(())
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&tmp_path);
-    }
-    result
+    replace_durably(
+        path,
+        ReplaceContents::Plain(bytes),
+        fsync,
+        "",
+        FailClosed::No,
+    )
 }
 
 /// Atomically replace one immutable framed object while binding ciphertext to
@@ -1331,26 +1773,225 @@ pub(crate) fn write_frame_atomic(
     fsync: bool,
     encryption: &EncryptionRuntime,
 ) -> Result<()> {
-    ensure_parent(path)?;
+    replace_durably(
+        path,
+        ReplaceContents::Framed {
+            kind,
+            payload,
+            encryption,
+        },
+        fsync,
+        "",
+        FailClosed::No,
+    )
+}
+
+/// What a failure of a durable file replacement means for the database
+/// (see `docs/durability-failure-handling.md`, section 7).
+#[derive(Clone, Copy)]
+pub(crate) enum FailClosed<'a> {
+    /// Never fatal: the error is returned and the handle stays healthy.
+    No,
+    /// Fatal once the rename happened, that is when the directory `fsync`
+    /// after it fails: the new file is live now and may vanish at the next
+    /// power loss, while the caller reports a failure. A failure up to and
+    /// including the rename itself (which is atomic: on error nothing was
+    /// renamed) leaves the old file in place and is not fatal.
+    AfterRename(&'a bicdb_page::DurabilityHealth),
+    /// Fatal at every step: the caller has already changed its memory to
+    /// the new contents, so any failure leaves memory ahead of the disk.
+    Always(&'a bicdb_page::DurabilityHealth),
+}
+
+impl FailClosed<'_> {
+    fn health(&self) -> Option<&bicdb_page::DurabilityHealth> {
+        match self {
+            Self::No => None,
+            Self::AfterRename(health) | Self::Always(health) => Some(health),
+        }
+    }
+}
+
+pub(crate) enum ReplaceContents<'a> {
+    Plain(&'a [u8]),
+    Framed {
+        kind: FrameKind,
+        payload: &'a [u8],
+        encryption: &'a EncryptionRuntime,
+    },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ReplaceStep {
+    Write,
+    Sync,
+    Rename,
+    DirSync,
+}
+
+impl ReplaceStep {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Write => "write",
+            Self::Sync => "sync",
+            Self::Rename => "rename",
+            Self::DirSync => "dir_sync",
+        }
+    }
+}
+
+/// The durable replacement protocol: write a new temporary file, `fsync`
+/// it, rename it over `path`, `fsync` the directory. With `fsync` off only
+/// the write and the rename happen (nothing is crash durable then).
+///
+/// `site` names the file for fault injection and for the recorded failure:
+/// injection sites `<site>.write`, `<site>.sync`, `<site>.rename` and
+/// `<site>.dir_sync` fail the corresponding step, and crash points
+/// `<site>.after_write`, `<site>.after_sync`, `<site>.after_rename` and
+/// `<site>.after_dir_sync` follow each step. An empty site has neither.
+///
+/// Under `policy` a fatal failure fences `health` and returns
+/// [`BicDbError::WriteFailed`] with site `<site>.<step>`; a non-fatal one
+/// returns the I/O error. A health that is already failed refuses the
+/// replacement before anything is written.
+pub(crate) fn replace_durably(
+    path: &Path,
+    contents: ReplaceContents<'_>,
+    fsync: bool,
+    site: &str,
+    policy: FailClosed<'_>,
+) -> Result<()> {
+    if let Some(health) = policy.health() {
+        health.check().map_err(crate::error::durability_error)?;
+    }
+    let result = replace_durably_steps(path, contents, fsync, site);
+    let Err((step, error)) = result else {
+        return Ok(());
+    };
+    let fatal = match policy {
+        FailClosed::No => None,
+        FailClosed::AfterRename(health) => (step == ReplaceStep::DirSync).then_some(health),
+        FailClosed::Always(health) => Some(health),
+    };
+    let Some(health) = fatal else {
+        return Err(error);
+    };
+    let recorded = if site.is_empty() {
+        format!("atomic_file.{}", step.name())
+    } else {
+        format!("{site}.{}", step.name())
+    };
+    let detail = format!("{}: {error}", path.display());
+    health.record_failure(&recorded, &detail);
+    Err(BicDbError::WriteFailed {
+        site: recorded,
+        detail,
+    })
+}
+
+fn replace_durably_steps(
+    path: &Path,
+    contents: ReplaceContents<'_>,
+    fsync: bool,
+    site: &str,
+) -> std::result::Result<(), (ReplaceStep, BicDbError)> {
+    use bicdb_page::test_faults;
+    let inject = |step: ReplaceStep| -> std::result::Result<(), (ReplaceStep, BicDbError)> {
+        if site.is_empty() {
+            return Ok(());
+        }
+        test_faults::io_fault(&format!("{site}.{}", step.name()), path)
+            .map_err(|error| (step, BicDbError::from(error)))
+    };
+    let crash = |point: &str| {
+        if !site.is_empty() {
+            test_faults::crash_point(&format!("{site}.{point}"));
+        }
+    };
+    let at = |step: ReplaceStep| move |error: BicDbError| (step, error);
+    ensure_parent(path).map_err(at(ReplaceStep::Write))?;
     let tmp_path = tmp_path(path);
-    let result = (|| -> Result<()> {
+    let result = (|| -> std::result::Result<(), (ReplaceStep, BicDbError)> {
+        inject(ReplaceStep::Write)?;
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
         #[cfg(unix)]
         options.custom_flags(libc::O_NOFOLLOW).mode(0o600);
-        drop(options.open(&tmp_path)?);
-        append_frames_for_object(
-            &tmp_path,
-            path,
-            kind,
-            &[payload.to_vec()],
-            fsync,
-            &CompressionConfig::disabled(),
-            encryption,
-        )?;
-        fs::rename(&tmp_path, path)?;
+        let file = options
+            .open(&tmp_path)
+            .map_err(|error| (ReplaceStep::Write, error.into()))?;
+        let data_synced = match contents {
+            ReplaceContents::Plain(bytes) => {
+                let mut file = file;
+                file.write_all(bytes)
+                    .map_err(|error| (ReplaceStep::Write, error.into()))?;
+                crash("after_write");
+                if fsync {
+                    inject(ReplaceStep::Sync)?;
+                    file.sync_all()
+                        .map_err(|error| (ReplaceStep::Sync, error.into()))?;
+                    crash("after_sync");
+                }
+                fsync
+            }
+            ReplaceContents::Framed {
+                kind,
+                payload,
+                encryption,
+            } => {
+                drop(file);
+                // The framed appender writes and (with `fsync`) syncs in one
+                // call; a failure is attributed to the write.
+                if fsync {
+                    inject(ReplaceStep::Sync)?;
+                }
+                append_frames_for_object(
+                    &tmp_path,
+                    path,
+                    kind,
+                    &[payload.to_vec()],
+                    fsync,
+                    &CompressionConfig::disabled(),
+                    encryption,
+                )
+                .map_err(|error| {
+                    // The temporary file is discarded whole, so a failed
+                    // tail repair inside it leaves nothing of unknown
+                    // status: drop the frame log's poison and marker for it
+                    // and report an ordinary write failure; the policy
+                    // decides whether that is fatal.
+                    clear_poison(&tmp_path);
+                    let _ = fs::remove_file(append_failure_marker_path(&tmp_path));
+                    let error = match error {
+                        BicDbError::WriteFailed { site, detail } => {
+                            BicDbError::Io(std::io::Error::other(format!("{site}: {detail}")))
+                        }
+                        other => other,
+                    };
+                    (ReplaceStep::Write, error)
+                })?;
+                crash("after_write");
+                if fsync {
+                    crash("after_sync");
+                }
+                fsync
+            }
+        };
+        inject(ReplaceStep::Rename)?;
+        let previous = if test_faults::volatile_dir_enabled() {
+            volatile_previous_link(path)
+        } else {
+            None
+        };
+        fs::rename(&tmp_path, path).map_err(|error| (ReplaceStep::Rename, error.into()))?;
+        if test_faults::volatile_dir_enabled() {
+            test_faults::register_volatile_rename(path, previous, data_synced);
+        }
+        crash("after_rename");
         if fsync {
-            sync_parent(path)?;
+            inject(ReplaceStep::DirSync)?;
+            sync_parent(path).map_err(at(ReplaceStep::DirSync))?;
+            crash("after_dir_sync");
         }
         Ok(())
     })();
@@ -1358,6 +1999,19 @@ pub(crate) fn write_frame_atomic(
         let _ = fs::remove_file(&tmp_path);
     }
     result
+}
+
+/// Power-loss emulation: keep the file a rename is about to replace, so a
+/// crash before the directory `fsync` can put it back.
+fn volatile_previous_link(path: &Path) -> Option<PathBuf> {
+    let link = path.with_file_name(format!(
+        ".{}.{}.volatile-previous",
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("bicdb"),
+        Uuid::new_v4().simple()
+    ));
+    fs::hard_link(path, &link).ok().map(|()| link)
 }
 
 fn encode_header(kind: FrameKind, flags: u16, payload: &[u8]) -> [u8; HEADER_LEN] {
@@ -1638,8 +2292,15 @@ fn sync_parent(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent() {
         let dir = File::open(parent)?;
         dir.sync_all()?;
+        bicdb_page::test_faults::directory_synced(parent);
     }
     Ok(())
+}
+
+/// `fsync` the directory that holds `path` (a no-op where directories
+/// cannot be synced).
+pub(crate) fn sync_parent_directory(path: &Path) -> Result<()> {
+    sync_parent(path)
 }
 
 fn tmp_path(path: &Path) -> PathBuf {
@@ -1985,8 +2646,8 @@ mod tests {
             assert_eq!(&frame.payload, payload);
         }
 
-        // A corrupted mid-file checksum ends the walk at the last valid
-        // frame, exactly like the reference reader.
+        // A corrupted mid-file checksum is damage, not a torn tail: both
+        // readers refuse it the same way and leave the file unchanged.
         let mid = recovered.frames[300].offset;
         {
             use std::io::{Seek, SeekFrom, Write};
@@ -1995,21 +2656,24 @@ mod tests {
                 .unwrap();
             file.write_all(&[0xFF]).unwrap();
         }
+        let damaged = fs::read(&path).unwrap();
         let mut streamed = Vec::new();
-        stream_frames(&path, FrameKind::Event, &encryption, |offset, payload| {
+        let error = stream_frames(&path, FrameKind::Event, &encryption, |offset, payload| {
             streamed.push((offset, payload));
             Ok(())
         })
-        .unwrap();
+        .unwrap_err();
+        assert!(matches!(error, BicDbError::Corruption { .. }), "{error}");
         assert_eq!(streamed.len(), 300);
-        let recovered = read_frames(
+        let error = read_frames(
             &path,
             FrameKind::Event,
             SegmentReadMode::Buffered,
             &encryption,
         )
-        .unwrap();
-        assert_eq!(recovered.frames.len(), 300);
+        .unwrap_err();
+        assert!(matches!(error, BicDbError::Corruption { .. }), "{error}");
+        assert_eq!(fs::read(&path).unwrap(), damaged);
 
         // Empty file: no frames, no truncation.
         let empty = dir.path().join("empty.seg");
@@ -2190,5 +2854,484 @@ mod tests {
         assert!(writer_rx.recv_timeout(Duration::from_millis(50)).is_err());
         drop(backup);
         drop(writer_rx.recv_timeout(Duration::from_secs(2)).unwrap());
+    }
+
+    // ---- Torn-tail recovery and failed-append repair of the generic frame
+    // appender. See docs/durability-failure-handling.md, section 7.4.
+
+    fn frame_payloads(count: usize, salt: &str) -> Vec<Vec<u8>> {
+        (0..count)
+            .map(|index| {
+                format!(
+                    "{{\"{salt}\":{index},\"pad\":\"{}\"}}",
+                    "p".repeat(index * 7 % 41)
+                )
+                .into_bytes()
+            })
+            .collect()
+    }
+
+    /// Every recovery reader, applied to `path`. Returns the payloads it
+    /// accepted, or its error.
+    fn recover_with(reader: &str, path: &Path) -> Result<Vec<Vec<u8>>> {
+        let encryption = EncryptionRuntime::disabled();
+        match reader {
+            "buffered" => read_frames(
+                path,
+                FrameKind::Sync,
+                SegmentReadMode::Buffered,
+                &encryption,
+            )
+            .map(|r| r.frames.into_iter().map(|f| f.payload).collect()),
+            "mmap" => read_frames(path, FrameKind::Sync, SegmentReadMode::Mmap, &encryption)
+                .map(|r| r.frames.into_iter().map(|f| f.payload).collect()),
+            "stream" => {
+                let mut out = Vec::new();
+                stream_frames(path, FrameKind::Sync, &encryption, |_, payload| {
+                    out.push(payload);
+                    Ok(())
+                })
+                .map(|_| out)
+            }
+            // The snapshot tail reader, started at the first frame boundary.
+            "from" => {
+                let first = HEADER_LEN as u64 + frame_payloads(1, "a")[0].len() as u64;
+                let mut out = vec![frame_payloads(1, "a")[0].clone()];
+                read_frames_from(path, first, FrameKind::Sync, &encryption).map(|r| {
+                    out.extend(r.frames.into_iter().map(|f| f.payload));
+                    out
+                })
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    const READERS: [&str; 4] = ["buffered", "mmap", "stream", "from"];
+
+    fn append_plain(path: &Path, payloads: &[Vec<u8>], fsync: bool) -> Result<Vec<u64>> {
+        append_frames(
+            path,
+            FrameKind::Sync,
+            payloads,
+            fsync,
+            &CompressionConfig::disabled(),
+            &EncryptionRuntime::disabled(),
+        )
+    }
+
+    /// A torn last frame, cut at every byte offset inside it, and a complete
+    /// last frame with any one byte damaged: every reader truncates exactly
+    /// the last frame, keeps every frame before it, and the log then
+    /// accepts appends on the repaired boundary.
+    #[test]
+    fn a_torn_or_damaged_last_frame_at_every_byte_offset_is_cut_to_the_last_good_frame() {
+        let dir = tempfile::tempdir().unwrap();
+        let reference = dir.path().join("reference.log");
+        let payloads = frame_payloads(5, "a");
+        let offsets = append_plain(&reference, &payloads, false).unwrap();
+        let full = fs::read(&reference).unwrap();
+        let last = offsets[4] as usize;
+        let kept = payloads[..4].to_vec();
+        let mut cases = 0;
+        for reader in READERS {
+            // Torn: the file ends `cut` bytes into the last frame.
+            for cut in 1..(full.len() - last) {
+                let path = dir.path().join(format!("torn-{reader}-{cut}.log"));
+                fs::write(&path, &full[..last + cut]).unwrap();
+                assert_eq!(
+                    recover_with(reader, &path).unwrap(),
+                    kept,
+                    "{reader} torn at +{cut}"
+                );
+                assert_eq!(
+                    fs::metadata(&path).unwrap().len(),
+                    last as u64,
+                    "{reader} torn at +{cut}"
+                );
+                cases += 1;
+            }
+            // Damaged: the last frame is complete but one byte is wrong.
+            for at in last..full.len() {
+                let path = dir.path().join(format!("flip-{reader}-{at}.log"));
+                let mut bytes = full.clone();
+                bytes[at] ^= 0x5A;
+                fs::write(&path, &bytes).unwrap();
+                assert_eq!(
+                    recover_with(reader, &path).unwrap(),
+                    kept,
+                    "{reader} flip at {at}"
+                );
+                assert_eq!(
+                    fs::metadata(&path).unwrap().len(),
+                    last as u64,
+                    "{reader} flip at {at}"
+                );
+                // The next append starts on the repaired boundary.
+                append_plain(&path, &[b"next".to_vec()], false).unwrap();
+                let mut expected = kept.clone();
+                expected.push(b"next".to_vec());
+                assert_eq!(
+                    recover_with(reader, &path).unwrap(),
+                    expected,
+                    "{reader} flip at {at}"
+                );
+                cases += 1;
+            }
+        }
+        assert!(cases > 4 * 2 * 20, "{cases}");
+    }
+
+    /// Damage in the middle of the log, at every byte of a middle frame, and
+    /// a zeroed run, is reported as corruption by every recovery reader and
+    /// the file is left byte-for-byte unchanged: the valid frames after the
+    /// damage are never silently dropped.
+    #[test]
+    fn damage_followed_by_valid_frames_is_corruption_and_the_file_is_left_unchanged() {
+        let dir = tempfile::tempdir().unwrap();
+        let reference = dir.path().join("reference.log");
+        let payloads = frame_payloads(5, "a");
+        let offsets = append_plain(&reference, &payloads, false).unwrap();
+        let full = fs::read(&reference).unwrap();
+        let (start, end) = (offsets[2] as usize, offsets[3] as usize);
+        let mut damaged_files = Vec::new();
+        for at in start..end {
+            let mut bytes = full.clone();
+            bytes[at] ^= 0x5A;
+            damaged_files.push((format!("flip-{at}"), bytes));
+        }
+        let mut zeroed = full.clone();
+        zeroed[start..start + 24].fill(0);
+        damaged_files.push(("zeroed".to_string(), zeroed));
+        // A torn frame followed by complete frames: what an append that
+        // landed after an unrepaired torn prefix produced before this change.
+        let mut torn_then_valid = full[..end - 3].to_vec();
+        torn_then_valid.extend_from_slice(&full[end..]);
+        damaged_files.push(("torn-then-valid".to_string(), torn_then_valid));
+        for reader in READERS {
+            for (label, bytes) in &damaged_files {
+                let path = dir.path().join(format!("{reader}-{label}.log"));
+                fs::write(&path, bytes).unwrap();
+                let error = recover_with(reader, &path).unwrap_err();
+                assert!(
+                    matches!(&error, BicDbError::Corruption { message, .. } if message.contains("valid frame follows")),
+                    "{reader} {label}: {error}"
+                );
+                assert_eq!(
+                    &fs::read(&path).unwrap(),
+                    bytes,
+                    "{reader} {label}: file changed"
+                );
+            }
+        }
+
+        // Salvage is the explicit way out: it keeps the frames before the
+        // damage, preserves the rest in a side file, and recovery then opens.
+        let path = dir.path().join("salvage.log");
+        let mut bytes = full.clone();
+        bytes[start + 1] ^= 0x5A;
+        fs::write(&path, &bytes).unwrap();
+        let salvage = salvage_frame_log(&path).unwrap();
+        assert_eq!(salvage.kept_bytes, start as u64);
+        assert_eq!(salvage.moved_bytes, (full.len() - start) as u64);
+        let side = salvage.moved_to.clone().unwrap();
+        assert_eq!(fs::read(&side).unwrap(), &bytes[start..]);
+        assert_eq!(
+            recover_with("buffered", &path).unwrap(),
+            payloads[..2].to_vec()
+        );
+        // A clean log is left alone.
+        let clean = salvage_frame_log(&reference).unwrap();
+        assert_eq!(clean.moved_bytes, 0);
+        assert_eq!(fs::read(&reference).unwrap(), full);
+    }
+
+    /// The live-log readers never truncate a frame that is still being
+    /// written, and stop before it.
+    #[test]
+    fn live_readers_never_truncate_an_in_flight_frame() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("live.log");
+        let payloads = frame_payloads(3, "a");
+        append_plain(&path, &payloads, false).unwrap();
+        let in_flight = encode_frames_to_bytes(
+            &path,
+            FrameKind::Sync,
+            &[b"in-flight".to_vec()],
+            &CompressionConfig::disabled(),
+            &EncryptionRuntime::disabled(),
+        )
+        .unwrap();
+        {
+            let mut file = OpenOptions::new().append(true).open(&path).unwrap();
+            file.write_all(&in_flight[..in_flight.len() - 4]).unwrap();
+        }
+        let before = fs::read(&path).unwrap();
+        let mut seen = Vec::new();
+        stream_frames_live(
+            &path,
+            FrameKind::Sync,
+            &EncryptionRuntime::disabled(),
+            |_, p| {
+                seen.push(p);
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(seen, payloads);
+        let frames =
+            read_frames_readonly_from(&path, 0, FrameKind::Sync, &EncryptionRuntime::disabled())
+                .unwrap();
+        assert_eq!(frames.len(), 3);
+        assert_eq!(fs::read(&path).unwrap(), before);
+    }
+
+    /// A failed write (nothing written), a short write (half the batch
+    /// written) and a failed sync (the whole batch written) each cut the log
+    /// back to the frame boundary before the batch and return an ordinary
+    /// error. The log keeps accepting appends, and recovery returns exactly
+    /// the acknowledged batches.
+    #[test]
+    fn a_failed_short_or_unsynced_append_is_cut_back_and_later_appends_survive() {
+        for fsync in [true, false] {
+            for site in ["frame_log.write", "frame_log.short_write", "frame_log.sync"] {
+                if site == "frame_log.sync" && !fsync {
+                    continue; // no sync to fail
+                }
+                let dir = tempfile::tempdir().unwrap();
+                let path = dir.path().join("outbox.log");
+                let mut acknowledged = Vec::new();
+                for batch in 0..3 {
+                    let payloads = frame_payloads(4, &format!("ok{batch}"));
+                    append_plain(&path, &payloads, fsync).unwrap();
+                    acknowledged.extend(payloads);
+                }
+                let before = fs::metadata(&path).unwrap().len();
+                let fault = bicdb_page::test_faults::arm_io_failure(site, dir.path(), 1, false);
+                let error = append_plain(&path, &frame_payloads(4, "failed"), fsync).unwrap_err();
+                assert_eq!(fault.fired(), 1, "{site} fsync={fsync}");
+                assert!(
+                    !error.is_durability_failure(),
+                    "{site} fsync={fsync}: {error}"
+                );
+                assert_eq!(
+                    fs::metadata(&path).unwrap().len(),
+                    before,
+                    "{site} fsync={fsync}: the failed batch must be cut back"
+                );
+                drop(fault);
+                for batch in 0..2 {
+                    let payloads = frame_payloads(3, &format!("later{batch}"));
+                    append_plain(&path, &payloads, fsync).unwrap();
+                    acknowledged.extend(payloads);
+                }
+                for reader in ["buffered", "stream"] {
+                    assert_eq!(
+                        recover_with(reader, &path).unwrap(),
+                        acknowledged,
+                        "{site} fsync={fsync} {reader}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// When the cut-back fails too, the log is poisoned: every later append
+    /// is refused with a durability failure and writes nothing. Recovery
+    /// then cuts the log to its acknowledged length (from the marker), so
+    /// even complete frames of the failed batch are not accepted, and the
+    /// log takes appends again.
+    #[test]
+    fn a_failed_repair_poisons_the_log_until_recovery_cuts_the_failed_bytes() {
+        for site in ["frame_log.short_write", "frame_log.sync"] {
+            for reader in ["buffered", "stream", "from"] {
+                let dir = tempfile::tempdir().unwrap();
+                let path = dir.path().join("outbox.log");
+                let mut acknowledged = frame_payloads(1, "a");
+                append_plain(&path, &acknowledged, true).unwrap();
+                let more = frame_payloads(3, "b");
+                append_plain(&path, &more, true).unwrap();
+                acknowledged.extend(more);
+                let before = fs::metadata(&path).unwrap().len();
+                let failing = bicdb_page::test_faults::arm_io_failure(site, dir.path(), 1, false);
+                let repair = bicdb_page::test_faults::arm_io_failure(
+                    "frame_log.repair",
+                    dir.path(),
+                    1,
+                    false,
+                );
+                // Eight frames: a short write leaves complete frames of the
+                // failed batch in the file, not only a torn one.
+                let error = append_plain(&path, &frame_payloads(8, "failed"), true).unwrap_err();
+                assert_eq!((failing.fired(), repair.fired()), (1, 1));
+                assert!(
+                    matches!(&error, BicDbError::WriteFailed { site, .. } if site == FRAME_LOG_REPAIR_SITE),
+                    "{error}"
+                );
+                let poisoned_len = fs::metadata(&path).unwrap().len();
+                assert!(poisoned_len > before, "{site}: the failed bytes stayed");
+                assert!(append_failure_marker_path(&path).exists());
+                drop((failing, repair));
+
+                let refused = append_plain(&path, &frame_payloads(1, "refused"), true).unwrap_err();
+                assert!(refused.is_durability_failure(), "{refused}");
+                assert_eq!(
+                    fs::metadata(&path).unwrap().len(),
+                    poisoned_len,
+                    "nothing appended"
+                );
+                // A later process has no in-memory poison; the marker alone
+                // still refuses appends until a recovery read cuts the tail.
+                clear_poison(&path);
+                let refused = append_plain(&path, &frame_payloads(1, "refused"), true).unwrap_err();
+                assert!(refused.is_durability_failure(), "{refused}");
+                assert_eq!(
+                    fs::metadata(&path).unwrap().len(),
+                    poisoned_len,
+                    "nothing appended"
+                );
+
+                assert_eq!(
+                    recover_with(reader, &path).unwrap(),
+                    acknowledged,
+                    "{site} {reader}"
+                );
+                assert_eq!(fs::metadata(&path).unwrap().len(), before);
+                assert!(!append_failure_marker_path(&path).exists());
+                let after = frame_payloads(2, "c");
+                append_plain(&path, &after, true).unwrap();
+                acknowledged.extend(after);
+                assert_eq!(recover_with("buffered", &path).unwrap(), acknowledged);
+            }
+        }
+    }
+
+    /// Every step of the durable replacement, under every policy: what is
+    /// on disk afterwards, whether the handle is fenced, and that no
+    /// temporary file is left behind.
+    #[test]
+    fn durable_replacement_fails_closed_per_step_and_policy() {
+        use bicdb_page::test_faults::arm_io_failure;
+        for step in ["write", "sync", "rename", "dir_sync"] {
+            for policy_name in ["no", "after_rename", "always"] {
+                let temp = tempfile::tempdir().unwrap();
+                let path = temp.path().join("state.json");
+                write_atomic(&path, b"old", true).unwrap();
+                let health = bicdb_page::DurabilityHealth::new();
+                let policy = match policy_name {
+                    "no" => FailClosed::No,
+                    "after_rename" => FailClosed::AfterRename(&health),
+                    _ => FailClosed::Always(&health),
+                };
+                let fault = arm_io_failure(&format!("unit.{step}"), temp.path(), 1, false);
+                let error =
+                    replace_durably(&path, ReplaceContents::Plain(b"new"), true, "unit", policy)
+                        .unwrap_err();
+                assert_eq!(fault.fired(), 1, "{step}/{policy_name}");
+                let label = format!("{step}/{policy_name}: {error}");
+                let renamed = step == "dir_sync";
+                let fatal = match policy_name {
+                    "no" => false,
+                    "after_rename" => step == "dir_sync",
+                    _ => true,
+                };
+                assert_eq!(health.is_failed(), fatal, "{label}");
+                assert_eq!(
+                    matches!(&error, BicDbError::WriteFailed { site, .. } if site == &format!("unit.{step}")),
+                    fatal,
+                    "{label}"
+                );
+                // The injected rename fails before renaming: the old file is
+                // intact. A failed directory sync follows a real rename.
+                let expected: &[u8] = if renamed { b"new" } else { b"old" };
+                assert_eq!(fs::read(&path).unwrap(), expected, "{label}");
+                let leftovers = fs::read_dir(temp.path())
+                    .unwrap()
+                    .filter_map(|entry| entry.ok())
+                    .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
+                    .count();
+                assert_eq!(leftovers, 0, "{label}: temporary file left behind");
+                // A fenced health refuses the next replacement outright.
+                drop(fault);
+                let again =
+                    replace_durably(&path, ReplaceContents::Plain(b"next"), true, "unit", policy);
+                assert_eq!(
+                    again.is_err(),
+                    fatal,
+                    "{label}: replacement after the failure"
+                );
+            }
+        }
+    }
+
+    /// With `fsync` off nothing is synced, so only the write and rename
+    /// steps exist.
+    #[test]
+    fn durable_replacement_without_fsync_skips_the_sync_steps() {
+        use bicdb_page::test_faults::arm_io_failure;
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("state.json");
+        let sync = arm_io_failure("unit.sync", temp.path(), 1, true);
+        let dir_sync = arm_io_failure("unit.dir_sync", temp.path(), 1, true);
+        let health = bicdb_page::DurabilityHealth::new();
+        replace_durably(
+            &path,
+            ReplaceContents::Plain(b"new"),
+            false,
+            "unit",
+            FailClosed::Always(&health),
+        )
+        .unwrap();
+        assert_eq!(sync.seen() + dir_sync.seen(), 0);
+        assert_eq!(fs::read(&path).unwrap(), b"new");
+    }
+
+    /// A framed (encrypted-sidecar) replacement whose frame append fails and
+    /// whose tail repair fails too: the temporary file is discarded, so the
+    /// frame log's poison and marker do not outlive it, the failure before
+    /// the rename is not fatal, and the next replacement succeeds.
+    #[test]
+    fn a_failed_framed_replacement_leaves_no_poison_or_marker() {
+        use bicdb_page::test_faults::arm_io_failure;
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("sidecar.json");
+        write_atomic(&path, b"old", true).unwrap();
+        let health = bicdb_page::DurabilityHealth::new();
+        let encryption = EncryptionRuntime::disabled();
+        let write = arm_io_failure("frame_log.short_write", temp.path(), 1, false);
+        let repair = arm_io_failure("frame_log.repair", temp.path(), 1, false);
+        let framed = || ReplaceContents::Framed {
+            kind: FrameKind::Index,
+            payload: b"new",
+            encryption: &encryption,
+        };
+        let error = replace_durably(
+            &path,
+            framed(),
+            true,
+            "unit",
+            FailClosed::AfterRename(&health),
+        )
+        .unwrap_err();
+        assert_eq!((write.fired(), repair.fired()), (1, 1), "{error}");
+        assert!(!error.is_durability_failure(), "{error}");
+        assert!(!health.is_failed());
+        assert_eq!(fs::read(&path).unwrap(), b"old");
+        let leftovers: Vec<_> = fs::read_dir(temp.path())
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name != "sidecar.json")
+            .collect();
+        assert!(leftovers.is_empty(), "{leftovers:?}");
+        drop((write, repair));
+        replace_durably(
+            &path,
+            framed(),
+            true,
+            "unit",
+            FailClosed::AfterRename(&health),
+        )
+        .unwrap();
+        assert!(!health.is_failed());
     }
 }

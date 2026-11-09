@@ -1385,6 +1385,9 @@ impl<'db> SqlEngine<'db> {
         schema: Option<&TableSchema>,
         selection: Option<&Expr>,
     ) -> Result<Option<Vec<Arc<Record>>>> {
+        let policy_selection =
+            self.rls_index_candidate_selection(table, alias, schema, selection, true)?;
+        let selection = policy_selection.as_ref().or(selection);
         if let Some(records) =
             self.btree_indexed_records_for_table_selection(table, alias, schema, selection)?
         {
@@ -3367,7 +3370,7 @@ impl<'db> SqlEngine<'db> {
             let bound = if field_on_left { right } else { left };
             // This early shortcut must not execute a scalar query in addition
             // to the actual lookup. Its NULL result is handled by that lookup.
-            if !expr_contains_subquery(bound)
+            if !lookup_expression_has_effects(bound)
                 && self.expr_is_bound_without_table_row(bound)?
                 && matches!(self.eval_dynamic_bound_expr(bound)?, SqlValue::Null)
             {
@@ -5145,7 +5148,7 @@ impl<'db> SqlEngine<'db> {
                     let sql = format!(
                         "SELECT * FROM {name}({})",
                         args.iter()
-                            .map(ToString::to_string)
+                            .map(crate::sql_text::sql_text)
                             .collect::<Vec<_>>()
                             .join(",")
                     );
@@ -6812,7 +6815,7 @@ impl<'db> SqlEngine<'db> {
         if !plan_cache::enabled() {
             return Ok(None);
         }
-        let sql = query.to_string();
+        let sql = crate::sql_text::sql_key(query);
 
         // Cache probe, validated against the current schema generation (handled in
         // `sql_plan_cache_get`) and the current routine-variable name shape.
@@ -7883,13 +7886,23 @@ fn subquery_is_independent_of(
     })
 }
 
-/// A conjunct that is the literal FALSE (a folded parameter switch such as
-/// `$1 = 'course'`): no row can match, so nothing is read.
+/// A literal FALSE or a false comparison of integer literals: no row can
+/// match, so neither data nor policy InitPlans need to be read.
 pub(crate) fn selection_has_false_term(selection: &Expr) -> bool {
     and_terms(selection).into_iter().any(|term| {
-        matches!(
-            unwrap_nested_expr(term),
-            Expr::Value(value) if matches!(value.value, Value::Boolean(false))
-        )
+        let term = unwrap_nested_expr(term);
+        if matches!(term, Expr::Value(value) if matches!(value.value, Value::Boolean(false))) {
+            return true;
+        }
+        // Extend the existing literal-FALSE shortcut to context-independent
+        // integer comparisons such as 1=0. Never evaluate calls, casts, column
+        // reads or context-sensitive constants while proving an empty input.
+        let Expr::BinaryOp { left, op, right } = term else { return false; };
+        if !matches!(op, BinaryOperator::Eq | BinaryOperator::NotEq | BinaryOperator::Lt
+            | BinaryOperator::LtEq | BinaryOperator::Gt | BinaryOperator::GtEq) { return false; }
+        let integer = |expr: &Expr| matches!(unwrap_nested_expr(expr),
+            Expr::Value(value) if matches!(&value.value, Value::Number(text, _) if text.parse::<i64>().is_ok()));
+        integer(left) && integer(right)
+            && eval_constant_expr(term).is_ok_and(|value| matches!(value, SqlValue::Bool(false)))
     })
 }

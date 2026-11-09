@@ -55,7 +55,7 @@ impl BicDb {
         let mut spins = 0_u32;
         let mut started = None;
         while self.last_committed_tx.load(AtomicOrdering::SeqCst) < commit_seq {
-            if self.recovery_required.load(AtomicOrdering::Acquire) {
+            if self.durability.is_failed() {
                 return;
             }
             if spins < 64 {
@@ -81,6 +81,7 @@ impl BicDb {
         writes: &[TxWrite],
         broker_publishes: &[crate::broker::PendingBrokerPublish],
         record_audit_events: &[Event],
+        sync_ops: &[SyncOp],
         prepared: PreparedWal,
     ) -> Result<Vec<u8>> {
         self.encode_tx_commit_frames_at(
@@ -89,6 +90,7 @@ impl BicDb {
             writes,
             broker_publishes,
             record_audit_events,
+            sync_ops,
             prepared,
             unix_timestamp(),
         )
@@ -101,6 +103,7 @@ impl BicDb {
         writes: &[TxWrite],
         broker_publishes: &[crate::broker::PendingBrokerPublish],
         record_audit_events: &[Event],
+        sync_ops: &[SyncOp],
         prepared: PreparedWal,
         timestamp: i64,
     ) -> Result<Vec<u8>> {
@@ -127,6 +130,16 @@ impl BicDb {
                         &mut bytes,
                         FrameKind::Transaction,
                         &TxFrameRef::RecordAudit { tx_id, event },
+                    )?;
+                }
+                if !sync_ops.is_empty() {
+                    storage::append_plain_json_frame(
+                        &mut bytes,
+                        FrameKind::Transaction,
+                        &TxFrameRef::SyncOps {
+                            tx_id,
+                            ops: sync_ops,
+                        },
                     )?;
                 }
                 storage::append_plain_json_frame(
@@ -168,6 +181,12 @@ impl BicDb {
                 event,
             })?);
         }
+        if !sync_ops.is_empty() {
+            payloads.push(serde_json::to_vec(&TxFrameRef::SyncOps {
+                tx_id,
+                ops: sync_ops,
+            })?);
+        }
         payloads.push(serde_json::to_vec(&TxFrameRef::Commit {
             tx_id,
             timestamp,
@@ -191,6 +210,9 @@ impl BicDb {
         journal: &[Event],
     ) -> Result<()> {
         let _commit_guard = self.commit_lock.lock();
+        // A fenced standby imports nothing: its acknowledgement position
+        // (the durable commit sequence) must stop at the failure.
+        self.check_recovery_state()?;
         let current = self.commit_seq.load(AtomicOrdering::SeqCst);
         if commit_seq <= current {
             return Ok(());
@@ -239,38 +261,60 @@ impl BicDb {
             writes,
             &[],
             journal,
+            &[],
             PreparedWal::default(),
             timestamp,
         )?;
         self.tx_log.enqueue(commit_seq, wal_bytes);
 
-        let mut timer = commit_trace::Timer::start();
-        self.apply_committed_record_writes(
-            commit_seq,
-            &writes_by_collection,
-            &index_mutations_by_collection,
-            &dim_plan,
-            &mut timer,
-            None,
-        )?;
-        self.fill_all_index_mutation_rowids(&mut index_mutations_by_collection)?;
-        let spatial_events = self.apply_index_mutations(&index_mutations_by_collection)?;
-        if !spatial_events.is_empty() {
-            let mut events = self.events.lock();
-            for event in spatial_events {
-                events.append(event)?;
-            }
-        }
-        self.refresh_graph_projections()?;
-        self.tx_log.write_durable(commit_seq)?;
-        if !journal.is_empty() {
-            {
+        // From the enqueue on, the resident state runs ahead of the log until
+        // `write_durable` returns. Any failure in between leaves the two
+        // diverged, so it fences the standby until a reopen rebuilds the
+        // state from what reached the disk. The commit is not acknowledged
+        // to the primary: `commit_seq` does not advance.
+        let applied = (|| -> Result<()> {
+            let mut timer = commit_trace::Timer::start();
+            self.apply_committed_record_writes(
+                commit_seq,
+                &writes_by_collection,
+                &index_mutations_by_collection,
+                &dim_plan,
+                &mut timer,
+                None,
+            )?;
+            self.fill_all_index_mutation_rowids(&mut index_mutations_by_collection)?;
+            let spatial_events = self.apply_index_mutations(&index_mutations_by_collection)?;
+            if !spatial_events.is_empty() {
                 let mut events = self.events.lock();
-                for event in journal {
-                    events.append_imported(event.clone())?;
+                for event in spatial_events {
+                    events.append(event)?;
                 }
             }
-            self.persist_record_audit_publication(TransactionId(tx_id), journal)?;
+            self.refresh_graph_projections()?;
+            self.tx_log.write_durable(commit_seq)
+        })();
+        if let Err(error) = applied {
+            self.fence_durability("standby.import", &error);
+            return Err(error);
+        }
+        // The commit is durable from here, but `commit_seq` has not advanced:
+        // a failure in the journal appends would let a retry re-apply a
+        // durable commit over itself. Fence instead; the reopen recovers the
+        // commit from the log and republishes its journal.
+        if !journal.is_empty() {
+            let published = (|| -> Result<()> {
+                {
+                    let mut events = self.events.lock();
+                    for event in journal {
+                        events.append_imported(event.clone())?;
+                    }
+                }
+                self.persist_record_audit_publication(TransactionId(tx_id), journal)
+            })();
+            if let Err(error) = published {
+                self.fence_durability("standby.import", &error);
+                return Err(error);
+            }
         }
         self.commit_seq.store(commit_seq, AtomicOrdering::SeqCst);
         self.mark_committed_seq(commit_seq);
@@ -715,14 +759,17 @@ impl BicDb {
             if let Some(rowid) = shard.rowid_of(&write.record_id) {
                 let max_tx = version_chain_max_tx(&shard.versions, rowid);
                 let mut conflict_snapshot = if write.statement_snapshot == 0 {
-                    // `snapshot_tx` may be raised above the contiguous applied
-                    // watermark solely for read-your-writes. A lower sequence
-                    // in that gap can apply after this transaction read the
-                    // row; treating the raised number as observed would mask a
-                    // real lost update. Write buffering normally replaces zero
-                    // with a point-read or lock-protected row boundary; retain
-                    // the truthful applied watermark as a defensive fallback.
-                    tx.applied_snapshot
+                    // A point read of a previously absent key has a genuine
+                    // zero boundary. An independently committed operation may
+                    // have advanced applied_snapshot since that observation;
+                    // using the new watermark would hide a competing insert.
+                    // Keep the legacy fallback only for an untracked write.
+                    tx.observed_record_versions
+                        .lock()
+                        .get(&write.collection)
+                        .and_then(|rows| rows.get(&write.record_id))
+                        .copied()
+                        .unwrap_or(tx.applied_snapshot)
                 } else {
                     write.statement_snapshot
                 };
@@ -1589,12 +1636,17 @@ impl BicDb {
         collections.sort_by(|left, right| left.name.cmp(&right.name));
         let catalog = CollectionCatalog { collections };
         let bytes = serde_json::to_vec_pretty(&catalog)?;
+        // Memory already holds the new catalog: any failure leaves it ahead
+        // of the disk (a retried CREATE would find the collection and
+        // succeed without persisting it), so every failure fences.
         write_sidecar(
             &self.path.join(DEFAULT_COLLECTION_CATALOG),
             FrameKind::Index,
             &bytes,
             self.config.fsync,
             &self.encryption,
+            "catalog",
+            storage::FailClosed::Always(&self.durability),
         )
     }
 
@@ -1613,6 +1665,8 @@ impl BicDb {
             &bytes,
             self.config.fsync,
             &self.encryption,
+            "index_catalog",
+            storage::FailClosed::Always(&self.durability),
         )
     }
 
@@ -1660,12 +1714,16 @@ impl BicDb {
         catalog: &IndexMaintenanceCatalog,
     ) -> Result<()> {
         let bytes = serde_json::to_vec_pretty(catalog)?;
+        // Not fatal: build progress and sizes, rewritten by the next build,
+        // rebuild or verification.
         write_sidecar(
             &self.path.join(DEFAULT_INDEX_MAINTENANCE),
             FrameKind::Index,
             &bytes,
             self.config.fsync,
             &self.encryption,
+            "index_maintenance",
+            storage::FailClosed::No,
         )
     }
 
@@ -1699,12 +1757,15 @@ impl BicDb {
 
     pub(crate) fn persist_planner_stats(&self) -> Result<()> {
         let bytes = serde_json::to_vec_pretty(&self.planner_stats)?;
+        // Not fatal: statistics only steer plans and ANALYZE rebuilds them.
         write_sidecar(
             &self.path.join(DEFAULT_PLANNER_STATS),
             FrameKind::Index,
             &bytes,
             self.config.fsync,
             &self.encryption,
+            "planner_stats",
+            storage::FailClosed::No,
         )
     }
 
@@ -2383,6 +2444,12 @@ impl BicDb {
                     // Append the delta to the existing segment (created on first
                     // append). Recovery replays frames in order, last-write-wins, so
                     // appended frames supersede older ones for the same record id.
+                    // A failed append cuts its bytes back, so the retried
+                    // checkpoint appends on a frame boundary and the
+                    // transaction log is not cut past rows recovery could
+                    // not then read. When the cut-back fails too, the
+                    // database is fenced and the segment accepts nothing
+                    // more until recovery.
                     storage::append_frames(
                         &self.segment_path(collection),
                         FrameKind::Record,
@@ -2390,7 +2457,10 @@ impl BicDb {
                         self.config.fsync,
                         &self.config.compression,
                         &self.encryption,
-                    )?;
+                    )
+                    .map_err(|error| {
+                        storage::fence_on_frame_log_failure(Some(&self.durability), error)
+                    })?;
                     base + frames.len() as u64
                 }
                 SegmentWrite::Rewrite(records) => {

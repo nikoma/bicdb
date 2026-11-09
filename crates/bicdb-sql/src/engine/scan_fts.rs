@@ -3466,6 +3466,41 @@ impl<'db> SqlEngine<'db> {
                     };
                 self.records_for_ids(collection, &ids)
             }
+            PlanKind::DeferredIndexLookup {
+                index_name,
+                prefix_exprs,
+            } => {
+                let schema = load_schema(self.db_ref(), collection)?;
+                let index = self
+                    .index_definition_for_scan(collection, index_name)
+                    .ok_or_else(|| {
+                        SqlError::InvalidSql("deferred index disappeared".to_string())
+                    })?;
+                let mut prefix = Vec::with_capacity(prefix_exprs.len());
+                for (field, expr) in index.fields.iter().zip(prefix_exprs) {
+                    let value = self.eval_policy_lookup_value(expr)?;
+                    if matches!(value, SqlValue::Null) {
+                        return Ok(Vec::new());
+                    }
+                    let mut value = index_value_from_sql(value)?;
+                    if let Some(schema) = &schema {
+                        value = typed_index_predicate_value(schema, field, value)?;
+                    }
+                    prefix.push(value);
+                }
+                // Reuse normal lookup, pending-write overlay and residual RLS.
+                return self.load_records_for_plan(
+                    collection,
+                    &QueryPlan {
+                        kind: PlanKind::IndexLookup {
+                            index_name: index_name.clone(),
+                            prefix,
+                        },
+                        estimated_rows: plan.estimated_rows,
+                        estimated_cost: plan.estimated_cost,
+                    },
+                );
+            }
             PlanKind::IndexRange {
                 index_name,
                 lower,

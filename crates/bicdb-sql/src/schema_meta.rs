@@ -504,7 +504,7 @@ pub fn plan_migration_sql(sql: &str) -> Result<Vec<MigrationStatementPlan>> {
             let (safety, reason) = classify_migration_statement(statement);
             MigrationStatementPlan {
                 ordinal: idx + 1,
-                sql: statement.to_string(),
+                sql: crate::sql_text::sql_text(statement),
                 safety,
                 reason,
             }
@@ -4180,6 +4180,19 @@ pub(crate) fn routine_schema_name(routine: &RoutineSchema) -> &str {
 /// Split a possibly schema-qualified routine name into its schema
 /// (defaulting to `public`) and its bare name. Every routine store/lookup
 /// path keys on the bare name, so the schema travels as data.
+/// The schema and name a new routine is created under: an unqualified name
+/// goes to the first schema on the session's search_path, as in PostgreSQL.
+pub(crate) fn routine_creation_schema_and_name(name: &str) -> (String, String) {
+    let (schema, bare) = routine_schema_and_name(name);
+    if name.contains('.') {
+        return (schema, bare);
+    }
+    match crate::search_path::active_path().and_then(|path| path.first().cloned()) {
+        Some(first) => (first, bare),
+        None => (schema, bare),
+    }
+}
+
 pub(crate) fn routine_schema_and_name(name: &str) -> (String, String) {
     let bare = normalize_object_name(name);
     let schema = match name.rsplit_once('.') {

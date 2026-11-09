@@ -133,6 +133,7 @@ pub use bicdb_page::{
     MAX_WRITEBACK_PAGES_PER_STEP, MIN_PAGE_SIZE, PAGED_STORE_SNAPSHOT_FORMAT_VERSION,
     PAGE_IO_LATENCY_BUCKET_COUNT, PAGE_IO_LATENCY_BUCKET_UPPER_BOUNDS_NANOS, VERSION_HEADER_BYTES,
 };
+pub use bicdb_page::{DurabilityState, WriteFailure};
 pub use broker::{
     Broker, BrokerAccess, BrokerCaller, BrokerDeliverySnapshot, BrokerDeliveryState, BrokerMessage,
     BrokerStats, ConsumeOptions, ConsumerGroupInfo, DrainOptions, DrainReport, GroupStats,
@@ -202,10 +203,11 @@ pub use db::{
     DEFAULT_PAGED_BTREE_BUILD_DIR, DEFAULT_PAGED_BUFFER_POOL_BYTES, DEFAULT_PAGED_DIR,
     DEFAULT_PAGED_PAGE_SIZE, DEFAULT_PAGED_READ_AHEAD_QUEUE_PAGES, DEFAULT_PAGED_WAL_MAX_BYTES,
     DEFAULT_PLANNER_STATS, DEFAULT_SEGMENTS_DIR, DEFAULT_TRANSACTION_LOG, DEFAULT_VECTOR_INDEX_DIR,
-    INCREMENTAL_COMPACTION_FORMAT_VERSION, MAX_CLUSTER_SCHEMA_BUNDLE_BYTES,
-    MAX_CLUSTER_SCHEMA_BUNDLE_RECORDS, MAX_CLUSTER_SCHEMA_SIGNER_KEY_ID_BYTES,
-    MAX_FULL_TEXT_TERM_BYTES, PAGED_BTREE_BUILD_FORMAT_VERSION,
-    SCHEMA_COMPATIBILITY_FORMAT_VERSION, SIGNED_CLUSTER_SCHEMA_BUNDLE_FORMAT_VERSION,
+    DURABILITY_FAILURE_MARKER, INCREMENTAL_COMPACTION_FORMAT_VERSION,
+    MAX_CLUSTER_SCHEMA_BUNDLE_BYTES, MAX_CLUSTER_SCHEMA_BUNDLE_RECORDS,
+    MAX_CLUSTER_SCHEMA_SIGNER_KEY_ID_BYTES, MAX_FULL_TEXT_TERM_BYTES,
+    PAGED_BTREE_BUILD_FORMAT_VERSION, SCHEMA_COMPATIBILITY_FORMAT_VERSION,
+    SIGNED_CLUSTER_SCHEMA_BUNDLE_FORMAT_VERSION,
 };
 pub use db::{
     diff_databases, finish_standby_bootstrap, read_only_standby_hint, read_persisted_ha_role,
@@ -227,6 +229,7 @@ pub use db::{timestamp_day_index_inputs_supported, timestamp_day_index_value};
 pub use db::{
     CommitAdmission, CommitAdmissionIntent, CommitAdmissionMutation, CommitAdmissionTicket,
 };
+pub use db::{CommitResolution, INCARNATION_JOURNAL};
 pub use distribution::{
     build_failure_repair_plan, build_rebalance_plan, distribution_key_token,
     filter_commit_frame_for_range, load_distribution_config, provision_cluster_member_directory,
@@ -513,7 +516,7 @@ pub use resource_governor::{
     ResourcePermit, ResourceUsage,
 };
 pub use spatial_packed::SpatialPackStrategy;
-pub use storage::{CompressionConfig, SegmentReadMode};
+pub use storage::{salvage_frame_log, CompressionConfig, FrameLogSalvage, SegmentReadMode};
 pub use sync::{OpType, SyncOp};
 pub use sync_mesh::{
     EventEnvelope, EventId, NodeId, PeerSyncStatus, StreamId, SyncBundle, SyncBundleEvent,

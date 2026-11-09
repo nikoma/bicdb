@@ -1,0 +1,45 @@
+    Finished `test` profile [unoptimized] target(s) in 1m 46s
+     Running tests/authorization_canary.rs (/root/carrier-zero-friction-target/debug/deps/authorization_canary-4bdfb4ab9b9d647a)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.94s
+     Running tests/binary_storage.rs (/root/carrier-zero-friction-target/debug/deps/binary_storage-822b3e7292942f1e)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.27s
+     Running tests/catalog_and_admin_authorization.rs (/root/carrier-zero-friction-target/debug/deps/catalog_and_admin_authorization-8c714035e0ef2bed)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+     Running tests/commit_outcome_resolution.rs (/root/carrier-zero-friction-target/debug/deps/commit_outcome_resolution-9256a9c60b7a134e)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.82s
+     Running tests/deferred_trigger_rollback.rs (/root/carrier-zero-friction-target/debug/deps/deferred_trigger_rollback-55ac08106c6601d8)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.33s
+     Running tests/explain_matches_execution.rs (/root/carrier-zero-friction-target/debug/deps/explain_matches_execution-f7d802f433e83a4c)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 19.91s
+     Running tests/fts_direct_build.rs (/root/carrier-zero-friction-target/debug/deps/fts_direct_build-799a65571fbcf5ae)
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 221.81s
+     Running tests/fts_query_budgets.rs (/root/carrier-zero-friction-target/debug/deps/fts_query_budgets-21164f474b82e793)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s
+     Running tests/no_context_no_authority.rs (/root/carrier-zero-friction-target/debug/deps/no_context_no_authority-dd4e4b79faa722b2)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+     Running tests/object_ddl_authorization.rs (/root/carrier-zero-friction-target/debug/deps/object_ddl_authorization-c8f63c124c44cd2c)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+     Running tests/oracle_application_sql.rs (/root/carrier-zero-friction-target/debug/deps/oracle_application_sql-5a58fa6b8a09d4c3)
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+     Running tests/pg_dump_schema_qualified_restore.rs (/root/carrier-zero-friction-target/debug/deps/pg_dump_schema_qualified_restore-e82fe930c1edd599)
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.85s
+     Running tests/pg_wewobo_compat.rs (/root/carrier-zero-friction-target/debug/deps/pg_wewobo_compat-8e1aca224b292be4)
+test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 43.92s
+     Running tests/ranked_fts_topk.rs (/root/carrier-zero-friction-target/debug/deps/ranked_fts_topk-00882608b5221547)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 32.28s
+     Running tests/rls_index_candidates.rs (/root/carrier-zero-friction-target/debug/deps/rls_index_candidates-f60f657cbc8d1131)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.87s
+     Running tests/routine_row_transaction_identity.rs (/root/carrier-zero-friction-target/debug/deps/routine_row_transaction_identity-59177fa705814c1a)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
+     Running tests/routine_table_emission.rs (/root/carrier-zero-friction-target/debug/deps/routine_table_emission-34b9d5b3eae468d1)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+     Running tests/select_row_locks.rs (/root/carrier-zero-friction-target/debug/deps/select_row_locks-d59230dd29a0c06a)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.08s
+     Running tests/sql/main.rs (/root/carrier-zero-friction-target/debug/deps/sql-b8126b1ffbc7b698)
+test result: ok. 419 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 96.92s
+     Running tests/streaming_rls_guard.rs (/root/carrier-zero-friction-target/debug/deps/streaming_rls_guard-851de2efd4248257)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.55s
+     Running tests/write_path_authorization.rs (/root/carrier-zero-friction-target/debug/deps/write_path_authorization-906fd619b85754ec)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.73s
+    Finished `dev` profile [unoptimized] target(s) in 2m 13s
+466a8c5aae1a5c17530757d8b74c0d92dfb331dc5af1b45913d030f762f406d7  /root/carrier-zero-friction/bin/bicdb-rls-index-a5bbadc

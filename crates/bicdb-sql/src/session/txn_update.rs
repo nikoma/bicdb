@@ -1292,6 +1292,17 @@ impl<'db> SqlSession<'db> {
             updated_record_snapshots.push(statement_snapshot);
             updated += 1;
         }
+        // The new rows pass UPDATE WITH CHECK and, when the statement reads
+        // the existing rows, SELECT USING (an updated row must stay visible
+        // to its writer), before their constraints and unique keys:
+        // PostgreSQL's order, so a refused key is not revealed by 23505.
+        let rls_violation = self.first_rls_write_violation(
+            &table,
+            schema.as_deref(),
+            PolicyAction::Update,
+            reads_existing,
+            &updated_records,
+        )?;
         if let Some(schema) = schema.as_deref() {
             let assigned_columns = update
                 .assignments
@@ -1301,23 +1312,24 @@ impl<'db> SqlSession<'db> {
                 })
                 .map(relation_name)
                 .collect::<Result<Vec<_>>>()?;
+            let checked = match &rls_violation {
+                Some((index, _)) => &updated_records[..*index],
+                None => &updated_records[..],
+            };
             validate_updated_records(
                 self.db_ref(),
                 self.tx.as_ref(),
                 &table,
                 schema,
-                &updated_records,
+                checked,
                 &before_after_records,
                 Some(&self.sql_engine()),
                 &assigned_columns,
             )?;
         }
-        self.enforce_rls_checks(
-            &table,
-            schema.as_deref(),
-            PolicyAction::Update,
-            &updated_records,
-        )?;
+        if let Some((_, error)) = rls_violation {
+            return Err(error);
+        }
         // The updated records are only read again for a RETURNING clause without
         // a FROM (the FROM case projects from slot rows, and a plain UPDATE never
         // reads them again). Project that result now, while the records are
@@ -2482,6 +2494,118 @@ impl<'db> SqlSession<'db> {
         Ok(expr.clone())
     }
 
+    fn oracle_routine_frame(&self) -> bool {
+        self.routine_slots
+            .as_ref()
+            .is_some_and(|slots| slots.oracle_procedural_evaluation)
+    }
+
+    /// Whether an expression in a routine body has type bytea, using the
+    /// declared types of routine variables, which value inspection cannot
+    /// tell apart from text.
+    fn routine_expr_is_bytea(&self, expr: &Expr) -> bool {
+        if self.oracle_routine_frame() {
+            // Oracle RAW values keep the profile's existing conversions.
+            return projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref() == Some("bytea");
+        }
+        match expr {
+            Expr::Nested(inner) => self.routine_expr_is_bytea(inner),
+            Expr::Substring { expr, .. } | Expr::Overlay { expr, .. } => {
+                self.routine_expr_is_bytea(expr)
+            }
+            Expr::BinaryOp {
+                left,
+                op: BinaryOperator::StringConcat,
+                right,
+            } => self.routine_expr_is_bytea(left) || self.routine_expr_is_bytea(right),
+            _ => self.routine_unary_operand_type(expr).as_deref() == Some("bytea"),
+        }
+    }
+
+    /// A comparison in a PL/pgSQL body with a date/time variable on one side
+    /// compares as date/time, as PostgreSQL's typed comparison does, not as
+    /// text (`date '2002-07-04' <> timestamp '2002-07-04 00:00'` is false).
+    /// An operand whose type the body does not declare (a record field, a
+    /// function result) takes the date/time type its value spells.
+    fn routine_temporal_comparison(
+        &self,
+        left: &Expr,
+        op: &BinaryOperator,
+        right: &Expr,
+        left_value: &SqlValue,
+        right_value: &SqlValue,
+    ) -> Result<Option<Option<bool>>> {
+        if !matches!(
+            op,
+            BinaryOperator::Eq
+                | BinaryOperator::NotEq
+                | BinaryOperator::Lt
+                | BinaryOperator::LtEq
+                | BinaryOperator::Gt
+                | BinaryOperator::GtEq
+        ) || self.oracle_routine_frame()
+            || self.routine_slots.is_none()
+        {
+            return Ok(None);
+        }
+        fn datetime(pg_type: Option<&str>) -> bool {
+            matches!(pg_type, Some("date" | "timestamp" | "timestamptz"))
+        }
+        fn spelled(value: &SqlValue) -> Option<String> {
+            let SqlValue::String(text) = value else {
+                return None;
+            };
+            parse_temporal_seconds(text)?;
+            Some(
+                if timestamp_has_iso_offset(text) {
+                    "timestamptz"
+                } else if text.trim().len() > 10 {
+                    "timestamp"
+                } else {
+                    "date"
+                }
+                .to_string(),
+            )
+        }
+        let (left_type, right_type) = (
+            self.routine_unary_operand_type(left),
+            self.routine_unary_operand_type(right),
+        );
+        let temporal_text = |pg_type: &Option<String>| {
+            pg_type.as_deref().is_some_and(|pg_type| {
+                let lower = pg_type.to_ascii_lowercase();
+                lower.contains("date") || lower.contains("time")
+            })
+        };
+        if !temporal_text(&left_type) && !temporal_text(&right_type) {
+            return Ok(None);
+        }
+        let canonical = |pg_type: Option<String>| {
+            pg_type.map(|pg_type| crate::pg_operators::canonical_type(&pg_type))
+        };
+        let mut left_type = canonical(left_type);
+        let mut right_type = canonical(right_type);
+        if !datetime(left_type.as_deref()) && !datetime(right_type.as_deref()) {
+            return Ok(None);
+        }
+        if left_type.is_none() {
+            left_type = spelled(left_value);
+        }
+        if right_type.is_none() {
+            right_type = spelled(right_value);
+        }
+        if !datetime(left_type.as_deref()) || !datetime(right_type.as_deref()) {
+            return Ok(None);
+        }
+        compare_temporal_values(
+            left_type.as_deref(),
+            right_type.as_deref(),
+            left_value,
+            op,
+            right_value,
+        )
+    }
+
     fn routine_unary_operand_type(&self, expr: &Expr) -> Option<String> {
         let name = match expr {
             Expr::Identifier(ident) => Some(ident.value.as_str()),
@@ -2520,7 +2644,14 @@ impl<'db> SqlSession<'db> {
             .map(|(generation, ir)| (generation, ir, function as *const Function as usize));
         let remembered = dispatch_key
             .and_then(|key| FN_DISPATCH_MEMO.with(|memo| memo.borrow().get(&key).cloned()));
-        if let Some(dispatch) = remembered.as_deref().filter(|d| d.stored) {
+        // Overloads select by argument types, which this shortcut skips.
+        if let Some(dispatch) = remembered.as_deref().filter(|d| {
+            d.stored
+                && routine_overloads(self.db_ref(), RoutineKind::Function, &d.name)
+                    .ok()
+                    .flatten()
+                    .is_none()
+        }) {
             // Straight to the stored function: the earlier dispatchers
             // are name-only and declined last time for this node.
             let mut args = PooledArgs::take();
@@ -2579,6 +2710,17 @@ impl<'db> SqlSession<'db> {
                 arg_types.first().and_then(Option::as_ref),
                 args.first(),
             ));
+        }
+        if crate::routine_overloads::user_function_takes_builtin_call(
+            self.db_ref(),
+            &self.session_gucs,
+            &name,
+            &arg_types,
+            &args,
+        )? {
+            if let Some(value) = self.eval_stored_function_value_typed(&name, &args, &arg_types)? {
+                return Ok(value);
+            }
         }
         if matches!(name.as_ref(), "txid_current" | "pg_catalog.txid_current") {
             require_arg_count("txid_current", &args, 0)?;
@@ -2660,7 +2802,7 @@ impl<'db> SqlSession<'db> {
         if let Some(value) = eval_spatial_function_value(&name, &args, &arg_types)? {
             return Ok(value);
         }
-        let stored = self.eval_stored_function_value(&name, &args)?;
+        let stored = self.eval_stored_function_value_typed(&name, &args, &arg_types)?;
         if let Some(key) = dispatch_key {
             if remembered.is_none() {
                 let entry = std::rc::Rc::new(FnDispatch {
@@ -2860,9 +3002,7 @@ impl<'db> SqlSession<'db> {
             Expr::Position { expr, r#in } => eval_position_typed_value(
                 self.eval_session_expr(expr)?,
                 self.eval_session_expr(r#in)?,
-                projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref() == Some("bytea")
-                    || projected_expr_pg_type_with_db(self.db_ref(), r#in).as_deref()
-                        == Some("bytea"),
+                self.routine_expr_is_bytea(expr) || self.routine_expr_is_bytea(r#in),
             ),
             Expr::Substring {
                 expr,
@@ -2871,11 +3011,10 @@ impl<'db> SqlSession<'db> {
                 shorthand,
                 ..
             } => {
-                let bytea =
-                    projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref() == Some("bytea");
+                let bytea = self.routine_expr_is_bytea(expr);
                 let invalid_bit_shorthand = *shorthand
                     && matches!(
-                        projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref(),
+                        self.routine_unary_operand_type(expr).as_deref(),
                         Some("bit" | "varbit")
                     );
                 eval_substring_expr(
@@ -2905,8 +3044,7 @@ impl<'db> SqlSession<'db> {
                 overlay_from,
                 overlay_for,
             } => {
-                let bytea =
-                    projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref() == Some("bytea");
+                let bytea = self.routine_expr_is_bytea(expr);
                 eval_overlay_expr(
                     expr,
                     overlay_what,
@@ -2998,7 +3136,27 @@ impl<'db> SqlSession<'db> {
             Expr::BinaryOp { left, op, right } => {
                 let left_value = self.eval_session_expr(left)?;
                 let right_value = self.eval_session_expr(right)?;
-                let types = self.routine_binary_expr_types(left, op, right);
+                if let Some(truth) =
+                    self.routine_temporal_comparison(left, op, right, &left_value, &right_value)?
+                {
+                    return Ok(truth.map(SqlValue::Bool).unwrap_or(SqlValue::Null));
+                }
+                let mut types = self.routine_binary_expr_types(left, op, right);
+                if matches!(op, BinaryOperator::StringConcat)
+                    && !self.oracle_routine_frame()
+                    && (self.routine_expr_is_bytea(left) || self.routine_expr_is_bytea(right))
+                {
+                    let bytea = || Some("bytea".to_string());
+                    types = std::rc::Rc::new(RoutineBinaryExprTypes {
+                        range_left: types.range_left.clone(),
+                        range_right: types.range_right.clone(),
+                        binary: BinaryExprTypes {
+                            left: bytea(),
+                            right: bytea(),
+                            result: bytea(),
+                        },
+                    });
+                }
                 if let Some(value) = eval_range_binary_value_with_db(
                     self.db_ref(),
                     left_value.clone(),
@@ -3412,7 +3570,19 @@ impl<'db> SqlSession<'db> {
         name: &str,
         args: &[SqlValue],
     ) -> Result<Option<SqlValue>> {
-        let Some(routine) = resolve_routine_cached(self.db_ref(), RoutineKind::Function, name)?
+        self.eval_stored_function_value_typed(name, args, &[])
+    }
+
+    /// Calls a stored function, selecting among overloads of `name` by the
+    /// arguments' static types where known and otherwise by their values.
+    pub(crate) fn eval_stored_function_value_typed(
+        &mut self,
+        name: &str,
+        args: &[SqlValue],
+        arg_types: &[Option<String>],
+    ) -> Result<Option<SqlValue>> {
+        let Some(routine) =
+            resolve_routine_for_call(self.db_ref(), RoutineKind::Function, name, arg_types, args)?
         else {
             return Ok(None);
         };
@@ -4304,8 +4474,9 @@ impl<'db> SqlSession<'db> {
                 iterator,
                 lower,
                 upper,
+                reverse,
                 body,
-            } => self.execute_routine_for_loop(frame, iterator, lower, upper, body),
+            } => self.execute_routine_for_loop(frame, iterator, lower, upper, *reverse, body),
             RoutineStmt::ForeachLoop {
                 target,
                 slice,
@@ -4444,7 +4615,12 @@ impl<'db> SqlSession<'db> {
                     return Ok(RoutineControl::Continue);
                 }
                 match parse_single_statement(&sql) {
-                    Ok(parsed) => {
+                    Ok(mut parsed) => {
+                        // Dynamic SQL resolves its relations through the
+                        // caller's search_path when it runs.
+                        if let Some(path) = crate::search_path::active_path() {
+                            crate::search_path::bind_node(self.db_ref(), &mut parsed, &path);
+                        }
                         // Parsed per execution: not an IR node.
                         let previous = self.bind_routine_frame(frame);
                         let owned = std::mem::replace(&mut self.ir_owned_statement, false);
@@ -4715,6 +4891,7 @@ impl<'db> SqlSession<'db> {
         iterator: &str,
         lower: &RoutineExpr,
         upper: &RoutineExpr,
+        reverse: bool,
         body: &[RoutineStmt],
     ) -> Result<RoutineControl> {
         let Some(lower) = sql_value_i64(&self.eval_routine_expr(frame, lower)?) else {
@@ -4727,10 +4904,17 @@ impl<'db> SqlSession<'db> {
                 "FOR loop upper bound for {iterator} must be an integer"
             )));
         };
-        if lower > upper {
-            return Ok(RoutineControl::Continue);
-        }
-        for value in lower..=upper {
+        // PL/pgSQL REVERSE counts down from the first bound to the second;
+        // Oracle PL/SQL REVERSE walks the same low..high range backwards.
+        let values: Box<dyn Iterator<Item = i64>> = if reverse && frame.oracle_procedural_evaluation
+        {
+            Box::new((lower..=upper).rev())
+        } else if reverse {
+            Box::new((upper..=lower).rev())
+        } else {
+            Box::new(lower..=upper)
+        };
+        for value in values {
             self.cancellation.check()?;
             frame.set(iterator, SqlValue::Int(value));
             match self.execute_routine_statements(frame, body)? {
@@ -5114,6 +5298,120 @@ impl<'db> SqlSession<'db> {
         self.routine_slots = previous.1;
     }
 
+    /// For a query that reads catalog relations: the query with unqualified
+    /// references to routine variables in its filters (WHERE, JOIN ON,
+    /// HAVING) replaced by their current values, or `None`. Only names that are not a column of any relation the query
+    /// reads are replaced; a query over relations whose columns are not known
+    /// here (derived tables, functions, CTEs) is left unchanged.
+    fn routine_query_with_values(&self, query: &Query) -> Result<Option<Query>> {
+        use sqlparser::ast::{Visit, Visitor};
+        if self.routine_vars.is_empty() {
+            return Ok(None);
+        }
+        struct Relations<'a> {
+            db: &'a BicDb,
+            columns: BTreeSet<String>,
+            unknown: bool,
+            catalog: bool,
+        }
+        impl Visitor for Relations<'_> {
+            type Break = ();
+            fn pre_visit_query(&mut self, query: &Query) -> ControlFlow<()> {
+                if query.with.is_some() {
+                    self.unknown = true;
+                    return ControlFlow::Break(());
+                }
+                ControlFlow::Continue(())
+            }
+            fn pre_visit_table_factor(&mut self, relation: &TableFactor) -> ControlFlow<()> {
+                let columns = match relation {
+                    TableFactor::Table {
+                        name, args: None, ..
+                    } => table_factor_column_names(self.db, relation).or_else(|| {
+                        let name = object_name(name).ok()?.to_ascii_lowercase();
+                        let columns = virtual_table_columns(
+                            name.strip_prefix("pg_catalog.").unwrap_or(&name),
+                        )?;
+                        self.catalog = true;
+                        Some(columns)
+                    }),
+                    _ => None,
+                };
+                match columns {
+                    Some(columns) => {
+                        self.columns.extend(
+                            columns
+                                .into_iter()
+                                .map(|column| column.to_ascii_lowercase()),
+                        );
+                        ControlFlow::Continue(())
+                    }
+                    None => {
+                        self.unknown = true;
+                        ControlFlow::Break(())
+                    }
+                }
+            }
+        }
+        let mut relations = Relations {
+            db: self.db_ref(),
+            columns: BTreeSet::new(),
+            unknown: false,
+            catalog: false,
+        };
+        let _ = query.visit(&mut relations);
+        // Queries over stored tables already filter by bound variables; only
+        // catalog relations, which are generated per query, need the values.
+        if relations.unknown || !relations.catalog {
+            return Ok(None);
+        }
+        let types = self
+            .routine_slots
+            .as_ref()
+            .map(|slots| Arc::clone(&slots.types));
+        let mut replace = |expr: &mut Expr, changed: &mut bool| {
+            let _ = sqlparser::ast::visit_expressions_mut(expr, |expr| {
+                let Expr::Identifier(ident) = expr else {
+                    return ControlFlow::<()>::Continue(());
+                };
+                let name = ident_value(ident);
+                if relations.columns.contains(&name) {
+                    return ControlFlow::Continue(());
+                }
+                let Some(value) = self.routine_vars.get(&name) else {
+                    return ControlFlow::Continue(());
+                };
+                let literal = routine_value_literal(value);
+                let declared =
+                    types
+                        .as_ref()
+                        .and_then(|types| types.get(&name))
+                        .and_then(|schema| {
+                            Parser::new(&PostgreSqlDialect {})
+                                .try_with_sql(&schema.pg_type)
+                                .and_then(|mut parser| parser.parse_data_type())
+                                .ok()
+                        });
+                *expr = match declared {
+                    Some(data_type) => Expr::Cast {
+                        kind: sqlparser::ast::CastKind::Cast,
+                        expr: Box::new(literal),
+                        data_type,
+                        array: false,
+                        format: None,
+                    },
+                    None => literal,
+                };
+                *changed = true;
+                ControlFlow::Continue(())
+            });
+        };
+        let mut rewritten = query.clone();
+        let mut changed = false;
+        rewrite_query_filters(&mut rewritten, &mut |expr| replace(expr, &mut changed));
+        Ok(changed.then_some(rewritten))
+    }
+
     pub(crate) fn execute_routine_query(
         &mut self,
         frame: &mut RoutineFrame,
@@ -5136,9 +5434,17 @@ impl<'db> SqlSession<'db> {
         let oracle_tokens = std::mem::take(&mut self.oracle_error_tokens);
         let _diagnostics = oracle::errors::DiagnosticScope::new(None);
         let previous = self.bind_routine_frame(frame);
-        let owned = std::mem::replace(&mut self.ir_owned_statement, true);
+        // PostgreSQL plans an embedded query with the current values of the
+        // routine variables it reads, so a variable compared with a column
+        // filters like a constant (catalog joins in particular).
+        let with_values = if frame.oracle_procedural_evaluation {
+            None
+        } else {
+            self.routine_query_with_values(query)?
+        };
+        let owned = std::mem::replace(&mut self.ir_owned_statement, with_values.is_none());
         let procedural = std::mem::replace(&mut self.in_routine_expression, false);
-        let result = self.execute_query(query);
+        let result = self.execute_query(with_values.as_ref().unwrap_or(query));
         self.in_routine_expression = procedural;
         self.ir_owned_statement = owned;
         self.unbind_routine_frame(previous);
@@ -6927,10 +7233,64 @@ impl RoutineCallHost for SessionRoutineHost {
         engine: &SqlEngine<'_>,
         name: &str,
         args: &[SqlValue],
+        arg_types: &[Option<String>],
     ) -> Result<SqlValue> {
         let mut session = SqlSession::for_row_routine_call(engine);
         session
-            .eval_stored_function_value(name, args)?
+            .eval_stored_function_value_typed(name, args, arg_types)?
             .ok_or_else(|| SqlError::undefined_function(format!("function {name} does not exist")))
     }
+}
+
+fn routine_value_literal(value: &SqlValue) -> Expr {
+    let value = match value {
+        SqlValue::Null => Value::Null,
+        SqlValue::Bool(value) => Value::Boolean(*value),
+        SqlValue::Int(value) => Value::Number(value.to_string(), false),
+        other => Value::SingleQuotedString(other.to_cell()),
+    };
+    Expr::Value(ValueWithSpan {
+        value,
+        span: sqlparser::tokenizer::Span::empty(),
+    })
+}
+
+/// Applies `rewrite` to every filter expression of a query and its nested
+/// queries: WHERE, JOIN ... ON and HAVING (select lists and ORDER BY keep
+/// their expressions, and so their output names).
+fn rewrite_query_filters(query: &mut Query, rewrite: &mut dyn FnMut(&mut Expr)) {
+    fn set_expr(body: &mut SetExpr, rewrite: &mut dyn FnMut(&mut Expr)) {
+        match body {
+            SetExpr::Select(select) => {
+                for from in &mut select.from {
+                    for join in &mut from.joins {
+                        if let JoinOperator::Join(JoinConstraint::On(on))
+                        | JoinOperator::Inner(JoinConstraint::On(on))
+                        | JoinOperator::Left(JoinConstraint::On(on))
+                        | JoinOperator::LeftOuter(JoinConstraint::On(on))
+                        | JoinOperator::Right(JoinConstraint::On(on))
+                        | JoinOperator::RightOuter(JoinConstraint::On(on))
+                        | JoinOperator::FullOuter(JoinConstraint::On(on)) =
+                            &mut join.join_operator
+                        {
+                            rewrite(on);
+                        }
+                    }
+                }
+                if let Some(selection) = select.selection.as_mut() {
+                    rewrite(selection);
+                }
+                if let Some(having) = select.having.as_mut() {
+                    rewrite(having);
+                }
+            }
+            SetExpr::Query(query) => set_expr(query.body.as_mut(), rewrite),
+            SetExpr::SetOperation { left, right, .. } => {
+                set_expr(left, rewrite);
+                set_expr(right, rewrite);
+            }
+            _ => {}
+        }
+    }
+    set_expr(query.body.as_mut(), rewrite);
 }

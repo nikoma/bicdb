@@ -933,14 +933,19 @@ impl PagedStore {
         } else {
             0
         };
-        let wal = Arc::new(Wal::open_with_segments_and_floor(
-            &paths.wal,
-            options.fsync,
-            wal_segment_bytes,
-            // The superblock's checkpoint LSN horizon: keeps LSNs monotonic
-            // across truncate+reopen so sealed-segment names never recur.
-            store.checkpoint_lsn(),
-        )?);
+        let wal = Arc::new(
+            Wal::open_with_segments_and_floor(
+                &paths.wal,
+                options.fsync,
+                wal_segment_bytes,
+                // The superblock's checkpoint LSN horizon: keeps LSNs monotonic
+                // across truncate+reopen so sealed-segment names never recur.
+                store.checkpoint_lsn(),
+            )?
+            // One fail-closed state for the page file and its log: a failure in
+            // either fences both.
+            .with_health(store.durability_health().clone()),
+        );
         crate::test_faults::register_wal(&wal);
 
         // Recovery runs BEFORE anything reads a page, so no caller can ever
@@ -2108,6 +2113,13 @@ impl PagedStore {
         Ok(true)
     }
 
+    /// The fail-closed durability state shared by this store's page file
+    /// and log. Hosts clone it to fence their own write paths on the same
+    /// failure.
+    pub fn durability_health(&self) -> &Arc<crate::health::DurabilityHealth> {
+        self.wal.health()
+    }
+
     /// Make a transaction's writes durable.
     pub fn commit(&self, transaction: Xid) -> Result<()> {
         self.commit_with_sync(transaction, true).map(|_| ())
@@ -2408,6 +2420,7 @@ impl PagedStore {
         // Spill what the watermark cannot absorb, so the log can truncate
         // even while a long-running transaction pins it.
         self.persist_status_spill()?;
+        crate::test_faults::crash_point("checkpoint.after_status_spill");
 
         // The meta page is written first: the checkpoint makes it durable, so it
         // must already hold the current tree roots and watermarks.
@@ -2441,6 +2454,7 @@ impl PagedStore {
             // end-of-chain answer a vacuumed slot gives.
             if checkpoint.wal_truncated {
                 self.pool.store().truncate_trailing_free_pages()?;
+                crate::test_faults::crash_point("checkpoint.after_tail_reclaim");
             }
         }
         // The checkpoint above flushed the meta page, so the spill descriptor
@@ -2448,6 +2462,7 @@ impl PagedStore {
         // last persist retired be returned to the free list.
         self.spill.reclaim_retired(self.meta_page, &self.pool)?;
         self.finalize_structural_frees()?;
+        crate::test_faults::crash_point("checkpoint.after_structural_frees");
         Ok(())
     }
 
@@ -2475,6 +2490,7 @@ impl PagedStore {
                 let writeback = self
                     .pool
                     .writeback_step(cursor.writeback, limits.writeback)?;
+                crate::test_faults::crash_point("checkpoint_step.after_drain");
                 let drained = writeback.complete && writeback.dirty_pages_remaining == 0;
                 let drain_passes = if writeback.complete && !drained {
                     cursor.drain_passes.saturating_add(1)
@@ -2533,6 +2549,7 @@ impl PagedStore {
                 let freeze = self
                     .transactions
                     .freeze_below_bounded(oldest_active, max_xids)?;
+                crate::test_faults::crash_point("checkpoint_step.after_freeze");
                 let next_cursor = PagedCheckpointCursor {
                     phase: if freeze.limit_reached {
                         PagedCheckpointPhase::Freeze
@@ -2599,6 +2616,7 @@ impl PagedStore {
                     let writeback = self
                         .pool
                         .writeback_step(cursor.writeback, limits.writeback)?;
+                    crate::test_faults::crash_point("checkpoint_step.after_finalize_drain");
                     PagedCheckpointStepReport {
                         phase_before: cursor.phase,
                         next_cursor: PagedCheckpointCursor {
@@ -2625,6 +2643,7 @@ impl PagedStore {
                     // Spill what the watermark cannot absorb before the meta
                     // page names it, exactly as the one-shot checkpoint does.
                     self.persist_status_spill()?;
+                    crate::test_faults::crash_point("checkpoint_step.after_status_spill");
                     // Stage the exact roots and visibility watermark only after
                     // every preceding dirty page is durable. With the writer
                     // gate held, this creates exactly one new dirty meta page.
@@ -2632,6 +2651,7 @@ impl PagedStore {
                     let writeback = self
                         .pool
                         .writeback_step(WritebackCursor::default(), limits.writeback)?;
+                    crate::test_faults::crash_point("checkpoint_step.after_meta_writeback");
                     if writeback.dirty_pages_remaining != 0 {
                         PagedCheckpointStepReport {
                             phase_before: cursor.phase,
@@ -2665,6 +2685,7 @@ impl PagedStore {
                             writeback.pages_written,
                             truncate,
                         )?;
+                        crate::test_faults::crash_point("checkpoint_step.after_finish");
                         // The checkpoint flushed the meta page, so the spill
                         // descriptor naming the current chain is durable; the
                         // pages the last persist retired may now be freed.
@@ -2679,6 +2700,7 @@ impl PagedStore {
                         } else {
                             None
                         };
+                        crate::test_faults::crash_point("checkpoint_step.after_tail_reclaim");
                         PagedCheckpointStepReport {
                             phase_before: cursor.phase,
                             next_cursor: PagedCheckpointCursor {

@@ -22,7 +22,7 @@ impl<'db> SqlSession<'db> {
         let name_end = rest
             .find(|ch: char| ch == '(' || ch.is_whitespace())
             .ok_or_else(|| SqlError::InvalidSql("CREATE FUNCTION requires a name".to_string()))?;
-        let (raw_function_schema, name) = routine_schema_and_name(&rest[..name_end]);
+        let (raw_function_schema, name) = routine_creation_schema_and_name(&rest[..name_end]);
         let (return_type, returns_set) = raw_routine_return_type(trimmed)?;
         let language = raw_routine_language(trimmed)?;
         match language.as_str() {
@@ -71,6 +71,7 @@ impl<'db> SqlSession<'db> {
                 internal_symbol: None,
                 owner: Some(owner),
                 security_definer: routine_definition_is_security_definer(trimmed),
+                overload: None,
             },
             false,
             prefix.contains("replace"),
@@ -185,13 +186,14 @@ impl<'db> SqlSession<'db> {
         );
         let arg_types = procedure_argument_type_schemas(params)?;
         validate_routine_pseudo_types(&arg_types, &[], arg_types.len(), None, &language)?;
-        let (procedure_schema, procedure_name) = routine_schema_and_name(&object_name(name)?);
+        let (procedure_schema, procedure_name) =
+            routine_creation_schema_and_name(&object_name(name)?);
         let routine = RoutineSchema {
             name: procedure_name,
             schema: procedure_schema,
             kind: RoutineKind::Procedure,
             args: params
-                .map(|params| params.iter().map(ToString::to_string).collect())
+                .map(|params| params.iter().map(crate::sql_text::sql_text).collect())
                 .unwrap_or_default(),
             arg_types,
             return_type: "void".to_string(),
@@ -199,10 +201,15 @@ impl<'db> SqlSession<'db> {
             return_type_declaration: Some("void".to_string()),
             returns_set: false,
             language,
-            definition: format!("CREATE PROCEDURE {name} {body}"),
+            definition: format!(
+                "CREATE PROCEDURE {} {}",
+                crate::sql_text::sql_text(name),
+                crate::sql_text::sql_text(body)
+            ),
             internal_symbol: None,
             owner: Some(current_user_from_gucs(&self.session_gucs)),
             security_definer: false,
+            overload: None,
         };
         self.save_session_routine_if_missing(routine, false, false)?;
         Ok(SqlResult::command("CREATE PROCEDURE"))
@@ -263,6 +270,7 @@ impl<'db> SqlSession<'db> {
                 internal_symbol: None,
                 owner: Some(owner),
                 security_definer: routine_definition_is_security_definer(trimmed),
+                overload: None,
             },
             false,
             prefix.contains("replace"),
@@ -525,7 +533,7 @@ impl<'db> SqlSession<'db> {
             // PostgreSQL: constraint triggers default to FOR EACH ROW.
             for_each = "row".to_string();
         }
-        let definition = create_trigger.to_string();
+        let definition = crate::sql_text::sql_text(create_trigger);
         let arguments = parse_raw_create_trigger(&definition)?
             .map(|(trigger, _)| trigger.arguments)
             .unwrap_or_default();
@@ -555,7 +563,7 @@ impl<'db> SqlSession<'db> {
         action: &str,
     ) -> Result<Option<RoutineSchema>> {
         let (schema, name) = routine_schema_and_name(&object_name(name_ast)?);
-        let routine = load_routine(self.db_ref(), kind, &name)?.filter(|routine| {
+        let in_schema = |routine: &RoutineSchema| {
             let schema = if oracle::preview_routine_language_version(&routine.language)
                 .is_some_and(|version| version >= 2)
             {
@@ -564,37 +572,28 @@ impl<'db> SqlSession<'db> {
                 schema.clone()
             };
             name_ast.0.len() == 1 || routine_schema_name(routine) == schema
-        });
-        if let (Some(routine), Some(signature)) = (&routine, signature) {
-            // DDL naming an obsolete overload must not alter the current routine
-            // merely because its name matches. Identity uses input argument
-            // types, not parameter names, defaults, OUT slots or typmods.
-            let declared = parse_routine_params(&routine.args)?;
-            let inputs = declared
-                .iter()
-                .filter(|arg| arg.mode != RoutineArgMode::Out)
-                .collect::<Vec<_>>();
-            let requested = signature
-                .iter()
-                .filter(|arg| arg.mode != Some(sqlparser::ast::ArgMode::Out))
-                .map(|arg| routine_type_schema(&arg.data_type))
-                .collect::<Result<Vec<_>>>()?;
-            if inputs.len() != requested.len()
-                || !inputs.iter().zip(&requested).all(|(input, requested)| {
-                    input.type_schema.as_ref().is_some_and(|declared| {
-                        match (
-                            pg_type_oid_by_name(&declared.pg_type),
-                            pg_type_oid_by_name(&requested.pg_type),
-                        ) {
-                            (Some(left), Some(right)) => left == right,
-                            _ => declared.pg_type == requested.pg_type,
-                        }
-                    })
-                })
-            {
-                return Ok(None);
+        };
+        let candidates = routines_named(self.db_ref(), kind, &name)?
+            .into_iter()
+            .filter(|routine| in_schema(routine))
+            .collect::<Vec<_>>();
+        let routine = match signature {
+            // DDL naming one signature acts on that overload only. Identity
+            // uses input argument types, not parameter names, defaults, OUT
+            // slots or typmods.
+            Some(signature) => {
+                let requested = requested_input_signature(signature)?;
+                let mut found = None;
+                for candidate in candidates {
+                    if routine_input_signature(&candidate)? == requested {
+                        found = Some(candidate);
+                        break;
+                    }
+                }
+                found
             }
-        }
+            None => candidates.into_iter().next(),
+        };
         if let Some(routine) = &routine {
             let object = match kind {
                 RoutineKind::Function => "function",
@@ -639,6 +638,21 @@ impl<'db> SqlSession<'db> {
                     "cannot drop function {name} because type {}.{} depends on it",
                     dependent.schema_name, dependent.name
                 )));
+            }
+            let operators = self.routine_operators(&routine)?;
+            if let Some(operator) = operators.first().filter(|_| !cascade) {
+                return Err(SqlError::dependent_objects_still_exist(format!(
+                    "cannot drop function {name} because other objects depend on it \
+                     (operator {} depends on function {name})",
+                    operator.id.display()
+                )));
+            }
+            if cascade && !operators.is_empty() {
+                let ids = operators
+                    .iter()
+                    .map(|operator| operator.id.clone())
+                    .collect::<Vec<_>>();
+                self.drop_operators(&ids)?;
             }
             if cascade {
                 let mut dropped = BTreeSet::new();
@@ -868,6 +882,22 @@ impl<'db> SqlSession<'db> {
                 insert.returning.as_deref(),
             );
         }
+        // PostgreSQL checks a new row against the row policies before its
+        // constraints and unique keys, so a key the writer may not insert is
+        // refused with 42501 rather than revealed by a duplicate-key error.
+        // Rows ahead of the first refused one keep their own constraint
+        // errors, as in PostgreSQL's row-at-a-time order.
+        let rls_violation = self.first_rls_write_violation(
+            &table,
+            schema.as_deref(),
+            PolicyAction::Insert,
+            insert_reads_target(insert),
+            &records,
+        )?;
+        let checked = match &rls_violation {
+            Some((index, _)) => &records[..*index],
+            None => &records[..],
+        };
         if let Some(schema) = schema.as_deref() {
             match prechecked
                 .as_ref()
@@ -875,7 +905,7 @@ impl<'db> SqlSession<'db> {
             {
                 Some((template, cells)) => {
                     let check_engine = self.sql_engine();
-                    for (record, cells) in records.iter().zip(cells) {
+                    for (record, cells) in checked.iter().zip(cells) {
                         template.check_row(&table, record, cells, Some(&check_engine))?;
                     }
                     validate_records_for_write_prechecked(
@@ -883,7 +913,7 @@ impl<'db> SqlSession<'db> {
                         self.tx.as_ref(),
                         &table,
                         schema,
-                        &records,
+                        checked,
                         false,
                     )?;
                 }
@@ -892,13 +922,15 @@ impl<'db> SqlSession<'db> {
                     self.tx.as_ref(),
                     &table,
                     schema,
-                    &records,
+                    checked,
                     false,
                     Some(&self.sql_engine()),
                 )?,
             }
         }
-        self.enforce_rls_checks(&table, schema.as_deref(), PolicyAction::Insert, &records)?;
+        if let Some((_, error)) = rls_violation {
+            return Err(error);
+        }
         self.insert_session_records(&table, records.clone())?;
         self.fire_after_insert_triggers(&table, schema.as_deref(), &records)?;
         self.insert_result(
@@ -1431,10 +1463,19 @@ impl<'db> SqlSession<'db> {
                 "INSERT ON DUPLICATE KEY UPDATE is not supported".to_string(),
             ));
         };
+        // An arbiter reads the target relation (PostgreSQL requires SELECT
+        // rights for it), so the SELECT policies join the new-row checks.
+        let select_required = on_conflict.conflict_target.is_some()
+            || matches!(on_conflict.action, OnConflictAction::DoUpdate(_))
+            || returning.is_some_and(select_items_reference_stored_columns);
         if matches!(on_conflict.action, OnConflictAction::DoNothing) {
             if on_conflict.conflict_target.is_none() {
                 return self.execute_insert_on_conflict_do_nothing_all_unique(
-                    table, schema, records, returning,
+                    table,
+                    schema,
+                    records,
+                    returning,
+                    select_required,
                 );
             }
             let conflict_columns =
@@ -1445,6 +1486,7 @@ impl<'db> SqlSession<'db> {
                 records,
                 &conflict_columns,
                 returning,
+                select_required,
             );
         }
         if let OnConflictAction::DoUpdate(update) = &on_conflict.action {
@@ -1459,6 +1501,15 @@ impl<'db> SqlSession<'db> {
             if idx % 1024 == 0 {
                 self.cancellation.check()?;
             }
+            // The proposed row passes the INSERT checks before arbitration,
+            // whichever path it then takes.
+            self.enforce_rls_write_checks(
+                table,
+                schema,
+                PolicyAction::Insert,
+                select_required,
+                std::slice::from_ref(&record),
+            )?;
             if let Some(existing) =
                 self.find_conflict_record(table, schema, &record, &conflict_columns)?
             {
@@ -1470,22 +1521,6 @@ impl<'db> SqlSession<'db> {
                                 "ON CONFLICT DO UPDATE requires a table schema".to_string(),
                             ));
                         };
-                        // Unlike a plain UPDATE (which silently skips rows
-                        // failing USING), PostgreSQL errors when the
-                        // conflicting existing row is not updatable.
-                        if let PreparedRls::Filter(filter) = prepare_rls_with_schema(
-                            self.db_ref(),
-                            table,
-                            PolicyAction::Update,
-                            Some(schema),
-                            &self.session_gucs,
-                            self.security_context.as_ref(),
-                            false,
-                        )? {
-                            if !filter.allows(&self.sql_engine(), schema, &existing)? {
-                                return Err(rls_using_denied(table));
-                            }
-                        }
                         let mut update_row =
                             row_from_record(table, table, Some(schema), &existing)?;
                         update_row = merge_rows(
@@ -1501,6 +1536,11 @@ impl<'db> SqlSession<'db> {
                                 continue;
                             }
                         }
+                        // Unlike a plain UPDATE (which silently skips rows
+                        // failing USING), PostgreSQL errors when the
+                        // conflicting existing row is not updatable or not
+                        // visible; the DO UPDATE WHERE is evaluated first.
+                        self.enforce_rls_conflict_check(table, schema, &existing)?;
 
                         let mut updated = existing.clone();
                         for assignment in &update.assignments {
@@ -1563,6 +1603,15 @@ impl<'db> SqlSession<'db> {
                             schema,
                             std::slice::from_mut(&mut updated),
                         )?;
+                        // The updated row: UPDATE WITH CHECK and SELECT USING,
+                        // before its constraints (PostgreSQL's order).
+                        self.enforce_rls_write_checks(
+                            table,
+                            Some(schema),
+                            PolicyAction::Update,
+                            true,
+                            std::slice::from_ref(&updated),
+                        )?;
                         validate_records_for_write(
                             self.db_ref(),
                             self.tx.as_ref(),
@@ -1572,7 +1621,6 @@ impl<'db> SqlSession<'db> {
                             true,
                             Some(&self.sql_engine()),
                         )?;
-                        self.enforce_rls_check(table, PolicyAction::Update, &updated)?;
                         self.update_session_record(table, updated.clone())?;
                         self.apply_foreign_key_parent_update(table, schema, &existing, &updated)?;
                         self.fire_after_row_triggers(
@@ -1598,12 +1646,6 @@ impl<'db> SqlSession<'db> {
                     Some(&self.sql_engine()),
                 )?;
             }
-            self.enforce_rls_checks(
-                table,
-                schema,
-                PolicyAction::Insert,
-                std::slice::from_ref(&record),
-            )?;
             self.insert_session_records(table, vec![record.clone()])?;
             inserted_records.push(record.clone());
             affected_records.push(record);
@@ -1626,7 +1668,17 @@ impl<'db> SqlSession<'db> {
         records: Vec<Record>,
         conflict_columns: &[String],
         returning: Option<&[SelectItem]>,
+        select_required: bool,
     ) -> Result<SqlResult> {
+        self.enforce_rls_before_do_nothing(
+            table,
+            schema,
+            &records,
+            select_required,
+            |session, rows| {
+                session.non_conflicting_insert_records(table, schema, rows, conflict_columns)
+            },
+        )?;
         let inserted_records =
             self.non_conflicting_insert_records(table, schema, records, conflict_columns)?;
         if let Some(schema) = schema {
@@ -1640,7 +1692,6 @@ impl<'db> SqlSession<'db> {
                 Some(&self.sql_engine()),
             )?;
         }
-        self.enforce_rls_checks(table, schema, PolicyAction::Insert, &inserted_records)?;
         self.insert_session_records(table, inserted_records.clone())?;
         self.fire_after_insert_triggers(table, schema, &inserted_records)?;
         self.insert_result(
@@ -1658,7 +1709,15 @@ impl<'db> SqlSession<'db> {
         schema: Option<&TableSchema>,
         records: Vec<Record>,
         returning: Option<&[SelectItem]>,
+        select_required: bool,
     ) -> Result<SqlResult> {
+        self.enforce_rls_before_do_nothing(
+            table,
+            schema,
+            &records,
+            select_required,
+            |session, rows| session.non_conflicting_insert_records_all_unique(table, schema, rows),
+        )?;
         let inserted_records =
             self.non_conflicting_insert_records_all_unique(table, schema, records)?;
         if let Some(schema) = schema {
@@ -1672,7 +1731,6 @@ impl<'db> SqlSession<'db> {
                 Some(&self.sql_engine()),
             )?;
         }
-        self.enforce_rls_checks(table, schema, PolicyAction::Insert, &inserted_records)?;
         self.insert_session_records(table, inserted_records.clone())?;
         self.fire_after_insert_triggers(table, schema, &inserted_records)?;
         self.insert_result(
@@ -1682,6 +1740,44 @@ impl<'db> SqlSession<'db> {
             &inserted_records,
             inserted_records.len(),
         )
+    }
+
+    /// `ON CONFLICT DO NOTHING`: every proposed row, conflicting or not,
+    /// passes the INSERT checks before arbitration (PostgreSQL's order), so
+    /// a conflict on a row the writer cannot see never turns a refused row
+    /// into a silent no-op. Rows ahead of the first refused one report their
+    /// own constraint errors first.
+    fn enforce_rls_before_do_nothing(
+        &self,
+        table: &str,
+        schema: Option<&TableSchema>,
+        records: &[Record],
+        select_required: bool,
+        non_conflicting: impl Fn(&Self, Vec<Record>) -> Result<Vec<Record>>,
+    ) -> Result<()> {
+        let Some((index, error)) = self.first_rls_write_violation(
+            table,
+            schema,
+            PolicyAction::Insert,
+            select_required,
+            records,
+        )?
+        else {
+            return Ok(());
+        };
+        if let Some(schema) = schema {
+            let earlier = non_conflicting(self, records[..index].to_vec())?;
+            validate_records_for_write(
+                self.db_ref(),
+                self.tx.as_ref(),
+                table,
+                schema,
+                &earlier,
+                false,
+                Some(&self.sql_engine()),
+            )?;
+        }
+        Err(error)
     }
 
     pub(crate) fn non_conflicting_insert_records(
@@ -2573,4 +2669,22 @@ impl<'db> SqlSession<'db> {
     pub(crate) fn row_engine(&self) -> SqlEngine<'_> {
         self.sql_engine()
     }
+}
+
+/// Whether an INSERT reads its target relation, so PostgreSQL requires
+/// SELECT rights and adds the SELECT policies to the new-row checks: a
+/// `RETURNING` that reads the row, or an `ON CONFLICT` arbiter (a conflict
+/// target or constraint; `DO UPDATE` always has one). `RETURNING 1` and an
+/// arbiter-less `ON CONFLICT DO NOTHING` read nothing.
+pub(crate) fn insert_reads_target(insert: &Insert) -> bool {
+    insert
+        .returning
+        .as_deref()
+        .is_some_and(select_items_reference_stored_columns)
+        || matches!(
+            &insert.on,
+            Some(OnInsert::OnConflict(on_conflict))
+                if on_conflict.conflict_target.is_some()
+                    || matches!(on_conflict.action, OnConflictAction::DoUpdate(_))
+        )
 }

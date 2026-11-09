@@ -413,12 +413,25 @@ fn journal_replicas_share_author_identity_and_preserve_it_after_promotion() {
             (db.node_id(), db.mesh_verifying_key().unwrap()) == identity
         }) && hosts[0].as_ref().unwrap().writer_lease().active()
     });
-    hosts[0]
-        .as_ref()
-        .unwrap()
+    // These are independent committed setup operations, not one transaction.
+    // Release the engine guard and await the native acknowledgement after each
+    // one: holding it across schema and journal setup can starve the peer
+    // confirmations past this test's short write lease on a busy runner.
+    let writer = hosts[0].as_ref().unwrap();
+    writer
         .with_write(|db| {
             SqlSession::new(db).execute("CREATE TABLE entries (id TEXT PRIMARY KEY, value INT)")?;
+            Ok(())
+        })
+        .unwrap();
+    writer
+        .with_write(|db| {
             db.set_collection_mesh_sync_enabled("entries", true)?;
+            Ok(())
+        })
+        .unwrap();
+    writer
+        .with_write(|db| {
             SqlSession::new(db).execute("INSERT INTO entries VALUES ('before', 1)")?;
             Ok(())
         })

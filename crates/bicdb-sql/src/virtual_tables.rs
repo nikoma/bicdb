@@ -33,6 +33,8 @@ pub(crate) fn is_internal_sql_collection(name: &str) -> bool {
         SEQUENCE_COLLECTION,
         VIEW_COLLECTION,
         ROUTINE_COLLECTION,
+        crate::pg_operators::OPERATOR_COLLECTION,
+        crate::query_rules::RULE_COLLECTION,
         TRIGGER_COLLECTION,
         NOTIFICATION_COLLECTION,
         ROLE_COLLECTION,
@@ -929,7 +931,7 @@ pub(crate) fn raw_routine_argument_type_details(arg: &str) -> Result<(RoutineTyp
         {
             type_start += 1;
         }
-    } else if words.len() > 1 && !is_likely_type_word(&words[0]) {
+    } else if words.len() > 1 && routine_arg_words_have_name(&words) {
         type_start = 1;
     }
 
@@ -940,6 +942,21 @@ pub(crate) fn raw_routine_argument_type_details(arg: &str) -> Result<(RoutineTyp
         )));
     }
     raw_routine_type_details(&declaration)
+}
+
+/// Whether an argument declaration without a mode starts with a parameter
+/// name. An unnamed multi-word type (`character varying`,
+/// `timestamp with time zone`) parses whole while its tail does not.
+pub(crate) fn routine_arg_words_have_name(words: &[String]) -> bool {
+    if words.len() < 2 {
+        return false;
+    }
+    if raw_routine_type_details(&words.join(" ")).is_ok()
+        && raw_routine_type_details(&words[1..].join(" ")).is_err()
+    {
+        return false;
+    }
+    !is_likely_type_word(&words[0])
 }
 
 pub(crate) fn routine_data_type(data_type: &DataType) -> Result<String> {
@@ -1531,7 +1548,9 @@ pub(crate) fn execute_builtin_function(
         )),
         "current_schema" | "pg_catalog.current_schema" => Ok(SqlResult::new(
             vec!["current_schema".to_string()],
-            vec![vec![SqlValue::String("public".to_string())]],
+            vec![vec![SqlValue::String(
+                crate::search_path::current_schema_name(),
+            )]],
         )),
         "current_schemas" | "pg_catalog.current_schemas" => {
             let args = function_args(function)
@@ -1552,14 +1571,10 @@ pub(crate) fn execute_builtin_function(
                     ));
                 }
             };
-            let schemas = if include_implicit {
-                vec![
-                    SqlValue::String("pg_catalog".to_string()),
-                    SqlValue::String("public".to_string()),
-                ]
-            } else {
-                vec![SqlValue::String("public".to_string())]
-            };
+            let schemas = crate::search_path::current_schema_names(include_implicit)
+                .into_iter()
+                .map(SqlValue::String)
+                .collect::<Vec<_>>();
             Ok(SqlResult::new(
                 vec![name.replace("pg_catalog.", "")],
                 vec![vec![sql_array_value(schemas)?]],
@@ -5839,18 +5854,33 @@ pub(crate) fn comparison_term(
     ) {
         return Ok(None);
     }
+    let constant_index_value = |expr: &Expr| -> Result<Option<IndexValue>> {
+        match eval_constant_expr(expr) {
+            // Stored/contextual calls can be valid row expressions without
+            // being static index constants. EXPLAIN must not reject or execute
+            // them; retain the normal residual predicate instead.
+            Err(SqlError::Unsupported(_)) => Ok(None),
+            result => result.and_then(index_value_from_sql).map(Some),
+        }
+    };
     if let Ok(field) = predicate_index_field_from_expr(left) {
         return Ok(Some((
             field,
             op.clone(),
-            index_value_from_sql(eval_constant_expr(right)?)?,
+            match constant_index_value(right)? {
+                Some(value) => value,
+                None => return Ok(None),
+            },
         )));
     }
     if let Ok(field) = predicate_index_field_from_expr(right) {
         return Ok(Some((
             field,
             reverse_comparison(op),
-            index_value_from_sql(eval_constant_expr(left)?)?,
+            match constant_index_value(left)? {
+                Some(value) => value,
+                None => return Ok(None),
+            },
         )));
     }
     Ok(None)

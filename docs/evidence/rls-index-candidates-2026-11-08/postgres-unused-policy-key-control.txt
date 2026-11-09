@@ -1,0 +1,54 @@
+BEGIN
+SET
+CREATE SCHEMA
+CREATE ROLE
+GRANT
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+INSERT 0 10000
+ANALYZE
+CREATE FUNCTION
+GRANT
+ALTER TABLE
+CREATE POLICY
+SET
+CASE single_policy_key_existing_number_index
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ LockRows  (cost=0.55..8.57 rows=1 width=10)
+   InitPlan 1 (returns $0)
+     ->  Result  (cost=0.00..0.26 rows=1 width=32)
+   ->  Index Scan using by_number on orders  (cost=0.29..8.30 rows=1 width=10)
+         Index Cond: (number = 'missing'::text)
+         Filter: (org_id = $0)
+(6 rows)
+
+ id 
+----
+(0 rows)
+
+RESET
+DROP POLICY
+CREATE POLICY
+SET
+SET
+CASE multiple_policy_keys_existing_number_index
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ LockRows  (cost=0.56..8.59 rows=1 width=10)
+   InitPlan 1 (returns $0)
+     ->  Result  (cost=0.00..0.01 rows=1 width=32)
+   InitPlan 2 (returns $1)
+     ->  Result  (cost=0.00..0.26 rows=1 width=32)
+   ->  Index Scan using by_number on orders  (cost=0.29..8.31 rows=1 width=10)
+         Index Cond: (number = 'missing'::text)
+         Filter: ((org_id = $0) AND (region = $1))
+(8 rows)
+
+ id 
+----
+(0 rows)
+
+ROLLBACK

@@ -12,8 +12,31 @@
 //!
 //! Both variables are read once. With neither set, [`crash_point`] is one
 //! relaxed load.
+//!
+//! `BICDB_TEST_DIR_VOLATILE=1` emulates power loss for **directory
+//! entries and unsynced file data** of durable file replacements (the
+//! temp-file, rename, directory-`fsync` protocol used for state files and
+//! sidecars). A replacement registers itself at its rename with
+//! [`register_volatile_rename`]; an `fsync` of the directory clears every
+//! registration in it ([`directory_synced`]). At a crash point, before the
+//! abort, every replacement still registered is undone: the previous file is
+//! put back (or the new name removed when there was none), and a replacement
+//! whose data was never synced is truncated to zero bytes. This is exactly
+//! what a power cut is allowed to do to an unsynced rename, so a missing
+//! directory `fsync` shows up as a lost state change after the reopen.
+//!
+//! `BICDB_TEST_FAIL_IO=<site>:<n>[+][,<site>:<n>[+]...]` makes the `n`-th
+//! call (1-based) of the named I/O site return `EIO` instead of doing the
+//! I/O. A trailing `+` keeps failing every later call too (a dead disk);
+//! without it only the `n`-th call fails (the "fsync failed once, then
+//! succeeded" pattern that fail-closed handling exists for). In-process tests
+//! use [`arm_io_failure`] instead, scoped to their own directory so parallel
+//! tests do not see each other's faults. With nothing armed, [`io_fault`] is
+//! one atomic load. Site names are listed in
+//! `docs/durability-failure-handling.md`.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use crate::wal::Wal;
@@ -88,15 +111,327 @@ pub fn crash_point(point: &str) {
     crash_now(plan.volatile_tail);
 }
 
+/// [`crash_point`] for a call site that holds `locked`'s file lock. Power-loss
+/// emulation skips that log: discarding its tail would need the same lock.
+/// Callers use it only where that log has no unsynced bytes that matter (a
+/// seal has just synced the file, a reset is discarding it, recovery appends
+/// nothing).
+pub(crate) fn crash_point_with_locked_wal(point: &str, locked: &Wal) {
+    let Some(plan) = plan() else {
+        return;
+    };
+    if plan.point != point {
+        return;
+    }
+    if plan.seen.fetch_add(1, Ordering::AcqRel) + 1 != plan.hit {
+        return;
+    }
+    crash_with(plan.volatile_tail, Some(locked));
+}
+
 /// Abort the process, first discarding unsynced page-WAL bytes when power
 /// loss emulation is on.
 pub fn crash_now(volatile_tail: bool) -> ! {
+    crash_with(volatile_tail, None)
+}
+
+fn crash_with(volatile_tail: bool, locked: Option<&Wal>) -> ! {
+    undo_volatile_renames();
     if volatile_tail {
         let wals = registry().lock().unwrap_or_else(|e| e.into_inner());
         for wal in wals.iter().filter_map(Weak::upgrade) {
+            if locked.is_some_and(|locked| std::ptr::eq(locked, Arc::as_ptr(&wal))) {
+                continue;
+            }
             wal.discard_unsynced_tail_for_test();
         }
     }
     eprintln!("bicdb test crash point reached");
     std::process::abort();
+}
+
+struct IoFaultPlan {
+    site: String,
+    /// Only calls on paths under this directory count. `None`: every path.
+    scope: Option<PathBuf>,
+    nth: u64,
+    persistent: bool,
+    seen: AtomicU64,
+    fired: AtomicU64,
+    /// Instead of failing, run this at the matching call (then do the I/O).
+    hook: Option<Box<dyn Fn() + Send + Sync>>,
+}
+
+fn io_fault_plans() -> &'static Mutex<Vec<Arc<IoFaultPlan>>> {
+    static PLANS: OnceLock<Mutex<Vec<Arc<IoFaultPlan>>>> = OnceLock::new();
+    PLANS.get_or_init(|| {
+        let mut plans = Vec::new();
+        if let Ok(spec) = std::env::var("BICDB_TEST_FAIL_IO") {
+            // A test-only knob that makes real I/O fail: never quiet. A
+            // malformed spec is refused outright rather than silently
+            // arming nothing (or the wrong call).
+            crate::health::log_event(&serde_json::json!({
+                "event": "test_faults.io_failure_injection_enabled",
+                "severity": "critical",
+                "spec": spec,
+                "warning": "BICDB_TEST_FAIL_IO is a test-only setting: durable writes will fail on purpose",
+            }));
+            for entry in spec.split(',').map(str::trim).filter(|e| !e.is_empty()) {
+                let (site, persistent, nth) = parse_io_fault_entry(entry).unwrap_or_else(|| {
+                    panic!(
+                        "BICDB_TEST_FAIL_IO: malformed entry `{entry}`; expected \
+                         <site>:<n> or <site>:<n>+ with n >= 1"
+                    )
+                });
+                plans.push(Arc::new(IoFaultPlan {
+                    site: site.to_string(),
+                    scope: None,
+                    nth,
+                    persistent,
+                    seen: AtomicU64::new(0),
+                    fired: AtomicU64::new(0),
+                    hook: None,
+                }));
+            }
+        }
+        IO_FAULTS_ARMED.store(!plans.is_empty(), Ordering::Release);
+        Mutex::new(plans)
+    })
+}
+
+static IO_FAULTS_ARMED: AtomicBool = AtomicBool::new(false);
+
+/// `<site>:<n>` or `<site>:<n>+`, `n >= 1`.
+fn parse_io_fault_entry(entry: &str) -> Option<(&str, bool, u64)> {
+    let (site, count) = entry.rsplit_once(':')?;
+    if site.is_empty() || site.contains(char::is_whitespace) {
+        return None;
+    }
+    let (count, persistent) = match count.strip_suffix('+') {
+        Some(count) => (count, true),
+        None => (count, false),
+    };
+    let nth = count.parse::<u64>().ok().filter(|nth| *nth >= 1)?;
+    Some((site, persistent, nth))
+}
+
+/// A named point where a test can run a hook ([`arm_io_hook`]); performs no
+/// I/O and never fails.
+pub fn io_hook_point(site: &str, path: &Path) {
+    let _ = io_fault(site, path);
+}
+
+/// Removes its fault plan when dropped.
+pub struct IoFaultGuard {
+    plan: Arc<IoFaultPlan>,
+}
+
+impl IoFaultGuard {
+    /// How many calls of the site (within scope) failed so far.
+    pub fn fired(&self) -> u64 {
+        self.plan.fired.load(Ordering::Acquire)
+    }
+
+    /// How many calls of the site (within scope) were seen so far.
+    pub fn seen(&self) -> u64 {
+        self.plan.seen.load(Ordering::Acquire)
+    }
+}
+
+impl Drop for IoFaultGuard {
+    fn drop(&mut self) {
+        let mut plans = io_fault_plans().lock().unwrap_or_else(|e| e.into_inner());
+        plans.retain(|plan| !Arc::ptr_eq(plan, &self.plan));
+        IO_FAULTS_ARMED.store(!plans.is_empty(), Ordering::Release);
+    }
+}
+
+/// Make the `nth` call (1-based) of `site` on a path under `scope` fail with
+/// `EIO`; with `persistent`, every later call fails too.
+pub fn arm_io_failure(site: &str, scope: &Path, nth: u64, persistent: bool) -> IoFaultGuard {
+    arm(site, scope, nth, persistent, None)
+}
+
+/// Run `hook` at the `nth` call of `site` under `scope`, then let the I/O
+/// proceed. Lets a test make something happen *while* an I/O is in flight
+/// (for example, a failure elsewhere during a successful fsync). The hook
+/// must not perform injected I/O itself.
+pub fn arm_io_hook(
+    site: &str,
+    scope: &Path,
+    nth: u64,
+    hook: impl Fn() + Send + Sync + 'static,
+) -> IoFaultGuard {
+    arm(site, scope, nth, false, Some(Box::new(hook)))
+}
+
+fn arm(
+    site: &str,
+    scope: &Path,
+    nth: u64,
+    persistent: bool,
+    hook: Option<Box<dyn Fn() + Send + Sync>>,
+) -> IoFaultGuard {
+    let plan = Arc::new(IoFaultPlan {
+        site: site.to_string(),
+        scope: Some(scope.to_path_buf()),
+        nth: nth.max(1),
+        persistent,
+        seen: AtomicU64::new(0),
+        fired: AtomicU64::new(0),
+        hook,
+    });
+    let mut plans = io_fault_plans().lock().unwrap_or_else(|e| e.into_inner());
+    plans.push(plan.clone());
+    IO_FAULTS_ARMED.store(true, Ordering::Release);
+    IoFaultGuard { plan }
+}
+
+/// Injection point for a durability-critical I/O call named `site` on
+/// `path`. Returns `EIO` when an armed plan says this call fails.
+pub fn io_fault(site: &str, path: &Path) -> std::io::Result<()> {
+    // Parses `BICDB_TEST_FAIL_IO` on first use; afterwards one atomic load.
+    let plans = io_fault_plans();
+    if !IO_FAULTS_ARMED.load(Ordering::Acquire) {
+        return Ok(());
+    }
+    let plans = plans.lock().unwrap_or_else(|e| e.into_inner());
+    for plan in plans.iter() {
+        if plan.site != site {
+            continue;
+        }
+        if let Some(scope) = &plan.scope {
+            if !path.starts_with(scope) {
+                continue;
+            }
+        }
+        let call = plan.seen.fetch_add(1, Ordering::AcqRel) + 1;
+        if call == plan.nth || (plan.persistent && call > plan.nth) {
+            plan.fired.fetch_add(1, Ordering::AcqRel);
+            if let Some(hook) = &plan.hook {
+                hook();
+                continue;
+            }
+            return Err(std::io::Error::from_raw_os_error(libc::EIO));
+        }
+    }
+    Ok(())
+}
+
+/// Whether directory-entry power-loss emulation is requested for this
+/// process (`BICDB_TEST_DIR_VOLATILE=1`).
+pub fn volatile_dir_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED
+        .get_or_init(|| std::env::var("BICDB_TEST_DIR_VOLATILE").is_ok_and(|value| value == "1"))
+}
+
+struct VolatileRename {
+    target: PathBuf,
+    /// A hard link to the file the rename replaced; `None` when the target
+    /// did not exist before.
+    previous: Option<PathBuf>,
+    data_synced: bool,
+    /// The directory entry was synced; only unsynced data is still at risk.
+    entry_durable: bool,
+}
+
+fn volatile_renames() -> &'static Mutex<Vec<VolatileRename>> {
+    static RENAMES: OnceLock<Mutex<Vec<VolatileRename>>> = OnceLock::new();
+    RENAMES.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+/// Record a rename of a durable replacement onto `target` that no directory
+/// `fsync` has covered yet. `previous` is a hard link to the replaced file.
+/// Only call when [`volatile_dir_enabled`].
+pub fn register_volatile_rename(target: &Path, previous: Option<PathBuf>, data_synced: bool) {
+    let mut renames = volatile_renames().lock().unwrap_or_else(|e| e.into_inner());
+    // A newer rename onto the same name keeps the oldest durable previous
+    // file: undoing both must restore what was there before either.
+    if let Some(existing) = renames.iter_mut().find(|entry| entry.target == target) {
+        if let Some(link) = previous {
+            let _ = std::fs::remove_file(link);
+        }
+        existing.data_synced = data_synced;
+        existing.entry_durable = false;
+        return;
+    }
+    renames.push(VolatileRename {
+        target: target.to_path_buf(),
+        previous,
+        data_synced,
+        entry_durable: false,
+    });
+}
+
+/// An `fsync` of `dir` succeeded: every rename into it is now durable.
+pub fn directory_synced(dir: &Path) {
+    if !volatile_dir_enabled() {
+        return;
+    }
+    let mut renames = volatile_renames().lock().unwrap_or_else(|e| e.into_inner());
+    renames.retain_mut(|entry| {
+        if entry.target.parent() != Some(dir) {
+            return true;
+        }
+        if let Some(link) = entry.previous.take() {
+            let _ = std::fs::remove_file(link);
+        }
+        entry.entry_durable = true;
+        // Data that was never synced can still be lost after the entry is
+        // durable; keep only that part of the emulation.
+        !entry.data_synced
+    });
+}
+
+fn undo_volatile_renames() {
+    if !volatile_dir_enabled() {
+        return;
+    }
+    let renames = volatile_renames().lock().unwrap_or_else(|e| e.into_inner());
+    for entry in renames.iter().rev() {
+        if entry.entry_durable {
+            // The name survives; its unsynced contents do not.
+            let _ = std::fs::OpenOptions::new()
+                .write(true)
+                .open(&entry.target)
+                .and_then(|file| file.set_len(0));
+            continue;
+        }
+        match &entry.previous {
+            Some(link) => {
+                let _ = std::fs::rename(link, &entry.target);
+            }
+            None => {
+                let _ = std::fs::remove_file(&entry.target);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_io_fault_entry;
+
+    #[test]
+    fn io_fault_specs_are_parsed_strictly() {
+        assert_eq!(
+            parse_io_fault_entry("page_log.sync:3"),
+            Some(("page_log.sync", false, 3))
+        );
+        assert_eq!(
+            parse_io_fault_entry("page_log.sync:1+"),
+            Some(("page_log.sync", true, 1))
+        );
+        for bad in [
+            "page_log.sync",
+            "page_log.sync:0",
+            "page_log.sync:x",
+            ":3",
+            "a b:1",
+            "s:-1",
+        ] {
+            assert_eq!(parse_io_fault_entry(bad), None, "{bad}");
+        }
+    }
 }

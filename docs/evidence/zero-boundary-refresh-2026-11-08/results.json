@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "base_commit": "b40ac848a4fddf617f5849359142d3f15af0df36",
+  "tested_fix_commit": "c6effac",
+  "flags": {
+    "CARGO_BUILD_JOBS": 4,
+    "CARGO_PROFILE_DEV_DEBUG": 0,
+    "CARGO_INCREMENTAL": 0,
+    "RUSTFLAGS": null,
+    "test_threads": 1
+  },
+  "resource_guards": {
+    "minimum_available_memory_kib": 8388608,
+    "minimum_available_disk_kib": 10485760,
+    "poll_seconds": 5
+  },
+  "commands": {
+    "core": "cargo test -p bicdb-core --test read_committed_zero_boundary --locked -- --test-threads=1",
+    "sql": "cargo test -p bicdb-sql --test independent_commit_conflicts --locked -- --test-threads=1",
+    "related": "cargo test -p bicdb-core --test transaction_isolation --test transaction_rollback_mark --test transaction_receipts --test commit_durability_isolation --locked -- --test-threads=1",
+    "floored": "cargo test -p bicdb-core --test core floored_snapshot --locked -- --test-threads=1"
+  },
+  "runs": [
+    {
+      "name": "core-before",
+      "passed": 1,
+      "failed": 3,
+      "cargo_exit_code": 101,
+      "full_log_sha256": "aa0b58e5640792fefae70d33ae321bf0b64273c62b0f6131ca256dc73070a5af"
+    },
+    {
+      "name": "sql-before",
+      "passed": 0,
+      "failed": 1,
+      "cargo_exit_code": 101,
+      "full_log_sha256": "6ef40fb1cf5f895ac82922d6f0b4bd9b079f9fb15af3df24ac3d10d1b52f09a8"
+    },
+    {
+      "name": "core-after",
+      "passed": 4,
+      "failed": 0,
+      "cargo_exit_code": 0,
+      "full_log_sha256": "826504a48a874cd72d63859980a8b1f7d8f5a2dc9d79cba21f106aad12a87caf"
+    },
+    {
+      "name": "sql-after",
+      "passed": 1,
+      "failed": 0,
+      "cargo_exit_code": 0,
+      "full_log_sha256": "d1822a3eb2a3d337cd7c5d9df26727f9aa67d8d2b4866b6a57518b13414adab1"
+    },
+    {
+      "name": "related-after",
+      "passed": 20,
+      "failed": 0,
+      "cargo_exit_code": 0,
+      "full_log_sha256": "1dae7dfb4802c9718564fb30042ec151e6277b08b49ae6350210b8aa7b2ed7cf"
+    }
+  ]
+}

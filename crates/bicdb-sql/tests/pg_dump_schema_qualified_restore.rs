@@ -100,6 +100,42 @@ fn set_default_nextval_resolves_a_schema_qualified_sequence() {
     );
 }
 
+/// Migration scripts register themselves with `SELECT f('..') FROM dual`,
+/// where `f` writes; function bodies use `=` assignment and RAISE WARNING.
+#[test]
+fn writing_functions_in_select_lists_and_plpgsql_dialect_forms() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE TABLE public.registered (name TEXT)")
+        .unwrap();
+    sql.execute("CREATE VIEW public.one_row AS SELECT 'X' AS dummy")
+        .unwrap();
+    sql.execute(
+        "CREATE FUNCTION public.register(p_name varchar) RETURNS void LANGUAGE plpgsql AS $$ \
+         DECLARE n integer; BEGIN \
+           n = 2; n = n * 3; \
+           RAISE WARNING 'registering % (%)', p_name, n; \
+           RAISE INFO 'info'; \
+           INSERT INTO public.registered VALUES (p_name || n); \
+         END; $$",
+    )
+    .unwrap();
+    sql.execute("SELECT register('a') FROM one_row").unwrap();
+    sql.execute("SELECT register(dummy) FROM one_row WHERE dummy = 'X'")
+        .unwrap();
+    let rows = sql
+        .execute("SELECT name FROM public.registered ORDER BY name")
+        .unwrap()
+        .rows;
+    assert_eq!(
+        rows,
+        vec![
+            vec![SqlValue::String("X6".into())],
+            vec![SqlValue::String("a6".into())]
+        ]
+    );
+}
+
 /// CREATE TABLE with an inline schema-qualified nextval default (the other
 /// spelling pg_dump emits) binds to the same sequence.
 #[test]
@@ -132,6 +168,65 @@ fn create_table_inline_nextval_default_resolves_schema_qualified() {
         ),
         901
     );
+}
+
+/// pg_dump restores rewrite rules; an INSERT on a table with a DO INSTEAD
+/// rule runs the rule's action once per row, with NEW bound to that row.
+#[test]
+fn instead_rules_replace_the_rewritten_statement() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE TABLE app.requests (tablename TEXT, amount INT)")
+        .unwrap();
+    sql.execute("CREATE TABLE app.applied (tablename TEXT, amount INT)")
+        .unwrap();
+    sql.execute(
+        "CREATE FUNCTION app.apply_request(t text, n integer) RETURNS void LANGUAGE plpgsql AS $$ \
+         BEGIN INSERT INTO app.applied VALUES (t, n * 2); END; $$",
+    )
+    .unwrap();
+    sql.execute(
+        "CREATE RULE apply_rule AS\n    ON INSERT TO app.requests DO INSTEAD  \
+         SELECT app.apply_request(new.tablename || '''', new.amount) AS apply_request",
+    )
+    .unwrap();
+    sql.execute("CREATE TABLE app.locked (id INT)").unwrap();
+    sql.execute("INSERT INTO app.locked VALUES (1)").unwrap();
+    sql.execute("CREATE RULE keep AS ON DELETE TO app.locked DO INSTEAD NOTHING")
+        .unwrap();
+
+    sql.execute("INSERT INTO app.requests VALUES ('a', 1), ('b', 5)")
+        .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.requests"), 0);
+    assert_eq!(
+        int_at(&mut sql, "SELECT sum(amount) FROM app.applied"),
+        12,
+        "the rule action ran once per row"
+    );
+    // The action keeps its literals exactly (a doubled quote stays one quote).
+    assert_eq!(
+        int_at(
+            &mut sql,
+            r#"SELECT count(*) FROM app.applied WHERE tablename = 'a'''"#
+        ),
+        1
+    );
+    sql.execute("DELETE FROM app.locked").unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.locked"), 1);
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_rules WHERE schemaname = 'app' AND tablename = 'locked'"
+        ),
+        1
+    );
+    sql.execute("DROP RULE keep ON app.locked").unwrap();
+    sql.execute("DELETE FROM app.locked").unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.locked"), 0);
+    assert!(sql
+        .execute("CREATE RULE r AS ON INSERT TO app.locked WHERE new.id > 1 DO INSTEAD NOTHING")
+        .is_err());
 }
 
 /// Regression: a pg_dump restore creates a trigger function in a
@@ -201,6 +296,29 @@ AS $$ BEGIN RETURN NEW; END; $$"#,
         rows.rows,
         vec![vec![SqlValue::String("public".to_string())]]
     );
+}
+
+/// Dynamic SQL in a routine resolves unqualified relations through the
+/// caller's search_path when it runs.
+#[test]
+fn dynamic_execute_binds_relations_through_search_path() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE TABLE app.item (id INT, note TEXT)")
+        .unwrap();
+    sql.execute(
+        "CREATE FUNCTION app.run(command text) RETURNS void LANGUAGE plpgsql AS $$ \
+         BEGIN EXECUTE command; END; $$",
+    )
+    .unwrap();
+    sql.execute("SET search_path TO app, public").unwrap();
+    sql.execute("SELECT run('insert into item values (1, ''a'')')")
+        .unwrap();
+    sql.execute("SELECT run('alter table item alter column note set not null')")
+        .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.item"), 1);
+    assert!(sql.execute("INSERT INTO item VALUES (2, NULL)").is_err());
 }
 
 /// A dump restores into its own schema; the application then names its
@@ -287,6 +405,99 @@ fn unqualified_relations_resolve_through_search_path() {
     assert_eq!(int_at(&mut sql, "SELECT app.item_count()"), 1);
 }
 
+/// Binding unqualified names must leave the rest of the statement text
+/// untouched: string literals with doubled quotes, comments and layout.
+#[test]
+fn search_path_binding_preserves_statement_text() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE TABLE app.note (id INT, body TEXT)")
+        .unwrap();
+    sql.execute("CREATE TABLE app.registered (body TEXT)")
+        .unwrap();
+    sql.execute("CREATE VIEW app.one_row AS SELECT 1 AS id")
+        .unwrap();
+    sql.execute(
+        "CREATE FUNCTION app.register(p text) RETURNS void LANGUAGE plpgsql AS $$ \
+         BEGIN INSERT INTO app.registered VALUES (p); END; $$",
+    )
+    .unwrap();
+    sql.execute("SET search_path TO app, public").unwrap();
+    sql.execute(
+        r#"INSERT INTO note /* keep */ VALUES (1, 'COALESCE(AD_Language, '''')'),
+            (2, 'it''s')"#,
+    )
+    .unwrap();
+    let rows = sql
+        .execute("SELECT body FROM note ORDER BY id")
+        .unwrap()
+        .rows;
+    assert_eq!(
+        rows,
+        vec![
+            vec![SqlValue::String("COALESCE(AD_Language, '')".into())],
+            vec![SqlValue::String("it's".into())],
+        ]
+    );
+    sql.execute(r#"SELECT register('x''''y') FROM one_row"#)
+        .unwrap();
+    assert_eq!(
+        sql.execute("SELECT body FROM registered").unwrap().rows,
+        vec![vec![SqlValue::String("x''y".into())]]
+    );
+}
+
+/// Every statement form a schema restore and its migrations use binds its
+/// unqualified relation names through the search_path. Binding never falls
+/// back to running a statement unbound: a name without a source position is
+/// an error, so each of these forms must carry positions.
+#[test]
+fn search_path_binding_covers_restore_and_migration_statement_forms() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("SET search_path TO app, public").unwrap();
+    for statement in [
+        "CREATE TABLE parent (id INT PRIMARY KEY, name VARCHAR(20) DEFAULT 'it''s')",
+        "CREATE TABLE child (id INT, parent_id INT, CONSTRAINT child_parent FOREIGN KEY (parent_id) REFERENCES parent (id))",
+        "CREATE TABLE tree (id INT PRIMARY KEY, up INT REFERENCES tree (id))",
+        "ALTER TABLE child ADD COLUMN note TEXT",
+        "ALTER TABLE ONLY child ADD CONSTRAINT child_pk PRIMARY KEY (id)",
+        "CREATE INDEX child_parent_idx ON child (parent_id)",
+        "CREATE UNIQUE INDEX parent_name_idx ON parent (name)",
+        "CREATE VIEW parent_names AS SELECT p.id, p.name FROM parent p",
+        "INSERT INTO parent (id, name) VALUES (1, 'a''b'), (2, 'c')",
+        "INSERT INTO child SELECT id, id, NULL FROM parent",
+        "UPDATE child SET note = (SELECT name FROM parent WHERE parent.id = child.parent_id)",
+        "UPDATE child c SET note = p.name || '''' FROM parent p WHERE p.id = c.parent_id",
+        "WITH gone AS (SELECT id FROM parent WHERE id = 2) UPDATE child SET note = 'gone' WHERE id IN (SELECT id FROM gone)",
+        "DELETE FROM child WHERE NOT EXISTS (SELECT 1 FROM parent_names v WHERE v.id = child.parent_id)",
+        "COMMENT ON TABLE parent IS 'parents'",
+        "TRUNCATE TABLE tree",
+        "DROP VIEW parent_names",
+        "DROP INDEX child_parent_idx",
+    ] {
+        sql.execute(statement)
+            .unwrap_or_else(|error| panic!("{statement}: {error}"));
+    }
+    assert_eq!(
+        sql.execute("SELECT id, note FROM app.child ORDER BY id")
+            .unwrap()
+            .rows,
+        vec![
+            vec![SqlValue::Int(1), SqlValue::String("a'b'".into())],
+            vec![SqlValue::Int(2), SqlValue::String("gone".into())],
+        ]
+    );
+    assert_eq!(
+        sql.execute("SELECT name FROM app.parent WHERE id = 1")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String("a'b".into())]]
+    );
+}
+
 /// The documented restore sets the application role's search_path as a
 /// role default, which applies to the role's later sessions.
 #[test]
@@ -325,6 +536,63 @@ fn alter_role_set_records_session_defaults() {
         .is_empty());
 }
 
+/// A correlated subquery names the outer table by its bare name, also when
+/// the table lives in a schema (written qualified, or bound through
+/// search_path).
+#[test]
+fn correlated_references_name_schema_qualified_tables_by_their_bare_name() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE TABLE app.line (id INT, product_id INT, uom_id INT)")
+        .unwrap();
+    sql.execute("CREATE TABLE app.product (product_id INT, uom_id INT)")
+        .unwrap();
+    sql.execute("INSERT INTO app.line VALUES (1, 10, NULL), (2, 20, NULL)")
+        .unwrap();
+    sql.execute("INSERT INTO app.product VALUES (10, 100), (20, 200)")
+        .unwrap();
+    sql.execute(
+        "UPDATE app.line SET uom_id = \
+         (SELECT uom_id FROM app.product WHERE product_id = line.product_id)",
+    )
+    .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT sum(uom_id) FROM app.line"), 300);
+    sql.execute("SET search_path TO app, public").unwrap();
+    sql.execute(
+        "UPDATE Line SET uom_id = \
+         (SELECT uom_id + 1 FROM Product WHERE product_id = Line.product_id)",
+    )
+    .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT sum(uom_id) FROM line"), 302);
+    // Siblings: UPDATE ... FROM, a correlated subquery in a select list, and
+    // a correlated reference to a view, all named by the bare name.
+    sql.execute("UPDATE line SET uom_id = 0").unwrap();
+    sql.execute("UPDATE line SET uom_id = product.uom_id FROM product WHERE product.product_id = line.product_id")
+        .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT sum(uom_id) FROM line"), 300);
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT (SELECT uom_id FROM product WHERE product_id = line.product_id) FROM app.line ORDER BY id"
+        ),
+        100
+    );
+    sql.execute("CREATE VIEW app.line_view AS SELECT id, product_id FROM app.line")
+        .unwrap();
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM app.line_view WHERE EXISTS \
+             (SELECT 1 FROM product WHERE product.product_id = line_view.product_id)"
+        ),
+        2
+    );
+    sql.execute("DELETE FROM line WHERE EXISTS (SELECT 1 FROM product WHERE product.product_id = line.product_id AND product.uom_id = 200)")
+        .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT count(*) FROM line"), 1);
+}
+
 /// pg_dump emits ALTER TABLE ... OWNER TO for views, and creates triggers on
 /// schema-qualified tables.
 #[test]
@@ -360,6 +628,47 @@ fn restored_view_owners_and_schema_qualified_triggers_work() {
     sql.execute("INSERT INTO app.blob VALUES (7)").unwrap();
     sql.execute("DELETE FROM app.blob").unwrap();
     assert_eq!(int_at(&mut sql, "SELECT count(*) FROM app.removed"), 1);
+}
+
+/// An unqualified CREATE FUNCTION creates (or replaces) the function in the
+/// first schema on the search_path.
+#[test]
+fn unqualified_functions_are_created_in_the_first_search_path_schema() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE FUNCTION app.make_id() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$")
+        .unwrap();
+    sql.execute("SET search_path TO app, public").unwrap();
+    sql.execute(
+        "CREATE OR REPLACE FUNCTION Make_ID() RETURNS integer LANGUAGE sql AS $$ SELECT 2 $$",
+    )
+    .unwrap();
+    sql.execute(
+        "CREATE FUNCTION fresh_fn() RETURNS integer LANGUAGE plpgsql AS $$ BEGIN RETURN 3; END $$",
+    )
+    .unwrap();
+    let rows = sql
+        .execute(
+            "SELECT p.proname, n.nspname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace \
+             WHERE p.proname IN ('make_id', 'fresh_fn') ORDER BY 1",
+        )
+        .unwrap()
+        .rows;
+    assert_eq!(
+        rows,
+        vec![
+            vec![
+                SqlValue::String("fresh_fn".into()),
+                SqlValue::String("app".into())
+            ],
+            vec![
+                SqlValue::String("make_id".into()),
+                SqlValue::String("app".into())
+            ],
+        ]
+    );
+    assert_eq!(int_at(&mut sql, "SELECT app.make_id()"), 2);
 }
 
 /// One simple-query text that sets search_path and then names relations
@@ -410,6 +719,44 @@ fn statement_list_binds_each_statement_with_the_path_set_before_it() {
         2
     );
     assert!(sql.execute("SELECT count(*) FROM ad_client").is_err());
+}
+
+/// current_schema and current_schemas report the search_path's schemas.
+#[test]
+fn current_schema_follows_the_search_path() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    let text = |sql: &mut SqlSession, query: &str| sql.execute(query).unwrap().rows[0][0].to_cell();
+    assert_eq!(text(&mut sql, "SELECT current_schema()"), "public");
+    sql.execute("CREATE SCHEMA app").unwrap();
+    sql.execute("CREATE TABLE app.item (id INT)").unwrap();
+    sql.execute("SET search_path TO app, public").unwrap();
+    assert_eq!(text(&mut sql, "SELECT current_schema()"), "app");
+    assert_eq!(text(&mut sql, "SELECT current_schema"), "app");
+    assert_eq!(
+        text(
+            &mut sql,
+            "SELECT array_to_string(current_schemas(false), ',')"
+        ),
+        "app,public"
+    );
+    assert_eq!(
+        text(
+            &mut sql,
+            "SELECT array_to_string(current_schemas(true), ',')"
+        ),
+        "pg_catalog,app,public"
+    );
+    // Catalog lookups by CURRENT_SCHEMA inside a routine find the schema's relations.
+    sql.execute(
+        "CREATE FUNCTION app.has_item() RETURNS bigint LANGUAGE plpgsql AS $$ \
+         DECLARE n bigint; BEGIN SELECT count(*) INTO n FROM pg_catalog.pg_class pc \
+         WHERE pc.relname = 'item' AND pc.relnamespace = \
+         (SELECT oid FROM pg_catalog.pg_namespace WHERE nspname = CURRENT_SCHEMA); \
+         RETURN n; END; $$",
+    )
+    .unwrap();
+    assert_eq!(int_at(&mut sql, "SELECT has_item()"), 1);
 }
 
 fn namespace_exists(sql: &mut SqlSession, name: &str) -> bool {
@@ -544,4 +891,619 @@ fn drop_schema_requires_ownership() {
     let mut intruder = SqlSession::new_unprivileged(&mut db, "intruder");
     let error = intruder.execute("DROP SCHEMA zz_owned").unwrap_err();
     assert!(format!("{error}").contains("owner"), "{error}");
+}
+
+#[test]
+fn drop_schema_cascade_removes_every_overload() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE SCHEMA calc").unwrap();
+    for signature in ["a integer", "a text", "a integer, b integer"] {
+        sql.execute(&format!(
+            "CREATE FUNCTION calc.twice({signature}) RETURNS text LANGUAGE sql AS $$ SELECT 'x' $$"
+        ))
+        .unwrap();
+    }
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_proc WHERE proname = 'twice'"
+        ),
+        3
+    );
+    sql.execute("DROP SCHEMA calc CASCADE").unwrap();
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_proc WHERE proname = 'twice'"
+        ),
+        0
+    );
+    sql.execute("CREATE SCHEMA calc").unwrap();
+    sql.execute(
+        "CREATE FUNCTION calc.twice(a integer) RETURNS text LANGUAGE sql AS $$ SELECT 'y' $$",
+    )
+    .expect("no overload of the dropped schema survives");
+}
+
+/// A dump defines several functions of one name that differ by input types;
+/// each call runs the overload whose declared types fit its arguments.
+#[test]
+fn overloaded_functions_restore_and_dispatch_by_argument_types() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE ROLE owner_role LOGIN").unwrap();
+    sql.execute(
+        "CREATE FUNCTION public.shift(inter interval, days numeric) RETURNS integer \
+         LANGUAGE plpgsql AS $$ BEGIN RETURN EXTRACT(DAY FROM inter) + days; END; $$",
+    )
+    .unwrap();
+    sql.execute(
+        "CREATE FUNCTION public.shift(datetime timestamp with time zone, days numeric) \
+         RETURNS date LANGUAGE plpgsql AS $$ \
+         BEGIN RETURN CAST(datetime AS date) + CAST(days AS integer); END; $$",
+    )
+    .expect("a second signature is an overload, not a duplicate");
+    sql.execute(
+        "CREATE FUNCTION public.pick(character varying, integer) RETURNS text \
+         LANGUAGE sql AS $$ SELECT 'text' $$",
+    )
+    .unwrap();
+    sql.execute(
+        "CREATE FUNCTION public.pick(numeric, numeric) RETURNS text \
+         LANGUAGE sql AS $$ SELECT 'number' $$",
+    )
+    .unwrap();
+    assert!(
+        sql.execute(
+            "CREATE FUNCTION public.pick(numeric, numeric) RETURNS text \
+             LANGUAGE sql AS $$ SELECT 'again' $$",
+        )
+        .is_err(),
+        "the same signature still conflicts"
+    );
+
+    let text = |sql: &mut SqlSession, query: &str| sql.execute(query).unwrap().rows[0][0].to_cell();
+    assert_eq!(text(&mut sql, "SELECT shift(interval '3 days', 2)"), "5");
+    assert_eq!(
+        text(
+            &mut sql,
+            "SELECT shift(timestamptz '2026-01-30 10:00:00+00', 3)"
+        ),
+        "2026-02-02"
+    );
+    assert_eq!(
+        text(
+            &mut sql,
+            "SELECT pg_typeof(shift(CAST(now() AS timestamptz), 1))"
+        ),
+        "date"
+    );
+    assert_eq!(text(&mut sql, "SELECT pick('a', 1)"), "text");
+    assert_eq!(text(&mut sql, "SELECT pick(1.5, 2)"), "number");
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_proc WHERE proname IN ('shift', 'pick')"
+        ),
+        4
+    );
+
+    // DDL naming a signature acts on that overload, including unnamed ones.
+    sql.execute("ALTER FUNCTION public.pick(character varying, integer) OWNER TO owner_role")
+        .unwrap();
+    sql.execute(
+        "ALTER FUNCTION public.shift(timestamp with time zone, numeric) OWNER TO owner_role",
+    )
+    .unwrap();
+    sql.execute("DROP FUNCTION public.shift(interval, numeric)")
+        .unwrap();
+    assert_eq!(
+        text(
+            &mut sql,
+            "SELECT shift(timestamptz '2026-01-30 10:00:00+00', 1)"
+        ),
+        "2026-01-31"
+    );
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_proc WHERE proname = 'shift'"
+        ),
+        1
+    );
+    sql.execute("BEGIN").unwrap();
+    sql.execute("DROP FUNCTION public.pick(numeric, numeric)")
+        .unwrap();
+    sql.execute("ROLLBACK").unwrap();
+    assert_eq!(text(&mut sql, "SELECT pick(1.5, 2)"), "number");
+    assert_eq!(text(&mut sql, "SELECT pick('a', 1)"), "text");
+}
+
+// ---------------------------------------------------------------------------
+// User-defined operators (`CREATE OPERATOR`), as a pg_dump of an application
+// schema restores them: day arithmetic on timestamps through functions.
+// ---------------------------------------------------------------------------
+
+fn text_at(sql: &mut SqlSession, query: &str) -> String {
+    match sql
+        .execute(query)
+        .unwrap_or_else(|error| panic!("{query}: {error}"))
+        .rows[0][0]
+    {
+        SqlValue::String(ref value) => value.clone(),
+        ref other => panic!("expected text from {query}, got {other:?}"),
+    }
+}
+
+fn error_of(sql: &mut SqlSession, statement: &str) -> String {
+    match sql.execute(statement) {
+        Ok(result) => panic!("`{statement}` unexpectedly succeeded: {:?}", result.rows),
+        Err(error) => error.to_string(),
+    }
+}
+
+fn app_operator_count(sql: &mut SqlSession) -> i64 {
+    int_at(
+        sql,
+        "SELECT count(*) FROM pg_operator o JOIN pg_namespace n ON n.oid = o.oprnamespace \
+         WHERE n.nspname = 'app'",
+    )
+}
+
+/// Functions and operators in the shape a pg_dump writes them.
+fn create_day_operators(sql: &mut SqlSession) {
+    for statement in [
+        "CREATE SCHEMA app",
+        "CREATE FUNCTION app.adddays(datetime timestamp with time zone, days numeric) \
+         RETURNS timestamp with time zone LANGUAGE plpgsql IMMUTABLE \
+         AS $$ BEGIN RETURN datetime + make_interval(days => days::int); END; $$",
+        "CREATE FUNCTION app.subtractdays(day timestamp with time zone, days numeric) \
+         RETURNS timestamp with time zone LANGUAGE plpgsql IMMUTABLE \
+         AS $$ BEGIN RETURN day - make_interval(days => days::int); END; $$",
+        "CREATE FUNCTION app.intervaldays(inter interval, days numeric) RETURNS integer \
+         LANGUAGE plpgsql IMMUTABLE \
+         AS $$ BEGIN RETURN EXTRACT(DAY FROM inter)::int + days::int; END; $$",
+        "CREATE OPERATOR app.+ (FUNCTION = app.intervaldays, LEFTARG = interval, \
+         RIGHTARG = numeric, COMMUTATOR = OPERATOR(app.-))",
+        "ALTER OPERATOR app.+ (interval, numeric) OWNER TO bicdb",
+        "CREATE OPERATOR app.+ (FUNCTION = app.adddays, LEFTARG = timestamp with time zone, \
+         RIGHTARG = numeric, COMMUTATOR = OPERATOR(app.+))",
+        "ALTER OPERATOR app.+ (timestamp with time zone, numeric) OWNER TO bicdb",
+        // The pg_dump order names `-`(numeric, interval) as this operator's
+        // commutator although it already commutes with `+`(interval, numeric).
+        "CREATE OPERATOR app.- (FUNCTION = app.intervaldays, LEFTARG = interval, \
+         RIGHTARG = numeric, COMMUTATOR = OPERATOR(app.-))",
+        "ALTER OPERATOR app.- (interval, numeric) OWNER TO bicdb",
+        "CREATE OPERATOR app.- (FUNCTION = app.subtractdays, LEFTARG = timestamp with time zone, \
+         RIGHTARG = numeric, COMMUTATOR = OPERATOR(app.-))",
+        "ALTER OPERATOR app.- (timestamp with time zone, numeric) OWNER TO bicdb",
+    ] {
+        sql.execute(statement)
+            .unwrap_or_else(|error| panic!("`{statement}` failed: {error}"));
+    }
+}
+
+#[test]
+fn create_operator_records_operators_and_commutator_shells() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    create_day_operators(&mut sql);
+
+    // Four operators plus the three shells their COMMUTATOR options named.
+    assert_eq!(app_operator_count(&mut sql), 7);
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_operator o JOIN pg_namespace n ON n.oid = o.oprnamespace \
+             WHERE n.nspname = 'app' AND o.oprresult = 0"
+        ),
+        3,
+        "commutator shells have no function or result"
+    );
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_operator o JOIN pg_namespace n ON n.oid = o.oprnamespace \
+             WHERE n.nspname = 'app' AND o.oprcom <> 0"
+        ),
+        7,
+        "operators and shells link to each other"
+    );
+    // Built-in operators are in the catalog too.
+    assert!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_operator WHERE oprnamespace = 11 AND oprname = '+'"
+        ) > 30
+    );
+
+    // An already-paired commutator keeps its link (as PostgreSQL 16 does):
+    // `-`(interval, numeric) points at the shell `-`(numeric, interval),
+    // which still points back at `+`(interval, numeric).
+    let linked = |sql: &mut SqlSession, left: i64, right: i64| {
+        text_at(
+            sql,
+            &format!(
+                "SELECT c.oprname || '(' || c.oprleft::text || ',' || c.oprright::text || ')' \
+                 FROM pg_operator o JOIN pg_operator c ON c.oid = o.oprcom \
+                 WHERE o.oprname = '-' AND o.oprleft = {left} AND o.oprright = {right}"
+            ),
+        )
+    };
+    assert_eq!(linked(&mut sql, 1186, 1700), "-(1700,1186)");
+    assert_eq!(linked(&mut sql, 1700, 1186), "+(1186,1700)");
+
+    let error = error_of(
+        &mut sql,
+        "CREATE OPERATOR app.+ (FUNCTION = app.adddays, LEFTARG = timestamp with time zone, \
+         RIGHTARG = numeric)",
+    );
+    assert!(error.contains("already exists"), "{error}");
+    let error = error_of(
+        &mut sql,
+        "CREATE OPERATOR app.* (FUNCTION = app.adddays, LEFTARG = date, RIGHTARG = numeric)",
+    );
+    assert!(
+        error.contains("function app.adddays(date, numeric) does not exist"),
+        "{error}"
+    );
+    let error = error_of(
+        &mut sql,
+        "CREATE OPERATOR app.! (FUNCTION = app.adddays, LEFTARG = timestamp with time zone)",
+    );
+    assert!(
+        error.contains("right argument type must be specified"),
+        "{error}"
+    );
+}
+
+#[test]
+fn user_operators_resolve_by_search_path_and_operand_types() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    create_day_operators(&mut sql);
+    sql.execute("CREATE TABLE app.docs (id int, dateacct timestamp, days numeric)")
+        .unwrap();
+    sql.execute("INSERT INTO app.docs VALUES (1, '2020-01-01 10:00:00', 3)")
+        .unwrap();
+    sql.execute("SET search_path TO app, pg_catalog").unwrap();
+
+    // timestamptz + integer: the integer coerces to numeric.
+    let value = text_at(
+        &mut sql,
+        "SELECT (timestamptz '2020-01-01 00:00:00+00' + 1)::text",
+    );
+    assert!(value.starts_with("2020-01-02 00:00:00"), "{value}");
+    // timestamp coerces to timestamptz; a numeric column is the day count.
+    let value = text_at(&mut sql, "SELECT (dateacct + 1)::text FROM app.docs");
+    assert!(value.starts_with("2020-01-02 10:00:00"), "{value}");
+    let value = text_at(&mut sql, "SELECT (dateacct - days)::text FROM app.docs");
+    assert!(value.starts_with("2019-12-29 10:00:00"), "{value}");
+    // date + integer is an exact built-in match and stays a date.
+    assert_eq!(
+        text_at(&mut sql, "SELECT (date '2020-01-01' + 1)::text"),
+        "2020-01-02"
+    );
+    // ... while date + numeric has no built-in candidate.
+    let value = text_at(&mut sql, "SELECT (date '2020-01-01' + 1.0)::text");
+    assert!(value.starts_with("2020-01-02 00:00:00"), "{value}");
+    // Built-in arithmetic is untouched.
+    assert_eq!(int_at(&mut sql, "SELECT 2 + 3"), 5);
+    assert_eq!(
+        text_at(
+            &mut sql,
+            "SELECT (timestamptz '2020-01-01 00:00:00+00' + interval '1 day')::text"
+        ),
+        text_at(
+            &mut sql,
+            "SELECT (timestamptz '2020-01-02 00:00:00+00')::text"
+        )
+    );
+
+    // Predicates and assignments resolve against the table's column types.
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM app.docs WHERE dateacct + 1 > timestamptz '2020-01-02 00:00:00+00'"
+        ),
+        1
+    );
+    sql.execute("UPDATE app.docs SET dateacct = dateacct + 1 WHERE id = 1")
+        .unwrap();
+    let value = text_at(&mut sql, "SELECT dateacct::text FROM app.docs");
+    assert!(value.starts_with("2020-01-02 10:00:00"), "{value}");
+
+    // A shell operator cannot be used; an unknown literal is ambiguous
+    // between the interval and timestamp candidates of the same name.
+    let error = error_of(
+        &mut sql,
+        "SELECT 1.5 + timestamptz '2020-01-01 00:00:00+00'",
+    );
+    assert!(error.contains("operator is only a shell"), "{error}");
+    let error = error_of(&mut sql, "SELECT now() + '1'");
+    assert!(error.contains("operator is not unique"), "{error}");
+
+    // pg_dump's explicit form resolves without the schema on the path, in a
+    // view as in a query; the view column takes the function's result type.
+    sql.execute("SET search_path TO public").unwrap();
+    let value = text_at(
+        &mut sql,
+        "SELECT (timestamptz '2020-01-01 00:00:00+00' OPERATOR(app.+) (2)::numeric)::text",
+    );
+    assert!(value.starts_with("2020-01-03 00:00:00"), "{value}");
+    sql.execute(
+        "CREATE VIEW app.due AS SELECT d.id, \
+         ((d.dateacct)::timestamp with time zone OPERATOR(app.+) (30)::numeric) AS duedate \
+         FROM app.docs d",
+    )
+    .unwrap();
+    let result = sql.execute("SELECT duedate FROM app.due").unwrap();
+    assert_eq!(result.column_types, vec![Some("timestamptz".to_string())]);
+    let value = text_at(&mut sql, "SELECT duedate::text FROM app.due");
+    assert!(value.starts_with("2020-02-01 10:00:00"), "{value}");
+    let error = error_of(&mut sql, "SELECT 1 OPERATOR(app.+) 2");
+    assert!(
+        error.contains("operator does not exist: integer app.+ integer"),
+        "{error}"
+    );
+
+    // Dropping an operator removes it from resolution and from its
+    // commutator's link.
+    sql.execute("DROP OPERATOR app.+ (timestamp with time zone, numeric)")
+        .unwrap();
+    assert_eq!(app_operator_count(&mut sql), 6);
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_operator o JOIN pg_namespace n ON n.oid = o.oprnamespace \
+             WHERE n.nspname = 'app' AND o.oprcom <> 0"
+        ),
+        5
+    );
+    let error = error_of(
+        &mut sql,
+        "SELECT timestamptz '2020-01-01 00:00:00+00' OPERATOR(app.+) (2)::numeric",
+    );
+    assert!(error.contains("operator does not exist"), "{error}");
+    sql.execute("DROP OPERATOR IF EXISTS app.+ (timestamp with time zone, numeric)")
+        .unwrap();
+}
+
+#[test]
+fn operator_ddl_rolls_back_with_its_transaction() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    create_day_operators(&mut sql);
+    sql.execute("BEGIN").unwrap();
+    sql.execute(
+        "CREATE OPERATOR app.# (FUNCTION = app.adddays, LEFTARG = timestamp with time zone, \
+         RIGHTARG = numeric, COMMUTATOR = OPERATOR(app.#))",
+    )
+    .unwrap();
+    sql.execute("DROP OPERATOR app.- (timestamp with time zone, numeric)")
+        .unwrap();
+    assert_eq!(app_operator_count(&mut sql), 8);
+    sql.execute("ROLLBACK").unwrap();
+    assert_eq!(app_operator_count(&mut sql), 7);
+    sql.execute("SET search_path TO app, pg_catalog").unwrap();
+    let value = text_at(
+        &mut sql,
+        "SELECT (timestamptz '2020-01-05 00:00:00+00' - 1)::text",
+    );
+    assert!(value.starts_with("2020-01-04 00:00:00"), "{value}");
+}
+
+#[test]
+fn user_operators_survive_reopen_in_both_storage_modes() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let dir = tempfile::tempdir().unwrap();
+        let open = || {
+            BicDb::open_with_config(
+                dir.path(),
+                DbConfig::default()
+                    .with_fsync(false)
+                    .with_storage_mode(mode.clone()),
+            )
+            .unwrap()
+        };
+        {
+            let mut db = open();
+            let mut sql = SqlSession::new(&mut db);
+            create_day_operators(&mut sql);
+        }
+        let mut db = open();
+        let mut sql = SqlSession::new(&mut db);
+        assert_eq!(
+            app_operator_count(&mut sql),
+            7,
+            "[{mode}] operators lost on reopen"
+        );
+        sql.execute("SET search_path TO app, pg_catalog").unwrap();
+        let value = text_at(
+            &mut sql,
+            "SELECT (timestamptz '2020-01-01 00:00:00+00' + 7)::text",
+        );
+        assert!(value.starts_with("2020-01-08 00:00:00"), "[{mode}] {value}");
+    }
+}
+
+#[test]
+fn drop_schema_restricts_on_and_cascades_to_operators() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    create_day_operators(&mut sql);
+    // A schema holding only operators (their function lives in `app`).
+    sql.execute("CREATE SCHEMA ops").unwrap();
+    sql.execute(
+        "CREATE OPERATOR ops.+ (FUNCTION = app.adddays, LEFTARG = timestamp with time zone, \
+         RIGHTARG = numeric, COMMUTATOR = OPERATOR(ops.+))",
+    )
+    .unwrap();
+    let ops_count = |sql: &mut SqlSession| {
+        int_at(
+            sql,
+            "SELECT count(*) FROM pg_operator o JOIN pg_namespace n ON n.oid = o.oprnamespace \
+             WHERE n.nspname = 'ops'",
+        )
+    };
+    assert_eq!(ops_count(&mut sql), 2);
+
+    let error = sql.execute("DROP SCHEMA ops").unwrap_err();
+    assert_eq!(error.sqlstate(), "2BP01", "{error}");
+    assert!(error.to_string().contains("operator ops.+"), "{error}");
+    assert_eq!(ops_count(&mut sql), 2);
+
+    sql.execute("DROP SCHEMA ops CASCADE").unwrap();
+    assert_eq!(ops_count(&mut sql), 0);
+
+    // CASCADE drops a schema's operators together with their functions.
+    sql.execute("DROP SCHEMA app CASCADE").unwrap();
+    assert_eq!(app_operator_count(&mut sql), 0);
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_operator WHERE oprnamespace <> 11"
+        ),
+        0
+    );
+}
+
+#[test]
+fn drop_function_restricts_on_and_cascades_to_its_operators() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    create_day_operators(&mut sql);
+    // An overload of an operator function: only operators of this signature
+    // depend on it.
+    sql.execute(
+        "CREATE FUNCTION app.adddays(inter interval, days numeric) RETURNS integer \
+         LANGUAGE plpgsql AS $$ BEGIN RETURN days::int; END; $$",
+    )
+    .unwrap();
+    sql.execute(
+        "CREATE OPERATOR app.* (FUNCTION = app.adddays, LEFTARG = interval, RIGHTARG = numeric)",
+    )
+    .unwrap();
+    assert_eq!(app_operator_count(&mut sql), 8);
+
+    let error = sql
+        .execute("DROP FUNCTION app.intervaldays(interval, numeric)")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "2BP01", "{error}");
+    assert!(error.to_string().contains("operator app."), "{error}");
+    assert_eq!(app_operator_count(&mut sql), 8);
+
+    // CASCADE drops both operators implemented by the function; the shell
+    // they named as commutator stays, unlinked, as in PostgreSQL.
+    sql.execute("DROP FUNCTION app.intervaldays(interval, numeric) CASCADE")
+        .unwrap();
+    assert_eq!(app_operator_count(&mut sql), 6);
+    assert_eq!(
+        int_at(
+            &mut sql,
+            "SELECT count(*) FROM pg_operator WHERE oprname = '-' AND oprleft = 1700 \
+             AND oprright = 1186 AND oprcom = 0"
+        ),
+        1
+    );
+
+    sql.execute("DROP FUNCTION app.adddays(interval, numeric) CASCADE")
+        .unwrap();
+    assert_eq!(app_operator_count(&mut sql), 5);
+    // The timestamptz overload and its operator are untouched.
+    sql.execute("SET search_path TO app, pg_catalog").unwrap();
+    let value = text_at(
+        &mut sql,
+        "SELECT (timestamptz '2020-01-01 00:00:00+00' + 1)::text",
+    );
+    assert!(value.starts_with("2020-01-02 00:00:00"), "{value}");
+}
+
+/// PL/pgSQL expressions resolve user-defined operators by the routine's
+/// declared types: parameters, variables and query-loop records, in
+/// assignments, conditions, loop bounds and RETURN. Values match
+/// PostgreSQL 16 running the same functions.
+#[test]
+fn routine_bodies_bind_user_operators_by_declared_types() {
+    let (_dir, mut db) = session_db();
+    let mut sql = SqlSession::new(&mut db);
+    create_day_operators(&mut sql);
+    sql.execute("SET search_path TO app, pg_catalog").unwrap();
+    for statement in [
+        "CREATE TABLE app.terms (id int, netdays numeric, grace numeric)",
+        "INSERT INTO app.terms VALUES (1, 30, 2), (2, 10, 0)",
+        // Record field from a query loop, as in the payment-term functions.
+        "CREATE FUNCTION app.due(term int, docdate timestamp with time zone) \
+         RETURNS timestamp with time zone LANGUAGE plpgsql AS $$ \
+         DECLARE due timestamp with time zone; p record; \
+         BEGIN \
+           FOR p IN SELECT netdays, grace FROM app.terms WHERE id = term LOOP \
+             due := docdate + p.netdays + p.grace; \
+           END LOOP; \
+           RETURN due; \
+         END; $$",
+        // Variables in a condition, a WHILE loop and RETURN.
+        "CREATE FUNCTION app.skip(d timestamp with time zone, n numeric) \
+         RETURNS timestamp with time zone LANGUAGE plpgsql AS $$ \
+         DECLARE v timestamp with time zone := d; k int := 0; \
+         BEGIN \
+           IF d + n > d THEN v := v + 1; END IF; \
+           WHILE v - n < d LOOP v := v + 1; k := k + 1; END LOOP; \
+           RETURN v - 1; \
+         END; $$",
+        // interval + numeric has no built-in meaning: only the user
+        // operator (a day count) gives a value.
+        "CREATE FUNCTION app.idays(i interval, n numeric) RETURNS integer \
+         LANGUAGE plpgsql AS $$ BEGIN RETURN i + n; END; $$",
+        // A FOR bound and a RAISE argument.
+        "CREATE FUNCTION app.loops(i interval, n numeric) RETURNS int LANGUAGE plpgsql AS $$ \
+         DECLARE c int := 0; \
+         BEGIN \
+           FOR k IN 1 .. i + n LOOP c := c + 1; END LOOP; \
+           RAISE NOTICE 'due %', timestamptz '2020-01-01 00:00:00+00' + n; \
+           RETURN c; \
+         END; $$",
+        // A date variable plus an integer stays date arithmetic.
+        "CREATE FUNCTION app.nextday(d date) RETURNS date LANGUAGE plpgsql AS $$ \
+         DECLARE v date := d; BEGIN v := v + 1; RETURN v; END; $$",
+    ] {
+        sql.execute(statement)
+            .unwrap_or_else(|error| panic!("`{statement}` failed: {error}"));
+    }
+    let value = text_at(
+        &mut sql,
+        "SELECT app.due(1, timestamptz '2020-01-01 00:00:00+00')::text",
+    );
+    assert!(value.starts_with("2020-02-02 00:00:00"), "{value}");
+    let value = text_at(
+        &mut sql,
+        "SELECT app.due(2, timestamptz '2020-01-01 00:00:00+00')::text",
+    );
+    assert!(value.starts_with("2020-01-11 00:00:00"), "{value}");
+    let value = text_at(
+        &mut sql,
+        "SELECT app.skip(timestamptz '2020-01-01 00:00:00+00', 3)::text",
+    );
+    assert!(value.starts_with("2020-01-03 00:00:00"), "{value}");
+    assert_eq!(
+        text_at(&mut sql, "SELECT app.nextday(date '2020-02-28')::text"),
+        "2020-02-29"
+    );
+    assert_eq!(
+        int_at(&mut sql, "SELECT app.idays(interval '3 days', 2)"),
+        5
+    );
+    let result = sql
+        .execute("SELECT app.loops(interval '3 days', 2)")
+        .unwrap();
+    assert_eq!(result.rows, vec![vec![SqlValue::Int(5)]]);
+    assert_eq!(result.notices.len(), 1);
+    assert!(
+        result.notices[0]
+            .message
+            .starts_with("due 2020-01-03 00:00:00"),
+        "{}",
+        result.notices[0].message
+    );
 }

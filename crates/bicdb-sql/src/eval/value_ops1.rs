@@ -135,6 +135,37 @@ pub(crate) fn eval_db_catalog_function_value(
             ))));
         }
     }
+    // Resolve a commit reported with SQLSTATE 08007 (outcome unknown) by
+    // the incarnation and commit sequence in its DETAIL. Superuser only
+    // (the bicdb_ gate above). See docs/durability-failure-handling.md.
+    if bare_name == "bicdb_commit_outcome" {
+        if args.len() != 2 {
+            return Err(SqlError::InvalidSql(format!(
+                "bicdb_commit_outcome expects 2 arguments (incarnation, commit_seq), got {}",
+                args.len()
+            )));
+        }
+        if args
+            .iter()
+            .any(|argument| matches!(argument, SqlValue::Null))
+        {
+            return Ok(Some(SqlValue::Null));
+        }
+        let SqlValue::String(incarnation) = &args[0] else {
+            return Err(SqlError::InvalidSql(
+                "bicdb_commit_outcome: incarnation must be text".into(),
+            ));
+        };
+        let sequence = sql_value_i64(&args[1])
+            .and_then(|sequence| u64::try_from(sequence).ok())
+            .ok_or_else(|| {
+                SqlError::InvalidSql(
+                    "bicdb_commit_outcome: commit_seq must be a non-negative integer".into(),
+                )
+            })?;
+        let resolution = db.resolve_commit_outcome(incarnation, sequence)?;
+        return Ok(Some(SqlValue::String(resolution.as_str().to_string())));
+    }
     if let Some(value) = eval_fts_db_function_value(db, name, args, session_gucs)? {
         return Ok(Some(value));
     }
@@ -1731,7 +1762,7 @@ pub(crate) fn eval_catalog_function_value(name: &str, args: &[SqlValue]) -> Opti
             Some(SqlValue::String("bicdb".to_string()))
         }
         "current_schema" | "pg_catalog.current_schema" => {
-            Some(SqlValue::String("public".to_string()))
+            Some(SqlValue::String(crate::search_path::current_schema_name()))
         }
         "current_date" | "pg_catalog.current_date" => {
             Some(SqlValue::String(unix_now_date_string()))
@@ -2798,6 +2829,9 @@ pub(crate) fn eval_bytea_function_value(
         || matches!(
             name,
             "get_byte"
+                | "int2send"
+                | "int4send"
+                | "int8send"
                 | "set_byte"
                 | "get_bit"
                 | "set_bit"
@@ -2848,6 +2882,26 @@ pub(crate) fn eval_bytea_function_value(
                 .map(|byte| i64::from(byte.count_ones()))
                 .sum();
             Ok(Some(SqlValue::Int(bits)))
+        }
+        "int2send" | "int4send" | "int8send" => {
+            // The type's binary send format: big-endian two's complement.
+            require_arg_count(name, args, 1)?;
+            let value = sql_value_i64(&args[0])
+                .ok_or_else(|| SqlError::invalid_parameter_value("argument is not an integer"))?;
+            let out_of_range =
+                || SqlError::numeric_value_out_of_range(format!("{name} argument out of range"));
+            let bytes = match name {
+                "int2send" => i16::try_from(value)
+                    .map_err(|_| out_of_range())?
+                    .to_be_bytes()
+                    .to_vec(),
+                "int4send" => i32::try_from(value)
+                    .map_err(|_| out_of_range())?
+                    .to_be_bytes()
+                    .to_vec(),
+                _ => value.to_be_bytes().to_vec(),
+            };
+            Ok(Some(SqlValue::String(format_bytea_hex(&bytes))))
         }
         "get_byte" | "get_bit" => {
             require_arg_count(name, args, 2)?;
@@ -3343,9 +3397,21 @@ pub(crate) fn eval_compatibility_function_value(
                         ))
                     },
                 )??;
-                return Ok(Some(SqlValue::String(round_decimal_half_away(
-                    value, scale,
-                ))));
+                // The result has exactly `scale` fractional digits, as
+                // PostgreSQL's numeric round does: round(1.2, 2) is 1.20.
+                let mut rounded = round_decimal_half_away(value, scale);
+                if let Ok(scale) = usize::try_from(scale.clamp(0, 1000)) {
+                    let digits = rounded
+                        .split_once('.')
+                        .map_or(0, |(_, fraction)| fraction.len());
+                    if digits < scale {
+                        if digits == 0 {
+                            rounded.push('.');
+                        }
+                        rounded.extend(std::iter::repeat_n('0', scale - digits));
+                    }
+                }
+                return Ok(Some(SqlValue::String(rounded)));
             }
             require_arg_count("round", args, 1)?;
             if matches!(args[0], SqlValue::Null) {

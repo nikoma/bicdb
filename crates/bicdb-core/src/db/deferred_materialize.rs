@@ -134,7 +134,11 @@ impl DeferredMaterializer {
             bytes.extend_from_slice(marker);
         }
         if bicdb_page::test_faults::crash_point_armed("materialize.torn_markers") {
-            let _ = self.tx_log.append_auxiliary(&bytes[..bytes.len() / 2]);
+            // Crashes inside, with the writer lock held across the torn write.
+            self.tx_log.append_torn_then_crash_for_test(
+                &bytes[..bytes.len() / 2],
+                "materialize.torn_markers",
+            );
         }
         bicdb_page::test_faults::crash_point("materialize.torn_markers");
         if let Err(error) = self.tx_log.append_auxiliary(&bytes) {

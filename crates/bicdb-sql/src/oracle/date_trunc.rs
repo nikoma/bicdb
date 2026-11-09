@@ -7,7 +7,7 @@ pub(super) fn exact_numeric_operand_sql(expr: &Expr) -> String {
             Value::Number(number, _) => {
                 format!("CAST('{}' AS NUMERIC)", number.replace('\'', "''"))
             }
-            _ => expr.to_string(),
+            _ => render_sql(expr),
         },
         Expr::Nested(inner) => format!("({})", exact_numeric_operand_sql(inner)),
         Expr::UnaryOp {
@@ -18,7 +18,7 @@ pub(super) fn exact_numeric_operand_sql(expr: &Expr) -> String {
             op: UnaryOperator::Minus,
             expr,
         } => format!("-({})", exact_numeric_operand_sql(expr)),
-        _ => expr.to_string(),
+        _ => render_sql(expr),
     }
 }
 

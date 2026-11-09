@@ -1,0 +1,40 @@
+running 17 tests
+test a_new_policy_prefix_does_not_hoist_authored_volatile_filters_above_rls ... ok
+test alternative_policy_indexes_do_not_initialize_all_stable_keys ... FAILED
+test an_existing_secondary_lookup_does_not_initialize_an_unused_policy_key ... FAILED
+test common_permissive_conjunct_and_restrictive_conjunct_can_narrow_without_changing_union ... ok
+test defaulted_overloads_are_not_misclassified_as_pure_zero_argument_calls ... ok
+test direct_calls_and_volatile_init_plans_keep_residual_scan_semantics ... ok
+test domain_cast_checks_are_not_speculatively_evaluated_by_explain ... ok
+test domain_policy_columns_retain_full_rls_results_without_inferred_keys ... ok
+test lossy_policy_casts_and_inherited_role_changes_do_not_reuse_wrong_constraints ... ok
+test missing_pk_and_unindexed_empty_reads_do_not_initialize_unused_policy_keys ... ok
+test necessary_policy_equality_reuses_index_and_statement_context_without_dropping_residual_rls ... ok
+test owner_bypass_role_bypass_forced_rls_and_trusted_bypass_are_preserved ... ok
+test permissive_union_does_not_make_one_tenant_predicate_necessary ... ok
+test stable_policy_exceptions_are_not_raised_by_explain_or_contradictory_filters ... ok
+test stable_policy_keys_are_deferred_until_execution_and_false_predicates_do_not_run_them ... ok
+test volatile_defaults_and_decorated_init_plans_are_not_executed_by_explain ... ok
+test volatile_policy_init_plans_are_not_speculatively_evaluated_by_explain ... ok
+
+failures:
+
+---- alternative_policy_indexes_do_not_initialize_all_stable_keys stdout ----
+
+thread 'alternative_policy_indexes_do_not_initialize_all_stable_keys' (1449305) panicked at crates/bicdb-sql/tests/rls_index_candidates.rs:544:10:
+called `Result::unwrap()` on an `Err` value: DataException { sqlstate: "22012", message: "division by zero", data_type: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- an_existing_secondary_lookup_does_not_initialize_an_unused_policy_key stdout ----
+
+thread 'an_existing_secondary_lookup_does_not_initialize_an_unused_policy_key' (1449314) panicked at crates/bicdb-sql/tests/rls_index_candidates.rs:526:10:
+called `Result::unwrap()` on an `Err` value: DataException { sqlstate: "22012", message: "division by zero", data_type: None }
+
+
+failures:
+    alternative_policy_indexes_do_not_initialize_all_stable_keys
+    an_existing_secondary_lookup_does_not_initialize_an_unused_policy_key
+
+test result: FAILED. 15 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.99s
+
+error: test failed, to rerun pass `-p bicdb-sql --test rls_index_candidates`

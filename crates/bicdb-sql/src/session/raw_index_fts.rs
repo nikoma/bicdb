@@ -842,9 +842,111 @@ impl<'db> SqlSession<'db> {
             self.oracle_autonomous_lock_epoch = self.oracle_autonomous_lock_epoch.wrapping_add(1);
         }
         let previous = std::mem::replace(&mut self.in_routine_expression, false);
-        let result = self.execute_query_in_sql(query);
+        let mut result = self.execute_query_in_sql(query);
+        if result
+            .as_ref()
+            .is_err_and(|error| error.to_string() == super::row_routine_write_error().to_string())
+            && !self.row_routine_call
+            && !self
+                .session_gucs
+                .get("bicdb.sql_profile")
+                .is_some_and(|profile| oracle::is_oracle_profile(profile))
+            && !oracle::preview_routine_language_enabled(self.db_ref())?
+        {
+            if let Some(rows) = self.execute_writing_projection(query)? {
+                result = Ok(rows);
+            }
+        }
         self.in_routine_expression = previous;
         result
+    }
+
+    /// `SELECT f(..) FROM one_relation [WHERE ..]` where `f` modifies data:
+    /// the per-row expression host only reads, so read the source rows first
+    /// and evaluate the select list once per row in this session, as
+    /// PostgreSQL evaluates a volatile select list once per row.
+    fn execute_writing_projection(&mut self, query: &Query) -> Result<Option<SqlResult>> {
+        let SetExpr::Select(select) = query.body.as_ref() else {
+            return Ok(None);
+        };
+        if query.with.is_some()
+            || query.order_by.is_some()
+            || query.limit_clause.is_some()
+            || query.fetch.is_some()
+            || !query.locks.is_empty()
+            || select.distinct.is_some()
+            || select.having.is_some()
+            || !matches!(&select.group_by, GroupByExpr::Expressions(exprs, _) if exprs.is_empty())
+            || select.into.is_some()
+        {
+            return Ok(None);
+        }
+        let [TableWithJoins { relation, joins }] = select.from.as_slice() else {
+            return Ok(None);
+        };
+        let TableFactor::Table { name, alias, .. } = relation else {
+            return Ok(None);
+        };
+        if !joins.is_empty()
+            || select.projection.iter().any(|item| {
+                !matches!(
+                    item,
+                    SelectItem::UnnamedExpr(_) | SelectItem::ExprWithAlias { .. }
+                )
+            })
+        {
+            return Ok(None);
+        }
+        let qualifier = alias
+            .as_ref()
+            .map(|alias| ident_value(&alias.name))
+            .or_else(|| object_name_parts(name).last().cloned())
+            .unwrap_or_default();
+        // Built as ASTs, never re-rendered text: rendering is not a faithful
+        // round trip for every literal.
+        let mut source_query = query.clone();
+        if let SetExpr::Select(source_select) = source_query.body.as_mut() {
+            source_select.projection = vec![SelectItem::Wildcard(
+                sqlparser::ast::WildcardAdditionalOptions::default(),
+            )];
+        }
+        let source = self.execute_query_in_sql(&source_query)?;
+        let mut output: Option<SqlResult> = None;
+        for row in &source.rows {
+            let mut projection = select.projection.clone();
+            let _ = sqlparser::ast::visit_expressions_mut(&mut projection, |expr| {
+                let column = match expr {
+                    Expr::Identifier(ident) => Some(ident_value(ident)),
+                    Expr::CompoundIdentifier(parts)
+                        if parts.len() == 2 && ident_value(&parts[0]) == qualifier =>
+                    {
+                        Some(ident_value(&parts[1]))
+                    }
+                    _ => None,
+                };
+                if let Some(index) = column.and_then(|column| {
+                    source
+                        .columns
+                        .iter()
+                        .position(|name| name.eq_ignore_ascii_case(&column))
+                }) {
+                    *expr = sql_value_literal_expr(&row[index]);
+                }
+                ControlFlow::<()>::Continue(())
+            });
+            let mut row_query = query.clone();
+            if let SetExpr::Select(row_select) = row_query.body.as_mut() {
+                row_select.projection = projection;
+                row_select.from.clear();
+                row_select.selection = None;
+            }
+            let produced = self.execute_query_in_sql(&row_query)?;
+            match &mut output {
+                Some(output) => output.rows.extend(produced.rows),
+                None => output = Some(produced),
+            }
+        }
+        Ok(Some(output.unwrap_or_else(|| SqlResult::empty(Vec::new()))))
     }
 
     fn execute_query_in_sql(&mut self, query: &Query) -> Result<SqlResult> {
@@ -1658,27 +1760,110 @@ impl<'db> SqlSession<'db> {
         action: PolicyAction,
         records: &[Record],
     ) -> Result<()> {
-        if records.is_empty() || schema.is_none_or(|schema| !schema.rls_enabled) {
-            return Ok(());
+        self.enforce_rls_write_checks(table, schema, action, false, records)
+    }
+
+    /// The new-row checks PostgreSQL runs for a write (its WITH CHECK
+    /// options): the command's own `WITH CHECK` policies (falling back to
+    /// `USING`), then, when the statement reads the target relation
+    /// (`select_required`: a `RETURNING` or an `ON CONFLICT` arbiter for
+    /// INSERT, any read of the existing row for UPDATE), the SELECT
+    /// policies' `USING`. A new row the writer could not read back is then
+    /// an error rather than a row silently written and returned.
+    pub(crate) fn enforce_rls_write_checks(
+        &self,
+        table: &str,
+        schema: Option<&TableSchema>,
+        action: PolicyAction,
+        select_required: bool,
+        records: &[Record],
+    ) -> Result<()> {
+        match self.first_rls_write_violation(table, schema, action, select_required, records)? {
+            Some((_, error)) => Err(error),
+            None => Ok(()),
         }
-        let prepared = prepare_rls_with_schema(
-            self.db_ref(),
-            table,
-            action,
-            schema,
-            &self.session_gucs,
-            self.security_context.as_ref(),
-            true,
-        )?;
-        let PreparedRls::Filter(filter) = prepared else {
-            return Ok(());
+    }
+
+    /// The index of the first record failing the write checks of
+    /// `enforce_rls_write_checks`, with its error. Callers that check
+    /// constraints in a batch use the index to report an earlier row's
+    /// constraint error first, as PostgreSQL's row-at-a-time order does.
+    pub(crate) fn first_rls_write_violation(
+        &self,
+        table: &str,
+        schema: Option<&TableSchema>,
+        action: PolicyAction,
+        select_required: bool,
+        records: &[Record],
+    ) -> Result<Option<(usize, SqlError)>> {
+        if records.is_empty() || schema.is_none_or(|schema| !schema.rls_enabled) {
+            return Ok(None);
+        }
+        let prepare = |action, with_check| {
+            prepare_rls_with_schema(
+                self.db_ref(),
+                table,
+                action,
+                schema,
+                &self.session_gucs,
+                self.security_context.as_ref(),
+                with_check,
+            )
         };
+        let mut filters = Vec::with_capacity(2);
+        if let PreparedRls::Filter(filter) = prepare(action, true)? {
+            filters.push(filter);
+        }
+        if select_required && action != PolicyAction::Select {
+            if let PreparedRls::Filter(filter) = prepare(PolicyAction::Select, false)? {
+                filters.push(filter);
+            }
+        }
+        if filters.is_empty() {
+            return Ok(None);
+        }
         let schema = schema.expect("RLS filter requires a table schema");
         let engine = self.sql_engine();
-        for record in records {
-            let verdict = filter.verdict(&engine, schema, record)?;
-            if !matches!(verdict, RlsRowVerdict::Allowed) {
-                return Err(rls_check_denied(table, &verdict));
+        for (index, record) in records.iter().enumerate() {
+            for filter in &filters {
+                let verdict = filter.verdict(&engine, schema, record)?;
+                if !matches!(verdict, RlsRowVerdict::Allowed) {
+                    return Ok(Some((index, rls_check_denied(table, &verdict))));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// The existing-row check of `INSERT ... ON CONFLICT DO UPDATE`: the row
+    /// must pass the UPDATE policies' `USING` and, since the arbiter reads
+    /// it, the SELECT policies' `USING`. PostgreSQL raises an error here
+    /// (never a silent skip), so a row the writer cannot see is never
+    /// modified or returned.
+    pub(crate) fn enforce_rls_conflict_check(
+        &self,
+        table: &str,
+        schema: &TableSchema,
+        existing: &Record,
+    ) -> Result<()> {
+        if !schema.rls_enabled {
+            return Ok(());
+        }
+        let engine = self.sql_engine();
+        for action in [PolicyAction::Update, PolicyAction::Select] {
+            if let PreparedRls::Filter(filter) = prepare_rls_with_schema(
+                self.db_ref(),
+                table,
+                action,
+                Some(schema),
+                &self.session_gucs,
+                self.security_context.as_ref(),
+                false,
+            )? {
+                let verdict = filter.verdict(&engine, schema, existing)?;
+                if !matches!(verdict, RlsRowVerdict::Allowed) {
+                    return Err(rls_using_denied(table, &verdict));
+                }
             }
         }
         Ok(())
@@ -2399,7 +2584,9 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_grant(&mut self, grant: &Grant) -> Result<SqlResult> {
-        if let Some(result) = self.execute_raw_function_privileges(&grant.to_string())? {
+        if let Some(result) =
+            self.execute_raw_function_privileges(&crate::sql_text::sql_text(grant))?
+        {
             return Ok(result);
         }
         if grant.with_grant_option
@@ -2421,7 +2608,9 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_revoke(&mut self, revoke: &Revoke) -> Result<SqlResult> {
-        if let Some(result) = self.execute_raw_function_privileges(&revoke.to_string())? {
+        if let Some(result) =
+            self.execute_raw_function_privileges(&crate::sql_text::sql_text(revoke))?
+        {
             return Ok(result);
         }
         if revoke.granted_by.is_some() || matches!(revoke.cascade, Some(CascadeOption::Cascade)) {

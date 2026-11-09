@@ -136,7 +136,12 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     );
     let body = plpgsql_body_from_definition(&routine.definition)?;
     let (body, oracle_autonomous) = oracle::autonomous::prepare_body(&body, &routine.language)?;
-    let (mut declarations, mut statements, mut exception_handlers) = parse_plpgsql_body(&body)?;
+    let (mut declarations, mut statements, mut exception_handlers) = {
+        let _dialect = PostgresDialectScope::new(
+            oracle::preview_routine_language_version(&routine.language).is_none(),
+        );
+        parse_plpgsql_body(&body)?
+    };
     if oracle::preview_routine_language_version(&routine.language).is_some_and(|v| v >= 25) {
         oracle::output::lower(&mut statements, &mut exception_handlers)?;
     }
@@ -236,8 +241,26 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             );
         }
     }
+    // User-defined operators bind against the body's declared types.
+    if oracle::preview_routine_language_version(&routine.language).is_none() {
+        if let Some(db) = db {
+            let path = crate::search_path::active_path();
+            crate::pg_operators::bind_routine_operators(
+                db,
+                path.as_deref(),
+                &mut params,
+                &mut declarations,
+                &mut statements,
+                &mut exception_handlers,
+            )?;
+        }
+    }
     let symbol_names =
         routine_symbol_names(&params, &declarations, &statements, &exception_handlers);
+    let user_functions = match db {
+        Some(db) => crate::routine_overloads::user_function_names(db)?,
+        None => Default::default(),
+    };
     bind_routine_expressions(
         &params,
         oracle::preview_routine_language_version(&routine.language).is_none(),
@@ -245,6 +268,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
         &mut declarations,
         &mut statements,
         &mut exception_handlers,
+        user_functions,
     );
     Ok(RoutineIR {
         node_ownership: CompiledNodeOwnership::default(),
@@ -275,6 +299,7 @@ pub(crate) fn routine_compilation_scope(db: &BicDb) -> RoutineCompilationScope {
         db.collection_generation(VIEW_COLLECTION),
         db.collection_generation(USER_TYPE_COLLECTION),
         db.index_generation(),
+        db.collection_generation(crate::pg_operators::OPERATOR_COLLECTION),
     )
 }
 
@@ -287,6 +312,12 @@ pub(crate) fn compile_cached_routine_ir_in_catalog(
         // The bound body depends on the path and on which relations exist.
         key.search_path = Some(path);
         key.catalog_scope = Some(routine_compilation_scope(db));
+    }
+    if let Some(db) = db {
+        // Operator binding depends on the operator catalog.
+        if !crate::pg_operators::user_operators(db)?.is_empty() {
+            key.catalog_scope = Some(routine_compilation_scope(db));
+        }
     }
     if oracle::typed_preview_routine_language(&routine.language) {
         key.catalog_scope = Some(routine_compilation_scope(db.ok_or_else(|| {
@@ -482,6 +513,7 @@ pub(crate) fn bind_routine_expressions(
     declarations: &mut [RoutineDecl],
     statements: &mut [RoutineStmt],
     handlers: &mut [RoutineExceptionHandler],
+    user_functions: std::sync::Arc<FxHashSet<String>>,
 ) {
     let array_vars = declarations
         .iter()
@@ -524,7 +556,8 @@ pub(crate) fn bind_routine_expressions(
     }
     let scope = BoundExprScope::new(&[], symbol_names)
         .with_array_vars(&array_vars)
-        .with_var_types(&types);
+        .with_var_types(&types)
+        .with_user_functions(user_functions);
     for declaration in declarations {
         if let RoutineDecl::Variable {
             default_expr: Some(expr),
@@ -867,7 +900,7 @@ pub(crate) fn parse_routine_param(arg: &str, index: usize) -> Result<RoutinePara
         {
             mode = RoutineArgMode::InOut;
         }
-    } else if words.len() >= 2 && !is_likely_type_word(&words[0]) {
+    } else if words.len() >= 2 && routine_arg_words_have_name(&words) {
         name = Some(unquote_identifier_word(&words[0]));
     }
     let details = raw_routine_argument_type_details(&arg).ok();
@@ -1092,6 +1125,10 @@ fn parse_plpgsql_block(
     Vec<RoutineStmt>,
     Vec<RoutineExceptionHandler>,
 )> {
+    let elsif = postgres_dialect_forms()
+        .then(|| elseif_as_elsif(body))
+        .flatten();
+    let body = elsif.as_deref().unwrap_or(body);
     let body = strip_plpgsql_compiler_directives(trim_sql_statement(body))?;
     let Some(begin_idx) = find_top_level_keyword(body, "BEGIN") else {
         return Err(SqlError::UnsupportedPlpgsqlFeature(
@@ -1875,6 +1912,15 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
         let expr = RoutineExpr::unbound(parse_routine_expr(statement[idx + 2..].trim())?);
         return Ok(RoutineStmt::Assignment { target, expr });
     }
+    // PL/pgSQL also accepts `=` as the assignment operator.
+    if let Some(idx) = postgres_dialect_forms()
+        .then(|| plain_equals_assignment(statement))
+        .flatten()
+    {
+        let target = parse_routine_assignment_target(statement[..idx].trim())?;
+        let expr = RoutineExpr::unbound(parse_routine_expr(statement[idx + 1..].trim())?);
+        return Ok(RoutineStmt::Assignment { target, expr });
+    }
     if routine_query_statement(statement) {
         if let Some((sql, targets, strict)) = extract_query_into(statement)? {
             return Ok(RoutineStmt::SelectInto {
@@ -1930,8 +1976,18 @@ pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
     if statement.trim().is_empty() {
         return Ok(RoutineStmt::Rethrow);
     }
+    // Non-error levels report a message and continue, as NOTICE does.
+    const ALL_LEVELS: [&str; 5] = ["NOTICE", "WARNING", "INFO", "LOG", "DEBUG"];
+    let levels: &[&str] = if postgres_dialect_forms() {
+        &ALL_LEVELS
+    } else {
+        &ALL_LEVELS[..1]
+    };
+    let message_levels = levels;
     if !starts_with_plpgsql_word(statement, "EXCEPTION")
-        && !starts_with_plpgsql_word(statement, "NOTICE")
+        && !message_levels
+            .iter()
+            .any(|level| starts_with_plpgsql_word(statement, level))
     {
         if let Ok(RoutineExceptionCondition::SqlState(sqlstate)) =
             routine_exception_condition(statement)
@@ -1946,7 +2002,10 @@ pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
             });
         }
     }
-    let (notice, rest) = if let Some(rest) = strip_routine_keyword(statement, "NOTICE") {
+    let (notice, rest) = if let Some(rest) = message_levels
+        .iter()
+        .find_map(|level| strip_routine_keyword(statement, level))
+    {
         (true, rest)
     } else if let Some(rest) = strip_routine_keyword(statement, "EXCEPTION") {
         (false, rest)
@@ -2113,13 +2172,20 @@ pub(crate) fn parse_routine_for_loop(statement: &str) -> Result<RoutineStmt> {
     let Some(loop_idx) = find_top_level_keyword(after_in, "LOOP") else {
         return Err(SqlError::InvalidSql("FOR loop requires LOOP".to_string()));
     };
-    let range_sql = after_in[..loop_idx].trim();
-    if strip_prefix_ci(range_sql, "REVERSE").is_some() {
-        return Err(SqlError::UnsupportedPlpgsqlFeature(
-            "REVERSE FOR loops are not implemented".to_string(),
+    let mut range_sql = after_in[..loop_idx].trim();
+    let reverse = match strip_routine_keyword(range_sql, "REVERSE") {
+        Some(rest) => {
+            range_sql = rest.trim();
+            true
+        }
+        None => false,
+    };
+    let body = routine_loop_body(&after_in[loop_idx + "LOOP".len()..])?;
+    if reverse && find_top_level_operator(range_sql, "..").is_none() {
+        return Err(SqlError::InvalidSql(
+            "REVERSE requires an integer FOR loop range".to_string(),
         ));
     }
-    let body = routine_loop_body(&after_in[loop_idx + "LOOP".len()..])?;
     if let Some(range_idx) = find_top_level_operator(range_sql, "..") {
         let lower = parse_routine_expr(range_sql[..range_idx].trim())?;
         let upper = parse_routine_expr(range_sql[range_idx + 2..].trim())?;
@@ -2127,6 +2193,7 @@ pub(crate) fn parse_routine_for_loop(statement: &str) -> Result<RoutineStmt> {
             iterator,
             lower: RoutineExpr::unbound(lower),
             upper: RoutineExpr::unbound(upper),
+            reverse,
             body,
         })
     } else {
@@ -2568,6 +2635,101 @@ pub(crate) fn split_top_level_keyword(sql: &str, keyword: &str) -> Vec<String> {
     parts
 }
 
+thread_local! {
+    /// Set while a PostgreSQL-dialect body (LANGUAGE plpgsql, DO) is parsed:
+    /// `=` assignment and the non-error RAISE levels are PL/pgSQL forms that
+    /// the Oracle-compatible routine languages do not accept.
+    static POSTGRES_DIALECT_FORMS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Enables PL/pgSQL-only statement forms while a body is parsed.
+pub(crate) struct PostgresDialectScope(bool);
+
+impl PostgresDialectScope {
+    pub(crate) fn new(enabled: bool) -> Self {
+        Self(POSTGRES_DIALECT_FORMS.with(|forms| forms.replace(enabled)))
+    }
+}
+
+impl Drop for PostgresDialectScope {
+    fn drop(&mut self) {
+        POSTGRES_DIALECT_FORMS.with(|forms| forms.set(self.0));
+    }
+}
+
+fn postgres_dialect_forms() -> bool {
+    POSTGRES_DIALECT_FORMS.with(std::cell::Cell::get)
+}
+
+/// `body` with the keyword `ELSEIF`, which PL/pgSQL accepts as a spelling of
+/// `ELSIF`, written as `ELSIF`; `None` when there is none. Strings, quoted
+/// identifiers and comments are left alone.
+fn elseif_as_elsif(body: &str) -> Option<String> {
+    if !body.to_ascii_uppercase().contains("ELSEIF") {
+        return None;
+    }
+    let tokens = sqlparser::tokenizer::Tokenizer::new(&PostgreSqlDialect {}, body)
+        .tokenize_with_location()
+        .ok()?;
+    let mut line_starts = vec![0usize];
+    line_starts.extend(body.match_indices('\n').map(|(index, _)| index + 1));
+    let mut edits = Vec::new();
+    for token in &tokens {
+        let sqlparser::tokenizer::Token::Word(word) = &token.token else {
+            continue;
+        };
+        if word.quote_style.is_some() || !word.value.eq_ignore_ascii_case("ELSEIF") {
+            continue;
+        }
+        let line_start = *line_starts.get(
+            usize::try_from(token.span.start.line)
+                .ok()?
+                .checked_sub(1)?,
+        )?;
+        let column = usize::try_from(token.span.start.column)
+            .ok()?
+            .checked_sub(1)?;
+        let start = body[line_start..]
+            .char_indices()
+            .nth(column)
+            .map(|(index, _)| line_start + index)?;
+        edits.push(start);
+    }
+    let mut out = body.to_string();
+    for start in edits.into_iter().rev() {
+        if !out[start..].get(..6)?.eq_ignore_ascii_case("ELSEIF") {
+            return None;
+        }
+        out.replace_range(start..start + 6, "ELSIF");
+    }
+    Some(out)
+}
+
+/// `target = expr` where the target is a variable, field or array element:
+/// the position of that `=`.
+fn plain_equals_assignment(statement: &str) -> Option<usize> {
+    let idx = statement.find('=')?;
+    let (left, right) = (&statement[..idx], &statement[idx + 1..]);
+    if left.ends_with(['<', '>', '!', ':', '=']) || right.starts_with(['=', '>']) {
+        return None;
+    }
+    let left = left.trim();
+    let (path, index) = match left.find('[') {
+        Some(open) if left.ends_with(']') => (&left[..open], Some(&left[open..])),
+        Some(_) => return None,
+        None => (left, None),
+    };
+    let _ = index;
+    let identifier = |part: &str| {
+        let mut chars = part.chars();
+        chars
+            .next()
+            .is_some_and(|first| first.is_ascii_alphabetic() || first == '_')
+            && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '$')
+    };
+    (!path.is_empty() && path.split('.').all(identifier)).then_some(idx)
+}
+
 pub(crate) fn find_top_level_operator(sql: &str, operator: &str) -> Option<usize> {
     let bytes = sql.as_bytes();
     let mut idx = 0usize;
@@ -2636,10 +2798,18 @@ pub(crate) fn save_routine(db: &mut BicDb, routine: &RoutineSchema) -> Result<()
     ensure_routine_collection(db)?;
     db.insert(
         ROUTINE_COLLECTION,
-        Record::new(routine_key(routine.kind, &routine.name))
-            .with_metadata(serde_json::to_value(routine)?),
+        Record::new(routine_storage_key(routine)).with_metadata(serde_json::to_value(routine)?),
     )?;
     Ok(())
+}
+
+/// Deletes exactly this routine (one overload of its name).
+pub(crate) fn delete_routine_schema(db: &mut BicDb, routine: &RoutineSchema) -> Result<bool> {
+    match db.delete(ROUTINE_COLLECTION, &routine_storage_key(routine)) {
+        Ok(existed) => Ok(existed),
+        Err(BicDbError::CollectionNotFound(_)) => Ok(false),
+        Err(error) => Err(error.into()),
+    }
 }
 
 pub(crate) fn delete_routine(db: &mut BicDb, kind: RoutineKind, name: &str) -> Result<bool> {

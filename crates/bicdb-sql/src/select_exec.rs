@@ -3743,6 +3743,7 @@ pub(crate) fn is_virtual_table(table: &str) -> bool {
             | "pg_sequences"
             | "pg_tables"
             | "pg_views"
+            | "pg_rules"
             | "pg_index"
             | "pg_indexes"
             | "pg_constraint"
@@ -3896,6 +3897,7 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "pg_sequences" => pg_sequences_rows(db),
         "pg_tables" => pg_tables_rows(db),
         "pg_views" => pg_views_rows(db),
+        "pg_rules" => crate::query_rules::pg_rules_rows(db),
         "pg_index" => pg_index_rows(db),
         "pg_indexes" => pg_indexes_rows(db),
         "pg_constraint" => pg_constraint_rows(db),
@@ -3934,7 +3936,7 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "pg_opfamily" => Ok(pg_opfamily_rows()),
         "pg_amop" => Ok(pg_amop_rows()),
         "pg_amproc" => Ok(pg_amproc_rows()),
-        "pg_operator" => Ok(Vec::new()),
+        "pg_operator" => crate::pg_operators::pg_operator_rows(db),
         "pg_ts_config" | "pg_ts_config_map" | "pg_ts_dict" | "pg_ts_parser" | "pg_ts_template" => {
             Ok(Vec::new())
         }
@@ -4884,6 +4886,12 @@ pub(crate) fn virtual_table_columns(table: &str) -> Option<Vec<String>> {
             .map(str::to_string)
             .collect(),
         ),
+        "pg_rules" => Some(
+            ["schemaname", "tablename", "rulename", "definition"]
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+        ),
         "pg_views" => Some(
             ["schemaname", "viewname", "viewowner", "definition"]
                 .into_iter()
@@ -5196,6 +5204,12 @@ pub(crate) fn virtual_table_column_types(table: &str) -> Option<Vec<(String, Opt
             ("cycle", "bool"),
             ("cache_size", "int8"),
             ("last_value", "int8"),
+        ],
+        "pg_rules" => &[
+            ("schemaname", "name"),
+            ("tablename", "name"),
+            ("rulename", "name"),
+            ("definition", "text"),
         ],
         "pg_views" => &[
             ("schemaname", "name"),
@@ -5536,6 +5550,23 @@ pub(crate) fn virtual_table_column_types(table: &str) -> Option<Vec<(String, Opt
             ("opfname", "name"),
             ("opfnamespace", "oid"),
             ("opfowner", "oid"),
+        ],
+        "pg_operator" => &[
+            ("oid", "oid"),
+            ("oprname", "name"),
+            ("oprnamespace", "oid"),
+            ("oprowner", "oid"),
+            ("oprkind", "char"),
+            ("oprcanmerge", "bool"),
+            ("oprcanhash", "bool"),
+            ("oprleft", "oid"),
+            ("oprright", "oid"),
+            ("oprresult", "oid"),
+            ("oprcom", "oid"),
+            ("oprnegate", "oid"),
+            ("oprcode", "regproc"),
+            ("oprrest", "regproc"),
+            ("oprjoin", "regproc"),
         ],
         "pg_amop" => &[
             ("oid", "oid"),

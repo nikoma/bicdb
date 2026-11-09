@@ -792,7 +792,10 @@ impl BicDb {
                     (before, after, frozen_end)
                 };
                 self.invalidate_sync_vector_cache();
-                let (sync_before, sync_after) = self.sync_log.get_mut().compact()?;
+                let (sync_before, sync_after) = self
+                    .sync_log
+                    .get_mut()
+                    .compact(self.commit_seq.load(AtomicOrdering::SeqCst))?;
                 self.sync_state.last_export_offset = 0;
                 self.sync_state.last_reconciled_offset = 0;
                 self.sync_state.origin_position_base = self
@@ -1133,7 +1136,10 @@ impl BicDb {
             (before, after, frozen_end)
         };
         self.invalidate_sync_vector_cache();
-        let (sync_before, sync_after) = self.sync_log.get_mut().compact()?;
+        let (sync_before, sync_after) = self
+            .sync_log
+            .get_mut()
+            .compact(self.commit_seq.load(AtomicOrdering::SeqCst))?;
         self.sync_state.last_export_offset = 0;
         self.sync_state.last_reconciled_offset = 0;
         self.sync_state.origin_position_base = self
@@ -1515,14 +1521,29 @@ impl BicDb {
                     None => paged.commit(xid),
                 };
                 if let Err(error) = committed {
-                    self.recovery_required.store(true, AtomicOrdering::Release);
-                    return Err(error);
+                    self.fence_durability("paged.commit", &error);
+                    if durable_decision {
+                        // The caller holds a durable transaction-log
+                        // decision and reports the outcome with its
+                        // commit sequence.
+                        return Err(error);
+                    }
+                    // Here the page-log commit record is the decision, and
+                    // it may have reached the disk: never a refused write.
+                    return Err(BicDbError::CommitOutcomeUnknown {
+                        sequence: None,
+                        transaction_id: None,
+                        incarnation: self.incarnation.clone(),
+                        detail: format!("page transaction {xid} did not commit cleanly: {error}"),
+                    });
                 }
                 Ok(Some(xid))
             }
             Err(error) => {
-                if paged.abort(xid).is_err() || durable_decision {
-                    self.recovery_required.store(true, AtomicOrdering::Release);
+                if let Err(abort_error) = paged.abort(xid) {
+                    self.fence_durability("paged.abort", &abort_error);
+                } else if durable_decision {
+                    self.fence_durability("commit.materialize", &error);
                 }
                 Err(error)
             }
@@ -1897,11 +1918,113 @@ impl BicDb {
     /// Refuse use of a handle whose durable transaction needs redo. Opening a
     /// new handle replays that decision before making the database available.
     pub fn check_recovery_state(&self) -> Result<()> {
-        if self.recovery_required.load(AtomicOrdering::Acquire) {
-            return Err(BicDbError::PagedStorage(
-                "database requires recovery after a transaction durability/materialization failure; reopen before serving data".into(),
-            ));
+        self.durability
+            .check()
+            .map_err(crate::error::durability_error)
+    }
+
+    /// This handle's fail-closed durability state. Never fenced itself, so
+    /// operators and status endpoints can read why a database refuses
+    /// writes.
+    pub fn durability_state(&self) -> bicdb_page::DurabilityState {
+        self.durability.state()
+    }
+
+    /// The shared durability state, for fault-injection tests that need to
+    /// fence the database from a hook. Not an operator API.
+    #[doc(hidden)]
+    pub fn durability_health_for_test(&self) -> Arc<bicdb_page::DurabilityHealth> {
+        self.durability.clone()
+    }
+
+    /// Move the database to `WriteFailed` (first failure wins). Every later
+    /// write, and every read `check_recovery_state` guards, is refused
+    /// until the database is reopened.
+    pub(crate) fn fence_durability(&self, site: &str, error: &dyn std::fmt::Display) {
+        self.durability.record_failure(site, error);
+    }
+
+    /// The commit-outcome error for `sequence` after a durability failure.
+    fn commit_outcome_unknown(
+        &self,
+        transaction_id: u64,
+        sequence: u64,
+        error: &BicDbError,
+    ) -> BicDbError {
+        let cause = match self.durability.failure() {
+            Some(failure) => format!("the database is fenced by a failure at {failure}"),
+            None => error.to_string(),
+        };
+        BicDbError::CommitOutcomeUnknown {
+            sequence: Some(sequence),
+            transaction_id: Some(transaction_id),
+            incarnation: self.incarnation.clone(),
+            detail: format!("{error}; {cause}"),
         }
+    }
+
+    /// The verification step of a reopen after a durability failure. Normal
+    /// recovery has already run; when the previous handle left the failure
+    /// marker, a full checkpoint (page log sync, page flush and sync,
+    /// checkpoint record, superblock, transaction-log flush and cut) must
+    /// succeed end to end before the database accepts writes. Only then is
+    /// the marker removed. A failure keeps the marker and fails the open.
+    pub(crate) fn verify_after_durability_failure(&self) -> Result<()> {
+        let marker = self.path.join(DURABILITY_FAILURE_MARKER);
+        let previous = match std::fs::read(&marker) {
+            Ok(bytes) => serde_json::from_slice::<bicdb_page::WriteFailure>(&bytes).ok(),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(error.into()),
+        };
+        let previous = previous.map_or_else(|| "unreadable marker".to_string(), |f| f.to_string());
+        bicdb_page::health::log_event(&serde_json::json!({
+            "event": "durability.verify_started",
+            "severity": "warn",
+            "previous_failure": previous,
+        }));
+        let verified = (|| -> Result<()> {
+            self.checkpoint_for_resume()?;
+            // Rewrite the transaction log (copy, fsync, rename, directory
+            // fsync) rather than fsync it: after a failed fsync the frames
+            // recovery just read may exist only in the page cache, clean but
+            // never written, and an fsync of clean pages writes nothing. A
+            // copy writes every byte recovery used to a new, synced inode.
+            // Embedded mode, or a cut that kept the whole log, would
+            // otherwise leave such frames exposed to an OS crash.
+            let log = self.tx_log_path();
+            if log.exists() {
+                self.tx_log.flush_pending()?;
+                let _backup_gate = storage::acquire_database_backup_write_guard(&self.path)?;
+                copy_transaction_log_tail(&log, 0, true)?;
+                self.tx_log.invalidate();
+            }
+            // The failure may have been a replacement of an HA or consensus
+            // state file whose rename landed but whose directory sync did
+            // not. Rewrite both through the full protocol so the vote, term,
+            // epoch and role this node now acts on are durable.
+            self.ha_node.persist_current()?;
+            if self.path.join(DEFAULT_CONSENSUS_STATE).exists() {
+                self.persist_consensus_state()?;
+            }
+            self.check_recovery_state()
+        })();
+        if let Err(error) = verified {
+            return Err(BicDbError::WriteFailed {
+                site: "open.verify".into(),
+                detail: format!(
+                    "verification after the earlier failure ({previous}) did not complete: {error}"
+                ),
+            });
+        }
+        std::fs::remove_file(&marker)?;
+        if self.config.fsync {
+            std::fs::File::open(&self.path)?.sync_all()?;
+        }
+        bicdb_page::health::log_event(&serde_json::json!({
+            "event": "durability.verified",
+            "severity": "info",
+            "previous_failure": previous,
+        }));
         Ok(())
     }
 
@@ -1942,7 +2065,12 @@ impl BicDb {
     }
 
     pub(crate) fn persist_consensus_state(&self) -> Result<()> {
-        persist_consensus_state(&self.path, &self.consensus_state, self.config.fsync)
+        persist_consensus_state(
+            &self.path,
+            &self.consensus_state,
+            self.config.fsync,
+            storage::FailClosed::AfterRename(&self.durability),
+        )
     }
 
     /// Applies a transaction (conflict check, in-memory apply) and enqueues its
@@ -2330,10 +2458,11 @@ impl BicDb {
         } else {
             self.sync_ops_for_commit(&index_mutations_by_collection)?
         };
-        if !sync_ops.is_empty() {
-            // TODO: v0.2 should atomically group transaction commits and sync-log events.
-            self.sync_log.lock().append_ops(&sync_ops)?;
-        }
+        // Change-capture ops are not appended to `sync.log` here, before the
+        // decision: a commit that then aborts (a failed decision write, a
+        // withdrawn commit, a crash) would leave ops a consumer reads as
+        // committed. They travel in the commit's own transaction-log batch and
+        // reach `sync.log` only once the commit is durable and visible (below).
         let mut record_audit_events = if tx.imported_projection {
             Vec::new()
         } else {
@@ -2350,6 +2479,7 @@ impl BicDb {
                 "injected pre-decision rejection".into(),
             ));
         }
+        bicdb_page::test_faults::crash_point("commit.before_decision");
         // Past validation: reserve and durably log the transaction decision.
         // A plain atomic add is monotonic; the seq-keyed writer queue tolerates
         // out-of-order enqueue; the writer coalesces the contiguous prefix.
@@ -2392,6 +2522,7 @@ impl BicDb {
             &tx.writes,
             &pending_publishes,
             &record_audit_events,
+            &sync_ops,
             prepared,
         );
         let wal_bytes = match encoded {
@@ -2411,10 +2542,30 @@ impl BicDb {
         // A durable logical decision precedes every physical/resident apply.
         // A failed sync may still have persisted it, so errors fence the handle
         // and leave the complete redo intact for restart and replication.
-        if let Err(error) = self.tx_log.write_durable(commit_seq) {
-            self.recovery_required.store(true, AtomicOrdering::Release);
-            tx.receipt_recovery_required(commit_seq);
-            return Err(error);
+        match self.tx_log.write_durable(commit_seq) {
+            Ok(()) => {}
+            // A backup-gate timeout (a backup or branch holding the gate)
+            // happens before any byte is written. It must not fence a
+            // healthy primary. Withdraw the commit so no later batch can
+            // write it: it then definitively did not commit, which is an
+            // ordinary, retryable error. If a concurrent batch already made
+            // it durable, it committed and the commit proceeds.
+            Err(error @ BicDbError::Backup(_)) => {
+                if self.tx_log.abandon_unwritten(commit_seq) {
+                    // The empty slot keeps the applied watermark gap-free.
+                    self.mark_committed_seq(commit_seq);
+                    tx.receipt_commit_withdrawn();
+                    return Err(error);
+                }
+            }
+            Err(error) => {
+                // The log fenced itself on an I/O failure; the enqueue-gap
+                // bound fences here. Some or all of the batch may be on
+                // disk: the outcome is unknown.
+                self.fence_durability("transaction_log.write", &error);
+                tx.receipt_recovery_required(commit_seq);
+                return Err(self.commit_outcome_unknown(tx.id.0, commit_seq, &error));
+            }
         }
         bicdb_page::test_faults::crash_point("commit.after_txlog_durable");
         timer.lap(&commit_trace::WAL_ENCODE);
@@ -2499,9 +2650,11 @@ impl BicDb {
             Ok(())
         })();
         if let Err(error) = apply_result {
-            self.recovery_required.store(true, AtomicOrdering::Release);
+            // The decision is durable, so recovery will apply it; this
+            // handle cannot, and must not report it as committed.
+            self.fence_durability("commit.materialize", &error);
             tx.receipt_recovery_required(commit_seq);
-            return Err(error);
+            return Err(self.commit_outcome_unknown(tx.id.0, commit_seq, &error));
         }
         // Done: drop the tx_states entry rather than leaving a `Committed`
         // tombstone. Nothing reads a completed tx's state by tx_id (visibility is
@@ -2519,6 +2672,34 @@ impl BicDb {
         self.wait_until_visible(commit_seq);
         let locked_keys = tx.locked_keys.get_mut().take_all();
         release_owned_write_locks(&self.write_locks, tx.id, &locked_keys);
+        // Fail-closed: once the database is fenced no commit is reported
+        // committed, even one whose decision reached the disk before the
+        // failure (recovery keeps that one). The receipt says recovery
+        // required; the caller must not assume either outcome.
+        if self.durability.is_failed() {
+            tx.receipt_recovery_required(commit_seq);
+            let fenced = self.check_recovery_state().unwrap_err();
+            return Err(self.commit_outcome_unknown(tx.id.0, commit_seq, &fenced));
+        }
+        // The commit is durable and visible: publish its change-capture ops.
+        // A failure here leaves them only in the transaction log. The commit
+        // stays committed (a refusal would make the client retry and
+        // duplicate it); the database is fenced, so no checkpoint or
+        // compaction moves past the log's copy, and the reopen republishes it.
+        if !sync_ops.is_empty() {
+            if let Err(error) = self.sync_log.lock().append_ops(&sync_ops) {
+                self.fence_durability("sync_log.publish", &error);
+                bicdb_page::health::log_event(&serde_json::json!({
+                    "event": "durability.sync_publication_deferred",
+                    "severity": "warn",
+                    "transaction_id": tx.id.0,
+                    "commit_seq": commit_seq,
+                    "error": error.to_string(),
+                    "action": "the commit is durable; recovery republishes its change-capture ops",
+                }));
+            }
+            bicdb_page::test_faults::crash_point("commit.after_sync_publish");
+        }
         tx.state = TxState::Committed;
         tx.committed_seq = Some(commit_seq);
         tx.receipt_commit_finished(commit_seq);

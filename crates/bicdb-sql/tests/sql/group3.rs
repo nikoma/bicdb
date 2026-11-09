@@ -1742,11 +1742,16 @@ fn postgres_pg_dump_operator_query_is_supported_without_user_defined_operators()
         .execute(
             "SELECT tableoid, oid, oprname, oprnamespace, oprowner, oprkind,
                     oprleft, oprright, oprcode::oid AS oprcode
-             FROM pg_operator",
+             FROM pg_operator
+             WHERE oprnamespace <> 11",
         )
         .unwrap();
 
     assert!(result.rows.is_empty());
+    let builtin = engine
+        .execute("SELECT count(*) FROM pg_operator WHERE oprnamespace = 11")
+        .unwrap();
+    assert!(matches!(builtin.rows[0][0], SqlValue::Int(count) if count > 700));
 }
 
 #[test]

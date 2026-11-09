@@ -2844,6 +2844,359 @@ pub(crate) fn row_security_disabled_error(table: &str) -> SqlError {
     )))
 }
 
+// Do not move direct user/volatile calls out of row-policy evaluation. A
+// FROM-less InitPlan may supply a lookup key only through literal expressions,
+// supported immutable wrappers, or a declared STABLE/IMMUTABLE zero-arg routine.
+fn policy_lookup_value(db: &BicDb, expr: &Expr, in_init_plan: bool) -> bool {
+    match expr {
+        Expr::Value(value) => !matches!(&value.value, Value::Placeholder(_)),
+        Expr::TypedString(typed) => pg_type_from_data_type(&typed.data_type)
+            .is_ok_and(|(kind, _)| pg_type_oid_by_name(&kind).is_some()),
+        Expr::Nested(inner) => policy_lookup_value(db, inner, in_init_plan),
+        Expr::Cast {
+            expr: inner,
+            data_type,
+            array: false,
+            format: None,
+            ..
+        } => {
+            pg_type_from_data_type(data_type)
+                .is_ok_and(|(kind, _)| pg_type_oid_by_name(&kind).is_some())
+                && policy_lookup_value(db, inner, in_init_plan)
+        }
+        Expr::Subquery(query) if is_policy_init_plan(query) => {
+            let SetExpr::Select(select) = query.body.as_ref() else {
+                return false;
+            };
+            // The older InitPlan classifier checks projection row-independence.
+            // A lookup must additionally reject every other expression-bearing
+            // clause: GROUP/DISTINCT/QUALIFY etc. can contain volatile effects.
+            if query.fetch.is_some()
+                || !query.locks.is_empty()
+                || query.for_clause.is_some()
+                || query.settings.is_some()
+                || query.format_clause.is_some()
+                || !query.pipe_operators.is_empty()
+                || !select.optimizer_hints.is_empty()
+                || select.distinct.is_some()
+                || select.select_modifiers.is_some()
+                || select.top.is_some()
+                || select.exclude.is_some()
+                || select.into.is_some()
+                || !select.lateral_views.is_empty()
+                || select.prewhere.is_some()
+                || !select.connect_by.is_empty()
+                || !matches!(&select.group_by, GroupByExpr::Expressions(exprs,modifiers) if exprs.is_empty() && modifiers.is_empty())
+                || !select.cluster_by.is_empty()
+                || !select.distribute_by.is_empty()
+                || !select.sort_by.is_empty()
+                || !select.named_window.is_empty()
+                || select.qualify.is_some()
+                || select.value_table_mode.is_some()
+            {
+                return false;
+            }
+            let Some(SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. }) =
+                select.projection.first()
+            else {
+                return false;
+            };
+            policy_lookup_value(db, expr, true)
+        }
+        Expr::Function(function)
+            if function.filter.is_none()
+                && function.over.is_none()
+                && function.within_group.is_empty()
+                && function.null_treatment.is_none()
+                && function.parameters == FunctionArguments::None =>
+        {
+            let FunctionArguments::List(args) = &function.args else {
+                return false;
+            };
+            if args.duplicate_treatment.is_some() || !args.clauses.is_empty()
+                || !args.args.iter().all(|arg| matches!(arg,
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) if policy_lookup_value(db, expr, in_init_plan)))
+                { return false; }
+            let Ok(name) = object_name_lowercase(&function.name) else {
+                return false;
+            };
+            matches!(
+                name.as_ref(),
+                "nullif" | "pg_catalog.nullif" | "coalesce" | "pg_catalog.coalesce"
+            ) || (in_init_plan
+                && (matches!(
+                    name.as_ref(),
+                    "current_setting" | "pg_catalog.current_setting"
+                ) || (args.args.is_empty()
+                    && resolve_routine_for_call(db, RoutineKind::Function, &name, &[], &[])
+                        .ok()
+                        .flatten()
+                        .is_some_and(|routine| {
+                            matches!(routine.schema.declared_volatility(), "s" | "i")
+                                && !routine.schema.returns_set
+                                && pg_type_oid_by_name(&routine.schema.return_type).is_some()
+                                // Zero actual arguments can select a defaulted
+                                // signature; its defaults may be volatile.
+                                && parse_routine_params(&routine.schema.args).is_ok_and(|params|
+                                    params.is_empty())
+                        }))))
+        }
+        _ => false,
+    }
+}
+
+// Lookup shortcuts must not execute per-row effects or user/domain checks
+// merely to test whether a bound value is NULL or to add a policy key.
+pub(crate) fn lookup_expression_has_effects(expr: &Expr) -> bool {
+    sqlparser::ast::visit_expressions(expr, |expr| {
+        use std::ops::ControlFlow;
+        match expr {
+            Expr::Function(_)
+            | Expr::Subquery(_)
+            | Expr::Exists { .. }
+            | Expr::InSubquery { .. }
+            | Expr::BinaryOp {
+                op: BinaryOperator::Custom(_) | BinaryOperator::PGCustomBinaryOperator(_),
+                ..
+            } => ControlFlow::Break(()),
+            Expr::Cast { data_type, .. }
+                if !pg_type_from_data_type(data_type)
+                    .is_ok_and(|(kind, _)| pg_type_oid_by_name(&kind).is_some()) =>
+            {
+                ControlFlow::Break(())
+            }
+            Expr::TypedString(typed)
+                if !pg_type_from_data_type(&typed.data_type)
+                    .is_ok_and(|(kind, _)| pg_type_oid_by_name(&kind).is_some()) =>
+            {
+                ControlFlow::Break(())
+            }
+            _ => ControlFlow::Continue(()),
+        }
+    })
+    .is_break()
+}
+
+impl<'db> SqlEngine<'db> {
+    pub(crate) fn eval_policy_lookup_value(&self, value: &Expr) -> Result<SqlValue> {
+        let value = fold_policy_init_plans(self, value, policy_context_hash(self))?;
+        self.eval_dynamic_bound_expr(&value)
+    }
+
+    /// Add only equalities necessary for every row admitted by the applicable
+    /// SELECT policy. This narrows index candidates, never replaces residual
+    /// RLS. Role/owner/FORCE/native bypass decisions come from the same resolver
+    /// used by row checks. Values are folded in the current statement context;
+    /// the existing content-keyed memo cannot reuse another identity’s values.
+    pub(crate) fn rls_index_candidate_selection(
+        &self,
+        table: &str,
+        alias: &str,
+        schema: Option<&TableSchema>,
+        selection: Option<&Expr>,
+        fold_values: bool,
+    ) -> Result<Option<Expr>> {
+        let Some(schema) = schema else {
+            return Ok(None);
+        };
+        // Preserve the executor's existing contradiction short circuit. Also
+        // decline augmentation when authored effects could otherwise be
+        // hoisted into the newly usable composite index's remaining keys.
+        if let Some(selection) = selection {
+            if crate::engine::selection_has_false_term(selection)
+                || self.selection_is_contradictory(alias, schema, selection)
+                || lookup_expression_has_effects(selection)
+            {
+                return Ok(None);
+            }
+        }
+        let PreparedRls::Filter(filter) = prepare_rls_with_schema(
+            self.db_ref(),
+            table,
+            PolicyAction::Select,
+            Some(schema),
+            &self.session_gucs,
+            self.security_context.as_ref(),
+            false,
+        )?
+        else {
+            return Ok(None);
+        };
+        let Some((_, first)) = filter.permissive.first() else {
+            return Ok(None);
+        };
+        // A complete authored PK lookup already determines the candidate row.
+        // Do not initialize unrelated policy keys for a missing-row read.
+        if let Some(selection) = selection {
+            let strategy = self.derive_locator_strategy(table, alias, Some(schema), selection)?;
+            if !strategy.pk_exprs.is_empty() && strategy.pk_exprs.iter().all(Option::is_some) {
+                return Ok(None);
+            }
+        }
+        // Permissive policies are OR: only an identical conjunct of every
+        // branch is necessary. Restrictive policies AND with that union.
+        // Deliberately do no independent expression simplification/optimization.
+        let mut terms = and_terms(first);
+        terms.retain(|term| {
+            filter
+                .permissive
+                .iter()
+                .skip(1)
+                .all(|(_, expr)| and_terms(expr).contains(term))
+        });
+        for (_, expr) in &filter.restrictive {
+            terms.extend(and_terms(expr));
+        }
+        let mut candidates = Vec::new();
+        for term in terms {
+            let Expr::BinaryOp {
+                left,
+                op: BinaryOperator::Eq,
+                right,
+            } = term
+            else {
+                continue;
+            };
+            for (column, value) in [
+                (left.as_ref(), right.as_ref()),
+                (right.as_ref(), left.as_ref()),
+            ] {
+                if !policy_lookup_value(self.db_ref(), value, false) {
+                    continue;
+                }
+                // Existing cast/equality rules reject truncation, UUID->text,
+                // collation transforms, and every unsupported expression key.
+                let Some(column @ Expr::Identifier(_)) =
+                    normalize_table_lookup_field_expr(column, table, alias, Some(schema))
+                else {
+                    continue;
+                };
+                let Expr::Identifier(name) = &column else {
+                    unreachable!()
+                };
+                if !schema.column(&name.value).is_some_and(|column| {
+                    column.user_type.is_none() && pg_type_oid_by_name(&column.pg_type).is_some()
+                }) {
+                    continue;
+                }
+                let value = value.clone();
+                let candidate = Expr::BinaryOp {
+                    left: Box::new(column),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(value),
+                };
+                if !candidates.contains(&candidate) {
+                    candidates.push(candidate);
+                }
+                break;
+            }
+        }
+        let augment = |predicate| match selection {
+            Some(selection) => and_expr(selection.clone(), predicate),
+            None => predicate,
+        };
+        let Some(predicate) = expr_from_and_terms(candidates.clone()) else {
+            return Ok(None);
+        };
+        let strategy =
+            self.derive_locator_strategy(table, alias, Some(schema), &augment(predicate.clone()))?;
+        // The row-set locator evaluates eligible keys before choosing its
+        // winning index. Do not introduce unused InitPlan calls through an
+        // alternative index, including one the authored predicate already
+        // supports. Literal-only constraints need no deferred initialization.
+        // A single shared InitPlan is safe only when every available lookup
+        // requires it. Ambiguous shapes retain their original scan/lookup.
+        let mut deferred_values = Vec::new();
+        for candidate in &candidates {
+            let Expr::BinaryOp { right, .. } = candidate else {
+                unreachable!()
+            };
+            if expr_contains_subquery(right) && !deferred_values.contains(&right.as_ref()) {
+                deferred_values.push(right.as_ref());
+            }
+        }
+        if let Some(value) = deferred_values.first() {
+            if deferred_values.len() != 1 {
+                return Ok(None);
+            }
+            if strategy.has_non_btree_indexes {
+                // Carrier models commonly carry a generated FullText index.
+                // The existing FTS candidate extractor requires an authored
+                // @@ expression; an unused FTS index cannot avoid this key.
+                // Do not evaluate a search expression just to classify it.
+                let authored_search = selection.is_some_and(|selection| {
+                    sqlparser::ast::visit_expressions(selection, |expr| {
+                        if matches!(
+                            expr,
+                            Expr::BinaryOp {
+                                op: BinaryOperator::AtAt,
+                                ..
+                            }
+                        ) {
+                            std::ops::ControlFlow::Break(())
+                        } else {
+                            std::ops::ControlFlow::Continue(())
+                        }
+                    })
+                    .is_break()
+                });
+                let other_non_btree = sql_index_definitions_for_collection(self.db_ref(), table)
+                    .iter()
+                    .any(|index| !matches!(index.kind, IndexKind::BTree | IndexKind::FullText));
+                if authored_search || other_non_btree {
+                    return Ok(None);
+                }
+            }
+            if let Some(selection) = selection {
+                let original =
+                    self.derive_locator_strategy(table, alias, Some(schema), selection)?;
+                if original.pk_exprs.iter().any(Option::is_some) || !original.indexes.is_empty() {
+                    return Ok(None);
+                }
+            }
+            if strategy.pk_exprs.iter().any(Option::is_some)
+                || strategy.indexes.is_empty()
+                || strategy
+                    .indexes
+                    .iter()
+                    .any(|index| !index.prefix_exprs.iter().any(|expr| expr == *value))
+            {
+                return Ok(None);
+            }
+        }
+        if !fold_values {
+            return Ok(Some(augment(predicate)));
+        }
+        // Initialize only policy values that a real lookup can consume. With
+        // no eligible index, preserve the original empty-scan behavior.
+        let used_values = strategy
+            .indexes
+            .iter()
+            .flat_map(|index| index.prefix_exprs.iter())
+            .chain(strategy.pk_exprs.iter().filter_map(Option::as_ref))
+            .collect::<Vec<_>>();
+        let mut useful = Vec::new();
+        for candidate in candidates {
+            let Expr::BinaryOp { left, right, .. } = candidate else {
+                unreachable!()
+            };
+            if !used_values.contains(&right.as_ref()) {
+                continue;
+            }
+            let value = fold_policy_init_plans(self, &right, policy_context_hash(self))?;
+            if expr_contains_subquery(&value) {
+                continue;
+            }
+            useful.push(Expr::BinaryOp {
+                left,
+                op: BinaryOperator::Eq,
+                right: Box::new(value.into_owned()),
+            });
+        }
+        Ok(expr_from_and_terms(useful).map(augment))
+    }
+}
+
 impl RlsFilter {
     pub(crate) fn verdict(
         &self,
@@ -3154,8 +3507,36 @@ pub(crate) fn expr_references_stored_columns(expr: &Expr) -> bool {
                     .is_some_and(expr_references_stored_columns)
         }
         Expr::Tuple(items) => items.iter().any(expr_references_stored_columns),
+        Expr::Subquery(query)
+        | Expr::Exists {
+            subquery: query, ..
+        } => query_may_reference_outer_columns(query),
+        Expr::InSubquery { expr, subquery, .. } => {
+            expr_references_stored_columns(expr) || query_may_reference_outer_columns(subquery)
+        }
         _ => true,
     }
+}
+
+// Whether a subquery may read the outer (target) row. Only a FROM-less
+// single SELECT whose clauses read no column is known not to: there every
+// column reference is an outer reference. Anything else counts as a read.
+fn query_may_reference_outer_columns(query: &Query) -> bool {
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return true;
+    };
+    !(query.with.is_none()
+        && query.order_by.is_none()
+        && select.from.is_empty()
+        && select
+            .selection
+            .as_ref()
+            .is_none_or(|expr| !expr_references_stored_columns(expr))
+        && select
+            .having
+            .as_ref()
+            .is_none_or(|expr| !expr_references_stored_columns(expr))
+        && !select_items_reference_stored_columns(&select.projection))
 }
 
 pub(crate) fn select_items_reference_stored_columns(items: &[SelectItem]) -> bool {
@@ -3198,11 +3579,16 @@ pub(crate) fn rls_check_denied(table: &str, verdict: &RlsRowVerdict) -> SqlError
 }
 
 // PostgreSQL's ON CONFLICT DO UPDATE message variant: the conflicting
-// existing row failed the UPDATE policy's USING expression.
-pub(crate) fn rls_using_denied(table: &str) -> SqlError {
-    SqlError::BicDb(BicDbError::Authorization(format!(
-        "new row violates row-level security policy (USING expression) for table \"{table}\""
-    )))
+// existing row failed the UPDATE or SELECT policies' USING expression.
+pub(crate) fn rls_using_denied(table: &str, verdict: &RlsRowVerdict) -> SqlError {
+    SqlError::BicDb(BicDbError::Authorization(match verdict {
+        RlsRowVerdict::Denied(Some(policy)) => format!(
+            "new row violates row-level security policy \"{policy}\" (USING expression) for table \"{table}\""
+        ),
+        _ => format!(
+            "new row violates row-level security policy (USING expression) for table \"{table}\""
+        ),
+    }))
 }
 
 thread_local! {
@@ -5434,10 +5820,15 @@ pub(crate) fn table_with_joins_name_and_alias(table: &TableWithJoins) -> Result<
         ));
     };
     let table = relation_name(name)?;
-    let alias = alias
-        .as_ref()
-        .map(|alias| alias.name.value.clone())
-        .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(&table).to_string());
+    // Without an alias the target is named by its table name, also when its
+    // storage name encodes a non-public schema.
+    let alias = match alias {
+        Some(alias) => alias.name.value.clone(),
+        None => object_name_parts(name)
+            .last()
+            .cloned()
+            .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(&table).to_string()),
+    };
     Ok((table, alias))
 }
 
@@ -6000,7 +6391,7 @@ fn fold_policy_init_plans<'e>(
         if !is_policy_init_plan(query) {
             return ControlFlow::Continue(());
         }
-        let key = (context, query.to_string());
+        let key = (context, crate::sql_text::sql_key(query));
         let cached = POLICY_INIT_PLANS.with(|stack| {
             stack
                 .borrow()

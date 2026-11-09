@@ -126,7 +126,9 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn save_session_routine(&mut self, routine: &RoutineSchema) -> Result<()> {
-        let previous = load_routine(self.db_ref(), routine.kind, &routine.name)?;
+        let previous = routines_named(self.db_ref(), routine.kind, &routine.name)?
+            .into_iter()
+            .find(|existing| existing.overload == routine.overload);
         let created = previous.is_none();
         save_routine(self.db_mut()?, routine)?;
         if self.tx.is_some() {
@@ -135,8 +137,7 @@ impl<'db> SqlSession<'db> {
                     .ddl_undo
                     .push(DdlUndo::RestoreRoutine { routine: previous }),
                 None => self.ddl_undo.push(DdlUndo::DeleteRoutine {
-                    kind: routine.kind,
-                    name: routine.name.clone(),
+                    routine: routine.clone(),
                 }),
             }
         }
@@ -167,26 +168,80 @@ impl<'db> SqlSession<'db> {
             oracle::routine_arithmetic::prepare_physical_metadata(&mut routine)?;
         }
         self.require_schema_create_privilege(&routine.schema)?;
-        if load_routine(self.db_ref(), routine.kind, &routine.name)?.is_some() {
-            if if_not_exists {
-                return Ok(());
+        let existing = routines_named(self.db_ref(), routine.kind, &routine.name)?;
+        if !existing.is_empty() {
+            // PostgreSQL identifies a function by its name and input types: a
+            // new signature adds an overload, the same one replaces it.
+            let signature = routine_input_signature(&routine)?;
+            let mut same = None;
+            for candidate in &existing {
+                if routine_input_signature(candidate)? == signature {
+                    same = Some(candidate);
+                    break;
+                }
             }
-            if !or_replace {
-                return Err(SqlError::InvalidSql(format!(
-                    "routine \"{}\" already exists",
-                    routine.name
-                )));
+            match same {
+                Some(same) => {
+                    if if_not_exists {
+                        return Ok(());
+                    }
+                    if !or_replace {
+                        return Err(SqlError::InvalidSql(format!(
+                            "routine \"{}\" already exists",
+                            routine.name
+                        )));
+                    }
+                    routine.overload = same.overload.clone();
+                }
+                None if routine.kind == RoutineKind::Function
+                    && oracle::preview_routine_language_version(&routine.language).is_none() =>
+                {
+                    routine.overload = Some(signature);
+                }
+                None => {
+                    if if_not_exists {
+                        return Ok(());
+                    }
+                    if !or_replace {
+                        return Err(SqlError::InvalidSql(format!(
+                            "routine \"{}\" already exists",
+                            routine.name
+                        )));
+                    }
+                }
             }
         }
         self.save_session_routine(&routine)
     }
 
     pub(crate) fn delete_session_routine(&mut self, routine: &RoutineSchema) -> Result<bool> {
-        let existed = delete_routine(self.db_mut()?, routine.kind, &routine.name)?;
+        let successor = if routine.overload.is_none() {
+            routines_named(self.db_ref(), routine.kind, &routine.name)?
+                .into_iter()
+                .find(|other| other.overload.is_some())
+        } else {
+            None
+        };
+        let existed = delete_routine_schema(self.db_mut()?, routine)?;
         if existed && self.tx.is_some() {
             self.ddl_undo.push(DdlUndo::RestoreRoutine {
                 routine: routine.clone(),
             });
+        }
+        if existed {
+            // The name's next overload takes over its plain catalog key.
+            if let Some(next) = successor {
+                delete_routine_schema(self.db_mut()?, &next)?;
+                let mut promoted = next.clone();
+                promoted.overload = None;
+                save_routine(self.db_mut()?, &promoted)?;
+                if self.tx.is_some() {
+                    self.ddl_undo
+                        .push(DdlUndo::RestoreRoutine { routine: next });
+                    self.ddl_undo
+                        .push(DdlUndo::DeleteRoutine { routine: promoted });
+                }
+            }
         }
         Ok(existed)
     }
@@ -1073,7 +1128,7 @@ impl<'db> SqlSession<'db> {
             });
             constraints.push(DomainConstraintSchema {
                 name: constraint_name,
-                expression: check.expr.to_string(),
+                expression: crate::sql_text::sql_text(&*check.expr),
                 validated: true,
             });
         }
@@ -1091,7 +1146,10 @@ impl<'db> SqlSession<'db> {
                 base_user_type: base_user_type.map(Box::new),
                 type_modifier,
                 collation,
-                default_expr: create_domain.default.as_ref().map(ToString::to_string),
+                default_expr: create_domain
+                    .default
+                    .as_ref()
+                    .map(crate::sql_text::sql_text),
                 not_null,
                 not_null_constraint_name,
                 constraints,
@@ -1174,12 +1232,12 @@ impl<'db> SqlSession<'db> {
         }
         let domain_name = tokens[2..operation_index]
             .iter()
-            .map(ToString::to_string)
+            .map(crate::eval::rewrite_helpers::token_sql)
             .collect::<String>();
         let operation_tokens = &tokens[operation_index..];
         let operation_sql = operation_tokens
             .iter()
-            .map(ToString::to_string)
+            .map(crate::eval::rewrite_helpers::token_sql)
             .collect::<Vec<_>>()
             .join(" ");
         let column_operation = operation_tokens.len() >= 2
@@ -1225,7 +1283,7 @@ impl<'db> SqlSession<'db> {
                     let UserTypeKind::Domain { default_expr, .. } = &mut user_type.kind else {
                         unreachable!()
                     };
-                    *default_expr = Some(value.to_string());
+                    *default_expr = Some(crate::sql_text::sql_text(&value));
                 }
                 AlterColumnOperation::DropDefault => {
                     let UserTypeKind::Domain { default_expr, .. } = &mut user_type.kind else {
@@ -1330,7 +1388,7 @@ impl<'db> SqlSession<'db> {
                         Some(constraint_name),
                     ));
                 }
-                let expression = check.expr.to_string();
+                let expression = crate::sql_text::sql_text(&*check.expr);
                 parse_check_expression(&expression)?;
                 constraints.push(DomainConstraintSchema {
                     name: constraint_name,
@@ -1479,7 +1537,7 @@ impl<'db> SqlSession<'db> {
 
         let type_name = tokens[2..operation_index]
             .iter()
-            .map(ToString::to_string)
+            .map(crate::eval::rewrite_helpers::token_sql)
             .collect::<String>();
         let mut operation_tokens = tokens[operation_index..].to_vec();
         if operation_tokens
@@ -1491,7 +1549,7 @@ impl<'db> SqlSession<'db> {
         operation_tokens[1] = Token::make_keyword("COLUMN");
         let operation_sql = operation_tokens
             .iter()
-            .map(ToString::to_string)
+            .map(crate::eval::rewrite_helpers::token_sql)
             .collect::<Vec<_>>()
             .join(" ");
         let transformed = format!("ALTER TABLE {type_name} {operation_sql}");

@@ -23,6 +23,9 @@ fn record_id_prefix_successor(prefix: &str) -> Option<String> {
 impl<'db> SqlEngine<'db> {
     pub(crate) fn execute_set_query(&self, query: &Query) -> Result<SqlResult> {
         let mut result = self.execute_set_expr(query.body.as_ref())?;
+        if matches!(query.body.as_ref(), SetExpr::SetOperation { .. }) {
+            validate_set_order_by(&result, query.order_by.as_ref())?;
+        }
         self.apply_result_order_by(
             &mut result,
             query.order_by.as_ref(),
@@ -46,8 +49,31 @@ impl<'db> SqlEngine<'db> {
                 set_quantifier,
                 right,
             } => {
-                let left = self.execute_set_expr(left)?;
-                let right = self.execute_set_expr(right)?;
+                let left_expr = left;
+                let right_expr = right;
+                let mut left = self.execute_set_expr(left_expr)?;
+                let mut right = self.execute_set_expr(right_expr)?;
+                // A branch executed without result metadata (a SELECT without
+                // FROM) is described statically, so its literals take part in
+                // type resolution.
+                for (branch, expr) in [(&mut left, left_expr), (&mut right, right_expr)] {
+                    if branch.column_types.len() != branch.columns.len() {
+                        let described = self.set_expr_output_columns(expr);
+                        branch.column_types =
+                            (0..branch.columns.len())
+                                .map(|index| {
+                                    branch.column_types.get(index).cloned().flatten().or_else(
+                                        || {
+                                            described
+                                                .as_ref()
+                                                .and_then(|columns| columns.get(index))
+                                                .and_then(|(_, pg_type)| pg_type.clone())
+                                        },
+                                    )
+                                })
+                                .collect();
+                    }
+                }
                 let column_types = left
                     .column_types
                     .iter()
@@ -66,6 +92,12 @@ impl<'db> SqlEngine<'db> {
                         .map(Some)
                     })
                     .collect::<Result<Vec<_>>>()?;
+                // Each branch's values become the common type before rows are
+                // compared or returned: a date branch of a timestamp column is
+                // a timestamp, and an untyped literal must be valid input of
+                // the resolved type.
+                let left = coerce_set_branch(left, &column_types)?;
+                let right = coerce_set_branch(right, &column_types)?;
                 let mut result = combine_set_results(left, *op, *set_quantifier, right)?;
                 result.column_types = column_types;
                 Ok(result)
@@ -134,6 +166,11 @@ impl<'db> SqlEngine<'db> {
         if expressions.is_empty() {
             return Ok(());
         }
+        // `ORDER BY n` names the n-th output column.
+        let positions = expressions
+            .iter()
+            .map(|order| output_position(&order.expr, result.columns.len()))
+            .collect::<Result<Vec<_>>>()?;
         let mut rows = result
             .rows
             .drain(..)
@@ -141,7 +178,11 @@ impl<'db> SqlEngine<'db> {
             .collect::<Result<Vec<_>>>()?;
         let order_types = expressions
             .iter()
-            .map(|order| {
+            .zip(&positions)
+            .map(|(order, position)| {
+                if let Some(index) = position {
+                    return result.column_types.get(*index).cloned().flatten();
+                }
                 let column = match &order.expr {
                     Expr::Identifier(identifier) => Some(identifier.value.as_str()),
                     Expr::CompoundIdentifier(parts) => parts.last().map(|part| part.value.as_str()),
@@ -174,10 +215,13 @@ impl<'db> SqlEngine<'db> {
                     .enumerate()
                     .map(|(index, order)| {
                         let pg_type = order_types.get(index).and_then(Option::as_deref);
-                        let value = match self.eval_row_value(&row, &order.expr) {
-                            Ok(value) => enforce_integer_value_type(value, pg_type)?,
-                            Err(error @ SqlError::DataException { .. }) => return Err(error),
-                            Err(_) => SqlValue::Null,
+                        let value = match positions[index] {
+                            Some(column) => values.get(column).cloned().unwrap_or(SqlValue::Null),
+                            None => match self.eval_row_value(&row, &order.expr) {
+                                Ok(value) => enforce_integer_value_type(value, pg_type)?,
+                                Err(error @ SqlError::DataException { .. }) => return Err(error),
+                                Err(_) => SqlValue::Null,
+                            },
                         };
                         let typed_key = pg_type
                             .filter(|_| !matches!(value, SqlValue::Null))
@@ -1404,13 +1448,20 @@ impl<'db> SqlEngine<'db> {
             let result = result?;
             let executed = ExecutedAccess::from_decisions(&decisions);
             let mut lines = explain_access_lines(&plan, planner_lines, executed.as_ref());
-            if let Some(fetched) = decisions
+            // Rows fetched are counted before the row policies filter them:
+            // for a reader under a policy that count would reveal how many
+            // rows it may not see (another tenant's matching rows). It is
+            // omitted whenever any table the statement read is policy
+            // filtered for this session; ActualRows is post-policy.
+            let fetched = decisions
                 .iter()
                 .rev()
                 .find(|decision| decision.chooser != "planner" || decision.rows_fetched.is_some())
-                .and_then(|decision| decision.rows_fetched)
-            {
-                lines.push(format!("ActualRowsFetched {fetched}"));
+                .and_then(|decision| decision.rows_fetched);
+            if let Some(fetched) = fetched {
+                if !self.any_policy_filtered_read(&decisions)? {
+                    lines.push(format!("ActualRowsFetched {fetched}"));
+                }
             }
             lines.push(format!("ActualRows {}", result.rows.len()));
             lines.push(format!(
@@ -1585,6 +1636,40 @@ impl<'db> SqlEngine<'db> {
             })
             .collect::<Vec<_>>();
 
+        if let Some(selection) = self.rls_index_candidate_selection(
+            collection,
+            alias,
+            schema.as_ref(),
+            select.selection.as_ref(),
+            false,
+        )? {
+            // Existing structural locator planning retains expressions. Never
+            // execute policy InitPlans merely to EXPLAIN or cost an index key.
+            let strategy =
+                self.derive_locator_strategy(collection, alias, schema.as_ref(), &selection)?;
+            for index in strategy
+                .indexes
+                .iter()
+                .filter(|index| !index.prefix_exprs.is_empty())
+            {
+                let estimated_rows = total_rows
+                    .saturating_div(10usize.saturating_pow(index.prefix_exprs.len() as u32))
+                    .max(1)
+                    .min(total_rows);
+                candidates.push(QueryPlan {
+                    kind: PlanKind::DeferredIndexLookup {
+                        index_name: index.name.clone(),
+                        prefix_exprs: index.prefix_exprs.clone(),
+                    },
+                    estimated_rows,
+                    estimated_cost: if stats.is_some() {
+                        20.0 + estimated_rows as f64 * 2.0
+                    } else {
+                        1.0 + estimated_rows as f64 * 0.10
+                    },
+                });
+            }
+        }
         if let Some(selection) = &select.selection {
             self.add_index_filter_candidates(
                 collection,
@@ -3116,6 +3201,38 @@ fn collect_query_relations(
 }
 
 impl SqlEngine<'_> {
+    /// Whether the session reads any table of `decisions` through a row
+    /// policy filter (not the owner, not superuser/BYPASSRLS, RLS enabled).
+    /// Fails closed: a table whose policies cannot be prepared counts as
+    /// filtered.
+    fn any_policy_filtered_read(
+        &self,
+        decisions: &[crate::plan_diagnostics::DecisionTrace],
+    ) -> Result<bool> {
+        for decision in decisions {
+            if is_virtual_table(&decision.collection) {
+                continue;
+            }
+            let schema = match load_schema_shared(self.db_ref(), &decision.collection) {
+                Ok(schema) => schema,
+                Err(_) => return Ok(true),
+            };
+            let prepared = prepare_rls_with_schema(
+                self.db_ref(),
+                &decision.collection,
+                PolicyAction::Select,
+                schema.as_deref(),
+                &self.session_gucs,
+                self.security_context.as_ref(),
+                false,
+            );
+            if !matches!(prepared, Ok(PreparedRls::Allow)) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     /// Authorize SELECT on every base table a query reads, BEFORE any physical
     /// path is chosen — a plan referencing an unauthorized base table cannot
     /// execute. Defense in depth alongside the per-path gates; the per-path
@@ -3313,4 +3430,103 @@ fn explain_access_lines(
         plan.estimated_cost
     ));
     lines
+}
+
+/// Converts one set-operation branch to the operation's column types. Typed
+/// columns of another type are cast; untyped (unknown literal) text is read
+/// as the resolved type. Only built-in result types are converted.
+fn coerce_set_branch(mut branch: SqlResult, column_types: &[Option<String>]) -> Result<SqlResult> {
+    let mut casts = Vec::new();
+    for (index, common) in column_types.iter().enumerate() {
+        let Some(common) = common else {
+            continue;
+        };
+        let builtin = pg_type_spec(common.strip_suffix("[]").unwrap_or(common)).is_some();
+        let branch_type = branch.column_types.get(index).cloned().flatten();
+        if !builtin || branch_type.as_deref() == Some(common.as_str()) {
+            continue;
+        }
+        if matches!(common.as_str(), "text" | "varchar" | "bpchar" | "name")
+            && branch_type.is_none()
+        {
+            continue;
+        }
+        casts.push((index, common.clone(), branch_type.is_none()));
+    }
+    if !casts.is_empty() {
+        for row in &mut branch.rows {
+            for (index, common, untyped) in &casts {
+                let Some(value) = row.get_mut(*index) else {
+                    continue;
+                };
+                if matches!(value, SqlValue::Null)
+                    || (*untyped && !matches!(value, SqlValue::String(_)))
+                {
+                    continue;
+                }
+                let original = std::mem::replace(value, SqlValue::Null);
+                *value = cast_value_to_pg_type(original, common)?;
+            }
+        }
+    }
+    branch.column_types = column_types.to_vec();
+    Ok(branch)
+}
+
+/// The output column an `ORDER BY` integer constant names (zero-based).
+fn output_position(expr: &Expr, width: usize) -> Result<Option<usize>> {
+    let Expr::Value(value) = expr else {
+        return Ok(None);
+    };
+    let Value::Number(number, _) = &value.value else {
+        return Ok(None);
+    };
+    match number.parse::<usize>() {
+        Ok(position) if (1..=width).contains(&position) => Ok(Some(position - 1)),
+        _ => Err(SqlError::data_exception_public(
+            "42P10",
+            format!("ORDER BY position {number} is not in select list"),
+            None,
+        )),
+    }
+}
+
+/// A set operation's ORDER BY may name result columns only, by name or
+/// position, as in PostgreSQL.
+fn validate_set_order_by(result: &SqlResult, order_by: Option<&OrderBy>) -> Result<()> {
+    let Some(OrderBy {
+        kind: OrderByKind::Expressions(expressions),
+        ..
+    }) = order_by
+    else {
+        return Ok(());
+    };
+    for order in expressions {
+        match &order.expr {
+            Expr::Value(_) => {
+                output_position(&order.expr, result.columns.len())?;
+            }
+            Expr::Identifier(ident) => {
+                if !result
+                    .columns
+                    .iter()
+                    .any(|column| column.eq_ignore_ascii_case(&ident.value))
+                {
+                    return Err(SqlError::data_exception_public(
+                        "42703",
+                        format!("column \"{}\" does not exist", ident.value),
+                        None,
+                    ));
+                }
+            }
+            _ => {
+                return Err(SqlError::data_exception_public(
+                    "0A000",
+                    "invalid UNION/INTERSECT/EXCEPT ORDER BY clause",
+                    None,
+                ));
+            }
+        }
+    }
+    Ok(())
 }

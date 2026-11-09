@@ -1,0 +1,4 @@
+     Running tests/independent_commit_conflicts.rs (/root/carrier-zero-friction-target/debug/deps/independent_commit_conflicts-d2c31ee32d59beec)
+running 1 test
+test independent_sql_commit_preserves_absent_key_conflict ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s

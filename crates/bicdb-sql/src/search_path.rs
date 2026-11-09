@@ -142,6 +142,11 @@ struct Binder<'a> {
     path: &'a [String],
     ctes: Vec<BTreeSet<String>>,
     changed: bool,
+    /// Source positions where a schema qualifier is inserted, so statement
+    /// text is bound in place instead of being re-rendered from the AST.
+    insertions: Vec<(sqlparser::tokenizer::Location, String)>,
+    /// A qualified name had no source position (synthesized AST).
+    positions_missing: bool,
 }
 
 impl Binder<'_> {
@@ -157,7 +162,16 @@ impl Binder<'_> {
     }
 
     fn qualify(&mut self, name: &mut ObjectName, schema: &str) {
-        name.0.insert(0, schema_ident(schema));
+        let part = schema_ident(schema);
+        match name.0.first() {
+            Some(sqlparser::ast::ObjectNamePart::Identifier(ident))
+                if ident.span.start.line > 0 =>
+            {
+                self.insertions.push((ident.span.start, format!("{part}.")));
+            }
+            _ => self.positions_missing = true,
+        }
+        name.0.insert(0, part);
         self.changed = true;
     }
 
@@ -204,12 +218,35 @@ impl Binder<'_> {
         }
     }
 
-    fn bind_column_foreign_key(&mut self, column: &mut sqlparser::ast::ColumnDef) {
+    fn bind_column_foreign_key(
+        &mut self,
+        column: &mut sqlparser::ast::ColumnDef,
+        created: Option<(&str, &str)>,
+    ) {
         for option in &mut column.options {
             if let sqlparser::ast::ColumnOption::ForeignKey(foreign_key) = &mut option.option {
-                self.bind_reference(&mut foreign_key.foreign_table, relation_exists);
+                if !self.bind_self_reference(&mut foreign_key.foreign_table, created) {
+                    self.bind_reference(&mut foreign_key.foreign_table, relation_exists);
+                }
             }
         }
+    }
+
+    /// A foreign key naming the table being created (`created` is its
+    /// unqualified name and the schema it was placed in) refers to that table.
+    fn bind_self_reference(
+        &mut self,
+        target: &mut ObjectName,
+        created: Option<(&str, &str)>,
+    ) -> bool {
+        let Some((table, schema)) = created else {
+            return false;
+        };
+        if Self::single_part(target).as_deref() != Some(table) {
+            return false;
+        }
+        self.qualify(target, schema);
+        true
     }
 }
 
@@ -222,18 +259,24 @@ impl sqlparser::ast::VisitorMut for Binder<'_> {
                 // A self-reference names the table being created.
                 let own = Self::single_part(&table.name);
                 self.bind_creation(&mut table.name);
-                let created = table.name.clone();
+                // Set only when creation placed the table in a schema.
+                let created_schema = match (own.is_some(), table.name.0.as_slice()) {
+                    (true, [sqlparser::ast::ObjectNamePart::Identifier(schema), _]) => {
+                        Some(schema.value.clone())
+                    }
+                    _ => None,
+                };
+                let created = own.as_deref().zip(created_schema.as_deref());
                 for constraint in &mut table.constraints {
                     if let sqlparser::ast::TableConstraint::ForeignKey(foreign_key) = constraint {
-                        if own.is_some() && Self::single_part(&foreign_key.foreign_table) == own {
-                            foreign_key.foreign_table = created.clone();
+                        if self.bind_self_reference(&mut foreign_key.foreign_table, created) {
                             continue;
                         }
                     }
                     self.bind_foreign_key(constraint);
                 }
                 for column in &mut table.columns {
-                    self.bind_column_foreign_key(column);
+                    self.bind_column_foreign_key(column, created);
                 }
             }
             Statement::CreateView(view) => self.bind_creation(&mut view.name),
@@ -245,7 +288,7 @@ impl sqlparser::ast::VisitorMut for Binder<'_> {
                             constraint, ..
                         } => self.bind_foreign_key(constraint),
                         sqlparser::ast::AlterTableOperation::AddColumn { column_def, .. } => {
-                            self.bind_column_foreign_key(column_def)
+                            self.bind_column_foreign_key(column_def, None)
                         }
                         _ => {}
                     }
@@ -309,20 +352,57 @@ pub(crate) fn bind_node<T: sqlparser::ast::VisitMut>(
     node: &mut T,
     path: &[String],
 ) -> bool {
+    run_binder(db, node, path).changed
+}
+
+fn run_binder<'a, T: sqlparser::ast::VisitMut>(
+    db: &'a BicDb,
+    node: &mut T,
+    path: &'a [String],
+) -> Binder<'a> {
     let mut binder = Binder {
         db,
         path,
         ctes: Vec::new(),
         changed: false,
+        insertions: Vec::new(),
+        positions_missing: false,
     };
     let _ = sqlparser::ast::VisitMut::visit(node, &mut binder);
-    binder.changed
+    binder
+}
+
+/// `sql` with each text inserted at its (1-based line and character column)
+/// source position.
+fn insert_at_positions(
+    sql: &str,
+    mut insertions: Vec<(sqlparser::tokenizer::Location, String)>,
+) -> Option<String> {
+    let mut line_starts = vec![0usize];
+    line_starts.extend(sql.match_indices('\n').map(|(index, _)| index + 1));
+    let mut offsets = Vec::with_capacity(insertions.len());
+    for (location, text) in insertions.drain(..) {
+        let start = *line_starts.get(usize::try_from(location.line).ok()?.checked_sub(1)?)?;
+        let column = usize::try_from(location.column).ok()?.checked_sub(1)?;
+        let line = &sql[start..];
+        let offset = match line.char_indices().nth(column) {
+            Some((index, _)) => start + index,
+            None => return None,
+        };
+        offsets.push((offset, text));
+    }
+    offsets.sort_by(|left, right| right.0.cmp(&left.0));
+    let mut out = sql.to_string();
+    for (offset, text) in offsets {
+        out.insert_str(offset, &text);
+    }
+    Some(out)
 }
 
 /// Statement text with unqualified relations bound through `path`, or `None`
 /// when nothing changed (or the text is not ordinary SQL, which then runs as
 /// before).
-pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Option<String> {
+pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Result<Option<String>> {
     // Lock strengths sqlparser lacks become the stronger ones it parses, as
     // statement execution does.
     let weak_locks = rewrite_weak_lock_strengths(sql);
@@ -331,7 +411,10 @@ pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Option<St
     let sql = lock_order.as_deref().unwrap_or(sql);
     let top = crate::eval::rewrite_helpers::rewrite_select_top_identifiers(sql);
     let sql = top.as_deref().unwrap_or(sql);
-    let mut statements = Parser::parse_sql(&sqlparser::dialect::PostgreSqlDialect {}, sql).ok()?;
+    let Ok(mut statements) = Parser::parse_sql(&sqlparser::dialect::PostgreSqlDialect {}, sql)
+    else {
+        return Ok(None);
+    };
     // Routine bodies bind when they execute, with the caller's path; DDL
     // that defines them is left verbatim.
     if statements.iter().any(|statement| {
@@ -342,18 +425,28 @@ pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Option<St
                 | Statement::CreateTrigger(_)
         )
     }) {
-        return None;
+        return Ok(None);
     }
-    if !bind_node(db, &mut statements, path) {
-        return None;
+    let binder = run_binder(db, &mut statements, path);
+    if !binder.changed {
+        return Ok(None);
     }
-    Some(
-        statements
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(";\n"),
-    )
+    // Running the statement unbound would resolve its names in another
+    // schema; refuse instead.
+    let unbindable = || {
+        SqlError::Unsupported(
+            "cannot bind the statement's unqualified relation names through search_path"
+                .to_string(),
+        )
+    };
+    if binder.positions_missing {
+        return Err(unbindable());
+    }
+    // Insert qualifiers into the original text: re-rendering the AST is not
+    // a faithful round trip (string literals with doubled quotes lost one).
+    insert_at_positions(sql, binder.insertions)
+        .map(Some)
+        .ok_or_else(unbindable)
 }
 
 /// Binds every SQL statement and expression of a routine body, before its
@@ -613,7 +706,30 @@ pub fn bind_session_sql(
     sql: &str,
     gucs: &HashMap<String, String>,
 ) -> Result<Option<String>> {
-    Ok(binding_path(db, gucs)?
-        .as_deref()
-        .and_then(|path| bind_sql_text(db, sql, path)))
+    match binding_path(db, gucs)? {
+        Some(path) => bind_sql_text(db, sql, &path),
+        None => Ok(None),
+    }
+}
+
+/// `current_schema`: the first existing schema on the search_path of the
+/// running statement (`public` when the path names no other schema).
+pub(crate) fn current_schema_name() -> String {
+    active_path()
+        .and_then(|path| path.first().cloned())
+        .unwrap_or_else(|| "public".to_string())
+}
+
+/// `current_schemas(include_implicit)`: the existing schemas on the path in
+/// order, after the implicitly searched `pg_catalog` when requested.
+pub(crate) fn current_schema_names(include_implicit: bool) -> Vec<String> {
+    let mut schemas = Vec::new();
+    if include_implicit {
+        schemas.push("pg_catalog".to_string());
+    }
+    match active_path() {
+        Some(path) => schemas.extend(path.iter().cloned()),
+        None => schemas.push("public".to_string()),
+    }
+    schemas
 }

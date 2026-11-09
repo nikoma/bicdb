@@ -116,6 +116,54 @@ END;",
     );
 }
 
+/// PostgreSQL-only PL/pgSQL forms (`=` assignment, RAISE WARNING) and
+/// data-modifying functions in a query's select list keep the Oracle
+/// profile's behaviour: a function that modifies data cannot be called from
+/// a query over a table (Oracle raises ORA-14551), and `x = 1;` is not an
+/// assignment.
+#[test]
+fn postgres_dialect_forms_do_not_apply_to_the_oracle_profile() {
+    let (_root, mut db) = app_database();
+    for source in [
+        "CREATE TABLE audit_rows (id NUMBER)",
+        "CREATE TABLE audit_sources (id NUMBER)",
+        "INSERT INTO audit_sources VALUES (1)",
+        "CREATE OR REPLACE FUNCTION note_row(p_id IN NUMBER) RETURN NUMBER AS
+         BEGIN
+           INSERT INTO audit_rows VALUES (p_id);
+           RETURN p_id;
+         END;",
+    ] {
+        run(&mut db, source).unwrap();
+    }
+    assert!(run(&mut db, "SELECT note_row(id) FROM audit_sources").is_err());
+    assert_eq!(
+        texts(run(&mut db, "SELECT COUNT(*) FROM audit_rows").unwrap()),
+        vec![vec!["0".to_string()]]
+    );
+    assert!(run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION equals_form RETURN NUMBER AS
+           n NUMBER;
+         BEGIN
+           n = 1;
+           RETURN n;
+         END;"
+    )
+    .and_then(|_| run(&mut db, "SELECT equals_form FROM dual"))
+    .is_err()); // ELSEIF is not a spelling of ELSIF in this profile.
+    assert!(run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION elseif_form RETURN NUMBER AS
+         BEGIN
+           IF 1 = 0 THEN RETURN 0; ELSEIF 1 = 1 THEN RETURN 1; END IF;
+           RETURN 2;
+         END;"
+    )
+    .and_then(|_| run(&mut db, "SELECT elseif_form FROM dual"))
+    .is_err());
+}
+
 #[test]
 fn character_patterns_over_joined_column_functions() {
     let (_root, mut db) = app_database();
@@ -189,6 +237,28 @@ fn drop_table_cascade_constraints_removes_referencing_foreign_keys() {
     assert!(run_owner(&mut db, "SELECT COUNT(*) FROM gone_t").is_err());
 }
 
+/// RAW values in Oracle routines keep the profile's conversion rules: the
+/// PostgreSQL bytea typing of routine variables does not apply, and RAW
+/// concatenation still requires an explicit conversion.
+#[test]
+fn raw_routine_parameters_keep_oracle_profile_conversions() {
+    let (_root, mut db) = app_database();
+    let created = run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION raw_pair(p IN RAW) RETURN VARCHAR2 AS
+         BEGIN
+           RETURN p || p;
+         END;",
+    );
+    let error = created
+        .and_then(|_| run(&mut db, "SELECT raw_pair(HEXTORAW('0102')) FROM dual"))
+        .unwrap_err();
+    assert!(
+        error.to_string().contains("Oracle concatenation requires"),
+        "{error}"
+    );
+}
+
 #[test]
 fn unique_constraints_are_checked_when_the_statement_ends() {
     let (_root, mut db) = app_database();
@@ -221,6 +291,29 @@ fn unique_constraints_are_checked_when_the_statement_ends() {
     );
 }
 
+/// The PL/pgSQL `REVERSE high .. low` form does not change the Oracle
+/// profile, whose front end still rejects REVERSE loops (Oracle walks
+/// `REVERSE low .. high` backwards; the interpreter honours that order for
+/// Oracle routines once the front end accepts the form).
+#[test]
+fn reverse_for_loops_are_unchanged_in_the_oracle_profile() {
+    let (_root, mut db) = app_database();
+    let created = run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION countdown RETURN VARCHAR2 AS
+           acc VARCHAR2(20) := '';
+         BEGIN
+           FOR i IN REVERSE 1 .. 3 LOOP
+             acc := acc || i;
+           END LOOP;
+           RETURN acc;
+         END;",
+    );
+    assert!(created
+        .and_then(|_| run(&mut db, "SELECT countdown() FROM dual"))
+        .is_err());
+}
+
 #[test]
 fn driver_metadata_presets_are_published() {
     for profile in ["postgres", ORACLE_PREVIEW_PROFILE] {
@@ -231,6 +324,25 @@ fn driver_metadata_presets_are_published() {
             .rows;
         assert_eq!(texts(rows), vec![vec!["32"]], "{profile}");
     }
+}
+
+/// Query rewrite rules are a PostgreSQL feature: the Oracle profile keeps
+/// rejecting CREATE RULE, and its DML is never rewritten.
+#[test]
+fn rules_are_not_available_in_the_oracle_profile() {
+    let (_root, mut db) = app_database();
+    run(&mut db, "CREATE TABLE ruled (id NUMBER)").unwrap();
+    assert!(run(
+        &mut db,
+        "CREATE RULE keep AS ON DELETE TO ruled DO INSTEAD NOTHING"
+    )
+    .is_err());
+    run(&mut db, "INSERT INTO ruled VALUES (1)").unwrap();
+    run(&mut db, "DELETE FROM ruled").unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT COUNT(*) FROM ruled").unwrap()),
+        vec![vec!["0".to_string()]]
+    );
 }
 
 #[test]
@@ -397,6 +509,73 @@ fn missing_application_relations_are_not_reported_as_reserved_names() {
     }
 }
 
+/// A user function named like a built-in SQL function does not take
+/// unqualified calls of that name in this profile.
+#[test]
+fn builtin_functions_keep_unqualified_calls_over_user_functions() {
+    let (_root, mut db) = app_database();
+    run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION lower(p_text IN VARCHAR2) RETURN VARCHAR2 AS
+         BEGIN
+           RETURN 'user-lower';
+         END;",
+    )
+    .unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT LOWER('A') FROM dual").unwrap()),
+        vec![vec!["a".to_string()]]
+    );
+}
+
+/// A correlated subquery names a schema-local UPDATE or DELETE target by its
+/// table name in the Oracle profile too.
+#[test]
+fn correlated_references_name_update_and_delete_targets_by_table_name() {
+    let (_root, mut db) = app_database();
+    for source in [
+        "CREATE TABLE line (id NUMBER, product_id NUMBER, uom_id NUMBER)",
+        "CREATE TABLE product (product_id NUMBER, uom_id NUMBER)",
+        "INSERT INTO line VALUES (1, 10, NULL)",
+        "INSERT INTO line VALUES (2, 20, NULL)",
+        "INSERT INTO product VALUES (10, 100)",
+        "INSERT INTO product VALUES (20, 200)",
+        "UPDATE line SET uom_id = (SELECT uom_id FROM product WHERE product_id = line.product_id)",
+    ] {
+        run(&mut db, source).unwrap();
+    }
+    assert_eq!(
+        texts(run(&mut db, "SELECT SUM(uom_id) FROM line").unwrap()),
+        vec![vec!["300".to_string()]]
+    );
+    run(
+        &mut db,
+        "DELETE FROM line WHERE EXISTS (SELECT 1 FROM product WHERE product.product_id = line.product_id AND product.uom_id = 200)",
+    )
+    .unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT COUNT(*) FROM line").unwrap()),
+        vec![vec!["1".to_string()]]
+    );
+}
+
+/// A column named INTERVAL is quoted as an identifier without changing the
+/// statement's other tokens.
+#[test]
+fn interval_identifier_quoting_keeps_string_literals() {
+    let (_root, mut db) = app_database();
+    run(
+        &mut db,
+        "CREATE TABLE schedule (id NUMBER, \"INTERVAL\" NUMBER)",
+    )
+    .unwrap();
+    run(&mut db, "INSERT INTO schedule VALUES (1, 7)").unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT 'it''s', interval FROM schedule").unwrap()),
+        vec![vec!["it's".to_string(), "7".to_string()]]
+    );
+}
+
 /// `TOP` is not row-limit syntax in this profile either: a column named
 /// `top` is an ordinary identifier.
 #[test]
@@ -429,4 +608,53 @@ fn drop_schema_stays_unsupported() {
         .execute("DROP SCHEMA \"APP\"")
         .unwrap_err();
     assert!(format!("{error}").contains("not supported"), "{error}");
+}
+
+/// Standalone Oracle functions are not overloaded: CREATE OR REPLACE with a
+/// different signature replaces the function, as before.
+#[test]
+fn oracle_standalone_functions_are_replaced_not_overloaded() {
+    let (_root, mut db) = app_database();
+    run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION pick(p_a IN NUMBER) RETURN NUMBER AS
+         BEGIN
+           RETURN p_a;
+         END;",
+    )
+    .unwrap();
+    run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION pick(p_a IN NUMBER, p_b IN NUMBER) RETURN NUMBER AS
+         BEGIN
+           RETURN p_a + p_b;
+         END;",
+    )
+    .unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT pick(1, 2) FROM dual").unwrap()),
+        vec![vec!["3".to_string()]]
+    );
+    assert!(run(&mut db, "SELECT pick(1) FROM dual").is_err());
+}
+
+/// PL/SQL compares DATE with TIMESTAMP values as date/time values.
+#[test]
+fn plsql_compares_dates_and_timestamps_as_datetimes() {
+    let (_root, mut db) = app_database();
+    run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION same_instant(p_days IN NUMBER) RETURN NUMBER AS
+           d DATE := TO_DATE('2002-07-04', 'YYYY-MM-DD');
+           t TIMESTAMP := TO_TIMESTAMP('2002-07-04 00:00:00', 'YYYY-MM-DD HH24:MI:SS');
+         BEGIN
+           IF d = t AND NOT d <> t AND d < t + p_days THEN RETURN 1; END IF;
+           RETURN 0;
+         END;",
+    )
+    .unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT same_instant(1) FROM dual").unwrap()),
+        vec![vec!["1".to_string()]]
+    );
 }

@@ -18,6 +18,7 @@ mod joins_windows;
 pub(crate) mod materialize;
 mod pg_catalog;
 mod predicates_locators;
+pub(crate) use predicates_locators::selection_has_false_term;
 mod quantified_vectors;
 mod records_plan;
 mod row_eval;
@@ -374,6 +375,7 @@ impl ParameterTypeResolver<'_, '_> {
                     lower,
                     upper,
                     body,
+                    ..
                 } => {
                     self.expr(&lower.expr, &env, Some("integer"));
                     self.expr(&upper.expr, &env, Some("integer"));
@@ -1366,6 +1368,13 @@ fn binary_operand_types(
     match op {
         BinaryOperator::And | BinaryOperator::Or => {
             (Some("bool".to_string()), Some("bool".to_string()))
+        }
+        // JSONB existence operators have asymmetric signatures. Inferring the
+        // unknown RHS from the document column describes a key as jsonb and
+        // makes a valid pgwire text bind fail before query evaluation.
+        BinaryOperator::Question => (Some("jsonb".to_string()), Some("text".to_string())),
+        BinaryOperator::QuestionAnd | BinaryOperator::QuestionPipe => {
+            (Some("jsonb".to_string()), Some("text[]".to_string()))
         }
         BinaryOperator::Eq
         | BinaryOperator::NotEq
@@ -3241,6 +3250,11 @@ pub(crate) enum PlanKind {
         index_name: String,
         prefix: Vec<IndexValue>,
     },
+    /// Runtime policy InitPlans stay unevaluated during EXPLAIN/costing.
+    DeferredIndexLookup {
+        index_name: String,
+        prefix_exprs: Vec<Expr>,
+    },
     IndexRange {
         index_name: String,
         lower: Option<IndexValue>,
@@ -3421,6 +3435,14 @@ impl QueryPlan {
             PlanKind::IndexLookup { index_name, prefix } => vec![
                 format!("IndexScan {index_name}"),
                 format!("PrefixKeys {}", prefix.len()),
+            ],
+            PlanKind::DeferredIndexLookup {
+                index_name,
+                prefix_exprs,
+            } => vec![
+                format!("IndexScan {index_name}"),
+                format!("PrefixKeys {}", prefix_exprs.len()),
+                "RuntimeKeys deferred".to_string(),
             ],
             PlanKind::IndexRange {
                 index_name,
@@ -3999,6 +4021,7 @@ pub(crate) trait RoutineCallHost: std::fmt::Debug {
         engine: &SqlEngine<'_>,
         name: &str,
         args: &[SqlValue],
+        arg_types: &[Option<String>],
     ) -> Result<SqlValue>;
 }
 
@@ -4500,7 +4523,9 @@ impl<'db> SqlEngine<'db> {
             | "select current_schema()"
             | "select pg_catalog.current_schema()" => Ok(Some(SqlResult::new(
                 vec!["current_schema".to_string()],
-                vec![vec![SqlValue::String("public".to_string())]],
+                vec![vec![SqlValue::String(
+                    crate::search_path::current_schema_name(),
+                )]],
             ))),
             "select version()" | "select pg_catalog.version()" => Ok(Some(SqlResult::new(
                 vec!["version".to_string()],

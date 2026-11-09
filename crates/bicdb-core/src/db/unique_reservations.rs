@@ -209,10 +209,49 @@ impl Transaction {
         claims.sort_unstable();
         let cancellation = self.blocking_row_waits.lock().clone();
         for (name, encoded) in claims {
+            if let Some(token) = &cancellation {
+                token.check()?;
+            }
             let scope = namespace(&name);
-            match &cancellation {
-                Some(token) => self.reserve_integrity_key_cancellable(&scope, &encoded, token)?,
-                None => self.reserve_integrity_key(&scope, &encoded)?,
+            match self.reserve_integrity_key(&scope, &encoded) {
+                Ok(()) => {}
+                Err(BicDbError::TransactionConflict(_)) => {
+                    // A cold paged blind update may have no resident preimage.
+                    // Only on contention, read its current physical row to
+                    // prove this index key already belongs to the same ID.
+                    // Leaving an existing key unchanged needs no new claim.
+                    // No index latch is retained across that page-store read.
+                    let current = match image.id() {
+                        Some(id) => db.get_unchecked(collection, id)?,
+                        None => None,
+                    };
+                    let unchanged = if let Some(current) = current {
+                        let state = db.indexes.get(&name).expect("catalog stable").read();
+                        record_matches_index_predicate(&current, &state.definition)?
+                            && hex::encode(encode_index_key(&record_index_key(
+                                &current,
+                                &state.definition.fields,
+                            ))) == encoded
+                    } else {
+                        false
+                    };
+                    if !unchanged {
+                        match &cancellation {
+                            Some(token) => {
+                                self.reserve_integrity_key_cancellable(&scope, &encoded, token)?
+                            }
+                            None => {
+                                return Err(BicDbError::TransactionConflict(
+                                    "constraint key is reserved by another transaction".into(),
+                                ))
+                            }
+                        }
+                    }
+                }
+                Err(error) => return Err(error),
+            }
+            if let Some(token) = &cancellation {
+                token.check()?;
             }
         }
         db.check_recovery_state()

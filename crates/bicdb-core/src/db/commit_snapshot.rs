@@ -1616,12 +1616,17 @@ impl BicDb {
         collections.sort_by(|left, right| left.name.cmp(&right.name));
         let catalog = CollectionCatalog { collections };
         let bytes = serde_json::to_vec_pretty(&catalog)?;
+        // Memory already holds the new catalog: any failure leaves it ahead
+        // of the disk (a retried CREATE would find the collection and
+        // succeed without persisting it), so every failure fences.
         write_sidecar(
             &self.path.join(DEFAULT_COLLECTION_CATALOG),
             FrameKind::Index,
             &bytes,
             self.config.fsync,
             &self.encryption,
+            "catalog",
+            storage::FailClosed::Always(&self.durability),
         )
     }
 
@@ -1640,6 +1645,8 @@ impl BicDb {
             &bytes,
             self.config.fsync,
             &self.encryption,
+            "index_catalog",
+            storage::FailClosed::Always(&self.durability),
         )
     }
 
@@ -1687,12 +1694,16 @@ impl BicDb {
         catalog: &IndexMaintenanceCatalog,
     ) -> Result<()> {
         let bytes = serde_json::to_vec_pretty(catalog)?;
+        // Not fatal: build progress and sizes, rewritten by the next build,
+        // rebuild or verification.
         write_sidecar(
             &self.path.join(DEFAULT_INDEX_MAINTENANCE),
             FrameKind::Index,
             &bytes,
             self.config.fsync,
             &self.encryption,
+            "index_maintenance",
+            storage::FailClosed::No,
         )
     }
 
@@ -1726,12 +1737,15 @@ impl BicDb {
 
     pub(crate) fn persist_planner_stats(&self) -> Result<()> {
         let bytes = serde_json::to_vec_pretty(&self.planner_stats)?;
+        // Not fatal: statistics only steer plans and ANALYZE rebuilds them.
         write_sidecar(
             &self.path.join(DEFAULT_PLANNER_STATS),
             FrameKind::Index,
             &bytes,
             self.config.fsync,
             &self.encryption,
+            "planner_stats",
+            storage::FailClosed::No,
         )
     }
 

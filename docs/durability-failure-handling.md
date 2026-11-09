@@ -2,10 +2,12 @@
 
 Status: implemented for the page log, the page file, checkpoints, the
 transaction log (`transactions.log`), the transaction-log cut, commit
-outcomes, standby import and the synchronous-quorum confirmation, and for
-the generic frame logs (`sync.log`, the event log, record segments; section
-7.4). The remaining sites in the inventory (section 7.3) are listed with
-their current behaviour and are the scope of follow-up changes.
+outcomes, standby import and the synchronous-quorum confirmation, the
+generic frame logs (`sync.log`, the event log, record segments; section
+7.4), and the HA and consensus state files, the collection and index
+catalogs, the other database sidecars and the standby bootstrap install
+(section 7.5). The remaining sites in the inventory (section 7.3) are listed
+with their current behaviour and are the scope of follow-up changes.
 
 ## 1. Why
 
@@ -258,6 +260,10 @@ what recovery does. Line numbers are at the time of writing.
 | Tail copy before the rename in a cut (`transaction_log.cut_copy`) | The live log is untouched until the rename; the checkpoint fails and is retried later. |
 | `commit-seq.floor` (`persist_commit_seq_floor`, `db.rs:18721`) | Written before any truncation, and its values only rise; a failure stops the cut before it changes the log. |
 | Recovery replay (`page_file.write` or `page_file.sync` during open) | The open fails and the log is left intact; the next open replays it again. |
+| A failure up to and including the rename of `ha-node.json`, `consensus-state.json`, the pending catalog, the model registry or the memory-index files (`<file>.write`, `.sync`, `.rename`) | The old file is intact and memory is unchanged (consensus memory is put back), so nothing is uncertain. The operation fails and is not acknowledged: no vote is granted, no fence or promotion reported. A primary that cannot persist its fence has already closed its quorum and refuses writes. |
+| `ha-state.json` (file-shipping HA) | No open handle owns it. The promotion or apply fails and is not acknowledged; the in-progress record keeps an unfinished apply from being promoted without `force`. |
+| `planner-stats.json` (`planner_stats.*`), `index-maintenance.json` (`index_maintenance.*`) | Derived data: statistics only steer plans and ANALYZE rebuilds them; build status and sizes are rewritten by the next build, rebuild or verification. |
+| `replication-state.json` | Descriptive; the applied position is durable in the transaction log. |
 
 ### 7.3 Remaining sites (follow-up; behaviour unchanged here)
 
@@ -266,9 +272,6 @@ the open-time audit publication) were listed here; section 7.4 covers them.
 
 | Site | Code | Caller told | Later acks possible? | Recovery |
 |---|---|---|---|---|
-| Sidecars: catalog, index catalog, planner stats, model registry, memory index | `storage::write_atomic` (`storage.rs:1307`), `write_frame_atomic` (`:1336`), `write_sidecar` (`db.rs:20698`) | Error. If the directory sync fails after the rename, the new file is already live while memory is rolled back. | Yes | Whatever file is in the directory |
-| HA state, consensus state | `persist_ha_state` (`db.rs:18400`), `persist_consensus_state` (`db.rs:18480`) | Error, except `let _ = persist_ha_state(...)` on an apply-error path (`db.rs:18563`) | Yes | No directory `fsync` after the rename |
-| HA bootstrap install | `db/ha_bootstrap.rs:184` | Directory sync ignored | — | Crash ordering after the ignored sync is not guaranteed |
 | Commit-log archive | `LogArchive::append` / `sync` / `finish_segment`, `crates/bicdb-core/src/log_archive.rs:209`, `:324`, `:333` | Error; poisoned only if the rollback fails | Yes. `archive_commits` retries `sync()`, so a retried `fsync` can falsely succeed. | `open` truncates the torn tail |
 | Page-WAL archive | `archive_wal_segments`, `db/spatial_paged.rs:1755`; directory sync ignored at `:1825` | Copy, sync and rename errors propagated | `mark_wal_archived_through` runs even when the directory sync failed, so local segments can be released before the archive is durable | — |
 | FTS segment manifest | `crates/bicdb-core/src/fts_segment.rs:1867` | Directory sync ignored | — | Manifest re-read at open |
@@ -384,6 +387,47 @@ backup can restore them.
   `export_replication_frames_since` can return a complete frame whose
   `O_DSYNC` write has not returned yet. This change only stops that reader
   from truncating; bounding it by the written sequence is separate.
+### 7.5 HA, consensus and sidecar state files
+
+All of these are now written with one primitive, `storage::replace_durably`
+(`crates/bicdb-core/src/storage.rs`): a new temporary file (unique name,
+`O_NOFOLLOW`, mode 0600), `fsync` of the file, rename over the old name,
+`fsync` of the directory. With `fsync` off only the write and the rename
+happen. A rename is atomic: when it fails nothing was renamed. So a failure
+up to and including the rename leaves the old file, and only the directory
+`fsync` after a successful rename leaves the outcome unknown (the new file
+is visible now and may be gone after a power loss). The `FailClosed` policy
+of each caller says what that means:
+
+- `AfterRename`: a failed directory `fsync` fences the database
+  (`WriteFailed`, site `<file>.dir_sync`); earlier failures are returned and
+  change nothing.
+- `Always`: memory already holds the new contents, so any failure fences.
+- `No`: the error is returned; the database stays healthy.
+
+A fenced database refuses every further replacement under `AfterRename` or
+`Always`, so no vote, term, epoch, fence or catalog change is made on it.
+
+Inventory, ranked by consequence. "Before" is the write pattern before this
+change.
+
+| Rank | File | Protects | Before | Now | A lost or failed write means |
+|---|---|---|---|---|---|
+| 1 | `consensus-state.json` (`persist_consensus_state`, `BicDb::consensus_*`) | Consensus term, `voted_for`, log entries, commit index | Fixed temporary name (`fs::write`), file `fsync`, rename, **no directory `fsync`**; memory changed before the write and kept on error | Durable protocol, `AfterRename`; every change goes through `consensus_transition`, which puts memory back to the state before the change on any error; directory `fsync` at open | A vote or term lost after it was granted allows two votes in one term; a follower's acknowledged entries lost after the leader counted them can drop a committed entry |
+| 2 | `ha-node.json` (`HaNode::with_file`) | Role (primary, standby, fenced), epoch, vote and election term, switchover offer (drain), epoch starts, standby slots and holds | Durable protocol (`write_atomic`), but a failed directory `fsync` was a plain error: memory stayed old while the new file was live, and later changes went on | Durable protocol, `AfterRename`; directory `fsync` at open | A lost fence or epoch unfences a superseded primary; a lost vote allows a second vote in the term; a lost drain lets the old primary accept writes after the target took over; lost slots release log a standby still needs |
+| 3 | `collections.json`, `indexes.json` (`persist_catalog`, `persist_index_catalog`) | The collection and index catalogs | Durable protocol; memory changed before the write; every failure was a plain error | `Always` (sites `catalog.*`, `index_catalog.*`) | Memory runs ahead of the disk. A CREATE retried on the same handle found the collection in memory and returned success without persisting it; rows acknowledged into it could vanish at the next open |
+| 4 | Standby bootstrap install (`finish_standby_bootstrap`) | Swap of the staged snapshot for the old directory | Two renames, directory `fsync` result ignored, then the old directory deleted | Directory `fsync` after both renames is the commit point (`WriteFailed`, site `bootstrap.dir_sync`, fails the open); `BOOTSTRAP_READY` stays inside the installed directory until it succeeds, and the next open completes the install | A power loss after the old directory was deleted but before the renames were durable could leave neither database |
+| 5 | `ha-state.json` (`persist_ha_state`; file-shipping HA, `promote_standby`, `configure_standby_from`) | Promotion of a file-shipping standby; apply progress | Fixed temporary name, file `fsync`, rename, **no directory `fsync`**; a failed apply's error write ignored (`let _`) | Durable protocol, `No` (no open handle owns it: the operation fails and is not acknowledged). Before the first file is copied, an apply records durably that it is in progress | A lost promotion reverts the node to standby; an interrupted apply, whose older state said the last apply succeeded, could be promoted without `force` with files from two checkpoints |
+| 6 | `pending-replication-catalog` sidecar (`stage_pending_replication_catalog`) | Redo of a catalog frame on a standby | Durable protocol, plain error | `AfterRename` (site `pending_catalog.dir_sync`) | The next open may or may not redo the frame while the import reported failure |
+| 7 | `model-registry.json`, `memory-indexes.json`, `memory-index-jobs.json` | Model and memory-index definitions and jobs | Durable protocol, plain error | `AfterRename` | A definition reported failed could reappear, or one reported created could vanish |
+| 8 | `planner-stats.json`, `index-maintenance.json` | Planner statistics, index build status and sizes | Durable protocol | `No` (section 7.2) | Plans and reported sizes until the next ANALYZE or rebuild |
+| 9 | `replication-state.json` | Descriptive standby apply state | Durable protocol, no `fsync` on the success path | Unchanged, `No` (section 7.2) | Nothing: the applied position is durable in the transaction log, and open takes the larger of the two |
+| 10 | Replication snapshot restore (`restore_snapshot_archive_atomic`, offline CLI) | A restored snapshot directory | Files synced; directories not; no directory `fsync` after the rename | Every staging directory synced before the rename, the parent after it | A power loss could leave a target with missing entries |
+
+Also checked, already complete and not attached to a database handle: the
+cluster metadata consensus state (`distribution_consensus.rs`) and the range
+write catalog (`distribution_range_consensus.rs`) use `write_atomic` with the
+directory `fsync`.
 
 ## 8. Site names and fault injection
 
@@ -406,6 +450,12 @@ The recorded `site` and the injection name are the same strings.
 | `page_file.sync` (migration) | `PageStore::advance_extent_migration` copy sync |
 | `backup_gate.timeout` | the backup write-gate wait reports its timeout at once (not fatal) |
 | `transaction_log.cut_window` | hook point only (`arm_io_hook`), between the cut's flush and its rename |
+| `ha_node.write`, `ha_node.sync`, `ha_node.rename`, `ha_node.dir_sync` | `ha-node.json` (`HaNode::with_file`); only `dir_sync` is fatal |
+| `consensus_state.write`, `.sync`, `.rename`, `.dir_sync` | `consensus-state.json`; only `dir_sync` is fatal |
+| `catalog.*`, `index_catalog.*` | `collections.json`, `indexes.json`; every step is fatal |
+| `pending_catalog.*`, `model_registry.*`, `memory_index_catalog.*`, `memory_index_jobs.*` | Sidecars; only `dir_sync` is fatal |
+| `planner_stats.*`, `index_maintenance.*`, `ha_state.*` | Not fatal |
+| `bootstrap.rename`, `bootstrap.dir_sync` | `finish_standby_bootstrap`; both fail the open (`WriteFailed`) and the next open resumes |
 
 | `frame_log.write` | `storage::append_frames*`, before the write (scoped by the file's path) |
 | `frame_log.short_write` | the same, after writing about half the batch, ending inside a frame |
@@ -436,6 +486,16 @@ Injection (`crates/bicdb-page/src/test_faults.rs`):
   it is set, a `test_faults.io_failure_injection_enabled` event (severity
   `critical`) is logged at the first I/O, and a malformed entry is refused
   with a panic naming it, instead of silently arming nothing.
+
+Crash points (`BICDB_TEST_CRASH_AT=<point>:<n>`) follow every step of a
+durable replacement: `<site>.after_write`, `<site>.after_sync`,
+`<site>.after_rename`, `<site>.after_dir_sync`; also `bootstrap.after_rename`,
+`bootstrap.after_dir_sync` and `ha_ship.after_file` (after each file of a
+file-shipping apply). `BICDB_TEST_DIR_VOLATILE=1` emulates power loss of
+directory entries: at the crash, every rename of a durable replacement that
+no directory `fsync` covered yet is undone, and a replaced file whose data
+was never synced is truncated (`test_faults::register_volatile_rename`,
+`directory_synced`).
 
 ## 9. Qualification
 
@@ -489,6 +549,17 @@ Injection (`crates/bicdb-page/src/test_faults.rs`):
 | `frame_log_torn_tail::replication_readers_never_truncate_the_live_transaction_log` | `replication_retention_status` and `export_replication_frames_since` with a frame mid-write |
 | `commit_durability_crash::transaction_log_only_path_survives_every_crash_point_with_eviction` (`materialize.torn_markers`) | The crash hook now holds the transaction log's writer lock across its torn write and the crash. It used to release the lock in between, so a concurrent commit could append complete frames behind the torn ones, a state no crash can produce; recovery, which used to drop those frames silently, now refuses it. Passed 3 of 3 repeats after the change |
 | `core::intentional_frame_corruption_is_detected_and_not_silently_repaired` | Updated: offset-0 damage in a log with later frames refuses the open (it used to truncate the whole log); salvage, then the open succeeds |
+| `storage::tests::durable_replacement_fails_closed_per_step_and_policy` | Each of the four steps under each policy: file contents after the failure, fencing, site name, no temporary file left, a fenced health refuses the next replacement |
+| `ha_state_durability::a_vote_is_never_granted_ahead_of_the_disk_and_never_twice_per_term` | `ha_node.*` at each step, embedded and paged: no grant, nothing in memory, fencing only on `dir_sync`, a fenced node refuses votes and candidacies, and after the reopen a second candidate in the term is granted exactly when the first vote is not on disk |
+| `ha_state_durability::a_primary_whose_fence_cannot_be_persisted_still_stops_writing` | A primary that learns of a newer epoch refuses writes whatever happens to its fence file; a reported fence survives the reopen |
+| `ha_state_durability::switchover_drain_and_election_promotion_fail_closed` | Drain offer and election promotion at each step |
+| `ha_state_durability::a_consensus_vote_is_durable_before_it_is_granted` | `consensus_state.*` at each step: memory put back, no grant, fencing on `dir_sync`, never two votes in a term across the reopen |
+| `ha_state_durability::file_shipping_promotion_and_apply_fail_closed` | `ha_state.*`: a promotion is on disk only when reported; an apply whose final state write fails refuses promotion without `force` |
+| `ha_state_durability::a_bootstrap_install_completes_only_after_its_directory_sync` | `bootstrap.rename` leaves the old directory and the staging; `bootstrap.dir_sync` fails the open and the next open completes the install |
+| `ha_state_durability::a_catalog_write_failure_fences_and_acknowledged_rows_survive` | `catalog.*` at each step fences; the retried CREATE no longer succeeds; acknowledged rows survive the reopen |
+| `ha_state_durability::a_planner_statistics_failure_is_not_fatal` | The deliberate non-fatal case |
+| `ha_state_crash::*` | Out of process (`examples/ha_state_child.rs`), with `BICDB_TEST_DIR_VOLATILE=1`: a crash at each step of `ha-node.json` (vote, fence, drain, promotion), `consensus-state.json` (vote) and `collections.json` (CREATE COLLECTION and a row in it), and after the acknowledgment. A crash before the directory `fsync` loses the change, after it keeps it; every acknowledged vote, fence, drain, promotion, collection and commit is present after the reopen, and a second vote in the same term is refused. A file-shipping apply crashed mid-copy refuses promotion without `force` |
+| `commit_durability_crash` fail-closed matrix, `catalog.write:4`, `catalog.dir_sync:5` | The catalog sites under the concurrent workload: fenced, no acknowledgment after the failure, acknowledged-commit reconciliation twice |
 
 Mutation checks (each mutation applied alone; the named tests must fail):
 
@@ -503,6 +574,12 @@ Mutation checks (each mutation applied alone; the named tests must fail):
 | Replication readers use the recovery readers again | `replication_readers_never_truncate_the_live_transaction_log` |
 | The append-failure marker is ignored | `a_failed_repair_poisons_the_log_until_recovery_cuts_the_failed_bytes`, `a_failed_sync_log_repair_fences_and_recovery_never_reports_the_aborted_ops`, `a_failed_event_log_repair_fences_and_recovery_keeps_only_acknowledged_events` |
 | A failed event-log append during audit publication no longer fences (and the test's fence check relaxed) | `audit_events_behind_a_commit_survive_a_failed_event_append`: the checkpoint cut the outbox, and the committed row's audit event was lost |
+| The durable replacement no longer `fsync`s the directory (the state of `consensus-state.json` and `ha-state.json` before this change) | Every `ha_state_crash` matrix: the vote, fence, drain, promotion and CREATE COLLECTION are lost after acknowledgment, and so is a row acknowledged into the new collection |
+| `ha-node.json` replacements not fail-closed | `a_vote_is_never_granted_ahead_of_the_disk_and_never_twice_per_term`, `a_primary_whose_fence_cannot_be_persisted_still_stops_writing`, `switchover_drain_and_election_promotion_fail_closed` |
+| `consensus-state.json` replacements not fail-closed | `a_consensus_vote_is_durable_before_it_is_granted` |
+| Consensus memory not put back on a failed write | `a_consensus_vote_is_durable_before_it_is_granted` |
+| The catalog fences only after the rename | `a_catalog_write_failure_fences_and_acknowledged_rows_survive` |
+| No in-progress record before a file-shipping copy | `an_interrupted_ship_is_never_promoted_without_force` |
 
 ## 10. Known gaps (outside this change)
 
@@ -569,13 +646,46 @@ The frame-log follow-up (section 7.4) adds two points for review:
    is logged (`durability.audit_publication_deferred`), and the database is
    fenced, so the next checkpoint is refused and the reopen republishes.
 
+The HA and consensus state-file follow-up (section 7.5) adds:
+
+6. **HA and consensus state.** A vote, a term, an epoch, a fence, a drain
+   or a promotion is reported only after its file and directory are synced.
+   Open now `fsync`s the directory holding `ha-node.json` and
+   `consensus-state.json` (one directory `fsync` per open) so a state left
+   by a process that stopped between its rename and its directory sync is
+   durable before the node acts on it. The verification step of a reopen
+   after a durability failure also rewrites both files through the full
+   protocol.
+7. **Catalog.** Any failure writing `collections.json` or `indexes.json`
+   fences the database, including an out-of-space failure before the
+   rename. Before, the handle went on with a catalog in memory that the
+   disk did not have.
+8. **File-shipping apply.** An apply now writes an in-progress record
+   before copying. A standby whose apply was interrupted refuses promotion
+   without `force` (it reports the replication lag and the unfinished
+   apply).
+
+Unresolved assumptions:
+
+- A primary whose own fence write fails at the directory `fsync` is fenced
+  in process (quorum closed, `WriteFailed`), but if the rename is lost to a
+  power loss it reopens as a primary of its old epoch until a peer
+  announces the newer one. Every peer and standby already follows the newer
+  epoch, so a synchronous-quorum primary cannot confirm anything; an
+  asynchronous primary in that state accepts local writes until it hears
+  the new epoch, which is the same exposure as a primary that was
+  partitioned before it ever learned of the new epoch.
+- The bootstrap install's directory `fsync` and the load-time directory
+  `fsync` are covered by fault injection, not by the power-loss emulation,
+  which only tracks renames of files.
+- The commit-log archive and the page-WAL archive (section 7.3) are
+  unchanged by this follow-up.
+
 Not implemented, because each changes the durability contract or adds
 synchronous I/O to a hot path, and needs a decision first:
 
 - Making the page-log reset durable (an `fsync` after the truncation and a
   directory `fsync` after removing sealed segments).
-- Adding the missing directory `fsync` to HA and consensus state files, and
-  failing closed on the sidecar directory syncs.
 - Fail-closed handling of the commit-log archive's retried `sync()` and the
   page-WAL archive's ignored directory sync before
   `mark_wal_archived_through`. (The generic frame appender's tail repair

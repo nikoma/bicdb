@@ -1992,6 +1992,14 @@ impl BicDb {
                 copy_transaction_log_tail(&log, 0, true)?;
                 self.tx_log.invalidate();
             }
+            // The failure may have been a replacement of an HA or consensus
+            // state file whose rename landed but whose directory sync did
+            // not. Rewrite both through the full protocol so the vote, term,
+            // epoch and role this node now acts on are durable.
+            self.ha_node.persist_current()?;
+            if self.path.join(DEFAULT_CONSENSUS_STATE).exists() {
+                self.persist_consensus_state()?;
+            }
             self.check_recovery_state()
         })();
         if let Err(error) = verified {
@@ -2051,7 +2059,12 @@ impl BicDb {
     }
 
     pub(crate) fn persist_consensus_state(&self) -> Result<()> {
-        persist_consensus_state(&self.path, &self.consensus_state, self.config.fsync)
+        persist_consensus_state(
+            &self.path,
+            &self.consensus_state,
+            self.config.fsync,
+            storage::FailClosed::AfterRename(&self.durability),
+        )
     }
 
     /// Applies a transaction (conflict check, in-memory apply) and enqueues its

@@ -14603,7 +14603,7 @@ impl SecureBicDb<'_> {
         }
         let mut events_by_stream = HashMap::new();
         for stream in projection.stream_names() {
-            events_by_stream.insert(stream.clone(), self.db.events.lock().read(&stream));
+            events_by_stream.insert(stream.clone(), self.db.events.lock().read(&stream)?);
         }
         GraphProjectionData::build(projection, &records_by_collection, &events_by_stream)
     }

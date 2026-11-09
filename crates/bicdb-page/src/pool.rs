@@ -1620,7 +1620,10 @@ impl BufferPool {
         }
         // Every frame unlogged: a no-steal pass cannot succeed, so skip its
         // O(shard) walk.
-        let no_steal_pass = if shard.unlogged.load(Ordering::Acquire) >= shard.capacity {
+        // A feature-on shard can temporarily have one extra resident frame.
+        // Two unlogged frames in a two-frame budget do not imply that every
+        // resident frame is unlogged: the emergency frame may be clean.
+        let no_steal_pass = if shard.unlogged.load(Ordering::Acquire) >= shard.resident.len() {
             Err(PageError::PoolExhausted {
                 page_id: wanted,
                 frames: shard.capacity,
@@ -1638,7 +1641,6 @@ impl BufferPool {
                     if shard.resident.len() + shard.loading.len() < shard.capacity + 1 {
                         return Ok(Arc::new(RwLock::new(vec![0; self.page_size as usize])));
                     }
-                    eprintln!("TEMP structural pressure wanted={wanted} resident={:?}", shard.resident.iter().map(|(id, frame)| (*id, frame.pins.load(Ordering::Acquire), frame.needs_log.load(Ordering::Acquire), frame.data.try_read().map(|bytes| bytes[6]))).collect::<Vec<_>>());
                     return Err(PageError::PoolExhausted {
                         page_id: wanted,
                         frames: shard.capacity + 1,

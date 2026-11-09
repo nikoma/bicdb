@@ -431,3 +431,31 @@ fn audit_required_mutations_fail_closed_and_publish_durable_evidence() {
     assert_eq!(evidence[0].payload["record_ids"][0], "allowed");
     assert_eq!(evidence[0].payload["actor"]["tenant_id"], "tenant-a");
 }
+
+#[test]
+fn transactional_catalog_rename_does_not_widen_native_mutation_grants() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    db.create_collection("documents").unwrap();
+    db.set_mutation_policy("documents", MutationPolicy::grants_required())
+        .unwrap();
+    let mut tx = db
+        .begin_application_transaction(actor("tenant-a", "workspace-a"))
+        .unwrap();
+    let permission = tx
+        .issue_mutation_grant(grant(MutationOperation::Insert, "doc-1", None))
+        .unwrap();
+    tx.insert_with_grant(
+        permission,
+        "documents",
+        record("doc-1", "tenant-a", "workspace-a", 1, "pending"),
+    )
+    .unwrap();
+    db.rename_collection_preserving_pending_writes(&mut tx, "documents", "renamed")
+        .unwrap();
+    assert!(matches!(tx.commit(), Err(BicDbError::MutationDenied(_))));
+    let reader = db
+        .begin_application_transaction(actor("tenant-a", "workspace-a"))
+        .unwrap();
+    assert!(reader.get_authorized("renamed", "doc-1").unwrap().is_none());
+}

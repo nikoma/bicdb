@@ -138,14 +138,17 @@ fn finish(db: &mut BicDb, key: &str, intent: Intent) -> Result<()> {
         let state = if state.phase == bicdb_core::PagedBTreeBuildPhase::Complete {
             state
         } else {
-            let governor = ResourceGovernor::new(ResourceGovernorConfig::default(), 100)?;
+            let started = state.updated_at_ms;
+            let governor = ResourceGovernor::new(ResourceGovernorConfig::default(), started)?;
             let demand = ResourceDemand {
                 memory_bytes: limits.max_batch_bytes as u64,
                 io_bytes: limits.max_batch_bytes as u64,
                 cpu_slots: 1,
                 io_charge_bytes: 1,
             };
-            let mut now = 101u64;
+            let mut now = started
+                .checked_add(1)
+                .ok_or_else(|| unsupported("Oracle case migration clock exhausted"))?;
             loop {
                 if let PagedBTreeBuildAdvance::Complete(state) = db
                     .advance_paged_btree_build_governed(

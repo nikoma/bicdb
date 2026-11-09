@@ -251,6 +251,7 @@ pub(super) fn finish_purge(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<()
         db.drop_collection(&entry.bin_name)?;
     }
     stage("purge_collection");
+    stage("deferred_purge_collection");
     // Decided purges are already hidden from the public recycle-bin view.
     let has_entry = match db.get(RECYCLE_BIN_COLLECTION, &entry.bin_name) {
         Ok(record) => record.is_some(),
@@ -261,6 +262,7 @@ pub(super) fn finish_purge(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<()
         delete_recycle_bin_entry(db, &entry.bin_name)?;
     }
     stage("purge_entry");
+    stage("deferred_purge_entry");
     clear_if_present(db, &entry.bin_name)?;
     db.delete(PURGES, &entry.bin_name)?;
     Ok(())
@@ -581,6 +583,18 @@ mod tests {
         let mut db = BicDb::open_with_config(path, config(paged)).unwrap();
         let mut session = SqlSession::new(&mut db);
         let cut = std::env::var("BICDB_TEST_RECYCLE_CUT").unwrap();
+        if cut.starts_with("deferred_purge_") {
+            session.execute("SET bicdb.recyclebin=off").unwrap();
+            session.execute("BEGIN").unwrap();
+            session.execute("SAVEPOINT before_purge").unwrap();
+            session.execute("DROP TABLE crash_source PURGE").unwrap();
+            if cut == "deferred_purge_rollback" {
+                session.execute("ROLLBACK TO before_purge").unwrap();
+            } else if cut != "deferred_purge_pending" {
+                session.execute("COMMIT").unwrap();
+            }
+            std::process::exit(99);
+        }
         if cut.starts_with("recreate_") {
             session.execute("BEGIN").unwrap();
             session.execute("SAVEPOINT before_recreate").unwrap();
@@ -660,6 +674,64 @@ mod tests {
         }
         std::process::exit(99);
     }
+    #[test]
+    fn process_crash_deferred_purge_obeys_the_outer_transaction_decision() {
+        for paged in [false, true] {
+            for stage in [
+                "deferred_purge_pending",
+                "deferred_purge_rollback",
+                "deferred_purge_decided",
+                "deferred_purge_collection",
+                "deferred_purge_entry",
+            ] {
+                let root = tempfile::tempdir().unwrap();
+                {
+                    let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
+                    seed_crash_source(&mut db);
+                }
+                let output = Command::new(std::env::current_exe().unwrap())
+                    .args([
+                        "--exact",
+                        "session::recycle_bin_journal::tests::crash_cut_child",
+                        "--nocapture",
+                    ])
+                    .env("BICDB_TEST_RECYCLE_PATH", root.path())
+                    .env("BICDB_TEST_RECYCLE_PAGED", paged.to_string())
+                    .env("BICDB_TEST_RECYCLE_EXPLICIT", "true")
+                    .env("BICDB_TEST_RECYCLE_CUT", stage)
+                    .output()
+                    .unwrap();
+                assert_eq!(
+                    output.status.code(),
+                    Some(99),
+                    "{paged}/{stage}: {} {}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                for reopen in 0..2 {
+                    let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
+                    super::super::recycle_bin::recover_interrupted_recycle_bin_renames(&mut db)
+                        .unwrap_or_else(|error| panic!("{paged}/{stage}/{reopen}: {error}"));
+                    ensure_primary_key_indexes(&mut db).unwrap();
+                    let mut sql = SqlSession::new(&mut db);
+                    if matches!(stage, "deferred_purge_pending" | "deferred_purge_rollback") {
+                        assert_eq!(
+                            sql.execute("SELECT k,v FROM crash_source").unwrap().rows,
+                            vec![vec![
+                                SqlValue::Int(1),
+                                SqlValue::String("acknowledged".into())
+                            ]]
+                        );
+                        assert_restored_metadata(sql.db_ref());
+                    } else {
+                        assert!(sql.execute("SELECT * FROM crash_source").is_err());
+                    }
+                    assert!(list_recycle_bin(sql.db_ref()).unwrap().is_empty());
+                }
+            }
+        }
+    }
+
     #[test]
     fn process_crash_recreated_name_restores_only_its_proven_backing() {
         for paged in [false, true] {

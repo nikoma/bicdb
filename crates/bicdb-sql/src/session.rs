@@ -3910,6 +3910,7 @@ impl<'db> SqlSession<'db> {
         self.ddl_undo.clear();
         self.savepoints.clear();
         self.commit_guc_transaction();
+        recycle_bin_journal::stage("deferred_purge_decided");
         // The purge decision is already in the durable outer commit. A cleanup
         // error must preserve its marker for startup, never undo committed DDL.
         recycle_bin_journal::recover_purges(self.db_mut()?)?;

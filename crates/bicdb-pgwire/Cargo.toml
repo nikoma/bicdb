@@ -39,6 +39,7 @@ uuid.workspace = true
 x509-parser.workspace = true
 
 [dev-dependencies]
+bicdb-page = { path = "../bicdb-page", version = "1.0.438-beta" }
 futures-util = "0.3"
 openssl = "0.10"
 postgres-openssl = "0.5.3"

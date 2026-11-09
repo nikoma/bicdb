@@ -340,7 +340,7 @@ pub(crate) fn eval_db_catalog_function_value(
                 "allocated_file_bytes": allocated,
                 "categories": categories,
                 "paged": paged,
-                "event_log_events": db.sync_status().total_events,
+                "event_log_events": db.sync_status()?.total_events,
             });
             return Ok(Some(SqlValue::String(report.to_string())));
         }

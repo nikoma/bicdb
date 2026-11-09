@@ -1234,7 +1234,7 @@ impl ApplicationRuntime {
         limit: usize,
     ) -> Result<ApplicationRealtimeBatch> {
         let now = crate::host::now_ms();
-        let messages = self.peek_realtime_queue(&session.contract.queue, cursor, 4_096);
+        let messages = self.peek_realtime_queue(&session.contract.queue, cursor, 4_096)?;
         let mut items = Vec::new();
         let mut next_cursor = cursor;
         for message in messages {
@@ -2327,7 +2327,7 @@ async fn carrier_realtime_axum_response(
                 "heartbeat_seconds": 20,
                 "last_sequence": state
                     .runtime
-                    .realtime_queue_last_sequence(&session.contract.queue),
+                    .realtime_queue_last_sequence(&session.contract.queue)?,
                 "endpoints": {
                     "websocket": format!("{}/ws", session.contract.path),
                     "sse": format!("{}/sse", session.contract.path),

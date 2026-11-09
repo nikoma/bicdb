@@ -255,6 +255,13 @@ pub struct Wal {
     /// bounded only by the archiver keeping up — same failure mode as
     /// PostgreSQL's archive_command, and deliberately so.
     archive_retention: AtomicBool,
+    /// The page-log archiver's own health. Its first failure stops
+    /// [`Self::mark_archived_through`] for this handle.
+    archive_health: std::sync::Arc<crate::health::ArchiveHealth>,
+    /// Where this handle's archiver last archived to, and when this handle
+    /// last verified the archive's confirmed prefix.
+    archive_destination: Mutex<Option<PathBuf>>,
+    archive_verified_at: Mutex<Option<Instant>>,
     /// Total bytes across sealed segments (the active file's bytes are
     /// `end_offset`).
     sealed_bytes: AtomicU64,
@@ -398,6 +405,18 @@ impl Wal {
         let end_offset = file.metadata().map_err(|e| PageError::io(&path, e))?.len();
         let (sealed, sealed_bytes) = discover_sealed_segments(&path)?;
         let initial_lsn = lsn_floor.max(1);
+        // Archive retention outlives the handle that enabled it: a reopen
+        // (and the checkpoints recovery runs) must not delete sealed segments
+        // the archiver has not confirmed, or the archive gaps for good.
+        let archive_retention = archive_retention_marker(&path).exists();
+        // Segments an earlier handle confirmed durable in the archive (bytes
+        // and directory entries, by its own fsyncs) stay confirmed: local
+        // truncation may delete them. Unreadable means nothing confirmed.
+        let confirmed = if archive_retention {
+            read_archive_confirmed(&path)
+        } else {
+            0
+        };
 
         Ok(Self {
             path,
@@ -405,8 +424,11 @@ impl Wal {
             segment_bytes,
             sealed: Mutex::new(sealed),
             active_first_lsn: AtomicU64::new(initial_lsn),
-            archived_through: AtomicU64::new(0),
-            archive_retention: AtomicBool::new(false),
+            archived_through: AtomicU64::new(confirmed),
+            archive_retention: AtomicBool::new(archive_retention),
+            archive_health: crate::health::ArchiveHealth::new(),
+            archive_destination: Mutex::new(None),
+            archive_verified_at: Mutex::new(None),
             sealed_bytes: AtomicU64::new(sealed_bytes),
             next_lsn: AtomicU64::new(initial_lsn),
             end_offset: AtomicU64::new(end_offset),
@@ -1312,17 +1334,176 @@ impl Wal {
         Ok(deleted)
     }
 
-    /// Turn on archive retention: from now until the handle closes,
-    /// checkpoint truncation keeps sealed segments the archiver has not
-    /// confirmed via [`Self::mark_archived_through`].
-    pub fn enable_archive_retention(&self) {
+    /// Turn on archive retention: checkpoint truncation keeps sealed
+    /// segments the archiver has not confirmed via
+    /// [`Self::mark_archived_through`]. The setting is persisted next to the
+    /// log (`<log>-archive-retention`), so it also holds for every later
+    /// handle until [`Self::disable_archive_retention`]; a reopened handle
+    /// starts with nothing confirmed, so it keeps every sealed segment until
+    /// the archiver confirms it again.
+    pub fn enable_archive_retention(&self) -> Result<()> {
+        // In memory first: from here on nothing unconfirmed is deleted, even
+        // if persisting the setting fails below.
         self.archive_retention.store(true, Ordering::Release);
+        let marker = archive_retention_marker(&self.path);
+        if marker.exists() {
+            return Ok(());
+        }
+        let persist = || -> std::io::Result<()> {
+            crate::test_faults::io_fault("wal_archive.retention", &marker)?;
+            let file = File::create(&marker)?;
+            if self.fsync {
+                file.sync_all()?;
+                if let Some(parent) = marker.parent().filter(|p| !p.as_os_str().is_empty()) {
+                    File::open(parent)?.sync_all()?;
+                }
+            }
+            Ok(())
+        };
+        persist().map_err(|error| {
+            let failure = self.record_archive_failure("wal_archive.retention", &marker, &error);
+            PageError::ArchiveFailed {
+                site: failure.site,
+                detail: failure.error,
+            }
+        })
     }
 
-    /// The archiver durably holds every sealed segment named <= `sequence`;
-    /// local truncation may delete them.
-    pub fn mark_archived_through(&self, sequence: u64) {
+    /// Turn archive retention off (archiving was stopped on purpose): the
+    /// next checkpoint deletes sealed segments whether archived or not.
+    pub fn disable_archive_retention(&self) -> Result<()> {
+        let marker = archive_retention_marker(&self.path);
+        for path in [marker.clone(), archive_confirmed_path(&self.path)] {
+            match std::fs::remove_file(&path) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(PageError::io(&path, error)),
+            }
+        }
+        if self.fsync {
+            if let Some(parent) = marker.parent().filter(|p| !p.as_os_str().is_empty()) {
+                File::open(parent)
+                    .and_then(|dir| dir.sync_all())
+                    .map_err(|e| PageError::io(parent, e))?;
+            }
+        }
+        self.archive_retention.store(false, Ordering::Release);
+        Ok(())
+    }
+
+    /// Whether checkpoint truncation keeps unarchived sealed segments.
+    pub fn archive_retention_enabled(&self) -> bool {
+        self.archive_retention.load(Ordering::Acquire)
+    }
+
+    /// Highest sealed-segment name this handle has confirmed archived.
+    pub fn archived_through(&self) -> u64 {
+        self.archived_through.load(Ordering::Acquire)
+    }
+
+    /// Sealed segments on disk named above [`Self::archived_through`]
+    /// (count, total bytes): what archive retention keeps locally until the
+    /// archiver confirms them. One `stat` per such segment.
+    pub fn unarchived_sealed(&self) -> (u64, u64) {
+        let through = self.archived_through();
+        let sealed = self.sealed.lock().clone();
+        let mut count = 0u64;
+        let mut bytes = 0u64;
+        for sequence in sealed.into_iter().filter(|sequence| *sequence > through) {
+            count += 1;
+            bytes = bytes.saturating_add(
+                std::fs::metadata(self.sealed_path(sequence))
+                    .map(|metadata| metadata.len())
+                    .unwrap_or(0),
+            );
+        }
+        (count, bytes)
+    }
+
+    /// The archiver durably holds every sealed segment named <= `sequence`
+    /// (bytes and directory entries); local truncation may delete them.
+    /// Refused once the archiver failed on this handle: a later "successful"
+    /// step proves nothing about the bytes the failure may have dropped.
+    pub fn mark_archived_through(&self, sequence: u64) -> Result<()> {
+        if let Some(failure) = self.archive_health.failure() {
+            return Err(PageError::ArchiveFailed {
+                site: failure.site,
+                detail: failure.error,
+            });
+        }
+        if sequence <= self.archived_through() {
+            return Ok(());
+        }
+        // Persist first: a reopened handle trusts this watermark.
+        let path = archive_confirmed_path(&self.path);
+        let tmp = {
+            let mut os = path.as_os_str().to_os_string();
+            os.push(".tmp");
+            PathBuf::from(os)
+        };
+        let persist = || -> std::io::Result<()> {
+            crate::test_faults::io_fault("wal_archive.confirm", &path)?;
+            let mut file = File::create(&tmp)?;
+            file.write_all(sequence.to_string().as_bytes())?;
+            if self.fsync {
+                file.sync_all()?;
+            }
+            drop(file);
+            std::fs::rename(&tmp, &path)?;
+            if self.fsync {
+                if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+                    File::open(parent)?.sync_all()?;
+                }
+            }
+            Ok(())
+        };
+        if let Err(error) = persist() {
+            let _ = std::fs::remove_file(&tmp);
+            let failure = self.record_archive_failure("wal_archive.confirm", &path, &error);
+            return Err(PageError::ArchiveFailed {
+                site: failure.site,
+                detail: failure.error,
+            });
+        }
         self.archived_through.fetch_max(sequence, Ordering::AcqRel);
+        Ok(())
+    }
+
+    /// The archive directory this handle last archived to.
+    pub fn archive_destination(&self) -> Option<PathBuf> {
+        self.archive_destination.lock().clone()
+    }
+
+    pub fn set_archive_destination(&self, destination: &Path) {
+        *self.archive_destination.lock() = Some(destination.to_path_buf());
+    }
+
+    /// When this handle last verified its archive's confirmed prefix.
+    pub fn archive_verified_at(&self) -> Option<Instant> {
+        *self.archive_verified_at.lock()
+    }
+
+    pub fn set_archive_verified_now(&self) {
+        *self.archive_verified_at.lock() = Some(Instant::now());
+    }
+
+    /// The page-log archiver's health for this handle.
+    pub fn archive_health(&self) -> &std::sync::Arc<crate::health::ArchiveHealth> {
+        &self.archive_health
+    }
+
+    /// Record a page-log archiver failure (first one wins).
+    pub fn record_archive_failure(
+        &self,
+        site: &str,
+        path: &Path,
+        error: &dyn std::fmt::Display,
+    ) -> crate::health::WriteFailure {
+        self.archive_health.record_failure(
+            "page_log",
+            site,
+            &format!("{}: {error}", path.display()),
+        )
     }
 
     /// Total log bytes: every sealed segment plus the active file.
@@ -1411,8 +1592,114 @@ where
     Ok((valid_bytes, first_lsn))
 }
 
+/// File holding the highest sealed segment confirmed archived.
+pub fn archive_confirmed_path(path: &Path) -> PathBuf {
+    let mut os = path.as_os_str().to_os_string();
+    os.push("-archive-confirmed");
+    PathBuf::from(os)
+}
+
+fn read_archive_confirmed(path: &Path) -> u64 {
+    std::fs::read_to_string(archive_confirmed_path(path))
+        .ok()
+        .and_then(|text| text.trim().parse().ok())
+        .unwrap_or(0)
+}
+
+/// What [`verify_archived_segments`] read back.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ArchivedChainReport {
+    /// Segments verified, ascending by name.
+    pub segments: u64,
+    pub records: u64,
+    pub first_lsn: Option<Lsn>,
+    pub last_lsn: Option<Lsn>,
+    /// Name of the last verified segment.
+    pub through: u64,
+}
+
+/// Read back every sealed segment `store.wal.<n>` in an archive directory
+/// with `n <= through`: every record must decode with a valid checksum, no
+/// segment may end in a partial record, and LSNs must run without a gap
+/// from one segment into the next. The segment named `through` must be
+/// present (it is the confirmed end). `through == 0` verifies nothing.
+pub fn verify_archived_segments(dir: &Path, through: u64) -> Result<ArchivedChainReport> {
+    let mut report = ArchivedChainReport::default();
+    if through == 0 {
+        return Ok(report);
+    }
+    let mut names = Vec::new();
+    for entry in std::fs::read_dir(dir).map_err(|e| PageError::io(dir, e))? {
+        let entry = entry.map_err(|e| PageError::io(dir, e))?;
+        let name = entry.file_name();
+        let Some(sequence) = name
+            .to_str()
+            .and_then(|name| name.strip_prefix("store.wal."))
+            .and_then(|suffix| suffix.parse::<u64>().ok())
+        else {
+            continue;
+        };
+        if sequence <= through {
+            names.push(sequence);
+        }
+    }
+    names.sort_unstable();
+    if names.last() != Some(&through) {
+        return Err(PageError::WalCorruption {
+            path: dir.join(format!("store.wal.{through}")),
+            lsn: through,
+            reason: "the confirmed segment is missing from the archive".into(),
+        });
+    }
+    let mut expected_lsn = None;
+    let mut scan = WalScanReport::default();
+    for sequence in names {
+        let path = dir.join(format!("store.wal.{sequence}"));
+        let mut file = File::open(&path).map_err(|e| PageError::io(&path, e))?;
+        let (valid, first) = scan_wal_file(
+            &mut file,
+            &path,
+            MAX_WAL_RECORD_BYTES - RECORD_HEADER_BYTES,
+            &mut expected_lsn,
+            &mut scan,
+            &mut |_| Ok(()),
+        )?;
+        let len = file.metadata().map_err(|e| PageError::io(&path, e))?.len();
+        if valid != len {
+            return Err(PageError::WalCorruption {
+                path,
+                lsn: scan.last_lsn.unwrap_or(0),
+                reason: format!(
+                    "archived segment holds {len} bytes but only {valid} decode (bad checksum, \
+                     torn record or an LSN gap from the previous segment)"
+                ),
+            });
+        }
+        report.first_lsn = report.first_lsn.or(first);
+        report.segments += 1;
+        report.through = sequence;
+    }
+    report.records = scan.records;
+    report.last_lsn = scan.last_lsn;
+    Ok(report)
+}
+
+/// File whose presence keeps archive retention on across reopens.
+pub fn archive_retention_marker(path: &Path) -> PathBuf {
+    let mut os = path.as_os_str().to_os_string();
+    os.push("-archive-retention");
+    PathBuf::from(os)
+}
+
 /// Sealed segments on disk next to `path`, ascending, with their total size.
 fn discover_sealed_segments(path: &Path) -> Result<(Vec<u64>, u64)> {
+    discover_sealed_segments_limited(path, None)
+}
+
+fn discover_sealed_segments_limited(
+    path: &Path,
+    limits: Option<&ReadOnlyScanLimits>,
+) -> Result<(Vec<u64>, u64)> {
     let Some(parent) = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -1425,6 +1712,9 @@ fn discover_sealed_segments(path: &Path) -> Result<(Vec<u64>, u64)> {
     let mut sealed = Vec::new();
     let mut total = 0u64;
     for entry in std::fs::read_dir(parent).map_err(|e| PageError::io(parent, e))? {
+        if let Some(limits) = limits {
+            limits.check((sealed.len() as u64 + 1).saturating_mul(512))?;
+        }
         let entry = entry.map_err(|e| PageError::io(parent, e))?;
         let name = entry.file_name();
         let Some(name) = name.to_str() else { continue };
@@ -1888,6 +2178,647 @@ pub struct CheckpointReport {
     pub pages_flushed: u64,
     pub wal_bytes_before: u64,
     pub wal_truncated: bool,
+}
+
+// ---------------------------------------------------------------------------
+// Read-only log analysis, for `crate::verify_store`.
+//
+// Nothing below opens a file for writing, truncates, renames or deletes. The
+// functions reproduce what `recover_with_outcomes` would decide from the same
+// files, so the verifier can examine the post-recovery state of a store
+// without running recovery (which writes the page file and truncates the log).
+
+/// How the page-log chain relates to the page file's checkpoint horizon `H`
+/// (the superblock's `checkpoint_lsn`). This is the same classification the
+/// crash-ordered log-reset fix makes at open (`ResetShape` there), computed
+/// from the files alone.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "shape", rename_all = "snake_case")]
+pub enum LogResetShape {
+    /// The chain is empty, or reaches at least the checkpoint record `H - 1`.
+    Normal,
+    /// Sealed segments whose records all predate `H - 1`, next to an empty
+    /// active file: a log reset interrupted between truncating the active
+    /// file and deleting the segments. The page file is newer than every
+    /// record. An engine without the reset fix replays these records over
+    /// newer pages at the next open.
+    InterruptedReset {
+        stale_segments: u64,
+        stale_last_lsn: Lsn,
+        /// Committed page images an engine without the fix would replay.
+        stale_images_replayed_by_unfixed_open: u64,
+    },
+    /// Such stale sealed segments, then an active file that starts exactly at
+    /// `H`: an interrupted reset after which an engine without the fix opened
+    /// the store (replaying the stale chain over newer pages) and kept
+    /// committing. Those later commits are real; an engine without the fix
+    /// discards them as a torn tail at its next open.
+    StaleSealedBeforeActive {
+        stale_segments: u64,
+        stale_last_lsn: Lsn,
+        active_records: u64,
+    },
+    /// The chain ends before `H - 1` in any other shape: a lost or damaged
+    /// log.
+    EndsBeforeHorizon { reason: String },
+}
+
+/// Where the newest replayable image of one page lives in the log.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct LoggedImage {
+    /// Index into [`ReadOnlyLog::files`].
+    pub(crate) file: usize,
+    /// Byte offset of the page payload within that file.
+    pub(crate) offset: u64,
+    pub(crate) lsn: Lsn,
+}
+
+/// Read-only view of what recovery would do with the log.
+pub(crate) struct ReadOnlyLog {
+    /// Sealed segments ascending, then the active file (when it exists).
+    pub(crate) files: Vec<(PathBuf, File)>,
+    pub(crate) sealed_segments: u64,
+    pub(crate) sealed_bytes: u64,
+    pub(crate) active_bytes: u64,
+    pub(crate) shape: LogResetShape,
+    /// Which files recovery would replay: `full_chain`, `active_only` or
+    /// `none`.
+    pub(crate) replay_scope: &'static str,
+    pub(crate) records: u64,
+    pub(crate) first_lsn: Option<Lsn>,
+    pub(crate) last_lsn: Option<Lsn>,
+    pub(crate) torn_tail_bytes: u64,
+    pub(crate) checkpoint_records: u64,
+    pub(crate) redo_lsn: Lsn,
+    /// Terminal outcomes in the replayed scope, ascending by xid.
+    pub(crate) outcomes: Vec<(u64, TxStatus)>,
+    pub(crate) committed_transactions: u64,
+    pub(crate) images_replayed: u64,
+    pub(crate) uncommitted_images_skipped: u64,
+    /// Newest replayable image per page.
+    pub(crate) images: rustc_hash::FxHashMap<PageId, LoggedImage>,
+    pub(crate) max_replayed_page: Option<PageId>,
+    /// Replay grows the page count one image at a time, and on a monolithic
+    /// file each growth is a `set_len` that also TRUNCATES a longer file.
+    /// Pages at or above this id that no replayed image covers read as zeros
+    /// after a real recovery, whatever the file holds now.
+    pub(crate) truncated_from: Option<PageId>,
+    /// Why a real open would refuse this log, if it would.
+    pub(crate) corruption: Option<String>,
+}
+
+impl ReadOnlyLog {
+    /// Status of `xid` according to the replayed log, if it holds one.
+    pub(crate) fn outcome(&self, xid: u64) -> Option<TxStatus> {
+        self.outcomes
+            .binary_search_by_key(&xid, |(candidate, _)| *candidate)
+            .ok()
+            .map(|index| self.outcomes[index].1)
+    }
+
+    /// Read one logged page image into `buffer` (exactly one page).
+    pub(crate) fn read_image(&self, image: LoggedImage, buffer: &mut [u8]) -> Result<()> {
+        let (path, file) = &self.files[image.file];
+        let got = crate::pio::read_at(file, buffer, image.offset)
+            .map_err(|error| PageError::io(path, error))?;
+        if got != buffer.len() {
+            return Err(PageError::WalCorruption {
+                path: path.clone(),
+                lsn: image.lsn,
+                reason: "a logged page image is shorter than a page".to_string(),
+            });
+        }
+        Ok(())
+    }
+}
+
+fn sealed_segment_path(path: &Path, sequence: u64) -> PathBuf {
+    let mut os = path.as_os_str().to_os_string();
+    os.push(format!(".{sequence}"));
+    PathBuf::from(os)
+}
+
+/// One record seen by a read-only scan, with its payload offset.
+struct ScannedRecord {
+    lsn: Lsn,
+    kind: RecordKind,
+    page_id: PageId,
+    transaction: u64,
+    payload_offset: u64,
+    payload_len: usize,
+}
+
+/// Setup scans precede the verifier's page walks; they must obey limits too.
+pub(crate) struct ReadOnlyScanLimits {
+    pub(crate) max_state_bytes: u64,
+    pub(crate) deadline: Option<std::time::Instant>,
+    stopped: std::cell::RefCell<Option<String>>,
+}
+
+impl ReadOnlyScanLimits {
+    pub(crate) fn new(max_state_bytes: u64, deadline: Option<std::time::Instant>) -> Self {
+        Self {
+            max_state_bytes,
+            deadline,
+            stopped: Default::default(),
+        }
+    }
+
+    pub(crate) fn check(&self, estimated_bytes: u64) -> Result<()> {
+        let mut stopped = self.stopped.borrow_mut();
+        if stopped.is_none() {
+            if self
+                .deadline
+                .is_some_and(|deadline| std::time::Instant::now() >= deadline)
+            {
+                *stopped = Some("time limit during read-only setup".to_string());
+            } else if estimated_bytes > self.max_state_bytes {
+                *stopped = Some("memory limit during read-only setup".to_string());
+            }
+        }
+        match stopped.as_ref() {
+            Some(reason) => Err(PageError::InvalidMaintenanceLimits {
+                reason: format!("read-only verification limit: {reason}"),
+            }),
+            None => Ok(()),
+        }
+    }
+}
+
+/// Scan one file from its start. `expected` carries LSN continuity across
+/// files exactly as `Wal::scan_records` does. Returns the decoded byte count.
+fn scan_file_read_only(
+    file: &mut File,
+    path: &Path,
+    max_body_bytes: usize,
+    expected: &mut Option<Lsn>,
+    scan: &mut WalScanReport,
+    visit: &mut dyn FnMut(&ScannedRecord),
+    limits: &ReadOnlyScanLimits,
+) -> Result<u64> {
+    let mut offset = 0_u64;
+    let mut adapter = |record: WalRecordView<'_>| -> Result<()> {
+        limits.check(0)?;
+        let payload_len = record.payload.len();
+        visit(&ScannedRecord {
+            lsn: record.lsn,
+            kind: record.kind,
+            page_id: record.page_id,
+            transaction: record.transaction,
+            payload_offset: offset + (RECORD_HEADER_BYTES + RECORD_FIXED_BODY_BYTES) as u64,
+            payload_len,
+        });
+        limits.check(0)?;
+        offset += (RECORD_HEADER_BYTES + RECORD_FIXED_BODY_BYTES + payload_len) as u64;
+        Ok(())
+    };
+    let (valid, _) = scan_wal_file(file, path, max_body_bytes, expected, scan, &mut adapter)?;
+    Ok(valid)
+}
+
+/// Analyse a store's page log without modifying it. `open` must open a file
+/// read-only; the verifier passes its own read-only opener.
+pub(crate) fn analyze_log_read_only(
+    path: &Path,
+    page_size: u32,
+    horizon: Lsn,
+    page_count: u64,
+    monolithic_file_pages: Option<u64>,
+    open: &dyn Fn(&Path) -> std::io::Result<File>,
+    limits: &ReadOnlyScanLimits,
+) -> Result<ReadOnlyLog> {
+    limits.check(0)?;
+    let max_body_bytes = RECORD_FIXED_BODY_BYTES.saturating_add(page_size as usize);
+    let (sealed, sealed_bytes) = discover_sealed_segments_limited(path, Some(limits))?;
+    let mut files: Vec<(PathBuf, File)> = Vec::with_capacity(sealed.len() + 1);
+    for sequence in &sealed {
+        limits.check((files.len() as u64 + 1).saturating_mul(512))?;
+        let segment = sealed_segment_path(path, *sequence);
+        let file = open(&segment).map_err(|error| PageError::io(&segment, error))?;
+        files.push((segment, file));
+    }
+    let active_index = match open(path) {
+        Ok(file) => {
+            files.push((path.to_path_buf(), file));
+            Some(files.len() - 1)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(PageError::io(path, error)),
+    };
+    let active_bytes = match active_index {
+        Some(index) => files[index]
+            .1
+            .metadata()
+            .map_err(|error| PageError::io(path, error))?
+            .len(),
+        None => 0,
+    };
+    let sealed_count = sealed.len();
+
+    // The reset shape, from independent per-file scans (no continuity), as
+    // the reset fix computes it before recovery touches anything.
+    let mut ignore = |_: &ScannedRecord| {};
+    let (active_first, active_last, active_records) = match active_index {
+        Some(index) => {
+            let (file_path, file) = &mut files[index];
+            let mut scan = WalScanReport::default();
+            let mut first = None;
+            let mut note_first = |record: &ScannedRecord| {
+                first.get_or_insert(record.lsn);
+            };
+            scan_file_read_only(
+                file,
+                file_path,
+                max_body_bytes,
+                &mut None,
+                &mut scan,
+                &mut note_first,
+                limits,
+            )?;
+            (first, scan.last_lsn, scan.records)
+        }
+        None => (None, None, 0),
+    };
+    let shape = if horizon == 0 {
+        LogResetShape::Normal
+    } else if sealed_count == 0 {
+        match active_last {
+            Some(last) if last.saturating_add(1) < horizon => LogResetShape::EndsBeforeHorizon {
+                reason: format!(
+                    "the page log ends at LSN {last}, before the checkpoint record {} of the \
+                     page file's horizon {horizon}",
+                    horizon - 1
+                ),
+            },
+            _ => LogResetShape::Normal,
+        }
+    } else {
+        let (file_path, file) = &mut files[sealed_count - 1];
+        let mut scan = WalScanReport::default();
+        scan_file_read_only(
+            file,
+            file_path,
+            max_body_bytes,
+            &mut None,
+            &mut scan,
+            &mut ignore,
+            limits,
+        )?;
+        match scan.last_lsn {
+            // An undecodable sealed segment is corruption the full scan reports.
+            None => LogResetShape::Normal,
+            Some(sealed_last) => {
+                let chain_last = match (active_first, active_last) {
+                    (Some(first), Some(last)) if first == sealed_last + 1 => last,
+                    _ => sealed_last,
+                };
+                if chain_last.saturating_add(1) >= horizon {
+                    LogResetShape::Normal
+                } else if active_bytes == 0 {
+                    LogResetShape::InterruptedReset {
+                        stale_segments: sealed_count as u64,
+                        stale_last_lsn: sealed_last,
+                        stale_images_replayed_by_unfixed_open: 0,
+                    }
+                } else if active_first == Some(horizon) {
+                    LogResetShape::StaleSealedBeforeActive {
+                        stale_segments: sealed_count as u64,
+                        stale_last_lsn: sealed_last,
+                        active_records,
+                    }
+                } else {
+                    LogResetShape::EndsBeforeHorizon {
+                        reason: format!(
+                            "the sealed page-log segments end at LSN {sealed_last}, before the \
+                             checkpoint record {} of the page file's horizon {horizon}, and the \
+                             active file ({active_bytes} bytes) does not start at the horizon \
+                             (first LSN {active_first:?})",
+                            horizon - 1
+                        ),
+                    }
+                }
+            }
+        }
+    };
+
+    let mut log = ReadOnlyLog {
+        files,
+        sealed_segments: sealed_count as u64,
+        sealed_bytes,
+        active_bytes,
+        shape: shape.clone(),
+        replay_scope: "none",
+        records: 0,
+        first_lsn: None,
+        last_lsn: None,
+        torn_tail_bytes: 0,
+        checkpoint_records: 0,
+        redo_lsn: 0,
+        outcomes: Vec::new(),
+        committed_transactions: 0,
+        images_replayed: 0,
+        uncommitted_images_skipped: 0,
+        images: rustc_hash::FxHashMap::default(),
+        max_replayed_page: None,
+        truncated_from: None,
+        corruption: None,
+    };
+
+    // What an engine WITHOUT the reset fix would replay from a stale chain.
+    if let LogResetShape::InterruptedReset { .. } = shape {
+        let scope: Vec<usize> = (0..sealed_count).collect();
+        let mut probe = ScopeScan {
+            page_count,
+            file_pages: monolithic_file_pages,
+            ..ScopeScan::default()
+        };
+        if replay_scope(
+            &mut log,
+            &scope,
+            active_index,
+            max_body_bytes,
+            horizon,
+            false,
+            &mut probe,
+            limits,
+        )
+        .is_ok()
+        {
+            log.shape = match shape.clone() {
+                LogResetShape::InterruptedReset {
+                    stale_segments,
+                    stale_last_lsn,
+                    ..
+                } => LogResetShape::InterruptedReset {
+                    stale_segments,
+                    stale_last_lsn,
+                    stale_images_replayed_by_unfixed_open: probe.images_replayed,
+                },
+                other => other,
+            };
+        }
+    }
+
+    limits.check(0)?;
+    let scope: Vec<usize> = match &shape {
+        LogResetShape::Normal => {
+            log.replay_scope = "full_chain";
+            (0..log.files.len()).collect()
+        }
+        LogResetShape::StaleSealedBeforeActive { .. } => {
+            log.replay_scope = "active_only";
+            active_index.into_iter().collect()
+        }
+        LogResetShape::InterruptedReset { .. } | LogResetShape::EndsBeforeHorizon { .. } => {
+            Vec::new()
+        }
+    };
+    if !scope.is_empty() {
+        let mut result = ScopeScan {
+            page_count,
+            file_pages: monolithic_file_pages,
+            ..ScopeScan::default()
+        };
+        match replay_scope(
+            &mut log,
+            &scope,
+            active_index,
+            max_body_bytes,
+            horizon,
+            true,
+            &mut result,
+            limits,
+        ) {
+            Ok(()) => {
+                log.records = result.records;
+                log.first_lsn = result.first_lsn;
+                log.last_lsn = result.last_lsn;
+                log.torn_tail_bytes = result.torn_tail_bytes;
+                log.checkpoint_records = result.checkpoint_records;
+                log.redo_lsn = result.redo_lsn;
+                log.outcomes = result.outcomes;
+                log.committed_transactions = result.committed;
+                log.images_replayed = result.images_replayed;
+                log.uncommitted_images_skipped = result.uncommitted_skipped;
+                log.images = result.images;
+                log.max_replayed_page = result.max_page;
+                log.truncated_from = result.truncated_from;
+            }
+            Err(reason) => {
+                limits.check(0)?;
+                log.corruption = Some(reason);
+                log.replay_scope = "none";
+            }
+        }
+    }
+    Ok(log)
+}
+
+#[derive(Default)]
+struct ScopeScan {
+    records: u64,
+    first_lsn: Option<Lsn>,
+    last_lsn: Option<Lsn>,
+    torn_tail_bytes: u64,
+    checkpoint_records: u64,
+    redo_lsn: Lsn,
+    outcomes: Vec<(u64, TxStatus)>,
+    committed: u64,
+    images_replayed: u64,
+    uncommitted_skipped: u64,
+    images: rustc_hash::FxHashMap<PageId, LoggedImage>,
+    max_page: Option<PageId>,
+    /// Inputs: the superblock page count and, for a monolithic file, its
+    /// length in pages. Output: where replay's growth truncates the file.
+    page_count: u64,
+    file_pages: Option<u64>,
+    truncated_from: Option<PageId>,
+}
+
+/// Recovery's two passes over `scope` (indices into `log.files`), read-only.
+/// Errors are the reasons a real open would refuse the log.
+fn replay_scope(
+    log: &mut ReadOnlyLog,
+    scope: &[usize],
+    active_index: Option<usize>,
+    max_body_bytes: usize,
+    horizon: Lsn,
+    build_map: bool,
+    out: &mut ScopeScan,
+    limits: &ReadOnlyScanLimits,
+) -> std::result::Result<(), String> {
+    // Pass 1: outcomes and the last checkpoint record's redo point.
+    let mut expected = None;
+    let mut scan = WalScanReport::default();
+    let files_bytes = log.files.len() as u64 * 512;
+    let mut outcomes: Vec<(u64, TxStatus)> = Vec::new();
+    let mut checkpoint_redo = 0_u64;
+    let mut checkpoints = 0_u64;
+    let mut first_lsn = None;
+    for &index in scope {
+        let (path, file) = &mut log.files[index];
+        let length = file.metadata().map_err(|error| error.to_string())?.len();
+        let mut visit = |record: &ScannedRecord| {
+            if limits
+                .check(
+                    (outcomes.len() as u64 + 1)
+                        .saturating_mul(32)
+                        .saturating_add(files_bytes),
+                )
+                .is_err()
+            {
+                return;
+            }
+            first_lsn.get_or_insert(record.lsn);
+            match record.kind {
+                RecordKind::Commit => outcomes.push((record.transaction, TxStatus::Committed)),
+                RecordKind::Abort => outcomes.push((record.transaction, TxStatus::Aborted)),
+                RecordKind::Checkpoint => {
+                    checkpoint_redo = record.transaction;
+                    checkpoints += 1;
+                }
+                RecordKind::PageImage => {}
+            }
+        };
+        let valid = scan_file_read_only(
+            file,
+            path,
+            max_body_bytes,
+            &mut expected,
+            &mut scan,
+            &mut visit,
+            limits,
+        )
+        .map_err(|error| error.to_string())?;
+        if Some(index) == active_index {
+            out.torn_tail_bytes = length.saturating_sub(valid);
+        } else if valid != length {
+            return Err(format!(
+                "sealed page-log segment {} holds {length} bytes but only {valid} decode; a real \
+                 open refuses this log",
+                path.display()
+            ));
+        }
+    }
+    outcomes.sort_unstable_by_key(|(xid, _)| *xid);
+    for pair in outcomes.windows(2) {
+        if pair[0].0 == pair[1].0 && pair[0].1 != pair[1].1 {
+            return Err(format!(
+                "transaction {} has contradictory commit and abort records; a real open refuses \
+                 this log",
+                pair[0].0
+            ));
+        }
+    }
+    outcomes.dedup_by_key(|(xid, _)| *xid);
+    let committed = outcomes
+        .iter()
+        .filter(|(_, status)| *status == TxStatus::Committed)
+        .count() as u64;
+    // The redo rule of `recover_with_outcomes`: only a redo point the page
+    // file's own horizon vouches for is trusted.
+    let redo_lsn = if horizon >= checkpoint_redo {
+        checkpoint_redo
+    } else {
+        0
+    };
+
+    // Pass 2: committed (or structural) images at or after the redo point.
+    let status_of = |xid: u64| {
+        outcomes
+            .binary_search_by_key(&xid, |(candidate, _)| *candidate)
+            .ok()
+            .map(|index| outcomes[index].1)
+    };
+    let mut expected = None;
+    let mut second = WalScanReport::default();
+    let mut images: rustc_hash::FxHashMap<PageId, LoggedImage> = Default::default();
+    let mut replayed = 0_u64;
+    let mut skipped = 0_u64;
+    let mut max_page: Option<PageId> = None;
+    let mut short_image = None;
+    let mut count = out.page_count;
+    let mut file_pages = out.file_pages;
+    let mut truncated_from = None;
+    for &index in scope {
+        let (path, file) = &mut log.files[index];
+        let mut visit = |record: &ScannedRecord| {
+            if record.kind != RecordKind::PageImage || record.lsn < redo_lsn {
+                return;
+            }
+            if record.transaction != 0 && status_of(record.transaction) != Some(TxStatus::Committed)
+            {
+                skipped += 1;
+                return;
+            }
+            if record.payload_len != max_body_bytes - RECORD_FIXED_BODY_BYTES {
+                short_image.get_or_insert(record.lsn);
+                return;
+            }
+            replayed += 1;
+            max_page = Some(max_page.map_or(record.page_id, |page| page.max(record.page_id)));
+            // `PageStore::reserve`, called before each replayed write.
+            let needed = record.page_id.saturating_add(1);
+            if needed > count {
+                if let Some(pages) = file_pages {
+                    if pages > needed {
+                        truncated_from.get_or_insert(needed);
+                    }
+                    file_pages = Some(needed);
+                }
+                count = needed;
+            }
+            if build_map {
+                let state_bytes = (outcomes.len() as u64)
+                    .saturating_mul(32)
+                    .saturating_add((images.len() as u64 + 1).saturating_mul(128))
+                    .saturating_add(files_bytes);
+                if limits.check(state_bytes).is_err() {
+                    return;
+                }
+                images.insert(
+                    record.page_id,
+                    LoggedImage {
+                        file: index,
+                        offset: record.payload_offset,
+                        lsn: record.lsn,
+                    },
+                );
+            }
+        };
+        scan_file_read_only(
+            file,
+            path,
+            max_body_bytes,
+            &mut expected,
+            &mut second,
+            &mut visit,
+            limits,
+        )
+        .map_err(|error| error.to_string())?;
+    }
+    if let Some(lsn) = short_image {
+        return Err(format!(
+            "the committed page image at LSN {lsn} is not one page long; a real open refuses this \
+             log"
+        ));
+    }
+    if second.records != scan.records || second.last_lsn != scan.last_lsn {
+        return Err("the page log changed between the two read-only passes".to_string());
+    }
+    out.records = scan.records;
+    out.first_lsn = first_lsn;
+    out.last_lsn = scan.last_lsn;
+    out.checkpoint_records = checkpoints;
+    out.redo_lsn = redo_lsn;
+    out.committed = committed;
+    out.outcomes = outcomes;
+    out.images_replayed = replayed;
+    out.uncommitted_skipped = skipped;
+    out.images = images;
+    out.max_page = max_page;
+    out.truncated_from = truncated_from;
+    Ok(())
 }
 
 #[cfg(test)]

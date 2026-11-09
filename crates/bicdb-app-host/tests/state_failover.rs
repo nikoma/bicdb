@@ -24,6 +24,8 @@ fn test_binary() -> std::path::PathBuf {
 const TOKEN: &str = "native-state-test-management-token-0000000000000000";
 #[path = "support/state_network.rs"]
 mod state_network;
+#[path = "support/state_sql_ports.rs"]
+mod state_sql_ports;
 
 struct Group {
     root: tempfile::TempDir,
@@ -75,7 +77,13 @@ impl Group {
     ) -> Self {
         let root = tempfile::tempdir().unwrap();
         let listeners: Vec<_> = (0..19)
-            .map(|_| TcpListener::bind("127.0.0.1:0").unwrap())
+            .map(|index| {
+                if index >= 16 {
+                    state_sql_ports::reserve()
+                } else {
+                    TcpListener::bind("127.0.0.1:0").unwrap()
+                }
+            })
             .collect();
         let ports: Vec<_> = listeners
             .iter()

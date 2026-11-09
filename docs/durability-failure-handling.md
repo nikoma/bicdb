@@ -3,11 +3,10 @@
 Status: implemented for the page log, the page file, checkpoints, the
 transaction log (`transactions.log`), the transaction-log cut, commit
 outcomes, standby import and the synchronous-quorum confirmation, the
-generic frame logs (`sync.log`, the event log, record segments; section
-7.4), and the HA and consensus state files, the collection and index
-catalogs, the other database sidecars and the standby bootstrap install
-(section 7.5). The remaining sites in the inventory (section 7.3) are listed
-with their current behaviour and are the scope of follow-up changes.
+generic frame logs (section 7.4), HA, consensus and sidecar state files
+(section 7.5), committed outboxes (section 7.6), and the commit-log and
+page-log archives with their capacity guard (sections 7.7 and 7.8).
+Remaining sites are listed in section 7.3.
 
 ## 1. Why
 
@@ -272,8 +271,7 @@ the open-time audit publication) were listed here; section 7.4 covers them.
 
 | Site | Code | Caller told | Later acks possible? | Recovery |
 |---|---|---|---|---|
-| Commit-log archive | `LogArchive::append` / `sync` / `finish_segment`, `crates/bicdb-core/src/log_archive.rs:209`, `:324`, `:333` | Error; poisoned only if the rollback fails | Yes. `archive_commits` retries `sync()`, so a retried `fsync` can falsely succeed. | `open` truncates the torn tail |
-| Page-WAL archive | `archive_wal_segments`, `db/spatial_paged.rs:1755`; directory sync ignored at `:1825` | Copy, sync and rename errors propagated | `mark_wal_archived_through` runs even when the directory sync failed, so local segments can be released before the archive is durable | — |
+| Commit-log archive, page-log archive | — | Fail-closed: see sections 7.7 and 7.8 | — | — |
 | FTS segment manifest | `crates/bicdb-core/src/fts_segment.rs:1867` | Directory sync ignored | — | Manifest re-read at open |
 | Page-store relayout / migration | `crates/bicdb-page/src/manager.rs:2823` | Directory sync ignored | Offline tool | — |
 
@@ -424,7 +422,7 @@ cluster metadata consensus state (`distribution_consensus.rs`) and the range
 write catalog (`distribution_range_consensus.rs`) use `write_atomic` with the
 directory `fsync`.
 
-### 7.5 Outboxes behind a commit: change capture and record audit
+### 7.6 Outboxes behind a commit: change capture and record audit
 
 Three outboxes carry effects of a commit to consumers: change capture
 (`sync.log`, read through `pending_sync_ops` / `mark_synced`), record-audit
@@ -486,6 +484,237 @@ it (the id is no longer known). This change does not address that case.
 | `crashes_at_every_outbox_boundary_deliver_each_committed_entry_exactly_once` | `abort()` in a child process at `commit.before_decision`, `commit.after_txlog_durable`, `commit.after_page_apply`, `commit.after_sync_publish`, `txlog_cut.after_floor`, and during republication at open (`open.audit_republish.after_event`, `open.after_sync_republish`), both modes, with checkpoints, a compaction and consumer acknowledgments in the workload; reconciled against the child's ledger over two reopens |
 | `mid_file_damage_fails_closed_in_every_frame_log` | Crash images with damage in the first frame of the transaction log, `sync.log`, the event log and a record segment: `Corruption`, file unchanged |
 
+### 7.7 Archives: commit-log archive and page-log archive
+
+Both archives are asynchronous copies of logs the database already made
+durable. No commit is acknowledged on the strength of an archive, so an
+archive failure does not make any acknowledged commit uncertain. What it makes
+uncertain is the archive copy: a failed `fsync` may drop the dirty pages it
+could not write, and a retried `fsync` can then report success for bytes that
+are not on disk. Each "archived" mark licenses deleting the only other copy,
+so a false mark can lose data from the point-in-time-recovery chain for good.
+
+**Inventory: what each step licenses, before and after this change.**
+
+Commit-log archive (`crates/bicdb-core/src/log_archive.rs`, the archiver
+thread in `crates/bicdb-pgwire/src/log_archive.rs`, the hold
+`LOG_ARCHIVE_HOLDER` in `db/log_archiving.rs`). The license is the
+transaction-log hold: `hold(seq)` lets the next checkpoint cut
+`transactions.log` through `seq`.
+
+| Step (site) | Licenses | Before | Now |
+|---|---|---|---|
+| Archive directory creation (`log_archive.dir_sync` on the parent) | — | No parent `fsync` | Parent synced |
+| `archive.json` write, sync, rename, directory sync (`log_archive.meta_write`, `log_archive.meta_sync`, `log_archive.rename`, `log_archive.dir_sync`) | The archive exists for a restore | Error returned; a failed directory sync left the new file live while memory was rolled back; the next call wrote it again | Handle stops |
+| Segment create, directory sync (`log_archive.create`, `log_archive.dir_sync`) | Every record of the segment is reachable | Error returned; the next call reopened the file and synced the directory again (a retry) | Handle stops |
+| Record write (`log_archive.write`) | — | Torn prefix truncated, next call appended again | Handle stops; the next handle truncates the torn tail at open |
+| Record sync, segment finish (`log_archive.sync`) | Advancing the hold to the batch | Error returned, **but `last_commit_seq` was already advanced**; the next round called `sync()` again, and on success `prepare_log_archive` advanced the hold over the unconfirmed batch | Handle stops; `last_commit_seq` only advances after the sync |
+| `hold_log_for_archive` | Log cut through the confirmed commit | Called after `append` | Unchanged (it is the publication step) |
+| Base backup in the archive (`archive_base_backup`) | Retention of the base's suffix | Reset an existing hold to 0 | Keeps an existing hold (it already retains the suffix) |
+
+Page-log archive (`archive_wal_segments` in `db/spatial_paged.rs`,
+`Wal::mark_archived_through` and archive retention in
+`crates/bicdb-page/src/wal.rs`). The license is `archived_through`: the next
+checkpoint reset deletes local sealed segments named at or below it.
+
+| Step (site) | Licenses | Before | Now |
+|---|---|---|---|
+| Retention (`wal_archive.retention`) | Unarchived sealed segments survive checkpoints | In memory, per handle: **a reopen (and the checkpoint the open or the next driver tick runs) deleted every unarchived segment** | Persisted as `paged/store.wal-archive-retention` (synced, directory synced), read at every open; `disable_wal_archiving()` removes it; excluded from backups and branch copies |
+| Archive directory creation (`wal_archive.create`, `wal_archive.dir_sync`) | — | No parent `fsync` | Parent synced |
+| Copy to `<name>.partial` (`wal_archive.copy`) | — | Error returned | Handle stops; staging removed |
+| Staging sync (`wal_archive.sync`) | — | Error returned | Handle stops |
+| Rename into place (`wal_archive.rename`) | — | Error returned | Handle stops |
+| Archive directory sync (`wal_archive.dir_sync`) | The renames survive a crash | **Ignored; segments were marked archived anyway** | Handle stops, nothing marked |
+| A segment already in the archive (`wal_archive.mismatch`) | — | Equal length: trusted and marked archived (it may have come from a run whose directory sync failed) | Not confirmed by this handle: compared byte for byte; equal bytes are copied again and synced by this handle, different bytes are refused and left as evidence |
+| `mark_wal_archived_through` | Local deletion | Always ran | Only after every step above succeeded; refused on a failed handle |
+
+**The rule.** An archive step is published (records counted, hold advanced,
+segment marked archived) only after its bytes and every directory entry they
+depend on are durable, confirmed by the same handle's own `fsync`s. The first
+failed step stops that handle for good (`ArchiveHealth`, first failure wins,
+`BicDbError::ArchiveFailed`): nothing more is marked, nothing local is
+released, and the handle is never retried. Recovery never re-syncs suspect
+bytes; it rewrites them from the retained local copy:
+
+- Commit-log archive: `BicDb::open_log_archive` / `reconcile_log_archive`
+  (used by the server at start and after a failure) discards every record past
+  the persisted hold (or past the archive's anchor, if higher) and the archiver
+  rewrites them from `transactions.log`, which the hold kept. It discards only
+  when the log still holds that suffix (`read_wal_base` at or below the cut);
+  otherwise the archive is kept as it is. A frame past the hold is either an
+  unconfirmed write or a confirmed one whose hold update did not persist; both
+  are rewritten with identical commits.
+- Page-log archive: a new handle (a reopen) starts with nothing confirmed, so
+  it compares and copies again every retained segment before marking it.
+
+**Primary state on an archive failure: archiver-only, not WriteFailed.**
+The database stays writable. Justification: (1) every acknowledged commit is
+already durable in the local logs and does not depend on the archive;
+(2) the local copy the archive would have released is retained (the hold does
+not move; unconfirmed sealed segments are never deleted, also across
+reopens); (3) fencing the primary for a failed archive disk would turn an
+archive outage into a write outage without protecting any data. The cost is
+local log growth while the archive is stopped, which is what the loud state is
+for. This does not change the commit durability contract: no acknowledgment,
+sync or ship decision depends on the archive, before or after.
+
+**Visibility.**
+
+- `SELECT * FROM bicdb_log_archive`: `enabled`, `healthy`,
+  `archived_commit_seq`, `failure_site`, `failure_error` (administrators),
+  `failed_at`, `failures_total`, `recoveries_total`, `rewritten_commits_total`.
+- Metrics: `bicdb_log_archive_enabled`, `bicdb_log_archive_failed`,
+  `bicdb_log_archive_archived_commit_seq`,
+  `bicdb_log_archive_failures_total`, `bicdb_log_archive_recoveries_total`,
+  `bicdb_log_archive_failed_timestamp_seconds{site}`,
+  `bicdb_wal_archive_failed`; the existing `bicdb_log_hold_commit_seq` shows
+  the hold standing still.
+- Disk cost of retention (approved change 1): `bicdb_wal_archive_retention_enabled`,
+  `bicdb_wal_archive_unarchived_segments` and `bicdb_wal_archive_unarchived_bytes`
+  (sealed page-log segments kept locally because the archive has not
+  confirmed them), also `BicDb::wal_archive_status()`. Alert on
+  `bicdb_wal_archive_unarchived_bytes` growing: a stopped page-log archiver
+  grows `paged/` until it catches up or `disable_wal_archiving()` is called.
+  The commit-log side's retained log shows as `bicdb_log_hold_commit_seq`
+  standing still against the current commit.
+- A JSON event `archive.write_failed` (severity critical) on stderr at the
+  first failure, `archive.unconfirmed_suffix_discarded` when a new handle
+  discards a suffix, and an `ARCHIVE FAILED` line from the server's archiver.
+  The verification drill reports the archive failure too.
+- `BicDb::wal_archive_failure()`, `BicDb::wal_archive_retention_enabled()`,
+  `LogArchive::failure()`.
+
+The server's archiver opens a new handle (discard and rewrite) 60 s after a
+failure; until that succeeds it stays failed. A page-log archiver resumes with
+a reopened database.
+
+**Commit stream content (found by the archive crash matrix).**
+`replication_frames_after` checked its resume anchor in one open of
+`transactions.log` and read from the cursor offset in another. A log cut
+renaming a new file over the path in between made the read start at an old
+offset in the new file, and every commit in the range it did not see fell
+through to the empty-frame fallback: the commit-log archive, and a standby,
+received those commits without their writes (observed: 4 to about 100
+commits per occurrence, under concurrent checkpoints). The check, the read
+and the new anchor now use one descriptor; a cut before the open fails the
+anchor check and the new log is rescanned from its start
+(`a_log_cut_between_anchor_check_and_read_never_ships_empty_frames`).
+
+**Restore against a partial or failed archive.**
+
+- Commit-log archive: a gap anywhere (a missing segment or record) is refused
+  (`commit N is missing`), a torn record is accepted only at the very end of
+  the last segment, and a commit target past the end is refused. New: a time
+  target that the archive does not reach (no archived commit after it) is
+  refused as well, because the archive may simply be missing the commits made
+  up to that time; restore without a target to restore to the end of the
+  archive.
+- Page-log archive: `apply_archived_wal` copies what is there; the open then
+  refuses any LSN gap between sealed segments as corruption (tested with a
+  segment removed from the middle of the archive). A segment that is missing
+  only at the end shortens the roll-forward to the archive's end, which is
+  that archive's recovery point.
+
+### 7.8 Archive guard: verification, capacity, alerts and backpressure
+
+Retaining local logs for a failed archive (section 7.5) is safe only until
+the data volume fills. The guard (`crates/bicdb-core/src/archive_guard.rs`,
+run by the server every `check_interval`) makes a prolonged failure
+visible early and stops it from turning into a full disk.
+
+**Persistent confirmed-prefix verification.** The confirmed prefix of each
+archive is read back periodically (`verify_interval`, default 1 h), on
+demand (`SELECT * FROM bicdb_archive_verify`, administrators), and on every
+new archiver handle while an earlier verification is recorded as failed.
+
+- Commit-log archive (`BicDb::verify_log_archive`): every record from the
+  archive's first commit through the transaction-log hold (the confirmed
+  end): record checksum, frame checksum, consecutive commit sequences, and
+  the archive must reach the hold.
+- Page-log archive (`BicDb::verify_wal_archive`, also run by
+  `archive_wal_segments` on a new handle and every `verify_interval`): every
+  archived `store.wal.<n>` up to the confirmed segment: every record's
+  checksum, no torn or partial segment, LSN continuity from segment to
+  segment, and the confirmed segment present. The confirmed segment is now
+  persisted (`paged/store.wal-archive-confirmed`, synced, directory synced,
+  site `wal_archive.confirm`), so a reopened handle keeps what an earlier
+  handle confirmed.
+- Results are persisted (`log-archive-verification.json` in the database
+  directory, `paged/store.wal-archive-verification`; both node-local,
+  excluded from backups). A failed verification stops the archiver like any
+  archive failure (`log_archive.verify`, `wal_archive.verify`): nothing more
+  is confirmed and nothing local is released. Every new handle re-verifies
+  while the failure is recorded and stays stopped until the prefix reads
+  back intact; it raises a critical alert and an
+  `archive.verification_failed` event.
+
+**Disk capacity.** Per evaluation: bytes retained only for the archives
+(unarchived page-log segments, plus `transactions.log` while the hold is
+behind the current commit), free and total bytes of the data volume and of
+each archive volume (`statvfs`), and a projected time to full from an
+exponentially weighted consumption rate (absent while a volume is not
+filling).
+
+**Escalating alerts.** Warning, then critical, by:
+
+| Signal | Warning | Critical |
+|---|---|---|
+| An archiver failed for | `warn_failure_after` (5 min) | `critical_failure_after` (30 min) |
+| Bytes retained for the archives | `warn_retained_bytes` (8 GiB) | `critical_retained_bytes` (32 GiB) |
+| Free space, data or archive volume | below `warn_free_fraction` (20 %) | below `critical_free_fraction` (10 %) |
+| Confirmed-prefix verification | — | failed |
+
+A fresh failure is already loud (section 7.5); these escalate it. Every
+change of level emits an `archive.alert` event with the reasons.
+
+**Safe backpressure.** Only while an archive is *degraded* (an archiver is
+failed, a verification failed, or it retains at least
+`warn_retained_bytes`): it protects the data volume from the archive's
+retention and is not a general disk-full policy.
+
+| State | When (degraded only) | Effect |
+|---|---|---|
+| Throttle | data volume free below `throttle_free_fraction` (10 %), or retained at least `throttle_retained_bytes` (32 GiB) | each write commit is delayed by `throttle_delay` (50 ms) |
+| Refuse | data volume free below `max(refuse_free_fraction` (5 %) of the volume, `refuse_free_bytes` (1 GiB)`)`, or retained at least `refuse_retained_bytes` (64 GiB) | write operations fail with SQLSTATE `53100` (`disk_full`, `BicDbError::ArchiveBackpressure`); reads, checkpoints and the archivers keep running |
+
+Retention is never dropped and no unarchived log is deleted in any state.
+The state is re-evaluated every `check_interval`; when the archive recovers
+(its failure clears and the retained bytes drain below the thresholds, or
+free space returns) the next evaluation lifts it and writes resume without
+operator action. Every change emits an `archive.backpressure` event.
+
+**Write availability (owner decision).** Refusing writes is a change in
+write availability: a database whose archive has been failed long enough
+to nearly fill the data volume stops accepting writes (53100) instead of
+continuing until the volume is full. The alternative, letting the volume
+fill, fails the database's own durable writes (the page log, the
+transaction log) and fences it (`WriteFailed`), which needs a reopen; the
+refusal is recoverable by itself. The thresholds are configurable; setting
+the refuse thresholds to `0` and `u64::MAX` disables refusal.
+
+**Configuration.** `LogArchiveConfig::guard` (server), otherwise
+environment variables `BICDB_ARCHIVE_GUARD_<FIELD>` (`CHECK_INTERVAL`,
+`VERIFY_INTERVAL`, `WARN_FAILURE_AFTER`, `CRITICAL_FAILURE_AFTER` in
+seconds; `WARN_RETAINED_BYTES`, `CRITICAL_RETAINED_BYTES`,
+`THROTTLE_RETAINED_BYTES`, `REFUSE_RETAINED_BYTES`, `REFUSE_FREE_BYTES` in
+bytes; `WARN_FREE_FRACTION`, `CRITICAL_FREE_FRACTION`,
+`THROTTLE_FREE_FRACTION`, `REFUSE_FREE_FRACTION` as decimals;
+`THROTTLE_DELAY_MS`). Thresholds must escalate (validated at start). A
+database used as a library evaluates `ArchiveGuard::evaluate` on
+`BicDb::archive_guard_inputs` and applies `BicDb::set_archive_backpressure`
+itself.
+
+**Visibility.** `SELECT * FROM bicdb_archive_guard` (per volume: alert
+level, backpressure, retained bytes, free and total bytes, seconds to full,
+failure duration, verification state, reasons) and
+`SELECT * FROM bicdb_archive_verify`. Metrics: `bicdb_archive_alert_level`,
+`bicdb_archive_backpressure`, `bicdb_archive_retained_bytes`,
+`bicdb_archive_failure_seconds`, `bicdb_volume_free_bytes{volume}`,
+`bicdb_volume_total_bytes{volume}`, `bicdb_volume_seconds_to_full{volume}`,
+`bicdb_archive_verification_ok{archive}`,
+`bicdb_archive_verification_timestamp_seconds{archive}`, plus the section
+7.5 metrics.
+
 ## 8. Site names and fault injection
 
 The recorded `site` and the injection name are the same strings.
@@ -518,6 +747,19 @@ The recorded `site` and the injection name are the same strings.
 | `frame_log.short_write` | the same, after writing about half the batch, ending inside a frame |
 | `frame_log.sync` | the same, after the whole batch was written, when the append is durable |
 | `frame_log.repair` | the cut-back after a failed append (recorded as `frame_log.repair` when it fails) |
+
+Archive sites (sections 7.5 and 7.6; an archive failure stops the archiver,
+not the database): `log_archive.open` (an archive that cannot be opened
+or discarded comes back as a failed handle; the server still starts),
+`log_archive.verify`, `wal_archive.verify`,
+`wal_archive.confirm`, `log_archive.meta_write`, `log_archive.meta_sync`,
+`log_archive.rename`, `log_archive.dir_sync`, `log_archive.create`,
+`log_archive.write`, `log_archive.sync`, `log_archive.truncate`,
+`log_archive.repair`; `wal_archive.retention`, `wal_archive.create`,
+`wal_archive.copy`, `wal_archive.sync`, `wal_archive.rename`,
+`wal_archive.dir_sync`, `wal_archive.mismatch` (recorded only). Crash points
+(`BICDB_TEST_CRASH_AT`): `log_archive.after_sync`,
+`wal_archive.after_rename`, `wal_archive.before_mark`.
 
 Other recorded sites: `transaction_log.auxiliary`, `paged.commit`,
 `paged.abort`, `commit.materialize`, `standby.import`, `open.verify`,
@@ -606,6 +848,19 @@ was never synced is truncated (`test_faults::register_volatile_rename`,
 | `frame_log_torn_tail::replication_readers_never_truncate_the_live_transaction_log` | `replication_retention_status` and `export_replication_frames_since` with a frame mid-write |
 | `commit_durability_crash::transaction_log_only_path_survives_every_crash_point_with_eviction` (`materialize.torn_markers`) | The crash hook now holds the transaction log's writer lock across its torn write and the crash. It used to release the lock in between, so a concurrent commit could append complete frames behind the torn ones, a state no crash can produce; recovery, which used to drop those frames silently, now refuses it. Passed 3 of 3 repeats after the change |
 | `core::intentional_frame_corruption_is_detected_and_not_silently_repaired` | Updated: offset-0 damage in a log with later frames refuses the open (it used to truncate the whole log); salvage, then the open succeeds |
+| `archive_fail_closed::commit_log_archive_fails_closed_at_every_step` (and `_in_paged_storage`) | Each commit-log archive step fails once: the error names the site, the confirmed commit and the hold do not advance, three more calls do no I/O (the fault fired once, so a retry would have succeeded), the database stays healthy, a checkpoint keeps every commit after the hold, a new handle rewrites the suffix, and a restore from base plus archive holds exactly the acknowledged rows |
+| `archive_fail_closed::unconfirmed_archive_suffix_is_rewritten_after_restart` | Records synced but never confirmed, plus a torn record, across a database restart: the persisted hold drives the discard, a failure while discarding stops that handle without changing the hold, and the rewritten archive restores every acknowledged row |
+| `archive_fail_closed::page_log_archive_fails_closed_at_every_step` | Each page-log archive step fails once: no archived mark, no retry, unconfirmed segments survive a checkpoint, a reopen and the reopen's checkpoint, the new handle copies them again, and a roll-forward holds every acknowledged row |
+| `archive_fail_closed::page_log_archive_refuses_a_differing_unconfirmed_copy` | An unconfirmed archived segment with different bytes is refused and kept; the local copy stays |
+| `archive_fail_closed::page_log_roll_forward_refuses_a_gapped_archive` | A roll-forward over an archive with a missing middle segment refuses to open; the complete archive restores |
+| `archive_fail_closed::restore_refuses_a_target_the_archive_does_not_reach` | Time and commit targets past the archive's end are refused |
+| `archive_fail_closed::commit_log_confirmed_prefix_verification_stops_and_resumes_the_archiver` | Damage inside the confirmed prefix: verification fails and is persisted, every new handle (also after a restart) stays stopped with `log_archive.verify`, the hold does not move; after the repair the next handle verifies, clears the record and archives |
+| `archive_fail_closed::page_log_confirmed_prefix_verification_stops_and_resumes_the_archiver` | Same for the page-log archive (`wal_archive.verify`), with the persisted confirmed watermark: no confirmation past it, a checkpoint releases nothing unarchived, repair resumes |
+| `archive_fail_closed::archive_backpressure_throttles_then_refuses_and_lifts` | Throttle delays a commit, refuse fails it with `ArchiveBackpressure` (53100) while reads continue and the node is not reported as a standby, lifting resumes writes |
+| `archive_fail_closed::the_guard_refuses_writes_for_a_failed_page_log_archive_and_lifts_after_recovery` | Library end to end: a failed page-log archive's retained bytes, the data volume and the failure drive a critical alert and refusal; retention is kept through a checkpoint; after recovery the evaluation lifts it |
+| `archive_guard::tests::*` | Alert escalation by duration, retained bytes, free space and verification; backpressure only for a degraded archive, throttle then refuse, lifted on recovery; time-to-full; threshold validation; the gate |
+| pgwire `log_archive::fail_closed_tests::the_guard_refuses_writes_during_an_archive_failure_and_lifts_after_recovery` | Server end to end: a persistent archive write failure, the guard refuses writes (53100), critical alert and metrics; the disk recovers, the archiver's new handle catches up and the backpressure lifts by itself; the archive is contiguous and its verification persisted as passing |
+| `commit_durability_crash::archives_fail_closed_and_roll_forward_to_every_acknowledged_commit` | Out of process, with the crash-matrix child feeding both archives under the concurrent workload: 4 crash points and 6 injected failures in the archivers. The database reconciles against the ledger; restores from each archive as left reconcile against the commits that archive had confirmed and hold no commit the database lacks; after resuming with new handles, restores from both archives hold every acknowledged commit |
 | `storage::tests::durable_replacement_fails_closed_per_step_and_policy` | Each of the four steps under each policy: file contents after the failure, fencing, site name, no temporary file left, a fenced health refuses the next replacement |
 | `ha_state_durability::a_vote_is_never_granted_ahead_of_the_disk_and_never_twice_per_term` | `ha_node.*` at each step, embedded and paged: no grant, nothing in memory, fencing only on `dir_sync`, a fenced node refuses votes and candidacies, and after the reopen a second candidate in the term is granted exactly when the first vote is not on disk |
 | `ha_state_durability::a_primary_whose_fence_cannot_be_persisted_still_stops_writing` | A primary that learns of a newer epoch refuses writes whatever happens to its fence file; a reported fence survives the reopen |
@@ -665,6 +920,15 @@ Mutation checks (each mutation applied alone; the named tests must fail):
   `WalWritebackBarrier` in `crates/bicdb-page/src/paged.rs`, an existing
   recovery defect. It fails closed (the open is refused; nothing is silently
   discarded). The states are saved for the recovery work.
+
+- **Retention setting that never became durable.** If the page-log
+  archiver's first step (persisting `store.wal-archive-retention`) fails,
+  retention holds only for that handle. After a reopen, checkpoints may
+  delete sealed segments before the archiver runs again; a roll-forward from
+  a base older than that is then refused at the gap (fail-closed, not
+  silent), and a new base backup is needed.
+- **Concurrent page-log archivers on one handle** share the `.partial`
+  staging name; run one archiver per database (as before).
 
 ## 11. Durability-contract notes
 
@@ -735,18 +999,25 @@ Unresolved assumptions:
 - The bootstrap install's directory `fsync` and the load-time directory
   `fsync` are covered by fault injection, not by the power-loss emulation,
   which only tracks renames of files.
-- The commit-log archive and the page-WAL archive (section 7.3) are
-  unchanged by this follow-up.
+- Archive durability and retention are covered by sections 7.7 and 7.8.
 
-Not implemented, because each changes the durability contract or adds
-synchronous I/O to a hot path, and needs a decision first:
+The durable page-log reset and segment-removal ordering are covered by
+the WAL reset follow-up and its crash regressions.
 
-- Making the page-log reset durable (an `fsync` after the truncation and a
-  directory `fsync` after removing sealed segments).
-- Fail-closed handling of the commit-log archive's retried `sync()` and the
-  page-WAL archive's ignored directory sync before
-  `mark_wal_archived_through`. (The generic frame appender's tail repair
-  and poisoning are in section 7.4.)
+The archive change (section 7.7) does not change the commit durability
+contract. Behaviour changes a reviewer should confirm:
+
+Approved by the owner:
+
+4. **Archive retention outlives the handle.** Once `archive_wal_segments`
+   ran, unarchived sealed segments are kept across reopens until archived or
+   until `disable_wal_archiving()`. A stopped archiver grows `paged/` instead
+   of gapping the archive.
+5. **Time-target restores past the archive's end are refused.**
+6. **A server start rewrites the commit-log archive past the persisted
+   hold** from the transaction log.
+7. **`archive_base_backup` keeps an existing hold** instead of resetting it
+   to 0.
 
 ## 12. Replication ships only durable frames
 
@@ -865,3 +1136,4 @@ covers the follower commit rule.
 - `current_commit_seq()` (reserved, not durable) is still reported as the
   source position in the HA heartbeat, range catch-up and the Cell fence
   receipt. None of these ships content past the durable bound.
+

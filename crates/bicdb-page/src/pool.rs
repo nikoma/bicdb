@@ -856,6 +856,17 @@ pub fn unlogged_reserve(shard_frames: usize) -> usize {
     (shard_frames / 8).max(1)
 }
 
+/// A fresh allocator page not yet published by a parent. The constructor is
+/// private to the pool, and sealing consumes the capability, so callers cannot
+/// seal an arbitrary reachable page or seal an allocation twice.
+pub(crate) struct UnreachablePage {
+    page_id: PageId,
+}
+
+impl UnreachablePage {
+    pub(crate) fn page_id(&self) -> PageId { self.page_id }
+}
+
 /// A bounded cache of pages over a [`PageStore`].
 #[derive(Debug)]
 pub struct BufferPool {
@@ -1092,21 +1103,26 @@ impl BufferPool {
         self.no_steal.store(true, Ordering::Release);
     }
 
-    /// Seal a newly allocated page before any existing parent references it.
-    /// Existing reachable pages are never passed here: their atomic update
-    /// remains part of the operation-boundary cut. A crash before that cut
-    /// can leak this unrooted page, but cannot replace committed structure.
-    /// Overflow callers build tail-first, making the chain readable with
-    /// constant memory before its heap reference is published.
-    #[cfg(feature = "experimental-structural-cuts")]
-    pub(crate) fn seal_unreachable_page(&self, page_id: PageId) -> Result<()> {
-        let barrier = self.barrier.lock().clone();
-        let Some(barrier) = barrier else { return Ok(()); };
-        let guard = self.get(page_id)?;
-        let epoch = guard.frame.modifications.load(Ordering::Acquire);
-        barrier.before_unreachable_writeback(page_id, guard.bytes())?;
-        drop(guard);
-        self.mark_logged(&[(page_id, epoch)]);
+    pub(crate) fn allocate_unreachable(&self, page_type: PageType) -> Result<UnreachablePage> {
+        Ok(UnreachablePage { page_id: self.store.allocate(page_type)? })
+    }
+
+    /// Seal a fresh, unrooted allocation before publishing any parent link.
+    /// Consuming the allocation capability enforces the caller lifecycle.
+    pub(crate) fn seal_unreachable_page(&self, page: UnreachablePage) -> Result<()> {
+        #[cfg(feature = "experimental-structural-cuts")]
+        {
+            let page_id = page.page_id;
+            let barrier = self.barrier.lock().clone();
+            let Some(barrier) = barrier else { return Ok(()); };
+            let guard = self.get(page_id)?;
+            let epoch = guard.frame.modifications.load(Ordering::Acquire);
+            barrier.before_unreachable_writeback(page_id, guard.bytes())?;
+            drop(guard);
+            self.mark_logged(&[(page_id, epoch)]);
+        }
+        #[cfg(not(feature = "experimental-structural-cuts"))]
+        let _ = page;
         Ok(())
     }
 

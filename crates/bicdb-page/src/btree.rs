@@ -1103,7 +1103,8 @@ impl BTree {
         // Allocate the right sibling and write it before touching the left, so
         // a crash mid-split leaves the original leaf complete and the new page
         // unreferenced.
-        let right_id = self.pool.store().allocate(PageType::BTreeLeaf)?;
+        let right_id_allocation = self.pool.allocate_unreachable(PageType::BTreeLeaf)?;
+        let right_id = right_id_allocation.page_id();
         let old_next = {
             let guard = self.pool.get_in_class(leaf_id, self.cache_class)?;
             NodeRef::new(guard.bytes()).next_page()
@@ -1114,8 +1115,7 @@ impl BTree {
             right.set_next_page(old_next);
             right.rebuild(right_entries, page_size)?;
         }
-        #[cfg(feature = "experimental-structural-cuts")]
-        self.pool.seal_unreachable_page(right_id)?;
+        self.pool.seal_unreachable_page(right_id_allocation)?;
         {
             let mut guard = self.pool.get_mut(leaf_id)?;
             let mut left = Node::new(guard.bytes_mut());
@@ -1166,7 +1166,8 @@ impl BTree {
 
         if level == 0 {
             // The root split: build a new root above it.
-            let new_root = self.pool.store().allocate(PageType::BTreeInterior)?;
+            let new_root_allocation = self.pool.allocate_unreachable(PageType::BTreeInterior)?;
+        let new_root = new_root_allocation.page_id();
             {
                 let mut guard = self.pool.get_mut(new_root)?;
                 let mut node = Node::init(guard.bytes_mut(), new_root, page_size, false);
@@ -1179,8 +1180,7 @@ impl BTree {
                 }
                 node.set_next_page(right_child);
             }
-            #[cfg(feature = "experimental-structural-cuts")]
-            self.pool.seal_unreachable_page(new_root)?;
+            self.pool.seal_unreachable_page(new_root_allocation)?;
             // The new root is made durable BEFORE anyone is told about it. A
             // crash in between leaves the old root intact and the new one
             // unreferenced — garbage, but never a dangling root.
@@ -1263,15 +1263,15 @@ impl BTree {
         let left_entries = entries[..middle].to_vec();
         let right_entries = entries[middle + 1..].to_vec();
 
-        let new_interior = self.pool.store().allocate(PageType::BTreeInterior)?;
+        let new_interior_allocation = self.pool.allocate_unreachable(PageType::BTreeInterior)?;
+        let new_interior = new_interior_allocation.page_id();
         {
             let mut guard = self.pool.get_mut(new_interior)?;
             let mut node = Node::init(guard.bytes_mut(), new_interior, page_size, false);
             node.rebuild(&right_entries, page_size)?;
             node.set_next_page(new_rightmost);
         }
-        #[cfg(feature = "experimental-structural-cuts")]
-        self.pool.seal_unreachable_page(new_interior)?;
+        self.pool.seal_unreachable_page(new_interior_allocation)?;
         {
             let mut guard = self.pool.get_mut(parent_id)?;
             let mut node = Node::new(guard.bytes_mut());

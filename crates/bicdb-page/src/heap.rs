@@ -310,7 +310,8 @@ impl HeapFile {
 
     fn allocate_and_insert(&self, tuple: &[u8]) -> Result<TupleLocator> {
         let page_size = self.pool.page_size();
-        let page_id = self.pool.store().allocate(PageType::Heap)?;
+        let allocated = self.pool.allocate_unreachable(PageType::Heap)?;
+        let page_id = allocated.page_id();
         // A reused page id must mint slot generations above every generation
         // any earlier heap tenancy handed out — the floor the catalog kept
         // when the page was freed. Fresh ids have no floor and start at 1.
@@ -324,8 +325,7 @@ impl HeapFile {
             let locator = heap.insert(tuple)?;
             (locator, heap.free_space())
         };
-        #[cfg(feature = "experimental-structural-cuts")]
-        self.pool.seal_unreachable_page(page_id)?;
+        self.pool.seal_unreachable_page(allocated)?;
         self.pages.lock().push(page_id);
         if let Some(catalog) = self.catalog() {
             catalog.register_page(page_id, PageType::Heap, free_after)?;

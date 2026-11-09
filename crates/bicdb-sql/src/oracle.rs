@@ -68,6 +68,7 @@ pub fn invalid_savepoint_error(name: &str) -> SqlError {
 }
 
 pub(crate) mod simple_case;
+mod simple_case_migration;
 
 pub(crate) const PROFILE_COLLECTION: &str = "__bicdb_sql_compatibility";
 
@@ -496,7 +497,7 @@ pub fn ensure_database_profile(db: &mut BicDb, profile: &str) -> Result<()> {
         {
             enable_metadata_v8(db)?;
         }
-        return Ok(());
+        return simple_case_migration::ensure(db);
     }
     if profile == POSTGRES_PROFILE {
         return Ok(());
@@ -512,7 +513,7 @@ pub fn ensure_database_profile(db: &mut BicDb, profile: &str) -> Result<()> {
         bicdb_core::Record::new("profile")
             .with_metadata(serde_json::json!({"format":1,"profile":profile})),
     )?;
-    Ok(())
+    simple_case_migration::ensure(db)
 }
 
 pub fn is_oracle_profile(profile: &str) -> bool {

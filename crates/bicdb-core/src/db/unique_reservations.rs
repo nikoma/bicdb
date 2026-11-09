@@ -7,6 +7,7 @@ fn namespace(index: &str) -> String {
     format!("native-unique-index:{index}")
 }
 
+#[derive(Debug)]
 pub(super) struct UniqueIndexCache {
     generation: u64,
     collections: FxHashMap<String, Arc<[String]>>,
@@ -104,7 +105,7 @@ impl Transaction {
         self.reserve_integrity_key_cancellable(&namespace(index), &encoded, cancellation)
     }
 
-    fn previous_unique_reservation_image(
+    pub(super) fn previous_unique_reservation_image(
         &self,
         collection: &str,
         record_id: &str,
@@ -130,7 +131,7 @@ impl Transaction {
 
     /// Called before buffering every native write, including signed and stored
     /// fast paths, so a SQL waiter also observes writers that bypass SQL.
-    fn reserve_unique_image(
+    pub(super) fn reserve_unique_image(
         &self,
         collection: &str,
         image: &OldImage,

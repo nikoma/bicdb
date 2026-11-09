@@ -1281,6 +1281,7 @@ dependencies = [
  "axum-server",
  "base64 0.22.1",
  "bicdb-core",
+ "bicdb-page",
  "bicdb-sql",
  "ctrlc",
  "futures-core",

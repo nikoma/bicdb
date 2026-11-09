@@ -2166,9 +2166,12 @@ impl BoundExprScope {
                     if let Some(operand_type) = self.known_expr_type(operand) {
                         if !plain(pg_comparison_kind(&operand_type, &operand_type))
                             || conditions.iter().any(|branch| {
-                                self.known_expr_type(&branch.condition).is_some_and(|when| {
-                                    !plain(pg_comparison_kind(&operand_type, &when))
-                                })
+                                (is_unknown_literal(&branch.condition)
+                                    && pg_comparison_kind(&operand_type, &operand_type)
+                                        != Some(PgComparisonKind::Text))
+                                    || self.known_expr_type(&branch.condition).is_some_and(|when| {
+                                        !plain(pg_comparison_kind(&operand_type, &when))
+                                    })
                             })
                         {
                             return None;

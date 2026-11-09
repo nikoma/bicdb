@@ -1177,6 +1177,31 @@ pub(crate) fn values_equal(left: &SqlValue, right: &SqlValue) -> bool {
     }
 }
 
+/// Resolve unknown simple-CASE literals against the other operand's type.
+/// An untyped row expression must retain its own runtime resolution.
+pub(crate) fn simple_case_expr_values_equal(
+    left_expr: &Expr,
+    right_expr: &Expr,
+    mut left: SqlValue,
+    mut right: SqlValue,
+    mut left_type: Option<String>,
+    mut right_type: Option<String>,
+) -> Result<bool> {
+    if crate::planner::is_unknown_literal(right_expr) {
+        if let Some(kind) = left_type.as_deref() {
+            right = cast_value_to_pg_type(right, kind)?;
+            right_type = left_type.clone();
+        }
+    }
+    if crate::planner::is_unknown_literal(left_expr) {
+        if let Some(kind) = right_type.as_deref() {
+            left = cast_value_to_pg_type(left, kind)?;
+            left_type = right_type.clone();
+        }
+    }
+    simple_case_values_equal(&left, &right, left_type.as_deref(), right_type.as_deref())
+}
+
 /// A simple CASE retains SQL NULL inequality and uses bpchar equality when
 /// both operands resolve to CHAR (or its unknown literal coercion). DECODE's
 /// generated opaque TEXT keys deliberately do not take this padded path.

@@ -9214,3 +9214,22 @@ fn server_paged_migration_initializes_new_table_constraints_atomically() {
         "23505"
     );
 }
+
+#[test]
+fn reused_record_field_types_replace_the_previous_projection() {
+    let mut frame = RoutineFrame::new(&[], &[]).unwrap();
+    frame.set_record_field_types(
+        "r",
+        &["d".into(), "old".into()],
+        &[Some("date".into()), Some("int4".into())],
+    );
+    assert_eq!(frame.assignment_types["r.d"].pg_type, "date");
+    frame.set_record_field_types(
+        "r",
+        &["d".into(), "new".into()],
+        &[None, Some("text".into())],
+    );
+    assert!(!frame.assignment_types.contains_key("r.d"));
+    assert!(!frame.assignment_types.contains_key("r.old"));
+    assert_eq!(frame.assignment_types["r.new"].pg_type, "text");
+}

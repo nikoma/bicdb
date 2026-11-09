@@ -184,3 +184,26 @@ fn explicit_text_operand_does_not_inherit_char_blank_padding() {
         );
     }
 }
+
+#[test]
+fn simple_case_unknown_literals_take_the_operand_type() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open_with_config(
+        root.path(),
+        bicdb_core::DbConfig::default().with_fsync(false),
+    )
+    .unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE cases (i int, n numeric, d date, t timestamp)")
+        .unwrap();
+    session
+        .execute("INSERT INTO cases VALUES(1, 2.00, '2002-07-04', '2002-07-04 00:00:00')")
+        .unwrap();
+    for from in ["cases", "(SELECT i,n,d,t FROM cases) s"] {
+        let sql = format!("SELECT CASE i WHEN '1' THEN 'yes' ELSE 'no' END, CASE n WHEN '2.000' THEN 'yes' ELSE 'no' END, CASE d WHEN '2002-07-04' THEN 'yes' ELSE 'no' END, CASE t WHEN '2002-07-04' THEN 'yes' ELSE 'no' END FROM {from}");
+        let expected = vec![vec![SqlValue::String("yes".into()); 4]];
+        assert_eq!(session.execute(&sql).unwrap().rows, expected, "{sql}");
+        assert_eq!(session.execute(&format!("WITH q AS (SELECT * FROM {from}) SELECT CASE i WHEN '1' THEN 'yes' ELSE 'no' END FROM q")).unwrap().rows, vec![vec![SqlValue::String("yes".into())]]);
+    }
+}

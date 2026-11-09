@@ -56,7 +56,7 @@ thread_local! {
 }
 
 /// Keeps a frame open for the duration of one query execution.
-pub(crate) struct SlotTypeFrame(());
+pub(crate) struct SlotTypeFrame(std::marker::PhantomData<Rc<()>>);
 
 impl Drop for SlotTypeFrame {
     fn drop(&mut self) {
@@ -68,7 +68,7 @@ impl Drop for SlotTypeFrame {
 
 pub(crate) fn push_frame() -> SlotTypeFrame {
     FRAMES.with(|frames| frames.borrow_mut().push(Frame::default()));
-    SlotTypeFrame(())
+    SlotTypeFrame(std::marker::PhantomData)
 }
 
 fn register(qualifier: &str, types: RelationTypes) {

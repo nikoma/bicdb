@@ -4791,25 +4791,31 @@ impl RoutineFrame {
         columns: &[String],
         types: &[Option<String>],
     ) {
-        let target = normalized_object_name_ref(target).to_ascii_lowercase();
+        let prefix = format!(
+            "{}.",
+            normalized_object_name_ref(target).to_ascii_lowercase()
+        );
         let fields = columns
             .iter()
             .zip(types)
             .filter_map(|(column, pg_type)| {
-                let key = format!("{target}.{}", column.to_ascii_lowercase());
-                let pg_type = pg_type.as_ref()?;
-                (self
-                    .assignment_types
-                    .get(&key)
-                    .map(|schema| &schema.pg_type)
-                    != Some(pg_type))
-                .then(|| (key, pg_type.clone()))
+                Some((
+                    format!("{prefix}{}", column.to_ascii_lowercase()),
+                    pg_type.as_ref()?.clone(),
+                ))
             })
-            .collect::<Vec<_>>();
-        if fields.is_empty() {
+            .collect::<BTreeMap<_, _>>();
+        let current = self
+            .assignment_types
+            .iter()
+            .filter(|(name, _)| name.starts_with(&prefix))
+            .map(|(name, kind)| (name.clone(), kind.pg_type.clone()))
+            .collect::<BTreeMap<_, _>>();
+        if current == fields {
             return;
         }
         let types = Arc::make_mut(&mut self.assignment_types);
+        types.retain(|name, _| !name.starts_with(&prefix));
         for (key, pg_type) in fields {
             types.insert(
                 key,

@@ -1,5 +1,6 @@
 //! Metadata preparation must not repeatedly decode one table definition.
 use crate::*;
+use bicdb_core::StorageMode;
 
 fn fixture(mode: bicdb_core::StorageMode) -> (tempfile::TempDir, BicDb, usize) {
     let root = tempfile::tempdir().unwrap();

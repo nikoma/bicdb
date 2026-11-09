@@ -5800,6 +5800,12 @@ impl crate::pool::WritebackBarrier for WalWritebackBarrier {
 
     #[cfg(feature = "experimental-structural-cuts")]
     fn before_unreachable_writeback(&self, page_id: PageId, bytes: &[u8]) -> Result<()> {
+        // A Free header contains no MVCC version or xid-bearing payload.
+        // Retirement must not allocate another marker after checkpoint status
+        // publication: that marker would pin the very reset retiring the page.
+        if bytes[6] == crate::page::PageType::Free as u8 {
+            return self.before_writeback(page_id, 0, bytes);
+        }
         // Even an unrooted image may contain live version headers. Persist
         // a fresh higher xid BEFORE appending a recoverable xid-zero image;
         // recovery must never reissue any xid found in those bytes.

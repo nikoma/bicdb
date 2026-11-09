@@ -13,15 +13,14 @@
 use super::*;
 use std::collections::BTreeSet;
 
-/// Nested views expanded at most this deep; deeper chains stay with the
-/// executor's own checks (a view cannot reference itself).
-const MAX_VIEW_DEPTH: usize = 32;
-
 struct Walk<'q> {
     // CTE scopes, innermost last: a FROM name matching one reads that CTE.
     ctes: Vec<Vec<(String, &'q Query)>>,
     // CTE bodies already walked, by address (recursive CTEs, repeated refs).
     walked: BTreeSet<usize>,
+    // Expansion path, independent of CTE scopes. Valid deep view chains must
+    // be checked completely; a cycle is refused instead of skipping checks.
+    views: Vec<String>,
 }
 
 impl SqlEngine<'_> {
@@ -30,17 +29,12 @@ impl SqlEngine<'_> {
         let mut walk = Walk {
             ctes: Vec::new(),
             walked: BTreeSet::new(),
+            views: Vec::new(),
         };
-        self.eager_query(query, &role, &mut walk, 0)
+        self.eager_query(query, &role, &mut walk)
     }
 
-    fn eager_query<'q>(
-        &self,
-        query: &'q Query,
-        role: &str,
-        walk: &mut Walk<'q>,
-        depth: usize,
-    ) -> Result<()> {
+    fn eager_query<'q>(&self, query: &'q Query, role: &str, walk: &mut Walk<'q>) -> Result<()> {
         let scoped = query.with.is_some();
         if let Some(with) = &query.with {
             walk.ctes.push(
@@ -50,34 +44,28 @@ impl SqlEngine<'_> {
                     .collect(),
             );
         }
-        let result = self.eager_set_expr(&query.body, role, walk, depth);
+        let result = self.eager_set_expr(&query.body, role, walk);
         if scoped {
             walk.ctes.pop();
         }
         result
     }
 
-    fn eager_set_expr<'q>(
-        &self,
-        body: &'q SetExpr,
-        role: &str,
-        walk: &mut Walk<'q>,
-        depth: usize,
-    ) -> Result<()> {
+    fn eager_set_expr<'q>(&self, body: &'q SetExpr, role: &str, walk: &mut Walk<'q>) -> Result<()> {
         match body {
             SetExpr::Select(select) => {
                 for from in &select.from {
-                    self.eager_factor(&from.relation, role, walk, depth)?;
+                    self.eager_factor(&from.relation, role, walk)?;
                     for join in &from.joins {
-                        self.eager_factor(&join.relation, role, walk, depth)?;
+                        self.eager_factor(&join.relation, role, walk)?;
                     }
                 }
                 Ok(())
             }
-            SetExpr::Query(query) => self.eager_query(query, role, walk, depth),
+            SetExpr::Query(query) => self.eager_query(query, role, walk),
             SetExpr::SetOperation { left, right, .. } => {
-                self.eager_set_expr(left, role, walk, depth)?;
-                self.eager_set_expr(right, role, walk, depth)
+                self.eager_set_expr(left, role, walk)?;
+                self.eager_set_expr(right, role, walk)
             }
             _ => Ok(()),
         }
@@ -88,7 +76,6 @@ impl SqlEngine<'_> {
         factor: &'q TableFactor,
         role: &str,
         walk: &mut Walk<'q>,
-        depth: usize,
     ) -> Result<()> {
         match factor {
             TableFactor::Table {
@@ -105,7 +92,7 @@ impl SqlEngine<'_> {
                 });
                 if let Some(cte) = cte {
                     if walk.walked.insert(cte as *const Query as usize) {
-                        self.eager_query(cte, role, walk, depth)?;
+                        self.eager_query(cte, role, walk)?;
                     }
                     return Ok(());
                 }
@@ -115,8 +102,10 @@ impl SqlEngine<'_> {
                 }
                 if let Some(view) = load_view(self.db_ref(), &name)? {
                     self.require_select_as(role, &name)?;
-                    if depth >= MAX_VIEW_DEPTH {
-                        return Ok(());
+                    if walk.views.iter().any(|view| view == &name) {
+                        return Err(SqlError::Unsupported(format!(
+                            "recursive view expansion for {name}"
+                        )));
                     }
                     let Ok(query) = parse_query(&view.query_sql) else {
                         return Ok(());
@@ -128,8 +117,10 @@ impl SqlEngine<'_> {
                     let mut inner = Walk {
                         ctes: Vec::new(),
                         walked: BTreeSet::new(),
+                        views: walk.views.clone(),
                     };
-                    return self.eager_query(&query, &executor, &mut inner, depth + 1);
+                    inner.views.push(name);
+                    return self.eager_query(&query, &executor, &mut inner);
                 }
                 if load_sequence(self.db_ref(), &name)?.is_some() {
                     return Ok(());
@@ -141,13 +132,13 @@ impl SqlEngine<'_> {
                 let table = resolve_session_relation_name(self.db_ref(), &name)?;
                 self.require_select_as(role, &table)
             }
-            TableFactor::Derived { subquery, .. } => self.eager_query(subquery, role, walk, depth),
+            TableFactor::Derived { subquery, .. } => self.eager_query(subquery, role, walk),
             TableFactor::NestedJoin {
                 table_with_joins, ..
             } => {
-                self.eager_factor(&table_with_joins.relation, role, walk, depth)?;
+                self.eager_factor(&table_with_joins.relation, role, walk)?;
                 for join in &table_with_joins.joins {
-                    self.eager_factor(&join.relation, role, walk, depth)?;
+                    self.eager_factor(&join.relation, role, walk)?;
                 }
                 Ok(())
             }

@@ -150,3 +150,32 @@ fn ungranted_tables_in_the_from_tree_are_refused_regardless_of_data() {
         exec(&mut sql, "RESET ROLE");
     }
 }
+
+#[test]
+fn deep_invoker_view_chains_do_not_skip_base_privileges() {
+    for mode in MODES {
+        let (_dir, mut db) = open(mode.clone());
+        let mut sql = SqlSession::new(&mut db);
+        fixture(&mut sql);
+        let mut source = "vw_i".to_string();
+        for level in 0..40 {
+            let view = format!("deep_{level}");
+            exec(
+                &mut sql,
+                &format!(
+                    "CREATE VIEW {view} WITH (security_invoker = true) AS SELECT id FROM {source}"
+                ),
+            );
+            exec(&mut sql, &format!("ALTER VIEW {view} OWNER TO app_owner"));
+            exec(&mut sql, &format!("GRANT SELECT ON {view} TO bob"));
+            source = view;
+        }
+        exec(&mut sql, "SET ROLE bob");
+        denied(
+            &mut sql,
+            "SELECT o.id FROM lz_open o JOIN deep_39 v ON o.id = v.id WHERE o.n = 99",
+            "vw_t",
+        );
+        exec(&mut sql, "RESET ROLE");
+    }
+}

@@ -460,9 +460,12 @@ async fn read_committed_upsert_waits_for_snapshot_invisible_winner(mode: Storage
             .unwrap();
         let reader = Arc::new(connect(running.port).await);
         reader
-        .batch_execute("BEGIN ISOLATION LEVEL READ COMMITTED; INSERT INTO invisible_upsert VALUES(2,5); SAVEPOINT prior_work")
-        .await
-        .unwrap();
+            .batch_execute(concat!(
+                "BEGIN ISOLATION LEVEL READ COMMITTED; ",
+                "INSERT INTO invisible_upsert VALUES(2,5); SAVEPOINT prior_work"
+            ))
+            .await
+            .unwrap();
         let querying = reader.clone();
         let mut upsert = tokio::spawn(async move {
             querying.simple_query("INSERT INTO invisible_upsert VALUES(1,10) ON CONFLICT(id) DO UPDATE SET val=invisible_upsert.val+EXCLUDED.val RETURNING val").await

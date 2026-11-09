@@ -337,6 +337,7 @@ fn shared_commit_keeps_decided_purge_hidden_until_exclusive_cleanup() {
             .with_ddl_undo_log(undo);
         shared.execute("COMMIT").unwrap();
         assert!(shared.execute("SELECT * FROM source").is_err());
+        assert!(shared.execute("SHOW RECYCLEBIN").unwrap().rows.is_empty());
         assert!(shared
             .execute("FLASHBACK TABLE source TO BEFORE DROP")
             .is_err());

@@ -44,8 +44,9 @@ For supported, nonpartitioned tables, a transactional PURGE or recycling-disable
 drop retains the exact backing until the outer decision. Reconstructing rows with
 fresh versions on rollback would hide them from the transaction's retained
 snapshot. The purge marker is instead written in that outer transaction. A durable
-marker hides the entry from FLASHBACK and permits physical cleanup. Ordinary SQL
-COMMIT performs cleanup; if interrupted, startup completes the marker. Cleanup
+marker hides the entry from FLASHBACK and permits physical cleanup. Exclusive SQL
+COMMIT performs cleanup; a shared COMMIT retains the hidden marker for the next
+exclusive cleanup or startup. If interrupted, startup completes the marker. Cleanup
 failure after the durable decision must not run DDL undo against committed work.
 This also fixes rollback of DROP SCHEMA public CASCADE for these tables.
 
@@ -61,7 +62,12 @@ identities are preserved. The original failing results remain in the local
 qualification evidence, rather than being replaced by weaker assertions.
 
 The versioned source `4663f20f` starts full SQL qualification across 224 Cargo
-targets. Its broad result, workspace compilation, final head CI and remote merge
+targets. Its library run found 11 actual shared-session regressions caused by
+unconditional exclusive purge cleanup on COMMIT (807 passed, four existing
+ignores). The correction restricts physical reclamation to exclusive sessions;
+the original broad run continues collecting other evidence. A new shared-COMMIT
+regression checks durable visibility, hidden purge entries and startup cleanup.
+Validation of the corrected source is still pending. Its broad result, workspace compilation, final head CI and remote merge
 are separate gates; focused results alone do not establish them. The merge order
 reserves this version after predecessor `1.0.444-beta`.
 

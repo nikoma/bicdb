@@ -111,6 +111,11 @@ fn creating_an_index_whose_backfill_outgrows_the_pool_fails_cleanly() {
             "{label}: unexpected index definition state after the refusal"
         );
         assert_eq!(db.scan_collection("rows").unwrap().len(), ROWS, "{label}");
+        if definition.kind == IndexKind::FullText {
+            let error = db.lookup_full_text_term(&definition.name, "common", false)
+                .expect_err("a refused build must not answer from a partial index");
+            assert!(error.to_string().contains("no completed build"), "{error}");
+        }
         db.close().unwrap();
 
         let mut db = BicDb::open_with_config(dir.path(), roomy()).unwrap();

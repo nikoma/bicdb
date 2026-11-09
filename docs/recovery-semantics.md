@@ -936,9 +936,8 @@ a committed (or structural, xid 0) record, except for the cases listed under
    collection whose entries outgrow the pool it now fails cleanly ("refused
    ... raise buffer_pool_bytes"), with every row intact; a B-tree build leaves
    no index, and a full-text build keeps its definition and workspace so that
-   retrying CREATE INDEX resumes it (existing resume design; the kept entry
-   reads `full_text_build_incomplete: false`, which a separate change should
-   look at). Before, it succeeded by
+   retrying CREATE INDEX resumes it. The kept entry is marked incomplete,
+   and lookups refuse instead of returning a partial result. Before, it succeeded by
    stealing, with a crash window that could lose other rows. At the default
    256 MiB pool that is roughly a few million rows, depending on the key
    size. Splitting it needs a completion marker, as the full-text path has;

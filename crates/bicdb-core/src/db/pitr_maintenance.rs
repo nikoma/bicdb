@@ -2976,7 +2976,7 @@ impl BicDb {
                 spatial_tombstones: FxHashSet::default(),
                 spatial_delta_durable: false,
                 paged_read_through: false,
-                full_text_build_incomplete: false,
+                full_text_build_incomplete: true,
             }),
         );
         if let Err(error) = self.persist_index_catalog() {
@@ -2987,6 +2987,9 @@ impl BicDb {
         }
 
         self.backfill_paged_index_entries(&definition)?;
+        if let Some(state) = self.indexes.get(&definition.name) {
+            state.write().full_text_build_incomplete = false;
+        }
         if let Some(paged) = &self.paged_records {
             let snapshot = paged.latest_snapshot();
             if paged.index_has_any_posting_blocks(&snapshot, &definition.name)? {

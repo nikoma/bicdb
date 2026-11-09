@@ -509,6 +509,25 @@ fn missing_application_relations_are_not_reported_as_reserved_names() {
     }
 }
 
+/// A user function named like a built-in SQL function does not take
+/// unqualified calls of that name in this profile.
+#[test]
+fn builtin_functions_keep_unqualified_calls_over_user_functions() {
+    let (_root, mut db) = app_database();
+    run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION lower(p_text IN VARCHAR2) RETURN VARCHAR2 AS
+         BEGIN
+           RETURN 'user-lower';
+         END;",
+    )
+    .unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT LOWER('A') FROM dual").unwrap()),
+        vec![vec!["a".to_string()]]
+    );
+}
+
 /// A correlated subquery names a schema-local UPDATE or DELETE target by its
 /// table name in the Oracle profile too.
 #[test]
@@ -617,4 +636,25 @@ fn oracle_standalone_functions_are_replaced_not_overloaded() {
         vec![vec!["3".to_string()]]
     );
     assert!(run(&mut db, "SELECT pick(1) FROM dual").is_err());
+}
+
+/// PL/SQL compares DATE with TIMESTAMP values as date/time values.
+#[test]
+fn plsql_compares_dates_and_timestamps_as_datetimes() {
+    let (_root, mut db) = app_database();
+    run(
+        &mut db,
+        "CREATE OR REPLACE FUNCTION same_instant(p_days IN NUMBER) RETURN NUMBER AS
+           d DATE := TO_DATE('2002-07-04', 'YYYY-MM-DD');
+           t TIMESTAMP := TO_TIMESTAMP('2002-07-04 00:00:00', 'YYYY-MM-DD HH24:MI:SS');
+         BEGIN
+           IF d = t AND NOT d <> t AND d < t + p_days THEN RETURN 1; END IF;
+           RETURN 0;
+         END;",
+    )
+    .unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT same_instant(1) FROM dual").unwrap()),
+        vec![vec!["1".to_string()]]
+    );
 }

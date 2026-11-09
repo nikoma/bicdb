@@ -1,0 +1,84 @@
+{
+ "production_qualification": false,
+ "statement": "Independent post-merge evidence on one host and one revision with emulated failures. Not production qualification; production stays on its last qualified configuration.",
+ "source_revision": "64251c3e2b37d0ffd6a4b30ad50ceaaedb6d7963",
+ "source_branch": "main",
+ "not_covered_later_merges": "#57 (merged 2026-11-08T16:35Z) and every later commit",
+ "binaries": {
+  "bicdb_server": {
+   "path": "target/release/bicdb",
+   "sha256": "6844a23a6793e8a63507b2885b106ac8bf2368524420074373dca8d9a02968a2",
+   "revision": "64251c3e2b37d0ffd6a4b30ad50ceaaedb6d7963"
+  },
+  "bicdb_verifier": {
+   "path": "target/release/bicdb",
+   "sha256": "ea1473a8f6247b8433ef2484bd0c6a177183fc69d4221537a2e13d43d7526a46",
+   "revision": "d2a7fe1cab42bd5dd0838b74df9af36bc7148c09 (local merge of 64251c3e and unmerged PR #85 head 2a64e329fd203ca7bfbb46585f6e4475c3d49b37, not pushed)",
+   "use": "verify-store --read-only only"
+  },
+  "durability_child": {
+   "path": "target/release/examples/durability_child",
+   "sha256": "721df93f12a6ba39685651cd3d5a70486c71d5fa251f5e8eb799f36f65000763",
+   "use": "built as requested; not used by the independent harness"
+  }
+ },
+ "build": {
+  "commands": [
+   "cargo build --release --locked -p bicdb-cli --bin bicdb",
+   "cargo build --release --locked -p bicdb-core --example durability_child"
+  ],
+  "profile": "release (lto=thin, debug=line-tables-only)",
+  "env": {
+   "CARGO_INCREMENTAL": "0",
+   "CARGO_BUILD_JOBS": "6",
+   "RUSTFLAGS": null
+  },
+  "rustc": "1.96.0 (ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96 2026-05-25), LLVM 22.1.2",
+  "cargo": "1.96.0 (30a34c682 2026-05-25)"
+ },
+ "environment": {
+  "host": "s3ny (warm standby host; shared with other jobs; production service untouched)",
+  "os": "Ubuntu 24.04.4 LTS",
+  "kernel": "6.8.0-147-generic x86_64",
+  "cpu": "12 cores / 24 threads",
+  "ram_gib": 91,
+  "filesystem": "ext4 rw,relatime on /dev/nvme2n1p2",
+  "disk": {
+   "model": "CT2000E100SSD8",
+   "firmware": "VDCR4014",
+   "volatile_write_cache": true,
+   "fua": true
+  },
+  "fsync": "on (server default --storage-sync durable)",
+  "isolation": "systemd transient units Nice=19 CPUWeight=10 IOWeight=10 MemoryMax=16G MemorySwapMax=0 LimitCORE=0",
+  "window_utc": [
+   "2026-11-08T16:04:01Z",
+   "2026-11-08T17:43:07Z"
+  ]
+ },
+ "harness": {
+  "location": "docs/evidence/storage-durability-harness-2026-11-08/harness/",
+  "language": "Python 3.12.3 stdlib",
+  "client": "own pgwire v3 client (pgw.py)",
+  "ledger": "per-client JSON lines, fsync per line, outside the database directory",
+  "checks": [
+   "a acked present with exact row set",
+   "b non-08007 failures absent",
+   "c 08007 identity matches txid_current and resolves via bicdb_commit_outcome to committed/not_committed matching presence, stable across recoveries",
+   "d no unwritten rows, no partial transactions, no resurrected deletes",
+   "e secondary/unique/primary index results equal full scan; duplicate key refused",
+   "f verify-store --read-only before recovery 1, before recovery 2 and after clean shutdown; files unchanged by verifier",
+   "no ack after a client's first 08007/58030 within one incarnation",
+   "stability across the two recoveries"
+  ],
+  "negative_controls": "10 of 10 detected"
+ },
+ "emulated_vs_real": {
+  "process_crash": "real SIGKILL or abort() at BICDB_TEST_CRASH_AT points",
+  "power_loss": "EMULATED: page-log unsynced tail truncated at the crash point (BICDB_TEST_WAL_VOLATILE_TAIL=1); no real power cut; other files keep page-cache state",
+  "io_failure": "EMULATED: BICDB_TEST_FAIL_IO returns EIO instead of doing the I/O; no real device error; no kernel post-fsync-failure page-cache behaviour",
+  "torn_tail_and_damage": "EMULATED by editing frame logs of a SIGKILLed server"
+ },
+ "cross_cutting_findings": "docs/evidence/storage-durability-harness-2026-11-08/README.md section 5: 12 failures in 1,422 plain-SIGKILL recoveries of server_paged stores (11 stress, 1 smallwal; 0 in default and smallpool; 0 in 570 embedded recoveries); classes: F1 silent loss after successful open (1), F2 secondary index silently missing committed rows (6), F3 open refused page beyond end (3), F4 open refused wrong page type (1) or panic btree.rs:430 (1); all deterministic on replay; none at the recovery of a fired injected boundary.",
+ "boundaries_all": "summary-all-boundaries.json"
+}

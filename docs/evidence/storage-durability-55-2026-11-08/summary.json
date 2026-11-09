@@ -1,0 +1,1444 @@
+{
+ "fix": "#55 fail-closed durability-critical write and fsync failures",
+ "merge_commit": "e4647d88",
+ "remaining_risks": [
+  "EIO injected instead of a real failed fsync; kernel page-cache drop semantics not exercised",
+  "power loss emulated only for the page-log tail",
+  "one host/filesystem/drive; stress profile needed to reach most sites; production runs the default profile",
+  "not covered: open-time failures as counted boundary, HA/quorum/standby (#71), archives (#73), event log, audit outbox, bulk-load/index-build 08007 with commit_seq=none, encrypted stores",
+  "transaction_log.cut_copy firing not observable (0 of 10 confirmed)",
+  "plain-SIGKILL recovery of server_paged stress stores unreliable at this revision (cross-cutting findings)",
+  "verifier unmerged and blind to small secondary-index omissions"
+ ],
+ "observations": [
+  "page_file.write documented not fatal but fenced at paged.commit in 9 of 9 fired trials (fails closed)",
+  "transaction_log.sync faults record site transaction_log.write or transaction_log.auxiliary, not the injection name",
+  "failed transaction-log sync: embedded resolves not_committed (81/81), paged mostly committed (98/114); consistent with storage, paged case not described in docs section 4",
+  "in-workload paged transaction-log cut fault fired 8 of 20; shutdown variant 15 of 20"
+ ],
+ "production_qualification": false,
+ "statement": "Independent post-merge evidence on one host and one revision with emulated failures. Not production qualification; production stays on its last qualified configuration.",
+ "source_revision": "64251c3e2b37d0ffd6a4b30ad50ceaaedb6d7963",
+ "source_branch": "main",
+ "not_covered_later_merges": "#57 (merged 2026-11-08T16:35Z) and every later commit",
+ "binaries": {
+  "bicdb_server": {
+   "path": "target/release/bicdb",
+   "sha256": "6844a23a6793e8a63507b2885b106ac8bf2368524420074373dca8d9a02968a2",
+   "revision": "64251c3e2b37d0ffd6a4b30ad50ceaaedb6d7963"
+  },
+  "bicdb_verifier": {
+   "path": "target/release/bicdb",
+   "sha256": "ea1473a8f6247b8433ef2484bd0c6a177183fc69d4221537a2e13d43d7526a46",
+   "revision": "d2a7fe1cab42bd5dd0838b74df9af36bc7148c09 (local merge of 64251c3e and unmerged PR #85 head 2a64e329fd203ca7bfbb46585f6e4475c3d49b37, not pushed)",
+   "use": "verify-store --read-only only"
+  },
+  "durability_child": {
+   "path": "target/release/examples/durability_child",
+   "sha256": "721df93f12a6ba39685651cd3d5a70486c71d5fa251f5e8eb799f36f65000763",
+   "use": "built as requested; not used by the independent harness"
+  }
+ },
+ "build": {
+  "commands": [
+   "cargo build --release --locked -p bicdb-cli --bin bicdb",
+   "cargo build --release --locked -p bicdb-core --example durability_child"
+  ],
+  "profile": "release (lto=thin, debug=line-tables-only)",
+  "env": {
+   "CARGO_INCREMENTAL": "0",
+   "CARGO_BUILD_JOBS": "6",
+   "RUSTFLAGS": null
+  },
+  "rustc": "1.96.0 (ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96 2026-05-25), LLVM 22.1.2",
+  "cargo": "1.96.0 (30a34c682 2026-05-25)"
+ },
+ "environment": {
+  "host": "s3ny (warm standby host; shared with other jobs; production service untouched)",
+  "os": "Ubuntu 24.04.4 LTS",
+  "kernel": "6.8.0-147-generic x86_64",
+  "cpu": "12 cores / 24 threads",
+  "ram_gib": 91,
+  "filesystem": "ext4 rw,relatime on /dev/nvme2n1p2",
+  "disk": {
+   "model": "CT2000E100SSD8",
+   "firmware": "VDCR4014",
+   "volatile_write_cache": true,
+   "fua": true
+  },
+  "fsync": "on (server default --storage-sync durable)",
+  "isolation": "systemd transient units Nice=19 CPUWeight=10 IOWeight=10 MemoryMax=16G MemorySwapMax=0 LimitCORE=0",
+  "window_utc": [
+   "2026-11-08T16:04:01Z",
+   "2026-11-08T17:43:07Z"
+  ]
+ },
+ "harness": {
+  "location": "docs/evidence/storage-durability-harness-2026-11-08/harness/",
+  "language": "Python 3.12.3 stdlib",
+  "client": "own pgwire v3 client (pgw.py)",
+  "ledger": "per-client JSON lines, fsync per line, outside the database directory",
+  "checks": [
+   "a acked present with exact row set",
+   "b non-08007 failures absent",
+   "c 08007 identity matches txid_current and resolves via bicdb_commit_outcome to committed/not_committed matching presence, stable across recoveries",
+   "d no unwritten rows, no partial transactions, no resurrected deletes",
+   "e secondary/unique/primary index results equal full scan; duplicate key refused",
+   "f verify-store --read-only before recovery 1, before recovery 2 and after clean shutdown; files unchanged by verifier",
+   "no ack after a client's first 08007/58030 within one incarnation",
+   "stability across the two recoveries"
+  ],
+  "negative_controls": "10 of 10 detected"
+ },
+ "emulated_vs_real": {
+  "process_crash": "real SIGKILL or abort() at BICDB_TEST_CRASH_AT points",
+  "power_loss": "EMULATED: page-log unsynced tail truncated at the crash point (BICDB_TEST_WAL_VOLATILE_TAIL=1); no real power cut; other files keep page-cache state",
+  "io_failure": "EMULATED: BICDB_TEST_FAIL_IO returns EIO instead of doing the I/O; no real device error; no kernel post-fsync-failure page-cache behaviour",
+  "torn_tail_and_damage": "EMULATED by editing frame logs of a SIGKILLed server"
+ },
+ "cross_cutting_findings": "docs/evidence/storage-durability-harness-2026-11-08/README.md section 5: 12 failures in 1,422 plain-SIGKILL recoveries of server_paged stores (11 stress, 1 smallwal; 0 in default and smallpool; 0 in 570 embedded recoveries); classes: F1 silent loss after successful open (1), F2 secondary index silently missing committed rows (6), F3 open refused page beyond end (3), F4 open refused wrong page type (1) or panic btree.rs:430 (1); all deterministic on replay; none at the recovery of a fired injected boundary.",
+ "totals": {
+  "trials": 350,
+  "fired": 309,
+  "pass": 348,
+  "fail": 2,
+  "reopen_failed": 0,
+  "harness_error": 0,
+  "acknowledged_ok": 447427,
+  "failed_non_08007": 5547,
+  "unknown_08007": 1029,
+  "08007_committed": 801,
+  "08007_not_committed": 228,
+  "08007_unresolved": 0
+ },
+ "boundaries": [
+  {
+   "boundary": "f55-crash-commit-paged-powerloss",
+   "fix": 55,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "crash",
+   "sites": [
+    "commit.after_txlog_durable",
+    "commit.after_page_apply",
+    "commit.after_marker"
+   ],
+   "n_range": [
+    10,
+    400
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": true,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 20,
+   "fired": 16,
+   "pass": 20,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "commit.after_txlog_durable": 7,
+    "commit.after_page_apply": 6,
+    "commit.after_marker": 3
+   },
+   "fence_sites_recorded": {},
+   "acknowledged_ok": 8839,
+   "failed_non_08007": 0,
+   "unknown_08007": 0,
+   "08007_resolved": {
+    "committed": 0,
+    "not_committed": 0,
+    "other": 0
+   },
+   "inflight_commit_sent": 230,
+   "inflight_outcomes": {
+    "absent": 7,
+    "present": 223
+   },
+   "inflight_no_commit_sent": 9,
+   "sqlstates_seen": {},
+   "violations": {},
+   "verify_pre2_ran": 20,
+   "verify_pre2_clean": 20,
+   "verify_pre2_exit_codes": {
+    "0": 20
+   },
+   "verify_pre_ran": 20,
+   "verify_pre_clean": 20,
+   "verify_pre_exit_codes": {
+    "0": 20
+   },
+   "verify_post_ran": 20,
+   "verify_post_clean": 20,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  },
+  {
+   "boundary": "f55-crash-commit-paged",
+   "fix": 55,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "crash",
+   "sites": [
+    "commit.after_txlog_durable",
+    "commit.after_page_apply",
+    "commit.after_marker"
+   ],
+   "n_range": [
+    10,
+    400
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 20,
+   "fired": 19,
+   "pass": 19,
+   "fail": 1,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "commit.after_marker": 10,
+    "commit.after_txlog_durable": 3,
+    "commit.after_page_apply": 6
+   },
+   "fence_sites_recorded": {},
+   "acknowledged_ok": 10431,
+   "failed_non_08007": 0,
+   "unknown_08007": 0,
+   "08007_resolved": {
+    "committed": 0,
+    "not_committed": 0,
+    "other": 0
+   },
+   "inflight_commit_sent": 227,
+   "inflight_outcomes": {
+    "absent": 11,
+    "present": 216
+   },
+   "inflight_no_commit_sent": 13,
+   "sqlstates_seen": {},
+   "violations": {
+    "writer_index_differs": 2
+   },
+   "verify_pre2_ran": 20,
+   "verify_pre2_clean": 19,
+   "verify_pre2_exit_codes": {
+    "0": 19,
+    "2": 1
+   },
+   "verify_pre_ran": 20,
+   "verify_pre_clean": 20,
+   "verify_pre_exit_codes": {
+    "0": 20
+   },
+   "verify_post_ran": 20,
+   "verify_post_clean": 19,
+   "verify_left_files_unchanged": true,
+   "failure_samples": [
+    {
+     "rep": 15,
+     "result": "FAIL",
+     "injected": {
+      "BICDB_TEST_CRASH_AT": "commit.after_page_apply:205"
+     },
+     "tamper": null,
+     "error": null,
+     "server_log_tail": null,
+     "violations_1": [],
+     "violations_2": [
+      {
+       "extra": 0,
+       "kind": "writer_index_differs",
+       "missing": 20,
+       "writer": 4
+      },
+      {
+       "extra": 0,
+       "kind": "writer_index_differs",
+       "missing": 185,
+       "writer": 5
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "boundary": "f55-pagefile-sync-paged",
+   "fix": 55,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "failio",
+   "sites": [
+    "page_file.sync"
+   ],
+   "n_range": [
+    1,
+    20
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 20,
+   "fired": 16,
+   "pass": 20,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "page_file.sync": 16
+   },
+   "fence_sites_recorded": {
+    "page_file.sync": 16
+   },
+   "acknowledged_ok": 7029,
+   "failed_non_08007": 308,
+   "unknown_08007": 76,
+   "08007_resolved": {
+    "committed": 69,
+    "not_committed": 7,
+    "other": 0
+   },
+   "inflight_commit_sent": 114,
+   "inflight_outcomes": {
+    "absent": 5,
+    "present": 109
+   },
+   "inflight_no_commit_sent": 6,
+   "sqlstates_seen": {
+    "08007": 76,
+    "58030": 308
+   },
+   "violations": {},
+   "verify_pre2_ran": 20,
+   "verify_pre2_clean": 20,
+   "verify_pre2_exit_codes": {
+    "0": 20
+   },
+   "verify_pre_ran": 20,
+   "verify_pre_clean": 20,
+   "verify_pre_exit_codes": {
+    "0": 20
+   },
+   "verify_post_ran": 20,
+   "verify_post_clean": 20,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  },
+  {
+   "boundary": "f55-pagefile-write-paged",
+   "fix": 55,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "failio",
+   "sites": [
+    "page_file.write"
+   ],
+   "n_range": [
+    1,
+    200
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 10,
+   "fired": 9,
+   "pass": 10,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "page_file.write": 9
+   },
+   "fence_sites_recorded": {
+    "paged.commit": 9
+   },
+   "acknowledged_ok": 3882,
+   "failed_non_08007": 176,
+   "unknown_08007": 40,
+   "08007_resolved": {
+    "committed": 39,
+    "not_committed": 1,
+    "other": 0
+   },
+   "inflight_commit_sent": 49,
+   "inflight_outcomes": {
+    "absent": 5,
+    "present": 44
+   },
+   "inflight_no_commit_sent": 11,
+   "sqlstates_seen": {
+    "08007": 40,
+    "58030": 176
+   },
+   "violations": {},
+   "verify_pre2_ran": 10,
+   "verify_pre2_clean": 8,
+   "verify_pre2_exit_codes": {
+    "0": 8,
+    "3": 2
+   },
+   "verify_pre_ran": 10,
+   "verify_pre_clean": 10,
+   "verify_pre_exit_codes": {
+    "0": 10
+   },
+   "verify_post_ran": 10,
+   "verify_post_clean": 10,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  },
+  {
+   "boundary": "f55-pagelog-seal-paged",
+   "fix": 55,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "failio",
+   "sites": [
+    "page_log.seal_sync",
+    "page_log.seal_dir_sync"
+   ],
+   "n_range": [
+    1,
+    10
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 20,
+   "fired": 20,
+   "pass": 20,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "page_log.seal_sync": 9,
+    "page_log.seal_dir_sync": 11
+   },
+   "fence_sites_recorded": {
+    "page_log.seal_sync": 9,
+    "page_log.seal_dir_sync": 11
+   },
+   "acknowledged_ok": 7469,
+   "failed_non_08007": 392,
+   "unknown_08007": 88,
+   "08007_resolved": {
+    "committed": 81,
+    "not_committed": 7,
+    "other": 0
+   },
+   "inflight_commit_sent": 107,
+   "inflight_outcomes": {
+    "absent": 5,
+    "present": 102
+   },
+   "inflight_no_commit_sent": 13,
+   "sqlstates_seen": {
+    "08007": 88,
+    "58030": 392
+   },
+   "violations": {},
+   "verify_pre2_ran": 20,
+   "verify_pre2_clean": 20,
+   "verify_pre2_exit_codes": {
+    "0": 20
+   },
+   "verify_pre_ran": 20,
+   "verify_pre_clean": 20,
+   "verify_pre_exit_codes": {
+    "0": 20
+   },
+   "verify_post_ran": 20,
+   "verify_post_clean": 20,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  },
+  {
+   "boundary": "f55-pagelog-sync-dead-paged",
+   "fix": 55,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "failio",
+   "sites": [
+    "page_log.sync"
+   ],
+   "n_range": [
+    20,
+    400
+   ],
+   "persistent": true,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 10,
+   "fired": 10,
+   "pass": 10,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "page_log.sync": 10
+   },
+   "fence_sites_recorded": {
+    "page_log.sync": 10
+   },
+   "acknowledged_ok": 3992,
+   "failed_non_08007": 184,
+   "unknown_08007": 56,
+   "08007_resolved": {
+    "committed": 55,
+    "not_committed": 1,
+    "other": 0
+   },
+   "inflight_commit_sent": 54,
+   "inflight_outcomes": {
+    "absent": 1,
+    "present": 53
+   },
+   "inflight_no_commit_sent": 6,
+   "sqlstates_seen": {
+    "08007": 56,
+    "58030": 184
+   },
+   "violations": {},
+   "verify_pre2_ran": 10,
+   "verify_pre2_clean": 9,
+   "verify_pre2_exit_codes": {
+    "0": 9,
+    "3": 1
+   },
+   "verify_pre_ran": 10,
+   "verify_pre_clean": 10,
+   "verify_pre_exit_codes": {
+    "0": 10
+   },
+   "verify_post_ran": 10,
+   "verify_post_clean": 10,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  },
+  {
+   "boundary": "f55-pagelog-sync-paged",
+   "fix": 55,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "failio",
+   "sites": [
+    "page_log.sync"
+   ],
+   "n_range": [
+    20,
+    400
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 20,
+   "fired": 19,
+   "pass": 20,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "page_log.sync": 19
+   },
+   "fence_sites_recorded": {
+    "page_log.sync": 19
+   },
+   "acknowledged_ok": 7448,
+   "failed_non_08007": 351,
+   "unknown_08007": 105,
+   "08007_resolved": {
+    "committed": 103,
+    "not_committed": 2,
+    "other": 0
+   },
+   "inflight_commit_sent": 114,
+   "inflight_outcomes": {
+    "absent": 5,
+    "present": 109
+   },
+   "inflight_no_commit_sent": 12,
+   "sqlstates_seen": {
+    "08007": 105,
+    "58030": 351
+   },
+   "violations": {},
+   "verify_pre2_ran": 20,
+   "verify_pre2_clean": 20,
+   "verify_pre2_exit_codes": {
+    "0": 20
+   },
+   "verify_pre_ran": 20,
+   "verify_pre_clean": 20,
+   "verify_pre_exit_codes": {
+    "0": 20
+   },
+   "verify_post_ran": 20,
+   "verify_post_clean": 20,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  },
+  {
+   "boundary": "f55-pagelog-write-paged",
+   "fix": 55,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "failio",
+   "sites": [
+    "page_log.write"
+   ],
+   "n_range": [
+    20,
+    2000
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 20,
+   "fired": 20,
+   "pass": 20,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "page_log.write": 20
+   },
+   "fence_sites_recorded": {
+    "page_log.write": 20
+   },
+   "acknowledged_ok": 9193,
+   "failed_non_08007": 376,
+   "unknown_08007": 104,
+   "08007_resolved": {
+    "committed": 98,
+    "not_committed": 6,
+    "other": 0
+   },
+   "inflight_commit_sent": 108,
+   "inflight_outcomes": {
+    "absent": 6,
+    "present": 102
+   },
+   "inflight_no_commit_sent": 12,
+   "sqlstates_seen": {
+    "08007": 104,
+    "58030": 376
+   },
+   "violations": {},
+   "verify_pre2_ran": 20,
+   "verify_pre2_clean": 20,
+   "verify_pre2_exit_codes": {
+    "0": 20
+   },
+   "verify_pre_ran": 20,
+   "verify_pre_clean": 20,
+   "verify_pre_exit_codes": {
+    "0": 20
+   },
+   "verify_post_ran": 20,
+   "verify_post_clean": 20,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  },
+  {
+   "boundary": "f55-txlog-cut-embedded",
+   "fix": 55,
+   "mode": "embedded",
+   "profile": "stress",
+   "kind": "failio",
+   "sites": [
+    "transaction_log.cut_rename",
+    "transaction_log.cut_sync"
+   ],
+   "n_range": [
+    2,
+    3
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 20,
+   "fired": 19,
+   "pass": 20,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "transaction_log.cut_rename": 11,
+    "transaction_log.cut_sync": 8
+   },
+   "fence_sites_recorded": {
+    "transaction_log.cut": 19
+   },
+   "acknowledged_ok": 111190,
+   "failed_non_08007": 456,
+   "unknown_08007": 0,
+   "08007_resolved": {
+    "committed": 0,
+    "not_committed": 0,
+    "other": 0
+   },
+   "inflight_commit_sent": 81,
+   "inflight_outcomes": {
+    "absent": 62,
+    "present": 19
+   },
+   "inflight_no_commit_sent": 44,
+   "sqlstates_seen": {
+    "58030": 456
+   },
+   "violations": {},
+   "verify_pre2_ran": 0,
+   "verify_pre2_clean": 0,
+   "verify_pre2_exit_codes": {},
+   "verify_pre_ran": 0,
+   "verify_pre_clean": 0,
+   "verify_pre_exit_codes": {},
+   "verify_post_ran": 0,
+   "verify_post_clean": 0,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  },
+  {
+   "boundary": "f55-txlog-cut-paged",
+   "fix": 55,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "failio",
+   "sites": [
+    "transaction_log.cut_rename",
+    "transaction_log.cut_sync"
+   ],
+   "n_range": [
+    2,
+    4
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 20,
+   "fired": 8,
+   "pass": 19,
+   "fail": 1,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "transaction_log.cut_rename": 3,
+    "transaction_log.cut_sync": 5
+   },
+   "fence_sites_recorded": {
+    "transaction_log.cut": 8
+   },
+   "acknowledged_ok": 12603,
+   "failed_non_08007": 192,
+   "unknown_08007": 0,
+   "08007_resolved": {
+    "committed": 0,
+    "not_committed": 0,
+    "other": 0
+   },
+   "inflight_commit_sent": 169,
+   "inflight_outcomes": {
+    "absent": 10,
+    "present": 159
+   },
+   "inflight_no_commit_sent": 22,
+   "sqlstates_seen": {
+    "58030": 192
+   },
+   "violations": {
+    "k_index_differs": 1,
+    "writer_index_differs": 1
+   },
+   "verify_pre2_ran": 0,
+   "verify_pre2_clean": 0,
+   "verify_pre2_exit_codes": {},
+   "verify_pre_ran": 20,
+   "verify_pre_clean": 20,
+   "verify_pre_exit_codes": {
+    "0": 20
+   },
+   "verify_post_ran": 20,
+   "verify_post_clean": 20,
+   "verify_left_files_unchanged": true,
+   "failure_samples": [
+    {
+     "rep": 3,
+     "result": "FAIL",
+     "injected": {
+      "BICDB_TEST_FAIL_IO": "transaction_log.cut_rename:2"
+     },
+     "tamper": null,
+     "error": null,
+     "server_log_tail": null,
+     "violations_1": [],
+     "violations_2": [
+      {
+       "extra": 0,
+       "kind": "writer_index_differs",
+       "missing": 2,
+       "writer": 5
+      },
+      {
+       "extra": 0,
+       "kind": "k_index_differs",
+       "missing": 2,
+       "writer": 5
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "boundary": "f55-txlog-cut-shutdown-embedded",
+   "fix": 55,
+   "mode": "embedded",
+   "profile": "stress",
+   "kind": "failio",
+   "sites": [
+    "transaction_log.cut_rename",
+    "transaction_log.cut_sync"
+   ],
+   "n_range": [
+    2,
+    2
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "term",
+   "target": null,
+   "control": null,
+   "trials": 20,
+   "fired": 19,
+   "pass": 20,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "transaction_log.cut_sync": 11,
+    "transaction_log.cut_rename": 8
+   },
+   "fence_sites_recorded": {
+    "transaction_log.cut": 19
+   },
+   "acknowledged_ok": 71636,
+   "failed_non_08007": 456,
+   "unknown_08007": 0,
+   "08007_resolved": {
+    "committed": 0,
+    "not_committed": 0,
+    "other": 0
+   },
+   "inflight_commit_sent": 78,
+   "inflight_outcomes": {
+    "absent": 59,
+    "present": 19
+   },
+   "inflight_no_commit_sent": 42,
+   "sqlstates_seen": {
+    "58030": 456
+   },
+   "violations": {},
+   "verify_pre2_ran": 0,
+   "verify_pre2_clean": 0,
+   "verify_pre2_exit_codes": {},
+   "verify_pre_ran": 0,
+   "verify_pre_clean": 0,
+   "verify_pre_exit_codes": {},
+   "verify_post_ran": 0,
+   "verify_post_clean": 0,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  },
+  {
+   "boundary": "f55-txlog-cut-shutdown-paged",
+   "fix": 55,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "failio",
+   "sites": [
+    "transaction_log.cut_rename",
+    "transaction_log.cut_sync"
+   ],
+   "n_range": [
+    2,
+    2
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "term",
+   "target": null,
+   "control": null,
+   "trials": 20,
+   "fired": 15,
+   "pass": 20,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "transaction_log.cut_rename": 6,
+    "transaction_log.cut_sync": 9
+   },
+   "fence_sites_recorded": {
+    "transaction_log.cut": 15
+   },
+   "acknowledged_ok": 14329,
+   "failed_non_08007": 360,
+   "unknown_08007": 0,
+   "08007_resolved": {
+    "committed": 0,
+    "not_committed": 0,
+    "other": 0
+   },
+   "inflight_commit_sent": 110,
+   "inflight_outcomes": {
+    "absent": 12,
+    "present": 98
+   },
+   "inflight_no_commit_sent": 10,
+   "sqlstates_seen": {
+    "58030": 360
+   },
+   "violations": {},
+   "verify_pre2_ran": 0,
+   "verify_pre2_clean": 0,
+   "verify_pre2_exit_codes": {},
+   "verify_pre_ran": 20,
+   "verify_pre_clean": 20,
+   "verify_pre_exit_codes": {
+    "0": 20
+   },
+   "verify_post_ran": 20,
+   "verify_post_clean": 20,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  },
+  {
+   "boundary": "f55-txlog-cutcopy-shutdown-paged",
+   "fix": 55,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "failio",
+   "sites": [
+    "transaction_log.cut_copy"
+   ],
+   "n_range": [
+    2,
+    2
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "term",
+   "target": null,
+   "control": null,
+   "trials": 10,
+   "fired": 0,
+   "pass": 10,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {},
+   "fence_sites_recorded": {},
+   "acknowledged_ok": 8372,
+   "failed_non_08007": 0,
+   "unknown_08007": 0,
+   "08007_resolved": {
+    "committed": 0,
+    "not_committed": 0,
+    "other": 0
+   },
+   "inflight_commit_sent": 56,
+   "inflight_outcomes": {
+    "absent": 4,
+    "present": 52
+   },
+   "inflight_no_commit_sent": 4,
+   "sqlstates_seen": {},
+   "violations": {},
+   "verify_pre2_ran": 0,
+   "verify_pre2_clean": 0,
+   "verify_pre2_exit_codes": {},
+   "verify_pre_ran": 10,
+   "verify_pre_clean": 10,
+   "verify_pre_exit_codes": {
+    "0": 10
+   },
+   "verify_post_ran": 10,
+   "verify_post_clean": 10,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  },
+  {
+   "boundary": "f55-txlog-sync-embedded",
+   "fix": 55,
+   "mode": "embedded",
+   "profile": "stress",
+   "kind": "failio",
+   "sites": [
+    "transaction_log.sync"
+   ],
+   "n_range": [
+    20,
+    400
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 20,
+   "fired": 20,
+   "pass": 20,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "transaction_log.sync": 20
+   },
+   "fence_sites_recorded": {
+    "transaction_log.write": 20
+   },
+   "acknowledged_ok": 59122,
+   "failed_non_08007": 399,
+   "unknown_08007": 81,
+   "08007_resolved": {
+    "committed": 0,
+    "not_committed": 81,
+    "other": 0
+   },
+   "inflight_commit_sent": 72,
+   "inflight_outcomes": {
+    "absent": 52,
+    "present": 20
+   },
+   "inflight_no_commit_sent": 48,
+   "sqlstates_seen": {
+    "08007": 81,
+    "58030": 399
+   },
+   "violations": {},
+   "verify_pre2_ran": 0,
+   "verify_pre2_clean": 0,
+   "verify_pre2_exit_codes": {},
+   "verify_pre_ran": 0,
+   "verify_pre_clean": 0,
+   "verify_pre_exit_codes": {},
+   "verify_post_ran": 0,
+   "verify_post_clean": 0,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  },
+  {
+   "boundary": "f55-txlog-sync-paged",
+   "fix": 55,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "failio",
+   "sites": [
+    "transaction_log.sync"
+   ],
+   "n_range": [
+    20,
+    400
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 20,
+   "fired": 20,
+   "pass": 20,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "transaction_log.sync": 20
+   },
+   "fence_sites_recorded": {
+    "transaction_log.write": 8,
+    "transaction_log.auxiliary": 12
+   },
+   "acknowledged_ok": 10127,
+   "failed_non_08007": 366,
+   "unknown_08007": 114,
+   "08007_resolved": {
+    "committed": 98,
+    "not_committed": 16,
+    "other": 0
+   },
+   "inflight_commit_sent": 111,
+   "inflight_outcomes": {
+    "absent": 5,
+    "present": 106
+   },
+   "inflight_no_commit_sent": 9,
+   "sqlstates_seen": {
+    "08007": 114,
+    "58030": 366
+   },
+   "violations": {},
+   "verify_pre2_ran": 0,
+   "verify_pre2_clean": 0,
+   "verify_pre2_exit_codes": {},
+   "verify_pre_ran": 20,
+   "verify_pre_clean": 20,
+   "verify_pre_exit_codes": {
+    "0": 20
+   },
+   "verify_post_ran": 20,
+   "verify_post_clean": 20,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  },
+  {
+   "boundary": "f55-txlog-sync-repairfail-embedded",
+   "fix": 55,
+   "mode": "embedded",
+   "profile": "stress",
+   "kind": "failio",
+   "sites": [
+    "transaction_log.sync"
+   ],
+   "n_range": [
+    20,
+    400
+   ],
+   "persistent": false,
+   "also_fail": "transaction_log.repair:1",
+   "power_loss_emulated": false,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 10,
+   "fired": 10,
+   "pass": 10,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "transaction_log.sync": 10
+   },
+   "fence_sites_recorded": {
+    "transaction_log.write": 10
+   },
+   "acknowledged_ok": 17185,
+   "failed_non_08007": 210,
+   "unknown_08007": 30,
+   "08007_resolved": {
+    "committed": 10,
+    "not_committed": 20,
+    "other": 0
+   },
+   "inflight_commit_sent": 38,
+   "inflight_outcomes": {
+    "absent": 28,
+    "present": 10
+   },
+   "inflight_no_commit_sent": 22,
+   "sqlstates_seen": {
+    "08007": 30,
+    "58030": 210
+   },
+   "violations": {},
+   "verify_pre2_ran": 0,
+   "verify_pre2_clean": 0,
+   "verify_pre2_exit_codes": {},
+   "verify_pre_ran": 0,
+   "verify_pre_clean": 0,
+   "verify_pre_exit_codes": {},
+   "verify_post_ran": 0,
+   "verify_post_clean": 0,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  },
+  {
+   "boundary": "f55-txlog-sync-repairfail-paged",
+   "fix": 55,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "failio",
+   "sites": [
+    "transaction_log.sync"
+   ],
+   "n_range": [
+    20,
+    400
+   ],
+   "persistent": false,
+   "also_fail": "transaction_log.repair:1",
+   "power_loss_emulated": false,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 20,
+   "fired": 20,
+   "pass": 20,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "transaction_log.sync": 20
+   },
+   "fence_sites_recorded": {
+    "transaction_log.write": 13,
+    "transaction_log.auxiliary": 7
+   },
+   "acknowledged_ok": 7780,
+   "failed_non_08007": 368,
+   "unknown_08007": 112,
+   "08007_resolved": {
+    "committed": 108,
+    "not_committed": 4,
+    "other": 0
+   },
+   "inflight_commit_sent": 111,
+   "inflight_outcomes": {
+    "absent": 4,
+    "present": 107
+   },
+   "inflight_no_commit_sent": 9,
+   "sqlstates_seen": {
+    "08007": 112,
+    "58030": 368
+   },
+   "violations": {},
+   "verify_pre2_ran": 0,
+   "verify_pre2_clean": 0,
+   "verify_pre2_exit_codes": {},
+   "verify_pre_ran": 20,
+   "verify_pre_clean": 20,
+   "verify_pre_exit_codes": {
+    "0": 20
+   },
+   "verify_post_ran": 20,
+   "verify_post_clean": 20,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  },
+  {
+   "boundary": "f55-txlog-write-dead-paged",
+   "fix": 55,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "failio",
+   "sites": [
+    "transaction_log.write"
+   ],
+   "n_range": [
+    20,
+    400
+   ],
+   "persistent": true,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 10,
+   "fired": 10,
+   "pass": 10,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "transaction_log.write": 10
+   },
+   "fence_sites_recorded": {
+    "transaction_log.auxiliary": 5,
+    "transaction_log.write": 5
+   },
+   "acknowledged_ok": 3980,
+   "failed_non_08007": 183,
+   "unknown_08007": 57,
+   "08007_resolved": {
+    "committed": 48,
+    "not_committed": 9,
+    "other": 0
+   },
+   "inflight_commit_sent": 58,
+   "inflight_outcomes": {
+    "absent": 2,
+    "present": 56
+   },
+   "inflight_no_commit_sent": 2,
+   "sqlstates_seen": {
+    "08007": 57,
+    "58030": 183
+   },
+   "violations": {},
+   "verify_pre2_ran": 0,
+   "verify_pre2_clean": 0,
+   "verify_pre2_exit_codes": {},
+   "verify_pre_ran": 10,
+   "verify_pre_clean": 10,
+   "verify_pre_exit_codes": {
+    "0": 10
+   },
+   "verify_post_ran": 10,
+   "verify_post_clean": 10,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  },
+  {
+   "boundary": "f55-txlog-write-embedded",
+   "fix": 55,
+   "mode": "embedded",
+   "profile": "stress",
+   "kind": "failio",
+   "sites": [
+    "transaction_log.write"
+   ],
+   "n_range": [
+    20,
+    400
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 20,
+   "fired": 20,
+   "pass": 20,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "transaction_log.write": 20
+   },
+   "fence_sites_recorded": {
+    "transaction_log.write": 20
+   },
+   "acknowledged_ok": 64244,
+   "failed_non_08007": 419,
+   "unknown_08007": 61,
+   "08007_resolved": {
+    "committed": 0,
+    "not_committed": 61,
+    "other": 0
+   },
+   "inflight_commit_sent": 70,
+   "inflight_outcomes": {
+    "absent": 51,
+    "present": 19
+   },
+   "inflight_no_commit_sent": 49,
+   "sqlstates_seen": {
+    "08007": 61,
+    "58030": 419
+   },
+   "violations": {},
+   "verify_pre2_ran": 0,
+   "verify_pre2_clean": 0,
+   "verify_pre2_exit_codes": {},
+   "verify_pre_ran": 0,
+   "verify_pre_clean": 0,
+   "verify_pre_exit_codes": {},
+   "verify_post_ran": 0,
+   "verify_post_clean": 0,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  },
+  {
+   "boundary": "f55-txlog-write-paged",
+   "fix": 55,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "failio",
+   "sites": [
+    "transaction_log.write"
+   ],
+   "n_range": [
+    20,
+    400
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 20,
+   "fired": 19,
+   "pass": 20,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "transaction_log.write": 19
+   },
+   "fence_sites_recorded": {
+    "transaction_log.write": 6,
+    "transaction_log.auxiliary": 13
+   },
+   "acknowledged_ok": 8576,
+   "failed_non_08007": 351,
+   "unknown_08007": 105,
+   "08007_resolved": {
+    "committed": 92,
+    "not_committed": 13,
+    "other": 0
+   },
+   "inflight_commit_sent": 124,
+   "inflight_outcomes": {
+    "absent": 13,
+    "present": 111
+   },
+   "inflight_no_commit_sent": 2,
+   "sqlstates_seen": {
+    "08007": 105,
+    "58030": 351
+   },
+   "violations": {},
+   "verify_pre2_ran": 0,
+   "verify_pre2_clean": 0,
+   "verify_pre2_exit_codes": {},
+   "verify_pre_ran": 20,
+   "verify_pre_clean": 20,
+   "verify_pre_exit_codes": {
+    "0": 20
+   },
+   "verify_post_ran": 20,
+   "verify_post_clean": 20,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  }
+ ]
+}

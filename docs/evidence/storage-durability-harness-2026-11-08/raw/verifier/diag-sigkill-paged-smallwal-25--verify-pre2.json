@@ -1,0 +1,498 @@
+{
+  "format_version": 1,
+  "verdict": "inconsistent",
+  "complete": true,
+  "stop_reason": null,
+  "store": {
+    "directory": "/root/bicdb-durability-s3/evid/work/diag-sigkill-paged-smallwal-25/db/paged",
+    "page_size": 8192,
+    "layout": "segmented",
+    "page_files": 1,
+    "superblock_page_count": 377,
+    "effective_page_count": 377,
+    "free_list_head": 362,
+    "free_page_count": 1,
+    "checkpoint_lsn": 14923,
+    "meta_page": 1,
+    "meta_initialized": true,
+    "index_root": 354,
+    "catalog_root": 3,
+    "frozen_xid": 497,
+    "next_xid": 497,
+    "abort_exceptions": 1,
+    "status_spill_pages": 0,
+    "status_spill_entries": 0
+  },
+  "read_only": {
+    "lock": {
+      "state": "unlocked"
+    },
+    "files_opened_read_only": [
+      "/root/bicdb-durability-s3/evid/work/diag-sigkill-paged-smallwal-25/db/paged/store.pages",
+      "/root/bicdb-durability-s3/evid/work/diag-sigkill-paged-smallwal-25/db/paged/store.wal.14923",
+      "/root/bicdb-durability-s3/evid/work/diag-sigkill-paged-smallwal-25/db/paged/store.wal.14938",
+      "/root/bicdb-durability-s3/evid/work/diag-sigkill-paged-smallwal-25/db/paged/store.wal"
+    ],
+    "recovery_ran": false,
+    "note": "Files were opened read-only (O_NOFOLLOW, O_NOATIME where permitted); the directory lock was probed with F_GETLK and not taken; recovery was reproduced in memory by reading committed page images from the log."
+  },
+  "log": {
+    "sealed_segments": 2,
+    "sealed_bytes": 246960,
+    "active_bytes": 24696,
+    "reset_shape": {
+      "shape": "normal"
+    },
+    "replay_scope": "full_chain",
+    "records": 33,
+    "first_lsn": 14923,
+    "last_lsn": 14955,
+    "torn_tail_bytes": 0,
+    "checkpoint_records": 0,
+    "redo_lsn": 0,
+    "committed_transactions": 0,
+    "pending_page_images": 0,
+    "distinct_pages_overlaid": 0,
+    "uncommitted_images_skipped": 33,
+    "page_file_truncated_by_recovery_from": null,
+    "open_would_refuse": null,
+    "stale_records_discarded": {
+      "recorded_in_store": false,
+      "segments_a_fixed_open_would_discard": 0,
+      "explanation": "The crash-ordered reset fix reports stale segments it discards (`stale_segments_discarded`) only in the RecoveryReport of that open; it persists nothing, so a store a fixed engine already cleaned up carries no trace of it. `reset_shape` is the same classification computed from these files now."
+    }
+  },
+  "counters": {
+    "index_entries": 5694,
+    "index_tree_pages": 103,
+    "index_tree_height": 3,
+    "catalog_entries": 451,
+    "catalog_tree_pages": 1,
+    "directory_heap_pages": 225,
+    "free_space_records": 226,
+    "versions_examined": 6090,
+    "visible_rows": 5333,
+    "deleted_rows": 360,
+    "keys_without_committed_version": 0,
+    "vacuumed_links": 0,
+    "heap_pages_swept": 225,
+    "heap_versions_swept": 6169,
+    "reachable_versions_swept": 6090,
+    "key_tree_passes": 1,
+    "pages_read_from_page_files": 750,
+    "pages_read_from_log": 0,
+    "page_cache_hits": 6317,
+    "bytes_read": 6144000,
+    "slot_bitmap_window_pages": 377,
+    "peak_bitmap_bytes": 47976,
+    "elapsed_millis": 2
+  },
+  "classes": [
+    {
+      "class": "unreachable_committed_live_version",
+      "family": "heap_reachability",
+      "severity": "inconsistent",
+      "count": 1,
+      "description": "a committed, undeleted heap version the key tree does not reach",
+      "samples": [
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 371,
+          "locator": {
+            "page_id": 371,
+            "slot": 12,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 491,
+          "xmax": 497,
+          "detail": "66 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        }
+      ]
+    },
+    {
+      "class": "missing_row_stale_heap_slot",
+      "family": "vacuum_row_loss",
+      "severity": "needs_external_cross_check",
+      "count": 1,
+      "description": "the version a reader needs points at a heap slot that is missing, dead or re-generated: state B (page reused as heap), or a deleted and vacuumed key",
+      "samples": [
+        {
+          "class": "missing_row_stale_heap_slot",
+          "severity": "needs_external_cross_check",
+          "key": "00056576686f7432",
+          "page_id": 374,
+          "locator": {
+            "page_id": 374,
+            "slot": 34,
+            "generation": 1
+          },
+          "chain_depth": 0,
+          "found_page_type": "heap",
+          "xmin": null,
+          "xmax": null,
+          "detail": "the head: slot 34 beyond the page's 34 slot(s)"
+        }
+      ]
+    },
+    {
+      "class": "unreachable_dead_version",
+      "family": "heap_reachability",
+      "severity": "info",
+      "count": 78,
+      "description": "unreachable version whose deleter committed (awaiting vacuum)",
+      "samples": [
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 12,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 7,
+          "xmax": 12,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 8,
+          "locator": {
+            "page_id": 8,
+            "slot": 1,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 12,
+          "xmax": 19,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 14,
+          "locator": {
+            "page_id": 14,
+            "slot": 37,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 19,
+          "xmax": 25,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 20,
+          "locator": {
+            "page_id": 20,
+            "slot": 17,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 25,
+          "xmax": 31,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 23,
+          "locator": {
+            "page_id": 23,
+            "slot": 21,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 31,
+          "xmax": 37,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 28,
+          "locator": {
+            "page_id": 28,
+            "slot": 4,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 37,
+          "xmax": 43,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 29,
+          "locator": {
+            "page_id": 29,
+            "slot": 27,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 43,
+          "xmax": 49,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 36,
+          "locator": {
+            "page_id": 36,
+            "slot": 25,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 49,
+          "xmax": 55,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 40,
+          "locator": {
+            "page_id": 40,
+            "slot": 21,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 55,
+          "xmax": 61,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 45,
+          "locator": {
+            "page_id": 45,
+            "slot": 12,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 61,
+          "xmax": 67,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 45,
+          "locator": {
+            "page_id": 45,
+            "slot": 34,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 67,
+          "xmax": 74,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 54,
+          "locator": {
+            "page_id": 54,
+            "slot": 25,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 74,
+          "xmax": 80,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 60,
+          "locator": {
+            "page_id": 60,
+            "slot": 17,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 80,
+          "xmax": 86,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 64,
+          "locator": {
+            "page_id": 64,
+            "slot": 8,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 86,
+          "xmax": 92,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 69,
+          "locator": {
+            "page_id": 69,
+            "slot": 12,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 92,
+          "xmax": 98,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 73,
+          "locator": {
+            "page_id": 73,
+            "slot": 17,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 98,
+          "xmax": 104,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 77,
+          "locator": {
+            "page_id": 77,
+            "slot": 21,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 104,
+          "xmax": 110,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 82,
+          "locator": {
+            "page_id": 82,
+            "slot": 34,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 110,
+          "xmax": 116,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 88,
+          "locator": {
+            "page_id": 88,
+            "slot": 21,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 116,
+          "xmax": 122,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 95,
+          "locator": {
+            "page_id": 95,
+            "slot": 4,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 122,
+          "xmax": 128,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "class": "heap_page_not_in_directory",
+      "family": "heap_reachability",
+      "severity": "info",
+      "count": 1,
+      "description": "a heap page missing from the page directory",
+      "samples": [
+        {
+          "class": "heap_page_not_in_directory",
+          "severity": "info",
+          "key": null,
+          "page_id": 362,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": null,
+          "xmax": null,
+          "detail": "0 slot(s); not swept for unreachable versions"
+        }
+      ]
+    }
+  ],
+  "external_evidence": [
+    "missing_row_*: the store keeps no record of whether the key was deleted. If the last committed operation on the key was a write, the row is lost; if it was a delete, the entry is a dangling index entry vacuum left behind (autovacuum does not sweep index entries). Settle each key against: a standby (it applies logical frames, so it holds the row if it was not deleted); the logical transaction log, or the commit-log archive, for the key's last operation; archived page-log segments, rolled forward into a scratch copy up to before the page's re-allocation, which expose the row's bytes; or a backup taken after the last write. In a database, a live secondary-index entry or foreign key that still names the record also proves the row was not deleted.",
+    "unreachable_committed_live_version: the row's bytes are intact on its heap page but no key reaches them. In a database the record id inside each value names the key; compare with a standby or backup to decide which version to restore."
+  ]
+}
+
+--stderr--

@@ -2811,6 +2811,7 @@ impl<'db> SqlSession<'db> {
             &mut declarations,
             &mut statements,
             &mut exception_handlers,
+            crate::routine_overloads::user_function_names(self.db_ref())?,
         );
         let owns_transaction = self.tx.is_none()
             && (routine_declarations_may_write(&declarations)

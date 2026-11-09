@@ -214,10 +214,11 @@ impl SqlSession<'_> {
                 // updated by this statement, but other old rows still own
                 // their keys. This permits an ordered shift into vacated keys
                 // while rejecting a cycle that needs statement-end checking.
-                self.enforce_rls_checks(
+                self.enforce_rls_write_checks(
                     table,
                     Some(schema),
                     PolicyAction::Update,
+                    reads_existing,
                     std::slice::from_ref(&after),
                 )?;
                 self.delete_session_record(table, &candidate.record.id)?;
@@ -245,7 +246,13 @@ impl SqlSession<'_> {
                 .iter()
                 .map(|(_, after)| after.clone())
                 .collect::<Vec<_>>();
-            self.enforce_rls_checks(table, Some(schema), PolicyAction::Update, &after)?;
+            self.enforce_rls_write_checks(
+                table,
+                Some(schema),
+                PolicyAction::Update,
+                reads_existing,
+                &after,
+            )?;
             let old_ids = pairs
                 .iter()
                 .map(|(before, _)| before.id.clone())

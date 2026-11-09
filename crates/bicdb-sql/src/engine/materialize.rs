@@ -328,6 +328,19 @@ impl<'db> SqlEngine<'db> {
                         args.first(),
                     ));
                 }
+                if crate::routine_overloads::user_function_takes_builtin_call(
+                    self.db_ref(),
+                    &self.session_gucs,
+                    &name,
+                    &arg_types,
+                    &args,
+                )? {
+                    if let Some(value) =
+                        self.eval_stored_sql_function_value(&name, &args, &arg_types)?
+                    {
+                        return Ok(value);
+                    }
+                }
                 if let Some(value) = self.eval_runtime_function_value(&name, &args)? {
                     return Ok(value);
                 }
@@ -3203,6 +3216,24 @@ impl<'db> SqlEngine<'db> {
         }
         let name = object_name(&function.name).ok()?.to_ascii_lowercase();
         let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
+        // A user-defined function that takes a built-in name's call.
+        if bare_name == name
+            && crate::routine_overloads::user_function_names(self.db_ref())
+                .is_ok_and(|names| names.contains(bare_name))
+        {
+            let arg_types = function_arg_list(function)
+                .iter()
+                .map(|arg| self.infer_env_expr_type(arg, env))
+                .collect::<Vec<_>>();
+            if let Some(pg_type) = crate::routine_overloads::user_function_result_type(
+                self.db_ref(),
+                &self.session_gucs,
+                bare_name,
+                &arg_types,
+            ) {
+                return Some(pg_type);
+            }
+        }
         // ARRAY(SELECT x ...) is an array of the subquery column's type.
         if let (true, FunctionArguments::Subquery(query)) = (bare_name == "array", &function.args) {
             let element = self.scalar_query_output_type(query)?;
@@ -3711,6 +3742,12 @@ impl<'db> SqlEngine<'db> {
                 .infer_env_expr_type(left, env)
                 .filter(|pg_type| matches!(pg_type.as_str(), "json" | "jsonb")),
             BinaryOperator::LongArrow | BinaryOperator::HashLongArrow => Some("text".to_string()),
+            // numeric ^ numeric when either side is NUMERIC, else float8.
+            BinaryOperator::PGExp => match (left_type.as_deref(), right_type.as_deref()) {
+                (Some("numeric"), _) | (_, Some("numeric")) => Some("numeric".to_string()),
+                (Some(_), Some(_)) => Some("float8".to_string()),
+                _ => None,
+            },
             BinaryOperator::StringConcat => match (left_type, right_type) {
                 (Some(left), _) if left.ends_with("[]") => Some(left),
                 (_, Some(right)) if right.ends_with("[]") => Some(right),

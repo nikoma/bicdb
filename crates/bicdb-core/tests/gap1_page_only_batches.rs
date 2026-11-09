@@ -85,6 +85,7 @@ fn loaded(dir: &std::path::Path, config: DbConfig, collection: &str, rows: usize
 /// index. These direct builds have no resumable workspace. With a larger
 /// pool the same CREATE INDEX completes with correct results.
 #[test]
+#[cfg(not(feature = "experimental-structural-cuts"))]
 fn creating_an_index_whose_backfill_outgrows_the_pool_fails_cleanly() {
     const ROWS: usize = 30_000;
     for (label, definition) in [("b-tree", btree("rows")), ("full-text", full_text("rows"))] {
@@ -212,4 +213,57 @@ fn a_page_apply_that_fails_mid_split_recovers_every_acknowledged_row() {
     let mut tx = db.begin_transaction().unwrap();
     tx.insert("q1", Record::new("after")).unwrap();
     tx.commit().expect("the recovered store must accept writes");
+}
+
+/// Structural cuts replace the interim refusal with complete atomic backfill.
+/// Check every ID through the index immediately and after repeated recovery.
+#[test]
+#[cfg(feature = "experimental-structural-cuts")]
+fn structural_cuts_complete_index_backfills_larger_than_the_pool() {
+    const ROWS: usize = 30_000;
+    let expected = (0..ROWS)
+        .map(|i| format!("doc-{i:06}"))
+        .collect::<std::collections::BTreeSet<_>>();
+    for (label, definition) in [("b-tree", btree("rows")), ("full-text", full_text("rows"))] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = loaded(dir.path(), small_pool(), "rows", ROWS);
+        db.create_index(definition.clone()).unwrap();
+        for recovery in 0..3 {
+            assert_eq!(db.scan_collection("rows").unwrap().len(), ROWS);
+            let ids = if definition.kind == IndexKind::FullText {
+                db.lookup_full_text_term(&definition.name, "common", false)
+                    .unwrap()
+            } else {
+                db.lookup_index(&definition.name, &[]).unwrap()
+            };
+            assert_eq!(ids.len(), ROWS, "{label}: recovery {recovery}");
+            assert_eq!(
+                ids.into_iter().collect::<std::collections::BTreeSet<_>>(),
+                expected,
+                "{label}: recovery {recovery}"
+            );
+            for i in (0..ROWS).step_by(97) {
+                let ids = if definition.kind == IndexKind::FullText {
+                    db.lookup_full_text_term(&definition.name, &format!("rare{i}"), false)
+                        .unwrap()
+                } else {
+                    db.lookup_index(
+                        &definition.name,
+                        &[bicdb_core::IndexValue::from(format!(
+                            "v-{:08}",
+                            (i * 7919) % 1_000_003
+                        ))],
+                    )
+                    .unwrap()
+                };
+                assert_eq!(
+                    ids,
+                    vec![format!("doc-{i:06}")],
+                    "{label}: recovery {recovery}"
+                );
+            }
+            db.close().unwrap();
+            db = BicDb::open_with_config(dir.path(), small_pool()).unwrap();
+        }
+    }
 }

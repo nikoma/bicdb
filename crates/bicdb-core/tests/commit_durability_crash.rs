@@ -1050,7 +1050,10 @@ fn the_last_resort_steal_path_recovers_after_the_stealing_commit() {
         .last()
         .and_then(|line| line.parse().ok())
         .expect("the child records its steal count");
+    #[cfg(not(feature = "experimental-structural-cuts"))]
     assert!(steals > 0, "the decided commit did not take the steal path");
+    #[cfg(feature = "experimental-structural-cuts")]
+    assert_eq!(steals, 0, "structural cuts must never steal unlogged pages");
 
     let mut cases: Vec<(String, Box<dyn FnOnce() + std::panic::UnwindSafe>)> = Vec::new();
     for point in ["commit.after_page_apply:1", "commit.after_marker:1"] {

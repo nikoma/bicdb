@@ -1047,6 +1047,17 @@ pub(crate) fn eval_db_catalog_function_value(
             };
             Ok(Some(SqlValue::String(formatted)))
         }
+        "to_regnamespace" | "pg_catalog.to_regnamespace" => {
+            require_arg_count("to_regnamespace", args, 1)?;
+            if matches!(args.first(), Some(SqlValue::Null) | None) {
+                return Ok(Some(SqlValue::Null));
+            }
+            Ok(Some(
+                resolve_regnamespace_oid(db, &args[0].to_cell())?
+                    .map(|oid| SqlValue::Int(i64::from(oid)))
+                    .unwrap_or(SqlValue::Null),
+            ))
+        }
         "to_regtype" | "pg_catalog.to_regtype" => {
             require_arg_count("to_regtype", args, 1)?;
             if matches!(args.first(), Some(SqlValue::Null) | None) {

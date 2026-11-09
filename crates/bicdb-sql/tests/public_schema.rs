@@ -39,6 +39,17 @@ fn dropping_public_is_persistent_and_creation_follows_the_remaining_search_path(
         let mut db = BicDb::open_with_config(root.path(), config()).unwrap();
         let mut s = SqlSession::new(&mut db);
         s.execute("CREATE SCHEMA \"Public\"").unwrap();
+        assert_eq!(
+            s.execute(
+                "SELECT to_regnamespace('public')::oid,pg_typeof(pg_catalog.to_regnamespace(NULL))"
+            )
+            .unwrap()
+            .rows,
+            vec![vec![
+                SqlValue::Int(2200),
+                SqlValue::String("regnamespace".into())
+            ]]
+        );
         s.execute("CREATE TABLE t(id int)").unwrap();
         s.execute("INSERT INTO t VALUES(1)").unwrap();
         assert_eq!(

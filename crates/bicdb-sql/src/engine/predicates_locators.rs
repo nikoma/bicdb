@@ -1655,6 +1655,9 @@ impl<'db> SqlEngine<'db> {
                 return Ok(Some(RecordLocators::Pks(ids)));
             }
         }
+        if let Some(ids) = self.composite_text_in_record_ids(table, alias, schema, selection)? {
+            return Ok(Some(RecordLocators::Pks(ids)));
+        }
         let strategy = self.locator_strategy_cached(table, alias, schema, selection)?;
         let located = self.execute_locator_strategy(table, alias, schema, selection, &strategy)?;
         if located.is_some() {
@@ -2762,6 +2765,9 @@ impl<'db> SqlEngine<'db> {
         {
             return Ok(Some(Vec::new()));
         }
+        if let Some(ids) = self.composite_text_in_record_ids(table, alias, schema, selection)? {
+            return Ok(Some(ids));
+        }
         // The record-id path serves statements with pending writes on the
         // table (every routine SELECT after an UPDATE of the same table) and
         // every UPDATE/DELETE: it re-derived the index analysis per
@@ -3072,6 +3078,142 @@ impl<'db> SqlEngine<'db> {
             );
         }
         Ok(best.map(|(_, ids)| ids))
+    }
+
+    /// Literal/parameter IN on the final column of a complete text key.
+    /// This stays deliberately narrower than general IN expression evaluation:
+    /// volatile functions, unbound values, historical snapshots and pending
+    /// writes retain the existing executor and its visibility rules.
+    fn composite_text_in_record_ids(
+        &self,
+        table: &str,
+        alias: &str,
+        schema: Option<&TableSchema>,
+        selection: &Expr,
+    ) -> Result<Option<Vec<String>>> {
+        fn literal_probe(expr: &Expr) -> bool {
+            match expr {
+                Expr::Value(_) => true,
+                Expr::TypedString(value) => {
+                    matches!(value.data_type, sqlparser::ast::DataType::Text)
+                }
+                Expr::Nested(expr) => literal_probe(expr),
+                Expr::Cast {
+                    expr, data_type, ..
+                } if matches!(data_type, sqlparser::ast::DataType::Text) => literal_probe(expr),
+                _ => false,
+            }
+        }
+        if crate::plan_diagnostics::forced_signature().is_some()
+            || self.tx.is_some_and(|tx| {
+                tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted
+                    || tx.has_pending_writes(table)
+            })
+        {
+            return Ok(None);
+        }
+        'indexes: for index in sql_index_definitions_for_collection(self.db_ref(), table) {
+            if index.kind != IndexKind::BTree
+                || index.fields.len() < 2
+                || index.fields.iter().any(|field| {
+                    !matches!(field, IndexField::MetadataPath(parts) if parts.len()==1)
+                        || !index_field_pg_type(schema, field)
+                            .is_some_and(|ty| ty.eq_ignore_ascii_case("text"))
+                })
+            {
+                continue;
+            }
+            let last = index.fields.last().unwrap();
+            let mut choices = None;
+            for term in and_terms(selection) {
+                if let Expr::InList {
+                    expr,
+                    list,
+                    negated: false,
+                } = term
+                {
+                    if list.len() <= 1024
+                        && self.expr_matches_table_index_field(expr, table, alias, schema, last)?
+                        && list.iter().all(literal_probe)
+                    {
+                        choices = Some(list);
+                        break;
+                    }
+                }
+            }
+            let Some(choices) = choices else { continue };
+            let mut prefix = Vec::new();
+            for field in &index.fields[..index.fields.len() - 1] {
+                let Some(expr) =
+                    self.dynamic_equality_field_expr(selection, table, alias, schema, field)?
+                else {
+                    continue 'indexes;
+                };
+                if !literal_probe(expr)
+                    || !self.expr_is_bound_without_table_row(expr)?
+                    || !self.index_probe_expr_is_exact(schema, Some(field), expr)
+                {
+                    continue 'indexes;
+                }
+                let value = self.eval_dynamic_bound_expr(expr)?;
+                match value {
+                    SqlValue::Null => return Ok(Some(Vec::new())),
+                    SqlValue::String(_) => {}
+                    _ => continue 'indexes,
+                }
+                let value = index_value_from_sql(value)?;
+                prefix.push(if let Some(schema) = schema {
+                    typed_index_predicate_value(schema, field, value)?
+                } else {
+                    value
+                });
+            }
+            let mut probes = Vec::new();
+            for expr in choices {
+                if !self.expr_is_bound_without_table_row(expr)?
+                    || !self.index_probe_expr_is_exact(schema, Some(last), expr)
+                {
+                    continue 'indexes;
+                }
+                let value = self.eval_dynamic_bound_expr(expr)?;
+                match value {
+                    SqlValue::Null => continue,
+                    SqlValue::String(_) => {}
+                    _ => continue 'indexes,
+                }
+                let value = index_value_from_sql(value)?;
+                probes.push(if let Some(schema) = schema {
+                    typed_index_predicate_value(schema, last, value)?
+                } else {
+                    value
+                });
+            }
+            let mut ids = BTreeSet::new();
+            for (position, value) in probes.into_iter().enumerate() {
+                if position % 64 == 0 {
+                    self.check_cancellation()?;
+                }
+                prefix.push(value);
+                ids.extend(self.db_ref().lookup_index(&index.name, &prefix)?);
+                prefix.pop();
+            }
+            if crate::plan_diagnostics::active() {
+                let signature = crate::plan_diagnostics::PlanSignature {
+                    kind: "IndexLookup",
+                    index: Some(index.name.clone()),
+                    prefix_len: index.fields.len(),
+                };
+                crate::plan_diagnostics::record_decision_for(
+                    "composite-text-in",
+                    table,
+                    vec![signature.clone()],
+                    &signature,
+                    Some(ids.len()),
+                );
+            }
+            return Ok(Some(ids.into_iter().collect()));
+        }
+        Ok(None)
     }
 
     pub(crate) fn full_text_index_record_ids(

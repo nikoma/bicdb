@@ -5037,7 +5037,7 @@ impl<'db> SqlSession<'db> {
     /// CREATE paths create it on the fly) needs CREATE on the database, which
     /// is what `CREATE SCHEMA` itself requires.
     pub(crate) fn require_schema_create_privilege(&self, schema: &str) -> Result<()> {
-        let schema = normalize_object_name(schema);
+        let schema = schema.to_string();
         if schema == "public" && load_namespace(self.db_ref(), &schema)?.is_none() {
             return Err(SqlError::data_exception_public(
                 "3F000",

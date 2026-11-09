@@ -38,6 +38,7 @@ fn dropping_public_is_persistent_and_creation_follows_the_remaining_search_path(
     {
         let mut db = BicDb::open_with_config(root.path(), config()).unwrap();
         let mut s = SqlSession::new(&mut db);
+        s.execute("CREATE SCHEMA \"Public\"").unwrap();
         s.execute("CREATE TABLE t(id int)").unwrap();
         s.execute("INSERT INTO t VALUES(1)").unwrap();
         assert_eq!(
@@ -48,6 +49,8 @@ fn dropping_public_is_persistent_and_creation_follows_the_remaining_search_path(
         );
         s.execute("DROP SCHEMA public CASCADE").unwrap();
         assert_absent(&mut s);
+        s.execute("CREATE TABLE \"Public\".independent(id int)")
+            .unwrap();
     }
     let mut db = BicDb::open_with_config(root.path(), config()).unwrap();
     let mut s = SqlSession::new(&mut db);

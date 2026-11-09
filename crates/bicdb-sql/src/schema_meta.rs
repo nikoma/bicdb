@@ -2562,7 +2562,7 @@ pub(crate) fn role_can_create_in_schema(
     database: Option<&str>,
 ) -> Result<Option<bool>> {
     let role = normalize_role_name(role);
-    let schema = schema.to_ascii_lowercase();
+    let schema = schema.to_string();
     if schema == "public" && load_namespace(db, &schema)?.is_none() {
         return Ok(None);
     }

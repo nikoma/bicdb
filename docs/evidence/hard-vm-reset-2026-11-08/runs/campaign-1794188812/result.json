@@ -1,0 +1,9 @@
+{
+  "format": 1,
+  "complete": false,
+  "source": "8313120f",
+  "acknowledged": 0,
+  "attempted": 0,
+  "error": "RuntimeError(\"guest SQL unavailable: ConnectionLost('[Errno 104] Connection reset by peer')\")",
+  "failures": []
+}

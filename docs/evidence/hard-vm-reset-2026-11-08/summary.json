@@ -1,0 +1,66 @@
+[
+  {
+    "run": "campaign-1794188065",
+    "source": "9ee0a5b3",
+    "storage_mode": "embedded_memory",
+    "acknowledged": 2996,
+    "attempted": 3038,
+    "hard_resets": 12,
+    "recoveries": 15,
+    "duplicate_acknowledged_native_ids": 0,
+    "complete": true,
+    "failure_kinds": []
+  },
+  {
+    "run": "campaign-1794188812",
+    "source": "8313120f",
+    "storage_mode": "not opened",
+    "acknowledged": 0,
+    "attempted": 0,
+    "hard_resets": 0,
+    "recoveries": 0,
+    "duplicate_acknowledged_native_ids": 0,
+    "complete": false,
+    "failure_kinds": []
+  },
+  {
+    "run": "campaign-1794188961",
+    "source": "8313120f",
+    "storage_mode": "server_paged",
+    "acknowledged": 474,
+    "attempted": 520,
+    "hard_resets": 12,
+    "recoveries": 15,
+    "duplicate_acknowledged_native_ids": 0,
+    "complete": true,
+    "failure_kinds": []
+  },
+  {
+    "run": "campaign-1794189323",
+    "source": "8313120f",
+    "storage_mode": "server_paged",
+    "acknowledged": 2045,
+    "attempted": 2049,
+    "hard_resets": 1,
+    "recoveries": 2,
+    "duplicate_acknowledged_native_ids": 0,
+    "complete": false,
+    "failure_kinds": [
+      "unexpected-ddl-error"
+    ]
+  },
+  {
+    "run": "campaign-1794191086",
+    "source": "1a9e3d56",
+    "storage_mode": "server_paged",
+    "acknowledged": 2089,
+    "attempted": 2097,
+    "hard_resets": 2,
+    "recoveries": 3,
+    "duplicate_acknowledged_native_ids": 52,
+    "complete": false,
+    "failure_kinds": [
+      "acknowledged-native-txid-reused"
+    ]
+  }
+]

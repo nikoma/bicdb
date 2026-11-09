@@ -61,6 +61,7 @@ fn selective_virtual_base_filter_limits_catalog_join_work_with_a_left_join() {
         assert_eq!(row[5], SqlValue::Bool(index == 0));
         assert_eq!(row[6], SqlValue::Null);
     }
+    assert!(memory.peak_bytes() > 0, "join work must still be charged");
     assert!(memory.peak_bytes() <= limit);
 }
 

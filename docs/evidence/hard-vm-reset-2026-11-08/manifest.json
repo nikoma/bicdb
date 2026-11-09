@@ -1,7 +1,7 @@
 {
-  "README.md": "2bc70e4e53f565e070cb849c926fadab3b96eace32835c897b17dbdf0311b6d8",
+  "README.md": "e9e3c8e2f871684158c4fca69f1bc25bee7bd360452cb3085bba2fde27d6a85b",
   "harness/campaign-v1.py": "c33deac50f95806716d43f6e37d2c4f68b292f6cc7f5a9dd677870da217ec9cc",
-  "harness/campaign.py": "bd84016c6daee862caf388a15d11a9dca211da297c6d3d69eedf6ca0f31899bf",
+  "harness/campaign.py": "5990e0c834d200fe7348a2f1a9c5f2d7c999cac7acc6c9d6dc6fc04503cb20ad",
   "harness/launch.sh": "f3d73ac3fb8d6561d623a5894ef81cd305f4a3fd9d158a8ffc6381fd3826fa84",
   "harness/pgw.py": "43065a0e9befe6f26ae1a5b3766fc414568bc36da57e63b8b98354a7b16f309e",
   "harness/prepare.py": "99ffee69817007a4f47a220d2f47fb253f4811d43a568a861e35b5b3501b5960",
@@ -44,5 +44,18 @@
   "runs/campaign-1794191086/resets.jsonl.gz": "3f1bbbf10c5701ba48208800351879932a43195645042dd9916bedf38ca8eca9",
   "runs/campaign-1794191086/result.json": "fbcf436369016a9949e1f6175755b02b72bb2ab20d50f598a57ddbc473a0123a",
   "runs/campaign-1794191086/tx-identities.jsonl.gz": "08c1f33fd02a8d959bdf93184659468e3231ec02c5624cf3a0b64bb81f8ae62b",
-  "summary.json": "eeb4aa2944d6526d6dd3705d053a459ce52ece9acd97a09f48a59e579c9e62f1"
+  "runs/campaign-1794195817/ack.jsonl.gz": "37b7ffd7d2b428646ef66b3a09cad56f8bc03e5da8b45fe4a277eaf5e479ef95",
+  "runs/campaign-1794195817/client-errors.jsonl.gz": "a5a6d09ef41ec37f296c85f9512db8fc162d6021d20104e1a7def557b2c30c78",
+  "runs/campaign-1794195817/commit-attempts.jsonl.gz": "be6ed97014b2ee17a7532d7420d8935c08cfa724d9e9de980439c4c0a8b24147",
+  "runs/campaign-1794195817/config.json": "08ea8b0eea30de10745bdf719a7846694af123e014e226a35c13a7537f623adf",
+  "runs/campaign-1794195817/ddl.jsonl.gz": "165179dbd6bfe619c909657326397eed8c52aa3573604059d2fc95653272f7f8",
+  "runs/campaign-1794195817/harness.py": "5990e0c834d200fe7348a2f1a9c5f2d7c999cac7acc6c9d6dc6fc04503cb20ad",
+  "runs/campaign-1794195817/intent.jsonl.gz": "381ae058fbd6672ee3e1867ce4c63a22c2934b891636f33dc041e6b85b967205",
+  "runs/campaign-1794195817/persisted-format.json": "a40df7665b2c0612063d556141538ac482847bc88106ee84588dae4c965d7835",
+  "runs/campaign-1794195817/qualified-artifact.json": "094e16bfcb7e95be8da7c8b6091c97dd8b97a437a61106513c24d08e8ed1f33e",
+  "runs/campaign-1794195817/recoveries.jsonl.gz": "117e3a8aec17e0d914ab5bf6d06a88f978f61b386d85b359ba753b9ca1d5f46b",
+  "runs/campaign-1794195817/resets.jsonl.gz": "d913441eedc0b5e05819f7bfabbeae3e84700ac64c610e82000388e954531796",
+  "runs/campaign-1794195817/result.json": "724f635d4b4f7e856b79ef27a9efb8d546fd46fdf57a88bbe91eefe774603eba",
+  "runs/campaign-1794195817/tx-identities.jsonl.gz": "475f5807a9625f6d28965763a0fa346a779ff8d3e57826d9ed13817f3cbfc9a1",
+  "summary.json": "7dcf6ec709017f17005c629b630b309f8ea80e557bd13a2f4e4020913d62c4d4"
 }

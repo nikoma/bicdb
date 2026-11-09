@@ -62,5 +62,17 @@
     "failure_kinds": [
       "acknowledged-native-txid-reused"
     ]
+  },
+  {
+    "run": "campaign-1794195817",
+    "source": "5d04f91f2189385ec43d0d650be05778f0acdfd1",
+    "storage_mode": "server_paged",
+    "acknowledged": 2428,
+    "attempted": 2472,
+    "hard_resets": 12,
+    "recoveries": 16,
+    "duplicate_acknowledged_native_ids": 0,
+    "complete": true,
+    "failure_kinds": []
   }
 ]

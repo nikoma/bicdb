@@ -24,7 +24,7 @@ config = {name: os.environ.get(name) for name in (
  'BICDB_VM_WAL', 'BICDB_VM_SEGMENT', 'BICDB_VM_DISK')}
 config['guest_server_sha256'] = hashlib.sha256((BASE/'initroot/bin/bicdb').read_bytes()).hexdigest()
 config['harness_dependencies_sha256'] = {name: hashlib.sha256((BASE/name).read_bytes()).hexdigest()
- for name in ('launch.sh', 'prepare.py', 'pgw.py', 'proxy.c', 'initrd.gz', 'vmlinuz')}
+ for name in ('launch.sh', 'prepare.py', 'pgw.py', 'proxy.c', 'proxy', 'initroot/init', 'initroot/bin/proxy', 'initrd.gz', 'vmlinuz')}
 (RUN/'config.json').write_text(json.dumps(config, indent=2)+'\n')
 
 intent={};ack={};native_ids={};decisions=set();ddl_tables={};ledger_lock=threading.Lock();failures=[];next_id=0;crash_id=0

@@ -779,6 +779,13 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
         }
         "power" | "pow" => {
             arity(name, args, 2..=2)?;
+            if matches!(args[0], SqlValue::Null) || matches!(args[1], SqlValue::Null) {
+                return Ok(Some(SqlValue::Null));
+            }
+            // power(numeric, numeric) is NUMERIC (NUMERIC travels as text).
+            if crate::eval::numeric_operand(&args[0]) || crate::eval::numeric_operand(&args[1]) {
+                return crate::eval::numeric_power_value(&args[0], &args[1]).map(Some);
+            }
             let (base, exponent) = (float_arg(name, &args[0])?, float_arg(name, &args[1])?);
             if base == 0.0 && exponent < 0.0 {
                 return Err(SqlError::data_exception(

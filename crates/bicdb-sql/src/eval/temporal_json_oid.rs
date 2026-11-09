@@ -3149,6 +3149,50 @@ fn date_only_epoch_days(text: &str) -> Option<i32> {
         .and_then(|date| date.epoch_days())
 }
 
+fn add_calendar_interval_text(
+    left: &str,
+    op: &BinaryOperator,
+    right: &str,
+) -> Result<Option<SqlValue>> {
+    let interval = |text: &str| PgInterval::from_postgres_text(text).ok();
+    let temporal = |text: &str| parse_temporal_seconds(text).is_some() && interval(text).is_none();
+    let typed = |interval: PgInterval, timestamp: &str| {
+        interval.months != 0 || timestamp_has_iso_offset(timestamp)
+    };
+    let (timestamp, interval_on_right) = match op {
+        BinaryOperator::Plus | BinaryOperator::Minus
+            if temporal(left) && interval(right).is_some_and(|i| typed(i, left)) =>
+        {
+            (left, true)
+        }
+        BinaryOperator::Plus
+            if temporal(right) && interval(left).is_some_and(|i| typed(i, right)) =>
+        {
+            (right, false)
+        }
+        _ => return Ok(None),
+    };
+    let pg_type = if timestamp_has_iso_offset(timestamp) {
+        "timestamptz"
+    } else {
+        "timestamp"
+    };
+    let (left_type, right_type) = if interval_on_right {
+        (pg_type, "interval")
+    } else {
+        ("interval", pg_type)
+    };
+    let (left, right) = (
+        SqlValue::String(left.to_string()),
+        SqlValue::String(right.to_string()),
+    );
+    if pg_type == "timestamptz" {
+        eval_typed_timestamptz_arithmetic(&left, op, &right, Some(left_type), Some(right_type))
+    } else {
+        eval_typed_timestamp_arithmetic(&left, op, &right, Some(left_type), Some(right_type))
+    }
+}
+
 pub(crate) fn eval_date_interval_arithmetic(
     left: &SqlValue,
     op: &BinaryOperator,
@@ -3174,6 +3218,13 @@ pub(crate) fn eval_date_interval_arithmetic(
             )
         })?;
         return Ok(Some(SqlValue::String(render_interval(result))));
+    }
+    // An interval computed at run time (`interval '1' month * n`) reaches
+    // here as text. With a month part, or against a timestamp with a time
+    // zone, it adds as the typed arithmetic does: on the calendar, and in
+    // the session time zone across daylight-saving changes.
+    if let Some(value) = add_calendar_interval_text(left, op, right)? {
+        return Ok(Some(value));
     }
     let left_interval = parse_interval_seconds(left);
     let right_interval = parse_interval_seconds(right);

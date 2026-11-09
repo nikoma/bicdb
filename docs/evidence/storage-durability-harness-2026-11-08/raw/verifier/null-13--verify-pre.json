@@ -1,0 +1,1028 @@
+{
+  "format_version": 1,
+  "verdict": "inconsistent",
+  "complete": true,
+  "stop_reason": null,
+  "store": {
+    "directory": "/root/bicdb-durability-s3/evid/work/f74-midfile-synclog-paged-13/db/paged",
+    "page_size": 8192,
+    "layout": "segmented",
+    "page_files": 1,
+    "superblock_page_count": 349,
+    "effective_page_count": 350,
+    "free_list_head": 0,
+    "free_page_count": 0,
+    "checkpoint_lsn": 16008,
+    "meta_page": 1,
+    "meta_initialized": true,
+    "index_root": 12,
+    "catalog_root": 3,
+    "frozen_xid": 451,
+    "next_xid": 451,
+    "abort_exceptions": 0,
+    "status_spill_pages": 0,
+    "status_spill_entries": 0
+  },
+  "read_only": {
+    "lock": {
+      "state": "unlocked"
+    },
+    "files_opened_read_only": [
+      "/root/bicdb-durability-s3/evid/work/f74-midfile-synclog-paged-13/db/paged/store.pages",
+      "/root/bicdb-durability-s3/evid/work/f74-midfile-synclog-paged-13/db/paged/store.wal.16008",
+      "/root/bicdb-durability-s3/evid/work/f74-midfile-synclog-paged-13/db/paged/store.wal.16023",
+      "/root/bicdb-durability-s3/evid/work/f74-midfile-synclog-paged-13/db/paged/store.wal.16038",
+      "/root/bicdb-durability-s3/evid/work/f74-midfile-synclog-paged-13/db/paged/store.wal.16053",
+      "/root/bicdb-durability-s3/evid/work/f74-midfile-synclog-paged-13/db/paged/store.wal.16068",
+      "/root/bicdb-durability-s3/evid/work/f74-midfile-synclog-paged-13/db/paged/store.wal"
+    ],
+    "recovery_ran": false,
+    "note": "Files were opened read-only (O_NOFOLLOW, O_NOATIME where permitted); the directory lock was probed with F_GETLK and not taken; recovery was reproduced in memory by reading committed page images from the log."
+  },
+  "log": {
+    "sealed_segments": 5,
+    "sealed_bytes": 617440,
+    "active_bytes": 98824,
+    "reset_shape": {
+      "shape": "normal"
+    },
+    "replay_scope": "full_chain",
+    "records": 89,
+    "first_lsn": 16008,
+    "last_lsn": 16096,
+    "torn_tail_bytes": 0,
+    "checkpoint_records": 0,
+    "redo_lsn": 0,
+    "committed_transactions": 2,
+    "pending_page_images": 82,
+    "distinct_pages_overlaid": 77,
+    "uncommitted_images_skipped": 5,
+    "page_file_truncated_by_recovery_from": null,
+    "open_would_refuse": null,
+    "stale_records_discarded": {
+      "recorded_in_store": false,
+      "segments_a_fixed_open_would_discard": 0,
+      "explanation": "The crash-ordered reset fix reports stale segments it discards (`stale_segments_discarded`) only in the RecoveryReport of that open; it persists nothing, so a store a fixed engine already cleaned up carries no trace of it. `reset_shape` is the same classification computed from these files now."
+    }
+  },
+  "counters": {
+    "index_entries": 2216,
+    "index_tree_pages": 47,
+    "index_tree_height": 2,
+    "catalog_entries": 425,
+    "catalog_tree_pages": 1,
+    "directory_heap_pages": 212,
+    "free_space_records": 213,
+    "versions_examined": 2216,
+    "visible_rows": 2076,
+    "deleted_rows": 140,
+    "keys_without_committed_version": 0,
+    "vacuumed_links": 0,
+    "heap_pages_swept": 212,
+    "heap_versions_swept": 5805,
+    "reachable_versions_swept": 2216,
+    "key_tree_passes": 1,
+    "pages_read_from_page_files": 502,
+    "pages_read_from_log": 148,
+    "page_cache_hits": 2429,
+    "bytes_read": 5324800,
+    "slot_bitmap_window_pages": 350,
+    "peak_bitmap_bytes": 44552,
+    "elapsed_millis": 2
+  },
+  "classes": [
+    {
+      "class": "tree_leaf_link_mismatch",
+      "family": "heap_reachability",
+      "severity": "inconsistent",
+      "count": 1,
+      "description": "a leaf's sibling link is not the next leaf in key order",
+      "samples": [
+        {
+          "class": "tree_leaf_link_mismatch",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 292,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": null,
+          "xmax": null,
+          "detail": "key tree leaf 292 is the last leaf in key order but links to page 87 (a btree_leaf page)"
+        }
+      ]
+    },
+    {
+      "class": "unreachable_committed_live_version",
+      "family": "heap_reachability",
+      "severity": "inconsistent",
+      "count": 2946,
+      "description": "a committed, undeleted heap version the key tree does not reach",
+      "samples": [
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 0,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 1,
+          "xmax": 0,
+          "detail": "85 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        },
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 1,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 1,
+          "xmax": 0,
+          "detail": "85 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        },
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 4,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 4,
+          "xmax": 0,
+          "detail": "17 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        },
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 5,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 5,
+          "xmax": 0,
+          "detail": "85 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        },
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 6,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 5,
+          "xmax": 0,
+          "detail": "85 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        },
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 7,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 6,
+          "xmax": 0,
+          "detail": "1213 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        },
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 9,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 7,
+          "xmax": 0,
+          "detail": "53 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        },
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 11,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 7,
+          "xmax": 0,
+          "detail": "53 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        },
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 13,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 7,
+          "xmax": 0,
+          "detail": "53 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        },
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 15,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 7,
+          "xmax": 0,
+          "detail": "53 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        },
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 17,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 7,
+          "xmax": 0,
+          "detail": "53 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        },
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 19,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 7,
+          "xmax": 0,
+          "detail": "53 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        },
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 21,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 8,
+          "xmax": 0,
+          "detail": "1250 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        },
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 22,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 8,
+          "xmax": 0,
+          "detail": "53 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        },
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 24,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 8,
+          "xmax": 0,
+          "detail": "53 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        },
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 25,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 8,
+          "xmax": 0,
+          "detail": "53 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        },
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 6,
+          "locator": {
+            "page_id": 6,
+            "slot": 0,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 8,
+          "xmax": 0,
+          "detail": "1250 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        },
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 6,
+          "locator": {
+            "page_id": 6,
+            "slot": 1,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 8,
+          "xmax": 0,
+          "detail": "53 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        },
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 6,
+          "locator": {
+            "page_id": 6,
+            "slot": 2,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 8,
+          "xmax": 0,
+          "detail": "1698 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        },
+        {
+          "class": "unreachable_committed_live_version",
+          "severity": "inconsistent",
+          "key": null,
+          "page_id": 6,
+          "locator": {
+            "page_id": 6,
+            "slot": 3,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 8,
+          "xmax": 0,
+          "detail": "53 stored bytes; no key-tree entry reaches this version (the page store does not record a version's key; in a database the record id inside the value names it)"
+        }
+      ]
+    },
+    {
+      "class": "unreachable_dead_version",
+      "family": "heap_reachability",
+      "severity": "info",
+      "count": 643,
+      "description": "unreachable version whose deleter committed (awaiting vacuum)",
+      "samples": [
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 2,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 2,
+          "xmax": 3,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 3,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 3,
+          "xmax": 4,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 8,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 7,
+          "xmax": 11,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 10,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 7,
+          "xmax": 13,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 12,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 7,
+          "xmax": 12,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 14,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 7,
+          "xmax": 9,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 16,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 7,
+          "xmax": 8,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 18,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 7,
+          "xmax": 10,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 4,
+          "locator": {
+            "page_id": 4,
+            "slot": 20,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 8,
+          "xmax": 14,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 6,
+          "locator": {
+            "page_id": 6,
+            "slot": 6,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 9,
+          "xmax": 15,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 7,
+          "locator": {
+            "page_id": 7,
+            "slot": 1,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 10,
+          "xmax": 16,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 7,
+          "locator": {
+            "page_id": 7,
+            "slot": 14,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 11,
+          "xmax": 17,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 7,
+          "locator": {
+            "page_id": 7,
+            "slot": 27,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 12,
+          "xmax": 18,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 9,
+          "locator": {
+            "page_id": 9,
+            "slot": 8,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 13,
+          "xmax": 20,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 9,
+          "locator": {
+            "page_id": 9,
+            "slot": 21,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 14,
+          "xmax": 19,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 10,
+          "locator": {
+            "page_id": 10,
+            "slot": 12,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 15,
+          "xmax": 21,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 10,
+          "locator": {
+            "page_id": 10,
+            "slot": 25,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 16,
+          "xmax": 22,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 14,
+          "locator": {
+            "page_id": 14,
+            "slot": 8,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 17,
+          "xmax": 23,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 14,
+          "locator": {
+            "page_id": 14,
+            "slot": 21,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 18,
+          "xmax": 24,
+          "detail": ""
+        },
+        {
+          "class": "unreachable_dead_version",
+          "severity": "info",
+          "key": null,
+          "page_id": 14,
+          "locator": {
+            "page_id": 14,
+            "slot": 31,
+            "generation": 1
+          },
+          "chain_depth": null,
+          "found_page_type": null,
+          "xmin": 20,
+          "xmax": 26,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "class": "orphan_tree_page",
+      "family": "heap_reachability",
+      "severity": "info",
+      "count": 48,
+      "description": "a B-tree page neither tree reaches",
+      "samples": [
+        {
+          "class": "orphan_tree_page",
+          "severity": "info",
+          "key": null,
+          "page_id": 11,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": "btree_leaf",
+          "xmin": null,
+          "xmax": null,
+          "detail": ""
+        },
+        {
+          "class": "orphan_tree_page",
+          "severity": "info",
+          "key": null,
+          "page_id": 21,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": "btree_leaf",
+          "xmin": null,
+          "xmax": null,
+          "detail": ""
+        },
+        {
+          "class": "orphan_tree_page",
+          "severity": "info",
+          "key": null,
+          "page_id": 34,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": "btree_leaf",
+          "xmin": null,
+          "xmax": null,
+          "detail": ""
+        },
+        {
+          "class": "orphan_tree_page",
+          "severity": "info",
+          "key": null,
+          "page_id": 35,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": "btree_leaf",
+          "xmin": null,
+          "xmax": null,
+          "detail": ""
+        },
+        {
+          "class": "orphan_tree_page",
+          "severity": "info",
+          "key": null,
+          "page_id": 50,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": "btree_leaf",
+          "xmin": null,
+          "xmax": null,
+          "detail": ""
+        },
+        {
+          "class": "orphan_tree_page",
+          "severity": "info",
+          "key": null,
+          "page_id": 52,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": "btree_leaf",
+          "xmin": null,
+          "xmax": null,
+          "detail": ""
+        },
+        {
+          "class": "orphan_tree_page",
+          "severity": "info",
+          "key": null,
+          "page_id": 62,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": "btree_leaf",
+          "xmin": null,
+          "xmax": null,
+          "detail": ""
+        },
+        {
+          "class": "orphan_tree_page",
+          "severity": "info",
+          "key": null,
+          "page_id": 64,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": "btree_leaf",
+          "xmin": null,
+          "xmax": null,
+          "detail": ""
+        },
+        {
+          "class": "orphan_tree_page",
+          "severity": "info",
+          "key": null,
+          "page_id": 71,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": "btree_leaf",
+          "xmin": null,
+          "xmax": null,
+          "detail": ""
+        },
+        {
+          "class": "orphan_tree_page",
+          "severity": "info",
+          "key": null,
+          "page_id": 87,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": "btree_leaf",
+          "xmin": null,
+          "xmax": null,
+          "detail": ""
+        },
+        {
+          "class": "orphan_tree_page",
+          "severity": "info",
+          "key": null,
+          "page_id": 106,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": "btree_leaf",
+          "xmin": null,
+          "xmax": null,
+          "detail": ""
+        },
+        {
+          "class": "orphan_tree_page",
+          "severity": "info",
+          "key": null,
+          "page_id": 109,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": "btree_leaf",
+          "xmin": null,
+          "xmax": null,
+          "detail": ""
+        },
+        {
+          "class": "orphan_tree_page",
+          "severity": "info",
+          "key": null,
+          "page_id": 114,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": "btree_leaf",
+          "xmin": null,
+          "xmax": null,
+          "detail": ""
+        },
+        {
+          "class": "orphan_tree_page",
+          "severity": "info",
+          "key": null,
+          "page_id": 117,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": "btree_leaf",
+          "xmin": null,
+          "xmax": null,
+          "detail": ""
+        },
+        {
+          "class": "orphan_tree_page",
+          "severity": "info",
+          "key": null,
+          "page_id": 120,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": "btree_leaf",
+          "xmin": null,
+          "xmax": null,
+          "detail": ""
+        },
+        {
+          "class": "orphan_tree_page",
+          "severity": "info",
+          "key": null,
+          "page_id": 123,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": "btree_leaf",
+          "xmin": null,
+          "xmax": null,
+          "detail": ""
+        },
+        {
+          "class": "orphan_tree_page",
+          "severity": "info",
+          "key": null,
+          "page_id": 125,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": "btree_leaf",
+          "xmin": null,
+          "xmax": null,
+          "detail": ""
+        },
+        {
+          "class": "orphan_tree_page",
+          "severity": "info",
+          "key": null,
+          "page_id": 129,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": "btree_leaf",
+          "xmin": null,
+          "xmax": null,
+          "detail": ""
+        },
+        {
+          "class": "orphan_tree_page",
+          "severity": "info",
+          "key": null,
+          "page_id": 132,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": "btree_leaf",
+          "xmin": null,
+          "xmax": null,
+          "detail": ""
+        },
+        {
+          "class": "orphan_tree_page",
+          "severity": "info",
+          "key": null,
+          "page_id": 153,
+          "locator": null,
+          "chain_depth": null,
+          "found_page_type": "btree_leaf",
+          "xmin": null,
+          "xmax": null,
+          "detail": ""
+        }
+      ]
+    }
+  ],
+  "external_evidence": [
+    "unreachable_committed_live_version: the row's bytes are intact on its heap page but no key reaches them. In a database the record id inside each value names the key; compare with a standby or backup to decide which version to restore."
+  ]
+}
+
+--stderr--

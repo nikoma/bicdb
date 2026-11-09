@@ -346,6 +346,9 @@ impl BicDb {
             &self.path,
             self.commit_seq.load(AtomicOrdering::SeqCst),
             wal_base,
+            self.next_tx_id
+                .load(AtomicOrdering::SeqCst)
+                .saturating_sub(1),
             self.config.fsync,
         )?;
         bicdb_page::test_faults::crash_point("txlog_cut.after_floor");

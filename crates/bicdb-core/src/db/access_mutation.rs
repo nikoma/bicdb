@@ -654,18 +654,20 @@ impl BicDb {
 
     /// Atomically allocates a unique, monotonically increasing transaction id.
     /// Safe to call from concurrent transaction begins.
-    pub(crate) fn allocate_tx_id(&self) -> TransactionId {
+    pub(crate) fn allocate_tx_id(&self) -> Result<TransactionId> {
         let mut current = self.next_tx_id.load(AtomicOrdering::SeqCst);
         loop {
             let id = current.max(1);
-            let next = id.saturating_add(1);
+            let next = id.checked_add(1).ok_or_else(|| {
+                BicDbError::FormatCompatibility("transaction id allocator exhausted".to_string())
+            })?;
             match self.next_tx_id.compare_exchange_weak(
                 current,
                 next,
                 AtomicOrdering::SeqCst,
                 AtomicOrdering::SeqCst,
             ) {
-                Ok(_) => return TransactionId(id),
+                Ok(_) => return Ok(TransactionId(id)),
                 Err(observed) => current = observed,
             }
         }
@@ -833,7 +835,7 @@ impl BicDb {
         // A standby may begin transactions to read; any write is refused when
         // it is buffered and a read-only commit takes no sequence number (see
         // `commit_transaction`).
-        let tx_id = self.allocate_tx_id();
+        let tx_id = self.allocate_tx_id()?;
         self.tx_states.insert(tx_id.0, TxState::Pending);
         let mut applied_watermark = self.last_committed_tx.load(AtomicOrdering::SeqCst);
         let mut snapshot_tx = TransactionId(applied_watermark.max(min_snapshot));

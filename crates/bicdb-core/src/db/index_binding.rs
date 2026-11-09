@@ -401,6 +401,50 @@ mod tests {
     }
 
     #[test]
+    fn replacement_validation_preserves_case_family_literals_and_unrelated_policy() {
+        let old = IndexDefinition {
+            name: "legacy".into(),
+            collection: "rows".into(),
+            fields: vec![IndexField::Upper(Box::new(IndexField::MetadataPath(vec![
+                "value".into(),
+            ])))],
+            unique: true,
+            nulls_not_distinct: false,
+            kind: IndexKind::BTree,
+            predicate: Some(IndexPredicate::Binary {
+                operator: IndexPredicateBinaryOperator::Equal,
+                left: Box::new(IndexPredicate::Field {
+                    field: IndexField::Lower(Box::new(IndexField::MetadataPath(vec![
+                        "other".into()
+                    ]))),
+                }),
+                right: Box::new(IndexPredicate::Literal {
+                    value: serde_json::json!("literal"),
+                }),
+                value_type: IndexPredicateValueType::String,
+            }),
+            exclusion: None,
+        };
+        let replacement = oracle_case_v1_definition(old.clone());
+        assert!(oracle_case_v1_replacement_matches(&old, &replacement));
+        let mut changed = replacement.clone();
+        changed.unique = false;
+        assert!(!oracle_case_v1_replacement_matches(&old, &changed));
+        let mut changed = replacement.clone();
+        changed.fields[0] =
+            IndexField::OracleLowerV1(Box::new(IndexField::MetadataPath(vec!["value".into()])));
+        assert!(!oracle_case_v1_replacement_matches(&old, &changed));
+        let mut changed = replacement.clone();
+        if let Some(IndexPredicate::Binary { right, .. }) = &mut changed.predicate {
+            *right = Box::new(IndexPredicate::Literal {
+                value: serde_json::json!("changed"),
+            });
+        }
+        assert!(!oracle_case_v1_replacement_matches(&old, &changed));
+        assert!(!oracle_case_v1_replacement_matches(&old, &old));
+    }
+
+    #[test]
     fn replacement_retains_old_reader_generation_and_refuses_bound_generation_cleanup() {
         let root = tempfile::tempdir().unwrap();
         let config = DbConfig::default()

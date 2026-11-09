@@ -3101,6 +3101,97 @@ mod snapshot_count_tests {
     use super::*;
 
     #[test]
+    fn count_does_not_parse_or_memoize_a_large_stored_pending_upsert() {
+        let directory = tempfile::tempdir().unwrap();
+        let config = DbConfig::default()
+            .with_fsync(false)
+            .with_storage_mode(StorageMode::ServerPaged);
+        let mut db = BicDb::open_with_config(directory.path(), config.clone()).unwrap();
+        db.create_collection("entries").unwrap();
+        db.insert("entries", Record::new("base")).unwrap();
+        db.close().unwrap();
+        let db = BicDb::open_with_config(directory.path(), config).unwrap();
+        assert!(db.collection_state("entries").unwrap().paged_lazy);
+        let mut tx = db.begin_transaction().unwrap();
+        let row = Arc::new(
+            StoredRecord::from_record(
+                &Record::new("pending")
+                    .with_metadata(serde_json::json!({"large": "x".repeat(4 * 1024 * 1024)})),
+            )
+            .unwrap(),
+        );
+        tx.write_stored_inserts_with_statement_snapshots("entries", [(row, db.last_commit_seq())])
+            .unwrap();
+        assert!(tx
+            .pending_writes_for_collection("entries")
+            .next()
+            .unwrap()
+            .record
+            .get()
+            .is_none());
+        let scope = crate::query_budget::QueryMemoryScope::new(64 * 1024);
+        assert_eq!(
+            tx.try_count_collection_visible_cancellable(
+                "entries",
+                &CancellationToken::uncancelable()
+            )
+            .unwrap(),
+            Some(2)
+        );
+        assert!(scope.peak_bytes() < 64 * 1024);
+        assert!(
+            tx.pending_writes_for_collection("entries")
+                .next()
+                .unwrap()
+                .record
+                .get()
+                .is_none(),
+            "COUNT parsed and retained the pending 4MiB payload outside its identity budget"
+        );
+    }
+
+    #[test]
+    fn retained_transaction_counts_report_a_recovery_fence_even_when_empty() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            for empty in [false, true] {
+                let directory = tempfile::tempdir().unwrap();
+                let config = DbConfig::default()
+                    .with_fsync(false)
+                    .with_storage_mode(mode.clone());
+                let mut db = BicDb::open_with_config(directory.path(), config.clone()).unwrap();
+                db.create_collection("entries").unwrap();
+                db.insert("entries", Record::new("base")).unwrap();
+                if empty {
+                    db.delete("entries", "base").unwrap();
+                }
+                db.close().unwrap();
+                let db = BicDb::open_with_config(directory.path(), config).unwrap();
+                let tx = db.begin_transaction().unwrap();
+                assert_eq!(
+                    tx.try_count_collection_visible_cancellable(
+                        "entries",
+                        &CancellationToken::uncancelable()
+                    )
+                    .unwrap(),
+                    Some(usize::from(!empty))
+                );
+                db.durability_health_for_test()
+                    .record_failure("test.count_fence", &"uncertain durable outcome");
+                assert!(
+                    matches!(
+                        tx.try_count_collection_visible_cancellable(
+                            "entries",
+                            &CancellationToken::uncancelable()
+                        ),
+                        Err(BicDbError::WriteFailed { .. })
+                    ),
+                    "mode={mode:?} empty={empty}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn resident_count_matches_snapshot_and_final_pending_writes() {
         let directory = tempfile::tempdir().unwrap();
         let mut db = BicDb::open_with_config(
@@ -3147,7 +3238,7 @@ mod snapshot_count_tests {
     }
 
     #[test]
-    fn lazy_paged_snapshot_count_explicitly_declines() {
+    fn lazy_paged_snapshot_count_matches_the_scan() {
         let directory = tempfile::tempdir().unwrap();
         let config = DbConfig::default()
             .with_fsync(false)
@@ -3164,7 +3255,7 @@ mod snapshot_count_tests {
                 &CancellationToken::uncancelable()
             )
             .unwrap(),
-            None
+            Some(1)
         );
         assert_eq!(tx.scan_collection("entries").unwrap().len(), 1);
     }
@@ -7638,6 +7729,12 @@ pub(crate) struct TxWrite {
 }
 
 impl TxWrite {
+    /// Presence only: counting a pending upsert must not expand or memoize
+    /// its stored payload merely to decide whether the row exists.
+    fn has_record_payload(&self) -> bool {
+        self.stored.is_some() || self.record.get().is_some_and(Option::is_some)
+    }
+
     /// The write's parsed record, parsed from `stored` on first use when the
     /// write was buffered in its stored form. `None` for deletes.
     pub(crate) fn record(&self) -> Result<Option<&Arc<Record>>> {
@@ -16155,10 +16252,9 @@ impl Transaction {
         self.scan_collection_visible_unchecked(collection)
     }
 
-    /// Count a resident collection at this transaction's snapshot without
-    /// decoding row payloads. The final buffered write for each key is overlaid
-    /// just as in `scan_collection`. Lazy paged collections decline explicitly:
-    /// their page-store base and resident version chains need a separate merge.
+    /// Count snapshot-visible rows without decoding row payloads. Lazy paged
+    /// rows use version-header visibility, then resident chains and the final
+    /// buffered write per key override that base exactly as in `scan_collection`.
     pub fn try_count_collection_visible_cancellable(
         &self,
         collection: &str,
@@ -16166,10 +16262,90 @@ impl Transaction {
     ) -> Result<Option<usize>> {
         cancellation.check()?;
         let db = self.db_ref();
+        db.check_recovery_state()?;
         db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
         let state = db.collection_state(collection)?;
         if state.paged_lazy {
-            return Ok(None);
+            let (Some(paged), Some(snapshot)) = (&db.paged_records, &self.paged_snapshot) else {
+                return Ok(None);
+            };
+            fn set_verdict(
+                verdicts: &mut FxHashMap<String, bool>,
+                id: &str,
+                visible: bool,
+                retained_bytes: &mut usize,
+            ) -> Result<()> {
+                if let Some(verdict) = verdicts.get_mut(id) {
+                    *verdict = visible;
+                    return Ok(());
+                }
+                if crate::query_budget::active() {
+                    // Include both tables during hash-map growth and the
+                    // initial control/allocation overhead, not row payloads.
+                    let table_overhead = if verdicts.is_empty() { 64 } else { 0 };
+                    *retained_bytes = retained_bytes
+                        .saturating_add(id.len())
+                        .saturating_add(4 * std::mem::size_of::<(String, bool)>())
+                        .saturating_add(table_overhead);
+                    crate::query_budget::observe(*retained_bytes);
+                    crate::query_budget::check()?;
+                }
+                verdicts.try_reserve(1).map_err(|_| {
+                    BicDbError::QueryMemoryLimit(
+                        "visible-count identity allocation failed".to_string(),
+                    )
+                })?;
+                verdicts.insert(id.to_owned(), visible);
+                Ok(())
+            }
+            let mut verdicts = FxHashMap::default();
+            let mut retained_bytes = 0usize;
+            let mut visited = 0usize;
+            // Release resident shard latches before walking the page store;
+            // page apply and resident publication must not invert that order.
+            {
+                for shard in state.read_all() {
+                    for versions in shard.versions.values() {
+                        if visited % 1024 == 0 {
+                            cancellation.check()?;
+                        }
+                        visited += 1;
+                        let Some(first) = versions.first() else {
+                            continue;
+                        };
+                        set_verdict(
+                            &mut verdicts,
+                            &first.record.id,
+                            visible_version(versions, self.snapshot_tx).is_some(),
+                            &mut retained_bytes,
+                        )?;
+                    }
+                }
+            }
+            for write in self.pending_writes_for_collection(collection) {
+                cancellation.check()?;
+                let visible = match write.op {
+                    TxWriteOp::Upsert if write.has_record_payload() => true,
+                    TxWriteOp::Delete => false,
+                    _ => continue,
+                };
+                set_verdict(
+                    &mut verdicts,
+                    &write.record_id,
+                    visible,
+                    &mut retained_bytes,
+                )?;
+            }
+            let mut count = 0usize;
+            for entry in paged.scan_record_visibility(snapshot, collection)? {
+                cancellation.check()?;
+                let (id, base_visible) = entry?;
+                count += usize::from(verdicts.remove(&id).unwrap_or(base_visible));
+            }
+            count += verdicts.values().filter(|visible| **visible).count();
+            cancellation.check()?;
+            db.check_recovery_state()?;
+            return Ok(Some(count));
         }
         let mut count = 0usize;
         let mut visited = 0usize;
@@ -16191,12 +16367,13 @@ impl Transaction {
                 .and_then(|versions| visible_version(versions, self.snapshot_tx))
                 .is_some();
             match write.op {
-                TxWriteOp::Upsert if !was_visible && write.record()?.is_some() => count += 1,
+                TxWriteOp::Upsert if !was_visible && write.has_record_payload() => count += 1,
                 TxWriteOp::Delete if was_visible => count -= 1,
                 _ => {}
             }
         }
         cancellation.check()?;
+        db.check_recovery_state()?;
         Ok(Some(count))
     }
 

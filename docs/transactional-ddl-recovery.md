@@ -48,7 +48,15 @@ marker hides the entry from FLASHBACK and permits physical cleanup. Exclusive SQ
 COMMIT performs cleanup; a shared COMMIT retains the hidden marker for the next
 exclusive cleanup or startup. If interrupted, startup completes the marker. Cleanup
 failure after the durable decision must not run DDL undo against committed work.
+The native server COMMIT path invokes decided-purge cleanup after durability and
+quorum finalization, releasing its transaction before taking the catalog lease.
 This also fixes rollback of DROP SCHEMA public CASCADE for these tables.
+
+Built-in SQL hosts perform startup repair before exposing queries: the server
+before index backfill, CLI before queries/analytics or migration application, the
+standalone application host before initialization, RESP before HotView startup,
+and the WebAssembly ABI before publishing a database handle. Embedders supplied
+with an already-open database retain the startup-repair obligation above.
 
 ## Validation and remaining gates
 
@@ -68,13 +76,25 @@ The correction restricts physical reclamation to exclusive sessions;
 the full original failing result is preserved. A new shared-COMMIT
 regression checks durable visibility, hidden purge entries and startup cleanup.
 Corrected source `5e3a9454` passed 959 tests across the full SQL library and nine
-integration targets, with zero failures and four existing ignores. The complete
-224-target SQL rerun is scoped to `c53ec0a9`; later changes here only update this
-document. The final source-scoped results and artifacts are tracked in
-[PR126](https://github.com/nikoma/bicdb/pull/126). Broad regression, workspace
-compilation, final head CI and remote merge are separate gates; focused results
-alone do not establish them. The merge order
-reserves this version after predecessor `1.0.444-beta`.
+integration targets, with zero failures and four existing ignores. Full SQL at
+`c53ec0a9` passed 2,334 tests across 224 Cargo targets, with zero failures and four
+existing ignores. Core source `61a6a13b` passed 1,271 tests, zero failures and ten
+existing helper/measurement/external-model ignores across 119 Cargo/doc targets
+plus one invoked subprocess result. Fresh crash helpers and locked workspace
+all-target compilation passed at that source. Core code and dependencies are
+unchanged by the subsequent frontend integration.
+
+These broad results precede the final frontend additions. Source `8558ab3b`
+reproduced missing native-COMMIT cleanup and missing CLI query/migration and host
+startup repair. Source `6e306a65` reproduced the RESP and native ABI startup gaps.
+All six frontend regressions pass after the corrections (`a72a3191` for server,
+CLI and host plus the fenced cleanup API; `bf538d4e` for RESP and the native ABI).
+The complete frontend package regressions and updated workspace compilation are
+separate gates. Final source-scoped results and artifacts are tracked in
+[PR126](https://github.com/nikoma/bicdb/pull/126). Broad regression, final head CI,
+remote merge and final-artifact qualification remain distinct; earlier scoped
+results do not imply all later gates. This version follows `1.0.444-beta`.
+
 
 The prior actual VM-cut recovery proof remains pinned to `823f9726`; it is not a
 test of this integrated candidate. Qualification requires a rebuilt final artifact and a VM campaign against its

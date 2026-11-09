@@ -267,3 +267,97 @@ fn oracle_case_v1_definition(mut definition: IndexDefinition) -> IndexDefinition
     }
     definition
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn build(db: &mut BicDb, definition: IndexDefinition) -> PagedBTreeBuildState {
+        let limits = PagedBTreeBuildLimits::default();
+        let name = definition.name.clone();
+        db.begin_paged_btree_build(definition, limits, 100).unwrap();
+        let governor =
+            ResourceGovernor::new(crate::ResourceGovernorConfig::default(), 100).unwrap();
+        let demand = ResourceDemand {
+            memory_bytes: limits.max_batch_bytes as u64,
+            io_bytes: limits.max_batch_bytes as u64,
+            cpu_slots: 1,
+            io_charge_bytes: 1,
+        };
+        for now in 101..1000 {
+            if let PagedBTreeBuildAdvance::Complete(state) = db
+                .advance_paged_btree_build_governed(&name, limits, &governor, demand, now)
+                .unwrap()
+            {
+                return state;
+            }
+        }
+        panic!("bounded build did not complete");
+    }
+
+    #[test]
+    fn replacement_retains_old_reader_generation_and_refuses_bound_generation_cleanup() {
+        let root = tempfile::tempdir().unwrap();
+        let config = DbConfig::default()
+            .with_fsync(false)
+            .with_storage_mode(StorageMode::ServerPaged);
+        let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+        db.create_collection("rows").unwrap();
+        db.insert(
+            "rows",
+            Record::new("one").with_metadata(serde_json::json!({"value":"é"})),
+        )
+        .unwrap();
+        let old = IndexDefinition {
+            name: "legacy".into(),
+            collection: "rows".into(),
+            fields: vec![IndexField::Upper(Box::new(IndexField::MetadataPath(vec![
+                "value".into(),
+            ])))],
+            unique: true,
+            nulls_not_distinct: false,
+            kind: IndexKind::BTree,
+            predicate: None,
+            exclusion: None,
+        };
+        let original = build(&mut db, old.clone());
+        let mut transformed = oracle_case_v1_definition(old.clone());
+        transformed.name = "owned-shadow".into();
+        let shadow = build(&mut db, transformed);
+        let paged = Arc::clone(db.paged_records.as_ref().unwrap());
+        let old_reader = paged.latest_snapshot();
+        let key = encode_index_key(&[IndexValue::String("é".into())]);
+        let old_entries = || {
+            paged
+                .scan_index_exact(&old_reader, &original.physical_name, &key)
+                .unwrap()
+                .collect::<Result<Vec<_>>>()
+                .unwrap()
+        };
+        let before = old_entries();
+        assert_eq!(before.len(), 1);
+        db.publish_oracle_case_v1_index_replacement(&old, &shadow)
+            .unwrap();
+        assert_eq!(old_entries(), before);
+        assert!(db
+            .remove_physical_index_entries(&paged, &shadow.physical_name)
+            .is_err());
+        assert_eq!(
+            db.lookup_index("legacy", &[IndexValue::String("É".into())])
+                .unwrap(),
+            vec!["one"]
+        );
+        db.flush().unwrap();
+        drop(old_reader);
+        drop(paged);
+        drop(db);
+        let db = BicDb::open_with_config(root.path(), config).unwrap();
+        let paged = db.paged_records.as_ref().unwrap();
+        let entries = paged
+            .scan_index_exact(&paged.latest_snapshot(), &original.physical_name, &key)
+            .unwrap()
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(entries, before);
+    }
+}

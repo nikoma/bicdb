@@ -53,3 +53,47 @@ or read-cache preimages and original version/commit uniqueness validation, and
 avoids preimage work when the collection has no unique index. Its final focused
 result and broader qualification are pending. The red log is
 `native-unique-unchanged-key-repro.log`.
+
+
+## Coherent successor qualification
+
+At4f3b18b80d4276987cd92365980bb7d448525792, focused qualification passed
+75 test functions:28core,30pgwire and17SQL. Many functions run both storage
+modes or multiple policy scenarios. Log on s3ny:
+`/root/bicdb-durability-s3/read-committed-coherent-final-focused.log`.
+This includes the original native concurrent-commit atomicity and untouched-index
+fast-path assertions, cancellation/deadlock/deadline controls, shared native versus
+exclusive SQL key reservations, checked signed row capabilities, canonical JSONB,
+NULL policies, deletes/key moves, actual SQL RLS and native encrypted projection,
+exhausted-grant no-op, and an unrelated-relation snapshot control.
+
+Additional independent PostgreSQL16 references are preserved in
+`postgresql-jsonb-reference.json` and
+`postgresql-other-relation-reference.json`. Their observers confirmed actual
+transactionid waits before owner COMMIT. JSONB key ordering and decimal scale
+produce one final updated row; the unrelated-relation schedule returns31 while
+its independently committed auxiliary row is99.
+
+The new public Rust API is additive: ReadCommittedRowReservation exposes no raw
+preimage/version, cannot be cloned, and is bound to its transaction, database,
+physical collection incarnation, retained row lock generation and pending write
+position. Unrelated row cleanup preserves it; same-row release/reacquire,
+pending-write changes or drop/recreate invalidate it. A real rename preserving
+the same collection backing preserves identity. Actual writes recheck the
+capability and existing mutation authority and merge only changes visible to
+the actor, retaining unchanged encrypted/masked fields.
+
+Earlier intermediate broad qualification at0d8c85e7 completed1224core tests
+(with11 existing diagnostic/child ignores) and143pgwire library tests, then
+SQL compilation was killed by its8GiB cgroup limit. The host still had free RAM.
+The failed log and exact unit journal are retained as
+`read-committed-arbiters-shared-broad.log` and
+`read-committed-arbiters-shared-broad-oom.txt`. This is an interrupted broad
+check, not a completed SQL result. Subsequent builds use12GiB/jobs2, disabled
+incremental compilation and an active host/cgroup memory monitor.
+
+Current broad qualification and actual final-head CI remain completion gates.
+These fixtures are not iDempiere application acceptance or a general throughput
+claim. Ordinary no-unique-index writes avoid preimage/announcement allocations;
+existing native concurrent preparation and changed-column fast paths retain
+their original assertions.

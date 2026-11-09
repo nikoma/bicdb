@@ -3304,23 +3304,23 @@ pub fn run_event_bench(path: impl AsRef<Path>, events: usize) -> Result<EventBen
     let latency_started = Arc::new(Mutex::new(Instant::now()));
     let (latency_tx, latency_rx) = mpsc::channel();
     let latency_started_for_handler = Arc::clone(&latency_started);
-    db.events_mut().subscribe("bench-events", move |_| {
+    db.events_mut().subscribe("bench-events", move |event| {
         let elapsed = latency_started_for_handler.lock().unwrap().elapsed();
-        let _ = latency_tx.send(elapsed);
-    });
+        let _ = latency_tx.send(event.map(|_| elapsed));
+    })?;
 
     let append_started = Instant::now();
     let mut subscriber_samples = Vec::with_capacity(events);
     for idx in 0..events {
         *latency_started.lock().unwrap() = Instant::now();
         db.events_mut().append(bench_event(idx))?;
-        subscriber_samples.push(latency_rx.recv().context("subscriber latency sample")?);
+        subscriber_samples.push(latency_rx.recv().context("subscriber latency sample")??);
     }
     db.flush()?;
     let append_elapsed = append_started.elapsed();
 
     let replay_started = Instant::now();
-    let replayed_events = db.events().replay("bench-events").len();
+    let replayed_events = db.events().replay("bench-events")?.len();
     let replay_elapsed = replay_started.elapsed();
     let database_size_bytes = db.stats()?.size_bytes;
 
@@ -4185,7 +4185,7 @@ pub fn run_memory_bench(
     let workspace_elapsed = workspace_started.elapsed();
 
     let stats = db.stats()?;
-    let memory_event_count = db.events().read(MEMORY_EVENT_STREAM).len();
+    let memory_event_count = db.events().read(MEMORY_EVENT_STREAM)?.len();
 
     Ok(MemoryBenchReport {
         mode: "memory",
@@ -4353,7 +4353,7 @@ pub fn run_sync_bench(path: impl AsRef<Path>, records_per_node: usize) -> Result
     let records_merged = right_import.records_merged + left_import.records_merged;
     let conflicts_resolved = right_import.conflicts_resolved + left_import.conflicts_resolved;
     let stats = left.stats()?;
-    let audit_events = left.events().read(bicdb_core::RECORD_AUDIT_STREAM).len();
+    let audit_events = left.events().read(bicdb_core::RECORD_AUDIT_STREAM)?.len();
 
     Ok(SyncBenchReport {
         mode: "sync",

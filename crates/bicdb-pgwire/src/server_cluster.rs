@@ -854,6 +854,13 @@ impl PgWireServer {
             guard
                 .events_mut()
                 .subscribe_prefix("queue:", move |stored| {
+                    let stored = match stored {
+                        Ok(stored) => stored,
+                        Err(error) => {
+                            eprintln!("broker notification subscription fenced: {error}");
+                            return;
+                        }
+                    };
                     if stored.event.event_type != "QueueMessage" {
                         return;
                     }
@@ -868,7 +875,7 @@ impl PgWireServer {
                     if let Ok(mut bus) = bus.lock() {
                         bus.notify(&format!("bicdb_broker__{queue}"), &payload, 0);
                     }
-                });
+                })?;
             (
                 guard.tx_log_handle(),
                 guard.sync_quorum(),
@@ -922,6 +929,7 @@ impl PgWireServer {
             live_incremental_runs: AtomicU64::new(0),
             live_registry: Default::default(),
             verification_runs: Mutex::new(Vec::new()),
+            log_archive_status: Mutex::new(Default::default()),
             backup_jobs: Mutex::new(Default::default()),
             workload: Default::default(),
             live_breaker_trips: AtomicU64::new(0),

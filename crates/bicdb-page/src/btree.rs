@@ -283,10 +283,10 @@ pub struct BTreeVerifyStepReport {
     pub valid: bool,
 }
 
-struct VerifiedNode {
-    leaf: bool,
-    count: usize,
-    next_page: PageId,
+pub(crate) struct VerifiedNode {
+    pub(crate) leaf: bool,
+    pub(crate) count: usize,
+    pub(crate) next_page: PageId,
 }
 
 enum BoundedDescent {
@@ -684,7 +684,7 @@ fn structural_fault(page_id: PageId, violation: BTreeNodeViolation) -> BTreeVeri
 /// all ranges before taking a slice. Keeping this parser separate makes it
 /// impossible for malformed directory data to turn a verification run into a
 /// bounds panic.
-fn validate_node(
+pub(crate) fn validate_node(
     page_id: PageId,
     bytes: &[u8],
     expectation: BTreePageExpectation,
@@ -870,6 +870,17 @@ fn validate_node(
         count,
         next_page,
     })
+}
+
+/// Key and value of entry `index` of a node that [`validate_node`] accepted.
+/// Every range was proven in bounds by that validation, so the plain
+/// accessors cannot panic here. Used by the read-only store verifier.
+pub(crate) fn validated_entry(bytes: &[u8], index: usize) -> (&[u8], &[u8]) {
+    let (offset, key_len, value_len) = NodeRef::new(bytes).entry_at(index);
+    (
+        &bytes[offset..offset + key_len],
+        &bytes[offset + key_len..offset + key_len + value_len],
+    )
 }
 
 /// One step of a root-to-leaf descent.

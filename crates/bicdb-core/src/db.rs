@@ -2647,6 +2647,13 @@ impl TxLogHandle {
         self.health.check().map_err(crate::error::durability_error)
     }
 
+    /// Check the shared database fence without reacquiring the database lock.
+    /// Protocol delivery uses this handle while a transaction may need to
+    /// finish ahead of an already queued exclusive database writer.
+    pub fn check_recovery_state(&self) -> Result<()> {
+        self.check_health()
+    }
+
     /// Record a failed write or sync of this log and fence the database.
     fn fail(&self, site: &str, error: BicDbError) -> BicDbError {
         crate::error::durability_error(
@@ -3349,6 +3356,23 @@ pub struct WalArchiveReport {
     pub skipped: usize,
 }
 
+/// Page-log archive state of one handle ([`BicDb::wal_archive_status`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WalArchiveStatus {
+    /// Checkpoints keep unarchived sealed segments (persisted setting).
+    pub retention_enabled: bool,
+    /// Highest sealed segment this handle confirmed archived (0: none).
+    pub archived_through: u64,
+    /// Sealed segments on disk this handle has not confirmed archived:
+    /// what retention keeps locally until the archiver catches up.
+    pub unarchived_segments: u64,
+    /// Their total size in bytes: the local disk cost of a lagging or
+    /// failed archiver.
+    pub unarchived_bytes: u64,
+    /// The archiver's first failure on this handle, if any.
+    pub failure: Option<crate::WriteFailure>,
+}
+
 /// The two chained artifacts of [`BicDb::create_online_backup`].
 #[derive(Clone, Debug)]
 pub struct OnlineBackupReport {
@@ -3875,6 +3899,9 @@ pub struct BicDb {
     commit_seq: Arc<AtomicU64>,
     // Synchronous replication: commits wait here for standby confirmations.
     sync_quorum: Arc<SyncQuorum>,
+    /// Write backpressure set by the archive guard (section 7.6 of
+    /// `docs/durability-failure-handling.md`).
+    archive_backpressure: Arc<crate::archive_guard::BackpressureGate>,
     // Runtime replication role, epoch and persisted standby positions.
     ha_node: Arc<ha_node::HaNode>,
     // Index catalog last announced to standbys (primary).
@@ -9757,6 +9784,17 @@ impl BicDb {
         tx_recovery.last_commit_seq = tx_recovery
             .last_commit_seq
             .max(read_commit_seq_floor(&path)?);
+        // A checkpoint may have removed every frame naming an acknowledged
+        // logical transaction. Its identity must survive alongside the commit
+        // sequence: SQL txid_current() exposes this allocator, not the page
+        // store's independent MVCC xid allocator.
+        tx_recovery.next_tx_id = tx_recovery.next_tx_id.max(
+            read_transaction_id_floor(&path)?
+                .checked_add(1)
+                .ok_or_else(|| {
+                    BicDbError::FormatCompatibility("transaction id floor exhausted".to_string())
+                })?,
+        );
         // Before anything can commit in this incarnation: the evidence that
         // resolves an earlier incarnation's uncertain commits.
         let incarnation = uuid::Uuid::new_v4().to_string();
@@ -10469,6 +10507,7 @@ impl BicDb {
                     &path,
                     tx_recovery.last_commit_seq,
                     tx_recovery.last_commit_seq,
+                    tx_recovery.next_tx_id.saturating_sub(1),
                     config.fsync,
                 )?;
                 bicdb_page::test_faults::crash_point("open.after_txlog_floor");
@@ -10593,6 +10632,7 @@ impl BicDb {
                 quorum.seed_holds(ha_node.read(|file| file.holds.clone()));
                 Arc::new(quorum)
             },
+            archive_backpressure: Arc::default(),
             ha_node: Arc::new(ha_node),
             announced_index_catalog: Mutex::new(None),
             local_index_maintenance: false,
@@ -14603,7 +14643,7 @@ impl SecureBicDb<'_> {
         }
         let mut events_by_stream = HashMap::new();
         for stream in projection.stream_names() {
-            events_by_stream.insert(stream.clone(), self.db.events.lock().read(&stream));
+            events_by_stream.insert(stream.clone(), self.db.events.lock().read(&stream)?);
         }
         GraphProjectionData::build(projection, &records_by_collection, &events_by_stream)
     }
@@ -19018,29 +19058,45 @@ pub(crate) const COMMIT_SEQ_FLOOR_FILE: &str = "commit-seq.floor";
 /// out a sequence number twice.
 /// `commit_seq`: every number up to it is in use (a reopen continues above
 /// it). `wal_base`: every commit at or below it may have been dropped from the
-/// log; commits above it are in the log or wrote nothing. Both only rise.
+/// log; commits above it are in the log or wrote nothing. `transaction_id_floor`
+/// retains logical transaction numbers that the cut removes. All only rise.
 pub(crate) fn persist_commit_seq_floor(
     root: &Path,
     commit_seq: u64,
     wal_base: u64,
+    transaction_id_floor: u64,
     fsync: bool,
 ) -> Result<()> {
-    let (floor, base) = read_commit_seq_floor_and_base(root)?;
-    let (next_floor, next_base) = (floor.max(commit_seq), base.max(wal_base));
-    if (next_floor, next_base) == (floor, base) {
+    let (floor, base, tx_floor) = read_sequence_floors(root)?;
+    let (next_floor, next_base, next_tx_floor) = (
+        floor.max(commit_seq),
+        base.max(wal_base),
+        tx_floor.max(transaction_id_floor),
+    );
+    if (next_floor, next_base, next_tx_floor) == (floor, base, tx_floor) {
         return Ok(());
     }
+    bicdb_page::test_faults::crash_point("transaction_id_floor.before_publish");
     storage::write_atomic(
         &root.join(COMMIT_SEQ_FLOOR_FILE),
-        format!("{next_floor} {next_base}\n").as_bytes(),
+        format!("{next_floor} {next_base} {next_tx_floor}\n").as_bytes(),
         fsync,
-    )
+    )?;
+    bicdb_page::test_faults::crash_point("transaction_id_floor.after_publish");
+    Ok(())
 }
 
 fn read_commit_seq_floor_and_base(root: &Path) -> Result<(u64, u64)> {
+    read_sequence_floors(root).map(|(floor, base, _)| (floor, base))
+}
+
+/// The optional third field preserves logical transaction identities across a
+/// WAL cut. Legacy one/two-field markers remain readable; no historical
+/// high-water mark can be reconstructed once an older writer discarded it.
+fn read_sequence_floors(root: &Path) -> Result<(u64, u64, u64)> {
     let text = match fs::read_to_string(root.join(COMMIT_SEQ_FLOOR_FILE)) {
         Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok((0, 0)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok((0, 0, 0)),
         Err(error) => return Err(error.into()),
     };
     let corrupt = |error: std::num::ParseIntError| {
@@ -19056,7 +19112,20 @@ fn read_commit_seq_floor_and_base(root: &Path) -> Result<(u64, u64)> {
         Some(base) => base.parse::<u64>().map_err(corrupt)?,
         None => floor,
     };
-    Ok((floor, base))
+    let transaction_id_floor = match parts.next() {
+        Some(value) => value.parse::<u64>().map_err(corrupt)?,
+        None => 0,
+    };
+    if parts.next().is_some() {
+        return Err(BicDbError::FormatCompatibility(format!(
+            "corrupt {COMMIT_SEQ_FLOOR_FILE}: unexpected fields"
+        )));
+    }
+    Ok((floor, base, transaction_id_floor))
+}
+
+fn read_transaction_id_floor(root: &Path) -> Result<u64> {
+    Ok(read_sequence_floors(root)?.2)
 }
 
 pub(crate) fn read_commit_seq_floor(root: &Path) -> Result<u64> {
@@ -27653,7 +27722,7 @@ mod event_horizon_tests {
         );
 
         // User streams untouched.
-        assert_eq!(db.events().read("app.audit").len(), 1);
+        assert_eq!(db.events().read("app.audit").unwrap().len(), 1);
 
         // A fresh device bootstraps from a snapshot, not from the trimmed
         // log. Trimming drops the very events whose positions the survivors'
@@ -30254,7 +30323,7 @@ mod index_maintenance_tests {
 
                 // Model process death in the narrow window after commit WAL
                 // durability but before the caller publishes the audit outbox.
-                assert!(db.events().read(RECORD_AUDIT_STREAM).is_empty());
+                assert!(db.events().read(RECORD_AUDIT_STREAM).unwrap().is_empty());
                 drop(tx);
             }
 
@@ -30270,7 +30339,7 @@ mod index_maintenance_tests {
                 db.get("widgets", "w-1").unwrap().unwrap().metadata["score"],
                 7
             );
-            let audit = db.events().read(RECORD_AUDIT_STREAM);
+            let audit = db.events().read(RECORD_AUDIT_STREAM).unwrap();
             assert_eq!(audit.len(), 1);
             assert_eq!(audit[0].event.payload["record_id"], "w-1");
         }

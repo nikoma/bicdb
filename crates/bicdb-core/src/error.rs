@@ -209,6 +209,32 @@ pub enum BicDbError {
         incarnation: String,
         detail: String,
     },
+
+    /// An archiver (`archive` is `commit_log` or `page_log`) failed at
+    /// `site`. The database stays writable: acknowledged commits never
+    /// depend on the archive, and the local logs it would have released are
+    /// retained. The archive itself is stopped for this handle: nothing more
+    /// is marked archived until a new handle rewrites the unconfirmed part.
+    #[error(
+        "{archive} archive failed at {site}: {detail}; archiving is stopped and the local log \
+         is retained until a reopened archive rewrites the unconfirmed part"
+    )]
+    ArchiveFailed {
+        archive: String,
+        site: String,
+        detail: String,
+    },
+
+    /// Write refused by archive backpressure: an archive is failed or
+    /// lagging and the local logs it needs (which are never dropped) would
+    /// otherwise fill the data volume. SQLSTATE 53100 (disk_full). Writes
+    /// resume on their own when the archive recovers. See
+    /// `docs/durability-failure-handling.md`, section 7.6.
+    #[error("write refused by archive backpressure: {0}")]
+    ArchiveBackpressure(String),
+
+    #[error("invalid configuration: {0}")]
+    InvalidConfig(String),
 }
 
 fn commit_outcome_identity_line(
@@ -274,6 +300,11 @@ pub(crate) fn durability_error(error: bicdb_page::PageError) -> BicDbError {
         bicdb_page::PageError::WriteFailed { site, detail } => {
             BicDbError::WriteFailed { site, detail }
         }
+        bicdb_page::PageError::ArchiveFailed { site, detail } => BicDbError::ArchiveFailed {
+            archive: "page_log".into(),
+            site,
+            detail,
+        },
         other => BicDbError::PagedStorage(other.to_string()),
     }
 }

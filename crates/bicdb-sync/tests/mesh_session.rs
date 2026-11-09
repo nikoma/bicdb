@@ -52,6 +52,7 @@ fn session(left: &mut BicDb, right: &mut BicDb) -> (MeshSyncReport, MeshSyncRepo
 
 fn event_ids(db: &BicDb) -> BTreeSet<Uuid> {
     db.export_events_since(0)
+        .unwrap()
         .into_iter()
         .map(|stored| stored.event.id)
         .collect()
@@ -61,6 +62,7 @@ fn event_ids(db: &BicDb) -> BTreeSet<Uuid> {
 /// so that evidence intentionally trails one session behind the data.
 fn data_event_ids(db: &BicDb) -> BTreeSet<Uuid> {
     db.export_events_since(0)
+        .unwrap()
         .into_iter()
         .filter(|stored| stored.event.stream != bicdb_core::CLOCK_OBSERVATION_STREAM)
         .map(|stored| stored.event.id)
@@ -132,6 +134,7 @@ fn a_live_session_converges_two_diverged_nodes_in_one_round_trip() {
     assert!(a_report.peer_clock_error_ms.unwrap() < 2_000);
     let observations = a
         .export_events_since(0)
+        .unwrap()
         .into_iter()
         .filter(|stored| stored.event.stream == bicdb_core::CLOCK_OBSERVATION_STREAM)
         .count();

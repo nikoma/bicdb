@@ -437,6 +437,7 @@ pub(crate) fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
         // failure made unknown. See docs/durability-failure-handling.md.
         BicDbError::WriteFailed { .. } => "58030",
         BicDbError::CommitOutcomeUnknown { .. } => "08007",
+        BicDbError::ArchiveBackpressure(_) => "53100",
         BicDbError::ReadOnlyStandby(_) => "25006",
         BicDbError::Authorization(_) => "42501",
         BicDbError::QueryMemoryLimit(_) => "53200",
@@ -2250,6 +2251,10 @@ mod durability_sqlstate_tests {
             SqlErrorField::Hint(hint) if hint.contains("bicdb_commit_outcome('inc-1', 7)"))));
         assert_eq!(bicdb_error_sqlstate(&refused), "58030");
         assert_eq!(bicdb_error_sqlstate(&unknown), "08007");
+        assert_eq!(
+            bicdb_error_sqlstate(&BicDbError::ArchiveBackpressure("test".into())),
+            "53100"
+        );
         assert_eq!(
             crate::query_exec::pgwire_error_sqlstate(&PgWireError::BicDb(unknown)),
             "08007"

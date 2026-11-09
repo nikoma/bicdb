@@ -5517,6 +5517,7 @@ impl<'db> SqlEngine<'db> {
                 &join.relation,
                 kind,
                 effective_constraint,
+                right_seed_selection,
                 needed_columns,
             )? {
                 return Ok(row_set);

@@ -2,6 +2,68 @@ use bicdb_core::{query_budget::QueryMemoryScope, BicDb, DbConfig};
 use bicdb_sql::{SqlSession, SqlValue};
 
 #[test]
+fn indexed_inner_join_filters_wide_right_rows_before_retaining_them() {
+    for mode in [
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            DbConfig::default()
+                .with_storage_mode(mode)
+                .with_fsync(false),
+        )
+        .unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session.execute("CREATE TABLE selective_drivers(id INTEGER PRIMARY KEY); INSERT INTO selective_drivers VALUES(0),(1),(2),(3); CREATE TABLE selective_payloads(id INTEGER PRIMARY KEY,driver_id INTEGER,selected TEXT,payload TEXT); CREATE INDEX selective_payload_driver ON selective_payloads(driver_id)").unwrap();
+        session.execute("INSERT INTO selective_payloads SELECT g,g%4,CASE WHEN g<4 THEN 'yes' ELSE NULL END,repeat('x',4096) FROM generate_series(0,999) g").unwrap();
+        for query in [
+            "SELECT w.id,w.payload FROM selective_drivers d JOIN selective_payloads w ON w.driver_id=d.id WHERE w.selected IS NOT NULL ORDER BY w.id",
+            "SELECT SELECTIVE_PAYLOADS.id,SELECTIVE_PAYLOADS.payload FROM selective_drivers JOIN SELECTIVE_PAYLOADS ON SELECTIVE_PAYLOADS.driver_id=selective_drivers.id WHERE SELECTIVE_PAYLOADS.selected IS NOT NULL ORDER BY SELECTIVE_PAYLOADS.id",
+        ] {
+            let limit = 2 * 1024 * 1024;
+            let memory = QueryMemoryScope::new(limit);
+            let result = session.execute(query).unwrap();
+            assert_eq!(result.rows.len(), 4);
+            for (id, row) in result.rows.iter().enumerate() {
+                assert_eq!(row[0], SqlValue::Int(id as i64));
+                assert_eq!(row[1].to_cell(), "x".repeat(4096));
+            }
+            assert!(memory.peak_bytes() > 0, "join work must still be charged");
+            assert!(memory.peak_bytes() <= limit);
+        }
+    }
+}
+
+#[test]
+fn indexed_right_filters_preserve_outer_rows_quoted_bindings_and_function_calls() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE TABLE filter_guard_l(id INTEGER PRIMARY KEY,v TEXT); CREATE TABLE filter_guard_r(id INTEGER PRIMARY KEY,v TEXT); INSERT INTO filter_guard_l VALUES(1,NULL),(2,'left'),(3,'orphan'); INSERT INTO filter_guard_r VALUES(1,'right'),(2,'right'); CREATE SEQUENCE filter_guard_calls").unwrap();
+    assert_eq!(
+        session.execute("SELECT l.id FROM filter_guard_l l LEFT JOIN filter_guard_r r ON l.id=r.id WHERE r.v IS NULL ORDER BY l.id").unwrap().rows,
+        vec![vec![SqlValue::Int(3)]]
+    );
+    assert_eq!(
+        session.execute(r#"SELECT "w".id FROM filter_guard_l "w" JOIN filter_guard_r "W" ON "w".id="W".id WHERE "w".v IS NULL ORDER BY "w".id"#).unwrap().rows,
+        vec![vec![SqlValue::Int(1)]]
+    );
+    assert_eq!(
+        session.execute("SELECT l.id FROM filter_guard_l l JOIN filter_guard_r r ON l.id=r.id WHERE r.v='right' AND nextval('filter_guard_calls')>0 ORDER BY l.id").unwrap().rows,
+        vec![vec![SqlValue::Int(1)],vec![SqlValue::Int(2)]]
+    );
+    assert_eq!(
+        session
+            .execute("SELECT nextval('filter_guard_calls')")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(3)]]
+    );
+}
+
+#[test]
 fn selective_virtual_base_filter_limits_catalog_join_work_with_a_left_join() {
     let root = tempfile::tempdir().unwrap();
     let mut db =

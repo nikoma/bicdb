@@ -275,6 +275,7 @@ impl<'db> SqlEngine<'db> {
         right_relation: &TableFactor,
         kind: RowJoinKind,
         constraint: &JoinConstraint,
+        right_selection: Option<&Expr>,
         needed_columns: Option<&ReferencedColumns>,
     ) -> Result<Option<RowSet>> {
         // The record-backed shortcut does not carry physical heap identities.
@@ -328,6 +329,34 @@ impl<'db> SqlEngine<'db> {
         let mut right_fields = FieldRef::wildcard(schema.as_ref());
         retain_referenced_fields(&mut right_fields, needed_columns, &table, &alias_name);
         let right_columns = row_output_columns_from_fields(&table, &alias_name, &right_fields);
+        // An inner join may discard right-local WHERE failures before cloning
+        // their payload into the joined result. Keep the original ON expression
+        // first, and leave outer joins, quoted bindings and callbacks unchanged.
+        let unquoted_binding = name.0.iter().all(|part| {
+            matches!(part, sqlparser::ast::ObjectNamePart::Identifier(ident) if ident.quote_style.is_none())
+        }) && alias.as_ref().is_none_or(|alias| {
+            alias.name.quote_style.is_none() && alias.columns.is_empty()
+        });
+        let pushed_filter = if matches!(kind, RowJoinKind::Inner) && unquoted_binding {
+            let columns = right_columns.iter().cloned().collect::<BTreeSet<_>>();
+            right_selection.and_then(|selection| {
+                and_terms(selection)
+                    .into_iter()
+                    .filter(|term| {
+                        super::pg_catalog::simple_qualified_unquoted_filter(term, &columns)
+                    })
+                    .cloned()
+                    .reduce(and_expr)
+            })
+        } else {
+            None
+        };
+        let pushed_constraint =
+            pushed_filter.map(|filter| JoinConstraint::On(and_expr(selection.clone(), filter)));
+        let constraint = pushed_constraint.as_ref().unwrap_or(constraint);
+        let JoinConstraint::On(selection) = constraint else {
+            unreachable!("indexed join requires an ON constraint")
+        };
         let can_eval_constraint_with_outer_row =
             join_constraint_can_eval_with_outer_row(constraint, &left.columns, &right_columns);
         let prepared_lookup = if can_eval_constraint_with_outer_row {

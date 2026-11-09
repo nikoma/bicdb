@@ -1184,7 +1184,8 @@ mod tests {
         }
         assert_eq!(catalog.find_page_with_room(1000).unwrap(), Some(doomed));
         let freed = pool.get(doomed).unwrap().bytes().to_vec();
-        pool.take_pages_needing_log();
+        let logged = pool.pages_needing_log();
+        pool.mark_logged(&logged);
 
         let placed = heap.insert(&payload(900, 2)).unwrap();
         assert_ne!(
@@ -1200,7 +1201,7 @@ mod tests {
             &freed[..],
             "the freed page was written"
         );
-        assert!(!pool.take_pages_needing_log().contains(&doomed));
+        assert!(!pool.pages_needing_log().iter().any(|&(page, _)| page == doomed));
         assert!(catalog.free_space_buckets(doomed).unwrap().is_empty());
         assert_eq!(heap.snapshot().non_heap_free_space_records, 1);
         assert_eq!(heap.get(placed).unwrap(), payload(900, 2));

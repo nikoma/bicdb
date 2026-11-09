@@ -278,6 +278,49 @@ fn transactional_rename_keeps_retained_locks_on_the_renamed_backing() {
 }
 
 #[test]
+fn transactional_purge_keeps_snapshot_rows_until_commit_and_reclaims_its_backing() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for recycle_off in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open_with_config(root.path(), config(mode.clone())).unwrap();
+            seed(&mut db);
+            let mut session = SqlSession::new(&mut db);
+            if recycle_off {
+                session.execute("SET bicdb.recyclebin=off").unwrap();
+            }
+            session.execute("BEGIN").unwrap();
+            session.execute("SAVEPOINT before_purge").unwrap();
+            session
+                .execute("UPDATE source SET v='pending' WHERE k=1")
+                .unwrap();
+            session.execute("DROP TABLE source PURGE").unwrap();
+            session.execute("ROLLBACK TO before_purge").unwrap();
+            assert_eq!(
+                session.execute("SELECT k,v FROM source").unwrap().rows,
+                vec![vec![
+                    SqlValue::Int(1),
+                    SqlValue::String("acknowledged".into())
+                ]]
+            );
+            session.execute("DROP TABLE source PURGE").unwrap();
+            session.execute("COMMIT").unwrap();
+            assert!(session.execute("SELECT * FROM source").is_err());
+            drop(session);
+            assert!(!db
+                .collections()
+                .iter()
+                .any(|meta| meta.name.starts_with("__bicdb_bin_")));
+            drop(db);
+            let mut db = BicDb::open_with_config(root.path(), config(mode)).unwrap();
+            assert_eq!(recover_interrupted_recycle_bin_renames(&mut db).unwrap(), 0);
+            assert!(SqlSession::new(&mut db)
+                .execute("SELECT * FROM source")
+                .is_err());
+        }
+    }
+}
+
+#[test]
 fn crash_recovery_never_reverses_a_live_transaction() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();

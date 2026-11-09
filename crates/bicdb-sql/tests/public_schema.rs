@@ -1,5 +1,5 @@
 //! PostgreSQL16 references retained in public-schema-pg16-reference.json.
-use bicdb_core::{BicDb, DbConfig};
+use bicdb_core::{BicDb, DbConfig, StorageMode};
 use bicdb_sql::{SqlEngine, SqlSession, SqlValue};
 fn config() -> DbConfig {
     DbConfig::default().with_fsync(false)
@@ -115,4 +115,26 @@ fn namespace_tombstones_follow_transaction_and_savepoint_rollback() {
     s.execute("CREATE SCHEMA public").unwrap();
     s.execute("ROLLBACK").unwrap();
     assert_absent(&mut s);
+}
+
+#[test]
+fn namespace_purge_rollback_preserves_snapshot_rows_with_recycling_disabled() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db =
+            BicDb::open_with_config(root.path(), config().with_storage_mode(mode)).unwrap();
+        let mut s = SqlSession::new(&mut db);
+        s.execute("SET bicdb.recyclebin=off").unwrap();
+        s.execute("CREATE TABLE t(id int PRIMARY KEY)").unwrap();
+        s.execute("INSERT INTO t VALUES(1)").unwrap();
+        s.execute("BEGIN").unwrap();
+        s.execute("SAVEPOINT before_drop").unwrap();
+        s.execute("DROP SCHEMA public CASCADE").unwrap();
+        s.execute("ROLLBACK TO before_drop").unwrap();
+        assert_eq!(
+            s.execute("SELECT id FROM public.t").unwrap().rows,
+            vec![vec![SqlValue::Int(1)]]
+        );
+        s.execute("COMMIT").unwrap();
+    }
 }

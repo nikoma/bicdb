@@ -675,6 +675,33 @@ mod tests {
         std::process::exit(99);
     }
     #[test]
+    fn replacement_intent_never_deletes_a_different_backing_with_the_same_name() {
+        for paged in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
+            seed_crash_source(&mut db);
+            let intent = CreationIntent {
+                table: "crash_source".into(),
+                storage: format!("{CREATED_PREFIX}{}", uuid::Uuid::new_v4().simple()),
+                order: 1,
+            };
+            assert!(rollback_creation(&mut db, &intent)
+                .unwrap_err()
+                .to_string()
+                .contains("ambiguous"));
+            assert_restored_metadata(&db);
+            let mut sql = SqlSession::new(&mut db);
+            assert_eq!(
+                sql.execute("SELECT k,v FROM crash_source").unwrap().rows,
+                vec![vec![
+                    SqlValue::Int(1),
+                    SqlValue::String("acknowledged".into())
+                ]]
+            );
+        }
+    }
+
+    #[test]
     fn process_crash_deferred_purge_obeys_the_outer_transaction_decision() {
         for paged in [false, true] {
             for stage in [

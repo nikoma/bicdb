@@ -845,3 +845,105 @@ fn promotion_with_a_commit_in_flight_never_acknowledges_or_merges_it() {
         );
     }
 }
+
+/// A replicated logical decision can be much larger than either node's pool.
+/// Fail standby page-image writes while structural cuts stream that decision;
+/// recovery must preserve its older acknowledged prefix and the new batch must
+/// stay whole, catch up exactly, and remain whole through promotion/reopening.
+#[test]
+#[cfg(feature = "experimental-structural-cuts")]
+fn structural_cuts_replicate_large_batches_through_apply_failure_and_promotion() {
+    let small = |mode| {
+        config(StorageMode::ServerPaged)
+            .with_paged_buffer_pool_bytes(256 * 1024)
+            .with_replication(replication(mode))
+    };
+    for fail_after in [1, 5, 20, 100] {
+        let primary_dir = tempfile::tempdir().unwrap();
+        let standby_dir = tempfile::tempdir().unwrap();
+        let mut primary =
+            BicDb::open_with_config(primary_dir.path(), small(ReplicationMode::Primary)).unwrap();
+        primary.create_collection("items").unwrap();
+        let mut tx = primary.begin_transaction().unwrap();
+        for i in 0..300 {
+            tx.insert(
+                "items",
+                Record::new(format!("acked-{i:05}"))
+                    .with_metadata(json!({"id": i, "payload": "a".repeat(1024)})),
+            )
+            .unwrap();
+        }
+        tx.commit().unwrap();
+        let older = rows(&primary);
+        let mut standby =
+            BicDb::open_with_config(standby_dir.path(), small(ReplicationMode::Standby)).unwrap();
+        let mut cursor = ReplicationCursor::new(0);
+        ship(Shipper::Live, &primary, &mut standby, &mut cursor).unwrap();
+        let acknowledged_prefix = standby.last_applied_commit_seq();
+        assert_eq!(rows(&standby), older);
+        let mut tx = primary.begin_transaction().unwrap();
+        for i in 0..2_000 {
+            tx.insert(
+                "items",
+                Record::new(format!("large-{i:05}"))
+                    .with_metadata(json!({"id": i, "payload": "b".repeat(1024)})),
+            )
+            .unwrap();
+        }
+        tx.commit().unwrap();
+        let expected = rows(&primary);
+        let frames = primary
+            .replication_frames_after(&mut cursor, 1_000)
+            .unwrap();
+        let fault = arm_io_failure("page_log.write", standby_dir.path(), fail_after, false);
+        let result = standby
+            .apply_replication_batch_within(&frames, primary.replication_feed().durable_seq());
+        assert!(fault.fired() > 0, "image fault {fail_after} never reached");
+        assert!(
+            result.is_err(),
+            "failed page apply {fail_after} acknowledged success"
+        );
+        assert!(standby.last_applied_commit_seq() >= acknowledged_prefix);
+        drop(fault);
+        drop(standby);
+        let mut standby =
+            BicDb::open_with_config(standby_dir.path(), small(ReplicationMode::Standby)).unwrap();
+        let recovered = rows(&standby);
+        for (id, value) in &older {
+            assert_eq!(
+                recovered.get(id),
+                Some(value),
+                "fault {fail_after}: lost {id}"
+            );
+        }
+        let large = recovered
+            .keys()
+            .filter(|id| id.starts_with("large-"))
+            .count();
+        assert!(
+            large == 0 || large == 2_000,
+            "fault {fail_after}: partial batch {large}"
+        );
+        assert!(standby.last_applied_commit_seq() <= primary.replication_feed().durable_seq());
+        let mut cursor = ReplicationCursor::new(standby.last_applied_commit_seq());
+        ship(Shipper::Live, &primary, &mut standby, &mut cursor).unwrap();
+        assert_eq!(
+            rows(&standby),
+            expected,
+            "fault {fail_after}: catch-up differs"
+        );
+        standby.promote_by_election(1, "standby", None).unwrap();
+        drop(standby);
+        for reopen in 0..2 {
+            let promoted =
+                BicDb::open_with_config(standby_dir.path(), small(ReplicationMode::Primary))
+                    .unwrap();
+            assert_eq!(
+                rows(&promoted),
+                expected,
+                "fault {fail_after}: promoted reopen {reopen}"
+            );
+            drop(promoted);
+        }
+    }
+}

@@ -135,3 +135,99 @@ fn create_or_replace_cannot_overwrite_another_owners_function() {
         vec![vec![SqlValue::Int(1)]]
     );
 }
+
+#[test]
+fn oracle_object_dictionary_includes_owned_relations_and_filters_other_roles() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+    for statement in [
+        "CREATE TABLE dictionary_table(id NUMBER PRIMARY KEY)",
+        "CREATE VIEW dictionary_view AS SELECT id FROM dictionary_table",
+        "CREATE SEQUENCE dictionary_sequence",
+        "CREATE TYPE dictionary_labels AS TABLE OF VARCHAR2(8 BYTE)",
+        "CREATE FUNCTION dictionary_function RETURN NUMBER IS BEGIN RETURN 1; END;",
+    ] {
+        run(&mut db, statement).unwrap();
+    }
+    let rows = run(&mut db, "SELECT object_name,object_type FROM user_objects")
+        .unwrap()
+        .rows;
+    for (name, kind) in [
+        ("DICTIONARY_TABLE", "TABLE"),
+        ("DICTIONARY_VIEW", "VIEW"),
+        ("DICTIONARY_SEQUENCE", "SEQUENCE"),
+        ("DICTIONARY_LABELS", "TYPE"),
+        ("DICTIONARY_FUNCTION", "FUNCTION"),
+    ] {
+        assert!(
+            rows.contains(&vec![
+                SqlValue::String(name.into()),
+                SqlValue::String(kind.into())
+            ]),
+            "{name}/{kind}: {rows:?}"
+        );
+    }
+    let objects = lower_session_sql(
+        &db,
+        "SELECT count(*) FROM user_objects",
+        ORACLE_PREVIEW_PROFILE,
+        None,
+        "bicdb",
+    )
+    .unwrap();
+    let errors = lower_session_sql(
+        &db,
+        "SELECT count(*) FROM user_errors",
+        ORACLE_PREVIEW_PROFILE,
+        None,
+        "bicdb",
+    )
+    .unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE ROLE routine_catalog_guest;SET ROLE routine_catalog_guest")
+        .unwrap();
+    assert_eq!(
+        sql.execute(&objects).unwrap().rows,
+        vec![vec![SqlValue::Int(0)]]
+    );
+    assert_eq!(
+        sql.execute(&errors).unwrap().rows,
+        vec![vec![SqlValue::Int(0)]]
+    );
+}
+
+#[test]
+fn oracle_dictionary_fallback_respects_local_tables_and_ctes() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+    run(
+        &mut db,
+        "CREATE TABLE user_errors(name VARCHAR2(20 CHAR),text VARCHAR2(20 CHAR))",
+    )
+    .unwrap();
+    run(&mut db, "INSERT INTO user_errors VALUES('local','table')").unwrap();
+    assert_eq!(
+        run(&mut db, "SELECT text FROM user_errors").unwrap().rows,
+        vec![vec![SqlValue::String("table".into())]]
+    );
+    assert_eq!(
+        run(
+            &mut db,
+            "WITH user_errors AS (SELECT 'cte' AS text FROM dual) SELECT text FROM user_errors"
+        )
+        .unwrap()
+        .rows,
+        vec![vec![SqlValue::String("cte".into())]]
+    );
+    assert_eq!(
+        run(
+            &mut db,
+            "SELECT count(*) FROM SYS.USER_ERRORS WHERE name='ABSENT'"
+        )
+        .unwrap()
+        .rows,
+        vec![vec![SqlValue::Int(0)]]
+    );
+}

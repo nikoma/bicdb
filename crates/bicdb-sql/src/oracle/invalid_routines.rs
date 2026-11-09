@@ -135,7 +135,7 @@ pub(crate) fn check_executable(routine: &RoutineSchema) -> Result<()> {
             "42000",
             &format!(
                 "Package or function {} is in an invalid state",
-                routine.name
+                declaration_name(routine)
             ),
         ));
     }
@@ -190,7 +190,7 @@ pub(crate) fn rows(db: &BicDb, table: &str, role: &str) -> Result<Vec<BTreeMap<S
         };
         if table == OBJECTS {
             rows.push(object_row(
-                routine.name.clone(),
+                declaration_name(&routine),
                 kind,
                 if routine.oracle_invalid.is_some() {
                     "INVALID"
@@ -202,7 +202,7 @@ pub(crate) fn rows(db: &BicDb, table: &str, role: &str) -> Result<Vec<BTreeMap<S
             if let Some(state) = &routine.oracle_invalid {
                 for (index, text) in state.diagnostics().into_iter().enumerate() {
                     rows.push(BTreeMap::from([
-                        ("NAME".into(), SqlValue::String(routine.name.clone())),
+                        ("NAME".into(), SqlValue::String(declaration_name(&routine))),
                         ("TYPE".into(), SqlValue::String(kind.into())),
                         ("SEQUENCE".into(), SqlValue::Int(index as i64 + 1)),
                         ("ATTRIBUTE".into(), SqlValue::String("ERROR".into())),
@@ -394,4 +394,22 @@ fn owned_objects(db: &BicDb, role: &str) -> Result<Vec<BTreeMap<String, SqlValue
         }
     }
     Ok(rows)
+}
+
+fn declaration_name(routine: &RoutineSchema) -> String {
+    if let Ok(statements) = parse_statements(&routine.definition) {
+        if let [Statement::CreateFunction(function)] = statements.as_slice() {
+            if let Some(name) = function.name.0.last().and_then(|part| part.as_ident()) {
+                return name.value.clone();
+            }
+        }
+    }
+    if routine.kind == RoutineKind::Procedure {
+        if let Ok(Some(function)) = super::procedures::header(&routine.definition) {
+            if let Some(name) = function.name.0.last().and_then(|part| part.as_ident()) {
+                return name.value.clone();
+            }
+        }
+    }
+    routine.name.clone()
 }

@@ -246,6 +246,8 @@ fn record_acknowledgments(root: &std::path::Path, rows: &[&str]) {
         .write_all(&serde_json::to_vec(rows).unwrap())
         .unwrap();
     ledger.sync_all().unwrap();
+    #[cfg(unix)]
+    std::fs::File::open(root).unwrap().sync_all().unwrap();
 }
 
 #[test]

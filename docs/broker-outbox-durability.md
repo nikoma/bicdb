@@ -20,9 +20,9 @@ finish every retained committed broker publication before returning a usable
 handle. An interrupted reopen is safe to repeat.
 
 This moves existing work inside admission; it adds no commit-path fsync and does
-not enable experimental commit modes. SQL and broker operations check handle health. The existing plain-`Vec`
-EventStream snapshot-read API is unchanged; this fix does not claim full P0 read
-fencing for that API.
+not enable experimental commit modes. SQL and broker operations check handle
+health. EventStream snapshots and subscription delivery also report a recovery
+fence through checked results; see [the Rust API migration](event-read-fencing.md).
 
 ## Retention receipts
 

@@ -9945,7 +9945,13 @@ impl BicDb {
         };
         let mut fts_generations =
             load_fts_generation_catalog(&path.join(DEFAULT_FTS_GENERATION_CATALOG))?;
-        let btree_bindings = load_btree_bindings(&path.join(DEFAULT_INDEX_CATALOG), &encryption)?;
+        // Recovery exports can explicitly omit secondary index definitions.
+        // Their atomic binding catalog lives in the same optional file.
+        let btree_bindings = if config.load_secondary_indexes {
+            load_btree_bindings(&path.join(DEFAULT_INDEX_CATALOG), &encryption)?
+        } else {
+            BTreeMap::new()
+        };
         // The atomic definition catalog overrides the legacy derived alias file.
         fts_generations.indexes.extend(btree_bindings.clone());
         if let Some(paged) = &paged_records {

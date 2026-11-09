@@ -33,3 +33,44 @@ fn top_level_with_delete_uses_ctes_for_using_returning_and_subqueries() {
         vec![vec!["3", "three"]]
     );
 }
+
+#[test]
+fn top_level_delete_rolls_back_cte_mutations_on_constraint_failure() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db =
+        BicDb::open_with_config(root.path(), DbConfig::default().with_fsync(false)).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE TABLE parent(id int PRIMARY KEY)",
+        "CREATE TABLE child(id int REFERENCES parent(id))",
+        "INSERT INTO parent VALUES(1)",
+        "INSERT INTO child VALUES(1)",
+    ] {
+        session.execute(sql).unwrap();
+    }
+    let error=session.execute("WITH added AS (INSERT INTO parent VALUES(2) RETURNING id) DELETE FROM parent WHERE id=1").unwrap_err();
+    assert_eq!(error.sqlstate(), "23503");
+    assert_eq!(
+        session
+            .execute("SELECT id FROM parent ORDER BY id")
+            .unwrap()
+            .rows[0][0]
+            .to_cell(),
+        "1"
+    );
+    assert_eq!(
+        session.execute("SELECT count(*) FROM parent").unwrap().rows[0][0].to_cell(),
+        "1"
+    );
+    session.execute("BEGIN").unwrap();
+    session
+        .execute(
+            "WITH doomed AS (SELECT 1 AS id) DELETE FROM child WHERE id IN(SELECT id FROM doomed)",
+        )
+        .unwrap();
+    session.execute("ROLLBACK").unwrap();
+    assert_eq!(
+        session.execute("SELECT count(*) FROM child").unwrap().rows[0][0].to_cell(),
+        "1"
+    );
+}

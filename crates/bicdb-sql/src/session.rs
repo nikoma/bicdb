@@ -5041,7 +5041,7 @@ impl<'db> SqlSession<'db> {
         if schema == "public" && load_namespace(self.db_ref(), &schema)?.is_none() {
             return Err(SqlError::data_exception_public(
                 "3F000",
-                "schema \"public\" does not exist".into(),
+                "schema \"public\" does not exist",
                 None,
             ));
         }

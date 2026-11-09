@@ -179,13 +179,13 @@ fn national_case_uses_al16utf16_for_literals_columns_and_nested_queries() {
             SqlSession::new(db).execute(&sql).unwrap().rows
         };
         run(&mut db, "CREATE TABLE national_case_rows(v NVARCHAR2(4))");
-        run(&mut db, "INSERT INTO national_case_rows VALUES(N'𐐨')");
+        run(&mut db, "INSERT INTO national_case_rows VALUES(N'ƛ')");
         run(
             &mut db,
             "CREATE VIEW national_case_view AS SELECT v FROM national_case_rows",
         );
         for sql in [
-            "SELECT upper(N'𐐨') FROM dual",
+            "SELECT upper(N'ƛ') FROM dual",
             "SELECT upper(v) FROM national_case_rows",
             "SELECT upper(q.v) FROM (SELECT v FROM national_case_rows) q",
             "SELECT upper(v) FROM national_case_view",
@@ -195,13 +195,13 @@ fn national_case_uses_al16utf16_for_literals_columns_and_nested_queries() {
         ] {
             assert_eq!(
                 run(&mut db, sql),
-                vec![vec![SqlValue::String("𐐨".into())]],
+                vec![vec![SqlValue::String("Ƛ".into())]],
                 "{mode:?}: {sql}"
             );
         }
         assert_eq!(
-            run(&mut db, "SELECT upper('𐐨') FROM dual"),
-            vec![vec![SqlValue::String("𐐀".into())]]
+            run(&mut db, "SELECT upper('ƛ') FROM dual"),
+            vec![vec![SqlValue::String("ƛ".into())]]
         );
     }
 }

@@ -45,7 +45,7 @@ fn quoted_column_identities_keep_their_own_declared_types() {
         "SELECT \"K\",k FROM identity_view",
     ] {
         assert_eq!(
-            infer_query_result_types(&db, sql).unwrap(),
+            infer_query_result_types(&db, sql).unwrap().unwrap(),
             vec![Some("numeric".to_string()), Some("float8".to_string())],
             "{sql}"
         );

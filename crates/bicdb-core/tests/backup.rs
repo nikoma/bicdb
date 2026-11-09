@@ -604,6 +604,7 @@ fn online_backup_during_concurrent_writes_restores_consistent_snapshot() {
 
     let writer_path = source.path().to_path_buf();
     let (writer_ready, ready) = std::sync::mpsc::sync_channel(0);
+    let (backup_finished, finished) = std::sync::mpsc::channel();
     let writer = std::thread::spawn(move || {
         let mut db =
             BicDb::open_with_config(&writer_path, DbConfig::default().with_fsync(false)).unwrap();
@@ -617,6 +618,9 @@ fn online_backup_during_concurrent_writes_restores_consistent_snapshot() {
                 std::thread::sleep(Duration::from_millis(2));
             }
         }
+        // Keep the source writer open throughout the entire capture, even
+        // when the machine finishes the insert loop before encryption/copy.
+        finished.recv_timeout(Duration::from_secs(60)).unwrap();
         db.close().unwrap();
     });
 
@@ -630,6 +634,7 @@ fn online_backup_during_concurrent_writes_restores_consistent_snapshot() {
         },
     )
     .unwrap();
+    backup_finished.send(()).unwrap();
     writer.join().unwrap();
 
     restore_backup(

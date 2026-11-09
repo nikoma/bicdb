@@ -936,7 +936,7 @@ impl AggregateProjection {
             return Ok(drift);
         }
         // The watermark may lag the source but must never lead it.
-        let source = Self::source_position(db);
+        let source = Self::source_position(db)?;
         if self.projection_position > source {
             return Err(BicDbError::ProjectionError(format!(
                 "watermark {} is ahead of source position {source}",
@@ -1133,7 +1133,7 @@ impl AggregateProjection {
         // Read the head BEFORE scanning: anything committed during the scan is
         // then re-applied by catch_up rather than missed. Re-applying is safe
         // (effectively-once); missing an event is not.
-        let head = Self::source_position(db);
+        let head = Self::source_position(db)?;
         let mut rows = 0usize;
         for record in db.scan_collection(&self.collection)? {
             let input = self.project(&record.metadata, head);
@@ -1375,7 +1375,7 @@ impl AggregateProjection {
         // copy. The scale harness found this; the 400-row tests could not.
         let events = db
             .events()
-            .read_stream_since(RECORD_AUDIT_STREAM, self.projection_position);
+            .read_stream_since(RECORD_AUDIT_STREAM, self.projection_position)?;
         let mut applied = 0usize;
         for stored in events {
             if self.apply_event(&stored)? {
@@ -1388,7 +1388,7 @@ impl AggregateProjection {
 
     /// Highest audit-stream position currently durable — the `source_position`
     /// half of the lag reading (docs §5).
-    pub fn source_position(db: &BicDb) -> u64 {
+    pub fn source_position(db: &BicDb) -> Result<u64> {
         db.events().stream_head_offset(RECORD_AUDIT_STREAM)
     }
 

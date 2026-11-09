@@ -583,7 +583,7 @@ fn typed_values_survive_record_audit_events_and_reopen() {
         let records = db.scan_collection("durable_types").unwrap();
         assert_eq!(records.len(), 1);
         let metadata = records[0].metadata.clone();
-        let events = db.events().read(RECORD_AUDIT_STREAM);
+        let events = db.events().read(RECORD_AUDIT_STREAM).unwrap();
         let created = events
             .iter()
             .find(|event| {
@@ -596,7 +596,7 @@ fn typed_values_survive_record_audit_events_and_reopen() {
     };
 
     let reopened = BicDb::open_with_config(root.path(), sync_config()).unwrap();
-    let events = reopened.events().read(RECORD_AUDIT_STREAM);
+    let events = reopened.events().read(RECORD_AUDIT_STREAM).unwrap();
     let created = events
         .iter()
         .find(|event| {

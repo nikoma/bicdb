@@ -2589,10 +2589,7 @@ pub(crate) fn flush_notifications(
     server: &PgWireServer,
     connection_id: u64,
 ) -> Result<()> {
-    let pending = match server.notifications.lock() {
-        Ok(mut bus) => bus.drain(connection_id),
-        Err(_) => return Ok(()),
-    };
+    let pending = drain_checked_notifications(server, connection_id)?;
     if pending.is_empty() {
         return Ok(());
     }
@@ -2603,6 +2600,7 @@ pub(crate) fn flush_notifications(
         body.push(0);
         body.extend_from_slice(payload.as_bytes());
         body.push(0);
+        server.tx_log.check_recovery_state()?;
         write_message(stream, b'A', &body)?;
     }
     stream.flush()?;

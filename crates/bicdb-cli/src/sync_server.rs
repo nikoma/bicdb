@@ -550,7 +550,10 @@ fn compose_user(
     // Locks are taken one database at a time, never nested.
     let (bundle, scope_node) = {
         let mut db = scope_handle.lock().expect("scope db lock");
-        let since = db.sync_status().last_export_checkpoint;
+        let since = db
+            .sync_status()
+            .map_err(|error| error.to_string())?
+            .last_export_checkpoint;
         let bundle = db
             .export_sync_bundle_since(since)
             .map_err(|error| error.to_string())?;
@@ -1099,7 +1102,10 @@ fn push_bundle(state: &ServerState, scope: &str, body: &[u8]) -> (u16, Value) {
                 .server_write_only
                 .iter()
                 .any(|protected| protected == collection)
-                && !db.events().contains_event(&entry.envelope.event_id)
+                && !match db.events().contains_event(&entry.envelope.event_id) {
+                    Ok(contains) => contains,
+                    Err(error) => return (503, json!({ "error": error.to_string() })),
+                }
             {
                 return (
                     403,

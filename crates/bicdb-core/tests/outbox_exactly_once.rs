@@ -102,7 +102,7 @@ fn pending_ops(db: &BicDb) -> BTreeMap<String, usize> {
 /// Record-audit events per record id.
 fn audit_events(db: &BicDb) -> BTreeMap<String, usize> {
     let mut counts = BTreeMap::new();
-    for stored in db.events().read(RECORD_AUDIT_STREAM) {
+    for stored in db.events().read(RECORD_AUDIT_STREAM).unwrap() {
         if let Some(id) = stored.event.payload["record_id"].as_str() {
             *counts.entry(id.to_string()).or_default() += 1;
         }

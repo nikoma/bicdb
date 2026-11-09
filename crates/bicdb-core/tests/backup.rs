@@ -476,6 +476,7 @@ fn pitr_restore_replays_expected_timestamp_state_in_bounded_batches() {
         first_timestamp = db
             .events()
             .read(bicdb_core::RECORD_AUDIT_STREAM)
+            .unwrap()
             .last()
             .unwrap()
             .event
@@ -489,6 +490,7 @@ fn pitr_restore_replays_expected_timestamp_state_in_bounded_batches() {
         second_timestamp = db
             .events()
             .read(bicdb_core::RECORD_AUDIT_STREAM)
+            .unwrap()
             .last()
             .unwrap()
             .event

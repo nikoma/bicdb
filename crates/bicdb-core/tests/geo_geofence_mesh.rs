@@ -105,6 +105,7 @@ fn enter_dwell_exit_lifecycle_with_overlapping_fences() {
     // consumers: 2 enters + 3 dwells + 2 exits = 7 events.
     let spatial_events = db
         .export_events_since(0)
+        .unwrap()
         .into_iter()
         .filter(|stored| {
             stored.event.stream == SPATIAL_AUDIT_STREAM
@@ -156,6 +157,7 @@ fn geofence_state_replicates_over_mesh_sync() {
 
     let transition_events: Vec<String> = hq
         .export_events_since(0)
+        .unwrap()
         .into_iter()
         .filter(|stored| {
             stored.event.stream == SPATIAL_AUDIT_STREAM

@@ -122,6 +122,7 @@ fn a_checkpoint_between_core_commit_and_caller_finalization_keeps_committed_outb
         .events()
         .read(RECORD_AUDIT_STREAM)
         .unwrap()
+        .unwrap()
         .iter()
         .filter(|entry| entry.event.payload["record_id"] == "acknowledged-business-row")
         .count();

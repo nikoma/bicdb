@@ -4185,7 +4185,7 @@ pub fn run_memory_bench(
     let workspace_elapsed = workspace_started.elapsed();
 
     let stats = db.stats()?;
-    let memory_event_count = db.events().read(MEMORY_EVENT_STREAM).len();
+    let memory_event_count = db.events().read(MEMORY_EVENT_STREAM)?.len();
 
     Ok(MemoryBenchReport {
         mode: "memory",
@@ -4353,7 +4353,7 @@ pub fn run_sync_bench(path: impl AsRef<Path>, records_per_node: usize) -> Result
     let records_merged = right_import.records_merged + left_import.records_merged;
     let conflicts_resolved = right_import.conflicts_resolved + left_import.conflicts_resolved;
     let stats = left.stats()?;
-    let audit_events = left.events().read(bicdb_core::RECORD_AUDIT_STREAM).len();
+    let audit_events = left.events().read(bicdb_core::RECORD_AUDIT_STREAM)?.len();
 
     Ok(SyncBenchReport {
         mode: "sync",

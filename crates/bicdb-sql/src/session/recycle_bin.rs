@@ -60,6 +60,11 @@ pub fn recover_interrupted_recycle_bin_renames(db: &mut BicDb) -> Result<usize> 
 }
 
 fn recover_interrupted_recycle_bin_renames_inner(db: &mut BicDb) -> Result<usize> {
+    if db.pending_transaction_count() != 0 {
+        return Err(SqlError::InvalidSql(
+            "catalog crash recovery requires no active transactions".into(),
+        ));
+    }
     let journal_repairs = super::recycle_bin_journal::recover(db)?;
     let completed = list_recycle_bin(db)?
         .into_iter()

@@ -10682,6 +10682,13 @@ impl BicDb {
         self.commit_seq.load(AtomicOrdering::SeqCst)
     }
 
+    /// Number of live transactions owned by this open database instance.
+    /// Hosts performing startup catalog recovery must require zero, while
+    /// holding the exclusive database guard that prevents new transactions.
+    pub fn pending_transaction_count(&self) -> usize {
+        self.tx_states.len()
+    }
+
     pub fn current_commit_seq(&self) -> u64 {
         self.last_commit_seq()
     }

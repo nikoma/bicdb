@@ -179,3 +179,29 @@ fn transactional_rename_requires_own_pending_transaction_and_checks_noop_health(
         assert!(other.get("after", "pending").unwrap().is_some());
     }
 }
+
+#[test]
+fn crash_recovery_never_reverses_a_live_transaction() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    seed(&mut db);
+    let mut session = SqlSession::new(&mut db);
+    session.execute("BEGIN").unwrap();
+    session.execute("DROP TABLE source").unwrap();
+    let pending = session.take_pending_transaction().unwrap();
+    drop(session);
+    assert_eq!(db.pending_transaction_count(), 1);
+    assert!(recover_interrupted_recycle_bin_renames(&mut db)
+        .unwrap_err()
+        .to_string()
+        .contains("no active transactions"));
+    assert!(db
+        .collections()
+        .iter()
+        .any(|meta| meta.name.starts_with("__bicdb_bin_")));
+    assert!(!db.collections().iter().any(|meta| meta.name == "source"));
+    drop(pending);
+    assert_eq!(db.pending_transaction_count(), 0);
+    recover_interrupted_recycle_bin_renames(&mut db).unwrap();
+    assert_row(&mut db);
+}

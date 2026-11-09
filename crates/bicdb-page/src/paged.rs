@@ -2472,6 +2472,24 @@ impl PagedStore {
         }
     }
 
+    /// Publish the checkpoint's one-page descriptor after its data closure
+    /// and status spill are durable. Another internal committed unit here
+    /// would create a new outcome after the spill and forever pin WAL reset.
+    /// The descriptor records next_xid itself, so no separate xid-floor
+    /// record is needed. Caller holds the writer gate.
+    #[cfg(feature = "experimental-structural-cuts")]
+    fn log_checkpoint_meta_for_experiment(&self) -> Result<()> {
+        let logged: Vec<_> = self.pool.pages_needing_log().into_iter()
+            .filter(|&(page, _)| page == self.meta_page).collect();
+        if logged.is_empty() { return Ok(()); }
+        let image = self.pool.get(self.meta_page)?.bytes().to_vec();
+        let lsn = self.wal.log_page_image(self.meta_page, 0, &image)?;
+        self.wal.sync_through(lsn)?;
+        self.pool.mark_logged(&logged);
+        self.pool.trim_experimental_frames()?;
+        Ok(())
+    }
+
     /// Persist every resident terminal outcome in the disk-backed status
     /// spill, sync it, and evict it from the transaction table.
     ///
@@ -2676,9 +2694,8 @@ impl PagedStore {
         // The meta page is written first: the checkpoint makes it durable, so it
         // must already hold the current tree roots and watermarks.
         self.write_meta()?;
-        if cfg!(feature = "experimental-structural-cuts") {
-            self.log_unlogged_pages_as_committed_unit()?;
-        }
+        #[cfg(feature = "experimental-structural-cuts")]
+        self.log_checkpoint_meta_for_experiment()?;
 
         // Truncating the log discards every commit record in it. That is only
         // safe once every unfrozen commit is proven somewhere durable: the
@@ -2908,9 +2925,8 @@ impl PagedStore {
                     // every preceding dirty page is durable. With the writer
                     // gate held, this creates exactly one new dirty meta page.
                     self.write_meta()?;
-                    if cfg!(feature = "experimental-structural-cuts") {
-                        self.log_unlogged_pages_as_committed_unit()?;
-                    }
+                    #[cfg(feature = "experimental-structural-cuts")]
+                    self.log_checkpoint_meta_for_experiment()?;
                     let writeback = self
                         .pool
                         .writeback_step(WritebackCursor::default(), limits.writeback)?;

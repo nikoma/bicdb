@@ -9743,6 +9743,10 @@ impl BicDb {
             &encryption,
             effective_mode == StorageMode::ServerPaged,
         )?;
+        // What recovery read becomes the durable sequence below; make it so.
+        if config.fsync {
+            storage::sync_transaction_log_at_open(&path.join(DEFAULT_TRANSACTION_LOG))?;
+        }
         // The log can be truncated below the newest commit (checkpoints); the
         // persisted floor keeps commit sequence numbers monotonic across
         // restarts, which replication relies on.
@@ -10622,7 +10626,10 @@ impl BicDb {
         Ok(db)
     }
 
-    /// Highest durable commit sequence assigned so far. Monotonic and gap-free.
+    /// Highest commit sequence assigned so far. Monotonic and gap-free. On a
+    /// primary this is the reservation counter: it can name a commit whose
+    /// log write has not returned. Shipping and snapshot labels use
+    /// `replication_shippable_seq` instead.
     pub fn last_commit_seq(&self) -> u64 {
         self.commit_seq.load(AtomicOrdering::SeqCst)
     }
@@ -11309,7 +11316,11 @@ impl BicDb {
     ) -> Result<Vec<CommitFrame>> {
         let limit = limit.max(1);
         self.ensure_replication_frames_retained()?;
-        let commits = self.replication_commits_from_retained_wal()?;
+        // Bound by the durable sequence BEFORE reading the file: the file may
+        // already hold a batch whose write has not returned (or a fenced
+        // primary's failed batch), and such a commit can still be lost.
+        let shippable = self.replication_shippable_seq();
+        let commits = self.replication_commits_from_retained_wal(shippable)?;
         if let Some(oldest) = commits.first().map(|commit| commit.commit_seq) {
             if commit_seq < oldest.saturating_sub(1) {
                 return Err(replication_error(format!(
@@ -11482,7 +11493,13 @@ impl BicDb {
         self.ha_state.role == HaRole::Standby || self.ha_node.role() == NodeRole::Standby
     }
 
-    fn replication_commits_from_retained_wal(&self) -> Result<Vec<RetainedReplicationCommit>> {
+    /// Commits retained in the transaction log, up to and including
+    /// `through_seq`. Callers pass [`Self::replication_shippable_seq`], read
+    /// before this call, so no commit past the durable prefix is returned.
+    fn replication_commits_from_retained_wal(
+        &self,
+        through_seq: u64,
+    ) -> Result<Vec<RetainedReplicationCommit>> {
         // The log is live: read it without the recovery reader's tail
         // truncation, which would cut off a commit that is mid-write (see
         // `replication_retention_status`).
@@ -11517,7 +11534,12 @@ impl BicDb {
                     timestamp,
                     commit_seq,
                 } => {
-                    commits.push((commit_seq, tx_id.0, timestamp));
+                    if commit_seq <= through_seq {
+                        commits.push((commit_seq, tx_id.0, timestamp));
+                    } else {
+                        writes.remove(&tx_id.0);
+                        audit.remove(&tx_id.0);
+                    }
                 }
                 TxFrame::Abort { tx_id, .. } => {
                     writes.remove(&tx_id.0);
@@ -11559,6 +11581,20 @@ impl BicDb {
             });
         }
         Ok(retained)
+    }
+
+    /// Apply frames from a primary whose durable commit sequence, when it
+    /// sent them, was `primary_durable_seq`. Refuses the whole batch, before
+    /// applying any of it, when a frame lies above that horizon: the
+    /// primary had not established a durable commit decision for it, so the
+    /// standby must neither expose it nor ship it onward.
+    pub fn apply_replication_batch_within(
+        &mut self,
+        frames: &[CommitFrame],
+        primary_durable_seq: u64,
+    ) -> Result<ReplicationApplyReport> {
+        ensure_frames_within_durable_horizon(frames, primary_durable_seq)?;
+        self.apply_replication_batch(frames)
     }
 
     pub fn apply_replication_batch(
@@ -19273,6 +19309,24 @@ impl SegmentReplayIndex {
             .get(collection)
             .is_some_and(|ids| ids.contains(record_id))
     }
+}
+
+/// Refuses frames above the primary's durable commit sequence.
+pub fn ensure_frames_within_durable_horizon(
+    frames: &[CommitFrame],
+    primary_durable_seq: u64,
+) -> Result<()> {
+    if let Some(frame) = frames
+        .iter()
+        .find(|frame| frame.commit_seq > primary_durable_seq)
+    {
+        return Err(replication_error(format!(
+            "commit_seq {} is above the primary's durable commit sequence {primary_durable_seq}; \
+             a frame without a durable commit decision is never applied",
+            frame.commit_seq
+        )));
+    }
+    Ok(())
 }
 
 fn recover_transaction_log(

@@ -348,6 +348,12 @@ pub enum ReplicationFrame {
         /// list: integer map keys do not survive this enum's JSON encoding.
         #[serde(default)]
         epoch_starts: Vec<(u64, u64)>,
+        /// The sending primary's durable commit sequence, read after the
+        /// batch was built: every commit at or below it has a durable commit
+        /// decision on the primary. A standby applies no frame above it.
+        /// `None` from senders that predate the field.
+        #[serde(default)]
+        durable_commit_seq: Option<u64>,
     },
     /// A candidate asks for a vote to become primary in `term`.
     VoteRequest {

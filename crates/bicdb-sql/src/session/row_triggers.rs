@@ -472,6 +472,25 @@ impl<'db> SqlSession<'db> {
     /// statement would. Public because the pgwire server commits buffered
     /// transactions itself and must drain through a session first.
     pub fn fire_deferred_row_triggers(&mut self) -> Result<()> {
+        let generation = self.db_ref().collection_generation(SCHEMA_COLLECTION);
+        let mut cache = SqlSchemaSessionCacheScope::new(
+            generation,
+            &mut self.schema_cache_generation,
+            &mut self.schema_cache,
+            &mut self.schema_list_cache,
+        );
+        let result = self.fire_deferred_row_triggers_inner();
+        let generation = self.db_ref().collection_generation(SCHEMA_COLLECTION);
+        cache.finish(
+            generation,
+            &mut self.schema_cache_generation,
+            &mut self.schema_cache,
+            &mut self.schema_list_cache,
+        );
+        result
+    }
+
+    fn fire_deferred_row_triggers_inner(&mut self) -> Result<()> {
         loop {
             let hooks = match self.tx.as_mut() {
                 Some(tx) => tx.take_deferred_hooks(),

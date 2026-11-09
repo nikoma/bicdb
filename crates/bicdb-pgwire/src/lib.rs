@@ -2666,18 +2666,20 @@ fn handle_frontend_message(
                     server.read_db()
                 };
                 let result = database.and_then(|db| {
-                    bicdb_sql::oracle::lower_session_sql(
-                        &db,
-                        query,
-                        &server.config.sql_profile,
-                        state
-                            .session_state
-                            .session_gucs()
-                            .get("search_path")
-                            .map(String::as_str),
-                        &state.user,
-                    )
-                    .map_err(PgWireError::from)
+                    state.catalog_cache.with_schema_cache(&db, || {
+                        bicdb_sql::oracle::lower_session_sql(
+                            &db,
+                            query,
+                            &server.config.sql_profile,
+                            state
+                                .session_state
+                                .session_gucs()
+                                .get("search_path")
+                                .map(String::as_str),
+                            &state.user,
+                        )
+                        .map_err(PgWireError::from)
+                    })
                 });
                 match result {
                     Ok(sql) => {

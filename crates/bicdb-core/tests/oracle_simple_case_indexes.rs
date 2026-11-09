@@ -305,59 +305,79 @@ fn explicit_oracle_capability_does_not_require_an_expression_index() {
     }
 }
 
+enum CaseShadow {
+    Paged(bicdb_core::PagedBTreeBuildState),
+    Embedded(IndexDefinition),
+}
+fn publish_case_shadow(
+    db: &mut BicDb,
+    old: &IndexDefinition,
+    shadow: &CaseShadow,
+) -> bicdb_core::Result<()> {
+    match shadow {
+        CaseShadow::Paged(state) => db.publish_oracle_case_v1_index_replacement(old, state),
+        CaseShadow::Embedded(definition) => {
+            db.publish_embedded_oracle_case_v1_index_replacement(old, definition)
+        }
+    }
+}
+
 #[test]
 fn atomic_case_binding_failure_steps_leave_whole_definition_and_generation_pairs() {
     use bicdb_page::test_faults::arm_io_failure;
-    for step in ["write", "sync", "rename", "dir_sync"] {
-        let root = tempfile::tempdir().unwrap();
-        let config = mode_config(StorageMode::ServerPaged).with_fsync(true);
-        let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
-        db.create_collection("rows").unwrap();
-        db.insert("rows", row("one", "é")).unwrap();
-        let old = index("legacy", IndexField::Upper(Box::new(path("value"))), true);
-        db.create_index(old.clone()).unwrap();
-        let shadow = completed_shadow(
-            &mut db,
-            index(
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for step in ["write", "sync", "rename", "dir_sync"] {
+            let root = tempfile::tempdir().unwrap();
+            let config = mode_config(mode).with_fsync(true);
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            db.create_collection("rows").unwrap();
+            db.insert("rows", row("one", "é")).unwrap();
+            let old = index("legacy", IndexField::Upper(Box::new(path("value"))), true);
+            db.create_index(old.clone()).unwrap();
+            let definition = index(
                 "owned-shadow",
                 IndexField::OracleUpperV1(Box::new(path("value"))),
                 true,
-            ),
-        );
-        let fault = arm_io_failure(&format!("index_catalog.{step}"), root.path(), 1, false);
-        assert!(
-            db.publish_oracle_case_v1_index_replacement(&old, &shadow)
-                .is_err(),
-            "{step}"
-        );
-        assert_eq!(fault.fired(), 1, "{step}");
-        assert!(
-            db.get("rows", "one").is_err(),
-            "uncertain publication fences the handle: {step}"
-        );
-        drop(fault);
-        drop(db);
-        let mut db = BicDb::open_with_config(root.path(), config).unwrap();
-        let published = step == "dir_sync";
-        assert_eq!(
-            db.lookup_index("legacy", &key(if published { "É" } else { "é" }))
-                .unwrap(),
-            vec!["one"],
-            "{step}"
-        );
-        assert!(
-            db.lookup_index("legacy", &key(if published { "é" } else { "É" }))
-                .unwrap()
-                .is_empty(),
-            "{step}"
-        );
-        db.publish_oracle_case_v1_index_replacement(&old, &shadow)
-            .unwrap();
-        assert_eq!(
-            db.lookup_index("legacy", &key("É")).unwrap(),
-            vec!["one"],
-            "{step}"
-        );
+            );
+            let shadow = if mode == StorageMode::ServerPaged {
+                CaseShadow::Paged(completed_shadow(&mut db, definition))
+            } else {
+                db.create_index(definition.clone()).unwrap();
+                CaseShadow::Embedded(definition)
+            };
+            let fault = arm_io_failure(&format!("index_catalog.{step}"), root.path(), 1, false);
+            assert!(
+                publish_case_shadow(&mut db, &old, &shadow).is_err(),
+                "{step}"
+            );
+            assert_eq!(fault.fired(), 1, "{step}");
+            assert!(
+                db.get("rows", "one").is_err(),
+                "uncertain publication fences the handle: {step}"
+            );
+            drop(fault);
+            drop(db);
+            let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+            let published = step == "dir_sync";
+            assert_eq!(
+                db.lookup_index("legacy", &key(if published { "É" } else { "é" }))
+                    .unwrap(),
+                vec!["one"],
+                "{step}"
+            );
+            assert!(
+                db.lookup_index("legacy", &key(if published { "é" } else { "É" }))
+                    .unwrap()
+                    .is_empty(),
+                "{step}"
+            );
+            publish_case_shadow(&mut db, &old, &shadow).unwrap();
+            assert_eq!(
+                db.lookup_index("legacy", &key("É")).unwrap(),
+                vec!["one"],
+                "{step}"
+            );
+        }
     }
 }
 
@@ -367,20 +387,30 @@ fn atomic_case_binding_crash_child() {
     let Ok(root) = std::env::var("BICDB_CASE_BINDING_TEST_ROOT") else {
         return;
     };
-    let mut db = BicDb::open_with_config(
-        &root,
-        mode_config(StorageMode::ServerPaged).with_fsync(true),
-    )
-    .unwrap();
+    let mode = if std::env::var("BICDB_CASE_BINDING_MODE").unwrap() == "paged" {
+        StorageMode::ServerPaged
+    } else {
+        StorageMode::EmbeddedMemory
+    };
+    let mut db = BicDb::open_with_config(&root, mode_config(mode).with_fsync(true)).unwrap();
     let old = index("legacy", IndexField::Upper(Box::new(path("value"))), true);
-    let shadow = db
-        .load_paged_btree_build("owned-shadow", bicdb_core::PagedBTreeBuildLimits::default())
-        .unwrap();
+    let shadow = if mode == StorageMode::ServerPaged {
+        CaseShadow::Paged(
+            db.load_paged_btree_build("owned-shadow", bicdb_core::PagedBTreeBuildLimits::default())
+                .unwrap(),
+        )
+    } else {
+        CaseShadow::Embedded(
+            db.index_definitions()
+                .into_iter()
+                .find(|definition| definition.name == "owned-shadow")
+                .unwrap(),
+        )
+    };
     println!("publishing-owned-shadow");
     use std::io::Write;
     std::io::stdout().flush().unwrap();
-    db.publish_oracle_case_v1_index_replacement(&old, &shadow)
-        .unwrap();
+    publish_case_shadow(&mut db, &old, &shadow).unwrap();
     panic!("configured publication crash did not fire");
 }
 
@@ -388,68 +418,80 @@ fn atomic_case_binding_crash_child() {
 fn atomic_case_binding_publication_process_crashes() {
     #[cfg(unix)]
     use std::os::unix::process::ExitStatusExt;
-    for point in [
-        "after_write",
-        "after_sync",
-        "after_rename",
-        "after_dir_sync",
-    ] {
-        let root = tempfile::tempdir().unwrap();
-        let config = mode_config(StorageMode::ServerPaged).with_fsync(true);
-        let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
-        db.create_collection("rows").unwrap();
-        db.insert("rows", row("one", "é")).unwrap();
-        let old = index("legacy", IndexField::Upper(Box::new(path("value"))), true);
-        db.create_index(old.clone()).unwrap();
-        let shadow = completed_shadow(
-            &mut db,
-            index(
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for point in [
+            "after_write",
+            "after_sync",
+            "after_rename",
+            "after_dir_sync",
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let config = mode_config(mode).with_fsync(true);
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            db.create_collection("rows").unwrap();
+            db.insert("rows", row("one", "é")).unwrap();
+            let old = index("legacy", IndexField::Upper(Box::new(path("value"))), true);
+            db.create_index(old.clone()).unwrap();
+            let definition = index(
                 "owned-shadow",
                 IndexField::OracleUpperV1(Box::new(path("value"))),
                 true,
-            ),
-        );
-        db.flush().unwrap();
-        drop(db);
-        let output = std::process::Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "atomic_case_binding_crash_child",
-                "--ignored",
-                "--nocapture",
-            ])
-            .env("BICDB_CASE_BINDING_TEST_ROOT", root.path())
-            .env("BICDB_TEST_CRASH_AT", format!("index_catalog.{point}"))
-            .output()
-            .unwrap();
-        #[cfg(unix)]
-        assert_eq!(
-            output.status.signal(),
-            Some(6),
-            "{point}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        assert!(
-            String::from_utf8_lossy(&output.stdout).contains("publishing-owned-shadow"),
-            "crash must follow startup: {point}"
-        );
-        let mut db = BicDb::open_with_config(root.path(), config).unwrap();
-        let published = matches!(point, "after_rename" | "after_dir_sync");
-        assert_eq!(
-            db.lookup_index("legacy", &key(if published { "É" } else { "é" }))
-                .unwrap(),
-            vec!["one"],
-            "{point}"
-        );
-        assert!(
-            db.lookup_index("legacy", &key(if published { "é" } else { "É" }))
-                .unwrap()
-                .is_empty(),
-            "{point}"
-        );
-        db.publish_oracle_case_v1_index_replacement(&old, &shadow)
-            .unwrap();
-        assert!(db.verify_index("legacy").unwrap().valid, "{point}");
+            );
+            let shadow = if mode == StorageMode::ServerPaged {
+                CaseShadow::Paged(completed_shadow(&mut db, definition))
+            } else {
+                db.create_index(definition.clone()).unwrap();
+                CaseShadow::Embedded(definition)
+            };
+            db.flush().unwrap();
+            drop(db);
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "atomic_case_binding_crash_child",
+                    "--ignored",
+                    "--nocapture",
+                ])
+                .env("BICDB_CASE_BINDING_TEST_ROOT", root.path())
+                .env(
+                    "BICDB_CASE_BINDING_MODE",
+                    if mode == StorageMode::ServerPaged {
+                        "paged"
+                    } else {
+                        "embedded"
+                    },
+                )
+                .env("BICDB_TEST_CRASH_AT", format!("index_catalog.{point}"))
+                .output()
+                .unwrap();
+            #[cfg(unix)]
+            assert_eq!(
+                output.status.signal(),
+                Some(6),
+                "{point}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(
+                String::from_utf8_lossy(&output.stdout).contains("publishing-owned-shadow"),
+                "crash must follow startup: {point}"
+            );
+            let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+            let published = matches!(point, "after_rename" | "after_dir_sync");
+            assert_eq!(
+                db.lookup_index("legacy", &key(if published { "É" } else { "é" }))
+                    .unwrap(),
+                vec!["one"],
+                "{point}"
+            );
+            assert!(
+                db.lookup_index("legacy", &key(if published { "é" } else { "É" }))
+                    .unwrap()
+                    .is_empty(),
+                "{point}"
+            );
+            publish_case_shadow(&mut db, &old, &shadow).unwrap();
+            assert!(db.verify_index("legacy").unwrap().valid, "{point}");
+        }
     }
 }
 

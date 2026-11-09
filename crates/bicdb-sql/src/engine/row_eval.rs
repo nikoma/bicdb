@@ -329,6 +329,7 @@ impl<'db> SqlEngine<'db> {
                 let right_type =
                     self.env_or_registered_expr_type(right, env, row.keys().map(String::as_str));
                 reject_undefined_comparison(left_type.as_deref(), op, right_type.as_deref())?;
+                let collation = comparison_collation(left, right, None)?;
                 let pg_type = if matches!(left_type.as_deref(), Some("inet" | "cidr"))
                     && matches!(right_type.as_deref(), Some("inet" | "cidr"))
                 {
@@ -372,6 +373,11 @@ impl<'db> SqlEngine<'db> {
                 }
                 if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
                     return Ok(None);
+                }
+                if let Some(truth) =
+                    compare_values_with_collation(collation.as_deref(), &left, op, &right)
+                {
+                    return Ok(truth);
                 }
                 if let Some(truth) = compare_values_by_pg_types(
                     left_type.as_deref(),
@@ -570,6 +576,7 @@ impl<'db> SqlEngine<'db> {
                     context.column_keys().iter().map(String::as_str),
                 );
                 reject_undefined_comparison(left_type.as_deref(), op, right_type.as_deref())?;
+                let collation = comparison_collation(left, right, None)?;
                 let pg_type = if matches!(left_type.as_deref(), Some("inet" | "cidr"))
                     && matches!(right_type.as_deref(), Some("inet" | "cidr"))
                 {
@@ -598,6 +605,11 @@ impl<'db> SqlEngine<'db> {
                 )?;
                 if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
                     return Ok(None);
+                }
+                if let Some(truth) =
+                    compare_values_with_collation(collation.as_deref(), &left, op, &right)
+                {
+                    return Ok(truth);
                 }
                 if let Some(truth) = compare_values_by_pg_types(
                     left_type.as_deref(),
@@ -656,6 +668,7 @@ impl<'db> SqlEngine<'db> {
                     let left_type = self.row_expr_pg_type(left, context);
                     let right_type = self.row_expr_pg_type(right, context);
                     reject_undefined_comparison(left_type.as_deref(), op, right_type.as_deref())?;
+                    let collation = comparison_collation(left, right, None)?;
                     let left = enforce_integer_value_type(
                         self.eval_slot_row_value(row, context, left)?,
                         left_type.as_deref(),
@@ -664,6 +677,11 @@ impl<'db> SqlEngine<'db> {
                         self.eval_slot_row_value(row, context, right)?,
                         right_type.as_deref(),
                     )?;
+                    if let Some(truth) =
+                        compare_values_with_collation(collation.as_deref(), &left, op, &right)
+                    {
+                        return Ok(truth);
+                    }
                     if let Some(truth) = compare_values_by_pg_types(
                         left_type.as_deref(),
                         right_type.as_deref(),
@@ -1603,6 +1621,7 @@ impl<'db> SqlEngine<'db> {
         for condition in conditions {
             let matched = if let Some(operand_value) = &operand_value {
                 simple_case_expr_values_equal(
+                    self.db_ref(),
                     operand.expect("simple CASE operand"),
                     &condition.condition,
                     operand_value.clone(),
@@ -2121,6 +2140,7 @@ impl<'db> SqlEngine<'db> {
                     let right_type =
                         self.record_outer_operand_type(table, alias, schema, outer_row, right);
                     reject_undefined_comparison(left_type.as_deref(), op, right_type.as_deref())?;
+                    let collation = comparison_collation(left, right, None)?;
                     let Some(left) = self
                         .eval_record_outer_value(table, alias, schema, record, outer_row, left)?
                     else {
@@ -2131,6 +2151,11 @@ impl<'db> SqlEngine<'db> {
                     else {
                         return Ok(None);
                     };
+                    if let Some(truth) =
+                        compare_values_with_collation(collation.as_deref(), &left, op, &right)
+                    {
+                        return Ok(truth);
+                    }
                     if let Some(truth) = compare_values_by_pg_types(
                         left_type.as_deref(),
                         right_type.as_deref(),
@@ -2349,6 +2374,7 @@ impl<'db> SqlEngine<'db> {
                         row.keys().map(String::as_str),
                     );
                     reject_undefined_comparison(left_type.as_deref(), op, right_type.as_deref())?;
+                    let collation = comparison_collation(left, right, None)?;
                     let left = enforce_integer_value_type(
                         self.eval_row_value(row, left)?,
                         left_type.as_deref(),
@@ -2357,6 +2383,11 @@ impl<'db> SqlEngine<'db> {
                         self.eval_row_value(row, right)?,
                         right_type.as_deref(),
                     )?;
+                    if let Some(truth) =
+                        compare_values_with_collation(collation.as_deref(), &left, op, &right)
+                    {
+                        return Ok(truth);
+                    }
                     if let Some(truth) = compare_values_by_pg_types(
                         left_type.as_deref(),
                         right_type.as_deref(),
@@ -3203,6 +3234,7 @@ impl<'db> SqlEngine<'db> {
         for condition in conditions {
             let matched = if let Some(operand_value) = &operand_value {
                 simple_case_expr_values_equal(
+                    self.db_ref(),
                     operand.expect("simple CASE operand"),
                     &condition.condition,
                     operand_value.clone(),

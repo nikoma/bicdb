@@ -3,7 +3,7 @@
 use bicdb_core::{BicDb, DbConfig};
 use bicdb_sql::{
     sql_text::{sql_key, sql_text},
-    SqlSession,
+    SqlSession, SqlValue,
 };
 use sqlparser::{dialect::PostgreSqlDialect, parser::Parser};
 fn quote(name: &str) -> String {
@@ -62,6 +62,6 @@ fn stored_views_preserve_adjacent_quotes_and_backslash_quote_column_names() {
         let result = s
             .execute(&format!("SELECT {n}=2.000 FROM view_{i}"))
             .unwrap();
-        assert_eq!(result.rows[0][0].to_cell(), "t");
+        assert_eq!(result.rows, vec![vec![SqlValue::Bool(true)]]);
     }
 }

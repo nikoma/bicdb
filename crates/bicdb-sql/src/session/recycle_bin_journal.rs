@@ -193,6 +193,7 @@ pub(super) fn recover(db: &mut BicDb) -> Result<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bicdb_core::{DbConfig, StorageMode};
     use std::process::Command;
     fn config(paged: bool) -> DbConfig {
         DbConfig::default().with_storage_mode(if paged {

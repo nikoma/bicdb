@@ -7,6 +7,10 @@
 #   BICDB_HOST=127.0.0.1 BICDB_PORT=5439 BICDB_USER=admin BICDB_PASSWORD=adminpw \
 #   PG_CONTAINER=bicdb-pg18-compat scripts/rls-pg18-diff.sh
 #
+# BATTERY selects another battery (default scripts/rls_parity_battery.sql;
+# scripts/rls_write_path_battery.sql covers ON CONFLICT and RETURNING);
+# PG_DATABASE names the oracle database (default compat).
+#
 # The BicDB connection user must map to a SUPERUSER SQL role so SET ROLE works
 # like the oracle's postgres superuser; the script creates it if missing.
 set -u
@@ -16,7 +20,8 @@ BICDB_PORT="${BICDB_PORT:-5439}"
 BICDB_USER="${BICDB_USER:-admin}"
 BICDB_PASSWORD="${BICDB_PASSWORD:-adminpw}"
 PG_CONTAINER="${PG_CONTAINER:-bicdb-pg18-compat}"
-BATTERY="$(dirname "$0")/rls_parity_battery.sql"
+BATTERY="${BATTERY:-$(dirname "$0")/rls_parity_battery.sql}"
+PG_DATABASE="${PG_DATABASE:-compat}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -41,7 +46,7 @@ normalize() {
 PGPASSWORD="$BICDB_PASSWORD" psql -h "$BICDB_HOST" -p "$BICDB_PORT" -U "$BICDB_USER" -d bicdb \
     -v ON_ERROR_STOP=0 -P pager=off -f "$BATTERY" 2>&1 | normalize > "$WORK/bicdb.out"
 
-docker exec -i "$PG_CONTAINER" psql -U postgres -d compat \
+docker exec -i "$PG_CONTAINER" psql -U postgres -d "$PG_DATABASE" \
     -v ON_ERROR_STOP=0 -P pager=off < "$BATTERY" 2>&1 | normalize > "$WORK/pg18.out"
 
 if diff -u "$WORK/pg18.out" "$WORK/bicdb.out"; then

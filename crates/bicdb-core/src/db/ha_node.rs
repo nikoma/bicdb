@@ -20,6 +20,10 @@ use super::*;
 /// File (in the database directory) holding [`HaNodeFile`].
 pub const HA_NODE_FILE: &str = "ha-node.json";
 
+/// Fault-injection and failure site of [`HA_NODE_FILE`] (steps `.write`,
+/// `.sync`, `.rename`, `.dir_sync`; see `docs/durability-failure-handling.md`).
+pub const HA_NODE_SITE: &str = "ha_node";
+
 /// A weak, engine-lock-free probe of native writer authority. This handle
 /// does not keep a database open, and observes explicit role changes as well
 /// as loss of the synchronous write lease.
@@ -151,16 +155,32 @@ pub(crate) struct HaNode {
     epoch: AtomicU64,
     path: PathBuf,
     fsync: bool,
+    health: Arc<bicdb_page::DurabilityHealth>,
 }
 
 impl HaNode {
-    pub(crate) fn load(root: &Path, configured: NodeRole, fsync: bool) -> Result<Self> {
+    pub(crate) fn load(
+        root: &Path,
+        configured: NodeRole,
+        fsync: bool,
+        health: Arc<bicdb_page::DurabilityHealth>,
+    ) -> Result<Self> {
         let path = root.join(HA_NODE_FILE);
         let file = match fs::read(&path) {
             Ok(bytes) => serde_json::from_slice::<HaNodeFile>(&bytes)?,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => HaNodeFile::default(),
             Err(error) => return Err(error.into()),
         };
+        if fsync && path.exists() {
+            // A previous process may have renamed a new state into place and
+            // stopped before its directory `fsync`: the file this node is
+            // about to act on (its vote, its fence, its epoch) could still
+            // vanish at a power loss. Make it durable before using it.
+            storage::sync_parent_directory(&path).map_err(|error| BicDbError::WriteFailed {
+                site: format!("{HA_NODE_SITE}.dir_sync"),
+                detail: format!("{}: {error}", path.display()),
+            })?;
+        }
         let role = file.role.unwrap_or(configured);
         Ok(Self {
             role: AtomicU8::new(role.code()),
@@ -169,7 +189,19 @@ impl HaNode {
             file: Mutex::new(file),
             path,
             fsync,
+            health,
         })
+    }
+
+    /// Rewrite the current state through the durable protocol. Used by the
+    /// verification step of a reopen after a durability failure, so that a
+    /// state file whose last replacement was not known to be durable is
+    /// durable before the node acts on it.
+    pub(crate) fn persist_current(&self) -> Result<()> {
+        if !self.path.exists() {
+            return Ok(());
+        }
+        self.with_file(|_| ())
     }
 
     pub(crate) fn is_draining(&self) -> bool {
@@ -184,11 +216,28 @@ impl HaNode {
         self.epoch.load(AtomicOrdering::Acquire)
     }
 
+    /// Apply `change` to the persisted state. The new state is durable
+    /// (temp file synced, renamed, directory synced) before memory changes
+    /// and before this returns, so a vote, a fence or an epoch is never
+    /// reported, or acted on, ahead of the disk.
+    ///
+    /// A failure up to and including the rename leaves the old file and
+    /// the old memory in place and is returned as an error. A failed
+    /// directory `fsync` after the rename leaves the outcome unknown (the
+    /// new file is live now and may be gone after a power loss), so it
+    /// fences the database (`WriteFailed`, site `ha_node.dir_sync`), and a
+    /// fenced database changes no HA state until it is reopened.
     pub(crate) fn with_file<T>(&self, change: impl FnOnce(&mut HaNodeFile) -> T) -> Result<T> {
         let mut file = self.file.lock();
         let mut next = file.clone();
         let value = change(&mut next);
-        storage::write_atomic(&self.path, &serde_json::to_vec_pretty(&next)?, self.fsync)?;
+        storage::replace_durably(
+            &self.path,
+            storage::ReplaceContents::Plain(&serde_json::to_vec_pretty(&next)?),
+            self.fsync,
+            HA_NODE_SITE,
+            storage::FailClosed::AfterRename(&self.health),
+        )?;
         *file = next;
         self.draining
             .store(file.switchover.is_some(), AtomicOrdering::Release);

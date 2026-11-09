@@ -1760,27 +1760,110 @@ impl<'db> SqlSession<'db> {
         action: PolicyAction,
         records: &[Record],
     ) -> Result<()> {
-        if records.is_empty() || schema.is_none_or(|schema| !schema.rls_enabled) {
-            return Ok(());
+        self.enforce_rls_write_checks(table, schema, action, false, records)
+    }
+
+    /// The new-row checks PostgreSQL runs for a write (its WITH CHECK
+    /// options): the command's own `WITH CHECK` policies (falling back to
+    /// `USING`), then, when the statement reads the target relation
+    /// (`select_required`: a `RETURNING` or an `ON CONFLICT` arbiter for
+    /// INSERT, any read of the existing row for UPDATE), the SELECT
+    /// policies' `USING`. A new row the writer could not read back is then
+    /// an error rather than a row silently written and returned.
+    pub(crate) fn enforce_rls_write_checks(
+        &self,
+        table: &str,
+        schema: Option<&TableSchema>,
+        action: PolicyAction,
+        select_required: bool,
+        records: &[Record],
+    ) -> Result<()> {
+        match self.first_rls_write_violation(table, schema, action, select_required, records)? {
+            Some((_, error)) => Err(error),
+            None => Ok(()),
         }
-        let prepared = prepare_rls_with_schema(
-            self.db_ref(),
-            table,
-            action,
-            schema,
-            &self.session_gucs,
-            self.security_context.as_ref(),
-            true,
-        )?;
-        let PreparedRls::Filter(filter) = prepared else {
-            return Ok(());
+    }
+
+    /// The index of the first record failing the write checks of
+    /// `enforce_rls_write_checks`, with its error. Callers that check
+    /// constraints in a batch use the index to report an earlier row's
+    /// constraint error first, as PostgreSQL's row-at-a-time order does.
+    pub(crate) fn first_rls_write_violation(
+        &self,
+        table: &str,
+        schema: Option<&TableSchema>,
+        action: PolicyAction,
+        select_required: bool,
+        records: &[Record],
+    ) -> Result<Option<(usize, SqlError)>> {
+        if records.is_empty() || schema.is_none_or(|schema| !schema.rls_enabled) {
+            return Ok(None);
+        }
+        let prepare = |action, with_check| {
+            prepare_rls_with_schema(
+                self.db_ref(),
+                table,
+                action,
+                schema,
+                &self.session_gucs,
+                self.security_context.as_ref(),
+                with_check,
+            )
         };
+        let mut filters = Vec::with_capacity(2);
+        if let PreparedRls::Filter(filter) = prepare(action, true)? {
+            filters.push(filter);
+        }
+        if select_required && action != PolicyAction::Select {
+            if let PreparedRls::Filter(filter) = prepare(PolicyAction::Select, false)? {
+                filters.push(filter);
+            }
+        }
+        if filters.is_empty() {
+            return Ok(None);
+        }
         let schema = schema.expect("RLS filter requires a table schema");
         let engine = self.sql_engine();
-        for record in records {
-            let verdict = filter.verdict(&engine, schema, record)?;
-            if !matches!(verdict, RlsRowVerdict::Allowed) {
-                return Err(rls_check_denied(table, &verdict));
+        for (index, record) in records.iter().enumerate() {
+            for filter in &filters {
+                let verdict = filter.verdict(&engine, schema, record)?;
+                if !matches!(verdict, RlsRowVerdict::Allowed) {
+                    return Ok(Some((index, rls_check_denied(table, &verdict))));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// The existing-row check of `INSERT ... ON CONFLICT DO UPDATE`: the row
+    /// must pass the UPDATE policies' `USING` and, since the arbiter reads
+    /// it, the SELECT policies' `USING`. PostgreSQL raises an error here
+    /// (never a silent skip), so a row the writer cannot see is never
+    /// modified or returned.
+    pub(crate) fn enforce_rls_conflict_check(
+        &self,
+        table: &str,
+        schema: &TableSchema,
+        existing: &Record,
+    ) -> Result<()> {
+        if !schema.rls_enabled {
+            return Ok(());
+        }
+        let engine = self.sql_engine();
+        for action in [PolicyAction::Update, PolicyAction::Select] {
+            if let PreparedRls::Filter(filter) = prepare_rls_with_schema(
+                self.db_ref(),
+                table,
+                action,
+                Some(schema),
+                &self.session_gucs,
+                self.security_context.as_ref(),
+                false,
+            )? {
+                let verdict = filter.verdict(&engine, schema, existing)?;
+                if !matches!(verdict, RlsRowVerdict::Allowed) {
+                    return Err(rls_using_denied(table, &verdict));
+                }
             }
         }
         Ok(())

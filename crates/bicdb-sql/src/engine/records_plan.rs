@@ -2151,7 +2151,9 @@ impl<'db> SqlEngine<'db> {
                     IndexField::TimestampDay(_)
                         | IndexField::Upper(_)
                         | IndexField::OracleUpperV1(_)
+                        | IndexField::OracleUpperNationalV1(_)
                         | IndexField::OracleLowerV1(_)
+                        | IndexField::OracleLowerNationalV1(_)
                         | IndexField::Lower(_)
                 ) {
                     // The static path needs the same schema-aware expression
@@ -2252,7 +2254,9 @@ impl<'db> SqlEngine<'db> {
                 IndexField::TimestampDay(_)
                     | IndexField::Upper(_)
                     | IndexField::OracleUpperV1(_)
+                    | IndexField::OracleUpperNationalV1(_)
                     | IndexField::OracleLowerV1(_)
+                    | IndexField::OracleLowerNationalV1(_)
                     | IndexField::Lower(_)
             ) {
                 let mut lower = None;
@@ -3090,8 +3094,14 @@ pub(super) fn folded_text_equality_prefix(
     let (inner, mapping): (&IndexField, fn(&str) -> String) = match field {
         IndexField::Upper(inner) => (inner.as_ref(), bicdb_core::index_key_upper),
         IndexField::OracleUpperV1(inner) => (inner.as_ref(), bicdb_core::oracle_simple_upper_v1),
+        IndexField::OracleUpperNationalV1(inner) => {
+            (inner.as_ref(), bicdb_core::oracle_simple_national_upper_v1)
+        }
         IndexField::Lower(inner) => (inner.as_ref(), bicdb_core::index_key_lower),
         IndexField::OracleLowerV1(inner) => (inner.as_ref(), bicdb_core::oracle_simple_lower_v1),
+        IndexField::OracleLowerNationalV1(inner) => {
+            (inner.as_ref(), bicdb_core::oracle_simple_national_lower_v1)
+        }
         _ => return None,
     };
     let IndexField::MetadataPath(path) = inner else {

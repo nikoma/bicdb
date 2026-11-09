@@ -4189,7 +4189,9 @@ fn index_range_probe_is_compatible(
         IndexField::Upper(_)
             | IndexField::Lower(_)
             | IndexField::OracleUpperV1(_)
+            | IndexField::OracleUpperNationalV1(_)
             | IndexField::OracleLowerV1(_)
+            | IndexField::OracleLowerNationalV1(_)
     ) {
         return matches!(value, IndexValue::String(_) | IndexValue::Null);
     }
@@ -4212,7 +4214,9 @@ fn case_mapped_probe_value_is_text(field: Option<&IndexField>, value: &SqlValue)
             IndexField::Upper(_)
                 | IndexField::Lower(_)
                 | IndexField::OracleUpperV1(_)
+                | IndexField::OracleUpperNationalV1(_)
                 | IndexField::OracleLowerV1(_)
+                | IndexField::OracleLowerNationalV1(_)
         )
     ) || matches!(value, SqlValue::String(_))
 }

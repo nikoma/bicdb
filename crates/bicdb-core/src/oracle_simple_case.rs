@@ -19,6 +19,62 @@ pub fn oracle_simple_lower_v1(text: &str) -> String {
     map(text, LOWER)
 }
 
+// National character values use Oracle's AL16UTF16 case table, which differs
+// from AL32UTF8 in the frozen v1 reference. Overrides apply before the base map.
+pub fn oracle_simple_national_upper_v1(text: &str) -> String {
+    if text.is_ascii() {
+        return text.to_ascii_uppercase();
+    }
+    map_national(text, NATIONAL_UPPER_OVERRIDES, UPPER)
+}
+pub fn oracle_simple_national_lower_v1(text: &str) -> String {
+    if text.is_ascii() {
+        return text.to_ascii_lowercase();
+    }
+    map_national(text, NATIONAL_LOWER_OVERRIDES, LOWER)
+}
+fn map_national(text: &str, overrides: &[(u32, u32)], base: &[(u32, u32)]) -> String {
+    text.chars()
+        .map(|ch| {
+            let cp = ch as u32;
+            let mapped = overrides
+                .binary_search_by_key(&cp, |&(from, _)| from)
+                .ok()
+                .map(|i| overrides[i].1)
+                .or_else(|| {
+                    base.binary_search_by_key(&cp, |&(from, _)| from)
+                        .ok()
+                        .map(|i| base[i].1)
+                })
+                .unwrap_or(cp);
+            char::from_u32(mapped).expect("validated scalar national case table")
+        })
+        .collect()
+}
+const NATIONAL_UPPER_OVERRIDES: &[(u32, u32)] = &[
+    (0x19B, 0xA7DC),
+    (0x23F, 0x2C7E),
+    (0x240, 0x2C7F),
+    (0x250, 0x2C6F),
+    (0x251, 0x2C6D),
+    (0x252, 0x2C70),
+    (0x25C, 0xA7AB),
+    (0x261, 0xA7AC),
+    (0x264, 0xA7CB),
+    (0x265, 0xA78D),
+    (0x266, 0xA7AA),
+    (0x26A, 0xA7AE),
+    (0x26B, 0x2C62),
+    (0x26C, 0xA7AD),
+    (0x271, 0x2C6E),
+    (0x27D, 0x2C64),
+    (0x282, 0xA7C5),
+    (0x287, 0xA7B1),
+    (0x29D, 0xA7B2),
+    (0x29E, 0xA7B0),
+];
+const NATIONAL_LOWER_OVERRIDES: &[(u32, u32)] = &[(0x23A, 0x2C65), (0x23E, 0x2C66)];
+
 fn map(text: &str, changes: &[(u32, u32)]) -> String {
     let mut output = String::with_capacity(text.len());
     for ch in text.chars() {
@@ -3020,7 +3076,12 @@ mod tests {
             assert_eq!(oracle_simple_upper_v1(&text), map(&text, UPPER));
             assert_eq!(oracle_simple_lower_v1(&text), map(&text, LOWER));
         }
-        for table in [UPPER, LOWER] {
+        for table in [
+            UPPER,
+            LOWER,
+            NATIONAL_UPPER_OVERRIDES,
+            NATIONAL_LOWER_OVERRIDES,
+        ] {
             for pair in table.windows(2) {
                 assert!(pair[0].0 < pair[1].0);
             }
@@ -3028,6 +3089,31 @@ mod tests {
                 assert!(char::from_u32(from).is_some() && char::from_u32(to).is_some());
                 assert_ne!(from, to);
             }
+        }
+    }
+    #[test]
+    fn national_case_uses_its_own_frozen_table() {
+        assert_eq!(oracle_simple_upper_v1("ɡɐƛ"), "ɡɐƛ");
+        assert_eq!(oracle_simple_national_upper_v1("ɡɐƛ"), "ꞬⱯꟜ");
+        assert_eq!(oracle_simple_lower_v1("ȺȾ"), "ȺȾ");
+        assert_eq!(oracle_simple_national_lower_v1("ȺȾ"), "ⱥⱦ");
+        for cp in 0..=0x10FFFF {
+            let Some(ch) = char::from_u32(cp) else {
+                continue;
+            };
+            let text = ch.to_string();
+            let upper = NATIONAL_UPPER_OVERRIDES
+                .iter()
+                .find(|pair| pair.0 == cp)
+                .map(|pair| char::from_u32(pair.1).unwrap().to_string())
+                .unwrap_or_else(|| oracle_simple_upper_v1(&text));
+            let lower = NATIONAL_LOWER_OVERRIDES
+                .iter()
+                .find(|pair| pair.0 == cp)
+                .map(|pair| char::from_u32(pair.1).unwrap().to_string())
+                .unwrap_or_else(|| oracle_simple_lower_v1(&text));
+            assert_eq!(oracle_simple_national_upper_v1(&text), upper);
+            assert_eq!(oracle_simple_national_lower_v1(&text), lower);
         }
     }
     #[test]

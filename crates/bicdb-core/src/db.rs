@@ -4839,7 +4839,9 @@ pub enum IndexField {
     Upper(Box<IndexField>),
     /// Frozen Oracle simple-case v1 keys; legacy Upper/Lower stay ASCII.
     OracleUpperV1(Box<IndexField>),
+    OracleUpperNationalV1(Box<IndexField>),
     OracleLowerV1(Box<IndexField>),
+    OracleLowerNationalV1(Box<IndexField>),
     Trim(Box<IndexField>),
     /// A type-preserving COALESCE with a constant fallback. `value` retains
     /// the scalar for predicate evaluation; `index_value` uses the field's
@@ -4862,6 +4864,7 @@ impl IndexField {
     pub(crate) fn uses_oracle_simple_case_v1(&self) -> bool {
         match self {
             Self::OracleUpperV1(_) | Self::OracleLowerV1(_) => true,
+            Self::OracleUpperNationalV1(_) | Self::OracleLowerNationalV1(_) => true,
             Self::Upper(inner)
             | Self::Lower(inner)
             | Self::Trim(inner)
@@ -9321,7 +9324,9 @@ impl IndexRecordMutation {
                 IndexField::Lower(inner)
                 | IndexField::Upper(inner)
                 | IndexField::OracleUpperV1(inner)
+                | IndexField::OracleUpperNationalV1(inner)
                 | IndexField::OracleLowerV1(inner)
+                | IndexField::OracleLowerNationalV1(inner)
                 | IndexField::Trim(inner)
                 | IndexField::TimestampDay(inner)
                 | IndexField::Coalesce { field: inner, .. } => base_column(inner),
@@ -22414,7 +22419,9 @@ fn validate_secure_index_field(
         IndexField::Lower(inner)
         | IndexField::Upper(inner)
         | IndexField::OracleUpperV1(inner)
+        | IndexField::OracleUpperNationalV1(inner)
         | IndexField::OracleLowerV1(inner)
+        | IndexField::OracleLowerNationalV1(inner)
         | IndexField::Trim(inner)
         | IndexField::TimestampDay(inner)
         | IndexField::Coalesce { field: inner, .. } => {
@@ -22432,7 +22439,9 @@ fn index_field_contains_geometry(field: &IndexField) -> bool {
         IndexField::Lower(inner)
         | IndexField::Upper(inner)
         | IndexField::OracleUpperV1(inner)
+        | IndexField::OracleUpperNationalV1(inner)
         | IndexField::OracleLowerV1(inner)
+        | IndexField::OracleLowerNationalV1(inner)
         | IndexField::Trim(inner)
         | IndexField::TimestampDay(inner)
         | IndexField::Coalesce { field: inner, .. } => index_field_contains_geometry(inner),
@@ -22465,7 +22474,9 @@ fn validate_index_field(index: &str, field: &IndexField) -> Result<()> {
         IndexField::Lower(inner)
         | IndexField::Upper(inner)
         | IndexField::OracleUpperV1(inner)
+        | IndexField::OracleUpperNationalV1(inner)
         | IndexField::OracleLowerV1(inner)
+        | IndexField::OracleLowerNationalV1(inner)
         | IndexField::Trim(inner)
         | IndexField::TimestampDay(inner)
         | IndexField::Coalesce { field: inner, .. } => validate_index_field(index, inner)?,
@@ -22715,6 +22726,12 @@ fn image_cells_index_key(
                     IndexValue::String(crate::oracle_simple_upper_v1(&index_value_text(&value)))
                 }
             },
+            IndexField::OracleUpperNationalV1(inner) => match field_value(stored, cells, inner)? {
+                IndexValue::Null => IndexValue::Null,
+                value => IndexValue::String(crate::oracle_simple_national_upper_v1(
+                    &index_value_text(&value),
+                )),
+            },
             IndexField::Lower(inner) => match field_value(stored, cells, inner)? {
                 IndexValue::Null => IndexValue::Null,
                 value => IndexValue::String(index_key_lower(&index_value_text(&value))),
@@ -22724,6 +22741,12 @@ fn image_cells_index_key(
                 value => {
                     IndexValue::String(crate::oracle_simple_lower_v1(&index_value_text(&value)))
                 }
+            },
+            IndexField::OracleLowerNationalV1(inner) => match field_value(stored, cells, inner)? {
+                IndexValue::Null => IndexValue::Null,
+                value => IndexValue::String(crate::oracle_simple_national_lower_v1(
+                    &index_value_text(&value),
+                )),
             },
             IndexField::Trim(inner) => match field_value(stored, cells, inner)? {
                 IndexValue::Null => IndexValue::Null,
@@ -22837,6 +22860,12 @@ fn stored_index_key(stored: &StoredRecord, fields: &[IndexField]) -> Option<Vec<
                     IndexValue::String(crate::oracle_simple_upper_v1(&index_value_text(&value)))
                 }
             },
+            IndexField::OracleUpperNationalV1(inner) => match field_value(stored, cells, inner)? {
+                IndexValue::Null => IndexValue::Null,
+                value => IndexValue::String(crate::oracle_simple_national_upper_v1(
+                    &index_value_text(&value),
+                )),
+            },
             IndexField::Lower(inner) => match field_value(stored, cells, inner)? {
                 IndexValue::Null => IndexValue::Null,
                 value => IndexValue::String(index_key_lower(&index_value_text(&value))),
@@ -22846,6 +22875,12 @@ fn stored_index_key(stored: &StoredRecord, fields: &[IndexField]) -> Option<Vec<
                 value => {
                     IndexValue::String(crate::oracle_simple_lower_v1(&index_value_text(&value)))
                 }
+            },
+            IndexField::OracleLowerNationalV1(inner) => match field_value(stored, cells, inner)? {
+                IndexValue::Null => IndexValue::Null,
+                value => IndexValue::String(crate::oracle_simple_national_lower_v1(
+                    &index_value_text(&value),
+                )),
             },
             IndexField::Trim(inner) => match field_value(stored, cells, inner)? {
                 IndexValue::Null => IndexValue::Null,
@@ -22900,6 +22935,12 @@ fn record_index_field_json(record: &Record, field: &IndexField) -> Value {
             Value::Null => Value::Null,
             value => Value::String(crate::oracle_simple_upper_v1(&predicate_value_text(&value))),
         },
+        IndexField::OracleUpperNationalV1(inner) => match record_index_field_json(record, inner) {
+            Value::Null => Value::Null,
+            value => Value::String(crate::oracle_simple_national_upper_v1(
+                &predicate_value_text(&value),
+            )),
+        },
         IndexField::Lower(inner) => match record_index_field_json(record, inner) {
             Value::Null => Value::Null,
             value => Value::String(index_key_lower(&predicate_value_text(&value))),
@@ -22907,6 +22948,12 @@ fn record_index_field_json(record: &Record, field: &IndexField) -> Value {
         IndexField::OracleLowerV1(inner) => match record_index_field_json(record, inner) {
             Value::Null => Value::Null,
             value => Value::String(crate::oracle_simple_lower_v1(&predicate_value_text(&value))),
+        },
+        IndexField::OracleLowerNationalV1(inner) => match record_index_field_json(record, inner) {
+            Value::Null => Value::Null,
+            value => Value::String(crate::oracle_simple_national_lower_v1(
+                &predicate_value_text(&value),
+            )),
         },
         IndexField::Trim(inner) => match record_index_field_json(record, inner) {
             Value::Null => Value::Null,
@@ -23330,7 +23377,9 @@ fn index_fields_have_timestamp_day(fields: &[IndexField]) -> bool {
         IndexField::Lower(inner)
         | IndexField::Upper(inner)
         | IndexField::OracleUpperV1(inner)
+        | IndexField::OracleUpperNationalV1(inner)
         | IndexField::OracleLowerV1(inner)
+        | IndexField::OracleLowerNationalV1(inner)
         | IndexField::Trim(inner)
         | IndexField::Coalesce { field: inner, .. } => {
             index_fields_have_timestamp_day(std::slice::from_ref(inner))
@@ -23369,7 +23418,9 @@ pub fn timestamp_day_index_inputs_supported(record: &Record, fields: &[IndexFiel
         IndexField::Lower(inner)
         | IndexField::Upper(inner)
         | IndexField::OracleUpperV1(inner)
+        | IndexField::OracleUpperNationalV1(inner)
         | IndexField::OracleLowerV1(inner)
+        | IndexField::OracleLowerNationalV1(inner)
         | IndexField::Trim(inner)
         | IndexField::Coalesce { field: inner, .. } => {
             timestamp_day_index_inputs_supported(record, std::slice::from_ref(inner))
@@ -23423,6 +23474,12 @@ fn record_index_field_value(record: &Record, field: &IndexField) -> IndexValue {
             IndexValue::Null => IndexValue::Null,
             value => IndexValue::String(crate::oracle_simple_upper_v1(&index_value_text(&value))),
         },
+        IndexField::OracleUpperNationalV1(inner) => match record_index_field_value(record, inner) {
+            IndexValue::Null => IndexValue::Null,
+            value => IndexValue::String(crate::oracle_simple_national_upper_v1(&index_value_text(
+                &value,
+            ))),
+        },
         IndexField::Lower(inner) => match record_index_field_value(record, inner) {
             IndexValue::Null => IndexValue::Null,
             value => IndexValue::String(index_key_lower(&index_value_text(&value))),
@@ -23430,6 +23487,12 @@ fn record_index_field_value(record: &Record, field: &IndexField) -> IndexValue {
         IndexField::OracleLowerV1(inner) => match record_index_field_value(record, inner) {
             IndexValue::Null => IndexValue::Null,
             value => IndexValue::String(crate::oracle_simple_lower_v1(&index_value_text(&value))),
+        },
+        IndexField::OracleLowerNationalV1(inner) => match record_index_field_value(record, inner) {
+            IndexValue::Null => IndexValue::Null,
+            value => IndexValue::String(crate::oracle_simple_national_lower_v1(&index_value_text(
+                &value,
+            ))),
         },
         IndexField::Trim(inner) => match record_index_field_value(record, inner) {
             IndexValue::Null => IndexValue::Null,
@@ -25223,9 +25286,21 @@ fn index_field_stats_name(field: &IndexField) -> String {
         IndexField::OracleUpperV1(inner) => {
             format!("bicdb_oracle_upper_v1({})", index_field_stats_name(inner))
         }
+        IndexField::OracleUpperNationalV1(inner) => {
+            format!(
+                "bicdb_oracle_national_upper_v1({})",
+                index_field_stats_name(inner)
+            )
+        }
         IndexField::Lower(inner) => format!("lower({})", index_field_stats_name(inner)),
         IndexField::OracleLowerV1(inner) => {
             format!("bicdb_oracle_lower_v1({})", index_field_stats_name(inner))
+        }
+        IndexField::OracleLowerNationalV1(inner) => {
+            format!(
+                "bicdb_oracle_national_lower_v1({})",
+                index_field_stats_name(inner)
+            )
         }
         IndexField::Trim(inner) => format!("trim({})", index_field_stats_name(inner)),
     }
@@ -26031,9 +26106,21 @@ fn spatial_field_name(field: &IndexField) -> String {
         IndexField::OracleUpperV1(inner) => {
             format!("bicdb_oracle_upper_v1({})", spatial_field_name(inner))
         }
+        IndexField::OracleUpperNationalV1(inner) => {
+            format!(
+                "bicdb_oracle_national_upper_v1({})",
+                spatial_field_name(inner)
+            )
+        }
         IndexField::Lower(inner) => format!("lower({})", spatial_field_name(inner)),
         IndexField::OracleLowerV1(inner) => {
             format!("bicdb_oracle_lower_v1({})", spatial_field_name(inner))
+        }
+        IndexField::OracleLowerNationalV1(inner) => {
+            format!(
+                "bicdb_oracle_national_lower_v1({})",
+                spatial_field_name(inner)
+            )
         }
         IndexField::Trim(inner) => format!("trim({})", spatial_field_name(inner)),
     }

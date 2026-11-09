@@ -7903,7 +7903,9 @@ pub(crate) fn index_field_attnum(
         | IndexField::Lower(_)
         | IndexField::Upper(_)
         | IndexField::OracleUpperV1(_)
+        | IndexField::OracleUpperNationalV1(_)
         | IndexField::OracleLowerV1(_)
+        | IndexField::OracleLowerNationalV1(_)
         | IndexField::Trim(_)
         | IndexField::TimestampDay(_)
         | IndexField::Coalesce { .. }

@@ -38,3 +38,15 @@ migration of existing Oracle expression and partial indexes remain necessary.
 Merely bypassing an old ASCII index in the planner would leave its uniqueness
 constraint with different semantics. Existing native ASCII key tags and
 PostgreSQL C-locale behavior must remain unchanged.
+
+National character case mapping has a separately captured AL16UTF16 reference:
+`UPPER(TO_NCHAR(:value))` and `LOWER(TO_NCHAR(:value))` over all 1,112,064 scalars.
+It has 1,505 uppercase and 1,488 lowercase changes: 20 uppercase and two lowercase
+overrides relative to AL32UTF8. All 3,329 independent standalone/random/context
+checks agree. Reference SHA-256:
+`d9e5861bd20418a4a25d83436ad886b47ef367f1760e17b8a613cf6c88f5bd4e`.
+The national index tags and helpers preserve this distinction, including partial
+predicates and uniqueness. SQL must select the family from the argument's Oracle
+character type; a database-profile switch alone does not establish NCHAR semantics.
+These reference and native-foundation checks do not qualify the unfinished SQL
+migration or runtime dispatch.

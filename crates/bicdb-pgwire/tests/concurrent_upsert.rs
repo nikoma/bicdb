@@ -134,8 +134,11 @@ async fn concurrent_upserts_never_report_a_unique_violation(mode: StorageMode) {
     let label = format!("{mode:?}");
     let root = database(mode);
     let running = start(root.path());
+    // The schema connection closes before the race: an idle connection
+    // would reach the server's idle timeout on a slow machine.
     let setup = connect(running.port).await;
     setup.batch_execute(SCHEMA).await.unwrap();
+    drop(setup);
 
     let barrier = Arc::new(Barrier::new(WORKERS));
     let mut workers = Vec::new();
@@ -210,6 +213,7 @@ async fn concurrent_upserts_never_report_a_unique_violation(mode: StorageMode) {
         failures.iter().take(5).collect::<Vec<_>>()
     );
     let fresh_keys = (0..ROUNDS).step_by(2).count() as i64;
+    let setup = connect(running.port).await;
     let hot = rows(
         &setup,
         &format!("SELECT count(*) FROM cache_entries WHERE key_hash < {HOT_KEYS}"),
@@ -248,8 +252,11 @@ async fn racing_plain_inserts_fail_with_unique_violation(mode: StorageMode) {
     let label = format!("{mode:?}");
     let root = database(mode);
     let running = start(root.path());
+    // The schema connection closes before the race: an idle connection
+    // would reach the server's idle timeout on a slow machine.
     let setup = connect(running.port).await;
     setup.batch_execute(SCHEMA).await.unwrap();
+    drop(setup);
 
     let barrier = Arc::new(Barrier::new(WORKERS));
     let mut workers = Vec::new();
@@ -300,6 +307,7 @@ async fn racing_plain_inserts_fail_with_unique_violation(mode: StorageMode) {
         winners.iter().all(|count| *count == 1),
         "{label}: exactly one insert per key must win: {winners:?}"
     );
+    let setup = connect(running.port).await;
     assert_one_row_per_key(&setup, ROUNDS as i64).await;
     drop(setup);
     stop(running);
@@ -323,4 +331,113 @@ async fn racing_plain_inserts_report_unique_violation_in_memory() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn racing_plain_inserts_report_unique_violation_paged() {
     racing_plain_inserts_fail_with_unique_violation(StorageMode::ServerPaged).await;
+}
+
+/// The statement-time half of the race, made deterministic. The upsert's
+/// statement snapshot is taken, then the statement waits on an advisory lock
+/// while another transaction commits the conflict key. The upsert cannot see
+/// that row under its snapshot. That is a serialization failure (40001),
+/// which a client retries, and which an autocommit statement retries
+/// internally under a fresh snapshot. It is not a unique violation (23505).
+/// For an autocommit statement, 23505 escaped that retry and sent the
+/// statement to the exclusive path. There it waited on row locks held by
+/// transactions that could not commit until the wait budget expired, which
+/// stalled every writer for seconds.
+async fn upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failure(
+    mode: StorageMode,
+) {
+    let label = format!("{mode:?}");
+    let root = database(mode);
+    let running = start(root.path());
+    let reader = Arc::new(connect(running.port).await);
+    reader.batch_execute(SCHEMA).await.unwrap();
+    reader
+        .batch_execute(
+            "CREATE FUNCTION wait_for_writer() RETURNS boolean LANGUAGE plpgsql AS \
+             $$ BEGIN PERFORM pg_advisory_xact_lock(42); RETURN true; END $$",
+        )
+        .await
+        .unwrap();
+    let writer = connect(running.port).await;
+    for (key, action) in [
+        (
+            7,
+            "DO UPDATE SET value = excluded.value, byte_size = excluded.byte_size",
+        ),
+        (8, "DO NOTHING"),
+    ] {
+        writer
+            .batch_execute(&format!(
+                "BEGIN; SELECT pg_advisory_xact_lock(42); \
+                 INSERT INTO cache_entries (key, value, key_hash, byte_size, created_at) \
+                 VALUES ('\\x6b', '\\x01', {key}, 1, CURRENT_TIMESTAMP)"
+            ))
+            .await
+            .unwrap();
+        reader.batch_execute("BEGIN").await.unwrap();
+        let upsert = {
+            let reader = Arc::clone(&reader);
+            let sql = format!(
+                "INSERT INTO cache_entries (key, value, key_hash, byte_size, created_at) \
+                 SELECT '\\x6b', '\\x02', {key}, 1, CURRENT_TIMESTAMP \
+                 FROM (SELECT wait_for_writer() AS ready) AS gate WHERE gate.ready \
+                 ON CONFLICT (key_hash) {action}"
+            );
+            tokio::spawn(async move { reader.simple_query(&sql).await })
+        };
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        assert!(!upsert.is_finished(), "{label}: the upsert must wait");
+        writer.batch_execute("COMMIT").await.unwrap();
+        match (key, upsert.await.unwrap()) {
+            // DO NOTHING needs no row to act on: the committed key is
+            // enough to skip the insert, as in PostgreSQL.
+            (8, Ok(messages)) => assert!(
+                messages
+                    .iter()
+                    .any(|message| matches!(message, SimpleQueryMessage::CommandComplete(0))),
+                "{label} {action}: {messages:?}"
+            ),
+            (_, Ok(messages)) => panic!("{label} {action}: the row is invisible: {messages:?}"),
+            (_, Err(error)) => assert_eq!(
+                error.code(),
+                Some(&tokio_postgres::error::SqlState::T_R_SERIALIZATION_FAILURE),
+                "{label} {action}: {error:?}"
+            ),
+        }
+        reader.batch_execute("ROLLBACK").await.unwrap();
+    }
+    assert_one_row_per_key_from(&writer, 7, 9).await;
+    drop(reader);
+    drop(writer);
+    stop(running);
+}
+
+async fn assert_one_row_per_key_from(client: &Client, first: i64, end: i64) {
+    for key in first..end {
+        assert_eq!(
+            rows(
+                client,
+                &format!("SELECT count(*) FROM cache_entries WHERE key_hash = {key}"),
+            )
+            .await,
+            vec![vec!["1".to_string()]],
+            "key {key}"
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failure_in_memory() {
+    upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failure(
+        StorageMode::EmbeddedMemory,
+    )
+    .await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failure_paged() {
+    upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failure(
+        StorageMode::ServerPaged,
+    )
+    .await;
 }

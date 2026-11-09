@@ -82,15 +82,39 @@ pub struct HeapSnapshot {
     pub compactions: u64,
     /// Inserts that had to allocate because no candidate page had room.
     pub candidate_misses: u64,
+    /// Free-space catalog entries that named a heap page without the
+    /// advertised room and were repaired on use.
+    #[serde(default)]
+    pub stale_free_space_entries: u64,
     /// Free-space records found naming a page that is no longer a heap page
     /// (freed by vacuum, possibly reused), dropped instead of written to.
     #[serde(default)]
     pub non_heap_free_space_records: u64,
 }
 
-/// How many stale free-space records one insert drops before it stops
-/// consulting the catalog and falls back to the ring.
+/// How many stale free-space records one insert drops or repairs before it
+/// stops consulting the catalog and falls back to the ring.
 const STALE_RECORD_ATTEMPTS: usize = 4;
+
+/// Outcome of trying one candidate page for an insert.
+enum Placement {
+    Placed {
+        locator: TupleLocator,
+        free_before: usize,
+        free_after: usize,
+    },
+    /// A heap page without room for the tuple; `free` is its real free space.
+    NoRoom { free: usize },
+    /// Compacted, gaining free space, yet still without room for the tuple.
+    CompactedWithoutRoom {
+        free_before: usize,
+        free_after: usize,
+    },
+    /// Not a heap page (any more).
+    NotHeap,
+    /// Could not be pinned right now.
+    Unavailable,
+}
 
 /// A heap of variable-size tuples.
 #[derive(Debug)]
@@ -138,18 +162,6 @@ impl HeapFile {
 
     fn catalog(&self) -> Option<Arc<Catalog>> {
         self.catalog.lock().clone()
-    }
-
-    /// Whether `page_id` currently holds a heap page. Read latch only.
-    fn is_heap_page(&self, page_id: PageId) -> Result<bool> {
-        let guard = self.pool.get(page_id)?;
-        Ok(PageType::from_u8(guard.bytes()[6]) == Some(PageType::Heap))
-    }
-
-    /// Free space on a page, for catalog bookkeeping.
-    fn free_space_of(&self, page_id: PageId) -> Result<usize> {
-        let guard = self.pool.get(page_id)?;
-        Ok(SlottedPageRef::new(guard.bytes()).free_space())
     }
 
     pub fn snapshot(&self) -> HeapSnapshot {
@@ -214,6 +226,20 @@ impl HeapFile {
     }
 
     /// Place an already-encoded tuple on some page with room.
+    ///
+    /// # Only the page that receives the tuple is written
+    ///
+    /// Candidates are examined under an upgradable latch
+    /// ([`BufferPool::get_upgradable`]) and the latch is upgraded only on the
+    /// page that takes the tuple. A candidate that is rejected is released
+    /// clean: it is not dirtied, so the commit does not log an image of it and
+    /// writeback does not rewrite it. Taking `get_mut` on every candidate used
+    /// to do both, for pages whose bytes had not changed.
+    ///
+    /// This does not touch durability: a page is logged when it is modified,
+    /// and a rejected candidate is not modified. Its last logged image (or its
+    /// on-disk copy, if that image predates the redo point) already holds its
+    /// bytes, so recovery needs nothing new from it.
     fn insert_tuple(&self, tuple: &[u8]) -> Result<TupleLocator> {
         let needed = SlottedPage::required_space(tuple.len());
 
@@ -221,77 +247,150 @@ impl HeapFile {
         // every page, not just the recently-touched ones, so it finds space the
         // in-memory ring would have forgotten.
         if let Some(catalog) = self.catalog() {
-            // A free-space record can outlive its page: vacuum frees a fully
-            // dead heap page, and a record the map failed to remove still
-            // names it. A freed page is zero-filled with a header whose slot
-            // fields describe an empty page, so it passes `can_fit`, and a
-            // tuple written there is lost when the page is next allocated.
-            // Check the page type first (under a read latch, so a refused
-            // page is not dirtied), drop every record naming a non-heap page,
-            // and look again. Bounded: one insert repairs a few records at
-            // most, never walks the whole map.
+            // An entry that over-claims is repaired and the search repeated;
+            // bounded so a catalog full of such entries (an older store)
+            // cannot turn one insert into a walk of the whole map.
             for _ in 0..STALE_RECORD_ATTEMPTS {
-                let Some(page_id) = catalog.find_page_with_room(needed)? else {
+                let Some((page_id, recorded)) = catalog.find_free_space_entry(needed)? else {
                     break;
                 };
-                if !self.is_heap_page(page_id)? {
-                    self.metrics.lock().non_heap_free_space_records += 1;
-                    catalog.forget_free_space(page_id)?;
-                    continue;
+                match self.try_place(page_id, tuple, false)? {
+                    Placement::Placed {
+                        locator,
+                        free_before,
+                        free_after,
+                    } => {
+                        catalog.record_free_space(
+                            page_id,
+                            Some(recorded),
+                            free_before,
+                            free_after,
+                        )?;
+                        return Ok(locator);
+                    }
+                    Placement::NoRoom { free } => {
+                        self.metrics.lock().stale_free_space_entries += 1;
+                        catalog.repair_free_space_entry(page_id, recorded, Some(free))?;
+                    }
+                    Placement::NotHeap => {
+                        // Freed by vacuum (possibly reused) while a record
+                        // still named it: drop every record of the page.
+                        self.metrics.lock().non_heap_free_space_records += 1;
+                        catalog.forget_free_space(page_id)?;
+                    }
+                    Placement::CompactedWithoutRoom { .. } => {
+                        unreachable!("the catalog path never compacts")
+                    }
+                    Placement::Unavailable => break,
                 }
-                let before = self.free_space_of(page_id)?;
-                let mut guard = self.pool.get_mut(page_id)?;
-                let mut heap = SlottedPage::new(guard.bytes_mut());
-                if heap.can_fit(tuple.len()) {
-                    let locator = heap.insert(tuple)?;
-                    let after = heap.free_space();
-                    drop(guard);
-                    catalog.update_free_space(page_id, before, after)?;
-                    return Ok(locator);
-                }
-                break;
             }
         }
 
-        // Try the free-space ring first.
+        // Then the free-space ring: recently allocated pages and pages that
+        // just had tuples deleted, which may fit a tuple the catalog's
+        // conservative floor does not advertise, or fit it after compaction.
         let candidates: Vec<PageId> = self.candidates.lock().iter().copied().collect();
         for page_id in candidates {
-            // The ring is only a hint as well: never write a tuple onto a
-            // page that is no longer a heap page.
-            match self.is_heap_page(page_id) {
-                Ok(true) => {}
-                Ok(false) => {
+            match self.try_place(page_id, tuple, true)? {
+                Placement::Placed {
+                    locator,
+                    free_before,
+                    free_after,
+                } => {
+                    // Keep the catalog in step. Leaving it behind made it
+                    // over-claim this page, so every later insert of the
+                    // same size was offered the page, bounced off it, and
+                    // fell back to this ring scan again.
+                    if let Some(catalog) = self.catalog() {
+                        catalog.record_free_space(page_id, None, free_before, free_after)?;
+                    }
+                    return Ok(locator);
+                }
+                Placement::CompactedWithoutRoom {
+                    free_before,
+                    free_after,
+                } => {
+                    if let Some(catalog) = self.catalog() {
+                        catalog.record_free_space(page_id, None, free_before, free_after)?;
+                    }
+                }
+                Placement::NotHeap => {
                     self.candidates.lock().retain(|id| *id != page_id);
-                    continue;
                 }
-                Err(PageError::PoolExhausted { .. }) => continue,
-                Err(other) => return Err(other),
-            }
-            let mut guard = match self.pool.get_mut(page_id) {
-                Ok(guard) => guard,
-                // A full pool is a reason to try another page, not to fail:
-                // some other page may already be resident.
-                Err(PageError::PoolExhausted { .. }) => continue,
-                Err(other) => return Err(other),
-            };
-            let page_size = self.pool.page_size();
-            let mut heap = SlottedPage::new(guard.bytes_mut());
-            if heap.can_fit(tuple.len()) {
-                return heap.insert(tuple);
-            }
-            // Reclaimable space from deleted tuples can be recovered in place
-            // rather than growing the file.
-            if heap.reclaimable_space() >= SlottedPage::required_space(tuple.len()) {
-                heap.compact(page_size)?;
-                self.metrics.lock().compactions += 1;
-                if heap.can_fit(tuple.len()) {
-                    return heap.insert(tuple);
-                }
+                Placement::NoRoom { .. } | Placement::Unavailable => continue,
             }
         }
 
         self.metrics.lock().candidate_misses += 1;
         self.allocate_and_insert(tuple)
+    }
+
+    /// Insert `tuple` on `page_id` if it is a heap page with room, compacting
+    /// first when `allow_compaction` and dead tuples would make the room.
+    ///
+    /// The page is written (and so dirtied and later logged) only when the
+    /// tuple is placed on it; every other outcome leaves it clean.
+    fn try_place(
+        &self,
+        page_id: PageId,
+        tuple: &[u8],
+        allow_compaction: bool,
+    ) -> Result<Placement> {
+        let guard = match self.pool.get_upgradable(page_id) {
+            Ok(guard) => guard,
+            // A full pool is a reason to try another page, not to fail:
+            // some other page may already be resident.
+            Err(PageError::PoolExhausted { .. }) => return Ok(Placement::Unavailable),
+            Err(other) => return Err(other),
+        };
+        if PageType::from_u8(guard.bytes()[6]) != Some(PageType::Heap) {
+            // Freed since it was recorded, possibly reused by another
+            // structure: interpreting it as a slotted page would be wrong.
+            return Ok(Placement::NotHeap);
+        }
+        let (free_before, fits, compaction_would_fit) = {
+            let page = SlottedPageRef::new(guard.bytes());
+            let free = page.free_space();
+            let fits = page.can_fit(tuple.len());
+            // Only compact when it is certain to make the room: compaction
+            // rewrites the page, so a compaction that then does not fit (or
+            // reclaims nothing because an earlier one already did) would
+            // dirty and log the page for no insert.
+            let compaction_would_fit = !fits
+                && allow_compaction
+                && page.free_space_after_compaction() > free
+                && page.can_fit_after_compaction(tuple.len());
+            (free, fits, compaction_would_fit)
+        };
+        if !fits && !compaction_would_fit {
+            return Ok(Placement::NoRoom { free: free_before });
+        }
+        let page_size = self.pool.page_size();
+        let mut guard = guard.upgrade();
+        let mut heap = SlottedPage::new(guard.bytes_mut());
+        if compaction_would_fit {
+            // Reclaimable space from deleted tuples can be recovered in place
+            // rather than growing the file. Compaction rewrites the page, so
+            // the page is modified (and logged) even if the tuple then does
+            // not fit.
+            heap.compact(page_size)?;
+            self.metrics.lock().compactions += 1;
+            if !heap.can_fit(tuple.len()) {
+                // Not expected (the fit was computed above), but the page
+                // was rewritten with more free space, so the catalog must
+                // still hear about it.
+                return Ok(Placement::CompactedWithoutRoom {
+                    free_before,
+                    free_after: heap.free_space(),
+                });
+            }
+        }
+        let locator = heap.insert(tuple)?;
+        Ok(Placement::Placed {
+            locator,
+            free_before,
+            free_after: heap.free_space(),
+        })
     }
 
     fn allocate_and_insert(&self, tuple: &[u8]) -> Result<TupleLocator> {
@@ -470,10 +569,11 @@ impl HeapFile {
             tuple
         };
 
-        let result = {
+        let (result, free_before, free_after) = {
             let mut guard = self.pool.get_mut(locator.page_id)?;
             let mut heap = SlottedPage::new(guard.bytes_mut());
-            match heap.update(locator, &tuple) {
+            let before = heap.free_space();
+            let result = match heap.update(locator, &tuple) {
                 Ok(()) => Ok(locator),
                 Err(PageError::ValueTooLarge { .. }) => {
                     // No room here: remove and place elsewhere.
@@ -481,8 +581,17 @@ impl HeapFile {
                     Err(())
                 }
                 Err(other) => return Err(other),
-            }
+            };
+            (result, before, heap.free_space())
         };
+        // A value that grew in place consumed free space the catalog may be
+        // advertising. Same-size rewrites (the `xmax` stamp) change nothing
+        // and skip the catalog entirely.
+        if free_before != free_after {
+            if let Some(catalog) = self.catalog() {
+                catalog.record_free_space(locator.page_id, None, free_before, free_after)?;
+            }
+        }
 
         let new_locator = match result {
             Ok(locator) => locator,
@@ -515,23 +624,23 @@ impl HeapFile {
             let heap = SlottedPageRef::new(guard.bytes());
             decode_tuple(heap.get(locator)?)?.owned()
         };
-        {
+        let (free_before, free_after) = {
             let mut guard = self.pool.get_mut(locator.page_id)?;
             let mut heap = SlottedPage::new(guard.bytes_mut());
+            let before = heap.free_space();
             heap.delete(locator)?;
-        }
+            (before, heap.free_space())
+        };
         if let OwnedTuple::Overflow { head } = owned {
             overflow::free_chain_pooled(&self.pool, head)?;
         }
 
         if update_catalog {
             if let Some(catalog) = self.catalog() {
-                let after = self.free_space_of(locator.page_id)?;
-                // `before` is unknown precisely here, so bracket it: the page had at
-                // most `after` free before the delete. Passing `after` for both
-                // would make every delete a no-op in the map and space would never
-                // be advertised again.
-                catalog.update_free_space(locator.page_id, 0, after)?;
+                // The record is found from `free_before` and moved only if
+                // the hysteresis band requires it, so a delete that frees a
+                // few bytes leaves the catalog untouched.
+                catalog.record_free_space(locator.page_id, None, free_before, free_after)?;
             }
         }
 
@@ -1086,6 +1195,272 @@ mod tests {
         })
         .unwrap();
         assert_eq!(count, 10_000);
+    }
+
+    /// A heap with a durable catalog attached, as the paged store runs it.
+    fn cataloged_heap(
+        dir: &TempDir,
+        page_size: u32,
+        budget: u64,
+    ) -> (Arc<PageStore>, Arc<BufferPool>, Arc<Catalog>, HeapFile) {
+        let store = Arc::new(
+            PageStore::open(
+                dir.path().join("h.pages"),
+                PageStoreOptions::default()
+                    .with_page_size(page_size)
+                    .with_fsync(false),
+            )
+            .unwrap(),
+        );
+        let pool = Arc::new(
+            BufferPool::new(
+                store.clone(),
+                BufferPoolOptions::default()
+                    .with_budget_bytes(budget)
+                    .with_shards(2),
+            )
+            .unwrap(),
+        );
+        let catalog = Arc::new(Catalog::create(pool.clone()).unwrap());
+        let heap = HeapFile::with_defaults(pool.clone());
+        heap.set_catalog(catalog.clone());
+        (store, pool, catalog, heap)
+    }
+
+    fn page_type_of(pool: &BufferPool, page_id: PageId) -> Option<PageType> {
+        PageType::from_u8(pool.get(page_id).unwrap().bytes()[6])
+    }
+
+    fn heap_pages_needing_log(pool: &BufferPool) -> Vec<PageId> {
+        pool.take_pages_needing_log()
+            .into_iter()
+            .filter(|page| page_type_of(pool, *page) == Some(PageType::Heap))
+            .collect()
+    }
+
+    #[test]
+    fn an_insert_that_probes_full_pages_dirties_only_the_page_it_writes() {
+        let dir = TempDir::new().unwrap();
+        let (_store, pool, _catalog, heap) = cataloged_heap(&dir, 4096, 4 * 1024 * 1024);
+
+        // Four 900-byte tuples per page leave each page about 400 bytes
+        // free, and the free-space ring full of such pages.
+        for index in 0..60 {
+            heap.insert(&payload(900, index as u8)).unwrap();
+        }
+        let full_pages = heap.page_ids();
+        assert!(full_pages.len() >= 10, "want many full pages");
+        pool.take_pages_needing_log();
+        pool.flush_all().unwrap();
+        assert!(pool.dirty_page_ids().is_empty());
+
+        // Fits on no existing page (but stays inline): every candidate is
+        // probed and rejected, and a fresh page takes it.
+        let placed = heap.insert(&payload(950, 7)).unwrap();
+        assert!(!full_pages.contains(&placed.page_id));
+        assert_eq!(
+            heap_pages_needing_log(&pool),
+            vec![placed.page_id],
+            "a rejected candidate was queued for the WAL"
+        );
+        let dirty_heap: Vec<PageId> = pool
+            .dirty_page_ids()
+            .into_iter()
+            .filter(|page| page_type_of(&pool, *page) == Some(PageType::Heap))
+            .collect();
+        assert_eq!(
+            dirty_heap,
+            vec![placed.page_id],
+            "a rejected candidate was dirtied"
+        );
+
+        // A small tuple: exactly the one page that takes it.
+        pool.flush_all().unwrap();
+        let small = heap.insert(&payload(40, 9)).unwrap();
+        assert_eq!(heap_pages_needing_log(&pool), vec![small.page_id]);
+        assert_eq!(heap.snapshot().stale_free_space_entries, 0);
+    }
+
+    #[test]
+    fn an_insert_without_a_catalog_also_leaves_rejected_candidates_clean() {
+        let dir = TempDir::new().unwrap();
+        let (_store, heap) = heap(&dir, 4096, 4 * 1024 * 1024);
+        for index in 0..60 {
+            heap.insert(&payload(900, index as u8)).unwrap();
+        }
+        heap.pool.take_pages_needing_log();
+        let placed = heap.insert(&payload(950, 7)).unwrap();
+        assert_eq!(heap.pool.take_pages_needing_log(), vec![placed.page_id]);
+    }
+
+    #[test]
+    fn a_compaction_that_cannot_make_room_is_not_attempted() {
+        // Dead slots keep their length after a compaction, so counting dead
+        // bytes as reclaimable made the ring rewrite an already compacted
+        // page, unchanged, on a later miss.
+        let dir = TempDir::new().unwrap();
+        let (_store, heap) = heap(&dir, 4096, 4 * 1024 * 1024);
+        let small: Vec<_> = (0..3)
+            .map(|index| heap.insert(&payload(10, index)).unwrap())
+            .collect();
+        let big: Vec<_> = (0..4)
+            .map(|index| heap.insert(&payload(900, index)).unwrap())
+            .collect();
+        let page = big[3].page_id;
+        assert!(small.iter().chain(&big).all(|l| l.page_id == page));
+        for locator in small.iter().chain(&big[..1]) {
+            heap.delete(*locator).unwrap();
+        }
+        // Needs the compaction, and gets it.
+        assert_eq!(heap.insert(&payload(1000, 5)).unwrap().page_id, page);
+        assert_eq!(heap.snapshot().compactions, 1);
+
+        // Three dead slots remain, one still carrying 900 bytes of length
+        // that the compaction already returned.
+        heap.pool.take_pages_needing_log();
+        let placed = heap.insert(&payload(900, 6)).unwrap();
+        assert_ne!(placed.page_id, page);
+        assert_eq!(heap.snapshot().compactions, 1, "a useless compaction ran");
+        assert_eq!(heap.pool.take_pages_needing_log(), vec![placed.page_id]);
+    }
+
+    #[test]
+    fn a_catalog_entry_naming_a_page_without_room_is_repaired_on_use() {
+        let dir = TempDir::new().unwrap();
+        let (_store, pool, catalog, heap) = cataloged_heap(&dir, 4096, 4 * 1024 * 1024);
+        let page = heap.insert(&payload(900, 1)).unwrap().page_id;
+        for index in 0..3 {
+            assert_eq!(heap.insert(&payload(900, index)).unwrap().page_id, page);
+        }
+        // Forge an over-claim, as an older binary's stale entry would be.
+        let real = catalog.recorded_bucket(page, 0).unwrap().unwrap();
+        catalog.repair_free_space_entry(page, real, None).unwrap();
+        catalog.record_free_space(page, None, 4000, 4000).unwrap();
+        assert!(catalog.recorded_bucket(page, 4000).unwrap().unwrap() > real);
+        pool.take_pages_needing_log();
+
+        // 900 bytes do not fit the ~400 the page really has.
+        let placed = heap.insert(&payload(900, 2)).unwrap();
+        assert_ne!(placed.page_id, page);
+        assert!(
+            !pool.take_pages_needing_log().contains(&page),
+            "the over-claimed page was written although nothing fit"
+        );
+        assert_eq!(heap.snapshot().stale_free_space_entries, 1);
+        // Recorded honestly now, and the next insert does not trip on it.
+        let free = SlottedPageRef::new(pool.get(page).unwrap().bytes()).free_space();
+        let recorded = catalog.free_space_buckets(page).unwrap();
+        assert_eq!(recorded.len(), 1);
+        assert!(recorded[0] as usize * (4096 / crate::catalog::FREE_BUCKETS as usize) <= free);
+        heap.insert(&payload(900, 3)).unwrap();
+        assert_eq!(heap.snapshot().stale_free_space_entries, 1);
+    }
+
+    #[test]
+    fn a_catalog_entry_naming_a_non_heap_page_is_dropped_not_written() {
+        let dir = TempDir::new().unwrap();
+        let (store, pool, catalog, heap) = cataloged_heap(&dir, 4096, 4 * 1024 * 1024);
+        for index in 0..4 {
+            heap.insert(&payload(900, index)).unwrap();
+        }
+        // A page that belongs to another structure, wrongly advertised.
+        let foreign = store.allocate(PageType::Overflow).unwrap();
+        {
+            let mut guard = pool.get_mut(foreign).unwrap();
+            let header = crate::page::PageHeader::new(foreign, PageType::Overflow, 4096);
+            header.encode(guard.bytes_mut());
+        }
+        catalog
+            .record_free_space(foreign, None, 4000, 4000)
+            .unwrap();
+        pool.flush_all().unwrap();
+        let before = pool.get(foreign).unwrap().bytes().to_vec();
+        pool.take_pages_needing_log();
+
+        let placed = heap.insert(&payload(900, 9)).unwrap();
+        assert_ne!(placed.page_id, foreign);
+        assert!(!pool.take_pages_needing_log().contains(&foreign));
+        assert_eq!(pool.get(foreign).unwrap().bytes(), &before[..]);
+        assert!(catalog.free_space_buckets(foreign).unwrap().is_empty());
+        assert_eq!(heap.snapshot().non_heap_free_space_records, 1);
+    }
+
+    /// The free-space map's contract after every operation of a churn: each
+    /// heap page has exactly one record, the record never claims more room
+    /// than the page has, and it lags the exact class by at most the slack.
+    fn assert_free_space_contract(pool: &BufferPool, catalog: &Catalog, heap: &HeapFile) {
+        use crate::catalog::{FREE_BUCKETS, FREE_SPACE_SLACK};
+        let span = (pool.page_size() as usize / FREE_BUCKETS as usize).max(1);
+        for page in heap.page_ids() {
+            let free = SlottedPageRef::new(pool.get(page).unwrap().bytes()).free_space();
+            let exact = (free / span).min(FREE_BUCKETS as usize - 1);
+            let recorded = catalog.free_space_buckets(page).unwrap();
+            assert_eq!(recorded.len(), 1, "page {page} has records {recorded:?}");
+            let r = recorded[0] as usize;
+            assert!(
+                r <= exact,
+                "page {page}: record {r} over-claims exact class {exact}"
+            );
+            assert!(
+                r + FREE_SPACE_SLACK as usize >= exact,
+                "page {page}: record {r} lags exact class {exact} beyond the slack"
+            );
+            assert!(
+                exact == 0 || r >= 1,
+                "page {page} hidden in bucket 0 with {free} free"
+            );
+        }
+        for needed in (16..4000).step_by(37) {
+            if let Some(page) = catalog.find_page_with_room(needed).unwrap() {
+                let free = SlottedPageRef::new(pool.get(page).unwrap().bytes()).free_space();
+                assert!(
+                    free >= needed,
+                    "offered page {page} ({free} free) for {needed}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_free_space_map_holds_its_contract_under_insert_update_delete_churn() {
+        let dir = TempDir::new().unwrap();
+        let (_store, pool, catalog, heap) = cataloged_heap(&dir, 4096, 8 * 1024 * 1024);
+        let mut rng = 0x2545_F491_4F6C_DD1Du64;
+        let mut next = move || {
+            rng ^= rng << 13;
+            rng ^= rng >> 7;
+            rng ^= rng << 17;
+            rng
+        };
+        let mut live: Vec<(TupleLocator, Vec<u8>)> = Vec::new();
+        for step in 0..3_000u32 {
+            let roll = next() % 10;
+            if roll < 5 || live.is_empty() {
+                let value = payload(8 + (next() % 990) as usize, step as u8);
+                live.push((heap.insert(&value).unwrap(), value));
+            } else if roll < 8 {
+                let at = (next() as usize) % live.len();
+                let value = payload(8 + (next() % 990) as usize, step as u8 ^ 0x5A);
+                let locator = heap.update(live[at].0, &value).unwrap();
+                live[at] = (locator, value);
+            } else {
+                let at = (next() as usize) % live.len();
+                let (locator, _) = live.swap_remove(at);
+                heap.delete(locator).unwrap();
+            }
+            if step % 50 == 0 {
+                assert_free_space_contract(&pool, &catalog, &heap);
+            }
+        }
+        assert_free_space_contract(&pool, &catalog, &heap);
+        assert_eq!(
+            heap.snapshot().stale_free_space_entries,
+            0,
+            "a healthy catalog should never need a repair"
+        );
+        for (locator, value) in &live {
+            assert_eq!(&heap.get(*locator).unwrap(), value);
+        }
     }
 
     #[test]

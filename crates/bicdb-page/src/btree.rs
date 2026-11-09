@@ -369,6 +369,27 @@ macro_rules! node_reads {
                 self.bytes[6] == PageType::BTreeLeaf as u8
             }
 
+            /// Whether this page is a leaf (`true`) or an interior (`false`).
+            /// Any other page type is corruption: a child or root pointer that
+            /// lands on a heap, overflow or free page must be reported, not
+            /// read as an interior node.
+            fn node_kind(&self, page_id: PageId) -> Result<bool> {
+                match self.bytes[6] {
+                    found if found == PageType::BTreeLeaf as u8 => Ok(true),
+                    found if found == PageType::BTreeInterior as u8 => Ok(false),
+                    found => Err(PageError::UnexpectedPageType {
+                        page_id,
+                        found,
+                        expected: PageType::BTreeInterior as u8,
+                    }),
+                }
+            }
+
+            /// The child page id stored in interior entry `index`.
+            fn child_value(&self, page_id: PageId, index: usize) -> Result<PageId> {
+                decode_child(page_id, self.value(index))
+            }
+
             #[inline]
             fn entry_at(&self, index: usize) -> (usize, usize, usize) {
                 let at = PAGE_HEADER_BYTES + index * ENTRY_BYTES;
@@ -406,16 +427,15 @@ macro_rules! node_reads {
             }
 
             /// The child to descend into for `needle` on an interior node.
-            fn child_for(&self, needle: &[u8]) -> PageId {
+            fn child_for(&self, page_id: PageId, needle: &[u8]) -> Result<PageId> {
                 let (index, exact) = self.search(needle);
                 // Separator semantics: child at `i` holds keys < key[i]. An
                 // exact match therefore belongs to the RIGHT of that separator.
                 let index = if exact { index + 1 } else { index };
                 if index >= self.count() {
-                    self.next_page()
+                    Ok(self.next_page())
                 } else {
-                    let value = self.value(index);
-                    u64::from_le_bytes(value.try_into().unwrap())
+                    self.child_value(page_id, index)
                 }
             }
 
@@ -428,6 +448,21 @@ macro_rules! node_reads {
 
 node_reads!(Node<'_>);
 node_reads!(NodeRef<'_>);
+
+/// Decode an interior entry's child pointer, refusing anything that is not
+/// exactly one page id wide.
+fn decode_child(page_id: PageId, value: &[u8]) -> Result<PageId> {
+    let bytes: [u8; 8] = value
+        .try_into()
+        .map_err(|_| PageError::BTreeNodeCorruption {
+            page_id,
+            reason: format!(
+                "interior entry holds a {}-byte child pointer, expected 8",
+                value.len()
+            ),
+        })?;
+    Ok(u64::from_le_bytes(bytes))
+}
 
 impl<'a> NodeRef<'a> {
     fn new(bytes: &'a [u8]) -> Self {
@@ -951,10 +986,10 @@ impl BTree {
             let next = {
                 let guard = self.pool.get_in_class(current, self.cache_class)?;
                 let node = NodeRef::new(guard.bytes());
-                if node.is_leaf() {
+                if node.node_kind(current)? {
                     break;
                 }
-                node.child_for(key)
+                node.child_for(current, key)?
             };
             if next == 0 {
                 return Err(PageError::UnexpectedPageType {
@@ -1201,7 +1236,7 @@ impl BTree {
         // a subtree that no longer covers it.
         let middle = byte_split(&entries, usable, true)?;
         let promoted = entries[middle].0.clone();
-        let promoted_child = u64::from_le_bytes(entries[middle].1.as_slice().try_into().unwrap());
+        let promoted_child = decode_child(parent_id, &entries[middle].1)?;
         let left_entries = entries[..middle].to_vec();
         let right_entries = entries[middle + 1..].to_vec();
 
@@ -1244,13 +1279,13 @@ impl BTree {
             let next = {
                 let guard = self.pool.get_in_class(current, self.cache_class)?;
                 let node = NodeRef::new(guard.bytes());
-                if node.is_leaf() {
+                if node.node_kind(current)? {
                     return Ok(current);
                 }
                 if node.count() == 0 {
                     node.next_page()
                 } else {
-                    u64::from_le_bytes(node.value(0).try_into().unwrap())
+                    node.child_value(current, 0)?
                 }
             };
             current = next;
@@ -1311,14 +1346,14 @@ impl BTree {
             let (is_leaf, child_index, next) = {
                 let guard = self.pool.get_in_class(current, self.cache_class)?;
                 let node = NodeRef::new(guard.bytes());
-                if node.is_leaf() {
+                if node.node_kind(current)? {
                     (true, 0, 0)
                 } else {
                     let (index, exact) = node.search(key);
                     // Separator semantics: child at `i` holds keys < key[i];
                     // an exact match belongs to the right of its separator.
                     let index = if exact { index + 1 } else { index };
-                    let child = Self::child_at(&node, index);
+                    let child = Self::child_at(&node, current, index)?;
                     (false, index, child)
                 }
             };
@@ -1355,11 +1390,11 @@ impl BTree {
             let (is_leaf, child_index, next) = {
                 let guard = self.pool.get_in_class(current, self.cache_class)?;
                 let node = NodeRef::new(guard.bytes());
-                if node.is_leaf() {
+                if node.node_kind(current)? {
                     (true, 0, 0)
                 } else {
                     let index = node.count();
-                    (false, index, Self::child_at(&node, index))
+                    (false, index, Self::child_at(&node, current, index)?)
                 }
             };
             if is_leaf {
@@ -1402,7 +1437,7 @@ impl BTree {
             let child = {
                 let guard = self.pool.get(page_id)?;
                 let node = NodeRef::new(guard.bytes());
-                if node.is_leaf() {
+                if node.node_kind(page_id)? {
                     // A concurrent structure change replaced this interior
                     // with a leaf; the recorded position is meaningless, so
                     // end the scan rather than yield from the wrong subtree.
@@ -1410,7 +1445,7 @@ impl BTree {
                 }
                 // Clamp against a concurrent shrink of this node.
                 let target = target.min(node.count());
-                Self::child_at(&node, target)
+                Self::child_at(&node, page_id, target)?
             };
             if child == 0 {
                 return Ok(None);
@@ -1429,11 +1464,11 @@ impl BTree {
 
     /// Child page at `index`, where `index == count()` is the rightmost
     /// (`next_page`) child.
-    fn child_at(node: &NodeRef<'_>, index: usize) -> PageId {
+    fn child_at(node: &NodeRef<'_>, page_id: PageId, index: usize) -> Result<PageId> {
         if index >= node.count() {
-            node.next_page()
+            Ok(node.next_page())
         } else {
-            u64::from_le_bytes(node.value(index).try_into().unwrap())
+            node.child_value(page_id, index)
         }
     }
 
@@ -1521,13 +1556,13 @@ impl BTree {
             let next = {
                 let guard = self.pool.get_in_class(current, self.cache_class)?;
                 let node = NodeRef::new(guard.bytes());
-                if node.is_leaf() {
+                if node.node_kind(current)? {
                     return Ok(height);
                 }
                 if node.count() == 0 {
                     node.next_page()
                 } else {
-                    u64::from_le_bytes(node.value(0).try_into().unwrap())
+                    node.child_value(current, 0)?
                 }
             };
             current = next;
@@ -2682,6 +2717,84 @@ mod tests {
             }) if page_id == root
         ));
         assert!(report.descent_pages_examined <= 1);
+    }
+
+    /// A crash state seen in recovery evidence: an interior entry of the
+    /// tree points at a page that is not a B+ tree node (a heap page here).
+    /// Every descent used to read that page as an interior node and panic on
+    /// the `try_into().unwrap()` of a "child pointer" that was really heap
+    /// bytes. It must surface as a corruption error the open can report.
+    #[test]
+    fn a_child_pointer_to_a_heap_page_is_a_corruption_error_not_a_panic() {
+        let dir = TempDir::new().unwrap();
+        let (store, tree) = tree(&dir, 512, 256 * 1024);
+        for index in 0..500 {
+            tree.insert(&key(index), &index.to_le_bytes()).unwrap();
+        }
+        let root = tree.root_page();
+        let heap = store.allocate(PageType::Heap).unwrap();
+        {
+            let mut guard = tree.pool.get_mut(heap).unwrap();
+            let mut page = crate::slotted::SlottedPage::init(guard.bytes_mut(), heap, 512);
+            page.insert(b"a heap tuple, not a node entry").unwrap();
+            page.insert(b"another one").unwrap();
+        }
+        {
+            let mut guard = tree.pool.get_mut(root).unwrap();
+            let bytes = guard.bytes_mut();
+            let node = NodeRef::new(bytes);
+            assert!(!node.is_leaf());
+            let (offset, key_len, value_len) = node.entry_at(0);
+            assert_eq!(value_len, 8);
+            let value_at = offset + key_len;
+            bytes[value_at..value_at + 8].copy_from_slice(&heap.to_le_bytes());
+        }
+
+        let corrupt = |error: PageError| {
+            assert!(error.is_corruption(), "{error}");
+            assert!(
+                matches!(
+                    error,
+                    PageError::UnexpectedPageType { page_id, found, .. }
+                        if page_id == heap && found == PageType::Heap as u8
+                ),
+                "{error}"
+            );
+        };
+        corrupt(tree.get(&key(0)).unwrap_err());
+        corrupt(tree.insert(&key(0), b"again").unwrap_err());
+        corrupt(
+            tree.range(&key(0))
+                .err()
+                .expect("a range must refuse the descent"),
+        );
+        corrupt(tree.height().unwrap_err());
+    }
+
+    /// The same, for an interior entry whose child pointer is the wrong width.
+    #[test]
+    fn a_short_child_pointer_is_a_corruption_error_not_a_panic() {
+        let dir = TempDir::new().unwrap();
+        let (_store, tree) = tree(&dir, 512, 256 * 1024);
+        for index in 0..500 {
+            tree.insert(&key(index), &index.to_le_bytes()).unwrap();
+        }
+        let root = tree.root_page();
+        {
+            let mut guard = tree.pool.get_mut(root).unwrap();
+            let bytes = guard.bytes_mut();
+            // Directory entry 0: offset u16, key_len u16, value_len u16.
+            let value_len_at = PAGE_HEADER_BYTES + 4;
+            bytes[value_len_at..value_len_at + 2].copy_from_slice(&4_u16.to_le_bytes());
+        }
+
+        let error = tree.get(&key(0)).unwrap_err();
+        assert!(error.is_corruption(), "{error}");
+        assert!(
+            matches!(error, PageError::BTreeNodeCorruption { page_id, .. } if page_id == root),
+            "{error}"
+        );
+        assert!(tree.height().unwrap_err().is_corruption());
     }
 
     #[test]

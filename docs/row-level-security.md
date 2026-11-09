@@ -49,6 +49,11 @@ suite (`crates/bicdb-sql/tests/sql.rs`, tests prefixed `rls_`) pins them.
   assignment right-hand sides, `RETURNING`, `FROM`/`USING`) additionally apply
   SELECT policies to those reads; a FROM-less subquery that reads no column
   is not such a read.
+- Policy expressions are evaluated with the table's column types, as a
+  `WHERE` clause on the table is: a `char(n)` column compared with a text
+  key (`current_setting(...)` is `text`) compares as text, so stored
+  `'ab  '` matches the key `'ab'` and not `'ab '`; numeric keys compare by
+  value.
 - `COPY table TO STDOUT` applies SELECT policies; `COPY table FROM STDIN`
   applies INSERT `WITH CHECK` policies.
 

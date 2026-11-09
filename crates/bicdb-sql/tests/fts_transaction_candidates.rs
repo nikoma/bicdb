@@ -26,7 +26,7 @@ fn transactional_fts_candidates_preserve_tenant_phrase_order_and_pending_writes(
         .collect::<Vec<_>>()
         .join("\n");
     assert!(plan.contains("FullTextIndexScan mail_fts"), "{plan}");
-    assert!(plan.contains("ActualRowsFetched 4"), "{plan}");
+    assert!(plan.contains("ActualRowsFetched 1"), "{plan}");
     sql.execute("INSERT INTO mail VALUES ('z','alice','red blue')")
         .unwrap();
     assert_eq!(

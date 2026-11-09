@@ -8,7 +8,9 @@
 // imports and the other split modules' re-exports) into scope so the moved
 // code compiles unchanged.
 use crate::*;
+mod bounded_fts;
 mod bounded_primary_key;
+mod bounded_range;
 pub(crate) mod column_check;
 mod eager_privileges;
 mod exists_probe;

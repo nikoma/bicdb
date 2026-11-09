@@ -32,6 +32,16 @@ fenced until startup resumes. New SQL indexes select their versioned native case
 family from durable column provenance. National declarations carry fenced Oracle
 profile metadata version 9, separate from routine-local national buffer metadata.
 
+Focused source `9f3780a3` passes nine integration tests: eight profile/case
+regressions plus the saved native national-assignment fixture, including both
+storage modes, unique-collision repair and resume, native index keys, rollback,
+reopen, view/CTE/derived aliases and national `%TYPE` routine buffers. The scalar
+checks compare all twenty-two saved character-set differences. Earlier source
+`55ac5135` passed the SQL library with 818 passes, zero failures and four existing
+ignores; the later anchor changes require their own broad qualification. A prior
+combined compile was interrupted at its 12 GiB cgroup limit before tests ran;
+subsequent builds use one compiler job and a monitored 16 GiB limit.
+
 Qualification is recorded by source revision. The recovered native foundations
 have their own older mapping/publication evidence under
 [oracle-simple-case-v1](evidence/oracle-simple-case-v1/); those results do not

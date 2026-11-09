@@ -2747,7 +2747,8 @@ fn numeric_values_are_json_numbers_in_built_objects() {
     let rows = s.execute("SELECT jsonb_agg(jsonb_build_object('weight', round(COALESCE(weight,1)::numeric,2)) ORDER BY weight NULLS LAST)::text FROM reports").unwrap().rows;
     assert_eq!(
         rows,
-        vec![vec![text(r#"[{"weight": 0.25}, {"weight": 1}]"#)]]
+        // round(.., 2) keeps two fractional digits (PostgreSQL 16: 1.00).
+        vec![vec![text(r#"[{"weight": 0.25}, {"weight": 1.00}]"#)]]
     );
     let rows = s.execute("SELECT jsonb_build_object('a', 1.5, 'b', 2::numeric, 'c', 'text', 'd', '7')::text, jsonb_build_array(0.5::numeric, 'x')::text, to_jsonb(3.25::numeric)::text").unwrap().rows;
     assert_eq!(

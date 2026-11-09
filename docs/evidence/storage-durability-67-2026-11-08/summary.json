@@ -1,0 +1,791 @@
+{
+ "fix": "#67 crash-ordered page-log reset (GAP-2) and horizon-bounded redo",
+ "merge_commit": "64251c3e",
+ "remaining_risks": [
+  "power loss emulation does not drop directory metadata or page-file page cache; real power cut or dm-log-writes replay needed",
+  "wal_reset.after_seal never reached; default-profile reset path (64 MiB segments) not reached",
+  "plain-SIGKILL recovery defects occurred on reset-heavy profiles, one with a 256 MiB pool; not root-caused; reset/checkpoint contribution not excluded",
+  "verifier missed a 2-entry index omission"
+ ],
+ "observations": [
+  "wal_reset.after_seal never reached",
+  "horizon-bounded redo only indirectly observable",
+  "recovery panic at btree.rs:430 on one saved crash state (deterministic)"
+ ],
+ "production_qualification": false,
+ "statement": "Independent post-merge evidence on one host and one revision with emulated failures. Not production qualification; production stays on its last qualified configuration.",
+ "source_revision": "64251c3e2b37d0ffd6a4b30ad50ceaaedb6d7963",
+ "source_branch": "main",
+ "not_covered_later_merges": "#57 (merged 2026-11-08T16:35Z) and every later commit",
+ "binaries": {
+  "bicdb_server": {
+   "path": "target/release/bicdb",
+   "sha256": "6844a23a6793e8a63507b2885b106ac8bf2368524420074373dca8d9a02968a2",
+   "revision": "64251c3e2b37d0ffd6a4b30ad50ceaaedb6d7963"
+  },
+  "bicdb_verifier": {
+   "path": "target/release/bicdb",
+   "sha256": "ea1473a8f6247b8433ef2484bd0c6a177183fc69d4221537a2e13d43d7526a46",
+   "revision": "d2a7fe1cab42bd5dd0838b74df9af36bc7148c09 (local merge of 64251c3e and unmerged PR #85 head 2a64e329fd203ca7bfbb46585f6e4475c3d49b37, not pushed)",
+   "use": "verify-store --read-only only"
+  },
+  "durability_child": {
+   "path": "target/release/examples/durability_child",
+   "sha256": "721df93f12a6ba39685651cd3d5a70486c71d5fa251f5e8eb799f36f65000763",
+   "use": "built as requested; not used by the independent harness"
+  }
+ },
+ "build": {
+  "commands": [
+   "cargo build --release --locked -p bicdb-cli --bin bicdb",
+   "cargo build --release --locked -p bicdb-core --example durability_child"
+  ],
+  "profile": "release (lto=thin, debug=line-tables-only)",
+  "env": {
+   "CARGO_INCREMENTAL": "0",
+   "CARGO_BUILD_JOBS": "6",
+   "RUSTFLAGS": null
+  },
+  "rustc": "1.96.0 (ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96 2026-05-25), LLVM 22.1.2",
+  "cargo": "1.96.0 (30a34c682 2026-05-25)"
+ },
+ "environment": {
+  "host": "s3ny (warm standby host; shared with other jobs; production service untouched)",
+  "os": "Ubuntu 24.04.4 LTS",
+  "kernel": "6.8.0-147-generic x86_64",
+  "cpu": "12 cores / 24 threads",
+  "ram_gib": 91,
+  "filesystem": "ext4 rw,relatime on /dev/nvme2n1p2",
+  "disk": {
+   "model": "CT2000E100SSD8",
+   "firmware": "VDCR4014",
+   "volatile_write_cache": true,
+   "fua": true
+  },
+  "fsync": "on (server default --storage-sync durable)",
+  "isolation": "systemd transient units Nice=19 CPUWeight=10 IOWeight=10 MemoryMax=16G MemorySwapMax=0 LimitCORE=0",
+  "window_utc": [
+   "2026-11-08T16:04:01Z",
+   "2026-11-08T17:43:07Z"
+  ]
+ },
+ "harness": {
+  "location": "docs/evidence/storage-durability-harness-2026-11-08/harness/",
+  "language": "Python 3.12.3 stdlib",
+  "client": "own pgwire v3 client (pgw.py)",
+  "ledger": "per-client JSON lines, fsync per line, outside the database directory",
+  "checks": [
+   "a acked present with exact row set",
+   "b non-08007 failures absent",
+   "c 08007 identity matches txid_current and resolves via bicdb_commit_outcome to committed/not_committed matching presence, stable across recoveries",
+   "d no unwritten rows, no partial transactions, no resurrected deletes",
+   "e secondary/unique/primary index results equal full scan; duplicate key refused",
+   "f verify-store --read-only before recovery 1, before recovery 2 and after clean shutdown; files unchanged by verifier",
+   "no ack after a client's first 08007/58030 within one incarnation",
+   "stability across the two recoveries"
+  ],
+  "negative_controls": "10 of 10 detected"
+ },
+ "emulated_vs_real": {
+  "process_crash": "real SIGKILL or abort() at BICDB_TEST_CRASH_AT points",
+  "power_loss": "EMULATED: page-log unsynced tail truncated at the crash point (BICDB_TEST_WAL_VOLATILE_TAIL=1); no real power cut; other files keep page-cache state",
+  "io_failure": "EMULATED: BICDB_TEST_FAIL_IO returns EIO instead of doing the I/O; no real device error; no kernel post-fsync-failure page-cache behaviour",
+  "torn_tail_and_damage": "EMULATED by editing frame logs of a SIGKILLed server"
+ },
+ "cross_cutting_findings": "docs/evidence/storage-durability-harness-2026-11-08/README.md section 5: 12 failures in 1,422 plain-SIGKILL recoveries of server_paged stores (11 stress, 1 smallwal; 0 in default and smallpool; 0 in 570 embedded recoveries); classes: F1 silent loss after successful open (1), F2 secondary index silently missing committed rows (6), F3 open refused page beyond end (3), F4 open refused wrong page type (1) or panic btree.rs:430 (1); all deterministic on replay; none at the recovery of a fired injected boundary.",
+ "totals": {
+  "trials": 320,
+  "fired": 233,
+  "pass": 316,
+  "fail": 3,
+  "reopen_failed": 1,
+  "harness_error": 0,
+  "acknowledged_ok": 160516,
+  "failed_non_08007": 909,
+  "unknown_08007": 291,
+  "08007_committed": 287,
+  "08007_not_committed": 4,
+  "08007_unresolved": 0
+ },
+ "boundaries": [
+  {
+   "boundary": "f67-crash-checkpoint-paged-powerloss",
+   "fix": 67,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "crash",
+   "sites": [
+    "checkpoint.after_wal_reset",
+    "checkpoint.after_publish",
+    "checkpoint.after_page_flush",
+    "checkpoint.after_wal_sync",
+    "checkpoint_step.after_finish",
+    "checkpoint_step.after_meta_writeback",
+    "wal_seal.after_rename"
+   ],
+   "n_range": [
+    1,
+    8
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": true,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 40,
+   "fired": 33,
+   "pass": 39,
+   "fail": 1,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "checkpoint.after_publish": 6,
+    "checkpoint_step.after_finish": 5,
+    "checkpoint_step.after_meta_writeback": 7,
+    "checkpoint.after_wal_sync": 6,
+    "checkpoint.after_wal_reset": 4,
+    "wal_seal.after_rename": 3,
+    "checkpoint.after_page_flush": 2
+   },
+   "fence_sites_recorded": {},
+   "acknowledged_ok": 17591,
+   "failed_non_08007": 0,
+   "unknown_08007": 0,
+   "08007_resolved": {
+    "committed": 0,
+    "not_committed": 0,
+    "other": 0
+   },
+   "inflight_commit_sent": 429,
+   "inflight_outcomes": {
+    "absent": 20,
+    "present": 409
+   },
+   "inflight_no_commit_sent": 27,
+   "sqlstates_seen": {},
+   "violations": {
+    "writer_index_differs": 2
+   },
+   "verify_pre2_ran": 40,
+   "verify_pre2_clean": 40,
+   "verify_pre2_exit_codes": {
+    "0": 40
+   },
+   "verify_pre_ran": 40,
+   "verify_pre_clean": 39,
+   "verify_pre_exit_codes": {
+    "0": 39,
+    "3": 1
+   },
+   "verify_post_ran": 40,
+   "verify_post_clean": 40,
+   "verify_left_files_unchanged": true,
+   "failure_samples": [
+    {
+     "rep": 33,
+     "result": "FAIL",
+     "injected": {
+      "BICDB_TEST_CRASH_AT": "checkpoint.after_page_flush:8",
+      "BICDB_TEST_WAL_VOLATILE_TAIL": "1"
+     },
+     "tamper": null,
+     "error": null,
+     "server_log_tail": null,
+     "violations_1": [
+      {
+       "extra": 0,
+       "kind": "writer_index_differs",
+       "missing": 1,
+       "writer": 0
+      }
+     ],
+     "violations_2": [
+      {
+       "extra": 0,
+       "kind": "writer_index_differs",
+       "missing": 1,
+       "writer": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "boundary": "f67-crash-checkpoint-paged",
+   "fix": 67,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "crash",
+   "sites": [
+    "checkpoint.after_wal_reset",
+    "checkpoint.after_publish",
+    "checkpoint.after_page_flush",
+    "checkpoint.after_wal_sync",
+    "checkpoint_step.after_finish",
+    "checkpoint_step.after_meta_writeback",
+    "wal_seal.after_rename"
+   ],
+   "n_range": [
+    1,
+    8
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 40,
+   "fired": 34,
+   "pass": 39,
+   "fail": 0,
+   "reopen_failed": 1,
+   "harness_error": 0,
+   "fired_by_site": {
+    "checkpoint.after_page_flush": 6,
+    "checkpoint_step.after_meta_writeback": 7,
+    "checkpoint.after_wal_reset": 5,
+    "checkpoint.after_wal_sync": 3,
+    "checkpoint.after_publish": 4,
+    "wal_seal.after_rename": 6,
+    "checkpoint_step.after_finish": 3
+   },
+   "fence_sites_recorded": {},
+   "acknowledged_ok": 18471,
+   "failed_non_08007": 0,
+   "unknown_08007": 0,
+   "08007_resolved": {
+    "committed": 0,
+    "not_committed": 0,
+    "other": 0
+   },
+   "inflight_commit_sent": 430,
+   "inflight_outcomes": {
+    "absent": 25,
+    "present": 405
+   },
+   "inflight_no_commit_sent": 26,
+   "sqlstates_seen": {},
+   "violations": {},
+   "verify_pre2_ran": 40,
+   "verify_pre2_clean": 39,
+   "verify_pre2_exit_codes": {
+    "0": 39,
+    "2": 1
+   },
+   "verify_pre_ran": 40,
+   "verify_pre_clean": 40,
+   "verify_pre_exit_codes": {
+    "0": 40
+   },
+   "verify_post_ran": 39,
+   "verify_post_clean": 39,
+   "verify_left_files_unchanged": true,
+   "failure_samples": [
+    {
+     "rep": 5,
+     "result": "REOPEN_2_FAILED",
+     "injected": {
+      "BICDB_TEST_CRASH_AT": "checkpoint.after_wal_sync:6"
+     },
+     "tamper": null,
+     "error": null,
+     "server_log_tail": "se,\"user\":\"bicdb\"}}\n{\"timestamp\":1794157508,\"event\":\"connection.opened\",\"severity\":\"info\",\"fields\":{\"connection_id\":5,\"database\":\"bicdb\",\"peer_addr\":\"127.0.0.1:48238\",\"tls\":false,\"user\":\"bicdb\"}}\n{\"timestamp\":1794157508,\"event\":\"connection.opened\",\"severity\":\"info\",\"fields\":{\"connection_id\":7,\"database\":\"bicdb\",\"peer_addr\":\"127.0.0.1:48254\",\"tls\":false,\"user\":\"bicdb\"}}\n{\"timestamp\":1794157508,\"event\":\"connection.opened\",\"severity\":\"info\",\"fields\":{\"connection_id\":6,\"database\":\"bicdb\",\"peer_addr\":\"127.0.0.1:48240\",\"tls\":false,\"user\":\"bicdb\"}}\n{\"timestamp\":1794157509,\"event\":\"paged_checkpoint.completed\",\"severity\":\"info\",\"fields\":{\"logical_writeback_bytes\":868352,\"operation_id\":\"a6e8b19b-477c-43ae-8429-2b0f8fa47927\",\"pages_written\":53,\"steps\":4,\"tail_pages_truncated\":0,\"transactions_frozen\":0,\"wal_truncations\":1}}\n{\"timestamp\":1794157510,\"event\":\"paged_checkpoint.completed\",\"severity\":\"info\",\"fields\":{\"logical_writeback_bytes\":1212416,\"operation_id\":\"39b2c747-9740-4bb4-9d02-2dc89200e91c\",\"pages_written\":74,\"steps\":3,\"tail_pages_truncated\":0,\"transactions_frozen\":1,\"wal_truncations\":1}}\nbicdb auto-checkpoint: wal 1 MB -> 0 MB (delta 0 records, phase-0 74 ms, phase-1 0 ms, lock-acquire 0 ms, truncate 4 ms, total 80 ms)\n{\"timestamp\":1794157511,\"event\":\"paged_checkpoint.completed\",\"severity\":\"info\",\"fields\":{\"logical_writeback_bytes\":622592,\"operation_id\":\"1adb59be-f70e-4931-893c-d9700edb04e5\",\"pages_written\":38,\"steps\":6,\"tail_pages_truncated\":0,\"transactions_frozen\":4,\"wal_truncations\":1}}\nbicdb auto-checkpoint: wal 1 MB -> 0 MB (delta 0 records, phase-0 45 ms, phase-1 0 ms, lock-acquire 0 ms, truncate 6 ms, total 53 ms)\nServing BicDB PostgreSQL wire protocol at 127.0.0.1:56040 for /root/bicdb-durability-s3/evid/work/f67-crash-checkpoint-paged-5/db\n\nthread '<unnamed>' (4038873) panicked at crates/bicdb-page/src/btree.rs:430:1:\ncalled `Result::unwrap()` on an `Err` value: TryFromSliceError(())\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+     "violations_1": [],
+     "violations_2": null
+    }
+   ]
+  },
+  {
+   "boundary": "f67-crash-reset-paged-powerloss",
+   "fix": 67,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "crash",
+   "sites": [
+    "wal_reset.after_seal",
+    "wal_reset.after_segment_delete",
+    "wal_reset.after_segments_removed",
+    "wal_reset.after_active_truncate"
+   ],
+   "n_range": [
+    1,
+    8
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": true,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 40,
+   "fired": 25,
+   "pass": 40,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "wal_reset.after_segments_removed": 8,
+    "wal_reset.after_active_truncate": 10,
+    "wal_reset.after_segment_delete": 7
+   },
+   "fence_sites_recorded": {},
+   "acknowledged_ok": 21560,
+   "failed_non_08007": 0,
+   "unknown_08007": 0,
+   "08007_resolved": {
+    "committed": 0,
+    "not_committed": 0,
+    "other": 0
+   },
+   "inflight_commit_sent": 447,
+   "inflight_outcomes": {
+    "absent": 26,
+    "present": 421
+   },
+   "inflight_no_commit_sent": 21,
+   "sqlstates_seen": {},
+   "violations": {},
+   "verify_pre2_ran": 40,
+   "verify_pre2_clean": 40,
+   "verify_pre2_exit_codes": {
+    "0": 40
+   },
+   "verify_pre_ran": 40,
+   "verify_pre_clean": 40,
+   "verify_pre_exit_codes": {
+    "0": 40
+   },
+   "verify_post_ran": 40,
+   "verify_post_clean": 40,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  },
+  {
+   "boundary": "f67-crash-reset-paged",
+   "fix": 67,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "crash",
+   "sites": [
+    "wal_reset.after_seal",
+    "wal_reset.after_segment_delete",
+    "wal_reset.after_segments_removed",
+    "wal_reset.after_active_truncate"
+   ],
+   "n_range": [
+    1,
+    8
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 40,
+   "fired": 29,
+   "pass": 39,
+   "fail": 1,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "wal_reset.after_active_truncate": 13,
+    "wal_reset.after_segments_removed": 10,
+    "wal_reset.after_segment_delete": 6
+   },
+   "fence_sites_recorded": {},
+   "acknowledged_ok": 23362,
+   "failed_non_08007": 0,
+   "unknown_08007": 0,
+   "08007_resolved": {
+    "committed": 0,
+    "not_committed": 0,
+    "other": 0
+   },
+   "inflight_commit_sent": 443,
+   "inflight_outcomes": {
+    "absent": 14,
+    "present": 429
+   },
+   "inflight_no_commit_sent": 25,
+   "sqlstates_seen": {},
+   "violations": {
+    "k_index_differs": 1
+   },
+   "verify_pre2_ran": 40,
+   "verify_pre2_clean": 39,
+   "verify_pre2_exit_codes": {
+    "0": 39,
+    "3": 1
+   },
+   "verify_pre_ran": 40,
+   "verify_pre_clean": 40,
+   "verify_pre_exit_codes": {
+    "0": 40
+   },
+   "verify_post_ran": 40,
+   "verify_post_clean": 40,
+   "verify_left_files_unchanged": true,
+   "failure_samples": [
+    {
+     "rep": 31,
+     "result": "FAIL",
+     "injected": {
+      "BICDB_TEST_CRASH_AT": "wal_reset.after_active_truncate:7"
+     },
+     "tamper": null,
+     "error": null,
+     "server_log_tail": null,
+     "violations_1": [],
+     "violations_2": [
+      {
+       "extra": 0,
+       "kind": "k_index_differs",
+       "missing": 3,
+       "writer": 5
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "boundary": "f67-recoverycrash-paged-powerloss",
+   "fix": 67,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "recoverycrash",
+   "sites": [
+    "page_recovery.after_scan",
+    "page_recovery.after_page_replay",
+    "page_recovery.after_flush",
+    "open.after_recovery_checkpoint",
+    "open.after_txlog_floor",
+    "wal_reset.after_seal",
+    "wal_reset.after_segment_delete",
+    "wal_reset.after_segments_removed",
+    "wal_reset.after_active_truncate",
+    "checkpoint.after_publish",
+    "checkpoint.after_wal_reset"
+   ],
+   "n_range": [
+    1,
+    2
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": true,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 40,
+   "fired": 22,
+   "pass": 40,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "page_recovery.after_scan": 1,
+    "wal_reset.after_segment_delete": 4,
+    "page_recovery.after_page_replay": 2,
+    "checkpoint.after_wal_reset": 3,
+    "checkpoint.after_publish": 2,
+    "wal_reset.after_segments_removed": 3,
+    "open.after_recovery_checkpoint": 2,
+    "wal_reset.after_active_truncate": 3,
+    "page_recovery.after_flush": 1,
+    "open.after_txlog_floor": 1
+   },
+   "fence_sites_recorded": {},
+   "acknowledged_ok": 26956,
+   "failed_non_08007": 0,
+   "unknown_08007": 0,
+   "08007_resolved": {
+    "committed": 0,
+    "not_committed": 0,
+    "other": 0
+   },
+   "inflight_commit_sent": 447,
+   "inflight_outcomes": {
+    "absent": 22,
+    "present": 425
+   },
+   "inflight_no_commit_sent": 32,
+   "sqlstates_seen": {},
+   "violations": {},
+   "verify_pre2_ran": 40,
+   "verify_pre2_clean": 40,
+   "verify_pre2_exit_codes": {
+    "0": 40
+   },
+   "verify_pre_ran": 40,
+   "verify_pre_clean": 40,
+   "verify_pre_exit_codes": {
+    "0": 40
+   },
+   "verify_post_ran": 40,
+   "verify_post_clean": 40,
+   "verify_left_files_unchanged": true,
+   "recovery_aborted_at_point": 22,
+   "failure_samples": []
+  },
+  {
+   "boundary": "f67-recoverycrash-paged",
+   "fix": 67,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "recoverycrash",
+   "sites": [
+    "page_recovery.after_scan",
+    "page_recovery.after_page_replay",
+    "page_recovery.after_flush",
+    "open.after_recovery_checkpoint",
+    "open.after_txlog_floor",
+    "wal_reset.after_seal",
+    "wal_reset.after_segment_delete",
+    "wal_reset.after_segments_removed",
+    "wal_reset.after_active_truncate",
+    "checkpoint.after_publish",
+    "checkpoint.after_wal_reset"
+   ],
+   "n_range": [
+    1,
+    2
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 60,
+   "fired": 40,
+   "pass": 59,
+   "fail": 1,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "wal_reset.after_segment_delete": 9,
+    "checkpoint.after_publish": 6,
+    "checkpoint.after_wal_reset": 3,
+    "page_recovery.after_scan": 2,
+    "page_recovery.after_page_replay": 7,
+    "wal_reset.after_segments_removed": 3,
+    "page_recovery.after_flush": 4,
+    "wal_reset.after_active_truncate": 3,
+    "open.after_recovery_checkpoint": 3
+   },
+   "fence_sites_recorded": {},
+   "acknowledged_ok": 37470,
+   "failed_non_08007": 0,
+   "unknown_08007": 0,
+   "08007_resolved": {
+    "committed": 0,
+    "not_committed": 0,
+    "other": 0
+   },
+   "inflight_commit_sent": 673,
+   "inflight_outcomes": {
+    "absent": 37,
+    "present": 636
+   },
+   "inflight_no_commit_sent": 46,
+   "sqlstates_seen": {},
+   "violations": {
+    "k_index_differs": 2
+   },
+   "verify_pre2_ran": 60,
+   "verify_pre2_clean": 59,
+   "verify_pre2_exit_codes": {
+    "0": 59,
+    "3": 1
+   },
+   "verify_pre_ran": 60,
+   "verify_pre_clean": 60,
+   "verify_pre_exit_codes": {
+    "0": 60
+   },
+   "verify_post_ran": 60,
+   "verify_post_clean": 60,
+   "verify_left_files_unchanged": true,
+   "recovery_aborted_at_point": 40,
+   "failure_samples": [
+    {
+     "rep": 25,
+     "result": "FAIL",
+     "injected": {
+      "BICDB_TEST_CRASH_AT": "page_recovery.after_flush:2"
+     },
+     "tamper": null,
+     "error": null,
+     "server_log_tail": null,
+     "violations_1": [
+      {
+       "extra": 0,
+       "kind": "k_index_differs",
+       "missing": 2,
+       "writer": 5
+      }
+     ],
+     "violations_2": [
+      {
+       "extra": 0,
+       "kind": "k_index_differs",
+       "missing": 1,
+       "writer": 5
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "boundary": "f67-resetfail-paged",
+   "fix": 67,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "failio",
+   "sites": [
+    "page_log.reset_unlink",
+    "page_log.reset_dir_sync",
+    "page_log.reset",
+    "page_log.reset_sync"
+   ],
+   "n_range": [
+    1,
+    8
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "kill",
+   "target": null,
+   "control": null,
+   "trials": 40,
+   "fired": 34,
+   "pass": 40,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "page_log.reset_sync": 10,
+    "page_log.reset": 10,
+    "page_log.reset_unlink": 8,
+    "page_log.reset_dir_sync": 6
+   },
+   "fence_sites_recorded": {
+    "page_log.reset_sync": 10,
+    "page_log.reset": 10,
+    "page_log.reset_unlink": 8,
+    "page_log.reset_dir_sync": 6
+   },
+   "acknowledged_ok": 10546,
+   "failed_non_08007": 619,
+   "unknown_08007": 197,
+   "08007_resolved": {
+    "committed": 195,
+    "not_committed": 2,
+    "other": 0
+   },
+   "inflight_commit_sent": 224,
+   "inflight_outcomes": {
+    "absent": 18,
+    "present": 206
+   },
+   "inflight_no_commit_sent": 16,
+   "sqlstates_seen": {
+    "08007": 197,
+    "58030": 619
+   },
+   "violations": {},
+   "verify_pre2_ran": 40,
+   "verify_pre2_clean": 40,
+   "verify_pre2_exit_codes": {
+    "0": 40
+   },
+   "verify_pre_ran": 40,
+   "verify_pre_clean": 40,
+   "verify_pre_exit_codes": {
+    "0": 40
+   },
+   "verify_post_ran": 40,
+   "verify_post_clean": 40,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  },
+  {
+   "boundary": "f67-resetfail-shutdown-paged",
+   "fix": 67,
+   "mode": "paged",
+   "profile": "stress",
+   "kind": "failio",
+   "sites": [
+    "page_log.reset_unlink",
+    "page_log.reset_dir_sync",
+    "page_log.reset",
+    "page_log.reset_sync"
+   ],
+   "n_range": [
+    1,
+    3
+   ],
+   "persistent": false,
+   "also_fail": null,
+   "power_loss_emulated": false,
+   "end": "term",
+   "target": null,
+   "control": null,
+   "trials": 20,
+   "fired": 16,
+   "pass": 20,
+   "fail": 0,
+   "reopen_failed": 0,
+   "harness_error": 0,
+   "fired_by_site": {
+    "page_log.reset_sync": 5,
+    "page_log.reset_unlink": 5,
+    "page_log.reset": 3,
+    "page_log.reset_dir_sync": 3
+   },
+   "fence_sites_recorded": {
+    "page_log.reset_sync": 5,
+    "page_log.reset_unlink": 5,
+    "page_log.reset": 3,
+    "page_log.reset_dir_sync": 3
+   },
+   "acknowledged_ok": 4560,
+   "failed_non_08007": 290,
+   "unknown_08007": 94,
+   "08007_resolved": {
+    "committed": 92,
+    "not_committed": 2,
+    "other": 0
+   },
+   "inflight_commit_sent": 112,
+   "inflight_outcomes": {
+    "absent": 5,
+    "present": 107
+   },
+   "inflight_no_commit_sent": 8,
+   "sqlstates_seen": {
+    "08007": 94,
+    "58030": 290
+   },
+   "violations": {},
+   "verify_pre2_ran": 20,
+   "verify_pre2_clean": 20,
+   "verify_pre2_exit_codes": {
+    "0": 20
+   },
+   "verify_pre_ran": 20,
+   "verify_pre_clean": 20,
+   "verify_pre_exit_codes": {
+    "0": 20
+   },
+   "verify_post_ran": 20,
+   "verify_post_clean": 20,
+   "verify_left_files_unchanged": true,
+   "failure_samples": []
+  }
+ ]
+}

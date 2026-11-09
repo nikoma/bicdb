@@ -249,7 +249,8 @@ impl BicDb {
                 TxFrame::Begin { .. }
                 | TxFrame::CommitMaterialized { .. }
                 | TxFrame::BrokerPublish { .. }
-                | TxFrame::RecordAuditPublished { .. } => {}
+                | TxFrame::RecordAuditPublished { .. }
+                | TxFrame::SyncOps { .. } => {}
             }
         }
 

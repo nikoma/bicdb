@@ -1650,6 +1650,17 @@ impl<'db> SqlEngine<'db> {
                 args.first(),
             ));
         }
+        if crate::routine_overloads::user_function_takes_builtin_call(
+            self.db_ref(),
+            &self.session_gucs,
+            &name,
+            &arg_types,
+            &args,
+        )? {
+            if let Some(value) = self.eval_stored_sql_function_value(&name, &args, &arg_types)? {
+                return Ok(value);
+            }
+        }
         if let Some(value) = eval_network_function_value(&name, &args, &arg_types)?
             .or(eval_user_range_function_value(
                 self.db_ref(),
@@ -3151,6 +3162,17 @@ impl<'db> SqlEngine<'db> {
                 arg_types.first().and_then(Option::as_ref),
                 args.first(),
             ));
+        }
+        if crate::routine_overloads::user_function_takes_builtin_call(
+            self.db_ref(),
+            &self.session_gucs,
+            &name,
+            &arg_types,
+            &args,
+        )? {
+            if let Some(value) = self.eval_stored_sql_function_value(&name, &args, &arg_types)? {
+                return Ok(value);
+            }
         }
         if let Some(value) = eval_network_function_value(&name, &args, &arg_types)?
             .or(eval_user_range_function_value(

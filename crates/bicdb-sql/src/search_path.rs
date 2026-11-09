@@ -218,12 +218,35 @@ impl Binder<'_> {
         }
     }
 
-    fn bind_column_foreign_key(&mut self, column: &mut sqlparser::ast::ColumnDef) {
+    fn bind_column_foreign_key(
+        &mut self,
+        column: &mut sqlparser::ast::ColumnDef,
+        created: Option<(&str, &str)>,
+    ) {
         for option in &mut column.options {
             if let sqlparser::ast::ColumnOption::ForeignKey(foreign_key) = &mut option.option {
-                self.bind_reference(&mut foreign_key.foreign_table, relation_exists);
+                if !self.bind_self_reference(&mut foreign_key.foreign_table, created) {
+                    self.bind_reference(&mut foreign_key.foreign_table, relation_exists);
+                }
             }
         }
+    }
+
+    /// A foreign key naming the table being created (`created` is its
+    /// unqualified name and the schema it was placed in) refers to that table.
+    fn bind_self_reference(
+        &mut self,
+        target: &mut ObjectName,
+        created: Option<(&str, &str)>,
+    ) -> bool {
+        let Some((table, schema)) = created else {
+            return false;
+        };
+        if Self::single_part(target).as_deref() != Some(table) {
+            return false;
+        }
+        self.qualify(target, schema);
+        true
     }
 }
 
@@ -236,22 +259,24 @@ impl sqlparser::ast::VisitorMut for Binder<'_> {
                 // A self-reference names the table being created.
                 let own = Self::single_part(&table.name);
                 self.bind_creation(&mut table.name);
-                let created = table.name.clone();
+                // Set only when creation placed the table in a schema.
+                let created_schema = match (own.is_some(), table.name.0.as_slice()) {
+                    (true, [sqlparser::ast::ObjectNamePart::Identifier(schema), _]) => {
+                        Some(schema.value.clone())
+                    }
+                    _ => None,
+                };
+                let created = own.as_deref().zip(created_schema.as_deref());
                 for constraint in &mut table.constraints {
                     if let sqlparser::ast::TableConstraint::ForeignKey(foreign_key) = constraint {
-                        if own.is_some() && Self::single_part(&foreign_key.foreign_table) == own {
-                            if let [schema, _] = created.0.as_slice() {
-                                let schema = schema.to_string();
-                                let schema = schema.trim_matches('"').to_string();
-                                self.qualify(&mut foreign_key.foreign_table, &schema);
-                            }
+                        if self.bind_self_reference(&mut foreign_key.foreign_table, created) {
                             continue;
                         }
                     }
                     self.bind_foreign_key(constraint);
                 }
                 for column in &mut table.columns {
-                    self.bind_column_foreign_key(column);
+                    self.bind_column_foreign_key(column, created);
                 }
             }
             Statement::CreateView(view) => self.bind_creation(&mut view.name),
@@ -263,7 +288,7 @@ impl sqlparser::ast::VisitorMut for Binder<'_> {
                             constraint, ..
                         } => self.bind_foreign_key(constraint),
                         sqlparser::ast::AlterTableOperation::AddColumn { column_def, .. } => {
-                            self.bind_column_foreign_key(column_def)
+                            self.bind_column_foreign_key(column_def, None)
                         }
                         _ => {}
                     }
@@ -377,7 +402,7 @@ fn insert_at_positions(
 /// Statement text with unqualified relations bound through `path`, or `None`
 /// when nothing changed (or the text is not ordinary SQL, which then runs as
 /// before).
-pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Option<String> {
+pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Result<Option<String>> {
     // Lock strengths sqlparser lacks become the stronger ones it parses, as
     // statement execution does.
     let weak_locks = rewrite_weak_lock_strengths(sql);
@@ -386,7 +411,10 @@ pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Option<St
     let sql = lock_order.as_deref().unwrap_or(sql);
     let top = crate::eval::rewrite_helpers::rewrite_select_top_identifiers(sql);
     let sql = top.as_deref().unwrap_or(sql);
-    let mut statements = Parser::parse_sql(&sqlparser::dialect::PostgreSqlDialect {}, sql).ok()?;
+    let Ok(mut statements) = Parser::parse_sql(&sqlparser::dialect::PostgreSqlDialect {}, sql)
+    else {
+        return Ok(None);
+    };
     // Routine bodies bind when they execute, with the caller's path; DDL
     // that defines them is left verbatim.
     if statements.iter().any(|statement| {
@@ -397,15 +425,28 @@ pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Option<St
                 | Statement::CreateTrigger(_)
         )
     }) {
-        return None;
+        return Ok(None);
     }
     let binder = run_binder(db, &mut statements, path);
-    if !binder.changed || binder.positions_missing {
-        return None;
+    if !binder.changed {
+        return Ok(None);
+    }
+    // Running the statement unbound would resolve its names in another
+    // schema; refuse instead.
+    let unbindable = || {
+        SqlError::Unsupported(
+            "cannot bind the statement's unqualified relation names through search_path"
+                .to_string(),
+        )
+    };
+    if binder.positions_missing {
+        return Err(unbindable());
     }
     // Insert qualifiers into the original text: re-rendering the AST is not
     // a faithful round trip (string literals with doubled quotes lost one).
     insert_at_positions(sql, binder.insertions)
+        .map(Some)
+        .ok_or_else(unbindable)
 }
 
 /// Binds every SQL statement and expression of a routine body, before its
@@ -665,9 +706,10 @@ pub fn bind_session_sql(
     sql: &str,
     gucs: &HashMap<String, String>,
 ) -> Result<Option<String>> {
-    Ok(binding_path(db, gucs)?
-        .as_deref()
-        .and_then(|path| bind_sql_text(db, sql, path)))
+    match binding_path(db, gucs)? {
+        Some(path) => bind_sql_text(db, sql, &path),
+        None => Ok(None),
+    }
 }
 
 /// `current_schema`: the first existing schema on the search_path of the

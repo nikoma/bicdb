@@ -2630,9 +2630,36 @@ pub(crate) fn eval_binary_value(
                 "unsupported value operator {op}"
             ))),
         },
+        // Exponentiation, as power().
+        BinaryOperator::PGExp => match (&left, &right) {
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            // A NUMERIC operand (decimal text) makes the power NUMERIC.
+            _ if numeric_operand(&left) || numeric_operand(&right) => {
+                numeric_power_value(&left, &right)
+            }
+            _ => crate::pg_scalar_extra::eval_pg_scalar_extra("power", &[left, right])?
+                .ok_or_else(|| SqlError::Unsupported("unsupported value operator ^".to_string())),
+        },
         other => Err(SqlError::Unsupported(format!(
             "unsupported value operator {other}"
         ))),
+    }
+}
+
+/// A NUMERIC value: NUMERIC travels as decimal text.
+pub(crate) fn numeric_operand(value: &SqlValue) -> bool {
+    matches!(value, SqlValue::String(_)) && decimal_value(value).is_some()
+}
+
+/// `left ^ right` as NUMERIC when both are integers or decimals.
+pub(crate) fn numeric_power_value(left: &SqlValue, right: &SqlValue) -> Result<SqlValue> {
+    match (decimal_value(left), decimal_value(right)) {
+        (Some(base), Some(exponent)) => Ok(SqlValue::String(
+            numeric_power(&base?, &exponent?)?.format(),
+        )),
+        _ => Err(SqlError::Unsupported(
+            "unsupported value operator ^".to_string(),
+        )),
     }
 }
 

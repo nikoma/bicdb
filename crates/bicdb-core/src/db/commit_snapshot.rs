@@ -81,6 +81,7 @@ impl BicDb {
         writes: &[TxWrite],
         broker_publishes: &[crate::broker::PendingBrokerPublish],
         record_audit_events: &[Event],
+        sync_ops: &[SyncOp],
         prepared: PreparedWal,
     ) -> Result<Vec<u8>> {
         self.encode_tx_commit_frames_at(
@@ -89,6 +90,7 @@ impl BicDb {
             writes,
             broker_publishes,
             record_audit_events,
+            sync_ops,
             prepared,
             unix_timestamp(),
         )
@@ -101,6 +103,7 @@ impl BicDb {
         writes: &[TxWrite],
         broker_publishes: &[crate::broker::PendingBrokerPublish],
         record_audit_events: &[Event],
+        sync_ops: &[SyncOp],
         prepared: PreparedWal,
         timestamp: i64,
     ) -> Result<Vec<u8>> {
@@ -127,6 +130,16 @@ impl BicDb {
                         &mut bytes,
                         FrameKind::Transaction,
                         &TxFrameRef::RecordAudit { tx_id, event },
+                    )?;
+                }
+                if !sync_ops.is_empty() {
+                    storage::append_plain_json_frame(
+                        &mut bytes,
+                        FrameKind::Transaction,
+                        &TxFrameRef::SyncOps {
+                            tx_id,
+                            ops: sync_ops,
+                        },
                     )?;
                 }
                 storage::append_plain_json_frame(
@@ -166,6 +179,12 @@ impl BicDb {
             payloads.push(serde_json::to_vec(&TxFrameRef::RecordAudit {
                 tx_id,
                 event,
+            })?);
+        }
+        if !sync_ops.is_empty() {
+            payloads.push(serde_json::to_vec(&TxFrameRef::SyncOps {
+                tx_id,
+                ops: sync_ops,
             })?);
         }
         payloads.push(serde_json::to_vec(&TxFrameRef::Commit {
@@ -242,6 +261,7 @@ impl BicDb {
             writes,
             &[],
             journal,
+            &[],
             PreparedWal::default(),
             timestamp,
         )?;
@@ -1616,12 +1636,17 @@ impl BicDb {
         collections.sort_by(|left, right| left.name.cmp(&right.name));
         let catalog = CollectionCatalog { collections };
         let bytes = serde_json::to_vec_pretty(&catalog)?;
+        // Memory already holds the new catalog: any failure leaves it ahead
+        // of the disk (a retried CREATE would find the collection and
+        // succeed without persisting it), so every failure fences.
         write_sidecar(
             &self.path.join(DEFAULT_COLLECTION_CATALOG),
             FrameKind::Index,
             &bytes,
             self.config.fsync,
             &self.encryption,
+            "catalog",
+            storage::FailClosed::Always(&self.durability),
         )
     }
 
@@ -1640,6 +1665,8 @@ impl BicDb {
             &bytes,
             self.config.fsync,
             &self.encryption,
+            "index_catalog",
+            storage::FailClosed::Always(&self.durability),
         )
     }
 
@@ -1687,12 +1714,16 @@ impl BicDb {
         catalog: &IndexMaintenanceCatalog,
     ) -> Result<()> {
         let bytes = serde_json::to_vec_pretty(catalog)?;
+        // Not fatal: build progress and sizes, rewritten by the next build,
+        // rebuild or verification.
         write_sidecar(
             &self.path.join(DEFAULT_INDEX_MAINTENANCE),
             FrameKind::Index,
             &bytes,
             self.config.fsync,
             &self.encryption,
+            "index_maintenance",
+            storage::FailClosed::No,
         )
     }
 
@@ -1726,12 +1757,15 @@ impl BicDb {
 
     pub(crate) fn persist_planner_stats(&self) -> Result<()> {
         let bytes = serde_json::to_vec_pretty(&self.planner_stats)?;
+        // Not fatal: statistics only steer plans and ANALYZE rebuilds them.
         write_sidecar(
             &self.path.join(DEFAULT_PLANNER_STATS),
             FrameKind::Index,
             &bytes,
             self.config.fsync,
             &self.encryption,
+            "planner_stats",
+            storage::FailClosed::No,
         )
     }
 

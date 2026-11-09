@@ -555,6 +555,10 @@ const FAIL_IO_SPECS: &[&str] = &[
     "page_log.reset:3",
     // The commit point of a transaction-log cut.
     "transaction_log.cut_sync:3",
+    // The collection catalog (DDL thread): memory is ahead of the file at
+    // every step, so each fences; the directory sync follows the rename.
+    "catalog.write:4",
+    "catalog.dir_sync:5",
 ];
 
 fn fail_io_case(mode: &str, spec: &str) {

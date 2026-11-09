@@ -2960,17 +2960,35 @@ impl<'db> SqlSession<'db> {
             self.apply_before_insert_row_triggers(&table, schema.as_ref(), records)?;
         if let Some(schema) = schema.as_ref() {
             self.materialize_generated_columns(&table, schema, &mut records)?;
+        }
+        // As INSERT: the row policies first, so a refused key is not
+        // revealed by a duplicate-key error; earlier rows keep their own
+        // constraint errors.
+        let rls_violation = self.first_rls_write_violation(
+            &table,
+            schema.as_ref(),
+            PolicyAction::Insert,
+            false,
+            &records,
+        )?;
+        if let Some(schema) = schema.as_ref() {
+            let checked = match &rls_violation {
+                Some((index, _)) => &records[..*index],
+                None => &records[..],
+            };
             validate_records_for_write(
                 self.db_ref(),
                 self.tx.as_ref(),
                 &table,
                 schema,
-                &records,
+                checked,
                 false,
                 Some(&self.sql_engine()),
             )?;
         }
-        self.enforce_rls_checks(&table, schema.as_ref(), PolicyAction::Insert, &records)?;
+        if let Some((_, error)) = rls_violation {
+            return Err(error);
+        }
         let count = records.len();
         self.insert_session_records(&table, records.clone())?;
         self.fire_after_insert_triggers(&table, schema.as_ref(), &records)?;
@@ -2987,9 +3005,10 @@ impl<'db> SqlSession<'db> {
         // statement sees the path and schemas earlier statements set up.
         let per_statement = crate::search_path::statements_bound_separately(sql, path.is_some());
         let path = if per_statement.is_some() { None } else { path };
-        let bound = path
-            .as_deref()
-            .and_then(|path| crate::search_path::bind_sql_text(self.db_ref(), sql, path));
+        let bound = match path.as_deref() {
+            Some(path) => crate::search_path::bind_sql_text(self.db_ref(), sql, path)?,
+            None => None,
+        };
         let _path_scope = crate::search_path::PathScope::enter(path);
         let sql = bound.as_deref().unwrap_or(sql);
         // A per-row routine call reaches raw SQL only through dynamic EXECUTE
@@ -3015,9 +3034,14 @@ impl<'db> SqlSession<'db> {
                                 session.db_ref(),
                                 &session.session_gucs,
                             )?;
-                            let bound = path.as_deref().and_then(|path| {
-                                crate::search_path::bind_sql_text(session.db_ref(), statement, path)
-                            });
+                            let bound = match path.as_deref() {
+                                Some(path) => crate::search_path::bind_sql_text(
+                                    session.db_ref(),
+                                    statement,
+                                    path,
+                                )?,
+                                None => None,
+                            };
                             let _path_scope = crate::search_path::PathScope::enter(path);
                             session.conflict_arbiter_memo.borrow_mut().take();
                             last =
@@ -3247,6 +3271,12 @@ impl<'db> SqlSession<'db> {
             return Ok(result);
         }
         if let Some(result) = self.execute_raw_alter_role_settings(sql)? {
+            return Ok(result);
+        }
+        if let Some(result) = self.execute_raw_create_rule(sql)? {
+            return Ok(result);
+        }
+        if let Some(result) = self.execute_raw_drop_rule(sql)? {
             return Ok(result);
         }
         if let Some(result) = self.execute_raw_reset(sql)? {
@@ -3728,6 +3758,9 @@ impl<'db> SqlSession<'db> {
 
     fn execute_parsed_statement_in_sql(&mut self, statement: &Statement) -> Result<SqlResult> {
         self.ensure_read_only_statement(statement)?;
+        if let Some(result) = self.apply_instead_rule(statement)? {
+            return Ok(result);
+        }
         // Earlier statements in a batch can change temporal output settings.
         let _temporal_scope = self.temporal_scope();
         self.db_ref().check_recovery_state()?;

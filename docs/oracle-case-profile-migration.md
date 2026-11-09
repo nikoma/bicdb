@@ -7,6 +7,15 @@ national literals, national table columns, derived queries, views and CTEs must
 retain national provenance before ordinary text transport erases it. PostgreSQL
 and legacy native ASCII index tags keep their existing behavior.
 
+Built-in SQL hosts initialize the profile already recorded by the store before
+serving queries; an unprovisioned database is not assigned a new profile. CLI
+query/migration paths, the standalone application host, RESP HotViews, the native
+WebAssembly ABI and the primary-index startup helper share
+`initialize_existing_database_profile`. The configured server still validates
+its explicit profile choice. Automatic SQL CLI dispatch keeps Oracle queries in
+the profile-aware SQL engine: the analytics engine otherwise folds `ß` and `SS`
+into one grouped key, contrary to the frozen Oracle mapping.
+
 Profile initialization enables the sticky `oracle_simple_case_v1` storage
 capability before publishing case-profile metadata. An older reader lacking the
 capability must refuse the store. SQL refuses an Oracle database until startup
@@ -41,6 +50,18 @@ checks compare all twenty-two saved character-set differences. Earlier source
 ignores; the later anchor changes require their own broad qualification. A prior
 combined compile was interrupted at its 12 GiB cgroup limit before tests ran;
 subsequent builds use one compiler job and a monitored 16 GiB limit.
+
+Full source `fccdf823` passed 2,343 SQL tests across 226 targets, zero failures
+and four existing ignores. Its 120-target core run plus one invoked subprocess
+result passed 1,289 tests with zero failures and eleven helper/measurement/
+external-model ignores. Fresh crash helpers and locked workspace/all-target
+compilation passed at that source. The later startup audit at `8e25f672`
+reproduced five missing-initialization cases; the same five pass at `f68afc09`.
+Actual CLI source `782230f4` grouped `ß` and `SS` into one key with count two;
+its unchanged test passes at `b3c8984e`, which also passes all nine SQL profile/
+national integration tests. Core code and dependencies are unchanged by these
+startup/dispatch additions. Updated workspace and final-head CI remain separate
+gates; the earlier full SQL run is not an exact test of changed startup code.
 
 Qualification is recorded by source revision. The recovered native foundations
 have their own older mapping/publication evidence under

@@ -238,7 +238,7 @@ pub unsafe extern "C" fn bicdb_open(
             None => BicDb::open_with_config(&path, db_config),
         }
         .map_err(|error| error.to_string())?;
-        bicdb_sql::recover_interrupted_recycle_bin_renames(&mut db)
+        bicdb_sql::oracle::initialize_existing_database_profile(&mut db)
             .map_err(|error| error.to_string())?;
 
         let id = NEXT_ID.with(|next| {
@@ -1131,5 +1131,34 @@ mod tests {
 
         call_json(bicdb_close(a));
         call_json(bicdb_close(b));
+    }
+    fn legacy_oracle_case_fixture(db: &mut BicDb) {
+        {
+            let mut sql = SqlSession::new(db);
+            sql.execute("CREATE TABLE startup_case(id INT PRIMARY KEY,v TEXT); INSERT INTO startup_case VALUES(1,'é'); CREATE INDEX startup_case_upper ON startup_case(upper(v))").unwrap();
+        }
+        db.create_collection("__bicdb_sql_compatibility").unwrap();
+        db.insert(
+            "__bicdb_sql_compatibility",
+            bicdb_core::Record::new("profile").with_metadata(
+                serde_json::json!({"format":1,"profile":bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE}),
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn legacy_oracle_case_profile_is_initialized_before_abi_sql() {
+        let root = tempfile::tempdir().unwrap();
+        {
+            let mut db = BicDb::open(root.path().join("db")).unwrap();
+            legacy_oracle_case_fixture(&mut db);
+        }
+        let db = open(root.path(), "db");
+        assert_eq!(
+            exec(db, "SELECT upper(v) FROM startup_case")["result"]["rows"],
+            json!([["É"]])
+        );
+        assert_eq!(call_json(bicdb_close(db))["ok"], true);
     }
 }

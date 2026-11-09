@@ -183,7 +183,7 @@ impl CacheStore {
             .with_fsync(config.fsync)
             .with_sync_outbox(false);
         let mut db = BicDb::open_with_config(path, db_config)?;
-        bicdb_sql::recover_interrupted_recycle_bin_renames(&mut db)
+        bicdb_sql::oracle::initialize_existing_database_profile(&mut db)
             .map_err(|error| RespServerError::Command(format!("SQL recovery failed: {error}")))?;
         let mem = config.ephemeral.then(|| {
             (0..NUM_DATABASES)
@@ -1074,6 +1074,37 @@ mod ddl_startup_recovery_tests {
         assert_eq!(
             store.query_sql("SELECT id FROM startup_rows").unwrap().rows,
             vec![vec![bicdb_sql::SqlValue::Int(1)]]
+        );
+    }
+    fn legacy_oracle_case_fixture(db: &mut BicDb) {
+        {
+            let mut sql = bicdb_sql::SqlSession::new_unprivileged(db, HOTVIEW_SQL_ROLE);
+            sql.execute("CREATE TABLE startup_case(id INT PRIMARY KEY,v TEXT); INSERT INTO startup_case VALUES(1,'é'); CREATE INDEX startup_case_upper ON startup_case(upper(v))").unwrap();
+        }
+        db.create_collection("__bicdb_sql_compatibility").unwrap();
+        db.insert(
+            "__bicdb_sql_compatibility",
+            bicdb_core::Record::new("profile").with_metadata(
+                serde_json::json!({"format":1,"profile":bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE}),
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn legacy_oracle_case_profile_is_initialized_before_hotview_sql() {
+        let root = tempfile::tempdir().unwrap();
+        {
+            let mut db = BicDb::open(root.path()).unwrap();
+            legacy_oracle_case_fixture(&mut db);
+        }
+        let store = CacheStore::open(root.path(), &CacheStoreConfig::default()).unwrap();
+        assert_eq!(
+            store
+                .query_sql("SELECT upper(v) FROM startup_case")
+                .unwrap()
+                .rows,
+            vec![vec![bicdb_sql::SqlValue::String("É".into())]]
         );
     }
 }

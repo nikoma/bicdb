@@ -1173,7 +1173,13 @@ fn render_token(token: &Token) -> String {
 /// sqlparser's generic Display accepts both escaped and decoded values and
 /// treats adjacent quotes as already escaped. Our parser uses decoded values;
 /// double every quote on a serialization-only copy before invoking Display.
-pub(crate) fn render_sql<T: Clone + sqlparser::ast::VisitMut + std::fmt::Display>(
+pub(crate) fn render_sql<
+    T: Clone
+        + sqlparser::ast::VisitMut
+        + std::fmt::Display
+        + serde::Serialize
+        + serde::de::DeserializeOwned,
+>(
     node: &T,
 ) -> String {
     crate::sql_text::sql_text(node)
@@ -1234,7 +1240,7 @@ fn lower_oracle_sql(
     if word(&source[0], "DEALLOCATE") {
         let statements = parse_statements(sql)?;
         if let [Statement::Deallocate { .. }] = statements.as_slice() {
-            return Ok(statements[0].to_string());
+            return Ok(render_sql(&statements[0]));
         }
         return Err(unsupported("expected one DEALLOCATE statement"));
     }
@@ -1273,7 +1279,7 @@ fn lower_oracle_sql(
             savepoint: None, ..
         }] = statements.as_slice()
         {
-            return Ok(statements[0].to_string());
+            return Ok(render_sql(&statements[0]));
         }
     }
     if preview
@@ -1284,7 +1290,7 @@ fn lower_oracle_sql(
         if parse_transaction_control_for_profile(sql, ORACLE_PREVIEW_PROFILE)?.is_some()
             || session_characteristics
         {
-            return Ok(parse_statements(sql)?[0].to_string());
+            return Ok(render_sql(&parse_statements(sql)?[0]));
         }
     }
     if source
@@ -1838,6 +1844,19 @@ fn canonical_tokens_with_routine_types(
         }
         if escape_syntax.contains(&i) {
             pieces.push("ESCAPE".into());
+            i += 1;
+            continue;
+        }
+        // REVERSE is a modifier only immediately after FOR <iterator> IN.
+        // Ordinary columns/functions named reverse retain identifier folding.
+        if preview
+            && word(t, "REVERSE")
+            && i >= 3
+            && word(&source[i - 1], "IN")
+            && matches!(&source[i - 2], Token::Word(_))
+            && word(&source[i - 3], "FOR")
+        {
+            pieces.push("REVERSE".into());
             i += 1;
             continue;
         }

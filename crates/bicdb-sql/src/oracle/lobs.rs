@@ -133,7 +133,7 @@ pub(super) fn lower_sql_scalars(db: &BicDb, statements: &mut Vec<Statement>) -> 
             select.projection = vec![SelectItem::UnnamedExpr(input.clone())];
             query.locks.clear();
             let Ok(Some(metadata)) =
-                infer_query_result_column_metadata(self.db, &query.to_string())
+                infer_query_result_column_metadata(self.db, &render_sql(&query))
             else {
                 return false;
             };
@@ -201,8 +201,9 @@ pub(super) fn lower_sql_scalars(db: &BicDb, statements: &mut Vec<Statement>) -> 
                     ));
                 }
                 expression(&format!(
-                    "pg_catalog.bicdb_oracle_sql_blob_{}({input})",
-                    operation.to_ascii_lowercase()
+                    "pg_catalog.bicdb_oracle_sql_blob_{}({})",
+                    operation.to_ascii_lowercase(),
+                    render_sql(input)
                 ))
             })();
             match lowered {

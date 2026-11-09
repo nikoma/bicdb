@@ -91,12 +91,9 @@ fn source(
             // Derived/CTE sources retain query-local names. Inference is only
             // used for unqualified columns; qualified aliases need no guessing.
             let sql = format!(
-                "{} SELECT * FROM {factor}",
-                query
-                    .with
-                    .as_ref()
-                    .map(ToString::to_string)
-                    .unwrap_or_default()
+                "{} SELECT * FROM {}",
+                query.with.as_ref().map(render_sql).unwrap_or_default(),
+                render_sql(factor)
             );
             infer_query_result_columns(db, &sql)
                 .ok()

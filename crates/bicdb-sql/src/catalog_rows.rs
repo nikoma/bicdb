@@ -7902,6 +7902,8 @@ pub(crate) fn index_field_attnum(
         IndexField::MetadataPath(_)
         | IndexField::Lower(_)
         | IndexField::Upper(_)
+        | IndexField::OracleUpperV1(_)
+        | IndexField::OracleLowerV1(_)
         | IndexField::Trim(_)
         | IndexField::TimestampDay(_)
         | IndexField::Coalesce { .. }

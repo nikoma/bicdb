@@ -4354,6 +4354,8 @@ pub(crate) fn collect_index_column_heads(fields: &[IndexField], out: &mut BTreeS
             }
             IndexField::Lower(inner)
             | IndexField::Upper(inner)
+            | IndexField::OracleUpperV1(inner)
+            | IndexField::OracleLowerV1(inner)
             | IndexField::Trim(inner)
             | IndexField::TimestampDay(inner)
             | IndexField::Coalesce { field: inner, .. } => {

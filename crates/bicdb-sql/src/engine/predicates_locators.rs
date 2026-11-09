@@ -6608,7 +6608,13 @@ impl<'db> SqlEngine<'db> {
             // result as the answer, without the text check single-table
             // probes make (`case_mapped_probe_value_is_text`). Keep
             // `upper(col)`/`lower(col)` keys out of join probes.
-            if matches!(field, IndexField::Upper(_) | IndexField::Lower(_)) {
+            if matches!(
+                field,
+                IndexField::Upper(_)
+                    | IndexField::Lower(_)
+                    | IndexField::OracleUpperV1(_)
+                    | IndexField::OracleLowerV1(_)
+            ) {
                 break;
             }
             let Some(bound) =

@@ -1650,12 +1650,25 @@ impl BicDb {
         )
     }
 
+    pub(crate) fn enable_index_format_capabilities(
+        &self,
+        definition: &IndexDefinition,
+    ) -> Result<()> {
+        if definition.uses_oracle_simple_case_v1() {
+            format::enable_oracle_simple_case_v1(&self.path)?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn persist_index_catalog(&self) -> Result<()> {
         self.deferred_materialize_barrier()?;
         let mut indexes = self.index_definitions();
         indexes.sort_by(|left, right| left.name.cmp(&right.name));
         if indexes.iter().any(|index| index.nulls_not_distinct) {
             format::enable_unique_nulls_not_distinct(&self.path)?;
+        }
+        for definition in &indexes {
+            self.enable_index_format_capabilities(definition)?;
         }
         let catalog = IndexCatalog { indexes };
         let bytes = serde_json::to_vec_pretty(&catalog)?;

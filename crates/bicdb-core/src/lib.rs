@@ -148,6 +148,9 @@ pub use consensus::{
 };
 pub use db::effective_fts_partitions;
 pub use db::ensure_frames_within_durable_horizon;
+mod oracle_simple_case;
+pub use oracle_simple_case::{oracle_simple_lower_v1, oracle_simple_upper_v1};
+
 pub use db::index_key_lower;
 pub use db::index_key_upper;
 pub use db::index_predicate_matches;

@@ -790,6 +790,7 @@ impl BicDb {
         validate_index_definition(&definition)?;
         self.ensure_collection(collection)?;
         self.validate_secure_index_definition(&definition)?;
+        self.enable_index_format_capabilities(&definition)?;
         let Some(paged) = self.paged_records.clone() else {
             return Err(BicDbError::Index(format!(
                 "packing `{name}` requires paged storage (server_paged)"
@@ -1084,6 +1085,7 @@ impl BicDb {
         operation: &str,
         interrupted_previous: bool,
     ) -> Result<IndexMaintenanceReport> {
+        self.enable_index_format_capabilities(&definition)?;
         let start = Instant::now();
         let scan_start = Instant::now();
         let expected_records = self

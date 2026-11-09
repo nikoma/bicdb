@@ -142,6 +142,7 @@ impl BicDb {
         validate_index_definition(&definition)?;
         self.ensure_collection(&definition.collection)?;
         self.validate_secure_index_definition(&definition)?;
+        self.enable_index_format_capabilities(&definition)?;
         if definition.kind != IndexKind::BTree || self.paged_records.is_none() {
             return Err(BicDbError::Index(
                 "restartable paged B-tree builds require a B-tree index and server_paged storage"

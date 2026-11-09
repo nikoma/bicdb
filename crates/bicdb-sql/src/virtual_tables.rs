@@ -14,6 +14,8 @@ pub(crate) fn index_field_is_expression(field: &IndexField) -> bool {
         field,
         IndexField::Lower(_)
             | IndexField::Upper(_)
+            | IndexField::OracleUpperV1(_)
+            | IndexField::OracleLowerV1(_)
             | IndexField::Trim(_)
             | IndexField::TimestampDay(_)
             | IndexField::Coalesce { .. }
@@ -2916,6 +2918,8 @@ fn coalesce_index_field(
             field,
             IndexField::Lower(_)
                 | IndexField::Upper(_)
+                | IndexField::OracleUpperV1(_)
+                | IndexField::OracleLowerV1(_)
                 | IndexField::Trim(_)
                 | IndexField::TimestampDay(_)
         ) =>
@@ -4044,6 +4048,12 @@ pub(crate) fn canonical_index_field_for_schema(
         }
         IndexField::Upper(inner) => {
             IndexField::Upper(Box::new(canonical_index_field_for_schema(schema, *inner)))
+        }
+        IndexField::OracleUpperV1(inner) => {
+            IndexField::OracleUpperV1(Box::new(canonical_index_field_for_schema(schema, *inner)))
+        }
+        IndexField::OracleLowerV1(inner) => {
+            IndexField::OracleLowerV1(Box::new(canonical_index_field_for_schema(schema, *inner)))
         }
         IndexField::Lower(inner) => {
             IndexField::Lower(Box::new(canonical_index_field_for_schema(schema, *inner)))
@@ -5517,6 +5527,8 @@ pub(crate) fn index_field_matches(left: &IndexField, right: &IndexField) -> bool
             },
         ) => lv == rv && li == ri && index_field_matches(left, right),
         (IndexField::Upper(left), IndexField::Upper(right))
+        | (IndexField::OracleUpperV1(left), IndexField::OracleUpperV1(right))
+        | (IndexField::OracleLowerV1(left), IndexField::OracleLowerV1(right))
         | (IndexField::Lower(left), IndexField::Lower(right))
         | (IndexField::TimestampDay(left), IndexField::TimestampDay(right))
         | (IndexField::Trim(left), IndexField::Trim(right)) => index_field_matches(left, right),

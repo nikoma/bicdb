@@ -1455,6 +1455,8 @@ impl<'db> SqlSession<'db> {
                 IndexField::MetadataPath(path) => path.first().is_none_or(|head| touches(head)),
                 IndexField::Lower(inner)
                 | IndexField::Upper(inner)
+                | IndexField::OracleUpperV1(inner)
+                | IndexField::OracleLowerV1(inner)
                 | IndexField::Trim(inner)
                 | IndexField::TimestampDay(inner)
                 | IndexField::Coalesce { field: inner, .. } => {

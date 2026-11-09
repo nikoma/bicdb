@@ -3455,6 +3455,8 @@ impl<'db> SqlSession<'db> {
                 IndexField::TimestampDay(_) => true,
                 IndexField::Lower(inner)
                 | IndexField::Upper(inner)
+                | IndexField::OracleUpperV1(inner)
+                | IndexField::OracleLowerV1(inner)
                 | IndexField::Trim(inner)
                 | IndexField::Coalesce { field: inner, .. } => has_timestamp_day(inner),
                 IndexField::FirstNonNull(fields) => fields.iter().any(has_timestamp_day),

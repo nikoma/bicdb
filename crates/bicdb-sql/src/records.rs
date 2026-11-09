@@ -2004,9 +2004,11 @@ pub(crate) fn index_field_pg_type(schema: &TableSchema, field: &IndexField) -> O
         IndexField::MetadataPath(path) if path.len() == 1 => {
             schema.column(&path[0]).map(|column| column.pg_type.clone())
         }
-        IndexField::Lower(_) | IndexField::Upper(_) | IndexField::Trim(_) => {
-            Some("text".to_string())
-        }
+        IndexField::Lower(_)
+        | IndexField::Upper(_)
+        | IndexField::OracleUpperV1(_)
+        | IndexField::OracleLowerV1(_)
+        | IndexField::Trim(_) => Some("text".to_string()),
         IndexField::MetadataPath(_) => None,
     }
 }
@@ -2206,10 +2208,22 @@ pub(crate) fn record_index_field_sql_value(
             SqlValue::Null => SqlValue::Null,
             value => SqlValue::String(bicdb_core::index_key_upper(&value.to_cell())),
         },
+        IndexField::OracleUpperV1(inner) => {
+            match record_index_field_sql_value(record, inner, schema) {
+                SqlValue::Null => SqlValue::Null,
+                value => SqlValue::String(bicdb_core::oracle_simple_upper_v1(&value.to_cell())),
+            }
+        }
         IndexField::Lower(inner) => match record_index_field_sql_value(record, inner, schema) {
             SqlValue::Null => SqlValue::Null,
             value => SqlValue::String(bicdb_core::index_key_lower(&value.to_cell())),
         },
+        IndexField::OracleLowerV1(inner) => {
+            match record_index_field_sql_value(record, inner, schema) {
+                SqlValue::Null => SqlValue::Null,
+                value => SqlValue::String(bicdb_core::oracle_simple_lower_v1(&value.to_cell())),
+            }
+        }
         IndexField::Trim(inner) => match record_index_field_sql_value(record, inner, schema) {
             SqlValue::Null => SqlValue::Null,
             value => SqlValue::String(value.to_cell().trim().to_string()),

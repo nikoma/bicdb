@@ -23,7 +23,9 @@ pub const SERVER_PAGED_FEATURE_FLAG: &str = "server_paged_storage";
 
 pub const ONLINE_BACKUP_EXTENT_FEATURE_FLAG: &str = "online_backup_extent_tracking_v1";
 pub const UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG: &str = "unique_nulls_not_distinct_v1";
+pub const ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG: &str = "oracle_simple_case_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
+    ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG,
     UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG,
     "format_metadata_v2",
     SERVER_PAGED_FEATURE_FLAG,
@@ -545,6 +547,20 @@ pub(crate) fn enable_unique_nulls_not_distinct(root: &Path) -> Result<()> {
     if metadata
         .feature_flags
         .insert(UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG.into())
+    {
+        persist_metadata(root, &metadata, true)?;
+    }
+    Ok(())
+}
+
+/// Persist the reader/writer fence before any Oracle-v1 key definition or build
+/// checkpoint becomes durable. The capability is sticky even after index DROP.
+pub(crate) fn enable_oracle_simple_case_v1(root: &Path) -> Result<()> {
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if metadata
+        .feature_flags
+        .insert(ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG.into())
     {
         persist_metadata(root, &metadata, true)?;
     }

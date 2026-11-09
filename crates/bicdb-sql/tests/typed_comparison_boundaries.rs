@@ -27,6 +27,19 @@ fn cells(session: &mut SqlSession<'_>, sql: &str) -> Vec<Vec<String>> {
 }
 
 #[test]
+fn derived_column_names_do_not_inherit_physical_system_column_types() {
+    let (_root, mut db) = database();
+    let mut session = SqlSession::new(&mut db);
+    assert_eq!(
+        cells(&mut session,
+            "SELECT pg_typeof(tableoid),pg_typeof(xmin),pg_typeof(xmax),pg_typeof(cmin),pg_typeof(cmax),pg_typeof(ctid) \
+             FROM (SELECT NULL::text AS tableoid,NULL::integer AS xmin,NULL::numeric AS xmax,\
+             NULL::timestamp AS cmin,NULL::boolean AS cmax,NULL::bytea AS ctid) q"),
+        vec![vec!["text", "integer", "numeric", "timestamp without time zone", "boolean", "bytea"]]
+    );
+}
+
+#[test]
 fn quoted_column_identities_keep_their_own_declared_types() {
     let (_root, mut db) = database();
     {

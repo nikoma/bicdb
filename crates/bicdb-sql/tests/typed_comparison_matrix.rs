@@ -226,6 +226,10 @@ fn widened_float_comparisons_keep_all_primary_key_matches() {
     for sql in [
         "SELECT k FROM wide_keys WHERE k = 9007199254740992::float8 ORDER BY k",
         "SELECT k FROM wide_keys WHERE k IN (9007199254740992::float8) ORDER BY k",
+        "SELECT k FROM wide_keys WHERE k <= 9007199254740992::float8 ORDER BY k",
+        "SELECT k FROM wide_keys WHERE k IN (SELECT 9007199254740992::float8) ORDER BY k",
+        "SELECT k FROM wide_keys WHERE k = ANY(ARRAY[9007199254740992::float8]) ORDER BY k",
+        "SELECT k FROM wide_keys o WHERE (SELECT count(*) FROM wide_keys i WHERE i.k = o.k::float8) = 2 ORDER BY k",
         "SELECT w.k FROM (SELECT 9007199254740992::float8 AS f) p JOIN wide_keys w ON w.k = p.f ORDER BY w.k",
         "SELECT k FROM wide_keys o WHERE EXISTS (SELECT 1 FROM wide_keys i WHERE i.k = o.k::float8) ORDER BY k",
     ] {

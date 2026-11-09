@@ -1742,6 +1742,13 @@ impl<'db> SqlEngine<'db> {
             if result.columns.len() != 1 {
                 return Ok(None);
             }
+            let field = IndexField::MetadataPath(vec![column.clone()]);
+            if !index_probe_type_is_exact(
+                index_field_pg_type(Some(schema), &field),
+                result.column_types.first().cloned().flatten(),
+            ) {
+                return Ok(None);
+            }
             let mut pks = Vec::with_capacity(result.rows.len());
             for row in result.rows {
                 let Some(value) = row.into_iter().next() else {
@@ -4251,7 +4258,9 @@ impl<'db> SqlEngine<'db> {
         // normalized so the column is on the left) for both the located and
         // the evaluated planners.
         for (op, expr) in self.dynamic_range_bound_exprs(selection, table, alias, schema, field)? {
-            if !self.expr_is_bound_without_table_row(&expr)? {
+            if !self.expr_is_bound_without_table_row(&expr)?
+                || !self.index_probe_expr_is_exact(schema, Some(field), &expr)
+            {
                 continue;
             }
             let value = self.eval_dynamic_bound_expr(&expr)?;

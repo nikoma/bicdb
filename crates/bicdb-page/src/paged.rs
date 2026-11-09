@@ -1594,7 +1594,11 @@ impl PagedStore {
                 });
             }
 
+            self.validate_put_value_size(value.len())?;
             let (transaction, _) = self.begin_transaction();
+            self.admit_write(transaction)?;
+            #[cfg(feature = "experimental-structural-cuts")]
+            let releases = self.pool.write_guard_releases();
             self.pool.set_current_transaction(transaction);
             let header = VersionHeader::new(transaction);
             let mut tuple = Vec::with_capacity(crate::mvcc::VERSION_HEADER_BYTES + value.len());
@@ -1603,8 +1607,11 @@ impl PagedStore {
             let replacement_head = match self.heap.insert(&tuple) {
                 Ok(locator) => locator,
                 Err(error) => {
+                    let failure: Result<()> = Err(error);
+                    #[cfg(feature = "experimental-structural-cuts")]
+                    self.poison_if_failed_after_a_change(transaction, releases, &failure)?;
                     let _ = self.abort(transaction);
-                    return Err(error);
+                    return Err(failure.unwrap_err());
                 }
             };
             if let Err(error) = self
@@ -1612,8 +1619,11 @@ impl PagedStore {
                 .insert(key, &replacement_head.encode())
                 .and_then(|_| self.sync_roots())
             {
+                let failure: Result<()> = Err(error);
+                #[cfg(feature = "experimental-structural-cuts")]
+                self.poison_if_failed_after_a_change(transaction, releases, &failure)?;
                 let _ = self.abort(transaction);
-                return Err(error);
+                return Err(failure.unwrap_err());
             }
             (transaction, replacement_head, inspection)
         };
@@ -2628,6 +2638,15 @@ impl PagedStore {
         field: HeaderStampField,
         expected: Xid,
     ) -> Result<HeaderRepair> {
+        self.experimental_maintenance(|| self.repair_version_header_stamp_inner(key, field, expected))
+    }
+
+    fn repair_version_header_stamp_inner(
+        &self,
+        key: &[u8],
+        field: HeaderStampField,
+        expected: Xid,
+    ) -> Result<HeaderRepair> {
         if expected == 0 {
             return Err(PageError::HeaderRepairRefused {
                 key: String::from_utf8_lossy(key).into_owned(),
@@ -3256,6 +3275,15 @@ impl PagedStore {
         &self,
         cursor: VacuumCursor,
         limits: VacuumLimits,
+        time_exhausted: impl FnMut() -> bool,
+    ) -> Result<VacuumReport> {
+        self.experimental_maintenance(|| self.vacuum_step_with_expiry_inner(cursor, limits, time_exhausted))
+    }
+
+    fn vacuum_step_with_expiry_inner(
+        &self,
+        cursor: VacuumCursor,
+        limits: VacuumLimits,
         mut time_exhausted: impl FnMut() -> bool,
     ) -> Result<VacuumReport> {
         limits.validate(self.pool.page_size())?;
@@ -3312,6 +3340,8 @@ impl PagedStore {
                 report.next_cursor.next_page_id = Some(page_id);
                 break;
             }
+            #[cfg(feature = "experimental-structural-cuts")]
+            self.admit_write(0)?;
             report.pages_scanned += 1;
             report.bytes_examined += page_size;
 
@@ -3490,6 +3520,10 @@ impl PagedStore {
     /// interleave, so remove-while-iterating is safe via the two-phase
     /// collect-then-remove below. Returns the number of keys removed.
     pub fn sweep_dead_index_entries(&self, max_keys: usize) -> Result<u64> {
+        self.experimental_maintenance(|| self.sweep_dead_index_entries_inner(max_keys))
+    }
+
+    fn sweep_dead_index_entries_inner(&self, max_keys: usize) -> Result<u64> {
         let _guard = self.write_lock.lock();
         let _structure = self.structure.write();
         // Phase 1: collect removable keys (bounded).
@@ -3516,14 +3550,33 @@ impl PagedStore {
         // Phase 2: remove.
         let mut removed = 0u64;
         for key in &removable {
+            #[cfg(feature = "experimental-structural-cuts")]
+            self.admit_write(0)?;
             if self.index.remove(key)? {
                 removed += 1;
             }
+            #[cfg(feature = "experimental-structural-cuts")]
+            self.sync_roots()?;
         }
         if removed > 0 {
             self.sync_roots()?;
         }
         Ok(removed)
+    }
+
+    /// Every maintenance mutation must either finish a complete structure,
+    /// or fence before a later cut could persist its partial result.
+    fn experimental_maintenance<T>(&self, operation: impl FnOnce() -> Result<T>) -> Result<T> {
+        #[cfg(feature = "experimental-structural-cuts")]
+        let _guard = self.write_lock.lock();
+        #[cfg(feature = "experimental-structural-cuts")]
+        self.admit_write(0)?;
+        #[cfg(feature = "experimental-structural-cuts")]
+        let releases = self.pool.write_guard_releases();
+        let result = operation();
+        #[cfg(feature = "experimental-structural-cuts")]
+        self.poison_if_failed_after_a_change(0, releases, &result)?;
+        result
     }
 
     /// Log after-images for pages modified since their last record.

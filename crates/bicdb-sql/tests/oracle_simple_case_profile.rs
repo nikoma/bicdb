@@ -305,3 +305,73 @@ fn national_and_database_case_indexes_keep_distinct_native_keys_and_uniqueness()
         assert!(db.verify_index(&native.name).unwrap().valid);
     }
 }
+
+#[test]
+fn sql_case_matches_every_saved_native_character_set_difference() {
+    use std::collections::{BTreeMap, BTreeSet};
+    let database: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../docs/evidence/oracle-simple-case-v1/oracle-reference.json"
+    ))
+    .unwrap();
+    let national: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../docs/evidence/oracle-simple-case-v1/oracle-simple-case-national-reference.json"
+    ))
+    .unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+    let mut checks = 0;
+    for direction in ["upper", "lower"] {
+        let field = format!("{direction}_changed");
+        let mapping = |reference: &serde_json::Value| {
+            reference[&field]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|pair| {
+                    (
+                        pair[0].as_u64().unwrap() as u32,
+                        pair[1].as_u64().unwrap() as u32,
+                    )
+                })
+                .collect::<BTreeMap<_, _>>()
+        };
+        let ordinary = mapping(&database);
+        let national = mapping(&national);
+        let scalars = ordinary
+            .keys()
+            .chain(national.keys())
+            .copied()
+            .collect::<BTreeSet<_>>();
+        for scalar in scalars {
+            let ordinary = *ordinary.get(&scalar).unwrap_or(&scalar);
+            let national = *national.get(&scalar).unwrap_or(&scalar);
+            if ordinary == national {
+                continue;
+            }
+            let input = char::from_u32(scalar).unwrap();
+            let sql = format!("SELECT {direction}('{input}'),{direction}(N'{input}') FROM dual");
+            let sql = bicdb_sql::oracle::lower_session_sql(
+                &db,
+                &sql,
+                ORACLE_PREVIEW_PROFILE,
+                None,
+                "bicdb",
+            )
+            .unwrap();
+            assert_eq!(
+                SqlSession::new(&mut db).execute(&sql).unwrap().rows,
+                vec![vec![
+                    SqlValue::String(char::from_u32(ordinary).unwrap().to_string()),
+                    SqlValue::String(char::from_u32(national).unwrap().to_string())
+                ]],
+                "{direction} U+{scalar:04X}"
+            );
+            checks += 1;
+        }
+    }
+    assert_eq!(
+        checks, 22,
+        "saved vendor reference changed; review both character sets"
+    );
+}

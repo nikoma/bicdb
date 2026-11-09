@@ -190,18 +190,15 @@ fn crash_recovery_never_reverses_a_live_transaction() {
     session.execute("DROP TABLE source").unwrap();
     let pending = session.take_pending_transaction().unwrap();
     drop(session);
-    assert_eq!(db.pending_transaction_count(), 1);
-    assert!(recover_interrupted_recycle_bin_renames(&mut db)
-        .unwrap_err()
-        .to_string()
-        .contains("no active transactions"));
+    assert!(db.check_catalog_recovery_quiescent().is_err());
+    assert!(recover_interrupted_recycle_bin_renames(&mut db).is_err());
     assert!(db
         .collections()
         .iter()
         .any(|meta| meta.name.starts_with("__bicdb_bin_")));
     assert!(!db.collections().iter().any(|meta| meta.name == "source"));
     drop(pending);
-    assert_eq!(db.pending_transaction_count(), 0);
+    db.check_catalog_recovery_quiescent().unwrap();
     recover_interrupted_recycle_bin_renames(&mut db).unwrap();
     assert_row(&mut db);
 }

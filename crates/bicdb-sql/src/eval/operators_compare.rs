@@ -91,6 +91,44 @@ pub(crate) fn reject_undefined_comparison(
     )))
 }
 
+pub(crate) fn reject_comparison_for_db(
+    db: &BicDb,
+    left_type: Option<&str>,
+    op: &BinaryOperator,
+    right_type: Option<&str>,
+) -> Result<()> {
+    if !matches!(
+        op,
+        BinaryOperator::Eq
+            | BinaryOperator::NotEq
+            | BinaryOperator::Lt
+            | BinaryOperator::LtEq
+            | BinaryOperator::Gt
+            | BinaryOperator::GtEq
+    ) {
+        return Ok(());
+    }
+    reject_undefined_comparison(left_type, op, right_type)?;
+    let (Some(left), Some(right)) = (left_type, right_type) else {
+        return Ok(());
+    };
+    if left == right {
+        return Ok(());
+    }
+    let left = crate::type_codec::comparison_base_type_for_db(db, left)?;
+    let right = crate::type_codec::comparison_base_type_for_db(db, right)?;
+    let numeric = |kind: &str| is_numeric_pg_type(kind) || matches!(kind, "float4" | "float8");
+    let text = |kind: &str| matches!(kind, "text" | "varchar" | "bpchar" | "name");
+    if ((numeric(&left) && text(&right)) || (text(&left) && numeric(&right)))
+        && !crate::oracle::is_oracle_database(db)?
+    {
+        return Err(SqlError::undefined_function(format!(
+            "operator does not exist: {left} {op} {right}"
+        )));
+    }
+    Ok(())
+}
+
 pub(crate) fn comparison_from_ordering(op: &BinaryOperator, ordering: Ordering) -> bool {
     match op {
         BinaryOperator::Eq => ordering == Ordering::Equal,
@@ -175,6 +213,23 @@ pub(crate) fn comparison_collation(
         (_, Some(right)) => Ok(Some(right)),
         _ => Ok(None),
     }
+}
+
+pub(crate) fn compare_values_with_collation(
+    collation: Option<&str>,
+    left: &SqlValue,
+    op: &BinaryOperator,
+    right: &SqlValue,
+) -> Option<Option<bool>> {
+    let collation = collation?;
+    if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
+        return Some(None);
+    }
+    let (SqlValue::String(left), SqlValue::String(right)) = (left, right) else {
+        return None;
+    };
+    locale_text_ordering(collation, left, right)
+        .map(|ordering| Some(comparison_from_ordering(op, ordering)))
 }
 
 pub(crate) fn expr_collation(expr: &Expr, schema: Option<&TableSchema>) -> Result<Option<String>> {
@@ -1180,6 +1235,7 @@ pub(crate) fn values_equal(left: &SqlValue, right: &SqlValue) -> bool {
 /// Resolve unknown simple-CASE literals against the other operand's type.
 /// An untyped row expression must retain its own runtime resolution.
 pub(crate) fn simple_case_expr_values_equal(
+    db: &BicDb,
     left_expr: &Expr,
     right_expr: &Expr,
     mut left: SqlValue,
@@ -1187,10 +1243,16 @@ pub(crate) fn simple_case_expr_values_equal(
     mut left_type: Option<String>,
     mut right_type: Option<String>,
 ) -> Result<bool> {
+    left_type = left_type
+        .map(|kind| crate::type_codec::comparison_base_type_for_db(db, &kind))
+        .transpose()?;
+    right_type = right_type
+        .map(|kind| crate::type_codec::comparison_base_type_for_db(db, &kind))
+        .transpose()?;
     if crate::planner::is_unknown_literal(right_expr) {
         if let Some(kind) = left_type
             .as_deref()
-            .filter(|kind| pg_comparison_kind(kind, kind).is_some())
+            .filter(|kind| *kind == "char" || pg_comparison_kind(kind, kind).is_some())
         {
             right = cast_value_to_pg_type(right, kind)?;
             right_type = left_type.clone();
@@ -1199,12 +1261,18 @@ pub(crate) fn simple_case_expr_values_equal(
     if crate::planner::is_unknown_literal(left_expr) {
         if let Some(kind) = right_type
             .as_deref()
-            .filter(|kind| pg_comparison_kind(kind, kind).is_some())
+            .filter(|kind| *kind == "char" || pg_comparison_kind(kind, kind).is_some())
         {
             left = cast_value_to_pg_type(left, kind)?;
             left_type = right_type.clone();
         }
     }
+    reject_comparison_for_db(
+        db,
+        left_type.as_deref(),
+        &BinaryOperator::Eq,
+        right_type.as_deref(),
+    )?;
     simple_case_values_equal(&left, &right, left_type.as_deref(), right_type.as_deref())
 }
 
@@ -3832,7 +3900,9 @@ pub(crate) fn pg_comparison_kind(left: &str, right: &str) -> Option<PgComparison
             "numeric" | "decimal" => Class::Numeric,
             "float4" | "real" | "float8" | "double precision" => Class::Float,
             "date" | "timestamp" | "timestamptz" => Class::Temporal,
-            "bpchar" | "character" | "char" => Class::Bpchar,
+            // Canonical `char` names PostgreSQL's internal one-byte type;
+            // SQL CHAR(n) has already normalized to bpchar.
+            "bpchar" | "character" => Class::Bpchar,
             "varchar" | "character varying" => Class::Varchar,
             "text" | "name" => Class::Text,
             "bool" | "boolean" => Class::Bool,

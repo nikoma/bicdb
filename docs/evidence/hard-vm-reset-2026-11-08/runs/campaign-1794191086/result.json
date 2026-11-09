@@ -1,0 +1,331 @@
+{
+  "format": 1,
+  "seed": 861250,
+  "source": "1a9e3d56",
+  "experimental": true,
+  "physical_power_loss": false,
+  "hard_vm_reset": true,
+  "guest_ram_mb": 4096,
+  "server_binary_sha256": "2e3dc4a0a29350e4a18ffdf99143701e1ca2dbc72067b51e935201777550ada9",
+  "acknowledged": 2089,
+  "attempted": 2097,
+  "native_transaction_ids_recorded": true,
+  "commit_attempts": 2092,
+  "ddl_tables_attempted": 22,
+  "failures": [
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 18,
+      "second": 2044,
+      "native_transaction_id": "24"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 19,
+      "second": 2043,
+      "native_transaction_id": "25"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 17,
+      "second": 2042,
+      "native_transaction_id": "23"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 22,
+      "second": 2045,
+      "native_transaction_id": "28"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 28,
+      "second": 2049,
+      "native_transaction_id": "34"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 26,
+      "second": 2048,
+      "native_transaction_id": "32"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 29,
+      "second": 2046,
+      "native_transaction_id": "35"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 27,
+      "second": 2047,
+      "native_transaction_id": "33"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 35,
+      "second": 2052,
+      "native_transaction_id": "41"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 33,
+      "second": 2050,
+      "native_transaction_id": "39"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 34,
+      "second": 2051,
+      "native_transaction_id": "40"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 36,
+      "second": 2053,
+      "native_transaction_id": "42"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 42,
+      "second": 2056,
+      "native_transaction_id": "48"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 43,
+      "second": 2057,
+      "native_transaction_id": "49"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 41,
+      "second": 2054,
+      "native_transaction_id": "47"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 40,
+      "second": 2055,
+      "native_transaction_id": "46"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 52,
+      "second": 2059,
+      "native_transaction_id": "58"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 49,
+      "second": 2060,
+      "native_transaction_id": "55"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 50,
+      "second": 2061,
+      "native_transaction_id": "56"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 51,
+      "second": 2058,
+      "native_transaction_id": "57"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 59,
+      "second": 2065,
+      "native_transaction_id": "65"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 57,
+      "second": 2063,
+      "native_transaction_id": "63"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 58,
+      "second": 2064,
+      "native_transaction_id": "64"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 56,
+      "second": 2062,
+      "native_transaction_id": "62"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 65,
+      "second": 2068,
+      "native_transaction_id": "71"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 63,
+      "second": 2067,
+      "native_transaction_id": "69"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 66,
+      "second": 2069,
+      "native_transaction_id": "72"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 64,
+      "second": 2066,
+      "native_transaction_id": "70"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 73,
+      "second": 2070,
+      "native_transaction_id": "79"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 72,
+      "second": 2072,
+      "native_transaction_id": "78"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 74,
+      "second": 2073,
+      "native_transaction_id": "80"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 75,
+      "second": 2071,
+      "native_transaction_id": "81"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 80,
+      "second": 2074,
+      "native_transaction_id": "86"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 82,
+      "second": 2075,
+      "native_transaction_id": "88"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 81,
+      "second": 2077,
+      "native_transaction_id": "87"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 79,
+      "second": 2076,
+      "native_transaction_id": "85"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 87,
+      "second": 2081,
+      "native_transaction_id": "93"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 86,
+      "second": 2080,
+      "native_transaction_id": "92"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 88,
+      "second": 2078,
+      "native_transaction_id": "94"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 89,
+      "second": 2079,
+      "native_transaction_id": "95"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 94,
+      "second": 2083,
+      "native_transaction_id": "100"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 95,
+      "second": 2085,
+      "native_transaction_id": "101"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 92,
+      "second": 2084,
+      "native_transaction_id": "98"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 93,
+      "second": 2082,
+      "native_transaction_id": "99"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 102,
+      "second": 2089,
+      "native_transaction_id": "108"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 99,
+      "second": 2088,
+      "native_transaction_id": "105"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 100,
+      "second": 2087,
+      "native_transaction_id": "106"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 101,
+      "second": 2086,
+      "native_transaction_id": "107"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 109,
+      "second": 2092,
+      "native_transaction_id": "115"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 106,
+      "second": 2093,
+      "native_transaction_id": "112"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 108,
+      "second": 2091,
+      "native_transaction_id": "114"
+    },
+    {
+      "kind": "acknowledged-native-txid-reused",
+      "first": 107,
+      "second": 2090,
+      "native_transaction_id": "113"
+    }
+  ],
+  "initial_backup_restore_verified": true,
+  "complete": false
+}

@@ -1,0 +1,632 @@
+{
+  "scope": "Paired all-logs indexed insert/hot-update microbenchmark; not application acceptance, independent acknowledgment-ledger crash proof, physical power-loss qualification, or a universal no-regression bound. All 18 runs retained, no outlier exclusions. Agent jobs were coordinated quiet; shared-host I/O pressure remained measurable.",
+  "complete": true,
+  "runs": 18,
+  "planned_sigabrt_runs": 18,
+  "successful_recoveries": 36,
+  "source": {
+    "main": "0af1b55e3d586d4a6933098419e7ee46a7ae5a79",
+    "candidate": "6d225c1940cf13ffbb7693f8ebc2917e5abaad82"
+  },
+  "start_utc": "2026-11-09T06:14:02.561215+00:00",
+  "end_utc": "2026-11-09T06:19:06.965150+00:00",
+  "groups": [
+    {
+      "writers": 1,
+      "sides": {
+        "main": {
+          "transactions_per_second": {
+            "values": [
+              366.31110030095834,
+              501.3175190641176,
+              166.79677411702923
+            ],
+            "median": 366.31110030095834,
+            "min": 166.79677411702923,
+            "max": 501.3175190641176
+          },
+          "commit_p50_ms": {
+            "values": [
+              2.907,
+              1.412,
+              1.64
+            ],
+            "median": 1.64,
+            "min": 1.412,
+            "max": 2.907
+          },
+          "commit_p95_ms": {
+            "values": [
+              3.564,
+              3.919,
+              22.156
+            ],
+            "median": 3.919,
+            "min": 3.564,
+            "max": 22.156
+          },
+          "commit_p99_ms": {
+            "values": [
+              3.75,
+              4.631,
+              24.263
+            ],
+            "median": 4.631,
+            "min": 3.75,
+            "max": 24.263
+          },
+          "end_page_wal_bytes_per_commit": {
+            "values": [
+              44577.58369723435,
+              44879.833000930725,
+              43522.87450039968
+            ],
+            "median": 44577.58369723435,
+            "min": 43522.87450039968,
+            "max": 44879.833000930725
+          },
+          "end_transaction_log_bytes_per_commit": {
+            "values": [
+              753.4663391557497,
+              754.1485174843771,
+              750.4344524380496
+            ],
+            "median": 753.4663391557497,
+            "min": 750.4344524380496,
+            "max": 754.1485174843771
+          },
+          "process_fs_output_blocks_per_commit": {
+            "values": [
+              114.19941775836972,
+              132.35686743784072,
+              112.30375699440448
+            ],
+            "median": 114.19941775836972,
+            "min": 112.30375699440448,
+            "max": 132.35686743784072
+          },
+          "recovery_open_ms": {
+            "values": [
+              216.72696399999998,
+              64.017971,
+              314.193575,
+              74.390299,
+              257.345202,
+              60.216677000000004
+            ],
+            "median": 145.5586315,
+            "min": 60.216677000000004,
+            "max": 314.193575
+          },
+          "io_some_stall_seconds": {
+            "values": [
+              4.919938,
+              4.870732,
+              6.845806
+            ],
+            "median": 4.919938,
+            "min": 4.870732,
+            "max": 6.845806
+          },
+          "min_host_memory_available_kib": 61774652
+        },
+        "candidate": {
+          "transactions_per_second": {
+            "values": [
+              164.59653260944404,
+              659.1360348465768,
+              298.572077380085
+            ],
+            "median": 298.572077380085,
+            "min": 164.59653260944404,
+            "max": 659.1360348465768
+          },
+          "commit_p50_ms": {
+            "values": [
+              1.651,
+              1.467,
+              3.042
+            ],
+            "median": 1.651,
+            "min": 1.467,
+            "max": 3.042
+          },
+          "commit_p95_ms": {
+            "values": [
+              22.483,
+              1.907,
+              3.612
+            ],
+            "median": 3.612,
+            "min": 1.907,
+            "max": 22.483
+          },
+          "commit_p99_ms": {
+            "values": [
+              24.684,
+              2.344,
+              3.914
+            ],
+            "median": 3.914,
+            "min": 2.344,
+            "max": 24.684
+          },
+          "end_page_wal_bytes_per_commit": {
+            "values": [
+              43487.2385581207,
+              45069.57686084142,
+              44364.89037731636
+            ],
+            "median": 44364.89037731636,
+            "min": 43487.2385581207,
+            "max": 45069.57686084142
+          },
+          "end_transaction_log_bytes_per_commit": {
+            "values": [
+              750.3600648035642,
+              754.5917273462783,
+              752.8910471087296
+            ],
+            "median": 752.8910471087296,
+            "min": 750.3600648035642,
+            "max": 754.5917273462783
+          },
+          "process_fs_output_blocks_per_commit": {
+            "values": [
+              112.18793033616849,
+              149.34546925566343,
+              113.78254074570216
+            ],
+            "median": 113.78254074570216,
+            "min": 112.18793033616849,
+            "max": 149.34546925566343
+          },
+          "recovery_open_ms": {
+            "values": [
+              149.607635,
+              52.48764,
+              294.421767,
+              51.922489,
+              242.748085,
+              70.34738899999999
+            ],
+            "median": 109.97751199999999,
+            "min": 51.922489,
+            "max": 294.421767
+          },
+          "io_some_stall_seconds": {
+            "values": [
+              7.459518,
+              4.672411,
+              4.614517
+            ],
+            "median": 4.672411,
+            "min": 4.614517,
+            "max": 7.459518
+          },
+          "min_host_memory_available_kib": 61997900
+        }
+      },
+      "paired_throughput_ratios": [
+        0.4493353667803482,
+        1.314807501794635,
+        1.7900350828763543
+      ],
+      "paired_ratio_geometric_mean": 1.018821511984301,
+      "median_tps_change_percent": -18.492211364935297
+    },
+    {
+      "writers": 16,
+      "sides": {
+        "main": {
+          "transactions_per_second": {
+            "values": [
+              320.4225861715099,
+              309.8847092570927,
+              1088.9528075888231
+            ],
+            "median": 320.4225861715099,
+            "min": 309.8847092570927,
+            "max": 1088.9528075888231
+          },
+          "commit_p50_ms": {
+            "values": [
+              39.976,
+              40.969,
+              14.672
+            ],
+            "median": 39.976,
+            "min": 14.672,
+            "max": 40.969
+          },
+          "commit_p95_ms": {
+            "values": [
+              125.124,
+              128.265,
+              17.911
+            ],
+            "median": 125.124,
+            "min": 17.911,
+            "max": 128.265
+          },
+          "commit_p99_ms": {
+            "values": [
+              222.668,
+              205.727,
+              20.452
+            ],
+            "median": 205.727,
+            "min": 20.452,
+            "max": 222.668
+          },
+          "end_page_wal_bytes_per_commit": {
+            "values": [
+              49341.42702702703,
+              49322.42476354256,
+              49989.901896024465
+            ],
+            "median": 49341.42702702703,
+            "min": 49322.42476354256,
+            "max": 49989.901896024465
+          },
+          "end_transaction_log_bytes_per_commit": {
+            "values": [
+              751.9182952182953,
+              751.8518916595012,
+              756.6136391437309
+            ],
+            "median": 751.9182952182953,
+            "min": 751.8518916595012,
+            "max": 756.6136391437309
+          },
+          "process_fs_output_blocks_per_commit": {
+            "values": [
+              117.13596673596673,
+              117.12295786758384,
+              185.90042813455656
+            ],
+            "median": 117.13596673596673,
+            "min": 117.12295786758384,
+            "max": 185.90042813455656
+          },
+          "recovery_open_ms": {
+            "values": [
+              223.9328,
+              58.677994,
+              192.88165700000002,
+              48.238377,
+              485.237234,
+              52.411653
+            ],
+            "median": 125.77982550000002,
+            "min": 48.238377,
+            "max": 485.237234
+          },
+          "io_some_stall_seconds": {
+            "values": [
+              2.58885,
+              3.051504,
+              3.53896
+            ],
+            "median": 3.051504,
+            "min": 2.58885,
+            "max": 3.53896
+          },
+          "min_host_memory_available_kib": 62077884
+        },
+        "candidate": {
+          "transactions_per_second": {
+            "values": [
+              739.6119361362415,
+              785.2820201116247,
+              1078.6093390089893
+            ],
+            "median": 785.2820201116247,
+            "min": 739.6119361362415,
+            "max": 1078.6093390089893
+          },
+          "commit_p50_ms": {
+            "values": [
+              21.104,
+              19.897,
+              14.913
+            ],
+            "median": 19.897,
+            "min": 14.913,
+            "max": 21.104
+          },
+          "commit_p95_ms": {
+            "values": [
+              26.935,
+              25.471,
+              17.744
+            ],
+            "median": 25.471,
+            "min": 17.744,
+            "max": 26.935
+          },
+          "commit_p99_ms": {
+            "values": [
+              29.447,
+              28.079,
+              20.768
+            ],
+            "median": 28.079,
+            "min": 20.768,
+            "max": 29.447
+          },
+          "end_page_wal_bytes_per_commit": {
+            "values": [
+              49737.08355067902,
+              49845.64195543506,
+              49973.384377894414
+            ],
+            "median": 49845.64195543506,
+            "min": 49737.08355067902,
+            "max": 49973.384377894414
+          },
+          "end_transaction_log_bytes_per_commit": {
+            "values": [
+              753.9125820667326,
+              754.3822756926205,
+              756.5133065761038
+            ],
+            "median": 754.3822756926205,
+            "min": 753.9125820667326,
+            "max": 756.5133065761038
+          },
+          "process_fs_output_blocks_per_commit": {
+            "values": [
+              170.1037863117187,
+              173.36880454121834,
+              185.45822784810127
+            ],
+            "median": 173.36880454121834,
+            "min": 170.1037863117187,
+            "max": 185.45822784810127
+          },
+          "recovery_open_ms": {
+            "values": [
+              369.100651,
+              65.20503599999999,
+              455.003428,
+              67.73752900000001,
+              479.90984399999996,
+              49.777682
+            ],
+            "median": 218.41909,
+            "min": 49.777682,
+            "max": 479.90984399999996
+          },
+          "io_some_stall_seconds": {
+            "values": [
+              4.0606,
+              4.265074,
+              3.937185
+            ],
+            "median": 4.0606,
+            "min": 3.937185,
+            "max": 4.265074
+          },
+          "min_host_memory_available_kib": 62057008
+        }
+      },
+      "paired_throughput_ratios": [
+        2.3082390819364886,
+        2.534110256663627,
+        0.990501453774901
+      ],
+      "paired_ratio_geometric_mean": 1.796058471973572,
+      "median_tps_change_percent": 145.0769870795854
+    },
+    {
+      "writers": 64,
+      "sides": {
+        "main": {
+          "transactions_per_second": {
+            "values": [
+              960.2703598251722,
+              556.1924851159372,
+              780.9520683714717
+            ],
+            "median": 780.9520683714717,
+            "min": 556.1924851159372,
+            "max": 960.2703598251722
+          },
+          "commit_p50_ms": {
+            "values": [
+              73.79,
+              92.892,
+              92.832
+            ],
+            "median": 92.832,
+            "min": 73.79,
+            "max": 92.892
+          },
+          "commit_p95_ms": {
+            "values": [
+              80.698,
+              230.933,
+              103.871
+            ],
+            "median": 103.871,
+            "min": 80.698,
+            "max": 230.933
+          },
+          "commit_p99_ms": {
+            "values": [
+              86.215,
+              486.482,
+              109.594
+            ],
+            "median": 109.594,
+            "min": 86.215,
+            "max": 486.482
+          },
+          "end_page_wal_bytes_per_commit": {
+            "values": [
+              53570.081138986796,
+              53419.2252709246,
+              53540.90449200575
+            ],
+            "median": 53540.90449200575,
+            "min": 53419.2252709246,
+            "max": 53570.081138986796
+          },
+          "end_transaction_log_bytes_per_commit": {
+            "values": [
+              759.3287718570738,
+              756.2018676504496,
+              757.8844429405295
+            ],
+            "median": 757.8844429405295,
+            "min": 756.2018676504496,
+            "max": 759.3287718570738
+          },
+          "process_fs_output_blocks_per_commit": {
+            "values": [
+              196.1097518833368,
+              170.1434171086004,
+              186.69283478555113
+            ],
+            "median": 186.69283478555113,
+            "min": 170.1434171086004,
+            "max": 196.1097518833368
+          },
+          "recovery_open_ms": {
+            "values": [
+              463.11395799999997,
+              53.255022,
+              350.88494,
+              66.040508,
+              403.849252,
+              68.073355
+            ],
+            "median": 209.47914749999998,
+            "min": 53.255022,
+            "max": 463.11395799999997
+          },
+          "io_some_stall_seconds": {
+            "values": [
+              3.708989,
+              3.215025,
+              3.132629
+            ],
+            "median": 3.215025,
+            "min": 3.132629,
+            "max": 3.708989
+          },
+          "min_host_memory_available_kib": 61985840
+        },
+        "candidate": {
+          "transactions_per_second": {
+            "values": [
+              951.2544841993558,
+              931.5369654623569,
+              420.9860237454701
+            ],
+            "median": 931.5369654623569,
+            "min": 420.9860237454701,
+            "max": 951.2544841993558
+          },
+          "commit_p50_ms": {
+            "values": [
+              74.919,
+              74.586,
+              119.592
+            ],
+            "median": 74.919,
+            "min": 74.586,
+            "max": 119.592
+          },
+          "commit_p95_ms": {
+            "values": [
+              82.747,
+              94.379,
+              362.087
+            ],
+            "median": 94.379,
+            "min": 82.747,
+            "max": 362.087
+          },
+          "commit_p99_ms": {
+            "values": [
+              87.425,
+              106.428,
+              427.559
+            ],
+            "median": 106.428,
+            "min": 87.425,
+            "max": 427.559
+          },
+          "end_page_wal_bytes_per_commit": {
+            "values": [
+              53567.70200892857,
+              53560.72938674229,
+              53307.88722633485
+            ],
+            "median": 53560.72938674229,
+            "min": 53307.88722633485,
+            "max": 53567.70200892857
+          },
+          "end_transaction_log_bytes_per_commit": {
+            "values": [
+              759.2663922991071,
+              759.1598723856788,
+              755.6623090250433
+            ],
+            "median": 759.1598723856788,
+            "min": 755.6623090250433,
+            "max": 759.2663922991071
+          },
+          "process_fs_output_blocks_per_commit": {
+            "values": [
+              195.76450892857142,
+              195.10074441687345,
+              146.11308867538196
+            ],
+            "median": 195.10074441687345,
+            "min": 146.11308867538196,
+            "max": 195.76450892857142
+          },
+          "recovery_open_ms": {
+            "values": [
+              466.309215,
+              55.710860000000004,
+              519.995933,
+              76.262112,
+              307.931354,
+              66.058612
+            ],
+            "median": 192.096733,
+            "min": 55.710860000000004,
+            "max": 519.995933
+          },
+          "io_some_stall_seconds": {
+            "values": [
+              3.32109,
+              3.40466,
+              2.793288
+            ],
+            "median": 3.32109,
+            "min": 2.793288,
+            "max": 3.40466
+          },
+          "min_host_memory_available_kib": 62009936
+        }
+      },
+      "paired_throughput_ratios": [
+        0.990611107035046,
+        1.674846371338836,
+        0.5390676851952734
+      ],
+      "paired_ratio_geometric_mean": 0.9634750870818694,
+      "median_tps_change_percent": 19.28222015019456
+    }
+  ],
+  "io_some_stall_seconds_all": {
+    "min": 2.58885,
+    "max": 7.459518
+  },
+  "interpretation": "Wide ranges and mixed paired directions prevent a consistent speedup or regression conclusion. Run medians are descriptive, not causal estimates. End-of-run WAL footprints are not total write amplification; process output blocks also include setup and filesystem effects. Original SQL performance assertions and real VM safety proofs are separate."
+}

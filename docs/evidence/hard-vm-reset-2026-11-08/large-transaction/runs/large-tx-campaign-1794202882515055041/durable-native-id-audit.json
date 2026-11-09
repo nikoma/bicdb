@@ -1,0 +1,15 @@
+{
+  "complete": true,
+  "scope": "Acknowledged and uncertain transactions proven committed by recovered rows and receipts; aborted/absent uncertain allocations may reuse IDs.",
+  "committed_generations": [
+    0,
+    2,
+    3
+  ],
+  "committed_native_ids": {
+    "0": "10",
+    "2": "20",
+    "3": "30"
+  },
+  "no_reuse": true
+}

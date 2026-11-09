@@ -1,0 +1,10 @@
+{
+  "source": "5d04f91f2189385ec43d0d650be05778f0acdfd1",
+  "run": "campaign-1794195817",
+  "guest_binary": "/root/bicdb-durability-s3/skr/bin/oracle-server-structural-cuts-5d04f91f-vm-qualified",
+  "guest_sha256": "0433dacf7964d86d6ba7c909c137069d38ebf9578d451f77767dc76f7df4e683",
+  "input_release_binary": "/root/bicdb-durability-s3/skr/bin/oracle-server-structural-cuts-5d04f91f-release",
+  "input_release_sha256": "f930850c671a5a8598c85484680682dce63cb627f5ea0452d8bb68affb37d52f",
+  "transformation": "prepare.py copies then runs GNU strip on the guest binary; qualified hash refers to actual guest bytes",
+  "complete": true
+}

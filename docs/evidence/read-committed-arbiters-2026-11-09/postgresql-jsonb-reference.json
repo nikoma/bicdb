@@ -1,0 +1,50 @@
+{
+  "reference": "PostgreSQL16.13",
+  "protected_baselines_untouched": true,
+  "cases": [
+    {
+      "primary_key": false,
+      "winner": "INSERT INTO t VALUES(1,'{\"a\":1,\"b\":2}',20)",
+      "upsert": "INSERT INTO t VALUES(2,'{\"b\":2.0,\"a\":1.00}',10) ON CONFLICT(k) DO UPDATE SET v=t.v+EXCLUDED.v RETURNING id,v",
+      "observed_wait": [
+        "Lock",
+        "transactionid"
+      ],
+      "returning": {
+        "rows": [
+          [
+            1,
+            30
+          ]
+        ]
+      },
+      "final": [
+        [
+          1,
+          30
+        ]
+      ]
+    },
+    {
+      "primary_key": true,
+      "winner": "INSERT INTO t VALUES('{\"a\":1,\"b\":2}',20)",
+      "upsert": "INSERT INTO t VALUES('{\"b\":2.0,\"a\":1.00}',10) ON CONFLICT(k) DO UPDATE SET v=t.v+EXCLUDED.v RETURNING v",
+      "observed_wait": [
+        "Lock",
+        "transactionid"
+      ],
+      "returning": {
+        "rows": [
+          [
+            30
+          ]
+        ]
+      },
+      "final": [
+        [
+          30
+        ]
+      ]
+    }
+  ]
+}

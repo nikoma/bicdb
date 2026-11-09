@@ -50,10 +50,13 @@ mod fts_query;
 mod index_build;
 mod integrity_reservations;
 mod pitr_maintenance;
+mod read_committed_reservation;
 mod row_lock_waiters;
 mod spatial_paged;
 mod transaction_receipts;
 mod transaction_suspension;
+mod unique_reservations;
+pub use read_committed_reservation::ReadCommittedRowReservation;
 mod wait_graph;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use parking_lot::{Condvar, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -3101,6 +3104,97 @@ mod snapshot_count_tests {
     use super::*;
 
     #[test]
+    fn count_does_not_parse_or_memoize_a_large_stored_pending_upsert() {
+        let directory = tempfile::tempdir().unwrap();
+        let config = DbConfig::default()
+            .with_fsync(false)
+            .with_storage_mode(StorageMode::ServerPaged);
+        let mut db = BicDb::open_with_config(directory.path(), config.clone()).unwrap();
+        db.create_collection("entries").unwrap();
+        db.insert("entries", Record::new("base")).unwrap();
+        db.close().unwrap();
+        let db = BicDb::open_with_config(directory.path(), config).unwrap();
+        assert!(db.collection_state("entries").unwrap().paged_lazy);
+        let mut tx = db.begin_transaction().unwrap();
+        let row = Arc::new(
+            StoredRecord::from_record(
+                &Record::new("pending")
+                    .with_metadata(serde_json::json!({"large": "x".repeat(4 * 1024 * 1024)})),
+            )
+            .unwrap(),
+        );
+        tx.write_stored_inserts_with_statement_snapshots("entries", [(row, db.last_commit_seq())])
+            .unwrap();
+        assert!(tx
+            .pending_writes_for_collection("entries")
+            .next()
+            .unwrap()
+            .record
+            .get()
+            .is_none());
+        let scope = crate::query_budget::QueryMemoryScope::new(64 * 1024);
+        assert_eq!(
+            tx.try_count_collection_visible_cancellable(
+                "entries",
+                &CancellationToken::uncancelable()
+            )
+            .unwrap(),
+            Some(2)
+        );
+        assert!(scope.peak_bytes() < 64 * 1024);
+        assert!(
+            tx.pending_writes_for_collection("entries")
+                .next()
+                .unwrap()
+                .record
+                .get()
+                .is_none(),
+            "COUNT parsed and retained the pending 4MiB payload outside its identity budget"
+        );
+    }
+
+    #[test]
+    fn retained_transaction_counts_report_a_recovery_fence_even_when_empty() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            for empty in [false, true] {
+                let directory = tempfile::tempdir().unwrap();
+                let config = DbConfig::default()
+                    .with_fsync(false)
+                    .with_storage_mode(mode.clone());
+                let mut db = BicDb::open_with_config(directory.path(), config.clone()).unwrap();
+                db.create_collection("entries").unwrap();
+                db.insert("entries", Record::new("base")).unwrap();
+                if empty {
+                    db.delete("entries", "base").unwrap();
+                }
+                db.close().unwrap();
+                let db = BicDb::open_with_config(directory.path(), config).unwrap();
+                let tx = db.begin_transaction().unwrap();
+                assert_eq!(
+                    tx.try_count_collection_visible_cancellable(
+                        "entries",
+                        &CancellationToken::uncancelable()
+                    )
+                    .unwrap(),
+                    Some(usize::from(!empty))
+                );
+                db.durability_health_for_test()
+                    .record_failure("test.count_fence", &"uncertain durable outcome");
+                assert!(
+                    matches!(
+                        tx.try_count_collection_visible_cancellable(
+                            "entries",
+                            &CancellationToken::uncancelable()
+                        ),
+                        Err(BicDbError::WriteFailed { .. })
+                    ),
+                    "mode={mode:?} empty={empty}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn resident_count_matches_snapshot_and_final_pending_writes() {
         let directory = tempfile::tempdir().unwrap();
         let mut db = BicDb::open_with_config(
@@ -3147,7 +3241,7 @@ mod snapshot_count_tests {
     }
 
     #[test]
-    fn lazy_paged_snapshot_count_explicitly_declines() {
+    fn lazy_paged_snapshot_count_matches_the_scan() {
         let directory = tempfile::tempdir().unwrap();
         let config = DbConfig::default()
             .with_fsync(false)
@@ -3164,7 +3258,7 @@ mod snapshot_count_tests {
                 &CancellationToken::uncancelable()
             )
             .unwrap(),
-            None
+            Some(1)
         );
         assert_eq!(tx.scan_collection("entries").unwrap().len(), 1);
     }
@@ -3863,6 +3957,7 @@ pub struct BicDb {
     // statement or trusting the catalog length alone (a rename keeps the
     // length but changes the names those caches carry).
     index_generation: AtomicU64,
+    unique_reservation_indexes: RwLock<Option<unique_reservations::UniqueIndexCache>>,
     planner_stats: PlannerStatsCatalog,
     model_registry: RwLock<FxHashMap<String, ModelRegistryEntry>>,
     memory_indexes: RwLock<FxHashMap<String, MemoryIndexDefinition>>,
@@ -4324,6 +4419,9 @@ impl Shard {
 #[derive(Debug)]
 struct CollectionState {
     meta: CollectionMeta,
+    // Runtime identity survives catalog-only moves, but a dropped/recreated
+    // backing never inherits a checked row capability from its old name.
+    incarnation: Arc<()>,
     /// Per-key-hash stripes (see [`SHARD_COUNT`]). Box<[..]> so the count is fixed
     /// after construction. Each shard has its own lock; commits to disjoint keys
     /// take only their shards' write locks and proceed concurrently.
@@ -4373,6 +4471,7 @@ impl CollectionState {
             .into_boxed_slice();
         Self {
             meta,
+            incarnation: Arc::new(()),
             shards,
             vector_store: RwLock::new(VectorStore::default()),
             generation: AtomicU64::new(0),
@@ -4396,6 +4495,7 @@ impl CollectionState {
             .into_boxed_slice();
         Self {
             meta,
+            incarnation: Arc::new(()),
             shards,
             vector_store: RwLock::new(VectorStore::default()),
             generation: AtomicU64::new(0),
@@ -7638,6 +7738,12 @@ pub(crate) struct TxWrite {
 }
 
 impl TxWrite {
+    /// Presence only: counting a pending upsert must not expand or memoize
+    /// its stored payload merely to decide whether the row exists.
+    fn has_record_payload(&self) -> bool {
+        self.stored.is_some() || self.record.get().is_some_and(Option::is_some)
+    }
+
     /// The write's parsed record, parsed from `stored` on first use when the
     /// write was buffered in its stored form. `None` for deletes.
     pub(crate) fn record(&self) -> Result<Option<&Arc<Record>>> {
@@ -8814,6 +8920,8 @@ pub struct Transaction {
     /// exclusive database guard may install it: the owner must be able to
     /// reach COMMIT while this transaction waits.
     blocking_row_waits: Mutex<Option<crate::CancellationToken>>,
+    row_reservation_epochs: Mutex<read_committed_reservation::RowReservationEpochs>,
+    row_reservations_active: AtomicBool,
     // Own handle to the active-snapshot registry so drop can deregister this
     // transaction's snapshot (unblocking version-chain GC) without touching `db`.
     active_snapshots: Arc<ActiveSnapshots>,
@@ -9249,37 +9357,51 @@ impl IndexRecordMutation {
     /// known and disjoint from every column the index reads, on an index
     /// without a predicate or exclusion constraint (those read other columns).
     fn leaves_index_untouched(&self, definition: &IndexDefinition) -> bool {
-        let Some(changed) = self.changed.as_deref() else {
-            return false;
-        };
-        if definition.predicate.is_some() || definition.exclusion.is_some() {
-            return false;
-        }
-        let (Some(old_id), Some(new_id)) = (self.old_record.id(), self.new_record.id()) else {
-            return false;
-        };
-        if old_id != new_id {
-            return false;
-        }
-        fn base_column(field: &IndexField) -> Option<&str> {
-            match field {
-                IndexField::MetadataPath(path) => path.first().map(String::as_str),
-                IndexField::Lower(inner)
-                | IndexField::Upper(inner)
-                | IndexField::Trim(inner)
-                | IndexField::TimestampDay(inner)
-                | IndexField::Coalesce { field: inner, .. } => base_column(inner),
-                // Several base columns: treat any change as relevant.
-                IndexField::FirstNonNull(_) => None,
-                // The id cannot change here; timestamps and geometry are
-                // not top-level keys the writer accounts for.
-                IndexField::Id | IndexField::Timestamp | IndexField::Geometry => None,
-            }
-        }
-        definition.fields.iter().all(|field| {
-            base_column(field).is_some_and(|column| !changed.iter().any(|key| &**key == column))
-        })
+        index_definition_untouched(
+            definition,
+            self.old_record.id(),
+            self.new_record.id(),
+            self.changed.as_deref(),
+        )
     }
+}
+
+fn index_definition_untouched(
+    definition: &IndexDefinition,
+    old_id: Option<&str>,
+    new_id: Option<&str>,
+    changed: Option<&[Box<str>]>,
+) -> bool {
+    let Some(changed) = changed else {
+        return false;
+    };
+    if definition.predicate.is_some() || definition.exclusion.is_some() {
+        return false;
+    }
+    let (Some(old_id), Some(new_id)) = (old_id, new_id) else {
+        return false;
+    };
+    if old_id != new_id {
+        return false;
+    }
+    fn base_column(field: &IndexField) -> Option<&str> {
+        match field {
+            IndexField::MetadataPath(path) => path.first().map(String::as_str),
+            IndexField::Lower(inner)
+            | IndexField::Upper(inner)
+            | IndexField::Trim(inner)
+            | IndexField::TimestampDay(inner)
+            | IndexField::Coalesce { field: inner, .. } => base_column(inner),
+            // Several base columns: treat any change as relevant.
+            IndexField::FirstNonNull(_) => None,
+            // The id cannot change here; timestamps and geometry are
+            // not top-level keys the writer accounts for.
+            IndexField::Id | IndexField::Timestamp | IndexField::Geometry => None,
+        }
+    }
+    definition.fields.iter().all(|field| {
+        base_column(field).is_some_and(|column| !changed.iter().any(|key| &**key == column))
+    })
 }
 
 impl VectorStore {
@@ -10638,6 +10760,7 @@ impl BicDb {
             local_index_maintenance: false,
             checkpoint_boundary_seq: AtomicU64::new(0),
             index_generation: AtomicU64::new(0),
+            unique_reservation_indexes: RwLock::new(None),
             serializable_commit_admission: RwLock::new(()),
             auto_checkpoint_running: AtomicBool::new(false),
             commit_lock: Mutex::new(()),
@@ -14997,6 +15120,17 @@ impl Transaction {
         operation: MutationOperation,
         records: &[Record],
     ) -> Result<Option<crate::broker::PendingBrokerPublish>> {
+        self.authorize_mutation_with_preimage(grant_id, collection, operation, records, None)
+    }
+
+    fn authorize_mutation_with_preimage(
+        &mut self,
+        grant_id: MutationGrantId,
+        collection: &str,
+        operation: MutationOperation,
+        records: &[Record],
+        checked_preimage: Option<(&str, Option<Arc<Record>>)>,
+    ) -> Result<Option<crate::broker::PendingBrokerPublish>> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -15085,7 +15219,15 @@ impl Transaction {
                     record.id
                 )));
             }
-            let existing = self.get_visible_unchecked(collection, &record.id)?;
+            let existing = match &checked_preimage {
+                Some((id, before)) if records.len() == 1 && *id == record.id => before.clone(),
+                Some(_) => {
+                    return Err(BicDbError::TransactionConflict(
+                        "checked mutation preimage does not match its row".into(),
+                    ))
+                }
+                None => self.get_visible_unchecked(collection, &record.id)?,
+            };
             let columns = mutation_changed_columns(operation, existing.as_deref(), record);
             if operation != MutationOperation::Delete
                 && !columns.is_subset(&grant.spec.allowed_columns)
@@ -16173,10 +16315,9 @@ impl Transaction {
         self.scan_collection_visible_unchecked(collection)
     }
 
-    /// Count a resident collection at this transaction's snapshot without
-    /// decoding row payloads. The final buffered write for each key is overlaid
-    /// just as in `scan_collection`. Lazy paged collections decline explicitly:
-    /// their page-store base and resident version chains need a separate merge.
+    /// Count snapshot-visible rows without decoding row payloads. Lazy paged
+    /// rows use version-header visibility, then resident chains and the final
+    /// buffered write per key override that base exactly as in `scan_collection`.
     pub fn try_count_collection_visible_cancellable(
         &self,
         collection: &str,
@@ -16184,10 +16325,90 @@ impl Transaction {
     ) -> Result<Option<usize>> {
         cancellation.check()?;
         let db = self.db_ref();
+        db.check_recovery_state()?;
         db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
         let state = db.collection_state(collection)?;
         if state.paged_lazy {
-            return Ok(None);
+            let (Some(paged), Some(snapshot)) = (&db.paged_records, &self.paged_snapshot) else {
+                return Ok(None);
+            };
+            fn set_verdict(
+                verdicts: &mut FxHashMap<String, bool>,
+                id: &str,
+                visible: bool,
+                retained_bytes: &mut usize,
+            ) -> Result<()> {
+                if let Some(verdict) = verdicts.get_mut(id) {
+                    *verdict = visible;
+                    return Ok(());
+                }
+                if crate::query_budget::active() {
+                    // Include both tables during hash-map growth and the
+                    // initial control/allocation overhead, not row payloads.
+                    let table_overhead = if verdicts.is_empty() { 64 } else { 0 };
+                    *retained_bytes = retained_bytes
+                        .saturating_add(id.len())
+                        .saturating_add(4 * std::mem::size_of::<(String, bool)>())
+                        .saturating_add(table_overhead);
+                    crate::query_budget::observe(*retained_bytes);
+                    crate::query_budget::check()?;
+                }
+                verdicts.try_reserve(1).map_err(|_| {
+                    BicDbError::QueryMemoryLimit(
+                        "visible-count identity allocation failed".to_string(),
+                    )
+                })?;
+                verdicts.insert(id.to_owned(), visible);
+                Ok(())
+            }
+            let mut verdicts = FxHashMap::default();
+            let mut retained_bytes = 0usize;
+            let mut visited = 0usize;
+            // Release resident shard latches before walking the page store;
+            // page apply and resident publication must not invert that order.
+            {
+                for shard in state.read_all() {
+                    for versions in shard.versions.values() {
+                        if visited % 1024 == 0 {
+                            cancellation.check()?;
+                        }
+                        visited += 1;
+                        let Some(first) = versions.first() else {
+                            continue;
+                        };
+                        set_verdict(
+                            &mut verdicts,
+                            &first.record.id,
+                            visible_version(versions, self.snapshot_tx).is_some(),
+                            &mut retained_bytes,
+                        )?;
+                    }
+                }
+            }
+            for write in self.pending_writes_for_collection(collection) {
+                cancellation.check()?;
+                let visible = match write.op {
+                    TxWriteOp::Upsert if write.has_record_payload() => true,
+                    TxWriteOp::Delete => false,
+                    _ => continue,
+                };
+                set_verdict(
+                    &mut verdicts,
+                    &write.record_id,
+                    visible,
+                    &mut retained_bytes,
+                )?;
+            }
+            let mut count = 0usize;
+            for entry in paged.scan_record_visibility(snapshot, collection)? {
+                cancellation.check()?;
+                let (id, base_visible) = entry?;
+                count += usize::from(verdicts.remove(&id).unwrap_or(base_visible));
+            }
+            count += verdicts.values().filter(|visible| **visible).count();
+            cancellation.check()?;
+            db.check_recovery_state()?;
+            return Ok(Some(count));
         }
         let mut count = 0usize;
         let mut visited = 0usize;
@@ -16209,12 +16430,13 @@ impl Transaction {
                 .and_then(|versions| visible_version(versions, self.snapshot_tx))
                 .is_some();
             match write.op {
-                TxWriteOp::Upsert if !was_visible && write.record()?.is_some() => count += 1,
+                TxWriteOp::Upsert if !was_visible && write.has_record_payload() => count += 1,
                 TxWriteOp::Delete if was_visible => count -= 1,
                 _ => {}
             }
         }
         cancellation.check()?;
+        db.check_recovery_state()?;
         Ok(Some(count))
     }
 
@@ -16234,6 +16456,79 @@ impl Transaction {
     /// than relying on their potentially older transaction snapshot.
     pub fn reserve_integrity_key(&self, constraint: &str, key: &str) -> Result<()> {
         self.reserve_integrity_key_mode(constraint, key, integrity_reservations::Mode::Exclusive)
+    }
+
+    /// Wait for a constraint key using the same live wait graph as row locks.
+    /// The owner retains its key until its transaction/savepoint releases it;
+    /// cancellation, fencing and deadlocks never remove another owner's key.
+    pub fn reserve_integrity_key_cancellable(
+        &self,
+        constraint: &str,
+        key: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<()> {
+        self.reserve_integrity_key_mode_cancellable(
+            constraint,
+            key,
+            cancellation,
+            integrity_reservations::Mode::Exclusive,
+        )
+    }
+
+    fn reserve_integrity_key_shared_cancellable(
+        &self,
+        constraint: &str,
+        key: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<()> {
+        self.reserve_integrity_key_mode_cancellable(
+            constraint,
+            key,
+            cancellation,
+            integrity_reservations::Mode::Shared,
+        )
+    }
+
+    fn reserve_integrity_key_mode_cancellable(
+        &self,
+        constraint: &str,
+        key: &str,
+        cancellation: &CancellationToken,
+        mode: integrity_reservations::Mode,
+    ) -> Result<()> {
+        if self.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        let db = self.db_ref();
+        let cancellation = if let Some(actor) = &self.mutation_actor {
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|value| value.as_millis() as i64)
+                .unwrap_or_default();
+            if actor.deadline_unix_ms <= now {
+                return Err(BicDbError::QueryTimedOut);
+            }
+            Instant::now()
+                .checked_add(Duration::from_millis((actor.deadline_unix_ms - now) as u64))
+                .map(|deadline| cancellation.child_with_deadline(deadline))
+                .unwrap_or_else(|| cancellation.clone())
+        } else {
+            cancellation.clone()
+        };
+        let check_health = || db.check_recovery_state();
+        self.write_locks.integrity.reserve_cancellable(
+            self.id,
+            constraint,
+            key,
+            mode,
+            &self.locked_keys,
+            &integrity_reservations::WaitContext {
+                cancellation: &cancellation,
+                graph: &db.wait_graph,
+                suspensions: &db.transaction_suspensions,
+                check_health: &check_health,
+            },
+        )
     }
 
     /// Reserve a referenced constraint key without excluding other readers.
@@ -16955,6 +17250,7 @@ impl Transaction {
             self.db_ref()
                 .detect_buffered_write_conflicts(self, &writes)?;
         }
+        self.invalidate_row_reservation_writes(&writes);
         if !writes.is_empty() && !self.prepared_wal.is_empty() {
             self.prepared_wal.clear();
         }
@@ -17439,6 +17735,7 @@ impl Transaction {
             }
             locked.split_off(mark.lock_len)
         };
+        self.invalidate_row_reservations(&released);
         release_owned_write_locks(&self.write_locks, self.id, &released);
         Ok(())
     }
@@ -17499,6 +17796,7 @@ impl Transaction {
             !retained.contains(key)
                 && (retained.is_empty() || !integrity_reservations::is_event(key))
         });
+        self.invalidate_row_reservations(&released);
         release_owned_write_locks(&self.write_locks, self.id, &released);
         Ok(())
     }
@@ -17519,6 +17817,7 @@ impl Transaction {
             let locked = self.locked_keys.get_mut();
             locked.split_off(lock_len)
         };
+        self.invalidate_row_reservations(&released);
         release_owned_write_locks(&self.write_locks, self.id, &released);
         Ok(())
     }
@@ -17562,6 +17861,24 @@ impl Transaction {
     where
         I: IntoIterator<Item = (Record, u64)>,
     {
+        self.write_upserts_with_reservation_preimages(
+            collection,
+            records
+                .into_iter()
+                .map(|(record, snapshot)| (record, snapshot, None)),
+            enforce_legacy_access,
+        )
+    }
+
+    fn write_upserts_with_reservation_preimages<I>(
+        &mut self,
+        collection: &str,
+        records: I,
+        enforce_legacy_access: bool,
+    ) -> Result<()>
+    where
+        I: IntoIterator<Item = (Record, u64, Option<OldImage>)>,
+    {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -17585,7 +17902,7 @@ impl Transaction {
                 let state = db.collection_state(collection)?;
                 (state.meta.vector_dim, state.meta.policy.clone())
             };
-            for (mut record, statement_snapshot) in records {
+            for (mut record, statement_snapshot, previous_image) in records {
                 // Field encryption, blind indexes, and fail-closed key checks
                 // for policied collections. The pre-MVCC write path ran this in
                 // prepare_mutations; the transactional path must too, or secure
@@ -17600,6 +17917,17 @@ impl Transaction {
                 }
                 let record_id = record.id.clone();
                 validate_record(collection, &record, &mut next_dim)?;
+                let record = Arc::new(record);
+                if db.has_unique_reservation_indexes(collection) {
+                    let image = OldImage::from_record(Some(Arc::clone(&record)));
+                    let previous_image = match previous_image {
+                        Some(previous) => Some(previous),
+                        None => {
+                            self.previous_unique_reservation_image(collection, &record_id, None)?
+                        }
+                    };
+                    self.reserve_unique_image(collection, &image, previous_image.as_ref(), None)?;
+                }
                 self.lock_row_for_write(tx_id, collection, &record_id, false)?;
                 let statement_snapshot =
                     self.conflict_snapshot_for_write(collection, &record_id, statement_snapshot);
@@ -17607,7 +17935,7 @@ impl Transaction {
                     collection: collection.to_string(),
                     op: TxWriteOp::Upsert,
                     record_id,
-                    record: OnceLock::from(Some(record.into())),
+                    record: OnceLock::from(Some(record)),
                     timestamp,
                     statement_snapshot,
                     repair: None,
@@ -17782,6 +18110,20 @@ impl Transaction {
                     stored.vector.as_deref(),
                     &mut next_dim,
                 )?;
+                if db.has_unique_reservation_indexes(collection) {
+                    let image = OldImage::from_stored(Arc::clone(&stored));
+                    let previous_image = self.previous_unique_reservation_image(
+                        collection,
+                        &record_id,
+                        previous_stored.as_ref(),
+                    )?;
+                    self.reserve_unique_image(
+                        collection,
+                        &image,
+                        previous_image.as_ref(),
+                        changed.as_deref(),
+                    )?;
+                }
                 if repair.is_none() && !optimistic_inserts {
                     self.lock_row_for_write(tx_id, collection, &record_id, false)?;
                 }
@@ -17833,6 +18175,13 @@ impl Transaction {
             for (record, statement_snapshot, repair) in records {
                 let record_id = record.id.clone();
                 validate_record(collection, &record, &mut next_dim)?;
+                let record = Arc::new(record);
+                if db.has_unique_reservation_indexes(collection) {
+                    let image = OldImage::from_record(Some(Arc::clone(&record)));
+                    let previous_image =
+                        self.previous_unique_reservation_image(collection, &record_id, None)?;
+                    self.reserve_unique_image(collection, &image, previous_image.as_ref(), None)?;
+                }
                 if repair.is_none() {
                     self.lock_row_for_write(tx_id, collection, &record_id, false)?;
                 }
@@ -17842,7 +18191,7 @@ impl Transaction {
                     collection: collection.to_string(),
                     op: TxWriteOp::Upsert,
                     record_id,
-                    record: OnceLock::from(Some(record.into())),
+                    record: OnceLock::from(Some(record)),
                     timestamp,
                     statement_snapshot,
                     repair: repair.map(Arc::new),
@@ -17889,7 +18238,26 @@ impl Transaction {
         collection: &str,
         id: &str,
     ) -> Result<Option<(Option<Record>, u64)>> {
-        self.read_committed_mutation_record(collection, id, MutationOperation::Update, None)
+        self.read_committed_mutation_record(collection, id, MutationOperation::Update, None, true)
+    }
+
+    /// Reserve/recheck without parking. Executors holding an exclusive
+    /// database guard must let a row owner reach COMMIT under a shared guard,
+    /// so a busy target returns the existing retryable transaction conflict.
+    pub fn read_committed_update_record_nowait(
+        &mut self,
+        collection: &str,
+        id: &str,
+    ) -> Result<Option<(Option<Record>, u64)>> {
+        self.db_ref().check_recovery_state()?;
+        let result = self.read_committed_mutation_record(
+            collection,
+            id,
+            MutationOperation::Update,
+            None,
+            false,
+        );
+        self.fenced(result)
     }
 
     /// Grant-aware sibling of [`Self::read_committed_update_record`] used by
@@ -17902,7 +18270,13 @@ impl Transaction {
         collection: &str,
         id: &str,
     ) -> Result<Option<(Option<Record>, u64)>> {
-        self.read_committed_mutation_record(collection, id, MutationOperation::Update, Some(grant))
+        self.read_committed_mutation_record(
+            collection,
+            id,
+            MutationOperation::Update,
+            Some(grant),
+            true,
+        )
     }
 
     fn read_committed_mutation_record(
@@ -17911,6 +18285,7 @@ impl Transaction {
         id: &str,
         operation: MutationOperation,
         grant: Option<MutationGrantId>,
+        wait: bool,
     ) -> Result<Option<(Option<Record>, u64)>> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
@@ -17931,7 +18306,19 @@ impl Transaction {
             None => db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?,
         }
         db.ensure_collection(collection)?;
-        self.lock_row_for_write(tx_id, collection, id, true)?;
+        if wait {
+            self.lock_row_for_write(tx_id, collection, id, true)?;
+        } else {
+            db.lock_tx_record_with_attempts(
+                tx_id,
+                collection,
+                id,
+                0,
+                false,
+                false,
+                &self.locked_keys,
+            )?;
+        }
         let Some(max_tx) = Self::latest_committed_record_sequence(db, collection, id)? else {
             return Ok(Some((None, 0)));
         };
@@ -19665,6 +20052,8 @@ fn apply_unmaterialized_transaction_log(
             let paged_ctx = match paged {
                 Some(paged) => {
                     let _guard = paged.write_guard();
+                    // Logical replay uses the same structural admission as
+                    // every writer; durable redo never grants a steal waiver.
                     let (xid, _) = paged.begin();
                     let index_defs = paged_durable_defs
                         .get(&write.collection)
@@ -21652,12 +22041,14 @@ fn sweep_stale_spatial_generations(
         let mut after = None::<Vec<u8>>;
         loop {
             let snapshot = paged.latest_snapshot();
+            // Bound maintenance work near the normal frame budget to avoid
+            // excessive internal cuts while opening a large store.
             let keys = paged.raw_keys_with_prefix_batch_after(
                 &snapshot,
                 &prefix,
                 after.as_deref(),
-                SWEEP_BATCH_ENTRIES,
-                SWEEP_BATCH_BYTES,
+                SWEEP_BATCH_ENTRIES.min(paged.page_only_batch_writes()),
+                SWEEP_BATCH_BYTES.min(paged.page_only_batch_bytes()),
             )?;
             if keys.is_empty() {
                 break;

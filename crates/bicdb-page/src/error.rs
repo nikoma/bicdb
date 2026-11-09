@@ -14,6 +14,10 @@ pub type Result<T> = std::result::Result<T, PageError>;
 /// only being able to log.
 #[derive(Debug, thiserror::Error)]
 pub enum PageError {
+    /// Ordinary unlogged images must enter a complete structural cut before
+    /// writeback. A single-image WAL record cannot make shared structure safe.
+    #[error("page {page_id} has unlogged changes; a complete structural cut is required before writeback")]
+    UnloggedWritebackNeedsCut { page_id: PageId },
     /// A durability-critical write or sync failed earlier (or just now) and
     /// the database refuses writes until it is reopened through recovery.
     /// See `crate::health`.

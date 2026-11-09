@@ -24,6 +24,16 @@
 //! 3. **replay is idempotent** — recovering twice equals recovering once, so an
 //!    interrupted recovery is safe to restart.
 
+//! # Transactions larger than the pool
+//!
+//! The 32-frame pool is many times smaller than these transactions, so they
+//! are begun with `begin_redo_backed`: an ordinary (refusable) transaction
+//! this size is refused before it would steal (GAP-1 no-steal, see
+//! `docs/recovery-semantics.md` 14.5). The redo-backed kind is never refused
+//! and still steals as a last resort, which is the path this matrix covers;
+//! its uncommitted case (`crash_before_commit_exposes_nothing`) holds no
+//! committed keys a split could move, so it stays within what is safe.
+
 use std::fs::OpenOptions;
 use std::path::Path;
 
@@ -54,7 +64,7 @@ fn value(index: usize) -> Vec<u8> {
 
 /// Write `count` rows and commit them. Returns without checkpointing.
 fn write_committed(store: &PagedStore, range: std::ops::Range<usize>) {
-    let transaction = store.begin();
+    let (transaction, _) = store.begin_redo_backed();
     for index in range {
         store.put(transaction, &key(index), &value(index)).unwrap();
     }
@@ -96,7 +106,7 @@ fn crash_before_commit_exposes_nothing() {
         write_committed(&store, 0..40);
 
         // A second transaction that never commits.
-        let doomed = store.begin();
+        let (doomed, _) = store.begin_redo_backed();
         for index in 100..160 {
             store.put(doomed, &key(index), &value(index)).unwrap();
         }
@@ -257,7 +267,7 @@ fn updates_and_deletes_survive_a_crash_with_the_right_final_state() {
         write_committed(&store, 0..60);
         store.checkpoint().unwrap();
 
-        let transaction = store.begin();
+        let (transaction, _) = store.begin_redo_backed();
         for index in (0..60).step_by(2) {
             store
                 .put(transaction, &key(index), b"updated-value-that-is-longer")
@@ -293,7 +303,7 @@ fn large_values_survive_a_crash() {
     let big: Vec<u8> = (0..40_000).map(|i| (i % 251) as u8).collect();
     {
         let store = open(dir.path());
-        let transaction = store.begin();
+        let (transaction, _) = store.begin_redo_backed();
         store.put(transaction, b"wide", &big).unwrap();
         store.put(transaction, b"narrow", b"small").unwrap();
         store.commit(transaction).unwrap();
@@ -341,12 +351,12 @@ fn a_crash_during_a_growing_update_keeps_one_coherent_version() {
     let dir = TempDir::new().unwrap();
     {
         let store = open(dir.path());
-        let transaction = store.begin();
+        let (transaction, _) = store.begin_redo_backed();
         store.put(transaction, b"k", b"short").unwrap();
         store.commit(transaction).unwrap();
         store.checkpoint().unwrap();
 
-        let second = store.begin();
+        let (second, _) = store.begin_redo_backed();
         store.put(second, b"k", &vec![b'g'; 5_000]).unwrap();
         store.commit(second).unwrap();
     }

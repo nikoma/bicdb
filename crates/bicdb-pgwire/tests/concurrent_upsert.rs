@@ -333,19 +333,12 @@ async fn racing_plain_inserts_report_unique_violation_paged() {
     racing_plain_inserts_fail_with_unique_violation(StorageMode::ServerPaged).await;
 }
 
-/// The statement-time half of the race, made deterministic. The upsert's
-/// statement snapshot is taken, then the statement waits on an advisory lock
-/// while another transaction commits the conflict key. The upsert cannot see
-/// that row under its snapshot. That is a serialization failure (40001),
-/// which a client retries, and which an autocommit statement retries
-/// internally under a fresh snapshot. It is not a unique violation (23505).
-/// For an autocommit statement, 23505 escaped that retry and sent the
-/// statement to the exclusive path. There it waited on row locks held by
-/// transactions that could not commit until the wait budget expired, which
-/// stalled every writer for seconds.
-async fn upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failure(
-    mode: StorageMode,
-) {
+/// Establish the statement snapshot before the winner commits by waiting on
+/// an advisory lock inside INSERT SELECT. READ COMMITTED must update the
+/// snapshot-invisible winner and commit.
+/// The DO NOTHING control still skips its conflicting row without an update.
+/// This also retains coverage of the old23505-to-exclusive escalation stall.
+async fn upsert_over_a_key_committed_after_the_snapshot(mode: StorageMode) {
     let label = format!("{mode:?}");
     let root = database(mode);
     let running = start(root.path());
@@ -359,13 +352,9 @@ async fn upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failu
         .await
         .unwrap();
     let writer = connect(running.port).await;
-    for (key, action) in [
-        (
-            7,
-            "DO UPDATE SET value = excluded.value, byte_size = excluded.byte_size",
-        ),
-        (8, "DO NOTHING"),
-    ] {
+    let update = "DO UPDATE SET value = excluded.value, byte_size = excluded.byte_size";
+    let cases = vec![(7, update), (8, "DO NOTHING")];
+    for (key, action) in cases {
         writer
             .batch_execute(&format!(
                 "BEGIN; SELECT pg_advisory_xact_lock(42); \
@@ -374,7 +363,10 @@ async fn upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failu
             ))
             .await
             .unwrap();
-        reader.batch_execute("BEGIN").await.unwrap();
+        reader
+            .batch_execute("BEGIN ISOLATION LEVEL READ COMMITTED")
+            .await
+            .unwrap();
         let upsert = {
             let reader = Arc::clone(&reader);
             let sql = format!(
@@ -397,14 +389,28 @@ async fn upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failu
                     .any(|message| matches!(message, SimpleQueryMessage::CommandComplete(0))),
                 "{label} {action}: {messages:?}"
             ),
-            (_, Ok(messages)) => panic!("{label} {action}: the row is invisible: {messages:?}"),
-            (_, Err(error)) => assert_eq!(
-                error.code(),
-                Some(&tokio_postgres::error::SqlState::T_R_SERIALIZATION_FAILURE),
-                "{label} {action}: {error:?}"
+            (7, Ok(messages)) => assert!(
+                messages
+                    .iter()
+                    .any(|message| matches!(message, SimpleQueryMessage::CommandComplete(1))),
+                "{label} RC update: {messages:?}"
             ),
+            (_, Ok(messages)) => panic!("unexpected case {key}: {messages:?}"),
+            (_, Err(error)) => panic!("{label} RC upsert must succeed: {error:?}"),
         }
-        reader.batch_execute("ROLLBACK").await.unwrap();
+        reader
+            .batch_execute(if key == 7 { "COMMIT" } else { "ROLLBACK" })
+            .await
+            .unwrap();
+        assert_eq!(
+            rows(
+                &writer,
+                &format!("SELECT encode(value,'hex') FROM cache_entries WHERE key_hash={key}")
+            )
+            .await,
+            vec![vec![if key == 7 { "02" } else { "01" }.to_string()]],
+            "{label} {action}: committed payload"
+        );
     }
     assert_one_row_per_key_from(&writer, 7, 9).await;
     drop(reader);
@@ -427,17 +433,142 @@ async fn assert_one_row_per_key_from(client: &Client, first: i64, end: i64) {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failure_in_memory() {
-    upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failure(
-        StorageMode::EmbeddedMemory,
-    )
-    .await;
+async fn read_committed_secondary_upsert_uses_winner_after_statement_snapshot_memory() {
+    upsert_over_a_key_committed_after_the_snapshot(StorageMode::EmbeddedMemory).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failure_paged() {
-    upsert_over_a_key_committed_after_the_snapshot_is_a_serialization_failure(
-        StorageMode::ServerPaged,
-    )
-    .await;
+async fn read_committed_secondary_upsert_uses_winner_after_statement_snapshot_paged() {
+    upsert_over_a_key_committed_after_the_snapshot(StorageMode::ServerPaged).await;
+}
+
+/// PostgreSQL READ COMMITTED upserts wait for an uncommitted arbiter winner,
+/// then update that row even though it was absent from the statement snapshot.
+async fn read_committed_upsert_waits_for_snapshot_invisible_winner(mode: StorageMode) {
+    for commit_winner in [true, false] {
+        let root = database(mode.clone());
+        let running = start(root.path());
+        let setup = connect(running.port).await;
+        setup
+            .batch_execute("CREATE TABLE invisible_upsert(id INT PRIMARY KEY, val INT)")
+            .await
+            .unwrap();
+        let writer = connect(running.port).await;
+        writer
+            .batch_execute("BEGIN; INSERT INTO invisible_upsert VALUES(1,20)")
+            .await
+            .unwrap();
+        let reader = Arc::new(connect(running.port).await);
+        reader
+            .batch_execute(concat!(
+                "BEGIN ISOLATION LEVEL READ COMMITTED; ",
+                "INSERT INTO invisible_upsert VALUES(2,5); SAVEPOINT prior_work"
+            ))
+            .await
+            .unwrap();
+        let querying = reader.clone();
+        let mut upsert = tokio::spawn(async move {
+            querying.simple_query("INSERT INTO invisible_upsert VALUES(1,10) ON CONFLICT(id) DO UPDATE SET val=invisible_upsert.val+EXCLUDED.val RETURNING val").await
+        });
+        let early = tokio::time::timeout(std::time::Duration::from_millis(200), &mut upsert).await;
+        assert!(
+            early.is_err(),
+            "upsert must wait for the uncommitted unique winner, got {early:?}"
+        );
+        writer
+            .batch_execute(if commit_winner { "COMMIT" } else { "ROLLBACK" })
+            .await
+            .unwrap();
+        let messages = tokio::time::timeout(std::time::Duration::from_secs(10), upsert)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        let values: Vec<_> = messages
+            .into_iter()
+            .filter_map(|message| match message {
+                SimpleQueryMessage::Row(row) => Some(row.get(0).unwrap().to_string()),
+                _ => None,
+            })
+            .collect();
+        let expected = if commit_winner { "30" } else { "10" };
+        assert_eq!(values, [expected]);
+        reader.batch_execute("COMMIT").await.unwrap();
+        assert_eq!(
+            rows(&setup, "SELECT id,val FROM invisible_upsert ORDER BY id").await,
+            vec![
+                vec!["1".to_string(), expected.to_string()],
+                vec!["2".to_string(), "5".to_string()]
+            ]
+        );
+        stop(running);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn read_committed_upsert_waits_for_invisible_winner_memory() {
+    read_committed_upsert_waits_for_snapshot_invisible_winner(StorageMode::EmbeddedMemory).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn read_committed_upsert_waits_for_invisible_winner_paged() {
+    read_committed_upsert_waits_for_snapshot_invisible_winner(StorageMode::ServerPaged).await;
+}
+
+async fn reversed_composite_arbiter_waits_for_the_correct_row(mode: StorageMode) {
+    let root = database(mode);
+    let running = start(root.path());
+    let setup = connect(running.port).await;
+    setup.batch_execute("CREATE TABLE composite_upsert(a INT,b INT,v INT,PRIMARY KEY(a,b)); INSERT INTO composite_upsert VALUES(2,1,50)").await.unwrap();
+    let writer = connect(running.port).await;
+    writer
+        .batch_execute("BEGIN; INSERT INTO composite_upsert VALUES(1,2,20)")
+        .await
+        .unwrap();
+    let reader = Arc::new(connect(running.port).await);
+    reader
+        .batch_execute("BEGIN ISOLATION LEVEL READ COMMITTED")
+        .await
+        .unwrap();
+    let querying = reader.clone();
+    let mut upsert = tokio::spawn(async move {
+        querying.simple_query("INSERT INTO composite_upsert VALUES(1,2,10) ON CONFLICT(b,a) DO UPDATE SET v=composite_upsert.v+EXCLUDED.v RETURNING a,b,v").await
+    });
+    let early = tokio::time::timeout(std::time::Duration::from_millis(200), &mut upsert).await;
+    assert!(
+        early.is_err(),
+        "must reserve (1,2), not update asymmetric (2,1): {early:?}"
+    );
+    writer.batch_execute("COMMIT").await.unwrap();
+    let messages = tokio::time::timeout(std::time::Duration::from_secs(10), upsert)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let values: Vec<_> = messages
+        .into_iter()
+        .filter_map(|m| match m {
+            SimpleQueryMessage::Row(row) => Some(
+                (0..row.len())
+                    .map(|i| row.get(i).unwrap().to_string())
+                    .collect::<Vec<_>>(),
+            ),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(values, vec![vec!["1", "2", "30"]]);
+    reader.batch_execute("COMMIT").await.unwrap();
+    assert_eq!(
+        rows(&setup, "SELECT a,b,v FROM composite_upsert ORDER BY a,b").await,
+        vec![vec!["1", "2", "30"], vec!["2", "1", "50"]]
+    );
+    stop(running);
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn reversed_composite_arbiter_waits_memory() {
+    reversed_composite_arbiter_waits_for_the_correct_row(StorageMode::EmbeddedMemory).await;
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn reversed_composite_arbiter_waits_paged() {
+    reversed_composite_arbiter_waits_for_the_correct_row(StorageMode::ServerPaged).await;
 }

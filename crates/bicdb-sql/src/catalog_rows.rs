@@ -1664,18 +1664,19 @@ pub(crate) fn pg_type_rows_for_db(db: &BicDb) -> Result<Vec<BTreeMap<String, Sql
                 type_row.insert("typispreferred".to_string(), SqlValue::Bool(*preferred));
                 type_row.insert(
                     "typinput".to_string(),
-                    SqlValue::Int(routine_oid(RoutineKind::Function, input)),
+                    SqlValue::Int(named_routine_oid(db, RoutineKind::Function, input)?),
                 );
                 type_row.insert(
                     "typoutput".to_string(),
-                    SqlValue::Int(routine_oid(RoutineKind::Function, output)),
+                    SqlValue::Int(named_routine_oid(db, RoutineKind::Function, output)?),
                 );
                 type_row.insert(
                     "typreceive".to_string(),
                     SqlValue::Int(
                         receive
                             .as_deref()
-                            .map(|name| routine_oid(RoutineKind::Function, name))
+                            .map(|name| named_routine_oid(db, RoutineKind::Function, name))
+                            .transpose()?
                             .unwrap_or(0),
                     ),
                 );
@@ -1683,7 +1684,8 @@ pub(crate) fn pg_type_rows_for_db(db: &BicDb) -> Result<Vec<BTreeMap<String, Sql
                     "typsend".to_string(),
                     SqlValue::Int(
                         send.as_deref()
-                            .map(|name| routine_oid(RoutineKind::Function, name))
+                            .map(|name| named_routine_oid(db, RoutineKind::Function, name))
+                            .transpose()?
                             .unwrap_or(0),
                     ),
                 );
@@ -2377,10 +2379,11 @@ fn pg_depend_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>
     let user_types = list_user_types(db)?;
     let routine_oids = list_routines(db)?
         .into_iter()
+        .filter(|routine| routine.overload.is_none())
         .map(|routine| {
             (
                 routine.name.to_ascii_lowercase(),
-                routine_oid(routine.kind, &routine.name),
+                catalog_routine_oid(&routine),
             )
         })
         .collect::<BTreeMap<_, _>>();
@@ -2693,7 +2696,7 @@ fn pg_depend_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>
             if routine_depends_on_catalog_user_type(&routine, user_type) {
                 rows.push(dependency_row(
                     PG_PROC_CATALOG_OID,
-                    routine_oid(routine.kind, &routine.name),
+                    catalog_routine_oid(&routine),
                     0,
                     PG_TYPE_CATALOG_OID,
                     user_type.oid,
@@ -2787,7 +2790,7 @@ fn expression_routine_dependencies(expression: &str, routines: &[RoutineSchema])
         oids.extend(
             chosen
                 .into_iter()
-                .map(|routine| routine_oid(routine.kind, &routine.name)),
+                .map(|routine| catalog_routine_oid(&routine)),
         );
     }
     oids.sort_unstable();
@@ -3456,7 +3459,7 @@ fn pg_proc_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> 
             .map(|oid| oid.to_string())
             .collect::<Vec<_>>();
         let mut row = proc_row(
-            routine_oid(routine.kind, &routine.name),
+            catalog_routine_oid(&routine),
             &routine.name,
             namespace_oid(routine_schema_name(&routine)),
             routine_catalog_type_oid(db, &routine.return_type)?,
@@ -3521,7 +3524,7 @@ pub(crate) fn pg_trigger_rows_filtered(
     relids: Option<&BTreeSet<i64>>,
 ) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     let table_oids = table_oids(db);
-    Ok(list_triggers(db)?
+    list_triggers(db)?
         .into_iter()
         .filter(|trigger| catalog_name_matches(names, &trigger.name))
         .filter(|trigger| {
@@ -3532,7 +3535,7 @@ pub(crate) fn pg_trigger_rows_filtered(
             })
         })
         .map(|trigger| {
-            virtual_row([
+            Ok(virtual_row([
                 (
                     "oid",
                     SqlValue::Int(trigger_oid(&trigger.table_name, &trigger.name)),
@@ -3545,7 +3548,11 @@ pub(crate) fn pg_trigger_rows_filtered(
                 ("tgname", SqlValue::String(trigger.name.clone())),
                 (
                     "tgfoid",
-                    SqlValue::Int(routine_oid(RoutineKind::Function, &trigger.function_name)),
+                    SqlValue::Int(named_routine_oid(
+                        db,
+                        RoutineKind::Function,
+                        &trigger.function_name,
+                    )?),
                 ),
                 (
                     "tgtype",
@@ -3590,9 +3597,9 @@ pub(crate) fn pg_trigger_rows_filtered(
                 ("tgqual", SqlValue::Null),
                 ("tgoldtable", SqlValue::Null),
                 ("tgnewtable", SqlValue::Null),
-            ])
+            ]))
         })
-        .collect())
+        .collect()
 }
 
 pub(crate) fn bicdb_notification_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {

@@ -1,0 +1,218 @@
+{
+  "reference": "PostgreSQL16.13",
+  "fixture_source_sha256": "3dccb1b879cf3d50a72abfab3a06daaa6abe6e9e79c2fc8c76cf4222657e0aa8",
+  "cases": [
+    {
+      "case": "secondary",
+      "sql": {
+        "schema": "CREATE TABLE arbiter_rows(id INT PRIMARY KEY,k TEXT UNIQUE,v INT)",
+        "winner": "INSERT INTO arbiter_rows VALUES(1,'same',20)",
+        "upsert": "INSERT INTO arbiter_rows VALUES(2,'same',10) ON CONFLICT(k) DO UPDATE SET v=arbiter_rows.v+EXCLUDED.v RETURNING id,k,v",
+        "verify": "SELECT id,k,v FROM arbiter_rows ORDER BY id",
+        "waits": true
+      },
+      "observed_wait": [
+        "Lock",
+        "transactionid"
+      ],
+      "completed_before_winner_commit": false,
+      "returning": {
+        "rows": [
+          [
+            "1",
+            "same",
+            "30"
+          ]
+        ]
+      },
+      "final_rows": [
+        [
+          "1",
+          "same",
+          "30"
+        ]
+      ]
+    },
+    {
+      "case": "char_primary",
+      "sql": {
+        "schema": "CREATE TABLE arbiter_rows(id CHAR(4) PRIMARY KEY,v INT)",
+        "winner": "INSERT INTO arbiter_rows VALUES('ab',20)",
+        "upsert": "INSERT INTO arbiter_rows VALUES('ab  ',10) ON CONFLICT(id) DO UPDATE SET v=arbiter_rows.v+EXCLUDED.v RETURNING v",
+        "verify": "SELECT v FROM arbiter_rows",
+        "waits": true
+      },
+      "observed_wait": [
+        "Lock",
+        "transactionid"
+      ],
+      "completed_before_winner_commit": false,
+      "returning": {
+        "rows": [
+          [
+            "30"
+          ]
+        ]
+      },
+      "final_rows": [
+        [
+          "30"
+        ]
+      ]
+    },
+    {
+      "case": "numeric_primary",
+      "sql": {
+        "schema": "CREATE TABLE arbiter_rows(id NUMERIC(10,2) PRIMARY KEY,v INT)",
+        "winner": "INSERT INTO arbiter_rows VALUES(1.0,20)",
+        "upsert": "INSERT INTO arbiter_rows VALUES(1.00,10) ON CONFLICT(id) DO UPDATE SET v=arbiter_rows.v+EXCLUDED.v RETURNING v",
+        "verify": "SELECT v FROM arbiter_rows",
+        "waits": true
+      },
+      "observed_wait": [
+        "Lock",
+        "transactionid"
+      ],
+      "completed_before_winner_commit": false,
+      "returning": {
+        "rows": [
+          [
+            "30"
+          ]
+        ]
+      },
+      "final_rows": [
+        [
+          "30"
+        ]
+      ]
+    },
+    {
+      "case": "nulls_distinct",
+      "sql": {
+        "schema": "CREATE TABLE arbiter_rows(id INT PRIMARY KEY,k TEXT UNIQUE,v INT)",
+        "winner": "INSERT INTO arbiter_rows VALUES(1,NULL,20)",
+        "upsert": "INSERT INTO arbiter_rows VALUES(2,NULL,10) ON CONFLICT(k) DO UPDATE SET v=arbiter_rows.v+EXCLUDED.v RETURNING id,v",
+        "verify": "SELECT id,v FROM arbiter_rows ORDER BY id",
+        "waits": false
+      },
+      "observed_wait": null,
+      "completed_before_winner_commit": true,
+      "returning": {
+        "rows": [
+          [
+            "2",
+            "10"
+          ]
+        ]
+      },
+      "final_rows": [
+        [
+          "1",
+          "20"
+        ],
+        [
+          "2",
+          "10"
+        ]
+      ]
+    },
+    {
+      "case": "nulls_not_distinct",
+      "sql": {
+        "schema": "CREATE TABLE arbiter_rows(id INT PRIMARY KEY,k TEXT,v INT,CONSTRAINT arbiter_null_key UNIQUE NULLS NOT DISTINCT(k))",
+        "winner": "INSERT INTO arbiter_rows VALUES(1,NULL,20)",
+        "upsert": "INSERT INTO arbiter_rows VALUES(2,NULL,10) ON CONFLICT(k) DO UPDATE SET v=arbiter_rows.v+EXCLUDED.v RETURNING id,v",
+        "verify": "SELECT id,v FROM arbiter_rows ORDER BY id",
+        "waits": true
+      },
+      "observed_wait": [
+        "Lock",
+        "transactionid"
+      ],
+      "completed_before_winner_commit": false,
+      "returning": {
+        "rows": [
+          [
+            "1",
+            "30"
+          ]
+        ]
+      },
+      "final_rows": [
+        [
+          "1",
+          "30"
+        ]
+      ]
+    },
+    {
+      "case": "key_deleted",
+      "sql": {
+        "schema": "CREATE TABLE arbiter_rows(id INT PRIMARY KEY,k TEXT UNIQUE,v INT); INSERT INTO arbiter_rows VALUES(1,'same',20)",
+        "winner": "DELETE FROM arbiter_rows WHERE id=1",
+        "upsert": "INSERT INTO arbiter_rows VALUES(2,'same',10) ON CONFLICT(k) DO UPDATE SET v=arbiter_rows.v+EXCLUDED.v RETURNING id,k,v",
+        "verify": "SELECT id,k,v FROM arbiter_rows ORDER BY id",
+        "waits": true
+      },
+      "observed_wait": [
+        "Lock",
+        "transactionid"
+      ],
+      "completed_before_winner_commit": false,
+      "returning": {
+        "rows": [
+          [
+            "2",
+            "same",
+            "10"
+          ]
+        ]
+      },
+      "final_rows": [
+        [
+          "2",
+          "same",
+          "10"
+        ]
+      ]
+    },
+    {
+      "case": "key_moved",
+      "sql": {
+        "schema": "CREATE TABLE arbiter_rows(id INT PRIMARY KEY,k TEXT UNIQUE,v INT); INSERT INTO arbiter_rows VALUES(1,'same',20)",
+        "winner": "UPDATE arbiter_rows SET k='other' WHERE id=1",
+        "upsert": "INSERT INTO arbiter_rows VALUES(2,'same',10) ON CONFLICT(k) DO UPDATE SET v=arbiter_rows.v+EXCLUDED.v RETURNING id,k,v",
+        "verify": "SELECT id,k,v FROM arbiter_rows ORDER BY id",
+        "waits": true
+      },
+      "observed_wait": [
+        "Lock",
+        "transactionid"
+      ],
+      "completed_before_winner_commit": false,
+      "returning": {
+        "rows": [
+          [
+            "2",
+            "same",
+            "10"
+          ]
+        ]
+      },
+      "final_rows": [
+        [
+          "1",
+          "other",
+          "20"
+        ],
+        [
+          "2",
+          "same",
+          "10"
+        ]
+      ]
+    }
+  ],
+  "protected_baselines_untouched": true
+}

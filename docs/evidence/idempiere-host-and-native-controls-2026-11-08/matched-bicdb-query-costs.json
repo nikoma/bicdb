@@ -1,0 +1,754 @@
+{
+  "s3-r3": {
+    "trace": "/root/.local/state/bicdb/idempiere-reference/upstream-fastdisk-fe9-s3-r3-wj5bb5gn/remote-query-trace.jsonl",
+    "events": {
+      "query.slow": 9033
+    },
+    "top_elapsed": [
+      {
+        "query": "SELECT \"T\".\"AD_TABLE_ID\", \"C\".\"COLUMNNAME\" FROM \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" JOIN \"IDEMPIERE_QUAL\".\"AD_TABLE\" \"T\" ON \"C\".\"AD_TABLE_ID\" = \"T\".\"AD_TABLE_ID\" LEFT JOIN \"IDEMPIERE_QUAL\".\"AD_REF_TABLE\" \"R\" ON \"C\".\"AD_REFERENCE_VALUE_ID\" = \"R\".\"AD_REFERENCE_ID\" LEFT JOIN \"IDEMPIERE_QUAL\".\"AD_TABLE\" \"TR\" ON \"R\".\"AD_TABLE_ID\" = \"TR\".\"AD_TABLE_ID\" WHERE \"T\".\"ISVIEW\" = '[REDACTED]' AND \"T\".\"ISACTIVE\" = '[REDACTED]' AND \"C\".\"ISACTIVE\" = '[REDACTED]' AND ((\"C\".\"AD_REFERENCE_ID\" = [REDACTED] AND \"C\".\"COLUMNNAME\" = nullif(concat('[REDACTED]', '[REDACTED]'), '[REDACTED]')) OR (\"C\".\"AD_REFERENCE_ID\" IN ([REDACTED], [REDACTED]) AND (\"TR\".\"TABLENAME\" = '[REDACTED]' OR (\"TR\".\"TABLENAME\" IS NULL AND \"C\".\"COLUMNNAME\" = nullif(concat('[REDACTED]', '[REDACTED]'), '[REDACTED]'))))) AND \"C\".\"FKCONSTRAINTTYPE\" = '[REDACTED]'",
+        "count": 9,
+        "total_elapsed_ms": 7228,
+        "max_elapsed_ms": 854
+      },
+      {
+        "query": "SELECT \"AD_TABLE\".\"AD_TABLE_ID\" AS \"AD_TABLE_ID\", \"AD_TABLE\".\"NAME\" AS \"NAME\", \"AD_TABLE\".\"DESCRIPTION\" AS \"DESCRIPTION\", \"AD_TABLE\".\"HELP\" AS \"HELP\", \"AD_TABLE\".\"AD_WINDOW_ID\" AS \"AD_WINDOW_ID\", \"AD_TABLE\".\"AD_VAL_RULE_ID\" AS \"AD_VAL_RULE_ID\", \"AD_TABLE\".\"TABLENAME\" AS \"TABLENAME\", \"AD_TABLE\".\"LOADSEQ\" AS \"LOADSEQ\", \"AD_TABLE\".\"ACCESSLEVEL\" AS \"ACCESSLEVEL\", \"AD_TABLE\".\"AD_CLIENT_ID\" AS \"AD_CLIENT_ID\", \"AD_TABLE\".\"AD_ORG_ID\" AS \"AD_ORG_ID\", \"AD_TABLE\".\"ISACTIVE\" AS \"ISACTIVE\", \"AD_TABLE\".\"CREATED\" AS \"CREATED\", \"AD_TABLE\".\"CREATEDBY\" AS \"CREATEDBY\", \"AD_TABLE\".\"UPDATED\" AS \"UPDATED\", \"AD_TABLE\".\"UPDATEDBY\" AS \"UPDATEDBY\", \"AD_TABLE\".\"ISSECURITYENABLED\" AS \"ISSECURITYENABLED\", \"AD_TABLE\".\"ISDELETEABLE\" AS \"ISDELETEABLE\", \"AD_TABLE\".\"ISHIGHVOLUME\" AS \"ISHIGHVOLUME\", \"AD_TABLE\".\"ISVIEW\" AS \"ISVIEW\", \"AD_TABLE\".\"ENTITYTYPE\" AS \"ENTITYTYPE\", \"AD_TABLE\".\"IMPORTTABLE\" AS \"IMPORTTABLE\", \"AD_TABLE\".\"ISCHANGELOG\" AS \"ISCHANGELOG\", \"AD_TABLE\".\"REPLICATIONTYPE\" AS \"REPLICATIONTYPE\", \"AD_TABLE\".\"PO_WINDOW_ID\" AS \"PO_WINDOW_ID\", \"AD_TABLE\".\"COPYCOLUMNSFROMTABLE\" AS \"COPYCOLUMNSFROMTABLE\", \"AD_TABLE\".\"ISCENTRALLYMAINTAINED\" AS \"ISCENTRALLYMAINTAINED\", \"AD_TABLE\".\"AD_TABLE_UU\" AS \"AD_TABLE_UU\", \"AD_TABLE\".\"PROCESSING\" AS \"PROCESSING\", \"AD_TABLE\".\"DATABASEVIEWDROP\" AS \"DATABASEVIEWDROP\", \"AD_TABLE\".\"COPYCOMPONENTSFROMVIEW\" AS \"COPYCOMPONENTSFROMVIEW\", \"AD_TABLE\".\"CREATEWINDOWFROMTABLE\" AS \"CREATEWINDOWFROMTABLE\", \"AD_TABLE\".\"ISSHOWINDRILLOPTIONS\" AS \"ISSHOWINDRILLOPTIONS\", \"AD_TABLE\".\"ISPARTITION\" AS \"ISPARTITION\", \"AD_TABLE\".\"CREATEPARTITION\" AS \"CREATEPARTITION\" FROM \"IDEMPIERE_QUAL\".\"AD_TABLE\" AS \"AD_TABLE\" JOIN \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" ON (\"C\".\"AD_TABLE_ID\" = \"AD_TABLE\".\"AD_TABLE_ID\") WHERE (\"C\".\"AD_REFERENCE_ID\" = [REDACTED] AND \"C\".\"FKCONSTRAINTTYPE\" = '[REDACTED]' AND \"AD_TABLE\".\"ISVIEW\" = '[REDACTED]' AND \"C\".\"COLUMNNAME\" = '[REDACTED]') AND \"AD_TABLE\".\"ISACTIVE\" = '[REDACTED]'",
+        "count": 4,
+        "total_elapsed_ms": 3672,
+        "max_elapsed_ms": 989
+      },
+      {
+        "query": "COMMIT",
+        "count": 933,
+        "total_elapsed_ms": 3229,
+        "max_elapsed_ms": 44
+      },
+      {
+        "query": "SELECT \"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_FIELD\" AS \"AD_FIELD\" WHERE \"ISACTIVE\" = '[REDACTED]' AND \"AD_TAB_ID\" = (SELECT min(\"AD_TAB_ID\") FROM \"IDEMPIERE_QUAL\".\"AD_TAB\" AS \"AD_TAB\" WHERE \"AD_TABLE_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') AND \"ISENCRYPTED\" = '[REDACTED]' AND \"OBSCURETYPE\" IS NULL AND \"AD_COLUMN_ID\" NOT IN (SELECT \"PFI\".\"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM\" \"PFI\" WHERE \"PFI\".\"AD_PRINTFORMAT_ID\" = [REDACTED] AND \"PFI\".\"AD_COLUMN_ID\" IS NOT NULL) AND (\"AD_COLUMN_ID\" IN (SELECT \"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_REPORTVIEW_COLUMN\" AS \"AD_REPORTVIEW_COLUMN\" WHERE \"AD_REPORTVIEW_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') OR ((SELECT count(*) FROM \"IDEMPIERE_QUAL\".\"AD_REPORTVIEW_COLUMN\" AS \"AD_REPORTVIEW_COLUMN\" WHERE \"AD_REPORTVIEW_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') = [REDACTED])) ORDER BY coalesce(\"ISDISPLAYED\", '[REDACTED]') DESC, \"SORTNO\", \"SEQNO\", \"NAME\"",
+        "count": 4,
+        "total_elapsed_ms": 3135,
+        "max_elapsed_ms": 1094
+      },
+      {
+        "query": "SELECT \"AD_TABLE\".\"AD_TABLE_ID\" AS \"AD_TABLE_ID\", \"AD_TABLE\".\"NAME\" AS \"NAME\", \"AD_TABLE\".\"DESCRIPTION\" AS \"DESCRIPTION\", \"AD_TABLE\".\"HELP\" AS \"HELP\", \"AD_TABLE\".\"AD_WINDOW_ID\" AS \"AD_WINDOW_ID\", \"AD_TABLE\".\"AD_VAL_RULE_ID\" AS \"AD_VAL_RULE_ID\", \"AD_TABLE\".\"TABLENAME\" AS \"TABLENAME\", \"AD_TABLE\".\"LOADSEQ\" AS \"LOADSEQ\", \"AD_TABLE\".\"ACCESSLEVEL\" AS \"ACCESSLEVEL\", \"AD_TABLE\".\"AD_CLIENT_ID\" AS \"AD_CLIENT_ID\", \"AD_TABLE\".\"AD_ORG_ID\" AS \"AD_ORG_ID\", \"AD_TABLE\".\"ISACTIVE\" AS \"ISACTIVE\", \"AD_TABLE\".\"CREATED\" AS \"CREATED\", \"AD_TABLE\".\"CREATEDBY\" AS \"CREATEDBY\", \"AD_TABLE\".\"UPDATED\" AS \"UPDATED\", \"AD_TABLE\".\"UPDATEDBY\" AS \"UPDATEDBY\", \"AD_TABLE\".\"ISSECURITYENABLED\" AS \"ISSECURITYENABLED\", \"AD_TABLE\".\"ISDELETEABLE\" AS \"ISDELETEABLE\", \"AD_TABLE\".\"ISHIGHVOLUME\" AS \"ISHIGHVOLUME\", \"AD_TABLE\".\"ISVIEW\" AS \"ISVIEW\", \"AD_TABLE\".\"ENTITYTYPE\" AS \"ENTITYTYPE\", \"AD_TABLE\".\"IMPORTTABLE\" AS \"IMPORTTABLE\", \"AD_TABLE\".\"ISCHANGELOG\" AS \"ISCHANGELOG\", \"AD_TABLE\".\"REPLICATIONTYPE\" AS \"REPLICATIONTYPE\", \"AD_TABLE\".\"PO_WINDOW_ID\" AS \"PO_WINDOW_ID\", \"AD_TABLE\".\"COPYCOLUMNSFROMTABLE\" AS \"COPYCOLUMNSFROMTABLE\", \"AD_TABLE\".\"ISCENTRALLYMAINTAINED\" AS \"ISCENTRALLYMAINTAINED\", \"AD_TABLE\".\"AD_TABLE_UU\" AS \"AD_TABLE_UU\", \"AD_TABLE\".\"PROCESSING\" AS \"PROCESSING\", \"AD_TABLE\".\"DATABASEVIEWDROP\" AS \"DATABASEVIEWDROP\", \"AD_TABLE\".\"COPYCOMPONENTSFROMVIEW\" AS \"COPYCOMPONENTSFROMVIEW\", \"AD_TABLE\".\"CREATEWINDOWFROMTABLE\" AS \"CREATEWINDOWFROMTABLE\", \"AD_TABLE\".\"ISSHOWINDRILLOPTIONS\" AS \"ISSHOWINDRILLOPTIONS\", \"AD_TABLE\".\"ISPARTITION\" AS \"ISPARTITION\", \"AD_TABLE\".\"CREATEPARTITION\" AS \"CREATEPARTITION\" FROM \"IDEMPIERE_QUAL\".\"AD_TABLE\" AS \"AD_TABLE\" JOIN \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" ON (\"C\".\"AD_TABLE_ID\" = \"AD_TABLE\".\"AD_TABLE_ID\") WHERE (\"C\".\"AD_REFERENCE_ID\" = [REDACTED] AND \"C\".\"FKCONSTRAINTTYPE\" = '[REDACTED]' AND \"AD_TABLE\".\"ISVIEW\" = '[REDACTED]' AND \"C\".\"COLUMNNAME\" = '[REDACTED]' AND (\"AD_TABLE\".\"TABLENAME\" IN ('[REDACTED]', '[REDACTED]'))) AND \"AD_TABLE\".\"ISACTIVE\" = '[REDACTED]'",
+        "count": 2,
+        "total_elapsed_ms": 1838,
+        "max_elapsed_ms": 969
+      },
+      {
+        "query": "SELECT \"AD_TABLE\".\"AD_TABLE_ID\" AS \"AD_TABLE_ID\", \"AD_TABLE\".\"NAME\" AS \"NAME\", \"AD_TABLE\".\"DESCRIPTION\" AS \"DESCRIPTION\", \"AD_TABLE\".\"HELP\" AS \"HELP\", \"AD_TABLE\".\"AD_WINDOW_ID\" AS \"AD_WINDOW_ID\", \"AD_TABLE\".\"AD_VAL_RULE_ID\" AS \"AD_VAL_RULE_ID\", \"AD_TABLE\".\"TABLENAME\" AS \"TABLENAME\", \"AD_TABLE\".\"LOADSEQ\" AS \"LOADSEQ\", \"AD_TABLE\".\"ACCESSLEVEL\" AS \"ACCESSLEVEL\", \"AD_TABLE\".\"AD_CLIENT_ID\" AS \"AD_CLIENT_ID\", \"AD_TABLE\".\"AD_ORG_ID\" AS \"AD_ORG_ID\", \"AD_TABLE\".\"ISACTIVE\" AS \"ISACTIVE\", \"AD_TABLE\".\"CREATED\" AS \"CREATED\", \"AD_TABLE\".\"CREATEDBY\" AS \"CREATEDBY\", \"AD_TABLE\".\"UPDATED\" AS \"UPDATED\", \"AD_TABLE\".\"UPDATEDBY\" AS \"UPDATEDBY\", \"AD_TABLE\".\"ISSECURITYENABLED\" AS \"ISSECURITYENABLED\", \"AD_TABLE\".\"ISDELETEABLE\" AS \"ISDELETEABLE\", \"AD_TABLE\".\"ISHIGHVOLUME\" AS \"ISHIGHVOLUME\", \"AD_TABLE\".\"ISVIEW\" AS \"ISVIEW\", \"AD_TABLE\".\"ENTITYTYPE\" AS \"ENTITYTYPE\", \"AD_TABLE\".\"IMPORTTABLE\" AS \"IMPORTTABLE\", \"AD_TABLE\".\"ISCHANGELOG\" AS \"ISCHANGELOG\", \"AD_TABLE\".\"REPLICATIONTYPE\" AS \"REPLICATIONTYPE\", \"AD_TABLE\".\"PO_WINDOW_ID\" AS \"PO_WINDOW_ID\", \"AD_TABLE\".\"COPYCOLUMNSFROMTABLE\" AS \"COPYCOLUMNSFROMTABLE\", \"AD_TABLE\".\"ISCENTRALLYMAINTAINED\" AS \"ISCENTRALLYMAINTAINED\", \"AD_TABLE\".\"AD_TABLE_UU\" AS \"AD_TABLE_UU\", \"AD_TABLE\".\"PROCESSING\" AS \"PROCESSING\", \"AD_TABLE\".\"DATABASEVIEWDROP\" AS \"DATABASEVIEWDROP\", \"AD_TABLE\".\"COPYCOMPONENTSFROMVIEW\" AS \"COPYCOMPONENTSFROMVIEW\", \"AD_TABLE\".\"CREATEWINDOWFROMTABLE\" AS \"CREATEWINDOWFROMTABLE\", \"AD_TABLE\".\"ISSHOWINDRILLOPTIONS\" AS \"ISSHOWINDRILLOPTIONS\", \"AD_TABLE\".\"ISPARTITION\" AS \"ISPARTITION\", \"AD_TABLE\".\"CREATEPARTITION\" AS \"CREATEPARTITION\" FROM \"IDEMPIERE_QUAL\".\"AD_TABLE\" AS \"AD_TABLE\" JOIN \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" ON (\"C\".\"AD_TABLE_ID\" = \"AD_TABLE\".\"AD_TABLE_ID\") WHERE (\"C\".\"AD_REFERENCE_ID\" = [REDACTED] AND \"C\".\"FKCONSTRAINTTYPE\" = '[REDACTED]' AND \"AD_TABLE\".\"ISVIEW\" = '[REDACTED]' AND \"C\".\"COLUMNNAME\" = '[REDACTED]' AND (\"AD_TABLE\".\"TABLENAME\" NOT IN ('[REDACTED]', '[REDACTED]'))) AND \"AD_TABLE\".\"ISACTIVE\" = '[REDACTED]'",
+        "count": 2,
+        "total_elapsed_ms": 1806,
+        "max_elapsed_ms": 909
+      },
+      {
+        "query": "INSERT INTO \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM_TRL\" (\"AD_LANGUAGE\", \"AD_PRINTFORMATITEM_ID\", \"NAME\", \"PRINTNAME\", \"PRINTNAMESUFFIX\", \"ISTRANSLATED\", \"AD_CLIENT_ID\", \"AD_ORG_ID\", \"CREATED\", \"CREATEDBY\", \"UPDATED\", \"UPDATEDBY\", \"AD_PRINTFORMATITEM_TRL_UU\") SELECT \"L\".\"AD_LANGUAGE\", \"T\".\"AD_PRINTFORMATITEM_ID\", \"T\".\"NAME\", \"T\".\"PRINTNAME\", \"T\".\"PRINTNAMESUFFIX\", CASE WHEN \"L\".\"AD_LANGUAGE\" = \"C\".\"AD_LANGUAGE\" THEN '[REDACTED]' ELSE '[REDACTED]' END AS \"ISTRANSLATED\", \"T\".\"AD_CLIENT_ID\", \"T\".\"AD_ORG_ID\", \"T\".\"CREATED\", \"T\".\"CREATEDBY\", \"T\".\"UPDATED\", \"T\".\"UPDATEDBY\", \"GENERATE_UUID\"() FROM \"IDEMPIERE_QUAL\".\"AD_LANGUAGE\" \"L\", \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM\" \"T\", \"IDEMPIERE_QUAL\".\"AD_CLIENT\" \"C\" WHERE \"T\".\"AD_CLIENT_ID\" = \"C\".\"AD_CLIENT_ID\" AND \"L\".\"ISACTIVE\" = '[REDACTED]' AND \"L\".\"ISSYSTEMLANGUAGE\" = '[REDACTED]' AND \"L\".\"ISBASELANGUAGE\" = '[REDACTED]' AND \"T\".\"AD_PRINTFORMATITEM_ID\" = [REDACTED] AND NOT EXISTS (SELECT * FROM \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM_TRL\" \"TT\" WHERE \"TT\".\"AD_LANGUAGE\" = \"L\".\"AD_LANGUAGE\" AND \"TT\".\"AD_PRINTFORMATITEM_ID\" = \"T\".\"AD_PRINTFORMATITEM_ID\")",
+        "count": 281,
+        "total_elapsed_ms": 940,
+        "max_elapsed_ms": 16
+      },
+      {
+        "query": "UPDATE \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM_TRL\" AS \"AD_PRINTFORMATITEM_TRL\" SET \"PRINTNAME\" = (SELECT \"E\".\"PRINTNAME\" FROM \"IDEMPIERE_QUAL\".\"AD_ELEMENT_TRL\" \"E\", \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" WHERE \"E\".\"AD_LANGUAGE\" = \"AD_PRINTFORMATITEM_TRL\".\"AD_LANGUAGE\" AND \"E\".\"AD_ELEMENT_ID\" = \"C\".\"AD_ELEMENT_ID\" AND \"C\".\"AD_COLUMN_ID\" = [REDACTED]) WHERE \"AD_PRINTFORMATITEM_ID\" = [REDACTED] AND EXISTS (SELECT * FROM \"IDEMPIERE_QUAL\".\"AD_ELEMENT_TRL\" \"E\", \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" WHERE \"E\".\"AD_LANGUAGE\" = \"AD_PRINTFORMATITEM_TRL\".\"AD_LANGUAGE\" AND \"E\".\"AD_ELEMENT_ID\" = \"C\".\"AD_ELEMENT_ID\" AND \"C\".\"AD_COLUMN_ID\" = [REDACTED] AND \"AD_PRINTFORMATITEM_TRL\".\"AD_PRINTFORMATITEM_ID\" = [REDACTED]) AND EXISTS (SELECT * FROM \"IDEMPIERE_QUAL\".\"AD_CLIENT\" AS \"AD_CLIENT\" WHERE \"AD_CLIENT_ID\" = \"AD_PRINTFORMATITEM_TRL\".\"AD_CLIENT_ID\" AND \"ISMULTILINGUALDOCUMENT\" = '[REDACTED]')",
+        "count": 281,
+        "total_elapsed_ms": 912,
+        "max_elapsed_ms": 131
+      },
+      {
+        "query": "SELECT c.oid, a.attnum, a.attname, c.relname, n.nspname, a.attnotnull OR (t.typtype = '[REDACTED]' AND t.typnotnull), a.attidentity != '[REDACTED]' OR pg_catalog.pg_get_expr(d.adbin, d.adrelid) LIKE '[REDACTED]' FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON (c.relnamespace = n.oid) JOIN pg_catalog.pg_attribute a ON (c.oid = a.attrelid) JOIN pg_catalog.pg_type t ON (a.atttypid = t.oid) LEFT JOIN pg_catalog.pg_attrdef d ON (d.adrelid = a.attrelid AND d.adnum = a.attnum) JOIN (SELECT [REDACTED] AS oid , [REDACTED] AS attnum UNION ALL SELECT [REDACTED], [REDACTED] UNION ALL SELECT [REDACTED], [REDACTED] UNION ALL SELECT [REDACTED], [REDACTED]) vals ON (c.oid = vals.oid AND a.attnum = vals.attnum) where c.oid in ([REDACTED])",
+        "count": 1,
+        "total_elapsed_ms": 886,
+        "max_elapsed_ms": 886
+      },
+      {
+        "query": "SELECT \"TABLENAME\" FROM \"IDEMPIERE_QUAL\".\"AD_TABLE\" AS \"AD_TABLE\" WHERE \"AD_TABLE_ID\" IN (SELECT \"AD_TABLE_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_COLUMN\" AS \"AD_COLUMN\" WHERE \"COLUMNNAME\" = '[REDACTED]') ORDER BY \"TABLENAME\"",
+        "count": 1,
+        "total_elapsed_ms": 771,
+        "max_elapsed_ms": 771
+      },
+      {
+        "query": "UPDATE \"IDEMPIERE_QUAL\".\"AD_SEQUENCE\" AS \"AD_SEQUENCE\" SET \"CURRENTNEXT\" = \"CURRENTNEXT\" + [REDACTED] WHERE \"AD_SEQUENCE_ID\" = [REDACTED]",
+        "count": 304,
+        "total_elapsed_ms": 613,
+        "max_elapsed_ms": 134
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_MIGRATIONSCRIPT\" ALTER COLUMN \"SCRIPT\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 557,
+        "max_elapsed_ms": 557
+      },
+      {
+        "query": "SELECT \"AD_TABLE_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_TABLE\" AS \"AD_TABLE\" WHERE (\"ISCHANGELOG\" = '[REDACTED]' OR EXISTS (SELECT * FROM \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" WHERE \"AD_TABLE\".\"AD_TABLE_ID\" = \"C\".\"AD_TABLE_ID\" AND \"C\".\"COLUMNNAME\" = '[REDACTED]')) ORDER BY \"AD_TABLE_ID\"",
+        "count": 1,
+        "total_elapsed_ms": 503,
+        "max_elapsed_ms": 503
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_ALERTPROCESSORLOG\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 402,
+        "max_elapsed_ms": 402
+      },
+      {
+        "query": "DELETE FROM \"IDEMPIERE_QUAL\".\"AD_PINSTANCE\" AS \"AD_PINSTANCE\" WHERE \"AD_PINSTANCE_ID\" = [REDACTED]",
+        "count": 4,
+        "total_elapsed_ms": 383,
+        "max_elapsed_ms": 138
+      },
+      {
+        "query": "DELETE FROM \"IDEMPIERE_QUAL\".\"AD_PRINTFORMAT\" AS \"AD_PRINTFORMAT\" WHERE \"AD_PRINTFORMAT_ID\" = [REDACTED]",
+        "count": 1,
+        "total_elapsed_ms": 362,
+        "max_elapsed_ms": 362
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"CREATE$JAVA$LOB$TABLE\" ALTER COLUMN \"LOB\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 356,
+        "max_elapsed_ms": 356
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_IMAGE\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 341,
+        "max_elapsed_ms": 341
+      },
+      {
+        "query": "INSERT INTO \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM\" (\"SEQNO\", \"NAME\", \"CREATED\", \"ISNEXTLINE\", \"AD_CLIENT_ID\", \"PRINTNAME\", \"YSPACE\", \"SORTNO\", \"AD_COLUMN_ID\", \"ISPAGEBREAK\", \"ISRELATIVEPOSITION\", \"UPDATEDBY\", \"MAXWIDTH\", \"AD_PRINTFORMATITEM_ID\", \"CREATEDBY\", \"ISSUMMARIZED\", \"YPOSITION\", \"UPDATED\", \"AD_PRINTFORMAT_ID\", \"AD_ORG_ID\", \"XSPACE\", \"ISACTIVE\", \"ISHEIGHTONELINE\", \"MAXHEIGHT\", \"XPOSITION\", \"FIELDALIGNMENTTYPE\", \"ISPRINTED\", \"ISORDERBY\", \"ISGROUPBY\", \"LINEALIGNMENTTYPE\", \"PRINTFORMATTYPE\", \"PRINTAREATYPE\", \"IMAGEISATTACHED\", \"ISCOUNTED\", \"ISAVERAGED\", \"ISSUPPRESSNULL\", \"ISSETNLPOSITION\", \"ISNEXTPAGE\", \"ISFIXEDWIDTH\", \"ISMAXCALC\", \"ISRUNNINGTOTAL\", \"ISMINCALC\", \"ISVARIANCECALC\", \"ISDEVIATIONCALC\", \"ISFILLEDRECTANGLE\", \"LINEWIDTH\", \"ARCDIAMETER\", \"SHAPETYPE\", \"ISCENTRALLYMAINTAINED\", \"ISIMAGEFIELD\", \"AD_PRINTFORMATITEM_UU\") VALUES ([REDACTED], '[REDACTED]', CAST('[REDACTED]' AS timestamp without time zone), '[REDACTED]', [REDACTED], '[REDACTED]', [REDACTED], [REDACTED], [REDACTED], '[REDACTED]', '[REDACTED]', [REDACTED], [REDACTED], [REDACTED], [REDACTED], '[REDACTED]', [REDACTED], CAST('[REDACTED]' AS timestamp without time zone), [REDACTED], [REDACTED], [REDACTED], '[REDACTED]', '[REDACTED]', [REDACTED], [REDACTED], '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', [REDACTED], [REDACTED], '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]')",
+        "count": 235,
+        "total_elapsed_ms": 301,
+        "max_elapsed_ms": 4
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_ARCHIVE\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 291,
+        "max_elapsed_ms": 291
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"TEST\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 286,
+        "max_elapsed_ms": 286
+      },
+      {
+        "query": "UPDATE \"IDEMPIERE_QUAL\".\"AD_PROCESS\" AS \"AD_PROCESS\" SET \"STATISTIC_COUNT\" = \"STATISTIC_COUNT\" + [REDACTED], \"STATISTIC_SECONDS\" = \"STATISTIC_SECONDS\" + [REDACTED] WHERE \"AD_PROCESS_ID\" = [REDACTED]",
+        "count": 9,
+        "total_elapsed_ms": 280,
+        "max_elapsed_ms": 132
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_ATTACHMENT\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 275,
+        "max_elapsed_ms": 275
+      },
+      {
+        "query": "SELECT \"n\".\"nspname\",\"p\".\"proname\",\"p\".\"prosrc\" FROM \"pg_catalog\".\"pg_proc\" AS \"p\" JOIN \"pg_catalog\".\"pg_namespace\" AS \"n\" ON \"n\".\"oid\"=\"p\".\"pronamespace\" WHERE \"n\".\"nspname\" NOT IN ('[REDACTED]','[REDACTED]')",
+        "count": 2,
+        "total_elapsed_ms": 257,
+        "max_elapsed_ms": 136
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_SCHEDULERLOG\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 245,
+        "max_elapsed_ms": 245
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"C_ACCTPROCESSORLOG\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 238,
+        "max_elapsed_ms": 238
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"IMP_PROCESSORLOG\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 232,
+        "max_elapsed_ms": 232
+      },
+      {
+        "query": "SELECT \"attrelid\",\"attname\",\"atttypid\",\"atttypmod\" FROM \"pg_catalog\".\"pg_attribute\" WHERE NOT \"attisdropped\"",
+        "count": 1,
+        "total_elapsed_ms": 231,
+        "max_elapsed_ms": 231
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_WORKFLOWPROCESSORLOG\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 231,
+        "max_elapsed_ms": 231
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"R_REQUESTPROCESSORLOG\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 230,
+        "max_elapsed_ms": 230
+      }
+    ]
+  },
+  "s3-r4": {
+    "trace": "/root/.local/state/bicdb/idempiere-reference/upstream-fastdisk-fe9-s3-r4-476etctx/remote-query-trace.jsonl",
+    "events": {
+      "query.slow": 9062
+    },
+    "top_elapsed": [
+      {
+        "query": "SELECT \"T\".\"AD_TABLE_ID\", \"C\".\"COLUMNNAME\" FROM \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" JOIN \"IDEMPIERE_QUAL\".\"AD_TABLE\" \"T\" ON \"C\".\"AD_TABLE_ID\" = \"T\".\"AD_TABLE_ID\" LEFT JOIN \"IDEMPIERE_QUAL\".\"AD_REF_TABLE\" \"R\" ON \"C\".\"AD_REFERENCE_VALUE_ID\" = \"R\".\"AD_REFERENCE_ID\" LEFT JOIN \"IDEMPIERE_QUAL\".\"AD_TABLE\" \"TR\" ON \"R\".\"AD_TABLE_ID\" = \"TR\".\"AD_TABLE_ID\" WHERE \"T\".\"ISVIEW\" = '[REDACTED]' AND \"T\".\"ISACTIVE\" = '[REDACTED]' AND \"C\".\"ISACTIVE\" = '[REDACTED]' AND ((\"C\".\"AD_REFERENCE_ID\" = [REDACTED] AND \"C\".\"COLUMNNAME\" = nullif(concat('[REDACTED]', '[REDACTED]'), '[REDACTED]')) OR (\"C\".\"AD_REFERENCE_ID\" IN ([REDACTED], [REDACTED]) AND (\"TR\".\"TABLENAME\" = '[REDACTED]' OR (\"TR\".\"TABLENAME\" IS NULL AND \"C\".\"COLUMNNAME\" = nullif(concat('[REDACTED]', '[REDACTED]'), '[REDACTED]'))))) AND \"C\".\"FKCONSTRAINTTYPE\" = '[REDACTED]'",
+        "count": 9,
+        "total_elapsed_ms": 7685,
+        "max_elapsed_ms": 948
+      },
+      {
+        "query": "SELECT \"AD_TABLE\".\"AD_TABLE_ID\" AS \"AD_TABLE_ID\", \"AD_TABLE\".\"NAME\" AS \"NAME\", \"AD_TABLE\".\"DESCRIPTION\" AS \"DESCRIPTION\", \"AD_TABLE\".\"HELP\" AS \"HELP\", \"AD_TABLE\".\"AD_WINDOW_ID\" AS \"AD_WINDOW_ID\", \"AD_TABLE\".\"AD_VAL_RULE_ID\" AS \"AD_VAL_RULE_ID\", \"AD_TABLE\".\"TABLENAME\" AS \"TABLENAME\", \"AD_TABLE\".\"LOADSEQ\" AS \"LOADSEQ\", \"AD_TABLE\".\"ACCESSLEVEL\" AS \"ACCESSLEVEL\", \"AD_TABLE\".\"AD_CLIENT_ID\" AS \"AD_CLIENT_ID\", \"AD_TABLE\".\"AD_ORG_ID\" AS \"AD_ORG_ID\", \"AD_TABLE\".\"ISACTIVE\" AS \"ISACTIVE\", \"AD_TABLE\".\"CREATED\" AS \"CREATED\", \"AD_TABLE\".\"CREATEDBY\" AS \"CREATEDBY\", \"AD_TABLE\".\"UPDATED\" AS \"UPDATED\", \"AD_TABLE\".\"UPDATEDBY\" AS \"UPDATEDBY\", \"AD_TABLE\".\"ISSECURITYENABLED\" AS \"ISSECURITYENABLED\", \"AD_TABLE\".\"ISDELETEABLE\" AS \"ISDELETEABLE\", \"AD_TABLE\".\"ISHIGHVOLUME\" AS \"ISHIGHVOLUME\", \"AD_TABLE\".\"ISVIEW\" AS \"ISVIEW\", \"AD_TABLE\".\"ENTITYTYPE\" AS \"ENTITYTYPE\", \"AD_TABLE\".\"IMPORTTABLE\" AS \"IMPORTTABLE\", \"AD_TABLE\".\"ISCHANGELOG\" AS \"ISCHANGELOG\", \"AD_TABLE\".\"REPLICATIONTYPE\" AS \"REPLICATIONTYPE\", \"AD_TABLE\".\"PO_WINDOW_ID\" AS \"PO_WINDOW_ID\", \"AD_TABLE\".\"COPYCOLUMNSFROMTABLE\" AS \"COPYCOLUMNSFROMTABLE\", \"AD_TABLE\".\"ISCENTRALLYMAINTAINED\" AS \"ISCENTRALLYMAINTAINED\", \"AD_TABLE\".\"AD_TABLE_UU\" AS \"AD_TABLE_UU\", \"AD_TABLE\".\"PROCESSING\" AS \"PROCESSING\", \"AD_TABLE\".\"DATABASEVIEWDROP\" AS \"DATABASEVIEWDROP\", \"AD_TABLE\".\"COPYCOMPONENTSFROMVIEW\" AS \"COPYCOMPONENTSFROMVIEW\", \"AD_TABLE\".\"CREATEWINDOWFROMTABLE\" AS \"CREATEWINDOWFROMTABLE\", \"AD_TABLE\".\"ISSHOWINDRILLOPTIONS\" AS \"ISSHOWINDRILLOPTIONS\", \"AD_TABLE\".\"ISPARTITION\" AS \"ISPARTITION\", \"AD_TABLE\".\"CREATEPARTITION\" AS \"CREATEPARTITION\" FROM \"IDEMPIERE_QUAL\".\"AD_TABLE\" AS \"AD_TABLE\" JOIN \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" ON (\"C\".\"AD_TABLE_ID\" = \"AD_TABLE\".\"AD_TABLE_ID\") WHERE (\"C\".\"AD_REFERENCE_ID\" = [REDACTED] AND \"C\".\"FKCONSTRAINTTYPE\" = '[REDACTED]' AND \"AD_TABLE\".\"ISVIEW\" = '[REDACTED]' AND \"C\".\"COLUMNNAME\" = '[REDACTED]') AND \"AD_TABLE\".\"ISACTIVE\" = '[REDACTED]'",
+        "count": 4,
+        "total_elapsed_ms": 4199,
+        "max_elapsed_ms": 1054
+      },
+      {
+        "query": "COMMIT",
+        "count": 934,
+        "total_elapsed_ms": 3233,
+        "max_elapsed_ms": 45
+      },
+      {
+        "query": "SELECT \"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_FIELD\" AS \"AD_FIELD\" WHERE \"ISACTIVE\" = '[REDACTED]' AND \"AD_TAB_ID\" = (SELECT min(\"AD_TAB_ID\") FROM \"IDEMPIERE_QUAL\".\"AD_TAB\" AS \"AD_TAB\" WHERE \"AD_TABLE_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') AND \"ISENCRYPTED\" = '[REDACTED]' AND \"OBSCURETYPE\" IS NULL AND \"AD_COLUMN_ID\" NOT IN (SELECT \"PFI\".\"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM\" \"PFI\" WHERE \"PFI\".\"AD_PRINTFORMAT_ID\" = [REDACTED] AND \"PFI\".\"AD_COLUMN_ID\" IS NOT NULL) AND (\"AD_COLUMN_ID\" IN (SELECT \"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_REPORTVIEW_COLUMN\" AS \"AD_REPORTVIEW_COLUMN\" WHERE \"AD_REPORTVIEW_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') OR ((SELECT count(*) FROM \"IDEMPIERE_QUAL\".\"AD_REPORTVIEW_COLUMN\" AS \"AD_REPORTVIEW_COLUMN\" WHERE \"AD_REPORTVIEW_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') = [REDACTED])) ORDER BY coalesce(\"ISDISPLAYED\", '[REDACTED]') DESC, \"SORTNO\", \"SEQNO\", \"NAME\"",
+        "count": 4,
+        "total_elapsed_ms": 3139,
+        "max_elapsed_ms": 1082
+      },
+      {
+        "query": "SELECT \"AD_TABLE\".\"AD_TABLE_ID\" AS \"AD_TABLE_ID\", \"AD_TABLE\".\"NAME\" AS \"NAME\", \"AD_TABLE\".\"DESCRIPTION\" AS \"DESCRIPTION\", \"AD_TABLE\".\"HELP\" AS \"HELP\", \"AD_TABLE\".\"AD_WINDOW_ID\" AS \"AD_WINDOW_ID\", \"AD_TABLE\".\"AD_VAL_RULE_ID\" AS \"AD_VAL_RULE_ID\", \"AD_TABLE\".\"TABLENAME\" AS \"TABLENAME\", \"AD_TABLE\".\"LOADSEQ\" AS \"LOADSEQ\", \"AD_TABLE\".\"ACCESSLEVEL\" AS \"ACCESSLEVEL\", \"AD_TABLE\".\"AD_CLIENT_ID\" AS \"AD_CLIENT_ID\", \"AD_TABLE\".\"AD_ORG_ID\" AS \"AD_ORG_ID\", \"AD_TABLE\".\"ISACTIVE\" AS \"ISACTIVE\", \"AD_TABLE\".\"CREATED\" AS \"CREATED\", \"AD_TABLE\".\"CREATEDBY\" AS \"CREATEDBY\", \"AD_TABLE\".\"UPDATED\" AS \"UPDATED\", \"AD_TABLE\".\"UPDATEDBY\" AS \"UPDATEDBY\", \"AD_TABLE\".\"ISSECURITYENABLED\" AS \"ISSECURITYENABLED\", \"AD_TABLE\".\"ISDELETEABLE\" AS \"ISDELETEABLE\", \"AD_TABLE\".\"ISHIGHVOLUME\" AS \"ISHIGHVOLUME\", \"AD_TABLE\".\"ISVIEW\" AS \"ISVIEW\", \"AD_TABLE\".\"ENTITYTYPE\" AS \"ENTITYTYPE\", \"AD_TABLE\".\"IMPORTTABLE\" AS \"IMPORTTABLE\", \"AD_TABLE\".\"ISCHANGELOG\" AS \"ISCHANGELOG\", \"AD_TABLE\".\"REPLICATIONTYPE\" AS \"REPLICATIONTYPE\", \"AD_TABLE\".\"PO_WINDOW_ID\" AS \"PO_WINDOW_ID\", \"AD_TABLE\".\"COPYCOLUMNSFROMTABLE\" AS \"COPYCOLUMNSFROMTABLE\", \"AD_TABLE\".\"ISCENTRALLYMAINTAINED\" AS \"ISCENTRALLYMAINTAINED\", \"AD_TABLE\".\"AD_TABLE_UU\" AS \"AD_TABLE_UU\", \"AD_TABLE\".\"PROCESSING\" AS \"PROCESSING\", \"AD_TABLE\".\"DATABASEVIEWDROP\" AS \"DATABASEVIEWDROP\", \"AD_TABLE\".\"COPYCOMPONENTSFROMVIEW\" AS \"COPYCOMPONENTSFROMVIEW\", \"AD_TABLE\".\"CREATEWINDOWFROMTABLE\" AS \"CREATEWINDOWFROMTABLE\", \"AD_TABLE\".\"ISSHOWINDRILLOPTIONS\" AS \"ISSHOWINDRILLOPTIONS\", \"AD_TABLE\".\"ISPARTITION\" AS \"ISPARTITION\", \"AD_TABLE\".\"CREATEPARTITION\" AS \"CREATEPARTITION\" FROM \"IDEMPIERE_QUAL\".\"AD_TABLE\" AS \"AD_TABLE\" JOIN \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" ON (\"C\".\"AD_TABLE_ID\" = \"AD_TABLE\".\"AD_TABLE_ID\") WHERE (\"C\".\"AD_REFERENCE_ID\" = [REDACTED] AND \"C\".\"FKCONSTRAINTTYPE\" = '[REDACTED]' AND \"AD_TABLE\".\"ISVIEW\" = '[REDACTED]' AND \"C\".\"COLUMNNAME\" = '[REDACTED]' AND (\"AD_TABLE\".\"TABLENAME\" NOT IN ('[REDACTED]', '[REDACTED]'))) AND \"AD_TABLE\".\"ISACTIVE\" = '[REDACTED]'",
+        "count": 2,
+        "total_elapsed_ms": 2112,
+        "max_elapsed_ms": 1059
+      },
+      {
+        "query": "SELECT \"AD_TABLE\".\"AD_TABLE_ID\" AS \"AD_TABLE_ID\", \"AD_TABLE\".\"NAME\" AS \"NAME\", \"AD_TABLE\".\"DESCRIPTION\" AS \"DESCRIPTION\", \"AD_TABLE\".\"HELP\" AS \"HELP\", \"AD_TABLE\".\"AD_WINDOW_ID\" AS \"AD_WINDOW_ID\", \"AD_TABLE\".\"AD_VAL_RULE_ID\" AS \"AD_VAL_RULE_ID\", \"AD_TABLE\".\"TABLENAME\" AS \"TABLENAME\", \"AD_TABLE\".\"LOADSEQ\" AS \"LOADSEQ\", \"AD_TABLE\".\"ACCESSLEVEL\" AS \"ACCESSLEVEL\", \"AD_TABLE\".\"AD_CLIENT_ID\" AS \"AD_CLIENT_ID\", \"AD_TABLE\".\"AD_ORG_ID\" AS \"AD_ORG_ID\", \"AD_TABLE\".\"ISACTIVE\" AS \"ISACTIVE\", \"AD_TABLE\".\"CREATED\" AS \"CREATED\", \"AD_TABLE\".\"CREATEDBY\" AS \"CREATEDBY\", \"AD_TABLE\".\"UPDATED\" AS \"UPDATED\", \"AD_TABLE\".\"UPDATEDBY\" AS \"UPDATEDBY\", \"AD_TABLE\".\"ISSECURITYENABLED\" AS \"ISSECURITYENABLED\", \"AD_TABLE\".\"ISDELETEABLE\" AS \"ISDELETEABLE\", \"AD_TABLE\".\"ISHIGHVOLUME\" AS \"ISHIGHVOLUME\", \"AD_TABLE\".\"ISVIEW\" AS \"ISVIEW\", \"AD_TABLE\".\"ENTITYTYPE\" AS \"ENTITYTYPE\", \"AD_TABLE\".\"IMPORTTABLE\" AS \"IMPORTTABLE\", \"AD_TABLE\".\"ISCHANGELOG\" AS \"ISCHANGELOG\", \"AD_TABLE\".\"REPLICATIONTYPE\" AS \"REPLICATIONTYPE\", \"AD_TABLE\".\"PO_WINDOW_ID\" AS \"PO_WINDOW_ID\", \"AD_TABLE\".\"COPYCOLUMNSFROMTABLE\" AS \"COPYCOLUMNSFROMTABLE\", \"AD_TABLE\".\"ISCENTRALLYMAINTAINED\" AS \"ISCENTRALLYMAINTAINED\", \"AD_TABLE\".\"AD_TABLE_UU\" AS \"AD_TABLE_UU\", \"AD_TABLE\".\"PROCESSING\" AS \"PROCESSING\", \"AD_TABLE\".\"DATABASEVIEWDROP\" AS \"DATABASEVIEWDROP\", \"AD_TABLE\".\"COPYCOMPONENTSFROMVIEW\" AS \"COPYCOMPONENTSFROMVIEW\", \"AD_TABLE\".\"CREATEWINDOWFROMTABLE\" AS \"CREATEWINDOWFROMTABLE\", \"AD_TABLE\".\"ISSHOWINDRILLOPTIONS\" AS \"ISSHOWINDRILLOPTIONS\", \"AD_TABLE\".\"ISPARTITION\" AS \"ISPARTITION\", \"AD_TABLE\".\"CREATEPARTITION\" AS \"CREATEPARTITION\" FROM \"IDEMPIERE_QUAL\".\"AD_TABLE\" AS \"AD_TABLE\" JOIN \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" ON (\"C\".\"AD_TABLE_ID\" = \"AD_TABLE\".\"AD_TABLE_ID\") WHERE (\"C\".\"AD_REFERENCE_ID\" = [REDACTED] AND \"C\".\"FKCONSTRAINTTYPE\" = '[REDACTED]' AND \"AD_TABLE\".\"ISVIEW\" = '[REDACTED]' AND \"C\".\"COLUMNNAME\" = '[REDACTED]' AND (\"AD_TABLE\".\"TABLENAME\" IN ('[REDACTED]', '[REDACTED]'))) AND \"AD_TABLE\".\"ISACTIVE\" = '[REDACTED]'",
+        "count": 2,
+        "total_elapsed_ms": 2082,
+        "max_elapsed_ms": 1042
+      },
+      {
+        "query": "INSERT INTO \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM_TRL\" (\"AD_LANGUAGE\", \"AD_PRINTFORMATITEM_ID\", \"NAME\", \"PRINTNAME\", \"PRINTNAMESUFFIX\", \"ISTRANSLATED\", \"AD_CLIENT_ID\", \"AD_ORG_ID\", \"CREATED\", \"CREATEDBY\", \"UPDATED\", \"UPDATEDBY\", \"AD_PRINTFORMATITEM_TRL_UU\") SELECT \"L\".\"AD_LANGUAGE\", \"T\".\"AD_PRINTFORMATITEM_ID\", \"T\".\"NAME\", \"T\".\"PRINTNAME\", \"T\".\"PRINTNAMESUFFIX\", CASE WHEN \"L\".\"AD_LANGUAGE\" = \"C\".\"AD_LANGUAGE\" THEN '[REDACTED]' ELSE '[REDACTED]' END AS \"ISTRANSLATED\", \"T\".\"AD_CLIENT_ID\", \"T\".\"AD_ORG_ID\", \"T\".\"CREATED\", \"T\".\"CREATEDBY\", \"T\".\"UPDATED\", \"T\".\"UPDATEDBY\", \"GENERATE_UUID\"() FROM \"IDEMPIERE_QUAL\".\"AD_LANGUAGE\" \"L\", \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM\" \"T\", \"IDEMPIERE_QUAL\".\"AD_CLIENT\" \"C\" WHERE \"T\".\"AD_CLIENT_ID\" = \"C\".\"AD_CLIENT_ID\" AND \"L\".\"ISACTIVE\" = '[REDACTED]' AND \"L\".\"ISSYSTEMLANGUAGE\" = '[REDACTED]' AND \"L\".\"ISBASELANGUAGE\" = '[REDACTED]' AND \"T\".\"AD_PRINTFORMATITEM_ID\" = [REDACTED] AND NOT EXISTS (SELECT * FROM \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM_TRL\" \"TT\" WHERE \"TT\".\"AD_LANGUAGE\" = \"L\".\"AD_LANGUAGE\" AND \"TT\".\"AD_PRINTFORMATITEM_ID\" = \"T\".\"AD_PRINTFORMATITEM_ID\")",
+        "count": 281,
+        "total_elapsed_ms": 929,
+        "max_elapsed_ms": 14
+      },
+      {
+        "query": "SELECT c.oid, a.attnum, a.attname, c.relname, n.nspname, a.attnotnull OR (t.typtype = '[REDACTED]' AND t.typnotnull), a.attidentity != '[REDACTED]' OR pg_catalog.pg_get_expr(d.adbin, d.adrelid) LIKE '[REDACTED]' FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON (c.relnamespace = n.oid) JOIN pg_catalog.pg_attribute a ON (c.oid = a.attrelid) JOIN pg_catalog.pg_type t ON (a.atttypid = t.oid) LEFT JOIN pg_catalog.pg_attrdef d ON (d.adrelid = a.attrelid AND d.adnum = a.attnum) JOIN (SELECT [REDACTED] AS oid , [REDACTED] AS attnum UNION ALL SELECT [REDACTED], [REDACTED] UNION ALL SELECT [REDACTED], [REDACTED] UNION ALL SELECT [REDACTED], [REDACTED]) vals ON (c.oid = vals.oid AND a.attnum = vals.attnum) where c.oid in ([REDACTED])",
+        "count": 1,
+        "total_elapsed_ms": 900,
+        "max_elapsed_ms": 900
+      },
+      {
+        "query": "UPDATE \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM_TRL\" AS \"AD_PRINTFORMATITEM_TRL\" SET \"PRINTNAME\" = (SELECT \"E\".\"PRINTNAME\" FROM \"IDEMPIERE_QUAL\".\"AD_ELEMENT_TRL\" \"E\", \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" WHERE \"E\".\"AD_LANGUAGE\" = \"AD_PRINTFORMATITEM_TRL\".\"AD_LANGUAGE\" AND \"E\".\"AD_ELEMENT_ID\" = \"C\".\"AD_ELEMENT_ID\" AND \"C\".\"AD_COLUMN_ID\" = [REDACTED]) WHERE \"AD_PRINTFORMATITEM_ID\" = [REDACTED] AND EXISTS (SELECT * FROM \"IDEMPIERE_QUAL\".\"AD_ELEMENT_TRL\" \"E\", \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" WHERE \"E\".\"AD_LANGUAGE\" = \"AD_PRINTFORMATITEM_TRL\".\"AD_LANGUAGE\" AND \"E\".\"AD_ELEMENT_ID\" = \"C\".\"AD_ELEMENT_ID\" AND \"C\".\"AD_COLUMN_ID\" = [REDACTED] AND \"AD_PRINTFORMATITEM_TRL\".\"AD_PRINTFORMATITEM_ID\" = [REDACTED]) AND EXISTS (SELECT * FROM \"IDEMPIERE_QUAL\".\"AD_CLIENT\" AS \"AD_CLIENT\" WHERE \"AD_CLIENT_ID\" = \"AD_PRINTFORMATITEM_TRL\".\"AD_CLIENT_ID\" AND \"ISMULTILINGUALDOCUMENT\" = '[REDACTED]')",
+        "count": 281,
+        "total_elapsed_ms": 770,
+        "max_elapsed_ms": 128
+      },
+      {
+        "query": "SELECT \"TABLENAME\" FROM \"IDEMPIERE_QUAL\".\"AD_TABLE\" AS \"AD_TABLE\" WHERE \"AD_TABLE_ID\" IN (SELECT \"AD_TABLE_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_COLUMN\" AS \"AD_COLUMN\" WHERE \"COLUMNNAME\" = '[REDACTED]') ORDER BY \"TABLENAME\"",
+        "count": 1,
+        "total_elapsed_ms": 756,
+        "max_elapsed_ms": 756
+      },
+      {
+        "query": "UPDATE \"IDEMPIERE_QUAL\".\"AD_SEQUENCE\" AS \"AD_SEQUENCE\" SET \"CURRENTNEXT\" = \"CURRENTNEXT\" + [REDACTED] WHERE \"AD_SEQUENCE_ID\" = [REDACTED]",
+        "count": 305,
+        "total_elapsed_ms": 629,
+        "max_elapsed_ms": 141
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_MIGRATIONSCRIPT\" ALTER COLUMN \"SCRIPT\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 536,
+        "max_elapsed_ms": 536
+      },
+      {
+        "query": "SELECT \"AD_TABLE_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_TABLE\" AS \"AD_TABLE\" WHERE (\"ISCHANGELOG\" = '[REDACTED]' OR EXISTS (SELECT * FROM \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" WHERE \"AD_TABLE\".\"AD_TABLE_ID\" = \"C\".\"AD_TABLE_ID\" AND \"C\".\"COLUMNNAME\" = '[REDACTED]')) ORDER BY \"AD_TABLE_ID\"",
+        "count": 1,
+        "total_elapsed_ms": 493,
+        "max_elapsed_ms": 493
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_ALERTPROCESSORLOG\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 413,
+        "max_elapsed_ms": 413
+      },
+      {
+        "query": "UPDATE \"IDEMPIERE_QUAL\".\"AD_PROCESS\" AS \"AD_PROCESS\" SET \"STATISTIC_COUNT\" = \"STATISTIC_COUNT\" + [REDACTED], \"STATISTIC_SECONDS\" = \"STATISTIC_SECONDS\" + [REDACTED] WHERE \"AD_PROCESS_ID\" = [REDACTED]",
+        "count": 9,
+        "total_elapsed_ms": 406,
+        "max_elapsed_ms": 134
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"CREATE$JAVA$LOB$TABLE\" ALTER COLUMN \"LOB\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 365,
+        "max_elapsed_ms": 365
+      },
+      {
+        "query": "DELETE FROM \"IDEMPIERE_QUAL\".\"AD_PRINTFORMAT\" AS \"AD_PRINTFORMAT\" WHERE \"AD_PRINTFORMAT_ID\" = [REDACTED]",
+        "count": 1,
+        "total_elapsed_ms": 365,
+        "max_elapsed_ms": 365
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_IMAGE\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 350,
+        "max_elapsed_ms": 350
+      },
+      {
+        "query": "INSERT INTO \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM\" (\"SEQNO\", \"NAME\", \"CREATED\", \"ISNEXTLINE\", \"AD_CLIENT_ID\", \"PRINTNAME\", \"YSPACE\", \"SORTNO\", \"AD_COLUMN_ID\", \"ISPAGEBREAK\", \"ISRELATIVEPOSITION\", \"UPDATEDBY\", \"MAXWIDTH\", \"AD_PRINTFORMATITEM_ID\", \"CREATEDBY\", \"ISSUMMARIZED\", \"YPOSITION\", \"UPDATED\", \"AD_PRINTFORMAT_ID\", \"AD_ORG_ID\", \"XSPACE\", \"ISACTIVE\", \"ISHEIGHTONELINE\", \"MAXHEIGHT\", \"XPOSITION\", \"FIELDALIGNMENTTYPE\", \"ISPRINTED\", \"ISORDERBY\", \"ISGROUPBY\", \"LINEALIGNMENTTYPE\", \"PRINTFORMATTYPE\", \"PRINTAREATYPE\", \"IMAGEISATTACHED\", \"ISCOUNTED\", \"ISAVERAGED\", \"ISSUPPRESSNULL\", \"ISSETNLPOSITION\", \"ISNEXTPAGE\", \"ISFIXEDWIDTH\", \"ISMAXCALC\", \"ISRUNNINGTOTAL\", \"ISMINCALC\", \"ISVARIANCECALC\", \"ISDEVIATIONCALC\", \"ISFILLEDRECTANGLE\", \"LINEWIDTH\", \"ARCDIAMETER\", \"SHAPETYPE\", \"ISCENTRALLYMAINTAINED\", \"ISIMAGEFIELD\", \"AD_PRINTFORMATITEM_UU\") VALUES ([REDACTED], '[REDACTED]', CAST('[REDACTED]' AS timestamp without time zone), '[REDACTED]', [REDACTED], '[REDACTED]', [REDACTED], [REDACTED], [REDACTED], '[REDACTED]', '[REDACTED]', [REDACTED], [REDACTED], [REDACTED], [REDACTED], '[REDACTED]', [REDACTED], CAST('[REDACTED]' AS timestamp without time zone), [REDACTED], [REDACTED], [REDACTED], '[REDACTED]', '[REDACTED]', [REDACTED], [REDACTED], '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', [REDACTED], [REDACTED], '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]')",
+        "count": 235,
+        "total_elapsed_ms": 306,
+        "max_elapsed_ms": 4
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_ARCHIVE\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 289,
+        "max_elapsed_ms": 289
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"TEST\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 284,
+        "max_elapsed_ms": 284
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_ATTACHMENT\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 278,
+        "max_elapsed_ms": 278
+      },
+      {
+        "query": "DELETE FROM \"IDEMPIERE_QUAL\".\"AD_PINSTANCE\" AS \"AD_PINSTANCE\" WHERE \"AD_PINSTANCE_ID\" = [REDACTED]",
+        "count": 4,
+        "total_elapsed_ms": 270,
+        "max_elapsed_ms": 134
+      },
+      {
+        "query": "DELETE FROM \"IDEMPIERE_QUAL\".\"AD_ATTACHMENT\" AS \"AD_ATTACHMENT\" WHERE \"AD_ATTACHMENT_ID\" = [REDACTED]",
+        "count": 2,
+        "total_elapsed_ms": 267,
+        "max_elapsed_ms": 134
+      },
+      {
+        "query": "SELECT \"n\".\"nspname\",\"p\".\"proname\",\"p\".\"prosrc\" FROM \"pg_catalog\".\"pg_proc\" AS \"p\" JOIN \"pg_catalog\".\"pg_namespace\" AS \"n\" ON \"n\".\"oid\"=\"p\".\"pronamespace\" WHERE \"n\".\"nspname\" NOT IN ('[REDACTED]','[REDACTED]')",
+        "count": 2,
+        "total_elapsed_ms": 263,
+        "max_elapsed_ms": 140
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_SCHEDULERLOG\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 245,
+        "max_elapsed_ms": 245
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"C_ACCTPROCESSORLOG\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 244,
+        "max_elapsed_ms": 244
+      },
+      {
+        "query": "UPDATE \"IDEMPIERE_QUAL\".\"AD_PINSTANCE\" AS \"AD_PINSTANCE\" SET \"ISPROCESSING\" = '[REDACTED]', \"UPDATED\" = CAST('[REDACTED]' AS timestamp without time zone), \"UPDATEDBY\" = [REDACTED] WHERE \"AD_PINSTANCE_ID\" = [REDACTED]",
+        "count": 10,
+        "total_elapsed_ms": 238,
+        "max_elapsed_ms": 119
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"IMP_PROCESSORLOG\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 235,
+        "max_elapsed_ms": 235
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"R_REQUESTPROCESSORLOG\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 235,
+        "max_elapsed_ms": 235
+      }
+    ]
+  },
+  "ny8-r3": {
+    "trace": "/root/.local/state/bicdb/idempiere-reference/upstream-fastdisk-fe9-ny8-r3-p8avobdm/query-trace.jsonl",
+    "events": {
+      "query.slow": 8983
+    },
+    "top_elapsed": [
+      {
+        "query": "COMMIT",
+        "count": 928,
+        "total_elapsed_ms": 22731,
+        "max_elapsed_ms": 164
+      },
+      {
+        "query": "SELECT \"T\".\"AD_TABLE_ID\", \"C\".\"COLUMNNAME\" FROM \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" JOIN \"IDEMPIERE_QUAL\".\"AD_TABLE\" \"T\" ON \"C\".\"AD_TABLE_ID\" = \"T\".\"AD_TABLE_ID\" LEFT JOIN \"IDEMPIERE_QUAL\".\"AD_REF_TABLE\" \"R\" ON \"C\".\"AD_REFERENCE_VALUE_ID\" = \"R\".\"AD_REFERENCE_ID\" LEFT JOIN \"IDEMPIERE_QUAL\".\"AD_TABLE\" \"TR\" ON \"R\".\"AD_TABLE_ID\" = \"TR\".\"AD_TABLE_ID\" WHERE \"T\".\"ISVIEW\" = '[REDACTED]' AND \"T\".\"ISACTIVE\" = '[REDACTED]' AND \"C\".\"ISACTIVE\" = '[REDACTED]' AND ((\"C\".\"AD_REFERENCE_ID\" = [REDACTED] AND \"C\".\"COLUMNNAME\" = nullif(concat('[REDACTED]', '[REDACTED]'), '[REDACTED]')) OR (\"C\".\"AD_REFERENCE_ID\" IN ([REDACTED], [REDACTED]) AND (\"TR\".\"TABLENAME\" = '[REDACTED]' OR (\"TR\".\"TABLENAME\" IS NULL AND \"C\".\"COLUMNNAME\" = nullif(concat('[REDACTED]', '[REDACTED]'), '[REDACTED]'))))) AND \"C\".\"FKCONSTRAINTTYPE\" = '[REDACTED]'",
+        "count": 9,
+        "total_elapsed_ms": 8125,
+        "max_elapsed_ms": 1031
+      },
+      {
+        "query": "SELECT \"AD_TABLE\".\"AD_TABLE_ID\" AS \"AD_TABLE_ID\", \"AD_TABLE\".\"NAME\" AS \"NAME\", \"AD_TABLE\".\"DESCRIPTION\" AS \"DESCRIPTION\", \"AD_TABLE\".\"HELP\" AS \"HELP\", \"AD_TABLE\".\"AD_WINDOW_ID\" AS \"AD_WINDOW_ID\", \"AD_TABLE\".\"AD_VAL_RULE_ID\" AS \"AD_VAL_RULE_ID\", \"AD_TABLE\".\"TABLENAME\" AS \"TABLENAME\", \"AD_TABLE\".\"LOADSEQ\" AS \"LOADSEQ\", \"AD_TABLE\".\"ACCESSLEVEL\" AS \"ACCESSLEVEL\", \"AD_TABLE\".\"AD_CLIENT_ID\" AS \"AD_CLIENT_ID\", \"AD_TABLE\".\"AD_ORG_ID\" AS \"AD_ORG_ID\", \"AD_TABLE\".\"ISACTIVE\" AS \"ISACTIVE\", \"AD_TABLE\".\"CREATED\" AS \"CREATED\", \"AD_TABLE\".\"CREATEDBY\" AS \"CREATEDBY\", \"AD_TABLE\".\"UPDATED\" AS \"UPDATED\", \"AD_TABLE\".\"UPDATEDBY\" AS \"UPDATEDBY\", \"AD_TABLE\".\"ISSECURITYENABLED\" AS \"ISSECURITYENABLED\", \"AD_TABLE\".\"ISDELETEABLE\" AS \"ISDELETEABLE\", \"AD_TABLE\".\"ISHIGHVOLUME\" AS \"ISHIGHVOLUME\", \"AD_TABLE\".\"ISVIEW\" AS \"ISVIEW\", \"AD_TABLE\".\"ENTITYTYPE\" AS \"ENTITYTYPE\", \"AD_TABLE\".\"IMPORTTABLE\" AS \"IMPORTTABLE\", \"AD_TABLE\".\"ISCHANGELOG\" AS \"ISCHANGELOG\", \"AD_TABLE\".\"REPLICATIONTYPE\" AS \"REPLICATIONTYPE\", \"AD_TABLE\".\"PO_WINDOW_ID\" AS \"PO_WINDOW_ID\", \"AD_TABLE\".\"COPYCOLUMNSFROMTABLE\" AS \"COPYCOLUMNSFROMTABLE\", \"AD_TABLE\".\"ISCENTRALLYMAINTAINED\" AS \"ISCENTRALLYMAINTAINED\", \"AD_TABLE\".\"AD_TABLE_UU\" AS \"AD_TABLE_UU\", \"AD_TABLE\".\"PROCESSING\" AS \"PROCESSING\", \"AD_TABLE\".\"DATABASEVIEWDROP\" AS \"DATABASEVIEWDROP\", \"AD_TABLE\".\"COPYCOMPONENTSFROMVIEW\" AS \"COPYCOMPONENTSFROMVIEW\", \"AD_TABLE\".\"CREATEWINDOWFROMTABLE\" AS \"CREATEWINDOWFROMTABLE\", \"AD_TABLE\".\"ISSHOWINDRILLOPTIONS\" AS \"ISSHOWINDRILLOPTIONS\", \"AD_TABLE\".\"ISPARTITION\" AS \"ISPARTITION\", \"AD_TABLE\".\"CREATEPARTITION\" AS \"CREATEPARTITION\" FROM \"IDEMPIERE_QUAL\".\"AD_TABLE\" AS \"AD_TABLE\" JOIN \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" ON (\"C\".\"AD_TABLE_ID\" = \"AD_TABLE\".\"AD_TABLE_ID\") WHERE (\"C\".\"AD_REFERENCE_ID\" = [REDACTED] AND \"C\".\"FKCONSTRAINTTYPE\" = '[REDACTED]' AND \"AD_TABLE\".\"ISVIEW\" = '[REDACTED]' AND \"C\".\"COLUMNNAME\" = '[REDACTED]') AND \"AD_TABLE\".\"ISACTIVE\" = '[REDACTED]'",
+        "count": 4,
+        "total_elapsed_ms": 4824,
+        "max_elapsed_ms": 1235
+      },
+      {
+        "query": "SELECT \"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_FIELD\" AS \"AD_FIELD\" WHERE \"ISACTIVE\" = '[REDACTED]' AND \"AD_TAB_ID\" = (SELECT min(\"AD_TAB_ID\") FROM \"IDEMPIERE_QUAL\".\"AD_TAB\" AS \"AD_TAB\" WHERE \"AD_TABLE_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') AND \"ISENCRYPTED\" = '[REDACTED]' AND \"OBSCURETYPE\" IS NULL AND \"AD_COLUMN_ID\" NOT IN (SELECT \"PFI\".\"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM\" \"PFI\" WHERE \"PFI\".\"AD_PRINTFORMAT_ID\" = [REDACTED] AND \"PFI\".\"AD_COLUMN_ID\" IS NOT NULL) AND (\"AD_COLUMN_ID\" IN (SELECT \"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_REPORTVIEW_COLUMN\" AS \"AD_REPORTVIEW_COLUMN\" WHERE \"AD_REPORTVIEW_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') OR ((SELECT count(*) FROM \"IDEMPIERE_QUAL\".\"AD_REPORTVIEW_COLUMN\" AS \"AD_REPORTVIEW_COLUMN\" WHERE \"AD_REPORTVIEW_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') = [REDACTED])) ORDER BY coalesce(\"ISDISPLAYED\", '[REDACTED]') DESC, \"SORTNO\", \"SEQNO\", \"NAME\"",
+        "count": 4,
+        "total_elapsed_ms": 4036,
+        "max_elapsed_ms": 1693
+      },
+      {
+        "query": "SELECT \"AD_TABLE\".\"AD_TABLE_ID\" AS \"AD_TABLE_ID\", \"AD_TABLE\".\"NAME\" AS \"NAME\", \"AD_TABLE\".\"DESCRIPTION\" AS \"DESCRIPTION\", \"AD_TABLE\".\"HELP\" AS \"HELP\", \"AD_TABLE\".\"AD_WINDOW_ID\" AS \"AD_WINDOW_ID\", \"AD_TABLE\".\"AD_VAL_RULE_ID\" AS \"AD_VAL_RULE_ID\", \"AD_TABLE\".\"TABLENAME\" AS \"TABLENAME\", \"AD_TABLE\".\"LOADSEQ\" AS \"LOADSEQ\", \"AD_TABLE\".\"ACCESSLEVEL\" AS \"ACCESSLEVEL\", \"AD_TABLE\".\"AD_CLIENT_ID\" AS \"AD_CLIENT_ID\", \"AD_TABLE\".\"AD_ORG_ID\" AS \"AD_ORG_ID\", \"AD_TABLE\".\"ISACTIVE\" AS \"ISACTIVE\", \"AD_TABLE\".\"CREATED\" AS \"CREATED\", \"AD_TABLE\".\"CREATEDBY\" AS \"CREATEDBY\", \"AD_TABLE\".\"UPDATED\" AS \"UPDATED\", \"AD_TABLE\".\"UPDATEDBY\" AS \"UPDATEDBY\", \"AD_TABLE\".\"ISSECURITYENABLED\" AS \"ISSECURITYENABLED\", \"AD_TABLE\".\"ISDELETEABLE\" AS \"ISDELETEABLE\", \"AD_TABLE\".\"ISHIGHVOLUME\" AS \"ISHIGHVOLUME\", \"AD_TABLE\".\"ISVIEW\" AS \"ISVIEW\", \"AD_TABLE\".\"ENTITYTYPE\" AS \"ENTITYTYPE\", \"AD_TABLE\".\"IMPORTTABLE\" AS \"IMPORTTABLE\", \"AD_TABLE\".\"ISCHANGELOG\" AS \"ISCHANGELOG\", \"AD_TABLE\".\"REPLICATIONTYPE\" AS \"REPLICATIONTYPE\", \"AD_TABLE\".\"PO_WINDOW_ID\" AS \"PO_WINDOW_ID\", \"AD_TABLE\".\"COPYCOLUMNSFROMTABLE\" AS \"COPYCOLUMNSFROMTABLE\", \"AD_TABLE\".\"ISCENTRALLYMAINTAINED\" AS \"ISCENTRALLYMAINTAINED\", \"AD_TABLE\".\"AD_TABLE_UU\" AS \"AD_TABLE_UU\", \"AD_TABLE\".\"PROCESSING\" AS \"PROCESSING\", \"AD_TABLE\".\"DATABASEVIEWDROP\" AS \"DATABASEVIEWDROP\", \"AD_TABLE\".\"COPYCOMPONENTSFROMVIEW\" AS \"COPYCOMPONENTSFROMVIEW\", \"AD_TABLE\".\"CREATEWINDOWFROMTABLE\" AS \"CREATEWINDOWFROMTABLE\", \"AD_TABLE\".\"ISSHOWINDRILLOPTIONS\" AS \"ISSHOWINDRILLOPTIONS\", \"AD_TABLE\".\"ISPARTITION\" AS \"ISPARTITION\", \"AD_TABLE\".\"CREATEPARTITION\" AS \"CREATEPARTITION\" FROM \"IDEMPIERE_QUAL\".\"AD_TABLE\" AS \"AD_TABLE\" JOIN \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" ON (\"C\".\"AD_TABLE_ID\" = \"AD_TABLE\".\"AD_TABLE_ID\") WHERE (\"C\".\"AD_REFERENCE_ID\" = [REDACTED] AND \"C\".\"FKCONSTRAINTTYPE\" = '[REDACTED]' AND \"AD_TABLE\".\"ISVIEW\" = '[REDACTED]' AND \"C\".\"COLUMNNAME\" = '[REDACTED]' AND (\"AD_TABLE\".\"TABLENAME\" NOT IN ('[REDACTED]', '[REDACTED]'))) AND \"AD_TABLE\".\"ISACTIVE\" = '[REDACTED]'",
+        "count": 2,
+        "total_elapsed_ms": 2476,
+        "max_elapsed_ms": 1241
+      },
+      {
+        "query": "SELECT \"AD_TABLE\".\"AD_TABLE_ID\" AS \"AD_TABLE_ID\", \"AD_TABLE\".\"NAME\" AS \"NAME\", \"AD_TABLE\".\"DESCRIPTION\" AS \"DESCRIPTION\", \"AD_TABLE\".\"HELP\" AS \"HELP\", \"AD_TABLE\".\"AD_WINDOW_ID\" AS \"AD_WINDOW_ID\", \"AD_TABLE\".\"AD_VAL_RULE_ID\" AS \"AD_VAL_RULE_ID\", \"AD_TABLE\".\"TABLENAME\" AS \"TABLENAME\", \"AD_TABLE\".\"LOADSEQ\" AS \"LOADSEQ\", \"AD_TABLE\".\"ACCESSLEVEL\" AS \"ACCESSLEVEL\", \"AD_TABLE\".\"AD_CLIENT_ID\" AS \"AD_CLIENT_ID\", \"AD_TABLE\".\"AD_ORG_ID\" AS \"AD_ORG_ID\", \"AD_TABLE\".\"ISACTIVE\" AS \"ISACTIVE\", \"AD_TABLE\".\"CREATED\" AS \"CREATED\", \"AD_TABLE\".\"CREATEDBY\" AS \"CREATEDBY\", \"AD_TABLE\".\"UPDATED\" AS \"UPDATED\", \"AD_TABLE\".\"UPDATEDBY\" AS \"UPDATEDBY\", \"AD_TABLE\".\"ISSECURITYENABLED\" AS \"ISSECURITYENABLED\", \"AD_TABLE\".\"ISDELETEABLE\" AS \"ISDELETEABLE\", \"AD_TABLE\".\"ISHIGHVOLUME\" AS \"ISHIGHVOLUME\", \"AD_TABLE\".\"ISVIEW\" AS \"ISVIEW\", \"AD_TABLE\".\"ENTITYTYPE\" AS \"ENTITYTYPE\", \"AD_TABLE\".\"IMPORTTABLE\" AS \"IMPORTTABLE\", \"AD_TABLE\".\"ISCHANGELOG\" AS \"ISCHANGELOG\", \"AD_TABLE\".\"REPLICATIONTYPE\" AS \"REPLICATIONTYPE\", \"AD_TABLE\".\"PO_WINDOW_ID\" AS \"PO_WINDOW_ID\", \"AD_TABLE\".\"COPYCOLUMNSFROMTABLE\" AS \"COPYCOLUMNSFROMTABLE\", \"AD_TABLE\".\"ISCENTRALLYMAINTAINED\" AS \"ISCENTRALLYMAINTAINED\", \"AD_TABLE\".\"AD_TABLE_UU\" AS \"AD_TABLE_UU\", \"AD_TABLE\".\"PROCESSING\" AS \"PROCESSING\", \"AD_TABLE\".\"DATABASEVIEWDROP\" AS \"DATABASEVIEWDROP\", \"AD_TABLE\".\"COPYCOMPONENTSFROMVIEW\" AS \"COPYCOMPONENTSFROMVIEW\", \"AD_TABLE\".\"CREATEWINDOWFROMTABLE\" AS \"CREATEWINDOWFROMTABLE\", \"AD_TABLE\".\"ISSHOWINDRILLOPTIONS\" AS \"ISSHOWINDRILLOPTIONS\", \"AD_TABLE\".\"ISPARTITION\" AS \"ISPARTITION\", \"AD_TABLE\".\"CREATEPARTITION\" AS \"CREATEPARTITION\" FROM \"IDEMPIERE_QUAL\".\"AD_TABLE\" AS \"AD_TABLE\" JOIN \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" ON (\"C\".\"AD_TABLE_ID\" = \"AD_TABLE\".\"AD_TABLE_ID\") WHERE (\"C\".\"AD_REFERENCE_ID\" = [REDACTED] AND \"C\".\"FKCONSTRAINTTYPE\" = '[REDACTED]' AND \"AD_TABLE\".\"ISVIEW\" = '[REDACTED]' AND \"C\".\"COLUMNNAME\" = '[REDACTED]' AND (\"AD_TABLE\".\"TABLENAME\" IN ('[REDACTED]', '[REDACTED]'))) AND \"AD_TABLE\".\"ISACTIVE\" = '[REDACTED]'",
+        "count": 2,
+        "total_elapsed_ms": 1994,
+        "max_elapsed_ms": 1016
+      },
+      {
+        "query": "UPDATE \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM_TRL\" \"NEW\" SET (\"PRINTNAME\", \"PRINTNAMESUFFIX\", \"ISTRANSLATED\") = (SELECT \"PRINTNAME\", \"PRINTNAMESUFFIX\", \"ISTRANSLATED\" FROM \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM_TRL\" \"OLD\" WHERE \"OLD\".\"AD_LANGUAGE\" = \"NEW\".\"AD_LANGUAGE\" AND \"AD_PRINTFORMATITEM_ID\" = [REDACTED]) WHERE \"AD_PRINTFORMATITEM_ID\" = [REDACTED] AND EXISTS (SELECT \"AD_PRINTFORMATITEM_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM_TRL\" \"OLD\" WHERE \"OLD\".\"AD_LANGUAGE\" = \"NEW\".\"AD_LANGUAGE\" AND \"AD_PRINTFORMATITEM_ID\" = [REDACTED])",
+        "count": 46,
+        "total_elapsed_ms": 1317,
+        "max_elapsed_ms": 33
+      },
+      {
+        "query": "INSERT INTO \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM_TRL\" (\"AD_LANGUAGE\", \"AD_PRINTFORMATITEM_ID\", \"NAME\", \"PRINTNAME\", \"PRINTNAMESUFFIX\", \"ISTRANSLATED\", \"AD_CLIENT_ID\", \"AD_ORG_ID\", \"CREATED\", \"CREATEDBY\", \"UPDATED\", \"UPDATEDBY\", \"AD_PRINTFORMATITEM_TRL_UU\") SELECT \"L\".\"AD_LANGUAGE\", \"T\".\"AD_PRINTFORMATITEM_ID\", \"T\".\"NAME\", \"T\".\"PRINTNAME\", \"T\".\"PRINTNAMESUFFIX\", CASE WHEN \"L\".\"AD_LANGUAGE\" = \"C\".\"AD_LANGUAGE\" THEN '[REDACTED]' ELSE '[REDACTED]' END AS \"ISTRANSLATED\", \"T\".\"AD_CLIENT_ID\", \"T\".\"AD_ORG_ID\", \"T\".\"CREATED\", \"T\".\"CREATEDBY\", \"T\".\"UPDATED\", \"T\".\"UPDATEDBY\", \"GENERATE_UUID\"() FROM \"IDEMPIERE_QUAL\".\"AD_LANGUAGE\" \"L\", \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM\" \"T\", \"IDEMPIERE_QUAL\".\"AD_CLIENT\" \"C\" WHERE \"T\".\"AD_CLIENT_ID\" = \"C\".\"AD_CLIENT_ID\" AND \"L\".\"ISACTIVE\" = '[REDACTED]' AND \"L\".\"ISSYSTEMLANGUAGE\" = '[REDACTED]' AND \"L\".\"ISBASELANGUAGE\" = '[REDACTED]' AND \"T\".\"AD_PRINTFORMATITEM_ID\" = [REDACTED] AND NOT EXISTS (SELECT * FROM \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM_TRL\" \"TT\" WHERE \"TT\".\"AD_LANGUAGE\" = \"L\".\"AD_LANGUAGE\" AND \"TT\".\"AD_PRINTFORMATITEM_ID\" = \"T\".\"AD_PRINTFORMATITEM_ID\")",
+        "count": 281,
+        "total_elapsed_ms": 1307,
+        "max_elapsed_ms": 21
+      },
+      {
+        "query": "UPDATE \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM_TRL\" AS \"AD_PRINTFORMATITEM_TRL\" SET \"PRINTNAME\" = (SELECT \"E\".\"PRINTNAME\" FROM \"IDEMPIERE_QUAL\".\"AD_ELEMENT_TRL\" \"E\", \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" WHERE \"E\".\"AD_LANGUAGE\" = \"AD_PRINTFORMATITEM_TRL\".\"AD_LANGUAGE\" AND \"E\".\"AD_ELEMENT_ID\" = \"C\".\"AD_ELEMENT_ID\" AND \"C\".\"AD_COLUMN_ID\" = [REDACTED]) WHERE \"AD_PRINTFORMATITEM_ID\" = [REDACTED] AND EXISTS (SELECT * FROM \"IDEMPIERE_QUAL\".\"AD_ELEMENT_TRL\" \"E\", \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" WHERE \"E\".\"AD_LANGUAGE\" = \"AD_PRINTFORMATITEM_TRL\".\"AD_LANGUAGE\" AND \"E\".\"AD_ELEMENT_ID\" = \"C\".\"AD_ELEMENT_ID\" AND \"C\".\"AD_COLUMN_ID\" = [REDACTED] AND \"AD_PRINTFORMATITEM_TRL\".\"AD_PRINTFORMATITEM_ID\" = [REDACTED]) AND EXISTS (SELECT * FROM \"IDEMPIERE_QUAL\".\"AD_CLIENT\" AS \"AD_CLIENT\" WHERE \"AD_CLIENT_ID\" = \"AD_PRINTFORMATITEM_TRL\".\"AD_CLIENT_ID\" AND \"ISMULTILINGUALDOCUMENT\" = '[REDACTED]')",
+        "count": 281,
+        "total_elapsed_ms": 1260,
+        "max_elapsed_ms": 356
+      },
+      {
+        "query": "SELECT \"TABLENAME\" FROM \"IDEMPIERE_QUAL\".\"AD_TABLE\" AS \"AD_TABLE\" WHERE \"AD_TABLE_ID\" IN (SELECT \"AD_TABLE_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_COLUMN\" AS \"AD_COLUMN\" WHERE \"COLUMNNAME\" = '[REDACTED]') ORDER BY \"TABLENAME\"",
+        "count": 1,
+        "total_elapsed_ms": 1203,
+        "max_elapsed_ms": 1203
+      },
+      {
+        "query": "UPDATE \"IDEMPIERE_QUAL\".\"AD_SEQUENCE\" AS \"AD_SEQUENCE\" SET \"CURRENTNEXT\" = \"CURRENTNEXT\" + [REDACTED] WHERE \"AD_SEQUENCE_ID\" = [REDACTED]",
+        "count": 305,
+        "total_elapsed_ms": 1032,
+        "max_elapsed_ms": 403
+      },
+      {
+        "query": "SELECT c.oid, a.attnum, a.attname, c.relname, n.nspname, a.attnotnull OR (t.typtype = '[REDACTED]' AND t.typnotnull), a.attidentity != '[REDACTED]' OR pg_catalog.pg_get_expr(d.adbin, d.adrelid) LIKE '[REDACTED]' FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON (c.relnamespace = n.oid) JOIN pg_catalog.pg_attribute a ON (c.oid = a.attrelid) JOIN pg_catalog.pg_type t ON (a.atttypid = t.oid) LEFT JOIN pg_catalog.pg_attrdef d ON (d.adrelid = a.attrelid AND d.adnum = a.attnum) JOIN (SELECT [REDACTED] AS oid , [REDACTED] AS attnum UNION ALL SELECT [REDACTED], [REDACTED] UNION ALL SELECT [REDACTED], [REDACTED] UNION ALL SELECT [REDACTED], [REDACTED]) vals ON (c.oid = vals.oid AND a.attnum = vals.attnum) where c.oid in ([REDACTED])",
+        "count": 1,
+        "total_elapsed_ms": 1001,
+        "max_elapsed_ms": 1001
+      },
+      {
+        "query": "UPDATE \"IDEMPIERE_QUAL\".\"AD_PROCESS\" AS \"AD_PROCESS\" SET \"STATISTIC_COUNT\" = \"STATISTIC_COUNT\" + [REDACTED], \"STATISTIC_SECONDS\" = \"STATISTIC_SECONDS\" + [REDACTED] WHERE \"AD_PROCESS_ID\" = [REDACTED]",
+        "count": 7,
+        "total_elapsed_ms": 863,
+        "max_elapsed_ms": 448
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_MIGRATIONSCRIPT\" ALTER COLUMN \"SCRIPT\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 758,
+        "max_elapsed_ms": 758
+      },
+      {
+        "query": "DELETE FROM \"IDEMPIERE_QUAL\".\"AD_PINSTANCE\" AS \"AD_PINSTANCE\" WHERE \"AD_PINSTANCE_ID\" = [REDACTED]",
+        "count": 4,
+        "total_elapsed_ms": 755,
+        "max_elapsed_ms": 309
+      },
+      {
+        "query": "INSERT INTO \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM\" (\"SEQNO\", \"NAME\", \"CREATED\", \"ISNEXTLINE\", \"AD_CLIENT_ID\", \"PRINTNAME\", \"YSPACE\", \"SORTNO\", \"AD_COLUMN_ID\", \"ISPAGEBREAK\", \"ISRELATIVEPOSITION\", \"UPDATEDBY\", \"MAXWIDTH\", \"AD_PRINTFORMATITEM_ID\", \"CREATEDBY\", \"ISSUMMARIZED\", \"YPOSITION\", \"UPDATED\", \"AD_PRINTFORMAT_ID\", \"AD_ORG_ID\", \"XSPACE\", \"ISACTIVE\", \"ISHEIGHTONELINE\", \"MAXHEIGHT\", \"XPOSITION\", \"FIELDALIGNMENTTYPE\", \"ISPRINTED\", \"ISORDERBY\", \"ISGROUPBY\", \"LINEALIGNMENTTYPE\", \"PRINTFORMATTYPE\", \"PRINTAREATYPE\", \"IMAGEISATTACHED\", \"ISCOUNTED\", \"ISAVERAGED\", \"ISSUPPRESSNULL\", \"ISSETNLPOSITION\", \"ISNEXTPAGE\", \"ISFIXEDWIDTH\", \"ISMAXCALC\", \"ISRUNNINGTOTAL\", \"ISMINCALC\", \"ISVARIANCECALC\", \"ISDEVIATIONCALC\", \"ISFILLEDRECTANGLE\", \"LINEWIDTH\", \"ARCDIAMETER\", \"SHAPETYPE\", \"ISCENTRALLYMAINTAINED\", \"ISIMAGEFIELD\", \"AD_PRINTFORMATITEM_UU\") VALUES ([REDACTED], '[REDACTED]', CAST('[REDACTED]' AS timestamp without time zone), '[REDACTED]', [REDACTED], '[REDACTED]', [REDACTED], [REDACTED], [REDACTED], '[REDACTED]', '[REDACTED]', [REDACTED], [REDACTED], [REDACTED], [REDACTED], '[REDACTED]', [REDACTED], CAST('[REDACTED]' AS timestamp without time zone), [REDACTED], [REDACTED], [REDACTED], '[REDACTED]', '[REDACTED]', [REDACTED], [REDACTED], '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', [REDACTED], [REDACTED], '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]')",
+        "count": 235,
+        "total_elapsed_ms": 642,
+        "max_elapsed_ms": 11
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_ALERTPROCESSORLOG\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 588,
+        "max_elapsed_ms": 588
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"CREATE$JAVA$LOB$TABLE\" ALTER COLUMN \"LOB\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 588,
+        "max_elapsed_ms": 588
+      },
+      {
+        "query": "SELECT \"AD_TABLE_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_TABLE\" AS \"AD_TABLE\" WHERE (\"ISCHANGELOG\" = '[REDACTED]' OR EXISTS (SELECT * FROM \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" WHERE \"AD_TABLE\".\"AD_TABLE_ID\" = \"C\".\"AD_TABLE_ID\" AND \"C\".\"COLUMNNAME\" = '[REDACTED]')) ORDER BY \"AD_TABLE_ID\"",
+        "count": 1,
+        "total_elapsed_ms": 573,
+        "max_elapsed_ms": 573
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_IMAGE\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 530,
+        "max_elapsed_ms": 530
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_ARCHIVE\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 476,
+        "max_elapsed_ms": 476
+      },
+      {
+        "query": "UPDATE \"IDEMPIERE_QUAL\".\"C_ORDER\" AS \"C_ORDER\" SET \"DATEPRINTED\" = \"GETDATE\"(), \"ISPRINTED\" = '[REDACTED]' WHERE \"C_ORDER_ID\" = [REDACTED]",
+        "count": 1,
+        "total_elapsed_ms": 439,
+        "max_elapsed_ms": 439
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_ATTACHMENT\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 436,
+        "max_elapsed_ms": 436
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"TEST\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 434,
+        "max_elapsed_ms": 434
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"R_REQUESTPROCESSORLOG\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 412,
+        "max_elapsed_ms": 412
+      },
+      {
+        "query": "DELETE FROM \"IDEMPIERE_QUAL\".\"AD_PRINTFORMAT\" AS \"AD_PRINTFORMAT\" WHERE \"AD_PRINTFORMAT_ID\" = [REDACTED]",
+        "count": 1,
+        "total_elapsed_ms": 411,
+        "max_elapsed_ms": 411
+      },
+      {
+        "query": "SELECT \"n\".\"nspname\",\"p\".\"proname\",\"p\".\"prosrc\" FROM \"pg_catalog\".\"pg_proc\" AS \"p\" JOIN \"pg_catalog\".\"pg_namespace\" AS \"n\" ON \"n\".\"oid\"=\"p\".\"pronamespace\" WHERE \"n\".\"nspname\" NOT IN ('[REDACTED]','[REDACTED]')",
+        "count": 2,
+        "total_elapsed_ms": 407,
+        "max_elapsed_ms": 235
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_ARCHIVE_BLOB\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 381,
+        "max_elapsed_ms": 381
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_IMAGE_BLOB\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 371,
+        "max_elapsed_ms": 371
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"C_ACCTPROCESSORLOG\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 368,
+        "max_elapsed_ms": 368
+      }
+    ]
+  },
+  "ny8-r4": {
+    "trace": "/root/.local/state/bicdb/idempiere-reference/upstream-fastdisk-fe9-ny8-r4-6eypzx4l/query-trace.jsonl",
+    "events": {
+      "query.slow": 8983
+    },
+    "top_elapsed": [
+      {
+        "query": "COMMIT",
+        "count": 928,
+        "total_elapsed_ms": 25095,
+        "max_elapsed_ms": 175
+      },
+      {
+        "query": "SELECT \"T\".\"AD_TABLE_ID\", \"C\".\"COLUMNNAME\" FROM \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" JOIN \"IDEMPIERE_QUAL\".\"AD_TABLE\" \"T\" ON \"C\".\"AD_TABLE_ID\" = \"T\".\"AD_TABLE_ID\" LEFT JOIN \"IDEMPIERE_QUAL\".\"AD_REF_TABLE\" \"R\" ON \"C\".\"AD_REFERENCE_VALUE_ID\" = \"R\".\"AD_REFERENCE_ID\" LEFT JOIN \"IDEMPIERE_QUAL\".\"AD_TABLE\" \"TR\" ON \"R\".\"AD_TABLE_ID\" = \"TR\".\"AD_TABLE_ID\" WHERE \"T\".\"ISVIEW\" = '[REDACTED]' AND \"T\".\"ISACTIVE\" = '[REDACTED]' AND \"C\".\"ISACTIVE\" = '[REDACTED]' AND ((\"C\".\"AD_REFERENCE_ID\" = [REDACTED] AND \"C\".\"COLUMNNAME\" = nullif(concat('[REDACTED]', '[REDACTED]'), '[REDACTED]')) OR (\"C\".\"AD_REFERENCE_ID\" IN ([REDACTED], [REDACTED]) AND (\"TR\".\"TABLENAME\" = '[REDACTED]' OR (\"TR\".\"TABLENAME\" IS NULL AND \"C\".\"COLUMNNAME\" = nullif(concat('[REDACTED]', '[REDACTED]'), '[REDACTED]'))))) AND \"C\".\"FKCONSTRAINTTYPE\" = '[REDACTED]'",
+        "count": 9,
+        "total_elapsed_ms": 8836,
+        "max_elapsed_ms": 1463
+      },
+      {
+        "query": "SELECT \"AD_TABLE\".\"AD_TABLE_ID\" AS \"AD_TABLE_ID\", \"AD_TABLE\".\"NAME\" AS \"NAME\", \"AD_TABLE\".\"DESCRIPTION\" AS \"DESCRIPTION\", \"AD_TABLE\".\"HELP\" AS \"HELP\", \"AD_TABLE\".\"AD_WINDOW_ID\" AS \"AD_WINDOW_ID\", \"AD_TABLE\".\"AD_VAL_RULE_ID\" AS \"AD_VAL_RULE_ID\", \"AD_TABLE\".\"TABLENAME\" AS \"TABLENAME\", \"AD_TABLE\".\"LOADSEQ\" AS \"LOADSEQ\", \"AD_TABLE\".\"ACCESSLEVEL\" AS \"ACCESSLEVEL\", \"AD_TABLE\".\"AD_CLIENT_ID\" AS \"AD_CLIENT_ID\", \"AD_TABLE\".\"AD_ORG_ID\" AS \"AD_ORG_ID\", \"AD_TABLE\".\"ISACTIVE\" AS \"ISACTIVE\", \"AD_TABLE\".\"CREATED\" AS \"CREATED\", \"AD_TABLE\".\"CREATEDBY\" AS \"CREATEDBY\", \"AD_TABLE\".\"UPDATED\" AS \"UPDATED\", \"AD_TABLE\".\"UPDATEDBY\" AS \"UPDATEDBY\", \"AD_TABLE\".\"ISSECURITYENABLED\" AS \"ISSECURITYENABLED\", \"AD_TABLE\".\"ISDELETEABLE\" AS \"ISDELETEABLE\", \"AD_TABLE\".\"ISHIGHVOLUME\" AS \"ISHIGHVOLUME\", \"AD_TABLE\".\"ISVIEW\" AS \"ISVIEW\", \"AD_TABLE\".\"ENTITYTYPE\" AS \"ENTITYTYPE\", \"AD_TABLE\".\"IMPORTTABLE\" AS \"IMPORTTABLE\", \"AD_TABLE\".\"ISCHANGELOG\" AS \"ISCHANGELOG\", \"AD_TABLE\".\"REPLICATIONTYPE\" AS \"REPLICATIONTYPE\", \"AD_TABLE\".\"PO_WINDOW_ID\" AS \"PO_WINDOW_ID\", \"AD_TABLE\".\"COPYCOLUMNSFROMTABLE\" AS \"COPYCOLUMNSFROMTABLE\", \"AD_TABLE\".\"ISCENTRALLYMAINTAINED\" AS \"ISCENTRALLYMAINTAINED\", \"AD_TABLE\".\"AD_TABLE_UU\" AS \"AD_TABLE_UU\", \"AD_TABLE\".\"PROCESSING\" AS \"PROCESSING\", \"AD_TABLE\".\"DATABASEVIEWDROP\" AS \"DATABASEVIEWDROP\", \"AD_TABLE\".\"COPYCOMPONENTSFROMVIEW\" AS \"COPYCOMPONENTSFROMVIEW\", \"AD_TABLE\".\"CREATEWINDOWFROMTABLE\" AS \"CREATEWINDOWFROMTABLE\", \"AD_TABLE\".\"ISSHOWINDRILLOPTIONS\" AS \"ISSHOWINDRILLOPTIONS\", \"AD_TABLE\".\"ISPARTITION\" AS \"ISPARTITION\", \"AD_TABLE\".\"CREATEPARTITION\" AS \"CREATEPARTITION\" FROM \"IDEMPIERE_QUAL\".\"AD_TABLE\" AS \"AD_TABLE\" JOIN \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" ON (\"C\".\"AD_TABLE_ID\" = \"AD_TABLE\".\"AD_TABLE_ID\") WHERE (\"C\".\"AD_REFERENCE_ID\" = [REDACTED] AND \"C\".\"FKCONSTRAINTTYPE\" = '[REDACTED]' AND \"AD_TABLE\".\"ISVIEW\" = '[REDACTED]' AND \"C\".\"COLUMNNAME\" = '[REDACTED]') AND \"AD_TABLE\".\"ISACTIVE\" = '[REDACTED]'",
+        "count": 4,
+        "total_elapsed_ms": 4205,
+        "max_elapsed_ms": 1083
+      },
+      {
+        "query": "SELECT \"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_FIELD\" AS \"AD_FIELD\" WHERE \"ISACTIVE\" = '[REDACTED]' AND \"AD_TAB_ID\" = (SELECT min(\"AD_TAB_ID\") FROM \"IDEMPIERE_QUAL\".\"AD_TAB\" AS \"AD_TAB\" WHERE \"AD_TABLE_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') AND \"ISENCRYPTED\" = '[REDACTED]' AND \"OBSCURETYPE\" IS NULL AND \"AD_COLUMN_ID\" NOT IN (SELECT \"PFI\".\"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM\" \"PFI\" WHERE \"PFI\".\"AD_PRINTFORMAT_ID\" = [REDACTED] AND \"PFI\".\"AD_COLUMN_ID\" IS NOT NULL) AND (\"AD_COLUMN_ID\" IN (SELECT \"AD_COLUMN_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_REPORTVIEW_COLUMN\" AS \"AD_REPORTVIEW_COLUMN\" WHERE \"AD_REPORTVIEW_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') OR ((SELECT count(*) FROM \"IDEMPIERE_QUAL\".\"AD_REPORTVIEW_COLUMN\" AS \"AD_REPORTVIEW_COLUMN\" WHERE \"AD_REPORTVIEW_ID\" = [REDACTED] AND \"ISACTIVE\" = '[REDACTED]') = [REDACTED])) ORDER BY coalesce(\"ISDISPLAYED\", '[REDACTED]') DESC, \"SORTNO\", \"SEQNO\", \"NAME\"",
+        "count": 4,
+        "total_elapsed_ms": 3626,
+        "max_elapsed_ms": 1249
+      },
+      {
+        "query": "SELECT \"AD_TABLE\".\"AD_TABLE_ID\" AS \"AD_TABLE_ID\", \"AD_TABLE\".\"NAME\" AS \"NAME\", \"AD_TABLE\".\"DESCRIPTION\" AS \"DESCRIPTION\", \"AD_TABLE\".\"HELP\" AS \"HELP\", \"AD_TABLE\".\"AD_WINDOW_ID\" AS \"AD_WINDOW_ID\", \"AD_TABLE\".\"AD_VAL_RULE_ID\" AS \"AD_VAL_RULE_ID\", \"AD_TABLE\".\"TABLENAME\" AS \"TABLENAME\", \"AD_TABLE\".\"LOADSEQ\" AS \"LOADSEQ\", \"AD_TABLE\".\"ACCESSLEVEL\" AS \"ACCESSLEVEL\", \"AD_TABLE\".\"AD_CLIENT_ID\" AS \"AD_CLIENT_ID\", \"AD_TABLE\".\"AD_ORG_ID\" AS \"AD_ORG_ID\", \"AD_TABLE\".\"ISACTIVE\" AS \"ISACTIVE\", \"AD_TABLE\".\"CREATED\" AS \"CREATED\", \"AD_TABLE\".\"CREATEDBY\" AS \"CREATEDBY\", \"AD_TABLE\".\"UPDATED\" AS \"UPDATED\", \"AD_TABLE\".\"UPDATEDBY\" AS \"UPDATEDBY\", \"AD_TABLE\".\"ISSECURITYENABLED\" AS \"ISSECURITYENABLED\", \"AD_TABLE\".\"ISDELETEABLE\" AS \"ISDELETEABLE\", \"AD_TABLE\".\"ISHIGHVOLUME\" AS \"ISHIGHVOLUME\", \"AD_TABLE\".\"ISVIEW\" AS \"ISVIEW\", \"AD_TABLE\".\"ENTITYTYPE\" AS \"ENTITYTYPE\", \"AD_TABLE\".\"IMPORTTABLE\" AS \"IMPORTTABLE\", \"AD_TABLE\".\"ISCHANGELOG\" AS \"ISCHANGELOG\", \"AD_TABLE\".\"REPLICATIONTYPE\" AS \"REPLICATIONTYPE\", \"AD_TABLE\".\"PO_WINDOW_ID\" AS \"PO_WINDOW_ID\", \"AD_TABLE\".\"COPYCOLUMNSFROMTABLE\" AS \"COPYCOLUMNSFROMTABLE\", \"AD_TABLE\".\"ISCENTRALLYMAINTAINED\" AS \"ISCENTRALLYMAINTAINED\", \"AD_TABLE\".\"AD_TABLE_UU\" AS \"AD_TABLE_UU\", \"AD_TABLE\".\"PROCESSING\" AS \"PROCESSING\", \"AD_TABLE\".\"DATABASEVIEWDROP\" AS \"DATABASEVIEWDROP\", \"AD_TABLE\".\"COPYCOMPONENTSFROMVIEW\" AS \"COPYCOMPONENTSFROMVIEW\", \"AD_TABLE\".\"CREATEWINDOWFROMTABLE\" AS \"CREATEWINDOWFROMTABLE\", \"AD_TABLE\".\"ISSHOWINDRILLOPTIONS\" AS \"ISSHOWINDRILLOPTIONS\", \"AD_TABLE\".\"ISPARTITION\" AS \"ISPARTITION\", \"AD_TABLE\".\"CREATEPARTITION\" AS \"CREATEPARTITION\" FROM \"IDEMPIERE_QUAL\".\"AD_TABLE\" AS \"AD_TABLE\" JOIN \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" ON (\"C\".\"AD_TABLE_ID\" = \"AD_TABLE\".\"AD_TABLE_ID\") WHERE (\"C\".\"AD_REFERENCE_ID\" = [REDACTED] AND \"C\".\"FKCONSTRAINTTYPE\" = '[REDACTED]' AND \"AD_TABLE\".\"ISVIEW\" = '[REDACTED]' AND \"C\".\"COLUMNNAME\" = '[REDACTED]' AND (\"AD_TABLE\".\"TABLENAME\" NOT IN ('[REDACTED]', '[REDACTED]'))) AND \"AD_TABLE\".\"ISACTIVE\" = '[REDACTED]'",
+        "count": 2,
+        "total_elapsed_ms": 2088,
+        "max_elapsed_ms": 1053
+      },
+      {
+        "query": "SELECT \"AD_TABLE\".\"AD_TABLE_ID\" AS \"AD_TABLE_ID\", \"AD_TABLE\".\"NAME\" AS \"NAME\", \"AD_TABLE\".\"DESCRIPTION\" AS \"DESCRIPTION\", \"AD_TABLE\".\"HELP\" AS \"HELP\", \"AD_TABLE\".\"AD_WINDOW_ID\" AS \"AD_WINDOW_ID\", \"AD_TABLE\".\"AD_VAL_RULE_ID\" AS \"AD_VAL_RULE_ID\", \"AD_TABLE\".\"TABLENAME\" AS \"TABLENAME\", \"AD_TABLE\".\"LOADSEQ\" AS \"LOADSEQ\", \"AD_TABLE\".\"ACCESSLEVEL\" AS \"ACCESSLEVEL\", \"AD_TABLE\".\"AD_CLIENT_ID\" AS \"AD_CLIENT_ID\", \"AD_TABLE\".\"AD_ORG_ID\" AS \"AD_ORG_ID\", \"AD_TABLE\".\"ISACTIVE\" AS \"ISACTIVE\", \"AD_TABLE\".\"CREATED\" AS \"CREATED\", \"AD_TABLE\".\"CREATEDBY\" AS \"CREATEDBY\", \"AD_TABLE\".\"UPDATED\" AS \"UPDATED\", \"AD_TABLE\".\"UPDATEDBY\" AS \"UPDATEDBY\", \"AD_TABLE\".\"ISSECURITYENABLED\" AS \"ISSECURITYENABLED\", \"AD_TABLE\".\"ISDELETEABLE\" AS \"ISDELETEABLE\", \"AD_TABLE\".\"ISHIGHVOLUME\" AS \"ISHIGHVOLUME\", \"AD_TABLE\".\"ISVIEW\" AS \"ISVIEW\", \"AD_TABLE\".\"ENTITYTYPE\" AS \"ENTITYTYPE\", \"AD_TABLE\".\"IMPORTTABLE\" AS \"IMPORTTABLE\", \"AD_TABLE\".\"ISCHANGELOG\" AS \"ISCHANGELOG\", \"AD_TABLE\".\"REPLICATIONTYPE\" AS \"REPLICATIONTYPE\", \"AD_TABLE\".\"PO_WINDOW_ID\" AS \"PO_WINDOW_ID\", \"AD_TABLE\".\"COPYCOLUMNSFROMTABLE\" AS \"COPYCOLUMNSFROMTABLE\", \"AD_TABLE\".\"ISCENTRALLYMAINTAINED\" AS \"ISCENTRALLYMAINTAINED\", \"AD_TABLE\".\"AD_TABLE_UU\" AS \"AD_TABLE_UU\", \"AD_TABLE\".\"PROCESSING\" AS \"PROCESSING\", \"AD_TABLE\".\"DATABASEVIEWDROP\" AS \"DATABASEVIEWDROP\", \"AD_TABLE\".\"COPYCOMPONENTSFROMVIEW\" AS \"COPYCOMPONENTSFROMVIEW\", \"AD_TABLE\".\"CREATEWINDOWFROMTABLE\" AS \"CREATEWINDOWFROMTABLE\", \"AD_TABLE\".\"ISSHOWINDRILLOPTIONS\" AS \"ISSHOWINDRILLOPTIONS\", \"AD_TABLE\".\"ISPARTITION\" AS \"ISPARTITION\", \"AD_TABLE\".\"CREATEPARTITION\" AS \"CREATEPARTITION\" FROM \"IDEMPIERE_QUAL\".\"AD_TABLE\" AS \"AD_TABLE\" JOIN \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" ON (\"C\".\"AD_TABLE_ID\" = \"AD_TABLE\".\"AD_TABLE_ID\") WHERE (\"C\".\"AD_REFERENCE_ID\" = [REDACTED] AND \"C\".\"FKCONSTRAINTTYPE\" = '[REDACTED]' AND \"AD_TABLE\".\"ISVIEW\" = '[REDACTED]' AND \"C\".\"COLUMNNAME\" = '[REDACTED]' AND (\"AD_TABLE\".\"TABLENAME\" IN ('[REDACTED]', '[REDACTED]'))) AND \"AD_TABLE\".\"ISACTIVE\" = '[REDACTED]'",
+        "count": 2,
+        "total_elapsed_ms": 2040,
+        "max_elapsed_ms": 1041
+      },
+      {
+        "query": "INSERT INTO \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM_TRL\" (\"AD_LANGUAGE\", \"AD_PRINTFORMATITEM_ID\", \"NAME\", \"PRINTNAME\", \"PRINTNAMESUFFIX\", \"ISTRANSLATED\", \"AD_CLIENT_ID\", \"AD_ORG_ID\", \"CREATED\", \"CREATEDBY\", \"UPDATED\", \"UPDATEDBY\", \"AD_PRINTFORMATITEM_TRL_UU\") SELECT \"L\".\"AD_LANGUAGE\", \"T\".\"AD_PRINTFORMATITEM_ID\", \"T\".\"NAME\", \"T\".\"PRINTNAME\", \"T\".\"PRINTNAMESUFFIX\", CASE WHEN \"L\".\"AD_LANGUAGE\" = \"C\".\"AD_LANGUAGE\" THEN '[REDACTED]' ELSE '[REDACTED]' END AS \"ISTRANSLATED\", \"T\".\"AD_CLIENT_ID\", \"T\".\"AD_ORG_ID\", \"T\".\"CREATED\", \"T\".\"CREATEDBY\", \"T\".\"UPDATED\", \"T\".\"UPDATEDBY\", \"GENERATE_UUID\"() FROM \"IDEMPIERE_QUAL\".\"AD_LANGUAGE\" \"L\", \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM\" \"T\", \"IDEMPIERE_QUAL\".\"AD_CLIENT\" \"C\" WHERE \"T\".\"AD_CLIENT_ID\" = \"C\".\"AD_CLIENT_ID\" AND \"L\".\"ISACTIVE\" = '[REDACTED]' AND \"L\".\"ISSYSTEMLANGUAGE\" = '[REDACTED]' AND \"L\".\"ISBASELANGUAGE\" = '[REDACTED]' AND \"T\".\"AD_PRINTFORMATITEM_ID\" = [REDACTED] AND NOT EXISTS (SELECT * FROM \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM_TRL\" \"TT\" WHERE \"TT\".\"AD_LANGUAGE\" = \"L\".\"AD_LANGUAGE\" AND \"TT\".\"AD_PRINTFORMATITEM_ID\" = \"T\".\"AD_PRINTFORMATITEM_ID\")",
+        "count": 281,
+        "total_elapsed_ms": 1516,
+        "max_elapsed_ms": 23
+      },
+      {
+        "query": "UPDATE \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM_TRL\" \"NEW\" SET (\"PRINTNAME\", \"PRINTNAMESUFFIX\", \"ISTRANSLATED\") = (SELECT \"PRINTNAME\", \"PRINTNAMESUFFIX\", \"ISTRANSLATED\" FROM \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM_TRL\" \"OLD\" WHERE \"OLD\".\"AD_LANGUAGE\" = \"NEW\".\"AD_LANGUAGE\" AND \"AD_PRINTFORMATITEM_ID\" = [REDACTED]) WHERE \"AD_PRINTFORMATITEM_ID\" = [REDACTED] AND EXISTS (SELECT \"AD_PRINTFORMATITEM_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM_TRL\" \"OLD\" WHERE \"OLD\".\"AD_LANGUAGE\" = \"NEW\".\"AD_LANGUAGE\" AND \"AD_PRINTFORMATITEM_ID\" = [REDACTED])",
+        "count": 46,
+        "total_elapsed_ms": 1314,
+        "max_elapsed_ms": 33
+      },
+      {
+        "query": "UPDATE \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM_TRL\" AS \"AD_PRINTFORMATITEM_TRL\" SET \"PRINTNAME\" = (SELECT \"E\".\"PRINTNAME\" FROM \"IDEMPIERE_QUAL\".\"AD_ELEMENT_TRL\" \"E\", \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" WHERE \"E\".\"AD_LANGUAGE\" = \"AD_PRINTFORMATITEM_TRL\".\"AD_LANGUAGE\" AND \"E\".\"AD_ELEMENT_ID\" = \"C\".\"AD_ELEMENT_ID\" AND \"C\".\"AD_COLUMN_ID\" = [REDACTED]) WHERE \"AD_PRINTFORMATITEM_ID\" = [REDACTED] AND EXISTS (SELECT * FROM \"IDEMPIERE_QUAL\".\"AD_ELEMENT_TRL\" \"E\", \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" WHERE \"E\".\"AD_LANGUAGE\" = \"AD_PRINTFORMATITEM_TRL\".\"AD_LANGUAGE\" AND \"E\".\"AD_ELEMENT_ID\" = \"C\".\"AD_ELEMENT_ID\" AND \"C\".\"AD_COLUMN_ID\" = [REDACTED] AND \"AD_PRINTFORMATITEM_TRL\".\"AD_PRINTFORMATITEM_ID\" = [REDACTED]) AND EXISTS (SELECT * FROM \"IDEMPIERE_QUAL\".\"AD_CLIENT\" AS \"AD_CLIENT\" WHERE \"AD_CLIENT_ID\" = \"AD_PRINTFORMATITEM_TRL\".\"AD_CLIENT_ID\" AND \"ISMULTILINGUALDOCUMENT\" = '[REDACTED]')",
+        "count": 281,
+        "total_elapsed_ms": 1242,
+        "max_elapsed_ms": 161
+      },
+      {
+        "query": "SELECT \"TABLENAME\" FROM \"IDEMPIERE_QUAL\".\"AD_TABLE\" AS \"AD_TABLE\" WHERE \"AD_TABLE_ID\" IN (SELECT \"AD_TABLE_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_COLUMN\" AS \"AD_COLUMN\" WHERE \"COLUMNNAME\" = '[REDACTED]') ORDER BY \"TABLENAME\"",
+        "count": 1,
+        "total_elapsed_ms": 1138,
+        "max_elapsed_ms": 1138
+      },
+      {
+        "query": "UPDATE \"IDEMPIERE_QUAL\".\"AD_PROCESS\" AS \"AD_PROCESS\" SET \"STATISTIC_COUNT\" = \"STATISTIC_COUNT\" + [REDACTED], \"STATISTIC_SECONDS\" = \"STATISTIC_SECONDS\" + [REDACTED] WHERE \"AD_PROCESS_ID\" = [REDACTED]",
+        "count": 7,
+        "total_elapsed_ms": 1069,
+        "max_elapsed_ms": 344
+      },
+      {
+        "query": "SELECT c.oid, a.attnum, a.attname, c.relname, n.nspname, a.attnotnull OR (t.typtype = '[REDACTED]' AND t.typnotnull), a.attidentity != '[REDACTED]' OR pg_catalog.pg_get_expr(d.adbin, d.adrelid) LIKE '[REDACTED]' FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON (c.relnamespace = n.oid) JOIN pg_catalog.pg_attribute a ON (c.oid = a.attrelid) JOIN pg_catalog.pg_type t ON (a.atttypid = t.oid) LEFT JOIN pg_catalog.pg_attrdef d ON (d.adrelid = a.attrelid AND d.adnum = a.attnum) JOIN (SELECT [REDACTED] AS oid , [REDACTED] AS attnum UNION ALL SELECT [REDACTED], [REDACTED] UNION ALL SELECT [REDACTED], [REDACTED] UNION ALL SELECT [REDACTED], [REDACTED]) vals ON (c.oid = vals.oid AND a.attnum = vals.attnum) where c.oid in ([REDACTED])",
+        "count": 1,
+        "total_elapsed_ms": 1020,
+        "max_elapsed_ms": 1020
+      },
+      {
+        "query": "UPDATE \"IDEMPIERE_QUAL\".\"AD_SEQUENCE\" AS \"AD_SEQUENCE\" SET \"CURRENTNEXT\" = \"CURRENTNEXT\" + [REDACTED] WHERE \"AD_SEQUENCE_ID\" = [REDACTED]",
+        "count": 305,
+        "total_elapsed_ms": 845,
+        "max_elapsed_ms": 220
+      },
+      {
+        "query": "DELETE FROM \"IDEMPIERE_QUAL\".\"AD_PINSTANCE\" AS \"AD_PINSTANCE\" WHERE \"AD_PINSTANCE_ID\" = [REDACTED]",
+        "count": 4,
+        "total_elapsed_ms": 845,
+        "max_elapsed_ms": 406
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_MIGRATIONSCRIPT\" ALTER COLUMN \"SCRIPT\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 755,
+        "max_elapsed_ms": 755
+      },
+      {
+        "query": "INSERT INTO \"IDEMPIERE_QUAL\".\"AD_PRINTFORMATITEM\" (\"SEQNO\", \"NAME\", \"CREATED\", \"ISNEXTLINE\", \"AD_CLIENT_ID\", \"PRINTNAME\", \"YSPACE\", \"SORTNO\", \"AD_COLUMN_ID\", \"ISPAGEBREAK\", \"ISRELATIVEPOSITION\", \"UPDATEDBY\", \"MAXWIDTH\", \"AD_PRINTFORMATITEM_ID\", \"CREATEDBY\", \"ISSUMMARIZED\", \"YPOSITION\", \"UPDATED\", \"AD_PRINTFORMAT_ID\", \"AD_ORG_ID\", \"XSPACE\", \"ISACTIVE\", \"ISHEIGHTONELINE\", \"MAXHEIGHT\", \"XPOSITION\", \"FIELDALIGNMENTTYPE\", \"ISPRINTED\", \"ISORDERBY\", \"ISGROUPBY\", \"LINEALIGNMENTTYPE\", \"PRINTFORMATTYPE\", \"PRINTAREATYPE\", \"IMAGEISATTACHED\", \"ISCOUNTED\", \"ISAVERAGED\", \"ISSUPPRESSNULL\", \"ISSETNLPOSITION\", \"ISNEXTPAGE\", \"ISFIXEDWIDTH\", \"ISMAXCALC\", \"ISRUNNINGTOTAL\", \"ISMINCALC\", \"ISVARIANCECALC\", \"ISDEVIATIONCALC\", \"ISFILLEDRECTANGLE\", \"LINEWIDTH\", \"ARCDIAMETER\", \"SHAPETYPE\", \"ISCENTRALLYMAINTAINED\", \"ISIMAGEFIELD\", \"AD_PRINTFORMATITEM_UU\") VALUES ([REDACTED], '[REDACTED]', CAST('[REDACTED]' AS timestamp without time zone), '[REDACTED]', [REDACTED], '[REDACTED]', [REDACTED], [REDACTED], [REDACTED], '[REDACTED]', '[REDACTED]', [REDACTED], [REDACTED], [REDACTED], [REDACTED], '[REDACTED]', [REDACTED], CAST('[REDACTED]' AS timestamp without time zone), [REDACTED], [REDACTED], [REDACTED], '[REDACTED]', '[REDACTED]', [REDACTED], [REDACTED], '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]', [REDACTED], [REDACTED], '[REDACTED]', '[REDACTED]', '[REDACTED]', '[REDACTED]')",
+        "count": 235,
+        "total_elapsed_ms": 746,
+        "max_elapsed_ms": 14
+      },
+      {
+        "query": "SELECT \"AD_TABLE_ID\" FROM \"IDEMPIERE_QUAL\".\"AD_TABLE\" AS \"AD_TABLE\" WHERE (\"ISCHANGELOG\" = '[REDACTED]' OR EXISTS (SELECT * FROM \"IDEMPIERE_QUAL\".\"AD_COLUMN\" \"C\" WHERE \"AD_TABLE\".\"AD_TABLE_ID\" = \"C\".\"AD_TABLE_ID\" AND \"C\".\"COLUMNNAME\" = '[REDACTED]')) ORDER BY \"AD_TABLE_ID\"",
+        "count": 1,
+        "total_elapsed_ms": 592,
+        "max_elapsed_ms": 592
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_ALERTPROCESSORLOG\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 568,
+        "max_elapsed_ms": 568
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"CREATE$JAVA$LOB$TABLE\" ALTER COLUMN \"LOB\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 506,
+        "max_elapsed_ms": 506
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_IMAGE\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 468,
+        "max_elapsed_ms": 468
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_ARCHIVE\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 423,
+        "max_elapsed_ms": 423
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"TEST\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 410,
+        "max_elapsed_ms": 410
+      },
+      {
+        "query": "DELETE FROM \"IDEMPIERE_QUAL\".\"AD_PRINTFORMAT\" AS \"AD_PRINTFORMAT\" WHERE \"AD_PRINTFORMAT_ID\" = [REDACTED]",
+        "count": 1,
+        "total_elapsed_ms": 408,
+        "max_elapsed_ms": 408
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_SCHEDULERLOG\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 393,
+        "max_elapsed_ms": 393
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_ATTACHMENT\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 391,
+        "max_elapsed_ms": 391
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"C_ACCTPROCESSORLOG\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 368,
+        "max_elapsed_ms": 368
+      },
+      {
+        "query": "UPDATE \"IDEMPIERE_QUAL\".\"AD_PINSTANCE\" AS \"AD_PINSTANCE\" SET \"ISPROCESSING\" = '[REDACTED]' WHERE \"AD_PINSTANCE_ID\" = [REDACTED]",
+        "count": 2,
+        "total_elapsed_ms": 349,
+        "max_elapsed_ms": 187
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_WORKFLOWPROCESSORLOG\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 339,
+        "max_elapsed_ms": 339
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"AD_LDAPPROCESSORLOG\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 337,
+        "max_elapsed_ms": 337
+      },
+      {
+        "query": "ALTER TABLE \"IDEMPIERE_QUAL\".\"R_REQUESTPROCESSORLOG\" ALTER COLUMN \"BINARYDATA\" TYPE BLOB",
+        "count": 1,
+        "total_elapsed_ms": 335,
+        "max_elapsed_ms": 335
+      }
+    ]
+  }
+}

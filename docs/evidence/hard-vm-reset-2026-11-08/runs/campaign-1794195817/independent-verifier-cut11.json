@@ -1,0 +1,93 @@
+{
+  "format_version": 1,
+  "verdict": "clean",
+  "complete": true,
+  "stop_reason": null,
+  "store": {
+    "directory": "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut11/paged",
+    "page_size": 8192,
+    "layout": "segmented",
+    "page_files": 1,
+    "superblock_page_count": 711,
+    "effective_page_count": 711,
+    "free_list_head": 0,
+    "free_page_count": 0,
+    "checkpoint_lsn": 24602,
+    "meta_page": 1,
+    "meta_initialized": true,
+    "index_root": 412,
+    "catalog_root": 321,
+    "frozen_xid": 2941,
+    "next_xid": 2941,
+    "abort_exceptions": 1,
+    "status_spill_pages": 0,
+    "status_spill_entries": 0
+  },
+  "read_only": {
+    "lock": {
+      "state": "unlocked"
+    },
+    "files_opened_read_only": [
+      "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut11/paged/store.pages",
+      "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut11/paged/store.wal.24602",
+      "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut11/paged/store.wal.24606",
+      "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut11/paged/store.wal.24609",
+      "/root/bicdb-durability-s3/vm-reset/structural-inspection-1794195817-cut11/paged/store.wal"
+    ],
+    "recovery_ran": false,
+    "note": "Files were opened read-only (O_NOFOLLOW, O_NOATIME where permitted); the directory lock was probed with F_GETLK and not taken; recovery was reproduced in memory by reading committed page images from the log."
+  },
+  "log": {
+    "sealed_segments": 3,
+    "sealed_bytes": 74128,
+    "active_bytes": 24736,
+    "reset_shape": {
+      "shape": "normal"
+    },
+    "replay_scope": "full_chain",
+    "records": 12,
+    "first_lsn": 24602,
+    "last_lsn": 24613,
+    "torn_tail_bytes": 16464,
+    "checkpoint_records": 0,
+    "redo_lsn": 0,
+    "committed_transactions": 2,
+    "pending_page_images": 10,
+    "distinct_pages_overlaid": 9,
+    "uncommitted_images_skipped": 0,
+    "page_file_truncated_by_recovery_from": null,
+    "open_would_refuse": null,
+    "stale_records_discarded": {
+      "recorded_in_store": false,
+      "segments_a_fixed_open_would_discard": 0,
+      "explanation": "The crash-ordered reset fix reports stale segments it discards (`stale_segments_discarded`) only in the RecoveryReport of that open; it persists nothing, so a store a fixed engine already cleaned up carries no trace of it. `reset_shape` is the same classification computed from these files now."
+    }
+  },
+  "counters": {
+    "index_entries": 14411,
+    "index_tree_pages": 205,
+    "index_tree_height": 3,
+    "catalog_entries": 998,
+    "catalog_tree_pages": 5,
+    "directory_heap_pages": 499,
+    "free_space_records": 499,
+    "versions_examined": 16823,
+    "visible_rows": 12572,
+    "deleted_rows": 1839,
+    "keys_without_committed_version": 0,
+    "vacuumed_links": 0,
+    "heap_pages_swept": 499,
+    "heap_versions_swept": 16823,
+    "reachable_versions_swept": 16823,
+    "key_tree_passes": 1,
+    "pages_read_from_page_files": 3190,
+    "pages_read_from_log": 19,
+    "page_cache_hits": 15532,
+    "bytes_read": 26288128,
+    "slot_bitmap_window_pages": 711,
+    "peak_bitmap_bytes": 90504,
+    "elapsed_millis": 52
+  },
+  "classes": [],
+  "external_evidence": []
+}

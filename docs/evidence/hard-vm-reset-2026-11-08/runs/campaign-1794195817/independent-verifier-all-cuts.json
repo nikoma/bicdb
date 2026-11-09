@@ -1,0 +1,280 @@
+{
+  "verifier_source": "26051caf",
+  "verifier_binary_sha256": "fd1b4ef5d7bcd51bed216125c255c5cad75a5f27903b57beb44bf4900c8f1b01",
+  "campaign_source": "5d04f91f2189385ec43d0d650be05778f0acdfd1",
+  "method": "journal replay on disposable copy, extract paged directory, read-only verifier without engine open; original crash image sizes/mtime unchanged",
+  "configured_pool_bytes": 2097152,
+  "limitation": "pagefile footprint is not live working-set or eviction proof; verifier is page-level, not universal logical/SQL integrity",
+  "cuts": [
+    {
+      "cut": 1,
+      "exit_code": 0,
+      "verdict": "clean",
+      "complete": true,
+      "page_file_bytes": 4775936,
+      "extracted_content_hashes_unchanged": true,
+      "files_sha256": {
+        "paged/store.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "paged/store.pages": "b40723b502523e1b0611770036009933c2d5bfc57dfca74ab71d9223081c11a2",
+        "paged/store.wal": "d85fabc6cf3673fea0a57b4c886dd6d92a4fa0b0dda462e3e71f5c23828bf134"
+      }
+    },
+    {
+      "cut": 2,
+      "exit_code": 0,
+      "verdict": "clean",
+      "complete": true,
+      "page_file_bytes": 4816896,
+      "extracted_content_hashes_unchanged": true,
+      "files_sha256": {
+        "paged/store.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "paged/store.pages": "6f74abadef9d4adc1792c8ca1ee20df2ff70ecd9c57608c679e2b20f3a94c09f",
+        "paged/store.wal": "303a4c58e02c04b3b3f131cf3313ba506d4d2997ca78306a499428c719cb2988",
+        "paged/store.wal.19671": "6e3dcdb1ce86c99761ce370163cff70e7a961ad736105714d8abb41efaf80ecf",
+        "paged/store.wal.19675": "836db16d13ed0190a9b97ba0fb978af11cf7427ea3d12861938be88da2b9dbba",
+        "paged/store.wal.19678": "372d3176c46ea1db3e9e93327392af5d8cb8bcc39d6a80b4235e0b9bb0688c29",
+        "paged/store.wal.19681": "c66b2cadc2d9826ed0fde11773de2a78f5af5ab8b75a53eb16daf138fc2b339d",
+        "paged/store.wal.19685": "8faf10a0c809e7b957d52232c8fe7f6031177181c313381384d40efb442f93af",
+        "paged/store.wal.19688": "dc16ae5a4f45b1642fb6d97602c70ab2efd9d331b31fa3ec70d5854066348be7",
+        "paged/store.wal.19691": "2bde94b6cf30364c924f3c8a60484bfecb54ba06e8af3f95a51eb9304074c8cf",
+        "paged/store.wal.19695": "5df970c2145497ab941e77b4adc1bbed370df2dfb6af26300c4ae2c01049d3ec",
+        "paged/store.wal.19698": "dc5de9b405d1c240ba11101301742c10cb98d19bed24eda43260a4a05b54c024",
+        "paged/store.wal.19701": "f0e4d67bc649c9f4266cfbc73e65323f13b1e91a24e82bd638341706e92c1075"
+      }
+    },
+    {
+      "cut": 3,
+      "exit_code": 0,
+      "verdict": "clean",
+      "complete": true,
+      "page_file_bytes": 4923392,
+      "extracted_content_hashes_unchanged": true,
+      "files_sha256": {
+        "paged/store.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "paged/store.pages": "2afe3841a7b5368da4deb5f99193e813c11ff0e300e3bbddf52e67ed7c063fa2",
+        "paged/store.wal": "9b2f4c1df42de3a4bafce9fc1aa1560f796afd42e6bfc4438d1479e3ff45b3e3",
+        "paged/store.wal.20117": "e064a36964dd8482f6b03ec285786c3e3759c8de226625492016ba5168ded3f4",
+        "paged/store.wal.20120": "3ee57ca9749ae780431c734eab78340b68e9c2a514b6893dde38b20d80701751",
+        "paged/store.wal.20124": "cf4fe4decea33ea4b27bb281e104616461b7b38e74eddd6e2dc56238e6846a51",
+        "paged/store.wal.20127": "23f817cf9cc63b0ad94954ed66e5aa321b414294daf5371363db9f31f78e5be3",
+        "paged/store.wal.20131": "1b3dfca48c1cb1c7441e159d70988c9e24eb069dc8f7ea173673faee4f308c96",
+        "paged/store.wal.20134": "538c45ccbafdbfe79abfd44f89e10aab3c691ceb41a0137729bf52e7ff20f9cc",
+        "paged/store.wal.20137": "e3deb268f65fd0ab037c36ee0d76581dbbf81f274d48362342490a2ef4335e58",
+        "paged/store.wal.20141": "e15c67a619284ed61d14c01debc9439ea1c0a33f3c43f268d9649e6621b90b44",
+        "paged/store.wal.20144": "7f56f7c919d27235c5f252258d0aa08e30c456bf00573a7fb5be2c07007045ee",
+        "paged/store.wal.20148": "3b29469c38c14ddf63a355b9563ba10c745f1cd4350f35d37c02d7d4b286011f",
+        "paged/store.wal.20151": "2182539e82d5e29a1f1027f9f718c5d3ed9b60b9a60ee07803b8b95a81812204",
+        "paged/store.wal.20154": "b502409916736a3ebbe01cdd89e31996b5129b97e6671941fcc8472ef4fac001",
+        "paged/store.wal.20159": "eb618e329ac020095a3f03b80daee089e84c68183e66db15c12823e581ea5789"
+      }
+    },
+    {
+      "cut": 4,
+      "exit_code": 0,
+      "verdict": "clean",
+      "complete": true,
+      "page_file_bytes": 5013504,
+      "extracted_content_hashes_unchanged": true,
+      "files_sha256": {
+        "paged/store.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "paged/store.pages": "a0651c95e128a42d599c6a3a5bfa5a52cb35db701aa29ac6130a82fd641556f7",
+        "paged/store.wal": "1c7255b4fac70c267effe804d857c280efd948e3d16202be1566ef7d89e76e16",
+        "paged/store.wal.20558": "dce455876d9031aa1a98c10b2e7f24e109529e022cbe04106d4ac51a10045e00",
+        "paged/store.wal.20561": "a2c891b347b6d7a9aa0fffa964154a301439d5a77a1df6f745147c3b2ae46b9e",
+        "paged/store.wal.20565": "2791edd6b346feb7f53fb5465c68d0653ad9bc3dd479cd44182adf3eebab3cd7",
+        "paged/store.wal.20568": "738d020a97c9d0ea27d075f133d28b71abb234e17d4c01f5debaf0aa56bb051d",
+        "paged/store.wal.20572": "2dc32b548ca75b4478694e59584c7657abd661560ce925dafaf7281663fc25bc",
+        "paged/store.wal.20575": "6f8035e253a637063ffdcaa990a663b9e4c1c1a243c8c8ee0a85ecc81d764155",
+        "paged/store.wal.20578": "76612d4beb8448622f1b5b249a1e6b28b13e60c84d7874144bab5cb8336240cf",
+        "paged/store.wal.20582": "fdc8b14c0e5be60fa9bceacf3e36ef74ffe2221a8e1706e20f7e65a1a24c6005",
+        "paged/store.wal.20585": "a57cbdb4c607c12a68950c9d8924d06658e50ce1640c4a2ea1b8d1818b1e0d13",
+        "paged/store.wal.20589": "344f09453474ad57b2114a4bd82b085471c04208c2a011403d611898f764973b",
+        "paged/store.wal.20592": "afad6bdf0a4bc20061de22a9441bf400528d892bb776328c8f507ae3795772c8",
+        "paged/store.wal.20595": "b208a97bec0224dafcb31ca183606fb8c3c2051458be38bab0c2b66d8e4d783b",
+        "paged/store.wal.20600": "6d2500ef02affcec15af386bb90ede1729d692c228d54c878a0cd6fbe01ac98f"
+      }
+    },
+    {
+      "cut": 5,
+      "exit_code": 0,
+      "verdict": "clean",
+      "complete": true,
+      "page_file_bytes": 5177344,
+      "extracted_content_hashes_unchanged": true,
+      "files_sha256": {
+        "paged/store.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "paged/store.pages": "95731ecc8dec224b88227a0f4f3967ed05d7000a6c27f3dc5f7e711b819d4948",
+        "paged/store.wal": "90eef178eb6512b047bcdec867c15c4ea2b7db313088cfbccd74169f0ec72e96",
+        "paged/store.wal.21330": "323404274d3cf24b5cd0ef534127805502a4e24c2c5d2d3e20ed8d227987de60",
+        "paged/store.wal.21334": "fbe91d88a5d5b8c75cd31ad69373a6457351a766fa201ad0de0b2e6cc718bd7d",
+        "paged/store.wal.21337": "94681f1979f7039671efbba6519b75fa2204267855bd76b1928fe3ede011c9bd",
+        "paged/store.wal.21340": "b41ed056c7e729c7473f41305de9c9e8c6e1ca1cebfe07d2da5897c6add4ba3b",
+        "paged/store.wal.21344": "6a3b5208360918e010bc553c30d173413154ea657c67d1b94282538fbbe4a87b",
+        "paged/store.wal.21347": "ffaec417a28f82af1564e4fa6c45423150fd3e7b2d312757a6681161dc6b0bc1",
+        "paged/store.wal.21350": "90e0838738af8e7e0190d30f84e8b60a1ff2bed4c1b7ef04057793a1019120fc",
+        "paged/store.wal.21354": "26254c5fd97afe5b2a4ac591707a24f3bfc42249e175ab2e72a09d574088e4b0",
+        "paged/store.wal.21357": "8d9bd1e047b6411f4b6385938159df1a326930bb7122d504f04c02b8b94d6888",
+        "paged/store.wal.21360": "ca08b129a462d8acfbc298badf3b686a0c9e6a99d11159a0819e825d8a75c32b",
+        "paged/store.wal.21364": "f988a47a9d619d34ef85901714499473891a78aa8b53ab78f777b27de5a4689b",
+        "paged/store.wal.21367": "889a18610f56d031c49c1c18a69624c1d1dcd94d89b185a16714a48f7ffa32ac",
+        "paged/store.wal.21370": "60c69e3e7213e988a6ae5b17755eca249001c01628c23f728964979e2dbc1ef0",
+        "paged/store.wal.21375": "22e9b1f4fe7a55e08f41cb914d58f3b494899fd758a0f7f9a821e501ff5d69d2",
+        "paged/store.wal.21379": "181f5eb8fe77d80f5f801f91323f3636ffa719b52c3056b034865bd1e290d1bf"
+      }
+    },
+    {
+      "cut": 6,
+      "exit_code": 0,
+      "verdict": "clean",
+      "complete": true,
+      "page_file_bytes": 5365760,
+      "extracted_content_hashes_unchanged": true,
+      "files_sha256": {
+        "paged/store.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "paged/store.pages": "30fc22ff4d5b909a71df7f530e895539191ab3e5836cbcae79cecc318681f1c2",
+        "paged/store.wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "cut": 7,
+      "exit_code": 0,
+      "verdict": "clean",
+      "complete": true,
+      "page_file_bytes": 5545984,
+      "extracted_content_hashes_unchanged": true,
+      "files_sha256": {
+        "paged/store.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "paged/store.pages": "00e4d01c98c38def95eb351539fefd7a5445178bf51dc6e990edb06600ccc254",
+        "paged/store.wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "paged/store.wal.23211": "35edae366cece069c8b9fb01e7dea6a4e1ec49d2e63fb2454f8f65399630d2f9"
+      }
+    },
+    {
+      "cut": 8,
+      "exit_code": 0,
+      "verdict": "clean",
+      "complete": true,
+      "page_file_bytes": 5611520,
+      "extracted_content_hashes_unchanged": true,
+      "files_sha256": {
+        "paged/store.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "paged/store.pages": "c995f2700038a091211e2fc51514ed6f6120db0e58500aaedd57445abb0c6ef6",
+        "paged/store.wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "paged/store.wal.23504": "cf21a6f806bf8c7f5069e483886f30d3f9944692c3f17240db5ebbb1c4d91981"
+      }
+    },
+    {
+      "cut": 9,
+      "exit_code": 0,
+      "verdict": "clean",
+      "complete": true,
+      "page_file_bytes": 5685248,
+      "extracted_content_hashes_unchanged": true,
+      "files_sha256": {
+        "paged/store.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "paged/store.pages": "aef4e626a8bb1487e7b917dd59ada7c9f321144bd23f5a30c46467ca92484586",
+        "paged/store.wal": "4f112ec9117c5775624e4cdb10389fc5402cecaf2b6fc4a9216d8f582f0196c0",
+        "paged/store.wal.23761": "a16297be47fde51cd175557d0c0e37613691eae9dbff54dea2de654b75bcb1ab",
+        "paged/store.wal.23765": "4a03520343fb091ae0c8fd70bab9abdb0577bfc900dc1ac8c9f50bb90e56a23a",
+        "paged/store.wal.23769": "03def3e1c72b8642cb40a5bd698a97f582773e3b0512b1c24a5ee45937e740a9",
+        "paged/store.wal.23773": "47355f4f2a618c8481edd50c5dd0241da74e36c4f6187c04fb4f795e39ccb8d3",
+        "paged/store.wal.23778": "3708b4642b500630be5238dcc78fc18fb9ce875bc22e9bf9c5d9559fe9811939",
+        "paged/store.wal.23782": "4c3757bd0bd4da377fce842d04b270a614c8fcbecd6a67346851c3edda79d061",
+        "paged/store.wal.23785": "c92211c987f2e8e75d93c7fc31f85c7e39214b7b293623fb8b7a8e3941de7629",
+        "paged/store.wal.23789": "70565501b16eae688755b8bc957e995b049253f58e8d8bafd1a95d075e711bca",
+        "paged/store.wal.23792": "9f512084c26e280923da0ce96852dacb3c632e0159a7058fb208bde42785702b",
+        "paged/store.wal.23795": "d09d301079bc776fe94cce10cfcafcb4b2290222c68c64b7d05b94c27bcb2785"
+      }
+    },
+    {
+      "cut": 10,
+      "exit_code": 0,
+      "verdict": "clean",
+      "complete": true,
+      "page_file_bytes": 5775360,
+      "extracted_content_hashes_unchanged": true,
+      "files_sha256": {
+        "paged/store.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "paged/store.pages": "6d232af9f5c8dd91f361fefa62fa5a1174c44df1207e2aa698cb1405413fade3",
+        "paged/store.wal": "fdeddfb00975445823fd4ffa17e9b695ff281c4498bc93194475ad3341c814c2",
+        "paged/store.wal.24199": "e3f51b8a40695a551f69bfd7ebab2248c22e9183d559e64b71ca81032e922db9",
+        "paged/store.wal.24203": "5e3b5891b1e7ba70141107ff823699533d33e7b7808ea36e63fc7bd87da6f004",
+        "paged/store.wal.24206": "74e9e43532b51efb3b102eb7fce228c841995d34bb3a229f28d1047502e72a7a",
+        "paged/store.wal.24209": "22fc7f0f0e7eacc03211c050396c81018de97f095eeb80173e94dd4e6dc45007",
+        "paged/store.wal.24213": "dc461cf651bc08ff8c68a200c1d4fe5c657957df71120c4a67d8786a3de66eda",
+        "paged/store.wal.24216": "63d68f6564dd76206cc8b081ffa322a4979deb8cb72335fa4dc696958ab8fa2f",
+        "paged/store.wal.24219": "6b272036d643de6bbec2c5d6ab94bfeeafe93636800e0de818a255ba068cb3cc",
+        "paged/store.wal.24223": "6a0e4f30bdda8f1afbb96f49f567a803143c79b13847694f21bc496c2089aecb",
+        "paged/store.wal.24226": "d690cb41f62e8c9a23ee513e998b4a3f83b1e84e1b3129b49ef75f69e4617a06",
+        "paged/store.wal.24230": "2e175f9aa7103ccfe9c8a86ccd91ade1fd64850c30d1bf6848d4569d23d3669c",
+        "paged/store.wal.24233": "73a2308fd7e2d96355fc2bc24da0bcef302ea2d95763f129198575cac64e3f3c",
+        "paged/store.wal.24236": "0ad7967f38be0105f09cffa5a919f454afcc06594507c9b36f0bead5eda9d036",
+        "paged/store.wal.24240": "ae40c11c734d9dd2c96ec982a2eca931190019975ca71965168de515a18c81c0",
+        "paged/store.wal.24244": "9ce8957a2de2316a73b159d6a190f4d227aa5f9ad2a5ed99c36df8315c7a4b1e",
+        "paged/store.wal.24248": "d4b0625677ab213c3eaeb95664806d77518582b2b7c5bc1a370d73a101b52656"
+      }
+    },
+    {
+      "cut": 11,
+      "exit_code": 0,
+      "verdict": "clean",
+      "complete": true,
+      "page_file_bytes": 5824512,
+      "extracted_content_hashes_unchanged": true,
+      "files_sha256": {
+        "paged/store.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "paged/store.pages": "f9d87803467e4a30b460debe85cb8953dbdeb1392738ac6d54067118cdd949f5",
+        "paged/store.wal": "a07c5db92b70f42d869ccdfe8cbc8094348bf21b26a232c3b6301bbf514d500d",
+        "paged/store.wal.24602": "848da96528a368c4912629bb9d347eb2fe3e241ac74e9129a7e36b81931ca043",
+        "paged/store.wal.24606": "bd08353d1a00339616084cbe0fb50ec8be0de00e269a706af3f0add4ff3e4838",
+        "paged/store.wal.24609": "84a68a02db0fc1bcdc61e00be0985009b3ef70e40f1db13815a381ffc83a766f"
+      }
+    },
+    {
+      "cut": 12,
+      "exit_code": 0,
+      "verdict": "clean",
+      "complete": true,
+      "page_file_bytes": 5939200,
+      "extracted_content_hashes_unchanged": true,
+      "files_sha256": {
+        "paged/store.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "paged/store.pages": "0198cc70c4c75802d5467bd008684867e6b862a80c57cba662a202a39fec8905",
+        "paged/store.wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "paged/store.wal.25120": "3227f3006c03bedce290a52ae8b9abeba97c0e264abc590c06f97a9f723093ae",
+        "paged/store.wal.25124": "23b7977c5310c8deab117d7141764fb30bd18bde5c56266d13ca50b40dd50ee5",
+        "paged/store.wal.25127": "cdb267d91706df314a928ff476b71e240db37d06532a49b41ecdd9573c0f67fb",
+        "paged/store.wal.25130": "b68464a9b5bafaac0fc0f93409c6db1b59625af39a72a7d2090da33ef94dd906",
+        "paged/store.wal.25134": "766c56911cdd32b1d7b7f673968752b2941f24619e9adc7d89d01a899acd504e",
+        "paged/store.wal.25137": "9d04fee2facd327179c998a18d5240760c599154c8f09a2ef2d10a0bc3fefe2b",
+        "paged/store.wal.25140": "b7702a85c9d0f24dfde8b2287fe1fe4aeb3f00175e8b22f55850577f45abdbe9"
+      }
+    },
+    {
+      "cut": 13,
+      "exit_code": 0,
+      "verdict": "clean",
+      "complete": true,
+      "page_file_bytes": 5947392,
+      "extracted_content_hashes_unchanged": true,
+      "files_sha256": {
+        "paged/store.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "paged/store.pages": "f8bdc292592d8f0f9838a856355a0cebdbcfa3f4901e5ac0bf4da81576fba84b",
+        "paged/store.wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "cut": 14,
+      "exit_code": 0,
+      "verdict": "clean",
+      "complete": true,
+      "page_file_bytes": 5947392,
+      "extracted_content_hashes_unchanged": true,
+      "files_sha256": {
+        "paged/store.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "paged/store.pages": "c3aaa1cb32fbea5b3aff27bac4bde44e7dbe64c41b6d831859330047de394816",
+        "paged/store.wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ]
+}

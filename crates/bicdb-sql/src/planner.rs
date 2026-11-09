@@ -1958,6 +1958,12 @@ impl BoundExprScope {
                     if !expr_may_need_tuple_comparison(left)
                         && !expr_may_need_tuple_comparison(right) =>
                 {
+                    // The compact comparison IR carries types but no locale.
+                    // Keep explicit collation validation and ordering together
+                    // on the evaluator path, including mismatched collations.
+                    if !matches!(comparison_collation(left, right, None), Ok(None)) {
+                        return None;
+                    }
                     let mut left_type = self.known_expr_type(left);
                     let mut right_type = self.known_expr_type(right);
                     let temporal = |kind: &Option<String>| {
@@ -4525,6 +4531,17 @@ pub(crate) fn merge_novel_right_ordinals(
             .insert(right_columns.to_vec(), built.clone());
         built
     })
+}
+
+/// A retained join result must fit before cloning its values into a new row.
+pub(crate) fn materialize_join_row(
+    left: &[SqlValue],
+    left_columns: &[String],
+    right: &[SqlValue],
+    right_columns: &[String],
+) -> Result<SlotRow> {
+    crate::join_budget::retain(left, right)?;
+    Ok(merge_slot_rows(left, left_columns, right, right_columns))
 }
 
 pub(crate) fn merge_slot_rows(

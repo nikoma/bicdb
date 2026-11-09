@@ -1,0 +1,23 @@
+{
+  "BICDB_VM_SOURCE": "5d04f91f2189385ec43d0d650be05778f0acdfd1",
+  "BICDB_VM_EXPERIMENTAL": "1",
+  "BICDB_VM_PRESEED": "1",
+  "BICDB_VM_BINARY": "/root/bicdb-durability-s3/skr/bin/oracle-server-structural-cuts-5d04f91f-release",
+  "BICDB_VM_SERVER_KIND": "oracle",
+  "BICDB_VM_POOL": "2097152",
+  "BICDB_VM_WAL": "131072",
+  "BICDB_VM_SEGMENT": "32768",
+  "BICDB_VM_DISK": "/root/bicdb-durability-s3/vm-reset/qualified-5d04f91f.raw",
+  "guest_server_sha256": "0433dacf7964d86d6ba7c909c137069d38ebf9578d451f77767dc76f7df4e683",
+  "harness_dependencies_sha256": {
+    "launch.sh": "f3d73ac3fb8d6561d623a5894ef81cd305f4a3fd9d158a8ffc6381fd3826fa84",
+    "prepare.py": "99ffee69817007a4f47a220d2f47fb253f4811d43a568a861e35b5b3501b5960",
+    "pgw.py": "43065a0e9befe6f26ae1a5b3766fc414568bc36da57e63b8b98354a7b16f309e",
+    "proxy.c": "2cf8aeca27a382c0a62ef9f5a40559c8932ec2926bcab7fd4d7bbbace430efba",
+    "proxy": "86bcef1d0b5094d7faf83366b2fa6ac481de653334d819da12ca67eaf0cefffe",
+    "initroot/init": "cf53dd3427a98bc2d3a12a2be22e0b3741916e7a66745b6c49e053dc9a81d289",
+    "initroot/bin/proxy": "86bcef1d0b5094d7faf83366b2fa6ac481de653334d819da12ca67eaf0cefffe",
+    "initrd.gz": "7e556e2a16198da88536d318faa4710a330dc6594ca88288fc85ac0ca3e69581",
+    "vmlinuz": "41ba36d860aa0b0cd995f4ca8856d80249b244577e704929b55be13fbd1ebd2f"
+  }
+}

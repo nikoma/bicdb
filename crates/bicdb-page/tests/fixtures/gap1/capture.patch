@@ -1,0 +1,68 @@
+diff --git a/crates/bicdb-page/tests/verify_store.rs b/crates/bicdb-page/tests/verify_store.rs
+index 1bfb11f4..cad8271f 100644
+--- a/crates/bicdb-page/tests/verify_store.rs
++++ b/crates/bicdb-page/tests/verify_store.rs
+@@ -1075,7 +1075,31 @@ fn flagged_pages(report: &StoreVerifyReport) -> BTreeSet<u64> {
+         .collect()
+ }
+ 
++
++// Test-only capture: run on the historical writer before the safe default exists.
++fn capture_historical_gap(name: &str, dir: &Path, truth: serde_json::Value) {
++    let Some(root) = std::env::var_os("BICDB_CAPTURE_HISTORICAL_GAP") else { return; };
++    let root = PathBuf::from(root);
++    std::fs::create_dir_all(&root).unwrap();
++    let mut files = Vec::new();
++    for entry in std::fs::read_dir(dir).unwrap() {
++        let path = entry.unwrap().path();
++        assert!(path.is_file(), "fixture capture expects flat store files");
++        let bytes = std::fs::read(&path).unwrap();
++        files.push(serde_json::json!({"name":path.file_name().unwrap().to_str().unwrap(),
++            "bytes_hex":hex::encode(&bytes), "size":bytes.len(),
++            "sha256":hex::encode(Sha256::digest(&bytes))}));
++    }
++    files.sort_by_key(|v| v["name"].as_str().unwrap().to_owned());
++    let value = serde_json::json!({"format":1,"writer_commit":"0af1b55e3d586d4a6933098419e7ee46a7ae5a79",
++        "case":name,"truth":truth,"files":files});
++    use std::io::Write;
++    let mut out=std::fs::OpenOptions::new().write(true).create_new(true).open(root.join(format!("{name}.json"))).unwrap();
++    out.write_all(&serde_json::to_vec(&value).unwrap()).unwrap();
++}
++
+ /// Ground truth through a normal open of a copy.
++#[derive(serde::Serialize)]
+ struct GapTruth {
+     /// Committed keys that read absent or another value.
+     committed_lost: usize,
+@@ -1148,6 +1172,7 @@ fn gap1_an_uncommitted_root_split_that_loses_committed_keys_is_detected() {
+         }
+         let report = verify(dir.path());
+         let truth = gap_failures(dir.path(), 0..committed, &crashed);
++        capture_historical_gap(&format!("root-{committed}"), dir.path(), serde_json::to_value(&truth).unwrap());
+         let lost = truth.committed_lost;
+         eprintln!(
+             "GAP1-ROOT committed={committed} committed_lost={lost} committed_erroring={} \
+@@ -1174,6 +1199,7 @@ fn gap1_an_uncommitted_root_split_that_loses_committed_keys_is_detected() {
+             let (store, _) = PagedStore::open(copy.path(), gap_options()).unwrap();
+             store.checkpoint().unwrap();
+         }
++        capture_historical_gap(&format!("root-{committed}-recovered"), copy.path(), serde_json::to_value(&truth).unwrap());
+         let recovered = verify(copy.path());
+         assert_eq!(
+             recovered.count(FindingClass::UnreachableCommittedLiveVersion),
+@@ -1240,6 +1266,7 @@ fn gap1_a_partially_drained_uncommitted_leaf_split_is_detected() {
+         }
+         let report = verify(dir.path());
+         let truth = gap_failures(dir.path(), 0..COMMITTED, &crashed);
++        capture_historical_gap(&format!("drain-{written:03}-of-{steps:03}"), dir.path(), serde_json::to_value(&truth).unwrap());
+         eprintln!(
+             "GAP1-DRAIN {written}/{steps} committed_lost={} committed_erroring={} \
+              uncommitted_erroring={} verify_integrity_valid={} {}",
+@@ -1321,6 +1348,7 @@ fn gap1_an_interleaved_open_transaction_leaves_unreadable_referenced_pages() {
+         }
+     }
+     let integrity_valid = store.verify_integrity(8).map(|r| r.valid).unwrap_or(false);
++    capture_historical_gap("interleaved", dir.path(), serde_json::json!({"erroring":erroring,"committed_wrong":committed_wrong,"integrity_valid":integrity_valid}));
+     let failing_pages: BTreeSet<Option<u64>> = erroring.iter().map(|(_, page)| *page).collect();
+     eprintln!(
+         "GAP1-INTERLEAVED erroring={} on pages {failing_pages:?} committed_wrong={committed_wrong} \

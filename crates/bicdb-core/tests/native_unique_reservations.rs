@@ -256,7 +256,7 @@ fn unchanged_unique_key_update_does_not_wait_for_a_rival_insert() {
                     "items",
                     Record::new("existing").with_metadata(json!({"k":"same","v":1})),
                 )
-                .expect("unchanged key must not reserve a rival's incoming identity");
+                .unwrap_or_else(|error| panic!("mode={mode:?} read_first={read_first}: unchanged key must not reserve rival identity: {error:?}"));
             updater.commit().unwrap();
             rival.rollback().unwrap();
             assert_eq!(

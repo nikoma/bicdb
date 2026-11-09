@@ -596,6 +596,7 @@ pub(crate) fn default_unique_null_policy(db: &BicDb) -> Result<UniqueNullPolicy>
 /// The preview profile grows independently of the bounded HR profile. Its
 /// database marker and startup opt-in prevent accidental profile switching.
 pub fn lower_profile_sql(db: &BicDb, sql: &str, profile: &str) -> Result<String> {
+    let _schemas = crate::SqlSchemaCacheScope::new();
     lower_profile_sql_in_namespace(db, sql, profile, None)
 }
 
@@ -646,6 +647,7 @@ pub fn lower_typed_native_sql(
     profile: &str,
     oids: &[i32],
 ) -> Result<String> {
+    let _schemas = crate::SqlSchemaCacheScope::new();
     if profile == ORACLE_PREVIEW_PROFILE {
         if let Some(command) = foreign_keys::timing_sql(sql, None)? {
             return Ok(command);
@@ -919,6 +921,7 @@ pub fn lower_session_sql(
     search_path: Option<&str>,
     user: &str,
 ) -> Result<String> {
+    let _schemas = crate::SqlSchemaCacheScope::new();
     if profile != ORACLE_PREVIEW_PROFILE {
         return lower_profile_sql(db, sql, profile);
     }

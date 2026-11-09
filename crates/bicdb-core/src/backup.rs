@@ -2018,7 +2018,13 @@ fn collect_source_files_inner(
             .file_name()
             .and_then(|name| name.to_str())
             .is_some_and(|name| {
-                name.starts_with(".backup-") || name == "backup-source.json" || name == "store.lock"
+                name.starts_with(".backup-")
+                    || name == "backup-source.json"
+                    || name == "store.lock"
+                    // Archive retention belongs to the archiving node, not
+                    // to its data: a restored copy must not inherit it.
+                    || name.starts_with("store.wal-archive-")
+                    || name == crate::archive_guard::COMMIT_LOG_VERIFICATION_FILE
             })
             || exclude.is_some_and(|exclude| {
                 paths_identical(&path, exclude)

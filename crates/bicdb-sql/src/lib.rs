@@ -243,6 +243,7 @@ pub mod extension_runtime;
 #[cfg(feature = "extension-host")]
 pub use extension_runtime::*;
 mod planner;
+mod slot_types;
 pub(crate) use planner::*;
 mod pg_dump_compat;
 pub(crate) use pg_dump_compat::*;
@@ -2279,6 +2280,7 @@ fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
         // failure made unknown. See docs/durability-failure-handling.md.
         BicDbError::WriteFailed { .. } => "58030",
         BicDbError::CommitOutcomeUnknown { .. } => "08007",
+        BicDbError::ArchiveBackpressure(_) => "53100",
         BicDbError::ReadOnlyStandby(_) => "25006",
         BicDbError::QueryCanceled | BicDbError::QueryTimedOut => "57014",
         BicDbError::Flashback(message) => bicdb_core::flashback_error_sqlstate(message),
@@ -5749,5 +5751,7 @@ mod durability_sqlstate_tests {
                 if detail == "commit_seq=3 transaction_id=none incarnation=inc-2")));
         assert_eq!(refused.sqlstate(), "58030");
         assert_eq!(unknown.sqlstate(), "08007");
+        let backpressure = SqlError::BicDb(BicDbError::ArchiveBackpressure("test".into()));
+        assert_eq!(backpressure.sqlstate(), "53100");
     }
 }

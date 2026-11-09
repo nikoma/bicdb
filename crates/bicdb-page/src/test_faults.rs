@@ -254,8 +254,10 @@ pub fn arm_io_failure(site: &str, scope: &Path, nth: u64, persistent: bool) -> I
 
 /// Run `hook` at the `nth` call of `site` under `scope`, then let the I/O
 /// proceed. Lets a test make something happen *while* an I/O is in flight
-/// (for example, a failure elsewhere during a successful fsync). The hook
-/// must not perform injected I/O itself.
+/// (for example, a failure elsewhere during a successful fsync). Hooks run
+/// outside the registry lock, so other injection points and nested I/O can
+/// make progress. A matching call already in flight retains its plan even if
+/// the scoped guard is concurrently removed.
 pub fn arm_io_hook(
     site: &str,
     scope: &Path,
@@ -295,16 +297,24 @@ pub fn io_fault(site: &str, path: &Path) -> std::io::Result<()> {
     if !IO_FAULTS_ARMED.load(Ordering::Acquire) {
         return Ok(());
     }
-    let plans = plans.lock().unwrap_or_else(|e| e.into_inner());
-    for plan in plans.iter() {
-        if plan.site != site {
-            continue;
-        }
-        if let Some(scope) = &plan.scope {
-            if !path.starts_with(scope) {
-                continue;
-            }
-        }
+    // Snapshot matching plans in registration order. A paused hook must not
+    // retain the global registry mutex: its resumer may execute a different
+    // injection point (or the hook may perform nested injected I/O).
+    let matching: Vec<_> = {
+        let plans = plans.lock().unwrap_or_else(|e| e.into_inner());
+        plans
+            .iter()
+            .filter(|plan| {
+                plan.site == site
+                    && plan
+                        .scope
+                        .as_ref()
+                        .is_none_or(|scope| path.starts_with(scope))
+            })
+            .cloned()
+            .collect()
+    };
+    for plan in matching {
         let call = plan.seen.fetch_add(1, Ordering::AcqRel) + 1;
         if call == plan.nth || (plan.persistent && call > plan.nth) {
             plan.fired.fetch_add(1, Ordering::AcqRel);
@@ -412,6 +422,64 @@ fn undo_volatile_renames() {
 #[cfg(test)]
 mod tests {
     use super::parse_io_fault_entry;
+
+    #[test]
+    fn hook_can_reenter_registry_without_blocking_and_preserves_plan_counts() {
+        let (done, received) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            // Guards live exclusively on the worker. A negative control that
+            // restores the old mutex-held callback fails the bounded receive
+            // without blocking the test thread in any guard's Drop.
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("nested");
+            let inner = super::arm_io_failure("nested.inner", directory.path(), 1, false);
+            let nested_path = path.clone();
+            let outer = super::arm_io_hook("nested.outer", directory.path(), 1, move || {
+                assert_eq!(
+                    super::io_fault("nested.inner", &nested_path)
+                        .unwrap_err()
+                        .raw_os_error(),
+                    Some(libc::EIO)
+                );
+            });
+            let second = super::arm_io_failure("nested.outer", directory.path(), 2, false);
+            super::io_fault("nested.outer", &path).unwrap();
+            assert_eq!(
+                (
+                    outer.seen(),
+                    outer.fired(),
+                    inner.seen(),
+                    inner.fired(),
+                    second.seen(),
+                    second.fired()
+                ),
+                (1, 1, 1, 1, 1, 0)
+            );
+            assert_eq!(
+                super::io_fault("nested.outer", &path)
+                    .unwrap_err()
+                    .raw_os_error(),
+                Some(libc::EIO)
+            );
+            super::io_fault("nested.inner", &path).unwrap();
+            assert_eq!(
+                (
+                    outer.seen(),
+                    outer.fired(),
+                    inner.seen(),
+                    inner.fired(),
+                    second.seen(),
+                    second.fired()
+                ),
+                (2, 1, 2, 1, 2, 1)
+            );
+            done.send(()).unwrap();
+        });
+        received
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("hook retained the global I/O fault registry lock");
+        worker.join().unwrap();
+    }
 
     #[test]
     fn io_fault_specs_are_parsed_strictly() {

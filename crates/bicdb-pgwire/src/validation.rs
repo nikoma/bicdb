@@ -4090,3 +4090,111 @@ fn jdbc_current_schema_startup_parameter_is_retained() {
         Some("\"Application Schema\"")
     );
 }
+
+#[test]
+fn exclusive_primary_upsert_releases_writer_for_owner_commit() {
+    // Force the genuine exclusive fallback, with a primary row already held
+    // by a pending owner. Parking here would exclude that owner's COMMIT.
+    let directory = tempfile::tempdir().unwrap();
+    let server = PgWireServer::open(
+        directory.path(),
+        PgWireConfig {
+            fsync: false,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let mut setup = ConnectionState::new(9000, "bicdb".into(), None);
+    execute_server_sql(
+        &server,
+        &mut setup,
+        "CREATE TABLE exclusive_upsert(id INT PRIMARY KEY,v INT)",
+    )
+    .unwrap();
+    let owner = {
+        let db = server.db.read();
+        let tx = db.begin_transaction().unwrap();
+        let mut session = sql_session_shared_for_server(&server, &db).with_pending_transaction(tx);
+        session
+            .execute("INSERT INTO exclusive_upsert VALUES(1,20)")
+            .unwrap();
+        session.take_pending_transaction().unwrap()
+    };
+    let owner = Arc::new(std::sync::Mutex::new(Some(owner)));
+    server.shared_write_credit.store(-64, Ordering::Relaxed);
+    server.shared_write_probe.store(1, Ordering::Relaxed);
+    let (done, received) = std::sync::mpsc::channel();
+    let querying = server.clone();
+    let query = std::thread::spawn(move || {
+        let mut state = ConnectionState::new(9001, "bicdb".into(), None);
+        let result = execute_server_sql(&querying,&mut state,"INSERT INTO exclusive_upsert VALUES(1,10) ON CONFLICT(id) DO UPDATE SET v=exclusive_upsert.v+EXCLUDED.v RETURNING v");
+        let retryable = matches!(
+            &result,
+            Err(PgWireError::Sql(SqlError::BicDb(
+                BicDbError::TransactionConflict(_)
+            ))) | Err(PgWireError::BicDb(BicDbError::TransactionConflict(_)))
+        );
+        done.send((result.is_ok(), retryable, format!("{result:?}")))
+            .unwrap();
+    });
+    // A fixed implementation may already have returned its retryable result;
+    // otherwise establish that its exclusive writer is held/queued first.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let completed = loop {
+        if let Ok(result) = received.try_recv() {
+            break Some(result);
+        }
+        if server.db.is_locked_exclusive() {
+            break None;
+        }
+        assert!(Instant::now() < deadline, "exclusive attempt did not start");
+        std::thread::sleep(Duration::from_millis(1));
+    };
+    let committing = server.clone();
+    let slot = owner.clone();
+    let (done, receipt) = std::sync::mpsc::channel();
+    let commit = std::thread::spawn(move || {
+        let result = committing
+            .read_db_for_transaction_progress()
+            .map_err(|error| error.to_string())
+            .and_then(|_guard| {
+                slot.lock()
+                    .unwrap()
+                    .take()
+                    .ok_or_else(|| "test escape dropped the blocked owner".to_string())?
+                    .commit()
+                    .map_err(|error| error.to_string())
+            });
+        done.send(result).unwrap();
+    });
+    let progressed = receipt.recv_timeout(Duration::from_secs(1));
+    if !matches!(&progressed, Ok(Ok(()))) {
+        // Transaction::drop owns its lock/state handles and does not borrow the
+        // DB. This always breaks the old wait before any assertion or join.
+        drop(owner.lock().unwrap().take());
+    }
+    let result =
+        completed.unwrap_or_else(|| received.recv_timeout(Duration::from_secs(5)).unwrap());
+    query.join().unwrap();
+    if progressed.is_err() {
+        let _ = receipt.recv_timeout(Duration::from_secs(5));
+    }
+    commit.join().unwrap();
+    assert!(
+        matches!(progressed, Ok(Ok(()))),
+        "primary upsert stranded the owner's COMMIT: {progressed:?}"
+    );
+    assert!(
+        result.0 || result.1,
+        "exclusive fallback returned a non-retryable error: {}",
+        result.2
+    );
+    let db = server.db.read();
+    let value = SqlSession::new_shared(&db)
+        .execute("SELECT v FROM exclusive_upsert WHERE id=1")
+        .unwrap();
+    assert_eq!(
+        value.rows,
+        vec![vec![SqlValue::Int(if result.0 { 30 } else { 20 })]]
+    );
+}

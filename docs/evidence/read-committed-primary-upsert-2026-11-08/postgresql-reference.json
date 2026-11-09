@@ -1,0 +1,28 @@
+{
+  "reference": "PostgreSQL 16.13 (Debian 16.13-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+  "schedule": [
+    "B INSERT(1,20) uncommitted",
+    "A BEGIN ISOLATION LEVEL READ COMMITTED",
+    "A starts INSERT INTO tc_upsert_reference AS t VALUES(1,10) ON CONFLICT(id) DO UPDATE SET val=t.val+EXCLUDED.val RETURNING val",
+    "observer confirms A waits Lock/transactionid",
+    "B COMMIT",
+    "A returns and commits"
+  ],
+  "observed_wait": [
+    "Lock",
+    "transactionid"
+  ],
+  "result": {
+    "rows": [
+      [
+        30
+      ]
+    ]
+  },
+  "final_rows": [
+    [
+      1,
+      30
+    ]
+  ]
+}

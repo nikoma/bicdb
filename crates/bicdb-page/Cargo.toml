@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-page"
-version = "1.0.438-beta"
+version = "1.0.439-beta"
 edition.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
@@ -27,6 +27,7 @@ thiserror.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+flate2 = "1.1.9"
 tempfile.workspace = true
 
 # Writer process for tests/kill_recovery.rs. A dedicated binary rather than a

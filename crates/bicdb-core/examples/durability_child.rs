@@ -47,6 +47,18 @@
 //! `q1-split` then commits ONE transaction of `<commits>` rows `a-NNNNN`,
 //! whose keys sort before every `r-` key, so the B-tree splits that it causes
 //! move committed keys to new right siblings.
+//!
+//! With `DURABILITY_ARCHIVE=<dir>` (fail-closed archiving, see
+//! `docs/durability-failure-handling.md`, section 7.5) the database runs as
+//! a replication primary, takes a commit-log base backup and an online
+//! page-log backup into `<dir>` before the writers start, and an archiver
+//! thread feeds both archives (`<dir>/commits`, `<dir>/wal`) every 30 ms.
+//! The DDL thread is off. After each archive call that returned success the
+//! archiver appends to `ledger-dir/archived-commits` or
+//! `ledger-dir/archived-wal` the per-writer acknowledged commits it read
+//! BEFORE the call: those commits must be restorable from that archive. The
+//! first failure of an archiver is recorded in `ledger-dir/archive-state`;
+//! that archiver then checks once that its handle refuses, and stops.
 
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -57,7 +69,8 @@ use std::time::Duration;
 
 use bicdb_core::{
     BicDb, DbConfig, IndexDefinition, IndexField, IndexKind, PagedCheckpointScheduleAdvance,
-    PagedCheckpointScheduleLimits, Record, ResourceGovernor, ResourceGovernorConfig, StorageMode,
+    PagedCheckpointScheduleLimits, Record, ReplicationConfig, ReplicationCursor, ReplicationMode,
+    ReplicationTlsConfig, ResourceGovernor, ResourceGovernorConfig, StorageMode,
 };
 use serde_json::json;
 
@@ -72,7 +85,37 @@ fn fail_io_mode() -> bool {
 const MIN_CHECKPOINTS: u64 = 20;
 pub const WRITERS: usize = 4;
 
+/// Passphrase of the base backups taken in archive mode.
+pub const ARCHIVE_KEY: &str = "durability-child-archive-passphrase-0123";
+
+fn archive_dir() -> Option<PathBuf> {
+    std::env::var_os("DURABILITY_ARCHIVE").map(PathBuf::from)
+}
+
 fn config(mode: &str) -> DbConfig {
+    let config = base_config(mode);
+    if archive_dir().is_some() {
+        config.with_replication(ReplicationConfig {
+            enabled: true,
+            mode: ReplicationMode::Primary,
+            cluster_id: "durability-child".to_string(),
+            node_id: "child".to_string(),
+            listen_addr: Some("127.0.0.1:0".to_string()),
+            tls: Some(ReplicationTlsConfig {
+                cert_path: Default::default(),
+                key_path: Default::default(),
+                ca_path: Default::default(),
+                require_client_cert: true,
+                dev_localhost_plaintext: true,
+            }),
+            ..ReplicationConfig::default()
+        })
+    } else {
+        config
+    }
+}
+
+fn base_config(mode: &str) -> DbConfig {
     let config = DbConfig::default()
         .with_fsync(true)
         .with_sync_outbox(false)
@@ -204,16 +247,40 @@ fn q1(db_dir: &Path, ledger: &Path, phase: &str, rows: u64) {
             }
         }
         "split" => {
-            let mut tx = db.begin_transaction().expect("begin");
-            for i in 0..rows {
-                tx.insert(
-                    "q1",
-                    Record::new(format!("a-{i:05}")).with_metadata(json!({"i": i})),
-                )
-                .expect("insert");
-            }
-            tx.commit().expect("commit");
-            append_line(&ledger.join("q1"), "split");
+            // With `DURABILITY_CHECKPOINTS=bounded`, the server's checkpoint
+            // worker runs next to the big transaction's page apply (GAP-1 W2).
+            let done = Arc::new(AtomicBool::new(false));
+            let checkpoints = Arc::new(AtomicU64::new(0));
+            std::thread::scope(|scope| {
+                if bounded_checkpoints() {
+                    let handle = db
+                        .paged_checkpoint_maintenance_handle()
+                        .expect("server_paged");
+                    let done = done.clone();
+                    let checkpoints = checkpoints.clone();
+                    scope.spawn(move || run_bounded_checkpoints(handle, &done, &checkpoints));
+                }
+                let mut tx = db.begin_transaction().expect("begin");
+                for i in 0..rows {
+                    tx.insert(
+                        "q1",
+                        Record::new(format!("a-{i:05}")).with_metadata(json!({"i": i})),
+                    )
+                    .expect("insert");
+                }
+                tx.commit().expect("commit");
+                append_line(&ledger.join("q1"), "split");
+                // How often the page apply took the last-resort steal (a
+                // decided commit larger than the pool), for the steal-path
+                // tests. Recorded only once the commit has returned.
+                if let Ok(Some(snapshot)) = db.paged_storage_snapshot() {
+                    append_line(
+                        &ledger.join("q1-steals"),
+                        &snapshot.buffer_pool.unlogged_steals.to_string(),
+                    );
+                }
+                done.store(true, Ordering::Release);
+            });
         }
         other => panic!("unknown q1 phase {other}"),
     }
@@ -241,6 +308,35 @@ fn main() {
         db.create_index(index("rows_unique_key", "uk", true))
             .expect("unique index");
     }
+    let archive = archive_dir();
+    if let Some(dir) = &archive {
+        // Bases first: a later archiver failure must still leave something
+        // to roll forward from.
+        let commits = dir.join("commits");
+        std::fs::create_dir_all(&commits).expect("archive dir");
+        if bicdb_core::log_archive::list_base_backups(&commits)
+            .expect("list bases")
+            .is_empty()
+        {
+            db.archive_base_backup(&commits, ARCHIVE_KEY)
+                .expect("commit-log base backup");
+            db.create_online_backup(
+                dir.join("base.bicbackup"),
+                dir.join("tail.bicbackup"),
+                bicdb_core::BackupCreateOptions {
+                    passphrase: ARCHIVE_KEY.to_string(),
+                    base_backup: None,
+                },
+            )
+            .expect("online page-log backup");
+            // Archive retention must start with the base: segments sealed
+            // between the base and the first archive call would otherwise
+            // be checkpointed away, a gap no restore can cross.
+            db.archive_wal_segments(dir.join("wal"))
+                .expect("first page-log archive");
+        }
+    }
+    let acked: Arc<Vec<AtomicU64>> = Arc::new((0..WRITERS).map(|_| AtomicU64::new(0)).collect());
     let db = Arc::new(RwLock::new(db));
     let done = Arc::new(AtomicBool::new(false));
     // The crash matrix names checkpoint boundaries by hit count (up to
@@ -258,6 +354,7 @@ fn main() {
             let violations = violations.clone();
             let writers_done = writers_done.clone();
             let ledger = ledger.join(format!("writer-{writer}"));
+            let acked = acked.clone();
             scope.spawn(move || {
                 let mut failures = 0u64;
                 for i in 1..=commits {
@@ -286,7 +383,10 @@ fn main() {
                         Ok(()) if failures > 0 => {
                             append_line(&violations, &format!("writer {writer}: commit {i} acknowledged after a failure"));
                         }
-                        Ok(()) => append_line(&ledger, &i.to_string()),
+                        Ok(()) => {
+                            append_line(&ledger, &i.to_string());
+                            acked[writer].store(i, Ordering::Release);
+                        }
                         Err(error) if fail_io => {
                             if !error.is_durability_failure() {
                                 append_line(&violations, &format!("writer {writer}: commit {i}: not a durability failure: {error}"));
@@ -302,8 +402,15 @@ fn main() {
                 writers_done.fetch_add(1, Ordering::AcqRel);
             });
         }
+        if let Some(dir) = archive.clone() {
+            let db = db.clone();
+            let done = done.clone();
+            let acked = acked.clone();
+            let ledger = ledger.clone();
+            scope.spawn(move || archiver(&db, &dir, &ledger, &acked, &done));
+        }
         // A run with no commits only reopens (recovery); it does no DDL either.
-        if commits > 0 {
+        if commits > 0 && archive.is_none() {
             let db = db.clone();
             let done = done.clone();
             let ledger = ledger.join("ddl");
@@ -451,5 +558,101 @@ fn continue_ddl(db: &RwLock<BicDb>, ledger: &Path, name: &str, generation: u64) 
     });
     if committed.is_ok() {
         append_line(ledger, &format!("create {name} {generation}"));
+    }
+}
+
+/// Archive mode: feed both archives until the run ends. See the module docs.
+fn archiver(db: &RwLock<BicDb>, dir: &Path, ledger: &Path, acked: &[AtomicU64], done: &AtomicBool) {
+    let snapshot = || {
+        acked
+            .iter()
+            .map(|seq| seq.load(Ordering::Acquire).to_string())
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let commits_dir = dir.join("commits");
+    let wal_dir = dir.join("wal");
+    let state = ledger.join("archive-state");
+    let violations = ledger.join("violations");
+    let mut archive = {
+        let guard = db.read().expect("db lock");
+        match guard.open_log_archive(&commits_dir, true) {
+            Ok(archive) => Some(archive),
+            Err(error) => {
+                append_line(&state, &format!("commit_log failed open: {error}"));
+                None
+            }
+        }
+    };
+    let mut cursor = ReplicationCursor::new(archive.as_ref().map_or(0, |a| a.last_commit_seq()));
+    let mut wal_alive = true;
+    // At least a few rounds after the writers stop, so the final commits
+    // reach both archives on a run without faults.
+    let mut tail_rounds = 0;
+    while tail_rounds < 3 {
+        if done.load(Ordering::Acquire) {
+            tail_rounds += 1;
+        }
+        std::thread::sleep(Duration::from_millis(30));
+        let guard = db.read().expect("db lock");
+        if let Some(log) = archive.as_mut() {
+            let before = snapshot();
+            let result = loop {
+                match guard.archive_commits(log, &mut cursor, 64) {
+                    Ok(0) => break Ok(()),
+                    Ok(_) => continue,
+                    Err(error) => break Err(error),
+                }
+            };
+            match result {
+                Ok(()) => append_line(&ledger.join("archived-commits"), &before),
+                Err(error) => {
+                    let site = match &error {
+                        bicdb_core::BicDbError::ArchiveFailed { site, .. } => site.clone(),
+                        other => {
+                            append_line(
+                                &violations,
+                                &format!("commit archive: not an archive failure: {other}"),
+                            );
+                            "other".to_string()
+                        }
+                    };
+                    append_line(&state, &format!("commit_log failed {site}"));
+                    if guard.archive_commits(log, &mut cursor, 64).is_ok() {
+                        append_line(&violations, "commit archive accepted work after a failure");
+                    }
+                    archive = None;
+                }
+            }
+        }
+        if wal_alive {
+            let before = snapshot();
+            match guard.archive_wal_segments(&wal_dir) {
+                Ok(_) => append_line(&ledger.join("archived-wal"), &before),
+                Err(error) => {
+                    let site = match &error {
+                        bicdb_core::BicDbError::ArchiveFailed { site, .. } => site.clone(),
+                        other => {
+                            append_line(
+                                &violations,
+                                &format!("page-log archive: not an archive failure: {other}"),
+                            );
+                            "other".to_string()
+                        }
+                    };
+                    append_line(&state, &format!("page_log failed {site}"));
+                    if guard.archive_wal_segments(&wal_dir).is_ok() {
+                        append_line(
+                            &violations,
+                            "page-log archive accepted work after a failure",
+                        );
+                    }
+                    wal_alive = false;
+                }
+            }
+        }
+        if !guard.durability_state().is_healthy() {
+            append_line(&violations, "an archive failure fenced the database");
+        }
     }
 }

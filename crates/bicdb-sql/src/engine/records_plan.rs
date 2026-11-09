@@ -2752,6 +2752,11 @@ impl<'db> SqlEngine<'db> {
             let mut record_ids = Vec::with_capacity(list.len());
             let mut constant = true;
             for element in list {
+                let field = IndexField::MetadataPath(vec![column.clone()]);
+                if !self.index_probe_expr_is_exact(Some(schema), Some(&field), element) {
+                    constant = false;
+                    break;
+                }
                 match eval_constant_expr(element) {
                     Ok(value) if !matches!(value, SqlValue::Null) => {
                         record_ids.push(record_id_from_column_values(
@@ -2819,12 +2824,15 @@ impl<'db> SqlEngine<'db> {
             }
         };
         let mut bound_values = Vec::with_capacity(primary_key_columns.len());
-        for entry in plan.iter() {
+        for (column, entry) in primary_key_columns.iter().zip(plan.iter()) {
+            let field = IndexField::MetadataPath(vec![column.clone()]);
             let value = match entry {
                 Some((term_idx, field_on_left)) => match nth_and_term(selection, *term_idx) {
                     Some(Expr::BinaryOp { left, right, .. }) => {
                         let bound = if *field_on_left { right } else { left };
-                        if self.expr_is_bound_without_table_row(bound)? {
+                        if self.expr_is_bound_without_table_row(bound)?
+                            && self.index_probe_expr_is_exact(Some(schema), Some(&field), bound)
+                        {
                             Some(self.eval_dynamic_bound_expr(bound)?)
                         } else {
                             None
@@ -3466,6 +3474,20 @@ fn coerce_set_branch(mut branch: SqlResult, column_types: &[Option<String>]) -> 
                 }
                 let original = std::mem::replace(value, SqlValue::Null);
                 *value = cast_value_to_pg_type(original, common)?;
+            }
+        }
+    }
+    // character(n) to text, varchar or name drops the trailing blanks the
+    // fixed width added, as PostgreSQL's bpchar casts do.
+    for (index, common) in column_types.iter().enumerate() {
+        let from_bpchar =
+            branch.column_types.get(index).cloned().flatten().as_deref() == Some("bpchar");
+        if from_bpchar && matches!(common.as_deref(), Some("text" | "varchar" | "name")) {
+            for row in &mut branch.rows {
+                if let Some(SqlValue::String(text)) = row.get_mut(index) {
+                    let trimmed = text.trim_end_matches(' ').len();
+                    text.truncate(trimmed);
+                }
             }
         }
     }

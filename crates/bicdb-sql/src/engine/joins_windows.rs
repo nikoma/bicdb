@@ -314,6 +314,15 @@ impl<'db> SqlEngine<'db> {
         // check — a cross-tenant read of any table by any authenticated role.
         self.require_relation_privilege(&table, "SELECT")?;
         let schema = load_schema(self.db_ref(), &table)?;
+        if let Some(schema) = &schema {
+            // The indexed shortcut does not materialize the right relation,
+            // so register its declared types before binding the join predicate.
+            let schema = Arc::new(schema.clone());
+            crate::slot_types::register_table(&alias_name, &schema);
+            if alias_name != table {
+                crate::slot_types::register_table(&table, &schema);
+            }
+        }
         // Column list and rows come from the same (possibly pruned) field
         // list: `row_output_columns` is exactly this over the wildcard.
         let mut right_fields = FieldRef::wildcard(schema.as_ref());
@@ -332,6 +341,21 @@ impl<'db> SqlEngine<'db> {
         } else {
             None
         };
+        // The per-row index lookup below casts each outer value to the key's
+        // type. An equality between keys of types that cast lossily (a
+        // timestamp against a date index, a float against a numeric one)
+        // would match rows the comparison rejects; join those by scan.
+        if prepared_lookup.is_none()
+            && self.join_selection_has_inexact_index_probe(
+                selection,
+                &left.columns,
+                &table,
+                &alias_name,
+                schema.as_ref(),
+            )
+        {
+            return Ok(None);
+        }
         let prepared_residual_constraint = prepared_lookup
             .as_ref()
             .map(|lookup| residual_join_constraint_after_lookup(selection, lookup));
@@ -825,6 +849,61 @@ impl<'db> SqlEngine<'db> {
             merge_row_set_columns(std::mem::take(&mut left.columns), prepared.right_columns);
         sql_profile_join_rows(&rows, candidate_pairs);
         Ok(RowSet { rows, columns })
+    }
+
+    /// Whether an equality term of `selection` compares a column of the
+    /// right table with an outer operand whose type does not cast exactly
+    /// to the column's (see `index_probe_type_is_exact`).
+    pub(crate) fn join_selection_has_inexact_index_probe(
+        &self,
+        selection: &Expr,
+        left_columns: &[String],
+        table: &str,
+        alias: &str,
+        schema: Option<&TableSchema>,
+    ) -> bool {
+        let Some(schema) = schema else {
+            return false;
+        };
+        let (scope, _) = self.bound_row_context(left_columns);
+        let right_column_type = |expr: &Expr| -> Option<String> {
+            let name = match unwrap_nested_expr(expr) {
+                Expr::CompoundIdentifier(parts) => match parts.as_slice() {
+                    [.., qualifier, column]
+                        if qualifier.value.eq_ignore_ascii_case(alias)
+                            || qualifier.value.eq_ignore_ascii_case(table) =>
+                    {
+                        column.value.clone()
+                    }
+                    _ => return None,
+                },
+                Expr::Identifier(ident) if scope.column_id(&[ident.value.clone()]).is_none() => {
+                    ident.value.clone()
+                }
+                _ => return None,
+            };
+            schema.column(&name).map(|column| column.pg_type.clone())
+        };
+        and_terms(selection).into_iter().any(|term| {
+            let Expr::BinaryOp {
+                left,
+                op: BinaryOperator::Eq,
+                right,
+            } = unwrap_nested_expr(term)
+            else {
+                return false;
+            };
+            [(left, right), (right, left)]
+                .into_iter()
+                .any(|(column, other)| {
+                    right_column_type(column).is_some_and(|column_type| {
+                        !super::predicates_locators::index_probe_type_is_exact(
+                            Some(column_type),
+                            scope.known_expr_type(other),
+                        )
+                    })
+                })
+        })
     }
 
     pub(crate) fn join_constraint_matches(
@@ -3298,7 +3377,10 @@ impl<'db> SqlEngine<'db> {
                 };
                 if let Some(var_values) = values {
                     return (
-                        entry.scope.clone(),
+                        entry
+                            .scope
+                            .clone()
+                            .with_column_types(self.slot_column_types(columns)),
                         BoundRowContext {
                             row_lookup: entry.row_lookup.clone(),
                             var_values,
@@ -3335,6 +3417,7 @@ impl<'db> SqlEngine<'db> {
             var_types: None,
             user_functions: crate::routine_overloads::user_function_names(self.db_ref())
                 .unwrap_or_default(),
+            column_types: None,
         };
         if let Some(slots) = slots {
             let types = slots
@@ -3361,7 +3444,42 @@ impl<'db> SqlEngine<'db> {
                 cache.insert(columns.to_vec(), entry);
             }
         }
-        (scope, context)
+        drop(cache);
+        (
+            scope.with_column_types(self.slot_column_types(columns)),
+            context,
+        )
+    }
+
+    /// Declared types of a slot layout's columns: the relation each
+    /// qualifier names in the executing query (`slot_types`), else a CTE or
+    /// base table of that name. Unknown columns stay `None`; the binder then
+    /// leaves their comparisons to the typed row evaluator.
+    pub(crate) fn slot_column_types(&self, columns: &[String]) -> Arc<[Option<String>]> {
+        columns
+            .iter()
+            .map(|column| self.slot_column_type(column))
+            .collect()
+    }
+
+    pub(crate) fn slot_column_type(&self, column: &str) -> Option<String> {
+        if let Some(found) = crate::slot_types::lookup_key(column) {
+            return found;
+        }
+        let (qualifier, name) = column.rsplit_once('.')?;
+        if let Some(cte) = self.cte(qualifier) {
+            let index = cte.columns.iter().position(|candidate| candidate == name)?;
+            return cte.column_type(index);
+        }
+        let schema = load_schema_shared(self.db_ref(), qualifier)
+            .ok()
+            .flatten()?;
+        let column = schema.column(name)?;
+        column
+            .collation
+            .as_deref()
+            .is_none_or(|collation| collation == "default")
+            .then(|| column.pg_type.clone())
     }
 
     /// Routine-variable name->id map for the current binding. Cached by the

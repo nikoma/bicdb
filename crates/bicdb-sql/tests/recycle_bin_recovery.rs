@@ -38,7 +38,7 @@ fn assert_row(db: &mut BicDb) {
 }
 #[test]
 fn interrupted_collection_rename_rolls_back_before_primary_key_backfill_and_repeated_open() {
-    for mode in [StorageMode::Embedded, StorageMode::ServerPaged] {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let root = tempfile::tempdir().unwrap();
         let bin = format!("__bicdb_bin_{}", uuid::Uuid::new_v4().simple());
         {

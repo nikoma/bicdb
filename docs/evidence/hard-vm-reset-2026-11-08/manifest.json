@@ -1,5 +1,5 @@
 {
-  "README.md": "47e925146dba5ee756506fe4dd6fc74d58f4a98955f833ae29d0b528e081f75c",
+  "README.md": "720c004a024c313e8ca2587b2c0a597e9ea13b0b9ec1c91d6f8d9b2d61c16e66",
   "harness/campaign-v1.py": "c33deac50f95806716d43f6e37d2c4f68b292f6cc7f5a9dd677870da217ec9cc",
   "harness/campaign.py": "5990e0c834d200fe7348a2f1a9c5f2d7c999cac7acc6c9d6dc6fc04503cb20ad",
   "harness/launch.sh": "f3d73ac3fb8d6561d623a5894ef81cd305f4a3fd9d158a8ffc6381fd3826fa84",
@@ -112,5 +112,19 @@
   "runs/campaign-1794195817/resets.jsonl.gz": "d913441eedc0b5e05819f7bfabbeae3e84700ac64c610e82000388e954531796",
   "runs/campaign-1794195817/result.json": "724f635d4b4f7e856b79ef27a9efb8d546fd46fdf57a88bbe91eefe774603eba",
   "runs/campaign-1794195817/tx-identities.jsonl.gz": "475f5807a9625f6d28965763a0fa346a779ff8d3e57826d9ed13817f3cbfc9a1",
-  "summary.json": "7dcf6ec709017f17005c629b630b309f8ea80e557bd13a2f4e4020913d62c4d4"
+  "runs/campaign-1794203435/ack.jsonl.gz": "3dbc7f104c401f4b39d26af4c4c73e0b168a27f99be0efa86a281cac1eaa1a21",
+  "runs/campaign-1794203435/client-errors.jsonl.gz": "5a03df779076b7b05fb059bc513fc31b867eb05997e8113fe9ac2646ac76b06d",
+  "runs/campaign-1794203435/commit-attempts.jsonl.gz": "4c6c46cd4d7ab427836b05aa446af26c93c5126448b124996bc05f3ca3c822c1",
+  "runs/campaign-1794203435/config.json": "2a2bca6f708281fa8ebfedfb2190280ddc5bf1b8bebaca130cd7153933175a7e",
+  "runs/campaign-1794203435/ddl.jsonl.gz": "879700d24fd858e5511b3654550e6238faf38d576d4595697cd5b93c337bf1e5",
+  "runs/campaign-1794203435/harness.py": "5990e0c834d200fe7348a2f1a9c5f2d7c999cac7acc6c9d6dc6fc04503cb20ad",
+  "runs/campaign-1794203435/intent.jsonl.gz": "f18fc30b2f6cc8f95ef514ed2c660fd3804aae21a831cc421d0f7cbd78bebc55",
+  "runs/campaign-1794203435/persisted-format.json": "f7bd524cb972af7e19f4ff504564a545ae15cd650de4be3cebc3199e3ce97120",
+  "runs/campaign-1794203435/qualified-artifact.json": "650bce66e43a7a28f3f8e1e5d0b250c85195f3f18bff5aaa04c3cf72758e61d3",
+  "runs/campaign-1794203435/recoveries.jsonl.gz": "adea0bd59fd0de38820a573396e75ca120b482564a7473f4ecf28d56073fda40",
+  "runs/campaign-1794203435/resets.jsonl.gz": "65c88a06afedd0a7b0dea5ba8cea28bd8bfc6d7fe5524e5498ab03c7d988fe29",
+  "runs/campaign-1794203435/result.json": "e6082b5e1c0a0980835fe37a32978d160ec59d9094233945845f0c3b23373d20",
+  "runs/campaign-1794203435/terminal-server.log": "f7ebe7b626eeb99fd269df3d883a0644ffb3850266eace556fa18bc9895c5f21",
+  "runs/campaign-1794203435/tx-identities.jsonl.gz": "6b0a18fcdc26c4b5c6bcb83adb5ea7a2345f8183a05bc747395544c6097fb305",
+  "summary.json": "a5dcddd4f92cad16e370d65e8e71846424fd15585db37b1d32f8a2ffa4aca75d"
 }

@@ -1,0 +1,13 @@
+{
+  "format": {
+    "format_version": 2,
+    "min_reader_version": 1,
+    "min_writer_version": 2,
+    "feature_flags": [
+      "format_metadata_v2",
+      "server_paged_storage"
+    ],
+    "storage_mode": "server_paged"
+  },
+  "method": "debugfs read of only format.json from disposable ext4-journal-replayed terminal image; original images unchanged"
+}

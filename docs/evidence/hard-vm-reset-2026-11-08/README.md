@@ -12,7 +12,9 @@ reports each run's source, persisted storage mode and outcomes. The guest
 reconciliation also checks exact rows/payloads, atomic row+receipt updates,
 indexed query results, duplicate-key rejection and the initial backup restore.
 Later harness revisions add native SQL transaction IDs, host-fsynced commit
-attempts, a >pool acknowledged preseed and concurrent CREATE/DROP constraints.
+attempts, an acknowledged preseed and concurrent CREATE/DROP constraints.
+The preseed grew the page file beyond the pool; the separate large-transaction
+campaign below records actual eviction pressure.
 The later seeded runs retain their exact `runs/<run>/harness.py`. The first
 v1 runs predate that capture; `harness/campaign-v1.py` is the retained v1
 snapshot with a later disk-path override correction, not a byte-exact capture
@@ -27,14 +29,29 @@ Older v1 results do not cover newly added assertions.
 | 1794189323 | 8313120f | server_paged, experimental | 2,045 | incomplete: concurrent fresh table constraint creation XX000; source fix #111 |
 | 1794191086 | 1a9e3d56 | server_paged, experimental | 2,089 | incomplete: acknowledged native SQL IDs reused after checkpoint/reopen; source fix #114 |
 | 1794195817 | 5d04f91f | server_paged, experimental | 2,428 | complete: preseed, native IDs, 123 DDL attempts, 12 writer resets +2 repeated recoveries, initial backup restore; zero violations |
+| 1794203435 | 0af1b55e | server_paged, ordinary main | 2,252 | incomplete: startup failed after 12th writer kill with orphan/mismatched `vm_ddl_75_pkey`; generic DDL catalog crash boundary under investigation |
 
-Both failing application runs retain `complete: false`. Their acknowledged
+All incomplete campaigns retain `complete: false`. Their acknowledged
 row/index/receipt checks passed up to the reported failures; this does not make
 the campaigns successful. The transaction-ID defect was independently
 reproduced on production main 8b1e1d47, not only the structural-cut prototype.
 The corrected prototype passed the new source-pinned campaign at5d04f91f.
-An explicit `server_paged` production-main control remains pending; the
-experimental source is not promoted or deployed by this result.
+The explicit `server_paged` production-main control at0af1b55e failed:
+11 writer-reset recoveries reconciled without row/index/receipt errors, then
+the next restart refused an existing `vm_ddl_75_pkey` definition. The client
+had acknowledged table creation and its row, attempted DROP, and received no
+DROP acknowledgment. Inspection found the index pointing at a missing
+`__bicdb_bin_*` collection. Recycle-bin behavior also applies to the PostgreSQL
+profile used by this VM; this is a generic transactional DDL/catalog boundary,
+not an Oracle-only or typed-catalog regression. The exact source and terminal
+error are preserved. No success is inferred from earlier clean recoveries.
+Experimental source is not promoted or deployed by these results.
+
+A preliminary **ordinary-default** candidate at2c3503db separately passed the
+[large-transaction campaign](large-transaction/README.md), including actual
+eviction pressure, values larger than the pool, seven hard VM kills and
+independent structural checks. Final integrated-source and postmerge
+qualification remain separate.
 
 Initial assumptions about the first CLI run's storage mode were wrong. Its
 persisted `format.json` proves `embedded_memory`. Each retained format record

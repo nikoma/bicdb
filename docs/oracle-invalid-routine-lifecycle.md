@@ -45,3 +45,12 @@ covered in both storage modes by the focused regression.
 
 These checks are separate from original unchanged iDempiere application tests,
 the two original 10-second timeout cases, and final-artifact VM qualification.
+
+The full SQL run at c07215b6 found one fixture conflict: the function-options
+regression declared RETURNS namespaces without creating that table/type. Native
+PostgreSQL16 independently rejected that declaration with 42704 and accepted the
+same declaration after CREATE TABLE namespaces. The control transaction was
+rolled back; its transcript is checked in alongside the native Oracle fixture.
+The corrected options fixture creates its missing table while retaining every
+original assertion. The failed broad run remains evidence; results from its
+unchanged passing targets are scoped separately from the corrected SQL target.

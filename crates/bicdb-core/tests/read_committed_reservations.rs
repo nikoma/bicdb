@@ -228,13 +228,6 @@ fn masked_native_fields_are_preserved_and_foreign_tenant_cannot_be_overwritten()
         )
         .unwrap();
         db.create_collection("rows").unwrap();
-        db.insert(
-            "rows",
-            Record::new("one").with_metadata(
-                json!({"tenant_id":"t","v":20,"secret":"unpublished-sensitive-value"}),
-            ),
-        )
-        .unwrap();
         db.set_collection_policy(
             "rows",
             CollectionPolicy::tenant_field("tenant_id")
@@ -248,6 +241,14 @@ fn masked_native_fields_are_preserved_and_foreign_tenant_cannot_be_overwritten()
                 ),
         )
         .unwrap();
+        db.secure(&bicdb_core::SecurityContext::new("seed", "t").with_roles(["writer"]))
+            .insert(
+                "rows",
+                Record::new("one").with_metadata(
+                    json!({"tenant_id":"t","v":20,"secret":"unpublished-sensitive-value"}),
+                ),
+            )
+            .unwrap();
         db.set_mutation_policy(
             "rows",
             MutationPolicy::grants_required().with_tenant_field("tenant_id"),

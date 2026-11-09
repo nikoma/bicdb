@@ -25,13 +25,21 @@ struct Owners {
 #[derive(Debug)]
 pub(super) struct Table {
     keys: ShardedMutexMap<RecordLockKey, Owners>,
+    changed: Vec<Condvar>,
+}
+
+pub(super) struct WaitContext<'a> {
+    pub cancellation: &'a CancellationToken,
+    pub graph: &'a wait_graph::WaitForGraph,
+    pub suspensions: &'a transaction_suspension::Suspensions,
+    pub check_health: &'a dyn Fn() -> Result<()>,
 }
 
 impl Table {
     pub(super) fn with_shards(count: usize) -> Self {
-        Self {
-            keys: ShardedMutexMap::with_shards(count),
-        }
+        let keys = ShardedMutexMap::with_shards(count);
+        let changed = (0..keys.shards.len()).map(|_| Condvar::new()).collect();
+        Self { keys, changed }
     }
 
     pub(super) fn reserve(
@@ -42,31 +50,119 @@ impl Table {
         mode: Mode,
         locked_keys: &Mutex<LockedKeys>,
     ) -> Result<()> {
+        self.reserve_inner(transaction, constraint, value, mode, locked_keys, None)
+    }
+
+    pub(super) fn reserve_cancellable(
+        &self,
+        transaction: TransactionId,
+        constraint: &str,
+        value: &str,
+        locked_keys: &Mutex<LockedKeys>,
+        context: &WaitContext<'_>,
+    ) -> Result<()> {
+        self.reserve_inner(
+            transaction,
+            constraint,
+            value,
+            Mode::Exclusive,
+            locked_keys,
+            Some(context),
+        )
+    }
+
+    fn reserve_inner(
+        &self,
+        transaction: TransactionId,
+        constraint: &str,
+        value: &str,
+        mode: Mode,
+        locked_keys: &Mutex<LockedKeys>,
+        context: Option<&WaitContext<'_>>,
+    ) -> Result<()> {
         let key = (constraint.to_owned(), value.to_owned());
-        let mut shard = self.keys.shards[self.keys.shard_idx(&key)].lock();
-        let owners = shard.entry(key).or_default();
-        let conflict = owners.exclusive.is_some_and(|owner| owner != transaction)
-            || matches!(mode, Mode::Exclusive)
-                && owners.shared.iter().any(|owner| *owner != transaction);
-        if conflict {
-            return Err(BicDbError::TransactionConflict(
-                "constraint key is reserved by another transaction".into(),
-            ));
+        let shard_index = self.keys.shard_idx(&key);
+        let started = Instant::now();
+        let mut edges = Vec::new();
+        let mut previous_owners = Vec::new();
+        loop {
+            if let Some(context) = context {
+                (context.check_health)()?;
+                context.cancellation.check()?;
+            }
+            let mut shard = self.keys.shards[shard_index].lock();
+            let owners = shard.entry(key.clone()).or_default();
+            let mut blockers = Vec::new();
+            if let Some(owner) = owners.exclusive.filter(|owner| *owner != transaction) {
+                blockers.push(owner);
+            }
+            if matches!(mode, Mode::Exclusive) {
+                blockers.extend(
+                    owners
+                        .shared
+                        .iter()
+                        .copied()
+                        .filter(|owner| *owner != transaction),
+                );
+            }
+            if !blockers.is_empty() {
+                let Some(context) = context else {
+                    return Err(BicDbError::TransactionConflict(
+                        "constraint key is reserved by another transaction".into(),
+                    ));
+                };
+                if started.elapsed() >= Duration::from_secs(240) {
+                    return Err(BicDbError::TransactionConflict(
+                        "constraint key wait exceeded its bounded safeguard".into(),
+                    ));
+                }
+                blockers.sort_unstable();
+                blockers.dedup();
+                if blockers != previous_owners {
+                    edges.clear();
+                    // Keep ownership stable while registering graph edges,
+                    // exactly as the row-lock path does. The graph never
+                    // acquires a reservation shard in the reverse direction.
+                    for owner in &blockers {
+                        if context.suspensions.would_cycle(transaction, *owner) {
+                            return Err(BicDbError::TransactionDeadlock(
+                                "constraint key waits for suspended execution".into(),
+                            ));
+                        }
+                        let edge =
+                            context.graph.wait_for(transaction, *owner).ok_or_else(|| {
+                                BicDbError::TransactionDeadlock(
+                                    "cycle detected while waiting for a constraint key".into(),
+                                )
+                            })?;
+                        edges.push(edge);
+                    }
+                    previous_owners = blockers;
+                }
+                self.changed[shard_index].wait_for(&mut shard, Duration::from_millis(1));
+                continue;
+            }
+            edges.clear();
+            let prefix = match mode {
+                Mode::Shared => {
+                    owners.shared.insert(transaction);
+                    SHARED_PREFIX
+                }
+                Mode::Exclusive => {
+                    owners.exclusive = Some(transaction);
+                    EXCLUSIVE_PREFIX
+                }
+            };
+            locked_keys
+                .lock()
+                .insert((format!("{prefix}{constraint}"), value.to_owned()));
+            drop(shard);
+            if let Some(context) = context {
+                (context.check_health)()?;
+                context.cancellation.check()?;
+            }
+            return Ok(());
         }
-        let prefix = match mode {
-            Mode::Shared => {
-                owners.shared.insert(transaction);
-                SHARED_PREFIX
-            }
-            Mode::Exclusive => {
-                owners.exclusive = Some(transaction);
-                EXCLUSIVE_PREFIX
-            }
-        };
-        locked_keys
-            .lock()
-            .insert((format!("{prefix}{constraint}"), value.to_owned()));
-        Ok(())
     }
 
     /// Returns true for an integrity event, even when its owner is absent.
@@ -80,7 +176,8 @@ impl Table {
             return false;
         };
         let key = (constraint.to_owned(), event.1.clone());
-        let mut shard = self.keys.shards[self.keys.shard_idx(&key)].lock();
+        let shard_index = self.keys.shard_idx(&key);
+        let mut shard = self.keys.shards[shard_index].lock();
         if let Some(owners) = shard.get_mut(&key) {
             if shared {
                 owners.shared.remove(&transaction);
@@ -91,6 +188,8 @@ impl Table {
                 shard.remove(&key);
             }
         }
+        drop(shard);
+        self.changed[shard_index].notify_all();
         true
     }
 }

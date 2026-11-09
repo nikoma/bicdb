@@ -16170,6 +16170,48 @@ impl Transaction {
         self.reserve_integrity_key_mode(constraint, key, integrity_reservations::Mode::Exclusive)
     }
 
+    /// Wait for a constraint key using the same live wait graph as row locks.
+    /// The owner retains its key until its transaction/savepoint releases it;
+    /// cancellation, fencing and deadlocks never remove another owner's key.
+    pub fn reserve_integrity_key_cancellable(
+        &self,
+        constraint: &str,
+        key: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<()> {
+        if self.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        let db = self.db_ref();
+        let cancellation = if let Some(actor) = &self.mutation_actor {
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|value| value.as_millis() as i64)
+                .unwrap_or_default();
+            if actor.deadline_unix_ms <= now {
+                return Err(BicDbError::QueryTimedOut);
+            }
+            cancellation.child_with_deadline(
+                Instant::now() + Duration::from_millis((actor.deadline_unix_ms - now) as u64),
+            )
+        } else {
+            cancellation.clone()
+        };
+        let check_health = || db.check_recovery_state();
+        self.write_locks.integrity.reserve_cancellable(
+            self.id,
+            constraint,
+            key,
+            &self.locked_keys,
+            &integrity_reservations::WaitContext {
+                cancellation: &cancellation,
+                graph: &db.wait_graph,
+                suspensions: &db.transaction_suspensions,
+                check_health: &check_health,
+            },
+        )
+    }
+
     /// Reserve a referenced constraint key without excluding other readers.
     /// Exclusive reservations still conflict. Savepoint rollback and transaction
     /// completion release this reservation using the same lifecycle as row locks.

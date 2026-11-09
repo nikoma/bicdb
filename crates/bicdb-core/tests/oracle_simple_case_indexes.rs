@@ -192,3 +192,115 @@ fn capture_old_reader_fixture(source: &std::path::Path) {
     }
     copy(source, &destination);
 }
+
+fn completed_shadow(
+    db: &mut BicDb,
+    definition: IndexDefinition,
+) -> bicdb_core::PagedBTreeBuildState {
+    use bicdb_core::{
+        PagedBTreeBuildAdvance, PagedBTreeBuildLimits, ResourceDemand, ResourceGovernor,
+        ResourceGovernorConfig,
+    };
+    let limits = PagedBTreeBuildLimits::default();
+    let name = definition.name.clone();
+    db.begin_paged_btree_build(definition, limits, 100).unwrap();
+    let governor = ResourceGovernor::new(ResourceGovernorConfig::default(), 100).unwrap();
+    let demand = ResourceDemand {
+        memory_bytes: limits.max_batch_bytes as u64,
+        io_bytes: limits.max_batch_bytes as u64,
+        cpu_slots: 1,
+        io_charge_bytes: 1,
+    };
+    for now in 101..1000 {
+        if let PagedBTreeBuildAdvance::Complete(state) = db
+            .advance_paged_btree_build_governed(&name, limits, &governor, demand, now)
+            .unwrap()
+        {
+            return state;
+        }
+    }
+    panic!("bounded shadow build did not complete");
+}
+
+#[test]
+fn atomic_case_binding_survives_legacy_alias_staleness_writes_reopen_rename_and_drop() {
+    let root = tempfile::tempdir().unwrap();
+    let config = mode_config(StorageMode::ServerPaged);
+    let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+    db.create_collection("rows").unwrap();
+    db.insert("rows", row("one", "é")).unwrap();
+    let old = index("legacy", IndexField::Upper(Box::new(path("value"))), true);
+    db.create_index(old.clone()).unwrap();
+    let shadow = completed_shadow(
+        &mut db,
+        index(
+            "owned-shadow",
+            IndexField::OracleUpperV1(Box::new(path("value"))),
+            true,
+        ),
+    );
+    // Complete shadows are ordinary load-bearing indexes: intervening data and
+    // ownership-intent commits must not invalidate a correctly maintained build.
+    db.insert("rows", row("two", "ø")).unwrap();
+    let before = std::fs::read(root.path().join("indexes.json")).unwrap();
+    let mut wrong_old = old.clone();
+    wrong_old.unique = false;
+    assert!(db
+        .publish_oracle_case_v1_index_replacement(&wrong_old, &shadow)
+        .is_err());
+    assert_eq!(
+        std::fs::read(root.path().join("indexes.json")).unwrap(),
+        before
+    );
+    db.publish_oracle_case_v1_index_replacement(&old, &shadow)
+        .unwrap();
+    db.publish_oracle_case_v1_index_replacement(&old, &shadow)
+        .unwrap();
+    assert_eq!(db.lookup_index("legacy", &key("É")).unwrap(), vec!["one"]);
+    assert_eq!(db.lookup_index("legacy", &key("Ø")).unwrap(), vec!["two"]);
+    assert!(db
+        .discard_paged_btree_build(&shadow.definition.name, shadow.limits)
+        .is_err());
+    assert!(db.insert("rows", row("duplicate", "É")).is_err());
+    db.flush().unwrap();
+    drop(db);
+    // The old derived file intentionally still aliases `legacy` to its old
+    // generation. The atomic catalog, not this stale cache, controls reopen.
+    let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+    db.publish_oracle_case_v1_index_replacement(&old, &shadow)
+        .unwrap();
+    assert_eq!(db.lookup_index("legacy", &key("É")).unwrap(), vec!["one"]);
+    db.insert("rows", row("one", "ǆ")).unwrap();
+    assert_eq!(db.lookup_index("legacy", &key("Ǆ")).unwrap(), vec!["one"]);
+    db.rename_index("legacy", "renamed").unwrap();
+    db.flush().unwrap();
+    drop(db);
+    let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+    assert_eq!(db.lookup_index("renamed", &key("Ǆ")).unwrap(), vec!["one"]);
+    assert!(db.verify_index("renamed").unwrap().valid);
+    db.drop_index("renamed").unwrap();
+    db.flush().unwrap();
+    drop(db);
+    let db = BicDb::open_with_config(root.path(), config).unwrap();
+    assert!(!db
+        .index_definitions()
+        .iter()
+        .any(|d| d.name == "legacy" || d.name == "renamed" || d.name == "owned-shadow"));
+}
+
+#[test]
+fn explicit_oracle_capability_does_not_require_an_expression_index() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(root.path(), mode_config(mode)).unwrap();
+        db.enable_oracle_simple_case_v1().unwrap();
+        let format: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(root.path().join("format.json")).unwrap())
+                .unwrap();
+        assert!(format["feature_flags"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|v| v == "oracle_simple_case_v1"));
+    }
+}

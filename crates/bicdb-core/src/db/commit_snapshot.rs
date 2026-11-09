@@ -1670,7 +1670,17 @@ impl BicDb {
         for definition in &indexes {
             self.enable_index_format_capabilities(definition)?;
         }
-        let catalog = IndexCatalog { indexes };
+        let btree_bindings = self
+            .btree_bindings
+            .lock()
+            .iter()
+            .filter(|(name, _)| indexes.iter().any(|definition| &definition.name == *name))
+            .map(|(name, physical)| (name.clone(), physical.clone()))
+            .collect();
+        let catalog = IndexCatalog {
+            indexes,
+            btree_bindings,
+        };
         let bytes = serde_json::to_vec_pretty(&catalog)?;
         write_sidecar(
             &self.path.join(DEFAULT_INDEX_CATALOG),
@@ -1680,7 +1690,9 @@ impl BicDb {
             &self.encryption,
             "index_catalog",
             storage::FailClosed::Always(&self.durability),
-        )
+        )?;
+        *self.btree_bindings.lock() = catalog.btree_bindings;
+        Ok(())
     }
 
     /// Recompute every index's `size_bytes` (and entry count) from the live

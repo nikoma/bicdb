@@ -47,7 +47,9 @@ mod commit_resolution;
 mod fts_build;
 pub use commit_resolution::{CommitResolution, INCARNATION_JOURNAL};
 mod fts_query;
+mod index_binding;
 mod index_build;
+use index_binding::load_btree_bindings;
 mod integrity_reservations;
 mod pitr_maintenance;
 mod row_lock_waiters;
@@ -3825,6 +3827,7 @@ pub struct BicDb {
     /// Logical GIN name -> immutable physical build generation. Updating this
     /// tiny catalog is the atomic publication point for a completed build.
     fts_generations: Mutex<FtsGenerationCatalog>,
+    btree_bindings: Mutex<BTreeMap<String, String>>,
     /// Shared, explicitly byte-bounded decoded posting cache. Entries are
     /// generation-qualified, so atomic publication cannot alias old data.
     fts_block_cache: Arc<crate::fts_cache::FullTextBlockCache>,
@@ -8965,6 +8968,8 @@ struct CollectionCatalog {
 struct IndexCatalog {
     #[serde(default)]
     indexes: Vec<IndexDefinition>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    btree_bindings: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -9811,8 +9816,11 @@ impl BicDb {
         } else {
             None
         };
-        let fts_generations =
+        let mut fts_generations =
             load_fts_generation_catalog(&path.join(DEFAULT_FTS_GENERATION_CATALOG))?;
+        let btree_bindings = load_btree_bindings(&path.join(DEFAULT_INDEX_CATALOG), &encryption)?;
+        // The atomic definition catalog overrides the legacy derived alias file.
+        fts_generations.indexes.extend(btree_bindings.clone());
         if let Some(paged) = &paged_records {
             paged.set_index_aliases(fts_generations.indexes.clone());
         }
@@ -10650,6 +10658,7 @@ impl BicDb {
             paged_records,
             paged_maintenance_lock: Arc::new(Mutex::new(())),
             fts_generations: Mutex::new(fts_generations),
+            btree_bindings: Mutex::new(btree_bindings),
             fts_block_cache,
             fts_open_metrics,
             sync_log: Mutex::new(sync_log),

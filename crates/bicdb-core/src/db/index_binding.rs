@@ -1,0 +1,199 @@
+//! Atomic logical-definition / physical-generation publication.
+use super::*;
+
+pub(super) fn load_btree_bindings(
+    path: &Path,
+    encryption: &EncryptionRuntime,
+) -> Result<BTreeMap<String, String>> {
+    let Some(bytes) = read_optional_sidecar(path, FrameKind::Index, encryption)? else {
+        return Ok(BTreeMap::new());
+    };
+    if bytes.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    let catalog: IndexCatalog = serde_json::from_slice(&bytes)?;
+    let mut physical_names = FxHashSet::default();
+    for (name, physical) in &catalog.btree_bindings {
+        let definition = catalog
+            .indexes
+            .iter()
+            .find(|definition| &definition.name == name);
+        let valid_physical = physical
+            .rsplit_once(".__btree.")
+            .is_some_and(|(prefix, id)| {
+                !prefix.is_empty() && Uuid::parse_str(id).is_ok_and(|id| !id.is_nil())
+            });
+        if !definition.is_some_and(|definition| definition.kind == IndexKind::BTree)
+            || !valid_physical
+            || !physical_names.insert(physical.clone())
+        {
+            return Err(BicDbError::Index(
+                "invalid authoritative B-tree generation binding".into(),
+            ));
+        }
+    }
+    Ok(catalog.btree_bindings)
+}
+
+impl BicDb {
+    /// Refuse older readers before publishing Oracle-v1 profile metadata, even
+    /// when the database has no expression indexes yet.
+    pub fn enable_oracle_simple_case_v1(&mut self) -> Result<()> {
+        self.ensure_writable("enable Oracle simple-case v1")?;
+        self.ensure_no_pending_transactions()?;
+        format::enable_oracle_simple_case_v1(&self.path)
+    }
+
+    /// Replace an existing legacy case-expression index with an independently
+    /// verified, owned Oracle-v1 shadow. The definition and physical binding
+    /// share one durable catalog publication. Retired physical entries remain
+    /// intact for readers; this operation does not reclaim generations.
+    pub fn publish_oracle_case_v1_index_replacement(
+        &mut self,
+        expected_old: &IndexDefinition,
+        shadow: &PagedBTreeBuildState,
+    ) -> Result<()> {
+        self.ensure_writable("publish Oracle simple-case v1 index")?;
+        self.ensure_no_pending_transactions()?;
+        shadow.validate()?;
+        let durable = self.load_paged_btree_build(&shadow.definition.name, shadow.limits)?;
+        if durable != *shadow || shadow.phase != PagedBTreeBuildPhase::Complete {
+            return Err(BicDbError::Index(
+                "Oracle replacement shadow is not the owned completed build".into(),
+            ));
+        }
+        let replacement = oracle_case_v1_definition(expected_old.clone());
+        if replacement == *expected_old || replacement.kind != IndexKind::BTree {
+            return Err(BicDbError::Index(
+                "Oracle replacement requires a legacy case-expression B-tree".into(),
+            ));
+        }
+        let mut renamed_shadow = shadow.definition.clone();
+        renamed_shadow.name.clone_from(&expected_old.name);
+        if replacement != renamed_shadow || shadow.definition.name == expected_old.name {
+            return Err(BicDbError::Index(
+                "Oracle replacement changes more than case semantics".into(),
+            ));
+        }
+        let current = self
+            .indexes
+            .get(&expected_old.name)
+            .map(|state| state.read().definition.clone());
+        // Idempotent retry after a crash following the catalog rename.
+        if current.as_ref() == Some(&replacement)
+            && self.btree_bindings.lock().get(&expected_old.name) == Some(&shadow.physical_name)
+            && !self.indexes.contains_key(&shadow.definition.name)
+        {
+            return Ok(());
+        }
+        if current.as_ref() != Some(expected_old)
+            || self
+                .indexes
+                .get(&shadow.definition.name)
+                .map(|state| state.read().definition.clone())
+                != Some(shadow.definition.clone())
+            || self
+                .fts_generations
+                .lock()
+                .indexes
+                .get(&shadow.definition.name)
+                != Some(&shadow.physical_name)
+            || self.paged_records.is_none()
+        {
+            return Err(BicDbError::Index(
+                "Oracle replacement source, shadow, or database changed".into(),
+            ));
+        }
+        self.enable_index_format_capabilities(&replacement)?;
+        let old_bindings = self.btree_bindings.lock().clone();
+        let old = self
+            .indexes
+            .remove(&expected_old.name)
+            .expect("validated source");
+        let mut new = self
+            .indexes
+            .remove(&shadow.definition.name)
+            .expect("validated shadow");
+        new.get_mut().definition = replacement;
+        self.indexes.insert(expected_old.name.clone(), new);
+        {
+            let mut bindings = self.btree_bindings.lock();
+            bindings.remove(&shadow.definition.name);
+            bindings.insert(expected_old.name.clone(), shadow.physical_name.clone());
+        }
+        if let Err(error) = self.persist_index_catalog() {
+            let mut new = self
+                .indexes
+                .remove(&expected_old.name)
+                .expect("replacement");
+            new.get_mut().definition = shadow.definition.clone();
+            self.indexes.insert(shadow.definition.name.clone(), new);
+            self.indexes.insert(expected_old.name.clone(), old);
+            *self.btree_bindings.lock() = old_bindings;
+            return Err(error);
+        }
+        // Only the catalog is authoritative. No fallible derived-file write
+        // may intervene before the in-process alias follows its publication.
+        let mut generations = self.fts_generations.lock();
+        generations.indexes.remove(&shadow.definition.name);
+        generations
+            .indexes
+            .insert(expected_old.name.clone(), shadow.physical_name.clone());
+        let paged = self.paged_records.as_ref().expect("validated paged store");
+        paged.remove_index_alias(&shadow.definition.name);
+        paged.set_index_alias(&expected_old.name, &shadow.physical_name);
+        self.index_generation
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.schema_compatibility.invalidate();
+        Ok(())
+    }
+}
+
+fn oracle_case_v1_definition(mut definition: IndexDefinition) -> IndexDefinition {
+    fn field(value: &mut IndexField) {
+        match value {
+            IndexField::Upper(inner) => {
+                field(inner);
+                *value = IndexField::OracleUpperV1(inner.clone());
+            }
+            IndexField::Lower(inner) => {
+                field(inner);
+                *value = IndexField::OracleLowerV1(inner.clone());
+            }
+            IndexField::OracleUpperV1(inner)
+            | IndexField::OracleLowerV1(inner)
+            | IndexField::Trim(inner)
+            | IndexField::TimestampDay(inner)
+            | IndexField::Coalesce { field: inner, .. } => field(inner),
+            IndexField::FirstNonNull(fields) => fields.iter_mut().for_each(field),
+            _ => {}
+        }
+    }
+    fn predicate(value: &mut IndexPredicate) {
+        match value {
+            IndexPredicate::Field { field: value } => field(value),
+            IndexPredicate::Literal { .. } => {}
+            IndexPredicate::Unary { value, .. } => predicate(value),
+            IndexPredicate::Binary { left, right, .. } => {
+                predicate(left);
+                predicate(right);
+            }
+        }
+    }
+    definition.fields.iter_mut().for_each(field);
+    if let Some(value) = &mut definition.predicate {
+        predicate(value);
+    }
+    if let Some(exclusion) = &mut definition.exclusion {
+        for element in &mut exclusion.elements {
+            match element {
+                IndexExclusionElement::Equal { field: value } => field(value),
+                IndexExclusionElement::Overlaps { start, end, .. } => {
+                    field(start);
+                    field(end);
+                }
+            }
+        }
+    }
+    definition
+}

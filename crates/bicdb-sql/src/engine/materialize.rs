@@ -605,7 +605,8 @@ impl<'db> SqlEngine<'db> {
             .data_path()
             .join(bicdb_core::aggregate_projection::PROJECTIONS_DIR);
         let source_position =
-            bicdb_core::aggregate_projection::AggregateProjection::source_position(db);
+            bicdb_core::aggregate_projection::AggregateProjection::source_position(db)
+                .map_err(SqlError::from)?;
         let mut rows = Vec::new();
         for name in bicdb_core::aggregate_projection::list_projections(db.data_path()) {
             let Some(projection) =
@@ -3253,6 +3254,8 @@ impl<'db> SqlEngine<'db> {
                 | "json_array_elements_text"
                 | "jsonb_object_keys"
                 | "json_object_keys"
+                | "current_setting"
+                | "set_config"
         ) {
             return Some("text".to_string());
         }

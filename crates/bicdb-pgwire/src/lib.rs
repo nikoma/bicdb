@@ -2281,15 +2281,66 @@ async fn handle_plain_client_async(
     result
 }
 
+/// A queued notification can contain business data from an earlier callback.
+/// Refuse it after a durability fence, even if its producer ran while healthy.
+fn drain_checked_notifications(
+    server: &PgWireServer,
+    connection_id: u64,
+) -> Result<Vec<(String, String, i32)>> {
+    server.tx_log.check_recovery_state()?;
+    let pending = match server.notifications.lock() {
+        Ok(mut bus) => bus.drain(connection_id),
+        Err(_) => return Ok(Vec::new()),
+    };
+    server.tx_log.check_recovery_state()?;
+    Ok(pending)
+}
+
+#[cfg(test)]
+mod notification_fence_tests {
+    use super::*;
+
+    #[test]
+    fn queued_notification_is_refused_after_durability_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let server = PgWireServer::open(dir.path(), PgWireConfig::default()).unwrap();
+        {
+            let mut bus = server.notifications.lock().unwrap();
+            bus.listen(7, "business");
+            bus.notify("business", "committed row", 1);
+        }
+        assert_eq!(drain_checked_notifications(&server, 7).unwrap().len(), 1);
+        server
+            .notifications
+            .lock()
+            .unwrap()
+            .notify("business", "queued row", 1);
+        server
+            .db
+            .read()
+            .durability_health_for_test()
+            .record_failure("test.notification_fence", &"injected");
+        assert!(matches!(
+            drain_checked_notifications(&server, 7),
+            Err(PgWireError::BicDb(
+                bicdb_core::BicDbError::WriteFailed { .. }
+            ))
+        ));
+        assert!(matches!(
+            drain_checked_notifications(&server, 8),
+            Err(PgWireError::BicDb(
+                bicdb_core::BicDbError::WriteFailed { .. }
+            ))
+        ));
+    }
+}
+
 async fn flush_notifications_async(
     stream: &mut TokioTcpStream,
     server: &PgWireServer,
     connection_id: u64,
 ) -> Result<()> {
-    let pending = match server.notifications.lock() {
-        Ok(mut bus) => bus.drain(connection_id),
-        Err(_) => return Ok(()),
-    };
+    let pending = drain_checked_notifications(server, connection_id)?;
     if pending.is_empty() {
         return Ok(());
     }
@@ -2305,6 +2356,7 @@ async fn flush_notifications_async(
         buffer.extend_from_slice(&((body.len() + 4) as u32).to_be_bytes());
         buffer.extend_from_slice(&body);
     }
+    server.tx_log.check_recovery_state()?;
     stream.write_all(&buffer).await?;
     Ok(())
 }
@@ -4007,8 +4059,15 @@ fn execute_server_db_sql_for_state_inner(
     // Only exhausted conflict retries are contention; statements that need
     // exclusive access (DDL) or a closed gate must not debit the gate.
     let mut conflicts_exhausted = false;
-    for attempt in 0..MAX_SHARED_COMMIT_ATTEMPTS {
+    // A lost unique-key race re-runs on this shared path under its own
+    // budget (see the `UniqueIndexConflict` arm below), so it neither spends
+    // the conflict attempts nor escalates to the exclusive path.
+    const MAX_UNIQUE_RACE_RETRIES: u32 = 64;
+    let mut unique_race_retries = 0u32;
+    let mut attempt = 0u32;
+    while attempt < MAX_SHARED_COMMIT_ATTEMPTS {
         conflicts_exhausted = attempt + 1 == MAX_SHARED_COMMIT_ATTEMPTS;
+        attempt += 1;
         // Plain SELECTs must never be throttled by the write gate. A SELECT
         // can still invoke a writing PL/pgSQL function, though, so execute it
         // with deferred commit and only enter write admission when the session
@@ -4179,17 +4238,34 @@ fn execute_server_db_sql_for_state_inner(
             Err(BicDbError::UniqueIndexConflict { .. }) if !independent => {
                 // Another transaction committed (or is committing) the same
                 // unique key after this statement's snapshot was taken. That
-                // decides nothing yet: an `INSERT ... ON CONFLICT` must now
-                // find that row and take its conflict action instead of
-                // failing, and a plain INSERT must report unique_violation at
-                // statement time. Re-run on the exclusive path. Its write
-                // guard waits for every in-flight shared commit, so the rival
-                // row is visible to the re-run, which therefore either takes
-                // the conflict action or fails exactly as a serial execution
-                // would. Not counted as contention: no gate debit.
+                // decides nothing yet: an `INSERT ... ON CONFLICT` must find
+                // that row and take its conflict action instead of failing,
+                // and a plain INSERT must report unique_violation at
+                // statement time. Re-run here, under a fresh snapshot, once
+                // the rival commit has had a moment to publish.
+                //
+                // Not on the exclusive path: its write guard stops in-flight
+                // shared transactions from committing, so a re-run that
+                // turns into an UPDATE of the rival row waits on a row lock
+                // whose owner cannot commit until the row-lock wait budget
+                // (seconds) expires, then fails with 40001.
                 drop(tx);
                 drop(rdb);
                 drop(admission);
+                if unique_race_retries < MAX_UNIQUE_RACE_RETRIES {
+                    unique_race_retries += 1;
+                    attempt -= 1;
+                    if unique_race_retries > 2 {
+                        thread::sleep(Duration::from_micros(
+                            50 * u64::from(unique_race_retries.min(40)),
+                        ));
+                    } else {
+                        thread::yield_now();
+                    }
+                    continue;
+                }
+                // Still racing after the whole budget: let the exclusive path
+                // settle it. Not contention, so no gate debit.
                 conflicts_exhausted = false;
                 break;
             }

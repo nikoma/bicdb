@@ -1,0 +1,26 @@
+{
+  "label": "c",
+  "mode": "plain",
+  "server_env_extra": {
+    "BICDB_PAGED_COMMIT_SYNC_OUTSIDE_LOCK": "1"
+  },
+  "n": 200,
+  "startup_s": 3.0,
+  "update": {
+    "commit_ms_p50": 27.61,
+    "p95": 48.57,
+    "p99": 55.87,
+    "max": 58.74,
+    "mean": 29.65,
+    "exec_ms_p50": 1.8
+  },
+  "insert": {
+    "commit_ms_p50": 27.76,
+    "p95": 34.27,
+    "p99": 45.79,
+    "max": 49.46,
+    "mean": 28.64,
+    "exec_ms_p50": 0.95
+  },
+  "database_removed": true
+}

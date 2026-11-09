@@ -346,6 +346,9 @@ impl BicDb {
             &self.path,
             self.commit_seq.load(AtomicOrdering::SeqCst),
             wal_base,
+            self.next_tx_id
+                .load(AtomicOrdering::SeqCst)
+                .saturating_sub(1),
             self.config.fsync,
         )?;
         bicdb_page::test_faults::crash_point("txlog_cut.after_floor");
@@ -369,6 +372,19 @@ impl BicDb {
             return Err(error);
         }
         self.tx_log.invalidate();
+        if keep_from >= log_len {
+            // A durable empty log proves no trimmed transactional publication
+            // can be replayed. Older or newer receipt markers are both safe
+            // if this optional cleanup fails; retain the conservative ledger.
+            if let Err(error) = self
+                .events
+                .lock()
+                .broker()
+                .prune_outbox_receipts(&Default::default())
+            {
+                eprintln!("bicdb: broker outbox receipt pruning deferred: {error}");
+            }
+        }
         Ok(())
     }
 

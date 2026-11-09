@@ -1,0 +1,18 @@
+{
+  "reference": "PostgreSQL16.13",
+  "statements": [
+    "CREATE TEMP TABLE tc_deleted_unique(id text PRIMARY KEY,k text UNIQUE,v text)",
+    "INSERT INTO tc_deleted_unique VALUES('old','same','before')",
+    "BEGIN",
+    "DELETE FROM tc_deleted_unique WHERE k='same'",
+    "INSERT INTO tc_deleted_unique VALUES('new','same','fresh') ON CONFLICT(k) DO UPDATE SET v=EXCLUDED.v",
+    "COMMIT",
+    "SELECT id,v FROM tc_deleted_unique"
+  ],
+  "rows": [
+    [
+      "new",
+      "fresh"
+    ]
+  ]
+}

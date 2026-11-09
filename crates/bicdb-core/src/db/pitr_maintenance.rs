@@ -2750,6 +2750,16 @@ impl BicDb {
     /// SQL uses this only before the new table has any pending data writes.
     pub fn create_empty_btree_index(&mut self, definition: IndexDefinition) -> Result<()> {
         self.ensure_writable("initialize empty B-tree index")?;
+        if self.write_locks.shards.iter().any(|shard| {
+            shard
+                .lock()
+                .keys()
+                .any(|(collection, _)| collection == &definition.collection)
+        }) {
+            return Err(BicDbError::Index(
+                "empty B-tree initialization refuses pending writes or locks on its target collection".into(),
+            ));
+        }
         if !self.is_server_paged()
             || definition.kind != IndexKind::BTree
             || definition.exclusion.is_some()
@@ -2989,7 +2999,22 @@ impl BicDb {
         self.backfill_paged_index_entries(&definition)?;
         if let Some(paged) = &self.paged_records {
             let snapshot = paged.latest_snapshot();
-            if paged.index_has_any_posting_blocks(&snapshot, &definition.name)? {
+            let has_blocks = paged.index_has_any_posting_blocks(&snapshot, &definition.name)?;
+            let has_entries = paged.index_has_entries(&snapshot, &definition.name)?;
+            if has_entries && !has_blocks {
+                // Legacy array postings use primary keys, and verification
+                // resolves those through the compact row-id registry. A table
+                // opened before it had an index has no registry yet.
+                let mut collection = self.collection_state_write(&definition.collection)?;
+                for shard in collection.shards_mut() {
+                    shard.track_reverse = true;
+                }
+                for id in paged.scan_ids(&snapshot, &definition.collection)? {
+                    let id = id?;
+                    collection.shard_mut(&id).rowid_or_alloc(&id);
+                }
+            }
+            if has_blocks || has_entries {
                 if let Some(state) = self.indexes.get(&definition.name) {
                     state.write().paged_read_through = true;
                 }

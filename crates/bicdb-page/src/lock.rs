@@ -138,6 +138,113 @@ impl DirectoryLock {
     }
 }
 
+/// Whether some handle currently owns a store directory, observed without
+/// taking, creating or modifying anything. Used by the read-only store
+/// verifier, which must refuse to read a store a live writer is changing
+/// but must never create `store.lock` itself.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum DirectoryLockProbe {
+    /// There is no `store.lock` file (the store was never opened by an engine
+    /// that locks, or the file was removed). Nothing can hold it.
+    NoLockFile,
+    /// The lock file exists and no process holds its record lock.
+    Unlocked,
+    /// Another process holds the record lock.
+    HeldByProcess { pid: i64 },
+    /// A handle in THIS process owns the directory.
+    HeldInThisProcess,
+    /// The platform cannot test the lock without taking it.
+    Unknown,
+}
+
+impl DirectoryLockProbe {
+    pub fn is_held(&self) -> bool {
+        matches!(self, Self::HeldByProcess { .. } | Self::HeldInThisProcess)
+    }
+}
+
+/// Test the directory lock without acquiring it. Opens the lock file
+/// read-only (never creating it) and asks the kernel with `F_GETLK`, which
+/// reports a conflicting lock and changes nothing.
+#[cfg(unix)]
+pub fn probe_directory_lock(dir: &Path) -> Result<DirectoryLockProbe> {
+    use std::os::unix::fs::OpenOptionsExt;
+    use std::os::unix::io::AsRawFd;
+
+    let metadata = std::fs::metadata(dir).map_err(|source| PageError::io(dir, source))?;
+    let identity = DirectoryIdentity {
+        device: metadata.dev(),
+        inode: metadata.ino(),
+    };
+    // Keep acquisition in this process excluded until the probe descriptor has
+    // closed. Closing *any* descriptor for an inode releases this process's
+    // POSIX locks on that inode. A check followed by an unlocked open could
+    // therefore drop a writer's lock if it acquired ownership in between.
+    let process_guard = process_locks_guard();
+    if process_guard.contains(&identity) {
+        return Ok(DirectoryLockProbe::HeldInThisProcess);
+    }
+    let path = dir.join(LOCK_FILE);
+    match std::fs::symlink_metadata(&path) {
+        Ok(metadata) if metadata.nlink() > 1 => return Err(PageError::io(&path,
+            std::io::Error::new(std::io::ErrorKind::InvalidInput,
+                "refusing a hard-linked store lock: probing it could release another store's POSIX lock"))),
+        Ok(_) => {},
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound =>
+            return Ok(DirectoryLockProbe::NoLockFile),
+        Err(error) => return Err(PageError::io(&path, error)),
+    }
+    let file = match OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(&path)
+    {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(DirectoryLockProbe::NoLockFile)
+        }
+        Err(error) => return Err(PageError::io(&path, error)),
+    };
+    if !file
+        .metadata()
+        .map_err(|error| PageError::io(&path, error))?
+        .is_file()
+    {
+        return Err(PageError::io(
+            &path,
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "store lock is not a regular file",
+            ),
+        ));
+    }
+    // SAFETY: see `try_lock_exclusive`; all-zero is a valid `flock`.
+    let mut lock: libc::flock = unsafe { std::mem::zeroed() };
+    lock.l_type = libc::F_WRLCK as _;
+    lock.l_whence = libc::SEEK_SET as _;
+    lock.l_start = 0;
+    lock.l_len = 0;
+    // SAFETY: `file` is open for the call and `lock` is initialized. F_GETLK
+    // only reports; it never places or releases a lock.
+    let rc = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETLK, &mut lock) };
+    if rc != 0 {
+        return Err(PageError::io(&path, std::io::Error::last_os_error()));
+    }
+    if i32::from(lock.l_type) == libc::F_UNLCK {
+        Ok(DirectoryLockProbe::Unlocked)
+    } else {
+        Ok(DirectoryLockProbe::HeldByProcess {
+            pid: i64::from(lock.l_pid),
+        })
+    }
+}
+
+#[cfg(not(unix))]
+pub fn probe_directory_lock(_dir: &Path) -> Result<DirectoryLockProbe> {
+    Ok(DirectoryLockProbe::Unknown)
+}
+
 #[cfg(unix)]
 impl Drop for DirectoryLock {
     fn drop(&mut self) {
@@ -221,7 +328,9 @@ fn open_lock_file(path: &Path) -> Result<File> {
 #[cfg(all(test, unix))]
 mod tests {
     use super::DirectoryLock;
+    use std::os::unix::io::AsRawFd;
     use std::os::unix::io::RawFd;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     fn pipe() -> [RawFd; 2] {
         let mut descriptors = [-1; 2];
@@ -234,6 +343,94 @@ mod tests {
         // SAFETY: every caller owns the descriptor in this process and closes it
         // at most once. Errors during test cleanup cannot affect lock semantics.
         let _ = unsafe { libc::close(fd) };
+    }
+
+    fn assert_kernel_exclusion(fd: RawFd) {
+        // SAFETY: the child performs only async-signal-safe libc operations.
+        let child = unsafe { libc::fork() };
+        assert!(child >= 0);
+        if child == 0 {
+            let mut lock: libc::flock = unsafe { std::mem::zeroed() };
+            lock.l_type = libc::F_WRLCK as _;
+            lock.l_whence = libc::SEEK_SET as _;
+            let rc = unsafe { libc::fcntl(fd, libc::F_SETLK, &mut lock) };
+            unsafe { libc::_exit(if rc == -1 { 0 } else { 1 }) };
+        }
+        let mut status = 0;
+        // SAFETY: child belongs to this process and status is writable.
+        assert_eq!(unsafe { libc::waitpid(child, &mut status, 0) }, child);
+        assert!(
+            libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
+            "read-only verification released another store's OS lock"
+        );
+    }
+
+    #[test]
+    fn hard_linked_inputs_cannot_release_another_store_lock() {
+        for name in ["store.lock", "store.pages"] {
+            let owner_dir = tempfile::tempdir().unwrap();
+            let copy_dir = tempfile::tempdir().unwrap();
+            let owner = DirectoryLock::acquire(owner_dir.path()).unwrap();
+            std::fs::hard_link(
+                owner_dir.path().join("store.lock"),
+                copy_dir.path().join(name),
+            )
+            .unwrap();
+            assert!(crate::verify_store_read_only(
+                copy_dir.path(),
+                &crate::StoreVerifyOptions::default()
+            )
+            .is_err());
+            assert_kernel_exclusion(owner.file.as_ref().unwrap().as_raw_fd());
+        }
+    }
+
+    #[test]
+    fn concurrent_read_only_probes_preserve_the_writers_cross_process_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        // Ensure probes can open an existing lock file between ownerships.
+        drop(DirectoryLock::acquire(dir.path()).unwrap());
+        let stop = AtomicBool::new(false);
+        std::thread::scope(|scope| {
+            struct StopOnDrop<'a>(&'a AtomicBool);
+            impl Drop for StopOnDrop<'_> {
+                fn drop(&mut self) {
+                    self.0.store(true, Ordering::Relaxed);
+                }
+            }
+            let _stop_on_exit = StopOnDrop(&stop);
+            for _ in 0..4 {
+                scope.spawn(|| {
+                    while !stop.load(Ordering::Relaxed) {
+                        super::probe_directory_lock(dir.path()).unwrap();
+                    }
+                });
+            }
+            for _ in 0..200 {
+                let owner = DirectoryLock::acquire(dir.path()).unwrap();
+                let fd = owner.file.as_ref().unwrap().as_raw_fd();
+                // SAFETY: the child only calls async-signal-safe libc functions
+                // and never allocates or acquires a Rust lock after fork.
+                let child = unsafe { libc::fork() };
+                assert!(child >= 0);
+                if child == 0 {
+                    let mut lock: libc::flock = unsafe { std::mem::zeroed() };
+                    lock.l_type = libc::F_WRLCK as _;
+                    lock.l_whence = libc::SEEK_SET as _;
+                    let rc = unsafe { libc::fcntl(fd, libc::F_SETLK, &mut lock) };
+                    unsafe { libc::_exit(if rc == -1 { 0 } else { 1 }) };
+                }
+                let mut status = 0;
+                // SAFETY: child is this process's child and status is writable.
+                assert_eq!(unsafe { libc::waitpid(child, &mut status, 0) }, child);
+                if !libc::WIFEXITED(status) || libc::WEXITSTATUS(status) != 0 {
+                    stop.store(true, Ordering::Relaxed);
+                    panic!("a read-only probe released the writer's OS lock");
+                }
+                drop(owner);
+            }
+            stop.store(true, Ordering::Relaxed);
+        });
     }
 
     #[test]

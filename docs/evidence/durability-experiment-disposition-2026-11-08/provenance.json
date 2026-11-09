@@ -1,0 +1,19 @@
+{
+  "original": {
+    "pr": 40,
+    "source": "37ffe7aa093d89ac0c471539354a8324fb2c5bd2",
+    "path": "docs/page-wal-write-amplification.md",
+    "copy": "originals/pr40-page-wal-write-amplification.md",
+    "sha256": "0e22d944e5eea53e8bcfbd35318211e82d90fa87a2a5248f375f378dc5f1b2d1",
+    "lines": 494,
+    "modified": false
+  },
+  "reconciliation": {
+    "pr": 107,
+    "main_commit": "6f75a3520e6e89aa82562c4b54fba13c5dbfa017",
+    "diagnostic_runs": 70,
+    "target_failures": 70,
+    "other_passing_repeated_invocations": 6615
+  },
+  "scope": "Historical investigation disposition only. No new storage execution or production promotion."
+}

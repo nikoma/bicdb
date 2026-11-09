@@ -2880,7 +2880,9 @@ mod tests {
                 .unwrap()
                 .to_string()
         };
-        let queued = db.with_broker(|broker| broker.peek("carrier_workflow_test", 0, 10));
+        let queued = db
+            .with_broker(|broker| broker.peek("carrier_workflow_test", 0, 10))
+            .unwrap();
         let timeout = queued
             .iter()
             .find(|message| message.payload["kind"] == "workflow_timeout")

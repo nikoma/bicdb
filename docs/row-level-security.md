@@ -49,6 +49,11 @@ suite (`crates/bicdb-sql/tests/sql.rs`, tests prefixed `rls_`) pins them.
   assignment right-hand sides, `RETURNING`, `FROM`/`USING`) additionally apply
   SELECT policies to those reads; a FROM-less subquery that reads no column
   is not such a read.
+- Policy expressions are evaluated with the table's column types, as a
+  `WHERE` clause on the table is: a `char(n)` column compared with a text
+  key (`current_setting(...)` is `text`) compares as text, so stored
+  `'ab  '` matches the key `'ab'` and not `'ab '`; numeric keys compare by
+  value.
 - `COPY table TO STDOUT` applies SELECT policies; `COPY table FROM STDIN`
   applies INSERT `WITH CHECK` policies.
 
@@ -133,6 +138,14 @@ Because `app_rw` does not own the tables, policies bind for it even without
   policy expressions still evaluate with the invoking session's identity and
   GUCs — this matches PostgreSQL 18 behavior, verified against the oracle.
 - `security_invoker = true` applies the querying session's RLS.
+- SELECT privileges on every relation of a query's FROM tree (joins,
+  derived tables, set operations, referenced CTEs, and the sources of the
+  views it reads: as the caller for an invoker or ownerless view, as the
+  owner for a definer view) are checked when the statement starts, as
+  PostgreSQL checks its range table. Whether a query is refused no longer
+  depends on whether a join side happened to be empty. Subqueries inside
+  expressions are still checked when evaluated, matching PostgreSQL, whose
+  planner drops unreachable ones before its check.
 - BicDB always evaluates RLS row filters before user predicates, so
   `security_barrier` has no separate planner effect.
 

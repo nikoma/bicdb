@@ -4020,27 +4020,40 @@ impl<'db> SqlSession<'db> {
         Ok(existed)
     }
 
-    pub(crate) fn create_session_index(&mut self, mut definition: IndexDefinition) -> Result<()> {
+    pub(crate) fn create_session_index(&mut self, definition: IndexDefinition) -> Result<()> {
+        self.create_session_index_inner(definition, false)
+    }
+
+    pub(crate) fn create_new_table_index(&mut self, definition: IndexDefinition) -> Result<()> {
+        self.create_session_index_inner(definition, true)
+    }
+
+    fn create_session_index_inner(
+        &mut self,
+        mut definition: IndexDefinition,
+        created_in_this_statement: bool,
+    ) -> Result<()> {
         let logical_name = catalog_display_name(&definition.name);
         let schema = load_schema(self.db_ref(), &definition.collection)?;
         if let Some(schema) = &schema {
             definition.name = sql_index_storage_name(&schema.schema_name, &definition.name);
         }
         let name = definition.name.clone();
-        // Only a table created by this transaction, before any of its data
-        // writes, may initialize an empty paged constraint index. Rebuilding an
-        // existing corpus retains the ordinary pending-transaction fence.
+        // A fresh CREATE TABLE has no corpus to rebuild, in autocommit as well
+        // as an explicit transaction. Existing-table builds retain the normal
+        // pending-transaction fence, and core also rejects pending target rows.
         let new_empty_table = self.db_ref().is_server_paged()
             && definition.kind == IndexKind::BTree
             && definition.exclusion.is_none()
             && self
                 .tx
                 .as_ref()
-                .is_some_and(|tx| !tx.has_pending_writes(&definition.collection))
-            && self.ddl_undo.iter().any(|undo| {
-                matches!(undo,
+                .is_none_or(|tx| !tx.has_pending_writes(&definition.collection))
+            && (created_in_this_statement
+                || self.ddl_undo.iter().any(|undo| {
+                    matches!(undo,
                 DdlUndo::DropCollection { name } if name == &definition.collection)
-            });
+                }));
         let created = if new_empty_table {
             self.db_mut()?.create_empty_btree_index(definition)
         } else {

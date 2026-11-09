@@ -159,10 +159,14 @@ impl Transaction {
         } else {
             db.get_unchecked(collection, id)?
         };
+        let collection_incarnation = {
+            let state = db.collection_state(collection)?;
+            Arc::clone(&state.incarnation)
+        };
         let token = ReadCommittedRowReservation {
             transaction: self.id,
             health: Arc::clone(&db.durability),
-            collection_incarnation: Arc::clone(&db.collection_state(collection)?.incarnation),
+            collection_incarnation,
             collection: collection.to_owned(),
             id: id.to_owned(),
             version: Self::latest_committed_record_sequence(db, collection, id)?,
@@ -180,25 +184,33 @@ impl Transaction {
     fn validate_row_reservation(&self, token: &ReadCommittedRowReservation) -> Result<()> {
         let db = self.db_ref();
         db.check_recovery_state()?;
-        #[cfg(debug_assertions)]
-        bicdb_page::test_faults::io_hook_point("read_committed.reservation.validate", &db.path);
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
-        if self.id != token.transaction
-            || !Arc::ptr_eq(&db.durability, &token.health)
-            || !Arc::ptr_eq(
-                &db.collection_state(&token.collection)?.incarnation,
-                &token.collection_incarnation,
-            )
-            || self
-                .row_reservation_epochs
-                .lock()
+        if self.id != token.transaction || !Arc::ptr_eq(&db.durability, &token.health) {
+            return Err(BicDbError::TransactionConflict(
+                "current row reservation belongs to another transaction or database".into(),
+            ));
+        }
+        // Clone the identity and drop the catalog latch before any further
+        // collection read. A queued catalog writer must not make a nested
+        // parking_lot read acquisition wait on its own retained read guard.
+        let collection_incarnation = {
+            let state = db.collection_state(&token.collection)?;
+            Arc::clone(&state.incarnation)
+        };
+        #[cfg(debug_assertions)]
+        bicdb_page::test_faults::io_hook_point("read_committed.reservation.validate", &db.path);
+        let lock_epoch = {
+            let epochs = self.row_reservation_epochs.lock();
+            epochs
                 .rows
                 .get(&token.collection)
                 .and_then(|rows| rows.get(&token.id))
                 .copied()
-                != Some(token.lock_epoch)
+        };
+        if !Arc::ptr_eq(&collection_incarnation, &token.collection_incarnation)
+            || lock_epoch != Some(token.lock_epoch)
             || !self.holds_record_lock(&token.collection, &token.id)
             || self
                 .write_index

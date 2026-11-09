@@ -191,7 +191,7 @@ fn w1_eviction_under_read_pressure_never_writes_an_uncommitted_split() {
             // Crash before commit.
         };
         if steals != 0 {
-            failures.push(format!("{reads} reads: {evictions} unlogged frames stolen"));
+            failures.push(format!("{reads} reads: {steals} unlogged frames stolen"));
         }
         for failure in reconcile(dir.path(), &acknowledged(0..COMMITTED), &crashed) {
             failures.push(format!("{reads} reads: {failure}"));

@@ -207,3 +207,28 @@ fn simple_case_unknown_literals_take_the_operand_type() {
         assert_eq!(session.execute(&format!("WITH q AS (SELECT * FROM {from}) SELECT CASE i WHEN '1' THEN 'yes' ELSE 'no' END FROM q")).unwrap().rows, vec![vec![SqlValue::String("yes".into())]]);
     }
 }
+
+#[test]
+fn widened_float_comparisons_keep_all_primary_key_matches() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open_with_config(
+        root.path(),
+        bicdb_core::DbConfig::default().with_fsync(false),
+    )
+    .unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE wide_keys(k bigint PRIMARY KEY)")
+        .unwrap();
+    session
+        .execute("INSERT INTO wide_keys VALUES(9007199254740992),(9007199254740993)")
+        .unwrap();
+    for sql in [
+        "SELECT k FROM wide_keys WHERE k = 9007199254740992::float8 ORDER BY k",
+        "SELECT k FROM wide_keys WHERE k IN (9007199254740992::float8) ORDER BY k",
+        "SELECT w.k FROM (SELECT 9007199254740992::float8 AS f) p JOIN wide_keys w ON w.k = p.f ORDER BY w.k",
+        "SELECT k FROM wide_keys o WHERE EXISTS (SELECT 1 FROM wide_keys i WHERE i.k = o.k::float8) ORDER BY k",
+    ] {
+        assert_eq!(session.execute(sql).unwrap().rows, vec![vec![SqlValue::Int(9007199254740992)],vec![SqlValue::Int(9007199254740993)]], "{sql}");
+    }
+}

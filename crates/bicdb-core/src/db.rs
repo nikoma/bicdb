@@ -10682,6 +10682,15 @@ impl BicDb {
         self.commit_seq.load(AtomicOrdering::SeqCst)
     }
 
+    /// Persist the compatibility fence before SQL publishes catalog intents.
+    /// Older readers must refuse stores whose pending DDL they cannot recover.
+    pub fn enable_sql_catalog_intents(&mut self) -> Result<()> {
+        self.ensure_writable("enable SQL catalog intents")?;
+        let result = format::enable_sql_catalog_intents(&self.path);
+        self.check_recovery_state()?;
+        result
+    }
+
     /// Require a healthy, quiescent database before startup catalog repair.
     /// Includes outstanding row locks as well as pending transaction states.
     pub fn check_catalog_recovery_quiescent(&self) -> Result<()> {

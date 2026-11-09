@@ -22,6 +22,7 @@ pub(super) struct RestorePlan {
     pub(super) indexes: Vec<(String, String)>,
 }
 pub(super) fn prepare(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<u64> {
+    db.enable_sql_catalog_intents()?;
     db.create_collection(INTENTS)?;
     prepare_inner(db, entry, None)
 }
@@ -30,6 +31,7 @@ pub(super) fn prepare_restore(
     entry: &RecycleBinEntry,
     plan: RestorePlan,
 ) -> Result<u64> {
+    db.enable_sql_catalog_intents()?;
     db.create_collection(INTENTS)?;
     prepare_inner(db, entry, Some(plan))
 }
@@ -97,6 +99,7 @@ pub(super) fn clear_if_present(db: &mut BicDb, bin: &str) -> Result<()> {
     }
 }
 pub(super) fn prepare_purge(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<()> {
+    db.enable_sql_catalog_intents()?;
     db.create_collection(PURGES)?;
     db.insert(
         PURGES,

@@ -202,3 +202,35 @@ fn crash_recovery_never_reverses_a_live_transaction() {
     recover_interrupted_recycle_bin_renames(&mut db).unwrap();
     assert_row(&mut db);
 }
+
+#[test]
+fn catalog_intent_feature_is_sticky_after_completed_ddl_and_reopen() {
+    let root = tempfile::tempdir().unwrap();
+    {
+        let mut db = BicDb::open(root.path()).unwrap();
+        seed(&mut db);
+        let path = root.path().join("format.json");
+        let before: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert!(!before["feature_flags"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|flag| flag == "sql_catalog_intents_v1"));
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("DROP TABLE source").unwrap();
+        sql.execute("FLASHBACK TABLE source TO BEFORE DROP")
+            .unwrap();
+        sql.execute("DROP TABLE source").unwrap();
+        sql.execute("PURGE RECYCLEBIN").unwrap();
+    }
+    let mut db = BicDb::open(root.path()).unwrap();
+    recover_interrupted_recycle_bin_renames(&mut db).unwrap();
+    let metadata: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(root.path().join("format.json")).unwrap()).unwrap();
+    assert!(metadata["feature_flags"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|flag| flag == "sql_catalog_intents_v1"));
+}

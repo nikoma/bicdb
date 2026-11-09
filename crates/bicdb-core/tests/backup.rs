@@ -605,9 +605,14 @@ fn online_backup_during_concurrent_writes_restores_consistent_snapshot() {
     }
 
     let writer_path = source.path().to_path_buf();
+    let (writer_ready, ready) = std::sync::mpsc::sync_channel(0);
+    let (backup_finished, finished) = std::sync::mpsc::channel();
     let writer = std::thread::spawn(move || {
         let mut db =
             BicDb::open_with_config(&writer_path, DbConfig::default().with_fsync(false)).unwrap();
+        // Establish the online writer before backup may briefly open a closed
+        // source for its checkpoint. A scheduling sleep cannot prove ownership.
+        writer_ready.send(()).unwrap();
         for idx in 0..100 {
             db.insert("patients", Record::new(format!("p-{idx:03}")))
                 .unwrap();
@@ -615,10 +620,13 @@ fn online_backup_during_concurrent_writes_restores_consistent_snapshot() {
                 std::thread::sleep(Duration::from_millis(2));
             }
         }
+        // Keep the source writer open throughout the entire capture, even
+        // when the machine finishes the insert loop before encryption/copy.
+        finished.recv().unwrap();
         db.close().unwrap();
     });
 
-    std::thread::sleep(Duration::from_millis(5));
+    ready.recv().unwrap();
     create_backup(
         source.path(),
         &backup_path,
@@ -628,6 +636,7 @@ fn online_backup_during_concurrent_writes_restores_consistent_snapshot() {
         },
     )
     .unwrap();
+    backup_finished.send(()).unwrap();
     writer.join().unwrap();
 
     restore_backup(

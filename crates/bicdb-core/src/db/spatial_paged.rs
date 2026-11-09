@@ -792,7 +792,10 @@ impl BicDb {
                     (before, after, frozen_end)
                 };
                 self.invalidate_sync_vector_cache();
-                let (sync_before, sync_after) = self.sync_log.get_mut().compact()?;
+                let (sync_before, sync_after) = self
+                    .sync_log
+                    .get_mut()
+                    .compact(self.commit_seq.load(AtomicOrdering::SeqCst))?;
                 self.sync_state.last_export_offset = 0;
                 self.sync_state.last_reconciled_offset = 0;
                 self.sync_state.origin_position_base = self
@@ -1133,7 +1136,10 @@ impl BicDb {
             (before, after, frozen_end)
         };
         self.invalidate_sync_vector_cache();
-        let (sync_before, sync_after) = self.sync_log.get_mut().compact()?;
+        let (sync_before, sync_after) = self
+            .sync_log
+            .get_mut()
+            .compact(self.commit_seq.load(AtomicOrdering::SeqCst))?;
         self.sync_state.last_export_offset = 0;
         self.sync_state.last_reconciled_offset = 0;
         self.sync_state.origin_position_base = self
@@ -2452,10 +2458,11 @@ impl BicDb {
         } else {
             self.sync_ops_for_commit(&index_mutations_by_collection)?
         };
-        if !sync_ops.is_empty() {
-            // TODO: v0.2 should atomically group transaction commits and sync-log events.
-            self.sync_log.lock().append_ops(&sync_ops)?;
-        }
+        // Change-capture ops are not appended to `sync.log` here, before the
+        // decision: a commit that then aborts (a failed decision write, a
+        // withdrawn commit, a crash) would leave ops a consumer reads as
+        // committed. They travel in the commit's own transaction-log batch and
+        // reach `sync.log` only once the commit is durable and visible (below).
         let mut record_audit_events = if tx.imported_projection {
             Vec::new()
         } else {
@@ -2472,6 +2479,7 @@ impl BicDb {
                 "injected pre-decision rejection".into(),
             ));
         }
+        bicdb_page::test_faults::crash_point("commit.before_decision");
         // Past validation: reserve and durably log the transaction decision.
         // A plain atomic add is monotonic; the seq-keyed writer queue tolerates
         // out-of-order enqueue; the writer coalesces the contiguous prefix.
@@ -2514,6 +2522,7 @@ impl BicDb {
             &tx.writes,
             &pending_publishes,
             &record_audit_events,
+            &sync_ops,
             prepared,
         );
         let wal_bytes = match encoded {
@@ -2671,6 +2680,25 @@ impl BicDb {
             tx.receipt_recovery_required(commit_seq);
             let fenced = self.check_recovery_state().unwrap_err();
             return Err(self.commit_outcome_unknown(tx.id.0, commit_seq, &fenced));
+        }
+        // The commit is durable and visible: publish its change-capture ops.
+        // A failure here leaves them only in the transaction log. The commit
+        // stays committed (a refusal would make the client retry and
+        // duplicate it); the database is fenced, so no checkpoint or
+        // compaction moves past the log's copy, and the reopen republishes it.
+        if !sync_ops.is_empty() {
+            if let Err(error) = self.sync_log.lock().append_ops(&sync_ops) {
+                self.fence_durability("sync_log.publish", &error);
+                bicdb_page::health::log_event(&serde_json::json!({
+                    "event": "durability.sync_publication_deferred",
+                    "severity": "warn",
+                    "transaction_id": tx.id.0,
+                    "commit_seq": commit_seq,
+                    "error": error.to_string(),
+                    "action": "the commit is durable; recovery republishes its change-capture ops",
+                }));
+            }
+            bicdb_page::test_faults::crash_point("commit.after_sync_publish");
         }
         tx.state = TxState::Committed;
         tx.committed_seq = Some(commit_seq);

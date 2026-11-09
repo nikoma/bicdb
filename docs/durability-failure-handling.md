@@ -287,7 +287,7 @@ recovery readers `read_frames`, `stream_frames` and `read_frames_from`.
 
 | User | Writer | Reader at open | Acknowledged when | Before this change | Now |
 |---|---|---|---|---|---|
-| `sync.log`, the CDC outbox | `SyncLog::append_ops` (`sync.rs:113`), called before the commit decision (`db/spatial_paged.rs:2444`); `SyncLog::mark_synced` (`sync.rs:156`) | `read_frames` in `SyncLog::open` | An op: its commit returns `Ok`. An ack: `mark_synced` returns `Ok`. | A failed or short append left a torn prefix and the log stayed usable. The next commit's ops landed after it, and the reopen truncated at the torn frame, dropping them (measured: 6 acknowledged ops lost, and 3 complete frames of the *aborted* commit reported as pending ops). A failed `mark_synced` likewise lost the next acknowledgment. | Tail cut back; the commit aborts with an ordinary error; nothing of it stays in the outbox. On a failed cut-back: poisoned, fenced (`frame_log.repair`), and the reopen cuts to the recorded acknowledged length. |
+| `sync.log`, the CDC outbox | `SyncLog::append_ops` (`sync.rs:113`), called after the commit is durable and visible since section 7.5 (before the decision until then); `SyncLog::mark_synced` (`sync.rs:156`) | `read_frames` in `SyncLog::open` | An op: its commit returns `Ok`. An ack: `mark_synced` returns `Ok`. | A failed or short append left a torn prefix and the log stayed usable. The next commit's ops landed after it, and the reopen truncated at the torn frame, dropping them (measured: 6 acknowledged ops lost, and 3 complete frames of the *aborted* commit reported as pending ops). A failed `mark_synced` likewise lost the next acknowledgment. | Tail cut back. Since section 7.5 the commit stays committed, the database is fenced (`sync_log.publish`), and the reopen republishes the ops from the transaction log. On a failed cut-back: poisoned, fenced (`frame_log.repair`), and the reopen cuts to the recorded acknowledged length. |
 | `events/events.seg`, the event log (user events, broker, geofence and spatial events, the record-audit outbox) | `EventStream::append_event` (`event.rs:540`) | `stream_frames` in `EventStream::open_with_encryption` | The append returns `Ok`. | Same failure: every later event lost at the reopen (measured: 5 of 5). | Same repair and poisoning. |
 | Record-audit publication behind a commit | `Transaction::finalize_committed_record_audit_events` (`db.rs`): event-log appends, then a `RecordAuditPublished` marker in the transaction log | Transaction-log recovery republishes unmarked outboxes | The commit's decision was already durable. | The commit returned an ordinary error and the handle stayed usable. A checkpoint on that handle then cut the transaction log past the unpublished outbox, and the committed row's audit event was lost for good (measured). | Fences (`record_audit.publish`). The commit is durable and visible, so it is reported as committed, with the failure logged, as for a failed publication marker (section 4). The fenced handle refuses the checkpoint, and the reopen republishes the outbox. The standby journal import already fences (`standby.import`). |
 | `segments/<collection>.seg`, record segments (embedded storage) | Checkpoint delta append, `checkpoint_write_segments` (`db/commit_snapshot.rs:2419`) | `read_frames` / `read_frames_from` (snapshot tail) at open | The checkpoint succeeds, then cuts the transaction log. | A failed delta append left a torn prefix; the retried checkpoint appended after it and cut the transaction log; the reopen truncated at the torn frame (measured: acknowledged rows lost). | Same repair and poisoning; a failed cut-back fences. |
@@ -376,13 +376,8 @@ backup can restore them.
   an operator. With `fsync` off, the unsynced window is larger.
 - *The marker is best effort.* When it cannot be written, the reopen
   accepts whatever complete frames of the failed batch reached the disk.
-- *`sync.log` is written before the commit decision*
-  (`db/spatial_paged.rs:2444`, the existing TODO). A crash, or a commit
-  that aborts (a failed decision write, or `08007` resolved as absent),
-  after its ops were appended leaves those ops pending for a commit that
-  did not happen. This change does not alter that ordering; it needs the
-  outbox to move behind the decision, with recovery republishing from the
-  transaction log as the audit outbox does.
+- *`sync.log` was written before the commit decision.* Closed by section
+  7.5.
 - *Replication export reads the file, not the durable prefix.*
   `export_replication_frames_since` can return a complete frame whose
   `O_DSYNC` write has not returned yet. This change only stops that reader
@@ -429,6 +424,68 @@ cluster metadata consensus state (`distribution_consensus.rs`) and the range
 write catalog (`distribution_range_consensus.rs`) use `write_atomic` with the
 directory `fsync`.
 
+### 7.5 Outboxes behind a commit: change capture and record audit
+
+Three outboxes carry effects of a commit to consumers: change capture
+(`sync.log`, read through `pending_sync_ops` / `mark_synced`), record-audit
+events (the event log's `bicdb.records` stream) and broker publishes (event
+log queue streams). The rules, and how each holds:
+
+| Rule | Change capture | Record audit | Broker publish |
+|---|---|---|---|
+| Written with the decision | `TxFrame::SyncOps` in the commit's transaction-log batch (new) | `TxFrame::RecordAudit` | `TxFrame::BrokerPublish` |
+| Visible to a consumer only after the commit is durable and visible | Appended to `sync.log` at the end of the commit, after the visibility wait (new; it used to be appended before the decision) | Appended after `write_durable` | Published after `write_durable` |
+| A publication failure keeps the commit committed | Fence `sync_log.publish`, report success, log `durability.sync_publication_deferred` | Fence `record_audit.publish`, report success (section 7.4) | Retained in the log for retry |
+| Recovery republishes the committed and unpublished entries | `SyncLog::republish_committed` at open, before the open-time log cut | Before the cut | Before the cut |
+| Exactly once | Skips an op id already pending or acknowledged, and every commit at or below the compaction watermark | Event ids deduplicate | Message ids deduplicate |
+| Nothing for an aborted transaction | Only transactions with a commit frame (`committed_sync_ops`) | Same | Same |
+
+**Why change capture moved.** `sync.log` was appended after validation but
+before the commit decision (the old TODO in `commit_transaction_inner`). Any
+abort after that point left the ops pending, and a consumer reads them as
+committed changes:
+
+- a failed decision write (`08007`) that recovery resolves as absent;
+- a commit withdrawn after a backup-gate timeout (`abandon_unwritten`);
+- the pre-decision test rejection;
+- a crash before the decision.
+
+The ops were also visible to `pending_sync_ops` before the commit was. Now
+the ops are in the commit's own batch: they are durable exactly when the
+decision is, which adds no write and no `fsync`. They reach `sync.log` only
+once the commit is visible.
+
+**The compaction watermark.** Compaction forgets acknowledged op ids. A
+retained transaction log (a replication primary keeps its log past a
+compaction) would then let recovery bring an acknowledged op back. A
+compaction runs with the database held exclusively, after every commit at
+or below the newest sequence has appended its ops (a failed append fences,
+and a fenced database cannot compact). It writes
+`CompactedThrough { commit_seq }` first, and recovery never republishes a
+commit at or below it. No log cut can fall between a commit's decision and
+its append either: commits hold the commit-admission gate shared for their
+whole duration, and every cut holds it exclusively or holds `&mut self`.
+
+**Compatibility.** A transaction log or compacted `sync.log` written by this
+version holds a frame kind (`tx_sync_ops`) or an event (`compacted_through`)
+that older versions do not decode, so they refuse to open such a database.
+Older logs open unchanged: their ops were already in `sync.log`.
+
+**Residual.** If the event log's broker retention trims a published message
+while a replication primary still retains its commit, a reopen republishes
+it (the id is no longer known). This change does not address that case.
+
+**Qualification** (`crates/bicdb-core/tests/outbox_exactly_once.rs`):
+
+| Test | What it proves |
+|---|---|
+| `aborted_transactions_never_produce_change_capture_ops` | A failed decision write, a withdrawn commit, a unique conflict and a rollback, both storage modes: no op or audit event, in the running database or after two reopens |
+| `a_durable_commit_stays_committed_when_its_outbox_publication_fails` | `sync.log` write, short write and sync failures; event-log write and short write; audit-marker write. The commit returns success (or `08007`), never an error; fenced; two reopens deliver each entry once |
+| `change_capture_republication_is_exactly_once_across_interrupted_reopens` | Three reopens whose republication fails, then clean reopens; acknowledged ops stay acknowledged across a reopen and a compaction |
+| `audit_republication_is_exactly_once_across_interrupted_reopens` | Republication interrupted after one event, and after every event but before the marker |
+| `crashes_at_every_outbox_boundary_deliver_each_committed_entry_exactly_once` | `abort()` in a child process at `commit.before_decision`, `commit.after_txlog_durable`, `commit.after_page_apply`, `commit.after_sync_publish`, `txlog_cut.after_floor`, and during republication at open (`open.audit_republish.after_event`, `open.after_sync_republish`), both modes, with checkpoints, a compaction and consumer acknowledgments in the workload; reconciled against the child's ledger over two reopens |
+| `mid_file_damage_fails_closed_in_every_frame_log` | Crash images with damage in the first frame of the transaction log, `sync.log`, the event log and a record segment: `Corruption`, file unchanged |
+
 ## 8. Site names and fault injection
 
 The recorded `site` and the injection name are the same strings.
@@ -464,7 +521,7 @@ The recorded `site` and the injection name are the same strings.
 
 Other recorded sites: `transaction_log.auxiliary`, `paged.commit`,
 `paged.abort`, `commit.materialize`, `standby.import`, `open.verify`,
-`record_audit.publish`.
+`record_audit.publish`, `sync_log.publish`.
 
 Injection (`crates/bicdb-page/src/test_faults.rs`):
 
@@ -539,8 +596,8 @@ was never synced is truncated (`test_faults::register_volatile_rename`,
 | `storage::tests::a_failed_short_or_unsynced_append_is_cut_back_and_later_appends_survive` | `frame_log.write`, `frame_log.short_write`, `frame_log.sync`, with and without `fsync` |
 | `storage::tests::a_failed_repair_poisons_the_log_until_recovery_cuts_the_failed_bytes` | Poison refuses appends and writes nothing; each recovery reader applies the marker, so complete frames of the failed batch are not accepted |
 | `storage::tests::live_readers_never_truncate_an_in_flight_frame` | The live readers stop before an incomplete frame and never change the file |
-| `frame_log_torn_tail::a_failed_sync_log_append_aborts_its_commit_and_later_commits_survive_reopen` | Embedded and paged, three failure kinds: the commit aborts with an ordinary error, the database stays healthy, and the CDC outbox equals exactly the acknowledged commits' ops before and after two reopens |
-| `frame_log_torn_tail::a_failed_sync_log_repair_fences_and_recovery_never_reports_the_aborted_ops` | A failed cut-back fences (`frame_log.repair`); the reopen verifies and reports no op of the aborted commit |
+| `frame_log_torn_tail::a_failed_sync_log_append_keeps_the_commit_and_recovery_publishes_its_ops_once` | Embedded and paged, three failure kinds: the append is cut back, the commit (durable and visible) succeeds, the database is fenced, and the outbox holds exactly one op per committed row across two reopens (section 7.5) |
+| `frame_log_torn_tail::a_failed_sync_log_repair_fences_and_recovery_publishes_the_ops_once` | A failed cut-back fences (`frame_log.repair`); the reopen cuts the failed bytes, verifies, and republishes the commit's ops once |
 | `frame_log_torn_tail::a_failed_sync_acknowledgment_keeps_the_ops_pending_and_the_log_clean` | `mark_synced` failures |
 | `frame_log_torn_tail::a_failed_event_append_is_cut_back_and_later_events_survive_reopen`, `a_failed_event_log_repair_fences_and_recovery_keeps_only_acknowledged_events` | The event log, both storage modes |
 | `frame_log_torn_tail::audit_events_behind_a_commit_survive_a_failed_event_append` | Audit outbox: the commit is reported committed, the database fenced (`record_audit.publish`), the checkpoint refused on the fenced handle, the reopen republishes; after more commits, a checkpoint and two reopens every committed row has exactly one audit event |
@@ -572,7 +629,7 @@ Mutation checks (each mutation applied alone; the named tests must fail):
 | Recovery readers: no mid-file detection (always truncate) | `damage_followed_by_valid_frames_is_corruption_and_the_file_is_left_unchanged`, `stream_frames_matches_read_frames_across_recovery_shapes`, `damage_in_the_middle_of_a_frame_log_refuses_the_open_until_salvaged`, `core::intentional_frame_corruption_is_detected_and_not_silently_repaired` |
 | Both of the above (the old behaviour), with the cut-back length checks relaxed so the reconciliation runs | Acknowledged data lost at the reopen: record rows (`delta-0` …), 5 of 5 later events, 6 later CDC ops plus 3 ops of the aborted commit reported, a CDC acknowledgment |
 | Replication readers use the recovery readers again | `replication_readers_never_truncate_the_live_transaction_log` |
-| The append-failure marker is ignored | `a_failed_repair_poisons_the_log_until_recovery_cuts_the_failed_bytes`, `a_failed_sync_log_repair_fences_and_recovery_never_reports_the_aborted_ops`, `a_failed_event_log_repair_fences_and_recovery_keeps_only_acknowledged_events` |
+| The append-failure marker is ignored | `a_failed_repair_poisons_the_log_until_recovery_cuts_the_failed_bytes`, `a_failed_sync_log_repair_fences_and_recovery_publishes_the_ops_once`, `a_failed_event_log_repair_fences_and_recovery_keeps_only_acknowledged_events` |
 | A failed event-log append during audit publication no longer fences (and the test's fence check relaxed) | `audit_events_behind_a_commit_survive_a_failed_event_append`: the checkpoint cut the outbox, and the committed row's audit event was lost |
 | The durable replacement no longer `fsync`s the directory (the state of `consensus-state.json` and `ha-state.json` before this change) | Every `ha_state_crash` matrix: the vote, fence, drain, promotion and CREATE COLLECTION are lost after acknowledgment, and so is a row acknowledged into the new collection |
 | `ha-node.json` replacements not fail-closed | `a_vote_is_never_granted_ahead_of_the_disk_and_never_twice_per_term`, `a_primary_whose_fence_cannot_be_persisted_still_stops_writing`, `switchover_drain_and_election_promotion_fail_closed` |

@@ -101,88 +101,81 @@ fn reconcile_sync_outbox(db: &BicDb, acknowledged: &[String], failed: &[String],
     }
 }
 
-/// A failed, short or unsynced `sync.log` append aborts its commit (an
-/// ordinary error: the decision was never logged), leaves nothing of the
-/// commit in the outbox, keeps the database healthy, and the commits after
-/// it are all kept, before and after a reopen.
+/// A failed, short or unsynced `sync.log` append. The append happens after
+/// the commit is durable and visible (`docs/durability-failure-handling.md`,
+/// section 7.5), so the commit stays committed and returns success; the
+/// failed bytes are cut back; the database is fenced (`sync_log.publish`);
+/// and the reopen republishes the commit's ops from the transaction log, so
+/// the outbox holds exactly one op per committed row, across two reopens.
 #[test]
-fn a_failed_sync_log_append_aborts_its_commit_and_later_commits_survive_reopen() {
+fn a_failed_sync_log_append_keeps_the_commit_and_recovery_publishes_its_ops_once() {
     for storage in storage_modes() {
         for site in APPEND_FAILURES {
             let label = format!("{storage:?} {site}");
             let dir = tempfile::tempdir().unwrap();
-            let mut acknowledged = Vec::new();
-            let failed = ids("failed", 6);
+            let mut committed = Vec::new();
             {
                 let mut db = BicDb::open_with_config(dir.path(), config(&storage)).unwrap();
                 db.create_collection("items").unwrap();
                 for batch in 0..4 {
                     let rows = ids(&format!("before{batch}"), 3);
                     commit_rows(&db, &rows).unwrap();
-                    acknowledged.extend(rows);
+                    committed.extend(rows);
                 }
                 let before = len(&sync_log(dir.path()));
                 let fault = arm_io_failure(site, &sync_log(dir.path()), 1, false);
-                let error = commit_rows(&db, &failed).unwrap_err();
+                let durable = ids("durable", 6);
+                commit_rows(&db, &durable).unwrap();
                 assert_eq!(fault.fired(), 1, "{label}");
-                assert!(!error.is_durability_failure(), "{label}: {error}");
-                assert!(db.durability_state().is_healthy(), "{label}");
+                assert_eq!(failed_site(&db), "sync_log.publish", "{label}");
                 assert_eq!(
                     len(&sync_log(dir.path())),
                     before,
                     "{label}: the failed batch must be cut back"
                 );
                 drop(fault);
-                for batch in 0..2 {
-                    let rows = ids(&format!("after{batch}"), 3);
-                    commit_rows(&db, &rows).unwrap();
-                    acknowledged.extend(rows);
-                }
-                reconcile_sync_outbox(&db, &acknowledged, &failed, &label);
+                committed.extend(durable);
             }
             for round in 0..2 {
                 let db = BicDb::open_with_config(dir.path(), config(&storage)).unwrap();
-                reconcile_sync_outbox(
-                    &db,
-                    &acknowledged,
-                    &failed,
-                    &format!("{label} reopen {round}"),
-                );
+                assert!(db.durability_state().is_healthy(), "{label}");
+                reconcile_sync_outbox(&db, &committed, &[], &format!("{label} reopen {round}"));
             }
+            let db = BicDb::open_with_config(dir.path(), config(&storage)).unwrap();
+            let rows = ids("after", 3);
+            commit_rows(&db, &rows).unwrap();
+            committed.extend(rows);
+            reconcile_sync_outbox(&db, &committed, &[], &format!("{label} resumed"));
         }
     }
 }
 
-/// When the cut-back fails too, the database is fenced (`frame_log.repair`)
-/// and the outbox refuses further appends. The reopen's recovery cuts the
-/// failed bytes, including complete frames of the failed batch, so the
-/// outbox never reports ops of the aborted commit; the reopen verifies, and
-/// commits resume.
+/// When the cut-back fails too, the outbox is poisoned and the database
+/// fenced (`frame_log.repair`, the first failure); the commit, durable and
+/// visible, still succeeds. The reopen's recovery cuts the failed bytes (the
+/// marker), then republishes the commit's ops from the transaction log:
+/// exactly one op per committed row, and commits resume.
 #[test]
-fn a_failed_sync_log_repair_fences_and_recovery_never_reports_the_aborted_ops() {
+fn a_failed_sync_log_repair_fences_and_recovery_publishes_the_ops_once() {
     for storage in storage_modes() {
         for site in ["frame_log.short_write", "frame_log.sync"] {
             let label = format!("{storage:?} {site}");
             let dir = tempfile::tempdir().unwrap();
-            let mut acknowledged = Vec::new();
-            let failed = ids("failed", 8);
+            let mut committed = Vec::new();
             {
                 let mut db = BicDb::open_with_config(dir.path(), config(&storage)).unwrap();
                 db.create_collection("items").unwrap();
                 for batch in 0..3 {
                     let rows = ids(&format!("before{batch}"), 3);
                     commit_rows(&db, &rows).unwrap();
-                    acknowledged.extend(rows);
+                    committed.extend(rows);
                 }
                 let before = len(&sync_log(dir.path()));
                 let failing = arm_io_failure(site, &sync_log(dir.path()), 1, false);
                 let repair = arm_io_failure("frame_log.repair", &sync_log(dir.path()), 1, false);
-                let error = commit_rows(&db, &failed).unwrap_err();
+                let durable = ids("durable", 8);
+                commit_rows(&db, &durable).unwrap();
                 assert_eq!((failing.fired(), repair.fired()), (1, 1), "{label}");
-                assert!(
-                    matches!(&error, BicDbError::WriteFailed { site, .. } if site == "frame_log.repair"),
-                    "{label}: {error}"
-                );
                 assert_eq!(failed_site(&db), "frame_log.repair", "{label}");
                 assert!(
                     dir.path().join(DURABILITY_FAILURE_MARKER).exists(),
@@ -193,6 +186,7 @@ fn a_failed_sync_log_repair_fences_and_recovery_never_reports_the_aborted_ops() 
                     "{label}: failed bytes stayed"
                 );
                 drop((failing, repair));
+                committed.extend(durable);
                 let refused = commit_rows(&db, &ids("refused", 1)).unwrap_err();
                 assert!(refused.is_durability_failure(), "{label}: {refused}");
             }
@@ -202,18 +196,13 @@ fn a_failed_sync_log_repair_fences_and_recovery_never_reports_the_aborted_ops() 
                 !dir.path().join(DURABILITY_FAILURE_MARKER).exists(),
                 "{label}"
             );
-            reconcile_sync_outbox(&db, &acknowledged, &failed, &format!("{label} reopen"));
+            reconcile_sync_outbox(&db, &committed, &[], &format!("{label} reopen"));
             let rows = ids("resumed", 2);
             commit_rows(&db, &rows).unwrap();
-            acknowledged.extend(rows);
+            committed.extend(rows);
             drop(db);
             let db = BicDb::open_with_config(dir.path(), config(&storage)).unwrap();
-            reconcile_sync_outbox(
-                &db,
-                &acknowledged,
-                &failed,
-                &format!("{label} second reopen"),
-            );
+            reconcile_sync_outbox(&db, &committed, &[], &format!("{label} second reopen"));
         }
     }
 }

@@ -2716,7 +2716,25 @@ fn intentional_frame_corruption_is_detected_and_not_silently_repaired() {
             Ok(_) => panic!("{file_name}: damage before a valid frame was truncated silently"),
             Err(error) => panic!("{file_name}: unexpected error {error}"),
         }
-        assert_eq!(fs::metadata(&path).unwrap().len(), 0);
+        if file_name == "sync" {
+            // The change-capture ops of committed transactions are also in
+            // the transaction log; recovery restores the ones the damaged
+            // file lost, each once.
+            let reopened = BicDb::open_with_config(
+                temp.path(),
+                DbConfig::default().with_storage_mode(StorageMode::EmbeddedMemory),
+            )
+            .unwrap();
+            let mut restored: Vec<String> = reopened
+                .pending_sync_ops()
+                .into_iter()
+                .map(|op| op.record_id)
+                .collect();
+            restored.sort();
+            assert_eq!(restored, vec!["p1".to_string(), "p2".to_string()]);
+        } else {
+            assert_eq!(fs::metadata(&path).unwrap().len(), 0);
+        }
         BicDb::verify_path(
             temp.path(),
             DbConfig::default().with_storage_mode(StorageMode::EmbeddedMemory),

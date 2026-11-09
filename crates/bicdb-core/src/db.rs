@@ -7431,6 +7431,15 @@ pub(crate) enum TxFrame {
     /// undone by stale transaction WAL.
     #[serde(rename = "tx_record_audit_published")]
     RecordAuditPublished { tx_id: TransactionId },
+    /// Change-capture ops of this transaction, committed by the same decision
+    /// as its rows. `sync.log` receives them only after the commit is durable
+    /// and visible; recovery copies any it is missing (by op id). An aborted
+    /// transaction therefore never produces an op a consumer can see.
+    #[serde(rename = "tx_sync_ops")]
+    SyncOps {
+        tx_id: TransactionId,
+        ops: Vec<SyncOp>,
+    },
     #[serde(rename = "tx_commit")]
     Commit {
         tx_id: TransactionId,
@@ -7465,6 +7474,7 @@ enum TxFrameKind {
     TxRecordAudit,
     TxRecordAuditOrigin,
     TxRecordAuditPublished,
+    TxSyncOps,
     TxCommit,
     TxCommitMaterialized,
     TxAbort,
@@ -7487,6 +7497,8 @@ struct TxFrameWire {
     event: Option<Box<RawValue>>,
     #[serde(default)]
     envelope: Option<Box<RawValue>>,
+    #[serde(default)]
+    ops: Option<Box<RawValue>>,
     #[serde(default)]
     len: Option<usize>,
     #[serde(default)]
@@ -7535,6 +7547,10 @@ fn decode_tx_frame(payload: &[u8]) -> Result<TxFrame> {
             )?,
         },
         TxFrameKind::TxRecordAuditPublished => TxFrame::RecordAuditPublished { tx_id: wire.tx_id },
+        TxFrameKind::TxSyncOps => TxFrame::SyncOps {
+            tx_id: wire.tx_id,
+            ops: serde_json::from_str(wire.ops.ok_or_else(|| missing("ops"))?.get())?,
+        },
         TxFrameKind::TxCommit => TxFrame::Commit {
             tx_id: wire.tx_id,
             timestamp: wire.timestamp.ok_or_else(|| missing("timestamp"))?,
@@ -7965,6 +7981,11 @@ enum TxFrameRef<'a> {
     RecordAudit {
         tx_id: TransactionId,
         event: &'a Event,
+    },
+    #[serde(rename = "tx_sync_ops")]
+    SyncOps {
+        tx_id: TransactionId,
+        ops: &'a [SyncOp],
     },
     #[serde(rename = "tx_commit")]
     Commit {
@@ -10399,6 +10420,7 @@ impl BicDb {
         for (tx_id, audit_events) in &recovered_audit_outboxes {
             for event in audit_events {
                 events.append_imported(event.clone())?;
+                bicdb_page::test_faults::crash_point("open.audit_republish.after_event");
             }
             // Journal-enabled recovery records the original envelopes after
             // loading the database identity and signer below. Until then no
@@ -10418,6 +10440,13 @@ impl BicDb {
                 &CompressionConfig::disabled(),
                 &encryption,
             )?;
+        }
+        // Change-capture ops: the same outbox discipline. Before the open-time
+        // log cut below, which would drop the transaction log's copy.
+        let mut sync_log = sync_log;
+        if config.sync_outbox {
+            sync_log.republish_committed(&tx_recovery.committed_sync_ops())?;
+            bicdb_page::test_faults::crash_point("open.after_sync_republish");
         }
         // A replication primary keeps its log at open: standbys resume from it.
         if paged_records.is_some() && broker_outbox_flushed && !config.replication.enabled {
@@ -11503,7 +11532,8 @@ impl BicDb {
                 TxFrame::Begin { .. }
                 | TxFrame::CommitMaterialized { .. }
                 | TxFrame::BrokerPublish { .. }
-                | TxFrame::RecordAuditPublished { .. } => {}
+                | TxFrame::RecordAuditPublished { .. }
+                | TxFrame::SyncOps { .. } => {}
             }
         }
         commits.sort_unstable_by_key(|(commit_seq, _, _)| *commit_seq);
@@ -19127,6 +19157,8 @@ struct TxRecovery {
     broker_publishes: BTreeMap<u64, Vec<crate::broker::PendingBrokerPublish>>,
     record_audit_events: BTreeMap<u64, Vec<Event>>,
     record_audit_published: FxHashSet<u64>,
+    /// Change-capture ops per transaction (`TxFrame::SyncOps`).
+    sync_ops: BTreeMap<u64, Vec<SyncOp>>,
     materialized_commits: FxHashSet<u64>,
     /// commit_seq assigned to each committed transaction (from its WAL Commit
     /// frame). MVCC version stamps are commit_seq values, so replay must stamp
@@ -19175,6 +19207,25 @@ impl TxRecovery {
             .filter(|(tx_id, _)| self.states.get(tx_id) == Some(&TxState::Committed))
             .flat_map(|(_, publishes)| publishes.iter().cloned())
             .collect()
+    }
+
+    /// Change-capture ops of committed transactions, with their commit
+    /// sequence, in commit order. Ops of a transaction without a commit
+    /// decision in the log (aborted, or interrupted before its decision) are
+    /// never returned.
+    fn committed_sync_ops(&self) -> Vec<(u64, Vec<SyncOp>)> {
+        let mut committed = self
+            .sync_ops
+            .iter()
+            .filter(|(tx_id, _)| self.states.get(tx_id) == Some(&TxState::Committed))
+            .filter_map(|(tx_id, ops)| {
+                self.commit_seq_by_tx
+                    .get(tx_id)
+                    .map(|commit_seq| (*commit_seq, ops.clone()))
+            })
+            .collect::<Vec<_>>();
+        committed.sort_by_key(|(commit_seq, _)| *commit_seq);
+        committed
     }
 
     fn committed_record_audit_outboxes(&self) -> Vec<(TransactionId, Vec<Event>)> {
@@ -19236,6 +19287,7 @@ fn recover_transaction_log(
         BTreeMap::new();
     let mut record_audit_events: BTreeMap<u64, Vec<Event>> = BTreeMap::new();
     let mut record_audit_published = FxHashSet::default();
+    let mut sync_ops: BTreeMap<u64, Vec<SyncOp>> = BTreeMap::new();
     let mut materialized_commits = FxHashSet::default();
     let mut commit_seq_by_tx: BTreeMap<u64, u64> = BTreeMap::new();
     let mut max_tx = 0_u64;
@@ -19291,6 +19343,11 @@ fn recover_transaction_log(
                 max_tx = max_tx.max(tx_id.0);
                 record_audit_published.insert(tx_id.0);
             }
+            TxFrame::SyncOps { tx_id, ops } => {
+                max_tx = max_tx.max(tx_id.0);
+                sync_ops.entry(tx_id.0).or_default().extend(ops);
+                states.entry(tx_id.0).or_insert(TxState::Pending);
+            }
             TxFrame::Commit {
                 tx_id, commit_seq, ..
             } => {
@@ -19323,6 +19380,7 @@ fn recover_transaction_log(
                 broker_publishes.remove(&tx_id.0);
                 record_audit_events.remove(&tx_id.0);
                 record_audit_published.remove(&tx_id.0);
+                sync_ops.remove(&tx_id.0);
             }
         }
         Ok(())
@@ -19344,6 +19402,7 @@ fn recover_transaction_log(
         broker_publishes,
         record_audit_events,
         record_audit_published,
+        sync_ops,
         materialized_commits,
         commit_seq_by_tx,
         next_tx_id: max_tx.saturating_add(1).max(1),

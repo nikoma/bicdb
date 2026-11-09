@@ -333,16 +333,11 @@ async fn racing_plain_inserts_report_unique_violation_paged() {
     racing_plain_inserts_fail_with_unique_violation(StorageMode::ServerPaged).await;
 }
 
-/// The statement-time half of the race, made deterministic. The upsert's
-/// statement snapshot is taken, then the statement waits on an advisory lock
-/// while another transaction commits the conflict key. The upsert cannot see
-/// that row under its snapshot. That is a serialization failure (40001),
-/// which a client retries, and which an autocommit statement retries
-/// internally under a fresh snapshot. It is not a unique violation (23505).
-/// For an autocommit statement, 23505 escaped that retry and sent the
-/// statement to the exclusive path. There it waited on row locks held by
-/// transactions that could not commit until the wait budget expired, which
-/// stalled every writer for seconds.
+/// Establish the statement snapshot before the winner commits by waiting on
+/// an advisory lock inside INSERT SELECT. READ COMMITTED must update the
+/// snapshot-invisible winner and commit; a fixed snapshot must report40001.
+/// The DO NOTHING control still skips its conflicting row without an update.
+/// This also retains coverage of the old23505-to-exclusive escalation stall.
 async fn upsert_over_a_key_committed_after_the_snapshot(mode: StorageMode, fixed: bool) {
     let label = format!("{mode:?}");
     let root = database(mode);

@@ -190,5 +190,37 @@
       "Execution Time": 0.029
     }
   ],
-  "sql": "BEGIN;\nCREATE TEMP TABLE scalar_null_sections(id NUMERIC(10) PRIMARY KEY,scope_id NUMERIC(10),active CHAR(1));\nCREATE TEMP TABLE scalar_null_fields(id NUMERIC(10) PRIMARY KEY,section_id NUMERIC(10),active CHAR(1),hidden VARCHAR(1));\nCREATE UNIQUE INDEX ON scalar_null_fields(section_id,id) NULLS NOT DISTINCT;\nCREATE TEMP TABLE scalar_null_seen(id NUMERIC(10),scope_id NUMERIC(10));\nCREATE TEMP TABLE scalar_null_visible(id NUMERIC(10),scope_id NUMERIC(10));\nINSERT INTO scalar_null_sections VALUES(3,7,'Y'),(9,7,'Y'),(1,8,'Y');\nINSERT INTO scalar_null_fields SELECT i,(i-1)%100+1,'Y',NULL FROM generate_series(1,5000)i;\nANALYZE scalar_null_fields;\nSELECT jsonb_build_object('version',current_setting('server_version'),'nonnull_rows',(SELECT count(*) FROM (SELECT id FROM scalar_null_fields WHERE active='Y' AND section_id=(SELECT min(id) FROM scalar_null_sections WHERE scope_id=7 AND active='Y') AND hidden IS NULL AND id NOT IN(SELECT id FROM scalar_null_seen WHERE scope_id=11 AND id IS NOT NULL) AND (id IN(SELECT id FROM scalar_null_visible WHERE scope_id=11) OR (SELECT count(*) FROM scalar_null_visible WHERE scope_id=11)=0) ORDER BY coalesce(active,'Y') DESC,id)s),'null_aggregate_rows',(SELECT count(*) FROM (SELECT id FROM scalar_null_fields WHERE active='Y' AND section_id=(SELECT min(id) FROM scalar_null_sections WHERE scope_id=404 AND active='Y') AND hidden IS NULL AND id NOT IN(SELECT id FROM scalar_null_seen WHERE scope_id=11 AND id IS NOT NULL) AND (id IN(SELECT id FROM scalar_null_visible WHERE scope_id=11) OR (SELECT count(*) FROM scalar_null_visible WHERE scope_id=11)=0) ORDER BY coalesce(active,'Y') DESC,id)s),'null_projection_rows',(SELECT count(*) FROM scalar_null_fields WHERE section_id=(SELECT CAST(NULL AS NUMERIC))));\nEXPLAIN(ANALYZE,FORMAT JSON) SELECT id FROM scalar_null_fields WHERE active='Y' AND section_id=(SELECT min(id) FROM scalar_null_sections WHERE scope_id=404 AND active='Y') AND hidden IS NULL AND id NOT IN(SELECT id FROM scalar_null_seen WHERE scope_id=11 AND id IS NOT NULL) AND (id IN(SELECT id FROM scalar_null_visible WHERE scope_id=11) OR (SELECT count(*) FROM scalar_null_visible WHERE scope_id=11)=0) ORDER BY coalesce(active,'Y') DESC,id;\nROLLBACK;\n"
+  "sql": "BEGIN;\nCREATE TEMP TABLE scalar_null_sections(id NUMERIC(10) PRIMARY KEY,scope_id NUMERIC(10),active CHAR(1));\nCREATE TEMP TABLE scalar_null_fields(id NUMERIC(10) PRIMARY KEY,section_id NUMERIC(10),active CHAR(1),hidden VARCHAR(1));\nCREATE UNIQUE INDEX ON scalar_null_fields(section_id,id) NULLS NOT DISTINCT;\nCREATE TEMP TABLE scalar_null_seen(id NUMERIC(10),scope_id NUMERIC(10));\nCREATE TEMP TABLE scalar_null_visible(id NUMERIC(10),scope_id NUMERIC(10));\nINSERT INTO scalar_null_sections VALUES(3,7,'Y'),(9,7,'Y'),(1,8,'Y');\nINSERT INTO scalar_null_fields SELECT i,(i-1)%100+1,'Y',NULL FROM generate_series(1,5000)i;\nANALYZE scalar_null_fields;\nSELECT jsonb_build_object('version',current_setting('server_version'),'nonnull_rows',(SELECT count(*) FROM (SELECT id FROM scalar_null_fields WHERE active='Y' AND section_id=(SELECT min(id) FROM scalar_null_sections WHERE scope_id=7 AND active='Y') AND hidden IS NULL AND id NOT IN(SELECT id FROM scalar_null_seen WHERE scope_id=11 AND id IS NOT NULL) AND (id IN(SELECT id FROM scalar_null_visible WHERE scope_id=11) OR (SELECT count(*) FROM scalar_null_visible WHERE scope_id=11)=0) ORDER BY coalesce(active,'Y') DESC,id)s),'null_aggregate_rows',(SELECT count(*) FROM (SELECT id FROM scalar_null_fields WHERE active='Y' AND section_id=(SELECT min(id) FROM scalar_null_sections WHERE scope_id=404 AND active='Y') AND hidden IS NULL AND id NOT IN(SELECT id FROM scalar_null_seen WHERE scope_id=11 AND id IS NOT NULL) AND (id IN(SELECT id FROM scalar_null_visible WHERE scope_id=11) OR (SELECT count(*) FROM scalar_null_visible WHERE scope_id=11)=0) ORDER BY coalesce(active,'Y') DESC,id)s),'null_projection_rows',(SELECT count(*) FROM scalar_null_fields WHERE section_id=(SELECT CAST(NULL AS NUMERIC))));\nEXPLAIN(ANALYZE,FORMAT JSON) SELECT id FROM scalar_null_fields WHERE active='Y' AND section_id=(SELECT min(id) FROM scalar_null_sections WHERE scope_id=404 AND active='Y') AND hidden IS NULL AND id NOT IN(SELECT id FROM scalar_null_seen WHERE scope_id=11 AND id IS NOT NULL) AND (id IN(SELECT id FROM scalar_null_visible WHERE scope_id=11) OR (SELECT count(*) FROM scalar_null_visible WHERE scope_id=11)=0) ORDER BY coalesce(active,'Y') DESC,id;\nROLLBACK;\n",
+  "correlated_controls": {
+    "left_join": [
+      [
+        1,
+        null
+      ],
+      [
+        2,
+        10
+      ],
+      [
+        3,
+        11
+      ]
+    ],
+    "lateral_left_join": [
+      [
+        1,
+        null
+      ],
+      [
+        2,
+        10
+      ],
+      [
+        3,
+        11
+      ]
+    ],
+    "sql": "BEGIN;\nCREATE TEMP TABLE outer_choices(id INT PRIMARY KEY,wanted INT);\nCREATE TEMP TABLE target_matches(id INT PRIMARY KEY,lookup_key INT);\nCREATE INDEX ON target_matches(lookup_key);\nINSERT INTO outer_choices VALUES(1,NULL),(2,2),(3,3);\nINSERT INTO target_matches VALUES(10,2),(11,3);\nSELECT jsonb_agg(jsonb_build_array(id,matched) ORDER BY id) FROM (SELECT o.id,t.id AS matched FROM outer_choices o LEFT JOIN target_matches t ON t.lookup_key=(SELECT o.wanted))s;\nSELECT jsonb_agg(jsonb_build_array(id,matched) ORDER BY id) FROM (SELECT o.id,t.id AS matched FROM outer_choices o LEFT JOIN LATERAL (SELECT r.id FROM target_matches r WHERE r.lookup_key=(SELECT o.wanted))t ON TRUE)s;\nROLLBACK;\n",
+    "transaction": "ROLLBACK"
+  }
 }

@@ -14,7 +14,7 @@ non-NULL control already used its index. The tests-only 39fb5c51 source returned
 the correct empty result but materialized 5,000 outer rows for both NULL controls.
 All three controls pass at 570c88ee, including the non-NULL 50-row result. Native
 PostgreSQL 16.13 confirms the 50/0/0 results in a rolled-back temporary fixture;
-its execution plan is retained in `tests/fixtures/postgres/scalar_null_index_pg16.json`.
+its execution plan is retained in `crates/bicdb-sql/tests/fixtures/postgres/scalar_null_index_pg16.json`.
 A correlated NULL-first control also checks subsequent non-NULL bindings and
 LEFT JOIN/LATERAL row preservation.
 

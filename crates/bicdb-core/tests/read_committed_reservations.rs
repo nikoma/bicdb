@@ -445,3 +445,40 @@ fn absent_row_capability_cannot_cross_drop_and_recreate_of_the_collection() {
     assert!(db.get("rows", "one").unwrap().is_none());
     tx.rollback().unwrap();
 }
+
+#[test]
+fn catalog_rename_and_restore_preserves_the_same_backing_capability() {
+    let (_dir, mut db) = setup(StorageMode::ServerPaged, false);
+    let mut tx = db.begin_application_transaction(actor()).unwrap();
+    let authority = tx
+        .issue_mutation_grant(grant(MutationOperation::Insert))
+        .unwrap();
+    let token = tx
+        .reserve_authorized_read_committed_row("rows", "one", None)
+        .unwrap();
+    Arc::get_mut(&mut db)
+        .unwrap()
+        .rename_collection("rows", "renamed_rows")
+        .unwrap();
+    assert!(
+        tx.read_authorized_reserved_row(&token).is_err(),
+        "a renamed-away logical relation must not remain readable by its old capability"
+    );
+    Arc::get_mut(&mut db)
+        .unwrap()
+        .rename_collection("renamed_rows", "rows")
+        .unwrap();
+    assert!(tx.read_authorized_reserved_row(&token).unwrap().is_none());
+    tx.upsert_reserved_with_grant(
+        authority,
+        token,
+        Record::new("one").with_metadata(json!({"v":10})),
+    )
+    .unwrap();
+    assert_eq!(tx.broker_publish_len(), 1);
+    tx.commit().unwrap();
+    assert_eq!(
+        db.get("rows", "one").unwrap().unwrap().metadata["v"],
+        json!(10)
+    );
+}

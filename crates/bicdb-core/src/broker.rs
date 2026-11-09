@@ -1079,6 +1079,7 @@ impl<'a> Broker<'a> {
         options: PublishOptions,
         prepared_id: Option<Uuid>,
     ) -> Result<PublishReceipt> {
+        self.stream.check_durability()?;
         validate_broker_name("queue", queue)?;
         if let Some(key) = options.idempotency_key.as_deref() {
             if let Some(&(message_id, sequence)) = self
@@ -1162,6 +1163,7 @@ impl<'a> Broker<'a> {
         consumer_id: &str,
         options: ConsumeOptions,
     ) -> Result<Vec<BrokerMessage>> {
+        self.stream.check_durability()?;
         validate_broker_name("queue", queue)?;
         validate_broker_name("group", group)?;
         validate_broker_name("consumer", consumer_id)?;
@@ -2353,5 +2355,151 @@ impl<'a> Broker<'a> {
                 "at_ms": now,
             }),
         )
+    }
+}
+
+#[cfg(test)]
+mod outbox_retention_tests {
+    use super::*;
+    use crate::{BicDb, DbConfig, StorageMode};
+
+    fn publish(db: &BicDb) -> Uuid {
+        let tx = db.begin_transaction().unwrap();
+        let id = tx
+            .buffer_broker_publish("q", json!(1), PublishOptions::default())
+            .unwrap();
+        tx.commit().unwrap();
+        id
+    }
+
+    fn settle(db: &mut BicDb, id: Uuid) {
+        let mut broker = db.broker();
+        let batch = broker
+            .consume(
+                "q",
+                "g",
+                "w",
+                ConsumeOptions {
+                    max_messages: 10,
+                    visibility_timeout_ms: 30_000,
+                },
+            )
+            .unwrap();
+        assert_eq!(batch.len(), 1);
+        assert_eq!(batch[0].message_id, id);
+        broker.ack("q", "g", "w", id).unwrap();
+    }
+
+    #[test]
+    fn legacy_trim_without_publication_evidence_refuses_ambiguous_recovery() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let id = publish(&db);
+        settle(&mut db, id);
+        db.broker().trim("q").unwrap();
+        db.events()
+            .rewrite_events_in_place(|event| {
+                if event.event_type == QUEUE_TRIMMED_EVENT {
+                    event
+                        .payload
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("outbox_receipts");
+                }
+                true
+            })
+            .unwrap();
+        let path = db.events().path().to_path_buf();
+        let before = std::fs::read(&path).unwrap();
+        drop(db);
+        let error = match BicDb::open(root.path()) {
+            Ok(_) => panic!("legacy recovery was guessed"),
+            Err(error) => error,
+        };
+        assert!(matches!(error, BicDbError::Corruption(_)), "{error}");
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+
+    #[test]
+    fn legacy_retained_outbox_protection_survives_other_queue_rewrites() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let id = publish(&db);
+        db.events()
+            .rewrite_events_in_place(|event| {
+                if event.id == id {
+                    event.metadata["broker"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("transactional_outbox");
+                }
+                true
+            })
+            .unwrap();
+        drop(db);
+        let mut db = BicDb::open(root.path()).unwrap();
+        let other = db.broker().publish("other", json!(2), Value::Null).unwrap();
+        db.broker()
+            .configure_queue(
+                "other",
+                QueueConfig {
+                    retention_max_messages: Some(0),
+                    ..QueueConfig::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(db.broker().trim("other").unwrap().removed_messages, 1);
+        assert!(db.broker().stream.event_by_id(&other.message_id).is_none());
+        settle(&mut db, id);
+        db.broker().trim("q").unwrap();
+        drop(db);
+        let mut db = BicDb::open(root.path()).unwrap();
+        assert!(db
+            .broker()
+            .consume(
+                "q",
+                "g",
+                "w",
+                ConsumeOptions {
+                    max_messages: 10,
+                    visibility_timeout_ms: 30_000
+                }
+            )
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn receipt_capacity_refuses_trim_before_forgetting_a_publication() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let id = publish(&db);
+        settle(&mut db, id);
+        let mut broker = db.broker();
+        let full = (0..MAX_OUTBOX_RECEIPTS)
+            .map(|n| (Uuid::from_u128(n as u128), n as u64))
+            .collect();
+        broker
+            .stream
+            .broker_state
+            .trimmed_outbox
+            .insert("full".into(), full);
+        let before = std::fs::read(broker.stream.path()).unwrap();
+        assert!(matches!(broker.trim("q"), Err(BicDbError::Compaction(_))));
+        assert_eq!(std::fs::read(broker.stream.path()).unwrap(), before);
+        assert!(broker.stream.event_by_id(&id).is_some());
+    }
+
+    #[test]
+    fn a_durable_full_log_cut_reclaims_receipt_capacity() {
+        let root = tempfile::tempdir().unwrap();
+        let config = DbConfig::default().with_storage_mode(StorageMode::ServerPaged);
+        let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+        let id = publish(&db);
+        settle(&mut db, id);
+        db.broker().trim("q").unwrap();
+        assert_eq!(db.broker().outbox_receipt_ids().len(), 1);
+        db.checkpoint_for_resume().unwrap();
+        assert!(db.broker().outbox_receipt_ids().is_empty());
     }
 }

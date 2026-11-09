@@ -149,6 +149,13 @@ pub struct DeviceView {
 }
 
 impl EventStream {
+    pub(crate) fn check_durability(&self) -> Result<()> {
+        if let Some(health) = &self.durability {
+            health.check().map_err(crate::error::durability_error)?;
+        }
+        Ok(())
+    }
+
     fn rebuild_broker_state(&mut self) -> Result<()> {
         let mut state = BrokerState::rebuild(&self.events)?;
         state.preserve_recovery_protection(&self.broker_state, &self.event_indexes);
@@ -426,6 +433,7 @@ impl EventStream {
     /// either the old or the new segment intact. Returns (bytes_before,
     /// bytes_after).
     pub(crate) fn rewrite_events(&mut self, events: Vec<Event>) -> Result<(u64, u64)> {
+        self.check_durability()?;
         let bytes_before = match fs::metadata(&self.path) {
             Ok(metadata) => metadata.len(),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
@@ -465,6 +473,7 @@ impl EventStream {
         &mut self,
         mut retain: impl FnMut(&mut Event) -> bool,
     ) -> Result<(u64, u64)> {
+        self.check_durability()?;
         self.events.retain_mut(|stored| retain(&mut stored.event));
         let result = self.compact();
         match result {
@@ -499,6 +508,7 @@ impl EventStream {
     }
 
     pub(crate) fn compact(&mut self) -> Result<(u64, u64)> {
+        self.check_durability()?;
         let bytes_before = match fs::metadata(&self.path) {
             Ok(metadata) => metadata.len(),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
@@ -547,6 +557,7 @@ impl EventStream {
     }
 
     fn append_event(&mut self, event: Event) -> Result<(StoredEvent, bool)> {
+        self.check_durability()?;
         validate_event(&event)?;
         self.broker_state.validate_event(&event)?;
         if let Some(index) = self.event_indexes.get(&event.id).copied() {

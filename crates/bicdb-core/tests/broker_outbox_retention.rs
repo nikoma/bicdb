@@ -130,3 +130,57 @@ fn a_checkpoint_between_core_commit_and_caller_finalization_keeps_committed_outb
         "a durable business row must keep both committed outboxes across a checkpoint"
     );
 }
+
+#[test]
+fn a_failed_committed_broker_publication_fences_until_verified_recovery() {
+    use bicdb_core::{BicDbError, DurabilityState, DEFAULT_EVENTS_DIR, DEFAULT_EVENTS_SEGMENT};
+    use bicdb_page::test_faults::arm_io_failure;
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for site in ["frame_log.write", "frame_log.short_write", "frame_log.sync"] {
+            let root = tempfile::tempdir().unwrap();
+            let config = DbConfig::default()
+                .with_storage_mode(mode.clone())
+                .with_fsync(true)
+                .with_audit_events(false)
+                .with_sync_outbox(false);
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            let log = root
+                .path()
+                .join(DEFAULT_EVENTS_DIR)
+                .join(DEFAULT_EVENTS_SEGMENT);
+            let fault = arm_io_failure(site, &log, 1, false);
+            let tx = db.begin_transaction().unwrap();
+            let id = tx
+                .buffer_broker_publish("q", json!({"committed": 1}), PublishOptions::default())
+                .unwrap();
+            tx.commit().unwrap();
+            assert!(matches!(
+                db.durability_state(),
+                DurabilityState::WriteFailed(_)
+            ));
+            assert!(matches!(
+                db.checkpoint_for_resume(),
+                Err(BicDbError::WriteFailed { .. })
+            ));
+            assert!(matches!(
+                db.broker().publish("q", json!(2), serde_json::Value::Null),
+                Err(BicDbError::WriteFailed { .. })
+            ));
+            assert!(matches!(
+                db.broker().consume("q", "blocked", "worker", consumed()),
+                Err(BicDbError::WriteFailed { .. })
+            ));
+            drop(fault);
+            drop(db);
+            for reopen in 0..2 {
+                let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+                let batch = db
+                    .broker()
+                    .consume("q", &format!("reopen-{reopen}"), "worker", consumed())
+                    .unwrap();
+                assert_eq!(batch.len(), 1, "{mode:?} {site} reopen {reopen}");
+                assert_eq!(batch[0].message_id, id);
+            }
+        }
+    }
+}

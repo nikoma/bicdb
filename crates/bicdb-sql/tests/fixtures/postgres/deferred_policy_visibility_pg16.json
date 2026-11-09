@@ -1,0 +1,17 @@
+{
+  "vendor": "PostgreSQL16.13",
+  "sql": "BEGIN;\nCREATE ROLE deferred_probe_reader_af34 NOSUPERUSER NOBYPASSRLS;\nCREATE TABLE memo_gate_af34 (allowed BOOLEAN);\nINSERT INTO memo_gate_af34 VALUES (true);\nCREATE TABLE memo_protected_af34 (id INT);\nINSERT INTO memo_protected_af34 VALUES (1);\nCREATE TABLE memo_queue_af34 (id INT);\nCREATE TABLE memo_seen_af34 (id INT, n BIGINT);\nCREATE FUNCTION memo_allow_af34() RETURNS BOOLEAN LANGUAGE SQL STABLE AS $$ SELECT allowed FROM memo_gate_af34 $$;\nALTER TABLE memo_protected_af34 ENABLE ROW LEVEL SECURITY;\nCREATE POLICY memo_read_af34 ON memo_protected_af34 FOR SELECT TO deferred_probe_reader_af34 USING ((SELECT memo_allow_af34()));\nGRANT ALL ON TABLE memo_gate_af34,memo_protected_af34,memo_queue_af34,memo_seen_af34 TO deferred_probe_reader_af34;\nGRANT EXECUTE ON FUNCTION memo_allow_af34() TO deferred_probe_reader_af34;\nCREATE FUNCTION memo_trigger_af34() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN INSERT INTO memo_seen_af34 SELECT NEW.id,count(*) FROM memo_protected_af34; UPDATE memo_gate_af34 SET allowed=false; RETURN NEW; END $$;\nCREATE CONSTRAINT TRIGGER memo_deferred_af34 AFTER INSERT ON memo_queue_af34 DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION memo_trigger_af34();\nGRANT EXECUTE ON FUNCTION memo_trigger_af34() TO deferred_probe_reader_af34;\nSET ROLE deferred_probe_reader_af34;\nINSERT INTO memo_queue_af34 VALUES(1),(2);\nSET CONSTRAINTS ALL IMMEDIATE;\nRESET ROLE;\nSELECT * FROM memo_seen_af34 ORDER BY id;\nROLLBACK;\n",
+  "rows": [
+    [
+      1,
+      1
+    ],
+    [
+      2,
+      0
+    ]
+  ],
+  "all_setup_and_trigger_writes_rolled_back": true,
+  "native_exit": 0,
+  "explanation": "A deferred trigger reads an RLS-protected table, then changes the data read by its policy scalar function. The next trigger must see the changed policy result."
+}

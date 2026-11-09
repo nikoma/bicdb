@@ -24,12 +24,25 @@ interior whole seconds contain 136 commits and roughly 5.2 seconds of their
 execution time. Commit-time deferred foreign-key checks loaded schemas outside
 the connection's existing cache scope. The tests-only 49585066 control passes
 referential-error/rollback checks but decodes two warmed schemas (1,775 bytes)
-on the next drain. Deferred drains now borrow and restore the existing session
-metadata cache. Simple-query Oracle lowering also borrows the connection cache,
+on the next drain. Each deferred foreign-key check now borrows and restores the
+existing session metadata cache. Custom trigger bodies retain their existing
+execution scopes. Simple-query Oracle lowering also borrows the connection cache,
 following the Parse/Describe path. Commit durability, sync ordering, transaction
 boundaries and original application assertions/timeouts remain unchanged.
+
+An initial cache scope around the whole drain incorrectly retained policy
+scalar results across custom trigger calls. The direct-protocol af34d117 control
+read one protected row twice after the first trigger changed the policy's data;
+the merged predecessor and native PostgreSQL read one row, then zero. The
+tests-only 32c669ca regression reproduces the failure. Restricting the new scope
+to each foreign-key check preserves both metadata reuse and policy visibility.
+The native transaction is retained in
+`crates/bicdb-sql/tests/fixtures/postgres/deferred_policy_visibility_pg16.json`.
 
 This batch requires broad SQL and pgwire validation, its own versioned-head CI,
 and an optimized original-application rerun. The 77403dca predecessor still fails
 the report's unchanged ten-second wait despite passing the financial report and
 all audit tests. Focused regressions do not establish application acceptance.
+The af34d117 optimized rerun also passes seven of eight original methods: the
+NULL-bound field lookup falls from 1.1–1.4 seconds to about 2–3 ms, but the
+report's original ten-second wait still fails. Further latency work remains.

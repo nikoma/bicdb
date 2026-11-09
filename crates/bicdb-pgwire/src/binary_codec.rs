@@ -2600,7 +2600,7 @@ pub(crate) fn flush_notifications(
         body.push(0);
         body.extend_from_slice(payload.as_bytes());
         body.push(0);
-        server.db.read().check_recovery_state()?;
+        server.tx_log.check_recovery_state()?;
         write_message(stream, b'A', &body)?;
     }
     stream.flush()?;

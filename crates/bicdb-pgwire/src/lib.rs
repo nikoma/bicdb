@@ -2287,12 +2287,12 @@ fn drain_checked_notifications(
     server: &PgWireServer,
     connection_id: u64,
 ) -> Result<Vec<(String, String, i32)>> {
-    server.db.read().check_recovery_state()?;
+    server.tx_log.check_recovery_state()?;
     let pending = match server.notifications.lock() {
         Ok(mut bus) => bus.drain(connection_id),
         Err(_) => return Ok(Vec::new()),
     };
-    server.db.read().check_recovery_state()?;
+    server.tx_log.check_recovery_state()?;
     Ok(pending)
 }
 
@@ -2356,7 +2356,7 @@ async fn flush_notifications_async(
         buffer.extend_from_slice(&((body.len() + 4) as u32).to_be_bytes());
         buffer.extend_from_slice(&body);
     }
-    server.db.read().check_recovery_state()?;
+    server.tx_log.check_recovery_state()?;
     stream.write_all(&buffer).await?;
     Ok(())
 }

@@ -138,6 +138,28 @@ fn key_moved() -> Case {
         ..key_deleted()
     }
 }
+fn json_secondary() -> Case {
+    Case {
+        schema: "CREATE TABLE arbiter_rows(id INT PRIMARY KEY,k JSONB UNIQUE,v INT)",
+        winner: r#"INSERT INTO arbiter_rows VALUES(1,'{"a":1,"b":2}',20)"#,
+        upsert: r#"INSERT INTO arbiter_rows VALUES(2,'{"b":2.0,"a":1.00}',10) ON CONFLICT(k) DO UPDATE SET v=arbiter_rows.v+EXCLUDED.v RETURNING id,v"#,
+        expected: vec![vec!["1", "30"]],
+        verify: "SELECT id,v FROM arbiter_rows ORDER BY id",
+        final_rows: vec![vec!["1", "30"]],
+        waits: true,
+    }
+}
+fn json_primary() -> Case {
+    Case {
+        schema: "CREATE TABLE arbiter_rows(id JSONB PRIMARY KEY,v INT)",
+        winner: r#"INSERT INTO arbiter_rows VALUES('{"a":1,"b":2}',20)"#,
+        upsert: r#"INSERT INTO arbiter_rows VALUES('{"b":2.0,"a":1.00}',10) ON CONFLICT(id) DO UPDATE SET v=arbiter_rows.v+EXCLUDED.v RETURNING v"#,
+        expected: vec![vec!["30"]],
+        verify: "SELECT v FROM arbiter_rows",
+        final_rows: vec![vec!["30"]],
+        waits: true,
+    }
+}
 macro_rules! arbiter_test {
     ($name:ident,$mode:expr,$case:ident) => {
         #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -188,3 +210,20 @@ arbiter_test!(key_deleted_memory, StorageMode::EmbeddedMemory, key_deleted);
 arbiter_test!(key_deleted_paged, StorageMode::ServerPaged, key_deleted);
 arbiter_test!(key_moved_memory, StorageMode::EmbeddedMemory, key_moved);
 arbiter_test!(key_moved_paged, StorageMode::ServerPaged, key_moved);
+
+arbiter_test!(
+    json_secondary_memory,
+    StorageMode::EmbeddedMemory,
+    json_secondary
+);
+arbiter_test!(
+    json_secondary_paged,
+    StorageMode::ServerPaged,
+    json_secondary
+);
+arbiter_test!(
+    json_primary_memory,
+    StorageMode::EmbeddedMemory,
+    json_primary
+);
+arbiter_test!(json_primary_paged, StorageMode::ServerPaged, json_primary);

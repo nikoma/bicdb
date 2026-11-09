@@ -87,6 +87,19 @@ fn case(kind: &str) -> Case {
             case.returned = vec![row(&[30])];
             case.final_rows = vec![row(&[30])];
         }
+        "json_secondary" => {
+            case.schema = "CREATE TABLE signed_arbiters(id INT PRIMARY KEY,k JSONB UNIQUE,v INT)";
+            case.owner = r#"INSERT INTO signed_arbiters VALUES(1,'{"a":1,"b":2}',20)"#;
+            case.waiter = r#"INSERT INTO signed_arbiters VALUES(2,'{"b":2.0,"a":1.00}',10) ON CONFLICT(k) DO UPDATE SET v=signed_arbiters.v+EXCLUDED.v RETURNING id,v"#;
+        }
+        "json_primary" => {
+            case.schema = "CREATE TABLE signed_arbiters(k JSONB PRIMARY KEY,v INT)";
+            case.owner = r#"INSERT INTO signed_arbiters VALUES('{"a":1,"b":2}',20)"#;
+            case.waiter = r#"INSERT INTO signed_arbiters VALUES('{"b":2.0,"a":1.00}',10) ON CONFLICT(k) DO UPDATE SET v=signed_arbiters.v+EXCLUDED.v RETURNING v"#;
+            case.has_id = false;
+            case.returned = vec![row(&[30])];
+            case.final_rows = vec![row(&[30])];
+        }
         "nulls_distinct" => {
             case.owner = "INSERT INTO signed_arbiters VALUES(1,NULL,20)";
             case.waiter="INSERT INTO signed_arbiters VALUES(2,NULL,10) ON CONFLICT(k) DO UPDATE SET v=signed_arbiters.v+EXCLUDED.v RETURNING id,v";
@@ -236,6 +249,9 @@ schedule!(
 );
 schedule!(signed_deleted_key_inserts_new_identity, "delete");
 schedule!(signed_moved_key_inserts_new_identity, "move");
+
+schedule!(signed_json_secondary_current_winner, "json_secondary");
+schedule!(signed_json_primary_current_winner, "json_primary");
 
 #[test]
 fn signed_native_projection_and_sql_rls_apply_to_the_current_conflict_row() {

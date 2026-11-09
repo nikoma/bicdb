@@ -2100,6 +2100,9 @@ impl<'db> SqlEngine<'db> {
                 // does. A genuinely bound NULL is handled by the earlier
                 // NULL-equality shortcut.
                 if matches!(value, SqlValue::Null) {
+                    if self.scalar_null_index_probe_is_empty(expr) {
+                        return Ok(Some(RecordLocators::Rowids(Vec::new())));
+                    }
                     prefix_complete = false;
                     break;
                 }
@@ -2927,9 +2930,13 @@ impl<'db> SqlEngine<'db> {
                     continue 'plans;
                 }
                 let value = self.eval_dynamic_bound_expr(expr)?;
-                if matches!(value, SqlValue::Null)
-                    || !case_mapped_probe_value_is_text(plan.fields.get(field_idx), &value)
-                {
+                if matches!(value, SqlValue::Null) {
+                    if self.scalar_null_index_probe_is_empty(expr) {
+                        return Ok(Some(Vec::new()));
+                    }
+                    continue 'plans;
+                }
+                if !case_mapped_probe_value_is_text(plan.fields.get(field_idx), &value) {
                     continue 'plans;
                 }
                 let value = index_value_from_sql(value)?;
@@ -3694,6 +3701,19 @@ impl<'db> SqlEngine<'db> {
             .flatten();
         let probe_type = row_columns_expr_pg_type(self.db_ref(), expr, columns);
         index_probe_type_is_exact(index_field_pg_type(schema, field), probe_type)
+    }
+
+    /// The locator already evaluated this independently bound key expression.
+    /// A pure scalar query returning SQL NULL cannot match an equality key.
+    /// Keep the deferred path for outer-row bindings: join inputs may still be
+    /// placeholders. Do not execute the query again to establish this proof.
+    fn scalar_null_index_probe_is_empty(&self, expr: &Expr) -> bool {
+        self.outer_row.is_none()
+            && matches!(
+                unwrap_nested_expr(expr),
+                Expr::Subquery(query)
+                    if super::row_eval::subquery_is_memoizable(self.db_ref(), query)
+            )
     }
 
     pub(crate) fn expr_is_bound_without_table_row(&self, expr: &Expr) -> Result<bool> {

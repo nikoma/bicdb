@@ -8,21 +8,61 @@ const PURGES: &str = "__bicdb_recycle_purges";
 struct MoveIntent {
     entry: RecycleBinEntry,
     definitions: Vec<bicdb_core::IndexDefinition>,
+    #[serde(default)]
+    order: u64,
+    #[serde(default)]
+    restore: Option<RestorePlan>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub(super) struct RestorePlan {
+    pub(super) id: String,
+    pub(super) target: String,
+    pub(super) schema: TableSchema,
+    pub(super) sequences: Vec<SequenceSchema>,
+    pub(super) indexes: Vec<(String, String)>,
 }
 pub(super) fn prepare(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<u64> {
     db.create_collection(INTENTS)?;
+    prepare_inner(db, entry, None)
+}
+pub(super) fn prepare_restore(
+    db: &mut BicDb,
+    entry: &RecycleBinEntry,
+    plan: RestorePlan,
+) -> Result<u64> {
+    db.create_collection(INTENTS)?;
+    prepare_inner(db, entry, Some(plan))
+}
+fn prepare_inner(
+    db: &mut BicDb,
+    entry: &RecycleBinEntry,
+    restore: Option<RestorePlan>,
+) -> Result<u64> {
+    let source = if restore.is_some() {
+        &entry.bin_name
+    } else {
+        &entry.table
+    };
+    let definitions = db
+        .index_definitions()
+        .into_iter()
+        .filter(|index| &index.collection == source)
+        .collect();
+    let mut tx = db.begin_transaction()?;
     let intent = MoveIntent {
         entry: entry.clone(),
-        definitions: db
-            .index_definitions()
-            .into_iter()
-            .filter(|index| index.collection == entry.table)
-            .collect(),
+        definitions,
+        order: tx.id().0,
+        restore,
     };
-    let mut tx = db.begin_transaction()?;
+    let id = intent
+        .restore
+        .as_ref()
+        .map(|plan| plan.id.as_str())
+        .unwrap_or(&entry.bin_name);
     tx.insert(
         INTENTS,
-        Record::new(entry.bin_name.clone()).with_metadata(serde_json::to_value(intent)?),
+        Record::new(id).with_metadata(serde_json::to_value(&intent)?),
     )?;
     Ok(tx.commit_with_sequence()?)
 }
@@ -36,8 +76,7 @@ pub(super) fn decide(session: &mut SqlSession<'_>, bin: &str, sequence: u64) -> 
     Ok(())
 }
 pub(super) fn clear(db: &mut BicDb, bin: &str) -> Result<()> {
-    // Remove intent first: a leftover decision without an intent is inert.
-    // Both deletes are one decision, avoiding unbounded abandoned markers.
+    // Called after metadata restoration, so repeated recovery stays safe.
     let mut tx = db.begin_transaction()?;
     tx.delete(INTENTS, bin)?;
     tx.commit()?;
@@ -113,15 +152,32 @@ pub(super) fn recover(db: &mut BicDb) -> Result<usize> {
         Err(BicDbError::CollectionNotFound(_)) => return Ok(purge_repairs),
         Err(error) => return Err(error.into()),
     };
+    let mut intents = records
+        .into_iter()
+        .map(|record| {
+            let intent: MoveIntent = serde_json::from_value(record.metadata)?;
+            let id = intent
+                .restore
+                .as_ref()
+                .map(|plan| plan.id.as_str())
+                .unwrap_or(&intent.entry.bin_name);
+            if record.id != id {
+                return Err(SqlError::InvalidSql(
+                    "recycle intent identity mismatch".into(),
+                ));
+            }
+            Ok(intent)
+        })
+        .collect::<Result<Vec<_>>>()?;
+    intents.sort_by_key(|intent| std::cmp::Reverse(intent.order));
     let mut repaired = purge_repairs;
-    for record in records {
-        let intent: MoveIntent = serde_json::from_value(record.metadata)?;
-        let entry = &intent.entry;
-        if record.id != entry.bin_name {
-            return Err(SqlError::InvalidSql(
-                "recycle intent identity mismatch".into(),
-            ));
+    for intent in intents {
+        if intent.restore.is_some() {
+            rollback_restore(db, &intent)?;
+            repaired += 1;
+            continue;
         }
+        let entry = &intent.entry;
         let collections = db.collections();
         let original = collections.iter().any(|c| c.name == entry.table);
         let bin = collections.iter().any(|c| c.name == entry.bin_name);
@@ -201,6 +257,101 @@ pub(super) fn recover(db: &mut BicDb) -> Result<usize> {
         repaired += 1;
     }
     Ok(repaired)
+}
+
+fn restore_backing_state(db: &BicDb, intent: &MoveIntent) -> Result<bool> {
+    let plan = intent.restore.as_ref().expect("restore intent");
+    let collections = db.collections();
+    let target = collections.iter().any(|meta| meta.name == plan.target);
+    let bin = collections
+        .iter()
+        .any(|meta| meta.name == intent.entry.bin_name);
+    if target == bin {
+        return Err(SqlError::InvalidSql(format!(
+            "ambiguous pending restore intent {}",
+            plan.id
+        )));
+    }
+    let indexes = db.index_definitions();
+    for definition in &intent.definitions {
+        let restored = plan
+            .indexes
+            .iter()
+            .find(|(from, _)| from == &definition.name)
+            .map(|(_, to)| to)
+            .ok_or_else(|| SqlError::InvalidSql("restore intent missing index mapping".into()))?;
+        let matching = indexes
+            .iter()
+            .filter(|index| index.name == definition.name || index.name == *restored)
+            .collect::<Vec<_>>();
+        let [current] = matching.as_slice() else {
+            return Err(SqlError::InvalidSql(format!(
+                "ambiguous pending restore index {}",
+                definition.name
+            )));
+        };
+        let mut expected = definition.clone();
+        expected.name = current.name.clone();
+        expected.collection = if target {
+            plan.target.clone()
+        } else {
+            intent.entry.bin_name.clone()
+        };
+        if **current != expected {
+            return Err(SqlError::InvalidSql(format!(
+                "conflicting pending restore index {}",
+                current.name
+            )));
+        }
+    }
+    Ok(target)
+}
+fn rollback_restore(db: &mut BicDb, intent: &MoveIntent) -> Result<()> {
+    let plan = intent.restore.as_ref().expect("restore intent");
+    if restore_backing_state(db, intent)? {
+        db.rename_collection(&plan.target, &intent.entry.bin_name)?;
+    }
+    let indexes = db.index_definitions();
+    for (scoped, restored) in &plan.indexes {
+        if scoped != restored && indexes.iter().any(|index| index.name == *restored) {
+            if !db.rename_index(restored, scoped)? {
+                return Err(SqlError::InvalidSql(format!(
+                    "pending restore index {restored} disappeared"
+                )));
+            }
+        }
+    }
+    delete_schema(db, &plan.target)?;
+    for grant in &intent.entry.grants {
+        let mut grant = grant.clone();
+        grant.object_name = plan.target.clone();
+        delete_privilege(db, &grant)?;
+    }
+    for trigger in &intent.entry.triggers {
+        delete_trigger(db, &trigger.name, Some(&plan.target))?;
+    }
+    for sequence in &plan.sequences {
+        delete_sequence(db, &sequence.name)?;
+    }
+    save_recycle_bin_entry(db, &intent.entry)?;
+    clear(db, &plan.id)?;
+    sql_index_definitions_cache_clear();
+    Ok(())
+}
+pub(super) fn undo_restore(session: &mut SqlSession<'_>, id: &str) -> Result<()> {
+    let record = session
+        .db_ref()
+        .get(INTENTS, id)?
+        .ok_or_else(|| SqlError::InvalidSql("missing restore undo intent".into()))?;
+    let intent: MoveIntent = serde_json::from_value(record.metadata)?;
+    let plan = intent
+        .restore
+        .as_ref()
+        .ok_or_else(|| SqlError::InvalidSql("invalid restore undo intent".into()))?;
+    if restore_backing_state(session.db_ref(), &intent)? {
+        session.rename_recycle_collection(&plan.target, &intent.entry.bin_name)?;
+    }
+    rollback_restore(session.db_mut()?, &intent)
 }
 
 #[cfg(test)]

@@ -155,7 +155,7 @@ pub(crate) fn list_recycle_bin(db: &BicDb) -> Result<Vec<RecycleBinEntry>> {
     Ok(entries)
 }
 
-fn save_recycle_bin_entry(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<()> {
+pub(super) fn save_recycle_bin_entry(db: &mut BicDb, entry: &RecycleBinEntry) -> Result<()> {
     db.create_collection(RECYCLE_BIN_COLLECTION)?;
     let metadata = serde_json::to_value(entry)
         .map_err(|error| SqlError::InvalidSql(format!("recycle bin entry: {error}")))?;
@@ -180,7 +180,7 @@ fn index_name_taken(db: &BicDb, name: &str) -> bool {
 }
 
 impl<'db> SqlSession<'db> {
-    fn rename_recycle_collection(&mut self, old: &str, new: &str) -> Result<()> {
+    pub(super) fn rename_recycle_collection(&mut self, old: &str, new: &str) -> Result<()> {
         if let Some(mut tx) = self.tx.take() {
             let result = self.db_mut().and_then(|db| {
                 db.rename_collection_preserving_pending_writes(&mut tx, old, new)
@@ -365,12 +365,10 @@ impl<'db> SqlSession<'db> {
             Some(target) => relation_name(target)?,
             None => entry.table.clone(),
         };
-        self.restore_from_recycle_bin(&entry, &target)?;
+        let intent_id = self.restore_from_recycle_bin(&entry, &target)?;
         if self.tx.is_some() {
-            self.ddl_undo.push(DdlUndo::ReturnToRecycleBin {
-                entry: Box::new(entry),
-                target,
-            });
+            self.ddl_undo
+                .push(DdlUndo::ReturnToRecycleBin { intent_id });
         }
         Ok(())
     }
@@ -379,8 +377,10 @@ impl<'db> SqlSession<'db> {
         &mut self,
         entry: &RecycleBinEntry,
         target: &str,
-    ) -> Result<()> {
-        self.restore_from_recycle_bin_impl(entry, target, false)
+    ) -> Result<String> {
+        Ok(self
+            .restore_from_recycle_bin_impl(entry, target, false)?
+            .expect("authored restore has an intent"))
     }
     pub(crate) fn restore_from_recycle_bin_undo(
         &mut self,
@@ -388,13 +388,14 @@ impl<'db> SqlSession<'db> {
         target: &str,
     ) -> Result<()> {
         self.restore_from_recycle_bin_impl(entry, target, true)
+            .map(|_| ())
     }
     fn restore_from_recycle_bin_impl(
         &mut self,
         entry: &RecycleBinEntry,
         target: &str,
         undo: bool,
-    ) -> Result<()> {
+    ) -> Result<Option<String>> {
         require_user_relation_name(target)?;
         // Check every conflict before changing anything.
         if load_schema(self.db_ref(), target)?.is_some()
@@ -438,7 +439,6 @@ impl<'db> SqlSession<'db> {
             sequences.push(restored);
         }
 
-        self.rename_recycle_collection(&entry.bin_name, target)?;
         let mut schema = entry.schema.clone();
         schema.name = target.to_string();
         for (original, restored) in entry.sequences.iter().zip(&sequences) {
@@ -456,6 +456,13 @@ impl<'db> SqlSession<'db> {
                 }
             }
         }
+        let mut index_renames = Vec::new();
+        let mut reserved = self
+            .db_ref()
+            .index_definitions()
+            .into_iter()
+            .map(|index| index.name)
+            .collect::<BTreeSet<_>>();
         for (scoped, original) in &entry.indexes {
             let mut name = original.clone();
             if scoped != original {
@@ -469,14 +476,15 @@ impl<'db> SqlSession<'db> {
                     );
                     let mut candidate = base.clone();
                     let mut suffix = 1;
-                    while index_name_taken(self.db_ref(), &candidate) {
+                    while reserved.contains(&candidate) {
                         suffix += 1;
                         candidate = format!("{base}{suffix}");
                     }
                     name = candidate;
                 }
-                self.db_mut()?.rename_index(scoped, &name)?;
+                reserved.insert(name.clone());
             }
+            index_renames.push((scoped.clone(), name.clone()));
             if &name != original {
                 for index in &mut schema.indexes {
                     if index.name == *original {
@@ -499,8 +507,35 @@ impl<'db> SqlSession<'db> {
                 }
             }
         }
+        let journal = if undo {
+            None
+        } else {
+            let id = format!("restore_{}", uuid::Uuid::new_v4().simple());
+            let plan = super::recycle_bin_journal::RestorePlan {
+                id: id.clone(),
+                target: target.to_string(),
+                schema: schema.clone(),
+                sequences: sequences.clone(),
+                indexes: index_renames.clone(),
+            };
+            let sequence =
+                super::recycle_bin_journal::prepare_restore(self.db_mut()?, entry, plan)?;
+            super::recycle_bin_journal::stage("restore_intent");
+            Some((id, sequence))
+        };
+        self.rename_recycle_collection(&entry.bin_name, target)?;
+        super::recycle_bin_journal::stage("restore_collection");
+        for (from, to) in &index_renames {
+            if from != to && !self.db_mut()?.rename_index(from, to)? {
+                return Err(SqlError::InvalidSql(format!(
+                    "restore index {from} disappeared"
+                )));
+            }
+            super::recycle_bin_journal::stage("restore_index");
+        }
         let db = self.db_mut()?;
         save_schema(db, &schema)?;
+        super::recycle_bin_journal::stage("restore_schema");
         for grant in &entry.grants {
             let mut grant = grant.clone();
             grant.object_name = target.to_string();
@@ -514,14 +549,20 @@ impl<'db> SqlSession<'db> {
         for sequence in &sequences {
             save_sequence(db, sequence)?;
         }
+        super::recycle_bin_journal::stage("restore_dependents");
         delete_recycle_bin_entry(db, &entry.bin_name)?;
+        super::recycle_bin_journal::stage("restore_entry");
+        if let Some((id, sequence)) = &journal {
+            super::recycle_bin_journal::decide(self, id, *sequence)?;
+            super::recycle_bin_journal::stage("restore_decision");
+        }
         if undo {
             // The caller already rolled back the outer transaction/mark and
             // released its pending intent-delete lock before DDL restoration.
             super::recycle_bin_journal::clear_if_present(self.db_mut()?, &entry.bin_name)?;
         }
         sql_index_definitions_cache_clear();
-        Ok(())
+        Ok(journal.map(|(id, _)| id))
     }
 
     fn purge_recycle_bin_entry(&mut self, entry: &RecycleBinEntry) -> Result<()> {

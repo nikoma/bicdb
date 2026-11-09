@@ -2062,8 +2062,7 @@ pub(crate) enum DdlUndo {
     },
     /// Undo of FLASHBACK TABLE ... TO BEFORE DROP.
     ReturnToRecycleBin {
-        entry: Box<recycle_bin::RecycleBinEntry>,
-        target: String,
+        intent_id: String,
     },
     DeleteDefaultPrivilege {
         grant: DefaultPrivilegeGrant,
@@ -4643,15 +4642,8 @@ impl<'db> SqlSession<'db> {
                     self.restore_from_recycle_bin_undo(&entry, &target)?;
                 }
             }
-            DdlUndo::ReturnToRecycleBin { entry, target } => {
-                if let Some(schema) = load_schema(self.db_ref(), &target)? {
-                    let moved = self.move_table_to_recycle_bin(&target, &schema)?;
-                    debug_assert!(
-                        moved,
-                        "{} restored from the bin can return to it",
-                        entry.bin_name
-                    );
-                }
+            DdlUndo::ReturnToRecycleBin { intent_id } => {
+                recycle_bin_journal::undo_restore(self, &intent_id)?;
             }
             DdlUndo::DeleteDefaultPrivilege { grant } => {
                 delete_default_privilege(self.db_mut()?, &grant)?;

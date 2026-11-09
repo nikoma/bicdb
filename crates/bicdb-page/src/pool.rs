@@ -2914,6 +2914,15 @@ impl BufferPool {
         out
     }
 
+    /// Test fixtures that inspect dirtied IDs simulate successful image logging.
+    /// Production callers must sync the images before acknowledging their epochs.
+    #[cfg(test)]
+    pub(crate) fn acknowledge_log_images_for_test(&self) -> Vec<PageId> {
+        let pages = self.pages_needing_log();
+        self.mark_logged(&pages);
+        pages.into_iter().map(|(page, _)| page).collect()
+    }
+
     /// Pages modified since their last log record, each with its
     /// modification count. The flags are NOT cleared: the caller logs each
     /// page's image, makes its commit record at least appended, and only then

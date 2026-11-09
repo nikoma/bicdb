@@ -1294,7 +1294,7 @@ mod tests {
     }
 
     fn heap_pages_needing_log(pool: &BufferPool) -> Vec<PageId> {
-        pool.take_pages_needing_log()
+        pool.acknowledge_log_images_for_test()
             .into_iter()
             .filter(|page| page_type_of(pool, *page) == Some(PageType::Heap))
             .collect()
@@ -1312,7 +1312,7 @@ mod tests {
         }
         let full_pages = heap.page_ids();
         assert!(full_pages.len() >= 10, "want many full pages");
-        pool.take_pages_needing_log();
+        pool.acknowledge_log_images_for_test();
         pool.flush_all().unwrap();
         assert!(pool.dirty_page_ids().is_empty());
 
@@ -1350,9 +1350,12 @@ mod tests {
         for index in 0..60 {
             heap.insert(&payload(900, index as u8)).unwrap();
         }
-        heap.pool.take_pages_needing_log();
+        heap.pool.acknowledge_log_images_for_test();
         let placed = heap.insert(&payload(950, 7)).unwrap();
-        assert_eq!(heap.pool.take_pages_needing_log(), vec![placed.page_id]);
+        assert_eq!(
+            heap.pool.acknowledge_log_images_for_test(),
+            vec![placed.page_id]
+        );
     }
 
     #[test]
@@ -1379,11 +1382,14 @@ mod tests {
 
         // Three dead slots remain, one still carrying 900 bytes of length
         // that the compaction already returned.
-        heap.pool.take_pages_needing_log();
+        heap.pool.acknowledge_log_images_for_test();
         let placed = heap.insert(&payload(900, 6)).unwrap();
         assert_ne!(placed.page_id, page);
         assert_eq!(heap.snapshot().compactions, 1, "a useless compaction ran");
-        assert_eq!(heap.pool.take_pages_needing_log(), vec![placed.page_id]);
+        assert_eq!(
+            heap.pool.acknowledge_log_images_for_test(),
+            vec![placed.page_id]
+        );
     }
 
     #[test]
@@ -1399,13 +1405,13 @@ mod tests {
         catalog.repair_free_space_entry(page, real, None).unwrap();
         catalog.record_free_space(page, None, 4000, 4000).unwrap();
         assert!(catalog.recorded_bucket(page, 4000).unwrap().unwrap() > real);
-        pool.take_pages_needing_log();
+        pool.acknowledge_log_images_for_test();
 
         // 900 bytes do not fit the ~400 the page really has.
         let placed = heap.insert(&payload(900, 2)).unwrap();
         assert_ne!(placed.page_id, page);
         assert!(
-            !pool.take_pages_needing_log().contains(&page),
+            !pool.acknowledge_log_images_for_test().contains(&page),
             "the over-claimed page was written although nothing fit"
         );
         assert_eq!(heap.snapshot().stale_free_space_entries, 1);
@@ -1437,11 +1443,11 @@ mod tests {
             .unwrap();
         pool.flush_all().unwrap();
         let before = pool.get(foreign).unwrap().bytes().to_vec();
-        pool.take_pages_needing_log();
+        pool.acknowledge_log_images_for_test();
 
         let placed = heap.insert(&payload(900, 9)).unwrap();
         assert_ne!(placed.page_id, foreign);
-        assert!(!pool.take_pages_needing_log().contains(&foreign));
+        assert!(!pool.acknowledge_log_images_for_test().contains(&foreign));
         assert_eq!(pool.get(foreign).unwrap().bytes(), &before[..]);
         assert!(catalog.free_space_buckets(foreign).unwrap().is_empty());
         assert_eq!(heap.snapshot().non_heap_free_space_records, 1);

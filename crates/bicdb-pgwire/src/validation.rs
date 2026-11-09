@@ -4144,7 +4144,7 @@ fn exclusive_primary_upsert_releases_writer_for_owner_commit() {
         if let Ok(result) = received.try_recv() {
             break Some(result);
         }
-        if server.db.try_read().is_none() {
+        if server.db.is_locked_exclusive() {
             break None;
         }
         assert!(Instant::now() < deadline, "exclusive attempt did not start");

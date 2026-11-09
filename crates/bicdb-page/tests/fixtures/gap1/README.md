@@ -11,8 +11,8 @@ files; each JSON separately records every original store file's size and SHA-256
 
 Reader truth was collected by the historical engine opening disposable copies,
 independently of the read-only verifier. Root witnesses also include those copies
-after historical recovery and checkpoint. Every partial-drain step is retained,
-including healthy states. The interleaved witness has 77 failing reads naming
+after historical recovery and checkpoint. All 15 partial-drain steps are retained; the historical reader classified
+all 15 as damaged. Original healthy-state conditional assertions remain in the test. The interleaved witness has 77 failing reads naming
 page 340, with zero incorrect committed values. Source-generated rows contain
 only deterministic test strings; these are not application databases.
 

@@ -1715,12 +1715,8 @@ impl<'db> SqlSession<'db> {
         }
         let key = record_column_values(record, schema, conflict_columns);
         let id = record_id_from_column_values(table, schema, &columns, &key)?;
-        let grant = self.signed_mutation_grant(table);
         let tx = self.tx.as_mut().expect("checked transaction");
-        let refreshed = match grant {
-            Some(grant) => tx.read_committed_update_record_with_grant(grant, table, &id)?,
-            None => tx.read_committed_update_record(table, &id)?,
-        };
+        let refreshed = tx.read_committed_update_record(table, &id)?;
         let Some((latest, snapshot)) = refreshed else {
             return Ok(None);
         };

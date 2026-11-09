@@ -119,7 +119,7 @@ fn direct_deferred_drain_refreshes_policy_results_between_trigger_calls() {
         let mut db = BicDb::open_with_config(
             root.path(),
             bicdb_core::DbConfig::default()
-                .with_storage_mode(mode)
+                .with_storage_mode(mode.clone())
                 .with_fsync(false),
         )
         .unwrap();

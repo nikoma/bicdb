@@ -32,6 +32,7 @@ fn reopened_paged_count_avoids_payload_materialization() {
     let dir = seeded();
     let db = BicDb::open_with_config(dir.path(), config(2 * 1024 * 1024)).unwrap();
     let tx = db.begin_transaction().unwrap();
+    let before = db.paged_storage_snapshot().unwrap().unwrap();
     let scope = bicdb_core::query_budget::QueryMemoryScope::new(64 * 1024);
     assert_eq!(
         tx.try_count_collection_visible_cancellable("rows", &CancellationToken::default())
@@ -39,6 +40,16 @@ fn reopened_paged_count_avoids_payload_materialization() {
         Some(128)
     );
     assert!(scope.peak_bytes() < 64 * 1024);
+    let after = db.paged_storage_snapshot().unwrap().unwrap();
+    let read_bytes = after
+        .buffer_pool
+        .misses
+        .saturating_sub(before.buffer_pool.misses)
+        .saturating_mul(u64::from(after.page_size));
+    assert!(
+        read_bytes < 2 * 1024 * 1024,
+        "count read {read_bytes} bytes instead of bounded headers for 4MiB of payloads"
+    );
     drop(scope);
     let _scope = bicdb_core::query_budget::QueryMemoryScope::new(64 * 1024);
     assert!(

@@ -1,0 +1,27 @@
+{
+  "label": "be",
+  "mode": "strace",
+  "server_env_extra": {
+    "BICDB_COMMIT_DURABILITY": "transaction-log",
+    "BICDB_PAGED_WAL_SYNC_UNLOCKED": "1"
+  },
+  "n": 100,
+  "startup_s": 3.5,
+  "update": {
+    "commit_ms_p50": 16.6,
+    "p95": 24.83,
+    "p99": 28.21,
+    "max": 28.23,
+    "mean": 16.36,
+    "exec_ms_p50": 1.77
+  },
+  "insert": {
+    "commit_ms_p50": 17.28,
+    "p95": 29.68,
+    "p99": 36.79,
+    "max": 36.83,
+    "mean": 18.58,
+    "exec_ms_p50": 1.02
+  },
+  "database_removed": true
+}

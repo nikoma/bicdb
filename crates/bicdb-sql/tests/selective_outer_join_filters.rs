@@ -108,3 +108,30 @@ fn nullable_right_where_filter_stays_after_left_join_matching() {
     session.execute("CREATE TABLE left_filter_l(id INT); CREATE TABLE left_filter_r(id INT,v TEXT); INSERT INTO left_filter_l VALUES(1),(2); INSERT INTO left_filter_r VALUES(1,'present')").unwrap();
     assert_eq!(session.execute("SELECT l.id FROM left_filter_l l LEFT JOIN left_filter_r r ON l.id=r.id WHERE r.v IS NULL").unwrap().rows,vec![vec![SqlValue::Int(2)]]);
 }
+
+#[test]
+fn quoted_case_distinct_alias_does_not_push_nullable_predicate_into_the_base() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE alias_left_probe(id INT); CREATE TABLE alias_right_probe(id INT)")
+        .unwrap();
+    let left = session
+        .execute("SELECT oid FROM pg_catalog.pg_class WHERE relname='alias_left_probe'")
+        .unwrap()
+        .rows[0][0]
+        .to_cell();
+    let right = session
+        .execute("SELECT oid FROM pg_catalog.pg_class WHERE relname='alias_right_probe'")
+        .unwrap()
+        .rows[0][0]
+        .to_cell();
+    let query = format!(
+        r#"SELECT "c".oid FROM pg_catalog.pg_class "c" LEFT JOIN (SELECT {right} AS oid) "C" ON "c".oid="C".oid WHERE "c".oid IN ({left},{right}) AND "C".oid IS NULL"#
+    );
+    assert_eq!(
+        session.execute(&query).unwrap().rows,
+        vec![vec![SqlValue::Int(left.parse().unwrap())]]
+    );
+}

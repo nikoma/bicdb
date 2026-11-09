@@ -4,6 +4,43 @@ use super::*;
 #[allow(unused_imports)]
 use crate::*;
 
+// Keep callback-bearing expressions (including custom operators and casts)
+// after the join. This small pure subset covers selective catalog keys without
+// changing how often a function or domain check runs.
+fn simple_virtual_base_filter(expr: &Expr) -> bool {
+    fn operand(expr: &Expr) -> bool {
+        matches!(
+            unwrap_nested_expr(expr),
+            Expr::Identifier(_) | Expr::CompoundIdentifier(_) | Expr::Value(_)
+        )
+    }
+    match unwrap_nested_expr(expr) {
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::And | BinaryOperator::Or,
+            right,
+        } => simple_virtual_base_filter(left) && simple_virtual_base_filter(right),
+        Expr::BinaryOp {
+            left,
+            op:
+                BinaryOperator::Eq
+                | BinaryOperator::NotEq
+                | BinaryOperator::Lt
+                | BinaryOperator::LtEq
+                | BinaryOperator::Gt
+                | BinaryOperator::GtEq,
+            right,
+        } => operand(left) && operand(right),
+        Expr::IsNull(expr) | Expr::IsNotNull(expr) => operand(expr),
+        Expr::InList { expr, list, .. } => operand(expr) && list.iter().all(operand),
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            expr,
+        } => simple_virtual_base_filter(expr),
+        _ => false,
+    }
+}
+
 impl<'db> SqlEngine<'db> {
     pub(crate) fn pg_dump_extension_fk_dependency_query(
         &self,
@@ -1267,7 +1304,9 @@ impl<'db> SqlEngine<'db> {
                 .collect::<BTreeSet<_>>();
             let mut pushdown = None;
             for term in and_terms(selection) {
-                if !predicate_references_only_columns(term, &columns) {
+                if !simple_virtual_base_filter(term)
+                    || !predicate_references_only_columns(term, &columns)
+                {
                     continue;
                 }
                 pushdown = Some(match pushdown {

@@ -58,6 +58,8 @@ fn selective_virtual_base_filter_limits_catalog_join_work_with_a_left_join() {
         );
         assert_eq!(row[3].to_cell(), "catalog_budget_0");
         assert_eq!(row[4].to_cell(), "public");
+        assert_eq!(row[5], SqlValue::Bool(index == 0));
+        assert_eq!(row[6], SqlValue::Null);
     }
     assert!(memory.peak_bytes() <= limit);
 }

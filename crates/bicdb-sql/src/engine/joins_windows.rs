@@ -3469,3 +3469,118 @@ impl<'db> SqlEngine<'db> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod join_envelope_path_tests {
+    use super::*;
+    use bicdb_core::query_budget::QueryMemoryScope;
+
+    fn join(sql: &str) -> (TableFactor, JoinConstraint) {
+        let Statement::Query(query) = crate::parse_statements(sql).unwrap().remove(0) else {
+            panic!("query");
+        };
+        let SetExpr::Select(select) = query.body.as_ref() else {
+            panic!("select");
+        };
+        let join = &select.from[0].joins[0];
+        let JoinOperator::Inner(constraint) = &join.join_operator else {
+            panic!("inner");
+        };
+        (join.relation.clone(), constraint.clone())
+    }
+
+    #[test]
+    fn spatial_tree_join_enforces_budget_on_its_own_retained_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let db =
+            BicDb::open_with_config(dir.path(), DbConfig::default().with_fsync(false)).unwrap();
+        let engine = SqlEngine::new(&db);
+        let left = RowSet {
+            columns: vec!["a.geom".into(), "a.payload".into()],
+            rows: (0..12)
+                .map(|_| {
+                    vec![
+                        SqlValue::String("POINT (0 0)".into()),
+                        SqlValue::String("x".repeat(2048)),
+                    ]
+                })
+                .collect(),
+        };
+        let right = RowSet {
+            columns: vec!["b.geom".into(), "b.payload".into()],
+            rows: (0..12)
+                .map(|_| {
+                    vec![
+                        SqlValue::String("POINT (0 0)".into()),
+                        SqlValue::String("y".repeat(2048)),
+                    ]
+                })
+                .collect(),
+        };
+        let (_, constraint) = join("SELECT * FROM a JOIN b ON ST_Intersects(a.geom,b.geom)");
+        {
+            let _scope = crate::join_budget::Scope::enter();
+            let _memory = QueryMemoryScope::new(4 * 1024 * 1024);
+            let result = engine
+                .apply_spatial_tree_join(&left, &right, RowJoinKind::Inner, &constraint)
+                .unwrap()
+                .expect("spatial optimization must apply");
+            assert_eq!(result.rows.len(), 144);
+        }
+        {
+            let _scope = crate::join_budget::Scope::enter();
+            let memory = QueryMemoryScope::new(64 * 1024);
+            let error = engine
+                .apply_spatial_tree_join(&left, &right, RowJoinKind::Inner, &constraint)
+                .unwrap_err();
+            assert_eq!(error.sqlstate(), "53200");
+            assert!(memory.peak_bytes() <= 64 * 1024 + 16 * 1024);
+        }
+    }
+
+    #[test]
+    fn primary_lookup_transfer_join_bounds_repeated_owned_right_values() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db =
+            BicDb::open_with_config(dir.path(), DbConfig::default().with_fsync(false)).unwrap();
+        SqlSession::new(&mut db).execute("CREATE TABLE budget_right(id INT PRIMARY KEY,payload TEXT); INSERT INTO budget_right VALUES(1,repeat('x',4096))").unwrap();
+        let engine = SqlEngine::new(&db);
+        let left = RowSet {
+            columns: vec!["l.id".into(), "l.fk".into()],
+            rows: (0..100)
+                .map(|id| vec![SqlValue::Int(id), SqlValue::Int(1)])
+                .collect(),
+        };
+        let (right, constraint) = join("SELECT * FROM l JOIN budget_right r ON l.fk=r.id");
+        {
+            let _scope = crate::join_budget::Scope::enter();
+            let _memory = QueryMemoryScope::new(4 * 1024 * 1024);
+            let result = engine
+                .apply_indexed_right_table_join(
+                    &mut left.clone(),
+                    &right,
+                    RowJoinKind::Inner,
+                    &constraint,
+                    None,
+                )
+                .unwrap()
+                .expect("indexed optimization must apply");
+            assert_eq!(result.rows.len(), 100);
+        }
+        {
+            let _scope = crate::join_budget::Scope::enter();
+            let memory = QueryMemoryScope::new(64 * 1024);
+            let error = engine
+                .apply_indexed_right_table_join(
+                    &mut left.clone(),
+                    &right,
+                    RowJoinKind::Inner,
+                    &constraint,
+                    None,
+                )
+                .unwrap_err();
+            assert_eq!(error.sqlstate(), "53200");
+            assert!(memory.peak_bytes() <= 64 * 1024 + 32 * 1024);
+        }
+    }
+}

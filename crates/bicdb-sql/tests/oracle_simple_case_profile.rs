@@ -55,14 +55,17 @@ fn legacy_oracle_profile_migrates_case_indexes_before_sql_is_served() {
                 .execute("SELECT id FROM case_rows WHERE upper(v)='É' ORDER BY id")
                 .unwrap()
                 .rows,
-            vec![vec![SqlValue::Integer(1)], vec![SqlValue::Integer(2)]]
+            vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(2)]]
         );
         let index = db
             .index_definitions()
             .into_iter()
             .find(|d| d.name.ends_with("case_upper"))
             .unwrap();
-        assert!(index.uses_oracle_simple_case_v1());
+        assert!(matches!(
+            &index.fields[0],
+            bicdb_core::IndexField::OracleUpperV1(_)
+        ));
         assert!(db.verify_index(&index.name).unwrap().valid);
         db.flush().unwrap();
         drop(db);
@@ -73,7 +76,7 @@ fn legacy_oracle_profile_migrates_case_indexes_before_sql_is_served() {
                 .execute("SELECT count(*) FROM case_rows WHERE upper(v)='É'")
                 .unwrap()
                 .rows,
-            vec![vec![SqlValue::Integer(2)]]
+            vec![vec![SqlValue::Int(2)]]
         );
     }
 }

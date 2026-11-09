@@ -59,6 +59,16 @@ pub fn recover_interrupted_recycle_bin_renames(db: &mut BicDb) -> Result<usize> 
     result
 }
 
+/// Finish only durably decided purges while the host owns exclusive catalog
+/// access. Unlike startup recovery, this never reverses a live move intent.
+/// Native committers call it after their transaction is durable and released.
+pub fn finish_committed_recycle_bin_purges(db: &mut BicDb) -> Result<usize> {
+    db.check_recovery_state()?;
+    let result = super::recycle_bin_journal::recover_purges(db);
+    db.check_recovery_state()?;
+    result
+}
+
 fn recover_interrupted_recycle_bin_renames_inner(db: &mut BicDb) -> Result<usize> {
     db.check_catalog_recovery_quiescent()?;
     let journal_repairs = super::recycle_bin_journal::recover(db)?;

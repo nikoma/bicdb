@@ -2,7 +2,8 @@
 //! These phase cuts preserve data and native indexes; no generic orphan prune.
 use bicdb_core::{BicDb, DbConfig, Record, StorageMode};
 use bicdb_sql::{
-    ensure_primary_key_indexes, recover_interrupted_recycle_bin_renames, SqlSession, SqlValue,
+    ensure_primary_key_indexes, finish_committed_recycle_bin_purges,
+    recover_interrupted_recycle_bin_renames, SqlSession, SqlValue,
 };
 fn config(mode: StorageMode) -> DbConfig {
     DbConfig::default()
@@ -138,6 +139,12 @@ fn recovery_fence_wins_even_when_no_repair_is_needed() {
             .record_failure("test.sql_catalog_recovery", &"injected");
         assert!(matches!(
             recover_interrupted_recycle_bin_renames(&mut db),
+            Err(bicdb_sql::SqlError::BicDb(
+                bicdb_core::BicDbError::WriteFailed { .. }
+            ))
+        ));
+        assert!(matches!(
+            finish_committed_recycle_bin_purges(&mut db),
             Err(bicdb_sql::SqlError::BicDb(
                 bicdb_core::BicDbError::WriteFailed { .. }
             ))

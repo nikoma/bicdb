@@ -3,8 +3,8 @@
     "CREATE TYPE audit_mood AS ENUM ('z', 'a')",
     "CREATE DOMAIN audit_label AS text",
     "CREATE DOMAIN audit_number AS numeric CHECK (VALUE >= 0)",
-    "CREATE TABLE audit_b (id int PRIMARY KEY, i int, n numeric, d date, t timestamp, a int[], m audit_mood, label audit_label, dn audit_number, c text COLLATE \"C\", e text COLLATE \"en-x-icu\", \"K\" numeric, k float8)",
-    "INSERT INTO audit_b VALUES (1,1,2.00,'2002-07-04','2002-07-04 00:00:00',ARRAY[1,2],'z','ok',2.00,'a','Z',9007199254740993,9007199254740992),(2,NULL,NULL,NULL,NULL,ARRAY[NULL]::int[],'a',NULL,NULL,'Z','a',NULL,NULL)",
+    "CREATE TABLE audit_b (id int PRIMARY KEY, i int, n numeric, d date, t timestamp, a int[], m audit_mood, label audit_label, dn audit_number, c text COLLATE \"C\", e text COLLATE \"en-x-icu\", \"K\" numeric, k float8, \"P\" char(4), p text)",
+    "INSERT INTO audit_b VALUES (1,1,2.00,'2002-07-04','2002-07-04 00:00:00',ARRAY[1,2],'z','ok',2.00,'a','Z',9007199254740993,9007199254740992,'ab','ab '),(2,NULL,NULL,NULL,NULL,ARRAY[NULL]::int[],'a',NULL,NULL,'Z','a',NULL,NULL,NULL,NULL)",
     "CREATE VIEW audit_case_view AS SELECT \"K\",k FROM audit_b WHERE id=1",
     "CREATE FUNCTION audit_rec() RETURNS text LANGUAGE plpgsql AS $$DECLARE r record; BEGIN FOR r IN SELECT \"K\",k FROM audit_b WHERE id=1 LOOP RETURN (r.\"K\" = r.k)::text; END LOOP; RETURN 'none'; END$$",
     "CREATE SCHEMA audit_s1",
@@ -357,6 +357,85 @@
     {
       "label": "quoted_routine",
       "sql": "SELECT audit_rec()",
+      "rows": [
+        [
+          "true"
+        ]
+      ]
+    },
+    {
+      "label": "quoted_padded_base",
+      "sql": "SELECT \"P\"=p FROM audit_b WHERE id=1",
+      "rows": [
+        [
+          "false"
+        ]
+      ]
+    },
+    {
+      "label": "quoted_padded_derived",
+      "sql": "SELECT q.\"P\"=q.p FROM (SELECT \"P\",p FROM audit_b WHERE id=1) q",
+      "rows": [
+        [
+          "false"
+        ]
+      ]
+    },
+    {
+      "label": "quoted_padded_cte",
+      "sql": "WITH q AS (SELECT \"P\",p FROM audit_b WHERE id=1) SELECT q.\"P\"=q.p FROM q",
+      "rows": [
+        [
+          "false"
+        ]
+      ]
+    },
+    {
+      "label": "quoted_padded_case",
+      "sql": "SELECT CASE WHEN q.\"P\"=q.p THEN 1 ELSE 0 END FROM (SELECT \"P\",p FROM audit_b WHERE id=1) q",
+      "rows": [
+        [
+          "0"
+        ]
+      ]
+    },
+    {
+      "label": "quoted_padded_unquoted_fold",
+      "sql": "SELECT q.P=q.p FROM (SELECT \"P\",p FROM audit_b WHERE id=1) q",
+      "rows": [
+        [
+          "true"
+        ]
+      ]
+    },
+    {
+      "label": "internal_char_space",
+      "sql": "SELECT ' '::\"char\"=''::\"char\", 'a'::\"char\"='a'::\"char\", 'a'::\"char\"='a'::text",
+      "rows": [
+        [
+          "false",
+          "true",
+          "true"
+        ]
+      ]
+    },
+    {
+      "label": "internal_char_case",
+      "sql": "SELECT CASE c WHEN 'a' THEN 'yes' ELSE 'no' END FROM (SELECT 'a'::\"char\" AS c) q",
+      "rows": [
+        [
+          "yes"
+        ]
+      ]
+    },
+    {
+      "label": "query_error_cleanup",
+      "sql": "SELECT 'bad'::int FROM (SELECT 'a' AS a,'b' AS b) q",
+      "sqlstate": "22P02"
+    },
+    {
+      "label": "query_after_error",
+      "sql": "SELECT q.a=q.b FROM (SELECT date '2002-07-04' AS a,timestamp '2002-07-04 00:00:00' AS b) q",
       "rows": [
         [
           "true"

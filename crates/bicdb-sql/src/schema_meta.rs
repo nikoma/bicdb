@@ -4669,6 +4669,24 @@ pub(crate) struct RoutineCacheEntry {
     pub(crate) procedure: Option<Option<CachedRoutine>>,
 }
 
+// Keep field identities separate from scalar-variable type keys. A quoted
+// field may contain dots or differ from another field only by letter case.
+fn routine_record_field_type_prefix(target: &str) -> String {
+    format!(
+        "\0bicdb:record-field-type:{}:",
+        serde_json::to_string(&normalized_object_name_ref(target).to_ascii_lowercase())
+            .expect("identifier JSON")
+    )
+}
+
+pub(crate) fn routine_record_field_type_key(target: &str, column: &str) -> String {
+    format!(
+        "{}{}",
+        routine_record_field_type_prefix(target),
+        serde_json::to_string(column).expect("column JSON")
+    )
+}
+
 impl RoutineFrame {
     #[allow(dead_code)]
     pub(crate) fn new(params: &[RoutineParam], args: &[SqlValue]) -> Result<Self> {
@@ -4780,23 +4798,20 @@ impl RoutineFrame {
 
     /// A record loop variable's fields take the types of the query's
     /// columns (`rec.field` compares as its column's type, not as text).
-    /// Recorded under `rec.field` beside the declared variable types.
+    /// Field keys retain quoted identity separately from scalar variable names.
     pub(crate) fn set_record_field_types(
         &mut self,
         target: &str,
         columns: &[String],
         types: &[Option<String>],
     ) {
-        let prefix = format!(
-            "{}.",
-            normalized_object_name_ref(target).to_ascii_lowercase()
-        );
+        let prefix = routine_record_field_type_prefix(target);
         let fields = columns
             .iter()
             .zip(types)
             .filter_map(|(column, pg_type)| {
                 Some((
-                    format!("{prefix}{}", column.to_ascii_lowercase()),
+                    routine_record_field_type_key(target, column),
                     pg_type.as_ref()?.clone(),
                 ))
             })

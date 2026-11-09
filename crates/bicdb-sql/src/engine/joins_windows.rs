@@ -3420,15 +3420,12 @@ impl<'db> SqlEngine<'db> {
     }
 
     pub(crate) fn slot_column_type(&self, column: &str) -> Option<String> {
-        let (qualifier, name) = column.rsplit_once('.')?;
-        if let Some(found) = crate::slot_types::lookup(qualifier, name) {
+        if let Some(found) = crate::slot_types::lookup_key(column) {
             return found;
         }
+        let (qualifier, name) = column.rsplit_once('.')?;
         if let Some(cte) = self.cte(qualifier) {
-            let index = cte
-                .columns
-                .iter()
-                .position(|candidate| candidate.eq_ignore_ascii_case(name))?;
+            let index = cte.columns.iter().position(|candidate| candidate == name)?;
             return cte.column_type(index);
         }
         let schema = load_schema_shared(self.db_ref(), qualifier)

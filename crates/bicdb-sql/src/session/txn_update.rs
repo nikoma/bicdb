@@ -2637,14 +2637,13 @@ impl<'db> SqlSession<'db> {
 
     fn routine_unary_operand_type(&self, expr: &Expr) -> Option<String> {
         if let Expr::CompoundIdentifier(idents) = expr {
-            // A record field (`rec.field`), typed by the record's query.
-            let key = idents
-                .iter()
-                .map(|ident| ident.value.to_ascii_lowercase())
-                .collect::<Vec<_>>()
-                .join(".");
-            if let Some(schema) = self.routine_slots.as_ref()?.types.get(&key) {
-                return Some(schema.pg_type.clone());
+            // Query results register flat record fields. Nested JSON paths
+            // retain their own evaluator and cannot capture a dotted field.
+            if let [target, column] = idents.as_slice() {
+                let key = routine_record_field_type_key(&target.value, &ident_value(column));
+                if let Some(schema) = self.routine_slots.as_ref()?.types.get(&key) {
+                    return Some(schema.pg_type.clone());
+                }
             }
         }
         let name = match expr {

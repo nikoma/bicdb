@@ -9223,13 +9223,23 @@ fn reused_record_field_types_replace_the_previous_projection() {
         &["d".into(), "old".into()],
         &[Some("date".into()), Some("int4".into())],
     );
-    assert_eq!(frame.assignment_types["r.d"].pg_type, "date");
+    assert_eq!(
+        frame.assignment_types[&routine_record_field_type_key("r", "d")].pg_type,
+        "date"
+    );
     frame.set_record_field_types(
         "r",
         &["d".into(), "new".into()],
         &[None, Some("text".into())],
     );
-    assert!(!frame.assignment_types.contains_key("r.d"));
-    assert!(!frame.assignment_types.contains_key("r.old"));
-    assert_eq!(frame.assignment_types["r.new"].pg_type, "text");
+    assert!(!frame
+        .assignment_types
+        .contains_key(&routine_record_field_type_key("r", "d")));
+    assert!(!frame
+        .assignment_types
+        .contains_key(&routine_record_field_type_key("r", "old")));
+    assert_eq!(
+        frame.assignment_types[&routine_record_field_type_key("r", "new")].pg_type,
+        "text"
+    );
 }

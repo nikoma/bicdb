@@ -40,7 +40,7 @@ impl RelationTypes {
             }),
             Self::Columns(columns) => columns
                 .iter()
-                .find(|(name, _)| name.eq_ignore_ascii_case(column))
+                .find(|(name, _)| name == column)
                 .map(|(_, pg_type)| pg_type.clone()),
         }
     }
@@ -132,6 +132,12 @@ pub(crate) fn lookup(qualifier: &str, column: &str) -> Option<Option<String>> {
 
 /// `lookup` for a slot column key (`qualifier.column`).
 pub(crate) fn lookup_key(key: &str) -> Option<Option<String>> {
-    let (qualifier, column) = key.rsplit_once('.')?;
-    lookup(qualifier, column)
+    // A quoted column name can itself contain dots. Try registered relation
+    // qualifiers before interpreting a dot inside the column as a boundary.
+    for (index, _) in key.match_indices('.').rev() {
+        if let Some(found) = lookup(&key[..index], &key[index + 1..]) {
+            return Some(found);
+        }
+    }
+    None
 }

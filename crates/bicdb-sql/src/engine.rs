@@ -3704,20 +3704,18 @@ pub(crate) fn full_text_index_expression_matches(stored: &str, query: &Expr) -> 
 fn registered_column_expr_type(expr: &Expr, columns: &[&str]) -> Option<Option<String>> {
     match expr {
         Expr::CompoundIdentifier(idents) if idents.len() >= 2 => {
-            let qualifier = &idents[idents.len() - 2].value;
-            let column = &idents[idents.len() - 1].value;
-            crate::slot_types::lookup(qualifier, column)
+            let qualifier = ident_value(&idents[idents.len() - 2]);
+            let column = ident_value(&idents[idents.len() - 1]);
+            crate::slot_types::lookup(&qualifier, &column)
         }
         Expr::Identifier(ident) => {
             let mut found: Option<Option<String>> = None;
+            let suffix = format!(".{}", ident_value(ident));
             for key in columns {
-                let Some((qualifier, name)) = key.rsplit_once('.') else {
-                    continue;
-                };
-                if !name.eq_ignore_ascii_case(&ident.value) {
+                if !key.ends_with(&suffix) {
                     continue;
                 }
-                let registered = crate::slot_types::lookup(qualifier, name)?;
+                let registered = crate::slot_types::lookup_key(key)?;
                 found = Some(match found {
                     None => registered,
                     Some(previous) if previous == registered => previous,

@@ -67,7 +67,10 @@ ignores across all 224 targets. All 36 failures came from unconditional exclusiv
 purge cleanup on shared COMMIT; its library alone had 807 passes and 11 failures. The correction restricts physical reclamation to exclusive sessions;
 the full original failing result is preserved. A new shared-COMMIT
 regression checks durable visibility, hidden purge entries and startup cleanup.
-Validation of the corrected source is still pending. Its broad result, workspace compilation, final head CI and remote merge
+Corrected source `5e3a9454` passed 959 tests across the full SQL library and nine
+integration targets, with zero failures and four existing ignores. The complete
+224-target SQL rerun is active at `c53ec0a9`; later changes here only update this
+document. Its broad result, workspace compilation, final head CI and remote merge
 are separate gates; focused results alone do not establish them. The merge order
 reserves this version after predecessor `1.0.444-beta`.
 

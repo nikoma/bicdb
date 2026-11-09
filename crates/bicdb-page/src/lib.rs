@@ -43,6 +43,7 @@ pub mod tiered_cache;
 pub mod tiered_gc;
 pub mod tiered_manifest;
 pub mod tiered_reader;
+pub mod verify_store;
 pub mod wal;
 
 pub use backup::{PageBackupLimits, PageBackupSnapshot, PageBackupStats};
@@ -58,7 +59,7 @@ pub use catalog::{Catalog, FREE_BUCKETS};
 pub use error::{PageError, Result};
 pub use health::{DurabilityHealth, DurabilityState, WriteFailure};
 pub use heap::{HeapFile, HeapOptions, HeapScan, HeapSnapshot};
-pub use lock::DirectoryLock;
+pub use lock::{probe_directory_lock, DirectoryLock, DirectoryLockProbe};
 pub use manager::{
     convert_extent_layout, repair_interrupted_relayout, ExtentMigrationReport, FaultInjection,
     FreeListTruncateReport, FreePageExtent, FreePageExtents, HolePunchReport, PageClassIoSnapshot,
@@ -116,9 +117,15 @@ pub use tiered_manifest::{
     PAGE_GENERATION_FORMAT_VERSION,
 };
 pub use tiered_reader::TieredPageReader;
+pub use verify_store::{
+    verify_store_read_only, verify_store_read_only_streaming, FindingClass, FindingClassSummary,
+    FindingSeverity, LogFacts, ReadOnlyEvidence, StaleRecordsDiscardedState, StoreFacts,
+    StoreFinding, StoreVerdict, StoreVerifyCounters, StoreVerifyOptions, StoreVerifyReport,
+    STORE_VERIFY_REPORT_FORMAT_VERSION,
+};
 pub use wal::{
-    recover, CheckpointReport, Checkpointer, Lsn, RecordKind, RecoveryReport, Wal, WalRecord,
-    WalSnapshot, MAX_WAL_RECORD_BYTES,
+    recover, CheckpointReport, Checkpointer, LogResetShape, Lsn, RecordKind, RecoveryReport, Wal,
+    WalRecord, WalSnapshot, MAX_WAL_RECORD_BYTES,
 };
 
 mod extent_tracking;

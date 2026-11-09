@@ -760,7 +760,7 @@ impl Iterator for HeapScan<'_> {
     }
 }
 
-enum Tuple<'a> {
+pub(crate) enum Tuple<'a> {
     Inline(&'a [u8]),
     Overflow { head: PageId, len: u64 },
 }
@@ -788,7 +788,7 @@ fn encode_overflow_ref(head: PageId, len: u64) -> Vec<u8> {
     tuple
 }
 
-fn decode_tuple(tuple: &[u8]) -> Result<Tuple<'_>> {
+pub(crate) fn decode_tuple(tuple: &[u8]) -> Result<Tuple<'_>> {
     match tuple.first() {
         Some(&TAG_INLINE) => Ok(Tuple::Inline(&tuple[1..])),
         Some(&TAG_OVERFLOW) if tuple.len() >= OVERFLOW_REF_BYTES => Ok(Tuple::Overflow {

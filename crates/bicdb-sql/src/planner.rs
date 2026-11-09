@@ -83,9 +83,9 @@ pub(crate) struct DeleteCandidate {
 #[derive(Debug)]
 pub(crate) struct ColumnLookups {
     pub(crate) columns: Vec<String>,
-    /// Preserve materialized column identity while retaining the existing
-    /// case-insensitive qualifier lookup. AST identifiers are folded before
-    /// lookup; quoted columns with different case must occupy different slots.
+    /// Preserve complete materialized column identity before the existing
+    /// case-insensitive fallback. Quoted aliases and columns with different
+    /// case must occupy different slots.
     case_exact: FxHashMap<String, ColumnId>,
     case_unqualified: FxHashMap<String, ColumnId>,
     case_scope_unqualified: FxHashMap<String, Option<ColumnId>>,
@@ -105,12 +105,7 @@ pub(crate) struct ColumnLookups {
 }
 
 fn case_qualified_column_key(key: &str) -> std::borrow::Cow<'_, str> {
-    match key.rsplit_once('.') {
-        Some((qualifier, column)) if qualifier.bytes().any(|byte| byte.is_ascii_uppercase()) => {
-            std::borrow::Cow::Owned(format!("{}.{}", qualifier.to_ascii_lowercase(), column))
-        }
-        _ => std::borrow::Cow::Borrowed(key),
-    }
+    std::borrow::Cow::Borrowed(key)
 }
 
 impl ColumnLookups {

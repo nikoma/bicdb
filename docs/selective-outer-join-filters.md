@@ -26,3 +26,15 @@ The integrated tests additionally assert its nullability and identity results.
 This is general predicate handling, not an application/table-name exemption or
 a larger memory allowance. The original background-job 10-second wait remains
 unchanged and requires an application rerun before any timeout-resolution claim.
+
+The broad 2f05e39f SQL run also reached an older engine test whose name explicitly
+stated that it documented the incorrect RIGHT JOIN null-extension behavior.
+Its expected extra matched row is replaced with PostgreSQL's genuinely
+unmatched row; the original failure and source remain retained. The native
+control includes that exact fixture. This does not change any application test.
+
+Early filtering must also distinguish quoted aliases such as "c" and "C".
+Virtual filter eligibility uses exact bound column spelling, and materialized
+column lookup preserves a complete exact identity before its legacy folded
+fallback. A separate LEFT JOIN control checks that a nullable-side predicate
+cannot be captured by a case-distinct base alias.

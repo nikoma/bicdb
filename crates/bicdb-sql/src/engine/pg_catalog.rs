@@ -41,6 +41,16 @@ fn simple_virtual_base_filter(expr: &Expr) -> bool {
     }
 }
 
+fn exact_virtual_base_columns(expr: &Expr, columns: &BTreeSet<String>) -> bool {
+    let mut references = Vec::new();
+    collect_predicate_column_references(expr, &mut references)
+        && !references.is_empty()
+        && references.iter().all(|parts| match parts.as_slice() {
+            [qualifier, column] => columns.contains(&format!("{qualifier}.{column}")),
+            _ => false,
+        })
+}
+
 impl<'db> SqlEngine<'db> {
     pub(crate) fn pg_dump_extension_fk_dependency_query(
         &self,
@@ -1304,8 +1314,7 @@ impl<'db> SqlEngine<'db> {
                 .collect::<BTreeSet<_>>();
             let mut pushdown = None;
             for term in and_terms(selection) {
-                if !simple_virtual_base_filter(term)
-                    || !predicate_references_only_columns(term, &columns)
+                if !simple_virtual_base_filter(term) || !exact_virtual_base_columns(term, &columns)
                 {
                     continue;
                 }

@@ -115,3 +115,23 @@ fn postgres_unknown_return_type_still_rejects_create() {
     let error=SqlSession::new(&mut db).execute("CREATE FUNCTION pg_bad_return() RETURNS compat_no_such_type LANGUAGE sql AS $$SELECT 1$$").unwrap_err();
     assert_eq!(error.sqlstate(), "42704");
 }
+
+#[test]
+fn create_or_replace_cannot_overwrite_another_owners_function() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE ROLE routine_attacker; GRANT CREATE ON SCHEMA public TO routine_attacker; CREATE FUNCTION owned_function() RETURNS INT LANGUAGE sql AS $$SELECT 1$$").unwrap();
+    sql.execute("SET ROLE routine_attacker").unwrap();
+    let error = sql
+        .execute(
+            "CREATE OR REPLACE FUNCTION owned_function() RETURNS INT LANGUAGE sql AS $$SELECT 2$$",
+        )
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42501");
+    sql.execute("RESET ROLE").unwrap();
+    assert_eq!(
+        sql.execute("SELECT owned_function()").unwrap().rows,
+        vec![vec![SqlValue::Int(1)]]
+    );
+}

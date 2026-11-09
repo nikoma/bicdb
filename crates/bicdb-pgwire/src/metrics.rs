@@ -92,7 +92,7 @@ impl Exposition {
     }
 }
 
-fn render(server: &Arc<PgWireServer>) -> Result<String> {
+pub(crate) fn render(server: &Arc<PgWireServer>) -> Result<String> {
     let mut out = Exposition(String::new());
     for (name, value) in backups::metric_values(server) {
         out.gauge(
@@ -185,6 +185,148 @@ fn render(server: &Arc<PgWireServer>) -> Result<String> {
                 failure.at_unix_millis / 1000,
             );
         }
+    }
+    {
+        // Archivers (docs/durability-failure-handling.md, section 7.5). An
+        // archive failure leaves the database writable but stops archiving;
+        // the local logs it would have released are retained.
+        let status = server.log_archive_status.lock().unwrap().clone();
+        out.gauge(
+            "bicdb_log_archive_enabled",
+            "The commit log archiver is configured.",
+            u8::from(status.enabled),
+        );
+        out.gauge(
+            "bicdb_log_archive_failed",
+            "The commit log archiver stopped after a failed write or sync; the transaction log \
+             is retained until a new archive handle rewrites the unconfirmed suffix.",
+            u8::from(status.failure.is_some()),
+        );
+        out.gauge(
+            "bicdb_log_archive_archived_commit_seq",
+            "Last commit confirmed durable in the commit log archive.",
+            status.archived_commit_seq,
+        );
+        out.counter(
+            "bicdb_log_archive_failures_total",
+            "Commit log archive handles stopped by a failed write or sync.",
+            status.failures_total,
+        );
+        out.counter(
+            "bicdb_log_archive_recoveries_total",
+            "New commit log archive handles that resumed after a failure.",
+            status.recoveries_total,
+        );
+        out.metric(
+            "bicdb_log_archive_failed_timestamp_seconds",
+            "gauge",
+            "Time of the failure that stopped the commit log archiver, labelled by site.",
+        );
+        if let Some(failure) = &status.failure {
+            out.sample(
+                "bicdb_log_archive_failed_timestamp_seconds",
+                &[("site", failure.site.as_str())],
+                failure.at_unix_millis / 1000,
+            );
+        }
+        let wal = server.read_db()?.wal_archive_status();
+        out.gauge(
+            "bicdb_wal_archive_failed",
+            "The page-log archiver failed on this handle; sealed segments stay local until a \
+             reopened handle archives them again.",
+            u8::from(wal.as_ref().is_some_and(|wal| wal.failure.is_some())),
+        );
+        let guard = status.guard.clone().unwrap_or_default();
+        out.gauge(
+            "bicdb_archive_alert_level",
+            "Archive alert level: 0 ok, 1 warning, 2 critical (failure duration, retained \
+             bytes, free space, failed verification).",
+            guard.level as u8,
+        );
+        out.gauge(
+            "bicdb_archive_backpressure",
+            "Write backpressure for a failed or lagging archive: 0 none, 1 throttle, 2 refuse \
+             (SQLSTATE 53100).",
+            server.read_db()?.archive_backpressure() as u8,
+        );
+        out.gauge(
+            "bicdb_archive_retained_bytes",
+            "Local bytes retained only for the archives (unarchived page-log segments and the \
+             held transaction log).",
+            guard.retained_bytes,
+        );
+        out.gauge(
+            "bicdb_archive_failure_seconds",
+            "How long an archiver has been failed; zero while healthy.",
+            guard.failure_seconds,
+        );
+        out.metric(
+            "bicdb_volume_free_bytes",
+            "gauge",
+            "Free bytes on the data volume and each archive volume.",
+        );
+        out.metric(
+            "bicdb_volume_total_bytes",
+            "gauge",
+            "Size of the data volume and each archive volume.",
+        );
+        out.metric(
+            "bicdb_volume_seconds_to_full",
+            "gauge",
+            "Projected seconds until the volume is full at the recent consumption rate; \
+             absent while it is not filling.",
+        );
+        for volume in guard.data_volume.iter().chain(guard.archive_volumes.iter()) {
+            let labels = [("volume", volume.name.as_str())];
+            out.sample("bicdb_volume_free_bytes", &labels, volume.free_bytes);
+            out.sample("bicdb_volume_total_bytes", &labels, volume.total_bytes);
+            if let Some(seconds) = volume.seconds_to_full {
+                out.sample("bicdb_volume_seconds_to_full", &labels, seconds);
+            }
+        }
+        out.metric(
+            "bicdb_archive_verification_ok",
+            "gauge",
+            "Last confirmed-prefix verification read back intact (1) or failed (0).",
+        );
+        out.metric(
+            "bicdb_archive_verification_timestamp_seconds",
+            "gauge",
+            "Time of the last confirmed-prefix verification.",
+        );
+        let verifications = [
+            status.verification.clone(),
+            server.read_db()?.page_log_archive_verification(),
+        ];
+        for verification in verifications.into_iter().flatten() {
+            let labels = [("archive", verification.archive.as_str())];
+            out.sample(
+                "bicdb_archive_verification_ok",
+                &labels,
+                u8::from(verification.ok),
+            );
+            out.sample(
+                "bicdb_archive_verification_timestamp_seconds",
+                &labels,
+                verification.at_unix_millis / 1000,
+            );
+        }
+        out.gauge(
+            "bicdb_wal_archive_retention_enabled",
+            "Checkpoints keep unarchived sealed page-log segments (persisted).",
+            u8::from(wal.as_ref().is_some_and(|wal| wal.retention_enabled)),
+        );
+        out.gauge(
+            "bicdb_wal_archive_unarchived_segments",
+            "Sealed page-log segments kept locally because the archive has not confirmed them.",
+            wal.as_ref().map_or(0, |wal| wal.unarchived_segments),
+        );
+        out.gauge(
+            "bicdb_wal_archive_unarchived_bytes",
+            "Local disk held by sealed page-log segments the archive has not confirmed; grows \
+             while the archiver lags or is stopped.",
+            wal.as_ref().map_or(0, |wal| wal.unarchived_bytes),
+        );
     }
     out.gauge(
         "bicdb_connections_active",

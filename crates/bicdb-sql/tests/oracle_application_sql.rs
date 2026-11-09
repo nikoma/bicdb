@@ -291,27 +291,65 @@ fn unique_constraints_are_checked_when_the_statement_ends() {
     );
 }
 
-/// The PL/pgSQL `REVERSE high .. low` form does not change the Oracle
-/// profile, whose front end still rejects REVERSE loops (Oracle walks
-/// `REVERSE low .. high` backwards; the interpreter honours that order for
-/// Oracle routines once the front end accepts the form).
+/// Oracle reverses the low..high range; PostgreSQL reverses high..low.
+/// These results were independently checked on Oracle23.
 #[test]
-fn reverse_for_loops_are_unchanged_in_the_oracle_profile() {
+fn reverse_for_loops_follow_oracle_bound_order_without_reserving_identifiers() {
     let (_root, mut db) = app_database();
-    let created = run(
-        &mut db,
-        "CREATE OR REPLACE FUNCTION countdown RETURN VARCHAR2 AS
-           acc VARCHAR2(20) := '';
-         BEGIN
-           FOR i IN REVERSE 1 .. 3 LOOP
-             acc := acc || i;
-           END LOOP;
-           RETURN acc;
-         END;",
+    for (low, high, expected) in [(1, 3, "321"), (3, 1, "<null>"), (2, 2, "2")] {
+        run(
+            &mut db,
+            &format!(
+                "CREATE OR REPLACE FUNCTION countdown RETURN VARCHAR2 AS
+               acc VARCHAR2(20) := '';
+             BEGIN
+               FOR i IN REVERSE {low} .. {high} LOOP
+                 acc := acc || i;
+               END LOOP;
+               RETURN acc;
+             END;"
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            texts(run(&mut db, "SELECT countdown() FROM dual").unwrap()),
+            vec![vec![expected]],
+            "{low}..{high}"
+        );
+    }
+    run(&mut db, "CREATE TABLE reverse (reverse NUMBER)").unwrap();
+    run(&mut db, "INSERT INTO reverse VALUES (42)").unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT reverse FROM reverse").unwrap()),
+        vec![vec!["42"]]
     );
-    assert!(created
-        .and_then(|_| run(&mut db, "SELECT countdown() FROM dual"))
-        .is_err());
+}
+
+#[test]
+fn cascade_constraints_purge_drops_dependencies_without_recycling_the_parent() {
+    let (_root, mut db) = app_database();
+    run(&mut db, "CREATE TABLE purge (id NUMBER PRIMARY KEY)").unwrap();
+    run(
+        &mut db,
+        "CREATE TABLE child (id NUMBER REFERENCES purge(id))",
+    )
+    .unwrap();
+    run(&mut db, "DROP TABLE purge CASCADE CONSTRAINTS PURGE").unwrap();
+    // The foreign key was removed, while its child table remains usable.
+    run(&mut db, "INSERT INTO child VALUES(42)").unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT id FROM child").unwrap()),
+        vec![vec!["42"]]
+    );
+    assert!(run(&mut db, "FLASHBACK TABLE purge TO BEFORE DROP").is_err());
+    // PURGE in a column/table position stays an ordinary identifier.
+    run(&mut db, "CREATE TABLE purge (purge NUMBER)").unwrap();
+    run(&mut db, "INSERT INTO purge VALUES(7)").unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT purge FROM purge").unwrap()),
+        vec![vec!["7"]]
+    );
+    run(&mut db, "DROP TABLE purge PURGE").unwrap();
 }
 
 #[test]
@@ -656,5 +694,76 @@ fn plsql_compares_dates_and_timestamps_as_datetimes() {
     assert_eq!(
         texts(run(&mut db, "SELECT same_instant(1) FROM dual").unwrap()),
         vec![vec!["1".to_string()]]
+    );
+}
+
+#[test]
+fn row_and_derived_datetime_comparisons_keep_declared_types() {
+    let (_root, mut db) = app_database();
+    for sql in [
+        "CREATE TABLE DAYS (ID NUMBER PRIMARY KEY, D DATE, T TIMESTAMP)",
+        "INSERT INTO DAYS VALUES (1, DATE '2002-07-04', TIMESTAMP '2002-07-04 00:00:00')",
+        "INSERT INTO DAYS VALUES (2, DATE '2002-07-04', TIMESTAMP '2002-07-04 12:00:00')",
+        "CREATE INDEX DAYS_T ON DAYS (T)",
+    ] {
+        run(&mut db, sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    for sql in [
+        "SELECT ID FROM DAYS WHERE D = T ORDER BY ID",
+        "SELECT ID FROM (SELECT ID, D, T FROM DAYS) S WHERE S.D = S.T ORDER BY ID",
+        "SELECT ID FROM DAYS WHERE CASE WHEN D = T THEN 1 ELSE 0 END = 1 ORDER BY ID",
+        "SELECT O.ID FROM DAYS O WHERE EXISTS (SELECT 1 FROM DAYS I WHERE I.ID = O.ID AND I.T = O.D) ORDER BY O.ID",
+        "SELECT X.ID FROM DAYS X JOIN DAYS Y ON X.ID = Y.ID AND X.D = Y.T ORDER BY X.ID",
+    ] {
+        assert_eq!(
+            texts(run(&mut db, sql).unwrap_or_else(|error| panic!("{sql}: {error}"))),
+            vec![vec!["1"]],
+            "{sql}",
+        );
+    }
+    assert_eq!(
+        texts(run(&mut db, "SELECT ID, CASE WHEN D = T THEN 'equal' WHEN D < T THEN 'before' ELSE 'after' END FROM DAYS ORDER BY ID").unwrap()),
+        vec![vec!["1", "equal"], vec!["2", "before"]],
+    );
+}
+
+#[test]
+fn oracle_rewrites_preserve_decoded_adjacent_quotes_and_quoted_identifiers() {
+    let (_root, mut db) = app_database();
+    // These scalar values were independently checked on Oracle23.
+    for expression in [
+        "DECODE(1,1,'a''''b','bad')",
+        "NVL(NULL,'a''''b')",
+        "SUBSTR('a''''b',1,4)",
+        "TO_CHAR('a''''b')",
+    ] {
+        assert_eq!(
+            texts(run(&mut db, &format!("SELECT {expression} FROM dual")).unwrap()),
+            vec![vec!["a''b"]],
+            "{expression}"
+        );
+    }
+    run(&mut db, r#"CREATE TABLE "dates" ("two""""quotes" DATE)"#).unwrap();
+    run(
+        &mut db,
+        r#"INSERT INTO "dates" VALUES (TO_DATE('2000-01-02 13:14:15','YYYY-MM-DD HH24:MI:SS'))"#,
+    )
+    .unwrap();
+    assert_eq!(
+        texts(
+            run(
+                &mut db,
+                r#"SELECT TO_CHAR(TRUNC("two""""quotes"),'YYYY-MM-DD HH24:MI:SS') FROM "dates""#
+            )
+            .unwrap()
+        ),
+        vec![vec!["2000-01-02 00:00:00"]]
+    );
+    run(&mut db, "CREATE TABLE written_values(v VARCHAR2(20))").unwrap();
+    run(&mut db,r#"CREATE OR REPLACE PROCEDURE "p""""q" AS BEGIN INSERT INTO written_values VALUES('a''''b'); END;"#).unwrap();
+    run(&mut db, r#"CALL "p""""q"()"#).unwrap();
+    assert_eq!(
+        texts(run(&mut db, "SELECT v FROM written_values").unwrap()),
+        vec![vec!["a''b"]]
     );
 }

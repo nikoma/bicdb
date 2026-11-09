@@ -72,6 +72,7 @@ impl<'db> SqlSession<'db> {
                 owner: Some(owner),
                 security_definer: routine_definition_is_security_definer(trimmed),
                 overload: None,
+                catalog_oid: None,
             },
             false,
             prefix.contains("replace"),
@@ -210,6 +211,7 @@ impl<'db> SqlSession<'db> {
             owner: Some(current_user_from_gucs(&self.session_gucs)),
             security_definer: false,
             overload: None,
+            catalog_oid: None,
         };
         self.save_session_routine_if_missing(routine, false, false)?;
         Ok(SqlResult::command("CREATE PROCEDURE"))
@@ -271,6 +273,7 @@ impl<'db> SqlSession<'db> {
                 owner: Some(owner),
                 security_definer: routine_definition_is_security_definer(trimmed),
                 overload: None,
+                catalog_oid: None,
             },
             false,
             prefix.contains("replace"),
@@ -757,6 +760,10 @@ impl<'db> SqlSession<'db> {
         let table =
             resolve_session_relation_name_if_exists(self.db_ref(), &relation_name(table_name)?);
         self.require_table_privilege(&table, "INSERT")?;
+        validate_comparison_signatures(
+            &self.sql_engine_with_ctes(ctes.clone()),
+            ComparisonStatement::Insert(insert),
+        )?;
         if insert.returning.is_some() {
             self.require_table_privilege(&table, "SELECT")?;
         }
@@ -1510,9 +1517,19 @@ impl<'db> SqlSession<'db> {
                 select_required,
                 std::slice::from_ref(&record),
             )?;
-            if let Some(existing) =
-                self.find_conflict_record(table, schema, &record, &conflict_columns)?
-            {
+            // A READ COMMITTED primary-key upsert must reserve the row before
+            // deciding INSERT versus UPDATE. The winner may commit while this
+            // statement waits, leaving it invisible to the statement snapshot.
+            let refreshed =
+                self.read_committed_primary_conflict(table, schema, &record, &conflict_columns)?;
+            let (existing, conflict_snapshot) = match refreshed {
+                Some((existing, snapshot)) => (existing, snapshot),
+                None => (
+                    self.find_conflict_record(table, schema, &record, &conflict_columns)?,
+                    0,
+                ),
+            };
+            if let Some(existing) = existing {
                 match &on_conflict.action {
                     OnConflictAction::DoNothing => {}
                     OnConflictAction::DoUpdate(update) => {
@@ -1621,7 +1638,10 @@ impl<'db> SqlSession<'db> {
                             true,
                             Some(&self.sql_engine()),
                         )?;
-                        self.update_session_record(table, updated.clone())?;
+                        self.insert_session_records_with_statement_snapshots(
+                            table,
+                            std::iter::once((updated.clone(), conflict_snapshot)),
+                        )?;
                         self.apply_foreign_key_parent_update(table, schema, &existing, &updated)?;
                         self.fire_after_row_triggers(
                             table,
@@ -1664,6 +1684,67 @@ impl<'db> SqlSession<'db> {
             &affected_records,
             affected_records.len(),
         )
+    }
+
+    /// Recheck only the arbiter row; other relations retain the statement's
+    /// original snapshot. Fixed-snapshot isolation keeps its existing conflict.
+    fn read_committed_primary_conflict(
+        &mut self,
+        table: &str,
+        schema: Option<&TableSchema>,
+        record: &Record,
+        conflict_columns: &[String],
+    ) -> Result<Option<(Option<Record>, u64)>> {
+        // Signed writes retain action-specific authority and the existing
+        // explicit retry requirement for snapshot-invisible conflicts. Their
+        // protected write helper does not yet carry a refreshed row version.
+        if self.signed_mutation_grant(table).is_some() {
+            return Ok(None);
+        }
+        if !self
+            .tx
+            .as_ref()
+            .is_some_and(|tx| tx.isolation() == bicdb_core::TransactionIsolation::ReadCommitted)
+        {
+            return Ok(None);
+        }
+        let Some(schema) = schema else {
+            return Ok(None);
+        };
+        let Some(arbiter) = self.memoized_unique_arbiter(table, schema, conflict_columns)? else {
+            return Ok(None);
+        };
+        let Some(columns) = primary_key_columns_for_unique_arbiter(schema, &arbiter) else {
+            return Ok(None);
+        };
+        if primary_key_requires_typed_identity(schema) {
+            return Ok(None);
+        }
+        let key = record_column_values(record, schema, &columns);
+        let id = record_id_from_column_values(table, schema, &columns, &key)?;
+        let exclusive = self.exclusive;
+        let tx = self.tx.as_mut().expect("checked transaction");
+        let refreshed = if exclusive {
+            tx.read_committed_update_record_nowait(table, &id)?
+        } else {
+            tx.read_committed_update_record(table, &id)?
+        };
+        let Some((latest, snapshot)) = refreshed else {
+            return Ok(None);
+        };
+        // Apply the same native read policy as ordinary conflict lookup. The
+        // row reservation pins this current committed version while SQL RLS,
+        // trigger and constraint checks decide the update path below.
+        let latest = if latest.is_some() {
+            match self.security_context.as_ref() {
+                Some(context) => self.db_ref().get_with_context(context, table, &id)?,
+                None => self.db_ref().get(table, &id)?,
+            }
+            .map(|record| record.as_ref().clone())
+        } else {
+            None
+        };
+        Ok(Some((latest, snapshot)))
     }
 
     /// An upsert that found no conflicting row under its snapshot can still
@@ -1916,7 +1997,11 @@ impl<'db> SqlSession<'db> {
             if let Some(columns) = primary_key_columns_for_unique_arbiter(schema, &arbiter) {
                 if !primary_key_requires_typed_identity(schema) {
                     sql_profile_index_lookup();
-                    let record_id = record_id_from_column_values(table, schema, &columns, &key)?;
+                    // Conflict targets may list a composite constraint in a
+                    // different order. Row identity uses authoritative PK order.
+                    let primary_values = record_column_values(record, schema, &columns);
+                    let record_id =
+                        record_id_from_column_values(table, schema, &columns, &primary_values)?;
                     return self.conflict_record_by_id(table, &record_id);
                 }
             }

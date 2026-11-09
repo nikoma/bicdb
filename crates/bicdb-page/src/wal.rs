@@ -255,6 +255,13 @@ pub struct Wal {
     /// bounded only by the archiver keeping up — same failure mode as
     /// PostgreSQL's archive_command, and deliberately so.
     archive_retention: AtomicBool,
+    /// The page-log archiver's own health. Its first failure stops
+    /// [`Self::mark_archived_through`] for this handle.
+    archive_health: std::sync::Arc<crate::health::ArchiveHealth>,
+    /// Where this handle's archiver last archived to, and when this handle
+    /// last verified the archive's confirmed prefix.
+    archive_destination: Mutex<Option<PathBuf>>,
+    archive_verified_at: Mutex<Option<Instant>>,
     /// Total bytes across sealed segments (the active file's bytes are
     /// `end_offset`).
     sealed_bytes: AtomicU64,
@@ -398,6 +405,18 @@ impl Wal {
         let end_offset = file.metadata().map_err(|e| PageError::io(&path, e))?.len();
         let (sealed, sealed_bytes) = discover_sealed_segments(&path)?;
         let initial_lsn = lsn_floor.max(1);
+        // Archive retention outlives the handle that enabled it: a reopen
+        // (and the checkpoints recovery runs) must not delete sealed segments
+        // the archiver has not confirmed, or the archive gaps for good.
+        let archive_retention = archive_retention_marker(&path).exists();
+        // Segments an earlier handle confirmed durable in the archive (bytes
+        // and directory entries, by its own fsyncs) stay confirmed: local
+        // truncation may delete them. Unreadable means nothing confirmed.
+        let confirmed = if archive_retention {
+            read_archive_confirmed(&path)
+        } else {
+            0
+        };
 
         Ok(Self {
             path,
@@ -405,8 +424,11 @@ impl Wal {
             segment_bytes,
             sealed: Mutex::new(sealed),
             active_first_lsn: AtomicU64::new(initial_lsn),
-            archived_through: AtomicU64::new(0),
-            archive_retention: AtomicBool::new(false),
+            archived_through: AtomicU64::new(confirmed),
+            archive_retention: AtomicBool::new(archive_retention),
+            archive_health: crate::health::ArchiveHealth::new(),
+            archive_destination: Mutex::new(None),
+            archive_verified_at: Mutex::new(None),
             sealed_bytes: AtomicU64::new(sealed_bytes),
             next_lsn: AtomicU64::new(initial_lsn),
             end_offset: AtomicU64::new(end_offset),
@@ -1312,17 +1334,176 @@ impl Wal {
         Ok(deleted)
     }
 
-    /// Turn on archive retention: from now until the handle closes,
-    /// checkpoint truncation keeps sealed segments the archiver has not
-    /// confirmed via [`Self::mark_archived_through`].
-    pub fn enable_archive_retention(&self) {
+    /// Turn on archive retention: checkpoint truncation keeps sealed
+    /// segments the archiver has not confirmed via
+    /// [`Self::mark_archived_through`]. The setting is persisted next to the
+    /// log (`<log>-archive-retention`), so it also holds for every later
+    /// handle until [`Self::disable_archive_retention`]; a reopened handle
+    /// starts with nothing confirmed, so it keeps every sealed segment until
+    /// the archiver confirms it again.
+    pub fn enable_archive_retention(&self) -> Result<()> {
+        // In memory first: from here on nothing unconfirmed is deleted, even
+        // if persisting the setting fails below.
         self.archive_retention.store(true, Ordering::Release);
+        let marker = archive_retention_marker(&self.path);
+        if marker.exists() {
+            return Ok(());
+        }
+        let persist = || -> std::io::Result<()> {
+            crate::test_faults::io_fault("wal_archive.retention", &marker)?;
+            let file = File::create(&marker)?;
+            if self.fsync {
+                file.sync_all()?;
+                if let Some(parent) = marker.parent().filter(|p| !p.as_os_str().is_empty()) {
+                    File::open(parent)?.sync_all()?;
+                }
+            }
+            Ok(())
+        };
+        persist().map_err(|error| {
+            let failure = self.record_archive_failure("wal_archive.retention", &marker, &error);
+            PageError::ArchiveFailed {
+                site: failure.site,
+                detail: failure.error,
+            }
+        })
     }
 
-    /// The archiver durably holds every sealed segment named <= `sequence`;
-    /// local truncation may delete them.
-    pub fn mark_archived_through(&self, sequence: u64) {
+    /// Turn archive retention off (archiving was stopped on purpose): the
+    /// next checkpoint deletes sealed segments whether archived or not.
+    pub fn disable_archive_retention(&self) -> Result<()> {
+        let marker = archive_retention_marker(&self.path);
+        for path in [marker.clone(), archive_confirmed_path(&self.path)] {
+            match std::fs::remove_file(&path) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(PageError::io(&path, error)),
+            }
+        }
+        if self.fsync {
+            if let Some(parent) = marker.parent().filter(|p| !p.as_os_str().is_empty()) {
+                File::open(parent)
+                    .and_then(|dir| dir.sync_all())
+                    .map_err(|e| PageError::io(parent, e))?;
+            }
+        }
+        self.archive_retention.store(false, Ordering::Release);
+        Ok(())
+    }
+
+    /// Whether checkpoint truncation keeps unarchived sealed segments.
+    pub fn archive_retention_enabled(&self) -> bool {
+        self.archive_retention.load(Ordering::Acquire)
+    }
+
+    /// Highest sealed-segment name this handle has confirmed archived.
+    pub fn archived_through(&self) -> u64 {
+        self.archived_through.load(Ordering::Acquire)
+    }
+
+    /// Sealed segments on disk named above [`Self::archived_through`]
+    /// (count, total bytes): what archive retention keeps locally until the
+    /// archiver confirms them. One `stat` per such segment.
+    pub fn unarchived_sealed(&self) -> (u64, u64) {
+        let through = self.archived_through();
+        let sealed = self.sealed.lock().clone();
+        let mut count = 0u64;
+        let mut bytes = 0u64;
+        for sequence in sealed.into_iter().filter(|sequence| *sequence > through) {
+            count += 1;
+            bytes = bytes.saturating_add(
+                std::fs::metadata(self.sealed_path(sequence))
+                    .map(|metadata| metadata.len())
+                    .unwrap_or(0),
+            );
+        }
+        (count, bytes)
+    }
+
+    /// The archiver durably holds every sealed segment named <= `sequence`
+    /// (bytes and directory entries); local truncation may delete them.
+    /// Refused once the archiver failed on this handle: a later "successful"
+    /// step proves nothing about the bytes the failure may have dropped.
+    pub fn mark_archived_through(&self, sequence: u64) -> Result<()> {
+        if let Some(failure) = self.archive_health.failure() {
+            return Err(PageError::ArchiveFailed {
+                site: failure.site,
+                detail: failure.error,
+            });
+        }
+        if sequence <= self.archived_through() {
+            return Ok(());
+        }
+        // Persist first: a reopened handle trusts this watermark.
+        let path = archive_confirmed_path(&self.path);
+        let tmp = {
+            let mut os = path.as_os_str().to_os_string();
+            os.push(".tmp");
+            PathBuf::from(os)
+        };
+        let persist = || -> std::io::Result<()> {
+            crate::test_faults::io_fault("wal_archive.confirm", &path)?;
+            let mut file = File::create(&tmp)?;
+            file.write_all(sequence.to_string().as_bytes())?;
+            if self.fsync {
+                file.sync_all()?;
+            }
+            drop(file);
+            std::fs::rename(&tmp, &path)?;
+            if self.fsync {
+                if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+                    File::open(parent)?.sync_all()?;
+                }
+            }
+            Ok(())
+        };
+        if let Err(error) = persist() {
+            let _ = std::fs::remove_file(&tmp);
+            let failure = self.record_archive_failure("wal_archive.confirm", &path, &error);
+            return Err(PageError::ArchiveFailed {
+                site: failure.site,
+                detail: failure.error,
+            });
+        }
         self.archived_through.fetch_max(sequence, Ordering::AcqRel);
+        Ok(())
+    }
+
+    /// The archive directory this handle last archived to.
+    pub fn archive_destination(&self) -> Option<PathBuf> {
+        self.archive_destination.lock().clone()
+    }
+
+    pub fn set_archive_destination(&self, destination: &Path) {
+        *self.archive_destination.lock() = Some(destination.to_path_buf());
+    }
+
+    /// When this handle last verified its archive's confirmed prefix.
+    pub fn archive_verified_at(&self) -> Option<Instant> {
+        *self.archive_verified_at.lock()
+    }
+
+    pub fn set_archive_verified_now(&self) {
+        *self.archive_verified_at.lock() = Some(Instant::now());
+    }
+
+    /// The page-log archiver's health for this handle.
+    pub fn archive_health(&self) -> &std::sync::Arc<crate::health::ArchiveHealth> {
+        &self.archive_health
+    }
+
+    /// Record a page-log archiver failure (first one wins).
+    pub fn record_archive_failure(
+        &self,
+        site: &str,
+        path: &Path,
+        error: &dyn std::fmt::Display,
+    ) -> crate::health::WriteFailure {
+        self.archive_health.record_failure(
+            "page_log",
+            site,
+            &format!("{}: {error}", path.display()),
+        )
     }
 
     /// Total log bytes: every sealed segment plus the active file.
@@ -1409,6 +1590,105 @@ where
         *expected_lsn = Some(lsn + 1);
     }
     Ok((valid_bytes, first_lsn))
+}
+
+/// File holding the highest sealed segment confirmed archived.
+pub fn archive_confirmed_path(path: &Path) -> PathBuf {
+    let mut os = path.as_os_str().to_os_string();
+    os.push("-archive-confirmed");
+    PathBuf::from(os)
+}
+
+fn read_archive_confirmed(path: &Path) -> u64 {
+    std::fs::read_to_string(archive_confirmed_path(path))
+        .ok()
+        .and_then(|text| text.trim().parse().ok())
+        .unwrap_or(0)
+}
+
+/// What [`verify_archived_segments`] read back.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ArchivedChainReport {
+    /// Segments verified, ascending by name.
+    pub segments: u64,
+    pub records: u64,
+    pub first_lsn: Option<Lsn>,
+    pub last_lsn: Option<Lsn>,
+    /// Name of the last verified segment.
+    pub through: u64,
+}
+
+/// Read back every sealed segment `store.wal.<n>` in an archive directory
+/// with `n <= through`: every record must decode with a valid checksum, no
+/// segment may end in a partial record, and LSNs must run without a gap
+/// from one segment into the next. The segment named `through` must be
+/// present (it is the confirmed end). `through == 0` verifies nothing.
+pub fn verify_archived_segments(dir: &Path, through: u64) -> Result<ArchivedChainReport> {
+    let mut report = ArchivedChainReport::default();
+    if through == 0 {
+        return Ok(report);
+    }
+    let mut names = Vec::new();
+    for entry in std::fs::read_dir(dir).map_err(|e| PageError::io(dir, e))? {
+        let entry = entry.map_err(|e| PageError::io(dir, e))?;
+        let name = entry.file_name();
+        let Some(sequence) = name
+            .to_str()
+            .and_then(|name| name.strip_prefix("store.wal."))
+            .and_then(|suffix| suffix.parse::<u64>().ok())
+        else {
+            continue;
+        };
+        if sequence <= through {
+            names.push(sequence);
+        }
+    }
+    names.sort_unstable();
+    if names.last() != Some(&through) {
+        return Err(PageError::WalCorruption {
+            path: dir.join(format!("store.wal.{through}")),
+            lsn: through,
+            reason: "the confirmed segment is missing from the archive".into(),
+        });
+    }
+    let mut expected_lsn = None;
+    let mut scan = WalScanReport::default();
+    for sequence in names {
+        let path = dir.join(format!("store.wal.{sequence}"));
+        let mut file = File::open(&path).map_err(|e| PageError::io(&path, e))?;
+        let (valid, first) = scan_wal_file(
+            &mut file,
+            &path,
+            MAX_WAL_RECORD_BYTES - RECORD_HEADER_BYTES,
+            &mut expected_lsn,
+            &mut scan,
+            &mut |_| Ok(()),
+        )?;
+        let len = file.metadata().map_err(|e| PageError::io(&path, e))?.len();
+        if valid != len {
+            return Err(PageError::WalCorruption {
+                path,
+                lsn: scan.last_lsn.unwrap_or(0),
+                reason: format!(
+                    "archived segment holds {len} bytes but only {valid} decode (bad checksum, \
+                     torn record or an LSN gap from the previous segment)"
+                ),
+            });
+        }
+        report.first_lsn = report.first_lsn.or(first);
+        report.segments += 1;
+        report.through = sequence;
+    }
+    report.records = scan.records;
+    report.last_lsn = scan.last_lsn;
+    Ok(report)
+}
+
+/// File whose presence keeps archive retention on across reopens.
+pub fn archive_retention_marker(path: &Path) -> PathBuf {
+    let mut os = path.as_os_str().to_os_string();
+    os.push("-archive-retention");
+    PathBuf::from(os)
 }
 
 /// Sealed segments on disk next to `path`, ascending, with their total size.

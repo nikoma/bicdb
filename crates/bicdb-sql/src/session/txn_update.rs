@@ -776,6 +776,10 @@ impl<'db> SqlSession<'db> {
         let (table, target_alias) = table_with_joins_name_and_alias(&update.table)?;
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
         self.require_update_privileges(&table, &update.assignments)?;
+        validate_comparison_signatures(
+            &self.sql_engine_with_ctes(ctes.clone()),
+            ComparisonStatement::Update(update),
+        )?;
         // RETURNING projects the affected rows back to the caller, so it is a
         // read. Without this, an UPDATE-only grant was a full table read.
         if update.returning.is_some() {
@@ -1632,8 +1636,13 @@ impl<'db> SqlSession<'db> {
                 {
                     continue;
                 }
-                let candidate_row =
-                    merge_slot_rows(&target_row, &target_columns, from_row, &from_rows.columns);
+                // This provisional row can become a retained assignment candidate.
+                let candidate_row = materialize_join_row(
+                    &target_row,
+                    &target_columns,
+                    from_row,
+                    &from_rows.columns,
+                )?;
                 // The predicate recheck through the statement's engine (the
                 // per-candidate engine it replaced had no outer row; clear it
                 // for the evaluation so identifier resolution is identical).
@@ -1925,7 +1934,12 @@ impl<'db> SqlSession<'db> {
                     self.cancellation.check()?;
                 }
                 for right in &row_set.rows {
-                    merged_rows.push(merge_slot_rows(left, &columns, right, &row_set.columns));
+                    merged_rows.push(materialize_join_row(
+                        left,
+                        &columns,
+                        right,
+                        &row_set.columns,
+                    )?);
                 }
             }
             rows = merged_rows;
@@ -1950,6 +1964,10 @@ impl<'db> SqlSession<'db> {
         let (table, target_alias) = delete_from_table_and_alias(delete)?;
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
         self.require_table_privilege(&table, "DELETE")?;
+        validate_comparison_signatures(
+            &self.sql_engine_with_ctes(ctes.clone()),
+            ComparisonStatement::Delete(delete),
+        )?;
         if delete.returning.is_some() {
             self.require_table_privilege(&table, "SELECT")?;
         }
@@ -2067,12 +2085,12 @@ impl<'db> SqlSession<'db> {
                                 schema.as_ref(),
                                 &record,
                             )?;
-                            let row = merge_slot_rows(
+                            let row = materialize_join_row(
                                 &target_row,
                                 target_columns.as_ref(),
                                 using_row,
                                 &using_rows.columns,
-                            );
+                            )?;
                             records.push(DeleteCandidate {
                                 record,
                                 columns: predicate_columns.clone(),
@@ -2296,7 +2314,12 @@ impl<'db> SqlSession<'db> {
                     self.cancellation.check()?;
                 }
                 for right in &row_set.rows {
-                    merged_rows.push(merge_slot_rows(left, &columns, right, &row_set.columns));
+                    merged_rows.push(materialize_join_row(
+                        left,
+                        &columns,
+                        right,
+                        &row_set.columns,
+                    )?);
                 }
             }
             rows = merged_rows;
@@ -2522,6 +2545,47 @@ impl<'db> SqlSession<'db> {
         }
     }
 
+    /// A comparison in a PL/pgSQL body whose operands both have declared
+    /// types (variables, parameters, record fields, typed literals)
+    /// compares under PostgreSQL's rules for that type pair.
+    fn routine_typed_comparison(
+        &self,
+        left: &Expr,
+        op: &BinaryOperator,
+        right: &Expr,
+        left_value: &SqlValue,
+        right_value: &SqlValue,
+    ) -> Result<Option<Option<bool>>> {
+        if !matches!(
+            op,
+            BinaryOperator::Eq
+                | BinaryOperator::NotEq
+                | BinaryOperator::Lt
+                | BinaryOperator::LtEq
+                | BinaryOperator::Gt
+                | BinaryOperator::GtEq
+        ) || self.oracle_routine_frame()
+            || self.routine_slots.is_none()
+            || crate::planner::is_unknown_literal(left)
+            || crate::planner::is_unknown_literal(right)
+        {
+            return Ok(None);
+        }
+        let left_type = self
+            .routine_unary_operand_type(left)
+            .map(|pg_type| crate::pg_operators::canonical_type(&pg_type));
+        let right_type = self
+            .routine_unary_operand_type(right)
+            .map(|pg_type| crate::pg_operators::canonical_type(&pg_type));
+        compare_values_by_pg_types(
+            left_type.as_deref(),
+            right_type.as_deref(),
+            left_value,
+            op,
+            right_value,
+        )
+    }
+
     /// A comparison in a PL/pgSQL body with a date/time variable on one side
     /// compares as date/time, as PostgreSQL's typed comparison does, not as
     /// text (`date '2002-07-04' <> timestamp '2002-07-04 00:00'` is false).
@@ -2607,6 +2671,16 @@ impl<'db> SqlSession<'db> {
     }
 
     fn routine_unary_operand_type(&self, expr: &Expr) -> Option<String> {
+        if let Expr::CompoundIdentifier(idents) = expr {
+            // Query results register flat record fields. Nested JSON paths
+            // retain their own evaluator and cannot capture a dotted field.
+            if let [target, column] = idents.as_slice() {
+                let key = routine_record_field_type_key(&target.value, &ident_value(column));
+                if let Some(schema) = self.routine_slots.as_ref()?.types.get(&key) {
+                    return Some(schema.pg_type.clone());
+                }
+            }
+        }
         let name = match expr {
             Expr::Identifier(ident) => Some(ident.value.as_str()),
             Expr::Value(value) => match &value.value {
@@ -3136,6 +3210,11 @@ impl<'db> SqlSession<'db> {
             Expr::BinaryOp { left, op, right } => {
                 let left_value = self.eval_session_expr(left)?;
                 let right_value = self.eval_session_expr(right)?;
+                if let Some(truth) =
+                    self.routine_typed_comparison(left, op, right, &left_value, &right_value)?
+                {
+                    return Ok(truth.map(SqlValue::Bool).unwrap_or(SqlValue::Null));
+                }
                 if let Some(truth) =
                     self.routine_temporal_comparison(left, op, right, &left_value, &right_value)?
                 {
@@ -4967,6 +5046,9 @@ impl<'db> SqlSession<'db> {
                 }
             }
         }
+        if !scalar_target {
+            frame.set_record_field_types(target, &result.columns, &result.column_types);
+        }
         for row in result.rows {
             self.cancellation.check()?;
             if scalar_target {
@@ -6679,12 +6761,12 @@ impl<'db> SqlSession<'db> {
                         }
                         let from_row = &from_rows.rows[source_positions[position]];
                         candidates.push((
-                            merge_slot_rows(
+                            materialize_join_row(
                                 &target_row,
                                 target_columns,
                                 from_row,
                                 &from_rows.columns,
-                            ),
+                            )?,
                             stored,
                         ));
                     }
@@ -6725,12 +6807,14 @@ impl<'db> SqlSession<'db> {
                             if seen.contains(&stored.id) {
                                 continue;
                             }
-                            let candidate_row = merge_slot_rows(
+                            // This provisional row may become a retained UPDATE
+                            // candidate. Count its clone before predicate evaluation.
+                            let candidate_row = materialize_join_row(
                                 &target_row,
                                 target_columns,
                                 from_row,
                                 &from_rows.columns,
-                            );
+                            )?;
                             // A point-plan hit is the whole predicate: no re-check.
                             let matches = match selection {
                                 None => true,

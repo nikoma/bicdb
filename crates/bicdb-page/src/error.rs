@@ -14,6 +14,10 @@ pub type Result<T> = std::result::Result<T, PageError>;
 /// only being able to log.
 #[derive(Debug, thiserror::Error)]
 pub enum PageError {
+    /// Ordinary unlogged images must enter a complete structural cut before
+    /// writeback. A single-image WAL record cannot make shared structure safe.
+    #[error("page {page_id} has unlogged changes; a complete structural cut is required before writeback")]
+    UnloggedWritebackNeedsCut { page_id: PageId },
     /// A durability-critical write or sync failed earlier (or just now) and
     /// the database refuses writes until it is reopened through recovery.
     /// See `crate::health`.
@@ -22,6 +26,15 @@ pub enum PageError {
          reopened and recovery verifies it"
     )]
     WriteFailed { site: String, detail: String },
+    /// The page-log archiver failed on this handle. The database itself is
+    /// unaffected (sealed segments stay local until the archive confirms
+    /// them), but nothing more is marked archived until a reopened handle
+    /// re-copies every unconfirmed segment. See `crate::health::ArchiveHealth`.
+    #[error(
+        "page-log archive failed at {site}: {detail}; archiving is stopped on this handle and \
+         sealed segments stay local until a reopened handle archives them again"
+    )]
+    ArchiveFailed { site: String, detail: String },
     #[error("page backup snapshot: {reason}")]
     BackupSnapshot { reason: String },
     #[error("page store io error at {path}: {source}")]

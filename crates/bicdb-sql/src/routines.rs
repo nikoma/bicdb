@@ -28,7 +28,17 @@ pub(crate) fn routine_record_value(columns: &[String], row: &[SqlValue]) -> SqlV
     let values = columns
         .iter()
         .zip(row.iter())
-        .map(|(column, value)| (column.clone(), sql_value_to_json(value.clone())))
+        .map(|(column, value)| {
+            let value = match value {
+                // JSON has no NaN or infinity: keep them as the float's
+                // text form rather than turning them into NULL.
+                SqlValue::Float(float) if !float.is_finite() => {
+                    JsonValue::String(SqlValue::Float(*float).to_cell())
+                }
+                value => sql_value_to_json(value.clone()),
+            };
+            (column.clone(), value)
+        })
         .collect::<JsonMap<String, JsonValue>>();
     SqlValue::Json(JsonValue::Object(values).into())
 }
@@ -2796,9 +2806,11 @@ pub(crate) fn save_routine(db: &mut BicDb, routine: &RoutineSchema) -> Result<()
         oracle::prepare_hierarchy_save(db, &body)?;
     }
     ensure_routine_collection(db)?;
+    let mut metadata = serde_json::to_value(routine)?;
+    metadata["catalog_oid"] = serde_json::json!(catalog_routine_oid(routine));
     db.insert(
         ROUTINE_COLLECTION,
-        Record::new(routine_storage_key(routine)).with_metadata(serde_json::to_value(routine)?),
+        Record::new(routine_storage_key(routine)).with_metadata(metadata),
     )?;
     Ok(())
 }

@@ -824,6 +824,7 @@ fn routine_ir_cache_reuses_unchanged_definition_and_recompiles_changes() {
         owner: Some(BOOTSTRAP_ROLE_NAME.to_string()),
         security_definer: false,
         overload: None,
+        catalog_oid: None,
     };
 
     let first = compile_cached_routine_ir(&routine).unwrap();
@@ -879,6 +880,7 @@ fn routine_ir_binds_scalar_expressions_to_var_ids() {
         owner: Some(BOOTSTRAP_ROLE_NAME.to_string()),
         security_definer: false,
         overload: None,
+        catalog_oid: None,
     };
 
     let ir = compile_routine_ir(&routine).unwrap();
@@ -1929,7 +1931,9 @@ fn bound_expr_truth_uses_positional_values_after_binding() {
     let db = BicDb::open(dir.path()).unwrap();
     let columns = vec!["arbitrary_row.quantity_value".to_string()];
     let vars = vec!["limit_value".to_string()];
-    let scope = BoundExprScope::new(&columns, &vars);
+    let scope = BoundExprScope::new(&columns, &vars)
+        .with_column_types(vec![Some("int4".to_string())].into())
+        .with_var_types(&[("limit_value".to_string(), "int4".to_string())]);
     let expr = scope
         .bind(
             &parse_routine_expr(
@@ -9210,5 +9214,34 @@ fn server_paged_migration_initializes_new_table_constraints_atomically() {
             .unwrap_err()
             .sqlstate(),
         "23505"
+    );
+}
+
+#[test]
+fn reused_record_field_types_replace_the_previous_projection() {
+    let mut frame = RoutineFrame::new(&[], &[]).unwrap();
+    frame.set_record_field_types(
+        "r",
+        &["d".into(), "old".into()],
+        &[Some("date".into()), Some("int4".into())],
+    );
+    assert_eq!(
+        frame.assignment_types[&routine_record_field_type_key("r", "d")].pg_type,
+        "date"
+    );
+    frame.set_record_field_types(
+        "r",
+        &["d".into(), "new".into()],
+        &[None, Some("text".into())],
+    );
+    assert!(!frame
+        .assignment_types
+        .contains_key(&routine_record_field_type_key("r", "d")));
+    assert!(!frame
+        .assignment_types
+        .contains_key(&routine_record_field_type_key("r", "old")));
+    assert_eq!(
+        frame.assignment_types[&routine_record_field_type_key("r", "new")].pg_type,
+        "text"
     );
 }

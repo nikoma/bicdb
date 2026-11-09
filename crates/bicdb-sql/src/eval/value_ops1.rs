@@ -327,6 +327,16 @@ pub(crate) fn eval_db_catalog_function_value(
                         "page_file_bytes": snapshot.page_file_bytes,
                         "wal_bytes": snapshot.wal_bytes,
                         "wal_max_bytes": snapshot.wal_max_bytes,
+                        // Cheap counters from the same bounded snapshot. They
+                        // distinguish file footprint from actual pool pressure.
+                        "buffer_pool": {
+                            "budget_bytes": snapshot.buffer_pool.budget_bytes,
+                            "total_frames": snapshot.buffer_pool.total_frames,
+                            "resident_pages": snapshot.buffer_pool.resident_pages,
+                            "evictions": snapshot.buffer_pool.evictions,
+                            "unlogged_pages": snapshot.buffer_pool.unlogged_pages,
+                            "unlogged_steals": snapshot.buffer_pool.unlogged_steals,
+                        },
                         // What vacuum + tail reclaim + hole punching can return:
                         // interior free pages plus tail slack beyond the logical
                         // page span.
@@ -1289,14 +1299,21 @@ pub(crate) fn pg_get_function_arguments_from_pg_proc_row(
     include_defaults: bool,
 ) -> Result<SqlValue> {
     require_arg_count("pg_get_function_arguments", args, 1)?;
-    if args.first().and_then(sql_value_i64).is_none() {
+    let Some(oid) = args.first().and_then(sql_value_i64) else {
         return Ok(SqlValue::Null);
-    }
-    if let Some(routine) = routine_from_pg_proc_row(db, row)? {
+    };
+    if let Some(routine) = routine_for_oid(db, oid)? {
         return Ok(SqlValue::String(routine_argument_signature(
             &routine.args,
             include_defaults,
         )));
+    }
+    if pg_proc_row_value(row, "oid")
+        .as_ref()
+        .and_then(sql_value_i64)
+        != Some(oid)
+    {
+        return pg_get_function_arguments(db, args, include_defaults);
     }
     if pg_proc_row_text(row, "proname").is_some() {
         return Ok(SqlValue::String(String::new()));
@@ -1310,15 +1327,22 @@ pub(crate) fn pg_get_function_result_from_pg_proc_row(
     args: &[SqlValue],
 ) -> Result<SqlValue> {
     require_arg_count("pg_get_function_result", args, 1)?;
-    if args.first().and_then(sql_value_i64).is_none() {
+    let Some(oid) = args.first().and_then(sql_value_i64) else {
         return Ok(SqlValue::Null);
-    }
-    if let Some(routine) = routine_from_pg_proc_row(db, row)? {
+    };
+    if let Some(routine) = routine_for_oid(db, oid)? {
         let mut rendered = routine.formatted_return_type();
         if routine.returns_set {
             rendered = format!("SETOF {rendered}");
         }
         return Ok(SqlValue::String(rendered));
+    }
+    if pg_proc_row_value(row, "oid")
+        .as_ref()
+        .and_then(sql_value_i64)
+        != Some(oid)
+    {
+        return pg_get_function_result(db, args);
     }
     let Some(return_type_oid) =
         pg_proc_row_value(row, "prorettype").and_then(|value| sql_value_i64(&value))
@@ -1335,17 +1359,6 @@ pub(crate) fn pg_get_function_result_from_pg_proc_row(
         rendered = format!("SETOF {rendered}");
     }
     Ok(SqlValue::String(rendered))
-}
-
-pub(crate) fn routine_from_pg_proc_row(db: &BicDb, row: &SqlRow) -> Result<Option<RoutineSchema>> {
-    let Some(name) = pg_proc_row_text(row, "proname") else {
-        return Ok(None);
-    };
-    let kind = match pg_proc_row_text(row, "prokind").as_deref() {
-        Some("p") => RoutineKind::Procedure,
-        _ => RoutineKind::Function,
-    };
-    load_routine(db, kind, &name)
 }
 
 pub(crate) fn pg_proc_row_text(row: &SqlRow, field: &str) -> Option<String> {
@@ -1594,7 +1607,7 @@ pub(crate) fn pg_get_function_result(db: &BicDb, args: &[SqlValue]) -> Result<Sq
 pub(crate) fn routine_for_oid(db: &BicDb, oid: i64) -> Result<Option<RoutineSchema>> {
     Ok(list_routines(db)?
         .into_iter()
-        .find(|routine| routine_oid(routine.kind, &routine.name) == oid))
+        .find(|routine| catalog_routine_oid(&routine) == oid))
 }
 
 pub(crate) fn pg_builtin_proc_return_type_oid(oid: i64) -> Option<i64> {

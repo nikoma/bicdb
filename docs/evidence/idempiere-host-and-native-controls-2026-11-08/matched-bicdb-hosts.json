@@ -1,0 +1,341 @@
+{
+  "source_commit": "fe9b678a46fd477f0c3877878921c85bcde9322b",
+  "binary_sha256": "977fec856d2d081efeae4c22b5cbd8c211f8ef2597e620773fe00b03be32ad7f",
+  "transport": "v2 TCP_NODELAY accepted client and outbound server sockets",
+  "same_fresh_verified_baseline": true,
+  "original_test_sources_bytecode_assertions_timeouts_unchanged": true,
+  "full_application_qualification": false,
+  "host_comparison_cpu_and_transport_confounded": true,
+  "initial_v1_campaign_transport_confounded": true,
+  "remaining_roundtrip_overhead_ms": 0.85,
+  "runs": [
+    {
+      "label": "ny8-r3",
+      "target": "ny8",
+      "record": "/root/.local/state/bicdb/idempiere-reference/upstream-fastdisk-fe9-ny8-r3-test-run.json",
+      "status": "tests_failed",
+      "test_reports": [
+        {
+          "file": "TEST-org.idempiere.test.base.ReportTest.xml",
+          "name": "org.idempiere.test.base.ReportTest",
+          "tests": "5",
+          "errors": "0",
+          "failures": "1",
+          "skipped": "0"
+        },
+        {
+          "file": "TEST-org.idempiere.test.tracking.AuditTraceContextTest.xml",
+          "name": "org.idempiere.test.tracking.AuditTraceContextTest",
+          "tests": "3",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0"
+        }
+      ],
+      "processes_stopped": true,
+      "remote_shutdown_verified": null,
+      "harness_elapsed_seconds": 120.39,
+      "methods": [
+        {
+          "classname": "org.idempiere.test.tracking.AuditTraceContextTest",
+          "name": "testProcess",
+          "elapsed_seconds": "0.377",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.tracking.AuditTraceContextTest",
+          "name": "testBackgroundJob",
+          "elapsed_seconds": "7.441",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.tracking.AuditTraceContextTest",
+          "name": "testChangeLog",
+          "elapsed_seconds": "0.662",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.base.ReportTest",
+          "name": "testAgingReport",
+          "elapsed_seconds": "38.387",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.base.ReportTest",
+          "name": "testBackgroundJob",
+          "elapsed_seconds": "11.485",
+          "failures": [
+            {
+              "kind": "failure",
+              "message": "Error waiting for background job to complete: null"
+            }
+          ]
+        },
+        {
+          "classname": "org.idempiere.test.base.ReportTest",
+          "name": "testPDFFileName",
+          "elapsed_seconds": "3.902",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.base.ReportTest",
+          "name": "testCreateXML",
+          "elapsed_seconds": "9.053",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.base.ReportTest",
+          "name": "testFinancialReport",
+          "elapsed_seconds": "15.875",
+          "failures": []
+        }
+      ]
+    },
+    {
+      "label": "s3-r3",
+      "target": "s3",
+      "record": "/root/.local/state/bicdb/idempiere-reference/upstream-fastdisk-fe9-s3-r3-test-run.json",
+      "status": "tests_completed",
+      "test_reports": [
+        {
+          "file": "TEST-org.idempiere.test.base.ReportTest.xml",
+          "name": "org.idempiere.test.base.ReportTest",
+          "tests": "5",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0"
+        },
+        {
+          "file": "TEST-org.idempiere.test.tracking.AuditTraceContextTest.xml",
+          "name": "org.idempiere.test.tracking.AuditTraceContextTest",
+          "tests": "3",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0"
+        }
+      ],
+      "processes_stopped": true,
+      "remote_shutdown_verified": {
+        "owned_server_stopped": true
+      },
+      "harness_elapsed_seconds": 91.757,
+      "methods": [
+        {
+          "classname": "org.idempiere.test.tracking.AuditTraceContextTest",
+          "name": "testProcess",
+          "elapsed_seconds": "0.329",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.tracking.AuditTraceContextTest",
+          "name": "testBackgroundJob",
+          "elapsed_seconds": "2.344",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.tracking.AuditTraceContextTest",
+          "name": "testChangeLog",
+          "elapsed_seconds": "0.619",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.base.ReportTest",
+          "name": "testAgingReport",
+          "elapsed_seconds": "26.364",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.base.ReportTest",
+          "name": "testBackgroundJob",
+          "elapsed_seconds": "14.199",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.base.ReportTest",
+          "name": "testPDFFileName",
+          "elapsed_seconds": "1.69",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.base.ReportTest",
+          "name": "testCreateXML",
+          "elapsed_seconds": "4.634",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.base.ReportTest",
+          "name": "testFinancialReport",
+          "elapsed_seconds": "11.529",
+          "failures": []
+        }
+      ]
+    },
+    {
+      "label": "s3-r4",
+      "target": "s3",
+      "record": "/root/.local/state/bicdb/idempiere-reference/upstream-fastdisk-fe9-s3-r4-test-run.json",
+      "status": "tests_failed",
+      "test_reports": [
+        {
+          "file": "TEST-org.idempiere.test.base.ReportTest.xml",
+          "name": "org.idempiere.test.base.ReportTest",
+          "tests": "5",
+          "errors": "0",
+          "failures": "1",
+          "skipped": "0"
+        },
+        {
+          "file": "TEST-org.idempiere.test.tracking.AuditTraceContextTest.xml",
+          "name": "org.idempiere.test.tracking.AuditTraceContextTest",
+          "tests": "3",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0"
+        }
+      ],
+      "processes_stopped": true,
+      "remote_shutdown_verified": {
+        "owned_server_stopped": true
+      },
+      "harness_elapsed_seconds": 91.556,
+      "methods": [
+        {
+          "classname": "org.idempiere.test.tracking.AuditTraceContextTest",
+          "name": "testProcess",
+          "elapsed_seconds": "0.317",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.tracking.AuditTraceContextTest",
+          "name": "testBackgroundJob",
+          "elapsed_seconds": "2.282",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.tracking.AuditTraceContextTest",
+          "name": "testChangeLog",
+          "elapsed_seconds": "0.586",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.base.ReportTest",
+          "name": "testAgingReport",
+          "elapsed_seconds": "27.844",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.base.ReportTest",
+          "name": "testBackgroundJob",
+          "elapsed_seconds": "14.758",
+          "failures": [
+            {
+              "kind": "failure",
+              "message": "Error waiting for background job to complete: null"
+            }
+          ]
+        },
+        {
+          "classname": "org.idempiere.test.base.ReportTest",
+          "name": "testPDFFileName",
+          "elapsed_seconds": "2.315",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.base.ReportTest",
+          "name": "testCreateXML",
+          "elapsed_seconds": "4.616",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.base.ReportTest",
+          "name": "testFinancialReport",
+          "elapsed_seconds": "10.578",
+          "failures": []
+        }
+      ]
+    },
+    {
+      "label": "ny8-r4",
+      "target": "ny8",
+      "record": "/root/.local/state/bicdb/idempiere-reference/upstream-fastdisk-fe9-ny8-r4-test-run.json",
+      "status": "tests_failed",
+      "test_reports": [
+        {
+          "file": "TEST-org.idempiere.test.base.ReportTest.xml",
+          "name": "org.idempiere.test.base.ReportTest",
+          "tests": "5",
+          "errors": "0",
+          "failures": "1",
+          "skipped": "0"
+        },
+        {
+          "file": "TEST-org.idempiere.test.tracking.AuditTraceContextTest.xml",
+          "name": "org.idempiere.test.tracking.AuditTraceContextTest",
+          "tests": "3",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0"
+        }
+      ],
+      "processes_stopped": true,
+      "remote_shutdown_verified": null,
+      "harness_elapsed_seconds": 120.268,
+      "methods": [
+        {
+          "classname": "org.idempiere.test.tracking.AuditTraceContextTest",
+          "name": "testProcess",
+          "elapsed_seconds": "0.399",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.tracking.AuditTraceContextTest",
+          "name": "testBackgroundJob",
+          "elapsed_seconds": "8.589",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.tracking.AuditTraceContextTest",
+          "name": "testChangeLog",
+          "elapsed_seconds": "0.667",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.base.ReportTest",
+          "name": "testAgingReport",
+          "elapsed_seconds": "36.061",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.base.ReportTest",
+          "name": "testBackgroundJob",
+          "elapsed_seconds": "11.714",
+          "failures": [
+            {
+              "kind": "failure",
+              "message": "Error waiting for background job to complete: null"
+            }
+          ]
+        },
+        {
+          "classname": "org.idempiere.test.base.ReportTest",
+          "name": "testPDFFileName",
+          "elapsed_seconds": "3.349",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.base.ReportTest",
+          "name": "testCreateXML",
+          "elapsed_seconds": "9.887",
+          "failures": []
+        },
+        {
+          "classname": "org.idempiere.test.base.ReportTest",
+          "name": "testFinancialReport",
+          "elapsed_seconds": "15.908",
+          "failures": []
+        }
+      ]
+    }
+  ],
+  "interpretation": "One of two corrected s3 repeats passed all8 unchanged tests; both ny8 repeats and the other s3 repeat failed only ReportTest.testBackgroundJob. Faster host improved several report timings but reliable job completion and broad app qualification remain unproved. Test method durations include setup and do not equal internal10-second wait interval."
+}

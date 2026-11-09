@@ -1689,6 +1689,28 @@ pub(crate) fn eval_range_binary_value_with_db(
     left_type: Option<&str>,
     right_type: Option<&str>,
 ) -> Result<Option<SqlValue>> {
+    if matches!(
+        op,
+        BinaryOperator::Eq
+            | BinaryOperator::NotEq
+            | BinaryOperator::Lt
+            | BinaryOperator::LtEq
+            | BinaryOperator::Gt
+            | BinaryOperator::GtEq
+    ) && left_type.is_some()
+        && left_type == right_type
+    {
+        let pg_type = left_type.unwrap();
+        // Enum values travel as labels; their ordering is the declaration's
+        // order, including enum arrays, rather than the label's text order.
+        if !matches!(left, SqlValue::Null) && !matches!(right, SqlValue::Null) {
+            if let Some(ordering) =
+                crate::type_codec::enum_comparison_for_db(db, pg_type, &left, &right)?
+            {
+                return Ok(Some(SqlValue::Bool(comparison_from_ordering(op, ordering))));
+            }
+        }
+    }
     let left_user = user_range_set_type(db, left_type)?;
     let right_user = user_range_set_type(db, right_type)?;
     if left_user.is_none() && right_user.is_none() {
@@ -3877,6 +3899,15 @@ pub(crate) fn compare_expr_values_resolved(
             }
         }
     }
+    if let Some(truth) = compare_values_by_pg_types(
+        left_expr_type.as_deref(),
+        right_expr_type.as_deref(),
+        left,
+        op,
+        right,
+    )? {
+        return Ok(truth);
+    }
     let left_type = left_expr_type
         .clone()
         .or_else(|| projected_arithmetic_operand_pg_type(left_expr, schema));
@@ -3914,6 +3945,26 @@ pub(crate) fn compare_expr_values_resolved(
             BinaryOperator::LtEq => ordering != Ordering::Greater,
             _ => unreachable!(),
         }));
+    }
+    if (left_expr_type.as_deref() == Some("char")
+        && matches!(right_expr_type.as_deref(), Some("text" | "varchar")))
+        || (right_expr_type.as_deref() == Some("char")
+            && matches!(left_expr_type.as_deref(), Some("text" | "varchar")))
+    {
+        let as_text = |value: &SqlValue, kind: Option<&str>| {
+            if kind == Some("char") {
+                if let Some(byte) = pg_internal_char_byte(value) {
+                    return SqlValue::String(pg_internal_char_text(byte));
+                }
+            }
+            value.clone()
+        };
+        let left = as_text(left, left_expr_type.as_deref());
+        let right = as_text(right, right_expr_type.as_deref());
+        return Ok(Some(comparison_from_ordering(
+            op,
+            pg_typed_compare("text", &left, &right)?,
+        )));
     }
     let internal_char_comparison = (matches!(left_expr_type.as_deref(), Some("char"))
         && matches!(right_expr_type.as_deref(), Some("char") | None))

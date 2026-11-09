@@ -9162,6 +9162,7 @@ impl ServeReplicationArgs {
             base_backup_key,
             base_backup_interval: Duration::from_secs(self.log_archive_base_hours.max(1) * 3600),
             keep_base_backups: self.log_archive_keep.max(1),
+            guard: None,
         }))
     }
 }

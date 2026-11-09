@@ -16115,10 +16115,9 @@ impl Transaction {
         self.scan_collection_visible_unchecked(collection)
     }
 
-    /// Count a resident collection at this transaction's snapshot without
-    /// decoding row payloads. The final buffered write for each key is overlaid
-    /// just as in `scan_collection`. Lazy paged collections decline explicitly:
-    /// their page-store base and resident version chains need a separate merge.
+    /// Count snapshot-visible rows without decoding row payloads. Lazy paged
+    /// rows use version-header visibility, then resident chains and the final
+    /// buffered write per key override that base exactly as in `scan_collection`.
     pub fn try_count_collection_visible_cancellable(
         &self,
         collection: &str,
@@ -16129,7 +16128,85 @@ impl Transaction {
         db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
         let state = db.collection_state(collection)?;
         if state.paged_lazy {
-            return Ok(None);
+            let (Some(paged), Some(snapshot)) = (&db.paged_records, &self.paged_snapshot) else {
+                return Ok(None);
+            };
+            fn set_verdict(
+                verdicts: &mut FxHashMap<String, bool>,
+                id: &str,
+                visible: bool,
+                retained_bytes: &mut usize,
+            ) -> Result<()> {
+                if let Some(verdict) = verdicts.get_mut(id) {
+                    *verdict = visible;
+                    return Ok(());
+                }
+                if crate::query_budget::active() {
+                    // Include both tables during hash-map growth and the
+                    // initial control/allocation overhead, not row payloads.
+                    let table_overhead = if verdicts.is_empty() { 64 } else { 0 };
+                    *retained_bytes = retained_bytes
+                        .saturating_add(id.len())
+                        .saturating_add(4 * std::mem::size_of::<(String, bool)>())
+                        .saturating_add(table_overhead);
+                    crate::query_budget::observe(*retained_bytes);
+                    crate::query_budget::check()?;
+                }
+                verdicts.try_reserve(1).map_err(|_| {
+                    BicDbError::QueryMemoryLimit(
+                        "visible-count identity allocation failed".to_string(),
+                    )
+                })?;
+                verdicts.insert(id.to_owned(), visible);
+                Ok(())
+            }
+            let mut verdicts = FxHashMap::default();
+            let mut retained_bytes = 0usize;
+            let mut visited = 0usize;
+            // Release resident shard latches before walking the page store;
+            // page apply and resident publication must not invert that order.
+            {
+                for shard in state.read_all() {
+                    for versions in shard.versions.values() {
+                        if visited % 1024 == 0 {
+                            cancellation.check()?;
+                        }
+                        visited += 1;
+                        let Some(first) = versions.first() else {
+                            continue;
+                        };
+                        set_verdict(
+                            &mut verdicts,
+                            &first.record.id,
+                            visible_version(versions, self.snapshot_tx).is_some(),
+                            &mut retained_bytes,
+                        )?;
+                    }
+                }
+            }
+            for write in self.pending_writes_for_collection(collection) {
+                cancellation.check()?;
+                let visible = match write.op {
+                    TxWriteOp::Upsert if write.record()?.is_some() => true,
+                    TxWriteOp::Delete => false,
+                    _ => continue,
+                };
+                set_verdict(
+                    &mut verdicts,
+                    &write.record_id,
+                    visible,
+                    &mut retained_bytes,
+                )?;
+            }
+            let mut count = 0usize;
+            for entry in paged.scan_record_visibility(snapshot, collection)? {
+                cancellation.check()?;
+                let (id, base_visible) = entry?;
+                count += usize::from(verdicts.remove(&id).unwrap_or(base_visible));
+            }
+            count += verdicts.values().filter(|visible| **visible).count();
+            cancellation.check()?;
+            return Ok(Some(count));
         }
         let mut count = 0usize;
         let mut visited = 0usize;

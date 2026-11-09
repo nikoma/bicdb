@@ -10870,6 +10870,14 @@ impl BicDb {
         self.commit_seq.load(AtomicOrdering::SeqCst)
     }
 
+    /// Fence older SQL runtimes before publishing invalid routine metadata.
+    pub fn enable_oracle_invalid_routines_v1(&mut self) -> Result<()> {
+        self.ensure_writable("enable Oracle invalid routine metadata")?;
+        let result = format::enable_oracle_invalid_routines(&self.path);
+        self.check_recovery_state()?;
+        result
+    }
+
     /// Persist the compatibility fence before SQL publishes catalog intents.
     /// Older readers must refuse stores whose pending DDL they cannot recover.
     pub fn enable_sql_catalog_intents(&mut self) -> Result<()> {

@@ -3645,6 +3645,9 @@ fn role_has_table_privilege_uncached(
     table: &str,
     privilege: &str,
 ) -> Result<bool> {
+    if oracle::invalid_routines::is_relation(table) {
+        return Ok(privilege.eq_ignore_ascii_case("SELECT"));
+    }
     if oracle::storage_catalog::is_relation(table) {
         return if privilege.eq_ignore_ascii_case("SELECT") {
             oracle::storage_catalog::can_select(db, &normalize_role_name(role))
@@ -4566,10 +4569,12 @@ pub(crate) fn load_routine(
     name: &str,
 ) -> Result<Option<RoutineSchema>> {
     match db.get(ROUTINE_COLLECTION, &routine_key(kind, name)) {
-        Ok(Some(record)) => Ok(Some(
-            serde_json::from_value::<RoutineSchema>(record.metadata.clone())?
-                .with_declared_metadata(),
-        )),
+        Ok(Some(record)) => {
+            let routine = serde_json::from_value::<RoutineSchema>(record.metadata.clone())?
+                .with_declared_metadata();
+            oracle::invalid_routines::validate(db, &routine)?;
+            Ok(Some(routine))
+        }
         Ok(None) => Ok(None),
         Err(BicDbError::CollectionNotFound(_)) => Ok(None),
         Err(error) => Err(error.into()),

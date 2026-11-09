@@ -3614,6 +3614,7 @@ impl<'db> SqlSession<'db> {
             &language,
         )?;
         let routine = RoutineSchema {
+            oracle_invalid: None,
             name,
             schema: function_schema,
             kind: RoutineKind::Function,

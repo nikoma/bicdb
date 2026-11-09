@@ -688,6 +688,13 @@ impl<'db> SqlEngine<'db> {
         if oracle::storage_catalog::is_relation(table) {
             return self.storage_free_space_rows();
         }
+        if oracle::invalid_routines::is_relation(table) {
+            return oracle::invalid_routines::rows(
+                self.db_ref(),
+                table,
+                &current_user_from_gucs(&self.session_gucs),
+            );
+        }
         let stripped = table.strip_prefix("pg_catalog.").unwrap_or(table);
         if stripped == "pg_locks" {
             if let Some(runtime) = &self.runtime {

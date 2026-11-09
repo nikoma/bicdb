@@ -432,7 +432,7 @@ pub use format::{
     persist_current, persist_current_with_mode, storage_mode, FormatMetadata, FormatMigrationPlan,
     FormatMigrationReport, FormatMigrationStep, StorageMode, CURRENT_FORMAT_VERSION,
     FORMAT_METADATA_FILE, FORMAT_MIGRATION_STATE_FILE, MIN_READ_FORMAT_VERSION,
-    MIN_WRITE_FORMAT_VERSION, SERVER_PAGED_FEATURE_FLAG,
+    MIN_WRITE_FORMAT_VERSION, ORACLE_INVALID_ROUTINES_FEATURE_FLAG, SERVER_PAGED_FEATURE_FLAG,
 };
 pub use fts_build::FullTextBuildStatus;
 pub use fts_filters::FullTextDocumentFilter;

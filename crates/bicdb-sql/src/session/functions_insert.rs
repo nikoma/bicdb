@@ -57,6 +57,7 @@ impl<'db> SqlSession<'db> {
         let owner = current_user_from_gucs(&self.session_gucs);
         self.save_session_routine_if_missing(
             RoutineSchema {
+                oracle_invalid: None,
                 name,
                 schema: raw_function_schema,
                 kind: RoutineKind::Function,
@@ -190,6 +191,7 @@ impl<'db> SqlSession<'db> {
         let (procedure_schema, procedure_name) =
             routine_creation_schema_and_name(&object_name(name)?);
         let routine = RoutineSchema {
+            oracle_invalid: None,
             name: procedure_name,
             schema: procedure_schema,
             kind: RoutineKind::Procedure,
@@ -258,6 +260,7 @@ impl<'db> SqlSession<'db> {
         let owner = current_user_from_gucs(&self.session_gucs);
         self.save_session_routine_if_missing(
             RoutineSchema {
+                oracle_invalid: None,
                 name,
                 schema: raw_procedure_schema,
                 kind: RoutineKind::Procedure,

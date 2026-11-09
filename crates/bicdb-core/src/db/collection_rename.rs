@@ -635,7 +635,45 @@ impl BicDb {
                 "cannot rename onto a name with pending transaction writes".into(),
             ));
         }
+        let moved_locks = tx
+            .locked_keys
+            .lock()
+            .order
+            .iter()
+            .filter(|key| key.0 == old)
+            .map(|key| (key.clone(), (new.to_string(), key.1.clone())))
+            .collect::<Vec<_>>();
+        for (source, target) in &moved_locks {
+            if self.write_locks.get_copied(source) != Some(tx.id)
+                || self.write_locks.get_copied(target).is_some()
+            {
+                return Err(BicDbError::TransactionConflict(
+                    "cannot rename inconsistent or occupied transaction row locks".into(),
+                ));
+            }
+        }
         self.rename_collection(old, new)?;
+        // The logical name is the row-lock identity. Publish the renamed lock
+        // before releasing its former identity, and retain acquisition order
+        // so existing rollback marks still release the same suffix.
+        for (_, target) in &moved_locks {
+            self.write_locks.insert(target.clone(), tx.id);
+        }
+        {
+            let mut locked = tx.locked_keys.lock();
+            for key in &mut locked.order {
+                if key.0 == old {
+                    key.0 = new.to_string();
+                }
+            }
+            for (source, target) in &moved_locks {
+                locked.held.remove(source);
+                locked.held.insert(target.clone());
+            }
+        }
+        for (source, _) in &moved_locks {
+            release_owned_write_locks(&self.write_locks, tx.id, std::slice::from_ref(source));
+        }
         for write in &mut tx.writes {
             if write.collection == old {
                 write.collection = new.to_string();
@@ -665,8 +703,6 @@ impl BicDb {
         if tx.serializable_reads.remove(old) {
             tx.serializable_reads.insert(new.to_string());
         }
-        // Keep the exact acquired lock identities so rollback/commit releases
-        // every lock it took before the rename. No lock ownership is invented.
         Ok(())
     }
 }

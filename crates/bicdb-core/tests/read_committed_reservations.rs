@@ -328,17 +328,15 @@ fn concurrent_fence_overrides_constructor_error_after_entry() {
                 health.record_failure(
                     "test.reservation_constructor",
                     &"concurrent terminal failure",
-                )
+                );
             },
         );
-        assert!(
-            matches!(
-                tx.reserve_authorized_read_committed_row("rows", "one", None),
-                Err(BicDbError::WriteFailed { .. })
-            ),
-            "fence must override fixed-isolation argument error after entry"
-        );
+        let result = tx.reserve_authorized_read_committed_row("rows", "one", None);
         assert_eq!(hook.fired(), 1);
+        assert!(
+            matches!(result, Err(BicDbError::WriteFailed { .. })),
+            "fence must override fixed-isolation error after entry: {result:?}"
+        );
     }
 }
 
@@ -357,15 +355,15 @@ fn concurrent_fence_overrides_stale_token_error_after_validation_entry() {
             "read_committed.reservation.validate",
             dir.path(),
             1,
-            move || health.record_failure("test.reservation_read", &"concurrent terminal failure"),
+            move || {
+                health.record_failure("test.reservation_read", &"concurrent terminal failure");
+            },
         );
-        assert!(
-            matches!(
-                tx.read_authorized_reserved_row(&token),
-                Err(BicDbError::WriteFailed { .. })
-            ),
-            "fence must override stale-token error after validation entry"
-        );
+        let result = tx.read_authorized_reserved_row(&token);
         assert_eq!(hook.fired(), 1);
+        assert!(
+            matches!(result, Err(BicDbError::WriteFailed { .. })),
+            "fence must override stale-token error after validation entry: {result:?}"
+        );
     }
 }

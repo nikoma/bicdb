@@ -107,3 +107,51 @@ fn indexed_collections_fall_back_to_the_checked_path() {
     let row = db.get("places", "i-007").unwrap().unwrap();
     assert_eq!(row.metadata["value"], json!(7));
 }
+
+/// The structural-cut option removes the interim whole-load refusal. Every
+/// acknowledged row, including its payload, must survive repeated recovery.
+#[test]
+fn structural_cuts_accept_a_whole_bulk_load_larger_than_the_buffer_pool() {
+    let dir = tempfile::tempdir().unwrap();
+    let small = || config().with_paged_buffer_pool_bytes(256 * 1024);
+    let mut db = BicDb::open_with_config(dir.path(), small()).unwrap();
+    db.create_collection("places").unwrap();
+    db.close().unwrap();
+    let mut db = BicDb::open_with_config(dir.path(), small()).unwrap();
+    db.bulk_load_insert(
+        "places",
+        (0..50u64).map(|index| record(&format!("before-{index:05}"), index)),
+    )
+    .unwrap();
+    db.bulk_load_insert(
+        "places",
+        (0..20_000u64).map(|index| record(&format!("big-{index:05}"), index)),
+    )
+    .unwrap();
+    for recovery in 0..3 {
+        let rows = db.scan_collection("places").unwrap();
+        assert_eq!(rows.len(), 20_050, "recovery {recovery}");
+        let by_id = rows
+            .iter()
+            .map(|row| (row.id.as_str(), &row.metadata))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        for index in 0..20_000u64 {
+            assert_eq!(
+                by_id[format!("big-{index:05}").as_str()]["value"],
+                json!(index),
+                "recovery {recovery} / big row {index}"
+            );
+        }
+        for index in 0..50u64 {
+            assert_eq!(
+                by_id[format!("before-{index:05}").as_str()]["value"],
+                json!(index),
+                "recovery {recovery} / preexisting row {index}"
+            );
+        }
+        drop(by_id);
+        drop(rows);
+        db.close().unwrap();
+        db = BicDb::open_with_config(dir.path(), small()).unwrap();
+    }
+}

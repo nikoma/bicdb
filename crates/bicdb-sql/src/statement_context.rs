@@ -38,6 +38,7 @@ pub(crate) fn describing() -> bool {
 }
 
 pub(crate) struct StatementScope {
+    _join_budget: crate::join_budget::Scope,
     effects: Rc<Effects>,
     root: bool,
 }
@@ -49,6 +50,7 @@ impl StatementScope {
                 *current.borrow_mut() = Some(Rc::new(Effects::default()));
             }
             Self {
+                _join_budget: crate::join_budget::Scope::enter(),
                 effects: current.borrow().as_ref().unwrap().clone(),
                 root,
             }

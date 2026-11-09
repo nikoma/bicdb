@@ -1513,6 +1513,8 @@ impl BicDb {
         // transactions that do not contain their own rows.
         let _guard = paged.write_guard();
         self.check_recovery_state()?;
+        // Every page apply uses the same structural admission. The logical
+        // decision controls recovery/error handling, never an eviction waiver.
         let (xid, _) = paged.begin();
         match apply(paged, xid) {
             Ok(()) => {

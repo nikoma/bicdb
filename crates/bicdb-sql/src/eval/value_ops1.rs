@@ -327,6 +327,16 @@ pub(crate) fn eval_db_catalog_function_value(
                         "page_file_bytes": snapshot.page_file_bytes,
                         "wal_bytes": snapshot.wal_bytes,
                         "wal_max_bytes": snapshot.wal_max_bytes,
+                        // Cheap counters from the same bounded snapshot. They
+                        // distinguish file footprint from actual pool pressure.
+                        "buffer_pool": {
+                            "budget_bytes": snapshot.buffer_pool.budget_bytes,
+                            "total_frames": snapshot.buffer_pool.total_frames,
+                            "resident_pages": snapshot.buffer_pool.resident_pages,
+                            "evictions": snapshot.buffer_pool.evictions,
+                            "unlogged_pages": snapshot.buffer_pool.unlogged_pages,
+                            "unlogged_steals": snapshot.buffer_pool.unlogged_steals,
+                        },
                         // What vacuum + tail reclaim + hole punching can return:
                         // interior free pages plus tail slack beyond the logical
                         // page span.

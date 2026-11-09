@@ -25,7 +25,6 @@ use std::path::{Path, PathBuf};
 use bicdb_page::{
     verify_store_read_only, FindingClass, FindingSeverity, LogResetShape, PageError, PagedStore,
     PagedStoreOptions, StoreVerdict, StoreVerifyOptions, StoreVerifyReport, TupleLocator,
-    WritebackCursor, WritebackLimits,
 };
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
@@ -1013,40 +1012,6 @@ fn the_churn_reproducer_of_the_vacuum_row_loss_bug_is_detected() {
 // ---------------------------------------------------------------------------
 // GAP-1: uncommitted structure that reached the page file.
 
-const GAP_PAGE: u32 = 512;
-
-fn gap_options() -> PagedStoreOptions {
-    PagedStoreOptions::default()
-        .with_page_size(GAP_PAGE)
-        .with_buffer_pool_bytes(1024 * u64::from(GAP_PAGE))
-        .with_fsync(false)
-        .with_wal_max_bytes(1 << 30)
-}
-
-fn gap_key(index: usize) -> Vec<u8> {
-    format!("key-{index:04}").into_bytes()
-}
-
-fn gap_value(index: usize) -> Vec<u8> {
-    format!("value-{index}").into_bytes()
-}
-
-fn committed_and_checkpointed(dir: &Path, range: std::ops::Range<usize>) -> PagedStore {
-    let (store, _) = PagedStore::open(dir, gap_options()).unwrap();
-    let all: Vec<usize> = range.collect();
-    for chunk in all.chunks(50) {
-        let xid = store.begin();
-        for index in chunk {
-            store
-                .put(xid, &gap_key(*index), &gap_value(*index))
-                .unwrap();
-        }
-        store.commit(xid).unwrap();
-    }
-    store.checkpoint().unwrap();
-    store
-}
-
 /// The page a read error names, if any.
 fn error_page(error: &PageError) -> Option<u64> {
     match error {
@@ -1075,47 +1040,70 @@ fn flagged_pages(report: &StoreVerifyReport) -> BTreeSet<u64> {
         .collect()
 }
 
-/// Ground truth through a normal open of a copy.
+/// Reader ground truth captured from the historical writer, independently of
+/// the verifier. Reopening these corrupt bytes with a future recovery engine
+/// would change the witness and would no longer test the original failure.
+#[derive(serde::Deserialize)]
 struct GapTruth {
-    /// Committed keys that read absent or another value.
     committed_lost: usize,
-    /// Committed keys whose read fails, and the page each failure names.
     committed_erroring: Vec<(Vec<u8>, Option<u64>)>,
-    /// Uncommitted keys whose read fails instead of reading absent.
     uncommitted_erroring: Vec<(Vec<u8>, Option<u64>)>,
     integrity_valid: bool,
 }
 
-fn gap_failures(dir: &Path, range: std::ops::Range<usize>, crashed: &[Vec<u8>]) -> GapTruth {
-    let copy = copy_dir(dir);
-    let (store, _) = PagedStore::open(copy.path(), gap_options()).unwrap();
-    let mut truth = GapTruth {
-        committed_lost: 0,
-        committed_erroring: Vec::new(),
-        uncommitted_erroring: Vec::new(),
-        integrity_valid: false,
-    };
-    for index in range {
-        match store.get(&gap_key(index)) {
-            Ok(Some(found)) if found == gap_value(index) => {}
-            Ok(_) => truth.committed_lost += 1,
-            Err(error) => truth
-                .committed_erroring
-                .push((gap_key(index), error_page(&error))),
-        }
+fn historical_gap(name: &str) -> (TempDir, serde_json::Value) {
+    use std::io::Read;
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/gap1")
+        .join(format!("{name}.json.gz"));
+    let compressed = std::fs::read(&path).unwrap();
+    let manifest: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(path.parent().unwrap().join("manifest.json")).unwrap(),
+    )
+    .unwrap();
+    let entries = manifest["fixtures"].as_array().unwrap();
+    assert_eq!(
+        entries.len(),
+        24,
+        "retain every captured historical witness"
+    );
+    let entry = entries
+        .iter()
+        .find(|entry| entry["name"].as_str() == path.file_name().unwrap().to_str())
+        .unwrap();
+    assert_eq!(
+        hex::encode(Sha256::digest(&compressed)),
+        entry["sha256"].as_str().unwrap()
+    );
+    assert_eq!(compressed.len() as u64, entry["bytes"].as_u64().unwrap());
+    let mut json = Vec::new();
+    flate2::read::GzDecoder::new(compressed.as_slice())
+        .read_to_end(&mut json)
+        .unwrap();
+    let fixture: serde_json::Value = serde_json::from_slice(&json).unwrap();
+    assert_eq!(fixture["format"], 1);
+    assert_eq!(
+        fixture["writer_commit"],
+        "0af1b55e3d586d4a6933098419e7ee46a7ae5a79"
+    );
+    assert_eq!(fixture["case"], name);
+    let dir = TempDir::new().unwrap();
+    for file in fixture["files"].as_array().unwrap() {
+        let name = file["name"].as_str().unwrap();
+        assert_eq!(Path::new(name).components().count(), 1);
+        assert!(matches!(
+            Path::new(name).components().next(),
+            Some(std::path::Component::Normal(_))
+        ));
+        let bytes = hex::decode(file["bytes_hex"].as_str().unwrap()).unwrap();
+        assert_eq!(bytes.len() as u64, file["size"].as_u64().unwrap());
+        assert_eq!(
+            hex::encode(Sha256::digest(&bytes)),
+            file["sha256"].as_str().unwrap()
+        );
+        std::fs::write(dir.path().join(name), bytes).unwrap();
     }
-    for key in crashed {
-        if let Err(error) = store.get(key) {
-            truth
-                .uncommitted_erroring
-                .push((key.clone(), error_page(&error)));
-        }
-    }
-    truth.integrity_valid = store
-        .verify_integrity(8)
-        .map(|report| report.valid)
-        .unwrap_or(false);
-    truth
+    (dir, fixture["truth"].clone())
 }
 
 /// Every failing read names a page the verifier flagged.
@@ -1136,18 +1124,9 @@ fn assert_failing_reads_flagged(report: &StoreVerifyReport, failing: &[(Vec<u8>,
 fn gap1_an_uncommitted_root_split_that_loses_committed_keys_is_detected() {
     let mut detected_any = false;
     for committed in [2usize, 4, 6, 8] {
-        let crashed: Vec<Vec<u8>> = (0..40).map(|j| format!("a-{j:03}").into_bytes()).collect();
-        let dir = TempDir::new().unwrap();
-        {
-            let store = committed_and_checkpointed(dir.path(), 0..committed);
-            let xid = store.begin();
-            for key in &crashed {
-                store.put(xid, key, b"uncommitted").unwrap();
-            }
-            // Crash before commit.
-        }
+        let (dir, truth) = historical_gap(&format!("root-{committed}"));
         let report = verify(dir.path());
-        let truth = gap_failures(dir.path(), 0..committed, &crashed);
+        let truth: GapTruth = serde_json::from_value(truth).unwrap();
         let lost = truth.committed_lost;
         eprintln!(
             "GAP1-ROOT committed={committed} committed_lost={lost} committed_erroring={} \
@@ -1168,78 +1147,47 @@ fn gap1_an_uncommitted_root_split_that_loses_committed_keys_is_detected() {
             detected_any = true;
             assert_eq!(report.verdict, StoreVerdict::Inconsistent);
         }
-        // The recovered state of a copy reads the same.
-        let copy = copy_dir(dir.path());
-        {
-            let (store, _) = PagedStore::open(copy.path(), gap_options()).unwrap();
-            store.checkpoint().unwrap();
-        }
+        // Replay the exact state checkpointed by the historical writer too.
+        let (copy, recovered_truth) = historical_gap(&format!("root-{committed}-recovered"));
+        assert_eq!(
+            serde_json::to_value(lost).unwrap(),
+            recovered_truth["committed_lost"]
+        );
         let recovered = verify(copy.path());
         assert_eq!(
             recovered.count(FindingClass::UnreachableCommittedLiveVersion),
             (lost + truth.committed_erroring.len()) as u64
         );
     }
+    assert!(
+        detected_any,
+        "historical fixtures must retain a damaged witness"
+    );
     eprintln!("GAP1-ROOT detected_any={detected_any}");
 }
 
 #[test]
 fn gap1_a_partially_drained_uncommitted_leaf_split_is_detected() {
-    const COMMITTED: usize = 300;
-    let crashed: Vec<Vec<u8>> = (0..40)
-        .map(|j| format!("key-0150-{j:03}").into_bytes())
-        .collect();
-    let one_page = WritebackLimits {
-        max_candidates: 1,
-        max_io_bytes: 2 * u64::from(GAP_PAGE),
-        max_duration_millis: 10_000,
-    };
-    let steps = {
-        let probe = TempDir::new().unwrap();
-        let store = committed_and_checkpointed(probe.path(), 0..COMMITTED);
-        let xid = store.begin();
-        for key in &crashed {
-            store.put(xid, key, b"uncommitted").unwrap();
-        }
-        let mut cursor = WritebackCursor::default();
-        let mut steps = 0usize;
-        loop {
-            let report = store.writeback_step(cursor, one_page).unwrap();
-            steps += report.pages_written as usize;
-            if report.complete && report.dirty_pages_remaining == 0 {
-                break;
-            }
-            cursor = if report.complete {
-                WritebackCursor::default()
-            } else {
-                report.next_cursor
-            };
-        }
-        steps
-    };
+    let mut fixtures: Vec<String> =
+        std::fs::read_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/gap1"))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .filter_map(|name| {
+                name.strip_suffix(".json.gz")
+                    .filter(|name| name.starts_with("drain-"))
+                    .map(str::to_owned)
+            })
+            .collect();
+    fixtures.sort();
+    let steps = fixtures.len();
+    assert_eq!(steps, 15, "retain all historical partial-drain steps");
     let mut damaged = 0;
-    for written in 1..=steps {
-        let dir = TempDir::new().unwrap();
-        {
-            let store = committed_and_checkpointed(dir.path(), 0..COMMITTED);
-            let xid = store.begin();
-            for key in &crashed {
-                store.put(xid, key, b"uncommitted").unwrap();
-            }
-            let mut cursor = WritebackCursor::default();
-            let mut done = 0usize;
-            while done < written {
-                let report = store.writeback_step(cursor, one_page).unwrap();
-                done += report.pages_written as usize;
-                cursor = if report.complete {
-                    WritebackCursor::default()
-                } else {
-                    report.next_cursor
-                };
-            }
-        }
+    for (index, name) in fixtures.iter().enumerate() {
+        let written = index + 1;
+        assert_eq!(name, &format!("drain-{written:03}-of-{steps:03}"));
+        let (dir, truth) = historical_gap(name);
         let report = verify(dir.path());
-        let truth = gap_failures(dir.path(), 0..COMMITTED, &crashed);
+        let truth: GapTruth = serde_json::from_value(truth).unwrap();
         eprintln!(
             "GAP1-DRAIN {written}/{steps} committed_lost={} committed_erroring={} \
              uncommitted_erroring={} verify_integrity_valid={} {}",
@@ -1269,58 +1217,21 @@ fn gap1_a_partially_drained_uncommitted_leaf_split_is_detected() {
             );
         }
     }
+    assert!(
+        damaged > 0,
+        "historical fixtures must retain damaged partial drains"
+    );
     eprintln!("GAP1-DRAIN damaged_states={damaged} of {steps}");
 }
 
 #[test]
 fn gap1_an_interleaved_open_transaction_leaves_unreadable_referenced_pages() {
-    let key = |i: u64| format!("key-{i:05}").into_bytes();
-    let value = |i: u64, round: u64| {
-        format!("v{round}-{}", "x".repeat(((i * 7 + round) % 40) as usize)).into_bytes()
-    };
-    // The smaller WAL/heap layout needs more pressure to reproduce the old
-    // unsafe-steal state. At 32 frames this workload still corrupts tree
-    // structure but no longer produces the unreadable references tested here.
-    let small = PagedStoreOptions::default()
-        .with_page_size(GAP_PAGE)
-        .with_buffer_pool_bytes(16 * u64::from(GAP_PAGE))
-        .with_fsync(false)
-        .with_wal_max_bytes(1 << 30);
-    let dir = TempDir::new().unwrap();
-    let mut model = BTreeMap::new();
-    {
-        let (store, _) = PagedStore::open(dir.path(), small).unwrap();
-        let open = store.begin();
-        for i in 0..400u64 {
-            store.put(open, &key(20_000 + i), &value(i, 1)).unwrap();
-            let tx = store.begin();
-            store.put(tx, &key(i % 90), &value(i, i)).unwrap();
-            store.put(tx, &key(10_000 + i), &value(i, 2)).unwrap();
-            store.commit(tx).unwrap();
-            model.insert(key(i % 90), value(i, i));
-            model.insert(key(10_000 + i), value(i, 2));
-        }
-        // Crash with `open` still running.
-    }
+    let (dir, truth) = historical_gap("interleaved");
     let report = verify_with(dir.path(), &many_samples());
-    // Ground truth: which keys fail to read after a normal open.
-    let copy = copy_dir(dir.path());
-    let (store, _) = PagedStore::open(copy.path(), gap_options()).unwrap();
-    let mut erroring = Vec::new();
-    let mut committed_wrong = 0;
-    for (k, v) in &model {
-        match store.get(k) {
-            Ok(Some(found)) if &found == v => {}
-            Ok(_) => committed_wrong += 1,
-            Err(error) => erroring.push((k.clone(), error_page(&error))),
-        }
-    }
-    for i in 0..400u64 {
-        if let Err(error) = store.get(&key(20_000 + i)) {
-            erroring.push((key(20_000 + i), error_page(&error)));
-        }
-    }
-    let integrity_valid = store.verify_integrity(8).map(|r| r.valid).unwrap_or(false);
+    let erroring: Vec<(Vec<u8>, Option<u64>)> =
+        serde_json::from_value(truth["erroring"].clone()).unwrap();
+    let committed_wrong = truth["committed_wrong"].as_u64().unwrap();
+    let integrity_valid = truth["integrity_valid"].as_bool().unwrap();
     let failing_pages: BTreeSet<Option<u64>> = erroring.iter().map(|(_, page)| *page).collect();
     eprintln!(
         "GAP1-INTERLEAVED erroring={} on pages {failing_pages:?} committed_wrong={committed_wrong} \
@@ -1328,6 +1239,8 @@ fn gap1_an_interleaved_open_transaction_leaves_unreadable_referenced_pages() {
         erroring.len(),
         summary_line(&report)
     );
+    assert_eq!(erroring.len(), 77);
+    assert_eq!(committed_wrong, 0);
     assert!(
         !erroring.is_empty(),
         "the reproducer no longer produces failing reads"

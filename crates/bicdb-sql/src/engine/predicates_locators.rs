@@ -5437,21 +5437,21 @@ impl<'db> SqlEngine<'db> {
                 )? {
                     matched_left = true;
                     matched_right[right_idx] = true;
-                    rows.push(merge_slot_rows(
+                    rows.push(materialize_join_row(
                         left_row,
                         &left.columns,
                         right_row,
                         &right.columns,
-                    ));
+                    )?);
                 }
             }
             if !matched_left && matches!(kind, RowJoinKind::Left | RowJoinKind::FullOuter) {
-                rows.push(merge_slot_rows(
+                rows.push(materialize_join_row(
                     left_row,
                     &left.columns,
                     &null_right,
                     &right.columns,
-                ));
+                )?);
             }
         }
 
@@ -5461,12 +5461,12 @@ impl<'db> SqlEngine<'db> {
                     self.check_cancellation()?;
                 }
                 if !matched_right[right_idx] {
-                    rows.push(merge_slot_rows(
+                    rows.push(materialize_join_row(
                         &null_left,
                         &left.columns,
                         right_row,
                         &right.columns,
-                    ));
+                    )?);
                 }
             }
         }
@@ -5605,21 +5605,21 @@ impl<'db> SqlEngine<'db> {
                     constraint,
                 )? {
                     matched_left = true;
-                    rows.push(merge_slot_rows(
+                    rows.push(materialize_join_row(
                         left_row,
                         &left.columns,
                         &right_row,
                         &right_columns,
-                    ));
+                    )?);
                 }
             }
             if !matched_left && matches!(kind, RowJoinKind::Left) {
-                rows.push(merge_slot_rows(
+                rows.push(materialize_join_row(
                     left_row,
                     &left.columns,
                     &null_right,
                     &right_columns,
-                ));
+                )?);
             }
         }
         let columns = merge_row_set_columns(left.columns, right_columns);
@@ -5689,21 +5689,21 @@ impl<'db> SqlEngine<'db> {
                         constraint,
                     )? {
                         matched_left = true;
-                        rows.push(merge_slot_rows(
+                        rows.push(materialize_join_row(
                             left_row,
                             &left.columns,
                             right_row,
                             &right_columns,
-                        ));
+                        )?);
                     }
                 }
                 if !matched_left && matches!(kind, RowJoinKind::Left) {
-                    rows.push(merge_slot_rows(
+                    rows.push(materialize_join_row(
                         left_row,
                         &left.columns,
                         &null_right,
                         &right_columns,
-                    ));
+                    )?);
                 }
                 continue;
             }
@@ -5729,21 +5729,21 @@ impl<'db> SqlEngine<'db> {
                     constraint,
                 )? {
                     matched_left = true;
-                    rows.push(merge_slot_rows(
+                    rows.push(materialize_join_row(
                         left_row,
                         &left.columns,
                         right_row,
                         &right_columns,
-                    ));
+                    )?);
                 }
             }
             if !matched_left && matches!(kind, RowJoinKind::Left) {
-                rows.push(merge_slot_rows(
+                rows.push(materialize_join_row(
                     left_row,
                     &left.columns,
                     &null_right,
                     &right_columns,
-                ));
+                )?);
             }
         }
 
@@ -5818,21 +5818,21 @@ impl<'db> SqlEngine<'db> {
                     constraint,
                 )? {
                     matched_left = true;
-                    rows.push(merge_slot_rows(
+                    rows.push(materialize_join_row(
                         left_row,
                         &left.columns,
                         &right_row,
                         right_columns_ref,
-                    ));
+                    )?);
                 }
             }
             if !matched_left && matches!(kind, RowJoinKind::Left) {
-                rows.push(merge_slot_rows(
+                rows.push(materialize_join_row(
                     left_row,
                     &left.columns,
                     &null_right,
                     right_columns_ref,
-                ));
+                )?);
             }
         }
 
@@ -6505,21 +6505,21 @@ impl<'db> SqlEngine<'db> {
                     )?
                 {
                     matched_left = true;
-                    rows.push(merge_slot_rows(
+                    rows.push(materialize_join_row(
                         left_row,
                         &left.columns,
                         right_row,
                         &right.columns,
-                    ));
+                    )?);
                 }
             }
             if let (false, Some(null_right)) = (matched_left, null_right.as_ref()) {
-                rows.push(merge_slot_rows(
+                rows.push(materialize_join_row(
                     left_row,
                     &left.columns,
                     null_right,
                     &right.columns,
-                ));
+                )?);
             }
         }
 
@@ -7626,6 +7626,16 @@ impl<'db> SqlEngine<'db> {
         select: &Select,
         query: &Query,
     ) -> Result<SqlResult> {
+        let budget = crate::join_budget::QueryScope::enter();
+        budget.finish(self.execute_cached_point_join_unscoped(template, select, query))
+    }
+
+    fn execute_cached_point_join_unscoped(
+        &self,
+        template: &PointJoinTemplate,
+        select: &Select,
+        query: &Query,
+    ) -> Result<SqlResult> {
         self.check_cancellation()?;
         let (_, context) = self.bound_row_context(&[]);
         let empty_row: SlotRow = Vec::new();
@@ -7635,12 +7645,12 @@ impl<'db> SqlEngine<'db> {
             let right_rows =
                 self.point_lookup_rows(&template.right, left_row, &context.var_values)?;
             if let Some(right_row) = right_rows.first() {
-                rows.push(merge_slot_rows(
+                rows.push(materialize_join_row(
                     left_row,
                     &template.left.output_columns,
                     right_row,
                     &template.right.output_columns,
-                ));
+                )?);
             }
         }
         sql_profile_join_rows(&rows, rows.len());

@@ -93,9 +93,9 @@ pub use paged::{
     MAX_VERSION_VERIFY_VERSIONS_PER_STEP, PAGED_STORE_SNAPSHOT_FORMAT_VERSION,
 };
 pub use pool::{
-    BufferPool, BufferPoolOptions, BufferPoolSnapshot, PageGuard, PageGuardMut,
+    unlogged_reserve, BufferPool, BufferPoolOptions, BufferPoolSnapshot, PageGuard, PageGuardMut,
     PageGuardUpgradable, PageReadSource, ReadAheadLimits, ReadAheadStepReport, ReadAheadStopReason,
-    ReadAheadSubmitReport, WritebackCursor, WritebackLimits, WritebackStepReport,
+    ReadAheadSubmitReport, UnloggedPressure, WritebackCursor, WritebackLimits, WritebackStepReport,
     WritebackStopReason, MAX_READ_AHEAD_CANDIDATES_PER_STEP,
     MAX_READ_AHEAD_DURATION_MILLIS_PER_STEP, MAX_READ_AHEAD_IO_BYTES_PER_STEP,
     MAX_READ_AHEAD_QUEUE_PAGES, MAX_WRITEBACK_DURATION_MILLIS_PER_STEP,

@@ -1,8 +1,8 @@
-//! Bound cumulative owned allocations while executing a join pipeline.
+//! Bound owned allocations while executing a join pipeline.
 //!
 //! This is a cooperative materialization envelope, not an allocator/RSS limit.
-//! Counting prior intermediates conservatively even after they are freed also
-//! bounds nested pipelines without needing allocation ownership in every RowSet.
+//! A pipeline conservatively counts its prior intermediates. Completed child
+//! queries release their intermediates and charge returned storage to the caller.
 use crate::{Result, SqlError, SqlResult, SqlValue};
 use std::{cell::Cell, marker::PhantomData, rc::Rc, sync::OnceLock};
 

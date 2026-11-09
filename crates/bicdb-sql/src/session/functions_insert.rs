@@ -1515,11 +1515,12 @@ impl<'db> SqlSession<'db> {
             // statement waits, leaving it invisible to the statement snapshot.
             let refreshed =
                 self.read_committed_primary_conflict(table, schema, &record, &conflict_columns)?;
-            let (existing, conflict_snapshot) = match refreshed {
-                Some((existing, snapshot)) => (existing, snapshot),
+            let (existing, conflict_snapshot, conflict_reservation) = match refreshed {
+                Some(found) => found,
                 None => (
                     self.find_conflict_record(table, schema, &record, &conflict_columns)?,
                     0,
+                    None,
                 ),
             };
             if let Some(existing) = existing {
@@ -1631,10 +1632,18 @@ impl<'db> SqlSession<'db> {
                             true,
                             Some(&self.sql_engine()),
                         )?;
-                        self.insert_session_records_with_statement_snapshots(
-                            table,
-                            std::iter::once((updated.clone(), conflict_snapshot)),
-                        )?;
+                        if let Some(reservation) = conflict_reservation {
+                            self.insert_reserved_session_record(
+                                table,
+                                reservation,
+                                updated.clone(),
+                            )?;
+                        } else {
+                            self.insert_session_records_with_statement_snapshots(
+                                table,
+                                std::iter::once((updated.clone(), conflict_snapshot)),
+                            )?;
+                        }
                         self.apply_foreign_key_parent_update(table, schema, &existing, &updated)?;
                         self.fire_after_row_triggers(
                             table,
@@ -1662,7 +1671,13 @@ impl<'db> SqlSession<'db> {
                     self.arbiter_race_as_conflict(table, Some(schema), &conflict_columns, error)
                 })?;
             }
-            if let Err(error) = self.insert_session_records(table, vec![record.clone()]) {
+            let inserted = match conflict_reservation {
+                Some(reservation) => {
+                    self.insert_reserved_session_record(table, reservation, record.clone())
+                }
+                None => self.insert_session_records(table, vec![record.clone()]),
+            };
+            if let Err(error) = inserted {
                 return Err(self.arbiter_race_as_conflict(table, schema, &conflict_columns, error));
             }
             inserted_records.push(record.clone());
@@ -1687,13 +1702,13 @@ impl<'db> SqlSession<'db> {
         schema: Option<&TableSchema>,
         record: &Record,
         conflict_columns: &[String],
-    ) -> Result<Option<(Option<Record>, u64)>> {
-        // Signed writes retain action-specific authority and the existing
-        // explicit retry requirement for snapshot-invisible conflicts. Their
-        // protected write helper does not yet carry a refreshed row version.
-        if self.signed_mutation_grant(table).is_some() {
-            return Ok(None);
-        }
+    ) -> Result<
+        Option<(
+            Option<Record>,
+            u64,
+            Option<bicdb_core::ReadCommittedRowReservation>,
+        )>,
+    > {
         if !self
             .tx
             .as_ref()
@@ -1707,9 +1722,14 @@ impl<'db> SqlSession<'db> {
         let Some(arbiter) = self.memoized_unique_arbiter(table, schema, conflict_columns)? else {
             return Ok(None);
         };
+        if self.signed_mutation_grant(table).is_some() {
+            return self.read_committed_signed_arbiter_conflict(table, schema, record, &arbiter);
+        }
         let columns = primary_key_columns_for_unique_arbiter(schema, &arbiter);
         let Some(columns) = columns.filter(|_| !primary_key_requires_typed_identity(schema)) else {
-            return self.read_committed_index_conflict(table, schema, record, &arbiter);
+            return self
+                .read_committed_index_conflict(table, schema, record, &arbiter)
+                .map(|found| found.map(|(row, snapshot)| (row, snapshot, None)));
         };
         let key = record_column_values(record, schema, &columns);
         let id = record_id_from_column_values(table, schema, &columns, &key)?;
@@ -1735,7 +1755,127 @@ impl<'db> SqlSession<'db> {
         } else {
             None
         };
-        Ok(Some((latest, snapshot)))
+        Ok(Some((latest, snapshot, None)))
+    }
+
+    fn read_committed_signed_arbiter_conflict(
+        &mut self,
+        table: &str,
+        schema: &TableSchema,
+        record: &Record,
+        arbiter: &records::UniqueConflictArbiter,
+    ) -> Result<
+        Option<(
+            Option<Record>,
+            u64,
+            Option<bicdb_core::ReadCommittedRowReservation>,
+        )>,
+    > {
+        let cancellation = self.blocking_row_wait_token();
+        let columns = primary_key_columns_for_unique_arbiter(schema, arbiter);
+        if let Some(columns) = columns.filter(|_| !primary_key_requires_typed_identity(schema)) {
+            let values = record_column_values(record, schema, &columns);
+            let id = record_id_from_column_values(table, schema, &columns, &values)?;
+            let tx = self.tx.as_mut().expect("RC transaction");
+            let token =
+                tx.reserve_authorized_read_committed_row(table, &id, cancellation.as_ref())?;
+            let row = tx
+                .read_authorized_reserved_row(&token)?
+                .map(|record| record.as_ref().clone());
+            return Ok(Some((row, 0, Some(token))));
+        }
+        let Some(index) = arbiter.index_name.as_deref() else {
+            return Ok(None);
+        };
+        let values = unique_key_values(record, schema, &arbiter.key);
+        if arbiter.skips_null_key(&values)
+            || !arbiter.applies_to(record)?
+            || values
+                .iter()
+                .any(|value| matches!(value, SqlValue::Json(_)))
+        {
+            return Ok(None);
+        }
+        let tx = self.tx.as_ref().expect("RC transaction");
+        match &cancellation {
+            Some(token) => tx.reserve_unique_index_record_cancellable(index, record, token)?,
+            None => tx.reserve_unique_index_record(index, record)?,
+        }
+        let index_values = unique_key_index_values(schema, &arbiter.key, &values)?;
+        let mut candidates = self.db_ref().lookup_index_exact(index, &index_values)?;
+        candidates.sort_unstable();
+        candidates.dedup();
+        let mut visited = std::collections::HashSet::new();
+        for id in candidates {
+            visited.insert(id.clone());
+            if let Some(found) = self.read_committed_signed_matching_row(
+                table,
+                schema,
+                arbiter,
+                &values,
+                &id,
+                cancellation.as_ref(),
+            )? {
+                return Ok(Some(found));
+            }
+        }
+        for id in self
+            .tx
+            .as_ref()
+            .expect("RC transaction")
+            .pending_record_ids_for_collection(table)
+        {
+            if !visited.contains(&id) {
+                if let Some(found) = self.read_committed_signed_matching_row(
+                    table,
+                    schema,
+                    arbiter,
+                    &values,
+                    &id,
+                    cancellation.as_ref(),
+                )? {
+                    return Ok(Some(found));
+                }
+            }
+        }
+        let tx = self.tx.as_mut().expect("RC transaction");
+        let token =
+            tx.reserve_authorized_read_committed_row(table, &record.id, cancellation.as_ref())?;
+        Ok(Some((None, 0, Some(token))))
+    }
+
+    fn read_committed_signed_matching_row(
+        &mut self,
+        table: &str,
+        schema: &TableSchema,
+        arbiter: &records::UniqueConflictArbiter,
+        values: &[SqlValue],
+        id: &str,
+        cancellation: Option<&bicdb_core::CancellationToken>,
+    ) -> Result<
+        Option<(
+            Option<Record>,
+            u64,
+            Option<bicdb_core::ReadCommittedRowReservation>,
+        )>,
+    > {
+        self.cancellation.check()?;
+        let tx = self.tx.as_mut().expect("RC transaction");
+        let token = tx.reserve_authorized_read_committed_row(table, id, cancellation)?;
+        let row = tx.read_authorized_reserved_row(&token)?;
+        let Some(row) = row else { return Ok(None) };
+        if arbiter.applies_to(&row)?
+            && records::unique_key_values_not_distinct(
+                schema,
+                &arbiter.key,
+                &unique_key_values(&row, schema, &arbiter.key),
+                values,
+            )?
+        {
+            Ok(Some((Some(row.as_ref().clone()), 0, Some(token))))
+        } else {
+            Ok(None)
+        }
     }
 
     fn read_committed_index_conflict(

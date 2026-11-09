@@ -81,10 +81,9 @@ fn loaded(dir: &std::path::Path, config: DbConfig, collection: &str, rows: usize
 /// its entries appear atomically, and nothing marks a partial backfill. On a
 /// collection whose entries outgrow the pool, CREATE INDEX now fails cleanly
 /// instead of succeeding by stealing pages (with a crash window that could
-/// lose other rows). The failure leaves every row intact; a B-tree build
-/// leaves no index, and a full-text build keeps its definition for resume.
-/// With a larger pool the same CREATE INDEX completes (for full text, by
-/// resuming) with correct results.
+/// lose other rows). The failure leaves every row intact and no published
+/// index. These direct builds have no resumable workspace. With a larger
+/// pool the same CREATE INDEX completes with correct results.
 #[test]
 fn creating_an_index_whose_backfill_outgrows_the_pool_fails_cleanly() {
     const ROWS: usize = 30_000;
@@ -98,23 +97,15 @@ fn creating_an_index_whose_backfill_outgrows_the_pool_fails_cleanly() {
             error.to_string().contains("refused"),
             "{label}: unexpected error: {error}"
         );
-        // A refused B-tree build leaves no definition. A full-text build
-        // keeps its definition and its build workspace on purpose, so that
-        // retrying CREATE INDEX resumes it (`resume_paged_full_text_build`).
-        let kept = db
-            .index_definitions()
-            .iter()
-            .any(|index| index.name == definition.name);
-        assert_eq!(
-            kept,
-            definition.kind == IndexKind::FullText,
-            "{label}: unexpected index definition state after the refusal"
+        assert!(
+            !db.index_definitions().iter().any(|index| index.name == definition.name),
+            "{label}: a refused non-resumable build left a published definition"
         );
         assert_eq!(db.scan_collection("rows").unwrap().len(), ROWS, "{label}");
         if definition.kind == IndexKind::FullText {
             let error = db.lookup_full_text_term(&definition.name, "common", false)
                 .expect_err("a refused build must not answer from a partial index");
-            assert!(error.to_string().contains("no completed build"), "{error}");
+            assert!(error.to_string().contains("not found"), "{error}");
         }
         db.close().unwrap();
 

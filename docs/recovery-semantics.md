@@ -934,10 +934,10 @@ a committed (or structural, xid 0) record, except for the cases listed under
    whenever the external full-text build does not complete the job) writes
    every entry of the backfill in one page transaction, which makes the new entries appear atomically. On a
    collection whose entries outgrow the pool it now fails cleanly ("refused
-   ... raise buffer_pool_bytes"), with every row intact; a B-tree build leaves
-   no index, and a full-text build keeps its definition and workspace so that
-   retrying CREATE INDEX resumes it. The kept entry is marked incomplete,
-   and lookups refuse instead of returning a partial result. Before, it succeeded by
+   ... raise buffer_pool_bytes"), with every row intact. A build with no
+   resumable workspace leaves no published index. A full-text external build
+   may keep its workspace and incomplete definition for resume; lookups
+   refuse instead of returning partial results. Before, it succeeded by
    stealing, with a crash window that could lose other rows. At the default
    256 MiB pool that is roughly a few million rows, depending on the key
    size. Splitting it needs a completion marker, as the full-text path has;

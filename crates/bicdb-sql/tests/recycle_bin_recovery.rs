@@ -169,11 +169,8 @@ fn transactional_rename_requires_own_pending_transaction_and_checks_noop_health(
                 Err(bicdb_core::BicDbError::WriteFailed { .. })
             ));
         }
-        tx.rollback().unwrap();
+        drop(tx);
         let mut finished = other.begin_transaction().unwrap();
-        // Obtain a finished transaction without consuming it through a no-op
-        // rollback mark? Commit consumes Transaction, so use a foreign owner
-        // check above for public API and exercise finished state in core units.
         finished.insert("before", Record::new("pending")).unwrap();
         other
             .rename_collection_preserving_pending_writes(&mut finished, "before", "after")

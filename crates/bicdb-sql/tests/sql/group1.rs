@@ -3373,6 +3373,23 @@ fn erp_date_interval_and_expression_subset() {
 
     // PostgreSQL DATE + INTERVAL returns TIMESTAMP, including midnight.
     assert_eq!(result.column_types[1].as_deref(), Some("timestamp"));
+    let interval_types = session
+        .execute(
+            "SELECT due_on - '2 days'::interval, '2 days'::interval + due_on \
+             FROM invoices WHERE id = 'i1'",
+        )
+        .unwrap();
+    assert_eq!(
+        interval_types.column_types,
+        vec![Some("timestamp".to_string()), Some("timestamp".to_string())]
+    );
+    assert_eq!(
+        interval_types.rows,
+        vec![vec![
+            SqlValue::String("2024-01-29 00:00:00".to_string()),
+            SqlValue::String("2024-02-02 00:00:00".to_string()),
+        ]]
+    );
     assert_eq!(
         result.rows,
         vec![

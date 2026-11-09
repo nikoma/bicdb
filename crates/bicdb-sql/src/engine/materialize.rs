@@ -3797,6 +3797,15 @@ impl<'db> SqlEngine<'db> {
                 {
                     return Some("timetz".to_string());
                 }
+                if (left.as_deref() == Some("date")
+                    && right_interval
+                    && matches!(op, BinaryOperator::Plus | BinaryOperator::Minus))
+                    || (left_interval
+                        && right.as_deref() == Some("date")
+                        && matches!(op, BinaryOperator::Plus))
+                {
+                    return Some("timestamp".to_string());
+                }
                 let timestamp_interval_plus = matches!(op, BinaryOperator::Plus)
                     && ((left.as_deref() == Some("timestamp")
                         && right.as_deref() == Some("interval"))

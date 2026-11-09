@@ -133,7 +133,7 @@ pub(crate) fn check_executable(routine: &RoutineSchema) -> Result<()> {
         return Err(errors::database_error(
             -6575,
             "42000",
-            format!(
+            &format!(
                 "Package or function {} is in an invalid state",
                 routine.name
             ),

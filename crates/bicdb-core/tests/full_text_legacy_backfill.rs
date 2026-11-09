@@ -11,11 +11,15 @@ fn a_legacy_array_backfill_is_queryable_immediately_and_after_reopen() {
     {
         let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
         db.create_collection("documents").unwrap();
-        db.bulk_load_insert("documents", (0..250).map(|i| {
-            Record::new(format!("document-{i:04}")).with_metadata(json!({
-                "terms": ["shared", format!("unique{i}")]
-            }))
-        })).unwrap();
+        db.bulk_load_insert(
+            "documents",
+            (0..250).map(|i| {
+                Record::new(format!("document-{i:04}")).with_metadata(json!({
+                    "terms": ["shared", format!("unique{i}")]
+                }))
+            }),
+        )
+        .unwrap();
         db.close().unwrap();
     }
     let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
@@ -28,10 +32,20 @@ fn a_legacy_array_backfill_is_queryable_immediately_and_after_reopen() {
         nulls_not_distinct: false,
         predicate: None,
         exclusion: None,
-    }).unwrap();
+    })
+    .unwrap();
     let assert_complete = |db: &BicDb| {
-        assert_eq!(db.lookup_full_text_term("documents_terms", "shared", false).unwrap().len(), 250);
-        assert_eq!(db.lookup_full_text_term("documents_terms", "unique17", false).unwrap(), vec!["document-0017"]);
+        assert_eq!(
+            db.lookup_full_text_term("documents_terms", "shared", false)
+                .unwrap()
+                .len(),
+            250
+        );
+        assert_eq!(
+            db.lookup_full_text_term("documents_terms", "unique17", false)
+                .unwrap(),
+            vec!["document-0017"]
+        );
         assert!(db.verify_index("documents_terms").unwrap().valid);
     };
     assert_complete(&db);

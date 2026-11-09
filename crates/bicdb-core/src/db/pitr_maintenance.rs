@@ -2996,7 +2996,9 @@ impl BicDb {
                 // resolves those through the compact row-id registry. A table
                 // opened before it had an index has no registry yet.
                 let mut collection = self.collection_state_write(&definition.collection)?;
-                for shard in collection.shards_mut() { shard.track_reverse = true; }
+                for shard in collection.shards_mut() {
+                    shard.track_reverse = true;
+                }
                 for id in paged.scan_ids(&snapshot, &definition.collection)? {
                     let id = id?;
                     collection.shard_mut(&id).rowid_or_alloc(&id);

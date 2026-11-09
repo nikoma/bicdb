@@ -249,6 +249,7 @@ impl<'db> SqlSession<'db> {
                 .collect(),
         };
         super::recycle_bin_journal::prepare(self.db_mut()?, &entry)?;
+        super::recycle_bin_journal::stage("intent");
         match self.db_mut()?.rename_collection(table, &bin_name) {
             Ok(()) => {}
             Err(BicDbError::Unsupported(_)) => {
@@ -257,6 +258,7 @@ impl<'db> SqlSession<'db> {
             }
             Err(error) => return Err(error.into()),
         }
+        super::recycle_bin_journal::stage("collection");
         let mut indexes = Vec::with_capacity(index_names.len());
         for (position, original) in index_names.into_iter().enumerate() {
             let scoped = format!("{bin_name}_i{position}");
@@ -272,9 +274,11 @@ impl<'db> SqlSession<'db> {
                 Err(error) => return Err(error.into()),
             };
             indexes.push((if renamed { scoped } else { original.clone() }, original));
+            super::recycle_bin_journal::stage("index");
         }
         let db = self.db_mut()?;
         delete_schema(db, table)?;
+        super::recycle_bin_journal::stage("schema");
         for grant in &grants {
             delete_privilege(db, grant)?;
         }
@@ -284,10 +288,13 @@ impl<'db> SqlSession<'db> {
         for sequence in &sequences {
             delete_sequence(db, &sequence.name)?;
         }
+        super::recycle_bin_journal::stage("dependents");
         let mut entry = entry;
         entry.indexes = indexes;
         save_recycle_bin_entry(db, &entry)?;
+        super::recycle_bin_journal::stage("entry");
         super::recycle_bin_journal::decide(self, &bin_name)?;
+        super::recycle_bin_journal::stage("decision");
         sql_index_definitions_cache_clear();
         if self.tx.is_some() {
             self.ddl_undo.push(DdlUndo::RestoreFromRecycleBin {
@@ -477,7 +484,7 @@ impl<'db> SqlSession<'db> {
             save_sequence(db, sequence)?;
         }
         delete_recycle_bin_entry(db, &entry.bin_name)?;
-        super::recycle_bin_journal::clear_if_present(db, &entry.bin_name)?;
+        super::recycle_bin_journal::clear_restored(self, &entry.bin_name)?;
         sql_index_definitions_cache_clear();
         Ok(())
     }
@@ -486,7 +493,7 @@ impl<'db> SqlSession<'db> {
         let db = self.db_mut()?;
         db.drop_collection(&entry.bin_name)?;
         delete_recycle_bin_entry(db, &entry.bin_name)?;
-        super::recycle_bin_journal::clear_if_present(db, &entry.bin_name)?;
+        super::recycle_bin_journal::clear_restored(self, &entry.bin_name)?;
         sql_index_definitions_cache_clear();
         Ok(())
     }

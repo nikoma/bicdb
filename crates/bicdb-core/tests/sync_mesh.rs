@@ -27,10 +27,10 @@ fn node_id_is_persisted_and_status_tracks_pending_changes() {
         db.create_collection("patients").unwrap();
         db.insert("patients", Record::new("p-1")).unwrap();
 
-        let pending = db.pending_changes();
+        let pending = db.pending_changes().unwrap();
         assert_eq!(pending.node_id, node(1));
         assert_eq!(pending.pending_events, 1);
-        assert_eq!(db.sync_status().total_events, 1);
+        assert_eq!(db.sync_status().unwrap().total_events, 1);
         db.close().unwrap();
     }
 
@@ -55,7 +55,7 @@ fn sync_bundle_round_trips_and_verifies_checksums() {
         .export_to_path(SyncCheckpoint::default(), &bundle_path)
         .unwrap();
     assert_eq!(report.event_count, 1);
-    assert!(db.pending_changes().pending_events == 0);
+    assert!(db.pending_changes().unwrap().pending_events == 0);
 
     let bundle = SyncBundle::read(&bundle_path).unwrap();
     assert_eq!(bundle.event_count, 1);
@@ -234,12 +234,14 @@ fn diverged_databases_exchange_bundles_and_converge_without_data_loss() {
     let left_audit_ids = left
         .events()
         .read(RECORD_AUDIT_STREAM)
+        .unwrap()
         .into_iter()
         .map(|event| event.event.id)
         .collect::<std::collections::BTreeSet<_>>();
     let right_audit_ids = right
         .events()
         .read(RECORD_AUDIT_STREAM)
+        .unwrap()
         .into_iter()
         .map(|event| event.event.id)
         .collect::<std::collections::BTreeSet<_>>();

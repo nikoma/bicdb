@@ -46,16 +46,19 @@ fn event_stream_appends_reads_replays_and_recovers() {
     }
 
     let db = BicDb::open(temp.path()).unwrap();
-    let events = db.events().read("patient-events");
+    let events = db.events().read("patient-events").unwrap();
     assert_eq!(events.len(), 2);
     assert_eq!(events[0].offset, first_offset);
     assert_eq!(events[0].event.event_type, "PatientCreated");
     assert_eq!(events[0].event.metadata["source"], "test");
 
-    let since = db.events().read_since(first_offset);
+    let since = db.events().read_since(first_offset).unwrap();
     assert_eq!(since.len(), 2);
 
-    let replay = db.events().replay_from("patient-events", events[1].offset);
+    let replay = db
+        .events()
+        .replay_from("patient-events", events[1].offset)
+        .unwrap();
     assert_eq!(replay.len(), 1);
     assert_eq!(replay[0].event.event_type, "PatientUpdated");
 }
@@ -65,18 +68,23 @@ fn subscribers_receive_appended_events_and_can_replay_from_offset() {
     let (_temp, mut db) = open_temp();
     let seen = Arc::new(Mutex::new(Vec::new()));
     let seen_for_handler = Arc::clone(&seen);
-    db.events_mut().subscribe("patient-events", move |event| {
-        seen_for_handler
-            .lock()
-            .unwrap()
-            .push(event.event.event_type.clone());
-    });
+    db.events_mut()
+        .subscribe("patient-events", move |event| {
+            let event = event.unwrap();
+            seen_for_handler
+                .lock()
+                .unwrap()
+                .push(event.event.event_type.clone());
+        })
+        .unwrap();
 
     let (tx, rx) = mpsc::channel();
     db.events_mut()
         .subscribe_async("patient-events", move |event| {
+            let event = event.unwrap();
             tx.send(event.event.event_type.clone()).unwrap();
-        });
+        })
+        .unwrap();
 
     let offset = db
         .events_mut()
@@ -93,7 +101,7 @@ fn subscribers_receive_appended_events_and_can_replay_from_offset() {
         "PatientCreated"
     );
 
-    let replay = db.events().replay_from("patient-events", offset);
+    let replay = db.events().replay_from("patient-events", offset).unwrap();
     assert_eq!(replay.len(), 1);
 }
 
@@ -136,7 +144,7 @@ fn queue_publish_and_consume_are_backed_by_event_stream() {
     assert_eq!(messages[0].event.payload["kind"], "email");
 
     assert!(db.queue("outbox").consume(10).unwrap().is_empty());
-    assert_eq!(db.events().read("queue:outbox").len(), 2);
+    assert_eq!(db.events().read("queue:outbox").unwrap().len(), 2);
 }
 
 #[test]
@@ -162,7 +170,7 @@ fn collection_audit_events_are_optional_and_capture_mutations() {
     .unwrap();
     assert!(db.delete("patients", "p-1").unwrap());
 
-    let events = db.events().read(RECORD_AUDIT_STREAM);
+    let events = db.events().read(RECORD_AUDIT_STREAM).unwrap();
     assert_eq!(
         events
             .iter()
@@ -194,7 +202,7 @@ fn spatial_record_mutation_emits_spatial_event_when_enabled() {
     )
     .unwrap();
 
-    let events = db.events().read(SPATIAL_AUDIT_STREAM);
+    let events = db.events().read(SPATIAL_AUDIT_STREAM).unwrap();
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].event.event_type, "SpatialRecordInserted");
     assert_eq!(events[0].event.payload["collection"], "places");
@@ -238,6 +246,7 @@ fn spatial_index_create_and_rebuild_emit_spatial_index_events() {
     let index_events = db
         .events()
         .read(SPATIAL_AUDIT_STREAM)
+        .unwrap()
         .into_iter()
         .filter(|event| event.event.event_type == "SpatialIndexUpdated")
         .collect::<Vec<_>>();
@@ -271,6 +280,7 @@ fn route_computation_event_captures_metadata_without_full_payload() {
     let event = db
         .events()
         .read(SPATIAL_AUDIT_STREAM)
+        .unwrap()
         .into_iter()
         .find(|event| event.event.event_type == "RouteComputed")
         .expect("route event");
@@ -325,7 +335,7 @@ fn sync_bundle_preserves_spatial_event_records() {
         right.pin_node_key(&left.node_id(), &key).unwrap();
     }
     right.import_sync_bundle(bundle).unwrap();
-    let imported = right.events().read(SPATIAL_AUDIT_STREAM);
+    let imported = right.events().read(SPATIAL_AUDIT_STREAM).unwrap();
     assert!(imported
         .iter()
         .any(|event| event.event.event_type == "SpatialRecordInserted"));
@@ -410,11 +420,11 @@ fn event_transfer_imports_events_without_duplicates() {
         ))
         .unwrap();
 
-    let exported = left.export_events_since(0);
+    let exported = left.export_events_since(0).unwrap();
     assert_eq!(right.import_events(exported.clone()).unwrap(), 1);
-    assert_eq!(right.events().read("sync-source").len(), 1);
+    assert_eq!(right.events().read("sync-source").unwrap().len(), 1);
     assert_eq!(right.import_events(exported).unwrap(), 0);
-    assert_eq!(right.events().read("sync-source").len(), 1);
+    assert_eq!(right.events().read("sync-source").unwrap().len(), 1);
 }
 
 fn insert_toy_roads(db: &mut BicDb) {

@@ -121,6 +121,7 @@ fn a_checkpoint_between_core_commit_and_caller_finalization_keeps_committed_outb
     let audit = db
         .events()
         .read(RECORD_AUDIT_STREAM)
+        .unwrap()
         .iter()
         .filter(|entry| entry.event.payload["record_id"] == "acknowledged-business-row")
         .count();
@@ -394,6 +395,7 @@ fn crashes_reconcile_acknowledged_rows_and_publications_across_retention_and_reo
                     let retained = db
                         .broker()
                         .stats()
+                        .unwrap()
                         .queues
                         .into_iter()
                         .find(|queue| queue.queue == "q")

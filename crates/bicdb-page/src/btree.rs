@@ -1114,6 +1114,8 @@ impl BTree {
             right.set_next_page(old_next);
             right.rebuild(right_entries, page_size)?;
         }
+        #[cfg(feature = "experimental-structural-cuts")]
+        self.pool.seal_unreachable_page(right_id)?;
         {
             let mut guard = self.pool.get_mut(leaf_id)?;
             let mut left = Node::new(guard.bytes_mut());
@@ -1177,6 +1179,8 @@ impl BTree {
                 }
                 node.set_next_page(right_child);
             }
+            #[cfg(feature = "experimental-structural-cuts")]
+            self.pool.seal_unreachable_page(new_root)?;
             // The new root is made durable BEFORE anyone is told about it. A
             // crash in between leaves the old root intact and the new one
             // unreferenced — garbage, but never a dangling root.
@@ -1266,6 +1270,8 @@ impl BTree {
             node.rebuild(&right_entries, page_size)?;
             node.set_next_page(new_rightmost);
         }
+        #[cfg(feature = "experimental-structural-cuts")]
+        self.pool.seal_unreachable_page(new_interior)?;
         {
             let mut guard = self.pool.get_mut(parent_id)?;
             let mut node = Node::new(guard.bytes_mut());

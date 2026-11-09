@@ -78,7 +78,7 @@ pub fn write_chain_pooled(pool: &crate::pool::BufferPool, value: &[u8]) -> Resul
         page[PAGE_HEADER_BYTES..PAGE_HEADER_BYTES + chunk.len()].copy_from_slice(chunk);
         drop(guard);
         #[cfg(feature = "experimental-structural-cuts")]
-        pool.seal_unreachable_overflow_page(page_id)?;
+        pool.seal_unreachable_page(page_id)?;
         next = page_id;
         head = page_id;
     }

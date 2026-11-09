@@ -1087,13 +1087,14 @@ impl BufferPool {
         self.no_steal.store(true, Ordering::Release);
     }
 
-    /// Seal one newly allocated, unreachable overflow page. Its next link
-    /// names only an earlier sealed page (the chain is built tail-first).
-    /// No heap tuple or index points to this new page yet, so its own image
-    /// is the entire newly reachable closure. A crash can leak this chain,
-    /// but cannot replace a committed value or expose an uncommitted row.
+    /// Seal a newly allocated page before any existing parent references it.
+    /// Existing reachable pages are never passed here: their atomic update
+    /// remains part of the operation-boundary cut. A crash before that cut
+    /// can leak this unrooted page, but cannot replace committed structure.
+    /// Overflow callers build tail-first, making the chain readable with
+    /// constant memory before its heap reference is published.
     #[cfg(feature = "experimental-structural-cuts")]
-    pub(crate) fn seal_unreachable_overflow_page(&self, page_id: PageId) -> Result<()> {
+    pub(crate) fn seal_unreachable_page(&self, page_id: PageId) -> Result<()> {
         let barrier = self.barrier.lock().clone();
         let Some(barrier) = barrier else { return Ok(()); };
         let guard = self.get(page_id)?;

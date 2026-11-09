@@ -318,25 +318,25 @@ impl HeapFile {
             Some(catalog) => catalog.page_generation_floor(page_id)?,
             None => 0,
         };
-        {
+        let (locator, free_after) = {
             let mut guard = self.pool.get_mut(page_id)?;
-            let mut heap =
-                SlottedPage::init_with_floor(guard.bytes_mut(), page_id, page_size, floor);
+            let mut heap = SlottedPage::init_with_floor(guard.bytes_mut(), page_id, page_size, floor);
             let locator = heap.insert(tuple)?;
-
-            let free_after = heap.free_space();
-            self.pages.lock().push(page_id);
-            if let Some(catalog) = self.catalog() {
-                catalog.register_page(page_id, PageType::Heap, free_after)?;
-            }
-            let mut candidates = self.candidates.lock();
-            candidates.push_front(page_id);
-            while candidates.len() > self.options.free_space_candidates {
-                candidates.pop_back();
-            }
-            self.metrics.lock().pages_allocated += 1;
-            Ok(locator)
+            (locator, heap.free_space())
+        };
+        #[cfg(feature = "experimental-structural-cuts")]
+        self.pool.seal_unreachable_page(page_id)?;
+        self.pages.lock().push(page_id);
+        if let Some(catalog) = self.catalog() {
+            catalog.register_page(page_id, PageType::Heap, free_after)?;
         }
+        let mut candidates = self.candidates.lock();
+        candidates.push_front(page_id);
+        while candidates.len() > self.options.free_space_candidates {
+            candidates.pop_back();
+        }
+        self.metrics.lock().pages_allocated += 1;
+        Ok(locator)
     }
 
     /// Read a value, collecting it into memory.

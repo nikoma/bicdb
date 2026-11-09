@@ -685,6 +685,34 @@ mod tests {
     }
 
     #[test]
+    fn ddl_startup_recovery_precedes_abi_sql_execution() {
+        let root = tempfile::tempdir().unwrap();
+        {
+            let mut db = BicDb::open_with_config(
+                root.path().join("db"),
+                DbConfig::default().with_fsync(false),
+            )
+            .unwrap();
+            let mut sql = SqlSession::new(&mut db);
+            sql.execute("CREATE TABLE startup_rows(id int PRIMARY KEY)")
+                .unwrap();
+            sql.execute("INSERT INTO startup_rows VALUES(1)").unwrap();
+            drop(sql);
+            db.rename_collection(
+                "startup_rows",
+                "__bicdb_bin_00000000000000000000000000000001",
+            )
+            .unwrap();
+        }
+        let db = open(root.path(), "db");
+        assert_eq!(
+            exec(db, "SELECT id FROM startup_rows")["result"]["rows"],
+            json!([[1]])
+        );
+        assert_eq!(call_json(bicdb_close(db))["ok"], true);
+    }
+
+    #[test]
     fn open_exec_stats_close_roundtrip() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("db").to_string_lossy().into_owned();

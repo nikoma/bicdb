@@ -452,3 +452,37 @@ fn atomic_case_binding_publication_process_crashes() {
         assert!(db.verify_index("legacy").unwrap().valid, "{point}");
     }
 }
+
+#[test]
+fn embedded_atomic_case_binding_preserves_uniqueness_and_reopens() {
+    let root = tempfile::tempdir().unwrap();
+    let config = mode_config(StorageMode::EmbeddedMemory);
+    let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+    db.create_collection("rows").unwrap();
+    db.insert("rows", row("one", "é")).unwrap();
+    let old = index("legacy", IndexField::Upper(Box::new(path("value"))), true);
+    let shadow = index(
+        "owned-shadow",
+        IndexField::OracleUpperV1(Box::new(path("value"))),
+        true,
+    );
+    db.create_index(old.clone()).unwrap();
+    db.create_index(shadow.clone()).unwrap();
+    db.insert("rows", row("two", "ø")).unwrap();
+    db.publish_embedded_oracle_case_v1_index_replacement(&old, &shadow)
+        .unwrap();
+    db.publish_embedded_oracle_case_v1_index_replacement(&old, &shadow)
+        .unwrap();
+    assert_eq!(db.lookup_index("legacy", &key("É")).unwrap(), vec!["one"]);
+    assert_eq!(db.lookup_index("legacy", &key("Ø")).unwrap(), vec!["two"]);
+    assert!(db.insert("rows", row("duplicate", "É")).is_err());
+    db.flush().unwrap();
+    drop(db);
+    let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+    db.publish_embedded_oracle_case_v1_index_replacement(&old, &shadow)
+        .unwrap();
+    assert!(db.verify_index("legacy").unwrap().valid);
+    assert_eq!(db.lookup_index("legacy", &key("É")).unwrap(), vec!["one"]);
+    db.insert("rows", row("one", "ǆ")).unwrap();
+    assert_eq!(db.lookup_index("legacy", &key("Ǆ")).unwrap(), vec!["one"]);
+}

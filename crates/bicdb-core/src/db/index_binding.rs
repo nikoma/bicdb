@@ -41,7 +41,8 @@ impl BicDb {
     pub fn enable_oracle_simple_case_v1(&mut self) -> Result<()> {
         self.ensure_writable("enable Oracle simple-case v1")?;
         self.ensure_no_pending_transactions()?;
-        format::enable_oracle_simple_case_v1(&self.path)
+        format::enable_oracle_simple_case_v1(&self.path)?;
+        self.check_recovery_state()
     }
 
     /// Replace an existing legacy case-expression index with an independently
@@ -84,7 +85,7 @@ impl BicDb {
             && self.btree_bindings.lock().get(&expected_old.name) == Some(&shadow.physical_name)
             && !self.indexes.contains_key(&shadow.definition.name)
         {
-            return Ok(());
+            return self.check_recovery_state();
         }
         if current.as_ref() != Some(expected_old)
             || self
@@ -145,7 +146,76 @@ impl BicDb {
         self.index_generation
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.schema_compatibility.invalidate();
-        Ok(())
+        self.check_recovery_state()
+    }
+
+    /// Embedded counterpart: the current verified shadow store is moved as a
+    /// whole, and reopen reconstructs its keys from the new atomic definition.
+    pub fn publish_embedded_oracle_case_v1_index_replacement(
+        &mut self,
+        expected_old: &IndexDefinition,
+        shadow: &IndexDefinition,
+    ) -> Result<()> {
+        self.ensure_writable("publish embedded Oracle simple-case v1 index")?;
+        self.ensure_no_pending_transactions()?;
+        if self.paged_records.is_some() {
+            return Err(BicDbError::Index(
+                "embedded index publication requires embedded storage".into(),
+            ));
+        }
+        let replacement = oracle_case_v1_definition(expected_old.clone());
+        let mut renamed_shadow = shadow.clone();
+        renamed_shadow.name.clone_from(&expected_old.name);
+        if replacement == *expected_old
+            || replacement.kind != IndexKind::BTree
+            || replacement != renamed_shadow
+            || shadow.name == expected_old.name
+        {
+            return Err(BicDbError::Index(
+                "Oracle replacement changes more than case semantics".into(),
+            ));
+        }
+        let current = self
+            .indexes
+            .get(&expected_old.name)
+            .map(|state| state.read().definition.clone());
+        if current.as_ref() == Some(&replacement) && !self.indexes.contains_key(&shadow.name) {
+            return self.check_recovery_state();
+        }
+        if current.as_ref() != Some(expected_old)
+            || self
+                .indexes
+                .get(&shadow.name)
+                .map(|state| state.read().definition.clone())
+                != Some(shadow.clone())
+            || !self.verify_index(&shadow.name)?.valid
+        {
+            return Err(BicDbError::Index(
+                "Oracle replacement source or owned shadow changed".into(),
+            ));
+        }
+        self.enable_index_format_capabilities(&replacement)?;
+        let old = self
+            .indexes
+            .remove(&expected_old.name)
+            .expect("validated source");
+        let mut new = self.indexes.remove(&shadow.name).expect("validated shadow");
+        new.get_mut().definition = replacement;
+        self.indexes.insert(expected_old.name.clone(), new);
+        if let Err(error) = self.persist_index_catalog() {
+            let mut new = self
+                .indexes
+                .remove(&expected_old.name)
+                .expect("replacement");
+            new.get_mut().definition = shadow.clone();
+            self.indexes.insert(shadow.name.clone(), new);
+            self.indexes.insert(expected_old.name.clone(), old);
+            return Err(error);
+        }
+        self.index_generation
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.schema_compatibility.invalidate();
+        self.check_recovery_state()
     }
 }
 

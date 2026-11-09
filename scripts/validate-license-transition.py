@@ -90,15 +90,16 @@ version = tomllib.loads((root / "crates/bicdb-core/Cargo.toml").read_text())["pa
 # identify an actual published release rather than inventing that source tag.
 readme = (root / "README.md").read_text()
 downloads = re.findall(
-    r"\[Download ([0-9]+\.[0-9]+\.[0-9]+-beta)\]"
+    r"\[Download ([0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?)\]"
     r"\(https://github\.com/nikoma/bicdb/releases/tag/v([^)]+)\)", readme)
 assert len(downloads) == 1, "Exactly one published release download is required"
 published, tag = downloads[0]
 assert published == tag, "Published download label and release tag must agree"
-def beta_version(value):
-    assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+-beta", value), value
-    return tuple(map(int, value.removesuffix("-beta").split(".")))
-assert beta_version(published) <= beta_version(version), "Published release cannot exceed current source"
+def version_components(value):
+    parsed = re.fullmatch(r"([0-9]+)\.([0-9]+)\.([0-9]+)(?:-[A-Za-z0-9.-]+)?", value)
+    assert parsed, value
+    return tuple(map(int, parsed.groups()))
+assert version_components(published) <= version_components(version), "Published release cannot exceed current source"
 assert (f"https://github.com/nikoma/bicdb/releases/download/v{published}/"
         f"bicdb-{published}-linux-x86_64.tar.gz") in readme
 assert (f"https://github.com/nikoma/bicdb/releases/download/v{published}/SHA256SUMS") in readme

@@ -100,6 +100,22 @@ fn full_backup_restores_the_exact_cut_while_normal_commits_and_ddl_complete() {
         })
         .unwrap();
     assert_eq!(snapshot.commit_seq(), expected.commit_seq);
+    // Exercise preservation before the worker can copy any physical page.
+    // Copying/WAL-release progress alone cannot guarantee that the later
+    // foreground writes still touch an uncopied prefix: the worker may already
+    // have copied all live low pages while it finishes the extent's tail.
+    // Keep the independent commits, DDL and checkpoint during copying below.
+    {
+        let mut db = source.write();
+        db.insert(
+            "rows",
+            Record::new("r0079").with_metadata(json!({
+                "n": 79, "body": "changed after the cut before copying", "padding": "q".repeat(2048),
+            })),
+        )
+        .unwrap();
+        db.checkpoint_for_resume().unwrap();
+    }
     let control = OnlineBackupControl::default();
     let worker_control = control.clone();
     let path = repo.path().join("full.bicbackup");

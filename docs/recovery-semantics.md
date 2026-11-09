@@ -934,12 +934,16 @@ a committed (or structural, xid 0) record, except for the cases listed under
    whenever the external full-text build does not complete the job) writes
    every entry of the backfill in one page transaction, which makes the new entries appear atomically. On a
    collection whose entries outgrow the pool it now fails cleanly ("refused
-   ... raise buffer_pool_bytes") and leaves no index; before, it succeeded by
+   ... raise buffer_pool_bytes"), with every row intact; a B-tree build leaves
+   no index, and a full-text build keeps its definition and workspace so that
+   retrying CREATE INDEX resumes it (existing resume design; the kept entry
+   reads `full_text_build_incomplete: false`, which a separate change should
+   look at). Before, it succeeded by
    stealing, with a crash window that could lose other rows. At the default
    256 MiB pool that is roughly a few million rows, depending on the key
    size. Splitting it needs a completion marker, as the full-text path has;
    the structural cuts of option (b) remove the limit. Pinned by
-   `gap1_page_only_batches.rs::creating_an_index_whose_backfill_outgrows_the_pool_fails_cleanly_and_leaves_no_trace`
+   `gap1_page_only_batches.rs::creating_an_index_whose_backfill_outgrows_the_pool_fails_cleanly`
    (both index kinds). Row commits, and their replay at open
    (`apply_unmaterialized_transaction_log`), are not affected.
 2. An abort that left changed pages appends their images and a commit of a

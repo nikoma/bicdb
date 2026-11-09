@@ -81,10 +81,12 @@ fn loaded(dir: &std::path::Path, config: DbConfig, collection: &str, rows: usize
 /// its entries appear atomically, and nothing marks a partial backfill. On a
 /// collection whose entries outgrow the pool, CREATE INDEX now fails cleanly
 /// instead of succeeding by stealing pages (with a crash window that could
-/// lose other rows). The failure leaves no index and every row intact, and
-/// the same index builds with a larger pool.
+/// lose other rows). The failure leaves every row intact; a B-tree build
+/// leaves no index, and a full-text build keeps its definition for resume.
+/// With a larger pool the same CREATE INDEX completes (for full text, by
+/// resuming) with correct results.
 #[test]
-fn creating_an_index_whose_backfill_outgrows_the_pool_fails_cleanly_and_leaves_no_trace() {
+fn creating_an_index_whose_backfill_outgrows_the_pool_fails_cleanly() {
     const ROWS: usize = 30_000;
     for (label, definition) in [("b-tree", btree("rows")), ("full-text", full_text("rows"))] {
         let dir = tempfile::tempdir().unwrap();
@@ -96,11 +98,17 @@ fn creating_an_index_whose_backfill_outgrows_the_pool_fails_cleanly_and_leaves_n
             error.to_string().contains("refused"),
             "{label}: unexpected error: {error}"
         );
-        assert!(
-            !db.index_definitions()
-                .iter()
-                .any(|index| index.name == definition.name),
-            "{label}: a refused build left an index definition"
+        // A refused B-tree build leaves no definition. A full-text build
+        // keeps its definition and its build workspace on purpose, so that
+        // retrying CREATE INDEX resumes it (`resume_paged_full_text_build`).
+        let kept = db
+            .index_definitions()
+            .iter()
+            .any(|index| index.name == definition.name);
+        assert_eq!(
+            kept,
+            definition.kind == IndexKind::FullText,
+            "{label}: unexpected index definition state after the refusal"
         );
         assert_eq!(db.scan_collection("rows").unwrap().len(), ROWS, "{label}");
         db.close().unwrap();
@@ -109,6 +117,15 @@ fn creating_an_index_whose_backfill_outgrows_the_pool_fails_cleanly_and_leaves_n
         assert_eq!(db.scan_collection("rows").unwrap().len(), ROWS, "{label}");
         db.create_index(definition.clone())
             .unwrap_or_else(|error| panic!("{label} with a larger pool: {error}"));
+        if definition.kind == IndexKind::FullText {
+            assert_eq!(
+                db.lookup_full_text_term(&definition.name, "common", false)
+                    .unwrap()
+                    .len(),
+                ROWS,
+                "{label}: the resumed build is incomplete"
+            );
+        }
         db.close().unwrap();
     }
 }

@@ -39,3 +39,12 @@ New tests cover fresh/conflicting DO UPDATE and DO NOTHING under INSERT-only
 authority in both modes, plus an exact signed snapshot-invisible winner schedule
 that must retain its retry requirement and never overwrite the committed winner.
 See [the remaining work ledger](../../read-committed-upsert-work.md).
+
+At22dc7099 the final unsigned-only guard passed both signed authority tests
+(two modes, all four action cases and the protected invisible-winner schedule),
+and all8 concurrent protocol tests. Signed DO UPDATE on a fresh row accepts its
+INSERT-only grant; an actual update still rejects it. Signed DO NOTHING accepts
+both fresh and conflicting cases. The protected race returns10, rejects COMMIT
+with TransactionConflict, and leaves winner20 intact, explicitly retaining that
+open repair. Log: `read-committed-grant-scoped-fixed.log`. The initial grant
+review failure is `read-committed-grant-review-repro.log` at2f485893.

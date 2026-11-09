@@ -250,7 +250,11 @@ impl<'db> SqlSession<'db> {
         };
         super::recycle_bin_journal::prepare(self.db_mut()?, &entry)?;
         super::recycle_bin_journal::stage("intent");
-        match self.db_mut()?.rename_collection(table, &bin_name) {
+        let renamed = match self.tx.as_mut() {
+            Some(tx) => tx.rename_collection_preserving_pending_writes(table, &bin_name),
+            None => self.db_mut()?.rename_collection(table, &bin_name),
+        };
+        match renamed {
             Ok(()) => {}
             Err(BicDbError::Unsupported(_)) => {
                 super::recycle_bin_journal::clear(self.db_mut()?, &bin_name)?;
@@ -407,7 +411,10 @@ impl<'db> SqlSession<'db> {
             sequences.push(restored);
         }
 
-        self.db_mut()?.rename_collection(&entry.bin_name, target)?;
+        match self.tx.as_mut() {
+            Some(tx) => tx.rename_collection_preserving_pending_writes(&entry.bin_name, target)?,
+            None => self.db_mut()?.rename_collection(&entry.bin_name, target)?,
+        }
         let mut schema = entry.schema.clone();
         schema.name = target.to_string();
         for (original, restored) in entry.sequences.iter().zip(&sequences) {

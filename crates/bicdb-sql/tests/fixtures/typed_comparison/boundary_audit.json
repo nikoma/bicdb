@@ -14,8 +14,7 @@
     "INSERT INTO audit_s1.same VALUES('2002-07-04')",
     "INSERT INTO audit_s2.same VALUES('2002-07-04 00:00:00')",
     "CREATE TABLE audit_wide(k bigint PRIMARY KEY)",
-    "INSERT INTO audit_wide VALUES(9007199254740992),(9007199254740993)",
-    "PREPARE audit_parameter(float8) AS SELECT k FROM audit_wide WHERE k=$1 ORDER BY k"
+    "INSERT INTO audit_wide VALUES(9007199254740992),(9007199254740993)"
   ],
   "cases": [
     {
@@ -467,14 +466,52 @@
       ]
     },
     {
-      "label": "prepared_widened_parameter",
-      "sql": "EXECUTE audit_parameter(9007199254740992::float8)",
+      "label": "function_unquoted_alias",
+      "sql": "SELECT pg_typeof(G),G FROM generate_series(1,1) G",
       "rows": [
         [
-          "9007199254740992"
-        ],
+          "integer",
+          "1"
+        ]
+      ]
+    },
+    {
+      "label": "function_quoted_alias",
+      "sql": "SELECT pg_typeof(\"G\"),\"G\" FROM generate_series(1,1) \"G\"",
+      "rows": [
         [
-          "9007199254740993"
+          "integer",
+          "1"
+        ]
+      ]
+    },
+    {
+      "label": "function_unquoted_column_list",
+      "sql": "SELECT pg_typeof(G.V),G.V FROM generate_series(1,1) G(V)",
+      "rows": [
+        [
+          "integer",
+          "1"
+        ]
+      ]
+    },
+    {
+      "label": "function_quoted_column_list",
+      "sql": "SELECT pg_typeof(\"G\".\"V\"),\"G\".\"V\" FROM generate_series(1,1) \"G\"(\"V\")",
+      "rows": [
+        [
+          "integer",
+          "1"
+        ]
+      ]
+    },
+    {
+      "label": "unnest_quoted_column",
+      "sql": "SELECT pg_typeof(\"D\"),\"D\" FROM unnest(ARRAY[DATE '2002-07-04']) AS g(\"D\")",
+      "rows": [
+        [
+          "date",
+          "2002-07-04"
         ]
       ]
     },

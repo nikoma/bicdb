@@ -90,7 +90,7 @@ pub(crate) fn table_alias_columns(
     }
     Ok(aliases
         .iter()
-        .map(|column| column.name.value.clone())
+        .map(|column| ident_value(&column.name))
         .collect())
 }
 

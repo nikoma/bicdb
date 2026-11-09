@@ -71,6 +71,9 @@ pub(crate) fn retain(left: &[SqlValue], right: &[SqlValue]) -> Result<()> {
 /// Charge a known new allocation before reserving its backing storage.
 pub(crate) fn retain_bytes(bytes: usize) -> Result<()> {
     let limit = bicdb_core::query_budget::limit(configured_limit());
+    if limit == usize::MAX {
+        return bicdb_core::query_budget::check().map_err(Into::into);
+    }
     let total = RETAINED.with(|retained| {
         let previous = retained.get().ok_or_else(|| {
             SqlError::resource_limit(
@@ -103,6 +106,9 @@ pub(crate) fn retain_extension<'a>(
     additional: usize,
     cloned_values: impl IntoIterator<Item = &'a SqlValue>,
 ) -> Result<()> {
+    if bicdb_core::query_budget::limit(configured_limit()) == usize::MAX {
+        return bicdb_core::query_budget::check().map_err(Into::into);
+    }
     let required = row_len.saturating_add(additional);
     let slots = if required > capacity {
         required.saturating_mul(std::mem::size_of::<SqlValue>())

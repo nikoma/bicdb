@@ -174,7 +174,7 @@ fn delete_using_candidate_rows_are_bounded_and_no_rows_are_deleted() {
 }
 
 #[test]
-fn indexed_update_from_candidates_share_the_materialization_budget() {
+fn update_from_candidates_share_the_materialization_budget() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = BicDb::open_with_config(
         dir.path(),
@@ -196,4 +196,18 @@ fn indexed_update_from_candidates_share_the_materialization_budget() {
         s.execute("SELECT sum(val) FROM ut").unwrap().rows,
         vec![vec![bicdb_sql::SqlValue::Int(0)]]
     );
+}
+
+#[test]
+fn memory_scopes_with_only_a_deadline_also_interrupt_join_execution() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db =
+        BicDb::open_with_config(dir.path(), DbConfig::default().with_fsync(false)).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    {
+        let _deadline = QueryMemoryScope::with_deadline(0, std::time::Instant::now());
+        let error = session.execute("SELECT count(*) FROM generate_series(1,100) a(x) CROSS JOIN generate_series(1,100) b(y) WHERE a.x+b.y<0").unwrap_err();
+        assert_eq!(error.sqlstate(), "57014");
+    }
+    assert_eq!(session.execute("SELECT 1").unwrap().rows.len(), 1);
 }

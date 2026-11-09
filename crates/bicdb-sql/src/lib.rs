@@ -2024,7 +2024,10 @@ impl SqlError {
         if let Self::WithNotices { error, .. } = self {
             return error.is_resource_limit();
         }
-        matches!(self, Self::ResourceLimit { .. })
+        matches!(
+            self,
+            Self::ResourceLimit { .. } | Self::BicDb(BicDbError::QueryMemoryLimit(_))
+        )
     }
 
     pub(crate) fn is_query_interruption(&self) -> bool {

@@ -4503,7 +4503,10 @@ impl<'db> SqlEngine<'db> {
     }
 
     pub(crate) fn check_cancellation(&self) -> Result<()> {
-        self.cancellation.check().map_err(SqlError::from)
+        self.cancellation.check().map_err(SqlError::from)?;
+        // Input materializers and host scopes may already have observed a
+        // memory limit or deadline. Do not continue a join/fallback after it.
+        bicdb_core::query_budget::check().map_err(SqlError::from)
     }
 
     pub(crate) fn execute_builtin(&self, sql: &str) -> Result<Option<SqlResult>> {

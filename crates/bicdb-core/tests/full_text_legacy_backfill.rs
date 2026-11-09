@@ -29,13 +29,14 @@ fn a_legacy_array_backfill_is_queryable_immediately_and_after_reopen() {
         predicate: None,
         exclusion: None,
     }).unwrap();
-    for reopen in 0..2 {
-        assert_eq!(db.lookup_full_text_term("documents_terms", "shared", false).unwrap().len(), 250, "reopen={reopen}");
+    let assert_complete = |db: &BicDb| {
+        assert_eq!(db.lookup_full_text_term("documents_terms", "shared", false).unwrap().len(), 250);
         assert_eq!(db.lookup_full_text_term("documents_terms", "unique17", false).unwrap(), vec!["document-0017"]);
         assert!(db.verify_index("documents_terms").unwrap().valid);
-        db.close().unwrap();
-        if reopen == 0 {
-            db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
-        }
-    }
+    };
+    assert_complete(&db);
+    db.close().unwrap();
+    let db = BicDb::open_with_config(root.path(), config).unwrap();
+    assert_complete(&db);
+    db.close().unwrap();
 }

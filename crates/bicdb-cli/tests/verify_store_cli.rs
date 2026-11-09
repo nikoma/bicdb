@@ -124,6 +124,19 @@ fn verify_store_reads_a_churned_sql_database_without_changing_a_byte() {
     assert_eq!(report["complete"], true);
     assert_eq!(report["read_only"]["recovery_ran"], false);
     assert!(report["counters"]["visible_rows"].as_u64().unwrap() > 0);
+    let (limited_code, limited, _) = run(&[
+        "verify-store",
+        "--read-only",
+        path.to_str().unwrap(),
+        "--max-seconds",
+        "0",
+    ]);
+    assert_eq!(
+        limited_code, 4,
+        "a setup limit must be an incomplete report"
+    );
+    assert_eq!(limited["complete"], false);
+    assert_eq!(limited["stop_reason"], "time limit");
     // Every finding line names the record layer's collection when the key
     // has that layout.
     let lines = std::fs::read_to_string(&findings).unwrap();

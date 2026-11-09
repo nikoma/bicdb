@@ -2750,6 +2750,16 @@ impl BicDb {
     /// SQL uses this only before the new table has any pending data writes.
     pub fn create_empty_btree_index(&mut self, definition: IndexDefinition) -> Result<()> {
         self.ensure_writable("initialize empty B-tree index")?;
+        if self.write_locks.shards.iter().any(|shard| {
+            shard
+                .lock()
+                .keys()
+                .any(|(collection, _)| collection == &definition.collection)
+        }) {
+            return Err(BicDbError::Index(
+                "empty B-tree initialization refuses pending writes or locks on its target collection".into(),
+            ));
+        }
         if !self.is_server_paged()
             || definition.kind != IndexKind::BTree
             || definition.exclusion.is_some()

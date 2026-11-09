@@ -3563,38 +3563,52 @@ mod join_envelope_path_tests {
                 .map(|id| vec![SqlValue::Int(id), SqlValue::Int(1)])
                 .collect(),
         };
-        let (right, constraint) = join("SELECT * FROM l JOIN budget_right r ON l.fk=r.id");
+        let table = resolve_session_relation_name(&db, "budget_right").unwrap();
+        let schema = load_schema(&db, &table).unwrap().unwrap();
+        let (_, context) = engine.bound_row_context(&left.columns);
+        let lookup = PreparedDynamicRecordLookup::PrimaryKeyExact {
+            schema: schema.clone(),
+            columns: vec!["id".into()],
+            values: vec![PreparedDynamicBoundExpr {
+                expr: BoundExpr::Column(ColumnId(1)),
+                term_idx: 0,
+            }],
+            covered_terms: [0].into_iter().collect(),
+            context,
+        };
+        let fields = FieldRef::wildcard(Some(&schema));
+        let right_columns = row_output_columns_from_fields(&table, "r", &fields);
+        // Exercise the transfer optimization directly; planner fallback has
+        // its own earlier guard and cannot prove this path is bounded.
+        let execute = |left: &mut RowSet| {
+            engine.apply_prepared_primary_key_right_table_join(
+                left,
+                PreparedPrimaryKeyRightJoin {
+                    table: &table,
+                    alias_name: "r",
+                    schema: Some(&schema),
+                    right_columns: right_columns.clone(),
+                    right_fields: fields.clone(),
+                    kind: RowJoinKind::Inner,
+                    lookup: &lookup,
+                    residual_constraint: &JoinConstraint::None,
+                },
+            )
+        };
         {
             let _scope = crate::join_budget::Scope::enter();
             let _memory = QueryMemoryScope::new(4 * 1024 * 1024);
-            let result = engine
-                .apply_indexed_right_table_join(
-                    &mut left.clone(),
-                    &right,
-                    RowJoinKind::Inner,
-                    &constraint,
-                    None,
-                )
-                .unwrap()
-                .expect("indexed optimization must apply");
-            assert_eq!(result.rows.len(), 100);
+            assert_eq!(execute(&mut left.clone()).unwrap().rows.len(), 100);
         }
         {
             let _scope = crate::join_budget::Scope::enter();
             let memory = QueryMemoryScope::new(64 * 1024);
-            let error = match engine.apply_indexed_right_table_join(
-                &mut left.clone(),
-                &right,
-                RowJoinKind::Inner,
-                &constraint,
-                None,
-            ) {
+            let error = match execute(&mut left.clone()) {
                 Err(error) => error,
-                Ok(Some(rows)) => panic!(
+                Ok(rows) => panic!(
                     "point join retained {} rows without rejecting the envelope",
                     rows.rows.len()
                 ),
-                Ok(None) => panic!("indexed optimization did not apply"),
             };
             assert_eq!(error.sqlstate(), "53200");
             assert!(memory.peak_bytes() <= 64 * 1024 + 32 * 1024);

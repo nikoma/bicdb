@@ -52,6 +52,17 @@ def main():
             assert len(resets) == 12
             assert {"repeat-0", "repeat-1"}.issubset({str(item["round"]) for item in recovery})
             assert result["initial_backup_restore_verified"]
+        cut_manifest = directory / "independent-verifier/manifest.json"
+        if cut_manifest.exists():
+            cuts = json.loads(cut_manifest.read_text())["cuts"]
+            assert len(cuts) == 14
+            for cut in cuts:
+                assert cut["exit_code"] == 0 and cut["extracted_files_unchanged"]
+                assert cut["original_size_mtime_unchanged"]
+                report_path = directory / "independent-verifier" / (cut["cut"] + ".json")
+                assert hashlib.sha256(report_path.read_bytes()).hexdigest() == cut["report_sha256"]
+                report = json.loads(report_path.read_text())
+                assert report["complete"] and report["verdict"] == "clean"
         mode = directory / "persisted-format.json"
         mode = json.loads(mode.read_text())["format"]["storage_mode"] if mode.exists() else "not opened"
         output.append(dict(run=directory.name, source=result["source"], storage_mode=mode,

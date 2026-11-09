@@ -62,7 +62,7 @@ use crate::manager::{decode_superblock, segment_path_for, Superblock};
 use crate::mvcc::{TxStatus, VersionHeader, Xid, VERSION_HEADER_BYTES};
 use crate::page::{PageHeader, PageId, PageType, PAGE_HEADER_BYTES, PAGE_TRAILER_BYTES};
 use crate::slotted::{TupleLocator, SLOT_BYTES};
-use crate::wal::{analyze_log_read_only, LogResetShape, ReadOnlyLog};
+use crate::wal::{analyze_log_read_only, LogResetShape, ReadOnlyLog, ReadOnlyScanLimits};
 
 /// Version of the JSON report layout.
 pub const STORE_VERIFY_REPORT_FORMAT_VERSION: u32 = 1;
@@ -77,7 +77,7 @@ pub(crate) fn open_read_only(path: &Path) -> std::io::Result<File> {
         {
             match std::fs::OpenOptions::new()
                 .read(true)
-                .custom_flags(libc::O_NOFOLLOW | libc::O_NOATIME)
+                .custom_flags(libc::O_NOFOLLOW | libc::O_NOATIME | libc::O_NONBLOCK)
                 .open(path)
             {
                 Ok(file) => return regular_file(file, path),
@@ -88,7 +88,7 @@ pub(crate) fn open_read_only(path: &Path) -> std::io::Result<File> {
         }
         let file = std::fs::OpenOptions::new()
             .read(true)
-            .custom_flags(libc::O_NOFOLLOW)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
             .open(path)?;
         regular_file(file, path)
     }
@@ -454,6 +454,16 @@ impl StoreFinding {
     }
 }
 
+fn finding_heap_bytes(finding: &StoreFinding) -> u64 {
+    finding.key.as_ref().map_or(0, |key| key.capacity() as u64)
+        + finding.detail.capacity() as u64
+        + finding
+            .found_page_type
+            .as_ref()
+            .map_or(0, |kind| kind.capacity() as u64)
+        + 64
+}
+
 /// Count and bounded samples for one class.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct FindingClassSummary {
@@ -635,9 +645,56 @@ pub fn verify_store_read_only_streaming(
             path: dir.join("store.lock"),
         });
     }
-    let mut verifier = Verifier::open(dir, options, lock, started, sink)?;
+    let mut verifier = match Verifier::open(dir, options, lock, started, sink) {
+        Ok(verifier) => verifier,
+        Err(PageError::InvalidMaintenanceLimits { reason })
+            if reason.starts_with("read-only verification limit:") =>
+        {
+            return Ok(setup_stopped_report(dir, lock, started, reason));
+        }
+        Err(error) => return Err(error),
+    };
     verifier.run();
     Ok(verifier.finish())
+}
+
+fn setup_stopped_report(
+    dir: &Path,
+    lock: DirectoryLockProbe,
+    started: Instant,
+    reason: String,
+) -> StoreVerifyReport {
+    StoreVerifyReport {
+        format_version: STORE_VERIFY_REPORT_FORMAT_VERSION,
+        verdict: StoreVerdict::NeedsExternalCrossCheck,
+        complete: false,
+        stop_reason: Some(if reason.contains("time limit") { "time limit" } else { "memory limit" }.to_string()),
+        store: StoreFacts { directory: dir.to_path_buf(), ..Default::default() },
+        read_only: ReadOnlyEvidence {
+            lock,
+            files_opened_read_only: Vec::new(),
+            recovery_ran: false,
+            note: format!("{reason}. Setup stopped before file inventory and recovery analysis completed; no engine was opened and all setup access was read-only."),
+        },
+        log: LogFacts {
+            sealed_segments: 0, sealed_bytes: 0, active_bytes: 0,
+            reset_shape: LogResetShape::Normal, replay_scope: "not_analyzed".to_string(),
+            records: 0, first_lsn: None, last_lsn: None, torn_tail_bytes: 0,
+            checkpoint_records: 0, redo_lsn: 0, committed_transactions: 0,
+            pending_page_images: 0, distinct_pages_overlaid: 0, uncommitted_images_skipped: 0,
+            page_file_truncated_by_recovery_from: None, open_would_refuse: None,
+            stale_records_discarded: StaleRecordsDiscardedState {
+                recorded_in_store: false, segments_a_fixed_open_would_discard: 0,
+                explanation: "Setup limit reached; log reset state was not established.".to_string(),
+            },
+        },
+        counters: StoreVerifyCounters {
+            elapsed_millis: started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
+            ..Default::default()
+        },
+        classes: Vec::new(),
+        external_evidence: vec!["Run the verifier again with sufficient limits; this incomplete result is not a clean-store verdict.".to_string()],
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -980,6 +1037,11 @@ impl<'a> Verifier<'a> {
         started: Instant,
         sink: &'a mut dyn FnMut(&StoreFinding),
     ) -> Result<Self> {
+        let deadline = options
+            .max_duration
+            .and_then(|limit| started.checked_add(limit));
+        let setup_limits = ReadOnlyScanLimits::new(options.max_memory_bytes / 2, deadline);
+        setup_limits.check(0)?;
         let mut files_opened = Vec::new();
         let base = dir.join("store.pages");
         let mut first = open_read_only(&base).map_err(|error| PageError::io(&base, error))?;
@@ -1007,10 +1069,14 @@ impl<'a> Verifier<'a> {
         }
         crate::page::verify(&page0, 0)?;
         let (superblock, _) = decode_superblock(&page0, &base, page_size)?;
+        // Never allocate bitmaps from an unchecked on-disk count. A valid
+        // checksum does not establish that the advertised count is sensible.
+        setup_limits.check(superblock.page_count.div_ceil(64).saturating_mul(24))?;
 
         let mut segments = vec![(base.clone(), first)];
         if superblock.extent_pages > 0 || superblock.migration_target_pages > 0 {
             loop {
+                setup_limits.check((segments.len() as u64 + 1).saturating_mul(512))?;
                 let path = segment_path_for(&base, segments.len());
                 match open_read_only(&path) {
                     Ok(file) => {
@@ -1041,6 +1107,7 @@ impl<'a> Verifier<'a> {
             superblock.page_count,
             monolithic_file_pages,
             &open_read_only,
+            &setup_limits,
         )?;
         files_opened.extend(log.files.iter().map(|(path, _)| path.clone()));
 
@@ -1048,7 +1115,10 @@ impl<'a> Verifier<'a> {
             log.max_replayed_page
                 .map_or(0, |page| page.saturating_add(1)),
         );
-        let cache_pages = options.page_cache_pages;
+        setup_limits.check(page_count.div_ceil(64).saturating_mul(24))?;
+        let cache_pages = options
+            .page_cache_pages
+            .min((options.max_memory_bytes / 4 / u64::from(page_size)).max(1) as usize);
         let source = PageSource {
             page_size,
             superblock,
@@ -1109,13 +1179,26 @@ impl<'a> Verifier<'a> {
             summaries: Vec::new(),
             complete: true,
             stop_reason: None,
-            deadline: options.max_duration.map(|limit| started + limit),
+            deadline,
             empty_store: false,
             unreadable_reported: FxHashSet::default(),
         })
     }
 
     fn report(&mut self, finding: StoreFinding) {
+        let retained = self
+            .summaries
+            .iter()
+            .find(|s| s.class == finding.class)
+            .is_none_or(|s| s.samples.len() < self.options.max_samples_per_class);
+        let bytes = if retained {
+            finding_heap_bytes(&finding)
+        } else {
+            0
+        };
+        if !self.within_budget(bytes) {
+            return;
+        }
         (self.sink)(&finding);
         let limit = self.options.max_samples_per_class;
         match self
@@ -1155,10 +1238,45 @@ impl<'a> Verifier<'a> {
             self.stop_reason = Some("time limit".to_string());
             return true;
         }
+        if self.estimated_state_bytes() > self.options.max_memory_bytes {
+            self.complete = false;
+            self.stop_reason = Some("memory limit".to_string());
+            return true;
+        }
         false
     }
 
+    fn estimated_state_bytes(&self) -> u64 {
+        self.tree_pages.bytes() + self.visited.bytes() + self.in_directory.bytes() + self.slots.bytes()
+            + self.source.cache.len() as u64 * u64::from(self.source.page_size)
+            + self.source.log.images.len() as u64 * 128
+            + self.source.log.outcomes.len() as u64 * 32
+            + (self.special_pages.capacity() + self.unreadable_reported.capacity()) as u64 * 64
+            + self.status.spill.capacity() as u64 * 24
+            + self.status.exceptions.capacity() as u64 * 8
+            + self.summaries.iter().map(|s| s.samples.iter().map(finding_heap_bytes).sum::<u64>() + s.samples.capacity() as u64 * std::mem::size_of::<StoreFinding>() as u64).sum::<u64>()
+            // Temporary decoded pages, entry copies and formatting buffers.
+            + 4 * u64::from(self.source.page_size)
+    }
+
+    fn within_budget(&mut self, temporary_bytes: u64) -> bool {
+        if self.out_of_time() {
+            return false;
+        }
+        if self.estimated_state_bytes().saturating_add(temporary_bytes)
+            > self.options.max_memory_bytes
+        {
+            self.complete = false;
+            self.stop_reason = Some("memory limit".to_string());
+            return false;
+        }
+        true
+    }
+
     fn run(&mut self) {
+        if self.out_of_time() {
+            return;
+        }
         self.check_log();
         if !self.load_meta() {
             return;
@@ -1167,6 +1285,9 @@ impl<'a> Verifier<'a> {
             return;
         }
         self.load_status_spill();
+        if self.out_of_time() {
+            return;
+        }
         let catalog_root = self.facts.catalog_root;
         if catalog_root != 0 {
             self.walk_tree(catalog_root, TreeKind::Catalog, true);
@@ -1177,8 +1298,9 @@ impl<'a> Verifier<'a> {
         let fixed = self.tree_pages.bytes()
             + self.visited.bytes()
             + self.in_directory.bytes()
-            + self.options.page_cache_pages as u64 * u64::from(self.source.page_size)
-            + self.source.log.images.len() as u64 * 32;
+            + self.source.cache.len() as u64 * u64::from(self.source.page_size)
+            + self.source.log.images.len() as u64 * 128
+            + self.source.log.outcomes.len() as u64 * 32;
         let available = self
             .options
             .max_memory_bytes
@@ -1188,6 +1310,7 @@ impl<'a> Verifier<'a> {
             .options
             .heap_window_pages
             .unwrap_or(available * 8 / self.slot_bits_per_page)
+            .min(available * 8 / self.slot_bits_per_page)
             .clamp(1, page_count.max(1));
         self.counters.slot_bitmap_window_pages = window_pages;
         self.slots = Bits::new(window_pages * self.slot_bits_per_page);
@@ -1341,6 +1464,9 @@ impl<'a> Verifier<'a> {
         let mut page_id = head;
         let mut chain = Vec::new();
         for index in 0..pages {
+            if !self.within_budget((chain.capacity() as u64 + 1).saturating_mul(48)) {
+                return;
+            }
             if !self.special_pages.insert(page_id) {
                 self.spill_fault(page_id, format!("status spill repeats page {page_id}"));
                 return;
@@ -1452,6 +1578,17 @@ impl<'a> Verifier<'a> {
         let mut previous_leaf: Option<(PageId, PageId)> = None;
         let mut steps = 0_u64;
         while let Some(frame) = stack.pop() {
+            let stack_bytes = stack.capacity() as u64 * std::mem::size_of::<TreeFrame>() as u64
+                + stack
+                    .iter()
+                    .map(|frame| {
+                        frame.low.as_ref().map_or(0, |key| key.len() as u64 + 32)
+                            + frame.high.as_ref().map_or(0, |key| key.len() as u64 + 32)
+                    })
+                    .sum::<u64>();
+            if !self.within_budget(stack_bytes) {
+                return;
+            }
             steps += 1;
             if steps % 256 == 0 && self.out_of_time() {
                 return;
@@ -1618,6 +1755,13 @@ impl<'a> Verifier<'a> {
             }
             // Interior: child i holds keys < key[i] (and >= key[i-1]); the
             // header link holds keys >= the last separator.
+            if !self.within_budget(
+                stack_bytes
+                    + (node.count as u64 + 1) * 4 * std::mem::size_of::<TreeFrame>() as u64
+                    + 2 * u64::from(self.source.page_size),
+            ) {
+                return;
+            }
             let mut children = Vec::with_capacity(node.count + 1);
             let mut low = frame.low.clone();
             for index in 0..node.count {
@@ -1833,6 +1977,9 @@ impl<'a> Verifier<'a> {
         let mut recent: Vec<TupleLocator> = Vec::new();
         let mut visited: Option<FxHashSet<TupleLocator>> = None;
         loop {
+            if !self.within_budget(depth.saturating_add(1).saturating_mul(64)) {
+                return;
+            }
             if depth >= self.options.max_versions_per_chain as u64 {
                 if first_pass {
                     let mut finding = StoreFinding::new(FindingClass::ChainTooLong);
@@ -1881,7 +2028,7 @@ impl<'a> Verifier<'a> {
                     }
                     let header = self.version_header(&bytes, locator, first_pass && needed, key);
                     let Some(header) = header else {
-                        if first_pass {
+                        if first_pass && self.complete {
                             let mut finding = StoreFinding::new(FindingClass::MalformedVersion);
                             finding.key = Some(key.to_vec());
                             finding.locator = Some(locator);
@@ -2071,7 +2218,26 @@ impl<'a> Verifier<'a> {
         let mut prefix = Vec::with_capacity(VERSION_HEADER_BYTES);
         let mut page_id = head;
         let mut total = 0_u64;
+        if expected_pages > self.source.page_count {
+            return (
+                prefix,
+                Some(
+                    "overflow length requires more distinct pages than the store contains"
+                        .to_string(),
+                ),
+            );
+        }
+        let mut visited = FxHashSet::default();
         for index in 0..expected_pages {
+            if !self.within_budget((visited.capacity() as u64 + 1).saturating_mul(64)) {
+                return (prefix, None);
+            }
+            if !visited.insert(page_id) {
+                return (
+                    prefix,
+                    Some(format!("overflow chain revisits page {page_id}")),
+                );
+            }
             if page_id == 0 || page_id >= self.source.page_count {
                 return (
                     prefix,
@@ -2135,7 +2301,7 @@ impl<'a> Verifier<'a> {
 
     fn sweep_window(&mut self, low: PageId, high: PageId) {
         for page_id in low.max(1)..high {
-            if page_id % 1024 == 0 && self.out_of_time() {
+            if self.out_of_time() {
                 return;
             }
             if self.special_pages.contains(&page_id) {

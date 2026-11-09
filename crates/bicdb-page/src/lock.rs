@@ -188,7 +188,7 @@ pub fn probe_directory_lock(dir: &Path) -> Result<DirectoryLockProbe> {
     let path = dir.join(LOCK_FILE);
     let file = match OpenOptions::new()
         .read(true)
-        .custom_flags(libc::O_NOFOLLOW)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
         .open(&path)
     {
         Ok(file) => file,
@@ -197,6 +197,19 @@ pub fn probe_directory_lock(dir: &Path) -> Result<DirectoryLockProbe> {
         }
         Err(error) => return Err(PageError::io(&path, error)),
     };
+    if !file
+        .metadata()
+        .map_err(|error| PageError::io(&path, error))?
+        .is_file()
+    {
+        return Err(PageError::io(
+            &path,
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "store lock is not a regular file",
+            ),
+        ));
+    }
     // SAFETY: see `try_lock_exclusive`; all-zero is a valid `flock`.
     let mut lock: libc::flock = unsafe { std::mem::zeroed() };
     lock.l_type = libc::F_WRLCK as _;

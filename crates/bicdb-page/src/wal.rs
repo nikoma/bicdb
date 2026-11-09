@@ -1413,6 +1413,13 @@ where
 
 /// Sealed segments on disk next to `path`, ascending, with their total size.
 fn discover_sealed_segments(path: &Path) -> Result<(Vec<u64>, u64)> {
+    discover_sealed_segments_limited(path, None)
+}
+
+fn discover_sealed_segments_limited(
+    path: &Path,
+    limits: Option<&ReadOnlyScanLimits>,
+) -> Result<(Vec<u64>, u64)> {
     let Some(parent) = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -1425,6 +1432,9 @@ fn discover_sealed_segments(path: &Path) -> Result<(Vec<u64>, u64)> {
     let mut sealed = Vec::new();
     let mut total = 0u64;
     for entry in std::fs::read_dir(parent).map_err(|e| PageError::io(parent, e))? {
+        if let Some(limits) = limits {
+            limits.check((sealed.len() as u64 + 1).saturating_mul(512))?;
+        }
         let entry = entry.map_err(|e| PageError::io(parent, e))?;
         let name = entry.file_name();
         let Some(name) = name.to_str() else { continue };
@@ -2011,6 +2021,43 @@ struct ScannedRecord {
     payload_len: usize,
 }
 
+/// Setup scans precede the verifier's page walks; they must obey limits too.
+pub(crate) struct ReadOnlyScanLimits {
+    pub(crate) max_state_bytes: u64,
+    pub(crate) deadline: Option<std::time::Instant>,
+    stopped: std::cell::RefCell<Option<String>>,
+}
+
+impl ReadOnlyScanLimits {
+    pub(crate) fn new(max_state_bytes: u64, deadline: Option<std::time::Instant>) -> Self {
+        Self {
+            max_state_bytes,
+            deadline,
+            stopped: Default::default(),
+        }
+    }
+
+    pub(crate) fn check(&self, estimated_bytes: u64) -> Result<()> {
+        let mut stopped = self.stopped.borrow_mut();
+        if stopped.is_none() {
+            if self
+                .deadline
+                .is_some_and(|deadline| std::time::Instant::now() >= deadline)
+            {
+                *stopped = Some("time limit during read-only setup".to_string());
+            } else if estimated_bytes > self.max_state_bytes {
+                *stopped = Some("memory limit during read-only setup".to_string());
+            }
+        }
+        match stopped.as_ref() {
+            Some(reason) => Err(PageError::InvalidMaintenanceLimits {
+                reason: format!("read-only verification limit: {reason}"),
+            }),
+            None => Ok(()),
+        }
+    }
+}
+
 /// Scan one file from its start. `expected` carries LSN continuity across
 /// files exactly as `Wal::scan_records` does. Returns the decoded byte count.
 fn scan_file_read_only(
@@ -2020,9 +2067,11 @@ fn scan_file_read_only(
     expected: &mut Option<Lsn>,
     scan: &mut WalScanReport,
     visit: &mut dyn FnMut(&ScannedRecord),
+    limits: &ReadOnlyScanLimits,
 ) -> Result<u64> {
     let mut offset = 0_u64;
     let mut adapter = |record: WalRecordView<'_>| -> Result<()> {
+        limits.check(0)?;
         let payload_len = record.payload.len();
         visit(&ScannedRecord {
             lsn: record.lsn,
@@ -2032,6 +2081,7 @@ fn scan_file_read_only(
             payload_offset: offset + (RECORD_HEADER_BYTES + RECORD_FIXED_BODY_BYTES) as u64,
             payload_len,
         });
+        limits.check(0)?;
         offset += (RECORD_HEADER_BYTES + RECORD_FIXED_BODY_BYTES + payload_len) as u64;
         Ok(())
     };
@@ -2048,11 +2098,14 @@ pub(crate) fn analyze_log_read_only(
     page_count: u64,
     monolithic_file_pages: Option<u64>,
     open: &dyn Fn(&Path) -> std::io::Result<File>,
+    limits: &ReadOnlyScanLimits,
 ) -> Result<ReadOnlyLog> {
+    limits.check(0)?;
     let max_body_bytes = RECORD_FIXED_BODY_BYTES.saturating_add(page_size as usize);
-    let (sealed, sealed_bytes) = discover_sealed_segments(path)?;
+    let (sealed, sealed_bytes) = discover_sealed_segments_limited(path, Some(limits))?;
     let mut files: Vec<(PathBuf, File)> = Vec::with_capacity(sealed.len() + 1);
     for sequence in &sealed {
+        limits.check((files.len() as u64 + 1).saturating_mul(512))?;
         let segment = sealed_segment_path(path, *sequence);
         let file = open(&segment).map_err(|error| PageError::io(&segment, error))?;
         files.push((segment, file));
@@ -2093,6 +2146,7 @@ pub(crate) fn analyze_log_read_only(
                 &mut None,
                 &mut scan,
                 &mut note_first,
+                limits,
             )?;
             (first, scan.last_lsn, scan.records)
         }
@@ -2121,6 +2175,7 @@ pub(crate) fn analyze_log_read_only(
             &mut None,
             &mut scan,
             &mut ignore,
+            limits,
         )?;
         match scan.last_lsn {
             // An undecodable sealed segment is corruption the full scan reports.
@@ -2198,6 +2253,7 @@ pub(crate) fn analyze_log_read_only(
             horizon,
             false,
             &mut probe,
+            limits,
         )
         .is_ok()
         {
@@ -2216,6 +2272,7 @@ pub(crate) fn analyze_log_read_only(
         }
     }
 
+    limits.check(0)?;
     let scope: Vec<usize> = match &shape {
         LogResetShape::Normal => {
             log.replay_scope = "full_chain";
@@ -2243,6 +2300,7 @@ pub(crate) fn analyze_log_read_only(
             horizon,
             true,
             &mut result,
+            limits,
         ) {
             Ok(()) => {
                 log.records = result.records;
@@ -2260,6 +2318,7 @@ pub(crate) fn analyze_log_read_only(
                 log.truncated_from = result.truncated_from;
             }
             Err(reason) => {
+                limits.check(0)?;
                 log.corruption = Some(reason);
                 log.replay_scope = "none";
             }
@@ -2299,10 +2358,12 @@ fn replay_scope(
     horizon: Lsn,
     build_map: bool,
     out: &mut ScopeScan,
+    limits: &ReadOnlyScanLimits,
 ) -> std::result::Result<(), String> {
     // Pass 1: outcomes and the last checkpoint record's redo point.
     let mut expected = None;
     let mut scan = WalScanReport::default();
+    let files_bytes = log.files.len() as u64 * 512;
     let mut outcomes: Vec<(u64, TxStatus)> = Vec::new();
     let mut checkpoint_redo = 0_u64;
     let mut checkpoints = 0_u64;
@@ -2311,6 +2372,16 @@ fn replay_scope(
         let (path, file) = &mut log.files[index];
         let length = file.metadata().map_err(|error| error.to_string())?.len();
         let mut visit = |record: &ScannedRecord| {
+            if limits
+                .check(
+                    (outcomes.len() as u64 + 1)
+                        .saturating_mul(32)
+                        .saturating_add(files_bytes),
+                )
+                .is_err()
+            {
+                return;
+            }
             first_lsn.get_or_insert(record.lsn);
             match record.kind {
                 RecordKind::Commit => outcomes.push((record.transaction, TxStatus::Committed)),
@@ -2329,6 +2400,7 @@ fn replay_scope(
             &mut expected,
             &mut scan,
             &mut visit,
+            limits,
         )
         .map_err(|error| error.to_string())?;
         if Some(index) == active_index {
@@ -2410,6 +2482,13 @@ fn replay_scope(
                 count = needed;
             }
             if build_map {
+                let state_bytes = (outcomes.len() as u64)
+                    .saturating_mul(32)
+                    .saturating_add((images.len() as u64 + 1).saturating_mul(128))
+                    .saturating_add(files_bytes);
+                if limits.check(state_bytes).is_err() {
+                    return;
+                }
                 images.insert(
                     record.page_id,
                     LoggedImage {
@@ -2427,6 +2506,7 @@ fn replay_scope(
             &mut expected,
             &mut second,
             &mut visit,
+            limits,
         )
         .map_err(|error| error.to_string())?;
     }

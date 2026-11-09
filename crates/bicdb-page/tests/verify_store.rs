@@ -1529,3 +1529,147 @@ fn a_time_limit_yields_an_incomplete_report() {
     assert!(!report.complete);
     assert_eq!(report.stop_reason.as_deref(), Some("time limit"));
 }
+
+#[test]
+fn verifier_limits_reject_huge_metadata_before_allocating_bitmaps() {
+    let dir = TempDir::new().unwrap();
+    {
+        let (store, _) = PagedStore::open(dir.path(), options(4096, 4 << 20)).unwrap();
+        store.checkpoint().unwrap();
+    }
+    let mut superblock = raw_read(dir.path(), 4096, 0);
+    superblock[64 + 12..64 + 20].copy_from_slice(&u64::MAX.to_le_bytes());
+    raw_write(dir.path(), 4096, 0, superblock);
+    let report = verify(dir.path());
+    assert!(!report.complete);
+    assert_eq!(report.stop_reason.as_deref(), Some("memory limit"));
+    assert_ne!(report.verdict, StoreVerdict::Clean);
+}
+
+#[test]
+fn verifier_limits_cover_wal_setup_and_small_memory_cache() {
+    let dir = TempDir::new().unwrap();
+    {
+        let (store, _) = PagedStore::open(dir.path(), options(4096, 4 << 20)).unwrap();
+        let tx = store.begin();
+        store.put(tx, b"retained", b"value").unwrap();
+        store.commit(tx).unwrap();
+        store.checkpoint().unwrap();
+    }
+    let small = StoreVerifyOptions {
+        max_memory_bytes: 1 << 20,
+        // Neither a huge requested window nor the default cache may overrun it.
+        heap_window_pages: Some(u64::MAX),
+        max_duration: Some(std::time::Duration::MAX),
+        ..Default::default()
+    };
+    let clean = verify_with(dir.path(), &small);
+    assert!(clean.complete);
+    assert_eq!(clean.verdict, StoreVerdict::Clean);
+    {
+        let wal = bicdb_page::wal::Wal::open(dir.path().join("store.wal"), false).unwrap();
+        for tx in 10_000..40_000 {
+            wal.commit(tx).unwrap();
+        }
+    }
+    let stopped = verify_with(dir.path(), &small);
+    assert!(!stopped.complete);
+    assert_eq!(stopped.stop_reason.as_deref(), Some("memory limit"));
+    assert!(
+        stopped.log.open_would_refuse.is_none(),
+        "limits are not disk corruption"
+    );
+    let timed = verify_with(
+        dir.path(),
+        &StoreVerifyOptions {
+            max_duration: Some(std::time::Duration::ZERO),
+            ..Default::default()
+        },
+    );
+    assert!(!timed.complete);
+    assert_eq!(timed.stop_reason.as_deref(), Some("time limit"));
+    assert_eq!(timed.log.records, 0, "expired setup must not scan the WAL");
+}
+
+#[test]
+fn verifier_limits_detect_overflow_cycles_and_impossible_lengths() {
+    let dir = TempDir::new().unwrap();
+    let locator = {
+        let (store, _) = PagedStore::open(dir.path(), options(4096, 4 << 20)).unwrap();
+        let tx = store.begin();
+        let locator = store
+            .put_returning_locator(tx, b"wide", &vec![b'x'; 20_000])
+            .unwrap();
+        store.commit(tx).unwrap();
+        store.checkpoint().unwrap();
+        locator
+    };
+    let heap = raw_read(dir.path(), 4096, locator.page_id);
+    let offset = u16_at(&heap, 64 + locator.slot as usize * 8) as usize;
+    assert_eq!(heap[offset], 1, "expected an overflow reference");
+    let head = u64::from_le_bytes(heap[offset + 1..offset + 9].try_into().unwrap());
+    let mut overflow = raw_read(dir.path(), 4096, head);
+    overflow[44..52].copy_from_slice(&head.to_le_bytes());
+    raw_write(dir.path(), 4096, head, overflow);
+    let cycle = verify(dir.path());
+    assert!(cycle.complete);
+    assert!(cycle.count(FindingClass::OverflowChainBroken) > 0);
+    let mut forged = heap;
+    forged[offset + 9..offset + 17].copy_from_slice(&u64::MAX.to_le_bytes());
+    raw_write(dir.path(), 4096, locator.page_id, forged);
+    let huge = verify(dir.path());
+    assert!(huge.complete);
+    assert!(huge.count(FindingClass::OverflowChainBroken) > 0);
+}
+
+#[test]
+fn verifier_limits_stop_long_version_walks_without_calling_them_corrupt() {
+    let dir = TempDir::new().unwrap();
+    {
+        let (store, _) = PagedStore::open(dir.path(), options(4096, 4 << 20)).unwrap();
+        // Keep a real old snapshot while accumulating a valid version chain.
+        let old = store.begin();
+        for _ in 0..12_000 {
+            let tx = store.begin();
+            store.put(tx, b"history", b"value").unwrap();
+            store.commit(tx).unwrap();
+        }
+        store.checkpoint().unwrap();
+        store.abort(old).unwrap();
+    }
+    let report = verify_with(
+        dir.path(),
+        &StoreVerifyOptions {
+            max_memory_bytes: 1 << 20,
+            ..Default::default()
+        },
+    );
+    assert!(!report.complete);
+    assert_eq!(report.stop_reason.as_deref(), Some("memory limit"));
+    assert_eq!(report.count(FindingClass::ChainTooLong), 0);
+    assert_eq!(report.count(FindingClass::MalformedVersion), 0);
+}
+
+#[cfg(unix)]
+#[test]
+fn verifier_limits_refuse_fifo_inputs_without_blocking() {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    for special in ["store.lock", "store.wal"] {
+        let dir = TempDir::new().unwrap();
+        {
+            let (store, _) = PagedStore::open(dir.path(), options(4096, 4 << 20)).unwrap();
+            store.checkpoint().unwrap();
+        }
+        let path = dir.path().join(special);
+        if path.exists() {
+            std::fs::remove_file(&path).unwrap();
+        }
+        let c_path = CString::new(path.as_os_str().as_bytes()).unwrap();
+        // SAFETY: c_path is a valid NUL-terminated path in this test's tempdir.
+        assert_eq!(unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) }, 0);
+        let start = std::time::Instant::now();
+        assert!(verify_store_read_only(dir.path(), &StoreVerifyOptions::default()).is_err());
+        assert!(start.elapsed() < std::time::Duration::from_secs(5));
+    }
+}

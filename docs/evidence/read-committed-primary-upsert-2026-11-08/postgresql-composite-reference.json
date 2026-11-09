@@ -1,0 +1,27 @@
+{
+  "reference": "PostgreSQL16.13",
+  "setup": [
+    "CREATE TEMP TABLE tc_reordered_pk(a integer,b integer,v integer,PRIMARY KEY(a,b))",
+    "INSERT INTO tc_reordered_pk VALUES(1,2,20),(2,1,50)"
+  ],
+  "sql": "INSERT INTO tc_reordered_pk AS t VALUES(1,2,10) ON CONFLICT(b,a) DO UPDATE SET v=t.v+EXCLUDED.v RETURNING a,b,v",
+  "returning": [
+    [
+      1,
+      2,
+      30
+    ]
+  ],
+  "final_rows": [
+    [
+      1,
+      2,
+      30
+    ],
+    [
+      2,
+      1,
+      50
+    ]
+  ]
+}

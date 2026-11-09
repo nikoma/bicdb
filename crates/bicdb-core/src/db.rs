@@ -17870,7 +17870,26 @@ impl Transaction {
         collection: &str,
         id: &str,
     ) -> Result<Option<(Option<Record>, u64)>> {
-        self.read_committed_mutation_record(collection, id, MutationOperation::Update, None)
+        self.read_committed_mutation_record(collection, id, MutationOperation::Update, None, true)
+    }
+
+    /// Reserve/recheck without parking. Executors holding an exclusive
+    /// database guard must let a row owner reach COMMIT under a shared guard,
+    /// so a busy target returns the existing retryable transaction conflict.
+    pub fn read_committed_update_record_nowait(
+        &mut self,
+        collection: &str,
+        id: &str,
+    ) -> Result<Option<(Option<Record>, u64)>> {
+        self.db_ref().check_recovery_state()?;
+        let result = self.read_committed_mutation_record(
+            collection,
+            id,
+            MutationOperation::Update,
+            None,
+            false,
+        );
+        self.fenced(result)
     }
 
     /// Grant-aware sibling of [`Self::read_committed_update_record`] used by
@@ -17883,7 +17902,13 @@ impl Transaction {
         collection: &str,
         id: &str,
     ) -> Result<Option<(Option<Record>, u64)>> {
-        self.read_committed_mutation_record(collection, id, MutationOperation::Update, Some(grant))
+        self.read_committed_mutation_record(
+            collection,
+            id,
+            MutationOperation::Update,
+            Some(grant),
+            true,
+        )
     }
 
     fn read_committed_mutation_record(
@@ -17892,6 +17917,7 @@ impl Transaction {
         id: &str,
         operation: MutationOperation,
         grant: Option<MutationGrantId>,
+        wait: bool,
     ) -> Result<Option<(Option<Record>, u64)>> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
@@ -17912,7 +17938,19 @@ impl Transaction {
             None => db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?,
         }
         db.ensure_collection(collection)?;
-        self.lock_row_for_write(tx_id, collection, id, true)?;
+        if wait {
+            self.lock_row_for_write(tx_id, collection, id, true)?;
+        } else {
+            db.lock_tx_record_with_attempts(
+                tx_id,
+                collection,
+                id,
+                0,
+                false,
+                false,
+                &self.locked_keys,
+            )?;
+        }
         let Some(max_tx) = Self::latest_committed_record_sequence(db, collection, id)? else {
             return Ok(Some((None, 0)));
         };

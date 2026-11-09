@@ -116,10 +116,11 @@ fn one_page() -> WritebackLimits {
 /// never committed, so whatever the drain wrote stays in the page file.
 ///
 /// GAP-1 in `docs/recovery-semantics.md`: a prefix that contains the split
-/// leaf but not its new right sibling leaves the committed keys that moved
-/// right unreachable.
+/// leaf but not its new right sibling left the committed keys that moved
+/// right unreachable (window W2). With no-steal the online writeback leaves
+/// every page of the uncommitted transaction in memory, so there is nothing
+/// to write; the sweep still checks every crash state.
 #[test]
-#[ignore = "GAP-1: steal without undo loses committed keys moved by an uncommitted split"]
 fn q1_crash_after_partial_drain_of_an_uncommitted_leaf_split_keeps_committed_keys() {
     const COMMITTED: usize = 300;
     let crashed: Vec<Vec<u8>> = (0..40)
@@ -134,29 +135,33 @@ fn q1_crash_after_partial_drain_of_an_uncommitted_leaf_split_keeps_committed_key
         for key in &crashed {
             store.put(xid, key, b"uncommitted").unwrap();
         }
+        let dirty = store.buffer_pool().dirty_page_count();
+        assert!(
+            dirty >= 3,
+            "the split must dirty several pages, got {dirty}"
+        );
         let mut cursor = WritebackCursor::default();
         let mut steps = 0usize;
+        // One full pass. The pages stay dirty, so the pass ends with them
+        // remaining.
         loop {
             let report = store.writeback_step(cursor, one_page()).unwrap();
             steps += report.pages_written as usize;
-            if report.complete && report.dirty_pages_remaining == 0 {
+            if report.complete {
                 break;
             }
-            cursor = if report.complete {
-                WritebackCursor::default()
-            } else {
-                report.next_cursor
-            };
+            cursor = report.next_cursor;
         }
+        assert!(store.buffer_pool().unlogged_writeback_skips() >= dirty as u64);
         steps
     };
-    assert!(
-        steps >= 3,
-        "the split must dirty several pages, got {steps}"
+    assert_eq!(
+        steps, 0,
+        "online writeback wrote {steps} pages of an uncommitted transaction"
     );
 
     let mut failures = Vec::new();
-    for written in 1..=steps {
+    for written in 0..=steps {
         let dir = TempDir::new().unwrap();
         {
             let store = committed_and_checkpointed(dir.path(), 0..COMMITTED);
@@ -166,9 +171,12 @@ fn q1_crash_after_partial_drain_of_an_uncommitted_leaf_split_keeps_committed_key
             }
             let mut cursor = WritebackCursor::default();
             let mut done = 0usize;
-            while done < written {
+            loop {
                 let report = store.writeback_step(cursor, one_page()).unwrap();
                 done += report.pages_written as usize;
+                if done >= written && report.complete {
+                    break;
+                }
                 cursor = if report.complete {
                     WritebackCursor::default()
                 } else {
@@ -189,17 +197,17 @@ fn q1_crash_after_partial_drain_of_an_uncommitted_leaf_split_keeps_committed_key
     );
 }
 
-/// Q1, root split. `BTree::insert_separator` flushes the whole pool when the
-/// root splits (`btree.rs`, "The new root is made durable BEFORE anyone is
-/// told about it"). Inside an uncommitted transaction that flush writes the
-/// split root, now holding only its left half, in place. The meta page still
-/// names that page as the root. A crash before commit then leaves the
-/// committed keys that moved to the right sibling unreachable.
+/// Q1, root split. `BTree::insert_separator` flushed the whole pool when the
+/// root split (`btree.rs`, "The new root is made durable BEFORE anyone is
+/// told about it"). Inside an uncommitted transaction that flush wrote the
+/// split root, then holding only its left half, in place. The meta page still
+/// named that page as the root. A crash before commit then left the
+/// committed keys that moved to the right sibling unreachable (window W3).
+/// The flush now writes only logged pages.
 ///
 /// The crashed transaction's keys sort first, so the committed keys are the
 /// ones pushed into the right half.
 #[test]
-#[ignore = "GAP-1: the root-split flush steals an uncommitted split and loses committed keys"]
 fn q1_crash_after_an_uncommitted_root_split_keeps_committed_keys() {
     let mut failures = Vec::new();
     for committed in [2usize, 4, 6, 8] {
@@ -493,19 +501,21 @@ fn repeated_recovery_of_one_crash_state_converges() {
 }
 
 /// Second GAP-1 reproducer, found independently on the page-delta branch
-/// (`page_deltas.rs::preexisting_mid_transaction_eviction_window`, PR #48)
-/// and ported here without the delta machinery. One transaction stays open
-/// while 400 others commit, with a 32-page pool (512-byte pages), then the
-/// process crashes. The open transaction's pages are evicted under its xid,
-/// so recovery skips their images, but committed structure (logged by the
-/// other commits) already references pages it allocated. Committed rows read
-/// back correctly; the open transaction's keys must read as absent and
-/// instead fail with a checksum mismatch on a page that was never written.
+/// (`page_deltas.rs::preexisting_mid_transaction_eviction_window`) and ported
+/// here without the delta machinery. One transaction stays open while 400
+/// others commit, with a 32-page pool (512-byte pages), then the process
+/// crashes. Committed rows must read back, and the open transaction's keys
+/// must read as absent. Before the interim they failed with a checksum
+/// mismatch on a page that was never written: the open transaction's pages
+/// were evicted under its xid while committed structure, logged by the other
+/// commits, already referenced pages it allocated.
 ///
-/// This is the reader-visible failure mode of GAP-1 (windows W1 and W6 of
-/// section 14.1): an unreadable page rather than silent row loss.
+/// This is windows W4 and W6 of section 14.1: page transactions interleaved
+/// between operations, without the writer gate held across them, each
+/// commit logging the other's pages, and stolen images tagged with whichever
+/// transaction touched the page last. Complete structural cuts must recover
+/// the acknowledged state while keeping all pending versions invisible.
 #[test]
-#[ignore = "GAP-1: an interleaved open transaction's evicted pages are referenced but never replayed"]
 fn an_open_transaction_interleaved_with_commits_reads_absent_after_a_crash() {
     let key = |i: u64| format!("key-{i:05}").into_bytes();
     let value =

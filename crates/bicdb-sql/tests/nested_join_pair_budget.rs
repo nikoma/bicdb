@@ -30,8 +30,9 @@ fn cartesian_bomb_is_refused_not_materialized() {
         .expect_err("the cartesian bomb must be refused");
     let msg = format!("{err}");
     assert!(
-        msg.contains("nested-loop limit") && msg.contains("row pairs"),
-        "expected the pair-budget refusal, got: {msg}"
+        (msg.contains("nested-loop limit") && msg.contains("row pairs"))
+            || (err.sqlstate() == "53200" && msg.contains("join materialization")),
+        "expected a resource refusal before the product is retained, got: {msg}"
     );
 }
 
@@ -44,4 +45,23 @@ fn small_cross_join_still_works() {
         .execute("SELECT count(*) FROM generate_series(1,100) a, generate_series(1,100) b")
         .unwrap();
     assert_eq!(format!("{:?}", r.rows[0][0]), "Int(10000)");
+}
+
+#[test]
+fn cpu_pair_limit_still_applies_when_no_output_rows_can_accumulate() {
+    let (_d, mut db) = db();
+    let mut s = SqlSession::new_unprivileged(&mut db, "mallory");
+    // Both base sets are small; the 400M predicate evaluations must be refused
+    // even though its false cross-relation predicate would retain no matches.
+    let err = s
+        .execute(
+            "SELECT count(*) FROM generate_series(1,20000) a(x) \
+        CROSS JOIN generate_series(1,20000) b(y) WHERE a.x+b.y<0",
+        )
+        .unwrap_err();
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("nested-loop limit") && msg.contains("row pairs"),
+        "{msg}"
+    );
 }

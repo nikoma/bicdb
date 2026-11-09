@@ -755,7 +755,7 @@ mod tests {
         let (pool, catalog) = catalog(&dir, 1024);
         let span = 1024 / FREE_BUCKETS as usize;
         catalog.register_page(9, PageType::Heap, 1000).unwrap();
-        pool.take_pages_needing_log();
+        pool.acknowledge_log_images_for_test();
 
         // Filling the page one class at a time moves it only once per
         // FREE_SPACE_SLACK + 1 classes, and a call that does not move it
@@ -765,7 +765,7 @@ mod tests {
         while free > span {
             let next = free - span;
             let moved = catalog.record_free_space(9, None, free, next).unwrap();
-            let logged = pool.take_pages_needing_log();
+            let logged = pool.acknowledge_log_images_for_test();
             assert_eq!(
                 moved,
                 !logged.is_empty(),

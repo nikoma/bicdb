@@ -344,3 +344,88 @@ fn a_cte_is_not_short_circuited() {
         );
     });
 }
+
+#[test]
+fn reopened_paged_counts_bound_payload_reads_and_keep_policy_guards() {
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let dir = TempDir::new().unwrap();
+        let config = DbConfig::default()
+            .with_fsync(false)
+            .with_sync_outbox(false)
+            .with_storage_mode(StorageMode::ServerPaged);
+        let mut db = BicDb::open_with_config(dir.path(), config.clone()).unwrap();
+        bicdb_sql::oracle::ensure_database_profile(&mut db, profile).unwrap();
+        {
+            let mut sql = SqlSession::new(&mut db);
+            sql.execute("CREATE TABLE large_t (id INT PRIMARY KEY, body TEXT)")
+                .unwrap();
+            let body = "x".repeat(32 * 1024);
+            for id in 0..128 {
+                sql.execute(&format!("INSERT INTO large_t VALUES ({id}, '{body}')"))
+                    .unwrap();
+            }
+        }
+        db.close().unwrap();
+        let mut db = BicDb::open_with_config(
+            dir.path(),
+            config.with_paged_buffer_pool_bytes(2 * 1024 * 1024),
+        )
+        .unwrap();
+        let before = db.paged_storage_snapshot().unwrap().unwrap();
+        {
+            let scope = bicdb_core::query_budget::QueryMemoryScope::new(64 * 1024);
+            assert_eq!(
+                count(&mut db, "SELECT COUNT(*) FROM large_t"),
+                128,
+                "{profile}"
+            );
+            assert!(scope.peak_bytes() < 64 * 1024, "{profile}");
+        }
+        let after = db.paged_storage_snapshot().unwrap().unwrap();
+        let read_bytes = after
+            .buffer_pool
+            .misses
+            .saturating_sub(before.buffer_pool.misses)
+            .saturating_mul(u64::from(after.page_size));
+        assert!(
+            read_bytes < 2 * 1024 * 1024,
+            "{profile}: count loaded {read_bytes} buffer bytes for 4MiB of payloads"
+        );
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("BEGIN").unwrap();
+        sql.execute("INSERT INTO large_t VALUES (1000, 'own')")
+            .unwrap();
+        {
+            let _scope = bicdb_core::query_budget::QueryMemoryScope::new(64 * 1024);
+            assert_eq!(
+                sql.execute("SELECT COUNT(*) FROM large_t").unwrap().rows,
+                vec![vec![SqlValue::Int(129)]],
+                "{profile}"
+            );
+        }
+        sql.execute("ROLLBACK").unwrap();
+        assert_eq!(
+            sql.execute("SELECT COUNT(*) FROM large_t WHERE id < 64")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(64)]],
+            "{profile}: predicate bypass"
+        );
+        if profile == "postgres" {
+            for statement in [
+                "CREATE ROLE count_reader LOGIN",
+                "GRANT SELECT ON large_t TO count_reader",
+                "ALTER TABLE large_t ENABLE ROW LEVEL SECURITY",
+                "CREATE POLICY count_subset ON large_t USING (id < 64)",
+                "SET ROLE count_reader",
+            ] {
+                sql.execute(statement).unwrap();
+            }
+            assert_eq!(
+                sql.execute("SELECT COUNT(*) FROM large_t").unwrap().rows,
+                vec![vec![SqlValue::Int(64)]],
+                "policy must filter the count"
+            );
+        }
+    }
+}

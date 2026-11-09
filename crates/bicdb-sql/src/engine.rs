@@ -4607,6 +4607,7 @@ impl<'db> SqlEngine<'db> {
     }
 
     pub fn execute(&self, sql: &str) -> Result<SqlResult> {
+        let _join_budget = crate::join_budget::Scope::enter();
         self.db_ref().check_recovery_state()?;
         let mut profile = SqlProfileScope::new(sql);
         let _schema_cache = SqlSchemaCacheScope::new();
@@ -4653,7 +4654,10 @@ impl<'db> SqlEngine<'db> {
     }
 
     pub(crate) fn check_cancellation(&self) -> Result<()> {
-        self.cancellation.check().map_err(SqlError::from)
+        self.cancellation.check().map_err(SqlError::from)?;
+        // Input materializers and host scopes may already have observed a
+        // memory limit or deadline. Do not continue a join/fallback after it.
+        bicdb_core::query_budget::check().map_err(SqlError::from)
     }
 
     pub(crate) fn execute_builtin(&self, sql: &str) -> Result<Option<SqlResult>> {
@@ -5055,6 +5059,7 @@ impl<'db> SqlEngine<'db> {
     }
 
     pub(crate) fn execute_query(&self, query: &Query) -> Result<SqlResult> {
+        let join_budget = crate::join_budget::QueryScope::enter();
         self.db_ref().check_recovery_state()?;
         self.require_from_relations_readable(query)?;
         validate_comparison_signatures(self, ComparisonStatement::Query(query))?;
@@ -5063,7 +5068,7 @@ impl<'db> SqlEngine<'db> {
         let _probes = self.exists_probe_memo.scope(
             self.outer_row.is_none() && exists_probe::probe_query_safe(self.db_ref(), query),
         );
-        self.execute_query_unscoped(query)
+        join_budget.finish(self.execute_query_unscoped(query))
     }
 
     fn execute_query_unscoped(&self, query: &Query) -> Result<SqlResult> {

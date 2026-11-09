@@ -1260,6 +1260,7 @@ name = "bicdb-page"
 version = "1.0.442-beta"
 dependencies = [
  "crc32fast",
+ "flate2",
  "hex",
  "libc",
  "parking_lot",

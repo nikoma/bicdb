@@ -347,7 +347,9 @@ impl PagedStoreSnapshot {
 #[derive(Clone, Debug)]
 pub struct PagedStoreOptions {
     pub page_size: u32,
-    /// Hard ceiling on cached pages. This is `buffer_pool_bytes`.
+    /// Normal frame-byte budget. During a WAL-managed operation, at most
+    /// one emergency page per shard may temporarily exceed it; a durable
+    /// boundary trims unpinned extras. This excludes frame/container metadata.
     pub buffer_pool_bytes: u64,
     /// Hard ceiling on deduplicated speculative page requests. This bounds
     /// read-ahead metadata independently of database size.
@@ -706,7 +708,7 @@ pub struct PagedStore {
     checkpointer: Checkpointer,
     options: PagedStoreOptions,
     next_transaction: AtomicU64,
-    transactions: TransactionTable,
+    transactions: Arc<TransactionTable>,
     /// Disk-backed terminal outcomes above a pinned watermark.
     spill: Arc<PagedOutcomeSpill>,
     /// The snapshot each live transaction began with.
@@ -717,6 +719,14 @@ pub struct PagedStore {
     /// transactions were running then. Bounded by the number of live
     /// transactions, and dropped at commit or abort.
     snapshots: Mutex<BTreeMap<Xid, Snapshot>>,
+    /// Live transactions that have written (a `put` or `delete`), so their
+    /// versions may be in pages another transaction's commit logs. See
+    /// [`PagedStore::log_xid_floor_above`].
+    live_writers: Mutex<BTreeSet<Xid>>,
+    /// Transactions with an operation that failed after changing a page:
+    /// their in-memory pages may hold a half-done structure. See
+    /// `PagedStore::poison_if_failed_after_a_change`.
+    poisoned: Mutex<BTreeSet<Xid>>,
     /// Inclusive cursor for the one bounded checkpoint step opportunistically
     /// advanced by commits after the WAL trigger is crossed. This is only a
     /// latency-safety fallback; the durable core supervisor owns production
@@ -1031,7 +1041,6 @@ impl PagedStore {
 
         let checkpointer = Checkpointer::new(pool.clone(), wal.clone());
         // Eviction must not outrun the log. See `WritebackBarrier`.
-        pool.set_barrier(Arc::new(WalWritebackBarrier { wal: wal.clone() }));
 
         // Checkpointed watermarks first, then final log outcomes on top:
         // anything the checkpoint froze is committed unless excepted, and the
@@ -1040,6 +1049,7 @@ impl PagedStore {
         // set.
         let transactions =
             TransactionTable::with_exception_capacity(abort_exception_capacity(options.page_size));
+        let transactions = Arc::new(transactions);
         // The spill is loaded before outcomes are installed: anything it
         // retains is visible to `status` immediately, and the open-time
         // freeze below can only shrink what it needs to cover.
@@ -1061,6 +1071,11 @@ impl PagedStore {
         // This is what keeps crash-orphaned row versions from reading as an
         // eternal concurrent writer once the exception region is full.
         transactions.seal_previous_incarnations();
+        pool.set_barrier(Arc::new(WalWritebackBarrier {
+            wal: wal.clone(),
+            transactions: transactions.clone(),
+            durable_floor: Mutex::new(0),
+        }));
 
         // Nothing is in flight at open, so every recovered xid is terminal or
         // crash-dead. Advance the watermark across everything representable
@@ -1096,6 +1111,8 @@ impl PagedStore {
             transactions,
             spill,
             snapshots: Mutex::new(BTreeMap::new()),
+            live_writers: Mutex::new(BTreeSet::new()),
+            poisoned: Mutex::new(BTreeSet::new()),
             automatic_checkpoint_cursor: Mutex::new(PagedCheckpointCursor::default()),
             last_recovery: recovery,
             backup_pins: AtomicU64::new(0),
@@ -1148,7 +1165,7 @@ impl PagedStore {
     fn write_meta(&self) -> Result<()> {
         let mut guard = self.pool.get_mut(self.meta_page)?;
         let page = guard.bytes_mut();
-        let mut header = crate::page::PageHeader::new(
+        let header = crate::page::PageHeader::new(
             self.meta_page,
             crate::page::PageType::Heap,
             self.options.page_size,
@@ -1578,6 +1595,8 @@ impl PagedStore {
             }
 
             let (transaction, _) = self.begin_transaction();
+            self.admit_write(transaction)?;
+            let releases = self.pool.write_guard_releases();
             self.pool.set_current_transaction(transaction);
             let header = VersionHeader::new(transaction);
             let mut tuple = Vec::with_capacity(crate::mvcc::VERSION_HEADER_BYTES + value.len());
@@ -1586,8 +1605,10 @@ impl PagedStore {
             let replacement_head = match self.heap.insert(&tuple) {
                 Ok(locator) => locator,
                 Err(error) => {
+                    let failure: Result<()> = Err(error);
+                    self.poison_if_failed_after_a_change(transaction, releases, &failure)?;
                     let _ = self.abort(transaction);
-                    return Err(error);
+                    return Err(failure.unwrap_err());
                 }
             };
             if let Err(error) = self
@@ -1595,8 +1616,10 @@ impl PagedStore {
                 .insert(key, &replacement_head.encode())
                 .and_then(|_| self.sync_roots())
             {
+                let failure: Result<()> = Err(error);
+                self.poison_if_failed_after_a_change(transaction, releases, &failure)?;
                 let _ = self.abort(transaction);
-                return Err(error);
+                return Err(failure.unwrap_err());
             }
             (transaction, replacement_head, inspection)
         };
@@ -1664,6 +1687,62 @@ impl PagedStore {
         xid
     }
 
+    /// An operation that fails after it changed a page (a write guard was
+    /// released) may leave a half-done structure in memory: a B-tree split
+    /// rewrites the left leaf before the parent records it, and a failure in
+    /// between (an I/O error on eviction, `PoolExhausted`, no space to
+    /// allocate) leaves keys reachable from nowhere. Nothing may log those
+    /// pages: not this transaction's abort (whose unit would make them
+    /// durable), and not another transaction's commit, which logs every
+    /// unlogged page. So the store fails closed at once (the fail-closed
+    /// state of `DurabilityHealth`), refusing every further write until a
+    /// restart, which recovers from the logs: a decided commit is replayed
+    /// from the transaction log, a page-only transaction's work is lost as
+    /// for a crash. The transaction is marked poisoned, so its abort reports
+    /// that instead of logging. An operation that fails before changing
+    /// anything (a refusal, a write conflict, an oversized key) is not
+    /// affected.
+    fn poison_if_failed_after_a_change<T>(
+        &self,
+        transaction: Xid,
+        releases_before: u64,
+        result: &Result<T>,
+    ) -> Result<()> {
+        let Err(error) = result else {
+            return Ok(());
+        };
+        if self.pool.write_guard_releases() == releases_before {
+            return Ok(());
+        }
+        self.poisoned.lock().insert(transaction);
+        let fenced = self.wal.health().record_failure(
+            "paged.operation_failed_after_change",
+            &format!("transaction {transaction}: {error}"),
+        );
+        // The caller still gets the operation's own error; the store is
+        // fenced either way.
+        let _ = fenced;
+        Ok(())
+    }
+
+    /// Compatibility spelling for a transaction whose logical redo is
+    /// already durable. Structural admission treats every writer identically;
+    /// external redo is never an exemption from no-steal.
+    pub fn begin_redo_backed(&self) -> (Xid, Snapshot) {
+        self.begin_transaction()
+    }
+
+    /// At an operation boundary, durably log the complete unlogged closure
+    /// before admitting more mutations. No transaction is exempt.
+    fn admit_write(&self, _transaction: Xid) -> Result<()> {
+        self.wal.health().check()?;
+        if self.pool.unlogged_pressure().is_some() {
+            self.log_unlogged_pages_as_committed_unit()?;
+            crate::test_faults::crash_point("structural_cut.after_durable");
+        }
+        Ok(())
+    }
+
     /// The snapshot a live transaction began with.
     fn snapshot_of(&self, xid: Xid) -> Snapshot {
         self.snapshots
@@ -1706,7 +1785,23 @@ impl PagedStore {
     ) -> Result<TupleLocator> {
         let _guard = self.write_lock.lock();
         let _structure = self.structure.write();
+        self.admit_write(transaction)?;
+        // A key the index would refuse is refused before the heap version
+        // is written, so that user error never leaves a changed page.
+        self.index
+            .check_insertable(key, TupleLocator::new(0, 0, 0).encode().len())?;
+        self.live_writers.lock().insert(transaction);
         self.pool.set_current_transaction(transaction);
+        let releases = self.pool.write_guard_releases();
+        let result = self.put_admitted(transaction, key, value);
+        self.poison_if_failed_after_a_change(transaction, releases, &result)?;
+        if result.is_ok() {
+            self.release_retired_overflow_at_boundary()?;
+        }
+        result
+    }
+
+    fn put_admitted(&self, transaction: Xid, key: &[u8], value: &[u8]) -> Result<TupleLocator> {
         let head = self.index.get(key)?.and_then(|b| TupleLocator::decode(&b));
         // Chain the new version onto the newest version that is not aborted:
         // an aborted (or crash-orphaned) head is dead weight, and stamping it
@@ -2087,7 +2182,19 @@ impl PagedStore {
     pub fn delete(&self, transaction: Xid, key: &[u8]) -> Result<bool> {
         let _guard = self.write_lock.lock();
         let _structure = self.structure.write();
+        self.admit_write(transaction)?;
+        self.live_writers.lock().insert(transaction);
         self.pool.set_current_transaction(transaction);
+        let releases = self.pool.write_guard_releases();
+        let result = self.delete_admitted(transaction, key);
+        self.poison_if_failed_after_a_change(transaction, releases, &result)?;
+        if result.is_ok() {
+            self.release_retired_overflow_at_boundary()?;
+        }
+        result
+    }
+
+    fn delete_admitted(&self, transaction: Xid, key: &[u8]) -> Result<bool> {
         let Some(bytes) = self.index.get(key)? else {
             return Ok(false);
         };
@@ -2151,14 +2258,32 @@ impl PagedStore {
         let commit_lsn;
         {
             let _guard = self.write_lock.lock();
+            if self.poisoned.lock().contains(&transaction) {
+                // Never commit a half-done structure (see
+                // `poison_if_failed_after_a_change`); the store is fenced.
+                self.wal.health().check()?;
+                return Err(self.wal.health().record_failure(
+                    "paged.commit_after_failed_operation",
+                    &format!("transaction {transaction}"),
+                ));
+            }
+            if self.pool.has_pending_frees(transaction) {
+                self.log_unlogged_pages_as_committed_unit()?;
+            }
             let free_adoption = self.prepare_free_adoption(transaction, &[])?;
-            self.log_dirty_pages(transaction)?;
+            let logged = self.log_dirty_pages(transaction)?;
             let lsn = if sync || !free_adoption.is_empty() {
                 self.wal.commit(transaction)?
             } else {
                 self.wal.commit_unsynced(transaction)?
             };
             commit_lsn = lsn;
+            // Only now may writeback treat these pages as logged: the commit
+            // record is appended (and synced, or covered by the deferred-commit
+            // sync that `before_logged_writeback` runs before such a write).
+            self.pool.mark_logged(&logged);
+            self.pool.trim_emergency_frames()?;
+            self.live_writers.lock().remove(&transaction);
             if !free_adoption.is_empty() {
                 self.pool.flush_all()?;
                 self.adopt_free_segments(&free_adoption)?;
@@ -2209,18 +2334,114 @@ impl PagedStore {
 
     /// Discard a transaction's writes.
     ///
-    /// Only meaningful before a crash: recovery already refuses to apply page
-    /// images from uncommitted transactions. In-memory pages are *not* rolled
-    /// back here, which is precisely why concurrency control is a later phase
-    /// rather than something quietly half-done.
+    /// Recovery refuses to apply page images from uncommitted transactions,
+    /// and MVCC hides the aborted versions. In-memory pages are *not* rolled
+    /// back: they keep the aborted operations' structural changes (splits,
+    /// allocations, the roots), with entries that lead to invisible versions.
+    ///
+    /// Those pages are then logged at once, under a fresh internal transaction
+    /// that commits (GAP-1 window W5). Before, they stayed unlogged until the
+    /// next commit logged them, and any checkpoint in between could write part
+    /// of them under the aborted xid: a partial structure recovery skipped but
+    /// could not undo. The next commit would have logged exactly these pages,
+    /// so the state that becomes durable is the same; only the moment changes.
+    /// A refused transaction's pages also stop occupying the pool.
+    ///
+    /// The unit is all or nothing: recovery applies its images only if its
+    /// commit record is in the log, so a crash or a failed write part-way
+    /// leaves the page file and the replay exactly as before the abort. Its
+    /// fresh xid is above every live one, so the log also names an xid above
+    /// any other live transaction whose pages it carries (see
+    /// [`Self::log_dirty_pages`]). Logging another live transaction's pages
+    /// here is the same as any commit doing so: under the writer gate, at an
+    /// operation boundary, with that transaction's versions invisible until
+    /// its own commit.
+    ///
+    /// Two exceptions. A transaction that wrote nothing logs nothing and
+    /// does not sync (read sessions abort this way). A poisoned transaction
+    /// (an operation failed after changing a page) logs nothing either: its
+    /// pages may hold a half-done structure, the store is already fenced,
+    /// and the abort returns that failure.
     pub fn abort(&self, transaction: Xid) -> Result<()> {
         // Serialize the abort record with checkpoint publication/reset. An
         // abort does not mutate a page, but it does append to the same WAL a
         // checkpoint may truncate.
         let _guard = self.write_lock.lock();
+        let wrote = self.live_writers.lock().remove(&transaction);
+        if self.poisoned.lock().remove(&transaction) {
+            // Its pages may hold a half-done structure: log nothing. The
+            // store is already fenced; the restart recovers from the logs.
+            self.transactions.abort(transaction);
+            self.snapshots.lock().remove(&transaction);
+            return Err(self.wal.health().check().err().unwrap_or_else(|| {
+                self.wal.health().record_failure(
+                    "paged.abort_after_failed_operation",
+                    &format!("transaction {transaction}"),
+                )
+            }));
+        }
         self.wal.abort(transaction)?;
         self.transactions.abort(transaction);
         self.snapshots.lock().remove(&transaction);
+        if !wrote {
+            // A read-only transaction changed no page: nothing to log, and
+            // no sync.
+            return Ok(());
+        }
+        self.log_unlogged_pages_as_committed_unit()
+    }
+
+    /// Log every page with unlogged changes under a fresh transaction and
+    /// commit it durably. Called with the writer gate held.
+    fn log_unlogged_pages_as_committed_unit(&self) -> Result<()> {
+        if self.pool.unlogged_pages() == 0 {
+            return Ok(());
+        }
+        let (unit, _) = self.begin_transaction();
+        let logged = self
+            .log_dirty_pages(unit)
+            .and_then(|logged| self.wal.commit(unit).map(|_| logged));
+        match logged {
+            Ok(logged) => {
+                self.pool.mark_logged(&logged);
+                self.pool.trim_emergency_frames()?;
+                self.transactions.commit(unit);
+                self.snapshots.lock().remove(&unit);
+                Ok(())
+            }
+            Err(error) => {
+                // Its images, if any reached the log, have no commit record,
+                // so recovery skips them, and the pages stay unlogged, so
+                // no-steal keeps them out of the page file. Do not leave the
+                // unit in progress: it would pin the freeze watermark.
+                let _ = self.wal.abort(unit);
+                self.transactions.abort(unit);
+                self.snapshots.lock().remove(&unit);
+                Err(error)
+            }
+        }
+    }
+
+    /// Publish the checkpoint's one-page descriptor after its data closure
+    /// and status spill are durable. Another internal committed unit here
+    /// would create a new outcome after the spill and forever pin WAL reset.
+    /// The descriptor records next_xid itself, so no separate xid-floor
+    /// record is needed. Caller holds the writer gate.
+    fn log_checkpoint_descriptor(&self) -> Result<()> {
+        let logged: Vec<_> = self
+            .pool
+            .pages_needing_log()
+            .into_iter()
+            .filter(|&(page, _)| page == self.meta_page)
+            .collect();
+        if logged.is_empty() {
+            return Ok(());
+        }
+        let image = self.pool.get(self.meta_page)?.bytes().to_vec();
+        let lsn = self.wal.log_page_image(self.meta_page, 0, &image)?;
+        self.wal.sync_through(lsn)?;
+        self.pool.mark_logged(&logged);
+        self.pool.trim_emergency_frames()?;
         Ok(())
     }
 
@@ -2360,6 +2581,15 @@ impl PagedStore {
         field: HeaderStampField,
         expected: Xid,
     ) -> Result<HeaderRepair> {
+        self.guarded_maintenance(|| self.repair_version_header_stamp_inner(key, field, expected))
+    }
+
+    fn repair_version_header_stamp_inner(
+        &self,
+        key: &[u8],
+        field: HeaderStampField,
+        expected: Xid,
+    ) -> Result<HeaderRepair> {
         if expected == 0 {
             return Err(PageError::HeaderRepairRefused {
                 key: String::from_utf8_lossy(key).into_owned(),
@@ -2408,6 +2638,7 @@ impl PagedStore {
         }
         self.heap.update(locator, &stored)?;
         self.sync_roots()?;
+        self.release_retired_overflow_at_boundary()?;
         Ok(HeaderRepair::Repaired)
     }
 
@@ -2416,6 +2647,7 @@ impl PagedStore {
         // flushes frames, so running it alongside a `put` mid-split would
         // checkpoint a half-modified tree.
         let _guard = self.write_lock.lock();
+        self.log_unlogged_pages_as_committed_unit()?;
         // Freeze first, so the watermark the meta page records is as advanced as
         // it can safely be. Freezing stops at the oldest still-running
         // transaction, so an in-flight writer is never frozen into visibility.
@@ -2430,6 +2662,7 @@ impl PagedStore {
         // The meta page is written first: the checkpoint makes it durable, so it
         // must already hold the current tree roots and watermarks.
         self.write_meta()?;
+        self.log_checkpoint_descriptor()?;
 
         // Truncating the log discards every commit record in it. That is only
         // safe once every unfrozen commit is proven somewhere durable: the
@@ -2492,9 +2725,12 @@ impl PagedStore {
 
         let report = match cursor.phase {
             PagedCheckpointPhase::Drain => {
+                // Drain runs without the writer gate, next to in-flight
+                // transactions: it must not write their unlogged pages
+                // (GAP-1). Finalize, under the gate, writes what remains.
                 let writeback = self
                     .pool
-                    .writeback_step(cursor.writeback, limits.writeback)?;
+                    .writeback_step_logged_only(cursor.writeback, limits.writeback)?;
                 crate::test_faults::crash_point("checkpoint_step.after_drain");
                 let drained = writeback.complete && writeback.dirty_pages_remaining == 0;
                 let drain_passes = if writeback.complete && !drained {
@@ -2585,6 +2821,7 @@ impl PagedStore {
             }
             PagedCheckpointPhase::Finalize => {
                 let _guard = self.write_lock.lock();
+                self.log_unlogged_pages_as_committed_unit()?;
                 // Recheck the watermark under the same fence used for final
                 // publication. Commits between the Freeze and Finalize ticks
                 // must either be frozen now or leave the WAL untruncated.
@@ -2653,6 +2890,7 @@ impl PagedStore {
                     // every preceding dirty page is durable. With the writer
                     // gate held, this creates exactly one new dirty meta page.
                     self.write_meta()?;
+                    self.log_checkpoint_descriptor()?;
                     let writeback = self
                         .pool
                         .writeback_step(WritebackCursor::default(), limits.writeback)?;
@@ -2734,13 +2972,15 @@ impl PagedStore {
     }
 
     /// Write back one cursor-bounded dirty-buffer window. The pool's installed
-    /// barrier durably logs every after-image before its page write.
+    /// barrier durably logs every after-image before its page write. Pages
+    /// holding changes no commit has logged yet stay dirty: this runs without
+    /// the writer gate, next to in-flight transactions (GAP-1).
     pub fn writeback_step(
         &self,
         cursor: WritebackCursor,
         limits: WritebackLimits,
     ) -> Result<WritebackStepReport> {
-        self.pool.writeback_step(cursor, limits)
+        self.pool.writeback_step_logged_only(cursor, limits)
     }
 
     /// The durable page directory and free-space map.
@@ -2864,7 +3104,10 @@ impl PagedStore {
         // must reach the file first or a recently freed page could be read in
         // its pre-free state. `free_list_members` likewise reads each member's
         // on-disk header and treats a not-yet-Flushed Free page as corruption,
-        // so the flush is a prerequisite for both.
+        // so the flush is a prerequisite for both. First make the complete
+        // closure durable, including versions owned by still-pending writers.
+        // Their visibility remains unchanged while the writer gate is held.
+        self.log_unlogged_pages_as_committed_unit()?;
         self.pool.flush_all()?;
         let page_count = store.page_count();
 
@@ -2946,7 +3189,7 @@ impl PagedStore {
         // the current list head — the exact segment adopt_free_pages validates.
         if !orphans.is_empty() {
             let free_adoption = self.prepare_free_adoption(0, &orphans)?;
-            self.log_dirty_pages(0)?;
+            self.log_unlogged_pages_as_committed_unit()?;
             self.wal.sync()?;
             self.pool.flush_all()?;
             self.adopt_free_segments(&free_adoption)?;
@@ -2972,6 +3215,17 @@ impl PagedStore {
         &self,
         cursor: VacuumCursor,
         limits: VacuumLimits,
+        time_exhausted: impl FnMut() -> bool,
+    ) -> Result<VacuumReport> {
+        self.guarded_maintenance(|| {
+            self.vacuum_step_with_expiry_inner(cursor, limits, time_exhausted)
+        })
+    }
+
+    fn vacuum_step_with_expiry_inner(
+        &self,
+        cursor: VacuumCursor,
+        limits: VacuumLimits,
         mut time_exhausted: impl FnMut() -> bool,
     ) -> Result<VacuumReport> {
         limits.validate(self.pool.page_size())?;
@@ -2992,7 +3246,7 @@ impl PagedStore {
             .catalog
             .scan_pages(crate::page::PageType::Heap, cursor.next_page_id)?;
 
-        'pages: loop {
+        loop {
             let Some(page_id) = pages.next().transpose()? else {
                 report.complete = true;
                 report.stop_reason = VacuumStopReason::Complete;
@@ -3028,6 +3282,7 @@ impl PagedStore {
                 report.next_cursor.next_page_id = Some(page_id);
                 break;
             }
+            self.admit_write(0)?;
             report.pages_scanned += 1;
             report.bytes_examined += page_size;
 
@@ -3086,9 +3341,17 @@ impl PagedStore {
                     self.heap.delete_for_vacuum(locator)?;
                     report.bytes_examined += release_bytes;
                     report.versions_reclaimed += 1;
+                    if report.versions_reclaimed == 1 {
+                        crate::test_faults::io_fault(
+                            "experimental.vacuum.after_first_mutation",
+                            self.pool.store().path(),
+                        )
+                        .map_err(|error| PageError::io(self.pool.store().path(), error))?;
+                    }
                 }
             }
 
+            self.release_retired_overflow_at_boundary()?;
             let (after_free, live) = {
                 let guard = self.pool.get(page_id)?;
                 let page = crate::slotted::SlottedPageRef::new(guard.bytes());
@@ -3136,8 +3399,9 @@ impl PagedStore {
                 self.catalog.forget_page(*page_id, free_bytes)?;
                 self.heap.forget_page(*page_id);
             }
+            self.log_unlogged_pages_as_committed_unit()?;
             let free_adoption = self.prepare_free_adoption(0, &fully_dead)?;
-            self.log_dirty_pages(0)?;
+            self.log_unlogged_pages_as_committed_unit()?;
             self.wal.sync()?;
             self.pool.flush_all()?;
             self.adopt_free_segments(&free_adoption)?;
@@ -3205,6 +3469,10 @@ impl PagedStore {
     /// interleave, so remove-while-iterating is safe via the two-phase
     /// collect-then-remove below. Returns the number of keys removed.
     pub fn sweep_dead_index_entries(&self, max_keys: usize) -> Result<u64> {
+        self.guarded_maintenance(|| self.sweep_dead_index_entries_inner(max_keys))
+    }
+
+    fn sweep_dead_index_entries_inner(&self, max_keys: usize) -> Result<u64> {
         let _guard = self.write_lock.lock();
         let _structure = self.structure.write();
         // Phase 1: collect removable keys (bounded).
@@ -3231,14 +3499,49 @@ impl PagedStore {
         // Phase 2: remove.
         let mut removed = 0u64;
         for key in &removable {
+            self.admit_write(0)?;
             if self.index.remove(key)? {
                 removed += 1;
+                if removed == 1 {
+                    crate::test_faults::io_fault(
+                        "experimental.sweep.after_first_mutation",
+                        self.pool.store().path(),
+                    )
+                    .map_err(|error| PageError::io(self.pool.store().path(), error))?;
+                }
             }
+            self.sync_roots()?;
         }
         if removed > 0 {
             self.sync_roots()?;
         }
         Ok(removed)
+    }
+
+    /// A complete operation changed the owner tuple/index first. While the
+    /// exclusive structure guard still excludes readers, make that replacement
+    /// durable before releasing any page from the old overflow chain.
+    fn release_retired_overflow_at_boundary(&self) -> Result<()> {
+        let retired = self.heap.take_retired_overflow();
+        if retired.is_empty() {
+            return Ok(());
+        }
+        self.log_unlogged_pages_as_committed_unit()?;
+        for head in retired {
+            self.pool.retire_overflow_after_durable_cut(head)?;
+        }
+        Ok(())
+    }
+
+    /// Every maintenance mutation must either finish a complete structure,
+    /// or fence before a later cut could persist its partial result.
+    fn guarded_maintenance<T>(&self, operation: impl FnOnce() -> Result<T>) -> Result<T> {
+        let _guard = self.write_lock.lock();
+        self.admit_write(0)?;
+        let releases = self.pool.write_guard_releases();
+        let result = operation();
+        self.poison_if_failed_after_a_change(0, releases, &result)?;
+        result
     }
 
     /// Log after-images for pages modified since their last record.
@@ -3248,16 +3551,56 @@ impl PagedStore {
     /// writes it out until the writeback barrier or a checkpoint, both of which
     /// put the log first. The ordering that matters — log durable before page
     /// durable — is preserved.
-    fn log_dirty_pages(&self, transaction: u64) -> Result<()> {
-        let dirty = self.pool.take_pages_needing_log();
-        for page_id in dirty {
+    ///
+    /// Returns the pages logged. The caller passes them to
+    /// `BufferPool::mark_logged` once the record that makes them recoverable
+    /// (the commit, or a sync for structural images) is in the log; until
+    /// then they stay unlogged, so no-steal keeps them out of the page file.
+    fn log_dirty_pages(&self, transaction: u64) -> Result<Vec<(PageId, u64)>> {
+        let dirty = self.pool.pages_needing_log();
+        for &(page_id, _) in &dirty {
             let image = {
                 let guard = self.pool.get(page_id)?;
                 guard.bytes().to_vec()
             };
             self.wal.log_page_image(page_id, transaction, &image)?;
         }
-        Ok(())
+        self.log_xid_floor_above(transaction)?;
+        crate::test_faults::crash_point("paged.after_page_images");
+        Ok(dirty)
+    }
+
+    /// Make the log name an xid above every live transaction that has
+    /// written, if one is above `transaction` (0 for structural images: any).
+    ///
+    /// The pages just logged can carry versions of other live transactions:
+    /// every unlogged page is logged, whoever changed it. Recovery sets the
+    /// next xid from the highest xid any record names. If no record named a
+    /// live transaction B, B's versions could be replayed and B's xid handed
+    /// out again after the crash, and a commit of the new holder would make
+    /// B's uncommitted versions visible. A fresh empty transaction, committed
+    /// with the caller's own durability (the caller syncs, or for a deferred
+    /// commit the deferred-commit sync covers it), names an xid above them.
+    fn log_xid_floor_above(&self, transaction: Xid) -> Result<()> {
+        // Only writers matter: a live transaction that wrote nothing has no
+        // versions in any page, and reusing its xid would expose nothing.
+        let highest_live = self.live_writers.lock().iter().next_back().copied();
+        if !highest_live.is_some_and(|live| live > transaction) {
+            return Ok(());
+        }
+        let (floor, _) = self.begin_transaction();
+        let appended = self.wal.commit_unsynced(floor);
+        self.snapshots.lock().remove(&floor);
+        match appended {
+            Ok(_) => {
+                self.transactions.commit(floor);
+                Ok(())
+            }
+            Err(error) => {
+                self.transactions.abort(floor);
+                Err(error)
+            }
+        }
     }
 
     /// Finalize every free page staged by a transaction (plus an explicit
@@ -3303,6 +3646,8 @@ impl PagedStore {
                 header.generation = generation;
                 header.next_page = next;
                 header.encode(bytes);
+                drop(guard);
+                self.pool.seal_unadopted_structural_free(*page_id)?;
             }
             segments.push((chunk[0], chunk.len() as u64));
             tail_target = chunk[0];
@@ -3324,9 +3669,10 @@ impl PagedStore {
     /// replacing them is durable, but leaving them only in memory until some
     /// later checkpoint would leak space after a clean shutdown.
     fn finalize_structural_frees(&self) -> Result<()> {
+        self.log_unlogged_pages_as_committed_unit()?;
         let adoption = self.prepare_free_adoption(0, &[])?;
         if !adoption.is_empty() {
-            self.log_dirty_pages(0)?;
+            self.log_unlogged_pages_as_committed_unit()?;
             self.wal.sync()?;
             self.pool.flush_all()?;
             self.adopt_free_segments(&adoption)?;
@@ -3836,23 +4182,37 @@ pub struct VisibleKeyPrefixScan<'a> {
     value_prefix_bytes: usize,
 }
 
+impl VisibleKeyPrefixScan<'_> {
+    /// Advance exactly one indexed key, including a key invisible to the
+    /// snapshot. A visible key has `Some(prefix)` (possibly empty); an
+    /// invisible key has `None`. Callers can therefore check cancellation
+    /// even across long runs of deleted or uncommitted keys.
+    pub fn next_candidate(&mut self) -> Option<Result<(Vec<u8>, Option<Vec<u8>>)>> {
+        let _structure = self.store.structure.read();
+        let (key, value) = match self.entries.next()? {
+            Ok(entry) => entry,
+            Err(error) => return Some(Err(error)),
+        };
+        Some(
+            self.store
+                .visible_value_prefix_as_of(
+                    &self.snapshot,
+                    TupleLocator::decode(&value),
+                    self.value_prefix_bytes,
+                )
+                .map(|prefix| (key, prefix)),
+        )
+    }
+}
+
 impl Iterator for VisibleKeyPrefixScan<'_> {
     type Item = Result<(Vec<u8>, Vec<u8>)>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let _structure = self.store.structure.read();
-            let (key, value) = match self.entries.next()? {
-                Ok(entry) => entry,
-                Err(error) => return Some(Err(error)),
-            };
-            match self.store.visible_value_prefix_as_of(
-                &self.snapshot,
-                TupleLocator::decode(&value),
-                self.value_prefix_bytes,
-            ) {
-                Ok(Some(prefix)) => return Some(Ok((key, prefix))),
-                Ok(None) => continue,
+            match self.next_candidate()? {
+                Ok((key, Some(prefix))) => return Some(Ok((key, prefix))),
+                Ok((_, None)) => continue,
                 Err(error) => return Some(Err(error)),
             }
         }
@@ -5337,30 +5697,51 @@ impl crate::mvcc::OutcomeSpill for PagedOutcomeSpill {
     }
 }
 
-/// Makes a page recoverable before it is allowed to reach disk.
-///
-/// Logging here rather than only at commit is what lets the pool evict freely:
-/// recovery filters page images by whether their transaction committed, so an
-/// evicted-but-uncommitted page is written to the file yet never replayed.
-///
-/// # Known limitation
-///
-/// That leaves the classic **steal without undo** gap: an uncommitted page
-/// evicted to the page file stays there, and this store has no UNDO log to roll
-/// it back. In practice a crash before commit therefore leaves such a page's
-/// bytes on disk, unreferenced by the index (whose own pages are governed by the
-/// same rule). It is safe for the commit-or-crash model this prototype supports,
-/// and it is exactly what the rest of Phase 2 — version chains and rollback —
-/// has to close. Recorded here rather than left for someone to find.
+/// Enforces durable closure before ordinary page-file writeback. Logging one
+/// uncommitted image alone cannot protect the committed structure it replaces.
+/// Only a consumed unreachable-page capability may stream an individual image;
+/// its publication and reclamation are ordered by PagedStore's writer gate.
 #[derive(Debug)]
 struct WalWritebackBarrier {
     wal: Arc<Wal>,
+    transactions: Arc<TransactionTable>,
+    durable_floor: Mutex<Xid>,
+}
+
+impl WalWritebackBarrier {
+    fn append_owned_image(&self, page_id: PageId, bytes: &[u8]) -> Result<()> {
+        let lsn = self.wal.log_page_image(page_id, 0, bytes)?;
+        self.wal.sync_through(lsn)
+    }
 }
 
 impl crate::pool::WritebackBarrier for WalWritebackBarrier {
-    fn before_writeback(&self, page_id: PageId, transaction: u64, bytes: &[u8]) -> Result<()> {
-        let lsn = self.wal.log_page_image(page_id, transaction, bytes)?;
-        self.wal.sync_through(lsn)
+    fn before_writeback(&self, page_id: PageId, _transaction: u64, _bytes: &[u8]) -> Result<()> {
+        Err(PageError::UnloggedWritebackNeedsCut { page_id })
+    }
+
+    fn before_unreachable_writeback(&self, page_id: PageId, bytes: &[u8]) -> Result<()> {
+        // A Free header contains no MVCC version or xid-bearing payload.
+        // Retirement must not allocate another marker after checkpoint status
+        // publication: that marker would pin the very reset retiring the page.
+        if bytes[6] == crate::page::PageType::Free as u8 {
+            return self.append_owned_image(page_id, bytes);
+        }
+        // Even an unrooted image may contain live version headers. Persist
+        // a fresh higher xid BEFORE appending a recoverable xid-zero image;
+        // recovery must never reissue any xid found in those bytes.
+        let mut floor = self.durable_floor.lock();
+        let highest_assigned = self.transactions.next_xid().saturating_sub(1);
+        if *floor < highest_assigned {
+            let (marker, _) = self.transactions.begin();
+            if let Err(error) = self.wal.commit(marker) {
+                self.transactions.abort(marker);
+                return Err(error);
+            }
+            self.transactions.commit(marker);
+            *floor = marker;
+        }
+        self.append_owned_image(page_id, bytes)
     }
 
     fn before_logged_writeback(&self, _page_id: PageId) -> Result<()> {
@@ -5386,6 +5767,194 @@ mod tests {
 
     fn open(dir: &TempDir) -> PagedStore {
         PagedStore::open(dir.path(), options()).unwrap().0
+    }
+
+    /// Direct pool flushing cannot turn one ordinary unlogged image into a
+    /// durable structure. Refusal precedes every such page-file write.
+    #[test]
+    fn ordinary_unlogged_flush_refuses_before_changing_page_file_bytes() {
+        let dir = TempDir::new().unwrap();
+        let config = options().with_buffer_pool_bytes(1024 * 512);
+        {
+            let store = PagedStore::open(dir.path(), config.clone()).unwrap().0;
+            let xid = store.begin();
+            store.put(xid, b"a", b"acknowledged-a").unwrap();
+            store.put(xid, b"b", b"acknowledged-b").unwrap();
+            store.commit(xid).unwrap();
+            store.checkpoint().unwrap();
+            let xid = store.begin();
+            store.put(xid, b"a", b"uncommitted-replacement").unwrap();
+            let unlogged = store.pool.pages_needing_log();
+            assert!(!unlogged.is_empty());
+            let before = std::fs::read(dir.path().join("store.pages")).unwrap();
+            let result = store.pool.flush_all();
+            let after = std::fs::read(dir.path().join("store.pages")).unwrap();
+            let changed = unlogged
+                .iter()
+                .filter(|(id, _)| {
+                    let range = (*id as usize * 512)..((*id as usize + 1) * 512);
+                    before.get(range.clone()) != after.get(range)
+                })
+                .count();
+            eprintln!("ordinary flush result={result:?}; changed unlogged disk pages={changed}");
+            assert!(matches!(
+                result,
+                Err(PageError::UnloggedWritebackNeedsCut { .. })
+            ));
+            assert_eq!(changed, 0);
+            assert!(!store.durability_health().is_failed());
+            // Simulated process crash before commit or abort.
+        }
+        let store = PagedStore::open(dir.path(), config).unwrap().0;
+        assert_eq!(
+            store.get(b"a").unwrap().as_deref(),
+            Some(&b"acknowledged-a"[..])
+        );
+        assert_eq!(
+            store.get(b"b").unwrap().as_deref(),
+            Some(&b"acknowledged-b"[..])
+        );
+        let xid = store.begin();
+        store.put(xid, b"a", b"committed-after-recovery").unwrap();
+        store.commit(xid).unwrap();
+        store.checkpoint().unwrap();
+        store.pool.flush_all().unwrap();
+        assert!(store.verify_integrity(4).unwrap().valid);
+    }
+
+    /// GAP-1, the commit's own logging window. A commit logs its pages'
+    /// images and then appends its commit record. The unlogged flags used to
+    /// be cleared before the images were logged, so online writeback (the
+    /// bounded checkpoint's Drain, without the writer gate) and eviction could
+    /// write those pages through the "already logged" path before the commit
+    /// record existed. A crash then left an uncommitted split in the page file.
+    /// The flags are now cleared only after the commit record.
+    #[test]
+    fn pages_a_commit_is_logging_stay_out_of_the_page_file_until_its_commit_record() {
+        let dir = TempDir::new().unwrap();
+        let options = options()
+            .with_buffer_pool_bytes(1024 * 512)
+            .with_wal_max_bytes(1 << 30);
+        let key = |index: usize| format!("key-{index:04}").into_bytes();
+        let crashed: Vec<Vec<u8>> = (0..40)
+            .map(|j| format!("key-0150-{j:03}").into_bytes())
+            .collect();
+        {
+            let store = PagedStore::open(dir.path(), options.clone()).unwrap().0;
+            for chunk in (0..300).collect::<Vec<usize>>().chunks(10) {
+                let xid = store.begin();
+                for index in chunk {
+                    store.put(xid, &key(*index), b"committed").unwrap();
+                }
+                store.commit(xid).unwrap();
+            }
+            store.checkpoint().unwrap();
+
+            let xid = store.begin();
+            for key in &crashed {
+                store.put(xid, key, b"uncommitted").unwrap();
+            }
+            // The first half of `commit`: images logged, no commit record.
+            let logged = store.log_dirty_pages(xid).unwrap();
+            assert!(logged.len() >= 3, "{logged:?}");
+            assert_eq!(store.pool.unlogged_pages(), logged.len() as u64);
+            // Online writeback and the root-split flush next to it.
+            let report = store
+                .writeback_step(WritebackCursor::default(), WritebackLimits::default())
+                .unwrap();
+            assert_eq!(report.pages_written, 0, "{report:?}");
+            assert_eq!(store.pool.flush_logged().unwrap(), 0);
+            // Crash before the commit record.
+        }
+        let store = PagedStore::open(dir.path(), options).unwrap().0;
+        for index in 0..300 {
+            assert_eq!(
+                store.get(&key(index)).unwrap().as_deref(),
+                Some(&b"committed"[..]),
+                "key-{index:04}"
+            );
+        }
+        for key in &crashed {
+            assert_eq!(store.get(key).unwrap(), None);
+        }
+        assert!(store.verify_integrity(4).unwrap().valid);
+    }
+
+    /// A writer that modifies a page after a commit read its image keeps the
+    /// page unlogged: `mark_logged` clears only an unchanged page.
+    #[test]
+    fn a_page_modified_after_its_image_was_logged_stays_unlogged() {
+        let dir = TempDir::new().unwrap();
+        let store = open(&dir);
+        let xid = store.begin();
+        store.put(xid, b"a", b"1").unwrap();
+        let logged = store.pool.pages_needing_log();
+        assert!(!logged.is_empty());
+        // Another change to the same pages before the flags are cleared.
+        store.put(xid, b"a", b"2").unwrap();
+        store.pool.mark_logged(&logged);
+        assert!(store.pool.unlogged_pages() > 0);
+        store.commit(xid).unwrap();
+        assert_eq!(store.pool.unlogged_pages(), 0);
+    }
+
+    #[test]
+    fn prefix_candidates_preserve_snapshot_visibility_and_include_invisible_keys() {
+        let dir = TempDir::new().unwrap();
+        let store = open(&dir);
+        let first = store.begin();
+        store.put(first, b"a", b"old").unwrap();
+        store.commit(first).unwrap();
+        let old = store.latest_snapshot();
+        let later = store.begin();
+        store.delete(later, b"a").unwrap();
+        store.put(later, b"b", b"new").unwrap();
+        store.commit(later).unwrap();
+        let pending = store.begin();
+        store.put(pending, b"c", b"pending").unwrap();
+        let latest = store.latest_snapshot();
+        for (snapshot, expected) in [
+            (&old, vec![true, false, false]),
+            (&latest, vec![false, true, false]),
+        ] {
+            let mut scan = store
+                .scan_visible_key_prefixes_from(snapshot, b"", 0)
+                .unwrap();
+            let mut observed = Vec::new();
+            while let Some(entry) = scan.next_candidate() {
+                let (key, prefix) = entry.unwrap();
+                if let Some(prefix) = &prefix {
+                    assert!(prefix.is_empty());
+                }
+                observed.push((key, prefix.is_some()));
+            }
+            assert_eq!(
+                observed
+                    .iter()
+                    .map(|(k, _)| k.as_slice())
+                    .collect::<Vec<_>>(),
+                vec![b"a".as_slice(), b"b".as_slice(), b"c".as_slice()]
+            );
+            assert_eq!(
+                observed
+                    .into_iter()
+                    .map(|(_, visible)| visible)
+                    .collect::<Vec<_>>(),
+                expected
+            );
+            let ordinary = store
+                .scan_visible_key_prefixes_from(snapshot, b"", 0)
+                .unwrap()
+                .map(|entry| entry.unwrap().0)
+                .collect::<Vec<_>>();
+            let visible = if snapshot.xmax == old.xmax {
+                b"a"
+            } else {
+                b"b"
+            };
+            assert_eq!(ordinary, vec![visible.to_vec()]);
+        }
+        store.abort(pending).unwrap();
     }
 
     /// The production follow-up: the floor advance refused (an abort wall
@@ -5677,7 +6246,10 @@ mod tests {
     fn paged_store_snapshot_is_scrape_safe_stable_and_strict() {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
-        let transaction = store.begin();
+        // This transaction is many times larger than the deliberately tiny
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
+        let (transaction, _) = store.begin_redo_backed();
         for index in 0..200 {
             store
                 .put(
@@ -5859,7 +6431,10 @@ mod tests {
         // Half of the Phase 0 exit gate.
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
-        let transaction = store.begin();
+        // This transaction is many times larger than the deliberately tiny
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
+        let (transaction, _) = store.begin_redo_backed();
 
         let count = 400usize;
         const STEP: usize = 137; // coprime with `count`
@@ -6092,7 +6667,10 @@ mod tests {
         .unwrap()
         .0;
 
-        let transaction = store.begin();
+        // This transaction is many times larger than the deliberately tiny
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
+        let (transaction, _) = store.begin_redo_backed();
         for index in 0..1_500 {
             store
                 .put(
@@ -6125,7 +6703,10 @@ mod tests {
     fn large_values_round_trip_through_overflow() {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
-        let transaction = store.begin();
+        // This transaction is many times larger than the deliberately tiny
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
+        let (transaction, _) = store.begin_redo_backed();
         let big: Vec<u8> = (0..50_000).map(|i| (i % 251) as u8).collect();
 
         store.put(transaction, b"wide", &big).unwrap();
@@ -6143,7 +6724,10 @@ mod tests {
     fn checkpointing_bounds_the_log() {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
-        let transaction = store.begin();
+        // This transaction is many times larger than the deliberately tiny
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
+        let (transaction, _) = store.begin_redo_backed();
         for index in 0..300 {
             store
                 .put(transaction, format!("k{index:05}").as_bytes(), b"payload")
@@ -6183,7 +6767,11 @@ mod tests {
             let dir = TempDir::new().unwrap();
             {
                 let store = open(&dir);
-                let transaction = store.begin();
+                // This transaction is many times larger than the deliberately tiny
+                // pool. A refusable one that size is refused (GAP-1 no-steal); this
+                // test is about something else, so it uses a redo-backed one, which
+                // is never refused and may still steal.
+                let (transaction, _) = store.begin_redo_backed();
                 for index in 0..rows {
                     store
                         .put(
@@ -6229,7 +6817,10 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
 
-        let transaction = store.begin();
+        // This transaction is many times larger than the deliberately tiny
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
+        let (transaction, _) = store.begin_redo_backed();
         for index in 0..600 {
             store
                 .put(
@@ -6243,7 +6834,8 @@ mod tests {
 
         // Empty out the earliest rows — pages long since evicted from any
         // recency-based candidate ring.
-        let second = store.begin();
+        // Redo-backed for the same reason as the setup above.
+        let (second, _) = store.begin_redo_backed();
         for index in 0..200 {
             store
                 .delete(second, format!("k{index:05}").as_bytes())
@@ -6260,7 +6852,8 @@ mod tests {
         );
 
         let pages_before = store.buffer_pool().store().page_count();
-        let third = store.begin();
+        // Redo-backed for the same reason as the setup above.
+        let (third, _) = store.begin_redo_backed();
         for index in 1_000..1_180 {
             store
                 .put(third, format!("k{index:05}").as_bytes(), &vec![b'y'; 60])
@@ -6420,7 +7013,10 @@ mod tests {
     fn vacuum_is_bounded_by_its_page_budget() {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
-        let xid = store.begin();
+        // This transaction is many times larger than the deliberately tiny
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
+        let (xid, _) = store.begin_redo_backed();
         for index in 0..600 {
             store
                 .put(xid, format!("k{index:05}").as_bytes(), &vec![b'v'; 60])
@@ -6483,7 +7079,10 @@ mod tests {
     fn bounded_vacuum_cursor_advances_without_materializing_the_catalog() {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
-        let xid = store.begin();
+        // This transaction is many times larger than the deliberately tiny
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
+        let (xid, _) = store.begin_redo_backed();
         for index in 0..600 {
             store
                 .put(xid, format!("k{index:05}").as_bytes(), &vec![b'v'; 60])
@@ -6578,7 +7177,10 @@ mod tests {
     fn a_time_limit_stops_between_pages_and_names_the_page_to_retry() {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
-        let xid = store.begin();
+        // This transaction is many times larger than the deliberately tiny
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
+        let (xid, _) = store.begin_redo_backed();
         // Enough data to span several heap pages, so the clock can be checked
         // between them.
         for index in 0..200 {
@@ -6782,7 +7384,10 @@ mod tests {
     fn a_scan_returns_every_visible_row_in_key_order() {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
-        let xid = store.begin();
+        // This transaction is many times larger than the deliberately tiny
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
+        let (xid, _) = store.begin_redo_backed();
         for index in 0..300 {
             store
                 .put(
@@ -6845,7 +7450,10 @@ mod tests {
     fn get_locality_batch_matches_point_gets_across_visibility() {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
-        let setup = store.begin();
+        // This transaction is many times larger than the deliberately tiny
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
+        let (setup, _) = store.begin_redo_backed();
         for index in 0..300u32 {
             store
                 .put(
@@ -6947,7 +7555,10 @@ mod tests {
         )
         .unwrap()
         .0;
-        let xid = store.begin();
+        // This transaction is many times larger than the deliberately tiny
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
+        let (xid, _) = store.begin_redo_backed();
         for index in 0..1_200 {
             store
                 .put(xid, format!("k{index:06}").as_bytes(), &vec![b'p'; 40])
@@ -6995,7 +7606,10 @@ mod tests {
     fn locality_batch_restores_key_order_and_snapshot_visibility() {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
-        let setup = store.begin();
+        // This transaction is many times larger than the deliberately tiny
+        // pool. The compatibility redo-backed entry point obeys the same
+        // structural-cut and no-steal rules as every other transaction.
+        let (setup, _) = store.begin_redo_backed();
         for index in (0..200).rev() {
             store
                 .put(setup, format!("k{index:05}").as_bytes(), b"before")
@@ -7455,8 +8069,10 @@ mod tests {
         }
 
         let (store, recovery) = PagedStore::open(dir.path(), options()).unwrap();
-        assert_eq!(recovery.transaction_outcomes, 3);
-        assert_eq!(recovery.frozen_outcomes_at_open, 3);
+        // Four: the three transactions, plus the committed unit the abort
+        // logged its changed pages under (GAP-1 W5, `PagedStore::abort`).
+        assert_eq!(recovery.transaction_outcomes, 4);
+        assert_eq!(recovery.frozen_outcomes_at_open, 4);
         assert_eq!(recovery.abort_exceptions_at_open, 1);
         assert_eq!(store.get(b"drop").unwrap(), None);
         assert_eq!(store.get(b"keep").unwrap().as_deref(), Some(&b"yes"[..]));
@@ -7842,6 +8458,40 @@ mod tests {
     }
 
     #[test]
+    fn orphan_reclaim_cuts_pending_structure_without_publishing_its_rows() {
+        let dir = TempDir::new().unwrap();
+        {
+            let store = open(&dir);
+            let committed = store.begin();
+            store.put(committed, b"ack", b"old").unwrap();
+            store.commit(committed).unwrap();
+            store.checkpoint().unwrap();
+            let pending = store.begin();
+            store.put(pending, b"ack", b"pending replacement").unwrap();
+            store.put(pending, b"pending", b"invisible").unwrap();
+            let stranded = store
+                .pool
+                .store()
+                .allocate(crate::page::PageType::Heap)
+                .unwrap();
+            orphan_free_page(&store, stranded);
+            let report = store
+                .reclaim_orphaned_free_pages_step(FreeReclaimCursor::default(), Default::default())
+                .unwrap();
+            assert_eq!(report.pages_reclaimed, 1);
+            assert_eq!(store.get(b"ack").unwrap().as_deref(), Some(&b"old"[..]));
+            assert_eq!(store.get(b"pending").unwrap(), None);
+            assert_eq!(store.pool.unlogged_steals(), 0);
+        }
+        for _ in 0..2 {
+            let store = open(&dir);
+            assert_eq!(store.get(b"ack").unwrap().as_deref(), Some(&b"old"[..]));
+            assert_eq!(store.get(b"pending").unwrap(), None);
+            assert!(store.verify_integrity(4).unwrap().valid);
+        }
+    }
+
+    #[test]
     fn orphaned_free_pages_are_reclaimed_into_the_free_list() {
         let dir = TempDir::new().unwrap();
         let store = open(&dir);
@@ -8133,6 +8783,9 @@ mod tests {
         }
         store.persist_status_spill().unwrap();
         store.write_meta().unwrap();
+        // Match the production checkpoint's durable descriptor ordering;
+        // ordinary pool flush no longer logs isolated unlogged images.
+        store.log_checkpoint_descriptor().unwrap();
         store
             .checkpointer
             .checkpoint(store.meta_page)
@@ -8176,6 +8829,9 @@ mod tests {
         }
         store.persist_status_spill().unwrap();
         store.write_meta().unwrap();
+        // Match the production checkpoint's durable descriptor ordering;
+        // ordinary pool flush no longer logs isolated unlogged images.
+        store.log_checkpoint_descriptor().unwrap();
         store
             .checkpointer
             .checkpoint(store.meta_page)

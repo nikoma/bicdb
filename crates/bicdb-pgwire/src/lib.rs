@@ -2852,6 +2852,7 @@ fn handle_frontend_message(
                         Some(&executed.source_sql),
                         false,
                         !executed.suspended,
+                        Some(&mut state.catalog_cache),
                     )?;
                     server.record_streamed_rows(stats.rows, stats.bytes);
                     if executed.suspended {
@@ -3404,7 +3405,16 @@ fn execute_server_query(
     }
     if let Some(name) = live_queries::parse_unsubscribe(sql) {
         let result = live_queries::unsubscribe(server, state, name.as_deref())?;
-        write_query_result(stream, server, &result, &[], None, true, true)?;
+        write_query_result(
+            stream,
+            server,
+            &result,
+            &[],
+            None,
+            true,
+            true,
+            Some(&mut state.catalog_cache),
+        )?;
         return Ok(QueryFlow::Complete);
     }
     if let Some(subscribe) = live_queries::parse_subscribe(sql) {
@@ -3413,7 +3423,16 @@ fn execute_server_query(
             Some(name) => {
                 let result =
                     live_queries::register_subscription(server, state, &name, subscribe.query)?;
-                write_query_result(stream, server, &result, &[], None, true, true)?;
+                write_query_result(
+                    stream,
+                    server,
+                    &result,
+                    &[],
+                    None,
+                    true,
+                    true,
+                    Some(&mut state.catalog_cache),
+                )?;
             }
             None => live_queries::run_subscription(
                 stream,
@@ -3527,13 +3546,23 @@ fn execute_server_query(
                 result.source_sql.as_deref(),
                 true,
                 true,
+                Some(&mut state.catalog_cache),
             )?;
         } else {
             let result =
                 execute_server_sql_with_options_normalized(server, state, sql, &normalized, true)?;
             write_session_parameter_status(stream, state)?;
             let source_sql = normalized.starts_with("select ").then_some(sql);
-            write_query_result(stream, server, &result, &[], source_sql, true, true)?;
+            write_query_result(
+                stream,
+                server,
+                &result,
+                &[],
+                source_sql,
+                true,
+                true,
+                Some(&mut state.catalog_cache),
+            )?;
         }
         Ok(QueryFlow::Complete)
     }

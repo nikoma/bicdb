@@ -343,7 +343,7 @@ pub(super) fn undo_restore(session: &mut SqlSession<'_>, id: &str) -> Result<()>
         .db_ref()
         .get(INTENTS, id)?
         .ok_or_else(|| SqlError::InvalidSql("missing restore undo intent".into()))?;
-    let intent: MoveIntent = serde_json::from_value(record.metadata)?;
+    let intent: MoveIntent = serde_json::from_value(record.metadata.clone())?;
     let plan = intent
         .restore
         .as_ref()

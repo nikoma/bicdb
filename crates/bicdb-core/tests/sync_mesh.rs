@@ -235,12 +235,14 @@ fn diverged_databases_exchange_bundles_and_converge_without_data_loss() {
         .events()
         .read(RECORD_AUDIT_STREAM)
         .unwrap()
+        .unwrap()
         .into_iter()
         .map(|event| event.event.id)
         .collect::<std::collections::BTreeSet<_>>();
     let right_audit_ids = right
         .events()
         .read(RECORD_AUDIT_STREAM)
+        .unwrap()
         .unwrap()
         .into_iter()
         .map(|event| event.event.id)

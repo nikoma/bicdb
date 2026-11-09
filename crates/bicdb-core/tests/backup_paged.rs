@@ -127,6 +127,7 @@ fn paged_pitr_replays_and_clears_rows_in_bounded_batches() {
         first_timestamp = db
             .events()
             .read(bicdb_core::RECORD_AUDIT_STREAM)
+            .unwrap()
             .last()
             .unwrap()
             .event

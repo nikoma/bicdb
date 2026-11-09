@@ -247,6 +247,7 @@ fn spatial_index_create_and_rebuild_emit_spatial_index_events() {
         .events()
         .read(SPATIAL_AUDIT_STREAM)
         .unwrap()
+        .unwrap()
         .into_iter()
         .filter(|event| event.event.event_type == "SpatialIndexUpdated")
         .collect::<Vec<_>>();
@@ -280,6 +281,7 @@ fn route_computation_event_captures_metadata_without_full_payload() {
     let event = db
         .events()
         .read(SPATIAL_AUDIT_STREAM)
+        .unwrap()
         .unwrap()
         .into_iter()
         .find(|event| event.event.event_type == "RouteComputed")

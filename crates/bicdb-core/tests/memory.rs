@@ -65,7 +65,7 @@ fn remember_and_weighted_recall_rank_agent_memories() {
     assert_eq!(results[0].memory.id, "pref-yoga");
     assert!(results[0].score > results[1].score);
 
-    let events = db.events().read(MEMORY_EVENT_STREAM);
+    let events = db.events().read(MEMORY_EVENT_STREAM).unwrap();
     assert_eq!(events.len(), 2);
     assert!(events
         .iter()
@@ -165,6 +165,7 @@ fn reinforce_decay_forget_and_expire_update_state_and_events() {
     let event_types = db
         .events()
         .read(MEMORY_EVENT_STREAM)
+        .unwrap()
         .into_iter()
         .map(|event| event.event.event_type)
         .collect::<Vec<_>>();
@@ -289,6 +290,7 @@ fn workspace_timeline_and_summary_preserve_context() {
     let event_types = db
         .events()
         .read(MEMORY_EVENT_STREAM)
+        .unwrap()
         .into_iter()
         .map(|event| event.event.event_type)
         .collect::<Vec<_>>();

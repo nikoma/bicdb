@@ -486,3 +486,63 @@ fn embedded_atomic_case_binding_preserves_uniqueness_and_reopens() {
     db.insert("rows", row("one", "ǆ")).unwrap();
     assert_eq!(db.lookup_index("legacy", &key("Ǆ")).unwrap(), vec!["one"]);
 }
+
+#[test]
+fn owned_shadow_collision_refuses_publication_without_changing_legacy_constraint() {
+    use bicdb_core::{
+        PagedBTreeBuildAdvance, PagedBTreeBuildLimits, ResourceDemand, ResourceGovernor,
+        ResourceGovernorConfig,
+    };
+    let root = tempfile::tempdir().unwrap();
+    let mut db =
+        BicDb::open_with_config(root.path(), mode_config(StorageMode::ServerPaged)).unwrap();
+    db.create_collection("rows").unwrap();
+    db.insert("rows", row("one", "é")).unwrap();
+    db.insert("rows", row("two", "É")).unwrap();
+    let old = index("legacy", IndexField::Upper(Box::new(path("value"))), true);
+    db.create_index(old.clone()).unwrap();
+    let limits = PagedBTreeBuildLimits::default();
+    db.begin_paged_btree_build(
+        index(
+            "owned-shadow",
+            IndexField::OracleUpperV1(Box::new(path("value"))),
+            true,
+        ),
+        limits,
+        100,
+    )
+    .unwrap();
+    let governor = ResourceGovernor::new(ResourceGovernorConfig::default(), 100).unwrap();
+    let demand = ResourceDemand {
+        memory_bytes: limits.max_batch_bytes as u64,
+        io_bytes: limits.max_batch_bytes as u64,
+        cpu_slots: 1,
+        io_charge_bytes: 1,
+    };
+    let mut refused = false;
+    for now in 101..1000 {
+        match db.advance_paged_btree_build_governed("owned-shadow", limits, &governor, demand, now)
+        {
+            Err(error) => {
+                assert!(error.to_string().contains("duplicate"), "{error}");
+                refused = true;
+                break;
+            }
+            Ok(PagedBTreeBuildAdvance::Progress(_)) => {}
+            Ok(PagedBTreeBuildAdvance::Complete(_)) => {
+                panic!("colliding shadow must never publish")
+            }
+        }
+    }
+    assert!(refused);
+    let state = db.load_paged_btree_build("owned-shadow", limits).unwrap();
+    assert!(db
+        .publish_oracle_case_v1_index_replacement(&old, &state)
+        .is_err());
+    assert_eq!(db.index_definitions(), vec![old]);
+    assert_eq!(db.lookup_index("legacy", &key("é")).unwrap(), vec!["one"]);
+    assert_eq!(db.lookup_index("legacy", &key("É")).unwrap(), vec!["two"]);
+    assert!(db
+        .discard_paged_btree_build("owned-shadow", limits)
+        .unwrap());
+}

@@ -8369,3 +8369,90 @@ pub(crate) fn index_probe_type_is_exact(
         _ => false,
     }
 }
+
+#[cfg(test)]
+mod composite_timestamp_prefix_residual_tests {
+    use super::*;
+
+    #[test]
+    fn mixed_timestamp_key_predicate_filters_prefix_candidates_for_every_mutation_path() {
+        for mode in [
+            bicdb_core::StorageMode::EmbeddedMemory,
+            bicdb_core::StorageMode::ServerPaged,
+        ] {
+            for kind in ["update", "update_from", "delete", "delete_using"] {
+                for reverse in [false, true] {
+                    for pending in [false, true] {
+                        let root = tempfile::tempdir().unwrap();
+                        let mut db = BicDb::open_with_config(
+                            root.path(),
+                            bicdb_core::DbConfig::default()
+                                .with_fsync(false)
+                                .with_storage_mode(mode.clone()),
+                        )
+                        .unwrap();
+                        let mut session = SqlSession::new(&mut db);
+                        session.execute("SET timezone='UTC'").unwrap();
+                        session.execute("CREATE TABLE prefix_rows(asi numeric(10,0) NOT NULL,locator numeric(10,0) NOT NULL,product numeric(10,0) NOT NULL,policy timestamp without time zone NOT NULL,qty numeric NOT NULL,PRIMARY KEY(product,locator,asi,policy))").unwrap();
+                        session.execute("INSERT INTO prefix_rows VALUES(0,101,137,TIMESTAMP '2003-01-22 00:00:00',50),(0,101,137,TIMESTAMP '2026-11-10 00:00:00',7)").unwrap();
+                        if pending {
+                            session.execute("BEGIN").unwrap();
+                            session.execute("UPDATE prefix_rows SET qty=qty+1").unwrap();
+                        }
+                        let bound = "to_timestamp('2003-01-22 00:00:00','YYYY-MM-DD HH24:MI:SS')";
+                        let date = if reverse {
+                            format!("{bound}=t.policy")
+                        } else {
+                            format!("t.policy={bound}")
+                        };
+                        let predicate =
+                            format!("t.asi=0 AND t.locator=101 AND t.product=137 AND {date}");
+                        let mutation = match kind {
+                            "update" => format!("UPDATE prefix_rows AS t SET qty=99 WHERE {predicate}"),
+                            "update_from" => format!("UPDATE prefix_rows AS t SET qty=99 FROM (SELECT 1 AS n) AS source WHERE {predicate}"),
+                            "delete" => format!("DELETE FROM prefix_rows AS t WHERE {predicate}"),
+                            "delete_using" => format!("DELETE FROM prefix_rows AS t USING (SELECT 1 AS n) AS source WHERE {predicate}"),
+                            _ => unreachable!(),
+                        };
+                        let label = format!("{mode:?} {kind} reverse={reverse} pending={pending}");
+                        let result = session
+                            .execute(&mutation)
+                            .unwrap_or_else(|error| panic!("{label}: {error}"));
+                        let expected_tag = if kind.starts_with("update") {
+                            "UPDATE 1"
+                        } else {
+                            "DELETE 1"
+                        };
+                        assert_eq!(result.command_tag.as_deref(), Some(expected_tag), "{label}");
+                        let rows = |session: &mut SqlSession<'_>| {
+                            session.execute("SELECT policy::text,qty::text FROM prefix_rows ORDER BY policy").unwrap().rows.iter().map(|row| row.iter().map(SqlValue::to_cell).collect::<Vec<_>>()).collect::<Vec<_>>()
+                        };
+                        let mut expected = vec![vec![
+                            "2026-11-10 00:00:00".to_string(),
+                            if pending { "8" } else { "7" }.to_string(),
+                        ]];
+                        if kind.starts_with("update") {
+                            expected.insert(0, vec!["2003-01-22 00:00:00".into(), "99".into()]);
+                        }
+                        assert_eq!(
+                            rows(&mut session),
+                            expected,
+                            "{label}: untouched prefix neighbor"
+                        );
+                        if pending {
+                            session.execute("ROLLBACK").unwrap();
+                            assert_eq!(
+                                rows(&mut session),
+                                vec![
+                                    vec!["2003-01-22 00:00:00".to_string(), "50".to_string()],
+                                    vec!["2026-11-10 00:00:00".to_string(), "7".to_string()]
+                                ],
+                                "{label}: rollback"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

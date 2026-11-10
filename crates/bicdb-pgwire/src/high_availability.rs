@@ -42,9 +42,10 @@ use std::net::{TcpStream, ToSocketAddrs};
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
-/// Native HA handshake version. Version 3 understands journal-carrying commit
-/// frames. All group members must upgrade before joining.
-pub const HA_REPLICATION_PROTOCOL_VERSION: u32 = 3;
+/// Native HA handshake version. Version 4 requires voter-scoped commit and
+/// lease authority as well as journal-carrying frames. Older voters must not
+/// rejoin and restore observer-derived authority. Upgrade the entire group.
+pub const HA_REPLICATION_PROTOCOL_VERSION: u32 = 4;
 
 /// Frames per round sent to one standby.
 const BATCH_COMMITS: usize = 512;

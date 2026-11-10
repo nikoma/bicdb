@@ -194,7 +194,10 @@ least `floor(N / 2)` for a group of `N` voting nodes: one voting standby in a
 three-node group, two in a five-node group. Only `--ha-peer` members count
 for commit acknowledgements and the primary's write lease. Additional allowed
 standbys can replicate and serve reads, but cannot vote, supply a write lease,
-or advance the group's election epoch. Every node must use the same static
+or advance the group's election epoch. The native HA handshake is version 4: upgrade the entire group together.
+Older peers are refused because an older primary can restore unsafe observer
+acknowledgement and lease counting. This is independent of PostgreSQL's client
+protocol. Every node must use the same static
 voting membership. Changing that membership requires a coordinated stop and
 reconfiguration; adding an allowed read replica does not change it.
 
@@ -405,7 +408,7 @@ Embedding hosts may enable `ReplicationConfig.record_journal` together with
 `DbConfig.audit_events` and `mesh_signing`. All physical replicas must use the
 same setting. Journal mode uses version 2 commit frames; ordinary row-only
 frames remain version 1 with their existing checksum encoding. The native
-version 3 handshake refuses older peers and mismatched journal modes.
+version 4 handshake refuses older peers and mismatched journal modes.
 
 Journal-enabled enrollment installs a snapshot when the standby's logical mesh
 node ID or signing key differs from the writer. Physical voting identities and

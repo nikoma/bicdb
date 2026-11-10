@@ -209,12 +209,13 @@ fn native_handshake_refuses_old_versions_and_mismatched_resume_identity() {
             .unwrap();
         stream
     };
-    let mut peer = connect();
-    send_frame(&mut peer, &hello(1), 65536).unwrap();
-    assert!(
-        matches!(recv_frame(&mut peer, 65536).unwrap(), ReplicationFrame::Error { message, .. } if message.contains("unsupported replication protocol"))
-    );
-    drop(peer);
+    for version in [1, 3] {
+        let mut peer = connect();
+        send_frame(&mut peer, &hello(version), 65536).unwrap();
+        assert!(
+            matches!(recv_frame(&mut peer, 65536).unwrap(), ReplicationFrame::Error { message, .. } if message.contains("unsupported replication protocol"))
+        );
+    }
     let mut peer = connect();
     send_frame(
         &mut peer,

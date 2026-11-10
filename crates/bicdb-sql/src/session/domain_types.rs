@@ -1396,15 +1396,25 @@ impl<'db> SqlSession<'db> {
                 }
                 AlterTableOperation::RenameTable { table_name } => {
                     let previous_schema = schema.clone();
-                    let new_table = match table_name {
-                        RenameTableNameKind::To(name) => relation_name(name)?,
-                        RenameTableNameKind::As(name) => relation_name(name)?,
+                    let target = match table_name {
+                        RenameTableNameKind::To(name) | RenameTableNameKind::As(name) => name,
                     };
-                    if load_user_type(self.db_ref(), &schema.schema_name, &new_table)?.is_some() {
+                    let parts = object_name_parts(target);
+                    let [new_name] = parts.as_slice() else {
+                        return Err(SqlError::InvalidSql(
+                            "RENAME TO requires an unqualified table name".into(),
+                        ));
+                    };
+                    // RENAME changes the relation's name inside its existing
+                    // namespace. Resolving a new unqualified relation would
+                    // instead select public and cross the schema boundary.
+                    let new_table =
+                        relation_name_from_parts(&[schema.schema_name.clone(), new_name.clone()])?;
+                    if load_user_type(self.db_ref(), &schema.schema_name, new_name)?.is_some() {
                         return Err(SqlError::data_exception(
                             "42710",
-                            format!("type \"{new_table}\" already exists"),
-                            Some(new_table),
+                            format!("type \"{new_name}\" already exists"),
+                            Some(new_name.clone()),
                         ));
                     }
                     let in_tx = self.tx.is_some();

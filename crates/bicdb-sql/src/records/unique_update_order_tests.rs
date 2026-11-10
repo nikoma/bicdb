@@ -25,7 +25,12 @@ fn immediate_unique_checks_keep_future_old_keys_but_release_preceding_old_keys()
             let pairs = order
                 .into_iter()
                 .map(|seq| {
-                    let before = db.get("ordered_keys", &format!("r{seq}")).unwrap().unwrap();
+                    let before = db
+                        .get("ordered_keys", &format!("r{seq}"))
+                        .unwrap()
+                        .unwrap()
+                        .as_ref()
+                        .clone();
                     let mut after = before.clone();
                     after.metadata["seq"] = serde_json::json!(if swap { 7 - seq } else { seq - 1 });
                     (before, after)

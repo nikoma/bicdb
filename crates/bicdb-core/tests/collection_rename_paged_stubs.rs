@@ -1,6 +1,7 @@
 //! A stored row pins its physical backing even when a logical name is reused.
 use bicdb_core::{
-    BicDb, DbConfig, IndexDefinition, IndexField, IndexKind, Record, StorageMode, VisibleRow,
+    BicDb, DbConfig, IndexDefinition, IndexField, IndexKind, IndexPredicate, Record, StorageMode,
+    VisibleRow,
 };
 use serde_json::json;
 
@@ -14,14 +15,14 @@ fn put(db: &BicDb, label: &str) {
     tx.commit().unwrap();
 }
 
-fn json_index(db: &mut BicDb) {
+fn materialized_index(db: &mut BicDb) {
     db.create_index(IndexDefinition {
-        name: "authored_doc".into(),
+        name: "authored_geometry".into(),
         collection: "authored".into(),
-        fields: vec![IndexField::MetadataPath(vec!["doc".into()])],
+        fields: vec![IndexField::Geometry],
         unique: false,
-        kind: IndexKind::Jsonb,
-        predicate: None,
+        kind: IndexKind::Spatial,
+        predicate: Some(IndexPredicate::Literal { value: json!(true) }),
         exclusion: None,
         nulls_not_distinct: false,
     })
@@ -36,7 +37,7 @@ fn exercise(phase: u8) {
         db.create_collection("authored").unwrap();
         put(&db, "original");
         if phase == 2 {
-            json_index(&mut db);
+            materialized_index(&mut db);
         }
         if phase != 0 {
             drop(db);
@@ -45,9 +46,10 @@ fn exercise(phase: u8) {
         if phase == 1 {
             // A non-page-backed index materializes the reopened lazy rows as
             // stored stubs without replacing their pinned snapshot.
-            json_index(&mut db);
+            materialized_index(&mut db);
         }
-        let row = db.get_stored("authored", "same-key").unwrap().unwrap();
+        let reader = db.begin_transaction().unwrap();
+        let row = reader.get_stored("authored", "same-key").unwrap().unwrap();
         assert!(matches!(row, VisibleRow::Stored(_)));
         db.rename_collection("authored", "renamed").unwrap();
         db.create_collection("authored").unwrap();
@@ -55,7 +57,8 @@ fn exercise(phase: u8) {
         let expected = json!({"label":"original","doc":{"value":"original"}});
         assert_eq!(row.to_record().unwrap().metadata, expected);
         assert_eq!(
-            db.get_stored("renamed", "same-key")
+            reader
+                .get_stored("renamed", "same-key")
                 .unwrap()
                 .unwrap()
                 .to_record()
@@ -73,6 +76,7 @@ fn exercise(phase: u8) {
             "replacement"
         );
         drop(row);
+        reader.rollback().unwrap();
         drop(db);
         let db = BicDb::open_with_config(root.path(), cfg).unwrap();
         assert_eq!(

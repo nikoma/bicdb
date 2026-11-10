@@ -148,3 +148,27 @@ bounds schema decoding across the batch, preserves CHECK rejection and rollback
 of a partly invalid batch, and checks subsequent DDL and rollback visibility.
 Each semantic successor requires its own source-pinned broad, optimized-build,
 VM, JDBC, CI and original-application evidence.
+
+The original core-callout method passes in the fadc1377 diagnostic build at the
+unchanged 512 MiB limit. Its two-method class retains the separate annotated
+callout failure also seen on both native engines; that diagnostic class result
+is one pass and one failure, not an application-wide qualification.
+
+The 3a85d34a PostgreSQL import finishes its original seed without errors and
+matches all 914 table counts and the declared column type attributes. Two
+migration statements still fail in the original altercolumn routine's first
+catalog lookup. Literal, NAME-cast and routine controls all reproduce the
+512 MiB failure. The query mixes qualified references with unique unqualified
+catalog columns, hiding equality dependencies from the conservative join
+planner. Bind those unique names before planning catalog-only comma joins.
+Keep ambiguous names and queries with nested scopes, column aliases or
+non-catalog inputs on their existing paths; keep role filtering intact.
+
+A reduced 16-table regression retains a 2 MiB query budget in both storage
+modes. The unchanged 3a85d34a binary fails both literal and NAME-cast forms
+under the same join budget (2,106,427 bytes); ef5070b6 passes both forms.
+Native PostgreSQL 16.13 confirms the expected numeric type and typmod,
+including a larger 96-table setup rolled back after the control. An earlier
+96-table/2 MiB test exhausted schema-loading memory before any join; both
+failed runs are retained separately from the reduced join regression.
+Source-scoped optimized, broad and original application checks remain required.

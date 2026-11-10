@@ -21,5 +21,38 @@
         ]
       ]
     }
-  ]
+  ],
+  "setup": {
+    "schema": "catalog_binding",
+    "table_name_pattern": "lookup_{i}",
+    "table_indices": {
+      "start": 0,
+      "end_exclusive": 96
+    },
+    "columns": [
+      "c0 NUMERIC(10)",
+      "c1 NUMERIC(10)",
+      "c2 NUMERIC(10)",
+      "c3 NUMERIC(10)",
+      "c4 NUMERIC(10)",
+      "c5 NUMERIC(10)",
+      "c6 NUMERIC(10)",
+      "c7 NUMERIC(10)",
+      "c8 NUMERIC(10)",
+      "c9 NUMERIC(10)",
+      "c10 NUMERIC(10)",
+      "c11 NUMERIC(10)",
+      "c12 NUMERIC(10)",
+      "c13 NUMERIC(10)",
+      "c14 NUMERIC(10)",
+      "c15 NUMERIC(10)"
+    ],
+    "transaction": "All setup and query statements executed in a transaction and rolled back",
+    "rust_regression_tables": 16,
+    "rust_query_memory_limit_bytes": 2097152,
+    "negative_control_source": "3a85d34a9b3acc1aea7e802db17f67ab80c20684",
+    "negative_control_join_memory_limit_bytes": 2097152,
+    "negative_control_sqlstate": "53200",
+    "negative_control_bytes": 2106427
+  }
 }

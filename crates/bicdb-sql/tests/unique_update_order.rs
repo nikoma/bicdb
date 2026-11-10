@@ -8,13 +8,13 @@ fn native_unique_updates_vacate_only_preceding_rows_and_roll_back_errors() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         for pending in [false, true] {
             for (values, assignment, succeeds) in [
-                ([0, 1, 2, 3, 4], "seq=seq-1 WHERE seq>2", true),
-                // The owner/seq index visits these keys in ascending order too.
-                // PG16 with an Index Scan also succeeds for descending inserts;
-                // heap-order rejection is tested with explicit row order below.
-                ([4, 3, 2, 1, 0], "seq=seq-1 WHERE seq>2", true),
-                ([0, 1, 2, 3, 4], "seq=4-seq", false),
-                ([0, 1, 2, 3, 4], "seq=0", false),
+                ([0, 1, 2, 3, 4], "seq=seq-1 WHERE seq>2", Some(true)),
+                // PG16 accepts the descending seed with Index Scan and rejects
+                // it with Seq Scan. Both are native outcomes without ORDER BY;
+                // explicit ordered-row checks below enforce immediate semantics.
+                ([4, 3, 2, 1, 0], "seq=seq-1 WHERE seq>2", None),
+                ([0, 1, 2, 3, 4], "seq=4-seq", Some(false)),
+                ([0, 1, 2, 3, 4], "seq=0", Some(false)),
             ] {
                 let root = tempfile::tempdir().unwrap();
                 let mut db = BicDb::open_with_config(
@@ -49,17 +49,22 @@ fn native_unique_updates_vacate_only_preceding_rows_and_roll_back_errors() {
                     format!("{assignment} WHERE owner=7")
                 };
                 let result = sql.execute(&format!("UPDATE entries SET {clause}"));
-                if succeeds {
-                    result.unwrap();
-                } else {
-                    assert_eq!(
-                        result.unwrap_err().sqlstate(),
-                        "23505",
-                        "{mode:?}, pending={pending}, {assignment}"
-                    );
-                    sql.execute("ROLLBACK TO before_shift").unwrap();
+                let succeeded = result.is_ok();
+                match result {
+                    Ok(_) => assert_ne!(succeeds, Some(false),
+                        "accepted a real conflict: {mode:?}, pending={pending}, {values:?}, {assignment}"),
+                    Err(error) => {
+                        assert_ne!(succeeds, Some(true),
+                            "refused ascending shift: {mode:?}, pending={pending}, {values:?}, {assignment}: {error}");
+                        assert_eq!(error.sqlstate(), "23505");
+                        sql.execute("ROLLBACK TO before_shift").unwrap();
+                    }
                 }
-                let expected = if succeeds { [0, 1, 2, 3] } else { [0, 1, 3, 4] };
+                let expected = if succeeded {
+                    [0, 1, 2, 3]
+                } else {
+                    [0, 1, 3, 4]
+                };
                 assert_eq!(
                     sql.execute("SELECT seq FROM entries WHERE owner=7 ORDER BY seq")
                         .unwrap()

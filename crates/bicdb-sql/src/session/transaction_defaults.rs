@@ -44,7 +44,10 @@ impl SqlSessionGucState {
     /// Record the mode of an already-started host transaction. The host must
     /// enforce the corresponding isolation before publishing this label.
     pub fn set_transaction_isolation_label(&mut self, value: &str) -> Result<()> {
-        if !matches!(value, "read committed" | "repeatable read" | "serializable") {
+        if !matches!(
+            value,
+            "read committed" | "read uncommitted" | "repeatable read" | "serializable"
+        ) {
             return Err(SqlError::invalid_parameter_value(
                 "invalid active transaction isolation label",
             ));
@@ -188,6 +191,44 @@ mod tests {
     }
 
     #[test]
+    fn postgres_read_uncommitted_defaults_keep_read_committed_execution() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = open(root.path(), false);
+        let mut session = SqlSession::new(&mut db);
+        for setting in [
+            "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ UNCOMMITTED",
+            "SET default_transaction_isolation='read uncommitted'",
+        ] {
+            run(&mut session, setting, false).unwrap();
+            assert_eq!(
+                shown(&mut session, false, "default_transaction_isolation"),
+                "read uncommitted"
+            );
+            run(&mut session, "BEGIN", false).unwrap();
+            assert_eq!(
+                shown(&mut session, false, "transaction_isolation"),
+                "read uncommitted"
+            );
+            assert_eq!(
+                session.tx.as_ref().unwrap().isolation(),
+                bicdb_core::TransactionIsolation::ReadCommitted
+            );
+            run(&mut session, "ROLLBACK", false).unwrap();
+            run(&mut session, "BEGIN ISOLATION LEVEL READ COMMITTED", false).unwrap();
+            assert_eq!(
+                shown(&mut session, false, "transaction_isolation"),
+                "read committed"
+            );
+            run(&mut session, "COMMIT", false).unwrap();
+            assert_eq!(
+                shown(&mut session, false, "transaction_isolation"),
+                "read uncommitted"
+            );
+            run(&mut session, "RESET default_transaction_isolation", false).unwrap();
+        }
+    }
+
+    #[test]
     fn session_default_changes_do_not_change_the_active_transaction() {
         let root = tempfile::tempdir().unwrap();
         let mut db = open(root.path(), true);
@@ -249,13 +290,20 @@ mod tests {
             let mut session = SqlSession::new(&mut db);
             for sql in [
                 "SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY",
-                "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ UNCOMMITTED",
                 "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ COMMITTED, READ ONLY",
                 "SET default_transaction_isolation='invalid'",
             ] {
                 assert!(run(&mut session, sql, oracle).is_err(), "{sql}");
                 assert!(session.tx.is_none(), "{sql}");
                 assert_eq!(shown(&mut session, oracle, "default_transaction_isolation"), "read committed");
+            }
+            if oracle {
+                assert!(run(
+                    &mut session,
+                    "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ UNCOMMITTED",
+                    true
+                )
+                .is_err());
             }
             if !oracle {
                 assert!(run(

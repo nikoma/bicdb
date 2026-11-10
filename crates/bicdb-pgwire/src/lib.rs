@@ -4820,7 +4820,7 @@ fn execute_server_sql_with_options_normalized(
                     sql,
                     &server.config.sql_profile,
                 )? {
-                    let fixed = isolation != "read committed";
+                    let fixed = isolation == "repeatable read" || isolation == "serializable";
                     state
                         .tx
                         .as_mut()
@@ -4887,7 +4887,7 @@ fn execute_server_sql_with_options_normalized(
             if chain {
                 begin_buffered_transaction(server, state)?;
                 if let Some(isolation) = chain_isolation {
-                    let fixed = isolation != "read committed";
+                    let fixed = isolation == "repeatable read" || isolation == "serializable";
                     state
                         .tx
                         .as_mut()

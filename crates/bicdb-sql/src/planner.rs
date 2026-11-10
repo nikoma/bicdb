@@ -3493,15 +3493,18 @@ pub(crate) fn normalize_table_field_expr(
     schema: Option<&TableSchema>,
 ) -> Option<Expr> {
     match expr {
-        Expr::Identifier(ident) if table_has_field(schema, &ident.value) => {
-            Some(Expr::Identifier(ident.clone()))
+        Expr::Identifier(ident) => {
+            let mut field = ident.clone();
+            field.value = ident_value(ident);
+            table_has_field(schema, &field.value).then_some(Expr::Identifier(field))
         }
         Expr::CompoundIdentifier(idents) if idents.len() >= 2 => {
             let qualifier = &idents[idents.len() - 2].value;
             if !qualifier.eq_ignore_ascii_case(alias) && !qualifier.eq_ignore_ascii_case(table) {
                 return None;
             }
-            let field = idents.last()?.clone();
+            let mut field = idents.last()?.clone();
+            field.value = ident_value(&field);
             table_has_field(schema, &field.value).then_some(Expr::Identifier(field))
         }
         Expr::Nested(expr) => normalize_table_field_expr(expr, table, alias, schema),

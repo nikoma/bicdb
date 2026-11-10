@@ -4198,11 +4198,26 @@ fn execute_server_db_sql_for_state_inner(
             }
             continue;
         }
-        // Needs exclusive access (DDL / non-transactional) or hit a genuine SQL
-        // error: hand off to the exclusive path, which re-runs and surfaces it.
-        let Ok(res) = result else {
-            conflicts_exhausted = false;
-            break;
+        let res = match result {
+            Ok(result) => result,
+            Err(error) if error.requires_exclusive_database_access() => {
+                // Only the internal lease request needs another execution.
+                conflicts_exhausted = false;
+                break;
+            }
+            Err(error) => {
+                // A definitive SQL failure (notably 23505 after waiting for a
+                // unique-key owner) must be returned without replay. Queuing
+                // an exclusive writer here can block the shared commit of a
+                // new owner while other INSERTs still hold shared guards and
+                // wait for that owner's key, creating a global lock convoy.
+                if let Some(tx) = pending {
+                    tx.rollback()?;
+                }
+                state.session_state = session_state;
+                state.catalog_cache = catalog_cache;
+                return Err(error.into());
+            }
         };
         let Some(tx) = pending else {
             // Read-only / no buffered write: nothing to commit.

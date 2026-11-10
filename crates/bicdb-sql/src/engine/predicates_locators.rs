@@ -13,10 +13,9 @@ impl<'db> SqlEngine<'db> {
         alias: &str,
         schema: Option<&TableSchema>,
     ) -> Result<bool> {
-        let mut references = Vec::new();
-        if !collect_predicate_column_references(expr, &mut references) {
+        let Some(references) = canonical_predicate_column_references(expr) else {
             return Ok(false);
-        }
+        };
         let mut saw_table_reference = false;
         for reference in references {
             if target_record_field_from_parts(table, alias, schema, &reference).is_some() {

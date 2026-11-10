@@ -42,9 +42,10 @@ fn simple_virtual_base_filter(expr: &Expr) -> bool {
 }
 
 fn exact_virtual_base_columns(expr: &Expr, columns: &BTreeSet<String>) -> bool {
-    let mut references = Vec::new();
-    collect_predicate_column_references(expr, &mut references)
-        && !references.is_empty()
+    let Some(references) = canonical_predicate_column_references(expr) else {
+        return false;
+    };
+    !references.is_empty()
         && references.iter().all(|parts| match parts.as_slice() {
             [qualifier, column] => columns.contains(&format!("{qualifier}.{column}")),
             _ => false,
@@ -1422,7 +1423,7 @@ impl<'db> SqlEngine<'db> {
         }
         let alias_name = alias
             .as_ref()
-            .map(|alias| alias.name.value.clone())
+            .map(|alias| ident_value(&alias.name))
             .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(&table).to_string());
         if is_virtual_table(&table) {
             // Known virtual columns permit the same early filtering as a base

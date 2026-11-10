@@ -5789,6 +5789,27 @@ pub(crate) fn predicate_references_only_columns(expr: &Expr, columns: &BTreeSet<
         .all(|reference| column_reference_matches(reference, columns))
 }
 
+/// Bind identifier spelling for proofs made before row materialization.
+/// Persisted schema names remain exact: only unquoted AST names are folded.
+pub(crate) fn canonical_predicate_column_references(expr: &Expr) -> Option<Vec<Vec<String>>> {
+    let mut references = Vec::new();
+    if !collect_predicate_column_references(expr, &mut references) {
+        return None;
+    }
+    references.clear();
+    let _ = sqlparser::ast::visit_expressions(expr, |expr| {
+        match expr {
+            Expr::Identifier(ident) => references.push(vec![ident_value(ident)]),
+            Expr::CompoundIdentifier(parts) => {
+                references.push(parts.iter().map(ident_value).collect());
+            }
+            _ => {}
+        }
+        std::ops::ControlFlow::<()>::Continue(())
+    });
+    Some(references)
+}
+
 pub(crate) fn collect_predicate_column_references(
     expr: &Expr,
     references: &mut Vec<Vec<String>>,

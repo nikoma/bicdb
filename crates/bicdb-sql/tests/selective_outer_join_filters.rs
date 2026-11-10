@@ -216,6 +216,18 @@ fn selective_virtual_base_filter_limits_catalog_join_work_with_a_left_join() {
     }
     assert!(memory.peak_bytes() > 0, "join work must still be charged");
     assert!(memory.peak_bytes() <= limit);
+    drop(memory);
+    let uppercase = query
+        .replace("c.oid", "C.OID")
+        .replace("c.relname", "C.RELNAME");
+    for query in [
+        uppercase.clone(),
+        uppercase.replace("pg_catalog.pg_class c ", "pg_catalog.pg_class C "),
+    ] {
+        let memory = QueryMemoryScope::new(limit);
+        assert_eq!(session.execute(&query).unwrap().rows, result.rows);
+        assert!(memory.peak_bytes() > 0 && memory.peak_bytes() <= limit);
+    }
 }
 
 #[test]

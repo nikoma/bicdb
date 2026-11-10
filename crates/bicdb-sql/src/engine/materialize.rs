@@ -3222,7 +3222,12 @@ impl<'db> SqlEngine<'db> {
         {
             let arg_types = function_arg_list(function)
                 .iter()
-                .map(|arg| self.infer_env_expr_type(arg, env))
+                .map(|arg| {
+                    crate::routine_overloads::routine_argument_type_hint(
+                        arg,
+                        self.infer_env_expr_type(arg, env),
+                    )
+                })
                 .collect::<Vec<_>>();
             if let Some(pg_type) = crate::routine_overloads::user_function_result_type(
                 self.db_ref(),
@@ -3664,7 +3669,12 @@ impl<'db> SqlEngine<'db> {
             _ => {
                 let static_types = args
                     .iter()
-                    .map(|arg| self.infer_env_expr_type(arg, env))
+                    .map(|arg| {
+                        crate::routine_overloads::routine_argument_type_hint(
+                            arg,
+                            self.infer_env_expr_type(arg, env),
+                        )
+                    })
                     .collect::<Vec<_>>();
                 overload_return_type(self.db_ref(), &name, &static_types).or_else(|| {
                     load_routine(self.db_ref(), RoutineKind::Function, &name)

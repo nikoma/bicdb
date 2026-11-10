@@ -2266,7 +2266,12 @@ fn projected_expr_pg_type_with_db_uncached(db: &BicDb, expr: &Expr) -> Option<St
         let args = function_arg_list(function);
         let arg_types = args
             .iter()
-            .map(|arg| projected_expr_pg_type_with_db_uncached(db, arg))
+            .map(|arg| {
+                crate::routine_overloads::routine_argument_type_hint(
+                    arg,
+                    projected_expr_pg_type_with_db_uncached(db, arg),
+                )
+            })
             .collect::<Vec<_>>();
         return overload_return_type(db, &name, &arg_types);
     }

@@ -331,6 +331,11 @@ pub(crate) fn overload_return_type(
     // Apply the same unknown-argument scoring as execution instead of exposing
     // the first catalog signature's unresolved polymorphic result type.
     let overloads = routines_named(db, RoutineKind::Function, name).ok()?;
+    // None can also mean a routine variable whose type needs the caller's
+    // frame. Do not mistake that missing scope for an SQL unknown literal.
+    if overloads.len() > 1 && static_types.iter().any(Option::is_none) {
+        return None;
+    }
     let score = if oracle::is_oracle_database(db).ok()? {
         argument_score
     } else {
@@ -338,6 +343,17 @@ pub(crate) fn overload_return_type(
     };
     select_overload_scored(&overloads, static_types, &[], score)
         .and_then(|routine| concrete_routine_return_type(db, routine, static_types).ok())
+}
+
+pub(crate) fn routine_argument_type_hint(expr: &Expr, inferred: Option<String>) -> Option<String> {
+    if inferred.is_some() {
+        return inferred;
+    }
+    match expr {
+        Expr::Value(_) => Some("unknown".into()),
+        Expr::Nested(inner) => routine_argument_type_hint(inner, None),
+        _ => None,
+    }
 }
 
 fn element_polymorphic_family(name: &str) -> Option<bool> {
@@ -811,8 +827,11 @@ fn chosen_user_function(
             by_value = Some(candidate.clone());
         }
     }
+    let native_builtin_name = crate::builtin_signatures::PG_CATALOG_FUNCTION_SIGNATURES
+        .iter()
+        .any(|(candidate, _)| *candidate == name);
     if by_value.is_none()
-        && actual.iter().all(Option::is_some)
+        && (actual.iter().all(Option::is_some) || !native_builtin_name)
         && !builtin_accepts_typed_arguments(name, &actual)
     {
         let eligible = eligible.into_iter().cloned().collect::<Vec<_>>();

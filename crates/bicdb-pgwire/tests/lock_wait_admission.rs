@@ -71,7 +71,11 @@ async fn lock_owner_progress(lock: &str, release: &str) {
     .await;
     if observed.is_err() && waiting.is_finished() {
         let early = waiting.await;
-        panic!("{lock} waiter completed before its owner released the lock: {early:?}");
+        let owner_rows = first.query("SELECT id,n FROM admission_rows ORDER BY id", &[]).await;
+        let owner_rows = owner_rows.map(|rows| rows.into_iter().map(|r| (r.get::<_,i32>(0),r.get::<_,i32>(1))).collect::<Vec<_>>());
+        let indexes = first.query("SELECT indexname,indexdef FROM pg_indexes WHERE tablename='admission_rows'", &[]).await;
+        let indexes = indexes.map(|rows| rows.into_iter().map(|r| (r.get::<_,String>(0),r.get::<_,String>(1))).collect::<Vec<_>>());
+        panic!("{lock} waiter completed before its owner released the lock: {early:?}; owner rows={owner_rows:?}; indexes={indexes:?}");
     }
     observed.unwrap();
     assert!(

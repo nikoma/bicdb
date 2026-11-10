@@ -63,6 +63,62 @@ fn cold_monitoring_validator_uses_an_ordinary_protocol_stack() {
 }
 
 #[test]
+fn cte_mutations_describe_no_data_and_keep_update_counts() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+    let mut client = TcpStream::connect(address).unwrap();
+    client.set_read_timeout(Some(Duration::from_secs(30))).unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    send_query(&mut client, "CREATE TABLE cte_update_counts(id INT PRIMARY KEY,n INT); INSERT INTO cte_update_counts VALUES(1,10)");
+    read_query_rows(&mut client);
+    for (name, sql, parameter, command) in [
+        ("cte_update", "WITH input AS (SELECT $1::int AS id) UPDATE cte_update_counts SET n=n+1 WHERE id=(SELECT id FROM input)", "1", "UPDATE 1"),
+        ("cte_insert", "WITH input AS (SELECT $1::int AS id) INSERT INTO cte_update_counts SELECT id,30 FROM input", "2", "INSERT 0 1"),
+        ("cte_delete", "WITH input AS (SELECT $1::int AS id) DELETE FROM cte_update_counts WHERE id=(SELECT id FROM input)", "2", "DELETE 1"),
+    ] {
+        send_parse(&mut client, name, sql, &[23]);
+        assert_eq!(read_message(&mut client).0, b'1');
+        send_describe_statement(&mut client, name);
+        assert_eq!(read_parameter_description(&mut client), vec![23]);
+        assert_eq!(read_message(&mut client).0, b'n', "{name}");
+        send_sync(&mut client);
+        read_until_ready(&mut client);
+        // Describe must not execute the mutation or advertise a phantom NULL column.
+        send_query(&mut client, "SELECT n FROM cte_update_counts WHERE id=1");
+        let expected = if name == "cte_update" { "10" } else { "11" };
+        assert_eq!(read_query_rows(&mut client), vec![vec![expected.to_string()]]);
+        send_bind(&mut client, "", name, &[parameter]);
+        send_execute(&mut client, "");
+        send_sync(&mut client);
+        assert_eq!(read_message(&mut client).0, b'2');
+        let (tag, payload) = read_message(&mut client);
+        assert_eq!(tag, b'C', "{name}: {payload:?}");
+        assert_eq!(payload, format!("{command}\0").as_bytes());
+        assert_eq!(read_message(&mut client).0, b'Z');
+    }
+    send_parse(&mut client, "cte_returning", "WITH input AS (SELECT $1::int AS id) UPDATE cte_update_counts SET n=n+1 WHERE id=(SELECT id FROM input) RETURNING id,n", &[23]);
+    assert_eq!(read_message(&mut client).0, b'1');
+    send_describe_statement(&mut client, "cte_returning");
+    assert_eq!(read_parameter_description(&mut client), vec![23]);
+    let (tag, payload) = read_message(&mut client);
+    assert_eq!(tag, b'T');
+    assert_eq!(i16::from_be_bytes(payload[..2].try_into().unwrap()), 2);
+    send_bind(&mut client, "", "cte_returning", &["1"]);
+    send_execute(&mut client, "");
+    send_sync(&mut client);
+    assert_eq!(read_query_rows(&mut client), vec![vec!["1".to_string(), "12".to_string()]]);
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
+#[test]
 fn exclusive_transaction_retry_preserves_backend_identity_and_advisory_locks() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

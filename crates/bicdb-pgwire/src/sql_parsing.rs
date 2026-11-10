@@ -4092,6 +4092,17 @@ mod mutating_with_describe_tests {
         // Read-only WITH queries keep their existing describe path.
         assert!(mutating_with_describe_sql("WITH x AS (SELECT 1 AS a) SELECT a FROM x").is_none());
     }
+
+    #[test]
+    fn trailing_cte_mutations_without_returning_have_no_row_description() {
+        for sql in [
+            "WITH input AS (SELECT $1::int AS id) UPDATE q SET attempts=attempts+1 WHERE id=(SELECT id FROM input)",
+            "WITH input AS (SELECT $1::int AS id) INSERT INTO q(id) SELECT id FROM input",
+            "WITH input AS (SELECT $1::int AS id) DELETE FROM q WHERE id=(SELECT id FROM input)",
+        ] {
+            assert!(mutating_with_describe_sql(sql).is_none(), "{sql}");
+        }
+    }
 }
 
 #[cfg(test)]

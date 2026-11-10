@@ -1575,7 +1575,7 @@ impl BicDb {
         xid: bicdb_page::Xid,
     ) -> Option<PagedApplyCtx> {
         let paged = Arc::clone(self.paged_records.as_ref()?);
-        let collection: Arc<str> = Arc::from(collection);
+        let physical: Arc<str> = Arc::from(paged.physical_collection(collection).as_ref());
         let post_snapshot = bicdb_page::Snapshot {
             xid,
             xmax: xid + 1,
@@ -1592,11 +1592,12 @@ impl BicDb {
         };
         let post = {
             let paged = Arc::clone(&paged);
-            let collection = Arc::clone(&collection);
-            Arc::new(move |pk: &str| paged.get(&post_snapshot, &collection, pk)) as PagedStubFetch
+            let physical = Arc::clone(&physical);
+            Arc::new(move |pk: &str| paged.get_physical_record(&post_snapshot, &physical, pk))
+                as PagedStubFetch
         };
-        let pre =
-            Arc::new(move |pk: &str| paged.get(&pre_snapshot, &collection, pk)) as PagedStubFetch;
+        let pre = Arc::new(move |pk: &str| paged.get_physical_record(&pre_snapshot, &physical, pk))
+            as PagedStubFetch;
         Some(PagedApplyCtx { xid, post, pre })
     }
 

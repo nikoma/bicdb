@@ -225,9 +225,9 @@ impl BicDb {
         let as_of = paged.latest_snapshot();
         let fetch: PagedStubFetch = {
             let paged = Arc::clone(&paged);
-            let name: Arc<str> = Arc::from(collection);
+            let physical: Arc<str> = Arc::from(paged.physical_collection(collection).as_ref());
             let as_of = as_of.clone();
-            Arc::new(move |pk: &str| paged.get(&as_of, &name, pk))
+            Arc::new(move |pk: &str| paged.get_physical_record(&as_of, &physical, pk))
         };
         let mut stubs: Vec<Arc<StoredRecord>> = Vec::new();
         for record in paged.scan_identities(&as_of, collection)? {

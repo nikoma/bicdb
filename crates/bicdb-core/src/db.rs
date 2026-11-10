@@ -10276,9 +10276,10 @@ impl BicDb {
                 let as_of = paged.latest_snapshot();
                 let fetch: PagedStubFetch = {
                     let paged = Arc::clone(paged);
-                    let collection: Arc<str> = Arc::from(meta.name.as_str());
+                    let physical: Arc<str> =
+                        Arc::from(paged.physical_collection(meta.name.as_str()).as_ref());
                     let as_of = as_of.clone();
-                    Arc::new(move |pk: &str| paged.get(&as_of, &collection, pk))
+                    Arc::new(move |pk: &str| paged.get_physical_record(&as_of, &physical, pk))
                 };
                 let mut record_arcs: Vec<Arc<StoredRecord>> = Vec::new();
                 // Identity-only decode: stubs keep exactly these fields, and
@@ -20178,13 +20179,25 @@ fn apply_unmaterialized_transaction_log(
                             };
                             let post: PagedStubFetch = {
                                 let paged = Arc::clone(paged);
-                                let collection: Arc<str> = Arc::from(write.collection.as_str());
-                                Arc::new(move |pk: &str| paged.get(&post_snapshot, &collection, pk))
+                                let physical: Arc<str> = Arc::from(
+                                    paged
+                                        .physical_collection(write.collection.as_str())
+                                        .as_ref(),
+                                );
+                                Arc::new(move |pk: &str| {
+                                    paged.get_physical_record(&post_snapshot, &physical, pk)
+                                })
                             };
                             let pre: PagedStubFetch = {
                                 let paged = Arc::clone(paged);
-                                let collection: Arc<str> = Arc::from(write.collection.as_str());
-                                Arc::new(move |pk: &str| paged.get(&pre_snapshot, &collection, pk))
+                                let physical: Arc<str> = Arc::from(
+                                    paged
+                                        .physical_collection(write.collection.as_str())
+                                        .as_ref(),
+                                );
+                                Arc::new(move |pk: &str| {
+                                    paged.get_physical_record(&pre_snapshot, &physical, pk)
+                                })
                             };
                             Some(PagedApplyCtx { xid, post, pre })
                         }

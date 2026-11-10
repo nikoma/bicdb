@@ -436,9 +436,8 @@ fn journal_replicas_share_author_identity_and_preserve_it_after_promotion() {
     // retry only that transient result with an idempotent setup statement.
     wait(|| {
         match writer.with_write(|db| {
-            SqlSession::new(db).execute(
-                "CREATE TABLE IF NOT EXISTS entries (id TEXT PRIMARY KEY, value INT)",
-            )?;
+            SqlSession::new(db)
+                .execute("CREATE TABLE IF NOT EXISTS entries (id TEXT PRIMARY KEY, value INT)")?;
             Ok(())
         }) {
             Ok(()) => true,

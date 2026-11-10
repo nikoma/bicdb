@@ -1951,6 +1951,12 @@ impl<'db> SqlSession<'db> {
             .then(|| self.signed_mutation_grant(table))
             .flatten();
         if let Some(tx) = self.tx.as_mut() {
+            if protected && signed_grant.is_none() {
+                return Err(SqlError::BicDb(BicDbError::Authorization(
+                    "protected SQL writes inside transactions require a signed mutation grant"
+                        .to_string(),
+                )));
+            }
             if let Some(constraint) = live_constraint {
                 let started = Instant::now();
                 tx.insert_using_live_identities(table, constraint, records, signed_grant)?;
@@ -1959,13 +1965,7 @@ impl<'db> SqlSession<'db> {
                 self.record_blob_writes(events)?;
                 return Ok(());
             }
-            if protected {
-                let grant = signed_grant.ok_or_else(|| {
-                    SqlError::BicDb(BicDbError::Authorization(
-                        "protected SQL writes inside transactions require a signed mutation grant"
-                            .to_string(),
-                    ))
-                })?;
+            if let Some(grant) = signed_grant {
                 let started = Instant::now();
                 for record in records {
                     tx.upsert_with_grant(grant, table, record)?;

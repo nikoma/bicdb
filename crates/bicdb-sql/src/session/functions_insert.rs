@@ -1701,7 +1701,12 @@ impl<'db> SqlSession<'db> {
                     Some(&self.sql_engine()),
                 )
                 .map_err(|error| {
-                    self.arbiter_race_as_conflict(table, Some(schema), &conflict_columns, error)
+                    self.arbiter_race_as_conflict(
+                        table,
+                        Some(schema),
+                        Some(&conflict_columns),
+                        error,
+                    )
                 })?;
             }
             let inserted = match conflict_reservation {
@@ -1711,7 +1716,12 @@ impl<'db> SqlSession<'db> {
                 None => self.insert_session_new_records(table, schema, vec![record.clone()]),
             };
             if let Err(error) = inserted {
-                return Err(self.arbiter_race_as_conflict(table, schema, &conflict_columns, error));
+                return Err(self.arbiter_race_as_conflict(
+                    table,
+                    schema,
+                    Some(&conflict_columns),
+                    error,
+                ));
             }
             inserted_records.push(record.clone());
             affected_records.push(record);
@@ -2153,11 +2163,11 @@ impl<'db> SqlSession<'db> {
     /// autocommit statement is then re-run under a fresh snapshot. Inside a
     /// transaction the client receives 40001 and retries. A violation of any
     /// other unique index stays a 23505 unique violation.
-    pub(crate) fn arbiter_race_as_conflict(
+    fn arbiter_race_as_conflict(
         &self,
         table: &str,
         schema: Option<&TableSchema>,
-        conflict_columns: &[String],
+        conflict_columns: Option<&[String]>,
         error: SqlError,
     ) -> SqlError {
         let Some(schema) = schema else {
@@ -2172,13 +2182,34 @@ impl<'db> SqlSession<'db> {
             SqlError::BicDb(BicDbError::UniqueIndexConflict { index }) => index.clone(),
             _ => return error,
         };
-        let arbiter = match self.memoized_unique_arbiter(table, schema, conflict_columns) {
-            Ok(Some(arbiter)) => arbiter,
-            _ => return error,
+        let matches_violation = |arbiter: &records::UniqueConflictArbiter| {
+            arbiter.name == violated || arbiter.index_name.as_deref() == Some(violated.as_str())
         };
-        if arbiter.name != violated && arbiter.index_name.as_deref() != Some(violated.as_str()) {
+        let arbiter = match conflict_columns {
+            Some(columns) => self
+                .memoized_unique_arbiter(table, schema, columns)
+                .ok()
+                .flatten()
+                .filter(matches_violation),
+            None => {
+                // Untargeted DO NOTHING accepts any of this table's unique
+                // arbiters. A fixed snapshot cannot silently ignore a tuple
+                // that became committed after its earlier arbiter probe.
+                if !matches!(
+                    records::postgres_fixed_snapshot(self.db_ref(), self.tx.as_ref()),
+                    Ok(Some(_))
+                ) {
+                    return error;
+                }
+                unique_arbiters_for_table(self.db_ref(), table, schema)
+                    .iter()
+                    .find(|arbiter| matches_violation(arbiter))
+                    .cloned()
+            }
+        };
+        let Some(arbiter) = arbiter else {
             return error;
-        }
+        };
         SqlError::BicDb(BicDbError::TransactionConflict(format!(
             "{table}: another transaction inserted the conflict key `{}` after this \
              statement's snapshot",
@@ -2217,12 +2248,17 @@ impl<'db> SqlSession<'db> {
                 Some(&self.sql_engine()),
             )
             .map_err(|error| {
-                self.arbiter_race_as_conflict(table, Some(schema), conflict_columns, error)
+                self.arbiter_race_as_conflict(table, Some(schema), Some(conflict_columns), error)
             })?;
         }
         if let Err(error) = self.insert_session_new_records(table, schema, inserted_records.clone())
         {
-            return Err(self.arbiter_race_as_conflict(table, schema, conflict_columns, error));
+            return Err(self.arbiter_race_as_conflict(
+                table,
+                schema,
+                Some(conflict_columns),
+                error,
+            ));
         }
         self.fire_after_insert_triggers(table, schema, &inserted_records)?;
         self.insert_result(
@@ -2260,9 +2296,11 @@ impl<'db> SqlSession<'db> {
                 &inserted_records,
                 false,
                 Some(&self.sql_engine()),
-            )?;
+            )
+            .map_err(|error| self.arbiter_race_as_conflict(table, Some(schema), None, error))?;
         }
-        self.insert_session_new_records(table, schema, inserted_records.clone())?;
+        self.insert_session_new_records(table, schema, inserted_records.clone())
+            .map_err(|error| self.arbiter_race_as_conflict(table, schema, None, error))?;
         self.fire_after_insert_triggers(table, schema, &inserted_records)?;
         self.insert_result(
             table,

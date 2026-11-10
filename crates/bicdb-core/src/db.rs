@@ -15186,9 +15186,26 @@ impl Transaction {
         records: Vec<Record>,
         grant: Option<MutationGrantId>,
     ) -> Result<()> {
+        self.db_ref().check_recovery_state()?;
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
+        let mark = self.rollback_mark();
+        let result =
+            self.insert_using_live_identities_inner(collection, primary_constraint, records, grant);
+        if result.is_err() {
+            self.rollback_to_mark(mark)?;
+        }
+        self.fenced(result)
+    }
+
+    fn insert_using_live_identities_inner(
+        &mut self,
+        collection: &str,
+        primary_constraint: &str,
+        records: Vec<Record>,
+        grant: Option<MutationGrantId>,
+    ) -> Result<()> {
         let mut prepared = Vec::with_capacity(records.len());
         let mut ids = FxHashSet::default();
         self.bind_collection_incarnation(collection)?;

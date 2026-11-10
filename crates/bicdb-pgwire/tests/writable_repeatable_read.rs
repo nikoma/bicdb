@@ -1,6 +1,6 @@
 use bicdb_core::{BicDb, DbConfig, StorageMode};
 use bicdb_pgwire::{PgWireConfig, PgWireServer};
-use std::{net::TcpListener, thread};
+use std::{net::TcpListener, thread, time::Duration};
 use tokio_postgres::NoTls;
 
 #[tokio::test]
@@ -21,7 +21,8 @@ async fn repeatable_read_rejects_concurrent_mutations_at_the_statement_boundary(
         let serving = server.clone();
         let task = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
         let config = format!("host=127.0.0.1 port={port} user=bicdb dbname=bicdb");
-        let (client, client_connection) = tokio_postgres::connect(&config, NoTls).await.unwrap();
+        let (mut client, client_connection) =
+            tokio_postgres::connect(&config, NoTls).await.unwrap();
         let client_task = tokio::spawn(client_connection);
         let (peer, peer_connection) = tokio_postgres::connect(&config, NoTls).await.unwrap();
         let peer_task = tokio::spawn(peer_connection);
@@ -103,6 +104,57 @@ async fn repeatable_read_rejects_concurrent_mutations_at_the_statement_boundary(
                 .map(|row| row.get(0))
                 .collect();
             assert_eq!(after, before, "{mode:?}: {statement}");
+        }
+        for (release, expected_state, expected_value) in
+            [("COMMIT", "40001", 11), ("ROLLBACK", "00000", 20)]
+        {
+            peer.batch_execute("DELETE FROM rr_mutation").await.unwrap();
+            client.batch_execute("BEGIN; SELECT 1").await.unwrap();
+            peer.batch_execute("BEGIN; INSERT INTO rr_mutation VALUES (2,200,11)")
+                .await
+                .unwrap();
+            let waiting = tokio::spawn(async move {
+                let result = client
+                    .batch_execute(
+                        "INSERT INTO rr_mutation VALUES (2,300,20) ON CONFLICT DO NOTHING",
+                    )
+                    .await;
+                (client, result)
+            });
+            let admitted = tokio::time::timeout(Duration::from_secs(2), async {
+                while !waiting.is_finished()
+                    && !server
+                        .connection_snapshots()
+                        .iter()
+                        .any(|connection| connection.active_query.is_some())
+                {
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                }
+            })
+            .await;
+            let waited_for_owner = admitted.is_ok() && !waiting.is_finished();
+            peer.batch_execute(release).await.unwrap();
+            let (returned, result) = tokio::time::timeout(Duration::from_secs(7), waiting)
+                .await
+                .unwrap()
+                .unwrap();
+            client = returned;
+            assert!(
+                waited_for_owner,
+                "{mode:?}: competitor did not wait for {release}"
+            );
+            let state = match &result {
+                Ok(()) => "00000",
+                Err(error) => error.code().map_or("client error", |code| code.code()),
+            };
+            assert_eq!(state, expected_state, "{mode:?}: owner {release}");
+            client.batch_execute("COMMIT").await.unwrap();
+            let value = peer
+                .query_one("SELECT v FROM rr_mutation WHERE id=2", &[])
+                .await
+                .unwrap()
+                .get::<_, i32>(0);
+            assert_eq!(value, expected_value, "{mode:?}: owner {release}");
         }
         drop(client);
         drop(peer);

@@ -1519,23 +1519,40 @@ impl BicDb {
                     if attempt < 8 {
                         drop(shard);
                         std::hint::spin_loop();
-                    } else if notify_wait {
-                        if key_wait.is_none() {
-                            key_wait =
-                                self.write_locks
-                                    .register_if_enabled(&key, shard_idx, max_attempts);
-                        }
-                        if let Some(wait) = &key_wait {
-                            if !wait.wait_for(&mut shard) {
-                                break;
-                            }
-                        } else {
-                            let _ = self.write_locks.waiters[shard_idx]
-                                .wait_for(&mut shard, Duration::from_micros(250));
-                        }
                     } else {
-                        drop(shard);
-                        std::thread::sleep(Duration::from_micros(25));
+                        let wait = || {
+                            let mut keep_waiting = true;
+                            if notify_wait {
+                                if key_wait.is_none() {
+                                    key_wait = self.write_locks.register_if_enabled(
+                                        &key,
+                                        shard_idx,
+                                        max_attempts,
+                                    );
+                                }
+                                if let Some(wait) = &key_wait {
+                                    keep_waiting = wait.wait_for(&mut shard);
+                                } else {
+                                    self.write_locks.waiters[shard_idx]
+                                        .wait_for(&mut shard, Duration::from_micros(250));
+                                }
+                                // Admission reacquisition must never hold the
+                                // shard needed by the lock owner's COMMIT.
+                                drop(shard);
+                            } else {
+                                drop(shard);
+                                std::thread::sleep(Duration::from_micros(25));
+                            }
+                            keep_waiting
+                        };
+                        let keep_waiting = if let Some(cancellation) = cancellation {
+                            cancellation.blocking_wait(wait)?
+                        } else {
+                            wait()
+                        };
+                        if !keep_waiting {
+                            break;
+                        }
                     }
                 }
                 _ => {

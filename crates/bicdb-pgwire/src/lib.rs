@@ -4755,7 +4755,7 @@ fn execute_server_sql_with_options_normalized(
     }
     let role_permit = workload::admit(server, &state.user, state.security_context.as_ref(), sql)?;
     let memory_scope = bicdb_core::query_budget::QueryMemoryScope::new(role_permit.memory_bytes);
-    let _permit = match server.acquire_query(query_kind_for_normalized_sql(normalized)) {
+    let permit = match server.acquire_query(query_kind_for_normalized_sql(normalized)) {
         Ok(permit) => permit,
         Err(PgWireError::QueryTimedOut) => {
             server.record_cancel_metadata(state.connection_id, "timeout", "57014");
@@ -4763,6 +4763,7 @@ fn execute_server_sql_with_options_normalized(
         }
         Err(error) => return Err(error),
     };
+    let _permit = PausableQueryPermit::new(permit);
     if state.take_cancel_request() {
         server.canceled_queries.fetch_add(1, Ordering::SeqCst);
         server.record_cancel_metadata(state.connection_id, "cancel", "57014");
@@ -4772,7 +4773,8 @@ fn execute_server_sql_with_options_normalized(
 
     let started = Instant::now();
     let deadline = (!role_permit.timeout.is_zero()).then(|| Instant::now() + role_permit.timeout);
-    let cancellation = CancellationToken::new(state.cancel_token.clone(), deadline);
+    let cancellation = CancellationToken::new(state.cancel_token.clone(), deadline)
+        .with_wait_admission(_permit.observer());
     let transaction_control = if is_transaction_control_candidate(normalized) {
         Some(
             parse_transaction_control_for_profile(sql, &server.config.sql_profile)

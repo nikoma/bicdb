@@ -24,11 +24,13 @@ fn read_committed_direct_session_observes_commits_between_client_statements() {
                 .rows,
             vec![vec![SqlValue::Int(1)]]
         );
-        db.insert(
+        let mut peer = db.begin_transaction().unwrap();
+        peer.insert(
             "statement_rows",
             Record::new("other").with_metadata(serde_json::json!({"rowkey":2,"payload":20})),
         )
         .unwrap();
+        peer.commit().unwrap();
         assert_eq!(
             sql.execute("SELECT rowkey FROM statement_rows ORDER BY rowkey")
                 .unwrap()
@@ -51,11 +53,13 @@ fn fixed_read_only_snapshot_is_not_advanced_by_client_statement_refresh() {
             .execute("SELECT rowkey FROM statement_rows ORDER BY rowkey")
             .unwrap()
             .rows;
-        db.insert(
+        let mut peer = db.begin_transaction().unwrap();
+        peer.insert(
             "statement_rows",
             Record::new("other").with_metadata(serde_json::json!({"rowkey":2,"payload":20})),
         )
         .unwrap();
+        peer.commit().unwrap();
         assert_eq!(
             sql.execute("SELECT rowkey FROM statement_rows ORDER BY rowkey")
                 .unwrap()

@@ -144,7 +144,7 @@ pub(crate) fn routines_named(
 const NUMERIC: &[i32] = &[20, 21, 23, 26, 700, 701, 1700];
 const STRING: &[i32] = &[18, 19, 25, 705, 1042, 1043];
 const DATETIME: &[i32] = &[1082, 1114, 1184];
-const POLYMORPHIC: &[i32] = &[2276, 2277, 2283, 2776, 5077, 5078];
+const POLYMORPHIC: &[i32] = &[2276, 2277, 2283, 2776, 5077, 5078, 5079];
 const INTERVAL: i32 = 1186;
 const BOOL: i32 = 16;
 
@@ -201,11 +201,95 @@ fn argument_score(
     }
 }
 
+// PostgreSQL resolves typed arguments through implicit casts, then favors a
+// preferred type within a category. Oracle retains its existing conversion
+// rules; in particular, numeric narrowing must not change there.
+fn pg_argument_score(
+    declared: Option<i32>,
+    static_type: Option<&str>,
+    value: &SqlValue,
+) -> Option<u32> {
+    let actual = static_type.and_then(static_oid);
+    // At Describe time unknown literals have no value. PostgreSQL prefers
+    // the string category (and text within it) when such overloads compete.
+    if actual.is_none() && matches!(value, SqlValue::Null) && declared == Some(25) {
+        return Some(2);
+    }
+    let (Some(actual), Some(declared)) = (actual, declared) else {
+        return argument_score(declared, static_type, value);
+    };
+    if actual == declared {
+        return Some(8);
+    }
+    if POLYMORPHIC.contains(&declared) {
+        return Some(1);
+    }
+    let input = pg_type_spec_by_oid(actual)?;
+    let target = pg_type_spec_by_oid(declared)?;
+    pg_cast_allows(input.name, target.name, PgCastContext::Implicit).then_some(
+        if input.category == target.category && target.preferred() {
+            4
+        } else {
+            3
+        },
+    )
+}
+
+fn builtin_accepts_typed_arguments(name: &str, actual: &[Option<i32>]) -> bool {
+    use crate::builtin_signatures::PG_CATALOG_FUNCTION_SIGNATURES as SIGNATURES;
+    let start = SIGNATURES.partition_point(|(candidate, _)| *candidate < name);
+    SIGNATURES[start..]
+        .iter()
+        .take_while(|(candidate, _)| *candidate == name)
+        .any(|(_, signature)| {
+            let declared = signature
+                .split(',')
+                .filter(|part| !part.is_empty())
+                .map(|part| part.parse::<i32>().ok())
+                .collect::<Vec<_>>();
+            // Polymorphic/variadic builtins stay on their established dispatch path.
+            if declared
+                .iter()
+                .flatten()
+                .any(|oid| POLYMORPHIC.contains(oid))
+            {
+                return true;
+            }
+            declared.len() == actual.len()
+                && actual.iter().zip(declared).all(|(input, target)| {
+                    // A known SQL unknown literal can be coerced to a
+                    // builtin's declared input type. Other typed arguments
+                    // must still allow that builtin's implicit conversion.
+                    if input.is_none() {
+                        return true;
+                    }
+                    match (
+                        input.and_then(pg_type_spec_by_oid),
+                        target.and_then(pg_type_spec_by_oid),
+                    ) {
+                        (Some(input), Some(target)) => {
+                            pg_cast_allows(input.name, target.name, PgCastContext::Implicit)
+                        }
+                        _ => false,
+                    }
+                })
+        })
+}
+
 /// The candidate that best fits a call, or `None` when none accepts it.
 pub(crate) fn select_overload<'a>(
     candidates: &'a [RoutineSchema],
     static_types: &[Option<String>],
     args: &[SqlValue],
+) -> Option<&'a RoutineSchema> {
+    select_overload_scored(candidates, static_types, args, argument_score)
+}
+
+fn select_overload_scored<'a>(
+    candidates: &'a [RoutineSchema],
+    static_types: &[Option<String>],
+    args: &[SqlValue],
+    score_argument: fn(Option<i32>, Option<&str>, &SqlValue) -> Option<u32>,
 ) -> Option<&'a RoutineSchema> {
     let mut best: Option<(u32, &RoutineSchema)> = None;
     for candidate in candidates {
@@ -229,7 +313,7 @@ pub(crate) fn select_overload<'a>(
             });
             let static_type = static_types.get(index).and_then(Option::as_deref);
             let value = args.get(index).unwrap_or(&SqlValue::Null);
-            match argument_score(declared, static_type, value) {
+            match score_argument(declared, static_type, value) {
                 Some(score) => total += score,
                 None => {
                     accepted = false;
@@ -250,13 +334,201 @@ pub(crate) fn overload_return_type(
     name: &str,
     static_types: &[Option<String>],
 ) -> Option<String> {
-    // Without every argument's type the call's overload is not known until
-    // it runs; guessing would report the name's first routine's type.
-    if static_types.iter().any(Option::is_none) {
+    // Apply the same unknown-argument scoring as execution instead of exposing
+    // the first catalog signature's unresolved polymorphic result type.
+    let overloads = routines_named(db, RoutineKind::Function, name).ok()?;
+    // None can also mean a routine variable whose type needs the caller's
+    // frame. Do not mistake that missing scope for an SQL unknown literal.
+    if overloads.len() > 1 && static_types.iter().any(Option::is_none) {
         return None;
     }
-    let overloads = routine_overloads(db, RoutineKind::Function, name).ok()??;
-    select_overload(&overloads, static_types, &[]).map(|routine| routine.return_type.clone())
+    let score = if oracle::is_oracle_database(db).ok()? {
+        argument_score
+    } else {
+        pg_argument_score
+    };
+    select_overload_scored(&overloads, static_types, &[], score)
+        .and_then(|routine| concrete_routine_return_type(db, routine, static_types).ok())
+}
+
+pub(crate) fn routine_argument_type_hint(expr: &Expr, inferred: Option<String>) -> Option<String> {
+    if inferred.is_some() {
+        return inferred;
+    }
+    match expr {
+        Expr::Value(_) => Some("unknown".into()),
+        Expr::Nested(inner) => routine_argument_type_hint(inner, None),
+        _ => None,
+    }
+}
+
+fn element_polymorphic_family(name: &str) -> Option<bool> {
+    match name {
+        "anyelement" | "anyarray" | "anynonarray" => Some(false),
+        "anycompatible" | "anycompatiblearray" | "anycompatiblenonarray" => Some(true),
+        _ => None,
+    }
+}
+
+/// Resolve element/array polymorphism to real SQL types. These bindings are
+/// per call; pseudo-types remain authoritative in the persisted catalog.
+fn element_polymorphic_bindings(
+    db: &BicDb,
+    routine: &RoutineSchema,
+    static_types: &[Option<String>],
+    values: &[SqlValue],
+) -> Result<BTreeMap<String, String>> {
+    let params = parse_routine_params(&routine.args)?;
+    let mut inputs = [Vec::new(), Vec::new()];
+    let mut needed = BTreeSet::new();
+    let mut position = 0;
+    for param in &params {
+        let declared = param
+            .type_schema
+            .as_ref()
+            .map(|kind| kind.pg_type.as_str())
+            .unwrap_or("");
+        if element_polymorphic_family(declared).is_some() {
+            needed.insert(declared.to_string());
+        }
+        if param.mode == RoutineArgMode::Out {
+            continue;
+        }
+        if let Some(compatible) = element_polymorphic_family(declared) {
+            let actual = static_types
+                .get(position)
+                .and_then(Option::as_deref)
+                .filter(|name| *name != "unknown" && *name != "705")
+                .map(str::to_string)
+                .or_else(|| match values.get(position) {
+                    Some(value @ (SqlValue::Bool(_) | SqlValue::Int(_) | SqlValue::Float(_))) => {
+                        Some(projected_value_pg_type(value).to_string())
+                    }
+                    _ => None,
+                });
+            let actual = actual
+                .map(|actual| raw_routine_type_schema(&actual).map(|kind| kind.pg_type))
+                .transpose()?;
+            let element = if declared.ends_with("array") && !declared.ends_with("nonarray") {
+                actual
+                    .map(|actual| {
+                        actual
+                            .strip_suffix("[]")
+                            .map(str::to_string)
+                            .ok_or_else(|| {
+                                SqlError::data_exception_public(
+                                    "42883",
+                                    "argument declared anyarray is not an array",
+                                    None,
+                                )
+                            })
+                    })
+                    .transpose()?
+            } else {
+                if declared.ends_with("nonarray")
+                    && actual.as_ref().is_some_and(|name| name.ends_with("[]"))
+                {
+                    return Err(SqlError::data_exception_public(
+                        "42883",
+                        "argument declared anynonarray is an array",
+                        None,
+                    ));
+                }
+                actual
+            };
+            inputs[usize::from(compatible)].push(element);
+        }
+        position += 1;
+    }
+    if element_polymorphic_family(&routine.return_type).is_some() {
+        needed.insert(routine.return_type.clone());
+    }
+    let mut elements = [None, None];
+    for compatible in [false, true] {
+        if !needed
+            .iter()
+            .any(|name| element_polymorphic_family(name) == Some(compatible))
+        {
+            continue;
+        }
+        let types = &inputs[usize::from(compatible)];
+        let concrete = if compatible {
+            select_common_pg_type(db, types, "polymorphic function").map_err(|error| {
+                if error.sqlstate() == "42804" {
+                    SqlError::undefined_function(format!(
+                        "function {} does not accept these argument types",
+                        routine.name
+                    ))
+                } else {
+                    error
+                }
+            })?
+        } else {
+            let known = types.iter().flatten().collect::<Vec<_>>();
+            let Some(first) = known.first() else {
+                return Err(SqlError::data_exception_public(
+                    "42804",
+                    "could not determine polymorphic type because input has type unknown",
+                    None,
+                ));
+            };
+            if known
+                .iter()
+                .any(|name| type_identity(name) != type_identity(first))
+            {
+                return Err(SqlError::data_exception_public(
+                    "42883",
+                    "arguments declared anyelement are not all alike",
+                    None,
+                ));
+            }
+            (*first).clone()
+        };
+        elements[usize::from(compatible)] = Some(concrete);
+    }
+    let mut bindings = BTreeMap::new();
+    for declared in needed {
+        let compatible = element_polymorphic_family(&declared).unwrap();
+        let element = elements[usize::from(compatible)].as_ref().unwrap();
+        if declared.ends_with("nonarray") && element.ends_with("[]") {
+            return Err(SqlError::data_exception_public(
+                "42804",
+                "polymorphic nonarray result cannot be an array",
+                None,
+            ));
+        }
+        let concrete = if declared.ends_with("array") && !declared.ends_with("nonarray") {
+            // PostgreSQL has no array-of-array type (dimensions belong to values).
+            if element.ends_with("[]") {
+                return Err(SqlError::data_exception_public(
+                    "42804",
+                    "could not find array type for polymorphic element",
+                    None,
+                ));
+            }
+            format!("{element}[]")
+        } else {
+            element.clone()
+        };
+        bindings.insert(declared, concrete);
+    }
+    Ok(bindings)
+}
+
+pub(crate) fn concrete_routine_return_type(
+    db: &BicDb,
+    routine: &RoutineSchema,
+    static_types: &[Option<String>],
+) -> Result<String> {
+    if oracle::is_oracle_database(db)? || element_polymorphic_family(&routine.return_type).is_none()
+    {
+        return Ok(routine.return_type.clone());
+    }
+    let bindings = element_polymorphic_bindings(db, routine, static_types, &[])?;
+    Ok(bindings
+        .get(&routine.return_type)
+        .cloned()
+        .unwrap_or_else(|| routine.return_type.clone()))
 }
 
 /// The routine a call of `name` executes, compiled. Names with one routine
@@ -268,10 +540,82 @@ pub(crate) fn resolve_routine_for_call(
     static_types: &[Option<String>],
     args: &[SqlValue],
 ) -> Result<Option<CachedRoutine>> {
+    let Some(routine) = resolve_unspecialized_routine_for_call(db, kind, name, static_types, args)?
+    else {
+        return Ok(None);
+    };
+    if oracle::is_oracle_database(db)?
+        || !routine
+            .schema
+            .arg_types
+            .iter()
+            .any(|kind| element_polymorphic_family(&kind.pg_type).is_some())
+    {
+        return Ok(Some(routine));
+    }
+    let bindings = element_polymorphic_bindings(db, &routine.schema, static_types, args)?;
+    let mut schema = (*routine.schema).clone();
+    let params = parse_routine_params(&schema.args)?;
+    for (index, param) in params.iter().enumerate() {
+        let Some(concrete) = param
+            .type_schema
+            .as_ref()
+            .and_then(|kind| bindings.get(&kind.pg_type))
+        else {
+            continue;
+        };
+        let mode = match param.mode {
+            RoutineArgMode::In => "IN",
+            RoutineArgMode::Out => "OUT",
+            RoutineArgMode::InOut => "INOUT",
+        };
+        let name = param
+            .name
+            .as_ref()
+            .map(|name| format!("\"{}\" ", name.replace('"', "\"\"")))
+            .unwrap_or_default();
+        let default = param
+            .default_expr
+            .as_ref()
+            .map(|expr| format!(" DEFAULT {expr}"))
+            .unwrap_or_default();
+        schema.args[index] = format!("{mode} {name}{concrete}{default}");
+        if let Some(kind) = schema.arg_types.get_mut(index) {
+            *kind = raw_routine_type_schema(concrete)?;
+        }
+    }
+    if let Some(concrete) = bindings.get(&schema.return_type) {
+        let kind = raw_routine_type_schema(concrete)?;
+        schema.return_type = kind.pg_type;
+        schema.return_type_modifier = kind.type_modifier;
+        schema.return_type_declaration = Some(concrete.clone());
+    }
+    // Specialized argument/return declarations participate in the normal IR
+    // cache key, so calls at different concrete types never share typed frames.
+    let ir = compile_cached_routine_ir_in_catalog(&schema, Some(db))?;
+    Ok(Some(CachedRoutine {
+        schema: Arc::new(schema),
+        ir,
+        ..routine
+    }))
+}
+
+fn resolve_unspecialized_routine_for_call(
+    db: &BicDb,
+    kind: RoutineKind,
+    name: &str,
+    static_types: &[Option<String>],
+    args: &[SqlValue],
+) -> Result<Option<CachedRoutine>> {
     let Some(overloads) = routine_overloads(db, kind, name)? else {
         return resolve_routine_cached(db, kind, name);
     };
-    let Some(selected) = select_overload(&overloads, static_types, args) else {
+    let score = if oracle::is_oracle_database(db)? {
+        argument_score
+    } else {
+        pg_argument_score
+    };
+    let Some(selected) = select_overload_scored(&overloads, static_types, args, score) else {
         return resolve_routine_cached(db, kind, name);
     };
     if selected.overload.is_none() {
@@ -409,7 +753,7 @@ pub(crate) fn user_function_result_type(
     chosen_user_function(db, gucs, name, static_types, None)
         .ok()
         .flatten()
-        .map(|routine| routine.return_type)
+        .and_then(|routine| concrete_routine_return_type(db, &routine, static_types).ok())
 }
 
 fn chosen_user_function(
@@ -445,6 +789,7 @@ fn chosen_user_function(
         })
         .collect();
     let mut by_value = None;
+    let mut eligible = Vec::new();
     for candidate in &candidates {
         let Some(declared) = candidate_oids(candidate, count) else {
             continue;
@@ -456,6 +801,7 @@ fn chosen_user_function(
                 continue;
             }
         }
+        eligible.push(candidate);
         if actual
             .iter()
             .zip(&declared)
@@ -486,6 +832,25 @@ fn chosen_user_function(
         {
             by_value = Some(candidate.clone());
         }
+    }
+    let native_builtin_name = crate::builtin_signatures::PG_CATALOG_FUNCTION_SIGNATURES
+        .iter()
+        .any(|(candidate, _)| *candidate == name);
+    if by_value.is_none()
+        // Some("unknown") is an actual SQL literal, unlike None for an
+        // unresolved column or variable. A typed timestamp rules out every
+        // numeric trunc builtin even when its format literal is unknown.
+        && (static_types.iter().all(Option::is_some) || !native_builtin_name)
+        && !builtin_accepts_typed_arguments(name, &actual)
+    {
+        let eligible = eligible.into_iter().cloned().collect::<Vec<_>>();
+        return Ok(select_overload_scored(
+            &eligible,
+            static_types,
+            values.unwrap_or(&[]),
+            pg_argument_score,
+        )
+        .cloned());
     }
     Ok(by_value)
 }

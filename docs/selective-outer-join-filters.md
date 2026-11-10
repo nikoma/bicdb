@@ -114,3 +114,70 @@ peers before starting setup writes. The lease, synchronous acknowledgement
 requirement, timeouts, journal identity assertions and promotion assertions stay
 unchanged. The original CI log is retained; this readiness change requires its
 own focused HA run and fresh current-head CI.
+
+
+The stock PostgreSQL iDempiere startup run at 03ffe407 exposed the same bounded
+join problem with stored tables. Its original mixed-case `AD_Table` / `AD_Column`
+metadata query exceeded the unchanged 512 MiB limit, while lowercasing only the
+unquoted identifiers returned the expected 35 rows. Identifier binding now folds
+unquoted references before base-filter and indexed-join eligibility checks.
+Quoted names keep their exact identity. The original expression still supplies
+both the row predicate and final WHERE check.
+
+Case-distinct column controls also exposed two independent shortcuts: key proofs
+compared declared column names without regard to case, and one indexed reader
+accepted the first folded cell match before checking an exact stored key. Key
+proofs now compare canonical column identities, and indexed materialization
+prefers the exact stored cell. Equality, IN and range controls distinguish `id`
+from `"ID"` in both storage modes. Their PostgreSQL 16.13 reference transaction,
+including setup SQL and results, is retained in
+`crates/bicdb-sql/tests/fixtures/postgres/mixed_case_join_filters_pg16.json`.
+The wide mixed-join regression keeps its 2 MiB guard and checks all four result
+rows, payload contents and NULLs, including an uppercase unquoted alias.
+
+The b08bbf24 development diagnostic returned 35 identical rows for the original
+literal query, the stock parameterized query and three comparison variants; all
+five matched native PostgreSQL. This used a closed copy of the retained 03ffe407
+application database, with all-log durability and the default memory guard. It is
+a focused diagnostic, not a fresh-baseline or complete application qualification.
+
+
+The 1380e6ec focused run passed all nine join controls. Its cell-reader fix also
+preserves the existing record-ID fallback when an integer primary key is absent
+from the flat cell view; a case-distinct quoted column cannot supply that key.
+This matters independently of identifier folding in the PostgreSQL wire layer:
+the embedded SQL API must retain the same column identities.
+
+A stock PostgreSQL-provider diagnostic at b08bbf24 then ran all 89 original
+foundation invocations against the closed, verified 03ffe407 baseline. It passed
+52, with three assertion failures and 34 errors. Most errors came from the
+application's `trunc(cast(? AS date))` calls reaching numeric builtin dispatch;
+the native schema instead resolves the date through an implicit timestamp
+overload. The virtual-column assertion remains a separate observed failure.
+
+Typed PostgreSQL user overloads now consider the catalog's implicit casts when
+the builtin has no viable typed signature, including the preferred datetime
+type. Exact builtin signatures and search-path rules keep their existing
+precedence. Oracle keeps its independent overload conversion rules. The native
+PostgreSQL 16.13 control covers direct calls, INSERT expressions, PL/pgSQL calls,
+explicit timestamp types and numeric builtin dispatch:
+`crates/bicdb-sql/tests/fixtures/postgres/implicit_date_builtin_overloads_pg16.json`.
+These focused controls require their own engine and application reruns.
+
+
+The 04462193 overload diagnostic passed all 27 focused routine/join controls.
+Its unchanged PostgreSQL foundation rerun passed the first 80 cases, including
+all 53 POTest methods and the formerly failing virtual-column load, before
+invoice processing reached another parser failure. `invoiceOpen` contains a
+valid annotation between `EXCEPTION` and `WHEN`; the handler parser required
+`WHEN` immediately after whitespace and rejected that comment. Broad validation
+was held before starting its build; the application run continues collecting
+original evidence.
+
+Exception handler parsing now uses the existing PostgreSQL lexer-based comment
+normalizer. Line comments and nested block comments become SQL whitespace;
+quoted text keeps comment markers intact. The control exercises nested handler
+boundaries, multiple handlers, rollback of a failed block, and normal successful
+execution in both storage modes. The matching native PostgreSQL 16.13 transaction
+is retained in
+`crates/bicdb-sql/tests/fixtures/postgres/exception_handler_comments_pg16.json`.

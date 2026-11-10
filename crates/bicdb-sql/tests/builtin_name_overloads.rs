@@ -8,6 +8,73 @@
 use bicdb_core::BicDb;
 use bicdb_sql::{SqlSession, SqlValue};
 
+#[test]
+fn typed_user_overload_with_unknown_format_keeps_native_result_metadata() {
+    use bicdb_core::{DbConfig, StorageMode};
+    use bicdb_sql::pg_type_oid_by_name;
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/postgres/trunc_metadata_pg16.json")).unwrap();
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let open = || {
+            BicDb::open_with_config(
+                root.path(),
+                DbConfig::default().with_storage_mode(mode.clone()),
+            )
+            .unwrap()
+        };
+        for reopened in [false, true] {
+            let mut db = open();
+            let mut session = SqlSession::new(&mut db);
+            if !reopened {
+                for sql in fixture["setup"].as_array().unwrap() {
+                    session.execute(sql.as_str().unwrap()).unwrap();
+                }
+            } else {
+                session
+                    .execute("SET search_path=trunc_meta_454,public")
+                    .unwrap();
+            }
+            for check in fixture["checks"].as_array().unwrap() {
+                let sql = check["sql"].as_str().unwrap();
+                let result = session
+                    .execute(sql)
+                    .unwrap_or_else(|error| panic!("{mode:?} reopened={reopened}, {sql}: {error}"));
+                let types = result
+                    .column_types
+                    .iter()
+                    .map(|kind| kind.as_deref().and_then(pg_type_oid_by_name))
+                    .collect::<Vec<_>>();
+                let expected_types = check["column_oids"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|oid| Some(oid.as_i64().unwrap() as i32))
+                    .collect::<Vec<_>>();
+                assert_eq!(types, expected_types, "{mode:?} reopened={reopened}: {sql}");
+                let rows = result
+                    .rows
+                    .iter()
+                    .map(|row| row.iter().map(SqlValue::to_cell).collect::<Vec<_>>())
+                    .collect::<Vec<_>>();
+                let expected = check["rows"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|row| {
+                        row.as_array()
+                            .unwrap()
+                            .iter()
+                            .map(|cell| cell.as_str().unwrap().to_string())
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(rows, expected, "{mode:?} reopened={reopened}: {sql}");
+            }
+        }
+    }
+}
+
 fn cells(session: &mut SqlSession<'_>, sql: &str) -> Vec<String> {
     session
         .execute(sql)
@@ -213,4 +280,36 @@ fn routine_casts_of_user_overload_results() {
         ),
         ["2024-01-31 00:00:00+00"]
     );
+}
+
+#[test]
+fn typed_date_call_uses_implicit_user_overload_when_builtin_cannot_accept_it() {
+    for mode in [
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            bicdb_core::DbConfig::default()
+                .with_storage_mode(mode)
+                .with_fsync(false),
+        )
+        .unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for sql in [
+            "CREATE SCHEMA implicit_calls",
+            "SET search_path=implicit_calls,pg_catalog",
+            "CREATE FUNCTION trunc(timestamp) RETURNS text LANGUAGE sql AS $$ SELECT 'without-zone' $$",
+            "CREATE FUNCTION trunc(timestamptz) RETURNS text LANGUAGE sql AS $$ SELECT 'with-zone' $$",
+            "CREATE FUNCTION wrap_date(d date) RETURNS text LANGUAGE plpgsql AS $$ BEGIN RETURN trunc(d); END $$",
+            "CREATE TABLE selected_calls(v text)",
+            "INSERT INTO selected_calls VALUES(trunc(CAST('2026-11-10' AS date)))",
+        ] { session.execute(sql).unwrap_or_else(|e| panic!("{sql}: {e}")); }
+        assert_eq!(cells(&mut session,"SELECT trunc(date '2026-11-10'),trunc(timestamp '2026-11-10 13:00:00'),trunc(timestamptz '2026-11-10 13:00:00+00'),trunc(12.7),wrap_date(date '2026-11-10')"),["with-zone","without-zone","with-zone","12","with-zone"]);
+        assert_eq!(
+            cells(&mut session, "SELECT v FROM selected_calls"),
+            ["with-zone"]
+        );
+    }
 }

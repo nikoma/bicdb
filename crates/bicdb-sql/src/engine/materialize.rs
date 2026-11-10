@@ -154,6 +154,9 @@ impl<'db> SqlEngine<'db> {
     /// argument type even when a value uses a shared text representation.
     /// In particular, a bytea argument must not select the text overload.
     pub(crate) fn constant_expr_pg_type(&self, expr: &Expr) -> Option<String> {
+        if let Some(pg_type) = self.infer_env_expr_type(expr, &[]) {
+            return Some(pg_type);
+        }
         let name = match expr {
             Expr::Identifier(ident) => Some(ident.value.as_str()),
             Expr::Value(value) => match &value.value {
@@ -3222,7 +3225,12 @@ impl<'db> SqlEngine<'db> {
         {
             let arg_types = function_arg_list(function)
                 .iter()
-                .map(|arg| self.infer_env_expr_type(arg, env))
+                .map(|arg| {
+                    crate::routine_overloads::routine_argument_type_hint(
+                        arg,
+                        self.infer_env_expr_type(arg, env),
+                    )
+                })
                 .collect::<Vec<_>>();
             if let Some(pg_type) = crate::routine_overloads::user_function_result_type(
                 self.db_ref(),
@@ -3374,7 +3382,13 @@ impl<'db> SqlEngine<'db> {
         }
         if matches!(bare_name, "lower" | "upper") {
             // Range bounds; any other argument is the text function below.
-            let range_type = self.infer_env_expr_type(args.first()?, env);
+            let argument = args.first()?;
+            let range_type = self
+                .infer_env_expr_type(argument, env)
+                .or_else(|| self.constant_expr_pg_type(argument));
+            if range_type.is_none() && is_unknown_literal(argument) {
+                return Some("text".to_string());
+            }
             let bound = match range_type.as_deref() {
                 Some("int4range") => Some("int4".to_string()),
                 Some("int8range") => Some("int8".to_string()),
@@ -3664,13 +3678,25 @@ impl<'db> SqlEngine<'db> {
             _ => {
                 let static_types = args
                     .iter()
-                    .map(|arg| self.infer_env_expr_type(arg, env))
+                    .map(|arg| {
+                        crate::routine_overloads::routine_argument_type_hint(
+                            arg,
+                            self.infer_env_expr_type(arg, env),
+                        )
+                    })
                     .collect::<Vec<_>>();
                 overload_return_type(self.db_ref(), &name, &static_types).or_else(|| {
                     load_routine(self.db_ref(), RoutineKind::Function, &name)
                         .ok()
                         .flatten()
-                        .map(|routine| routine.return_type)
+                        .and_then(|routine| {
+                            crate::routine_overloads::concrete_routine_return_type(
+                                self.db_ref(),
+                                &routine,
+                                &static_types,
+                            )
+                            .ok()
+                        })
                 })
             }
         }
@@ -4000,6 +4026,10 @@ impl<'db> SqlEngine<'db> {
         order_by: Option<&OrderBy>,
         needed_columns: Option<&ReferencedColumns>,
     ) -> Result<RowSet> {
+        let folded_selection = self.fold_join_constant_operands(from, selection);
+        let selection = folded_selection.as_ref().or(selection);
+        let qualified_selection = self.qualify_catalog_cross_join_selection(from, selection)?;
+        let selection = qualified_selection.as_ref().or(selection);
         if let Some(row_set) = self.pg_class_index_join_row_set(from, selection)? {
             return Ok(row_set);
         }

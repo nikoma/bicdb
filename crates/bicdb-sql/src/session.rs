@@ -2102,6 +2102,10 @@ pub(crate) enum DdlUndo {
     RestoreRoutine {
         routine: RoutineSchema,
     },
+    RestoreRule {
+        key: String,
+        previous: Option<crate::query_rules::RuleSchema>,
+    },
     RestoreOperator {
         id: crate::pg_operators::OperatorRef,
         previous: Option<Box<crate::pg_operators::OperatorSchema>>,
@@ -2856,7 +2860,7 @@ impl<'db> SqlSession<'db> {
 
     /// Keep a whole mutation statement, including authored triggers and their
     /// deferred effects, inside one transaction when the caller has no BEGIN.
-    fn with_statement_transaction<T>(
+    pub(crate) fn with_statement_transaction<T>(
         &mut self,
         execute: impl FnOnce(&mut Self) -> Result<T>,
     ) -> Result<T> {
@@ -3004,6 +3008,11 @@ impl<'db> SqlSession<'db> {
                 Some((index, _)) => &records[..*index],
                 None => &records[..],
             };
+            // Give CHECK typing the batch's declared schema, as query
+            // materialization does. Callback queries keep their nested frames.
+            let _row_types = crate::slot_types::push_frame();
+            let declared_types = Arc::new(schema.clone());
+            crate::slot_types::register_table(&table, &declared_types);
             validate_records_for_write(
                 self.db_ref(),
                 self.tx.as_ref(),
@@ -4658,6 +4667,9 @@ impl<'db> SqlSession<'db> {
             }
             DdlUndo::RestoreSequence { sequence } => {
                 save_sequence(self.db_mut()?, &sequence)?;
+            }
+            DdlUndo::RestoreRule { key, previous } => {
+                crate::query_rules::restore_rule(self.db_mut()?, &key, previous)?;
             }
             DdlUndo::DeleteView { view } => {
                 let _ = delete_view(self.db_mut()?, &view)?;

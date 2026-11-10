@@ -13,10 +13,9 @@ impl<'db> SqlEngine<'db> {
         alias: &str,
         schema: Option<&TableSchema>,
     ) -> Result<bool> {
-        let mut references = Vec::new();
-        if !collect_predicate_column_references(expr, &mut references) {
+        let Some(references) = canonical_predicate_column_references(expr) else {
             return Ok(false);
-        }
+        };
         let mut saw_table_reference = false;
         for reference in references {
             if target_record_field_from_parts(table, alias, schema, &reference).is_some() {
@@ -991,6 +990,24 @@ impl<'db> SqlEngine<'db> {
                 columns.into_iter().collect()
             });
             add_virtual_tableoid_column(&table, &mut source_columns);
+            // Row-aware pg_get_function_* helpers read these catalog fields
+            // implicitly. Preserve them when their SQL argument only names oid.
+            let helper_columns = needed_columns
+                .filter(|_| table.strip_prefix("pg_catalog.").unwrap_or(&table) == "pg_proc")
+                .map(|needed| {
+                    let mut needed = needed.clone();
+                    needed
+                        .all
+                        .extend(["proname", "prorettype", "proretset"].map(str::to_string));
+                    needed
+                });
+            retain_referenced_columns(
+                &mut source_columns,
+                helper_columns.as_ref().or(needed_columns),
+                &table,
+                &alias_name,
+                Clone::clone,
+            );
             let columns = source_columns
                 .iter()
                 .map(|column| format!("{alias_name}.{column}"))
@@ -1167,9 +1184,14 @@ impl<'db> SqlEngine<'db> {
                                             | FieldRef::TypedColumn { name, .. } => name.as_str(),
                                             _ => return None,
                                         };
-                                        cells.iter().position(|(key, _)| {
-                                            key.as_ref() == name || key.eq_ignore_ascii_case(name)
-                                        })
+                                        cells
+                                            .iter()
+                                            .position(|(key, _)| key.as_ref() == name)
+                                            .or_else(|| {
+                                                cells.iter().position(|(key, _)| {
+                                                    key.eq_ignore_ascii_case(name)
+                                                })
+                                            })
                                     })
                                     .collect()
                             });
@@ -1185,8 +1207,7 @@ impl<'db> SqlEngine<'db> {
                                         _ => return None,
                                     };
                                     cells.get(cell_idx).and_then(|(key, cell)| {
-                                        (key.as_ref() == name || key.eq_ignore_ascii_case(name))
-                                            .then_some(cell)
+                                        (key.as_ref() == name).then_some(cell)
                                     })
                                 });
                                 match fast {
@@ -4165,10 +4186,14 @@ impl<'db> SqlEngine<'db> {
             let matched = if let Some(idx) =
                 self.primary_key_expr_index(left, table, alias, Some(schema), &primary_key_columns)?
             {
-                // A structural key equality is not covered when lookup could
-                // not bind its value; candidates may come from a key prefix.
+                // Coverage requires the same binding and type-exactness proof
+                // used by primary_key_access_for_selection. A mixed timestamp
+                // comparison may bind only the preceding numeric key prefix;
+                // those candidates must still evaluate this equality.
+                let field = IndexField::MetadataPath(vec![primary_key_columns[idx].clone()]);
                 if self.expr_references_table(right, table, alias, Some(schema))?
                     || !self.expr_is_bound_without_table_row(right)?
+                    || !self.index_probe_expr_is_exact(Some(schema), Some(&field), right)
                     || expr_contains_volatile_function(right)
                 {
                     return Ok(false);
@@ -4181,8 +4206,10 @@ impl<'db> SqlEngine<'db> {
                 Some(schema),
                 &primary_key_columns,
             )? {
+                let field = IndexField::MetadataPath(vec![primary_key_columns[idx].clone()]);
                 if self.expr_references_table(left, table, alias, Some(schema))?
                     || !self.expr_is_bound_without_table_row(left)?
+                    || !self.index_probe_expr_is_exact(Some(schema), Some(&field), left)
                     || expr_contains_volatile_function(left)
                 {
                     return Ok(false);
@@ -4714,7 +4741,12 @@ impl<'db> SqlEngine<'db> {
             Some(schema) => index_field_from_expr_for_schema(schema, &normalized),
             None => index_field_from_expr(&normalized),
         }
-        .map(|candidate| index_field_matches(&candidate, field))
+        .map(|candidate| match schema {
+            // Declared column names are canonical here; preserve quoted case
+            // distinctions through compound and expression index keys too.
+            Some(_) => candidate == *field,
+            None => index_field_matches(&candidate, field),
+        })
     }
 
     pub(crate) fn expr_matches_table_column(
@@ -4729,7 +4761,9 @@ impl<'db> SqlEngine<'db> {
             return Ok(false);
         };
         Ok(match normalized {
-            Expr::Identifier(ident) => ident.value.eq_ignore_ascii_case(column),
+            // The normalized identifier already folds unquoted names. Quoted
+            // case-distinct columns must not borrow another column's index proof.
+            Expr::Identifier(ident) => ident.value == column,
             _ => false,
         })
     }
@@ -5517,6 +5551,7 @@ impl<'db> SqlEngine<'db> {
                 &join.relation,
                 kind,
                 effective_constraint,
+                right_seed_selection,
                 needed_columns,
             )? {
                 return Ok(row_set);
@@ -8338,5 +8373,92 @@ pub(crate) fn index_probe_type_is_exact(
         ("timestamp", "date") | ("timestamptz", "date" | "timestamp") => true,
         ("text", "varchar") | ("varchar", "text") => true,
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod composite_timestamp_prefix_residual_tests {
+    use super::*;
+
+    #[test]
+    fn mixed_timestamp_key_predicate_filters_prefix_candidates_for_every_mutation_path() {
+        for mode in [
+            bicdb_core::StorageMode::EmbeddedMemory,
+            bicdb_core::StorageMode::ServerPaged,
+        ] {
+            for kind in ["update", "update_from", "delete", "delete_using"] {
+                for reverse in [false, true] {
+                    for pending in [false, true] {
+                        let root = tempfile::tempdir().unwrap();
+                        let mut db = BicDb::open_with_config(
+                            root.path(),
+                            bicdb_core::DbConfig::default()
+                                .with_fsync(false)
+                                .with_storage_mode(mode.clone()),
+                        )
+                        .unwrap();
+                        let mut session = SqlSession::new(&mut db);
+                        session.execute("SET timezone='UTC'").unwrap();
+                        session.execute("CREATE TABLE prefix_rows(asi numeric(10,0) NOT NULL,locator numeric(10,0) NOT NULL,product numeric(10,0) NOT NULL,policy timestamp without time zone NOT NULL,qty numeric NOT NULL,PRIMARY KEY(product,locator,asi,policy))").unwrap();
+                        session.execute("INSERT INTO prefix_rows VALUES(0,101,137,TIMESTAMP '2003-01-22 00:00:00',50),(0,101,137,TIMESTAMP '2026-11-10 00:00:00',7)").unwrap();
+                        if pending {
+                            session.execute("BEGIN").unwrap();
+                            session.execute("UPDATE prefix_rows SET qty=qty+1").unwrap();
+                        }
+                        let bound = "to_timestamp('2003-01-22 00:00:00','YYYY-MM-DD HH24:MI:SS')";
+                        let date = if reverse {
+                            format!("{bound}=t.policy")
+                        } else {
+                            format!("t.policy={bound}")
+                        };
+                        let predicate =
+                            format!("t.asi=0 AND t.locator=101 AND t.product=137 AND {date}");
+                        let mutation = match kind {
+                            "update" => format!("UPDATE prefix_rows AS t SET qty=99 WHERE {predicate}"),
+                            "update_from" => format!("UPDATE prefix_rows AS t SET qty=99 FROM (SELECT 1 AS n) AS source WHERE {predicate}"),
+                            "delete" => format!("DELETE FROM prefix_rows AS t WHERE {predicate}"),
+                            "delete_using" => format!("DELETE FROM prefix_rows AS t USING (SELECT 1 AS n) AS source WHERE {predicate}"),
+                            _ => unreachable!(),
+                        };
+                        let label = format!("{mode:?} {kind} reverse={reverse} pending={pending}");
+                        let result = session
+                            .execute(&mutation)
+                            .unwrap_or_else(|error| panic!("{label}: {error}"));
+                        let expected_tag = if kind.starts_with("update") {
+                            "UPDATE 1"
+                        } else {
+                            "DELETE 1"
+                        };
+                        assert_eq!(result.command_tag.as_deref(), Some(expected_tag), "{label}");
+                        let rows = |session: &mut SqlSession<'_>| {
+                            session.execute("SELECT policy::text,qty::text FROM prefix_rows ORDER BY policy").unwrap().rows.iter().map(|row| row.iter().map(SqlValue::to_cell).collect::<Vec<_>>()).collect::<Vec<_>>()
+                        };
+                        let mut expected = vec![vec![
+                            "2026-11-10 00:00:00".to_string(),
+                            if pending { "8" } else { "7" }.to_string(),
+                        ]];
+                        if kind.starts_with("update") {
+                            expected.insert(0, vec!["2003-01-22 00:00:00".into(), "99".into()]);
+                        }
+                        assert_eq!(
+                            rows(&mut session),
+                            expected,
+                            "{label}: untouched prefix neighbor"
+                        );
+                        if pending {
+                            session.execute("ROLLBACK").unwrap();
+                            assert_eq!(
+                                rows(&mut session),
+                                vec![
+                                    vec!["2003-01-22 00:00:00".to_string(), "50".to_string()],
+                                    vec!["2026-11-10 00:00:00".to_string(), "7".to_string()]
+                                ],
+                                "{label}: rollback"
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 }

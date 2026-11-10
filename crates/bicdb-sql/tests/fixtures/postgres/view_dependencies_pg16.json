@@ -1,0 +1,87 @@
+{
+  "setup": [
+    "CREATE SCHEMA dependency_probe",
+    "CREATE TABLE dependency_probe.orders(id integer PRIMARY KEY, description text, total numeric)",
+    "CREATE TABLE dependency_probe.labels(id integer PRIMARY KEY, description text)",
+    "CREATE VIEW dependency_probe.direct AS SELECT o.description FROM dependency_probe.orders o JOIN dependency_probe.labels l ON o.id=l.id",
+    "CREATE VIEW dependency_probe.indirect AS SELECT description FROM dependency_probe.direct",
+    "CREATE VIEW dependency_probe.other_description AS SELECT l.description FROM dependency_probe.orders o JOIN dependency_probe.labels l ON o.id=l.id"
+  ],
+  "query": "SELECT v.relname,ref.relname,d.refobjsubid,a.attname,d.deptype FROM pg_depend d JOIN pg_rewrite r ON r.oid=d.objid AND d.classid='pg_rewrite'::regclass JOIN pg_class v ON v.oid=r.ev_class JOIN pg_namespace n ON n.oid=v.relnamespace JOIN pg_class ref ON ref.oid=d.refobjid AND d.refclassid='pg_class'::regclass LEFT JOIN pg_attribute a ON a.attrelid=ref.oid AND a.attnum=d.refobjsubid WHERE n.nspname='dependency_probe' ORDER BY v.relname,ref.relname,d.refobjsubid,d.deptype",
+  "rows": [
+    [
+      "direct",
+      "direct",
+      0,
+      null,
+      "i"
+    ],
+    [
+      "direct",
+      "labels",
+      1,
+      "id",
+      "n"
+    ],
+    [
+      "direct",
+      "orders",
+      1,
+      "id",
+      "n"
+    ],
+    [
+      "direct",
+      "orders",
+      2,
+      "description",
+      "n"
+    ],
+    [
+      "indirect",
+      "direct",
+      1,
+      "description",
+      "n"
+    ],
+    [
+      "indirect",
+      "indirect",
+      0,
+      null,
+      "i"
+    ],
+    [
+      "other_description",
+      "labels",
+      1,
+      "id",
+      "n"
+    ],
+    [
+      "other_description",
+      "labels",
+      2,
+      "description",
+      "n"
+    ],
+    [
+      "other_description",
+      "orders",
+      1,
+      "id",
+      "n"
+    ],
+    [
+      "other_description",
+      "other_description",
+      0,
+      null,
+      "i"
+    ]
+  ],
+  "target_database": "bicdb_native_app_ctrl_20261109",
+  "source_database_used_for_mutations": false,
+  "reference": "PostgreSQL 16.13; owned clone; fixture DDL and rows rolled back after observation",
+  "purpose": "Exact column-level pg_depend and pg_rewrite edges for joined views and a view chain"
+}

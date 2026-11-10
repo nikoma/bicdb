@@ -3581,7 +3581,7 @@ fn split_setting_list(value: &str) -> Vec<String> {
     parts
 }
 
-fn sql_comments_as_whitespace(sql: &str) -> Result<std::borrow::Cow<'_, str>> {
+pub(crate) fn sql_comments_as_whitespace(sql: &str) -> Result<std::borrow::Cow<'_, str>> {
     if !sql.contains("/*") && !sql.contains("--") {
         return Ok(std::borrow::Cow::Borrowed(sql));
     }

@@ -1,0 +1,82 @@
+{
+  "server": "PostgreSQL 16 control",
+  "transaction_rolled_back": true,
+  "setup": [
+    "CREATE SCHEMA trunc_meta_454",
+    "SET search_path=trunc_meta_454,public",
+    "CREATE FUNCTION trunc(datetime timestamp, format varchar) RETURNS date LANGUAGE plpgsql IMMUTABLE AS $$ BEGIN RETURN date_trunc('month',datetime)::date; END $$",
+    "CREATE FUNCTION trunc(datetime timestamptz, format varchar) RETURNS date LANGUAGE plpgsql IMMUTABLE AS $$ BEGIN RETURN trunc(datetime::timestamp,format); END $$",
+    "CREATE TABLE invoices(amount numeric,invoiced timestamp)",
+    "INSERT INTO invoices VALUES(3,'2002-02-19'),(4,'2002-02-21'),(5,'2002-03-09')",
+    "CREATE VIEW invoice_v AS SELECT amount,invoiced FROM invoices"
+  ],
+  "checks": [
+    {
+      "sql": "SELECT trunc(timestamp '2002-02-19','MM')+1 AS following_day",
+      "column_oids": [
+        1082
+      ],
+      "rows": [
+        [
+          "2002-02-02"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT sum(amount),trunc(invoiced,'MM') FROM invoice_v GROUP BY trunc(invoiced,'MM') ORDER BY trunc(invoiced,'MM')",
+      "column_oids": [
+        1700,
+        1082
+      ],
+      "rows": [
+        [
+          "7",
+          "2002-02-01"
+        ],
+        [
+          "5",
+          "2002-03-01"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT trunc(invoiced,'MM') AS month FROM invoice_v WHERE false",
+      "column_oids": [
+        1082
+      ],
+      "rows": []
+    },
+    {
+      "sql": "SELECT trunc(invoiced,'MM')+1 AS following_day FROM invoice_v ORDER BY invoiced",
+      "column_oids": [
+        1082
+      ],
+      "rows": [
+        [
+          "2002-02-02"
+        ],
+        [
+          "2002-02-02"
+        ],
+        [
+          "2002-03-02"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT trunc(12.789,1),trunc(timestamp '2002-02-19','MM'),trunc(timestamptz '2002-03-19 14:00:00+00','MM')",
+      "column_oids": [
+        1700,
+        1082,
+        1082
+      ],
+      "rows": [
+        [
+          "12.7",
+          "2002-02-01",
+          "2002-03-01"
+        ]
+      ]
+    }
+  ]
+}

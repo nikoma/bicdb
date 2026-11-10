@@ -2,6 +2,174 @@ use bicdb_core::{query_budget::QueryMemoryScope, BicDb, DbConfig};
 use bicdb_sql::{SqlSession, SqlValue};
 
 #[test]
+fn mixed_join_base_filter_folds_unquoted_identifiers_before_schema_lookup() {
+    for mode in [
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            DbConfig::default()
+                .with_storage_mode(mode)
+                .with_fsync(false),
+        )
+        .unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session.execute("CREATE TABLE mixed_drivers(Driver_ID INT PRIMARY KEY); INSERT INTO mixed_drivers SELECT g FROM generate_series(0,255) g; CREATE TABLE mixed_columns(Column_ID INT PRIMARY KEY,Driver_ID INT,Rule_ID INT,Element_ID INT,IsActive TEXT,Payload TEXT); CREATE INDEX mixed_columns_driver ON mixed_columns(Driver_ID); INSERT INTO mixed_columns SELECT g,g%256,CASE WHEN g%2=0 THEN 0 ELSE NULL END,g%16,'Y',repeat('x',4096) FROM generate_series(0,999) g; CREATE TABLE mixed_rules(Rule_ID INT PRIMARY KEY,Rule_Name TEXT); INSERT INTO mixed_rules VALUES(0,'present'); CREATE TABLE mixed_elements(Element_ID INT PRIMARY KEY); INSERT INTO mixed_elements SELECT g FROM generate_series(0,15) g").unwrap();
+        let query = "SELECT c.Column_ID,c.Payload,vr.Rule_Name FROM mixed_drivers t INNER JOIN mixed_columns c ON(t.Driver_ID=c.Driver_ID) LEFT JOIN mixed_rules vr ON(c.Rule_ID=vr.Rule_ID) INNER JOIN mixed_elements e ON(c.Element_ID=e.Element_ID) WHERE t.Driver_ID=1 AND c.IsActive='Y' ORDER BY c.Column_ID";
+        for query in [
+            query.to_string(),
+            query
+                .replace("t.", "T.")
+                .replace("mixed_drivers t ", "mixed_drivers T "),
+        ] {
+            let limit = 2 * 1024 * 1024;
+            let memory = QueryMemoryScope::new(limit);
+            let rows = session.execute(&query).unwrap().rows;
+            assert_eq!(rows.len(), 4);
+            for (index, row) in rows.iter().enumerate() {
+                assert_eq!(
+                    row,
+                    &vec![
+                        SqlValue::Int(1 + 256 * index as i64),
+                        SqlValue::String("x".repeat(4096)),
+                        SqlValue::Null
+                    ]
+                );
+            }
+            assert!(memory.peak_bytes() > 0 && memory.peak_bytes() <= limit);
+        }
+        session.execute("CREATE TABLE mixed_case_guard(id INT PRIMARY KEY,\"ID\" INT); INSERT INTO mixed_case_guard VALUES(1,2),(2,1)").unwrap();
+        for query in [
+            "SELECT l.id,l.\"ID\" FROM mixed_case_guard l WHERE l.ID=1",
+            "SELECT l.id,l.\"ID\" FROM mixed_case_guard l WHERE l.id=1",
+            "SELECT l.id,l.\"ID\" FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.ID=1",
+        ] {
+            assert_eq!(session.execute(query).unwrap().rows, vec![vec![SqlValue::Int(1),SqlValue::Int(2)]], "{query}");
+        }
+        assert_eq!(session.execute("SELECT l.id FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.\"ID\"=1").unwrap().rows,vec![vec![SqlValue::Int(2)]]);
+        assert_eq!(session.execute("SELECT l.\"ID\" FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.ID=1").unwrap().rows,vec![vec![SqlValue::Int(2)]]);
+        for query in [
+            "SELECT l.id FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.\"ID\">1",
+            "SELECT l.id FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.\"ID\" IN(2)",
+            "SELECT l.\"ID\" FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.ID>1",
+            "SELECT l.\"ID\" FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.ID IN(2)",
+        ] {
+            assert_eq!(session.execute(query).unwrap().rows, vec![vec![SqlValue::Int(1)]], "{query}");
+        }
+    }
+}
+
+#[test]
+fn catalog_type_lookup_binds_unique_unqualified_columns_before_joining() {
+    for mode in [
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            DbConfig::default()
+                .with_storage_mode(mode)
+                .with_fsync(false),
+        )
+        .unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session.execute("CREATE SCHEMA catalog_binding").unwrap();
+        let columns = (0..16)
+            .map(|i| format!("c{i} NUMERIC(10)"))
+            .collect::<Vec<_>>()
+            .join(",");
+        for i in 0..16 {
+            session
+                .execute(&format!(
+                    "CREATE TABLE catalog_binding.lookup_{i}({columns})"
+                ))
+                .unwrap();
+        }
+        for table in ["lower('LOOKUP_0')", "lower(CAST('LOOKUP_0' AS name))"] {
+            let query = format!("SELECT pg_type.typname,format_type(pg_type.oid,pg_attribute.atttypmod) FROM pg_class,pg_attribute,pg_type,pg_namespace WHERE relname={table} AND relkind IN('r','p') AND pg_class.oid=pg_attribute.attrelid AND attname=lower('C0') AND atttypid=pg_type.oid AND pg_class.relnamespace=pg_namespace.oid AND pg_namespace.nspname='catalog_binding'");
+            let limit = 2 * 1024 * 1024;
+            let memory = QueryMemoryScope::new(limit);
+            assert_eq!(
+                session.execute(&query).unwrap().rows,
+                vec![vec![
+                    SqlValue::String("numeric".into()),
+                    SqlValue::String("numeric(10,0)".into())
+                ]]
+            );
+            assert!(memory.peak_bytes() <= limit);
+        }
+    }
+}
+
+#[test]
+fn indexed_inner_join_filters_wide_right_rows_before_retaining_them() {
+    for mode in [
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            DbConfig::default()
+                .with_storage_mode(mode)
+                .with_fsync(false),
+        )
+        .unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session.execute("CREATE TABLE selective_drivers(id INTEGER PRIMARY KEY); INSERT INTO selective_drivers VALUES(0),(1),(2),(3); CREATE TABLE selective_payloads(id INTEGER PRIMARY KEY,driver_id INTEGER,selected TEXT,payload TEXT); CREATE INDEX selective_payload_driver ON selective_payloads(driver_id)").unwrap();
+        session.execute("INSERT INTO selective_payloads SELECT g,g%4,CASE WHEN g<4 THEN 'yes' ELSE NULL END,repeat('x',4096) FROM generate_series(0,999) g").unwrap();
+        for query in [
+            "SELECT w.id,w.payload FROM selective_drivers d JOIN selective_payloads w ON w.driver_id=d.id WHERE w.selected IS NOT NULL ORDER BY w.id",
+            "SELECT SELECTIVE_PAYLOADS.id,SELECTIVE_PAYLOADS.payload FROM selective_drivers JOIN SELECTIVE_PAYLOADS ON SELECTIVE_PAYLOADS.driver_id=selective_drivers.id WHERE SELECTIVE_PAYLOADS.selected IS NOT NULL ORDER BY SELECTIVE_PAYLOADS.id",
+            "SELECT \"w\".id,\"w\".payload FROM selective_drivers d JOIN selective_payloads \"w\" ON \"w\".driver_id=d.id WHERE \"w\".selected IS NOT NULL ORDER BY \"w\".id",
+            "SELECT \"selective_payloads\".\"id\",\"selective_payloads\".\"payload\" FROM selective_drivers JOIN \"selective_payloads\" ON \"selective_payloads\".\"driver_id\"=selective_drivers.id WHERE \"selective_payloads\".\"selected\" IS NOT NULL ORDER BY \"selective_payloads\".\"id\"",
+            "SELECT w.id,w.payload FROM selective_drivers d JOIN \"selective_payloads\" w ON w.driver_id=d.id WHERE w.selected IS NOT NULL ORDER BY w.id",
+        ] {
+            let limit = 2 * 1024 * 1024;
+            let memory = QueryMemoryScope::new(limit);
+            let result = session.execute(query).unwrap();
+            assert_eq!(result.rows.len(), 4);
+            for (id, row) in result.rows.iter().enumerate() {
+                assert_eq!(row[0], SqlValue::Int(id as i64));
+                assert_eq!(row[1].to_cell(), "x".repeat(4096));
+            }
+            assert!(memory.peak_bytes() > 0, "join work must still be charged");
+            assert!(memory.peak_bytes() <= limit);
+        }
+    }
+}
+
+#[test]
+fn indexed_right_filters_preserve_outer_rows_quoted_bindings_and_function_calls() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE TABLE filter_guard_l(id INTEGER PRIMARY KEY,v TEXT); CREATE TABLE filter_guard_r(id INTEGER PRIMARY KEY,v TEXT); INSERT INTO filter_guard_l VALUES(1,NULL),(2,'left'),(3,'orphan'); INSERT INTO filter_guard_r VALUES(1,'right'),(2,'right'); CREATE SEQUENCE filter_guard_calls; CREATE FUNCTION filter_guard_tick() RETURNS BIGINT LANGUAGE plpgsql VOLATILE AS $$ BEGIN RETURN nextval('filter_guard_calls'); END $$").unwrap();
+    assert_eq!(
+        session.execute("SELECT l.id FROM filter_guard_l l LEFT JOIN filter_guard_r r ON l.id=r.id WHERE r.v IS NULL ORDER BY l.id").unwrap().rows,
+        vec![vec![SqlValue::Int(3)]]
+    );
+    assert_eq!(
+        session.execute(r#"SELECT "w".id FROM filter_guard_l "w" JOIN filter_guard_r "W" ON "w".id="W".id WHERE "w".v IS NULL ORDER BY "w".id"#).unwrap().rows,
+        vec![vec![SqlValue::Int(1)]]
+    );
+    assert_eq!(
+        session.execute("SELECT l.id FROM filter_guard_l l JOIN filter_guard_r r ON l.id=r.id WHERE r.v='right' AND filter_guard_tick()>0 ORDER BY l.id").unwrap().rows,
+        vec![vec![SqlValue::Int(1)],vec![SqlValue::Int(2)]]
+    );
+    assert_eq!(
+        session
+            .execute("SELECT nextval('filter_guard_calls')")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(3)]]
+    );
+}
+
+#[test]
 fn selective_virtual_base_filter_limits_catalog_join_work_with_a_left_join() {
     let root = tempfile::tempdir().unwrap();
     let mut db =
@@ -63,6 +231,18 @@ fn selective_virtual_base_filter_limits_catalog_join_work_with_a_left_join() {
     }
     assert!(memory.peak_bytes() > 0, "join work must still be charged");
     assert!(memory.peak_bytes() <= limit);
+    drop(memory);
+    let uppercase = query
+        .replace("c.oid", "C.OID")
+        .replace("c.relname", "C.RELNAME");
+    for query in [
+        uppercase.clone(),
+        uppercase.replace("pg_catalog.pg_class c ", "pg_catalog.pg_class C "),
+    ] {
+        let memory = QueryMemoryScope::new(limit);
+        assert_eq!(session.execute(&query).unwrap().rows, result.rows);
+        assert!(memory.peak_bytes() > 0 && memory.peak_bytes() <= limit);
+    }
 }
 
 #[test]

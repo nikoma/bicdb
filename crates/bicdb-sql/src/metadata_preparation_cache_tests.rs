@@ -31,6 +31,120 @@ fn measured<T>(operation: impl FnOnce() -> T) -> (T, SqlProfileStats) {
 }
 
 #[test]
+fn metadata_preparation_copy_checks_reuse_declared_types_and_refresh_after_ddl() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            bicdb_core::DbConfig::default()
+                .with_storage_mode(mode)
+                .with_fsync(false),
+        )
+        .unwrap();
+        let mut session = SqlSession::new(&mut db);
+        let declarations = (0..32)
+            .map(|n| {
+                if n < 4 {
+                    format!("c{n} INTEGER CHECK(c{n}>=0)")
+                } else {
+                    format!("c{n} INTEGER")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        session
+            .execute(&format!("CREATE TABLE copy_checked({declarations})"))
+            .unwrap();
+        let record = session
+            .db_ref()
+            .get(SCHEMA_COLLECTION, "copy_checked")
+            .unwrap()
+            .unwrap();
+        let bytes = serde_json::to_vec(&record.metadata).unwrap().len();
+        let columns = (0..32).map(|n| format!("c{n}")).collect::<Vec<_>>();
+        let row = vec![Some("1".to_string()); 32];
+        let (inserted, stats) =
+            measured(|| session.copy_insert_rows("copy_checked", &columns, vec![row.clone(); 64]));
+        assert_eq!(inserted.unwrap(), 64);
+        assert!(
+            stats.schema_loads <= 8 && stats.schema_load_bytes <= 8 * bytes,
+            "{stats:?}; one schema is {bytes} bytes"
+        );
+        let mut invalid = row.clone();
+        invalid[0] = Some("-1".to_string());
+        assert_eq!(
+            session
+                .copy_insert_rows("copy_checked", &columns, vec![row, invalid])
+                .unwrap_err()
+                .sqlstate(),
+            "23514"
+        );
+        assert_eq!(
+            session
+                .execute("SELECT count(*) FROM copy_checked")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(64)]]
+        );
+        session
+            .execute("BEGIN; ALTER TABLE copy_checked ADD COLUMN extra TEXT")
+            .unwrap();
+        let extra = vec!["copy_checked.extra".to_string()];
+        assert_eq!(
+            SqlEngine::new(session.db_ref())
+                .slot_column_types(&extra)
+                .as_ref(),
+            [Some("text".to_string())]
+        );
+        session.execute("ROLLBACK").unwrap();
+        assert_eq!(
+            SqlEngine::new(session.db_ref())
+                .slot_column_types(&extra)
+                .as_ref(),
+            [None]
+        );
+    }
+}
+
+#[test]
+fn metadata_preparation_row_slots_decode_each_table_once_and_refresh_after_ddl() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let (_root, mut db, bytes) = fixture(mode);
+        let columns = (0..32)
+            .map(|n| format!("prep_rows.c{n}"))
+            .collect::<Vec<_>>();
+        let (types, stats) = measured(|| SqlEngine::new(&db).slot_column_types(&columns));
+        assert_eq!(types.as_ref(), vec![Some("int4".to_string()); 32]);
+        assert!(
+            stats.schema_load_bytes <= bytes,
+            "{stats:?}; one schema is {bytes} bytes"
+        );
+        let extra = vec!["prep_rows.extra".to_string()];
+        assert_eq!(
+            SqlEngine::new(&db).slot_column_types(&extra).as_ref(),
+            [None]
+        );
+        let mut session = SqlSession::new(&mut db);
+        session
+            .execute("BEGIN; ALTER TABLE prep_rows ADD COLUMN extra TEXT")
+            .unwrap();
+        assert_eq!(
+            SqlEngine::new(session.db_ref())
+                .slot_column_types(&extra)
+                .as_ref(),
+            [Some("text".to_string())]
+        );
+        session.execute("ROLLBACK").unwrap();
+        assert_eq!(
+            SqlEngine::new(session.db_ref())
+                .slot_column_types(&extra)
+                .as_ref(),
+            [None]
+        );
+    }
+}
+
+#[test]
 fn metadata_preparation_description_decodes_each_table_once() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let (_root, db, bytes) = fixture(mode);

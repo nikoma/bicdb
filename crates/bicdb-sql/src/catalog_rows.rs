@@ -2594,6 +2594,37 @@ fn pg_depend_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>
     }
     let schemas = list_schemas(db)?;
     let relation_oids = table_oids(db);
+    for view in list_views(db)? {
+        let Some(view_oid) = relation_oids.get(&view.name).copied() else {
+            continue;
+        };
+        let rule_oid = rewrite_rule_oid(&view.name);
+        rows.push(dependency_row(
+            PG_REWRITE_CATALOG_OID,
+            rule_oid,
+            0,
+            PG_CLASS_CATALOG_OID,
+            view_oid,
+            "i",
+        ));
+        let query = parse_query(&view.query_sql)?;
+        for (relation, column) in crate::engine::column_check::view_column_dependencies(db, &query)?
+        {
+            let Some(relation_oid) = relation_oids.get(&relation).copied() else {
+                continue;
+            };
+            let mut row = dependency_row(
+                PG_REWRITE_CATALOG_OID,
+                rule_oid,
+                0,
+                PG_CLASS_CATALOG_OID,
+                relation_oid,
+                "n",
+            );
+            row.insert("refobjsubid".into(), SqlValue::Int(column));
+            rows.push(row);
+        }
+    }
     for schema in &schemas {
         let Some(relation_oid) = relation_oids.get(&schema.name).copied() else {
             continue;
@@ -2706,14 +2737,28 @@ fn pg_depend_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>
         }
     }
     rows.sort_by(|left, right| {
-        ["classid", "objid", "objsubid", "refclassid", "refobjid"]
+        [
+            "classid",
+            "objid",
+            "objsubid",
+            "refclassid",
+            "refobjid",
+            "refobjsubid",
+        ]
+        .into_iter()
+        .map(|column| virtual_cell(left, column).to_cell())
+        .cmp(
+            [
+                "classid",
+                "objid",
+                "objsubid",
+                "refclassid",
+                "refobjid",
+                "refobjsubid",
+            ]
             .into_iter()
-            .map(|column| virtual_cell(left, column).to_cell())
-            .cmp(
-                ["classid", "objid", "objsubid", "refclassid", "refobjid"]
-                    .into_iter()
-                    .map(|column| virtual_cell(right, column).to_cell()),
-            )
+            .map(|column| virtual_cell(right, column).to_cell()),
+        )
     });
     rows.dedup();
     Ok(rows)
@@ -3775,6 +3820,25 @@ pub(crate) fn filter_information_schema_rows_for_role(
     table: &str,
     rows: Vec<BTreeMap<String, SqlValue>>,
 ) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    if matches!(
+        table,
+        "information_schema.role_table_grants" | "information_schema.table_privileges"
+    ) {
+        if normalize_role_name(role) == BOOTSTRAP_ROLE_NAME || pg_role_is_superuser(db, role)? {
+            return Ok(rows);
+        }
+        let roles = role_privilege_closure(db, role)?;
+        return Ok(rows
+            .into_iter()
+            .filter(|row| {
+                let grantor = sql_value_text(&virtual_cell(row, "grantor")).unwrap_or_default();
+                let grantee = sql_value_text(&virtual_cell(row, "grantee")).unwrap_or_default();
+                roles.contains(&normalize_role_name(&grantor))
+                    || roles.contains(&normalize_role_name(&grantee))
+                    || table == "information_schema.table_privileges" && grantee == "PUBLIC"
+            })
+            .collect());
+    }
     let (schema_column, name_column, privileges): (_, _, &[&str]) = match table {
         "information_schema.views" => (
             "table_schema",

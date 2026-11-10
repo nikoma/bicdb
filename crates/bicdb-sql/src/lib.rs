@@ -621,6 +621,7 @@ type SqlIndexDefinitionsCacheMap = FxHashMap<u64, FxHashMap<String, Vec<IndexDef
 const SYNTHETIC_PRIMARY_KEY: &str = "__bicdb_rowid";
 const PG_PROC_CATALOG_OID: i64 = 1255;
 const PG_CLASS_CATALOG_OID: i64 = 1259;
+const PG_REWRITE_CATALOG_OID: i64 = 2618;
 const PG_TYPE_CATALOG_OID: i64 = 1247;
 const PG_CAST_CATALOG_OID: i64 = 2605;
 const PG_NAMESPACE_CATALOG_OID: i64 = 2615;
@@ -2014,6 +2015,20 @@ pub enum SqlError {
 }
 
 impl SqlError {
+    /// Internal request to retry a statement with an exclusive database lease.
+    /// Notices and diagnostic context must preserve this control signal; SQL
+    /// exception handlers must not interpret it as a user-visible failure.
+    pub fn requires_exclusive_database_access(&self) -> bool {
+        match self {
+            Self::Unsupported(message) => message == "operation requires exclusive database access",
+            Self::WithNotices { error, .. } => error.requires_exclusive_database_access(),
+            Self::OracleContext { inner, .. } | Self::Rethrown(inner) => {
+                inner.requires_exclusive_database_access()
+            }
+            _ => false,
+        }
+    }
+
     pub(crate) fn resource_limit(sqlstate: &'static str, message: impl Into<String>) -> Self {
         Self::ResourceLimit {
             sqlstate,
@@ -5781,3 +5796,6 @@ mod durability_sqlstate_tests {
 
 #[cfg(test)]
 mod scalar_index_predicate_tests;
+
+#[cfg(test)]
+mod join_constant_predicate_tests;

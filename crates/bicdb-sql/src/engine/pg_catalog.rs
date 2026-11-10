@@ -42,16 +42,148 @@ fn simple_virtual_base_filter(expr: &Expr) -> bool {
 }
 
 fn exact_virtual_base_columns(expr: &Expr, columns: &BTreeSet<String>) -> bool {
-    let mut references = Vec::new();
-    collect_predicate_column_references(expr, &mut references)
-        && !references.is_empty()
+    let Some(references) = canonical_predicate_column_references(expr) else {
+        return false;
+    };
+    !references.is_empty()
         && references.iter().all(|parts| match parts.as_slice() {
             [qualifier, column] => columns.contains(&format!("{qualifier}.{column}")),
             _ => false,
         })
 }
 
+pub(super) fn simple_qualified_filter(
+    expr: &Expr,
+    columns: &BTreeSet<String>,
+    binding: &str,
+) -> bool {
+    if !simple_virtual_base_filter(expr) {
+        return false;
+    }
+    // Do not capture an ambiguous unqualified name or fold a quoted alias into
+    // a different input. Callback-bearing expressions stay after the join.
+    let unsupported = sqlparser::ast::visit_expressions(expr, |expr| {
+        match expr {
+            Expr::Identifier(_) => return std::ops::ControlFlow::Break(()),
+            Expr::CompoundIdentifier(parts) => {
+                if parts.len() != 2 {
+                    return std::ops::ControlFlow::Break(());
+                }
+                let qualifier = if parts[0].quote_style.is_some() {
+                    parts[0].value.clone()
+                } else {
+                    normalize_object_name(&parts[0].value)
+                };
+                if qualifier != binding {
+                    return std::ops::ControlFlow::Break(());
+                }
+            }
+            _ => {}
+        }
+        std::ops::ControlFlow::Continue(())
+    })
+    .is_break();
+    !unsupported && predicate_references_only_columns(expr, columns)
+}
+
 impl<'db> SqlEngine<'db> {
+    /// Bind unique catalog column names before the comma-join planner sees
+    /// them. Its dependency proofs deliberately require qualified references;
+    /// leaving a unique `atttypid` unbound can hide an equality join entirely.
+    /// Keep ambiguous names, nested scopes and non-catalog inputs unchanged.
+    pub(crate) fn qualify_catalog_cross_join_selection(
+        &self,
+        from: &TableWithJoins,
+        selection: Option<&Expr>,
+    ) -> Result<Option<Expr>> {
+        let Some(selection) = selection else {
+            return Ok(None);
+        };
+        if from.joins.is_empty()
+            || !from.joins.iter().all(|join| {
+                matches!(
+                    join.join_operator,
+                    JoinOperator::CrossJoin(JoinConstraint::None)
+                )
+            })
+        {
+            return Ok(None);
+        }
+        let mut bindings: BTreeMap<String, Vec<sqlparser::ast::Ident>> = BTreeMap::new();
+        for relation in
+            std::iter::once(&from.relation).chain(from.joins.iter().map(|join| &join.relation))
+        {
+            let TableFactor::Table {
+                name,
+                alias,
+                args: None,
+                ..
+            } = relation
+            else {
+                return Ok(None);
+            };
+            let table = relation_name(name)?;
+            if !is_virtual_table(&table)
+                || self.cte(&table).is_some()
+                || alias
+                    .as_ref()
+                    .is_some_and(|alias| !alias.columns.is_empty())
+            {
+                return Ok(None);
+            }
+            let Some(columns) = virtual_table_columns(&table) else {
+                return Ok(None);
+            };
+            let binding = alias
+                .as_ref()
+                .map(|alias| alias.name.clone())
+                .unwrap_or_else(|| {
+                    name.0
+                        .last()
+                        .expect("relation has a name")
+                        .as_ident()
+                        .expect("plain table name")
+                        .clone()
+                });
+            for column in columns {
+                bindings.entry(column).or_default().push(binding.clone());
+            }
+        }
+        if sqlparser::ast::visit_expressions(selection, |expr| {
+            if matches!(
+                expr,
+                Expr::Subquery(_) | Expr::InSubquery { .. } | Expr::Exists { .. }
+            ) {
+                std::ops::ControlFlow::Break(())
+            } else {
+                std::ops::ControlFlow::Continue(())
+            }
+        })
+        .is_break()
+        {
+            return Ok(None);
+        }
+        let mut qualified = selection.clone();
+        let mut changed = false;
+        let _ = sqlparser::ast::visit_expressions_mut(&mut qualified, |expr| {
+            if let Expr::Identifier(column) = expr {
+                let key = if column.quote_style.is_some() {
+                    column.value.clone()
+                } else {
+                    normalize_object_name(&column.value)
+                };
+                if let Some(owners) = bindings.get(&key) {
+                    if owners.len() == 1 {
+                        *expr = Expr::CompoundIdentifier(vec![owners[0].clone(), column.clone()]);
+                        changed = true;
+                    }
+                }
+            }
+            std::ops::ControlFlow::<()>::Continue(())
+        });
+        Ok(changed.then_some(qualified))
+    }
+
     pub(crate) fn pg_dump_extension_fk_dependency_query(
         &self,
         select: &Select,
@@ -1291,7 +1423,7 @@ impl<'db> SqlEngine<'db> {
         }
         let alias_name = alias
             .as_ref()
-            .map(|alias| alias.name.value.clone())
+            .map(|alias| ident_value(&alias.name))
             .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(&table).to_string());
         if is_virtual_table(&table) {
             // Known virtual columns permit the same early filtering as a base

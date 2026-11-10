@@ -1,0 +1,103 @@
+{
+  "database": "bicdb_native_app_ctrl_20261109",
+  "queries": [
+    {
+      "sql": "SELECT c.Column_ID,c.Payload,vr.Rule_Name FROM mixed_drivers t INNER JOIN mixed_columns c ON(t.Driver_ID=c.Driver_ID) LEFT JOIN mixed_rules vr ON(c.Rule_ID=vr.Rule_ID) INNER JOIN mixed_elements e ON(c.Element_ID=e.Element_ID) WHERE t.Driver_ID=1 AND c.IsActive='Y' ORDER BY c.Column_ID",
+      "row_count": 4,
+      "ids": [
+        1,
+        257,
+        513,
+        769
+      ],
+      "payload_lengths": [
+        4096,
+        4096,
+        4096,
+        4096
+      ],
+      "all_rules_null": true
+    },
+    {
+      "sql": "SELECT c.Column_ID,c.Payload,vr.Rule_Name FROM mixed_drivers T INNER JOIN mixed_columns c ON(T.Driver_ID=c.Driver_ID) LEFT JOIN mixed_rules vr ON(c.Rule_ID=vr.Rule_ID) INNER JOIN mixed_elements e ON(c.Element_ID=e.Element_ID) WHERE T.Driver_ID=1 AND c.IsActive='Y' ORDER BY c.Column_ID",
+      "row_count": 4,
+      "ids": [
+        1,
+        257,
+        513,
+        769
+      ],
+      "payload_lengths": [
+        4096,
+        4096,
+        4096,
+        4096
+      ],
+      "all_rules_null": true
+    },
+    {
+      "sql": "SELECT l.id FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.\"ID\"=1",
+      "rows": [
+        [
+          2
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT l.\"ID\" FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.ID=1",
+      "rows": [
+        [
+          2
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT l.id FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.\"ID\">1",
+      "rows": [
+        [
+          1
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT l.id FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.\"ID\" IN(2)",
+      "rows": [
+        [
+          1
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT l.\"ID\" FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.ID>1",
+      "rows": [
+        [
+          1
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT l.\"ID\" FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.ID IN(2)",
+      "rows": [
+        [
+          1
+        ]
+      ]
+    }
+  ],
+  "transaction_rolled_back": true,
+  "version": "PostgreSQL 16.13 (Debian 16.13-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+  "setup": {
+    "ddl": "CREATE TABLE mixed_drivers(Driver_ID INT PRIMARY KEY); INSERT INTO mixed_drivers SELECT g FROM generate_series(0,255) g; CREATE TABLE mixed_columns(Column_ID INT PRIMARY KEY,Driver_ID INT,Rule_ID INT,Element_ID INT,IsActive TEXT,Payload TEXT); CREATE INDEX mixed_columns_driver ON mixed_columns(Driver_ID); INSERT INTO mixed_columns SELECT g,g%256,CASE WHEN g%2=0 THEN 0 ELSE NULL END,g%16,'Y',repeat('x',4096) FROM generate_series(0,999) g; CREATE TABLE mixed_rules(Rule_ID INT PRIMARY KEY,Rule_Name TEXT); INSERT INTO mixed_rules VALUES(0,'present'); CREATE TABLE mixed_elements(Element_ID INT PRIMARY KEY); INSERT INTO mixed_elements SELECT g FROM generate_series(0,15) g",
+    "query": "SELECT c.Column_ID,c.Payload,vr.Rule_Name FROM mixed_drivers t INNER JOIN mixed_columns c ON(t.Driver_ID=c.Driver_ID) LEFT JOIN mixed_rules vr ON(c.Rule_ID=vr.Rule_ID) INNER JOIN mixed_elements e ON(c.Element_ID=e.Element_ID) WHERE t.Driver_ID=1 AND c.IsActive='Y' ORDER BY c.Column_ID",
+    "guard_ddl": "CREATE TABLE mixed_case_guard(id INT PRIMARY KEY,\"ID\" INT); INSERT INTO mixed_case_guard VALUES(1,2),(2,1)",
+    "guard_queries": [
+      "SELECT l.id FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.\"ID\"=1",
+      "SELECT l.\"ID\" FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.ID=1",
+      "SELECT l.id FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.\"ID\">1",
+      "SELECT l.id FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.\"ID\" IN(2)",
+      "SELECT l.\"ID\" FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.ID>1",
+      "SELECT l.\"ID\" FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.ID IN(2)"
+    ]
+  },
+  "scope": "Owned native PostgreSQL control clone, all fixture DDL/DML rolled back; protected idempiere database unchanged."
+}

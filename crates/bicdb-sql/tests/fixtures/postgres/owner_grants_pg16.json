@@ -1,0 +1,206 @@
+{
+  "database": "bicdb_native_app_ctrl_20261109",
+  "transaction_rolled_back": true,
+  "setup": [
+    "CREATE ROLE owner_grants_owner",
+    "CREATE ROLE owner_grants_reader",
+    "CREATE ROLE owner_grants_outsider",
+    "CREATE SCHEMA owner_grants AUTHORIZATION owner_grants_owner",
+    "SET ROLE owner_grants_owner",
+    "CREATE TABLE owner_grants.base(id integer)",
+    "CREATE VIEW owner_grants.visible AS SELECT id FROM owner_grants.base",
+    "GRANT SELECT ON owner_grants.visible TO owner_grants_reader, PUBLIC"
+  ],
+  "cases": [
+    {
+      "role": "owner_grants_owner",
+      "sql": "SELECT grantor,grantee,privilege_type,is_grantable,with_hierarchy FROM information_schema.role_table_grants WHERE table_schema='owner_grants' AND table_name='visible' ORDER BY grantee,privilege_type",
+      "rows": [
+        [
+          "owner_grants_owner",
+          "PUBLIC",
+          "SELECT",
+          "NO",
+          "YES"
+        ],
+        [
+          "owner_grants_owner",
+          "owner_grants_owner",
+          "DELETE",
+          "YES",
+          "NO"
+        ],
+        [
+          "owner_grants_owner",
+          "owner_grants_owner",
+          "INSERT",
+          "YES",
+          "NO"
+        ],
+        [
+          "owner_grants_owner",
+          "owner_grants_owner",
+          "REFERENCES",
+          "YES",
+          "NO"
+        ],
+        [
+          "owner_grants_owner",
+          "owner_grants_owner",
+          "SELECT",
+          "YES",
+          "YES"
+        ],
+        [
+          "owner_grants_owner",
+          "owner_grants_owner",
+          "TRIGGER",
+          "YES",
+          "NO"
+        ],
+        [
+          "owner_grants_owner",
+          "owner_grants_owner",
+          "TRUNCATE",
+          "YES",
+          "NO"
+        ],
+        [
+          "owner_grants_owner",
+          "owner_grants_owner",
+          "UPDATE",
+          "YES",
+          "NO"
+        ],
+        [
+          "owner_grants_owner",
+          "owner_grants_reader",
+          "SELECT",
+          "NO",
+          "YES"
+        ]
+      ]
+    },
+    {
+      "role": "owner_grants_owner",
+      "sql": "SELECT grantor,grantee,privilege_type,is_grantable,with_hierarchy FROM information_schema.table_privileges WHERE table_schema='owner_grants' AND table_name='visible' ORDER BY grantee,privilege_type",
+      "rows": [
+        [
+          "owner_grants_owner",
+          "PUBLIC",
+          "SELECT",
+          "NO",
+          "YES"
+        ],
+        [
+          "owner_grants_owner",
+          "owner_grants_owner",
+          "DELETE",
+          "YES",
+          "NO"
+        ],
+        [
+          "owner_grants_owner",
+          "owner_grants_owner",
+          "INSERT",
+          "YES",
+          "NO"
+        ],
+        [
+          "owner_grants_owner",
+          "owner_grants_owner",
+          "REFERENCES",
+          "YES",
+          "NO"
+        ],
+        [
+          "owner_grants_owner",
+          "owner_grants_owner",
+          "SELECT",
+          "YES",
+          "YES"
+        ],
+        [
+          "owner_grants_owner",
+          "owner_grants_owner",
+          "TRIGGER",
+          "YES",
+          "NO"
+        ],
+        [
+          "owner_grants_owner",
+          "owner_grants_owner",
+          "TRUNCATE",
+          "YES",
+          "NO"
+        ],
+        [
+          "owner_grants_owner",
+          "owner_grants_owner",
+          "UPDATE",
+          "YES",
+          "NO"
+        ],
+        [
+          "owner_grants_owner",
+          "owner_grants_reader",
+          "SELECT",
+          "NO",
+          "YES"
+        ]
+      ]
+    },
+    {
+      "role": "owner_grants_reader",
+      "sql": "SELECT grantor,grantee,privilege_type,is_grantable,with_hierarchy FROM information_schema.role_table_grants WHERE table_schema='owner_grants' AND table_name='visible' ORDER BY grantee,privilege_type",
+      "rows": [
+        [
+          "owner_grants_owner",
+          "owner_grants_reader",
+          "SELECT",
+          "NO",
+          "YES"
+        ]
+      ]
+    },
+    {
+      "role": "owner_grants_reader",
+      "sql": "SELECT grantor,grantee,privilege_type,is_grantable,with_hierarchy FROM information_schema.table_privileges WHERE table_schema='owner_grants' AND table_name='visible' ORDER BY grantee,privilege_type",
+      "rows": [
+        [
+          "owner_grants_owner",
+          "PUBLIC",
+          "SELECT",
+          "NO",
+          "YES"
+        ],
+        [
+          "owner_grants_owner",
+          "owner_grants_reader",
+          "SELECT",
+          "NO",
+          "YES"
+        ]
+      ]
+    },
+    {
+      "role": "owner_grants_outsider",
+      "sql": "SELECT grantor,grantee,privilege_type,is_grantable,with_hierarchy FROM information_schema.role_table_grants WHERE table_schema='owner_grants' AND table_name='visible' ORDER BY grantee,privilege_type",
+      "rows": []
+    },
+    {
+      "role": "owner_grants_outsider",
+      "sql": "SELECT grantor,grantee,privilege_type,is_grantable,with_hierarchy FROM information_schema.table_privileges WHERE table_schema='owner_grants' AND table_name='visible' ORDER BY grantee,privilege_type",
+      "rows": [
+        [
+          "owner_grants_owner",
+          "PUBLIC",
+          "SELECT",
+          "NO",
+          "YES"
+        ]
+      ]
+    }
+  ],
+  "version": "PostgreSQL 16.13 (Debian 16.13-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit"
+}

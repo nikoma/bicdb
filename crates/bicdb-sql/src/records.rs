@@ -1277,6 +1277,17 @@ fn validate_unique_arbiter_records_vacating(
         return Ok(());
     }
 
+    // Native writes announce their unique keys with shared reservations so
+    // commit can arbitrate them atomically. SQL must additionally take the
+    // exclusive reservation before testing committed state: two ordinary
+    // INSERTs otherwise both pass the lookup while the first is uncommitted.
+    // Recheck the index after the wait, using its current committed contents.
+    if let (Some(tx), Some(index)) = (tx, arbiter.index_name.as_deref()) {
+        for record in records {
+            tx.reserve_unique_index_record_for_integrity_check(index, record)?;
+        }
+    }
+
     let contains_json = records.iter().any(|record| {
         unique_key_values(record, schema, &arbiter.key)
             .iter()
@@ -2560,8 +2571,8 @@ pub(crate) fn validate_foreign_key_constraint(
         if key.iter().any(|value| matches!(value, SqlValue::Null)) {
             return Ok(());
         }
-        let parent =
-            load_schema(db, foreign_table)?.ok_or_else(|| foreign_key_violation(table, name))?;
+        let parent = load_schema_shared(db, foreign_table)?
+            .ok_or_else(|| foreign_key_violation(table, name))?;
         // Reserve the same key now as immediate FK checks and parent writes.
         // Delaying the reservation would permit a concurrent parent deletion.
         if let Err(error) = reserve_foreign_key(tx, &parent, referred_columns, &key) {
@@ -2600,7 +2611,7 @@ pub(crate) fn validate_foreign_key_constraint_immediate(
     if key.iter().any(|value| matches!(value, SqlValue::Null)) {
         return Ok(());
     }
-    let Some(foreign_schema) = load_schema(db, foreign_table)? else {
+    let Some(foreign_schema) = load_schema_shared(db, foreign_table)? else {
         return Err(foreign_key_violation(table, name));
     };
     let domain_error = |error: SqlError| {

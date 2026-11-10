@@ -60,3 +60,61 @@ fn unsupported_compiler_options_are_explicit_instead_of_declarations() {
         assert!(error.to_string().contains("compiler directive"));
     }
 }
+
+#[test]
+fn exception_handler_comments_preserve_boundaries_values_and_rollback() {
+    for mode in [
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            bicdb_core::DbConfig::default()
+                .with_storage_mode(mode)
+                .with_fsync(false),
+        )
+        .unwrap();
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("CREATE TABLE handler_comment_rows(id int PRIMARY KEY,v int);INSERT INTO handler_comment_rows VALUES(1,10)").unwrap();
+        sql.execute(
+            "CREATE FUNCTION commented_handlers(n int) RETURNS text LANGUAGE plpgsql AS $$
+BEGIN
+ BEGIN
+  UPDATE handler_comment_rows SET v=99 WHERE id=1;
+  PERFORM 10/n;
+ EXCEPTION -- An ordinary application annotation.
+  /* outer /* nested comment with WHEN OTHERS THEN */ still a comment */
+  WHEN /* condition annotation */ division_by_zero THEN
+   RETURN '-- literal /* remains intact */';
+  -- The second handler must remain separate.
+  WHEN OTHERS THEN RETURN 'unexpected handler';
+ END;
+ RETURN 'success';
+END $$",
+        )
+        .unwrap();
+        assert_eq!(
+            sql.execute("SELECT commented_handlers(0)").unwrap().rows,
+            vec![vec![SqlValue::String(
+                "-- literal /* remains intact */".into()
+            )]]
+        );
+        assert_eq!(
+            sql.execute("SELECT v FROM handler_comment_rows")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(10)]]
+        );
+        assert_eq!(
+            sql.execute("SELECT commented_handlers(2)").unwrap().rows,
+            vec![vec![SqlValue::String("success".into())]]
+        );
+        assert_eq!(
+            sql.execute("SELECT v FROM handler_comment_rows")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(99)]]
+        );
+    }
+}

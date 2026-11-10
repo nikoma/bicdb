@@ -275,6 +275,7 @@ impl<'db> SqlEngine<'db> {
         right_relation: &TableFactor,
         kind: RowJoinKind,
         constraint: &JoinConstraint,
+        right_selection: Option<&Expr>,
         needed_columns: Option<&ReferencedColumns>,
     ) -> Result<Option<RowSet>> {
         // The record-backed shortcut does not carry physical heap identities.
@@ -328,6 +329,47 @@ impl<'db> SqlEngine<'db> {
         let mut right_fields = FieldRef::wildcard(schema.as_ref());
         retain_referenced_fields(&mut right_fields, needed_columns, &table, &alias_name);
         let right_columns = row_output_columns_from_fields(&table, &alias_name, &right_fields);
+        // An inner join may discard right-local WHERE failures before cloning
+        // their payload into the joined result. Keep the original ON expression
+        // first and resolve quoted qualifiers exactly.
+        let binding = alias
+            .as_ref()
+            .map(|alias| &alias.name)
+            .or_else(|| match name.0.last() {
+                Some(sqlparser::ast::ObjectNamePart::Identifier(ident)) => Some(ident),
+                _ => None,
+            });
+        let binding = binding.map(|ident| {
+            if ident.quote_style.is_some() {
+                ident.value.clone()
+            } else {
+                normalize_object_name(&ident.value)
+            }
+        });
+        let pushed_filter = if matches!(kind, RowJoinKind::Inner)
+            && alias.as_ref().is_none_or(|alias| alias.columns.is_empty())
+        {
+            let columns = right_columns.iter().cloned().collect::<BTreeSet<_>>();
+            right_selection.and_then(|selection| {
+                and_terms(selection)
+                    .into_iter()
+                    .filter(|term| {
+                        binding.as_ref().is_some_and(|binding| {
+                            super::pg_catalog::simple_qualified_filter(term, &columns, binding)
+                        })
+                    })
+                    .cloned()
+                    .reduce(and_expr)
+            })
+        } else {
+            None
+        };
+        let pushed_constraint =
+            pushed_filter.map(|filter| JoinConstraint::On(and_expr(selection.clone(), filter)));
+        let constraint = pushed_constraint.as_ref().unwrap_or(constraint);
+        let JoinConstraint::On(selection) = constraint else {
+            unreachable!("indexed join requires an ON constraint")
+        };
         let can_eval_constraint_with_outer_row =
             join_constraint_can_eval_with_outer_row(constraint, &left.columns, &right_columns);
         let prepared_lookup = if can_eval_constraint_with_outer_row {
@@ -3456,6 +3498,10 @@ impl<'db> SqlEngine<'db> {
     /// base table of that name. Unknown columns stay `None`; the binder then
     /// leaves their comparisons to the typed row evaluator.
     pub(crate) fn slot_column_types(&self, columns: &[String]) -> Arc<[Option<String>]> {
+        // Resolve a layout's types against one shared definition per table.
+        // Keep this scope inside metadata lookup: row expressions and policy
+        // subqueries must execute after it drops so their visibility is fresh.
+        let _schema_cache = SqlSchemaCacheScope::new();
         columns
             .iter()
             .map(|column| self.slot_column_type(column))

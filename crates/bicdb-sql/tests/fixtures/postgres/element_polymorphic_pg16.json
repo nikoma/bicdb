@@ -1,0 +1,175 @@
+{
+  "setup": [
+    "CREATE SCHEMA poly_probe",
+    "CREATE FUNCTION poly_probe.ident(anyelement) RETURNS anyelement LANGUAGE sql AS $$ SELECT $1 $$",
+    "CREATE FUNCTION poly_probe.choose(anyelement,anyelement) RETURNS anyelement LANGUAGE plpgsql AS $$ BEGIN RETURN coalesce($1,$2); END $$",
+    "CREATE FUNCTION poly_probe.compatible(anycompatible,anycompatible) RETURNS anycompatible LANGUAGE sql AS $$ SELECT coalesce($1,$2) $$",
+    "CREATE FUNCTION poly_probe.first_element(anyarray) RETURNS anyelement LANGUAGE sql AS $$ SELECT $1[1] $$",
+    "CREATE FUNCTION poly_probe.make_array(anyelement) RETURNS anyarray LANGUAGE plpgsql AS $$ BEGIN RETURN ARRAY[$1]; END $$",
+    "CREATE FUNCTION poly_probe.scalar_only(anynonarray) RETURNS anynonarray LANGUAGE sql AS $$ SELECT $1 $$",
+    "CREATE FUNCTION poly_probe.nvl(anyelement,anyelement) RETURNS anyelement LANGUAGE plpgsql IMMUTABLE AS $$ BEGIN RETURN coalesce($1,$2); END $$",
+    "CREATE FUNCTION poly_probe.nvl(integer,numeric) RETURNS numeric LANGUAGE plpgsql IMMUTABLE AS $$ BEGIN RETURN poly_probe.nvl($1::numeric,$2); END $$",
+    "CREATE FUNCTION poly_probe.nvl(numeric,integer) RETURNS numeric LANGUAGE plpgsql IMMUTABLE AS $$ BEGIN RETURN poly_probe.nvl($1,$2::numeric); END $$",
+    "CREATE FUNCTION poly_probe.nvl(text,text) RETURNS text LANGUAGE plpgsql IMMUTABLE AS $$ BEGIN RETURN coalesce($1,$2); END $$"
+  ],
+  "checks": [
+    {
+      "query": "SELECT poly_probe.ident(7::integer),pg_typeof(poly_probe.ident(7::integer))::text",
+      "rows": [
+        [
+          7,
+          "integer"
+        ]
+      ],
+      "oids": [
+        23,
+        25
+      ]
+    },
+    {
+      "query": "SELECT poly_probe.ident('a'::varchar),pg_typeof(poly_probe.ident('a'::varchar))::text",
+      "rows": [
+        [
+          "a",
+          "character varying"
+        ]
+      ],
+      "oids": [
+        1043,
+        25
+      ]
+    },
+    {
+      "query": "SELECT poly_probe.choose(NULL,7),pg_typeof(poly_probe.choose(NULL,7))::text",
+      "rows": [
+        [
+          7,
+          "integer"
+        ]
+      ],
+      "oids": [
+        23,
+        25
+      ]
+    },
+    {
+      "query": "SELECT poly_probe.choose(1.25::numeric,2.5::numeric),pg_typeof(poly_probe.choose(1.25::numeric,2.5::numeric))::text",
+      "rows": [
+        [
+          "1.25",
+          "numeric"
+        ]
+      ],
+      "oids": [
+        1700,
+        25
+      ]
+    },
+    {
+      "query": "SELECT poly_probe.compatible(1::integer,2::bigint),pg_typeof(poly_probe.compatible(1::integer,2::bigint))::text",
+      "rows": [
+        [
+          1,
+          "bigint"
+        ]
+      ],
+      "oids": [
+        20,
+        25
+      ]
+    },
+    {
+      "query": "SELECT poly_probe.compatible(NULL,NULL),pg_typeof(poly_probe.compatible(NULL,NULL))::text",
+      "rows": [
+        [
+          null,
+          "text"
+        ]
+      ],
+      "oids": [
+        25,
+        25
+      ]
+    },
+    {
+      "query": "SELECT poly_probe.first_element(ARRAY[3,4]),pg_typeof(poly_probe.first_element(ARRAY[3,4]))::text",
+      "rows": [
+        [
+          3,
+          "integer"
+        ]
+      ],
+      "oids": [
+        23,
+        25
+      ]
+    },
+    {
+      "query": "SELECT array_length(poly_probe.make_array('x'::text),1),pg_typeof(poly_probe.make_array('x'::text))::text",
+      "rows": [
+        [
+          1,
+          "text[]"
+        ]
+      ],
+      "oids": [
+        23,
+        25
+      ]
+    },
+    {
+      "query": "SELECT poly_probe.scalar_only(true),pg_typeof(poly_probe.scalar_only(true))::text",
+      "rows": [
+        [
+          true,
+          "boolean"
+        ]
+      ],
+      "oids": [
+        16,
+        25
+      ]
+    },
+    {
+      "query": "SELECT poly_probe.nvl(1::integer,2::numeric),poly_probe.nvl(NULL::numeric,2::integer),poly_probe.nvl(NULL::varchar,'fallback'::text)",
+      "rows": [
+        [
+          "1",
+          "2",
+          "fallback"
+        ]
+      ],
+      "oids": [
+        1700,
+        1700,
+        25
+      ]
+    },
+    {
+      "query": "SELECT poly_probe.ident('unknown')",
+      "sqlstate": "42804",
+      "message": "could not determine polymorphic type because input has type unknown"
+    },
+    {
+      "query": "SELECT poly_probe.ident(NULL)",
+      "sqlstate": "42804",
+      "message": "could not determine polymorphic type because input has type unknown"
+    },
+    {
+      "query": "SELECT poly_probe.choose(1::integer,2::numeric)",
+      "sqlstate": "42883",
+      "message": "function poly_probe.choose(integer, numeric) does not exist"
+    },
+    {
+      "query": "SELECT poly_probe.scalar_only(ARRAY[1])",
+      "sqlstate": "42883",
+      "message": "function poly_probe.scalar_only(integer[]) does not exist"
+    },
+    {
+      "query": "SELECT poly_probe.first_element(1::integer)",
+      "sqlstate": "42883",
+      "message": "function poly_probe.first_element(integer) does not exist"
+    }
+  ],
+  "reference": "PostgreSQL16.13 owned clone, original data not used, all fixture DDL/queries rolled back"
+}

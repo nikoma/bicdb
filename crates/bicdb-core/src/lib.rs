@@ -141,7 +141,7 @@ pub use broker::{
     NackOptions, PeekedMessage, PublishOptions, PublishReceipt, QueueConfig, QueueStats,
     TrimReport, DEAD_LETTER_MESSAGE_EVENT, DEFAULT_MAX_ATTEMPTS,
 };
-pub use cancellation::CancellationToken;
+pub use cancellation::{BlockingWaitAdmission, CancellationToken};
 pub use consensus::{
     AppendEntries, AppendResponse, ConsensusConfig, ConsensusLogEntry, ConsensusPeer,
     ConsensusRole, ConsensusState, ConsensusStatus, RequestVote, VoteResponse,

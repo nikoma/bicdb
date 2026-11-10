@@ -233,7 +233,7 @@ fn relation_column(
                 }
             }
             let relation_name = relation_name(name).ok()?;
-            let Some(schema) = load_schema(db, &relation_name).ok()? else {
+            let Some(schema) = load_schema_shared(db, &relation_name).ok()? else {
                 let view = load_view(db, &relation_name).ok()??;
                 let statements = parse_statements(&view.query_sql).ok()?;
                 let [Statement::Query(query)] = statements.as_slice() else {

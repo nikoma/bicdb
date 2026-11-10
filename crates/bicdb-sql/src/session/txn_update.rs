@@ -12,11 +12,28 @@ pub(crate) struct RoutineBinaryExprTypes {
 }
 
 impl RoutineBinaryExprTypes {
-    fn compute(db: &BicDb, left: &Expr, op: &BinaryOperator, right: &Expr) -> Self {
+    fn compute(engine: &SqlEngine<'_>, left: &Expr, op: &BinaryOperator, right: &Expr) -> Self {
+        let range_left = engine.constant_expr_pg_type(left);
+        let range_right = engine.constant_expr_pg_type(right);
+        let mut binary = binary_expr_types(left, op, right, None);
+        if range_left.is_some() {
+            binary.left = range_left.clone();
+        }
+        if range_right.is_some() {
+            binary.right = range_right.clone();
+        }
+        binary.result = projected_binary_expr_pg_type_with_types(
+            left,
+            op,
+            right,
+            None,
+            binary.left.clone(),
+            binary.right.clone(),
+        );
         Self {
-            range_left: projected_expr_pg_type_with_db(db, left),
-            range_right: projected_expr_pg_type_with_db(db, right),
-            binary: binary_expr_types(left, op, right, None),
+            range_left,
+            range_right,
+            binary,
         }
     }
 }
@@ -4142,7 +4159,7 @@ impl<'db> SqlSession<'db> {
         });
         let Some((generation, ir)) = scope else {
             return std::rc::Rc::new(RoutineBinaryExprTypes::compute(
-                self.db_ref(),
+                &self.sql_engine(),
                 left,
                 op,
                 right,
@@ -4153,7 +4170,7 @@ impl<'db> SqlSession<'db> {
             return hit;
         }
         let types = std::rc::Rc::new(RoutineBinaryExprTypes::compute(
-            self.db_ref(),
+            &self.sql_engine(),
             left,
             op,
             right,
@@ -4343,6 +4360,9 @@ impl<'db> SqlSession<'db> {
         ddl_undo_len: usize,
         savepoint_len: usize,
     ) -> Result<RoutineControl> {
+        if error.requires_exclusive_database_access() {
+            return Err(error);
+        }
         let sqlstate = error.sqlstate().to_string();
         let Some(handler) = handlers
             .iter()

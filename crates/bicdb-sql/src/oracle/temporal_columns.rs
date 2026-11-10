@@ -395,7 +395,7 @@ fn relation_column(
                     return projection_column(db, &cte.query, column, depth + 1);
                 }
             }
-            let schema = load_schema(db, &relation_name(name).ok()?).ok()??;
+            let schema = load_schema_shared(db, &relation_name(name).ok()?).ok()??;
             let mut fields = schema
                 .columns
                 .iter()

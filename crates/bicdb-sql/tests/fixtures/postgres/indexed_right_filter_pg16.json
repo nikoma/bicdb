@@ -1,0 +1,538 @@
+{
+  "engine": "PostgreSQL",
+  "version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "fixture_scope": "Temporary tables in an owned control database, transaction rolled back; protected reference database untouched.",
+  "setup": [
+    "CREATE TEMP TABLE selective_drivers(id INTEGER PRIMARY KEY)",
+    "INSERT INTO selective_drivers VALUES(0),(1),(2),(3)",
+    "CREATE TEMP TABLE selective_payloads(id INTEGER PRIMARY KEY,driver_id INTEGER,selected TEXT,payload TEXT)",
+    "CREATE INDEX selective_payload_driver ON selective_payloads(driver_id)",
+    "INSERT INTO selective_payloads SELECT g,g%4,CASE WHEN g<4 THEN 'yes' ELSE NULL END,repeat('x',4096) FROM generate_series(0,999) g"
+  ],
+  "queries": [
+    {
+      "sql": "SELECT w.id,w.payload FROM selective_drivers d JOIN selective_payloads w ON w.driver_id=d.id WHERE w.selected IS NOT NULL ORDER BY w.id",
+      "rows": [
+        {
+          "id": 0,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        },
+        {
+          "id": 1,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        },
+        {
+          "id": 2,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        },
+        {
+          "id": 3,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        }
+      ],
+      "plan": [
+        {
+          "Plan": {
+            "Node Type": "Sort",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 139.58,
+            "Total Cost": 142.0,
+            "Plan Rows": 967,
+            "Plan Width": 36,
+            "Actual Startup Time": 0.072,
+            "Actual Total Time": 0.073,
+            "Actual Rows": 4,
+            "Actual Loops": 1,
+            "Sort Key": [
+              "w.id"
+            ],
+            "Sort Method": "quicksort",
+            "Sort Space Used": 25,
+            "Sort Space Type": "Memory",
+            "Shared Hit Blocks": 0,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 13,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Hash Join",
+                "Parent Relationship": "Outer",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Join Type": "Inner",
+                "Startup Cost": 67.38,
+                "Total Cost": 91.63,
+                "Plan Rows": 967,
+                "Plan Width": 36,
+                "Actual Startup Time": 0.03,
+                "Actual Total Time": 0.068,
+                "Actual Rows": 4,
+                "Actual Loops": 1,
+                "Inner Unique": true,
+                "Hash Cond": "(w.driver_id = d.id)",
+                "Shared Hit Blocks": 0,
+                "Shared Read Blocks": 0,
+                "Shared Dirtied Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Local Hit Blocks": 13,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Seq Scan",
+                    "Parent Relationship": "Outer",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Relation Name": "selective_payloads",
+                    "Alias": "w",
+                    "Startup Cost": 0.0,
+                    "Total Cost": 21.72,
+                    "Plan Rows": 967,
+                    "Plan Width": 40,
+                    "Actual Startup Time": 0.01,
+                    "Actual Total Time": 0.047,
+                    "Actual Rows": 4,
+                    "Actual Loops": 1,
+                    "Filter": "(selected IS NOT NULL)",
+                    "Rows Removed by Filter": 996,
+                    "Shared Hit Blocks": 0,
+                    "Shared Read Blocks": 0,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Local Hit Blocks": 12,
+                    "Local Read Blocks": 0,
+                    "Local Dirtied Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0
+                  },
+                  {
+                    "Node Type": "Hash",
+                    "Parent Relationship": "Inner",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Startup Cost": 35.5,
+                    "Total Cost": 35.5,
+                    "Plan Rows": 2550,
+                    "Plan Width": 4,
+                    "Actual Startup Time": 0.005,
+                    "Actual Total Time": 0.005,
+                    "Actual Rows": 4,
+                    "Actual Loops": 1,
+                    "Hash Buckets": 4096,
+                    "Original Hash Buckets": 4096,
+                    "Hash Batches": 1,
+                    "Original Hash Batches": 1,
+                    "Peak Memory Usage": 33,
+                    "Shared Hit Blocks": 0,
+                    "Shared Read Blocks": 0,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Local Hit Blocks": 1,
+                    "Local Read Blocks": 0,
+                    "Local Dirtied Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Seq Scan",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Async Capable": false,
+                        "Relation Name": "selective_drivers",
+                        "Alias": "d",
+                        "Startup Cost": 0.0,
+                        "Total Cost": 35.5,
+                        "Plan Rows": 2550,
+                        "Plan Width": 4,
+                        "Actual Startup Time": 0.002,
+                        "Actual Total Time": 0.002,
+                        "Actual Rows": 4,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 0,
+                        "Shared Read Blocks": 0,
+                        "Shared Dirtied Blocks": 0,
+                        "Shared Written Blocks": 0,
+                        "Local Hit Blocks": 1,
+                        "Local Read Blocks": 0,
+                        "Local Dirtied Blocks": 0,
+                        "Local Written Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "Planning": {
+            "Shared Hit Blocks": 0,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.064,
+          "Triggers": [],
+          "Execution Time": 0.082
+        }
+      ]
+    },
+    {
+      "sql": "SELECT SELECTIVE_PAYLOADS.id,SELECTIVE_PAYLOADS.payload FROM selective_drivers JOIN SELECTIVE_PAYLOADS ON SELECTIVE_PAYLOADS.driver_id=selective_drivers.id WHERE SELECTIVE_PAYLOADS.selected IS NOT NULL ORDER BY SELECTIVE_PAYLOADS.id",
+      "rows": [
+        {
+          "id": 0,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        },
+        {
+          "id": 1,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        },
+        {
+          "id": 2,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        },
+        {
+          "id": 3,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        }
+      ],
+      "plan": [
+        {
+          "Plan": {
+            "Node Type": "Sort",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 139.58,
+            "Total Cost": 142.0,
+            "Plan Rows": 967,
+            "Plan Width": 36,
+            "Actual Startup Time": 0.053,
+            "Actual Total Time": 0.053,
+            "Actual Rows": 4,
+            "Actual Loops": 1,
+            "Sort Key": [
+              "selective_payloads.id"
+            ],
+            "Sort Method": "quicksort",
+            "Sort Space Used": 25,
+            "Sort Space Type": "Memory",
+            "Shared Hit Blocks": 0,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 13,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Hash Join",
+                "Parent Relationship": "Outer",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Join Type": "Inner",
+                "Startup Cost": 67.38,
+                "Total Cost": 91.63,
+                "Plan Rows": 967,
+                "Plan Width": 36,
+                "Actual Startup Time": 0.007,
+                "Actual Total Time": 0.052,
+                "Actual Rows": 4,
+                "Actual Loops": 1,
+                "Inner Unique": true,
+                "Hash Cond": "(selective_payloads.driver_id = selective_drivers.id)",
+                "Shared Hit Blocks": 0,
+                "Shared Read Blocks": 0,
+                "Shared Dirtied Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Local Hit Blocks": 13,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Seq Scan",
+                    "Parent Relationship": "Outer",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Relation Name": "selective_payloads",
+                    "Alias": "selective_payloads",
+                    "Startup Cost": 0.0,
+                    "Total Cost": 21.72,
+                    "Plan Rows": 967,
+                    "Plan Width": 40,
+                    "Actual Startup Time": 0.003,
+                    "Actual Total Time": 0.046,
+                    "Actual Rows": 4,
+                    "Actual Loops": 1,
+                    "Filter": "(selected IS NOT NULL)",
+                    "Rows Removed by Filter": 996,
+                    "Shared Hit Blocks": 0,
+                    "Shared Read Blocks": 0,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Local Hit Blocks": 12,
+                    "Local Read Blocks": 0,
+                    "Local Dirtied Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0
+                  },
+                  {
+                    "Node Type": "Hash",
+                    "Parent Relationship": "Inner",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Startup Cost": 35.5,
+                    "Total Cost": 35.5,
+                    "Plan Rows": 2550,
+                    "Plan Width": 4,
+                    "Actual Startup Time": 0.002,
+                    "Actual Total Time": 0.002,
+                    "Actual Rows": 4,
+                    "Actual Loops": 1,
+                    "Hash Buckets": 4096,
+                    "Original Hash Buckets": 4096,
+                    "Hash Batches": 1,
+                    "Original Hash Batches": 1,
+                    "Peak Memory Usage": 33,
+                    "Shared Hit Blocks": 0,
+                    "Shared Read Blocks": 0,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Local Hit Blocks": 1,
+                    "Local Read Blocks": 0,
+                    "Local Dirtied Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Seq Scan",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Async Capable": false,
+                        "Relation Name": "selective_drivers",
+                        "Alias": "selective_drivers",
+                        "Startup Cost": 0.0,
+                        "Total Cost": 35.5,
+                        "Plan Rows": 2550,
+                        "Plan Width": 4,
+                        "Actual Startup Time": 0.001,
+                        "Actual Total Time": 0.001,
+                        "Actual Rows": 4,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 0,
+                        "Shared Read Blocks": 0,
+                        "Shared Dirtied Blocks": 0,
+                        "Shared Written Blocks": 0,
+                        "Local Hit Blocks": 1,
+                        "Local Read Blocks": 0,
+                        "Local Dirtied Blocks": 0,
+                        "Local Written Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "Planning": {
+            "Shared Hit Blocks": 0,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.039,
+          "Triggers": [],
+          "Execution Time": 0.06
+        }
+      ]
+    },
+    {
+      "sql": "SELECT \"w\".id,\"w\".payload FROM selective_drivers d JOIN selective_payloads \"w\" ON \"w\".driver_id=d.id WHERE \"w\".selected IS NOT NULL ORDER BY \"w\".id",
+      "rows": [
+        {
+          "id": 0,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        },
+        {
+          "id": 1,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        },
+        {
+          "id": 2,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        },
+        {
+          "id": 3,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        }
+      ]
+    },
+    {
+      "sql": "SELECT \"selective_payloads\".\"id\",\"selective_payloads\".\"payload\" FROM selective_drivers JOIN \"selective_payloads\" ON \"selective_payloads\".\"driver_id\"=selective_drivers.id WHERE \"selective_payloads\".\"selected\" IS NOT NULL ORDER BY \"selective_payloads\".\"id\"",
+      "rows": [
+        {
+          "id": 0,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        },
+        {
+          "id": 1,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        },
+        {
+          "id": 2,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        },
+        {
+          "id": 3,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        }
+      ]
+    },
+    {
+      "sql": "SELECT w.id,w.payload FROM selective_drivers d JOIN \"selective_payloads\" w ON w.driver_id=d.id WHERE w.selected IS NOT NULL ORDER BY w.id",
+      "rows": [
+        {
+          "id": 0,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        },
+        {
+          "id": 1,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        },
+        {
+          "id": 2,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        },
+        {
+          "id": 3,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        }
+      ]
+    }
+  ],
+  "guard_controls": [
+    {
+      "sql": "SELECT l.id FROM filter_guard_l l LEFT JOIN filter_guard_r r ON l.id=r.id WHERE r.v IS NULL ORDER BY l.id",
+      "rows": [
+        [
+          3
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT \"w\".id FROM filter_guard_l \"w\" JOIN filter_guard_r \"W\" ON \"w\".id=\"W\".id WHERE \"w\".v IS NULL ORDER BY \"w\".id",
+      "rows": [
+        [
+          1
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT l.id FROM filter_guard_l l JOIN filter_guard_r r ON l.id=r.id WHERE r.v='right' AND nextval('filter_guard_calls')>0 ORDER BY l.id",
+      "rows": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT nextval('filter_guard_calls')",
+      "rows": [
+        [
+          3
+        ]
+      ]
+    }
+  ],
+  "transaction_rolled_back": true,
+  "routine_callback_control": {
+    "setup": [
+      "CREATE TEMP TABLE filter_guard_l(id INTEGER PRIMARY KEY,v TEXT)",
+      "CREATE TEMP TABLE filter_guard_r(id INTEGER PRIMARY KEY,v TEXT)",
+      "INSERT INTO filter_guard_l VALUES(1,NULL),(2,'left'),(3,'orphan')",
+      "INSERT INTO filter_guard_r VALUES(1,'right'),(2,'right')",
+      "CREATE TEMP SEQUENCE filter_guard_calls",
+      "CREATE FUNCTION filter_guard_tick() RETURNS BIGINT LANGUAGE plpgsql VOLATILE AS $$ BEGIN RETURN nextval('filter_guard_calls'); END $$"
+    ],
+    "queries": [
+      {
+        "sql": "SELECT l.id FROM filter_guard_l l JOIN filter_guard_r r ON l.id=r.id WHERE r.v='right' AND filter_guard_tick()>0 ORDER BY l.id",
+        "rows": [
+          [
+            1
+          ],
+          [
+            2
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT nextval('filter_guard_calls')",
+        "rows": [
+          [
+            3
+          ]
+        ]
+      }
+    ],
+    "transaction_rolled_back": true,
+    "fixture_note": "The regression uses the supported PL/pgSQL row-callback path. Direct nextval and SQL-language sequence callbacks are an existing unsupported BicDB row-expression context; the earlier native direct-call results are retained separately, not claimed as passing BicDB cases."
+  }
+}

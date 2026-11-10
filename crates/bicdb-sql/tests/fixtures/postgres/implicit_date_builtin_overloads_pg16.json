@@ -1,0 +1,48 @@
+{
+  "database": "bicdb_native_app_ctrl_20261109",
+  "queries": [
+    {
+      "sql": "CREATE SCHEMA implicit_calls"
+    },
+    {
+      "sql": "SET search_path=implicit_calls,pg_catalog"
+    },
+    {
+      "sql": "CREATE FUNCTION trunc(timestamp) RETURNS text LANGUAGE sql AS $$ SELECT 'without-zone' $$"
+    },
+    {
+      "sql": "CREATE FUNCTION trunc(timestamptz) RETURNS text LANGUAGE sql AS $$ SELECT 'with-zone' $$"
+    },
+    {
+      "sql": "CREATE FUNCTION wrap_date(d date) RETURNS text LANGUAGE plpgsql AS $$ BEGIN RETURN trunc(d); END $$"
+    },
+    {
+      "sql": "CREATE TABLE selected_calls(v text)"
+    },
+    {
+      "sql": "INSERT INTO selected_calls VALUES(trunc(CAST('2026-11-10' AS date)))"
+    },
+    {
+      "sql": "SELECT trunc(date '2026-11-10'),trunc(timestamp '2026-11-10 13:00:00'),trunc(timestamptz '2026-11-10 13:00:00+00'),trunc(12.7),wrap_date(date '2026-11-10')",
+      "rows": [
+        [
+          "with-zone",
+          "without-zone",
+          "with-zone",
+          "12",
+          "with-zone"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT v FROM selected_calls",
+      "rows": [
+        [
+          "with-zone"
+        ]
+      ]
+    }
+  ],
+  "transaction_rolled_back": true,
+  "version": "PostgreSQL 16.13 (Debian 16.13-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit"
+}

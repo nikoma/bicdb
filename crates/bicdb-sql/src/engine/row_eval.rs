@@ -121,21 +121,31 @@ impl<'db> SqlEngine<'db> {
         let scope = crate::eval::expr_type_scope()
             .filter(|_| self.routine_ir.is_some() && crate::eval::can_memoize_routine_expr(expr));
         let Some((generation, ir)) = scope else {
-            return std::rc::Rc::new(row_columns_expr_pg_type(
-                self.db_ref(),
-                expr,
-                context.column_keys().iter().map(String::as_str),
-            ));
+            return std::rc::Rc::new(
+                self.row_user_function_type(expr, context.column_keys().iter().map(String::as_str))
+                    .or_else(|| {
+                        row_columns_expr_pg_type(
+                            self.db_ref(),
+                            expr,
+                            context.column_keys().iter().map(String::as_str),
+                        )
+                    }),
+            );
         };
         let key = (generation, ir, expr as *const Expr as usize);
         if let Some(hit) = ROW_EXPR_TYPE_MEMO.with(|memo| memo.borrow().get(&key).cloned()) {
             return hit;
         }
-        let computed = std::rc::Rc::new(row_columns_expr_pg_type(
-            self.db_ref(),
-            expr,
-            context.column_keys().iter().map(String::as_str),
-        ));
+        let computed = std::rc::Rc::new(
+            self.row_user_function_type(expr, context.column_keys().iter().map(String::as_str))
+                .or_else(|| {
+                    row_columns_expr_pg_type(
+                        self.db_ref(),
+                        expr,
+                        context.column_keys().iter().map(String::as_str),
+                    )
+                }),
+        );
         ROW_EXPR_TYPE_MEMO.with(|memo| {
             let mut memo = memo.borrow_mut();
             if memo.len() >= ROW_EXPR_TYPE_MEMO_MAX {
@@ -1347,6 +1357,14 @@ impl<'db> SqlEngine<'db> {
                     if right_type.is_some() {
                         types.right = right_type.clone();
                     }
+                    types.result = projected_binary_expr_pg_type_with_types(
+                        left,
+                        op,
+                        right,
+                        None,
+                        types.left.clone(),
+                        types.right.clone(),
+                    );
                     eval_binary_expr_value_typed(
                         left,
                         op,
@@ -3082,6 +3100,14 @@ impl<'db> SqlEngine<'db> {
                     if right_type.is_some() {
                         types.right = right_type.clone();
                     }
+                    types.result = projected_binary_expr_pg_type_with_types(
+                        left,
+                        op,
+                        right,
+                        None,
+                        types.left.clone(),
+                        types.right.clone(),
+                    );
                     eval_binary_expr_value_typed(
                         left,
                         op,
@@ -3640,14 +3666,16 @@ impl<'db> SqlEngine<'db> {
     }
 
     pub(crate) fn infer_sql_row_expr_type(&self, row: &SqlRow, expr: &Expr) -> Option<String> {
-        row_columns_expr_pg_type(self.db_ref(), expr, row.keys().map(String::as_str)).or_else(
-            || {
+        self.row_user_function_type(expr, row.keys().map(String::as_str))
+            .or_else(|| {
+                row_columns_expr_pg_type(self.db_ref(), expr, row.keys().map(String::as_str))
+            })
+            .or_else(|| {
                 self.routine_slots.as_ref()?;
                 let columns = row.keys().cloned().collect::<Vec<_>>();
                 let (scope, _) = self.bound_row_context(&columns);
                 scope.known_expr_type(expr)
-            },
-        )
+            })
     }
 
     pub(crate) fn infer_slot_row_expr_type(
@@ -3655,14 +3683,48 @@ impl<'db> SqlEngine<'db> {
         columns: &[String],
         expr: &Expr,
     ) -> Option<String> {
-        row_columns_expr_pg_type(self.db_ref(), expr, columns.iter().map(String::as_str)).or_else(
-            || {
+        self.row_user_function_type(expr, columns.iter().map(String::as_str))
+            .or_else(|| {
+                row_columns_expr_pg_type(self.db_ref(), expr, columns.iter().map(String::as_str))
+            })
+            .or_else(|| {
                 self.routine_slots.as_ref()?;
                 // The binder preserves column precedence and ambiguity. A
                 // same-named argument must not capture a local row column.
                 let (scope, _) = self.bound_row_context(columns);
                 scope.known_expr_type(expr)
-            },
+            })
+    }
+
+    fn row_user_function_type<'c>(
+        &self,
+        expr: &Expr,
+        columns: impl Iterator<Item = &'c str> + Clone,
+    ) -> Option<String> {
+        let Expr::Function(function) = unwrap_nested_expr(expr) else {
+            return None;
+        };
+        let name = object_name(&function.name).ok()?.to_ascii_lowercase();
+        if !crate::routine_overloads::user_function_names(self.db_ref())
+            .ok()?
+            .contains(&name)
+        {
+            return None;
+        }
+        let types = function_arg_list(function)
+            .iter()
+            .map(|arg| {
+                let inferred = self
+                    .row_user_function_type(arg, columns.clone())
+                    .or_else(|| row_columns_expr_pg_type(self.db_ref(), arg, columns.clone()));
+                crate::routine_overloads::routine_argument_type_hint(arg, inferred)
+            })
+            .collect::<Vec<_>>();
+        crate::routine_overloads::user_function_result_type(
+            self.db_ref(),
+            &self.session_gucs,
+            &name,
+            &types,
         )
     }
 

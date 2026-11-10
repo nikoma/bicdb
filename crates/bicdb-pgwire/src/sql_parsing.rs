@@ -2764,9 +2764,28 @@ pub(crate) fn describe_message(
                 // COPY's stream description is sent by Execute, never by
                 // running the mutation during Describe.
                 no_data(stream)?;
-            } else if bicdb_sql::is_constraint_timing_command(&portal_sql)? {
+            } else if bicdb_sql::is_constraint_timing_command(&portal_sql)?
+                || bicdb_sql::is_postgres_rule_command(&portal_sql)?
+                || is_mutation_without_returning(&portal_sql)
+            {
                 no_data(stream)?;
             } else if let Some(result) = returning_describe_result(server, &portal_sql)? {
+                describe_result(
+                    stream,
+                    server,
+                    &result,
+                    &portal_result_formats,
+                    Some(&portal_source_sql),
+                    Some(&mut state.catalog_cache),
+                )?;
+            } else if let Some(describe_sql) = mutating_with_describe_sql(&portal_sql) {
+                let result = execute_server_sql_for_describe_with_session(
+                    server,
+                    &describe_sql,
+                    &state.session_state,
+                    state.security_context.as_ref(),
+                    &mut state.catalog_cache,
+                )?;
                 describe_result(
                     stream,
                     server,
@@ -2933,7 +2952,10 @@ pub(crate) fn execute_message(
         Some(result) => result,
         None => execute_server_sql_with_options(server, state, &sql, !streaming_fetch)?,
     };
-    if !streaming_fetch || result.columns.is_empty() {
+    // A rewritten mutation without RETURNING is a multi-query portal, not
+    // a fetchable SELECT. Native PostgreSQL completes all its rule actions
+    // and rows even when the client requests a one-row Execute limit.
+    if !streaming_fetch || result.columns.is_empty() || is_mutation_without_returning(&sql) {
         return Ok(PortalExecuteResult {
             result,
             result_formats,
@@ -3157,6 +3179,33 @@ pub(crate) fn returning_describe_result(
     } else {
         Ok(Some(SqlResult::empty(columns)))
     }
+}
+
+/// The original mutation has no result descriptor even if rewrite actions
+/// produce rows. Portal Describe must not execute it to discover that shape.
+fn is_mutation_without_returning(sql: &str) -> bool {
+    fn statement(statement: &Statement) -> bool {
+        match statement {
+            Statement::Insert(insert) => insert.returning.as_ref().is_none_or(Vec::is_empty),
+            Statement::Update(update) => update.returning.as_ref().is_none_or(Vec::is_empty),
+            Statement::Delete(delete) => delete.returning.as_ref().is_none_or(Vec::is_empty),
+            Statement::Query(query) => body(&query.body),
+            _ => false,
+        }
+    }
+    fn body(expr: &sqlparser::ast::SetExpr) -> bool {
+        use sqlparser::ast::SetExpr;
+        match expr {
+            SetExpr::Insert(value) | SetExpr::Update(value) | SetExpr::Delete(value) => {
+                statement(value)
+            }
+            SetExpr::Query(query) => body(&query.body),
+            _ => false,
+        }
+    }
+    Parser::parse_sql(&PostgreSqlDialect {}, sql)
+        .ok()
+        .is_some_and(|statements| matches!(statements.as_slice(), [value] if statement(value)))
 }
 
 pub(crate) fn has_dml_returning(sql: &str) -> bool {
@@ -4008,6 +4057,18 @@ pub(crate) fn mutating_with_describe_sql(sql: &str) -> Option<String> {
             _ => None,
         }
     }
+    // An outer mutation without RETURNING has no result columns. The NULL
+    // stand-in below exists only to describe internal CTEs; exposing it as the
+    // statement's result makes JDBC executeUpdate reject an otherwise valid
+    // WITH ... UPDATE/INSERT/DELETE after prepared-statement Describe.
+    if dml_of(&query.body).is_some_and(|statement| match statement {
+        Statement::Insert(insert) => insert.returning.as_ref().is_none_or(Vec::is_empty),
+        Statement::Update(update) => update.returning.as_ref().is_none_or(Vec::is_empty),
+        Statement::Delete(delete) => delete.returning.as_ref().is_none_or(Vec::is_empty),
+        _ => false,
+    }) {
+        return None;
+    }
     let parse_query = |sql: &str| -> Option<sqlparser::ast::Query> {
         match Parser::parse_sql(&PostgreSqlDialect {}, sql)
             .ok()?
@@ -4091,6 +4152,17 @@ mod mutating_with_describe_tests {
 
         // Read-only WITH queries keep their existing describe path.
         assert!(mutating_with_describe_sql("WITH x AS (SELECT 1 AS a) SELECT a FROM x").is_none());
+    }
+
+    #[test]
+    fn trailing_cte_mutations_without_returning_have_no_row_description() {
+        for sql in [
+            "WITH input AS (SELECT $1::int AS id) UPDATE q SET attempts=attempts+1 WHERE id=(SELECT id FROM input)",
+            "WITH input AS (SELECT $1::int AS id) INSERT INTO q(id) SELECT id FROM input",
+            "WITH input AS (SELECT $1::int AS id) DELETE FROM q WHERE id=(SELECT id FROM input)",
+        ] {
+            assert!(mutating_with_describe_sql(sql).is_none(), "{sql}");
+        }
     }
 }
 

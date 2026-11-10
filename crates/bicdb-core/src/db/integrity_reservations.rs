@@ -162,7 +162,10 @@ impl Table {
                     }
                     previous_owners = blockers;
                 }
-                self.changed[shard_index].wait_for(&mut shard, Duration::from_millis(1));
+                context.cancellation.blocking_wait(|| {
+                    self.changed[shard_index].wait_for(&mut shard, Duration::from_millis(1));
+                    drop(shard);
+                })?;
                 continue;
             }
             edges.clear();

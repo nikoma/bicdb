@@ -2504,7 +2504,11 @@ impl FieldRef {
                 .map(SqlValue::Int)
                 .unwrap_or(SqlValue::Null))),
             Self::OracleBlobColumn { .. } => None,
-            Self::PrimaryKey { name, pg_type, .. } => match lookup(cells, name) {
+            Self::PrimaryKey { name, pg_type, .. } => match cells
+                .iter()
+                .find(|(key, _)| key.as_ref() == name)
+                .map(|(_, cell)| cell)
+            {
                 Some(cell) if is_json_pg_type(pg_type) => {
                     typed_json_cell_to_sql_value(cell).map(Ok)
                 }
@@ -5763,9 +5767,51 @@ pub(crate) fn predicate_references_only_columns(expr: &Expr, columns: &BTreeSet<
     if !collect_predicate_column_references(expr, &mut references) || references.is_empty() {
         return false;
     }
+    // A quoted qualifier may distinguish two inputs whose names differ only
+    // by case. Never push that input's predicate into its case-folded peer.
+    let quoted_mismatch = sqlparser::ast::visit_expressions(expr, |expr| {
+        if let Expr::CompoundIdentifier(parts) = expr {
+            if parts.iter().any(|part| part.quote_style.is_some())
+                && (parts.len() < 2
+                    || !columns.contains(&format!(
+                        "{}.{}",
+                        parts[parts.len() - 2].value,
+                        parts[parts.len() - 1].value
+                    )))
+            {
+                return std::ops::ControlFlow::Break(());
+            }
+        }
+        std::ops::ControlFlow::Continue(())
+    })
+    .is_break();
+    if quoted_mismatch {
+        return false;
+    }
     references
         .iter()
         .all(|reference| column_reference_matches(reference, columns))
+}
+
+/// Bind identifier spelling for proofs made before row materialization.
+/// Persisted schema names remain exact: only unquoted AST names are folded.
+pub(crate) fn canonical_predicate_column_references(expr: &Expr) -> Option<Vec<Vec<String>>> {
+    let mut references = Vec::new();
+    if !collect_predicate_column_references(expr, &mut references) {
+        return None;
+    }
+    references.clear();
+    let _ = sqlparser::ast::visit_expressions(expr, |expr| {
+        match expr {
+            Expr::Identifier(ident) => references.push(vec![ident_value(ident)]),
+            Expr::CompoundIdentifier(parts) => {
+                references.push(parts.iter().map(ident_value).collect());
+            }
+            _ => {}
+        }
+        std::ops::ControlFlow::<()>::Continue(())
+    });
+    Some(references)
 }
 
 pub(crate) fn collect_predicate_column_references(

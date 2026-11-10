@@ -21,6 +21,213 @@ struct ScopeRelation {
     alias: String,
     /// `None`: the relation's columns are not known statically.
     columns: Option<Vec<String>>,
+    dependency: Option<std::sync::Arc<DependencyRelation>>,
+}
+
+#[derive(Debug)]
+struct DependencyRelation {
+    table: String,
+    columns: Vec<(String, i64)>,
+}
+
+#[derive(Default)]
+struct ViewDependencies {
+    relations: BTreeSet<String>,
+    columns: BTreeSet<(String, i64)>,
+}
+
+thread_local! {
+    static VIEW_DEPENDENCIES: RefCell<Option<ViewDependencies>> = const { RefCell::new(None) };
+}
+
+fn collecting_view_dependencies() -> bool {
+    VIEW_DEPENDENCIES.with(|slot| slot.borrow().is_some())
+}
+
+/// Observe the same scoped walk used for column binding, without executing a
+/// view or expanding its sources into transitive (rather than direct) edges.
+pub(crate) fn view_column_dependencies(
+    db: &BicDb,
+    query: &Query,
+) -> Result<BTreeSet<(String, i64)>> {
+    struct Restore(Option<ViewDependencies>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            VIEW_DEPENDENCIES.with(|slot| *slot.borrow_mut() = self.0.take());
+        }
+    }
+    let _restore =
+        Restore(VIEW_DEPENDENCIES.with(|slot| slot.replace(Some(ViewDependencies::default()))));
+    SqlEngine::new(db).check_query_columns(query, &[])?;
+    let mut collected = VIEW_DEPENDENCIES.with(|slot| slot.borrow_mut().take().unwrap());
+    for table in collected.relations {
+        if !collected.columns.iter().any(|(name, _)| name == &table) {
+            collected.columns.insert((table, 0));
+        }
+    }
+    Ok(collected.columns)
+}
+
+fn dependency_ident_matches(name: &str, ident: &Ident) -> bool {
+    name == ident_value(ident)
+}
+
+fn dependency_system_column(column: &Ident) -> Option<i64> {
+    match ident_value(column).as_str() {
+        "ctid" => Some(-1),
+        "xmin" => Some(-2),
+        "cmin" => Some(-3),
+        "xmax" => Some(-4),
+        "cmax" => Some(-5),
+        "tableoid" => Some(-6),
+        _ => None,
+    }
+}
+
+fn dependency_relation_has_column(relation: &ScopeRelation, column: &Ident) -> bool {
+    match &relation.dependency {
+        Some(source) => {
+            source
+                .columns
+                .iter()
+                .any(|(name, _)| dependency_ident_matches(name, column))
+                || dependency_system_column(column).is_some()
+        }
+        None => relation.columns.as_ref().is_some_and(|columns| {
+            columns
+                .iter()
+                .any(|name| dependency_ident_matches(name, column))
+        }),
+    }
+}
+
+fn dependency_visible_columns(relation: &ScopeRelation) -> Vec<String> {
+    match &relation.dependency {
+        Some(source) => source
+            .columns
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect(),
+        None => relation.columns.clone().unwrap_or_default(),
+    }
+}
+
+fn record_dependency(relation: &ScopeRelation, column: Option<&Ident>) {
+    let Some(source) = &relation.dependency else {
+        return;
+    };
+    VIEW_DEPENDENCIES.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        let Some(dependencies) = slot.as_mut() else {
+            return;
+        };
+        if let Some(column) = column {
+            if let Some(number) = dependency_system_column(column) {
+                dependencies.columns.insert((source.table.clone(), number));
+            }
+            for (name, number) in &source.columns {
+                if dependency_ident_matches(name, column) {
+                    dependencies.columns.insert((source.table.clone(), *number));
+                }
+            }
+        } else {
+            dependencies.columns.insert((source.table.clone(), 0));
+        }
+    });
+}
+
+fn record_wildcard_dependencies(scope: &Scope, qualifier: Option<&str>) {
+    if !collecting_view_dependencies() {
+        return;
+    }
+    VIEW_DEPENDENCIES.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        let dependencies = slot.as_mut().unwrap();
+        for relation in &scope.relations {
+            if qualifier.is_some_and(|qualifier| relation.alias != qualifier) {
+                continue;
+            }
+            if let Some(source) = &relation.dependency {
+                for (_, number) in &source.columns {
+                    dependencies.columns.insert((source.table.clone(), *number));
+                }
+            }
+        }
+    });
+}
+
+fn record_reference_dependencies(parts: &[Ident], scope: &Scope, outer: &[Scope], outputs: bool) {
+    if !collecting_view_dependencies() {
+        return;
+    }
+    let Some(column) = parts.last() else {
+        return;
+    };
+    if parts.len() == 1
+        && outputs
+        && scope
+            .output_names
+            .iter()
+            .any(|name| dependency_ident_matches(name, column))
+    {
+        return;
+    }
+    for scope in std::iter::once(scope).chain(outer) {
+        if parts.len() == 1 {
+            let matches = scope
+                .relations
+                .iter()
+                .filter(|relation| dependency_relation_has_column(relation, column))
+                .collect::<Vec<_>>();
+            if !matches.is_empty() {
+                for relation in matches {
+                    record_dependency(relation, Some(column));
+                }
+                return;
+            }
+            if let Some(relation) = scope
+                .relations
+                .iter()
+                .find(|relation| dependency_ident_matches(&relation.alias, column))
+            {
+                record_dependency(relation, None);
+                return;
+            }
+            if scope.is_open() {
+                return;
+            }
+        } else {
+            let qualifier = &parts[parts.len() - 2];
+            let qualified_table = (parts.len() == 3)
+                .then(|| {
+                    relation_name_from_parts(
+                        &parts[..2].iter().map(ident_value).collect::<Vec<_>>(),
+                    )
+                    .ok()
+                })
+                .flatten();
+            let matches = scope
+                .relations
+                .iter()
+                .filter(|relation| {
+                    if let Some(table) = &qualified_table {
+                        relation
+                            .dependency
+                            .as_ref()
+                            .is_some_and(|source| &source.table == table)
+                    } else {
+                        dependency_ident_matches(&relation.alias, qualifier)
+                    }
+                })
+                .collect::<Vec<_>>();
+            if !matches.is_empty() {
+                for relation in matches {
+                    record_dependency(relation, Some(column));
+                }
+                return;
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -59,7 +266,8 @@ const NON_COLUMN_NAMES: &[&str] = &[
 ];
 
 /// System columns every base table carries.
-const SYSTEM_COLUMNS: &[&str] = &["ctid", "xmin", "xmax", "cmin", "cmax", "tableoid", "oid"];
+pub(super) const SYSTEM_COLUMNS: &[&str] =
+    &["ctid", "xmin", "xmax", "cmin", "cmax", "tableoid", "oid"];
 
 /// Qualifiers that name rule/trigger pseudo relations rather than FROM items.
 const PSEUDO_QUALIFIERS: &[&str] = &["new", "old", "excluded"];
@@ -244,6 +452,11 @@ impl SqlEngine<'_> {
                     &cte.alias.columns,
                 )
             });
+            let collect_nonrecursive_body = collecting_view_dependencies() && !with.recursive;
+            if collect_nonrecursive_body {
+                // A non-recursive CTE's own name is not visible in its body.
+                engine.check_query_columns(&cte.query, outer)?;
+            }
             match columns {
                 Some(columns) => {
                     let (names, types): (Vec<_>, Vec<_>) = columns.into_iter().unzip();
@@ -251,7 +464,9 @@ impl SqlEngine<'_> {
                         cte_key(&name),
                         CteResult::new(name.clone(), names, Vec::new()).with_column_types(types),
                     );
-                    engine.check_query_columns(&cte.query, outer)?;
+                    if !collect_nonrecursive_body {
+                        engine.check_query_columns(&cte.query, outer)?;
+                    }
                 }
                 None => {
                     // Unknown output columns: references to this CTE stay
@@ -265,7 +480,9 @@ impl SqlEngine<'_> {
                             Vec::new(),
                         ),
                     );
-                    engine.check_query_columns(&cte.query, outer)?;
+                    if !collect_nonrecursive_body {
+                        engine.check_query_columns(&cte.query, outer)?;
+                    }
                 }
             }
         }
@@ -285,6 +502,7 @@ impl SqlEngine<'_> {
                     let scope = Scope {
                         relations: vec![ScopeRelation {
                             alias: String::new(),
+                            dependency: None,
                             columns: output
                                 .map(|columns| columns.into_iter().map(|(name, _)| name).collect()),
                         }],
@@ -351,6 +569,16 @@ impl SqlEngine<'_> {
                     self.check_expr_columns(expr, &scope, outer, false)?;
                     scope.output_names.push(alias.value.clone());
                 }
+                SelectItem::Wildcard(_) => {
+                    record_wildcard_dependencies(&scope, None);
+                }
+                SelectItem::QualifiedWildcard(
+                    sqlparser::ast::SelectItemQualifiedWildcardKind::ObjectName(name),
+                    _,
+                ) => {
+                    let parts = object_name_parts(name);
+                    record_wildcard_dependencies(&scope, parts.last().map(String::as_str));
+                }
                 _ => {}
             }
         }
@@ -364,6 +592,14 @@ impl SqlEngine<'_> {
         }
         if let GroupByExpr::Expressions(exprs, _) = &select.group_by {
             for expr in exprs {
+                // GROUP BY prefers an input column over an output alias.
+                if collecting_view_dependencies() {
+                    let mut collector = ReferenceCollector::default();
+                    let _ = expr.visit(&mut collector);
+                    for parts in collector.references {
+                        record_reference_dependencies(&parts, &scope, outer, false);
+                    }
+                }
                 self.check_expr_columns(expr, &scope, outer, true)?;
             }
         }
@@ -394,9 +630,37 @@ impl SqlEngine<'_> {
     ) -> Result<()> {
         self.scope_table_factor(&table.relation, outer, scope, deferred)?;
         for join in &table.joins {
+            let left_columns = collecting_view_dependencies().then(|| {
+                scope
+                    .relations
+                    .iter()
+                    .flat_map(dependency_visible_columns)
+                    .collect::<BTreeSet<_>>()
+            });
+            let left_relations = scope.relations.len();
             self.scope_table_factor(&join.relation, outer, scope, deferred)?;
             if let Some(JoinConstraint::On(expr)) = join_constraint(&join.join_operator) {
                 deferred.push(expr);
+            }
+            if collecting_view_dependencies() {
+                let names = match join_constraint(&join.join_operator) {
+                    Some(JoinConstraint::Using(names)) => names
+                        .iter()
+                        .filter_map(|name| object_name_parts(name).last().cloned())
+                        .collect::<BTreeSet<_>>(),
+                    Some(JoinConstraint::Natural) => scope.relations[left_relations..]
+                        .iter()
+                        .flat_map(dependency_visible_columns)
+                        .filter(|name| left_columns.as_ref().unwrap().contains(name))
+                        .collect(),
+                    _ => BTreeSet::new(),
+                };
+                for name in names {
+                    let ident = Ident::with_quote('"', name);
+                    for relation in &scope.relations {
+                        record_dependency(relation, Some(&ident));
+                    }
+                }
             }
         }
         Ok(())
@@ -437,6 +701,53 @@ impl SqlEngine<'_> {
             _ => {}
         }
         let alias = table_factor_alias(factor);
+        let source = if collecting_view_dependencies() {
+            if let TableFactor::Table {
+                name, args: None, ..
+            } = factor
+            {
+                let name = relation_name(name)?;
+                if self.cte(&name).is_some() {
+                    None
+                } else if let Some(schema) = load_schema(self.db_ref(), &name)? {
+                    Some((
+                        name,
+                        schema
+                            .columns
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, column)| !column.hidden)
+                            .map(|(index, column)| (column.name.clone(), index as i64 + 1))
+                            .collect::<Vec<_>>(),
+                    ))
+                } else {
+                    load_view(self.db_ref(), &name)?.map(|view| {
+                        (
+                            name,
+                            view.columns
+                                .iter()
+                                .enumerate()
+                                .filter(|(_, column)| !column.hidden)
+                                .map(|(index, column)| (column.name.clone(), index as i64 + 1))
+                                .collect::<Vec<_>>(),
+                        )
+                    })
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        if let Some((name, _)) = &source {
+            VIEW_DEPENDENCIES.with(|slot| {
+                slot.borrow_mut()
+                    .as_mut()
+                    .unwrap()
+                    .relations
+                    .insert(name.clone())
+            });
+        }
         // Catalog and virtual relations, CTEs without known columns and
         // anything the column inference does not cover stay open.
         let virtual_relation = matches!(factor, TableFactor::Table { name, args: None, .. }
@@ -455,6 +766,7 @@ impl SqlEngine<'_> {
             scope.relations.push(ScopeRelation {
                 alias: alias.unwrap_or_default(),
                 columns: None,
+                dependency: None,
             });
             return Ok(());
         }
@@ -475,6 +787,7 @@ impl SqlEngine<'_> {
                         scope.relations.push(ScopeRelation {
                             alias: table_factor_alias(factor).unwrap_or_default(),
                             columns: None,
+                            dependency: None,
                         });
                         return Ok(());
                     }
@@ -485,6 +798,16 @@ impl SqlEngine<'_> {
         for relation in env {
             let mut columns: Vec<String> =
                 relation.columns.into_iter().map(|(name, _)| name).collect();
+            let dependency = source.as_ref().map(|(table, original)| {
+                std::sync::Arc::new(DependencyRelation {
+                    table: table.clone(),
+                    columns: columns
+                        .iter()
+                        .zip(original)
+                        .map(|(name, (_, number))| (name.clone(), *number))
+                        .collect(),
+                })
+            });
             if base_table {
                 columns.extend(SYSTEM_COLUMNS.iter().map(|name| (*name).to_string()));
                 // Record fields every BicDB collection row carries.
@@ -508,12 +831,18 @@ impl SqlEngine<'_> {
                     scope.relations.push(ScopeRelation {
                         alias: table.clone(),
                         columns: Some(columns.clone()),
+                        dependency: dependency.clone(),
                     });
                 }
             }
             scope.relations.push(ScopeRelation {
-                alias: relation.alias,
+                alias: if collecting_view_dependencies() {
+                    alias.clone().unwrap_or(relation.alias)
+                } else {
+                    relation.alias
+                },
                 columns: Some(columns),
+                dependency,
             });
         }
         Ok(())
@@ -529,6 +858,7 @@ impl SqlEngine<'_> {
         let mut collected = ReferenceCollector::default();
         let _ = expr.visit(&mut collected);
         for parts in &collected.references {
+            record_reference_dependencies(parts, scope, outer, output_names_visible);
             let parts: Vec<&Ident> = parts.iter().collect();
             self.check_reference(&parts, scope, outer, output_names_visible)?;
         }

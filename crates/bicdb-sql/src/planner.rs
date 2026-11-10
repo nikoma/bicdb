@@ -3493,15 +3493,18 @@ pub(crate) fn normalize_table_field_expr(
     schema: Option<&TableSchema>,
 ) -> Option<Expr> {
     match expr {
-        Expr::Identifier(ident) if table_has_field(schema, &ident.value) => {
-            Some(Expr::Identifier(ident.clone()))
+        Expr::Identifier(ident) => {
+            let mut field = ident.clone();
+            field.value = ident_value(ident);
+            table_has_field(schema, &field.value).then_some(Expr::Identifier(field))
         }
         Expr::CompoundIdentifier(idents) if idents.len() >= 2 => {
             let qualifier = &idents[idents.len() - 2].value;
             if !qualifier.eq_ignore_ascii_case(alias) && !qualifier.eq_ignore_ascii_case(table) {
                 return None;
             }
-            let field = idents.last()?.clone();
+            let mut field = idents.last()?.clone();
+            field.value = ident_value(&field);
             table_has_field(schema, &field.value).then_some(Expr::Identifier(field))
         }
         Expr::Nested(expr) => normalize_table_field_expr(expr, table, alias, schema),
@@ -4115,7 +4118,13 @@ pub(crate) fn slot_row_from_cells(
                     .and_then(|index| cells.get(index))
                     .filter(|(key, _)| key.as_ref() == name)
                     .or_else(|| cells.iter().find(|(key, _)| key.as_ref() == name))
-                    .or_else(|| cells.iter().find(|(key, _)| key.eq_ignore_ascii_case(name)))
+                    .or_else(|| {
+                        // A missing declared PK cell is represented by the
+                        // physical record ID, not a different quoted column.
+                        (!matches!(field, FieldRef::PrimaryKey { .. }))
+                            .then(|| cells.iter().find(|(key, _)| key.eq_ignore_ascii_case(name)))
+                            .flatten()
+                    })
                     .map(|(_, cell)| cell);
                 match cell {
                     Some(cell) => {
@@ -5107,6 +5116,18 @@ pub(crate) fn retain_referenced_fields(
     table: &str,
     alias: &str,
 ) {
+    retain_referenced_columns(fields, needed, table, alias, |field| field.name());
+}
+
+/// Applies the same conservative projection to stored fields and virtual
+/// catalog columns. Both paths must preserve wildcard and whole-row values.
+pub(crate) fn retain_referenced_columns<T>(
+    columns: &mut Vec<T>,
+    needed: Option<&ReferencedColumns>,
+    table: &str,
+    alias: &str,
+    name: impl Fn(&T) -> String,
+) {
     let Some(needed) = needed else {
         return;
     };
@@ -5119,14 +5140,14 @@ pub(crate) fn retain_referenced_fields(
     {
         return;
     }
-    let kept = fields
+    let kept = columns
         .iter()
-        .filter(|field| needed.all.contains(&field.name().to_ascii_lowercase()))
+        .filter(|column| needed.all.contains(&name(column).to_ascii_lowercase()))
         .count();
-    if kept == 0 || kept == fields.len() {
+    if kept == 0 || kept == columns.len() {
         return;
     }
-    fields.retain(|field| needed.all.contains(&field.name().to_ascii_lowercase()));
+    columns.retain(|column| needed.all.contains(&name(column).to_ascii_lowercase()));
 }
 
 #[cfg(test)]

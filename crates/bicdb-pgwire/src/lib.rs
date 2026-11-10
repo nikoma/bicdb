@@ -4019,7 +4019,9 @@ fn execute_server_db_sql(
         }
         if metadata_progress
             || independent
-            || !matches!(&result, Err(SqlError::Unsupported(message)) if message == "operation requires exclusive database access")
+            || !result
+                .as_ref()
+                .is_err_and(|error| error.requires_exclusive_database_access())
         {
             return result.map_err(PgWireError::from);
         }
@@ -4196,11 +4198,26 @@ fn execute_server_db_sql_for_state_inner(
             }
             continue;
         }
-        // Needs exclusive access (DDL / non-transactional) or hit a genuine SQL
-        // error: hand off to the exclusive path, which re-runs and surfaces it.
-        let Ok(res) = result else {
-            conflicts_exhausted = false;
-            break;
+        let res = match result {
+            Ok(result) => result,
+            Err(error) if error.requires_exclusive_database_access() => {
+                // Only the internal lease request needs another execution.
+                conflicts_exhausted = false;
+                break;
+            }
+            Err(error) => {
+                // A definitive SQL failure (notably 23505 after waiting for a
+                // unique-key owner) must be returned without replay. Queuing
+                // an exclusive writer here can block the shared commit of a
+                // new owner while other INSERTs still hold shared guards and
+                // wait for that owner's key, creating a global lock convoy.
+                if let Some(tx) = pending {
+                    tx.rollback()?;
+                }
+                state.session_state = session_state;
+                state.catalog_cache = catalog_cache;
+                return Err(error.into());
+            }
         };
         let Some(tx) = pending else {
             // Read-only / no buffered write: nothing to commit.
@@ -4452,7 +4469,9 @@ fn execute_server_transaction_sql(
     };
     state.last_commit_seq = state.last_commit_seq.max(independent_sequence);
     let ran_exclusive = !independent
-        && matches!(&result, Err(SqlError::Unsupported(message)) if message == "operation requires exclusive database access");
+        && result
+            .as_ref()
+            .is_err_and(|error| error.requires_exclusive_database_access());
     let (result, session_state, pending_tx, catalog_cache, ddl_undo_log, recovered) =
         if ran_exclusive {
             let Some(tx) = pending_tx else {
@@ -4755,7 +4774,7 @@ fn execute_server_sql_with_options_normalized(
     }
     let role_permit = workload::admit(server, &state.user, state.security_context.as_ref(), sql)?;
     let memory_scope = bicdb_core::query_budget::QueryMemoryScope::new(role_permit.memory_bytes);
-    let _permit = match server.acquire_query(query_kind_for_normalized_sql(normalized)) {
+    let permit = match server.acquire_query(query_kind_for_normalized_sql(normalized)) {
         Ok(permit) => permit,
         Err(PgWireError::QueryTimedOut) => {
             server.record_cancel_metadata(state.connection_id, "timeout", "57014");
@@ -4763,6 +4782,7 @@ fn execute_server_sql_with_options_normalized(
         }
         Err(error) => return Err(error),
     };
+    let _permit = PausableQueryPermit::new(permit);
     if state.take_cancel_request() {
         server.canceled_queries.fetch_add(1, Ordering::SeqCst);
         server.record_cancel_metadata(state.connection_id, "cancel", "57014");
@@ -4772,7 +4792,8 @@ fn execute_server_sql_with_options_normalized(
 
     let started = Instant::now();
     let deadline = (!role_permit.timeout.is_zero()).then(|| Instant::now() + role_permit.timeout);
-    let cancellation = CancellationToken::new(state.cancel_token.clone(), deadline);
+    let cancellation = CancellationToken::new(state.cancel_token.clone(), deadline)
+        .with_wait_admission(_permit.observer());
     let transaction_control = if is_transaction_control_candidate(normalized) {
         Some(
             parse_transaction_control_for_profile(sql, &server.config.sql_profile)

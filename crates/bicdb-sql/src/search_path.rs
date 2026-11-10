@@ -213,6 +213,17 @@ impl Binder<'_> {
         }
     }
 
+    fn bind_privilege_objects(&mut self, objects: Option<&mut GrantObjects>) {
+        let (names, exists): (_, fn(&BicDb, &str) -> bool) = match objects {
+            Some(GrantObjects::Tables(names)) => (names, relation_exists),
+            Some(GrantObjects::Sequences(names)) => (names, sequence_exists),
+            _ => return,
+        };
+        for name in names {
+            self.bind_reference(name, exists);
+        }
+    }
+
     fn bind_foreign_key(&mut self, constraint: &mut sqlparser::ast::TableConstraint) {
         if let sqlparser::ast::TableConstraint::ForeignKey(foreign_key) = constraint {
             self.bind_reference(&mut foreign_key.foreign_table, relation_exists);
@@ -311,6 +322,12 @@ impl sqlparser::ast::VisitorMut for Binder<'_> {
                     }
                 }
             }
+            Statement::Grant(grant) => {
+                self.bind_privilege_objects(grant.objects.as_mut());
+            }
+            Statement::Revoke(revoke) => {
+                self.bind_privilege_objects(revoke.objects.as_mut());
+            }
             Statement::Copy {
                 source: sqlparser::ast::CopySource::Table { table_name, .. },
                 ..
@@ -345,6 +362,22 @@ impl sqlparser::ast::VisitorMut for Binder<'_> {
         self.bind_reference(name, relation_exists);
         ControlFlow::Continue(())
     }
+}
+
+/// Binds a relation parsed by a raw-only PostgreSQL DDL handler.
+pub(crate) fn bind_raw_relation(db: &BicDb, name: &mut ObjectName) {
+    let Some(path) = active_path() else {
+        return;
+    };
+    let mut binder = Binder {
+        db,
+        path: &path,
+        ctes: Vec::new(),
+        changed: false,
+        insertions: Vec::new(),
+        positions_missing: false,
+    };
+    binder.bind_reference(name, relation_exists);
 }
 
 /// Binds unqualified relation references in any AST node; reports a change.

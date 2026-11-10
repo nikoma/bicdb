@@ -214,11 +214,20 @@ impl AdvisoryLockManager {
                 state.waiting.remove(&connection_id);
                 return Err(SqlError::from(error));
             }
-            let (next, _) = self
-                .changed
-                .wait_timeout(state, Duration::from_millis(25))
-                .unwrap();
-            state = next;
+            let waited = cancellation.blocking_wait(|| {
+                let (next, _) = self
+                    .changed
+                    .wait_timeout(state, Duration::from_millis(25))
+                    .unwrap();
+                drop(next);
+            });
+            // Reacquire execution admission before this mutex. The owner must
+            // be able to unlock while the waiter is waiting for admission.
+            state = self.state.lock().unwrap();
+            if let Err(error) = waited {
+                state.waiting.remove(&connection_id);
+                return Err(error.into());
+            }
         }
     }
 
@@ -2721,6 +2730,69 @@ impl Drop for ConnectionAdmission {
 pub(crate) struct ActiveQueryPermit {
     pub(crate) server: Arc<PgWireServer>,
     pub(crate) kind: QueryKind,
+}
+
+/// The statement owns this state; tokens retained by a transaction hold only
+/// a weak observer and cannot retain an execution slot after statement exit.
+pub(crate) struct PausableQueryPermit {
+    permit: Mutex<Option<ActiveQueryPermit>>,
+    server: Arc<PgWireServer>,
+    kind: QueryKind,
+    thread: thread::ThreadId,
+}
+
+impl PausableQueryPermit {
+    pub(crate) fn new(permit: ActiveQueryPermit) -> Arc<Self> {
+        Arc::new(Self {
+            server: permit.server.clone(),
+            kind: permit.kind,
+            thread: thread::current().id(),
+            permit: Mutex::new(Some(permit)),
+        })
+    }
+
+    pub(crate) fn observer(self: &Arc<Self>) -> Arc<dyn bicdb_core::BlockingWaitAdmission> {
+        Arc::new(QueryWaitObserver(Arc::downgrade(self)))
+    }
+}
+
+struct QueryWaitObserver(Weak<PausableQueryPermit>);
+
+impl std::fmt::Debug for QueryWaitObserver {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("QueryWaitObserver")
+    }
+}
+
+impl bicdb_core::BlockingWaitAdmission for QueryWaitObserver {
+    fn suspend(&self) -> bool {
+        let Some(state) = self.0.upgrade() else {
+            return false;
+        };
+        // A child's parallel work may share cancellation but cannot release
+        // the executing parent's permit from a different worker thread.
+        if state.thread != thread::current().id() {
+            return false;
+        }
+        let released = state.permit.lock().unwrap().take().is_some();
+        released
+    }
+
+    fn resume(&self, cancellation: &CancellationToken) -> bicdb_core::Result<()> {
+        let Some(state) = self.0.upgrade() else {
+            return Ok(());
+        };
+        cancellation.check()?;
+        let permit = state
+            .server
+            .acquire_query(state.kind)
+            .map_err(|error| match error {
+                PgWireError::QueryTimedOut => BicDbError::QueryTimedOut,
+                other => BicDbError::ResourceGovernance(other.to_string()),
+            })?;
+        *state.permit.lock().unwrap() = Some(permit);
+        cancellation.check()
+    }
 }
 
 pub(crate) struct QueryQueueAdmission {

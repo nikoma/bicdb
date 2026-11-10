@@ -2766,9 +2766,26 @@ pub(crate) fn describe_message(
                 no_data(stream)?;
             } else if bicdb_sql::is_constraint_timing_command(&portal_sql)?
                 || bicdb_sql::is_postgres_rule_command(&portal_sql)?
+                || is_mutation_without_returning(&portal_sql)
             {
                 no_data(stream)?;
             } else if let Some(result) = returning_describe_result(server, &portal_sql)? {
+                describe_result(
+                    stream,
+                    server,
+                    &result,
+                    &portal_result_formats,
+                    Some(&portal_source_sql),
+                    Some(&mut state.catalog_cache),
+                )?;
+            } else if let Some(describe_sql) = mutating_with_describe_sql(&portal_sql) {
+                let result = execute_server_sql_for_describe_with_session(
+                    server,
+                    &describe_sql,
+                    &state.session_state,
+                    state.security_context.as_ref(),
+                    &mut state.catalog_cache,
+                )?;
                 describe_result(
                     stream,
                     server,
@@ -3159,6 +3176,33 @@ pub(crate) fn returning_describe_result(
     } else {
         Ok(Some(SqlResult::empty(columns)))
     }
+}
+
+/// The original mutation has no result descriptor even if rewrite actions
+/// produce rows. Portal Describe must not execute it to discover that shape.
+fn is_mutation_without_returning(sql: &str) -> bool {
+    fn statement(statement: &Statement) -> bool {
+        match statement {
+            Statement::Insert(insert) => insert.returning.as_ref().is_none_or(Vec::is_empty),
+            Statement::Update(update) => update.returning.as_ref().is_none_or(Vec::is_empty),
+            Statement::Delete(delete) => delete.returning.as_ref().is_none_or(Vec::is_empty),
+            Statement::Query(query) => body(&query.body),
+            _ => false,
+        }
+    }
+    fn body(expr: &sqlparser::ast::SetExpr) -> bool {
+        use sqlparser::ast::SetExpr;
+        match expr {
+            SetExpr::Insert(value) | SetExpr::Update(value) | SetExpr::Delete(value) => {
+                statement(value)
+            }
+            SetExpr::Query(query) => body(&query.body),
+            _ => false,
+        }
+    }
+    Parser::parse_sql(&PostgreSqlDialect {}, sql)
+        .ok()
+        .is_some_and(|statements| matches!(statements.as_slice(), [value] if statement(value)))
 }
 
 pub(crate) fn has_dml_returning(sql: &str) -> bool {

@@ -4019,7 +4019,9 @@ fn execute_server_db_sql(
         }
         if metadata_progress
             || independent
-            || !matches!(&result, Err(SqlError::Unsupported(message)) if message == "operation requires exclusive database access")
+            || !result
+                .as_ref()
+                .is_err_and(|error| error.requires_exclusive_database_access())
         {
             return result.map_err(PgWireError::from);
         }
@@ -4452,7 +4454,9 @@ fn execute_server_transaction_sql(
     };
     state.last_commit_seq = state.last_commit_seq.max(independent_sequence);
     let ran_exclusive = !independent
-        && matches!(&result, Err(SqlError::Unsupported(message)) if message == "operation requires exclusive database access");
+        && result
+            .as_ref()
+            .is_err_and(|error| error.requires_exclusive_database_access());
     let (result, session_state, pending_tx, catalog_cache, ddl_undo_log, recovered) =
         if ran_exclusive {
             let Some(tx) = pending_tx else {

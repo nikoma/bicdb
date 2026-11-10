@@ -4343,6 +4343,9 @@ impl<'db> SqlSession<'db> {
         ddl_undo_len: usize,
         savepoint_len: usize,
     ) -> Result<RoutineControl> {
+        if error.requires_exclusive_database_access() {
+            return Err(error);
+        }
         let sqlstate = error.sqlstate().to_string();
         let Some(handler) = handlers
             .iter()

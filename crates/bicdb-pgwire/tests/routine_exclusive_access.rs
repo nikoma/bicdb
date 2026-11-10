@@ -41,12 +41,39 @@ async fn routine_ddl_escalates_without_entering_user_handler_or_replaying_writes
             .unwrap()
             .get::<_, i64>(0);
         client.batch_execute("COMMIT").await.unwrap();
-        let extra = client
-            .query_one("SELECT extra FROM escalation_target", &[])
+        assert!(client
+            .query("SELECT extra FROM escalation_target", &[])
             .await
-            .unwrap_err();
-        // An empty target yields no row; resolving the new column succeeded.
-        assert!(extra.code().is_none(), "new column must resolve: {extra}");
+            .unwrap()
+            .is_empty());
+        client.batch_execute("CREATE FUNCTION escalation_user_error() RETURNS integer LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'operation requires exclusive database access' USING ERRCODE='0A000'; EXCEPTION WHEN OTHERS THEN RETURN 9; END $$").await.unwrap();
+        assert_eq!(
+            client
+                .query_one("SELECT escalation_user_error()", &[])
+                .await
+                .unwrap()
+                .get::<_, i32>(0),
+            9
+        );
+        client.batch_execute("CREATE SCHEMA adempiere; SET search_path=adempiere,public; CREATE TABLE wire_privilege_probe(description varchar(20)); INSERT INTO wire_privilege_probe VALUES('retained'); CREATE VIEW wire_privilege_probe_v AS SELECT description FROM wire_privilege_probe").await.unwrap();
+        client
+            .batch_execute(include_str!(
+                "../../bicdb-sql/tests/fixtures/postgres/idempiere_altercolumn.sql"
+            ))
+            .await
+            .unwrap();
+        client.batch_execute("BEGIN").await.unwrap();
+        client.query("SELECT altercolumn('wire_privilege_probe'::name,'description'::name,'varchar(40)'::name,NULL::varchar,NULL::varchar)", &[]).await.unwrap();
+        assert_eq!(
+            client
+                .query_one("SELECT description FROM wire_privilege_probe_v", &[])
+                .await
+                .unwrap()
+                .get::<_, String>(0),
+            "retained"
+        );
+        assert_eq!(client.query_one("SELECT count(*) FROM information_schema.role_table_grants WHERE table_schema='adempiere' AND table_name='wire_privilege_probe_v'", &[]).await.unwrap().get::<_, i64>(0),7);
+        client.batch_execute("COMMIT").await.unwrap();
         count
     } else {
         client.batch_execute("ROLLBACK").await.unwrap();

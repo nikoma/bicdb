@@ -4,8 +4,9 @@ use super::*;
 use bicdb_core::RecordReadSnapshot;
 
 const PAGE_BYTES: u64 = 2048;
-// PostgreSQL's 2 KiB LO pages have a signed 32-bit page number.
-const MAX_LENGTH: u64 = PAGE_BYTES * (i32::MAX as u64 + 1);
+// PostgreSQL 16 caps seek/end at INT_MAX * LOBLKSIZE, not at
+// (INT_MAX + 1) pages. Native sparse boundary controls cover this exact value.
+const MAX_LENGTH: u64 = PAGE_BYTES * i32::MAX as u64;
 const OBJECT_RESERVATION: &str = "postgres-large-object";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -425,23 +426,31 @@ impl Mutation<'_> {
             return Err(invalid("large object exceeds the maximum length"));
         }
         let first_removed = if length == 0 {
-            0
+            1
         } else {
             (length - 1) / PAGE_BYTES + 1
         };
         self.delete_pages_from(first_removed, cancellation)?;
-        if length > 0 {
-            let page = (length - 1) / PAGE_BYTES;
-            let within = ((length - 1) % PAGE_BYTES + 1) as usize;
-            let key = page_key(self.oid, page);
-            let (record, boundary) = row_for_write(self.tx, PAGES, &key)?;
-            let mut data = page_bytes(record.as_deref())?.to_vec();
-            data.resize(within, 0);
-            self.tx.write_upserts_with_statement_snapshots(
-                PAGES,
-                [(Record::new(key).with_payload(data), boundary)],
-            )?;
-        }
+        // Native lo_truncate(0) keeps/creates page zero with empty data.
+        // Extensions likewise materialize only their final sparse page.
+        let page = if length == 0 {
+            0
+        } else {
+            (length - 1) / PAGE_BYTES
+        };
+        let within = if length == 0 {
+            0
+        } else {
+            ((length - 1) % PAGE_BYTES + 1) as usize
+        };
+        let key = page_key(self.oid, page);
+        let (record, boundary) = row_for_write(self.tx, PAGES, &key)?;
+        let mut data = page_bytes(record.as_deref())?.to_vec();
+        data.resize(within, 0);
+        self.tx.write_upserts_with_statement_snapshots(
+            PAGES,
+            [(Record::new(key).with_payload(data), boundary)],
+        )?;
         self.metadata.length = length;
         self.persist_metadata()
     }
@@ -567,7 +576,7 @@ mod tests {
     }
 
     #[test]
-    fn truncate_extends_sparse_last_page_and_zero_removes_all_pages() {
+    fn truncate_extends_sparse_last_page_and_zero_keeps_empty_page() {
         let root = tempfile::tempdir().unwrap();
         let mut db = open(root.path(), StorageMode::EmbeddedMemory);
         ensure_storage(&mut db).unwrap();
@@ -605,10 +614,19 @@ mod tests {
             .truncate(0, &cancel)
             .unwrap();
         assert_eq!(metadata(&tx, 42001).unwrap().length, 0);
-        assert!(tx
-            .scan_collection_record_ids_with_prefix(PAGES, &page_prefix(42001))
-            .unwrap()
-            .is_empty());
+        assert_eq!(
+            tx.scan_collection_record_ids_with_prefix(PAGES, &page_prefix(42001))
+                .unwrap(),
+            vec![page_key(42001, 0)]
+        );
+        assert_eq!(
+            tx.get(PAGES, &page_key(42001, 0))
+                .unwrap()
+                .unwrap()
+                .payload
+                .as_deref(),
+            Some([].as_slice())
+        );
         tx.rollback().unwrap();
     }
 
@@ -687,6 +705,39 @@ mod tests {
                 .execute(&format!("CREATE TABLE {name}(id integer)"))
                 .is_err());
         }
+    }
+
+    #[test]
+    fn native_sparse_maximum_accepts_empty_write_and_rejects_one_more_byte() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = open(root.path(), StorageMode::EmbeddedMemory);
+        ensure_storage(&mut db).unwrap();
+        let cancel = CancellationToken::uncancelable();
+        let mut tx = db.begin_transaction().unwrap();
+        create(&db, &mut tx, 42001, "bicdb", None).unwrap();
+        mutation(&db, &mut tx, 42001, None)
+            .unwrap()
+            .write(MAX_LENGTH, &[], &cancel)
+            .unwrap();
+        assert_eq!(metadata(&tx, 42001).unwrap().length, 0);
+        mutation(&db, &mut tx, 42001, None)
+            .unwrap()
+            .write(MAX_LENGTH - 1, b"Z", &cancel)
+            .unwrap();
+        assert_eq!(metadata(&tx, 42001).unwrap().length, 4398046509056);
+        assert_eq!(
+            read(&tx, 42001, MAX_LENGTH - 1, 100, &cancel).unwrap(),
+            b"Z"
+        );
+        assert!(mutation(&db, &mut tx, 42001, None)
+            .unwrap()
+            .write(MAX_LENGTH, b"x", &cancel)
+            .is_err());
+        assert!(mutation(&db, &mut tx, 42001, None)
+            .unwrap()
+            .truncate(MAX_LENGTH + 1, &cancel)
+            .is_err());
+        tx.rollback().unwrap();
     }
 
     #[test]

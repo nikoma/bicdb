@@ -1277,6 +1277,17 @@ fn validate_unique_arbiter_records_vacating(
         return Ok(());
     }
 
+    // Native writes announce their unique keys with shared reservations so
+    // commit can arbitrate them atomically. SQL must additionally take the
+    // exclusive reservation before testing committed state: two ordinary
+    // INSERTs otherwise both pass the lookup while the first is uncommitted.
+    // Recheck the index after the wait, using its current committed contents.
+    if let (Some(tx), Some(index)) = (tx, arbiter.index_name.as_deref()) {
+        for record in records {
+            tx.reserve_unique_index_record_for_integrity_check(index, record)?;
+        }
+    }
+
     let contains_json = records.iter().any(|record| {
         unique_key_values(record, schema, &arbiter.key)
             .iter()

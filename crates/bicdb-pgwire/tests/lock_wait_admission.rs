@@ -52,7 +52,7 @@ async fn lock_owner_progress(lock: &str, release: &str) {
     } else {
         statement
     };
-    let waiting = tokio::spawn(async move {
+    let mut waiting = tokio::spawn(async move {
         let result = second.batch_execute(statement).await;
         let commit = second.batch_execute("COMMIT").await;
         drop(second);
@@ -71,10 +71,25 @@ async fn lock_owner_progress(lock: &str, release: &str) {
     .await;
     if observed.is_err() && waiting.is_finished() {
         let early = waiting.await;
-        let owner_rows = first.query("SELECT id,n FROM admission_rows ORDER BY id", &[]).await;
-        let owner_rows = owner_rows.map(|rows| rows.into_iter().map(|r| (r.get::<_,i32>(0),r.get::<_,i32>(1))).collect::<Vec<_>>());
-        let indexes = first.query("SELECT indexname,indexdef FROM pg_indexes WHERE tablename='admission_rows'", &[]).await;
-        let indexes = indexes.map(|rows| rows.into_iter().map(|r| (r.get::<_,String>(0),r.get::<_,String>(1))).collect::<Vec<_>>());
+        let owner_rows = first
+            .query("SELECT id,n FROM admission_rows ORDER BY id", &[])
+            .await;
+        let owner_rows = owner_rows.map(|rows| {
+            rows.into_iter()
+                .map(|r| (r.get::<_, i32>(0), r.get::<_, i32>(1)))
+                .collect::<Vec<_>>()
+        });
+        let indexes = first
+            .query(
+                "SELECT indexname,indexdef FROM pg_indexes WHERE tablename='admission_rows'",
+                &[],
+            )
+            .await;
+        let indexes = indexes.map(|rows| {
+            rows.into_iter()
+                .map(|r| (r.get::<_, String>(0), r.get::<_, String>(1)))
+                .collect::<Vec<_>>()
+        });
         panic!("{lock} waiter completed before its owner released the lock: {early:?}; owner rows={owner_rows:?}; indexes={indexes:?}");
     }
     observed.unwrap();
@@ -82,6 +97,15 @@ async fn lock_owner_progress(lock: &str, release: &str) {
         !waiting.is_finished(),
         "the second session must wait on the held lock"
     );
+    if lock == "unique" {
+        // Merely observing the INSERT while it executes can also catch a
+        // nonblocking implementation. It must stay pending while the owner
+        // retains the unique key, and then reflect the owner's outcome.
+        tokio::select! {
+            early = &mut waiting => panic!("unique INSERT did not wait for its owner: {early:?}"),
+            _ = tokio::time::sleep(Duration::from_millis(50)) => {}
+        }
+    }
     let released = first.batch_execute(release).await;
     // Clean up even on the failing source: disconnect releases the owner's lock.
     if released.is_ok() && release != "COMMIT" && release != "ROLLBACK" {
@@ -118,10 +142,18 @@ async fn lock_owner_progress(lock: &str, release: &str) {
     );
     let (statement_result, commit_result) =
         waited.expect("waiter must resume after release").unwrap();
-    assert!(
-        statement_result.is_ok(),
-        "waiter must acquire the released lock: {statement_result:?}"
-    );
+    if lock == "unique" && release == "COMMIT" {
+        assert_eq!(
+            statement_result.unwrap_err().code().map(|code| code.code()),
+            Some("23505"),
+            "a committed owner's unique key must reject the waiting INSERT"
+        );
+    } else {
+        assert!(
+            statement_result.is_ok(),
+            "waiter must acquire the released lock: {statement_result:?}"
+        );
+    }
     assert!(
         commit_result.is_ok(),
         "waiter must commit: {commit_result:?}"
@@ -159,4 +191,14 @@ async fn advisory_waiter_allows_session_unlock() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn constraint_waiter_allows_owner_rollback() {
     lock_owner_progress("unique", "ROLLBACK").await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn constraint_waiter_rechecks_owner_commit() {
+    lock_owner_progress("unique", "COMMIT").await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn constraint_waiter_allows_owner_savepoint_rollback() {
+    lock_owner_progress("unique", "ROLLBACK TO SAVEPOINT before_lock").await;
 }

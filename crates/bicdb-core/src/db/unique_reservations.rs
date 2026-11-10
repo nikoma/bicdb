@@ -104,6 +104,18 @@ impl Transaction {
         self.reserve_unique_index_record_inner(index, record, None)
     }
 
+    /// SQL constraint validation must wait for pending native and SQL writers
+    /// before checking the committed index. Honor the transaction's configured
+    /// shared-guard wait policy; an exclusive-guard caller must never park.
+    pub fn reserve_unique_index_record_for_integrity_check(
+        &self,
+        index: &str,
+        record: &Record,
+    ) -> Result<()> {
+        let cancellation = self.blocking_row_waits.lock().clone();
+        self.reserve_unique_index_record_inner(index, record, cancellation.as_ref())
+    }
+
     fn reserve_unique_index_record_inner(
         &self,
         index: &str,

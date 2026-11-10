@@ -254,7 +254,7 @@ mod tests {
             .unwrap();
             tx.insert("pages", Record::new("obj/2")).unwrap();
             tx.rollback_to_mark(mark).unwrap();
-            tx.rollback().unwrap();
+            db.rollback_transaction(&mut tx).unwrap();
             drop(tx);
             db.insert(
                 "pages",
@@ -304,7 +304,7 @@ mod tests {
                 tx.get("pages", "obj/0").unwrap().unwrap().timestamp,
                 Some(39)
             );
-            tx.rollback().unwrap();
+            db.rollback_transaction(&mut tx).unwrap();
             drop(tx);
             db.checkpoint_for_resume().unwrap();
             let clone = snapshot.clone();
@@ -325,7 +325,7 @@ mod tests {
         let snapshot = tx
             .capture_record_prefix_snapshot_unchecked("pages", "obj/", 1024)
             .unwrap();
-        tx.rollback().unwrap();
+        db.rollback_transaction(&mut tx).unwrap();
         drop(tx);
         drop(db);
         let reopened = open(root.path(), StorageMode::EmbeddedMemory);
@@ -356,7 +356,7 @@ mod tests {
             .unwrap();
         assert!(snapshot.retained_bytes() < 1024);
         drop(snapshot);
-        tx.rollback().unwrap();
+        db.rollback_transaction(&mut tx).unwrap();
         assert!(matches!(
             tx.capture_record_prefix_snapshot_unchecked("pages", "obj/", 1024),
             Err(BicDbError::TransactionNotPending)

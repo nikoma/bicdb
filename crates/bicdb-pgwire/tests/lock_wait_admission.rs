@@ -202,3 +202,82 @@ async fn constraint_waiter_rechecks_owner_commit() {
 async fn constraint_waiter_allows_owner_savepoint_rollback() {
     lock_owner_progress("unique", "ROLLBACK TO SAVEPOINT before_lock").await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn definitive_unique_error_does_not_wait_for_an_unrelated_reader() {
+    let root = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = PgWireServer::open(root.path(), PgWireConfig::default()).unwrap();
+    let serving = server.clone();
+    let serving_thread =
+        thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
+    let config = format!("host=127.0.0.1 port={port} user=bicdb dbname=bicdb");
+    let mut clients = Vec::new();
+    let mut connections = Vec::new();
+    for _ in 0..3 {
+        let (client, connection) = tokio_postgres::connect(&config, NoTls).await.unwrap();
+        clients.push(client);
+        connections.push(tokio::spawn(connection));
+    }
+    let duplicate = clients.pop().unwrap();
+    let reader = clients.pop().unwrap();
+    let owner = clients.pop().unwrap();
+    owner.batch_execute("CREATE TABLE error_rows(id int PRIMARY KEY); INSERT INTO error_rows VALUES(1); SELECT pg_advisory_lock(17,42)").await.unwrap();
+    let waiting = tokio::spawn(async move {
+        reader
+            .batch_execute("SELECT pg_advisory_lock(17,42)")
+            .await
+            .unwrap();
+        drop(reader);
+    });
+    // Observe an actual advisory wait, rather than a briefly active query.
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let count: i64 = duplicate
+                .query_one(
+                    "SELECT count(*) FROM pg_locks WHERE locktype='advisory' AND NOT granted",
+                    &[],
+                )
+                .await
+                .unwrap()
+                .get(0);
+            if count == 1 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+    })
+    .await
+    .unwrap();
+    let result = tokio::time::timeout(
+        Duration::from_secs(2),
+        duplicate.batch_execute("INSERT INTO error_rows VALUES(1)"),
+    )
+    .await;
+    // Disconnect the advisory owner even on a failing implementation so the
+    // unrelated reader and any queued exclusive replay can finish cleanup.
+    drop(owner);
+    tokio::time::timeout(Duration::from_secs(5), waiting)
+        .await
+        .unwrap()
+        .unwrap();
+    drop(duplicate);
+    for connection in connections {
+        tokio::time::timeout(Duration::from_secs(5), connection)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+    }
+    server.request_shutdown();
+    serving_thread.join().unwrap().unwrap();
+    assert_eq!(
+        result
+            .expect("a definitive error must not queue an exclusive replay")
+            .unwrap_err()
+            .code()
+            .map(|code| code.code()),
+        Some("23505")
+    );
+}

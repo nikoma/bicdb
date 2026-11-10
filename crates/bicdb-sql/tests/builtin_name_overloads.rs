@@ -8,6 +8,73 @@
 use bicdb_core::BicDb;
 use bicdb_sql::{SqlSession, SqlValue};
 
+#[test]
+fn typed_user_overload_with_unknown_format_keeps_native_result_metadata() {
+    use bicdb_core::{DbConfig, StorageMode};
+    use bicdb_sql::pg_type_oid_by_name;
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/postgres/trunc_metadata_pg16.json")).unwrap();
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let open = || {
+            BicDb::open_with_config(
+                root.path(),
+                DbConfig::default().with_storage_mode(mode.clone()),
+            )
+            .unwrap()
+        };
+        for reopened in [false, true] {
+            let mut db = open();
+            let mut session = SqlSession::new(&mut db);
+            if !reopened {
+                for sql in fixture["setup"].as_array().unwrap() {
+                    session.execute(sql.as_str().unwrap()).unwrap();
+                }
+            } else {
+                session
+                    .execute("SET search_path=trunc_meta_454,public")
+                    .unwrap();
+            }
+            for check in fixture["checks"].as_array().unwrap() {
+                let sql = check["sql"].as_str().unwrap();
+                let result = session
+                    .execute(sql)
+                    .unwrap_or_else(|error| panic!("{mode:?} reopened={reopened}, {sql}: {error}"));
+                let types = result
+                    .column_types
+                    .iter()
+                    .map(|kind| kind.as_deref().and_then(pg_type_oid_by_name))
+                    .collect::<Vec<_>>();
+                let expected_types = check["column_oids"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|oid| Some(oid.as_i64().unwrap() as i32))
+                    .collect::<Vec<_>>();
+                assert_eq!(types, expected_types, "{mode:?} reopened={reopened}: {sql}");
+                let rows = result
+                    .rows
+                    .iter()
+                    .map(|row| row.iter().map(SqlValue::to_cell).collect::<Vec<_>>())
+                    .collect::<Vec<_>>();
+                let expected = check["rows"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|row| {
+                        row.as_array()
+                            .unwrap()
+                            .iter()
+                            .map(|cell| cell.as_str().unwrap().to_string())
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(rows, expected, "{mode:?} reopened={reopened}: {sql}");
+            }
+        }
+    }
+}
+
 fn cells(session: &mut SqlSession<'_>, sql: &str) -> Vec<String> {
     session
         .execute(sql)

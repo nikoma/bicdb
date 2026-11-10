@@ -1,5 +1,6 @@
 //! Evaluate safe, row-independent operands before selecting a join order.
 use super::*;
+use sqlparser::ast::CastKind;
 
 impl SqlEngine<'_> {
     pub(crate) fn fold_join_constant_operands(

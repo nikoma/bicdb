@@ -339,6 +339,43 @@ mod tests {
     }
 
     #[test]
+    fn descriptor_snapshot_fails_closed_after_database_durability_failure() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = open(root.path(), mode);
+            db.create_collection("pages").unwrap();
+            db.insert("pages", Record::new("obj/committed")).unwrap();
+            let mut tx = db.begin_transaction().unwrap();
+            tx.insert("pages", Record::new("obj/pending")).unwrap();
+            let snapshot = tx
+                .capture_record_prefix_snapshot_unchecked("pages", "obj/", 4096)
+                .unwrap();
+            db.durability_health_for_test()
+                .record_failure("test.descriptor_fence", &"uncertain durable outcome");
+            for id in ["obj/committed", "obj/pending", "obj/missing"] {
+                assert!(
+                    matches!(snapshot.get(&db, id), Err(BicDbError::WriteFailed { .. })),
+                    "unfenced descriptor read: {id}"
+                );
+                assert!(
+                    matches!(
+                        snapshot.get_visible_record_unchecked(&db, id),
+                        Err(BicDbError::WriteFailed { .. })
+                    ),
+                    "unfenced internal descriptor read: {id}"
+                );
+            }
+            assert!(matches!(
+                tx.capture_record_prefix_snapshot_unchecked("pages", "obj/", 4096),
+                Err(BicDbError::WriteFailed { .. })
+            ));
+            drop(tx);
+            drop(snapshot);
+            assert_eq!(db.active_snapshots.len(), 0);
+        }
+    }
+
+    #[test]
     fn descriptor_snapshot_enforces_budget_without_leaking_pins() {
         let root = tempfile::tempdir().unwrap();
         let mut db = open(root.path(), StorageMode::EmbeddedMemory);

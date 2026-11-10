@@ -1270,6 +1270,12 @@ pub(crate) fn routine_exception_condition(condition: &str) -> Result<RoutineExce
     match normalized.as_str() {
         "others" => Ok(RoutineExceptionCondition::Others),
         "duplicate_object" => Ok(RoutineExceptionCondition::SqlState("42710".to_string())),
+        "undefined_object" => Ok(RoutineExceptionCondition::SqlState("42704".into())),
+        "undefined_table" => Ok(RoutineExceptionCondition::SqlState("42P01".into())),
+        "undefined_column" => Ok(RoutineExceptionCondition::SqlState("42703".into())),
+        "undefined_function" => Ok(RoutineExceptionCondition::SqlState("42883".into())),
+        "invalid_schema_name" => Ok(RoutineExceptionCondition::SqlState("3F000".into())),
+        "invalid_catalog_name" => Ok(RoutineExceptionCondition::SqlState("3D000".into())),
         "serialization_failure" => Ok(RoutineExceptionCondition::SqlState("40001".to_string())),
         "deadlock_detected" => Ok(RoutineExceptionCondition::SqlState("40P01".to_string())),
         "raise_exception" => Ok(RoutineExceptionCondition::SqlState("P0001".to_string())),

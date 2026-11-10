@@ -29,6 +29,8 @@ pub(crate) fn index_field_is_expression(field: &IndexField) -> bool {
 pub(crate) fn is_internal_sql_collection(name: &str) -> bool {
     [
         SCHEMA_COLLECTION,
+        crate::pg_large_objects::METADATA,
+        crate::pg_large_objects::PAGES,
         oracle::PROFILE_COLLECTION,
         oracle::lob_storage::OWNERS,
         NAMESPACE_COLLECTION,

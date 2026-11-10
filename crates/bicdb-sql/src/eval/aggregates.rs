@@ -1696,6 +1696,9 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         if unqualified_name == "txid_current_snapshot" {
             return Some("txid_snapshot".to_string());
         }
+        if let Some(ty) = crate::pg_large_objects::functions::return_type(&name) {
+            return Some(ty.to_string());
+        }
         if unqualified_name == "txid_current" {
             return Some("int8".to_string());
         }

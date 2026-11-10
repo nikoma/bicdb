@@ -736,6 +736,9 @@ pub fn parse_transaction_isolation_for_profile(
         TransactionMode::IsolationLevel(TransactionIsolationLevel::ReadCommitted) => {
             Some("read committed")
         }
+        TransactionMode::IsolationLevel(TransactionIsolationLevel::ReadUncommitted) => {
+            Some("read uncommitted")
+        }
         TransactionMode::IsolationLevel(TransactionIsolationLevel::RepeatableRead) => {
             Some("repeatable read")
         }
@@ -752,6 +755,17 @@ pub(crate) fn validate_profile_transaction_modes(
 ) -> Result<()> {
     if !oracle_preview {
         return validate_transaction_modes(modes);
+    }
+    if modes.iter().any(|mode| {
+        matches!(
+            mode,
+            TransactionMode::IsolationLevel(TransactionIsolationLevel::ReadUncommitted)
+        )
+    }) {
+        return Err(SqlError::Unsupported(
+            "transaction isolation level READ UNCOMMITTED is not supported by the Oracle profile"
+                .into(),
+        ));
     }
     // Oracle SERIALIZABLE provides snapshot isolation. PostgreSQL SERIALIZABLE
     // remains unsupported here; it requires its separate concurrency contract.
@@ -786,7 +800,10 @@ pub(crate) fn validate_transaction_modes(modes: &[TransactionMode]) -> Result<()
     for mode in modes {
         if let TransactionMode::IsolationLevel(level) = mode {
             match level {
-                TransactionIsolationLevel::ReadCommitted => {}
+                // PostgreSQL implements READ UNCOMMITTED with READ COMMITTED
+                // visibility while preserving the requested isolation label.
+                TransactionIsolationLevel::ReadCommitted
+                | TransactionIsolationLevel::ReadUncommitted => {}
                 TransactionIsolationLevel::RepeatableRead if read_only => {}
                 TransactionIsolationLevel::RepeatableRead => {
                     return Err(SqlError::Unsupported(
@@ -797,11 +814,6 @@ pub(crate) fn validate_transaction_modes(modes: &[TransactionMode]) -> Result<()
                 TransactionIsolationLevel::Serializable => {
                     return Err(SqlError::Unsupported(
                         "transaction isolation level SERIALIZABLE is not supported".to_string(),
-                    ));
-                }
-                TransactionIsolationLevel::ReadUncommitted => {
-                    return Err(SqlError::Unsupported(
-                        "transaction isolation level READ UNCOMMITTED is not supported".to_string(),
                     ));
                 }
                 TransactionIsolationLevel::Snapshot => {

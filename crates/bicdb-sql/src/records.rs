@@ -845,7 +845,8 @@ pub(crate) fn validate_unique_constraints_for_update(
         // Oracle checks unique constraints when the statement ends: a stored
         // key whose row this statement moves to another key is no conflict
         // (the new keys are checked against each other).
-        let vacated = if oracle::preview_routine_language_enabled(db)? {
+        let statement_end = oracle::preview_routine_language_enabled(db)?;
+        let vacated = if statement_end {
             changed_records
                 .iter()
                 .map(|record| record.id.clone())
@@ -862,6 +863,7 @@ pub(crate) fn validate_unique_constraints_for_update(
             &changed_records,
             true,
             &vacated,
+            !statement_end,
         )?;
     }
     Ok(())
@@ -1230,6 +1232,7 @@ pub(crate) fn validate_unique_arbiter_records(
         records,
         allow_existing_same_id,
         &BTreeSet::new(),
+        false,
     )
 }
 
@@ -1245,10 +1248,17 @@ fn validate_unique_arbiter_records_vacating(
     records: &[Record],
     allow_existing_same_id: bool,
     vacated: &BTreeSet<String>,
+    vacate_preceding: bool,
 ) -> Result<()> {
-    let conflicts = |id: &String, record: &Record| {
-        (!allow_existing_same_id || id != &record.id) && !vacated.contains(id)
+    // PostgreSQL's immediate check sees replacements of rows already visited,
+    // but a later row's old key still conflicts. Do not vacate the whole batch:
+    // that would incorrectly accept swaps and forward collisions.
+    let conflicts = |id: &String, record: &Record, preceding: &BTreeSet<&str>| {
+        (!allow_existing_same_id || id != &record.id)
+            && !vacated.contains(id)
+            && !preceding.contains(id.as_str())
     };
+    let mut preceding = BTreeSet::new();
     let mut seen = BTreeMap::<Vec<String>, String>::new();
     for record in records {
         let key_values = unique_key_values(record, schema, &arbiter.key);
@@ -1310,6 +1320,9 @@ fn validate_unique_arbiter_records_vacating(
             .collect::<Vec<_>>();
         let existing = unique_key_record_ids(schema, &arbiter.key, &existing_records)?;
         for record in records {
+            if vacate_preceding {
+                preceding.insert(record.id.as_str());
+            }
             let key_values = unique_key_values(record, schema, &arbiter.key);
             if arbiter.skips_null_key(&key_values) || !arbiter.applies_to(record)? {
                 continue;
@@ -1317,7 +1330,7 @@ fn validate_unique_arbiter_records_vacating(
             let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
             if existing
                 .get(&key)
-                .is_some_and(|ids| ids.iter().any(|id| conflicts(id, record)))
+                .is_some_and(|ids| ids.iter().any(|id| conflicts(id, record, &preceding)))
             {
                 return Err(unique_violation(schema, &arbiter.name));
             }
@@ -1342,6 +1355,9 @@ fn validate_unique_arbiter_records_vacating(
     }
 
     for record in records {
+        if vacate_preceding {
+            preceding.insert(record.id.as_str());
+        }
         let key_values = unique_key_values(record, schema, &arbiter.key);
         if arbiter.skips_null_key(&key_values) || !arbiter.applies_to(record)? {
             continue;
@@ -1353,14 +1369,14 @@ fn validate_unique_arbiter_records_vacating(
             table,
             db.lookup_index_exact(index_name, &index_values)?,
         );
-        if ids.iter().any(|id| conflicts(id, record)) {
+        if ids.iter().any(|id| conflicts(id, record, &preceding)) {
             return Err(unique_violation(schema, &arbiter.name));
         }
         // Committed index entries cannot see this transaction's earlier writes.
         let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
         if pending_keys
             .get(&key)
-            .is_some_and(|ids| ids.iter().any(|id| conflicts(id, record)))
+            .is_some_and(|ids| ids.iter().any(|id| conflicts(id, record, &preceding)))
         {
             return Err(unique_violation(schema, &arbiter.name));
         }
@@ -6619,3 +6635,7 @@ mod alter_check_batches_tests {
 #[cfg(test)]
 #[path = "records/foreign_key_lookup_tests.rs"]
 mod foreign_key_lookup_tests;
+
+#[cfg(test)]
+#[path = "records/unique_update_order_tests.rs"]
+mod unique_update_order_tests;

@@ -164,6 +164,7 @@ pub use db::DeferredMaterializeStats;
 pub use db::FullTextBuildStep;
 pub use db::FullTextStoredTextPage;
 pub use db::ReadCommittedRowReservation;
+pub use db::RecordReadSnapshot;
 pub use db::ReplicationWriterAuthority;
 pub use db::UniqueIndexRangeCursor;
 pub use db::{

@@ -95,8 +95,12 @@ pub fn english_websearch_positive_and_terms(query: &str) -> Option<Vec<String>> 
 /// Observe-only and gated behind `BICDB_AEE`; see [`adaptive`] for details.
 pub mod adaptive;
 mod fts;
+mod function_call;
 mod geometric;
 mod pg_casts;
+pub use function_call::{postgres_function_call_signature, PgFunctionCallSignature};
+mod pg_large_objects;
+pub use pg_large_objects::{SqlLargeObjectSavepoint, SqlLargeObjectTransactionCleanup};
 mod pg_opclasses;
 mod pg_operators;
 mod trigram;

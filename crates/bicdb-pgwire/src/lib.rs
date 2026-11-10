@@ -9,6 +9,7 @@ pub use delegation::{set_user_delegation_policy, DelegationPolicy};
 mod server_cluster;
 pub use server_cluster::PgWireCluster;
 pub(crate) use server_cluster::*;
+mod function_call;
 mod query_exec;
 mod routine_outcome_trace;
 pub(crate) use query_exec::*;
@@ -2652,6 +2653,7 @@ fn handle_frontend_message(
     }
 
     match tag {
+        b'F' => return function_call::handle(stream, server, state, &payload),
         b'Q' => {
             let query = cstring_payload(&payload)?;
             let lowered;
@@ -3128,6 +3130,7 @@ struct SavepointMark {
     lock_len: usize,
     ddl_undo_len: usize,
     shared_role_ddl_len: usize,
+    large_objects: bicdb_sql::SqlLargeObjectSavepoint,
     session_state: SqlSessionGucState,
 }
 
@@ -3268,6 +3271,19 @@ impl ConnectionState {
             return;
         }
         if self.in_transaction {
+            // Abort the current subtransaction's handles immediately. Older
+            // descriptors survive ROLLBACK TO with their advanced positions.
+            if let Some(mark) = self.savepoints.last() {
+                if self
+                    .catalog_cache
+                    .rollback_large_objects_to(mark.large_objects)
+                    .is_err()
+                {
+                    self.catalog_cache.close_transaction_large_objects();
+                }
+            } else {
+                self.catalog_cache.close_transaction_large_objects();
+            }
             self.failed_transaction = true;
         }
     }
@@ -3335,6 +3351,7 @@ impl ConnectionState {
             .saturating_add(session_state)
             .saturating_add(copy_in)
             .saturating_add(self.active_request_bytes)
+            .saturating_add(self.catalog_cache.large_object_retained_bytes())
     }
 
     fn take_cancel_request(&self) -> bool {
@@ -4056,9 +4073,25 @@ fn execute_server_db_sql_for_state(
     normalized: &str,
     cancellation: &CancellationToken,
 ) -> Result<SqlResult> {
+    // Borrow the connection rather than cloning its lazy descriptor state:
+    // ordinary queries must not allocate an unused large-object registry.
+    // Drop still runs on every return and during the outer panic containment.
+    struct DescriptorCleanup<'a> {
+        state: &'a mut ConnectionState,
+        implicit: bool,
+    }
+    impl Drop for DescriptorCleanup<'_> {
+        fn drop(&mut self) {
+            if self.implicit {
+                self.state.catalog_cache.close_transaction_large_objects();
+            }
+        }
+    }
+    let implicit = !state.in_transaction;
+    let cleanup = DescriptorCleanup { state, implicit };
     let trace = routine_outcome_trace::RoutineOutcomeTrace::start(normalized);
     let result =
-        execute_server_db_sql_for_state_inner(server, state, sql, normalized, cancellation);
+        execute_server_db_sql_for_state_inner(server, cleanup.state, sql, normalized, cancellation);
     if let Some(trace) = trace {
         trace.finish(result.is_ok());
     }
@@ -4820,7 +4853,7 @@ fn execute_server_sql_with_options_normalized(
                     sql,
                     &server.config.sql_profile,
                 )? {
-                    let fixed = isolation != "read committed";
+                    let fixed = isolation == "repeatable read" || isolation == "serializable";
                     state
                         .tx
                         .as_mut()
@@ -4887,7 +4920,7 @@ fn execute_server_sql_with_options_normalized(
             if chain {
                 begin_buffered_transaction(server, state)?;
                 if let Some(isolation) = chain_isolation {
-                    let fixed = isolation != "read committed";
+                    let fixed = isolation == "repeatable read" || isolation == "serializable";
                     state
                         .tx
                         .as_mut()

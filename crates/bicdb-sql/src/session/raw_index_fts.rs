@@ -968,9 +968,17 @@ impl<'db> SqlSession<'db> {
         if let Some(folded) = fold_statement_constants(query, &self.routine_vars) {
             return self.execute_temporary_query(&folded);
         }
+        let large_objects = crate::pg_large_objects::functions::query_has_calls(query)
+            && !oracle::is_oracle_database(self.db_ref())?;
+        // Resolve any initial exclusive storage lease before evaluating an
+        // argument, changing a descriptor cursor, or executing authored code.
+        if large_objects {
+            self.prepare_pg_large_object_storage()?;
+        }
         // Own the entire statement, including CTEs and its final DML. A
         // correlated function must never commit independently of that DML.
-        if (!self.row_routine_call && self.query_has_postgres_scalar_routines(query)?)
+        if (!self.row_routine_call
+            && (large_objects || self.query_has_postgres_scalar_routines(query)?))
             || query_may_write(query)
                 && (self.tx.is_some() || self.mutation_needs_atomic_effects(query)?)
         {

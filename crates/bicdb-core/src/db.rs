@@ -53,6 +53,8 @@ use index_binding::load_btree_bindings;
 mod integrity_reservations;
 mod pitr_maintenance;
 mod read_committed_reservation;
+mod record_read_snapshot;
+pub use record_read_snapshot::RecordReadSnapshot;
 mod row_lock_waiters;
 mod spatial_paged;
 mod transaction_receipts;
@@ -15873,61 +15875,14 @@ impl Transaction {
 
     fn get_visible_unchecked(&self, collection: &str, id: &str) -> Result<Option<Arc<Record>>> {
         let db = self.db_ref();
-        db.ensure_collection(collection)?;
-        let (record, observed_version, read_stored) = {
-            let state = db.collection_state(collection)?;
-            let shard = state.shard(id).read();
-            // Lazy paged collections: a row is "touched this session" exactly
-            // when it has a version chain; only then is the chain authoritative
-            // (including an "invisible" verdict). A registry rowid alone (the
-            // indexed-collection bootstrap allocates one per row without any
-            // chain) says nothing about content, so it must not suppress the
-            // page-store fallback.
-            let versions = shard
-                .rowid_of(id)
-                .and_then(|rowid| shard.versions.get(&rowid));
-            match versions {
-                Some(versions) => {
-                    let visible = visible_version(versions, self.snapshot_tx);
-                    // Exact state this read observed. Future mutations above
-                    // the snapshot are deliberately excluded.
-                    let observed =
-                        visible
-                            .map(|version| version.created_tx.0)
-                            .unwrap_or_else(|| {
-                                versions
-                                    .iter()
-                                    .flat_map(|version| {
-                                        std::iter::once(version.created_tx.0)
-                                            .chain(version.deleted_tx.map(|tx| tx.0))
-                                    })
-                                    .filter(|version| *version <= self.snapshot_tx.0)
-                                    .max()
-                                    .unwrap_or_default()
-                            });
-                    let stored = visible.map(|version| Arc::clone(&version.record));
-                    let record = stored
-                        .as_deref()
-                        .map(StoredRecord::to_record)
-                        .transpose()?
-                        .map(Arc::new);
-                    (record, observed, stored)
-                }
-                None if state.paged_lazy => {
-                    drop(shard);
-                    let record = match (&self.paged_snapshot, &db.paged_records) {
-                        (Some(snapshot), Some(paged)) => {
-                            paged.get(snapshot, collection, id)?.map(Arc::new)
-                        }
-                        _ => None,
-                    };
-                    // An untouched paged baseline predates core commit
-                    // sequences; its first resident mutation conflicts with 0.
-                    (record, 0, None)
-                }
-                None => (None, 0, None),
-            }
-        };
+        let (record, observed_version, read_stored) =
+            record_read_snapshot::read_record_at_snapshot_unchecked(
+                db,
+                collection,
+                id,
+                self.snapshot_tx,
+                &self.paged_snapshot,
+            )?;
         if let (Some(stored), Some(record)) = (read_stored, record.as_ref()) {
             // Only a fully resident row is worth remembering: an eviction stub
             // is re-fetched from the page store at commit anyway.

@@ -3216,7 +3216,7 @@ pub(crate) const PG_BUILTIN_PROC_ROWS: &[(i64, &str, i64, i64)] = &[
     (1002, "version", 25, 0),
     (1023, "bicdb_version", 25, 0),
     (1003, "now", 1184, 0),
-    (1004, "has_schema_privilege", 16, 0),
+    (2272, "has_schema_privilege", 16, 2),
     (1005, "has_table_privilege", 16, 0),
     (1006, "pg_get_constraintdef", 25, 0),
     (1007, "pg_get_indexdef", 25, 0),
@@ -3236,6 +3236,23 @@ pub(crate) const PG_BUILTIN_PROC_ROWS: &[(i64, &str, i64, i64)] = &[
     (1021, "pg_get_userbyid", 25, 0),
     (1022, "has_type_privilege", 16, 0),
     (1024, "has_function_privilege", 16, 0),
+    (715, "lo_create", 26, 1),
+    (952, "lo_open", 23, 2),
+    (953, "lo_close", 23, 1),
+    (954, "loread", 17, 2),
+    (955, "lowrite", 23, 2),
+    (956, "lo_lseek", 23, 3),
+    (957, "lo_creat", 26, 1),
+    (958, "lo_tell", 23, 1),
+    (964, "lo_unlink", 23, 1),
+    (1004, "lo_truncate", 23, 2),
+    (3170, "lo_lseek64", 20, 3),
+    (3171, "lo_tell64", 20, 1),
+    (3172, "lo_truncate64", 23, 2),
+    (3457, "lo_from_bytea", 26, 2),
+    (3458, "lo_get", 17, 1),
+    (3459, "lo_get", 17, 3),
+    (3460, "lo_put", 2278, 3),
     (3432, "gen_random_uuid", 2950, 0),
     (6342, "uuid_extract_timestamp", 1184, 1),
     (6343, "uuid_extract_version", 21, 1),
@@ -3334,6 +3351,25 @@ fn pg_proc_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> 
                 BOOTSTRAP_ROLE_NAME,
                 false,
             );
+            if let Some(args) = crate::pg_large_objects::functions::argument_oids(oid) {
+                row.insert("proargtypes".into(), SqlValue::String(args.into()));
+                row.insert("prolang".into(), SqlValue::Int(12));
+                row.insert(
+                    "prosrc".into(),
+                    SqlValue::String(if oid == 3459 {
+                        "be_lo_get_fragment".into()
+                    } else {
+                        format!("be_{name}")
+                    }),
+                );
+                row.insert("proisstrict".into(), SqlValue::Bool(true));
+                row.insert("provolatile".into(), SqlValue::String("v".into()));
+                row.insert("proparallel".into(), SqlValue::String("u".into()));
+            }
+            if oid == 2272 {
+                row.insert("proargtypes".into(), SqlValue::String("25 25".into()));
+                row.insert("proisstrict".into(), SqlValue::Bool(true));
+            }
             if matches!(
                 name,
                 "gen_random_uuid"

@@ -1515,8 +1515,23 @@ fn resolve_builtin_oid_alias(pg_type: &str, value: &str) -> Option<u32> {
             let nargs = signature.as_ref().map(Vec::len);
             let mut matches = PG_BUILTIN_PROC_ROWS
                 .iter()
-                .filter(|(_, candidate, _, count)| {
-                    *candidate == name && nargs.is_none_or(|nargs| *count == nargs as i64)
+                .filter(|(oid, candidate, _, count)| {
+                    if *candidate != name || nargs.is_some_and(|nargs| *count != nargs as i64) {
+                        return false;
+                    }
+                    match (
+                        signature.as_ref(),
+                        crate::pg_large_objects::functions::argument_oids(*oid),
+                    ) {
+                        (Some(actual), Some(expected)) => actual
+                            .iter()
+                            .zip(expected.split_whitespace())
+                            .all(|(actual, expected)| {
+                                pg_type_regtype_name(actual)
+                                    .is_some_and(|ty| pg_type_oid(&ty).to_string() == expected)
+                            }),
+                        _ => true,
+                    }
                 });
             let first = matches
                 .next()

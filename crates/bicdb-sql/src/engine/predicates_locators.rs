@@ -990,6 +990,13 @@ impl<'db> SqlEngine<'db> {
                 columns.into_iter().collect()
             });
             add_virtual_tableoid_column(&table, &mut source_columns);
+            retain_referenced_columns(
+                &mut source_columns,
+                needed_columns,
+                &table,
+                &alias_name,
+                String::as_str,
+            );
             let columns = source_columns
                 .iter()
                 .map(|column| format!("{alias_name}.{column}"))

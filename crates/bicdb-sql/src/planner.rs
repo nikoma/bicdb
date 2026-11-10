@@ -5116,6 +5116,18 @@ pub(crate) fn retain_referenced_fields(
     table: &str,
     alias: &str,
 ) {
+    retain_referenced_columns(fields, needed, table, alias, |field| field.name());
+}
+
+/// Applies the same conservative projection to stored fields and virtual
+/// catalog columns. Both paths must preserve wildcard and whole-row values.
+pub(crate) fn retain_referenced_columns<T>(
+    columns: &mut Vec<T>,
+    needed: Option<&ReferencedColumns>,
+    table: &str,
+    alias: &str,
+    name: impl Fn(&T) -> &str,
+) {
     let Some(needed) = needed else {
         return;
     };
@@ -5128,14 +5140,14 @@ pub(crate) fn retain_referenced_fields(
     {
         return;
     }
-    let kept = fields
+    let kept = columns
         .iter()
-        .filter(|field| needed.all.contains(&field.name().to_ascii_lowercase()))
+        .filter(|column| needed.all.contains(&name(column).to_ascii_lowercase()))
         .count();
-    if kept == 0 || kept == fields.len() {
+    if kept == 0 || kept == columns.len() {
         return;
     }
-    fields.retain(|field| needed.all.contains(&field.name().to_ascii_lowercase()));
+    columns.retain(|column| needed.all.contains(&name(column).to_ascii_lowercase()));
 }
 
 #[cfg(test)]

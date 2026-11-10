@@ -97,6 +97,7 @@ pub mod adaptive;
 mod fts;
 mod geometric;
 mod pg_casts;
+mod pg_large_objects;
 mod pg_opclasses;
 mod pg_operators;
 mod trigram;

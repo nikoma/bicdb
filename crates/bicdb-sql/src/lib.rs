@@ -5782,3 +5782,6 @@ mod durability_sqlstate_tests {
 
 #[cfg(test)]
 mod scalar_index_predicate_tests;
+
+#[cfg(test)]
+mod join_constant_predicate_tests;

@@ -4901,6 +4901,18 @@ fn execute_server_sql_with_options_normalized(
                 }
             }
         } else if let Some(ending) = transaction_end {
+            if matches!(
+                ending,
+                delegation::TransactionEnd::Commit { chain: true }
+                    | delegation::TransactionEnd::Rollback { chain: true }
+            ) && !state.in_transaction
+            {
+                return Err(SqlError::InvalidTransactionState {
+                    message: "AND CHAIN requires an active transaction".into(),
+                }
+                .into());
+            }
+            let chain_read_only = state.session_state.transaction_read_only();
             let chain_isolation = state
                 .session_state
                 .session_gucs()
@@ -4919,6 +4931,9 @@ fn execute_server_sql_with_options_normalized(
             };
             if chain {
                 begin_buffered_transaction(server, state)?;
+                state
+                    .session_state
+                    .set_transaction_read_only_label(chain_read_only)?;
                 if let Some(isolation) = chain_isolation {
                     let fixed = isolation == "repeatable read" || isolation == "serializable";
                     state

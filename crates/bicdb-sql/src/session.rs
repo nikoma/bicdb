@@ -3883,12 +3883,19 @@ impl<'db> SqlSession<'db> {
                 self.apply_transaction_modes(modes)?;
                 Ok(SqlResult::command("BEGIN"))
             }
+            Statement::Commit { chain: true, .. } => self.finish_chained_transaction(true),
             Statement::Commit { .. } => self.commit(),
-            Statement::Rollback { savepoint, .. } => {
+            Statement::Rollback {
+                savepoint, chain, ..
+            } => {
                 if let Some(savepoint) = savepoint {
                     return self.rollback_to_savepoint(savepoint);
                 }
-                self.rollback_current_transaction()
+                if *chain {
+                    self.finish_chained_transaction(false)
+                } else {
+                    self.rollback_current_transaction()
+                }
             }
             Statement::Savepoint { name } => self.create_savepoint(name),
             Statement::ReleaseSavepoint { name } => self.release_savepoint(name),
@@ -3912,6 +3919,39 @@ impl<'db> SqlSession<'db> {
             self.oracle_autonomous_active = true;
         }
         result
+    }
+
+    fn finish_chained_transaction(&mut self, commit: bool) -> Result<SqlResult> {
+        let tx = self
+            .tx
+            .as_ref()
+            .ok_or_else(|| SqlError::InvalidTransactionState {
+                message: "AND CHAIN requires an active transaction".into(),
+            })?;
+        let fixed = tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted;
+        let read_only = self.transaction_read_only();
+        let isolation = self
+            .session_gucs
+            .get("transaction_isolation")
+            .cloned()
+            .unwrap_or(self.default_transaction_isolation()?.into());
+        let oracle = oracle::preview_routine_language_enabled(self.db_ref())?;
+        let result = if commit {
+            self.commit()?
+        } else {
+            self.rollback_current_transaction()?
+        };
+
+        let mut next = self.begin_session_transaction()?;
+        let floor = self
+            .snapshot_floor
+            .max(crate::statement_context::latest_independent_commit());
+        next.set_snapshot_isolation(fixed, floor)?;
+        next.set_statement_write_conflict_check(oracle && fixed)?;
+        self.set_transaction_read_only_label(read_only)?;
+        self.set_transaction_isolation_label(&isolation)?;
+        self.tx = Some(next);
+        Ok(result)
     }
 
     /// Internal rollback cleanup must run even if the statement was canceled.

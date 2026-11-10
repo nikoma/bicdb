@@ -91,3 +91,45 @@ fn rename_copy_and_savepoint_restoration_are_visible_in_the_same_client_batch() 
         sql.execute("ROLLBACK").unwrap();
     }
 }
+
+#[test]
+fn chained_direct_session_inherits_access_mode_and_starts_a_new_snapshot() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for ending in ["COMMIT AND CHAIN", "ROLLBACK AND CHAIN"] {
+            let root = tempfile::tempdir().unwrap();
+            let db = seeded(mode.clone(), root.path());
+            let mut sql = SqlSession::new_shared(&db);
+            assert_eq!(sql.execute(ending).unwrap_err().sqlstate(), "25P01");
+            sql.execute("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY")
+                .unwrap();
+            let query = "SELECT rowkey FROM statement_rows ORDER BY rowkey";
+            assert_eq!(
+                sql.execute(query).unwrap().rows,
+                vec![vec![SqlValue::Int(1)]]
+            );
+            let mut peer = db.begin_transaction().unwrap();
+            peer.insert(
+                "statement_rows",
+                Record::new("peer").with_metadata(serde_json::json!({"rowkey": 2, "payload": 20})),
+            )
+            .unwrap();
+            peer.commit().unwrap();
+            assert_eq!(
+                sql.execute(query).unwrap().rows,
+                vec![vec![SqlValue::Int(1)]]
+            );
+            sql.execute(ending).unwrap();
+            assert_eq!(
+                sql.execute(query).unwrap().rows,
+                vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(2)]]
+            );
+            assert_eq!(
+                sql.execute("INSERT INTO statement_rows VALUES (3,30)")
+                    .unwrap_err()
+                    .sqlstate(),
+                "25006"
+            );
+            sql.execute("ROLLBACK").unwrap();
+        }
+    }
+}

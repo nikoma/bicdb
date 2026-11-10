@@ -298,8 +298,15 @@ impl DescriptorState {
     /// Native lo_unlink closes this backend's descriptors for the object.
     /// Another backend's descriptors are independent and retain their rights.
     pub(super) fn close_object(&self, transaction: DescriptorTransaction, oid: u32) -> Result<()> {
+        if self.shared.get().is_none() {
+            return Ok(());
+        }
         let mut registry = self.lock()?;
-        registry.require(transaction)?;
+        // Unlink also succeeds when this transaction has never opened a
+        // descriptor. Cleanup must neither create nor require a registry.
+        if registry.transaction != Some(transaction) {
+            return Ok(());
+        }
         registry
             .descriptors
             .retain(|_, descriptor| descriptor.access.oid() != oid);

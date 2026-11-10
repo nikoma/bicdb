@@ -968,8 +968,8 @@ impl<'db> SqlSession<'db> {
         if let Some(folded) = fold_statement_constants(query, &self.routine_vars) {
             return self.execute_temporary_query(&folded);
         }
-        let large_objects = !oracle::is_oracle_database(self.db_ref())?
-            && crate::pg_large_objects::functions::query_has_calls(query);
+        let large_objects = crate::pg_large_objects::functions::query_has_calls(query)
+            && !oracle::is_oracle_database(self.db_ref())?;
         // Resolve any initial exclusive storage lease before evaluating an
         // argument, changing a descriptor cursor, or executing authored code.
         if large_objects {

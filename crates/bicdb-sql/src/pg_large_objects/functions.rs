@@ -6,6 +6,25 @@ use descriptors::{Access, DescriptorTransaction};
 const INV_WRITE: i32 = 0x20000;
 const INV_READ: i32 = 0x40000;
 
+// PostgreSQL 16.13 pg_proc control: native OIDs and input oidvectors for the
+// implemented database-backed calls. Server-file import/export remain separate.
+pub(crate) fn argument_oids(oid: i64) -> Option<&'static str> {
+    Some(match oid {
+        715 | 964 | 3458 => "26",
+        952 => "26 23",
+        953 | 957 | 958 | 3171 => "23",
+        954 | 1004 => "23 23",
+        955 => "23 17",
+        956 => "23 23 23",
+        3170 => "23 20 23",
+        3172 => "23 20",
+        3457 => "26 17",
+        3459 => "26 20 23",
+        3460 => "26 20 17",
+        _ => return None,
+    })
+}
+
 pub(crate) fn function_name(name: &str) -> Option<&str> {
     let name = name.strip_prefix("pg_catalog.").unwrap_or(name);
     matches!(
@@ -542,6 +561,64 @@ mod tests {
             SqlValue::String("616263".into())
         );
         state(&mut sql, "SELECT lo_get(43002)", "42704");
+    }
+
+    #[test]
+    fn native_catalog_identity_signatures_and_regprocedure_lookup_are_consistent() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = database(root.path(), StorageMode::EmbeddedMemory);
+        let mut sql = SqlSession::new(&mut db);
+        // Independent PG16.13 catalog controls established these ABI values;
+        // in particular 1004 belongs to lo_truncate, never a privilege helper.
+        for (oid, name, args, ret, nargs) in [
+            (952, "lo_open", "26 23", 23, 2),
+            (954, "loread", "23 23", 17, 2),
+            (1004, "lo_truncate", "23 23", 23, 2),
+            (3170, "lo_lseek64", "23 20 23", 20, 3),
+            (3459, "lo_get", "26 20 23", 17, 3),
+            (3460, "lo_put", "26 20 17", 2278, 3),
+        ] {
+            let result = sql.execute(&format!("SELECT proname,proargtypes::text,prorettype,pronargs,proisstrict,provolatile,proparallel,prolang FROM pg_catalog.pg_proc WHERE oid={oid}")).unwrap();
+            assert_eq!(
+                result.rows,
+                vec![vec![
+                    SqlValue::String(name.into()),
+                    SqlValue::String(args.into()),
+                    SqlValue::Int(ret),
+                    SqlValue::Int(nargs),
+                    SqlValue::Bool(true),
+                    SqlValue::String("v".into()),
+                    SqlValue::String("u".into()),
+                    SqlValue::Int(12)
+                ]]
+            );
+        }
+        assert_eq!(
+            one(&mut sql, "SELECT proname FROM pg_proc WHERE oid=2272"),
+            SqlValue::String("has_schema_privilege".into())
+        );
+        assert_eq!(
+            one(&mut sql, "SELECT 'lo_open'::regproc::oid"),
+            SqlValue::Int(952)
+        );
+        assert_eq!(
+            one(&mut sql, "SELECT 'lo_get(oid)'::regprocedure::oid"),
+            SqlValue::Int(3458)
+        );
+        assert_eq!(
+            one(
+                &mut sql,
+                "SELECT 'pg_catalog.lo_get(oid,bigint,integer)'::regprocedure::oid"
+            ),
+            SqlValue::Int(3459)
+        );
+        assert_eq!(
+            one(
+                &mut sql,
+                "SELECT to_regprocedure('lo_get(oid,text,integer)')"
+            ),
+            SqlValue::Null
+        );
     }
 
     #[test]

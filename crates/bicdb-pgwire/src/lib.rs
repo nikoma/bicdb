@@ -601,6 +601,7 @@ impl PgWireConfig {
             }
         }
         if let Some(ha) = &self.high_availability {
+            ha.validate()?;
             bicdb_core::replication_transport::validate_transport_config(
                 &ha.database_replication(),
             )?;

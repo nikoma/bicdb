@@ -432,6 +432,8 @@ pub enum SyncTimeoutPolicy {
 #[derive(Debug)]
 struct SyncQuorumState {
     required: usize,
+    /// Static election membership; observers retain logs but grant no authority.
+    voters: Option<std::collections::BTreeSet<String>>,
     timeout: Duration,
     policy: SyncTimeoutPolicy,
     acked: BTreeMap<String, u64>,
@@ -476,6 +478,7 @@ impl Default for SyncQuorum {
         Self {
             state: Mutex::new(SyncQuorumState {
                 required: 0,
+                voters: None,
                 timeout: Duration::from_secs(10),
                 policy: SyncTimeoutPolicy::Fail,
                 acked: BTreeMap::new(),
@@ -542,6 +545,14 @@ impl SyncQuorum {
         self.changed.notify_all();
     }
 
+    /// Restrict commit confirmations and write-lease contacts to the static
+    /// election peers. Other standbys still retain the log and report progress.
+    /// Configure before admitting writes; this is not a membership-change protocol.
+    pub fn restrict_to_voters(&self, voters: &[String]) {
+        self.state.lock().voters = Some(voters.iter().cloned().collect());
+        self.changed.notify_all();
+    }
+
     /// Requires a write lease: writes are admitted only while at least
     /// `peers` standbys were heard from within `duration` (a primary cut off
     /// from the majority of its group stops writing before the group can
@@ -561,8 +572,14 @@ impl SyncQuorum {
         let now = Instant::now();
         let heard = state
             .heard
-            .values()
-            .filter(|at| now.saturating_duration_since(**at) <= duration)
+            .iter()
+            .filter(|(id, at)| {
+                state
+                    .voters
+                    .as_ref()
+                    .is_none_or(|voters| voters.contains(*id))
+                    && now.saturating_duration_since(**at) <= duration
+            })
             .count();
         (heard < peers).then(|| {
             format!(
@@ -600,7 +617,17 @@ impl SyncQuorum {
         if state.required == 0 {
             return u64::MAX;
         }
-        let mut acked = state.acked.values().copied().collect::<Vec<_>>();
+        let mut acked = state
+            .acked
+            .iter()
+            .filter(|(id, _)| {
+                state
+                    .voters
+                    .as_ref()
+                    .is_none_or(|voters| voters.contains(*id))
+            })
+            .map(|(_, seq)| *seq)
+            .collect::<Vec<_>>();
         acked.sort_unstable_by(|a, b| b.cmp(a));
         acked.get(state.required - 1).copied().unwrap_or(0)
     }

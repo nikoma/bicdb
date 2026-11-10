@@ -1351,3 +1351,32 @@ fn a_failed_fence_write_still_revokes_live_writer_authority() {
         assert!(db.sync_quorum().wait_for(1).is_err());
     }
 }
+
+#[test]
+fn observer_acknowledgements_retain_logs_but_supply_no_election_authority() {
+    let quorum = SyncQuorum::default();
+    quorum.configure(2, Duration::from_millis(10), SyncTimeoutPolicy::Fail);
+    quorum.restrict_to_voters(&["v1".into(), "v2".into(), "v3".into(), "v4".into()]);
+    quorum.configure_lease(Duration::from_secs(30), 2);
+    for id in ["observer1", "observer2", "observer3"] {
+        quorum.record_ack(id, 100);
+    }
+    assert!(quorum.lease_refusal().is_some());
+    assert!(quorum.wait_for(1).is_err());
+    assert_eq!(quorum.status().quorum_seq, 0);
+    assert_eq!(quorum.retention_floor(), Some(100));
+    quorum.record_ack("v1", 10);
+    assert!(quorum.lease_refusal().is_some());
+    quorum.record_ack("v2", 5);
+    assert!(quorum.lease_refusal().is_none());
+    assert_eq!(quorum.status().quorum_seq, 5);
+    quorum.wait_for(5).unwrap();
+    assert!(quorum.wait_for(6).is_err());
+    assert_eq!(quorum.acknowledged()["observer1"], 100);
+    assert_eq!(quorum.retention_floor(), Some(5));
+    // A reconnect that lost data replaces the eligible voter's old position.
+    quorum.set_ack("v2", 2);
+    assert!(quorum.wait_for(3).is_err());
+    quorum.record_ack("v3", 10);
+    quorum.wait_for(10).unwrap();
+}

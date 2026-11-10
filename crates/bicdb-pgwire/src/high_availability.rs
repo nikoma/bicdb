@@ -42,9 +42,10 @@ use std::net::{TcpStream, ToSocketAddrs};
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
-/// Native HA handshake version. Version 3 understands journal-carrying commit
-/// frames. All group members must upgrade before joining.
-pub const HA_REPLICATION_PROTOCOL_VERSION: u32 = 3;
+/// Native HA handshake version. Version 4 requires voter-scoped commit and
+/// lease authority as well as journal-carrying frames. Older voters must not
+/// rejoin and restore observer-derived authority. Upgrade the entire group.
+pub const HA_REPLICATION_PROTOCOL_VERSION: u32 = 4;
 
 /// Frames per round sent to one standby.
 const BATCH_COMMITS: usize = 512;
@@ -135,6 +136,63 @@ pub struct HaServerConfig {
 }
 
 impl HaServerConfig {
+    /// Validate static election membership and its acknowledgement policy.
+    /// Every future primary must use the same membership on every node.
+    pub fn validate(&self) -> Result<()> {
+        let Some(failover) = &self.failover else {
+            return Ok(());
+        };
+        let fail = |message: &str| PgWireError::Server(message.to_string());
+        if failover.peers.len() < 2 || failover.timeout < MIN_FAILOVER_TIMEOUT {
+            return Err(fail("automatic failover needs at least three nodes and a timeout of at least three seconds"));
+        }
+        let mut voters = std::collections::BTreeSet::new();
+        for peer in &failover.peers {
+            if peer.node_id.is_empty()
+                || peer.node_id == self.replication.node_id
+                || !voters.insert(peer.node_id.as_str())
+            {
+                return Err(fail("automatic failover peers must have distinct nonempty identities and exclude this node"));
+            }
+        }
+        let validate_primary = |role: &HaServerRole| -> Result<()> {
+            let HaServerRole::Primary {
+                allowed_standbys,
+                synchronous_standbys,
+                ..
+            } = role
+            else {
+                return Err(fail("automatic failover as_primary must be a primary role"));
+            };
+            let mut allowed = std::collections::BTreeSet::new();
+            for standby in allowed_standbys {
+                if standby.node_id.is_empty()
+                    || standby.node_id == self.replication.node_id
+                    || !allowed.insert(standby.node_id.as_str())
+                {
+                    return Err(fail("allowed standbys must have distinct nonempty identities and exclude this node"));
+                }
+            }
+            if !voters.is_subset(&allowed) {
+                return Err(fail(
+                    "every automatic failover peer must be an allowed standby",
+                ));
+            }
+            let minimum = self.group_size() / 2;
+            if *synchronous_standbys != 0
+                && (*synchronous_standbys < minimum || *synchronous_standbys > voters.len())
+            {
+                return Err(fail("synchronous automatic failover requires enough voting standbys for a group majority; observers do not count"));
+            }
+            Ok(())
+        };
+        validate_primary(&failover.as_primary)?;
+        if matches!(self.role, HaServerRole::Primary { .. }) {
+            validate_primary(&self.role)?;
+        }
+        Ok(())
+    }
+
     /// The database-level replication configuration for this role: a primary
     /// logs full row images so frames can be built, a standby refuses
     /// ordinary writes.
@@ -293,6 +351,7 @@ pub(crate) fn start(server: Arc<PgWireServer>, config: HaServerConfig) -> Result
         bicdb_core::read_persisted_ha_role(db.data_path()).map_err(PgWireError::from)?
     };
     let config = config.resolved(recorded);
+    config.validate()?;
     config
         .database_replication()
         .validate()
@@ -355,6 +414,14 @@ pub(crate) fn start(server: Arc<PgWireServer>, config: HaServerConfig) -> Result
             .sync_quorum
             .configure(*synchronous_standbys, *synchronous_timeout, *on_timeout);
         if let Some(failover) = &config.failover {
+            // Only voters can supply the intersection with an election majority.
+            server.sync_quorum.restrict_to_voters(
+                &failover
+                    .peers
+                    .iter()
+                    .map(|peer| peer.node_id.clone())
+                    .collect::<Vec<_>>(),
+            );
             // A majority of the group: this node plus half of the others.
             server
                 .sync_quorum
@@ -546,45 +613,51 @@ fn serve_peer(
     };
     let stream = stream.as_mut();
 
-    let peer = match receive_control(stream)? {
-        ReplicationFrame::Hello {
-            protocol_version,
-            cluster_id,
-            node_id,
-            epoch,
-        } => {
-            if protocol_version != HA_REPLICATION_PROTOCOL_VERSION {
-                return Err(refuse(stream, "unsupported replication protocol version"));
-            }
-            if cluster_id != config.replication.cluster_id {
-                return Err(refuse(stream, "cluster_id mismatch"));
-            }
-            // Fail closed: an empty allow-list authorizes nobody.
-            let Some(allowed) = config
-                .allowed()
-                .iter()
-                .find(|allowed| allowed.node_id == node_id)
-            else {
-                return Err(refuse(stream, "node is not allowed"));
-            };
-            match (&allowed.certificate_sha256, presented.as_deref()) {
-                (Some(expected), Some(presented)) if expected == presented => {}
-                (None, None) => {}
-                (Some(_), _) => {
-                    return Err(refuse(stream, "certificate does not match node identity"));
+    let peer =
+        match receive_control(stream)? {
+            ReplicationFrame::Hello {
+                protocol_version,
+                cluster_id,
+                node_id,
+                epoch,
+            } => {
+                if protocol_version != HA_REPLICATION_PROTOCOL_VERSION {
+                    return Err(refuse(stream, "unsupported replication protocol version"));
                 }
-                (None, Some(_)) => {
-                    return Err(refuse(
-                        stream,
-                        "node identity is not pinned to a certificate",
-                    ));
+                if cluster_id != config.replication.cluster_id {
+                    return Err(refuse(stream, "cluster_id mismatch"));
                 }
+                // Fail closed: an empty allow-list authorizes nobody.
+                let Some(allowed) = config
+                    .allowed()
+                    .iter()
+                    .find(|allowed| allowed.node_id == node_id)
+                else {
+                    return Err(refuse(stream, "node is not allowed"));
+                };
+                match (&allowed.certificate_sha256, presented.as_deref()) {
+                    (Some(expected), Some(presented)) if expected == presented => {}
+                    (None, None) => {}
+                    (Some(_), _) => {
+                        return Err(refuse(stream, "certificate does not match node identity"));
+                    }
+                    (None, Some(_)) => {
+                        return Err(refuse(
+                            stream,
+                            "node identity is not pinned to a certificate",
+                        ));
+                    }
+                }
+                // Read replicas outside the election group cannot advance its epoch.
+                if config.failover.as_ref().is_none_or(|failover| {
+                    failover.peers.iter().any(|voter| voter.node_id == node_id)
+                }) {
+                    superseded_check(server, stream, epoch)?;
+                }
+                node_id
             }
-            superseded_check(server, stream, epoch)?;
-            node_id
-        }
-        _ => return Err(refuse(stream, "expected Hello")),
-    };
+            _ => return Err(refuse(stream, "expected Hello")),
+        };
     match receive(stream)? {
         ReplicationFrame::Resume {
             cluster_id,
@@ -630,6 +703,13 @@ fn serve_peer(
             last_commit_seq,
             ..
         } => {
+            if !config
+                .failover
+                .as_ref()
+                .is_some_and(|failover| failover.peers.iter().any(|voter| voter.node_id == peer))
+            {
+                return Err(refuse(stream, "only election peers may request votes"));
+            }
             let db = server.read_db()?;
             let granted = if candidate != peer {
                 false
@@ -667,6 +747,16 @@ fn serve_peer(
             )
         }
         ReplicationFrame::Ping { epoch, .. } => {
+            if config
+                .failover
+                .as_ref()
+                .is_some_and(|failover| !failover.peers.iter().any(|voter| voter.node_id == peer))
+            {
+                return Err(refuse(
+                    stream,
+                    "only election peers may renew primary contact",
+                ));
+            }
             let db = server.read_db()?;
             if epoch >= db.replication_epoch() && db.replication_role() != NodeRole::Primary {
                 // The current primary is alive even if its stream is not.

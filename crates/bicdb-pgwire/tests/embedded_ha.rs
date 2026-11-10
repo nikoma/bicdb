@@ -209,12 +209,13 @@ fn native_handshake_refuses_old_versions_and_mismatched_resume_identity() {
             .unwrap();
         stream
     };
-    let mut peer = connect();
-    send_frame(&mut peer, &hello(1), 65536).unwrap();
-    assert!(
-        matches!(recv_frame(&mut peer, 65536).unwrap(), ReplicationFrame::Error { message, .. } if message.contains("unsupported replication protocol"))
-    );
-    drop(peer);
+    for version in [1, 3] {
+        let mut peer = connect();
+        send_frame(&mut peer, &hello(version), 65536).unwrap();
+        assert!(
+            matches!(recv_frame(&mut peer, 65536).unwrap(), ReplicationFrame::Error { message, .. } if message.contains("unsupported replication protocol"))
+        );
+    }
     let mut peer = connect();
     send_frame(
         &mut peer,
@@ -430,12 +431,20 @@ fn journal_replicas_share_author_identity_and_preserve_it_after_promotion() {
     // one: holding it across schema and journal setup can starve the peer
     // confirmations past this test's short write lease on a busy runner.
     let writer = hosts[0].as_ref().unwrap();
-    writer
-        .with_write(|db| {
-            SqlSession::new(db).execute("CREATE TABLE entries (id TEXT PRIMARY KEY, value INT)")?;
+    // Cold schema initialization can outlast the short fixture lease while
+    // holding the engine guard on a busy runner. A lease refusal is correct;
+    // retry only that transient result with an idempotent setup statement.
+    wait(|| {
+        match writer.with_write(|db| {
+            SqlSession::new(db)
+                .execute("CREATE TABLE IF NOT EXISTS entries (id TEXT PRIMARY KEY, value INT)")?;
             Ok(())
-        })
-        .unwrap();
+        }) {
+            Ok(()) => true,
+            Err(error) if error.to_string().contains("write lease") => false,
+            Err(error) => panic!("journal fixture schema setup failed: {error}"),
+        }
+    });
     writer
         .with_write(|db| {
             db.set_collection_mesh_sync_enabled("entries", true)?;
@@ -522,4 +531,188 @@ fn journal_replicas_share_author_identity_and_preserve_it_after_promotion() {
     for host in hosts.iter().flatten() {
         host.request_shutdown();
     }
+}
+
+#[test]
+fn failover_validates_every_future_primary_and_unique_voters() {
+    let ports = [port(), port(), port(), port(), port()];
+    // One synchronous follower cannot intersect every majority of five voters.
+    for index in [0, 1] {
+        let mut cfg = config(index, &ports, true);
+        assert!(cfg.high_availability.as_ref().unwrap().validate().is_err());
+        let ha = cfg.high_availability.as_mut().unwrap();
+        let set_k = |role: &mut HaServerRole, k| {
+            if let HaServerRole::Primary {
+                synchronous_standbys,
+                ..
+            } = role
+            {
+                *synchronous_standbys = k;
+            }
+        };
+        set_k(&mut ha.role, 2);
+        set_k(&mut ha.failover.as_mut().unwrap().as_primary, 2);
+        ha.validate().unwrap();
+        let valid = ha.clone();
+        ha.failover.as_mut().unwrap().peers[0].node_id = ha.replication.node_id.clone();
+        assert!(ha.validate().is_err());
+        *ha = valid.clone();
+        ha.failover.as_mut().unwrap().peers[1] = ha.failover.as_ref().unwrap().peers[0].clone();
+        assert!(ha.validate().is_err());
+        *ha = valid.clone();
+        set_k(&mut ha.failover.as_mut().unwrap().as_primary, 1);
+        assert!(ha.validate().is_err());
+        *ha = valid.clone();
+        // Explicit asynchronous mode remains available, with no zero-RPO claim.
+        set_k(&mut ha.role, 0);
+        set_k(&mut ha.failover.as_mut().unwrap().as_primary, 0);
+        ha.validate().unwrap();
+        *ha = valid;
+        ha.failover.as_mut().unwrap().timeout = Duration::from_millis(1);
+        assert!(ha.validate().is_err());
+    }
+}
+
+#[test]
+fn allowed_observer_cannot_fence_a_primary_or_request_election_votes() {
+    use bicdb_core::{
+        replication::ReplicationFrame,
+        replication_transport::{recv_frame, send_frame},
+    };
+    let root = tempfile::tempdir().unwrap();
+    let ports = [port(), port(), port()];
+    let mut cfg = config(0, &ports, true);
+    let ha = cfg.high_availability.as_mut().unwrap();
+    for role in [&mut ha.role, &mut ha.failover.as_mut().unwrap().as_primary] {
+        if let HaServerRole::Primary {
+            allowed_standbys, ..
+        } = role
+        {
+            allowed_standbys.push(AllowedStandby {
+                node_id: "observer".into(),
+                certificate_sha256: None,
+            });
+        }
+    }
+    let host = EmbeddedHaDatabase::open(root.path(), cfg, DbConfig::default()).unwrap();
+    for request in [
+        ReplicationFrame::VoteRequest {
+            cluster_id: "embedded-test".into(),
+            candidate: "observer".into(),
+            term: 101,
+            data_epoch: 100,
+            last_commit_seq: 0,
+        },
+        ReplicationFrame::Ping {
+            cluster_id: "embedded-test".into(),
+            node_id: "observer".into(),
+            epoch: 100,
+        },
+    ] {
+        let mut peer = TcpStream::connect(("127.0.0.1", ports[0])).unwrap();
+        peer.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+        send_frame(
+            &mut peer,
+            &ReplicationFrame::Hello {
+                protocol_version: bicdb_pgwire::HA_REPLICATION_PROTOCOL_VERSION,
+                cluster_id: "embedded-test".into(),
+                node_id: "observer".into(),
+                epoch: 100,
+            },
+            65536,
+        )
+        .unwrap();
+        send_frame(&mut peer, &request, 65536).unwrap();
+        assert!(matches!(recv_frame(&mut peer, 65536).unwrap(),
+            ReplicationFrame::Error { message, .. } if message.contains("only election peers")));
+    }
+    let database = host.database();
+    let db = database.read();
+    assert_eq!(db.replication_role(), NodeRole::Primary);
+    assert!(db.replication_epoch() < 100);
+    assert!(db.replication_election_term() < 101);
+    assert!(db.sync_quorum().lease_refusal().is_some());
+    drop(db);
+    drop(database);
+    host.shutdown(Duration::from_secs(2)).unwrap();
+}
+
+#[test]
+fn streaming_observer_does_not_replace_an_absent_voting_majority() {
+    let root = tempfile::tempdir().unwrap();
+    let ports = [port(), port(), port(), port()];
+    let mut primary_config = config(0, &ports, true);
+    primary_config
+        .high_availability
+        .as_mut()
+        .unwrap()
+        .failover
+        .as_mut()
+        .unwrap()
+        .peers
+        .retain(|peer| peer.node_id != "n1");
+    let primary =
+        EmbeddedHaDatabase::open(root.path().join("n0"), primary_config, DbConfig::default())
+            .unwrap();
+    let mut observer = Some(open(root.path(), 1, &ports, false));
+    wait(|| {
+        if observer.as_ref().unwrap().restart_required() {
+            observer
+                .take()
+                .unwrap()
+                .shutdown(Duration::from_secs(2))
+                .unwrap();
+            observer = Some(open(root.path(), 1, &ports, false));
+        }
+        primary
+            .database()
+            .read()
+            .sync_quorum()
+            .acknowledged()
+            .contains_key("n1")
+    });
+    // This is a real authenticated-by-allowlist Resume/ACK stream, not an
+    // injected quorum notification. Neither voting peer n2/n3 is running.
+    let db = primary.database();
+    let db = db.read();
+    assert!(db.sync_quorum().lease_refusal().is_some());
+    assert_eq!(db.sync_quorum().status().quorum_seq, 0);
+    drop(db);
+    assert!(primary
+        .with_write(|db| {
+            db.create_collection("must_not_be_admitted")?;
+            Ok(())
+        })
+        .is_err());
+    assert!(!primary
+        .database()
+        .read()
+        .has_collection("must_not_be_admitted"));
+    observer
+        .take()
+        .unwrap()
+        .shutdown(Duration::from_secs(2))
+        .unwrap();
+    primary.shutdown(Duration::from_secs(2)).unwrap();
+}
+
+#[test]
+fn invalid_failover_configuration_is_rejected_before_host_initialization() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("unopened");
+    let initialized = std::sync::atomic::AtomicBool::new(false);
+    let error = EmbeddedHaDatabase::open_with_initializer(
+        &path,
+        config(0, &[port(), port(), port(), port(), port()], true),
+        DbConfig::default(),
+        |_| {
+            initialized.store(true, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        },
+    )
+    .err()
+    .expect("unsafe quorum must be rejected");
+    assert!(error.to_string().contains("group majority"));
+    assert!(!initialized.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(!path.exists());
 }

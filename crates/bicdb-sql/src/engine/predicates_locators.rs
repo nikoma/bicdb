@@ -4728,7 +4728,9 @@ impl<'db> SqlEngine<'db> {
             return Ok(false);
         };
         Ok(match normalized {
-            Expr::Identifier(ident) => ident.value.eq_ignore_ascii_case(column),
+            // The normalized identifier already folds unquoted names. Quoted
+            // case-distinct columns must not borrow another column's index proof.
+            Expr::Identifier(ident) => ident.value == column,
             _ => false,
         })
     }

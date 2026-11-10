@@ -79,3 +79,17 @@ fn user_overloads_and_column_arguments_keep_their_resolution() {
     sql.execute("DROP FUNCTION public.lower(text)").unwrap();
     assert_eq!(sql.execute("SELECT count(*) FROM constant_left c,constant_right d WHERE c.join_key=d.join_key AND lower(c.name)='target'").unwrap().rows, vec![vec![SqlValue::Int(4)]]);
 }
+
+#[test]
+fn volatile_calls_are_not_evaluated_before_an_empty_join() {
+    let (_root, mut db) = fixture(StorageMode::EmbeddedMemory, 4);
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("TRUNCATE constant_right; CREATE SEQUENCE constant_eval_seq; CREATE FUNCTION public.lower(value text) RETURNS text LANGUAGE plpgsql VOLATILE AS $$ BEGIN PERFORM nextval('constant_eval_seq'); RETURN 'other'; END $$; SET search_path=public,pg_catalog").unwrap();
+    assert_eq!(sql.execute("SELECT count(*) FROM constant_left c,constant_right d WHERE c.join_key=d.join_key AND c.name=lower('TARGET'::text) AND nextval('constant_eval_seq')>0").unwrap().rows, vec![vec![SqlValue::Int(0)]]);
+    assert_eq!(
+        sql.execute("SELECT last_value,is_called FROM constant_eval_seq")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(1), SqlValue::Bool(false)]]
+    );
+}

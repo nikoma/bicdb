@@ -50,8 +50,37 @@ pub(crate) fn list_rules(db: &BicDb) -> Result<Arc<Vec<RuleSchema>>> {
     Ok(list)
 }
 
+pub(crate) fn is_rule_command(sql: &str) -> Result<bool> {
+    Ok(parse_create(sql, None)?.is_some()
+        || strip_prefix_ci(trim_sql_statement(sql), "DROP RULE ").is_some())
+}
+
+fn load_rule(db: &BicDb, key: &str) -> Result<Option<RuleSchema>> {
+    match db.get(RULE_COLLECTION, key) {
+        Ok(Some(record)) => Ok(Some(serde_json::from_value(record.metadata)?)),
+        Ok(None) | Err(BicDbError::CollectionNotFound(_)) => Ok(None),
+        Err(error) => Err(error.into()),
+    }
+}
+
+pub(crate) fn restore_rule(db: &mut BicDb, key: &str, previous: Option<RuleSchema>) -> Result<()> {
+    if let Some(previous) = previous {
+        db.create_collection(RULE_COLLECTION)?;
+        db.insert(
+            RULE_COLLECTION,
+            Record::new(key).with_metadata(serde_json::to_value(previous)?),
+        )?;
+    } else {
+        match db.delete(RULE_COLLECTION, key) {
+            Ok(_) | Err(BicDbError::CollectionNotFound(_)) => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(())
+}
+
 /// `CREATE [OR REPLACE] RULE name AS ON event TO table DO INSTEAD action`.
-fn parse_create(sql: &str) -> Result<Option<(RuleSchema, bool)>> {
+fn parse_create(sql: &str, db: Option<&BicDb>) -> Result<Option<(RuleSchema, bool)>> {
     let trimmed = trim_sql_statement(sql);
     let Some(mut rest) = keyword(trimmed, "CREATE") else {
         return Ok(None);
@@ -87,10 +116,13 @@ fn parse_create(sql: &str) -> Result<Option<(RuleSchema, bool)>> {
             "conditional rules are not supported".into(),
         ));
     }
-    let object = Parser::new(&PostgreSqlDialect {})
+    let mut object = Parser::new(&PostgreSqlDialect {})
         .try_with_sql(target)
         .and_then(|mut parser| parser.parse_object_name(false))
         .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+    if let Some(db) = db {
+        crate::search_path::bind_raw_relation(db, &mut object);
+    }
     let table = relation_name(&object)?;
     let action = rest[do_index + 2..].trim_start();
     let Some(action) = keyword(action, "INSTEAD") else {
@@ -174,7 +206,7 @@ impl SqlSession<'_> {
         if self.rules_unavailable()? {
             return Ok(None);
         }
-        let Some((rule, or_replace)) = parse_create(sql)? else {
+        let Some((rule, or_replace)) = parse_create(sql, Some(self.db_ref()))? else {
             return Ok(None);
         };
         if load_schema(self.db_ref(), &rule.table)?.is_none() {
@@ -182,14 +214,8 @@ impl SqlSession<'_> {
         }
         self.require_table_ownership(&rule.table, "create a rule on it")?;
         let key = rule_key(&rule.table, &rule.name);
-        if !or_replace
-            && self
-                .db_ref()
-                .get(RULE_COLLECTION, &key)
-                .ok()
-                .flatten()
-                .is_some()
-        {
+        let previous = load_rule(self.db_ref(), &key)?;
+        if !or_replace && previous.is_some() {
             return Err(SqlError::InvalidSql(format!(
                 "rule \"{}\" for relation already exists",
                 rule.name
@@ -199,8 +225,12 @@ impl SqlSession<'_> {
         db.create_collection(RULE_COLLECTION)?;
         db.insert(
             RULE_COLLECTION,
-            Record::new(key).with_metadata(serde_json::to_value(&rule)?),
+            Record::new(key.clone()).with_metadata(serde_json::to_value(&rule)?),
         )?;
+        if self.tx.is_some() {
+            self.ddl_undo
+                .push(crate::session::DdlUndo::RestoreRule { key, previous });
+        }
         Ok(Some(SqlResult::command("CREATE RULE")))
     }
 
@@ -224,22 +254,26 @@ impl SqlSession<'_> {
         let target = strip_suffix_ci(target, " CASCADE")
             .or_else(|| strip_suffix_ci(target, " RESTRICT"))
             .unwrap_or(target);
-        let object = Parser::new(&PostgreSqlDialect {})
+        let mut object = Parser::new(&PostgreSqlDialect {})
             .try_with_sql(target)
             .and_then(|mut parser| parser.parse_object_name(false))
             .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+        crate::search_path::bind_raw_relation(self.db_ref(), &mut object);
         let table = relation_name(&object)?;
         self.require_table_ownership(&table, "drop its rule")?;
         let key = rule_key(&table, &normalize_object_name(&name));
-        let existed = match self.db_mut()?.delete(RULE_COLLECTION, &key) {
-            Ok(existed) => existed,
-            Err(BicDbError::CollectionNotFound(_)) => false,
-            Err(error) => return Err(error.into()),
-        };
-        if !existed && !if_exists {
+        let previous = load_rule(self.db_ref(), &key)?;
+        if previous.is_none() && !if_exists {
             return Err(SqlError::InvalidSql(format!(
                 "rule \"{name}\" does not exist"
             )));
+        }
+        if previous.is_some() {
+            self.db_mut()?.delete(RULE_COLLECTION, &key)?;
+            if self.tx.is_some() {
+                self.ddl_undo
+                    .push(crate::session::DdlUndo::RestoreRule { key, previous });
+            }
         }
         Ok(Some(SqlResult::command("DROP RULE")))
     }
@@ -296,12 +330,22 @@ impl SqlSession<'_> {
                 "DO INSTEAD rule actions for {event} are not supported"
             )));
         };
+        self.with_statement_transaction(|session| session.execute_insert_rule(insert, &rule))
+            .map(Some)
+    }
+
+    fn execute_insert_rule(
+        &mut self,
+        insert: &sqlparser::ast::Insert,
+        rule: &RuleSchema,
+    ) -> Result<SqlResult> {
+        let table = &rule.table;
         let source = insert
             .source
             .as_ref()
             .ok_or_else(|| SqlError::Unsupported("INSERT without rows under a rule".into()))?;
-        let schema = load_schema(self.db_ref(), &table)?
-            .ok_or_else(|| SqlError::InvalidCollection(table.clone()))?;
+        let schema = load_schema(self.db_ref(), table)?
+            .ok_or_else(|| SqlError::InvalidCollection(table.to_string()))?;
         let columns = if insert.columns.is_empty() {
             schema
                 .columns
@@ -316,28 +360,33 @@ impl SqlSession<'_> {
                 .collect::<Vec<_>>()
         };
         let rows = self.execute_query(source)?.rows;
-        let mut result = SqlResult::command(tag(0));
+        let mut result = SqlResult::command("INSERT 0 0");
+        let mut affected = 0usize;
         for row in &rows {
+            let mut row_affected = 0usize;
             for action in &rule.actions {
                 let mut parsed = parse_statements(action)?;
                 for statement in &mut parsed {
                     bind_new_row(statement, &columns, row);
                     let produced = self.execute_statement(statement)?;
+                    if matches!(statement, Statement::Insert(_)) {
+                        row_affected =
+                            crate::postgres_control::row_count(&produced).max(0) as usize;
+                    }
                     if !produced.columns.is_empty() {
                         if result.columns.is_empty() {
                             result.columns = produced.columns.clone();
+                            result.column_types = produced.column_types.clone();
+                            result.column_metadata = produced.column_metadata.clone();
                         }
                         result.rows.extend(produced.rows);
                     }
                 }
             }
+            affected = affected.saturating_add(row_affected);
         }
-        if result.columns.is_empty() {
-            result = SqlResult::command(tag(0));
-        } else {
-            result.command_tag = None;
-        }
-        Ok(Some(result))
+        result.command_tag = Some(format!("INSERT 0 {affected}"));
+        Ok(result)
     }
 }
 

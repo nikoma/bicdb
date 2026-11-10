@@ -2102,6 +2102,10 @@ pub(crate) enum DdlUndo {
     RestoreRoutine {
         routine: RoutineSchema,
     },
+    RestoreRule {
+        key: String,
+        previous: Option<crate::query_rules::RuleSchema>,
+    },
     RestoreOperator {
         id: crate::pg_operators::OperatorRef,
         previous: Option<Box<crate::pg_operators::OperatorSchema>>,
@@ -4663,6 +4667,9 @@ impl<'db> SqlSession<'db> {
             }
             DdlUndo::RestoreSequence { sequence } => {
                 save_sequence(self.db_mut()?, &sequence)?;
+            }
+            DdlUndo::RestoreRule { key, previous } => {
+                crate::query_rules::restore_rule(self.db_mut()?, &key, previous)?;
             }
             DdlUndo::DeleteView { view } => {
                 let _ = delete_view(self.db_mut()?, &view)?;

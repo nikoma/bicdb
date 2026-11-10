@@ -364,6 +364,22 @@ impl sqlparser::ast::VisitorMut for Binder<'_> {
     }
 }
 
+/// Binds a relation parsed by a raw-only PostgreSQL DDL handler.
+pub(crate) fn bind_raw_relation(db: &BicDb, name: &mut ObjectName) {
+    let Some(path) = active_path() else {
+        return;
+    };
+    let mut binder = Binder {
+        db,
+        path: &path,
+        ctes: Vec::new(),
+        changed: false,
+        insertions: Vec::new(),
+        positions_missing: false,
+    };
+    binder.bind_reference(name, relation_exists);
+}
+
 /// Binds unqualified relation references in any AST node; reports a change.
 pub(crate) fn bind_node<T: sqlparser::ast::VisitMut>(
     db: &BicDb,

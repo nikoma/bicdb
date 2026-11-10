@@ -51,8 +51,13 @@ pub fn is_constraint_timing_command(sql: &str) -> Result<bool> {
     Ok(crate::session::deferred_constraints::parse_constraint_command(sql)?.is_some())
 }
 
+/// Raw rewrite-rule DDL has no wire result columns and must not execute at Describe.
+pub fn is_postgres_rule_command(sql: &str) -> Result<bool> {
+    crate::query_rules::is_rule_command(sql)
+}
+
 fn parse_inference_statements(db: &BicDb, sql: &str) -> Result<Vec<Statement>> {
-    if is_constraint_timing_command(sql)? {
+    if is_constraint_timing_command(sql)? || is_postgres_rule_command(sql)? {
         return Ok(Vec::new());
     }
     // A dollar-quoted anonymous body is one command with no wire parameters

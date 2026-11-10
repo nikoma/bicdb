@@ -2764,7 +2764,9 @@ pub(crate) fn describe_message(
                 // COPY's stream description is sent by Execute, never by
                 // running the mutation during Describe.
                 no_data(stream)?;
-            } else if bicdb_sql::is_constraint_timing_command(&portal_sql)? {
+            } else if bicdb_sql::is_constraint_timing_command(&portal_sql)?
+                || bicdb_sql::is_postgres_rule_command(&portal_sql)?
+            {
                 no_data(stream)?;
             } else if let Some(result) = returning_describe_result(server, &portal_sql)? {
                 describe_result(

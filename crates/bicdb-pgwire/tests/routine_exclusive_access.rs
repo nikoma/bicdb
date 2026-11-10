@@ -74,6 +74,33 @@ async fn routine_ddl_escalates_without_entering_user_handler_or_replaying_writes
         );
         assert_eq!(client.query_one("SELECT count(*) FROM information_schema.role_table_grants WHERE table_schema='adempiere' AND table_name='wire_privilege_probe_v'", &[]).await.unwrap().get::<_, i64>(0),7);
         client.batch_execute("COMMIT").await.unwrap();
+        client.batch_execute("CREATE TABLE wire_rule_request(tablename name,columnname name,datatype name,nullclause varchar,defaultclause varchar)").await.unwrap();
+        let rule = client.prepare("CREATE RULE wire_sync AS ON INSERT TO wire_rule_request DO INSTEAD SELECT altercolumn(new.tablename,new.columnname,new.datatype,new.nullclause,new.defaultclause)").await.unwrap();
+        assert!(rule.columns().is_empty());
+        assert_eq!(
+            client
+                .query_one(
+                    "SELECT count(*) FROM pg_rules WHERE rulename='wire_sync'",
+                    &[]
+                )
+                .await
+                .unwrap()
+                .get::<_, i64>(0),
+            0,
+            "Describe must not create the rule"
+        );
+        client.execute(&rule, &[]).await.unwrap();
+        client.batch_execute("BEGIN").await.unwrap();
+        assert_eq!(client.execute("INSERT INTO wire_rule_request VALUES('wire_privilege_probe','description','varchar(41)',NULL,NULL)", &[]).await.unwrap(),0);
+        assert_eq!(
+            client
+                .query_one("SELECT description FROM wire_privilege_probe_v", &[])
+                .await
+                .unwrap()
+                .get::<_, String>(0),
+            "retained"
+        );
+        client.batch_execute("ROLLBACK").await.unwrap();
         count
     } else {
         client.batch_execute("ROLLBACK").await.unwrap();

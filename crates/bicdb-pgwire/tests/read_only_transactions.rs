@@ -109,7 +109,7 @@ async fn read_uncommitted_uses_read_committed_visibility_in_both_storage_modes()
                 root.path(),
                 bicdb_core::DbConfig::default()
                     .with_fsync(false)
-                    .with_storage_mode(mode),
+                    .with_storage_mode(mode.clone()),
             )
             .unwrap(),
         );

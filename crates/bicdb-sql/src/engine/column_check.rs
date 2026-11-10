@@ -266,7 +266,8 @@ const NON_COLUMN_NAMES: &[&str] = &[
 ];
 
 /// System columns every base table carries.
-const SYSTEM_COLUMNS: &[&str] = &["ctid", "xmin", "xmax", "cmin", "cmax", "tableoid", "oid"];
+pub(super) const SYSTEM_COLUMNS: &[&str] =
+    &["ctid", "xmin", "xmax", "cmin", "cmax", "tableoid", "oid"];
 
 /// Qualifiers that name rule/trigger pseudo relations rather than FROM items.
 const PSEUDO_QUALIFIERS: &[&str] = &["new", "old", "excluded"];

@@ -103,7 +103,7 @@ fn safe_operand(
             // A local column wins over a similarly named routine variable.
             // Unknown relation columns make variable folding unsafe.
             let name = ident_value(ident);
-            if SYSTEM_COLUMNS.contains(&name.as_str()) {
+            if super::column_check::SYSTEM_COLUMNS.contains(&name.as_str()) {
                 return false;
             }
             !columns.iter().any(|relation| {

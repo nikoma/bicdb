@@ -594,6 +594,14 @@ mod tests {
             );
         }
         assert_eq!(
+            one(&mut sql, "SELECT has_schema_privilege(NULL::text,'USAGE')"),
+            SqlValue::Null
+        );
+        assert_eq!(
+            one(&mut sql, "SELECT has_schema_privilege('public',NULL::text)"),
+            SqlValue::Null
+        );
+        assert_eq!(
             one(&mut sql, "SELECT proname FROM pg_proc WHERE oid=2272"),
             SqlValue::String("has_schema_privilege".into())
         );

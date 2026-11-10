@@ -12,6 +12,11 @@ pub(crate) fn eval_privilege_function_value(
 ) -> Result<Option<SqlValue>> {
     match name {
         "has_schema_privilege" | "pg_catalog.has_schema_privilege" => {
+            if matches!(args.len(), 2 | 3)
+                && args.iter().any(|value| matches!(value, SqlValue::Null))
+            {
+                return Ok(Some(SqlValue::Null));
+            }
             Ok(Some(SqlValue::Bool(has_schema_privilege(db, args)?)))
         }
         "has_table_privilege" | "pg_catalog.has_table_privilege" => {

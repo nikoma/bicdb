@@ -3379,7 +3379,13 @@ impl<'db> SqlEngine<'db> {
         }
         if matches!(bare_name, "lower" | "upper") {
             // Range bounds; any other argument is the text function below.
-            let range_type = self.infer_env_expr_type(args.first()?, env);
+            let argument = args.first()?;
+            let range_type = self
+                .infer_env_expr_type(argument, env)
+                .or_else(|| self.constant_expr_pg_type(argument));
+            if range_type.is_none() && is_unknown_literal(argument) {
+                return Some("text".to_string());
+            }
             let bound = match range_type.as_deref() {
                 Some("int4range") => Some("int4".to_string()),
                 Some("int8range") => Some("int8".to_string()),

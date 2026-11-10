@@ -50,6 +50,7 @@ impl EmbeddedHaDatabase {
             .as_ref()
             .ok_or_else(|| PgWireError::Server("embedded HA requires replication settings".into()))?
             .resolved(bicdb_core::read_persisted_ha_role(path)?);
+        ha.validate()?;
         config.high_availability = Some(ha.clone());
         let mut database = BicDb::open_with_config(
             path,

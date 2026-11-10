@@ -523,3 +523,104 @@ fn journal_replicas_share_author_identity_and_preserve_it_after_promotion() {
         host.request_shutdown();
     }
 }
+
+#[test]
+fn failover_validates_every_future_primary_and_unique_voters() {
+    let ports = [port(), port(), port(), port(), port()];
+    // One synchronous follower cannot intersect every majority of five voters.
+    for index in [0, 1] {
+        let mut cfg = config(index, &ports, true);
+        assert!(cfg.high_availability.as_ref().unwrap().validate().is_err());
+        let ha = cfg.high_availability.as_mut().unwrap();
+        let set_k = |role: &mut HaServerRole, k| {
+            if let HaServerRole::Primary {
+                synchronous_standbys,
+                ..
+            } = role
+            {
+                *synchronous_standbys = k;
+            }
+        };
+        set_k(&mut ha.role, 2);
+        set_k(&mut ha.failover.as_mut().unwrap().as_primary, 2);
+        ha.validate().unwrap();
+        let valid = ha.clone();
+        ha.failover.as_mut().unwrap().peers[0].node_id = ha.replication.node_id.clone();
+        assert!(ha.validate().is_err());
+        *ha = valid.clone();
+        ha.failover.as_mut().unwrap().peers[1] = ha.failover.as_ref().unwrap().peers[0].clone();
+        assert!(ha.validate().is_err());
+        *ha = valid.clone();
+        set_k(&mut ha.failover.as_mut().unwrap().as_primary, 1);
+        assert!(ha.validate().is_err());
+        *ha = valid.clone();
+        // Explicit asynchronous mode remains available, with no zero-RPO claim.
+        set_k(&mut ha.role, 0);
+        set_k(&mut ha.failover.as_mut().unwrap().as_primary, 0);
+        ha.validate().unwrap();
+        *ha = valid;
+        ha.failover.as_mut().unwrap().timeout = Duration::from_millis(1);
+        assert!(ha.validate().is_err());
+    }
+}
+
+#[test]
+fn allowed_observer_cannot_fence_a_primary_or_request_election_votes() {
+    use bicdb_core::{
+        replication::ReplicationFrame,
+        replication_transport::{recv_frame, send_frame},
+    };
+    let root = tempfile::tempdir().unwrap();
+    let ports = [port(), port(), port()];
+    let mut cfg = config(0, &ports, true);
+    let ha = cfg.high_availability.as_mut().unwrap();
+    for role in [&mut ha.role, &mut ha.failover.as_mut().unwrap().as_primary] {
+        if let HaServerRole::Primary {
+            allowed_standbys, ..
+        } = role
+        {
+            allowed_standbys.push(AllowedStandby {
+                node_id: "observer".into(),
+                certificate_sha256: None,
+            });
+        }
+    }
+    let host = EmbeddedHaDatabase::open(root.path(), cfg, DbConfig::default()).unwrap();
+    let mut peer = TcpStream::connect(("127.0.0.1", ports[0])).unwrap();
+    peer.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+    send_frame(
+        &mut peer,
+        &ReplicationFrame::Hello {
+            protocol_version: bicdb_pgwire::HA_REPLICATION_PROTOCOL_VERSION,
+            cluster_id: "embedded-test".into(),
+            node_id: "observer".into(),
+            epoch: 100,
+        },
+        65536,
+    )
+    .unwrap();
+    send_frame(
+        &mut peer,
+        &ReplicationFrame::VoteRequest {
+            cluster_id: "embedded-test".into(),
+            candidate: "observer".into(),
+            term: 101,
+            data_epoch: 100,
+            last_commit_seq: 0,
+        },
+        65536,
+    )
+    .unwrap();
+    assert!(matches!(recv_frame(&mut peer, 65536).unwrap(),
+        ReplicationFrame::Error { message, .. } if message.contains("only election peers")));
+    let database = host.database();
+    let db = database.read();
+    assert_eq!(db.replication_role(), NodeRole::Primary);
+    assert!(db.replication_epoch() < 100);
+    assert!(db.replication_election_term() < 101);
+    assert!(db.sync_quorum().lease_refusal().is_some());
+    drop(db);
+    drop(database);
+    drop(peer);
+    host.shutdown(Duration::from_secs(2)).unwrap();
+}

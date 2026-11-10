@@ -106,6 +106,18 @@ struct CommitDecision {
     victims: BTreeSet<ParticipantId>,
 }
 
+struct SafeSnapshot {
+    reader: ParticipantId,
+    writers: Vec<ParticipantId>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum SnapshotSafety {
+    Waiting,
+    Safe,
+    Retry,
+}
+
 /// Holds the dependency graph exclusively from validation through the caller's
 /// durable commit boundary. Any incoming edges added by this attempt disappear
 /// if the caller returns an error before publishing the durable result.
@@ -162,6 +174,48 @@ impl<Collection: Ord> Dependencies<Collection> {
                 }
             )
             .is_none());
+    }
+
+    fn begin_safe_snapshot(&mut self, id: ParticipantId) -> SafeSnapshot {
+        let writers = self
+            .participants
+            .iter()
+            .filter(|(_, transaction)| !transaction.read_only && transaction.committed.is_none())
+            .map(|(&id, _)| id)
+            .collect();
+        self.begin(id, true);
+        SafeSnapshot {
+            reader: id,
+            writers,
+        }
+    }
+
+    fn snapshot_safety(&self, candidate: &SafeSnapshot) -> SnapshotSafety {
+        let reader = &self.participants[&candidate.reader];
+        let mut waiting = false;
+        for writer in &candidate.writers {
+            let Some(writer) = self.participants.get(writer) else {
+                // An aborted writer cannot be the pivot of a committed cycle.
+                continue;
+            };
+            if writer.committed.is_none() {
+                waiting = true;
+            } else if writer.writers.iter().any(|id| {
+                self.participants[id]
+                    .committed
+                    .is_some_and(|end| end < reader.snapshot)
+            }) {
+                // A concurrent writer with an outgoing dependency to an
+                // earlier commit can be the pivot of a read-only anomaly.
+                // Discard this snapshot before exposing any of its reads.
+                return SnapshotSafety::Retry;
+            }
+        }
+        if waiting {
+            SnapshotSafety::Waiting
+        } else {
+            SnapshotSafety::Safe
+        }
     }
 
     fn observe_read(&mut self, id: ParticipantId, scope: ReadScope<Collection>) {
@@ -640,4 +694,35 @@ fn a_failed_write_commit_rolls_back_its_tentative_edges_before_releasing_the_gra
         .unwrap()
         .committed();
     assert!(graph.participants[&1].doomed);
+}
+
+#[test]
+fn a_deferrable_snapshot_waits_for_its_existing_writers_only() {
+    let mut graph = Dependencies::<u64>::default();
+    graph.begin(1, false);
+    let snapshot = graph.begin_safe_snapshot(2);
+    graph.begin(3, false);
+    assert_eq!(graph.snapshot_safety(&snapshot), SnapshotSafety::Waiting);
+    graph.did_commit(graph.prepare_commit(1).unwrap(), Vec::new());
+    assert_eq!(graph.snapshot_safety(&snapshot), SnapshotSafety::Safe);
+}
+
+#[test]
+fn a_deferrable_snapshot_retries_when_an_overlapping_writer_has_an_earlier_out_commit() {
+    for writer_commits in [false, true] {
+        let mut graph = Dependencies::<u64>::default();
+        graph.begin(1, false);
+        graph.begin(2, false);
+        graph.observe(2, 1);
+        graph.did_commit(graph.prepare_commit(1).unwrap(), Vec::new());
+        let snapshot = graph.begin_safe_snapshot(3);
+        assert_eq!(graph.snapshot_safety(&snapshot), SnapshotSafety::Waiting);
+        if writer_commits {
+            graph.did_commit(graph.prepare_commit(2).unwrap(), Vec::new());
+            assert_eq!(graph.snapshot_safety(&snapshot), SnapshotSafety::Retry);
+        } else {
+            graph.abort(2);
+            assert_eq!(graph.snapshot_safety(&snapshot), SnapshotSafety::Safe);
+        }
+    }
 }

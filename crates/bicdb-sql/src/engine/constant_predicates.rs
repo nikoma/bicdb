@@ -24,7 +24,10 @@ impl SqlEngine<'_> {
             // Preserve the expression's declared type: a string-valued NAME,
             // date, or numeric operand is not an unknown string literal.
             if matches!(expr, Expr::Identifier(_) | Expr::Function(_)) && safe(expr) {
-                if let Some(pg_type) = engine.constant_expr_pg_type(expr) {
+                if let Some(pg_type) = engine
+                    .constant_expr_pg_type(expr)
+                    .or_else(|| engine.infer_env_expr_type(expr, &[]))
+                {
                     if pg_type != "unknown" {
                         if let (Ok(value), Ok(data_type)) = (
                             engine.eval_select_constant_expr(expr),

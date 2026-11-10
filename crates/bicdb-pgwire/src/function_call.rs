@@ -27,11 +27,11 @@ fn execute(
     }
     let db = server.read_db_for_transaction_progress()?;
     let signature = bicdb_sql::postgres_function_call_signature(&db, oid)?.ok_or_else(|| {
-        PgWireError::Sql(SqlError::data_exception(
-            "42883",
-            format!("function with OID {oid} does not exist"),
-            None,
-        ))
+        PgWireError::Sql(SqlError::DataException {
+            sqlstate: "42883",
+            message: format!("function with OID {oid} does not exist"),
+            data_type: None,
+        })
     })?;
     if count != signature.arguments.len() {
         return Err(protocol(

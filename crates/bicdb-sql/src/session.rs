@@ -4888,7 +4888,34 @@ impl<'db> SqlSession<'db> {
 
     fn apply_transaction_modes(&mut self, modes: &[TransactionMode]) -> Result<()> {
         let oracle_preview = oracle::preview_routine_language_enabled(self.db_ref())?;
-        validate_profile_transaction_modes(modes, oracle_preview)?;
+        let level = modes.iter().find_map(|mode| match mode {
+            TransactionMode::IsolationLevel(level) => Some(level),
+            _ => None,
+        });
+        let isolation_label = level.map(transaction_defaults::isolation_label);
+        let same_isolation = isolation_label.is_some_and(|requested| {
+            self.session_gucs
+                .get("transaction_isolation")
+                .is_some_and(|current| current == requested)
+        });
+        if oracle_preview {
+            validate_profile_transaction_modes(modes, true)?;
+        } else {
+            validate_postgres_transaction_modes(modes, self.transaction_read_only())?;
+            if isolation_label.is_some()
+                && !same_isolation
+                && self
+                    .tx
+                    .as_ref()
+                    .is_some_and(Transaction::statement_snapshot_acquired)
+            {
+                return Err(SqlError::data_exception(
+                    "25001",
+                    "SET TRANSACTION ISOLATION LEVEL must be called before any query",
+                    None,
+                ));
+            }
+        }
         if let Some(read_only) = modes.iter().find_map(|mode| match mode {
             TransactionMode::AccessMode(TransactionAccessMode::ReadOnly) => Some(true),
             TransactionMode::AccessMode(TransactionAccessMode::ReadWrite) => Some(false),
@@ -4921,10 +4948,9 @@ impl<'db> SqlSession<'db> {
             }
             self.set_transaction_read_only_label(read_only)?;
         }
-        let level = modes.iter().find_map(|mode| match mode {
-            TransactionMode::IsolationLevel(level) => Some(level),
-            _ => None,
-        });
+        if !oracle_preview && same_isolation {
+            return Ok(());
+        }
         let Some(level) = level else {
             return Ok(());
         };

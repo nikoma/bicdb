@@ -739,6 +739,16 @@ pub fn parse_transaction_control_for_profile(
     sql: &str,
     profile: &str,
 ) -> Result<Option<TransactionControl>> {
+    parse_transaction_control_for_session(sql, profile, false)
+}
+
+/// Classify transport commands that can inherit an active transaction's
+/// access mode. BEGIN and session defaults use their own modes.
+pub fn parse_transaction_control_for_session(
+    sql: &str,
+    profile: &str,
+    transaction_read_only: bool,
+) -> Result<Option<TransactionControl>> {
     let statements = parse_statements(sql)?;
     let [statement] = statements.as_slice() else {
         return Ok(None);
@@ -758,7 +768,14 @@ pub fn parse_transaction_control_for_profile(
                     "transaction snapshots are not supported".to_string(),
                 ));
             }
-            validate_profile_transaction_modes(modes, profile == oracle::ORACLE_PREVIEW_PROFILE)?;
+            if *session || profile == oracle::ORACLE_PREVIEW_PROFILE {
+                validate_profile_transaction_modes(
+                    modes,
+                    profile == oracle::ORACLE_PREVIEW_PROFILE,
+                )?;
+            } else {
+                validate_postgres_transaction_modes(modes, transaction_read_only)?;
+            }
             Ok((!session).then_some(TransactionControl::SetTransaction))
         }
         _ => Ok(None),
@@ -844,12 +861,20 @@ pub(crate) fn validate_set_transaction_modes(modes: &[TransactionMode]) -> Resul
 }
 
 pub(crate) fn validate_transaction_modes(modes: &[TransactionMode]) -> Result<()> {
-    let read_only = modes.iter().any(|mode| {
-        matches!(
-            mode,
-            TransactionMode::AccessMode(TransactionAccessMode::ReadOnly)
-        )
-    });
+    validate_postgres_transaction_modes(modes, false)
+}
+
+pub(crate) fn validate_postgres_transaction_modes(
+    modes: &[TransactionMode],
+    inherited_read_only: bool,
+) -> Result<()> {
+    let read_only = modes
+        .iter()
+        .find_map(|mode| match mode {
+            TransactionMode::AccessMode(mode) => Some(*mode == TransactionAccessMode::ReadOnly),
+            _ => None,
+        })
+        .unwrap_or(inherited_read_only);
     for mode in modes {
         if let TransactionMode::IsolationLevel(level) = mode {
             match level {

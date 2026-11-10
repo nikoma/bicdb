@@ -4702,8 +4702,6 @@ fn execute_server_sql_with_options(
     )
 }
 
-/// `execute_server_sql_with_options` for a caller that already normalized
-/// the text (the simple-query path normalizes once per query).
 fn acquire_postgres_statement_snapshot(
     server: &PgWireServer,
     state: &mut ConnectionState,
@@ -4725,6 +4723,8 @@ fn acquire_postgres_statement_snapshot(
     Ok(())
 }
 
+/// `execute_server_sql_with_options` for a caller that already normalized
+/// the text (the simple-query path normalizes once per query).
 fn execute_server_sql_with_options_normalized(
     server: &Arc<PgWireServer>,
     state: &mut ConnectionState,
@@ -4863,8 +4863,12 @@ fn execute_server_sql_with_options_normalized(
         .with_wait_admission(_permit.observer());
     let transaction_control = if is_transaction_control_candidate(normalized) {
         Some(
-            parse_transaction_control_for_profile(sql, &server.config.sql_profile)
-                .map_err(PgWireError::from)?,
+            bicdb_sql::parse_transaction_control_for_session(
+                sql,
+                &server.config.sql_profile,
+                state.session_state.transaction_read_only(),
+            )
+            .map_err(PgWireError::from)?,
         )
     } else {
         None

@@ -2374,6 +2374,7 @@ impl<'db> SqlSession<'db> {
                 },
                 records,
                 &existing_records,
+                None,
             );
         };
         non_conflicting_records(
@@ -2431,17 +2432,21 @@ impl<'db> SqlSession<'db> {
             return Ok(None);
         }
         if let Some(arbiter) = arbiter {
+            let fixed = records::postgres_fixed_snapshot(self.db_ref(), self.tx.as_ref())?;
+            if fixed.is_some() && !arbiter.applies_to(record)? {
+                return Ok(None);
+            }
+            let mut typed_primary_key = false;
             if let Some(columns) = primary_key_columns_for_unique_arbiter(schema, &arbiter) {
-                if !primary_key_requires_typed_identity(schema) {
+                typed_primary_key = primary_key_requires_typed_identity(schema);
+                if !typed_primary_key {
                     sql_profile_index_lookup();
                     // Conflict targets may list a composite constraint in a
                     // different order. Row identity uses authoritative PK order.
                     let primary_values = record_column_values(record, schema, &columns);
                     let record_id =
                         record_id_from_column_values(table, schema, &columns, &primary_values)?;
-                    if let Some(tx) =
-                        records::postgres_fixed_snapshot(self.db_ref(), self.tx.as_ref())?
-                    {
+                    if let Some(tx) = fixed {
                         if tx
                             .overlay_pending_write(
                                 table,
@@ -2462,6 +2467,22 @@ impl<'db> SqlSession<'db> {
             let contains_json = key_values
                 .iter()
                 .any(|value| matches!(value, SqlValue::Json(_)));
+            if let Some(tx) =
+                fixed.filter(|_| typed_primary_key || contains_json || arbiter.index_name.is_none())
+            {
+                let key_label = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
+                let live = current_integrity_records(self.db_ref(), Some(tx), table)?;
+                for candidate in arbiter.covered(&live)? {
+                    let values = unique_key_values(candidate, schema, &arbiter.key);
+                    if !arbiter.skips_null_key(&values)
+                        && typed_unique_key_label(schema, &arbiter.key, &values)? == key_label
+                    {
+                        tx.require_conflict_tuple_in_snapshot(table, &candidate.id)?;
+                        return self.conflict_record_by_id(table, &candidate.id);
+                    }
+                }
+                return Ok(None);
+            }
             if let Some(index_name) = arbiter.index_name.as_ref().filter(|_| !contains_json) {
                 sql_profile_index_lookup();
                 let index_values = unique_key_index_values(schema, &arbiter.key, &key_values)?;

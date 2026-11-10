@@ -1124,7 +1124,7 @@ pub(crate) fn canonical_unique_reservation_key(
     )?)?))
 }
 
-fn json_unique_existing_records(
+fn reserved_unique_existing_records(
     db: &BicDb,
     tx: Option<&Transaction>,
     table: &str,
@@ -1303,9 +1303,14 @@ fn validate_unique_arbiter_records_vacating(
             .iter()
             .any(|value| matches!(value, SqlValue::Json(_)))
     });
-    if arbiter.index_name.is_none() || contains_json {
-        let existing_records = if contains_json {
-            json_unique_existing_records(db, tx, table, schema, arbiter, records)?
+    let fixed_typed_primary = primary_key_requires_typed_identity(schema)
+        && primary_key_columns_for_unique_arbiter(schema, arbiter).is_some()
+        && postgres_fixed_snapshot(db, tx)?.is_some();
+    if arbiter.index_name.is_none() || contains_json || fixed_typed_primary {
+        let existing_records = if contains_json || fixed_typed_primary {
+            reserved_unique_existing_records(db, tx, table, schema, arbiter, records)?
+        } else if postgres_fixed_snapshot(db, tx)?.is_some() {
+            current_integrity_records(db, tx, table)?
         } else {
             match tx {
                 Some(tx) => tx.scan_collection_for_integrity_check(table)?,
@@ -1404,14 +1409,23 @@ pub(crate) fn non_conflicting_records(
     arbiter: &UniqueConflictArbiter,
     records: Vec<Record>,
 ) -> Result<Vec<Record>> {
+    let fixed = postgres_fixed_snapshot(db, tx)?;
+    let visibility_check = fixed.map(|tx| (tx, table));
     if let Some(columns) = primary_key_columns_for_unique_arbiter(schema, arbiter) {
         if primary_key_requires_typed_identity(schema) {
-            let existing_records = match tx {
-                Some(tx) => tx.scan_collection_for_integrity_check(table)?,
-                None => db.scan_collection_unchecked(table)?,
+            let existing_records = match (fixed, tx) {
+                (Some(_), _) => current_integrity_records(db, tx, table)?,
+                (_, Some(tx)) => tx.scan_collection_for_integrity_check(table)?,
+                (_, None) => db.scan_collection_unchecked(table)?,
             };
             sql_profile_full_scan();
-            return non_conflicting_records_from_scan(schema, arbiter, records, &existing_records);
+            return non_conflicting_records_from_scan(
+                schema,
+                arbiter,
+                records,
+                &existing_records,
+                visibility_check,
+            );
         }
         return non_conflicting_records_by_primary_key(db, tx, table, schema, &columns, records);
     }
@@ -1423,7 +1437,9 @@ pub(crate) fn non_conflicting_records(
     });
     if arbiter.index_name.is_none() || contains_json {
         let existing_records = if contains_json {
-            json_unique_existing_records(db, tx, table, schema, arbiter, &records)?
+            reserved_unique_existing_records(db, tx, table, schema, arbiter, &records)?
+        } else if fixed.is_some() {
+            current_integrity_records(db, tx, table)?
         } else {
             match tx {
                 Some(tx) => tx.scan_collection_for_integrity_check(table)?,
@@ -1431,11 +1447,16 @@ pub(crate) fn non_conflicting_records(
             }
         };
         sql_profile_full_scan();
-        return non_conflicting_records_from_scan(schema, arbiter, records, &existing_records);
+        return non_conflicting_records_from_scan(
+            schema,
+            arbiter,
+            records,
+            &existing_records,
+            visibility_check,
+        );
     }
     let index_name = arbiter.index_name.as_ref().expect("checked above");
 
-    let fixed = postgres_fixed_snapshot(db, tx)?;
     let mut seen = BTreeSet::<Vec<String>>::new();
     let mut inserted = Vec::new();
     for record in records {
@@ -1862,6 +1883,7 @@ pub(crate) fn non_conflicting_records_from_scan(
     arbiter: &UniqueConflictArbiter,
     records: Vec<Record>,
     existing_records: &[Record],
+    visibility_check: Option<(&Transaction, &str)>,
 ) -> Result<Vec<Record>> {
     let existing_records = arbiter
         .covered(existing_records)?
@@ -1875,7 +1897,15 @@ pub(crate) fn non_conflicting_records_from_scan(
         let key_values = unique_key_values(&record, schema, &arbiter.key);
         if !arbiter.skips_null_key(&key_values) && arbiter.applies_to(&record)? {
             let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
-            if existing.contains_key(&key) || !seen.insert(key) {
+            if let Some(ids) = existing.get(&key) {
+                if let Some((tx, table)) = visibility_check {
+                    for id in ids {
+                        tx.require_conflict_tuple_in_snapshot(table, id)?;
+                    }
+                }
+                continue;
+            }
+            if !seen.insert(key) {
                 continue;
             }
         }

@@ -33,6 +33,7 @@ async fn repeatable_read_rejects_concurrent_mutations_at_the_statement_boundary(
         client
             .batch_execute(
                 "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+                 SET bicdb.update_repair = on;
                  BEGIN; INSERT INTO rr_mutation VALUES (1, 100, 10); COMMIT",
             )
             .await
@@ -41,6 +42,7 @@ async fn repeatable_read_rejects_concurrent_mutations_at_the_statement_boundary(
              INSERT INTO rr_mutation VALUES (2,200,12); COMMIT";
         let delete = "DELETE FROM rr_mutation WHERE id=1";
         for (concurrent, statement, expected_state) in [
+            (update_and_insert, "UPDATE rr_mutation SET v=v+5 WHERE id=1", "40001"),
             (update_and_insert, "UPDATE rr_mutation SET v=20 WHERE id=1 AND v=10", "40001"),
             (
                 update_and_insert,
@@ -155,6 +157,64 @@ async fn repeatable_read_rejects_concurrent_mutations_at_the_statement_boundary(
                 .unwrap()
                 .get::<_, i32>(0);
             assert_eq!(value, expected_value, "{mode:?}: owner {release}");
+        }
+        peer.batch_execute(
+            "CREATE TABLE rr_typed(id NUMERIC PRIMARY KEY,v INT);
+             CREATE TABLE rr_json(id INT PRIMARY KEY,k JSONB UNIQUE,v INT);
+             CREATE TABLE rr_partial(id INT PRIMARY KEY,k INT,live BOOLEAN,v INT);
+             CREATE UNIQUE INDEX rr_partial_k ON rr_partial(k) WHERE live",
+        )
+        .await
+        .unwrap();
+        for (table, owner, proposed, target) in [
+            ("rr_typed", "(1.00,11)", "(1.0,20)", "(id)"),
+            (
+                "rr_json",
+                r#"(2,'{"a":1}',11)"#,
+                r#"(3,'{"a":1.0}',20)"#,
+                "(k)",
+            ),
+            (
+                "rr_partial",
+                "(2,7,true,11)",
+                "(3,7,true,20)",
+                "(k) WHERE live",
+            ),
+        ] {
+            for (action, expected_state) in [
+                (String::new(), "23505"),
+                (" ON CONFLICT DO NOTHING".into(), "40001"),
+                (
+                    format!(" ON CONFLICT {target} DO UPDATE SET v=excluded.v"),
+                    "40001",
+                ),
+            ] {
+                peer.batch_execute(&format!("DELETE FROM {table}"))
+                    .await
+                    .unwrap();
+                client.batch_execute("BEGIN; SELECT 1").await.unwrap();
+                peer.batch_execute(&format!("INSERT INTO {table} VALUES {owner}"))
+                    .await
+                    .unwrap();
+                let statement = format!("INSERT INTO {table} VALUES {proposed}{action}");
+                let result = client.batch_execute(&statement).await;
+                let state = match &result {
+                    Ok(()) => "00000",
+                    Err(error) => error.code().map_or("client error", |code| code.code()),
+                };
+                if state != expected_state {
+                    failures.push(format!(
+                        "{mode:?}: {statement}: expected {expected_state}, got {state}"
+                    ));
+                }
+                client.batch_execute("ROLLBACK").await.unwrap();
+                let stored = peer
+                    .query_one(&format!("SELECT v FROM {table}"), &[])
+                    .await
+                    .unwrap()
+                    .get::<_, i32>(0);
+                assert_eq!(stored, 11);
+            }
         }
         drop(client);
         drop(peer);

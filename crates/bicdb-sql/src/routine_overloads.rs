@@ -541,7 +541,7 @@ fn chosen_user_function(
                 continue;
             }
         }
-        eligible.push(candidate.clone());
+        eligible.push(candidate);
         if actual
             .iter()
             .zip(&declared)
@@ -577,6 +577,7 @@ fn chosen_user_function(
         && actual.iter().all(Option::is_some)
         && !builtin_accepts_typed_arguments(name, &actual)
     {
+        let eligible = eligible.into_iter().cloned().collect::<Vec<_>>();
         return Ok(select_overload_scored(
             &eligible,
             static_types,

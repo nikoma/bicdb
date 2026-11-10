@@ -163,3 +163,21 @@ PostgreSQL 16.13 control covers direct calls, INSERT expressions, PL/pgSQL calls
 explicit timestamp types and numeric builtin dispatch:
 `crates/bicdb-sql/tests/fixtures/postgres/implicit_date_builtin_overloads_pg16.json`.
 These focused controls require their own engine and application reruns.
+
+
+The 04462193 overload diagnostic passed all 27 focused routine/join controls.
+Its unchanged PostgreSQL foundation rerun passed the first 80 cases, including
+all 53 POTest methods and the formerly failing virtual-column load, before
+invoice processing reached another parser failure. `invoiceOpen` contains a
+valid annotation between `EXCEPTION` and `WHEN`; the handler parser required
+`WHEN` immediately after whitespace and rejected that comment. Broad validation
+was held before starting its build; the application run continues collecting
+original evidence.
+
+Exception handler parsing now uses the existing PostgreSQL lexer-based comment
+normalizer. Line comments and nested block comments become SQL whitespace;
+quoted text keeps comment markers intact. The control exercises nested handler
+boundaries, multiple handlers, rollback of a failed block, and normal successful
+execution in both storage modes. The matching native PostgreSQL 16.13 transaction
+is retained in
+`crates/bicdb-sql/tests/fixtures/postgres/exception_handler_comments_pg16.json`.

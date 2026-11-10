@@ -101,6 +101,17 @@ fn dependency_relation_has_column(relation: &ScopeRelation, column: &Ident) -> b
     }
 }
 
+fn dependency_visible_columns(relation: &ScopeRelation) -> Vec<String> {
+    match &relation.dependency {
+        Some(source) => source
+            .columns
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect(),
+        None => relation.columns.clone().unwrap_or_default(),
+    }
+}
+
 fn record_dependency(relation: &ScopeRelation, column: Option<&Ident>) {
     let Some(source) = &relation.dependency else {
         return;
@@ -622,7 +633,7 @@ impl SqlEngine<'_> {
                 scope
                     .relations
                     .iter()
-                    .flat_map(|relation| relation.columns.iter().flatten().cloned())
+                    .flat_map(dependency_visible_columns)
                     .collect::<BTreeSet<_>>()
             });
             let left_relations = scope.relations.len();
@@ -638,9 +649,8 @@ impl SqlEngine<'_> {
                         .collect::<BTreeSet<_>>(),
                     Some(JoinConstraint::Natural) => scope.relations[left_relations..]
                         .iter()
-                        .flat_map(|relation| relation.columns.iter().flatten())
-                        .filter(|name| left_columns.as_ref().unwrap().contains(*name))
-                        .cloned()
+                        .flat_map(dependency_visible_columns)
+                        .filter(|name| left_columns.as_ref().unwrap().contains(name))
                         .collect(),
                     _ => BTreeSet::new(),
                 };

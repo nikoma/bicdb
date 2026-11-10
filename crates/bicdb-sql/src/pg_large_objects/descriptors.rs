@@ -693,7 +693,8 @@ mod tests {
                 assert_eq!(state.tell(key, writer).unwrap(), 3);
                 session.execute("RELEASE keep_older_handles").unwrap();
                 assert_eq!(state.tell(key, reader).unwrap(), 0);
-                assert_eq!(session.db_ref().mvcc_debug_stats().active_snapshots, 2);
+                // The metric counts distinct pinned watermarks, not pin references.
+                assert_eq!(session.db_ref().mvcc_debug_stats().active_snapshots, 1);
                 session.execute(ending).unwrap();
                 assert_eq!(session.db_ref().mvcc_debug_stats().active_snapshots, 0);
                 assert!(is_state(state.tell(key, writer), "42704"));
@@ -724,15 +725,16 @@ mod tests {
                     .open(key, Access::Read(view), 1024 * 1024)
                     .unwrap();
                 assert!(cache.large_object_retained_bytes() > 0);
-                assert_eq!(db.mvcc_debug_stats().active_snapshots, 2);
+                // Release the transaction first; only the descriptor now pins
+                // this watermark, so guard cleanup must remove it immediately.
+                tx.rollback().unwrap();
+                assert_eq!(db.mvcc_debug_stats().active_snapshots, 1);
                 if unwind {
                     panic!("controlled host unwind");
                 }
             }));
             assert_eq!(result.is_err(), unwind);
-            assert_eq!(db.mvcc_debug_stats().active_snapshots, 1);
             assert!(is_state(sibling.pg_large_objects.tell(key, 0), "42704"));
-            tx.rollback().unwrap();
             assert_eq!(db.mvcc_debug_stats().active_snapshots, 0);
         }
     }

@@ -23,6 +23,7 @@ fn indexed_inner_join_filters_wide_right_rows_before_retaining_them() {
             "SELECT SELECTIVE_PAYLOADS.id,SELECTIVE_PAYLOADS.payload FROM selective_drivers JOIN SELECTIVE_PAYLOADS ON SELECTIVE_PAYLOADS.driver_id=selective_drivers.id WHERE SELECTIVE_PAYLOADS.selected IS NOT NULL ORDER BY SELECTIVE_PAYLOADS.id",
             "SELECT \"w\".id,\"w\".payload FROM selective_drivers d JOIN selective_payloads \"w\" ON \"w\".driver_id=d.id WHERE \"w\".selected IS NOT NULL ORDER BY \"w\".id",
             "SELECT \"selective_payloads\".\"id\",\"selective_payloads\".\"payload\" FROM selective_drivers JOIN \"selective_payloads\" ON \"selective_payloads\".\"driver_id\"=selective_drivers.id WHERE \"selective_payloads\".\"selected\" IS NOT NULL ORDER BY \"selective_payloads\".\"id\"",
+            "SELECT w.id,w.payload FROM selective_drivers d JOIN \"selective_payloads\" w ON w.driver_id=d.id WHERE w.selected IS NOT NULL ORDER BY w.id",
         ] {
             let limit = 2 * 1024 * 1024;
             let memory = QueryMemoryScope::new(limit);

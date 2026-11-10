@@ -437,6 +437,31 @@
           "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
         }
       ]
+    },
+    {
+      "sql": "SELECT w.id,w.payload FROM selective_drivers d JOIN \"selective_payloads\" w ON w.driver_id=d.id WHERE w.selected IS NOT NULL ORDER BY w.id",
+      "rows": [
+        {
+          "id": 0,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        },
+        {
+          "id": 1,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        },
+        {
+          "id": 2,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        },
+        {
+          "id": 3,
+          "payload_bytes": 4096,
+          "payload_sha256": "a2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e"
+        }
+      ]
     }
   ],
   "guard_controls": [

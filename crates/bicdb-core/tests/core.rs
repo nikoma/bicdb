@@ -3038,6 +3038,44 @@ fn commit_time_delta_repair_merges_concurrent_counter_updates() {
 }
 
 #[test]
+fn delta_repair_keeps_the_write_watermark_after_a_later_statement_refresh() {
+    use bicdb_core::{RepairDelta, RepairPlan};
+    let (_temp, mut db) = open_temp();
+    db.create_collection("counters").unwrap();
+    db.insert(
+        "counters",
+        Record::new("shared").with_metadata(json!({"value": 100})),
+    )
+    .unwrap();
+    let mut reader = db.begin_transaction().unwrap();
+    reader
+        .write_upserts_with_repairs(
+            "counters",
+            [(
+                Record::new("shared").with_metadata(json!({"value": 105})),
+                0,
+                Some(RepairPlan {
+                    deltas: vec![("value".into(), RepairDelta::Int(5))],
+                }),
+            )],
+        )
+        .unwrap();
+    let mut peer = db.begin_transaction().unwrap();
+    peer.update(
+        "counters",
+        Record::new("shared").with_metadata(json!({"value": 110})),
+    )
+    .unwrap();
+    peer.commit().unwrap();
+    reader.refresh_read_committed_snapshot().unwrap();
+    reader.commit().unwrap();
+    assert_eq!(
+        db.get("counters", "shared").unwrap().unwrap().metadata["value"],
+        115
+    );
+}
+
+#[test]
 fn delta_repair_rebuilds_even_when_floored_snapshot_covers_the_conflict() {
     use bicdb_core::{RepairDelta, RepairPlan};
     let (_temp, mut db) = open_temp();

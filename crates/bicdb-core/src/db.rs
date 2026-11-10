@@ -18188,6 +18188,11 @@ impl Transaction {
                 }
                 let statement_snapshot =
                     self.conflict_snapshot_for_write(collection, &record_id, statement_snapshot);
+                let statement_snapshot = if repair.is_some() {
+                    statement_snapshot.min(self.applied_snapshot)
+                } else {
+                    statement_snapshot
+                };
                 writes.push(TxWrite {
                     collection: collection.to_string(),
                     op: TxWriteOp::Upsert,
@@ -18246,6 +18251,11 @@ impl Transaction {
                 }
                 let statement_snapshot =
                     self.conflict_snapshot_for_write(collection, &record_id, statement_snapshot);
+                let statement_snapshot = if repair.is_some() {
+                    statement_snapshot.min(self.applied_snapshot)
+                } else {
+                    statement_snapshot
+                };
                 writes.push(TxWrite {
                     collection: collection.to_string(),
                     op: TxWriteOp::Upsert,

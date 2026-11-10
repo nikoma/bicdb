@@ -4071,11 +4071,25 @@ fn execute_server_db_sql_for_state(
     normalized: &str,
     cancellation: &CancellationToken,
 ) -> Result<SqlResult> {
-    let _large_objects =
-        (!state.in_transaction).then(|| state.catalog_cache.large_object_transaction_cleanup());
+    // Borrow the connection rather than cloning its lazy descriptor state:
+    // ordinary queries must not allocate an unused large-object registry.
+    // Drop still runs on every return and during the outer panic containment.
+    struct DescriptorCleanup<'a> {
+        state: &'a mut ConnectionState,
+        implicit: bool,
+    }
+    impl Drop for DescriptorCleanup<'_> {
+        fn drop(&mut self) {
+            if self.implicit {
+                self.state.catalog_cache.close_transaction_large_objects();
+            }
+        }
+    }
+    let implicit = !state.in_transaction;
+    let cleanup = DescriptorCleanup { state, implicit };
     let trace = routine_outcome_trace::RoutineOutcomeTrace::start(normalized);
     let result =
-        execute_server_db_sql_for_state_inner(server, state, sql, normalized, cancellation);
+        execute_server_db_sql_for_state_inner(server, cleanup.state, sql, normalized, cancellation);
     if let Some(trace) = trace {
         trace.finish(result.is_ok());
     }

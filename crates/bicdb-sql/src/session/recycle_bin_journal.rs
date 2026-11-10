@@ -5,6 +5,14 @@ use super::*;
 const INTENTS: &str = "__bicdb_recycle_intents";
 const PURGES: &str = "__bicdb_recycle_purges";
 const CREATIONS: &str = "__bicdb_recycle_creations";
+
+/// Native rollback journals are implementation collections, never SQL tables.
+/// Compare physical names exactly so identically named user relations in a
+/// private SQL schema remain accessible through their encoded storage name.
+pub(crate) fn is_catalog_journal_collection(name: &str) -> bool {
+    [INTENTS, PURGES, CREATIONS].contains(&name)
+}
+
 const CREATED_PREFIX: &str = "__bicdb_created_";
 #[derive(Clone, Serialize, Deserialize)]
 struct CreationIntent {

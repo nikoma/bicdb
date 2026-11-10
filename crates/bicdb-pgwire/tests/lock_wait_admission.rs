@@ -33,17 +33,25 @@ async fn lock_owner_progress(lock: &str, release: &str) {
     let second_connection = tokio::spawn(async move { connection.await });
     first.batch_execute("CREATE TABLE admission_rows(id INT PRIMARY KEY,n INT); INSERT INTO admission_rows VALUES(1,0)").await.unwrap();
     first
-        .batch_execute("BEGIN; SAVEPOINT before_lock")
+        .batch_execute(
+            "CREATE UNIQUE INDEX admission_n ON admission_rows(n); BEGIN; SAVEPOINT before_lock",
+        )
         .await
         .unwrap();
     let statement = match lock {
         "row" => "UPDATE admission_rows SET n=n+1 WHERE id=1",
         "transaction_advisory" => "SELECT pg_advisory_xact_lock(17,42)",
         "session_advisory" => "SELECT pg_advisory_lock(17,42)",
+        "unique" => "INSERT INTO admission_rows VALUES(2,7)",
         _ => unreachable!(),
     };
     first.batch_execute(statement).await.unwrap();
     second.batch_execute("BEGIN").await.unwrap();
+    let statement = if lock == "unique" {
+        "INSERT INTO admission_rows VALUES(3,7)"
+    } else {
+        statement
+    };
     let waiting = tokio::spawn(async move {
         let result = second.batch_execute(statement).await;
         let commit = second.batch_execute("COMMIT").await;
@@ -52,7 +60,11 @@ async fn lock_owner_progress(lock: &str, release: &str) {
     });
     // Observe admission of the actual waiter rather than using a timing guess.
     tokio::time::timeout(Duration::from_secs(2), async {
-        while server.stats_snapshot().active_queries != 1 {
+        while !server
+            .connection_snapshots()
+            .iter()
+            .any(|connection| connection.active_query.as_deref() == Some(statement))
+        {
             tokio::time::sleep(Duration::from_millis(1)).await;
         }
     })
@@ -85,6 +97,11 @@ async fn lock_owner_progress(lock: &str, release: &str) {
     } else {
         None
     };
+    assert_eq!(
+        server.stats_snapshot().peak_active_queries,
+        1,
+        "lock waits must not raise the execution limit"
+    );
     server.request_shutdown();
     serving_thread.join().unwrap().unwrap();
     assert!(
@@ -129,4 +146,9 @@ async fn advisory_waiter_allows_owner_rollback() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn advisory_waiter_allows_session_unlock() {
     lock_owner_progress("session_advisory", "SELECT pg_advisory_unlock(17,42)").await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn constraint_waiter_allows_owner_rollback() {
+    lock_owner_progress("unique", "ROLLBACK").await;
 }

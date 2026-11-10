@@ -59,7 +59,7 @@ async fn lock_owner_progress(lock: &str, release: &str) {
         (result, commit)
     });
     // Observe admission of the actual waiter rather than using a timing guess.
-    tokio::time::timeout(Duration::from_secs(2), async {
+    let observed = tokio::time::timeout(Duration::from_secs(2), async {
         while !server
             .connection_snapshots()
             .iter()
@@ -68,8 +68,12 @@ async fn lock_owner_progress(lock: &str, release: &str) {
             tokio::time::sleep(Duration::from_millis(1)).await;
         }
     })
-    .await
-    .unwrap();
+    .await;
+    if observed.is_err() && waiting.is_finished() {
+        let early = waiting.await;
+        panic!("{lock} waiter completed before its owner released the lock: {early:?}");
+    }
+    observed.unwrap();
     assert!(
         !waiting.is_finished(),
         "the second session must wait on the held lock"

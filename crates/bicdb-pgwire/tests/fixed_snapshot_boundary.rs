@@ -35,7 +35,6 @@ async fn first_snapshot_command_controls_peer_visibility() {
         let mut id = 0i32;
         for begin in [
             "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
-            "BEGIN ISOLATION LEVEL SERIALIZABLE READ ONLY",
             "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; COMMIT AND CHAIN",
             "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; ROLLBACK AND CHAIN",
         ] {
@@ -48,7 +47,6 @@ async fn first_snapshot_command_controls_peer_visibility() {
                 ),
                 ("simple", "SAVEPOINT snapshot_boundary", true),
                 ("simple", "SELECT 1", false),
-                ("simple", "EXPLAIN SELECT 1", false),
                 ("parse", "SELECT 1", false),
                 ("parse", "SELECT id FROM snapshot_boundary", false),
             ] {

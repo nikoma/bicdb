@@ -1,5 +1,9 @@
 # Distributed cluster operations
 
+See the [2026-11-10 maturity audit](ha-horizontal-scaling-audit-2026-11-10.md)
+for source-scoped tests, missing transparent SQL integration, physical evidence
+limits, recovery blockers and the proposed independent 4→5-node experiment.
+
 This guide covers BicDB's automatic range-placement control plane. A cluster
 uses durable membership, virtual ranges, epoch-fenced routes, bounded
 relocation state machines, and an automatic supervisor. Single-node databases

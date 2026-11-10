@@ -1,5 +1,9 @@
 # BicDB High Availability
 
+For the current-source capability matrix, measured evidence and independent
+4→5-node experiment, see the [2026-11-10 HA/scaling audit](ha-horizontal-scaling-audit-2026-11-10.md).
+Automatic range movement does not currently provide transparent distributed SQL.
+
 For scheduled restore and promotion drills, bounded region-local reads, planned
 switchover, and role/tenant budgets, see
 [verification and workload protection](verification-and-workload-protection.md).
@@ -22,8 +26,9 @@ For zero-data-loss replication between servers, use
 
 Native Raft-style consensus support exists for ordered commit coordination.
 It is separate from this legacy file-shipping HA path and does not make BicDB
-multi-writer. Operators must still fence the old primary before promoting a
-standby until the server daemon owns automatic failover end to end.
+multi-writer. Manual file-shipping promotion requires operator fencing. Native
+streaming automatic failover uses the separate majority election and write lease described
+below.
 
 The 1.0.322-beta Cell runtime adds a separate, callable HA path: threshold
 writer/replica authority is verified before Cell key release, primary commits
@@ -65,7 +70,11 @@ a candidacy does not make a live primary appear to have been heard.
 `bicdb serve` can run as a replication primary or standby itself. A primary
 streams every commit to its standbys over long-lived authenticated connections.
 With `--synchronous-standbys K`, a client's commit is acknowledged only after
-K standbys have made it durable (RPO = 0). Standbys keep serving read-only
+K standbys have made it durable, unless timeout policy permits degradation.
+For zero acknowledged loss across automatic elections, configure a majority
+of durable copies including the primary: `K >= floor(group_size / 2)`, with
+`--synchronous-on-timeout fail`. A majority liveness lease alone does not
+prove that a particular commit reached a majority. Standbys keep serving read-only
 queries while they apply the stream.
 
 Embedding hosts can use `bicdb_pgwire::EmbeddedHaDatabase` with the same
@@ -113,7 +122,9 @@ bicdb serve /srv/standby --port 5432 \
 
 ### Guarantees
 
-- **No acknowledged commit is lost.** Every commit path (explicit `COMMIT`,
+- **Synchronous acknowledgment preserves confirmed commits.** With the
+  nondegrading synchronous policy and an appropriate failover target/quorum
+  described above, no acknowledged commit is lost. Every commit path (explicit `COMMIT`,
   autocommit statements, extended-protocol execution, DDL, `COPY`) holds the
   client's acknowledgement until the synchronous standbys have the commit
   durably. If the primary fails, a synchronous standby has every commit any
@@ -185,9 +196,10 @@ How it works:
   for election in the next term. It becomes primary with the votes of a
   majority of the group. A node votes once per term, only for a candidate
   whose commits are at least as recent as its own, and only when it has not
-  heard from the primary for the failover timeout itself. With synchronous
-  standbys, every acknowledged commit is on a majority-overlapping set of
-  nodes, so the winner always holds every acknowledged commit.
+  heard from the primary for the failover timeout itself. With enough synchronous
+  standbys to make each acknowledged commit durable on a majority, that
+  durable set overlaps every election quorum. Configuring fewer copies in a
+  larger group does not establish this guarantee.
 - **Write lease.** A primary admits writes only while it has heard from
   enough standbys to form a majority within half the failover timeout. A
   primary cut off from its group stops writing before the group can elect a
@@ -214,8 +226,9 @@ peer from a broken network. Use manual failover there, or add a third node.
 ### Manual failover
 
 1. Make sure the old primary is stopped and cannot come back (fence it).
-2. Restart a synchronous standby as the primary (any synchronous standby has
-   every acknowledged commit): drop `--standby-of`, add
+2. Verify the selected standby holds the required acknowledged commit watermark,
+   then restart it as the primary. A count-based K-of-N policy does not prove
+   that every standby has every acknowledgment. Drop `--standby-of`, add
    `--replication-listen` and `--allow-standby` for the remaining nodes. It
    builds its secondary indexes at start.
 3. Point clients at it. Re-create the old primary as a standby from a fresh
@@ -353,8 +366,10 @@ verify zero lag, promote the standby, and then move clients.
 
 ## Limitations
 
-- Streaming replication is asynchronous whole-database commit-stream
-  replication. The `consensus run` interface is retained for compatibility;
+- The standalone manual stream/follow transport is asynchronous whole-database
+  commit-stream replication. Native `bicdb serve` can additionally wait for
+  synchronous acknowledgments as described above. The `consensus run` interface
+  is retained for compatibility;
   distributed `bicdb serve` data safety comes from the synchronous per-range
   command log, not from asynchronous post-commit frame export.
 - File shipping is async fallback replication, not streaming consensus.

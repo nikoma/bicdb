@@ -906,7 +906,11 @@ Mutation checks (each mutation applied alone; the named tests must fail):
   migration, found while writing the migration fence test, and is tracked
   separately.
 
-- **A recovery that refuses to open after an early stop.** About 1 in
+- **Historical GAP-1 recovery refusal; source repair merged in PR119.** The
+  [unconditional structural-cut algorithm](storage/structural-cuts.md) replaces
+  the steal behavior described below. Preserve these old failure states as
+  evidence; they are not a claim that current source still uses that algorithm,
+  nor does the source repair qualify a current binary or deployment. About 1 in
   several hundred repeated runs leaves a state that recovery refuses to open
   with `page N is beyond the end of the file (N pages)`, both after a crash
   (`pool.after_writeback:40`) and after an injected early page-log sync

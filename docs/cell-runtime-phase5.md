@@ -171,8 +171,13 @@ Environment and CLI paths select documents; they grant no authority.
 
 ## Admission status
 
-`regulated_data_admitted` remains `false`. Phase 5 closes the callable
-cell-scoped HA/recovery implementation item. Device replicas, cross-Cell
-grants, attested deployment enforcement, externally archived production
-drills, independent review, and the remaining admission gates are still
-absent. Zero-RPO synchronous Cell commits are also not claimed.
+For this Phase-5 profile, `regulated_data_admitted` remains `false`. Later
+[Phase8](cell-runtime-phase8.md) adds conditional continuous admission for an
+exact valid evidence/attestation bundle; synthetic fixtures are not operational
+drills or production qualification. See the
+[current HA/scaling audit](ha-horizontal-scaling-audit-2026-11-10.md).
+Phase 5 closes the callable Cell-scoped HA/recovery implementation item.
+Device replicas, cross-Cell grants and attested deployment enforcement require
+their later phase profiles; Phase 5 alone does not grant those capabilities.
+Externally archived production drills and independent review remain evidence
+requirements. Zero-RPO synchronous Cell commits are also not claimed.

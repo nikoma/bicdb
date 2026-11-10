@@ -2,6 +2,10 @@
 
 Status: implementation roadmap. A checked item is shipped with tests. An
 unchecked item is not a BicDB capability and must not be described as one.
+Checked planning/router/protocol-boundary items do not establish a general
+distributed SQL executor or production qualification. The
+[2026-11-10 audit](ha-horizontal-scaling-audit-2026-11-10.md) traces those
+distinctions to implementation, tests and retained hardware evidence.
 
 The goal is a cluster where an operator joins a server and BicDB automatically
 places, replicates, moves, and balances data without application-level shard

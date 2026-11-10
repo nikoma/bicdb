@@ -47,7 +47,7 @@ async fn portal_describe_keeps_rule_actions_deferred_until_execute() {
         .unwrap();
     raw.write_all(&startup).unwrap();
     while receive(&mut raw).0 != b'Z' {}
-    let mut parse = b"rule_insert\0INSERT INTO portal_request VALUES(7)\0".to_vec();
+    let mut parse = b"rule_insert\0INSERT INTO portal_request VALUES(7),(8)\0".to_vec();
     parse.extend_from_slice(&0i16.to_be_bytes());
     send(&mut raw, b'P', &parse);
     let mut bind = b"rule_portal\0rule_insert\0".to_vec();
@@ -74,7 +74,7 @@ async fn portal_describe_keeps_rule_actions_deferred_until_execute() {
         "Describe must not run the rule"
     );
     let mut execute = b"rule_portal\0".to_vec();
-    execute.extend_from_slice(&0i32.to_be_bytes());
+    execute.extend_from_slice(&1i32.to_be_bytes());
     send(&mut raw, b'E', &execute);
     send(&mut raw, b'S', &[]);
     let mut rows = 0;
@@ -89,7 +89,7 @@ async fn portal_describe_keeps_rule_actions_deferred_until_execute() {
             other => panic!("unexpected response {other}: {p:?}"),
         }
     }
-    assert_eq!(rows, 1);
+    assert_eq!(rows, 2);
     assert_eq!(command.as_deref(), Some("INSERT 0 0"));
     assert_eq!(
         client
@@ -97,7 +97,7 @@ async fn portal_describe_keeps_rule_actions_deferred_until_execute() {
             .await
             .unwrap()
             .get::<_, i64>(0),
-        1
+        2
     );
     drop(raw);
     drop(client);

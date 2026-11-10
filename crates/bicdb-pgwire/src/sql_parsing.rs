@@ -2952,7 +2952,10 @@ pub(crate) fn execute_message(
         Some(result) => result,
         None => execute_server_sql_with_options(server, state, &sql, !streaming_fetch)?,
     };
-    if !streaming_fetch || result.columns.is_empty() {
+    // A rewritten mutation without RETURNING is a multi-query portal, not
+    // a fetchable SELECT. Native PostgreSQL completes all its rule actions
+    // and rows even when the client requests a one-row Execute limit.
+    if !streaming_fetch || result.columns.is_empty() || is_mutation_without_returning(&sql) {
         return Ok(PortalExecuteResult {
             result,
             result_formats,

@@ -36,6 +36,7 @@ impl RecordReadSnapshot {
     /// Read through ordinary native collection protection. SQL hosts that
     /// enforce their own object privileges use the explicitly unchecked form.
     pub fn get(&self, db: &BicDb, id: &str) -> Result<Option<Arc<Record>>> {
+        db.check_recovery_state()?;
         db.ensure_unprotected_legacy_access(&self.0.collection, SecureOperation::Read)?;
         self.get_visible_record_unchecked(db, id)
     }
@@ -49,6 +50,15 @@ impl RecordReadSnapshot {
         db: &BicDb,
         id: &str,
     ) -> Result<Option<Arc<Record>>> {
+        db.check_recovery_state()?;
+        let result = self.read_record_unchecked(db, id);
+        // A failure may fence the database while an old row or cached pending
+        // value is being read. Never expose that value after the fence.
+        db.check_recovery_state()?;
+        result
+    }
+
+    fn read_record_unchecked(&self, db: &BicDb, id: &str) -> Result<Option<Arc<Record>>> {
         if db.instance_id() != self.0.instance_id {
             return Err(BicDbError::Unsupported(
                 "read snapshot belongs to a different database instance".into(),
@@ -93,6 +103,7 @@ impl Transaction {
             return Err(BicDbError::TransactionNotPending);
         }
         let db = self.db_ref();
+        db.check_recovery_state()?;
         db.ensure_collection(collection)?;
         let mut retained_bytes = std::mem::size_of::<RecordReadSnapshotState>()
             .saturating_add(collection.len())
@@ -137,7 +148,7 @@ impl Transaction {
         // The source transaction already pins this boundary while its overlay
         // is copied. Register the independent pin before returning the handle.
         self.active_snapshots.incr(self.snapshot_tx.0);
-        Ok(RecordReadSnapshot(Arc::new(RecordReadSnapshotState {
+        let snapshot = RecordReadSnapshot(Arc::new(RecordReadSnapshotState {
             instance_id: db.instance_id(),
             collection: collection.into(),
             id_prefix: id_prefix.into(),
@@ -146,7 +157,10 @@ impl Transaction {
             active_snapshots: self.active_snapshots.clone(),
             overlay,
             retained_bytes,
-        })))
+        }));
+        // On a racing durability failure this error also drops the new pin.
+        db.check_recovery_state()?;
+        Ok(snapshot)
     }
 }
 

@@ -140,3 +140,26 @@ literal query, the stock parameterized query and three comparison variants; all
 five matched native PostgreSQL. This used a closed copy of the retained 03ffe407
 application database, with all-log durability and the default memory guard. It is
 a focused diagnostic, not a fresh-baseline or complete application qualification.
+
+
+The 1380e6ec focused run passed all nine join controls. Its cell-reader fix also
+preserves the existing record-ID fallback when an integer primary key is absent
+from the flat cell view; a case-distinct quoted column cannot supply that key.
+This matters independently of identifier folding in the PostgreSQL wire layer:
+the embedded SQL API must retain the same column identities.
+
+A stock PostgreSQL-provider diagnostic at b08bbf24 then ran all 89 original
+foundation invocations against the closed, verified 03ffe407 baseline. It passed
+52, with three assertion failures and 34 errors. Most errors came from the
+application's `trunc(cast(? AS date))` calls reaching numeric builtin dispatch;
+the native schema instead resolves the date through an implicit timestamp
+overload. The virtual-column assertion remains a separate observed failure.
+
+Typed PostgreSQL user overloads now consider the catalog's implicit casts when
+the builtin has no viable typed signature, including the preferred datetime
+type. Exact builtin signatures and search-path rules keep their existing
+precedence. Oracle keeps its independent overload conversion rules. The native
+PostgreSQL 16.13 control covers direct calls, INSERT expressions, PL/pgSQL calls,
+explicit timestamp types and numeric builtin dispatch:
+`crates/bicdb-sql/tests/fixtures/postgres/implicit_date_builtin_overloads_pg16.json`.
+These focused controls require their own engine and application reruns.

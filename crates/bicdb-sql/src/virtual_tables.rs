@@ -54,6 +54,7 @@ pub(crate) fn is_internal_sql_collection(name: &str) -> bool {
         crate::session::RECYCLE_BIN_COLLECTION,
     ]
     .contains(&name)
+        || crate::session::is_catalog_journal_collection(name)
         || bicdb_core::is_flashback_history_collection(name)
         || crate::session::is_recycle_bin_name(name)
 }

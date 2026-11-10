@@ -40,11 +40,11 @@ impl SqlSessionCatalogCache {
 }
 
 impl DescriptorState {
-    pub(super) fn savepoint(&self) -> Result<SqlLargeObjectSavepoint> {
+    pub(crate) fn savepoint(&self) -> Result<SqlLargeObjectSavepoint> {
         self.current_mark().map(SqlLargeObjectSavepoint)
     }
 
-    pub(super) fn restore(&self, mark: SqlLargeObjectSavepoint) -> Result<()> {
+    pub(crate) fn restore(&self, mark: SqlLargeObjectSavepoint) -> Result<()> {
         if let Some(mark) = mark.0 {
             self.rollback_to(mark)
         } else {

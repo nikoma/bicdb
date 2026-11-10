@@ -174,7 +174,7 @@ impl DescriptorState {
         }))
     }
 
-    pub(super) fn clear(&self) {
+    pub(crate) fn clear(&self) {
         if let Some(shared) = self.shared.get() {
             let mut registry = shared
                 .lock()

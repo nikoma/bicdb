@@ -2547,6 +2547,7 @@ impl BicDb {
         let _serializable_exclusive = (tx.isolation == TransactionIsolation::Serializable)
             .then(|| self.serializable_commit_admission.write());
         self.check_recovery_state()?;
+        self.validate_transaction_collection_incarnations(tx)?;
         // CONCURRENT COMMIT (no global commit_lock). Correctness rests on four
         // independent mechanisms, each guarding exactly what it must:
         //  * same-record W-W: optimistic per-record `write_locks` (a 2nd writer of

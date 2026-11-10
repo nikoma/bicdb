@@ -2263,22 +2263,12 @@ fn projected_expr_pg_type_with_db_uncached(db: &BicDb, expr: &Expr) -> Option<St
     }
     if let Expr::Function(function) = expr {
         let name = object_name(&function.name).ok()?;
-        if routine_overloads(db, RoutineKind::Function, &name)
-            .ok()
-            .flatten()
-            .is_some()
-        {
-            let args = function_arg_list(function);
-            let arg_types = args
-                .iter()
-                .map(|arg| projected_expr_pg_type_with_db_uncached(db, arg))
-                .collect::<Vec<_>>();
-            return overload_return_type(db, &name, &arg_types);
-        }
-        return load_routine(db, RoutineKind::Function, &name)
-            .ok()
-            .flatten()
-            .map(|routine| routine.return_type);
+        let args = function_arg_list(function);
+        let arg_types = args
+            .iter()
+            .map(|arg| projected_expr_pg_type_with_db_uncached(db, arg))
+            .collect::<Vec<_>>();
+        return overload_return_type(db, &name, &arg_types);
     }
     None
 }

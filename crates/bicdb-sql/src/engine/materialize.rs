@@ -3670,7 +3670,14 @@ impl<'db> SqlEngine<'db> {
                     load_routine(self.db_ref(), RoutineKind::Function, &name)
                         .ok()
                         .flatten()
-                        .map(|routine| routine.return_type)
+                        .and_then(|routine| {
+                            crate::routine_overloads::concrete_routine_return_type(
+                                self.db_ref(),
+                                &routine,
+                                &static_types,
+                            )
+                            .ok()
+                        })
                 })
             }
         }

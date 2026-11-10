@@ -1384,6 +1384,18 @@ fn validate_unique_arbiter_records_vacating(
     Ok(())
 }
 
+pub(crate) fn postgres_fixed_snapshot<'tx>(
+    db: &BicDb,
+    tx: Option<&'tx Transaction>,
+) -> Result<Option<&'tx Transaction>> {
+    let Some(tx) =
+        tx.filter(|tx| tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted)
+    else {
+        return Ok(None);
+    };
+    Ok((!oracle::preview_routine_language_enabled(db)?).then_some(tx))
+}
+
 pub(crate) fn non_conflicting_records(
     db: &BicDb,
     tx: Option<&Transaction>,
@@ -1423,6 +1435,7 @@ pub(crate) fn non_conflicting_records(
     }
     let index_name = arbiter.index_name.as_ref().expect("checked above");
 
+    let fixed = postgres_fixed_snapshot(db, tx)?;
     let mut seen = BTreeSet::<Vec<String>>::new();
     let mut inserted = Vec::new();
     for record in records {
@@ -1434,13 +1447,15 @@ pub(crate) fn non_conflicting_records(
             }
             sql_profile_index_lookup();
             let index_values = unique_key_index_values(schema, &arbiter.key, &key_values)?;
-            if !committed_ids_still_present(
+            let conflicts = committed_ids_still_present(
                 tx,
                 table,
                 db.lookup_index_exact(index_name, &index_values)?,
-            )
-            .is_empty()
-            {
+            );
+            if let Some(conflict) = conflicts.first() {
+                if let Some(tx) = fixed {
+                    tx.require_conflict_tuple_in_snapshot(table, conflict)?;
+                }
                 continue;
             }
             // The index is committed state only. A row this transaction has
@@ -1488,6 +1503,7 @@ pub(crate) fn validate_unique_primary_key_arbiter_records(
     if primary_key_requires_typed_identity(schema) {
         return Ok(false);
     }
+    let fixed = postgres_fixed_snapshot(db, tx)?;
     for record in records {
         let key_values = record_column_values(record, schema, &columns);
         if arbiter.skips_null_key(&key_values) {
@@ -1498,9 +1514,12 @@ pub(crate) fn validate_unique_primary_key_arbiter_records(
         // Through the transaction when there is one: `db.get` sees committed
         // state only, so a row inserted earlier in this same transaction was
         // invisible and the duplicate silently replaced it.
-        let existing = match tx {
-            Some(tx) => tx.get_for_integrity_check(table, &record_id)?,
-            None => db.get_unchecked(table, &record_id)?,
+        let existing = match (fixed, tx) {
+            (Some(tx), _) => {
+                tx.overlay_pending_write(table, &record_id, db.get_unchecked(table, &record_id)?)
+            }
+            (_, Some(tx)) => tx.get_for_integrity_check(table, &record_id)?,
+            (_, None) => db.get_unchecked(table, &record_id)?,
         };
         if existing.is_some_and(|existing| !allow_existing_same_id || existing.id != record.id) {
             return Err(unique_violation(schema, &arbiter.name));
@@ -1517,6 +1536,7 @@ pub(crate) fn non_conflicting_records_by_primary_key(
     columns: &[String],
     records: Vec<Record>,
 ) -> Result<Vec<Record>> {
+    let fixed = postgres_fixed_snapshot(db, tx)?;
     let mut seen = BTreeSet::<Vec<String>>::new();
     let mut inserted = Vec::new();
     for record in records {
@@ -1529,11 +1549,19 @@ pub(crate) fn non_conflicting_records_by_primary_key(
             }
             sql_profile_index_lookup();
             let record_id = record_id_from_column_values(table, schema, columns, &key_values)?;
-            let existing = match tx {
-                Some(tx) => tx.get_for_integrity_check(table, &record_id)?,
-                None => db.get_unchecked(table, &record_id)?,
+            let existing = match (fixed, tx) {
+                (Some(tx), _) => tx.overlay_pending_write(
+                    table,
+                    &record_id,
+                    db.get_unchecked(table, &record_id)?,
+                ),
+                (_, Some(tx)) => tx.get_for_integrity_check(table, &record_id)?,
+                (_, None) => db.get_unchecked(table, &record_id)?,
             };
             if existing.is_some() {
+                if let Some(tx) = fixed {
+                    tx.require_conflict_tuple_in_snapshot(table, &record_id)?;
+                }
                 continue;
             }
         }

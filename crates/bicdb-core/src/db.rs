@@ -15176,6 +15176,75 @@ impl Transaction {
         Ok(())
     }
 
+    /// SQL INSERT claims a currently vacant identity, including one freed by
+    /// a delete after the reader's fixed snapshot. Keep that newer boundary
+    /// on the new write only; reads and updates retain the original snapshot.
+    pub fn insert_using_live_identities(
+        &mut self,
+        collection: &str,
+        primary_constraint: &str,
+        records: Vec<Record>,
+        grant: Option<MutationGrantId>,
+    ) -> Result<()> {
+        if self.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        let mut prepared = Vec::with_capacity(records.len());
+        let mut ids = FxHashSet::default();
+        self.bind_collection_incarnation(collection)?;
+        for record in &records {
+            let db = self.db_ref();
+            match grant {
+                Some(grant) => self.validate_mutation_grant_operation(
+                    grant,
+                    collection,
+                    &record.id,
+                    MutationOperation::Insert,
+                )?,
+                None => db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?,
+            }
+            self.lock_row_for_write(self.id, collection, &record.id, false)?;
+            let current = self.overlay_pending_write(
+                collection,
+                &record.id,
+                db.get_unchecked(collection, &record.id)?,
+            );
+            if current.is_some() || !ids.insert(record.id.as_str()) {
+                return Err(BicDbError::UniqueIndexConflict {
+                    index: primary_constraint.into(),
+                });
+            }
+            prepared.push(
+                Self::latest_committed_record_sequence(db, collection, &record.id)?.unwrap_or(0),
+            );
+        }
+        drop(ids);
+        let mut audits = Vec::new();
+        if let Some(grant) = grant {
+            for record in &records {
+                audits.push(self.authorize_mutation_with_preimage(
+                    grant,
+                    collection,
+                    MutationOperation::Insert,
+                    std::slice::from_ref(record),
+                    Some((&record.id, None)),
+                )?);
+            }
+        }
+        self.write_upserts_with_reservation_preimages(
+            collection,
+            records
+                .into_iter()
+                .zip(prepared)
+                .map(|(record, sequence)| (record, sequence, Some(OldImage::none()))),
+            grant.is_none(),
+        )?;
+        for audit in audits {
+            self.enqueue_mutation_audit(audit);
+        }
+        Ok(())
+    }
+
     pub fn update_with_grant(
         &mut self,
         grant: MutationGrantId,
@@ -15850,6 +15919,23 @@ impl Transaction {
         id: &str,
     ) -> Result<Option<Arc<Record>>> {
         self.get_visible_unchecked(collection, id)
+    }
+
+    /// Check visibility of a committed tuple already identified by a SQL
+    /// uniqueness arbiter. This check exposes neither the row nor its fields.
+    pub fn require_conflict_tuple_in_snapshot(&self, collection: &str, id: &str) -> Result<()> {
+        let db = self.db_ref();
+        self.bind_collection_incarnation(collection)?;
+        if self.last_pending_write(collection, id).is_none()
+            && Self::latest_committed_record_sequence(db, collection, id)?
+                .is_some_and(|sequence| sequence > self.applied_snapshot)
+        {
+            return Err(BicDbError::TransactionConflict(format!(
+                "{collection}:{id} changed after transaction {} snapshot",
+                self.id.0
+            )));
+        }
+        Ok(())
     }
 
     /// Batch existence probe for engine-internal primary-key arbitration.

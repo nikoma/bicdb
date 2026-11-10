@@ -941,7 +941,7 @@ impl<'db> SqlSession<'db> {
         if let Some((_, error)) = rls_violation {
             return Err(error);
         }
-        self.insert_session_records(&table, records.clone())?;
+        self.insert_session_new_records(&table, schema.as_deref(), records.clone())?;
         self.fire_after_insert_triggers(&table, schema.as_deref(), &records)?;
         self.insert_result(
             &table,
@@ -1534,6 +1534,26 @@ impl<'db> SqlSession<'db> {
                 ),
             };
             if let Some(existing) = existing {
+                if let Some(tx) = records::postgres_fixed_snapshot(self.db_ref(), self.tx.as_ref())?
+                {
+                    let context = self.security_context.as_ref();
+                    let locked = if self.exclusive {
+                        tx.try_lock_visible_record(context, table, &existing.id)?
+                    } else {
+                        tx.lock_visible_record_cancellable(
+                            context,
+                            table,
+                            &existing.id,
+                            &self.cancellation,
+                        )?
+                    };
+                    if !locked {
+                        return Err(BicDbError::TransactionConflict(format!(
+                            "cannot lock conflict tuple in {table}"
+                        ))
+                        .into());
+                    }
+                }
                 match &on_conflict.action {
                     OnConflictAction::DoNothing => {}
                     OnConflictAction::DoUpdate(update) => {
@@ -1688,7 +1708,7 @@ impl<'db> SqlSession<'db> {
                 Some(reservation) => {
                     self.insert_reserved_session_record(table, reservation, record.clone(), &[])
                 }
-                None => self.insert_session_records(table, vec![record.clone()]),
+                None => self.insert_session_new_records(table, schema, vec![record.clone()]),
             };
             if let Err(error) = inserted {
                 return Err(self.arbiter_race_as_conflict(table, schema, &conflict_columns, error));
@@ -2200,7 +2220,8 @@ impl<'db> SqlSession<'db> {
                 self.arbiter_race_as_conflict(table, Some(schema), conflict_columns, error)
             })?;
         }
-        if let Err(error) = self.insert_session_records(table, inserted_records.clone()) {
+        if let Err(error) = self.insert_session_new_records(table, schema, inserted_records.clone())
+        {
             return Err(self.arbiter_race_as_conflict(table, schema, conflict_columns, error));
         }
         self.fire_after_insert_triggers(table, schema, &inserted_records)?;
@@ -2241,7 +2262,7 @@ impl<'db> SqlSession<'db> {
                 Some(&self.sql_engine()),
             )?;
         }
-        self.insert_session_records(table, inserted_records.clone())?;
+        self.insert_session_new_records(table, schema, inserted_records.clone())?;
         self.fire_after_insert_triggers(table, schema, &inserted_records)?;
         self.insert_result(
             table,
@@ -2380,6 +2401,21 @@ impl<'db> SqlSession<'db> {
                     let primary_values = record_column_values(record, schema, &columns);
                     let record_id =
                         record_id_from_column_values(table, schema, &columns, &primary_values)?;
+                    if let Some(tx) =
+                        records::postgres_fixed_snapshot(self.db_ref(), self.tx.as_ref())?
+                    {
+                        if tx
+                            .overlay_pending_write(
+                                table,
+                                &record_id,
+                                self.db_ref().get_unchecked(table, &record_id)?,
+                            )
+                            .is_none()
+                        {
+                            return Ok(None);
+                        }
+                        tx.require_conflict_tuple_in_snapshot(table, &record_id)?;
+                    }
                     return self.conflict_record_by_id(table, &record_id);
                 }
             }

@@ -5,6 +5,7 @@ use tokio_postgres::NoTls;
 
 #[tokio::test]
 async fn repeatable_read_rejects_concurrent_mutations_at_the_statement_boundary() {
+    let mut failures = Vec::new();
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let root = tempfile::tempdir().unwrap();
         drop(
@@ -24,37 +25,42 @@ async fn repeatable_read_rejects_concurrent_mutations_at_the_statement_boundary(
         let client_task = tokio::spawn(client_connection);
         let (peer, peer_connection) = tokio_postgres::connect(&config, NoTls).await.unwrap();
         let peer_task = tokio::spawn(peer_connection);
-        peer.batch_execute("CREATE TABLE rr_mutation(id integer PRIMARY KEY, v integer NOT NULL)")
+        peer.batch_execute("CREATE TABLE rr_mutation(id integer PRIMARY KEY, k integer UNIQUE, v integer NOT NULL)")
             .await
             .unwrap();
 
         client
             .batch_execute(
                 "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL REPEATABLE READ;
-                 BEGIN; INSERT INTO rr_mutation VALUES (1, 10); COMMIT",
+                 BEGIN; INSERT INTO rr_mutation VALUES (1, 100, 10); COMMIT",
             )
             .await
             .unwrap();
-        for (statement, expected_state) in [
-            ("UPDATE rr_mutation SET v=20 WHERE id=1 AND v=10", "40001"),
+        let update_and_insert = "BEGIN; UPDATE rr_mutation SET v=11 WHERE id=1;
+             INSERT INTO rr_mutation VALUES (2,200,12); COMMIT";
+        let delete = "DELETE FROM rr_mutation WHERE id=1";
+        for (concurrent, statement, expected_state) in [
+            (update_and_insert, "UPDATE rr_mutation SET v=20 WHERE id=1 AND v=10", "40001"),
             (
+                update_and_insert,
                 "UPDATE rr_mutation AS target SET v=20 FROM (VALUES (1)) AS source(id)
                  WHERE target.id=source.id",
                 "40001",
             ),
-            ("DELETE FROM rr_mutation WHERE id=1 AND v=10", "40001"),
-            ("SELECT v FROM rr_mutation WHERE id=1 FOR UPDATE", "40001"),
-            ("INSERT INTO rr_mutation VALUES (2,20)", "23505"),
-            (
-                "INSERT INTO rr_mutation VALUES (2,20) ON CONFLICT DO NOTHING",
-                "40001",
-            ),
-            (
-                "INSERT INTO rr_mutation VALUES (2,20) ON CONFLICT(id) DO UPDATE SET v=EXCLUDED.v",
-                "40001",
-            ),
+            (update_and_insert, "DELETE FROM rr_mutation WHERE id=1 AND v=10", "40001"),
+            (update_and_insert, "SELECT v FROM rr_mutation WHERE id=1 FOR UPDATE", "40001"),
+            (update_and_insert, "INSERT INTO rr_mutation VALUES (2,300,20)", "23505"),
+            (update_and_insert, "INSERT INTO rr_mutation VALUES (2,300,20) ON CONFLICT DO NOTHING", "40001"),
+            (update_and_insert, "INSERT INTO rr_mutation VALUES (2,300,20) ON CONFLICT(id) DO UPDATE SET v=EXCLUDED.v", "40001"),
+            (update_and_insert, "INSERT INTO rr_mutation VALUES (1,100,20) ON CONFLICT(id) DO NOTHING", "40001"),
+            (update_and_insert, "INSERT INTO rr_mutation VALUES (1,100,20) ON CONFLICT(id) DO UPDATE SET v=EXCLUDED.v WHERE false", "40001"),
+            (delete, "INSERT INTO rr_mutation VALUES (1,100,20) ON CONFLICT(id) DO NOTHING", "00000"),
+            (delete, "INSERT INTO rr_mutation VALUES (1,100,20)", "00000"),
+            (update_and_insert, "INSERT INTO rr_mutation VALUES (3,200,20) ON CONFLICT DO NOTHING", "40001"),
+            (update_and_insert, "INSERT INTO rr_mutation VALUES (3,200,20) ON CONFLICT(id) DO NOTHING", "23505"),
+            (update_and_insert, "INSERT INTO rr_mutation VALUES (3,200,20) ON CONFLICT(k) DO UPDATE SET v=EXCLUDED.v", "40001"),
         ] {
-            peer.batch_execute("DELETE FROM rr_mutation; INSERT INTO rr_mutation VALUES (1,10)")
+            peer.batch_execute("DELETE FROM rr_mutation; INSERT INTO rr_mutation VALUES (1,100,10)")
                 .await
                 .unwrap();
             client.batch_execute("BEGIN").await.unwrap();
@@ -63,27 +69,40 @@ async fn repeatable_read_rejects_concurrent_mutations_at_the_statement_boundary(
                 .await
                 .unwrap();
             assert_eq!(original.get::<_, i32>(0), 10, "{mode:?}: {statement}");
-            peer.batch_execute(
-                "BEGIN; UPDATE rr_mutation SET v=11 WHERE id=1;
-                 INSERT INTO rr_mutation VALUES (2,12); COMMIT",
-            )
-            .await
-            .unwrap();
-            let error = client.batch_execute(statement).await.unwrap_err();
-            assert_eq!(
-                error.code().unwrap().code(),
-                expected_state,
-                "{mode:?}: {statement}: {error:?}"
-            );
-            client.batch_execute("ROLLBACK").await.unwrap();
-            let values: Vec<i32> = peer
+            peer.batch_execute(concurrent).await.unwrap();
+            let before: Vec<i32> = peer
                 .query("SELECT v FROM rr_mutation ORDER BY id", &[])
                 .await
                 .unwrap()
                 .iter()
                 .map(|row| row.get(0))
                 .collect();
-            assert_eq!(values, [11, 12]);
+            let result = client.batch_execute(statement).await;
+            let state = match &result {
+                Ok(()) => "00000",
+                Err(error) => error.code().map_or("client error", |code| code.code()),
+            };
+            if state != expected_state {
+                failures.push(format!("{mode:?}: {statement}: expected {expected_state}, got {state}"));
+            }
+            if state == "00000" && expected_state == "00000" {
+                let row = client
+                    .query_one("SELECT v FROM rr_mutation WHERE id=1", &[])
+                    .await
+                    .unwrap();
+                if row.get::<_, i32>(0) != 20 {
+                    failures.push(format!("{mode:?}: {statement}: reinserted row not visible"));
+                }
+            }
+            client.batch_execute("ROLLBACK").await.unwrap();
+            let after: Vec<i32> = peer
+                .query("SELECT v FROM rr_mutation ORDER BY id", &[])
+                .await
+                .unwrap()
+                .iter()
+                .map(|row| row.get(0))
+                .collect();
+            assert_eq!(after, before, "{mode:?}: {statement}");
         }
         drop(client);
         drop(peer);
@@ -92,4 +111,5 @@ async fn repeatable_read_rejects_concurrent_mutations_at_the_statement_boundary(
         server.request_shutdown();
         task.join().unwrap().unwrap();
     }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

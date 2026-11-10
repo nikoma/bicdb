@@ -257,6 +257,12 @@ fn builtin_accepts_typed_arguments(name: &str, actual: &[Option<i32>]) -> bool {
             }
             declared.len() == actual.len()
                 && actual.iter().zip(declared).all(|(input, target)| {
+                    // A known SQL unknown literal can be coerced to a
+                    // builtin's declared input type. Other typed arguments
+                    // must still allow that builtin's implicit conversion.
+                    if input.is_none() {
+                        return true;
+                    }
                     match (
                         input.and_then(pg_type_spec_by_oid),
                         target.and_then(pg_type_spec_by_oid),
@@ -831,7 +837,10 @@ fn chosen_user_function(
         .iter()
         .any(|(candidate, _)| *candidate == name);
     if by_value.is_none()
-        && (actual.iter().all(Option::is_some) || !native_builtin_name)
+        // Some("unknown") is an actual SQL literal, unlike None for an
+        // unresolved column or variable. A typed timestamp rules out every
+        // numeric trunc builtin even when its format literal is unknown.
+        && (static_types.iter().all(Option::is_some) || !native_builtin_name)
         && !builtin_accepts_typed_arguments(name, &actual)
     {
         let eligible = eligible.into_iter().cloned().collect::<Vec<_>>();

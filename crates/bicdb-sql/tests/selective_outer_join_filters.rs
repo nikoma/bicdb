@@ -41,6 +41,13 @@ fn mixed_join_base_filter_folds_unquoted_identifiers_before_schema_lookup() {
             assert!(memory.peak_bytes() > 0 && memory.peak_bytes() <= limit);
         }
         session.execute("CREATE TABLE mixed_case_guard(id INT PRIMARY KEY,\"ID\" INT); INSERT INTO mixed_case_guard VALUES(1,2),(2,1)").unwrap();
+        for query in [
+            "SELECT l.id,l.\"ID\" FROM mixed_case_guard l WHERE l.ID=1",
+            "SELECT l.id,l.\"ID\" FROM mixed_case_guard l WHERE l.id=1",
+            "SELECT l.id,l.\"ID\" FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.ID=1",
+        ] {
+            assert_eq!(session.execute(query).unwrap().rows, vec![vec![SqlValue::Int(1),SqlValue::Int(2)]], "{query}");
+        }
         assert_eq!(session.execute("SELECT l.id FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.\"ID\"=1").unwrap().rows,vec![vec![SqlValue::Int(2)]]);
         assert_eq!(session.execute("SELECT l.\"ID\" FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.ID=1").unwrap().rows,vec![vec![SqlValue::Int(2)]]);
         for query in [

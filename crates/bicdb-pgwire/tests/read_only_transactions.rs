@@ -100,8 +100,8 @@ async fn read_only_survives_wire_messages_prepared_execution_and_pool_reuse() {
 #[tokio::test]
 async fn read_uncommitted_uses_read_committed_visibility_in_both_storage_modes() {
     for mode in [
-        bicdb_core::StorageMode::InMemory,
-        bicdb_core::StorageMode::Paged,
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
     ] {
         let root = tempfile::tempdir().unwrap();
         drop(

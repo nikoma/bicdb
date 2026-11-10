@@ -70,6 +70,8 @@ impl RecordReadSnapshot {
             ));
         }
         db.ensure_collection(&self.0.collection)?;
+        #[cfg(test)]
+        tests::after_collection_gate();
         if let Some(record) = self.0.overlay.get(id) {
             return Ok(record.clone());
         }
@@ -233,6 +235,52 @@ pub(super) fn read_record_at_snapshot_unchecked(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    thread_local! {
+        static AFTER_COLLECTION_GATE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+            std::cell::RefCell::new(None);
+    }
+
+    pub(super) fn after_collection_gate() {
+        let callback = AFTER_COLLECTION_GATE.with(|slot| slot.borrow_mut().take());
+        if let Some(callback) = callback {
+            callback();
+        }
+    }
+
+    #[test]
+    fn descriptor_snapshot_fence_race_returns_no_cached_rows() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = open(root.path(), mode);
+            db.create_collection("pages").unwrap();
+            let mut tx = db.begin_transaction().unwrap();
+            tx.insert("pages", Record::new("obj/pending")).unwrap();
+            let snapshot = tx
+                .capture_record_prefix_snapshot_unchecked("pages", "obj/", 4096)
+                .unwrap();
+            let health = db.durability_health_for_test();
+            // Deterministically fence after collection lookup's health check
+            // but before a cached pending row is returned. Ordinary pre-fenced
+            // tests also pass without the descriptor's final health check.
+            AFTER_COLLECTION_GATE.with(|slot| {
+                *slot.borrow_mut() = Some(Box::new(move || {
+                    health
+                        .record_failure("test.descriptor_fence_race", &"uncertain durable outcome");
+                }))
+            });
+            assert!(
+                matches!(
+                    snapshot.get_visible_record_unchecked(&db, "obj/pending"),
+                    Err(BicDbError::WriteFailed { .. })
+                ),
+                "cached row escaped the racing durability fence"
+            );
+            drop(tx);
+            drop(snapshot);
+            assert_eq!(db.active_snapshots.len(), 0);
+        }
+    }
 
     fn open(path: &Path, mode: StorageMode) -> BicDb {
         BicDb::open_with_config(

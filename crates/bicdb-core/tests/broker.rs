@@ -988,3 +988,128 @@ fn database_compaction_enforces_configured_retention() {
     assert_eq!(batch.len(), 1);
     assert_eq!(batch[0].sequence, 2);
 }
+
+#[test]
+fn ack_batch_is_atomic_and_replays_the_deployed_settlements_format() {
+    let (temp, mut db) = open_temp();
+    let mut broker = db.broker();
+    for n in 0..3 {
+        broker.publish("q", json!({"n": n}), Value::Null).unwrap();
+    }
+    let first = broker.consume("q", "g", "w1", opts(2, 30_000)).unwrap();
+    let second = broker.consume("q", "g", "w2", opts(1, 30_000)).unwrap();
+    assert!(broker
+        .ack_batch("q", "g", "w1", &[first[0].message_id, second[0].message_id])
+        .is_err());
+    assert_eq!(broker.group_info("q", "g").unwrap().unwrap().in_flight, 3);
+    assert!(broker
+        .ack_batch("q", "g", "w1", &[first[0].message_id, first[0].message_id])
+        .is_err());
+    broker
+        .ack_batch("q", "g", "w1", &[first[0].message_id, first[1].message_id])
+        .unwrap();
+    drop(broker);
+    let events = db.events().read("broker:q/g").unwrap();
+    let batches: Vec<_> = events
+        .iter()
+        .filter(|e| e.event.event_type == "BrokerAckedBatch")
+        .collect();
+    assert_eq!(batches.len(), 1);
+    assert_eq!(batches[0].event.payload["settlements"][0]["sequence"], 0);
+    drop(db);
+    let mut db = BicDb::open(temp.path()).unwrap();
+    let info = db.broker().group_info("q", "g").unwrap().unwrap();
+    assert_eq!(info.in_flight, 1);
+    assert_eq!(
+        db.broker().stats().unwrap().queues[0].groups[0].settled_floor,
+        2
+    );
+    assert_eq!(db.broker().trim("q").unwrap().removed_messages, 2);
+    drop(db);
+    let mut db = BicDb::open(temp.path()).unwrap();
+    let info = db.broker().group_info("q", "g").unwrap().unwrap();
+    assert_eq!(info.in_flight, 1);
+    assert_eq!(
+        db.broker().stats().unwrap().queues[0].groups[0].settled_floor,
+        2
+    );
+    assert_eq!(db.broker().stats().unwrap().queues[0].next_sequence, 3);
+}
+
+#[test]
+fn trim_keeps_surviving_members_of_a_mixed_ack_batch() {
+    let (temp, mut db) = open_temp();
+    let mut broker = db.broker();
+    for n in 0..3 {
+        broker.publish("q", json!({"n": n}), Value::Null).unwrap();
+    }
+    let fast = broker.consume("q", "fast", "w", opts(3, 30_000)).unwrap();
+    let slow = broker.consume("q", "slow", "w", opts(3, 30_000)).unwrap();
+    broker
+        .ack_batch(
+            "q",
+            "fast",
+            "w",
+            &fast.iter().map(|m| m.message_id).collect::<Vec<_>>(),
+        )
+        .unwrap();
+    broker.ack("q", "slow", "w", slow[0].message_id).unwrap();
+    assert_eq!(broker.trim("q").unwrap().removed_messages, 1);
+    drop(db);
+    let mut db = BicDb::open(temp.path()).unwrap();
+    let fast = db.broker().group_info("q", "fast").unwrap().unwrap();
+    assert_eq!(
+        db.broker().stats().unwrap().queues[0]
+            .groups
+            .iter()
+            .find(|g| g.group == "fast")
+            .unwrap()
+            .settled_floor,
+        3
+    );
+    assert_eq!(fast.in_flight, 0);
+    let slow = db.broker().group_info("q", "slow").unwrap().unwrap();
+    assert_eq!(
+        db.broker().stats().unwrap().queues[0]
+            .groups
+            .iter()
+            .find(|g| g.group == "slow")
+            .unwrap()
+            .settled_floor,
+        1
+    );
+    assert_eq!(slow.in_flight, 2);
+    let batches = db.events().read("broker:q/fast").unwrap();
+    let event = batches
+        .iter()
+        .find(|e| e.event.event_type == "BrokerAckedBatch")
+        .unwrap();
+    assert_eq!(
+        event.event.payload["settlements"].as_array().unwrap().len(),
+        2
+    );
+}
+
+#[test]
+fn deployed_retired_consumer_groups_do_not_return_after_reopen() {
+    let (temp, mut db) = open_temp();
+    db.broker()
+        .publish("q", json!({"n": 1}), Value::Null)
+        .unwrap();
+    db.broker()
+        .consume("q", "retired", "w", opts(1, 30_000))
+        .unwrap();
+    db.events()
+        .append(bicdb_core::Event::new(
+            "broker:q/retired",
+            "BrokerGroupDeleted",
+            json!({"queue":"q", "group":"retired", "deleted_at_ms": 1790000000000i64}),
+        ))
+        .unwrap();
+    drop(db);
+    let mut db = BicDb::open(temp.path()).unwrap();
+    assert!(db.broker().group_info("q", "retired").unwrap().is_none());
+    assert_eq!(db.broker().stats().unwrap().queues[0].retained_messages, 1);
+    // Retiring the only group does not make the queued message eligible for deletion.
+    assert_eq!(db.broker().trim("q").unwrap().removed_messages, 0);
+}

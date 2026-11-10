@@ -99,6 +99,15 @@ flight for that consumer. After a visibility timeout expires and the message is
 redelivered elsewhere, the original consumer's ack fails (at-least-once
 delivery).
 
+`ack_batch(queue, group, consumer_id, &message_ids)` validates every delivery
+and appends one durable `BrokerAckedBatch` event containing its message IDs and
+sequences. Duplicate IDs or a delivery owned by another consumer reject the
+entire batch before any settlement. SQL exposes the same operation as
+`broker_ack_batch(queue, group, consumer_id, json_array_of_uuid_strings)` and
+returns `true`; the usual consume ACL applies, including to an empty batch.
+Like single-message acknowledgement, this is immediate and does not roll back
+with an enclosing SQL transaction.
+
 ## Crash recovery
 
 The projection keeps only actionable deliveries (in-flight or awaiting
@@ -108,6 +117,12 @@ visibility deadline has passed become redeliverable, acked messages stay gone,
 and group cursors resume exactly where they were. Dead-letter processing
 appends the DLQ copy before the control transition, so a crash between the two
 redelivers rather than double-delivers.
+
+Recovery also recognizes deployed `BrokerGroupDeleted` events: the named group
+stays deleted on reopen, while queued messages and DLQ history remain intact.
+Retention filters individual members of mixed `BrokerAckedBatch` events so
+surviving settlements replay correctly after a prefix trim. Older engines that
+ignore these event types are not safe replacements for stores containing them.
 
 ## Queue configuration & retention (Slice 2)
 

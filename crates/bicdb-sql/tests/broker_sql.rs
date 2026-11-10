@@ -498,3 +498,33 @@ fn exception_rollback_discards_only_protected_block_publishes() {
         vec![serde_json::json!({"id":1}), serde_json::json!({"id":3})]
     );
 }
+
+#[test]
+fn broker_ack_batch_sql_validates_before_settling_and_survives_reopen() {
+    let (dir, mut db) = empty_db();
+    scalar_json(&mut db, "SELECT broker_publish('batch.q', '{\"n\":1}')");
+    scalar_json(&mut db, "SELECT broker_publish('batch.q', '{\"n\":2}')");
+    let batch = scalar_json(&mut db, "SELECT broker_consume('batch.q','g','w',10,30000)");
+    let ids = batch
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["message_id"].clone())
+        .collect::<Vec<_>>();
+    let invalid = format!(
+        "SELECT broker_ack_batch('batch.q','g','w','[{},\"invalid\"]')",
+        ids[0]
+    );
+    assert!(SqlSession::new(&mut db).execute(&invalid).is_err());
+    let sql = format!(
+        "SELECT broker_ack_batch('batch.q','g','w','{}')",
+        serde_json::to_string(&ids).unwrap()
+    );
+    assert_eq!(scalar(&mut db, &sql), SqlValue::Bool(true));
+    drop(db);
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let info = scalar_json(&mut db, "SELECT broker_group_info('batch.q','g')");
+    assert_eq!(info["in_flight"], 0);
+    let stats = scalar_json(&mut db, "SELECT broker_stats()");
+    assert_eq!(stats["queues"][0]["groups"][0]["settled_floor"], 2);
+}

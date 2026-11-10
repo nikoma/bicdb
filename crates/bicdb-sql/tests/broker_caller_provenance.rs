@@ -152,3 +152,14 @@ fn a_superuser_sql_role_can_still_administer_a_queue_it_locked_down() {
     ));
     let _ = SqlValue::Null;
 }
+
+#[test]
+fn batch_acknowledgement_obeys_the_consume_acl_even_when_empty() {
+    let (_directory, mut db) = db();
+    configure_locked_queue(&mut db);
+    let mut session = SqlSession::new_secure(&mut db, context(&["reader"]));
+    let error = session
+        .execute("SELECT broker_ack_batch('locked','g','w','[]')")
+        .unwrap_err();
+    assert!(format!("{error}").contains("lacks Consume access"));
+}

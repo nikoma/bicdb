@@ -18,7 +18,9 @@ use serde_json::Value as JsonValue;
 
 pub(crate) fn broker_function_pg_type(name: &str) -> Option<&'static str> {
     match name.strip_prefix("pg_catalog.").unwrap_or(name) {
-        "broker_ack" | "broker_nack" | "broker_configure_queue" => Some("bool"),
+        "broker_ack" | "broker_ack_batch" | "broker_nack" | "broker_configure_queue" => {
+            Some("bool")
+        }
         "broker_purge_dead_letters" => Some("int8"),
         "broker_publish"
         | "broker_publish_with"
@@ -147,6 +149,33 @@ pub(crate) fn eval_broker_function_value(
             let message_id = message_id_arg(name, args, 3)?;
             authorize(&queue, BrokerAccess::Consume)?;
             db.with_broker(|broker| broker.ack(&queue, &group, &consumer, message_id))
+                .map_err(SqlError::from)?;
+            Ok(Some(SqlValue::Bool(true)))
+        }
+        "broker_ack_batch" => {
+            expect_args(name, args, 4, 4)?;
+            let queue = text_arg(name, args, 0)?;
+            let group = text_arg(name, args, 1)?;
+            let consumer = text_arg(name, args, 2)?;
+            let raw = json_arg(name, args, 3)?;
+            let entries = raw.as_array().ok_or_else(|| {
+                SqlError::InvalidSql("broker_ack_batch requires a JSON array of message ids".into())
+            })?;
+            let ids = entries
+                .iter()
+                .map(|entry| {
+                    entry
+                        .as_str()
+                        .and_then(|id| uuid::Uuid::parse_str(id).ok())
+                        .ok_or_else(|| {
+                            SqlError::InvalidSql(
+                                "broker_ack_batch requires valid UUID strings".into(),
+                            )
+                        })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            authorize(&queue, BrokerAccess::Consume)?;
+            db.with_broker(|broker| broker.ack_batch(&queue, &group, &consumer, &ids))
                 .map_err(SqlError::from)?;
             Ok(Some(SqlValue::Bool(true)))
         }

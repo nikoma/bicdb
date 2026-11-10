@@ -45,8 +45,10 @@ pub const DEFAULT_MAX_ATTEMPTS: u32 = 16;
 
 pub(crate) const QUEUE_MESSAGE_EVENT: &str = "QueueMessage";
 const GROUP_CREATED_EVENT: &str = "BrokerGroupCreated";
+const GROUP_DELETED_EVENT: &str = "BrokerGroupDeleted";
 const DELIVERED_EVENT: &str = "BrokerDelivered";
 const ACKED_EVENT: &str = "BrokerAcked";
+const ACKED_BATCH_EVENT: &str = "BrokerAckedBatch";
 const NACKED_EVENT: &str = "BrokerNacked";
 const DEAD_LETTERED_EVENT: &str = "BrokerDeadLettered";
 const QUEUE_TRIMMED_EVENT: &str = "BrokerQueueTrimmed";
@@ -669,6 +671,11 @@ impl BrokerState {
             return Ok(());
         };
         match event.event_type.as_str() {
+            GROUP_DELETED_EVENT => {
+                if let Some(groups) = self.groups.get_mut(queue) {
+                    groups.remove(group);
+                }
+            }
             GROUP_CREATED_EVENT => {
                 let created_at = payload
                     .get("created_at_ms")
@@ -751,6 +758,27 @@ impl BrokerState {
                         .or_else(|| payload.get("sequence").and_then(Value::as_u64));
                     if let Some(sequence) = sequence {
                         state.settle(sequence);
+                    }
+                }
+            }
+            ACKED_BATCH_EVENT => {
+                if let Some(state) = self.group_mut(queue, group) {
+                    for entry in payload
+                        .get("settlements")
+                        .and_then(Value::as_array)
+                        .into_iter()
+                        .flatten()
+                    {
+                        if let Some(id) = payload_message_id(entry) {
+                            let sequence = state
+                                .deliveries
+                                .remove(&id)
+                                .map(|delivery| delivery.sequence)
+                                .or_else(|| entry.get("sequence").and_then(Value::as_u64));
+                            if let Some(sequence) = sequence {
+                                state.settle(sequence);
+                            }
+                        }
                     }
                 }
             }
@@ -882,6 +910,18 @@ fn retain_trimmed_control_event(
                     .and_then(|raw| Uuid::parse_str(raw).ok())
                     .is_some_and(|id| removed.contains(&id))
             });
+            !entries.is_empty()
+        }
+        ACKED_BATCH_EVENT => {
+            let Some(entries) = event
+                .payload
+                .get_mut("settlements")
+                .and_then(Value::as_array_mut)
+            else {
+                return false;
+            };
+            entries
+                .retain(|entry| !payload_message_id(entry).is_some_and(|id| removed.contains(&id)));
             !entries.is_empty()
         }
         ACKED_EVENT | NACKED_EVENT | DEAD_LETTERED_EVENT => {
@@ -1420,6 +1460,48 @@ impl<'a> Broker<'a> {
                 "message_id": message_id.to_string(),
                 "sequence": sequence,
                 "acked_at_ms": now_ms(),
+            }),
+        )
+    }
+
+    /// Atomically settle a batch using the durable format deployed by Carrier Broker.
+    /// Every delivery is validated before the single control event is appended.
+    pub fn ack_batch(
+        &mut self,
+        queue: &str,
+        group: &str,
+        consumer_id: &str,
+        message_ids: &[Uuid],
+    ) -> Result<()> {
+        self.stream.check_durability()?;
+        let mut seen = HashSet::new();
+        let mut settlements = Vec::with_capacity(message_ids.len());
+        for id in message_ids {
+            if !seen.insert(*id) {
+                return Err(BicDbError::Broker(
+                    "duplicate message in acknowledgement batch".into(),
+                ));
+            }
+            self.check_in_flight(queue, group, consumer_id, *id)?;
+            let sequence = self
+                .stream
+                .broker_state
+                .group(queue, group)
+                .expect("checked")
+                .deliveries[id]
+                .sequence;
+            settlements.push(json!({"message_id": id.to_string(), "sequence": sequence}));
+        }
+        if settlements.is_empty() {
+            return Ok(());
+        }
+        self.append_control(
+            queue,
+            group,
+            ACKED_BATCH_EVENT,
+            json!({
+                "queue": queue, "group": group, "consumer_id": consumer_id,
+                "settlements": settlements, "acked_at_ms": now_ms(),
             }),
         )
     }

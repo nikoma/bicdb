@@ -88,6 +88,10 @@ fn fixed_read_only_snapshot_starts_at_first_query_in_direct_sessions() {
             )
             .unwrap();
             peer.commit().unwrap();
+            if id == 3 {
+                sql.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+                    .unwrap();
+            }
             assert_eq!(
                 sql.execute("SELECT rowkey FROM statement_rows ORDER BY rowkey")
                     .unwrap()
@@ -95,6 +99,10 @@ fn fixed_read_only_snapshot_starts_at_first_query_in_direct_sessions() {
                 vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(2)]]
             );
         }
+        let error = sql
+            .execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+            .unwrap_err();
+        assert_eq!(error.sqlstate(), "25001");
         sql.execute("ROLLBACK").unwrap();
     }
 }

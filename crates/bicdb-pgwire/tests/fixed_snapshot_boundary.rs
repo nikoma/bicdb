@@ -92,11 +92,36 @@ async fn first_snapshot_command_controls_peer_visibility() {
         peer.execute("INSERT INTO snapshot_boundary VALUES ($1)", &[&id])
             .await
             .unwrap();
+        tx.batch_execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+            .await
+            .unwrap();
         let found = !tx.query_portal(&portal, 0).await.unwrap().is_empty();
         let case = format!("{mode:?}: Bind of a statement prepared before BEGIN");
         observations.push((case.clone(), found));
         expected.push((case, false));
+        let error = tx
+            .batch_execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+            .await
+            .unwrap_err();
+        assert_eq!(error.code().unwrap().code(), "25001");
         tx.rollback().await.unwrap();
+
+        reader
+            .batch_execute(
+                "BEGIN READ ONLY; SHOW transaction_isolation;
+                 SET TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            reader
+                .query_one("SHOW transaction_isolation", &[])
+                .await
+                .unwrap()
+                .get::<_, String>(0),
+            "repeatable read"
+        );
+        reader.batch_execute("ROLLBACK").await.unwrap();
         drop(reader);
         drop(peer);
         reader_task.abort();

@@ -71,6 +71,35 @@ fn fixed_read_only_snapshot_is_not_advanced_by_client_statement_refresh() {
 }
 
 #[test]
+fn fixed_read_only_snapshot_starts_at_first_query_in_direct_sessions() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let db = seeded(mode, root.path());
+        let mut sql = SqlSession::new_shared(&db);
+        sql.execute("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY")
+            .unwrap();
+        sql.execute("SHOW transaction_isolation; SAVEPOINT before_query")
+            .unwrap();
+        for id in [2, 3] {
+            let mut peer = db.begin_transaction().unwrap();
+            peer.insert(
+                "statement_rows",
+                Record::new(id.to_string()).with_metadata(serde_json::json!({ "rowkey": id })),
+            )
+            .unwrap();
+            peer.commit().unwrap();
+            assert_eq!(
+                sql.execute("SELECT rowkey FROM statement_rows ORDER BY rowkey")
+                    .unwrap()
+                    .rows,
+                vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(2)]]
+            );
+        }
+        sql.execute("ROLLBACK").unwrap();
+    }
+}
+
+#[test]
 fn rename_copy_and_savepoint_restoration_are_visible_in_the_same_client_batch() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let root = tempfile::tempdir().unwrap();

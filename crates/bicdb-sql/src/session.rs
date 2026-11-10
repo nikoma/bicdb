@@ -3127,6 +3127,10 @@ impl<'db> SqlSession<'db> {
     /// Statement text through the profiled executor; a read-only transaction
     /// checks a single statement before it runs.
     fn execute_text_statements(&mut self, sql: &str) -> Result<SqlResult> {
+        self.acquire_postgres_statement_snapshot(|| {
+            (!sql.contains(';') || split_sql_statements(sql).len() == 1)
+                && postgres_execution_requires_snapshot(sql)
+        })?;
         self.refresh_client_statement_snapshot()?;
         if !self.transaction_read_only() {
             return self.execute_profiled(sql);
@@ -3589,6 +3593,29 @@ impl<'db> SqlSession<'db> {
         Ok(())
     }
 
+    fn acquire_postgres_statement_snapshot(
+        &mut self,
+        requires_snapshot: impl FnOnce() -> bool,
+    ) -> Result<()> {
+        if !self.column_references_checkable()
+            || !self
+                .tx
+                .as_ref()
+                .is_some_and(|tx| !tx.statement_snapshot_acquired())
+            || oracle::preview_routine_language_enabled(self.db_ref())?
+            || !requires_snapshot()
+        {
+            return Ok(());
+        }
+        let floor = self
+            .snapshot_floor
+            .max(crate::statement_context::latest_independent_commit());
+        if let Some(tx) = self.tx.as_mut() {
+            tx.acquire_statement_snapshot(floor)?;
+        }
+        Ok(())
+    }
+
     /// Column references are checked for client statements only: routine and
     /// trigger bodies resolve their variables through frames this check does
     /// not model.
@@ -3830,6 +3857,9 @@ impl<'db> SqlSession<'db> {
 
     fn execute_parsed_statement_in_sql(&mut self, statement: &Statement) -> Result<SqlResult> {
         self.ensure_read_only_statement(statement)?;
+        self.acquire_postgres_statement_snapshot(|| {
+            postgres_execution_requires_snapshot(&statement.to_string())
+        })?;
         self.refresh_client_statement_snapshot()?;
         if let Some(result) = self.apply_instead_rule(statement)? {
             return Ok(result);

@@ -586,33 +586,37 @@ fn allowed_observer_cannot_fence_a_primary_or_request_election_votes() {
         }
     }
     let host = EmbeddedHaDatabase::open(root.path(), cfg, DbConfig::default()).unwrap();
-    let mut peer = TcpStream::connect(("127.0.0.1", ports[0])).unwrap();
-    peer.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
-    send_frame(
-        &mut peer,
-        &ReplicationFrame::Hello {
-            protocol_version: bicdb_pgwire::HA_REPLICATION_PROTOCOL_VERSION,
-            cluster_id: "embedded-test".into(),
-            node_id: "observer".into(),
-            epoch: 100,
-        },
-        65536,
-    )
-    .unwrap();
-    send_frame(
-        &mut peer,
-        &ReplicationFrame::VoteRequest {
+    for request in [
+        ReplicationFrame::VoteRequest {
             cluster_id: "embedded-test".into(),
             candidate: "observer".into(),
             term: 101,
             data_epoch: 100,
             last_commit_seq: 0,
         },
-        65536,
-    )
-    .unwrap();
-    assert!(matches!(recv_frame(&mut peer, 65536).unwrap(),
-        ReplicationFrame::Error { message, .. } if message.contains("only election peers")));
+        ReplicationFrame::Ping {
+            cluster_id: "embedded-test".into(),
+            node_id: "observer".into(),
+            epoch: 100,
+        },
+    ] {
+        let mut peer = TcpStream::connect(("127.0.0.1", ports[0])).unwrap();
+        peer.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+        send_frame(
+            &mut peer,
+            &ReplicationFrame::Hello {
+                protocol_version: bicdb_pgwire::HA_REPLICATION_PROTOCOL_VERSION,
+                cluster_id: "embedded-test".into(),
+                node_id: "observer".into(),
+                epoch: 100,
+            },
+            65536,
+        )
+        .unwrap();
+        send_frame(&mut peer, &request, 65536).unwrap();
+        assert!(matches!(recv_frame(&mut peer, 65536).unwrap(),
+            ReplicationFrame::Error { message, .. } if message.contains("only election peers")));
+    }
     let database = host.database();
     let db = database.read();
     assert_eq!(db.replication_role(), NodeRole::Primary);
@@ -621,7 +625,6 @@ fn allowed_observer_cannot_fence_a_primary_or_request_election_votes() {
     assert!(db.sync_quorum().lease_refusal().is_some());
     drop(db);
     drop(database);
-    drop(peer);
     host.shutdown(Duration::from_secs(2)).unwrap();
 }
 

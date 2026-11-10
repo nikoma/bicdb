@@ -4118,7 +4118,13 @@ pub(crate) fn slot_row_from_cells(
                     .and_then(|index| cells.get(index))
                     .filter(|(key, _)| key.as_ref() == name)
                     .or_else(|| cells.iter().find(|(key, _)| key.as_ref() == name))
-                    .or_else(|| cells.iter().find(|(key, _)| key.eq_ignore_ascii_case(name)))
+                    .or_else(|| {
+                        // A missing declared PK cell is represented by the
+                        // physical record ID, not a different quoted column.
+                        (!matches!(field, FieldRef::PrimaryKey { .. }))
+                            .then(|| cells.iter().find(|(key, _)| key.eq_ignore_ascii_case(name)))
+                            .flatten()
+                    })
                     .map(|(_, cell)| cell);
                 match cell {
                     Some(cell) => {

@@ -2504,7 +2504,11 @@ impl FieldRef {
                 .map(SqlValue::Int)
                 .unwrap_or(SqlValue::Null))),
             Self::OracleBlobColumn { .. } => None,
-            Self::PrimaryKey { name, pg_type, .. } => match lookup(cells, name) {
+            Self::PrimaryKey { name, pg_type, .. } => match cells
+                .iter()
+                .find(|(key, _)| key.as_ref() == name)
+                .map(|(_, cell)| cell)
+            {
                 Some(cell) if is_json_pg_type(pg_type) => {
                     typed_json_cell_to_sql_value(cell).map(Ok)
                 }

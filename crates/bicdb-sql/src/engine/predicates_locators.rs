@@ -4186,10 +4186,14 @@ impl<'db> SqlEngine<'db> {
             let matched = if let Some(idx) =
                 self.primary_key_expr_index(left, table, alias, Some(schema), &primary_key_columns)?
             {
-                // A structural key equality is not covered when lookup could
-                // not bind its value; candidates may come from a key prefix.
+                // Coverage requires the same binding and type-exactness proof
+                // used by primary_key_access_for_selection. A mixed timestamp
+                // comparison may bind only the preceding numeric key prefix;
+                // those candidates must still evaluate this equality.
+                let field = IndexField::MetadataPath(vec![primary_key_columns[idx].clone()]);
                 if self.expr_references_table(right, table, alias, Some(schema))?
                     || !self.expr_is_bound_without_table_row(right)?
+                    || !self.index_probe_expr_is_exact(Some(schema), Some(&field), right)
                     || expr_contains_volatile_function(right)
                 {
                     return Ok(false);
@@ -4202,8 +4206,10 @@ impl<'db> SqlEngine<'db> {
                 Some(schema),
                 &primary_key_columns,
             )? {
+                let field = IndexField::MetadataPath(vec![primary_key_columns[idx].clone()]);
                 if self.expr_references_table(left, table, alias, Some(schema))?
                     || !self.expr_is_bound_without_table_row(left)?
+                    || !self.index_probe_expr_is_exact(Some(schema), Some(&field), left)
                     || expr_contains_volatile_function(left)
                 {
                     return Ok(false);

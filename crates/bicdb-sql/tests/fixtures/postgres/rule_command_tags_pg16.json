@@ -1,0 +1,90 @@
+{
+  "database": "bicdb_native_app_ctrl_20261109",
+  "transaction_rolled_back": true,
+  "setup": [
+    "CREATE SCHEMA rule_results_454",
+    "SET search_path=rule_results_454,public",
+    "CREATE TABLE effects(v integer)",
+    "CREATE TABLE void_request(v integer)",
+    "CREATE TABLE scalar_request(v integer)",
+    "CREATE TABLE insert_request(v integer)",
+    "CREATE FUNCTION apply_void(n integer) RETURNS void LANGUAGE plpgsql AS $$ BEGIN INSERT INTO effects VALUES(n); END $$",
+    "CREATE RULE void_action AS ON INSERT TO rule_results_454.void_request DO INSTEAD SELECT apply_void(new.v)",
+    "CREATE RULE insert_action AS ON INSERT TO rule_results_454.insert_request DO INSTEAD INSERT INTO rule_results_454.effects VALUES(new.v)",
+    "CREATE RULE scalar_action AS ON INSERT TO rule_results_454.scalar_request DO INSTEAD SELECT new.v * 2 AS result"
+  ],
+  "checks": [
+    {
+      "sql": "SELECT apply_void(1)",
+      "status": "SELECT 1",
+      "columns": [
+        [
+          "apply_void",
+          2278
+        ]
+      ],
+      "rows": [
+        [
+          ""
+        ]
+      ]
+    },
+    {
+      "sql": "INSERT INTO void_request VALUES(2),(3)",
+      "status": "INSERT 0 0",
+      "columns": [
+        [
+          "apply_void",
+          2278
+        ]
+      ],
+      "rows": [
+        [
+          ""
+        ],
+        [
+          ""
+        ]
+      ]
+    },
+    {
+      "sql": "INSERT INTO scalar_request VALUES(4),(5)",
+      "status": "INSERT 0 0",
+      "columns": [
+        [
+          "result",
+          23
+        ]
+      ],
+      "rows": [
+        [
+          8
+        ],
+        [
+          10
+        ]
+      ]
+    },
+    {
+      "sql": "INSERT INTO insert_request VALUES(6),(7)",
+      "status": "INSERT 0 2",
+      "columns": [],
+      "rows": []
+    },
+    {
+      "sql": "SELECT sum(v) FROM effects",
+      "status": "SELECT 1",
+      "columns": [
+        [
+          "sum",
+          20
+        ]
+      ],
+      "rows": [
+        [
+          19
+        ]
+      ]
+    }
+  ]
+}

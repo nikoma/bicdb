@@ -2,6 +2,51 @@ use bicdb_core::{query_budget::QueryMemoryScope, BicDb, DbConfig};
 use bicdb_sql::{SqlSession, SqlValue};
 
 #[test]
+fn mixed_join_base_filter_folds_unquoted_identifiers_before_schema_lookup() {
+    for mode in [
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            DbConfig::default()
+                .with_storage_mode(mode)
+                .with_fsync(false),
+        )
+        .unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session.execute("CREATE TABLE mixed_drivers(Driver_ID INT PRIMARY KEY); INSERT INTO mixed_drivers SELECT g FROM generate_series(0,255) g; CREATE TABLE mixed_columns(Column_ID INT PRIMARY KEY,Driver_ID INT,Rule_ID INT,Element_ID INT,IsActive TEXT,Payload TEXT); CREATE INDEX mixed_columns_driver ON mixed_columns(Driver_ID); INSERT INTO mixed_columns SELECT g,g%256,CASE WHEN g%2=0 THEN 0 ELSE NULL END,g%16,'Y',repeat('x',4096) FROM generate_series(0,999) g; CREATE TABLE mixed_rules(Rule_ID INT PRIMARY KEY,Rule_Name TEXT); INSERT INTO mixed_rules VALUES(0,'present'); CREATE TABLE mixed_elements(Element_ID INT PRIMARY KEY); INSERT INTO mixed_elements SELECT g FROM generate_series(0,15) g").unwrap();
+        let query = "SELECT c.Column_ID,c.Payload,vr.Rule_Name FROM mixed_drivers t INNER JOIN mixed_columns c ON(t.Driver_ID=c.Driver_ID) LEFT JOIN mixed_rules vr ON(c.Rule_ID=vr.Rule_ID) INNER JOIN mixed_elements e ON(c.Element_ID=e.Element_ID) WHERE t.Driver_ID=1 AND c.IsActive='Y' ORDER BY c.Column_ID";
+        for query in [
+            query.to_string(),
+            query
+                .replace("t.", "T.")
+                .replace("mixed_drivers t ", "mixed_drivers T "),
+        ] {
+            let limit = 2 * 1024 * 1024;
+            let memory = QueryMemoryScope::new(limit);
+            let rows = session.execute(&query).unwrap().rows;
+            assert_eq!(rows.len(), 4);
+            for (index, row) in rows.iter().enumerate() {
+                assert_eq!(
+                    row,
+                    &vec![
+                        SqlValue::Int(1 + 256 * index as i64),
+                        SqlValue::String("x".repeat(4096)),
+                        SqlValue::Null
+                    ]
+                );
+            }
+            assert!(memory.peak_bytes() > 0 && memory.peak_bytes() <= limit);
+        }
+        session.execute("CREATE TABLE mixed_case_guard(id INT PRIMARY KEY,\"ID\" INT); INSERT INTO mixed_case_guard VALUES(1,2),(2,1)").unwrap();
+        assert_eq!(session.execute("SELECT l.id FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.\"ID\"=1").unwrap().rows,vec![vec![SqlValue::Int(2)]]);
+        assert_eq!(session.execute("SELECT l.\"ID\" FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.ID=1").unwrap().rows,vec![vec![SqlValue::Int(2)]]);
+    }
+}
+
+#[test]
 fn catalog_type_lookup_binds_unique_unqualified_columns_before_joining() {
     for mode in [
         bicdb_core::StorageMode::EmbeddedMemory,

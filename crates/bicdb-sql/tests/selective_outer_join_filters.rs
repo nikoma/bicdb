@@ -2,6 +2,49 @@ use bicdb_core::{query_budget::QueryMemoryScope, BicDb, DbConfig};
 use bicdb_sql::{SqlSession, SqlValue};
 
 #[test]
+fn catalog_type_lookup_binds_unique_unqualified_columns_before_joining() {
+    for mode in [
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            DbConfig::default()
+                .with_storage_mode(mode)
+                .with_fsync(false),
+        )
+        .unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session.execute("CREATE SCHEMA catalog_binding").unwrap();
+        let columns = (0..16)
+            .map(|i| format!("c{i} NUMERIC(10)"))
+            .collect::<Vec<_>>()
+            .join(",");
+        for i in 0..96 {
+            session
+                .execute(&format!(
+                    "CREATE TABLE catalog_binding.lookup_{i}({columns})"
+                ))
+                .unwrap();
+        }
+        for table in ["lower('LOOKUP_0')", "lower(CAST('LOOKUP_0' AS name))"] {
+            let query = format!("SELECT pg_type.typname,format_type(pg_type.oid,pg_attribute.atttypmod) FROM pg_class,pg_attribute,pg_type,pg_namespace WHERE relname={table} AND relkind IN('r','p') AND pg_class.oid=pg_attribute.attrelid AND attname=lower('C0') AND atttypid=pg_type.oid AND pg_class.relnamespace=pg_namespace.oid AND pg_namespace.nspname='catalog_binding'");
+            let limit = 2 * 1024 * 1024;
+            let memory = QueryMemoryScope::new(limit);
+            assert_eq!(
+                session.execute(&query).unwrap().rows,
+                vec![vec![
+                    SqlValue::String("numeric".into()),
+                    SqlValue::String("numeric(10,0)".into())
+                ]]
+            );
+            assert!(memory.peak_bytes() <= limit);
+        }
+    }
+}
+
+#[test]
 fn indexed_inner_join_filters_wide_right_rows_before_retaining_them() {
     for mode in [
         bicdb_core::StorageMode::EmbeddedMemory,

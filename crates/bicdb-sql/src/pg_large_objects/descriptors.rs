@@ -34,7 +34,7 @@ pub(super) enum Access {
 }
 
 impl Access {
-    fn oid(&self) -> u32 {
+    pub(super) fn oid(&self) -> u32 {
         match self {
             Self::Read(view) => view.oid(),
             Self::Write(oid) => *oid,

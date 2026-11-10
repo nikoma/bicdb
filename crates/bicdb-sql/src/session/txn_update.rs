@@ -2817,6 +2817,9 @@ impl<'db> SqlSession<'db> {
                 return Ok(value);
             }
         }
+        if let Some(value) = self.eval_pg_large_object_function(&name, &args)? {
+            return Ok(value);
+        }
         if matches!(name.as_ref(), "txid_current" | "pg_catalog.txid_current") {
             require_arg_count("txid_current", &args, 0)?;
             // Per-row routine hosts borrow the caller's transaction. Reading

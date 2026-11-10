@@ -3,6 +3,7 @@
 use crate::*;
 
 mod descriptors;
+pub(crate) mod functions;
 mod lifecycle;
 mod storage;
 pub(crate) use descriptors::DescriptorState;

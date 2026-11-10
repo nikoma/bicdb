@@ -1305,7 +1305,8 @@ pub(crate) fn begin_buffered_transaction(
                 watermark,
             )
         };
-        if isolation == "serializable" {
+        let fixed = matches!(isolation, "repeatable read" | "serializable");
+        if fixed {
             tx.set_snapshot_isolation(true, state.last_commit_seq)?;
             tx.set_statement_write_conflict_check(true)?;
         }
@@ -1317,7 +1318,7 @@ pub(crate) fn begin_buffered_transaction(
         state
             .session_state
             .set_transaction_isolation_label(isolation)?;
-        state.tx_fixed_snapshot = isolation == "serializable";
+        state.tx_fixed_snapshot = fixed;
         state.replica_tx_watermark = watermark;
         state.in_transaction = true;
         state.failed_transaction = false;

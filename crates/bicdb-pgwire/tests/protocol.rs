@@ -10598,7 +10598,7 @@ fn pgwire_buffered_transaction_replays_split_schema_chunks() {
 }
 
 #[test]
-fn pgwire_transaction_isolation_commands_accept_read_only_repeatable_read() {
+fn pgwire_transaction_isolation_commands_accept_repeatable_read() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
@@ -10636,10 +10636,9 @@ fn pgwire_transaction_isolation_commands_accept_read_only_repeatable_read() {
         &mut client,
         "BEGIN ISOLATION LEVEL REPEATABLE READ READ WRITE;",
     );
-    let (error, status) = read_error_response_with_status(&mut client);
-    assert_eq!(status, b'I');
-    assert!(error.contains("0A000"));
-    assert!(error.contains("transaction isolation level REPEATABLE READ requires READ ONLY"));
+    assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
+    send_query(&mut client, "ROLLBACK;");
+    assert_eq!(read_query_rows_with_status(&mut client).1, b'I');
 
     send_query(&mut client, "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;");
     let (error, status) = read_error_response_with_status(&mut client);

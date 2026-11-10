@@ -428,7 +428,7 @@ fn correlated_locator_cache_does_not_reuse_null_outer_values() {
 }
 
 #[test]
-fn transaction_isolation_commands_accept_read_only_repeatable_read() {
+fn transaction_isolation_commands_accept_repeatable_read() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(dir.path()).unwrap();
     let mut session = SqlSession::new(&mut db);
@@ -454,16 +454,16 @@ fn transaction_isolation_commands_accept_read_only_repeatable_read() {
         .unwrap();
     session.execute("ROLLBACK").unwrap();
 
-    for sql in [
-        "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ WRITE",
+    for begin in [
+        "BEGIN; SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ WRITE",
         "BEGIN ISOLATION LEVEL REPEATABLE READ READ WRITE",
     ] {
-        let error = session.execute(sql).unwrap_err();
-        assert_eq!(error.sqlstate(), "0A000");
+        session.execute(begin).unwrap();
         assert_eq!(
-            error.to_string(),
-            "unsupported SQL: transaction isolation level REPEATABLE READ requires READ ONLY"
+            session.execute("SHOW transaction_isolation").unwrap().rows,
+            vec![vec![SqlValue::String("repeatable read".into())]]
         );
+        session.execute("ROLLBACK").unwrap();
     }
 
     let error = session

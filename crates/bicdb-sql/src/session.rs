@@ -2618,7 +2618,7 @@ impl<'db> SqlSession<'db> {
             .max(crate::statement_context::latest_independent_commit());
         let mut tx = self.db_ref().begin_transaction_after(floor)?;
         tx.set_blocking_row_waits(self.blocking_row_wait_token());
-        if isolation == "serializable" {
+        if matches!(isolation, "repeatable read" | "serializable") {
             tx.set_snapshot_isolation(true, floor)?;
             tx.set_statement_write_conflict_check(true)?;
         }
@@ -3965,7 +3965,6 @@ impl<'db> SqlSession<'db> {
             .get("transaction_isolation")
             .cloned()
             .unwrap_or(self.default_transaction_isolation()?.into());
-        let oracle = oracle::preview_routine_language_enabled(self.db_ref())?;
         let result = if commit {
             self.commit()?
         } else {
@@ -3977,7 +3976,7 @@ impl<'db> SqlSession<'db> {
             .snapshot_floor
             .max(crate::statement_context::latest_independent_commit());
         next.set_snapshot_isolation(fixed, floor)?;
-        next.set_statement_write_conflict_check(oracle && fixed)?;
+        next.set_statement_write_conflict_check(fixed)?;
         self.set_transaction_read_only_label(read_only)?;
         self.set_transaction_isolation_label(&isolation)?;
         self.tx = Some(next);
@@ -4901,7 +4900,7 @@ impl<'db> SqlSession<'db> {
         if oracle_preview {
             validate_profile_transaction_modes(modes, true)?;
         } else {
-            validate_postgres_transaction_modes(modes, self.transaction_read_only())?;
+            validate_transaction_modes(modes)?;
             if isolation_label.is_some()
                 && !same_isolation
                 && self
@@ -4973,7 +4972,7 @@ impl<'db> SqlSession<'db> {
                 ));
             }
             tx.set_snapshot_isolation(fixed, floor)?;
-            tx.set_statement_write_conflict_check(oracle_preview && fixed)?;
+            tx.set_statement_write_conflict_check(fixed)?;
             self.set_transaction_isolation_label(transaction_defaults::isolation_label(level))?;
         }
         Ok(())

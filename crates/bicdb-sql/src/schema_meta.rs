@@ -739,16 +739,6 @@ pub fn parse_transaction_control_for_profile(
     sql: &str,
     profile: &str,
 ) -> Result<Option<TransactionControl>> {
-    parse_transaction_control_for_session(sql, profile, false)
-}
-
-/// Classify transport commands that can inherit an active transaction's
-/// access mode. BEGIN and session defaults use their own modes.
-pub fn parse_transaction_control_for_session(
-    sql: &str,
-    profile: &str,
-    transaction_read_only: bool,
-) -> Result<Option<TransactionControl>> {
     let statements = parse_statements(sql)?;
     let [statement] = statements.as_slice() else {
         return Ok(None);
@@ -768,14 +758,7 @@ pub fn parse_transaction_control_for_session(
                     "transaction snapshots are not supported".to_string(),
                 ));
             }
-            if *session || profile == oracle::ORACLE_PREVIEW_PROFILE {
-                validate_profile_transaction_modes(
-                    modes,
-                    profile == oracle::ORACLE_PREVIEW_PROFILE,
-                )?;
-            } else {
-                validate_postgres_transaction_modes(modes, transaction_read_only)?;
-            }
+            validate_profile_transaction_modes(modes, profile == oracle::ORACLE_PREVIEW_PROFILE)?;
             Ok((!session).then_some(TransactionControl::SetTransaction))
         }
         _ => Ok(None),
@@ -837,6 +820,24 @@ pub(crate) fn validate_profile_transaction_modes(
                 .into(),
         ));
     }
+    let read_only = modes.iter().any(|mode| {
+        matches!(
+            mode,
+            TransactionMode::AccessMode(TransactionAccessMode::ReadOnly)
+        )
+    });
+    if !read_only
+        && modes.iter().any(|mode| {
+            matches!(
+                mode,
+                TransactionMode::IsolationLevel(TransactionIsolationLevel::RepeatableRead)
+            )
+        })
+    {
+        return Err(SqlError::Unsupported(
+            "transaction isolation level REPEATABLE READ requires READ ONLY".into(),
+        ));
+    }
     // Oracle SERIALIZABLE provides snapshot isolation. PostgreSQL SERIALIZABLE
     // remains unsupported here; it requires its separate concurrency contract.
     let modes = modes
@@ -861,34 +862,14 @@ pub(crate) fn validate_set_transaction_modes(modes: &[TransactionMode]) -> Resul
 }
 
 pub(crate) fn validate_transaction_modes(modes: &[TransactionMode]) -> Result<()> {
-    validate_postgres_transaction_modes(modes, false)
-}
-
-pub(crate) fn validate_postgres_transaction_modes(
-    modes: &[TransactionMode],
-    inherited_read_only: bool,
-) -> Result<()> {
-    let read_only = modes
-        .iter()
-        .find_map(|mode| match mode {
-            TransactionMode::AccessMode(mode) => Some(*mode == TransactionAccessMode::ReadOnly),
-            _ => None,
-        })
-        .unwrap_or(inherited_read_only);
     for mode in modes {
         if let TransactionMode::IsolationLevel(level) = mode {
             match level {
                 // PostgreSQL implements READ UNCOMMITTED with READ COMMITTED
                 // visibility while preserving the requested isolation label.
                 TransactionIsolationLevel::ReadCommitted
-                | TransactionIsolationLevel::ReadUncommitted => {}
-                TransactionIsolationLevel::RepeatableRead if read_only => {}
-                TransactionIsolationLevel::RepeatableRead => {
-                    return Err(SqlError::Unsupported(
-                        "transaction isolation level REPEATABLE READ requires READ ONLY"
-                            .to_string(),
-                    ));
-                }
+                | TransactionIsolationLevel::ReadUncommitted
+                | TransactionIsolationLevel::RepeatableRead => {}
                 TransactionIsolationLevel::Serializable => {
                     return Err(SqlError::Unsupported(
                         "transaction isolation level SERIALIZABLE is not supported".to_string(),

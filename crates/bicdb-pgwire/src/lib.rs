@@ -4863,12 +4863,8 @@ fn execute_server_sql_with_options_normalized(
         .with_wait_admission(_permit.observer());
     let transaction_control = if is_transaction_control_candidate(normalized) {
         Some(
-            bicdb_sql::parse_transaction_control_for_session(
-                sql,
-                &server.config.sql_profile,
-                state.session_state.transaction_read_only(),
-            )
-            .map_err(PgWireError::from)?,
+            parse_transaction_control_for_profile(sql, &server.config.sql_profile)
+                .map_err(PgWireError::from)?,
         )
     } else {
         None
@@ -4900,11 +4896,7 @@ fn execute_server_sql_with_options_normalized(
                         .tx
                         .as_mut()
                         .unwrap()
-                        .set_statement_write_conflict_check(
-                            fixed
-                                && server.config.sql_profile
-                                    == bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE,
-                        )?;
+                        .set_statement_write_conflict_check(fixed)?;
                     state.tx_fixed_snapshot = fixed;
                     state
                         .session_state
@@ -4982,11 +4974,7 @@ fn execute_server_sql_with_options_normalized(
                         .tx
                         .as_mut()
                         .unwrap()
-                        .set_statement_write_conflict_check(
-                            fixed
-                                && server.config.sql_profile
-                                    == bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE,
-                        )?;
+                        .set_statement_write_conflict_check(fixed)?;
                     state.tx_fixed_snapshot = fixed;
                     state
                         .session_state

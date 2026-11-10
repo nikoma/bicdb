@@ -214,3 +214,35 @@ fn routine_casts_of_user_overload_results() {
         ["2024-01-31 00:00:00+00"]
     );
 }
+
+#[test]
+fn typed_date_call_uses_implicit_user_overload_when_builtin_cannot_accept_it() {
+    for mode in [
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            bicdb_core::DbConfig::default()
+                .with_storage_mode(mode)
+                .with_fsync(false),
+        )
+        .unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for sql in [
+            "CREATE SCHEMA implicit_calls",
+            "SET search_path=implicit_calls,pg_catalog",
+            "CREATE FUNCTION trunc(timestamp) RETURNS text LANGUAGE sql AS $$ SELECT 'without-zone' $$",
+            "CREATE FUNCTION trunc(timestamptz) RETURNS text LANGUAGE sql AS $$ SELECT 'with-zone' $$",
+            "CREATE FUNCTION wrap_date(d date) RETURNS text LANGUAGE plpgsql AS $$ BEGIN RETURN trunc(d); END $$",
+            "CREATE TABLE selected_calls(v text)",
+            "INSERT INTO selected_calls VALUES(trunc(CAST('2026-11-10' AS date)))",
+        ] { session.execute(sql).unwrap_or_else(|e| panic!("{sql}: {e}")); }
+        assert_eq!(cells(&mut session,"SELECT trunc(date '2026-11-10'),trunc(timestamp '2026-11-10 13:00:00'),trunc(timestamptz '2026-11-10 13:00:00+00'),trunc(12.7),wrap_date(date '2026-11-10')"),["with-zone","without-zone","with-zone","12","with-zone"]);
+        assert_eq!(
+            cells(&mut session, "SELECT v FROM selected_calls"),
+            ["with-zone"]
+        );
+    }
+}

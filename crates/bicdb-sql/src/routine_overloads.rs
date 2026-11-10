@@ -201,11 +201,84 @@ fn argument_score(
     }
 }
 
+// PostgreSQL resolves typed arguments through implicit casts, then favors a
+// preferred type within a category. Oracle retains its existing conversion
+// rules; in particular, numeric narrowing must not change there.
+fn pg_argument_score(
+    declared: Option<i32>,
+    static_type: Option<&str>,
+    value: &SqlValue,
+) -> Option<u32> {
+    let actual = static_type.and_then(static_oid);
+    let (Some(actual), Some(declared)) = (actual, declared) else {
+        return argument_score(declared, static_type, value);
+    };
+    if actual == declared {
+        return Some(8);
+    }
+    if POLYMORPHIC.contains(&declared) {
+        return Some(1);
+    }
+    let input = pg_type_spec_by_oid(actual)?;
+    let target = pg_type_spec_by_oid(declared)?;
+    pg_cast_allows(input.name, target.name, PgCastContext::Implicit).then_some(
+        if input.category == target.category && target.preferred() {
+            4
+        } else {
+            3
+        },
+    )
+}
+
+fn builtin_accepts_typed_arguments(name: &str, actual: &[Option<i32>]) -> bool {
+    use crate::builtin_signatures::PG_CATALOG_FUNCTION_SIGNATURES as SIGNATURES;
+    let start = SIGNATURES.partition_point(|(candidate, _)| *candidate < name);
+    SIGNATURES[start..]
+        .iter()
+        .take_while(|(candidate, _)| *candidate == name)
+        .any(|(_, signature)| {
+            let declared = signature
+                .split(',')
+                .filter(|part| !part.is_empty())
+                .map(|part| part.parse::<i32>().ok())
+                .collect::<Vec<_>>();
+            // Polymorphic/variadic builtins stay on their established dispatch path.
+            if declared
+                .iter()
+                .flatten()
+                .any(|oid| POLYMORPHIC.contains(oid))
+            {
+                return true;
+            }
+            declared.len() == actual.len()
+                && actual.iter().zip(declared).all(|(input, target)| {
+                    match (
+                        input.and_then(pg_type_spec_by_oid),
+                        target.and_then(pg_type_spec_by_oid),
+                    ) {
+                        (Some(input), Some(target)) => {
+                            pg_cast_allows(input.name, target.name, PgCastContext::Implicit)
+                        }
+                        _ => false,
+                    }
+                })
+        })
+}
+
 /// The candidate that best fits a call, or `None` when none accepts it.
 pub(crate) fn select_overload<'a>(
     candidates: &'a [RoutineSchema],
     static_types: &[Option<String>],
     args: &[SqlValue],
+) -> Option<&'a RoutineSchema> {
+    select_overload_scored(candidates, static_types, args, argument_score)
+}
+
+fn select_overload_scored<'a>(
+    candidates: &'a [RoutineSchema],
+    static_types: &[Option<String>],
+    args: &[SqlValue],
+    score_argument: fn(Option<i32>, Option<&str>, &SqlValue) -> Option<u32>,
 ) -> Option<&'a RoutineSchema> {
     let mut best: Option<(u32, &RoutineSchema)> = None;
     for candidate in candidates {
@@ -229,7 +302,7 @@ pub(crate) fn select_overload<'a>(
             });
             let static_type = static_types.get(index).and_then(Option::as_deref);
             let value = args.get(index).unwrap_or(&SqlValue::Null);
-            match argument_score(declared, static_type, value) {
+            match score_argument(declared, static_type, value) {
                 Some(score) => total += score,
                 None => {
                     accepted = false;
@@ -256,7 +329,13 @@ pub(crate) fn overload_return_type(
         return None;
     }
     let overloads = routine_overloads(db, RoutineKind::Function, name).ok()??;
-    select_overload(&overloads, static_types, &[]).map(|routine| routine.return_type.clone())
+    let score = if oracle::is_oracle_database(db).ok()? {
+        argument_score
+    } else {
+        pg_argument_score
+    };
+    select_overload_scored(&overloads, static_types, &[], score)
+        .map(|routine| routine.return_type.clone())
 }
 
 /// The routine a call of `name` executes, compiled. Names with one routine
@@ -271,7 +350,12 @@ pub(crate) fn resolve_routine_for_call(
     let Some(overloads) = routine_overloads(db, kind, name)? else {
         return resolve_routine_cached(db, kind, name);
     };
-    let Some(selected) = select_overload(&overloads, static_types, args) else {
+    let score = if oracle::is_oracle_database(db)? {
+        argument_score
+    } else {
+        pg_argument_score
+    };
+    let Some(selected) = select_overload_scored(&overloads, static_types, args, score) else {
         return resolve_routine_cached(db, kind, name);
     };
     if selected.overload.is_none() {
@@ -445,6 +529,7 @@ fn chosen_user_function(
         })
         .collect();
     let mut by_value = None;
+    let mut eligible = Vec::new();
     for candidate in &candidates {
         let Some(declared) = candidate_oids(candidate, count) else {
             continue;
@@ -456,6 +541,7 @@ fn chosen_user_function(
                 continue;
             }
         }
+        eligible.push(candidate.clone());
         if actual
             .iter()
             .zip(&declared)
@@ -486,6 +572,18 @@ fn chosen_user_function(
         {
             by_value = Some(candidate.clone());
         }
+    }
+    if by_value.is_none()
+        && actual.iter().all(Option::is_some)
+        && !builtin_accepts_typed_arguments(name, &actual)
+    {
+        return Ok(select_overload_scored(
+            &eligible,
+            static_types,
+            values.unwrap_or(&[]),
+            pg_argument_score,
+        )
+        .cloned());
     }
     Ok(by_value)
 }

@@ -12247,7 +12247,15 @@ fn graceful_shutdown_drains_many_idle_and_active_clients() {
     let mut saw_active = false;
     let active_deadline = std::time::Instant::now() + Duration::from_secs(5);
     while std::time::Instant::now() < active_deadline {
-        if server.stats_snapshot().active_queries == 4 {
+        // Lock waiters remain active statements, but yield execution slots
+        // so their lock owner can run. Require all four statements to have
+        // reached that waiting state before testing graceful shutdown.
+        let active_statements = server
+            .connection_snapshots()
+            .iter()
+            .filter(|connection| connection.active_query.is_some())
+            .count();
+        if active_statements == 4 && server.stats_snapshot().active_queries == 0 {
             saw_active = true;
             break;
         }

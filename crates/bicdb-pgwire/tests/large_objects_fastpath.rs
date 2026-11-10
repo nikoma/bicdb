@@ -239,6 +239,10 @@ fn native_large_object_fastpath_cycles_preserve_bytes_transactions_and_error_rec
             ),
         );
         error(&cycle(&mut s), "22P02", b'I');
+        for input in [b"2147483648".as_slice(), b"9223372036854775808".as_slice()] {
+            send(&mut s, b'F', &frame(proc_oid, &[], &[Some(input)], 1));
+            error(&cycle(&mut s), "22003", b'I');
+        }
         assert_eq!(
             first_text(&ok_query(&mut s, "SELECT fastpath_custom(1)")),
             "2"

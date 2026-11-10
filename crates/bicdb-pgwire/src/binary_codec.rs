@@ -1164,20 +1164,31 @@ pub(crate) fn sql_integer_parameter_literal(value: &str, oid: i32) -> Result<Str
         21 => "smallint",
         _ => "integer",
     };
-    let parsed: i64 = value.trim().parse().map_err(|_| {
-        PgWireError::Protocol(format!(
-            "invalid input syntax for type {pg_type}: \"{value}\""
-        ))
-    })?;
+    let range_error = || {
+        PgWireError::Sql(SqlError::DataException {
+            sqlstate: "22003",
+            message: format!("value \"{value}\" is out of range for type {pg_type}"),
+            data_type: None,
+        })
+    };
+    let parsed: i64 = value
+        .trim()
+        .parse::<i64>()
+        .map_err(|error| match error.kind() {
+            std::num::IntErrorKind::PosOverflow | std::num::IntErrorKind::NegOverflow => {
+                range_error()
+            }
+            _ => PgWireError::Sql(SqlError::InvalidTextRepresentation(format!(
+                "invalid input syntax for type {pg_type}: \"{value}\""
+            ))),
+        })?;
     let in_range = match oid {
         21 => i16::try_from(parsed).is_ok(),
         23 => i32::try_from(parsed).is_ok(),
         _ => true,
     };
     if !in_range {
-        return Err(PgWireError::Protocol(format!(
-            "value \"{value}\" is out of range for type {pg_type}"
-        )));
+        return Err(range_error());
     }
     Ok(parsed.to_string())
 }

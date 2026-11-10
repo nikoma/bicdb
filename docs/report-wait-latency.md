@@ -107,3 +107,44 @@ around those pure metadata lookups only. It ends before evaluating row
 expressions or policy subqueries. The regression measures one decode for a
 32-column layout in both storage modes and checks schema visibility across DDL
 and rollback. Original COPY input and constraint assertions remain unchanged.
+
+## Original application joins and COPY checks
+
+The complete original Oracle run at c7475382 executes all 1,464 invocations:
+1,461 pass, three fail, none skip, and no server abort or writer-queue timeout is
+recorded. Both original ten-second waits pass: the whole report background-job
+method takes 7.584 seconds and the audit method takes 7.915 seconds. The original
+source, bytecode, assertions and 10,000 ms waits are unchanged. This is a
+diagnostic candidate result, not final application qualification.
+
+Two assertions also fail on native Oracle: release of a savepoint through the
+Oracle application path, and the annotated callout's exact-one assertion.
+Independent native PostgreSQL 16.13 controls pass all 18 transaction tests and
+fail the same annotated-callout assertion. Both native controls pass the separate
+core-callout mapping method. That method fails on c7475382 because its wide,
+selective AD_Column join exceeds the 512 MiB join-materialization budget.
+
+The indexed right-table shortcut evaluated its ON condition before retaining
+rows, but left right-local WHERE filters until after payload retention. Apply
+simple, qualified right-local filters during inner-join matching, keeping the
+original ON expression first. Resolve quoted qualifiers exactly and fold
+unquoted qualifiers according to their binding. Leave callbacks, casts, custom
+operators and outer-join matching on their existing paths. The execution budget
+remains 512 MiB. A smaller regression joins 1,000 indexed 4 KiB payloads to four
+drivers, selects four rows, and retains a 2 MiB budget in both storage modes.
+Native PostgreSQL confirms unquoted and quoted variants, NULL-extended rows,
+case-distinct aliases and a volatile routine callback's call count in
+`crates/bicdb-sql/tests/fixtures/postgres/indexed_right_filter_pg16.json`.
+The initial unquoted-only prototype still fails the original mapping method;
+its failed run is retained, and quoted variants extend the regression.
+
+The COPY follow-up profile still finds shared-schema decoding inside CHECK
+typing. A 64-row, 32-column, four-CHECK control at cf4bd000 plus the regression
+decodes 259 definitions (2,675,729 bytes). COPY now registers its fixed declared
+schema in a row-type frame during validation, following query materialization.
+Callback queries keep their own nested frames; policy-plan scopes retain their
+existing lifetime. The frame ends before after-row triggers. The regression
+bounds schema decoding across the batch, preserves CHECK rejection and rollback
+of a partly invalid batch, and checks subsequent DDL and rollback visibility.
+Each semantic successor requires its own source-pinned broad, optimized-build,
+VM, JDBC, CI and original-application evidence.

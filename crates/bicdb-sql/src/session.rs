@@ -3004,6 +3004,11 @@ impl<'db> SqlSession<'db> {
                 Some((index, _)) => &records[..*index],
                 None => &records[..],
             };
+            // Give CHECK typing the batch's declared schema, as query
+            // materialization does. Callback queries keep their nested frames.
+            let _row_types = crate::slot_types::push_frame();
+            let declared_types = Arc::new(schema.clone());
+            crate::slot_types::register_table(&table, &declared_types);
             validate_records_for_write(
                 self.db_ref(),
                 self.tx.as_ref(),

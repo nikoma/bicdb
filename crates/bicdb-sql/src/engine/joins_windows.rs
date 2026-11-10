@@ -331,19 +331,32 @@ impl<'db> SqlEngine<'db> {
         let right_columns = row_output_columns_from_fields(&table, &alias_name, &right_fields);
         // An inner join may discard right-local WHERE failures before cloning
         // their payload into the joined result. Keep the original ON expression
-        // first, and leave outer joins, quoted bindings and callbacks unchanged.
-        let unquoted_binding = name.0.iter().all(|part| {
-            matches!(part, sqlparser::ast::ObjectNamePart::Identifier(ident) if ident.quote_style.is_none())
-        }) && alias.as_ref().is_none_or(|alias| {
-            alias.name.quote_style.is_none() && alias.columns.is_empty()
+        // first and resolve quoted qualifiers exactly.
+        let binding = alias
+            .as_ref()
+            .map(|alias| &alias.name)
+            .or_else(|| match name.0.last() {
+                Some(sqlparser::ast::ObjectNamePart::Identifier(ident)) => Some(ident),
+                _ => None,
+            });
+        let binding = binding.map(|ident| {
+            if ident.quote_style.is_some() {
+                ident.value.clone()
+            } else {
+                normalize_object_name(&ident.value)
+            }
         });
-        let pushed_filter = if matches!(kind, RowJoinKind::Inner) && unquoted_binding {
+        let pushed_filter = if matches!(kind, RowJoinKind::Inner)
+            && alias.as_ref().is_none_or(|alias| alias.columns.is_empty())
+        {
             let columns = right_columns.iter().cloned().collect::<BTreeSet<_>>();
             right_selection.and_then(|selection| {
                 and_terms(selection)
                     .into_iter()
                     .filter(|term| {
-                        super::pg_catalog::simple_qualified_unquoted_filter(term, &columns)
+                        binding.as_ref().is_some_and(|binding| {
+                            super::pg_catalog::simple_qualified_filter(term, &columns, binding)
+                        })
                     })
                     .cloned()
                     .reduce(and_expr)

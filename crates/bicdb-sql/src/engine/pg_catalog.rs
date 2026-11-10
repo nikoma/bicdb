@@ -51,20 +51,35 @@ fn exact_virtual_base_columns(expr: &Expr, columns: &BTreeSet<String>) -> bool {
         })
 }
 
-pub(super) fn simple_qualified_unquoted_filter(expr: &Expr, columns: &BTreeSet<String>) -> bool {
+pub(super) fn simple_qualified_filter(
+    expr: &Expr,
+    columns: &BTreeSet<String>,
+    binding: &str,
+) -> bool {
     if !simple_virtual_base_filter(expr) {
         return false;
     }
     // Do not capture an ambiguous unqualified name or fold a quoted alias into
     // a different input. Callback-bearing expressions stay after the join.
     let unsupported = sqlparser::ast::visit_expressions(expr, |expr| {
-        if matches!(expr, Expr::Identifier(_))
-            || matches!(expr, Expr::CompoundIdentifier(parts) if parts.len() != 2 || parts.iter().any(|part| part.quote_style.is_some()))
-        {
-            std::ops::ControlFlow::Break(())
-        } else {
-            std::ops::ControlFlow::Continue(())
+        match expr {
+            Expr::Identifier(_) => return std::ops::ControlFlow::Break(()),
+            Expr::CompoundIdentifier(parts) => {
+                if parts.len() != 2 {
+                    return std::ops::ControlFlow::Break(());
+                }
+                let qualifier = if parts[0].quote_style.is_some() {
+                    parts[0].value.clone()
+                } else {
+                    normalize_object_name(&parts[0].value)
+                };
+                if qualifier != binding {
+                    return std::ops::ControlFlow::Break(());
+                }
+            }
+            _ => {}
         }
+        std::ops::ControlFlow::Continue(())
     })
     .is_break();
     !unsupported && predicate_references_only_columns(expr, columns)

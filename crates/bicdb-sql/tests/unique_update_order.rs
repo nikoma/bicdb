@@ -18,7 +18,7 @@ fn native_unique_updates_vacate_only_preceding_rows_and_roll_back_errors() {
                     root.path(),
                     DbConfig::default()
                         .with_fsync(false)
-                        .with_storage_mode(mode),
+                        .with_storage_mode(mode.clone()),
                 )
                 .unwrap();
                 let mut sql = SqlSession::new(&mut db);

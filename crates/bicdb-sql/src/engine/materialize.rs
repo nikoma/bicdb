@@ -154,10 +154,8 @@ impl<'db> SqlEngine<'db> {
     /// argument type even when a value uses a shared text representation.
     /// In particular, a bytea argument must not select the text overload.
     pub(crate) fn constant_expr_pg_type(&self, expr: &Expr) -> Option<String> {
-        if let Expr::Function(function) = expr {
-            if let Some(pg_type) = self.infer_env_function_type(function, &[]) {
-                return Some(pg_type);
-            }
+        if let Some(pg_type) = self.infer_env_expr_type(expr, &[]) {
+            return Some(pg_type);
         }
         let name = match expr {
             Expr::Identifier(ident) => Some(ident.value.as_str()),

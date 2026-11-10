@@ -1332,7 +1332,7 @@ impl<'db> SqlSession<'db> {
             let (expr, alias) = select_item_expr_and_alias(item)?;
             columns.push(alias.unwrap_or_else(|| select_expr_column_name(expr)));
             validate_common_type_expr(self.db_ref(), expr)?;
-            column_types.push(projected_expr_pg_type_with_db(self.db_ref(), expr));
+            column_types.push(self.sql_engine().constant_expr_pg_type(expr));
             if include_row {
                 row.push(self.eval_session_expr(expr)?);
             }

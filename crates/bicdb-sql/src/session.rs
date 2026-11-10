@@ -1101,6 +1101,7 @@ pub struct SqlSession<'db> {
     pub(crate) currvals: FxHashMap<String, i64>,
     pub(crate) oracle_output: oracle::output::State,
     pub(crate) oracle_lobs: oracle::lobs::State,
+    pub(crate) pg_large_objects: crate::pg_large_objects::DescriptorState,
     pub(crate) schema_cache_generation: u64,
     pub(crate) schema_cache: SqlSchemaCacheMap,
     pub(crate) schema_list_cache: SqlSchemaListCacheMap,
@@ -1640,6 +1641,7 @@ pub(crate) struct TxnLookupCaches {
 #[derive(Clone, Debug, Default)]
 pub struct SqlSessionCatalogCache {
     pub(crate) oracle_lobs: oracle::lobs::State,
+    pub(crate) pg_large_objects: crate::pg_large_objects::DescriptorState,
     pub(crate) schema_cache_generation: u64,
     pub(crate) schema_cache: SqlSchemaCacheMap,
     pub(crate) schema_list_cache: SqlSchemaListCacheMap,
@@ -2432,6 +2434,7 @@ impl<'db> SqlSession<'db> {
             currvals: FxHashMap::default(),
             oracle_output: oracle::output::State::default(),
             oracle_lobs: oracle::lobs::State::default(),
+            pg_large_objects: crate::pg_large_objects::DescriptorState::default(),
             schema_cache_generation,
             schema_cache: SqlSchemaCacheMap::default(),
             schema_list_cache: BTreeMap::new(),
@@ -2693,6 +2696,7 @@ impl<'db> SqlSession<'db> {
 
     pub fn with_catalog_cache(mut self, cache: SqlSessionCatalogCache) -> Self {
         self.oracle_lobs = cache.oracle_lobs;
+        self.pg_large_objects = cache.pg_large_objects;
         self.schema_cache_generation = cache.schema_cache_generation;
         self.schema_cache = cache.schema_cache;
         self.schema_list_cache = cache.schema_list_cache;
@@ -2718,6 +2722,7 @@ impl<'db> SqlSession<'db> {
     pub fn into_catalog_cache(self) -> SqlSessionCatalogCache {
         SqlSessionCatalogCache {
             oracle_lobs: self.oracle_lobs,
+            pg_large_objects: self.pg_large_objects,
             schema_cache_generation: self.schema_cache_generation,
             schema_cache: self.schema_cache,
             schema_list_cache: self.schema_list_cache,

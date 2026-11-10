@@ -6,7 +6,7 @@ use bicdb_core::RecordReadSnapshot;
 const PAGE_BYTES: u64 = 2048;
 // PostgreSQL 16 caps seek/end at INT_MAX * LOBLKSIZE, not at
 // (INT_MAX + 1) pages. Native sparse boundary controls cover this exact value.
-const MAX_LENGTH: u64 = PAGE_BYTES * i32::MAX as u64;
+pub(super) const MAX_LENGTH: u64 = PAGE_BYTES * i32::MAX as u64;
 const OBJECT_RESERVATION: &str = "postgres-large-object";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -280,6 +280,10 @@ pub(super) fn capture_read_view(
 }
 
 impl ReadView {
+    pub(super) fn oid(&self) -> u32 {
+        self.oid
+    }
+
     pub(super) fn retained_bytes(&self) -> usize {
         self.pages
             .retained_bytes()

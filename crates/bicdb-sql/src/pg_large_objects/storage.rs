@@ -167,7 +167,7 @@ pub(super) fn mutation<'a>(
     reserve_object(tx, oid, cancellation)?;
     tx.refresh_read_committed_snapshot()?;
     let (record, boundary) = row_for_write(tx, METADATA, &object_key(oid))?;
-    let metadata = decode_metadata(&record.ok_or_else(|| missing(oid))?)?;
+    let metadata = decode_metadata(record.as_deref().ok_or_else(|| missing(oid))?)?;
     db.check_recovery_state()?;
     Ok(Mutation {
         db,

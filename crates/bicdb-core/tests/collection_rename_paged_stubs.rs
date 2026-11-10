@@ -1,7 +1,6 @@
 //! A stored row pins its physical backing even when a logical name is reused.
 use bicdb_core::{
-    BicDb, DbConfig, IndexDefinition, IndexField, IndexKind, IndexPredicate, Record, StorageMode,
-    VisibleRow,
+    BicDb, DbConfig, IndexDefinition, IndexField, IndexKind, Record, StorageMode, VisibleRow,
 };
 use serde_json::json;
 
@@ -9,7 +8,7 @@ fn put(db: &BicDb, label: &str) {
     let mut tx = db.begin_transaction().unwrap();
     tx.insert(
         "authored",
-        Record::new("same-key").with_metadata(json!({"label":label,"doc":{"value":label}})),
+        Record::new("same-key").with_metadata(json!({"label":label,"terms":[label]})),
     )
     .unwrap();
     tx.commit().unwrap();
@@ -17,12 +16,12 @@ fn put(db: &BicDb, label: &str) {
 
 fn materialized_index(db: &mut BicDb) {
     db.create_index(IndexDefinition {
-        name: "authored_geometry".into(),
+        name: "authored_terms".into(),
         collection: "authored".into(),
-        fields: vec![IndexField::Geometry],
+        fields: vec![IndexField::MetadataPath(vec!["terms".into()])],
         unique: false,
-        kind: IndexKind::Spatial,
-        predicate: Some(IndexPredicate::Literal { value: json!(true) }),
+        kind: IndexKind::Array,
+        predicate: None,
         exclusion: None,
         nulls_not_distinct: false,
     })
@@ -54,7 +53,7 @@ fn exercise(phase: u8) {
         db.rename_collection("authored", "renamed").unwrap();
         db.create_collection("authored").unwrap();
         put(&db, "replacement");
-        let expected = json!({"label":"original","doc":{"value":"original"}});
+        let expected = json!({"label":"original","terms":["original"]});
         assert_eq!(row.to_record().unwrap().metadata, expected);
         assert_eq!(
             reader

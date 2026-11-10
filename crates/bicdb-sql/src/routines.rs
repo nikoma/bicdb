@@ -2059,6 +2059,7 @@ pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
         .collect::<Result<Vec<_>>>()?;
     let mut sqlstate = if notice { "00000" } else { "P0001" }.to_string();
     let mut detail = None;
+    let mut default_message = None;
     let mut error_fields = RaiseErrorFields::default();
     let mut seen = std::collections::HashSet::new();
     if let Some(options) = using_options {
@@ -2095,13 +2096,29 @@ pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
                 })?;
             match name.as_str() {
                 "errcode" => {
-                    if parsed.len() != 5 || !parsed.bytes().all(|byte| byte.is_ascii_alphanumeric())
+                    sqlstate = if parsed.len() == 5
+                        && parsed
+                            .bytes()
+                            .all(|byte| byte.is_ascii_digit() || byte.is_ascii_uppercase())
                     {
-                        return Err(SqlError::InvalidSql(
-                            "RAISE EXCEPTION ERRCODE must be a five-character SQLSTATE".into(),
-                        ));
-                    }
-                    sqlstate = parsed.to_ascii_uppercase();
+                        parsed.clone()
+                    } else {
+                        match routine_exception_condition(&parsed) {
+                            Ok(RoutineExceptionCondition::SqlState(state))
+                                if parsed == parsed.to_ascii_lowercase() =>
+                            {
+                                state
+                            }
+                            _ => {
+                                return Err(SqlError::undefined_object(format!(
+                                    "unrecognized exception condition \"{parsed}\""
+                                )))
+                            }
+                        }
+                    };
+                    // Native USING ERRCODE keeps the condition's supplied name
+                    // as its default message; numeric codes keep their code.
+                    default_message = Some(parsed);
                 }
                 "constraint" => error_fields.constraint = Some(parsed),
                 "table" => error_fields.table = Some(parsed),
@@ -2117,8 +2134,9 @@ pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
             }
         }
     }
-    let message =
-        message.ok_or_else(|| SqlError::InvalidSql("RAISE EXCEPTION requires a message".into()))?;
+    let message = message
+        .or_else(|| using_options.map(|_| default_message.unwrap_or_else(|| sqlstate.clone())))
+        .ok_or_else(|| SqlError::InvalidSql("RAISE EXCEPTION requires a message".into()))?;
     if notice {
         let mut chars = message.chars().peekable();
         let mut placeholders = 0;

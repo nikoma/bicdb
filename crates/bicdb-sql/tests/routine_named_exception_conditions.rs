@@ -28,6 +28,21 @@ fn named_missing_object_handlers_match_native_sqlstates_without_catching_other_e
                 vec![vec![SqlValue::String(state.into())]]
             );
         }
+        for (name, clause, expected) in [
+            ("numeric_default", "ERRCODE='42703'", "42703:42703"),
+            (
+                "named_default",
+                "ERRCODE='undefined_column'",
+                "42703:undefined_column",
+            ),
+            ("detail_default", "DETAIL='detail only'", "P0001:P0001"),
+        ] {
+            sql.execute(&format!("CREATE FUNCTION {name}() RETURNS text LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION USING {clause}; EXCEPTION WHEN OTHERS THEN RETURN SQLSTATE||':'||SQLERRM; END $$")).unwrap();
+            assert_eq!(
+                sql.execute(&format!("SELECT {name}()")).unwrap().rows,
+                vec![vec![SqlValue::String(expected.into())]]
+            );
+        }
         sql.execute("CREATE FUNCTION unrelated_missing_column() RETURNS text LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION USING ERRCODE='42703'; EXCEPTION WHEN undefined_object THEN RETURN 'incorrectly caught'; END $$").unwrap();
         assert_eq!(
             sql.execute("SELECT unrelated_missing_column()")

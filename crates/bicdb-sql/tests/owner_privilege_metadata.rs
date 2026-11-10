@@ -71,3 +71,18 @@ fn original_altercolumn_recreates_view_and_owner_grants() {
     );
     assert_eq!(s.execute("SELECT count(*) FROM information_schema.role_table_grants WHERE table_schema='adempiere' AND table_name='privilege_probe_v'").unwrap().rows,vec![vec![SqlValue::Int(7)]]);
 }
+
+#[test]
+fn grant_and_revoke_follow_search_path_for_tables_and_views() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db =
+        BicDb::open_with_config(root.path(), DbConfig::default().with_fsync(false)).unwrap();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE ROLE path_grantee; CREATE SCHEMA grant_path; CREATE TABLE public.same(id integer); CREATE TABLE grant_path.same(id integer); CREATE VIEW grant_path.same_v AS SELECT id FROM grant_path.same; SET search_path=grant_path,public").unwrap();
+    s.execute("GRANT SELECT ON same, same_v TO path_grantee")
+        .unwrap();
+    assert_eq!(s.execute("SELECT table_schema,table_name FROM information_schema.role_table_grants WHERE grantee='path_grantee' ORDER BY table_name").unwrap().rows, vec![vec![SqlValue::String("grant_path".into()),SqlValue::String("same".into())],vec![SqlValue::String("grant_path".into()),SqlValue::String("same_v".into())]]);
+    s.execute("REVOKE SELECT ON same, same_v FROM path_grantee")
+        .unwrap();
+    assert!(s.execute("SELECT table_name FROM information_schema.role_table_grants WHERE grantee='path_grantee'").unwrap().rows.is_empty());
+}

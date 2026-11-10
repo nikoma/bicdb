@@ -1,6 +1,6 @@
 use bicdb_core::{BicDb, DbConfig, StorageMode};
 use bicdb_pgwire::{PgWireConfig, PgWireServer};
-use std::{net::TcpListener, thread};
+use std::{net::TcpListener, thread, time::Duration};
 use tokio_postgres::{Client, NoTls};
 
 struct Scenario {
@@ -176,6 +176,51 @@ async fn serializable_tracks_row_and_predicate_dependencies() {
             .get::<_, i32>(0);
         assert_eq!(during, before, "{mode:?}: read-only snapshot moved");
         a.batch_execute("COMMIT").await.unwrap();
+
+        peer.batch_execute("UPDATE ssi_scope SET v=10 WHERE id=1")
+            .await
+            .unwrap();
+        b.batch_execute(
+            "BEGIN ISOLATION LEVEL SERIALIZABLE; UPDATE ssi_scope SET v=200 WHERE id=2",
+        )
+        .await
+        .unwrap();
+        a.batch_execute("BEGIN ISOLATION LEVEL SERIALIZABLE READ ONLY DEFERRABLE")
+            .await
+            .unwrap();
+        let sql = "SELECT v FROM ssi_scope WHERE id=1";
+        {
+            let read = a.query_one(sql, &[]);
+            tokio::pin!(read);
+            assert!(
+                tokio::time::timeout(Duration::from_millis(200), &mut read)
+                    .await
+                    .is_err(),
+                "{mode:?}: deferrable read completed while its overlapping writer was active"
+            );
+            b.batch_execute("COMMIT").await.unwrap();
+            let value = tokio::time::timeout(Duration::from_secs(5), &mut read)
+                .await
+                .expect("deferrable read did not resume after the writer committed")
+                .unwrap()
+                .get::<_, i32>(0);
+            assert_eq!(value, 10, "{mode:?}: initial deferrable snapshot");
+        }
+        b.batch_execute(
+            "BEGIN ISOLATION LEVEL SERIALIZABLE; UPDATE ssi_scope SET v=11 WHERE id=1; COMMIT",
+        )
+        .await
+        .unwrap();
+        let value = a.query_one(sql, &[]).await.unwrap().get::<_, i32>(0);
+        assert_eq!(value, 10, "{mode:?}: deferrable snapshot moved");
+        assert_eq!(
+            outcome(&a, "INSERT INTO ssi_scope VALUES (99,99)")
+                .await
+                .as_deref(),
+            Some("25006"),
+            "{mode:?}: deferrable read-only transaction permitted a write"
+        );
+        a.batch_execute("ROLLBACK").await.unwrap();
 
         drop((a, b, peer));
         a_task.abort();

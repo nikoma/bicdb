@@ -4713,7 +4713,12 @@ impl<'db> SqlEngine<'db> {
             Some(schema) => index_field_from_expr_for_schema(schema, &normalized),
             None => index_field_from_expr(&normalized),
         }
-        .map(|candidate| index_field_matches(&candidate, field))
+        .map(|candidate| match schema {
+            // Declared column names are canonical here; preserve quoted case
+            // distinctions through compound and expression index keys too.
+            Some(_) => candidate == *field,
+            None => index_field_matches(&candidate, field),
+        })
     }
 
     pub(crate) fn expr_matches_table_column(

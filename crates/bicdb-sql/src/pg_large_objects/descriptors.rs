@@ -414,13 +414,14 @@ mod tests {
 
     #[test]
     fn cache_transfers_keep_cursor_changes_but_savepoint_abort_closes_new_handles() {
+        let cancel = CancellationToken::uncancelable();
         for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
             let (_root, mut db) = fixture(mode);
             let mut tx = db.begin_transaction().unwrap();
             let key = DescriptorTransaction::new(&db, &tx);
             let cache = SqlSessionCatalogCache::default();
             let shared_cache = cache.clone();
-            let view = storage::capture_read_view(&tx, 42001, 1024 * 1024).unwrap();
+            let view = storage::capture_read_view(&tx, 42001, 1024 * 1024, &cancel).unwrap();
             let readfd = cache
                 .pg_large_objects
                 .open(key, Access::Read(view), 1024 * 1024)
@@ -498,12 +499,13 @@ mod tests {
 
     #[test]
     fn read_snapshot_seek_and_write_permissions_follow_native_descriptor_modes() {
+        let cancel = CancellationToken::uncancelable();
         for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
             let (_root, db) = fixture(mode);
             let mut reader = db.begin_transaction().unwrap();
             let key = DescriptorTransaction::new(&db, &reader);
             let state = DescriptorState::default();
-            let view = storage::capture_read_view(&reader, 42001, 1024 * 1024).unwrap();
+            let view = storage::capture_read_view(&reader, 42001, 1024 * 1024, &cancel).unwrap();
             let readfd = state.open(key, Access::Read(view), 1024 * 1024).unwrap();
             let writefd = state.open(key, Access::Write(42001), 1024 * 1024).unwrap();
             assert!(is_state(state.begin_io(key, readfd, true), "55000"));
@@ -515,7 +517,7 @@ mod tests {
                 .unwrap();
             writer.commit().unwrap();
             reader.refresh_read_committed_snapshot().unwrap();
-            let length = storage::metadata(&reader, 42001).unwrap().length;
+            let length = storage::physical_length(&reader, 42001, &cancel).unwrap();
             assert_eq!(length, 9);
             assert_eq!(state.seek(key, readfd, 0, 2, length).unwrap(), 3);
             assert_eq!(state.seek(key, writefd, 0, 2, length).unwrap(), 9);
@@ -547,6 +549,7 @@ mod tests {
 
     #[test]
     fn unlink_closes_local_handles_and_rollback_does_not_resurrect_them() {
+        let cancel = CancellationToken::uncancelable();
         let (_root, db) = fixture(StorageMode::EmbeddedMemory);
         let mut tx = db.begin_transaction().unwrap();
         let key = DescriptorTransaction::new(&db, &tx);
@@ -554,7 +557,7 @@ mod tests {
         let readfd = local
             .open(
                 key,
-                Access::Read(storage::capture_read_view(&tx, 42001, 1024 * 1024).unwrap()),
+                Access::Read(storage::capture_read_view(&tx, 42001, 1024 * 1024, &cancel).unwrap()),
                 1024 * 1024,
             )
             .unwrap();
@@ -580,6 +583,7 @@ mod tests {
 
     #[test]
     fn descriptor_budgets_and_context_cleanup_release_snapshot_pins() {
+        let cancel = CancellationToken::uncancelable();
         let (_root, db) = fixture(StorageMode::EmbeddedMemory);
         let tx = db.begin_transaction().unwrap();
         let key = DescriptorTransaction::new(&db, &tx);
@@ -588,7 +592,7 @@ mod tests {
         state
             .open(
                 key,
-                Access::Read(storage::capture_read_view(&tx, 42001, 1024 * 1024).unwrap()),
+                Access::Read(storage::capture_read_view(&tx, 42001, 1024 * 1024, &cancel).unwrap()),
                 1024 * 1024,
             )
             .unwrap();
@@ -596,7 +600,7 @@ mod tests {
         assert!(matches!(
             state.open(
                 key,
-                Access::Read(storage::capture_read_view(&tx, 42001, 1024 * 1024).unwrap()),
+                Access::Read(storage::capture_read_view(&tx, 42001, 1024 * 1024, &cancel).unwrap()),
                 current_bytes
             ),
             Err(SqlError::BicDb(BicDbError::QueryMemoryLimit(_)))

@@ -14,7 +14,6 @@ const OBJECT_RESERVATION: &str = "postgres-large-object";
 pub(super) struct Metadata {
     format: u32,
     pub(super) owner: String,
-    pub(super) length: u64,
     #[serde(default)]
     pub(super) acl: BTreeMap<String, u8>,
 }
@@ -67,10 +66,9 @@ fn decode_metadata(record: &Record) -> Result<Metadata> {
         .map_err(|_| corrupt("metadata encoding"))?;
     if metadata.format != 1
         || metadata.owner.is_empty()
-        || metadata.length > MAX_LENGTH
         || metadata.acl.values().any(|rights| rights & !3 != 0)
     {
-        return Err(corrupt("metadata format, owner or length"));
+        return Err(corrupt("metadata format or owner"));
     }
     Ok(metadata)
 }
@@ -141,7 +139,6 @@ pub(super) fn create(
     let value = Metadata {
         format: 1,
         owner: owner.into(),
-        length: 0,
         acl: BTreeMap::new(),
     };
     let record = Record::new(object_key(oid)).with_metadata(serde_json::to_value(value)?);
@@ -154,7 +151,7 @@ pub(super) struct Mutation<'a> {
     db: &'a BicDb,
     tx: &'a mut Transaction,
     oid: u32,
-    pub(super) metadata: Metadata,
+    metadata_present: bool,
     metadata_boundary: u64,
 }
 
@@ -164,17 +161,43 @@ pub(super) fn mutation<'a>(
     oid: u32,
     cancellation: Option<&CancellationToken>,
 ) -> Result<Mutation<'a>> {
+    mutation_inner(db, tx, oid, cancellation, false)
+}
+
+/// Only an already-authorized WRITE descriptor may bypass a missing metadata
+/// row. PostgreSQL retains that descriptor after another backend's unlink and
+/// permits writes to orphan pages; this must never manufacture an owner/ACL.
+pub(super) fn descriptor_mutation<'a>(
+    db: &'a BicDb,
+    tx: &'a mut Transaction,
+    oid: u32,
+    cancellation: Option<&CancellationToken>,
+) -> Result<Mutation<'a>> {
+    mutation_inner(db, tx, oid, cancellation, true)
+}
+
+fn mutation_inner<'a>(
+    db: &'a BicDb,
+    tx: &'a mut Transaction,
+    oid: u32,
+    cancellation: Option<&CancellationToken>,
+    authorized_descriptor: bool,
+) -> Result<Mutation<'a>> {
     db.check_recovery_state()?;
     reserve_object(tx, oid, cancellation)?;
     tx.refresh_read_committed_snapshot()?;
     let (record, boundary) = row_for_write(tx, METADATA, &object_key(oid))?;
-    let metadata = decode_metadata(record.as_deref().ok_or_else(|| missing(oid))?)?;
+    if let Some(record) = &record {
+        decode_metadata(record)?;
+    } else if !authorized_descriptor {
+        return Err(missing(oid));
+    }
     db.check_recovery_state()?;
     Ok(Mutation {
         db,
         tx,
         oid,
-        metadata,
+        metadata_present: record.is_some(),
         metadata_boundary: boundary,
     })
 }
@@ -233,6 +256,55 @@ fn read_window(
     Ok(bytes)
 }
 
+/// Length is derived from the highest visible physical page, as in native
+/// PostgreSQL. A metadata cache would be stale after orphan writes followed by
+/// explicit OID recreation. Seek backwards over keys, rechecking visibility.
+pub(super) fn physical_length(
+    tx: &Transaction,
+    oid: u32,
+    cancellation: &CancellationToken,
+) -> Result<u64> {
+    let lower = page_prefix(oid);
+    let mut upper = format!("{lower}~");
+    loop {
+        cancellation.check()?;
+        let (ids, complete) = tx.scan_collection_record_key_candidates_in_range_unchecked(
+            PAGES,
+            std::ops::Bound::Included(lower.as_str()),
+            std::ops::Bound::Excluded(upper.as_str()),
+            true,
+            64,
+        )?;
+        let retained = ids
+            .iter()
+            .fold(0usize, |n, id| n.saturating_add(id.len() + 64));
+        if retained > operation_budget() {
+            return Err(SqlError::BicDb(BicDbError::QueryMemoryLimit(
+                "large object page keys exceed query memory".into(),
+            )));
+        }
+        bicdb_core::query_budget::observe(retained);
+        bicdb_core::query_budget::check()?;
+        for id in &ids {
+            cancellation.check()?;
+            if let Some(record) = tx.get(PAGES, id)? {
+                let page: u64 = id
+                    .strip_prefix(&lower)
+                    .and_then(|suffix| suffix.parse().ok())
+                    .ok_or_else(|| corrupt("invalid page key"))?;
+                if page >= i32::MAX as u64 || page_key(oid, page) != *id {
+                    return Err(corrupt("page number outside native range"));
+                }
+                return Ok(page * PAGE_BYTES + page_bytes(Some(&record))?.len() as u64);
+            }
+        }
+        if complete || ids.is_empty() {
+            return Ok(0);
+        }
+        upper = ids.last().expect("nonempty batch").clone();
+    }
+}
+
 pub(super) fn read(
     tx: &Transaction,
     oid: u32,
@@ -240,10 +312,22 @@ pub(super) fn read(
     requested: usize,
     cancellation: &CancellationToken,
 ) -> Result<Vec<u8>> {
-    let metadata = metadata(tx, oid)?;
+    metadata(tx, oid)?;
+    descriptor_read(tx, oid, offset, requested, cancellation)
+}
+
+/// The host must possess a live, authorized WRITE descriptor. Unlike direct
+/// OID access, its rights survive another backend deleting the metadata row.
+pub(super) fn descriptor_read(
+    tx: &Transaction,
+    oid: u32,
+    offset: u64,
+    requested: usize,
+    cancellation: &CancellationToken,
+) -> Result<Vec<u8>> {
     read_window(
         oid,
-        metadata.length,
+        physical_length(tx, oid, cancellation)?,
         offset,
         requested,
         cancellation,
@@ -265,18 +349,16 @@ pub(super) fn capture_read_view(
     tx: &Transaction,
     oid: u32,
     max_retained_bytes: usize,
+    cancellation: &CancellationToken,
 ) -> Result<ReadView> {
-    let metadata = metadata(tx, oid)?;
+    metadata(tx, oid)?;
+    let length = physical_length(tx, oid, cancellation)?;
     let pages = tx.capture_record_prefix_snapshot_unchecked(
         PAGES,
         &page_prefix(oid),
         max_retained_bytes.saturating_sub(std::mem::size_of::<ReadView>()),
     )?;
-    Ok(ReadView {
-        oid,
-        length: metadata.length,
-        pages,
-    })
+    Ok(ReadView { oid, length, pages })
 }
 
 impl ReadView {
@@ -312,16 +394,6 @@ impl ReadView {
 }
 
 impl Mutation<'_> {
-    fn persist_metadata(&mut self) -> Result<()> {
-        self.db.check_recovery_state()?;
-        let record =
-            Record::new(object_key(self.oid)).with_metadata(serde_json::to_value(&self.metadata)?);
-        self.tx
-            .write_upserts_with_statement_snapshots(METADATA, [(record, self.metadata_boundary)])?;
-        self.db.check_recovery_state()?;
-        Ok(())
-    }
-
     pub(super) fn write(
         &mut self,
         offset: u64,
@@ -356,8 +428,8 @@ impl Mutation<'_> {
             )?;
             copied += chunk;
         }
-        self.metadata.length = self.metadata.length.max(end);
-        self.persist_metadata()
+        self.db.check_recovery_state()?;
+        Ok(())
     }
 
     fn delete_pages_from(&mut self, first: u64, cancellation: &CancellationToken) -> Result<()> {
@@ -455,12 +527,15 @@ impl Mutation<'_> {
             PAGES,
             [(Record::new(key).with_payload(data), boundary)],
         )?;
-        self.metadata.length = length;
-        self.persist_metadata()
+        self.db.check_recovery_state()?;
+        Ok(())
     }
 
     pub(super) fn unlink(mut self, cancellation: &CancellationToken) -> Result<()> {
         self.db.check_recovery_state()?;
+        if !self.metadata_present {
+            return Err(missing(self.oid));
+        }
         self.delete_pages_from(0, cancellation)?;
         self.tx.delete_many_with_statement_snapshots(
             METADATA,
@@ -502,7 +577,7 @@ mod tests {
             }
             let bytes = vec![0, 1, 127, 128, 255, 0, 0, 0, 171];
             assert_eq!(read(&tx, 42001, 0, 100, &cancel).unwrap(), bytes);
-            let view = capture_read_view(&tx, 42001, 1024 * 1024).unwrap();
+            let view = capture_read_view(&tx, 42001, 1024 * 1024, &cancel).unwrap();
             assert!(view.retained_bytes() <= 1024 * 1024);
             mutation(&db, &mut tx, 42001, None)
                 .unwrap()
@@ -520,7 +595,7 @@ mod tests {
                 vec![0, 0, 0, 0, 0, 254]
             );
             tx.rollback_to_mark(mark).unwrap();
-            assert_eq!(metadata(&tx, 42001).unwrap().length, 3);
+            assert_eq!(physical_length(&tx, 42001, &cancel).unwrap(), 3);
             tx.commit().unwrap();
             // Host descriptors close at transaction end; this low-level owned
             // view also proves its retained own overlay cannot be mutated.
@@ -548,7 +623,7 @@ mod tests {
             drop(db);
             let db = open(root.path(), mode);
             let reader = db.begin_transaction().unwrap();
-            let view = capture_read_view(&reader, 42001, 1024 * 1024).unwrap();
+            let view = capture_read_view(&reader, 42001, 1024 * 1024, &cancel).unwrap();
             assert_eq!(
                 view.read(&db, 2046, 8, &cancel).unwrap(),
                 vec![0, 17, 34, 51]
@@ -617,7 +692,7 @@ mod tests {
             .unwrap()
             .truncate(0, &cancel)
             .unwrap();
-        assert_eq!(metadata(&tx, 42001).unwrap().length, 0);
+        assert_eq!(physical_length(&tx, 42001, &cancel).unwrap(), 0);
         assert_eq!(
             tx.scan_collection_record_ids_with_prefix(PAGES, &page_prefix(42001))
                 .unwrap(),
@@ -649,7 +724,7 @@ mod tests {
                 .unwrap();
             seed.commit().unwrap();
             let mut a = db.begin_transaction().unwrap();
-            let view = capture_read_view(&a, 42001, 1024 * 1024).unwrap();
+            let view = capture_read_view(&a, 42001, 1024 * 1024, &cancel).unwrap();
             let mut b = db.begin_transaction().unwrap();
             mutation(&db, &mut b, 42001, None)
                 .unwrap()
@@ -678,6 +753,10 @@ mod tests {
         let cancel = CancellationToken::uncancelable();
         create(&db, &mut tx, 42001, "bicdb", None).unwrap();
         assert!(create(&db, &mut tx, 42001, "other", None).is_err());
+        let stopped = CancellationToken::new(Default::default(), None);
+        stopped.cancel();
+        assert!(physical_length(&tx, 42001, &stopped).is_err());
+        assert!(capture_read_view(&tx, 42001, 1024 * 1024, &stopped).is_err());
         let offset = 8 * 1024 * 1024 * 1024;
         mutation(&db, &mut tx, 42001, None)
             .unwrap()
@@ -692,7 +771,7 @@ mod tests {
             Err(SqlError::BicDb(BicDbError::QueryMemoryLimit(_)))
         ));
         assert!(matches!(
-            capture_read_view(&tx, 42001, 0),
+            capture_read_view(&tx, 42001, 0, &cancel),
             Err(SqlError::BicDb(BicDbError::QueryMemoryLimit(_)))
         ));
         mutation(&db, &mut tx, 42001, None)
@@ -723,12 +802,12 @@ mod tests {
             .unwrap()
             .write(MAX_LENGTH, &[], &cancel)
             .unwrap();
-        assert_eq!(metadata(&tx, 42001).unwrap().length, 0);
+        assert_eq!(physical_length(&tx, 42001, &cancel).unwrap(), 0);
         mutation(&db, &mut tx, 42001, None)
             .unwrap()
             .write(MAX_LENGTH - 1, b"Z", &cancel)
             .unwrap();
-        assert_eq!(metadata(&tx, 42001).unwrap().length, 4398046509056);
+        assert_eq!(physical_length(&tx, 42001, &cancel).unwrap(), 4398046509056);
         assert_eq!(
             read(&tx, 42001, MAX_LENGTH - 1, 100, &cancel).unwrap(),
             b"Z"
@@ -742,6 +821,83 @@ mod tests {
             .truncate(MAX_LENGTH + 1, &cancel)
             .is_err());
         tx.rollback().unwrap();
+    }
+
+    fn assert_missing<T>(result: Result<T>) {
+        assert!(matches!(
+            result,
+            Err(SqlError::DataException {
+                sqlstate: "42704",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn authorized_writer_survives_other_unlink_and_oid_recreation_inherits_pages() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = open(root.path(), mode.clone());
+            ensure_storage(&mut db).unwrap();
+            let cancel = CancellationToken::uncancelable();
+            let mut seed = db.begin_transaction().unwrap();
+            create(&db, &mut seed, 42001, "original", None).unwrap();
+            mutation(&db, &mut seed, 42001, None)
+                .unwrap()
+                .write(0, b"abc", &cancel)
+                .unwrap();
+            seed.commit().unwrap();
+            let mut writer = db.begin_transaction().unwrap();
+            let view = capture_read_view(&writer, 42001, 1024 * 1024, &cancel).unwrap();
+            let mut remover = db.begin_transaction().unwrap();
+            mutation(&db, &mut remover, 42001, None)
+                .unwrap()
+                .unlink(&cancel)
+                .unwrap();
+            remover.commit().unwrap();
+            writer.refresh_read_committed_snapshot().unwrap();
+            assert_missing(read(&writer, 42001, 0, 100, &cancel));
+            assert_missing(mutation(&db, &mut writer, 42001, None));
+            assert!(descriptor_read(&writer, 42001, 0, 100, &cancel)
+                .unwrap()
+                .is_empty());
+            let mark = writer.rollback_mark();
+            descriptor_mutation(&db, &mut writer, 42001, None)
+                .unwrap()
+                .truncate(4099, &cancel)
+                .unwrap();
+            assert_eq!(physical_length(&writer, 42001, &cancel).unwrap(), 4099);
+            writer.rollback_to_mark(mark).unwrap();
+            assert_eq!(physical_length(&writer, 42001, &cancel).unwrap(), 0);
+            descriptor_mutation(&db, &mut writer, 42001, None)
+                .unwrap()
+                .write(0, b"orphan", &cancel)
+                .unwrap();
+            assert_eq!(
+                descriptor_read(&writer, 42001, 0, 100, &cancel).unwrap(),
+                b"orphan"
+            );
+            assert_missing(metadata(&writer, 42001));
+            assert_eq!(view.read(&db, 0, 100, &cancel).unwrap(), b"abc");
+            writer.commit().unwrap();
+            drop(view);
+            db.checkpoint_for_resume().unwrap();
+            drop(db);
+            let db = open(root.path(), mode);
+            let mut recreate = db.begin_transaction().unwrap();
+            assert_missing(metadata(&recreate, 42001));
+            assert_eq!(physical_length(&recreate, 42001, &cancel).unwrap(), 6);
+            create(&db, &mut recreate, 42001, "new_owner", None).unwrap();
+            assert_eq!(metadata(&recreate, 42001).unwrap().owner, "new_owner");
+            assert!(metadata(&recreate, 42001).unwrap().acl.is_empty());
+            assert_eq!(read(&recreate, 42001, 0, 100, &cancel).unwrap(), b"orphan");
+            mutation(&db, &mut recreate, 42001, None)
+                .unwrap()
+                .unlink(&cancel)
+                .unwrap();
+            assert_eq!(physical_length(&recreate, 42001, &cancel).unwrap(), 0);
+            recreate.commit().unwrap();
+        }
     }
 
     #[test]
@@ -766,6 +922,9 @@ mod tests {
             .unwrap()
             .unlink(&cancel)
             .unwrap();
+        // All committed page keys are still locator candidates until commit;
+        // descending length seeks must skip tombstones across many batches.
+        assert_eq!(physical_length(&tx, 42001, &cancel).unwrap(), 0);
         tx.commit().unwrap();
         let tx = db.begin_transaction().unwrap();
         assert!(tx

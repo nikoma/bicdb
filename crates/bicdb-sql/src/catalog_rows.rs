@@ -2594,6 +2594,37 @@ fn pg_depend_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>
     }
     let schemas = list_schemas(db)?;
     let relation_oids = table_oids(db);
+    for view in list_views(db)? {
+        let Some(view_oid) = relation_oids.get(&view.name).copied() else {
+            continue;
+        };
+        let rule_oid = rewrite_rule_oid(&view.name);
+        rows.push(dependency_row(
+            PG_REWRITE_CATALOG_OID,
+            rule_oid,
+            0,
+            PG_CLASS_CATALOG_OID,
+            view_oid,
+            "i",
+        ));
+        let query = parse_query(&view.query_sql)?;
+        for (relation, column) in crate::engine::column_check::view_column_dependencies(db, &query)?
+        {
+            let Some(relation_oid) = relation_oids.get(&relation).copied() else {
+                continue;
+            };
+            let mut row = dependency_row(
+                PG_REWRITE_CATALOG_OID,
+                rule_oid,
+                0,
+                PG_CLASS_CATALOG_OID,
+                relation_oid,
+                "n",
+            );
+            row.insert("refobjsubid".into(), SqlValue::Int(column));
+            rows.push(row);
+        }
+    }
     for schema in &schemas {
         let Some(relation_oid) = relation_oids.get(&schema.name).copied() else {
             continue;
@@ -2706,14 +2737,28 @@ fn pg_depend_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>
         }
     }
     rows.sort_by(|left, right| {
-        ["classid", "objid", "objsubid", "refclassid", "refobjid"]
+        [
+            "classid",
+            "objid",
+            "objsubid",
+            "refclassid",
+            "refobjid",
+            "refobjsubid",
+        ]
+        .into_iter()
+        .map(|column| virtual_cell(left, column).to_cell())
+        .cmp(
+            [
+                "classid",
+                "objid",
+                "objsubid",
+                "refclassid",
+                "refobjid",
+                "refobjsubid",
+            ]
             .into_iter()
-            .map(|column| virtual_cell(left, column).to_cell())
-            .cmp(
-                ["classid", "objid", "objsubid", "refclassid", "refobjid"]
-                    .into_iter()
-                    .map(|column| virtual_cell(right, column).to_cell()),
-            )
+            .map(|column| virtual_cell(right, column).to_cell()),
+        )
     });
     rows.dedup();
     Ok(rows)

@@ -4,10 +4,36 @@ use bicdb_sql::{SqlSession, SqlValue};
 
 #[test]
 fn view_rewrite_dependencies_keep_exact_columns_and_view_chains() {
-    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+    check_fixture(include_str!(
         "fixtures/postgres/view_dependencies_pg16.json"
-    ))
-    .unwrap();
+    ));
+}
+
+#[test]
+fn view_dependencies_bind_scopes_quotes_stars_and_joins() {
+    check_fixture(include_str!(
+        "fixtures/postgres/view_dependency_scopes_pg16.json"
+    ));
+}
+
+#[test]
+fn describing_view_dependencies_never_executes_view_functions() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE TABLE dependency_effects(id int); CREATE FUNCTION dependency_effect() RETURNS int LANGUAGE plpgsql VOLATILE AS $$ BEGIN INSERT INTO dependency_effects VALUES(1); RETURN 1; END $$; CREATE VIEW dependency_function_view AS SELECT dependency_effect() AS n").unwrap();
+    session.execute("SELECT count(*) FROM pg_depend").unwrap();
+    assert_eq!(
+        session
+            .execute("SELECT count(*) FROM dependency_effects")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(0)]]
+    );
+}
+
+fn check_fixture(json: &str) {
+    let fixture: serde_json::Value = serde_json::from_str(json).unwrap();
     let expected = fixture["rows"]
         .as_array()
         .unwrap()

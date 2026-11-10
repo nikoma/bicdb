@@ -621,6 +621,7 @@ type SqlIndexDefinitionsCacheMap = FxHashMap<u64, FxHashMap<String, Vec<IndexDef
 const SYNTHETIC_PRIMARY_KEY: &str = "__bicdb_rowid";
 const PG_PROC_CATALOG_OID: i64 = 1255;
 const PG_CLASS_CATALOG_OID: i64 = 1259;
+const PG_REWRITE_CATALOG_OID: i64 = 2618;
 const PG_TYPE_CATALOG_OID: i64 = 1247;
 const PG_CAST_CATALOG_OID: i64 = 2605;
 const PG_NAMESPACE_CATALOG_OID: i64 = 2615;

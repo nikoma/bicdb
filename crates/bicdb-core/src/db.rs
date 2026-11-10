@@ -57,6 +57,8 @@ mod read_committed_reservation;
 mod record_read_snapshot;
 pub use record_read_snapshot::RecordReadSnapshot;
 mod row_lock_waiters;
+#[cfg(test)]
+mod sql_serializable;
 mod spatial_paged;
 mod transaction_receipts;
 mod transaction_suspension;

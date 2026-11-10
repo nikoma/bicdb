@@ -90,6 +90,19 @@ async fn routine_ddl_escalates_without_entering_user_handler_or_replaying_writes
             "Describe must not create the rule"
         );
         client.execute(&rule, &[]).await.unwrap();
+        // pg_depend parses every stored view while the original routine is
+        // already nested under a rule and an extended-protocol transaction.
+        // A nested join view reproduces that cold parser stack pressure.
+        let mut source = "wire_privilege_probe a0".to_string();
+        for alias in 1..14 {
+            source = format!("({source} CROSS JOIN wire_privilege_probe a{alias})");
+        }
+        client
+            .batch_execute(&format!(
+                "CREATE VIEW wire_nested_dependency AS SELECT a0.description FROM {source}"
+            ))
+            .await
+            .unwrap();
         client.batch_execute("BEGIN").await.unwrap();
         assert_eq!(client.execute("INSERT INTO wire_rule_request VALUES('wire_privilege_probe','description','varchar(41)',NULL,NULL)", &[]).await.unwrap(),0);
         assert_eq!(

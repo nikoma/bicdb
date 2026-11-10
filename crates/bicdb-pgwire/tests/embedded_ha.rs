@@ -624,3 +624,83 @@ fn allowed_observer_cannot_fence_a_primary_or_request_election_votes() {
     drop(peer);
     host.shutdown(Duration::from_secs(2)).unwrap();
 }
+
+#[test]
+fn streaming_observer_does_not_replace_an_absent_voting_majority() {
+    let root = tempfile::tempdir().unwrap();
+    let ports = [port(), port(), port(), port()];
+    let mut primary_config = config(0, &ports, true);
+    primary_config
+        .high_availability
+        .as_mut()
+        .unwrap()
+        .failover
+        .as_mut()
+        .unwrap()
+        .peers
+        .retain(|peer| peer.node_id != "n1");
+    let primary =
+        EmbeddedHaDatabase::open(root.path().join("n0"), primary_config, DbConfig::default())
+            .unwrap();
+    let mut observer = Some(open(root.path(), 1, &ports, false));
+    wait(|| {
+        if observer.as_ref().unwrap().restart_required() {
+            observer
+                .take()
+                .unwrap()
+                .shutdown(Duration::from_secs(2))
+                .unwrap();
+            observer = Some(open(root.path(), 1, &ports, false));
+        }
+        primary
+            .database()
+            .read()
+            .sync_quorum()
+            .acknowledged()
+            .contains_key("n1")
+    });
+    // This is a real authenticated-by-allowlist Resume/ACK stream, not an
+    // injected quorum notification. Neither voting peer n2/n3 is running.
+    let db = primary.database();
+    let db = db.read();
+    assert!(db.sync_quorum().lease_refusal().is_some());
+    assert_eq!(db.sync_quorum().status().quorum_seq, 0);
+    drop(db);
+    assert!(primary
+        .with_write(|db| {
+            db.create_collection("must_not_be_admitted")?;
+            Ok(())
+        })
+        .is_err());
+    assert!(!primary
+        .database()
+        .read()
+        .has_collection("must_not_be_admitted"));
+    observer
+        .take()
+        .unwrap()
+        .shutdown(Duration::from_secs(2))
+        .unwrap();
+    primary.shutdown(Duration::from_secs(2)).unwrap();
+}
+
+#[test]
+fn invalid_failover_configuration_is_rejected_before_host_initialization() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("unopened");
+    let initialized = std::sync::atomic::AtomicBool::new(false);
+    let error = EmbeddedHaDatabase::open_with_initializer(
+        &path,
+        config(0, &[port(), port(), port(), port(), port()], true),
+        DbConfig::default(),
+        |_| {
+            initialized.store(true, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        },
+    )
+    .err()
+    .expect("unsafe quorum must be rejected");
+    assert!(error.to_string().contains("group majority"));
+    assert!(!initialized.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(!path.exists());
+}

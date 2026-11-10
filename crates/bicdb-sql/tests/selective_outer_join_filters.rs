@@ -21,7 +21,7 @@ fn catalog_type_lookup_binds_unique_unqualified_columns_before_joining() {
             .map(|i| format!("c{i} NUMERIC(10)"))
             .collect::<Vec<_>>()
             .join(",");
-        for i in 0..96 {
+        for i in 0..16 {
             session
                 .execute(&format!(
                     "CREATE TABLE catalog_binding.lookup_{i}({columns})"

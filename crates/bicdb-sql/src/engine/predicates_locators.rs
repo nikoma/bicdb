@@ -990,9 +990,20 @@ impl<'db> SqlEngine<'db> {
                 columns.into_iter().collect()
             });
             add_virtual_tableoid_column(&table, &mut source_columns);
+            // Row-aware pg_get_function_* helpers read these catalog fields
+            // implicitly. Preserve them when their SQL argument only names oid.
+            let helper_columns = needed_columns
+                .filter(|_| table.strip_prefix("pg_catalog.").unwrap_or(&table) == "pg_proc")
+                .map(|needed| {
+                    let mut needed = needed.clone();
+                    needed
+                        .all
+                        .extend(["proname", "prorettype", "proretset"].map(str::to_string));
+                    needed
+                });
             retain_referenced_columns(
                 &mut source_columns,
-                needed_columns,
+                helper_columns.as_ref().or(needed_columns),
                 &table,
                 &alias_name,
                 Clone::clone,

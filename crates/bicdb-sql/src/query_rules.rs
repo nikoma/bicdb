@@ -57,7 +57,7 @@ pub(crate) fn is_rule_command(sql: &str) -> Result<bool> {
 
 fn load_rule(db: &BicDb, key: &str) -> Result<Option<RuleSchema>> {
     match db.get(RULE_COLLECTION, key) {
-        Ok(Some(record)) => Ok(Some(serde_json::from_value(record.metadata)?)),
+        Ok(Some(record)) => Ok(Some(serde_json::from_value(record.metadata.clone())?)),
         Ok(None) | Err(BicDbError::CollectionNotFound(_)) => Ok(None),
         Err(error) => Err(error.into()),
     }

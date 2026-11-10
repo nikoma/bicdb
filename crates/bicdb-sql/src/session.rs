@@ -2860,7 +2860,7 @@ impl<'db> SqlSession<'db> {
 
     /// Keep a whole mutation statement, including authored triggers and their
     /// deferred effects, inside one transaction when the caller has no BEGIN.
-    fn with_statement_transaction<T>(
+    pub(crate) fn with_statement_transaction<T>(
         &mut self,
         execute: impl FnOnce(&mut Self) -> Result<T>,
     ) -> Result<T> {

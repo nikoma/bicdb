@@ -1206,8 +1206,11 @@ pub(crate) fn find_plpgsql_exception_clause(block_sql: &str) -> Option<usize> {
 }
 
 pub(crate) fn parse_routine_exception_handlers(sql: &str) -> Result<Vec<RoutineExceptionHandler>> {
+    // EXCEPTION/WHEN boundaries may be separated by comments, just like other
+    // SQL tokens. Preserve quoted values while handling nested block comments.
+    let uncommented = sql_comments_as_whitespace(sql)?;
     let mut handlers = Vec::new();
-    let mut rest = sql.trim();
+    let mut rest = uncommented.trim();
     while !rest.is_empty() {
         let Some(after_when) = strip_prefix_ci(rest, "WHEN") else {
             return Err(SqlError::UnsupportedPlpgsqlFeature(

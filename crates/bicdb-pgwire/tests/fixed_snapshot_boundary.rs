@@ -24,7 +24,8 @@ async fn first_snapshot_command_controls_peer_visibility() {
         let serving = server.clone();
         let task = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
         let config = format!("host=127.0.0.1 port={port} user=bicdb dbname=bicdb");
-        let (reader, reader_connection) = tokio_postgres::connect(&config, NoTls).await.unwrap();
+        let (mut reader, reader_connection) =
+            tokio_postgres::connect(&config, NoTls).await.unwrap();
         let reader_task = tokio::spawn(reader_connection);
         let (peer, peer_connection) = tokio_postgres::connect(&config, NoTls).await.unwrap();
         let peer_task = tokio::spawn(peer_connection);
@@ -47,6 +48,7 @@ async fn first_snapshot_command_controls_peer_visibility() {
                 ),
                 ("simple", "SAVEPOINT snapshot_boundary", true),
                 ("simple", "SELECT 1", false),
+                ("simple", "EXPLAIN SELECT 1", false),
                 ("parse", "SELECT 1", false),
                 ("parse", "SELECT id FROM snapshot_boundary", false),
             ] {
@@ -74,6 +76,27 @@ async fn first_snapshot_command_controls_peer_visibility() {
                 reader.batch_execute("ROLLBACK").await.unwrap();
             }
         }
+        let statement = reader
+            .prepare("SELECT id FROM snapshot_boundary WHERE id=$1")
+            .await
+            .unwrap();
+        id += 1;
+        let tx = reader
+            .build_transaction()
+            .isolation_level(tokio_postgres::IsolationLevel::RepeatableRead)
+            .read_only(true)
+            .start()
+            .await
+            .unwrap();
+        let portal = tx.bind(&statement, &[&id]).await.unwrap();
+        peer.execute("INSERT INTO snapshot_boundary VALUES ($1)", &[&id])
+            .await
+            .unwrap();
+        let found = !tx.query_portal(&portal, 0).await.unwrap().is_empty();
+        let case = format!("{mode:?}: Bind of a statement prepared before BEGIN");
+        observations.push((case.clone(), found));
+        expected.push((case, false));
+        tx.rollback().await.unwrap();
         drop(reader);
         drop(peer);
         reader_task.abort();

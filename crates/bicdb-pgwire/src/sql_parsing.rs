@@ -2436,6 +2436,9 @@ pub(crate) fn parse_message(
     server: &Arc<PgWireServer>,
     state: &mut ConnectionState,
 ) -> Result<ParsedStatementMessage> {
+    acquire_postgres_statement_snapshot(server, state, || {
+        parse_payload_sql(payload).is_some_and(bicdb_sql::postgres_parse_requires_snapshot)
+    })?;
     let db = server.read_db_for_transaction_progress()?;
     state.catalog_cache.with_schema_cache(&db, || {
         parse_message_inner(payload, server, &db, &state.session_state, &state.user)
@@ -2535,7 +2538,7 @@ pub(crate) fn bind_message(
     payload: &[u8],
     prepared: &FxHashMap<String, PreparedStatement>,
     server: &Arc<PgWireServer>,
-) -> Result<(String, Portal)> {
+) -> Result<(String, Portal, bool)> {
     let mut idx = 0;
     let portal_name = read_cstr(payload, &mut idx)?;
     let statement_name = read_cstr(payload, &mut idx)?;
@@ -2619,6 +2622,7 @@ pub(crate) fn bind_message(
             registered_stream_memory: 0,
             predescribed: None,
         },
+        param_count != 0,
     ))
 }
 

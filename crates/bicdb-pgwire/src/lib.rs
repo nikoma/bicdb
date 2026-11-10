@@ -2751,7 +2751,15 @@ fn handle_frontend_message(
                 }
             }
         },
-        b'B' => match bind_message(&payload, &state.prepared, server) {
+        b'B' => match bind_message(&payload, &state.prepared, server).and_then(
+            |(portal_name, portal, has_parameters)| {
+                acquire_postgres_statement_snapshot(server, state, || {
+                    has_parameters
+                        || bicdb_sql::postgres_parse_requires_snapshot(&portal.source_sql)
+                })?;
+                Ok((portal_name, portal))
+            },
+        ) {
             Ok((portal_name, portal)) => {
                 state.portals.insert(portal_name, portal);
                 bind_complete(stream)?;
@@ -3466,6 +3474,7 @@ fn execute_server_query(
     }
     if let Some(copy) = parse_copy_statement(sql)? {
         delegation::validate_delegation(server, state)?;
+        acquire_postgres_statement_snapshot(server, state, || true)?;
         if let (CopyDirection::ToStdout, Some(query)) = (
             copy.direction,
             copy.query
@@ -4695,6 +4704,27 @@ fn execute_server_sql_with_options(
 
 /// `execute_server_sql_with_options` for a caller that already normalized
 /// the text (the simple-query path normalizes once per query).
+fn acquire_postgres_statement_snapshot(
+    server: &PgWireServer,
+    state: &mut ConnectionState,
+    requires_snapshot: impl FnOnce() -> bool,
+) -> Result<()> {
+    if state.failed_transaction || bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
+    {
+        return Ok(());
+    }
+    if let Some(tx) = state.tx.as_mut() {
+        if !tx.statement_snapshot_acquired() && requires_snapshot() {
+            // Sample before refreshing so a subsequent replica apply cannot
+            // make the newly pinned snapshot look fresher than it is.
+            let watermark = *server.replica_read_watermark.lock().unwrap();
+            tx.acquire_statement_snapshot(state.last_commit_seq)?;
+            state.replica_tx_watermark = watermark;
+        }
+    }
+    Ok(())
+}
+
 fn execute_server_sql_with_options_normalized(
     server: &Arc<PgWireServer>,
     state: &mut ConnectionState,
@@ -4723,6 +4753,9 @@ fn execute_server_sql_with_options_normalized(
     {
         delegation::validate_delegation(server, state)?;
     }
+    acquire_postgres_statement_snapshot(server, state, || {
+        bicdb_sql::postgres_execution_requires_snapshot(sql)
+    })?;
     if is_server_status_query_normalized(normalized) {
         let gucs = state.session_state.session_gucs();
         let configuration_user = gucs

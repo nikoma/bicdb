@@ -325,6 +325,59 @@ pub fn leading_keyword_bypasses_raw_probes(sql: &str) -> bool {
     })
 }
 
+/// Utility commands that PostgreSQL executes before acquiring a transaction
+/// snapshot. The other statements acquire one at execution even if Parse
+/// was able to prepare them without it.
+pub fn postgres_execution_requires_snapshot(sql: &str) -> bool {
+    if sql_has_no_statements(sql) {
+        return false;
+    }
+    !leading_sql_keyword(sql).is_some_and(|keyword| {
+        [
+            "begin",
+            "start",
+            "commit",
+            "end",
+            "rollback",
+            "abort",
+            "savepoint",
+            "release",
+            "lock",
+            "set",
+            "reset",
+            "show",
+            "fetch",
+            "move",
+            "listen",
+            "notify",
+            "unlisten",
+            "checkpoint",
+        ]
+        .iter()
+        .any(|utility| keyword.eq_ignore_ascii_case(utility))
+    })
+}
+
+/// Extended-protocol Parse and Bind take a snapshot for statements that need
+/// parse analysis or planning. A parameterized Bind also needs a snapshot.
+pub fn postgres_parse_requires_snapshot(sql: &str) -> bool {
+    let Ok(statements) = parse_statements(sql) else {
+        return false;
+    };
+    match statements.as_slice() {
+        [Statement::CreateTable(table)] => table.query.is_some(),
+        [Statement::Query(_)
+        | Statement::Insert(_)
+        | Statement::Update(_)
+        | Statement::Delete(_)
+        | Statement::Merge(_)
+        | Statement::Declare { .. }
+        | Statement::Explain { .. }
+        | Statement::Call(_)] => true,
+        _ => false,
+    }
+}
+
 pub fn split_sql_statements(sql: &str) -> Vec<String> {
     let bytes = sql.as_bytes();
     let mut statements = Vec::new();

@@ -8948,6 +8948,7 @@ pub struct Transaction {
     /// Opt-in SQL profiles may report write conflicts at the statement
     /// boundary. Commit validation remains mandatory in either mode.
     statement_write_conflicts: bool,
+    statement_snapshot_acquired: bool,
     state: TxState,
     outcome_observer: OnceLock<Arc<transaction_receipts::OutcomeState>>,
     write_receipts: Option<Box<transaction_receipts::ReceiptJournal>>,
@@ -14942,6 +14943,24 @@ impl Transaction {
 
     pub fn isolation(&self) -> TransactionIsolation {
         self.isolation
+    }
+
+    /// Whether the host has reached a statement that requires a snapshot.
+    pub fn statement_snapshot_acquired(&self) -> bool {
+        self.statement_snapshot_acquired
+    }
+
+    /// Pin the first SQL statement's snapshot for a host-managed fixed
+    /// transaction. Native callers keep their begin-time snapshot semantics.
+    pub fn acquire_statement_snapshot(&mut self, floor: u64) -> Result<()> {
+        if self.statement_snapshot_acquired {
+            return Ok(());
+        }
+        if self.isolation == TransactionIsolation::RepeatableRead {
+            self.set_snapshot_isolation(true, floor)?;
+        }
+        self.statement_snapshot_acquired = true;
+        Ok(())
     }
 
     /// Validate newly buffered writes against their observed snapshots before

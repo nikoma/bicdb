@@ -114,3 +114,29 @@ peers before starting setup writes. The lease, synchronous acknowledgement
 requirement, timeouts, journal identity assertions and promotion assertions stay
 unchanged. The original CI log is retained; this readiness change requires its
 own focused HA run and fresh current-head CI.
+
+
+The stock PostgreSQL iDempiere startup run at 03ffe407 exposed the same bounded
+join problem with stored tables. Its original mixed-case `AD_Table` / `AD_Column`
+metadata query exceeded the unchanged 512 MiB limit, while lowercasing only the
+unquoted identifiers returned the expected 35 rows. Identifier binding now folds
+unquoted references before base-filter and indexed-join eligibility checks.
+Quoted names keep their exact identity. The original expression still supplies
+both the row predicate and final WHERE check.
+
+Case-distinct column controls also exposed two independent shortcuts: key proofs
+compared declared column names without regard to case, and one indexed reader
+accepted the first folded cell match before checking an exact stored key. Key
+proofs now compare canonical column identities, and indexed materialization
+prefers the exact stored cell. Equality, IN and range controls distinguish `id`
+from `"ID"` in both storage modes. Their PostgreSQL 16.13 reference transaction,
+including setup SQL and results, is retained in
+`crates/bicdb-sql/tests/fixtures/postgres/mixed_case_join_filters_pg16.json`.
+The wide mixed-join regression keeps its 2 MiB guard and checks all four result
+rows, payload contents and NULLs, including an uppercase unquoted alias.
+
+The b08bbf24 development diagnostic returned 35 identical rows for the original
+literal query, the stock parameterized query and three comparison variants; all
+five matched native PostgreSQL. This used a closed copy of the retained 03ffe407
+application database, with all-log durability and the default memory guard. It is
+a focused diagnostic, not a fresh-baseline or complete application qualification.

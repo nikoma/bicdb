@@ -9,6 +9,7 @@ pub use delegation::{set_user_delegation_policy, DelegationPolicy};
 mod server_cluster;
 pub use server_cluster::PgWireCluster;
 pub(crate) use server_cluster::*;
+mod function_call;
 mod query_exec;
 mod routine_outcome_trace;
 pub(crate) use query_exec::*;
@@ -2652,6 +2653,7 @@ fn handle_frontend_message(
     }
 
     match tag {
+        b'F' => return function_call::handle(stream, server, state, &payload),
         b'Q' => {
             let query = cstring_payload(&payload)?;
             let lowered;

@@ -3820,6 +3820,25 @@ pub(crate) fn filter_information_schema_rows_for_role(
     table: &str,
     rows: Vec<BTreeMap<String, SqlValue>>,
 ) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    if matches!(
+        table,
+        "information_schema.role_table_grants" | "information_schema.table_privileges"
+    ) {
+        if normalize_role_name(role) == BOOTSTRAP_ROLE_NAME || pg_role_is_superuser(db, role)? {
+            return Ok(rows);
+        }
+        let roles = role_privilege_closure(db, role)?;
+        return Ok(rows
+            .into_iter()
+            .filter(|row| {
+                let grantor = sql_value_text(&virtual_cell(row, "grantor")).unwrap_or_default();
+                let grantee = sql_value_text(&virtual_cell(row, "grantee")).unwrap_or_default();
+                roles.contains(&normalize_role_name(&grantor))
+                    || roles.contains(&normalize_role_name(&grantee))
+                    || table == "information_schema.table_privileges" && grantee == "PUBLIC"
+            })
+            .collect());
+    }
     let (schema_column, name_column, privileges): (_, _, &[&str]) = match table {
         "information_schema.views" => (
             "table_schema",

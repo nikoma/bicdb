@@ -3308,25 +3308,81 @@ pub(crate) fn privilege_acl_code(privilege: &str) -> &str {
 pub(crate) fn information_schema_role_table_grants(
     db: &BicDb,
 ) -> Result<Vec<BTreeMap<String, SqlValue>>> {
-    list_privileges(db)?
+    // PostgreSQL expands a relation's default ACL even when no GRANT has
+    // been stored. Provisioning routines use these owner rows to preserve
+    // privileges while dropping and recreating dependent views.
+    let mut owners = BTreeMap::new();
+    for schema in list_schemas_shared(db)?.iter() {
+        owners.insert(
+            schema.name.clone(),
+            schema.owner.clone().unwrap_or_else(current_role_name),
+        );
+    }
+    for view in list_views_shared(db)?
+        .iter()
+        .filter(|view| !view.materialized)
+    {
+        owners.insert(
+            view.name.clone(),
+            view.owner.clone().unwrap_or_else(current_role_name),
+        );
+    }
+    let mut grants = BTreeMap::new();
+    for (relation, owner) in &owners {
+        for privilege in [
+            "INSERT",
+            "SELECT",
+            "UPDATE",
+            "DELETE",
+            "TRUNCATE",
+            "REFERENCES",
+            "TRIGGER",
+        ] {
+            grants.insert(
+                (relation.clone(), owner.clone(), privilege.to_string()),
+                (owner.clone(), true),
+            );
+        }
+    }
+    for grant in list_privileges(db)?
         .into_iter()
         .filter(|grant| grant.object_type == PrivilegeObjectType::Table && grant.column.is_none())
-        .map(|grant| {
+    {
+        let Some(owner) = owners.get(&grant.object_name) else {
+            continue;
+        };
+        let grantee = if grant.grantee.eq_ignore_ascii_case("public") {
+            "PUBLIC".to_string()
+        } else {
+            grant.grantee
+        };
+        // An explicit grant to the owner must not duplicate its default ACL.
+        grants
+            .entry((grant.object_name, grantee, grant.privilege))
+            .or_insert_with(|| (owner.clone(), false));
+    }
+    grants
+        .into_iter()
+        .map(|((relation, grantee, privilege), (grantor, grantable))| {
+            let hierarchy = if privilege == "SELECT" { "YES" } else { "NO" };
             Ok(virtual_row([
-                ("grantor", SqlValue::String(current_role_name())),
-                ("grantee", SqlValue::String(grant.grantee)),
+                ("grantor", SqlValue::String(grantor)),
+                ("grantee", SqlValue::String(grantee)),
                 ("table_catalog", SqlValue::String("bicdb".to_string())),
                 (
                     "table_schema",
-                    SqlValue::String(relation_catalog_namespace(db, &grant.object_name)?),
+                    SqlValue::String(relation_catalog_namespace(db, &relation)?),
                 ),
                 (
                     "table_name",
-                    SqlValue::String(catalog_display_name(&grant.object_name)),
+                    SqlValue::String(catalog_display_name(&relation)),
                 ),
-                ("privilege_type", SqlValue::String(grant.privilege)),
-                ("is_grantable", SqlValue::String("NO".to_string())),
-                ("with_hierarchy", SqlValue::String("NO".to_string())),
+                ("privilege_type", SqlValue::String(privilege)),
+                (
+                    "is_grantable",
+                    SqlValue::String(if grantable { "YES" } else { "NO" }.to_string()),
+                ),
+                ("with_hierarchy", SqlValue::String(hierarchy.to_string())),
             ]))
         })
         .collect()

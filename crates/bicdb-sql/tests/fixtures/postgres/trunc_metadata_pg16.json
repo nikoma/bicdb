@@ -12,6 +12,17 @@
   ],
   "checks": [
     {
+      "sql": "SELECT trunc(timestamp '2002-02-19','MM')+1 AS following_day",
+      "column_oids": [
+        1082
+      ],
+      "rows": [
+        [
+          "2002-02-02"
+        ]
+      ]
+    },
+    {
       "sql": "SELECT sum(amount),trunc(invoiced,'MM') FROM invoice_v GROUP BY trunc(invoiced,'MM') ORDER BY trunc(invoiced,'MM')",
       "column_oids": [
         1700,

@@ -6635,3 +6635,7 @@ mod alter_check_batches_tests {
 #[cfg(test)]
 #[path = "records/foreign_key_lookup_tests.rs"]
 mod foreign_key_lookup_tests;
+
+#[cfg(test)]
+#[path = "records/unique_update_order_tests.rs"]
+mod unique_update_order_tests;

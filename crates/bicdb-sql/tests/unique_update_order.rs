@@ -9,7 +9,10 @@ fn native_unique_updates_vacate_only_preceding_rows_and_roll_back_errors() {
         for pending in [false, true] {
             for (values, assignment, succeeds) in [
                 ([0, 1, 2, 3, 4], "seq=seq-1 WHERE seq>2", true),
-                ([4, 3, 2, 1, 0], "seq=seq-1 WHERE seq>2", false),
+                // The owner/seq index visits these keys in ascending order too.
+                // PG16 with an Index Scan also succeeds for descending inserts;
+                // heap-order rejection is tested with explicit row order below.
+                ([4, 3, 2, 1, 0], "seq=seq-1 WHERE seq>2", true),
                 ([0, 1, 2, 3, 4], "seq=4-seq", false),
                 ([0, 1, 2, 3, 4], "seq=0", false),
             ] {

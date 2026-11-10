@@ -1457,6 +1457,16 @@ impl<'db> SqlSession<'db> {
                             self.save_session_privilege(&grant)?;
                         }
                     }
+                    // Trigger identity includes its owning relation. Rebind
+                    // through session metadata helpers so statement errors,
+                    // savepoints and full rollback restore both identities.
+                    for mut trigger in list_triggers(self.db_ref())? {
+                        if trigger.table_name == table {
+                            self.delete_session_trigger(&trigger.name, Some(&table))?;
+                            trigger.table_name = new_table.clone();
+                            self.save_session_trigger(&trigger)?;
+                        }
+                    }
                     let renamed_type = table_row_type_schema(&schema)
                         .column_type(false)
                         .formatted_name();

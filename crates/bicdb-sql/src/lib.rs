@@ -98,6 +98,7 @@ mod fts;
 mod geometric;
 mod pg_casts;
 mod pg_large_objects;
+pub use pg_large_objects::{SqlLargeObjectSavepoint, SqlLargeObjectTransactionCleanup};
 mod pg_opclasses;
 mod pg_operators;
 mod trigram;

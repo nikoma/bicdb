@@ -163,6 +163,28 @@ fn invalid_seek() -> SqlError {
 }
 
 impl DescriptorState {
+    pub(super) fn current_mark(&self) -> Result<Option<DescriptorSavepoint>> {
+        if self.shared.get().is_none() {
+            return Ok(None);
+        }
+        let registry = self.lock()?;
+        Ok(registry.transaction.map(|transaction| DescriptorSavepoint {
+            transaction,
+            next_generation: registry.next_generation,
+        }))
+    }
+
+    pub(super) fn clear(&self) {
+        if let Some(shared) = self.shared.get() {
+            let mut registry = shared
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            registry.descriptors.clear();
+            registry.transaction = None;
+            registry.next_generation = 0;
+        }
+    }
+
     fn registry(&self) -> &Arc<Mutex<Registry>> {
         self.shared
             .get_or_init(|| Arc::new(Mutex::new(Registry::default())))
@@ -619,5 +641,99 @@ mod tests {
         next_tx.rollback().unwrap();
         drop(db);
         state.finish(next_key);
+    }
+
+    #[test]
+    fn sql_boundaries_release_snapshots_and_preserve_only_pre_savepoint_handles() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            for ending in ["COMMIT", "ROLLBACK"] {
+                let (_root, mut db) = fixture(mode.clone());
+                let cancel = CancellationToken::uncancelable();
+                let mut session = SqlSession::new(&mut db);
+                session.execute("BEGIN").unwrap();
+                let key =
+                    DescriptorTransaction::new(session.db_ref(), session.tx.as_ref().unwrap());
+                let state = session.pg_large_objects.clone();
+                session.execute("SAVEPOINT before_first_open").unwrap();
+                let view = storage::capture_read_view(
+                    session.tx.as_ref().unwrap(),
+                    42001,
+                    1024 * 1024,
+                    &cancel,
+                )
+                .unwrap();
+                let fd = state.open(key, Access::Read(view), 1024 * 1024).unwrap();
+                session.execute("ROLLBACK TO before_first_open").unwrap();
+                assert!(is_state(state.tell(key, fd), "42704"));
+                assert_eq!(session.db_ref().mvcc_debug_stats().active_snapshots, 1);
+                let writer = state.open(key, Access::Write(42001), 1024 * 1024).unwrap();
+                let view = storage::capture_read_view(
+                    session.tx.as_ref().unwrap(),
+                    42001,
+                    1024 * 1024,
+                    &cancel,
+                )
+                .unwrap();
+                let reader = state.open(key, Access::Read(view), 1024 * 1024).unwrap();
+                session.execute("SAVEPOINT keep_older_handles").unwrap();
+                let newer = state.open(key, Access::Write(42001), 1024 * 1024).unwrap();
+                state.seek(key, writer, 2, 0, 3).unwrap();
+                session.execute("ROLLBACK TO keep_older_handles").unwrap();
+                assert!(is_state(state.tell(key, newer), "42704"));
+                assert_eq!(state.tell(key, writer).unwrap(), 2);
+                assert_eq!(state.tell(key, reader).unwrap(), 0);
+                let failure: Result<()> = session.with_statement_transaction(|session| {
+                    state.open(key, Access::Write(42001), 1024 * 1024)?;
+                    state.seek(key, writer, 3, 0, 3)?;
+                    assert!(session.tx.is_some());
+                    Err(SqlError::InvalidSql("forced statement failure".into()))
+                });
+                assert!(failure.is_err());
+                assert!(is_state(state.tell(key, newer), "42704"));
+                assert_eq!(state.tell(key, writer).unwrap(), 3);
+                session.execute("RELEASE keep_older_handles").unwrap();
+                assert_eq!(state.tell(key, reader).unwrap(), 0);
+                assert_eq!(session.db_ref().mvcc_debug_stats().active_snapshots, 2);
+                session.execute(ending).unwrap();
+                assert_eq!(session.db_ref().mvcc_debug_stats().active_snapshots, 0);
+                assert!(is_state(state.tell(key, writer), "42704"));
+                assert!(is_state(state.tell(key, reader), "42704"));
+            }
+        }
+    }
+
+    #[test]
+    fn implicit_host_cleanup_releases_shared_cache_snapshots_on_return_and_unwind() {
+        for unwind in [false, true] {
+            let (_root, db) = fixture(StorageMode::ServerPaged);
+            let tx = db.begin_transaction().unwrap();
+            let key = DescriptorTransaction::new(&db, &tx);
+            let cache = SqlSessionCatalogCache::default();
+            let sibling = cache.clone();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let _cleanup = cache.large_object_transaction_cleanup();
+                let view = storage::capture_read_view(
+                    &tx,
+                    42001,
+                    1024 * 1024,
+                    &CancellationToken::uncancelable(),
+                )
+                .unwrap();
+                sibling
+                    .pg_large_objects
+                    .open(key, Access::Read(view), 1024 * 1024)
+                    .unwrap();
+                assert!(cache.large_object_retained_bytes() > 0);
+                assert_eq!(db.mvcc_debug_stats().active_snapshots, 2);
+                if unwind {
+                    panic!("controlled host unwind");
+                }
+            }));
+            assert_eq!(result.is_err(), unwind);
+            assert_eq!(db.mvcc_debug_stats().active_snapshots, 1);
+            assert!(is_state(sibling.pg_large_objects.tell(key, 0), "42704"));
+            tx.rollback().unwrap();
+            assert_eq!(db.mvcc_debug_stats().active_snapshots, 0);
+        }
     }
 }

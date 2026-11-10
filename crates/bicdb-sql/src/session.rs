@@ -2161,6 +2161,7 @@ pub(crate) enum DdlUndo {
 pub(crate) struct SavepointMark {
     pub(crate) name: String,
     pub(crate) transaction: bicdb_core::TransactionRollbackMark,
+    pub(crate) pg_large_objects: SqlLargeObjectSavepoint,
     pub(crate) ddl_undo_len: usize,
     pub(crate) settings: SqlSettings,
     pub(crate) session_gucs: Arc<HashMap<String, String>>,
@@ -2870,11 +2871,13 @@ impl<'db> SqlSession<'db> {
         execute: impl FnOnce(&mut Self) -> Result<T>,
     ) -> Result<T> {
         if let Some(transaction) = self.tx.as_ref().map(Transaction::rollback_mark) {
+            let large_objects = self.pg_large_objects.savepoint()?;
             let ddl_undo_len = self.ddl_undo.len();
             let savepoint_len = self.savepoints.len();
             let mut gucs = self.session_guc_state();
             let result = execute(self);
             if result.is_err() {
+                self.pg_large_objects.restore(large_objects)?;
                 if let Some(tx) = self.tx.as_mut() {
                     tx.rollback_to_mark(transaction)?;
                 }
@@ -3149,6 +3152,10 @@ impl<'db> SqlSession<'db> {
         let tx = self.tx.as_ref().expect("pending Oracle statement");
         let id = tx.id();
         let mark = tx.rollback_mark();
+        let large_objects = match self.pg_large_objects.savepoint() {
+            Ok(mark) => mark,
+            Err(error) => return (Err(error), false),
+        };
         let ddl_len = self.ddl_undo.len();
         let savepoint_len = self.savepoints.len();
         let mut gucs = self.session_guc_state();
@@ -3161,6 +3168,7 @@ impl<'db> SqlSession<'db> {
         let cleanup = (|| {
             match self.tx.as_mut() {
                 Some(tx) if tx.id() == id => {
+                    self.pg_large_objects.restore(large_objects)?;
                     tx.rollback_to_mark(mark)?;
                     self.rollback_ddl_to_len(ddl_len)?;
                     self.savepoints.truncate(savepoint_len);
@@ -3888,6 +3896,7 @@ impl<'db> SqlSession<'db> {
 
     /// Internal rollback cleanup must run even if the statement was canceled.
     pub(crate) fn rollback_current_transaction(&mut self) -> Result<SqlResult> {
+        self.pg_large_objects.clear();
         self.oracle_autonomous_active = false;
         self.oracle_autonomous_epoch += 1;
         // A rolled-back transaction's deferred constraint triggers
@@ -3920,6 +3929,7 @@ impl<'db> SqlSession<'db> {
             .is_some_and(Transaction::has_deferred_hooks)
         {
             if let Err(error) = self.fire_deferred_row_triggers() {
+                self.pg_large_objects.clear();
                 if let Some(tx) = self.tx.take() {
                     let _ = tx.rollback();
                 }
@@ -3929,6 +3939,7 @@ impl<'db> SqlSession<'db> {
                 return Err(error);
             }
         }
+        self.pg_large_objects.clear();
         let mut committed_sequence = 0;
         if let Some(tx) = self.tx.take() {
             match tx.commit_with_sequence() {
@@ -3973,6 +3984,7 @@ impl<'db> SqlSession<'db> {
         self.savepoints.push(SavepointMark {
             name: savepoint_name(name),
             transaction: tx.rollback_mark(),
+            pg_large_objects: self.pg_large_objects.savepoint()?,
             ddl_undo_len: self.ddl_undo.len(),
             settings: self.settings,
             session_gucs: self.session_gucs.clone(),
@@ -3999,6 +4011,9 @@ impl<'db> SqlSession<'db> {
         let guc_local_restore = self.savepoints[position].guc_local_restore.clone();
         let guc_local_settings_restore =
             self.savepoints[position].guc_local_settings_restore.clone();
+        let descriptor_rollback = self
+            .pg_large_objects
+            .restore(self.savepoints[position].pg_large_objects);
         let write_rollback = tx.rollback_to_mark(transaction);
         let ddl_rollback = self.rollback_ddl_to_len(ddl_undo_len);
         let lastval = self.session_gucs.get(LASTVAL_SESSION_KEY).cloned();
@@ -4016,6 +4031,7 @@ impl<'db> SqlSession<'db> {
         self.guc_local_restore = guc_local_restore;
         self.guc_local_settings_restore = guc_local_settings_restore;
         self.savepoints.truncate(position + 1);
+        descriptor_rollback?;
         write_rollback?;
         ddl_rollback?;
         Ok(SqlResult::command("ROLLBACK"))

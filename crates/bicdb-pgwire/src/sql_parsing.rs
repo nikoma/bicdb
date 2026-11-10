@@ -521,6 +521,7 @@ pub(crate) fn rollback_open_transaction(
 }
 
 pub(crate) fn clear_open_transaction_state(server: &PgWireServer, state: &mut ConnectionState) {
+    state.catalog_cache.close_transaction_large_objects();
     delegation::clear_delegation(server, state);
     state.in_transaction = false;
     state.failed_transaction = false;
@@ -1415,6 +1416,7 @@ pub(crate) fn execute_savepoint_command(
                 lock_len: state.tx.as_ref().map(Transaction::lock_len).unwrap_or(0),
                 ddl_undo_len: state.tx_ddl_undo.len(),
                 shared_role_ddl_len: state.tx_shared_role_ddl.len(),
+                large_objects: state.catalog_cache.large_object_savepoint()?,
                 session_state: state.session_state.clone(),
             });
             if let Err(error) = enforce_connection_memory(state, &server.config) {
@@ -1445,6 +1447,9 @@ pub(crate) fn execute_savepoint_command(
             let ddl_undo_len = state.savepoints[position].ddl_undo_len;
             let shared_role_ddl_len = state.savepoints[position].shared_role_ddl_len;
             let session_state = state.savepoints[position].session_state.clone();
+            state
+                .catalog_cache
+                .rollback_large_objects_to(state.savepoints[position].large_objects)?;
             state.tx_statements.truncate(statement_len);
             if let Some(tx) = state.tx.as_mut() {
                 tx.truncate_writes_and_locks(

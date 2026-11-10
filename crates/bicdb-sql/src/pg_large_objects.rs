@@ -3,8 +3,10 @@
 use crate::*;
 
 mod descriptors;
+mod lifecycle;
 mod storage;
 pub(crate) use descriptors::DescriptorState;
+pub use lifecycle::{SqlLargeObjectSavepoint, SqlLargeObjectTransactionCleanup};
 
 pub(crate) const METADATA: &str = "__bicdb_pg_large_objects";
 pub(crate) const PAGES: &str = "__bicdb_pg_large_object_pages";

@@ -431,12 +431,21 @@ fn journal_replicas_share_author_identity_and_preserve_it_after_promotion() {
     // one: holding it across schema and journal setup can starve the peer
     // confirmations past this test's short write lease on a busy runner.
     let writer = hosts[0].as_ref().unwrap();
-    writer
-        .with_write(|db| {
-            SqlSession::new(db).execute("CREATE TABLE entries (id TEXT PRIMARY KEY, value INT)")?;
+    // Cold schema initialization can outlast the short fixture lease while
+    // holding the engine guard on a busy runner. A lease refusal is correct;
+    // retry only that transient result with an idempotent setup statement.
+    wait(|| {
+        match writer.with_write(|db| {
+            SqlSession::new(db).execute(
+                "CREATE TABLE IF NOT EXISTS entries (id TEXT PRIMARY KEY, value INT)",
+            )?;
             Ok(())
-        })
-        .unwrap();
+        }) {
+            Ok(()) => true,
+            Err(error) if error.to_string().contains("write lease") => false,
+            Err(error) => panic!("journal fixture schema setup failed: {error}"),
+        }
+    });
     writer
         .with_write(|db| {
             db.set_collection_mesh_sync_enabled("entries", true)?;

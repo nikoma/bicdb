@@ -34,6 +34,31 @@ fn measured<T>(operation: impl FnOnce() -> T) -> (T, SqlProfileStats) {
 fn literal_scalar_operands_filter_before_materializing_a_join() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let (_root, mut db) = fixture(mode, 128);
+        // TEMP_DIAGNOSTIC_JOIN_FOLD: remove before broad qualification.
+        {
+            let query = parse_query("SELECT c.id,d.id FROM constant_left c,constant_right d WHERE c.join_key=d.join_key AND c.name=lower('TARGET')").unwrap();
+            let SetExpr::Select(select) = query.body.as_ref() else {
+                unreachable!()
+            };
+            let from = SqlEngine::comma_from_items_to_cross_join(&select.from);
+            let engine = SqlEngine::new(&db);
+            let pure = parse_query("SELECT lower('TARGET')").unwrap();
+            let SetExpr::Select(pure_select) = pure.body.as_ref() else {
+                unreachable!()
+            };
+            let SelectItem::UnnamedExpr(expr) = &pure_select.projection[0] else {
+                unreachable!()
+            };
+            eprintln!(
+                "FOLD_DIAG type={:?} inferred={:?} eval={:?} folded={:?}",
+                engine.constant_expr_pg_type(expr),
+                engine.infer_env_expr_type(expr, &[]),
+                engine.eval_select_constant_expr(expr),
+                engine
+                    .fold_join_constant_operands(&from, select.selection.as_ref())
+                    .map(|expr| expr.to_string())
+            );
+        }
         let (result, stats) = measured(|| {
             SqlSession::new(&mut db).execute("SELECT c.id,d.id FROM constant_left c,constant_right d WHERE c.join_key=d.join_key AND c.name=lower('TARGET') ORDER BY d.id").unwrap()
         });

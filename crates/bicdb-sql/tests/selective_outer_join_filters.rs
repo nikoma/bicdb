@@ -43,6 +43,14 @@ fn mixed_join_base_filter_folds_unquoted_identifiers_before_schema_lookup() {
         session.execute("CREATE TABLE mixed_case_guard(id INT PRIMARY KEY,\"ID\" INT); INSERT INTO mixed_case_guard VALUES(1,2),(2,1)").unwrap();
         assert_eq!(session.execute("SELECT l.id FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.\"ID\"=1").unwrap().rows,vec![vec![SqlValue::Int(2)]]);
         assert_eq!(session.execute("SELECT l.\"ID\" FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.ID=1").unwrap().rows,vec![vec![SqlValue::Int(2)]]);
+        for query in [
+            "SELECT l.id FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.\"ID\">1",
+            "SELECT l.id FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.\"ID\" IN(2)",
+            "SELECT l.\"ID\" FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.ID>1",
+            "SELECT l.\"ID\" FROM mixed_case_guard l LEFT JOIN mixed_rules r ON l.id=r.Rule_ID WHERE l.ID IN(2)",
+        ] {
+            assert_eq!(session.execute(query).unwrap().rows, vec![vec![SqlValue::Int(1)]], "{query}");
+        }
     }
 }
 

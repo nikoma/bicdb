@@ -1350,7 +1350,7 @@ impl<'db> SqlEngine<'db> {
         };
         Ok(primary_key_columns
             .iter()
-            .position(|column| column.eq_ignore_ascii_case(&ident.value)))
+            .position(|column| column == &ident.value))
     }
 
     /// Require SELECT on every base table an EXPLAIN'd query references, so

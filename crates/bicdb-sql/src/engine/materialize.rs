@@ -4000,6 +4000,8 @@ impl<'db> SqlEngine<'db> {
         order_by: Option<&OrderBy>,
         needed_columns: Option<&ReferencedColumns>,
     ) -> Result<RowSet> {
+        let qualified_selection = self.qualify_catalog_cross_join_selection(from, selection)?;
+        let selection = qualified_selection.as_ref().or(selection);
         if let Some(row_set) = self.pg_class_index_join_row_set(from, selection)? {
             return Ok(row_set);
         }

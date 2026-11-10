@@ -1166,9 +1166,14 @@ impl<'db> SqlEngine<'db> {
                                             | FieldRef::TypedColumn { name, .. } => name.as_str(),
                                             _ => return None,
                                         };
-                                        cells.iter().position(|(key, _)| {
-                                            key.as_ref() == name || key.eq_ignore_ascii_case(name)
-                                        })
+                                        cells
+                                            .iter()
+                                            .position(|(key, _)| key.as_ref() == name)
+                                            .or_else(|| {
+                                                cells.iter().position(|(key, _)| {
+                                                    key.eq_ignore_ascii_case(name)
+                                                })
+                                            })
                                     })
                                     .collect()
                             });
@@ -1184,8 +1189,7 @@ impl<'db> SqlEngine<'db> {
                                         _ => return None,
                                     };
                                     cells.get(cell_idx).and_then(|(key, cell)| {
-                                        (key.as_ref() == name || key.eq_ignore_ascii_case(name))
-                                            .then_some(cell)
+                                        (key.as_ref() == name).then_some(cell)
                                     })
                                 });
                                 match fast {

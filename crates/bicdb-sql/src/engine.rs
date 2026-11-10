@@ -12,6 +12,7 @@ mod bounded_fts;
 mod bounded_primary_key;
 mod bounded_range;
 pub(crate) mod column_check;
+mod constant_predicates;
 mod eager_privileges;
 mod exists_probe;
 pub(crate) mod flashback;

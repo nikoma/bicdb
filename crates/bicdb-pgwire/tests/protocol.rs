@@ -73,7 +73,9 @@ fn cte_mutations_describe_no_data_and_keep_update_counts() {
         bicdb_pgwire::handle_client(stream, path).unwrap();
     });
     let mut client = TcpStream::connect(address).unwrap();
-    client.set_read_timeout(Some(Duration::from_secs(30))).unwrap();
+    client
+        .set_read_timeout(Some(Duration::from_secs(30)))
+        .unwrap();
     startup(&mut client);
     read_until_ready(&mut client);
     send_query(&mut client, "CREATE TABLE cte_update_counts(id INT PRIMARY KEY,n INT); INSERT INTO cte_update_counts VALUES(1,10)");
@@ -113,7 +115,10 @@ fn cte_mutations_describe_no_data_and_keep_update_counts() {
     send_bind(&mut client, "", "cte_returning", &["1"]);
     send_execute(&mut client, "");
     send_sync(&mut client);
-    assert_eq!(read_query_rows(&mut client), vec![vec!["1".to_string(), "12".to_string()]]);
+    assert_eq!(
+        read_query_rows(&mut client),
+        vec![vec!["1".to_string(), "12".to_string()]]
+    );
     client.write_all(b"X\0\0\0\x04").unwrap();
     server.join().unwrap();
 }

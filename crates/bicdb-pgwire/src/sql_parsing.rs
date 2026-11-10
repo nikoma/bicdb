@@ -4008,6 +4008,18 @@ pub(crate) fn mutating_with_describe_sql(sql: &str) -> Option<String> {
             _ => None,
         }
     }
+    // An outer mutation without RETURNING has no result columns. The NULL
+    // stand-in below exists only to describe internal CTEs; exposing it as the
+    // statement's result makes JDBC executeUpdate reject an otherwise valid
+    // WITH ... UPDATE/INSERT/DELETE after prepared-statement Describe.
+    if dml_of(&query.body).is_some_and(|statement| match statement {
+        Statement::Insert(insert) => insert.returning.as_ref().is_none_or(Vec::is_empty),
+        Statement::Update(update) => update.returning.as_ref().is_none_or(Vec::is_empty),
+        Statement::Delete(delete) => delete.returning.as_ref().is_none_or(Vec::is_empty),
+        _ => false,
+    }) {
+        return None;
+    }
     let parse_query = |sql: &str| -> Option<sqlparser::ast::Query> {
         match Parser::parse_sql(&PostgreSqlDialect {}, sql)
             .ok()?

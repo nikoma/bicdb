@@ -995,7 +995,7 @@ impl<'db> SqlEngine<'db> {
                 needed_columns,
                 &table,
                 &alias_name,
-                String::as_str,
+                Clone::clone,
             );
             let columns = source_columns
                 .iter()

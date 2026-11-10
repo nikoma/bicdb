@@ -5126,7 +5126,7 @@ pub(crate) fn retain_referenced_columns<T>(
     needed: Option<&ReferencedColumns>,
     table: &str,
     alias: &str,
-    name: impl Fn(&T) -> &str,
+    name: impl Fn(&T) -> String,
 ) {
     let Some(needed) = needed else {
         return;

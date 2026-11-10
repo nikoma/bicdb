@@ -11347,7 +11347,15 @@ fn concurrent_selects_use_shared_read_locks() {
     let deadline = std::time::Instant::now() + Duration::from_secs(5);
     let mut overlapped = false;
     while std::time::Instant::now() < deadline {
-        if server.stats_snapshot().active_queries >= 2 {
+        // Advisory lock waiters yield execution slots. Observe the pending
+        // statements themselves so this proves overlap even when no waiter
+        // occupies a slot at the instant the observer is scheduled.
+        let active_readers = server
+            .connection_snapshots()
+            .iter()
+            .filter(|connection| connection.active_query.is_some())
+            .count();
+        if active_readers == readers && server.stats_snapshot().active_queries == 0 {
             overlapped = true;
             break;
         }
@@ -11356,7 +11364,7 @@ fn concurrent_selects_use_shared_read_locks() {
     // Disconnect releases the holder without needing a free query-admission
     // slot, even when every active reader is waiting for this lock.
     admin.write_all(b"X\0\0\0\x04").unwrap();
-    assert!(overlapped, "reader admission never overlapped");
+    assert!(overlapped, "reader statements never overlapped");
     for handle in handles {
         assert_eq!(handle.join().unwrap(), vec![vec!["20".to_string()]],);
     }

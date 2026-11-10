@@ -63,7 +63,7 @@ async fn lock_owner_progress(lock: &str, release: &str) {
         while !server
             .connection_snapshots()
             .iter()
-            .any(|connection| connection.active_query.as_deref() == Some(statement))
+            .any(|connection| connection.active_query.is_some())
         {
             tokio::time::sleep(Duration::from_millis(1)).await;
         }

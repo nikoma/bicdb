@@ -868,6 +868,53 @@ impl ClusterDataNodeService {
         Arc::clone(&self.db)
     }
 
+    /// Receiver-only: the runtime already owns the drained range freeze and
+    /// acquired an independently fresh role before taking this service latch.
+    pub(crate) fn fence_native_recovery(
+        &mut self,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        scope: &crate::distribution_range_consensus::RecoveryFenceScope,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryEpochFenceReply> {
+        cancellation.check()?;
+        self.range_mutations
+            .validate_quiescent_frozen(scope.range_id, frozen)?;
+        let db = loop {
+            cancellation.check()?;
+            if let Some(db) = self.db.try_read_for(std::time::Duration::from_millis(5)) {
+                break db;
+            }
+        };
+        let native = db.native_recovery_admission(
+            role.cluster_id(),
+            role.bootstrap_id(),
+            role.local_node_id(),
+            role.local_member_incarnation(),
+        )?;
+        native.require_current(&db)?;
+        role.require_live_request()?;
+        self.range_mutations
+            .validate_quiescent_frozen(scope.range_id, frozen)?;
+        self.range_writes
+            .fence_recovery_epoch(role, &native, scope)?;
+        cancellation.check()?;
+        native.require_current(&db)?;
+        role.require_live_request()?;
+        Ok(
+            crate::distribution_range_recovery::RecoveryEpochFenceReply {
+                scope: scope.clone(),
+                node_id: self.node_id.clone(),
+                member_incarnation: role.local_member_incarnation(),
+                store_open_id: self.range_writes.recovery_store_open_id(),
+                native_database_incarnation: native.database_incarnation().to_string(),
+                birth_initialization_complete: true,
+                progress: self.range_writes.progress(scope.range_id),
+                native: db.native_range_prefix_observation(scope.range_id)?,
+            },
+        )
+    }
+
     pub fn schema_compatibility_fingerprint(&self) -> Result<SchemaCompatibilityFingerprint> {
         try_database_read(&self.db)?.schema_compatibility_fingerprint()
     }

@@ -7,6 +7,42 @@ use crate::distribution_range_consensus::{
 use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 use crate::distribution_range_recovery::{CurrentImageInstallingEvidence, RecoveryRoleAdmission};
 impl ClusterDataNodeService {
+    #[cfg(test)]
+    pub(crate) fn test_current_image_catalogue_boundary(
+        &mut self,
+        source: &crate::distribution_range_image::TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
+        frozen: &FrozenRangeMutationPermit,
+        attempt: uuid::Uuid,
+        orphan_only: bool,
+    ) -> Result<crate::distribution_range_consensus::TargetImageInstallFence> {
+        let db = try_database_read(&self.db)?;
+        let actual = role.role();
+        let native = db.native_recovery_admission(
+            actual.cluster_id(),
+            actual.bootstrap_id(),
+            actual.local_node_id(),
+            actual.local_member_incarnation(),
+        )?;
+        let safety = db.native_range_install_safety(&native, source.cut().range().id, frozen)?;
+        if orphan_only {
+            self.range_writes
+                .test_current_proposal_without_intent_publication(
+                    &db, &native, &safety, source, role, frozen, attempt,
+                )
+        } else {
+            self.range_writes.begin_native_image_install(
+                &db,
+                &native,
+                &safety,
+                source,
+                role,
+                frozen,
+                crate::distribution_range_consensus::ImageInstallPurpose::CurrentVoterRepair,
+                attempt,
+            )
+        }
+    }
     pub(crate) fn preflight_current_image_installing(
         &mut self,
         role: &RecoveryRoleAdmission,

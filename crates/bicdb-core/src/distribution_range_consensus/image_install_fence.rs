@@ -903,6 +903,31 @@ impl RangeWriteStore {
         purpose: ImageInstallPurpose,
         attempt_id: Uuid,
     ) -> Result<TargetImageInstallFence> {
+        self.begin_native_image_install_with(
+            database,
+            admission,
+            native_safety,
+            source,
+            role,
+            frozen,
+            purpose,
+            attempt_id,
+            Self::persist,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn begin_native_image_install_with(
+        &mut self,
+        database: &crate::BicDb,
+        admission: &NativeRecoveryAdmission,
+        native_safety: &NativeRangeInstallSafety,
+        source: &TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &NativeImageInstallRole<'_>,
+        frozen: &FrozenRangeMutationPermit,
+        purpose: ImageInstallPurpose,
+        attempt_id: Uuid,
+        persist: impl FnOnce(&Self) -> Result<()>,
+    ) -> Result<TargetImageInstallFence> {
         let mut intent = self.candidate_native_image_install_intent(
             database, admission, source, role, frozen, purpose, attempt_id, attempt_id,
         )?;
@@ -991,7 +1016,7 @@ impl RangeWriteStore {
                 .image_install_intents
                 .insert(intent.range.id, intent.clone());
         }
-        self.persist_native_install_intent_with(intent.clone(), Self::persist)?;
+        self.persist_native_install_intent_with(intent.clone(), persist)?;
         role.role().require_live_request()?;
         let fence = TargetImageInstallFence {
             store_open_id: self.open_id,
@@ -1003,6 +1028,35 @@ impl RangeWriteStore {
             self.rebind_recovery_open_after_image_fence(database, admission, role, &fence, frozen)?;
         }
         Ok(fence)
+    }
+
+    #[cfg(test)]
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn test_current_proposal_without_intent_publication(
+        &mut self,
+        database: &crate::BicDb,
+        admission: &NativeRecoveryAdmission,
+        native_safety: &NativeRangeInstallSafety,
+        source: &TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &NativeImageInstallRole<'_>,
+        frozen: &FrozenRangeMutationPermit,
+        attempt_id: Uuid,
+    ) -> Result<TargetImageInstallFence> {
+        self.begin_native_image_install_with(
+            database,
+            admission,
+            native_safety,
+            source,
+            role,
+            frozen,
+            ImageInstallPurpose::CurrentVoterRepair,
+            attempt_id,
+            |_| {
+                Err(range_write_error(
+                    "injected before ANY catalogue intent publication",
+                ))
+            },
+        )
     }
 
     #[allow(clippy::too_many_arguments)]

@@ -2686,3 +2686,7 @@ mod current_repair_flow;
 pub(crate) use current_repair_flow::{
     materialize_actual_current_repair_image, stage_and_clear_actual_current_repair_image,
 };
+
+#[cfg(test)]
+#[path = "distribution_range_image_install/proposal_tests.rs"]
+mod proposal_tests;

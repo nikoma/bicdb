@@ -48,12 +48,14 @@ use native_image_base::{NativeImageCatalogueBase, NATIVE_IMAGE_CATALOG_FORMAT};
 pub(crate) use native_image_ready::FinalizedNativeImageCatalogueObservation;
 mod image_install_obligations;
 pub(crate) use image_install_obligations::TargetImageCatalogHistoryObligations;
+mod image_install_resume;
 mod image_install_state;
 mod image_proposal_state;
-mod image_install_resume;
 pub(crate) use image_install_resume::CurrentImageInstallingAdmission;
 use image_proposal_state::IMAGE_PROPOSAL_CATALOG_FORMAT;
-pub(crate) use image_proposal_state::{NativeCurrentImageProposalPointer, NativeImageProposalIntentBinding};
+pub(crate) use image_proposal_state::{
+    NativeCurrentImageProposalPointer, NativeImageProposalIntentBinding,
+};
 mod native_completion_observation;
 mod native_read_catalog;
 mod native_ready_catalog;
@@ -822,8 +824,12 @@ impl RangeWriteStore {
                 "handoff range catalog requires its durable image reader fence and fsync",
             ));
         }
-        if catalog.format_version>=IMAGE_PROPOSAL_CATALOG_FORMAT && !crate::format::current_image_proposal_active(&root)? {
-            return Err(range_write_error("protected proposal catalog lacks its mandatory native reader fence"));
+        if catalog.format_version >= IMAGE_PROPOSAL_CATALOG_FORMAT
+            && !crate::format::current_image_proposal_active(&root)?
+        {
+            return Err(range_write_error(
+                "protected proposal catalog lacks its mandatory native reader fence",
+            ));
         }
         let migrated_v1_decisions = catalog.format_version == 1;
         let migrated = catalog.format_version < RANGE_WRITE_LOG_FORMAT_VERSION;

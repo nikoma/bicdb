@@ -22,15 +22,15 @@ fn node(id: &str) -> ClusterNodeId {
     ClusterNodeId::new(id).unwrap()
 }
 
-struct CurrentRepairFixture {
-    origin: ActualNativeRf3Fixture,
-    providers: BTreeMap<ClusterNodeId, Arc<MetadataReadProvider>>,
-    runtimes: BTreeMap<ClusterNodeId, Arc<RangeRecoveryRuntime>>,
+pub(super) struct CurrentRepairFixture {
+    pub(super) origin: ActualNativeRf3Fixture,
+    pub(super) providers: BTreeMap<ClusterNodeId, Arc<MetadataReadProvider>>,
+    pub(super) runtimes: BTreeMap<ClusterNodeId, Arc<RangeRecoveryRuntime>>,
     initiator: MetadataReadParticipant,
-    range: RangeDescriptor,
-    scope: RecoveryFenceScope,
-    capture: Option<RangeImageCapture>,
-    service: Arc<Mutex<ClusterDataNodeService>>,
+    pub(super) range: RangeDescriptor,
+    pub(super) scope: RecoveryFenceScope,
+    pub(super) capture: Option<RangeImageCapture>,
+    pub(super) service: Arc<Mutex<ClusterDataNodeService>>,
     selected_key: String,
     other_keys: Vec<String>,
     source_b: u64,
@@ -75,8 +75,9 @@ impl CurrentRepairFixture {
         )
         .unwrap()
     }
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         let origin = ActualNativeRf3Fixture::new_with_initial_ranges(2);
+        origin.transport.enable_native_delivery();
         let topology = origin.topology.read().clone();
         let range = topology.ranges.values().next().unwrap().clone();
         let other = topology.ranges.values().find(|r| r.id != range.id).unwrap();
@@ -94,6 +95,9 @@ impl CurrentRepairFixture {
                 .unwrap();
         }
         let selected_key = key("current-repair-selected", &range);
+        // The selected target remains genuinely behind through one lost
+        // qualified Apply. Earlier other-range ACKs use real native delivery.
+        origin.transport.drop_native_apply_once(node("n1"), 1);
         origin.append(&selected_key).unwrap();
         let source_b = origin.databases[&node("n0")].read().current_commit_seq();
         assert!(source_b > 1);
@@ -297,7 +301,7 @@ impl CurrentRepairFixture {
             original_target_uid,
         }
     }
-    fn role(&self) -> RecoveryRoleAdmission {
+    pub(super) fn role(&self) -> RecoveryRoleAdmission {
         Self::fresh_role_for(
             &self.providers,
             &self.initiator,

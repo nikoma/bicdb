@@ -239,6 +239,32 @@ fn point_range(record: &ProtectedCurrentImageProposalRecord) -> RangeId {
 }
 
 impl BicDb {
+    /// Historical audit lookup, not an intent, current quorum or source grant.
+    pub(crate) fn read_native_current_image_proposal_by_id(
+        &self,
+        native: &NativeRecoveryAdmission,
+        id: Uuid,
+    ) -> Result<Option<NativeCurrentImageProposalReceipt>> {
+        native.require_current(self)?;
+        if id.is_nil() {
+            return Err(invalid("proposal audit ID is nil"));
+        }
+        if !crate::format::current_image_proposal_active(&self.path)? {
+            return Ok(None);
+        }
+        let record: Option<ProtectedCurrentImageProposalRecord> =
+            self.read_native_range_image_record(&key(id))?;
+        let Some(record) = record else {
+            return Ok(None);
+        };
+        record.validate()?;
+        let pointer = NativeCurrentImageProposalPointer {
+            proposal_id: id,
+            checksum_sha256: record.checksum_sha256,
+        };
+        self.read_native_current_image_proposal(native, &pointer)
+            .map(Some)
+    }
     pub(crate) fn read_native_current_image_proposal(
         &self,
         native: &NativeRecoveryAdmission,

@@ -74,7 +74,6 @@ pub(crate) use range_image_native::rf3_fixture::{
 };
 pub(crate) use range_image_native::NativeActivationDecisionReceipt;
 pub(crate) use range_image_native::NativeReplicaMaterialization;
-pub(crate) use range_image_native::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 pub(crate) use range_image_native::{
     FreshRangeGenesisAuthority, KnownNativeRecoveryPrefix, NativeHistoryPublicationBinding,
     NativeHistoryStage, NativeHistoryStageProgress, NativeHistoryTargetContext,
@@ -84,6 +83,7 @@ pub(crate) use range_image_native::{
     NativeRecoveryAppliedReceipt, RangeImageBirthMember, RangeImageBirthSpec,
     SourceRangeImageLineage, StagedNativeHistoryProof,
 };
+pub(crate) use range_image_native::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 mod range_image_bindings;
 pub(crate) use range_image_bindings::RangeImageDbBindings;
 mod read_committed_reservation;
@@ -9902,6 +9902,12 @@ impl BicDb {
         &self,
     ) -> crate::distribution_range_mutation::RangeMutationGate {
         self.range_mutations.clone()
+    }
+
+    pub(crate) fn native_service_directory_lifetime(
+        &self,
+    ) -> Option<std::sync::Weak<bicdb_page::DirectoryLock>> {
+        self._directory_lock.as_ref().map(Arc::downgrade)
     }
 
     pub fn commit_admission_ready(&self) -> bool {

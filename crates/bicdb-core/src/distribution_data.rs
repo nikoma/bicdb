@@ -41,10 +41,12 @@ use crate::{
 
 mod native_activation;
 mod native_apply;
+mod native_durability;
+use native_durability::ServiceStoragePolicy;
 mod native_completion;
 mod native_image_install;
-mod native_ready;
 mod native_range_read;
+mod native_ready;
 pub(crate) use native_range_read::ActualServiceNativeReadEvidence;
 
 pub const RANGE_LEARNER_APPLY_FORMAT_VERSION: u32 = 1;
@@ -726,6 +728,7 @@ pub struct ClusterDataNodeService {
     cluster_id: ClusterId,
     node_id: ClusterNodeId,
     db: Arc<RwLock<BicDb>>,
+    storage_policy: ServiceStoragePolicy,
     schema_compatibility: SchemaCompatibilityAuthority,
     schema_compatibility_window: Option<ClusterSchemaCompatibilityWindow>,
     learner: RangeLearnerStore,
@@ -801,6 +804,10 @@ impl ClusterDataNodeService {
             ));
         }
         let root = root.as_ref();
+        // Refuse unsafe native configuration BEFORE opening or creating any
+        // learner/range/digest catalog. Actual DB context, never request DTO.
+        let storage_policy = ServiceStoragePolicy::capture(&try_database_read(&db)?)?;
+        storage_policy.validate_configuration(root, fsync)?;
         let learner = RangeLearnerStore::open(root, cluster_id.clone(), fsync)?;
         let range_writes = RangeWriteStore::open(root, cluster_id.clone(), node_id.clone(), fsync)?;
         let range_digest_root = root.join(DEFAULT_RANGE_DIGEST_STATE_DIR);
@@ -844,6 +851,7 @@ impl ClusterDataNodeService {
             cluster_id,
             node_id,
             db,
+            storage_policy,
             schema_compatibility,
             schema_compatibility_window,
             learner,
@@ -2101,6 +2109,7 @@ impl ClusterDataNodeService {
             .command_by_id(command_id)
             .ok_or_else(|| data_error(format!("unknown range-write command {command_id}")))?;
         self.range_mutations.validate(command.range_id, authority)?;
+        self.require_catalog_storage_policy()?;
         self.range_writes.mark_applied(&command)
     }
 
@@ -2191,6 +2200,7 @@ impl ClusterDataNodeService {
         range: &RangeDescriptor,
         caller: &ClusterNodeId,
     ) -> Result<()> {
+        self.require_catalog_storage_policy()?;
         if &range.leader != caller {
             return Err(data_error(format!(
                 "node {caller} is not the current leader for {} epoch {}",

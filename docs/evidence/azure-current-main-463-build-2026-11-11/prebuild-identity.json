@@ -1,0 +1,30 @@
+{
+  "source_commit": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+  "source_clean": true,
+  "rustc_verbose": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0\nLLVM version: 22.1.2\n",
+  "cargo": "cargo 1.96.0 (30a34c682 2026-05-25)",
+  "profile": "repository default release",
+  "features": "bicdb-cli defaults",
+  "explicit_feature_flags": [],
+  "optional_environment": {
+    "RUSTFLAGS": null,
+    "CARGO_ENCODED_RUSTFLAGS": null,
+    "CARGO_PROFILE_RELEASE_LTO": null,
+    "CARGO_PROFILE_RELEASE_DEBUG": null,
+    "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": null,
+    "CARGO_PROFILE_RELEASE_OPT_LEVEL": null
+  },
+  "profile_environment_matches_old_build": true,
+  "toolchain_selection_environment": {
+    "old_RUSTUP_TOOLCHAIN": "1.96.0-x86_64-unknown-linux-gnu",
+    "new_RUSTUP_TOOLCHAIN": null,
+    "new_selection": "rust-toolchain.toml resolves same1.96.0 compiler"
+  },
+  "source_tree": "0719b29b5f7727beb1504a017279236c20f6caff",
+  "source_hashes": {
+    "Cargo.toml": "7c756098550cdd9c86d781044c6427a369dc9983ce9296df07ed4d720ae7a3ad",
+    "Cargo.lock": "7c0f71c4dcd956a1517e17491315058072d5cd516f805a8d44aeee5e946670f5",
+    "rust-toolchain.toml": "66894b16254576f70fc56e3e3abf4d489c678e08feaec17e101ec405207b9d84",
+    "crates/bicdb-cli/Cargo.toml": "adf1230781cf3582d2bd77036be957e6c6d39d29e3d6eaca5ce80bdff1e604a3"
+  }
+}

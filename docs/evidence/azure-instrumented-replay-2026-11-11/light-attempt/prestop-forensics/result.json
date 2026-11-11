@@ -1,0 +1,35 @@
+{
+  "finished_unix_ns": 1794389981253758531,
+  "nodes": [
+    {
+      "node": 0,
+      "db_exists": true,
+      "copied_files": 7,
+      "error": null
+    },
+    {
+      "node": 1,
+      "db_exists": true,
+      "copied_files": 7,
+      "error": null
+    },
+    {
+      "node": 2,
+      "db_exists": true,
+      "copied_files": 7,
+      "error": null
+    },
+    {
+      "node": 3,
+      "db_exists": true,
+      "copied_files": 7,
+      "error": null
+    },
+    {
+      "node": 4,
+      "db_exists": false,
+      "copied_files": 0,
+      "error": null
+    }
+  ]
+}

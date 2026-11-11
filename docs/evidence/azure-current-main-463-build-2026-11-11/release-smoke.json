@@ -1,0 +1,11 @@
+{
+  "source_commit": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+  "binary": "/tmp/bicdb-azure-artifact-463-evidence/bicdb-1.0.463-beta-d49a391b",
+  "binary_sha256": "840f0124f27a1a7695c4b2b0c72b05a262456802af65e063cff12242559e2f7d",
+  "script_sha256": "7f074e8ad61838562756da76142617a5c197df20d70883dffe4db5cc752ed0ff",
+  "start_unix": 1794385327.534043,
+  "end_unix": 1794385328.5920045,
+  "exit_code": 0,
+  "error": null,
+  "scope": "Local CLI SQL FTS/process-reopen, ordinary psql pgwire read, CLI reopen after server shutdown; not HA/distributed/physical qualification."
+}

@@ -1,0 +1,36 @@
+{
+  "format": 3,
+  "frozen_unix_ns": 1794386586533725310,
+  "policy_reference_commit": "b05385d4b033edf0db03f3eccf4bdd86f7c8eddb",
+  "runtime": {
+    "source_commit": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+    "version": "1.0.463-beta",
+    "binary": "/tmp/bicdb-azure-artifact-463-evidence/bicdb-1.0.463-beta-d49a391b",
+    "sha256": "840f0124f27a1a7695c4b2b0c72b05a262456802af65e063cff12242559e2f7d"
+  },
+  "linked_core": {
+    "source_commit": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+    "version": "1.0.463-beta",
+    "rlib_sha256": "dc714b001a0fe8758473c2c4ef80158474d7426e16630926edb65b6cc35f0356"
+  },
+  "supersedes_v2_for_target_coverage_boundary": true,
+  "prior_red_fixture": "/tmp/bicdb-reconcile-cap-red-fixture/red-receipt.json",
+  "strong_read_proof": false,
+  "server_declared_read_contract": "eventual/local-applied-on-named-leader",
+  "server_internal_retries_observed": false,
+  "partial_network_frames_preserved": false,
+  "member_keys_exported": false,
+  "production_qualified": false,
+  "ha_qualified": false,
+  "cloud_smoke_still_required": true,
+  "files": {
+    "wire-build.json": "5cc5cb2ff575bfb0f49f85984f5fa05d467d9d59be6cd88e284bdb7a4daa4d5c",
+    "wire-worker.rs": "07b96ffe4725f13a6632b9da9955f8fab627a252467b8f4b6b3723df87d138e3",
+    "README.md": "9298becf1dd65d17661ca84f7ad17dafe16729a2faef5b417b21055fefb6c870",
+    "wire-worker": "b8cc2607220e32f705a23fd6b7d4f41c22298cd1b0ec92cc8e83847783ef8d2c",
+    "snapshot-controller.py": "180f5ca81d78054af10b268ca221dcddaf2d3e646f33b7de8fae1247fd8a89e6",
+    "test_trace_client.py": "e1358909ffeed36e6c275c7767c29ffdf4e4eb09356b38e522e7ee2a8e6ec690",
+    "build-wire-worker.py": "c06a14396c23fef8b02f3fc9658f7634c26a6695f810a9d7b2d8bd60dbda0466",
+    "trace_client.py": "a1ab418d1031ec409ce108aeb547cf5a2ceebff46f41811d991f7182259f66fb"
+  }
+}

@@ -340,6 +340,59 @@ fn host_authority_keeps_grant_checks_and_database_identity() {
 }
 
 #[test]
+fn internal_catalog_writes_stay_inside_the_declared_effect_scope() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(root.path(), config(mode)).unwrap();
+        db.create_collection("catalog").unwrap();
+        db.create_collection("business").unwrap();
+        db.insert("catalog", seed(0)).unwrap();
+        db.insert("business", seed(0)).unwrap();
+        let owner = db.begin_transaction().unwrap();
+        let token = owner
+            .reserve_catalog_collections(&["catalog".into()])
+            .unwrap();
+        owner
+            .retain_catalog_scope(&token, "journal-bounded")
+            .unwrap();
+        {
+            let _access = db.enter_catalog_scope(&token).unwrap();
+            let mut internal = db.begin_transaction().unwrap();
+            // An ordinary read may inspect an unrelated dependency. Its
+            // mutation must first belong to the declared undo/effect scope.
+            assert_eq!(
+                internal.get("business", "seed").unwrap().unwrap().metadata["value"],
+                0
+            );
+            assert!(matches!(
+                internal.update("business", seed(9)),
+                Err(BicDbError::TransactionConflict(_))
+            ));
+            assert!(matches!(
+                internal.insert("business", Record::new("outside")),
+                Err(BicDbError::TransactionConflict(_))
+            ));
+            assert!(matches!(
+                internal.delete("business", "seed"),
+                Err(BicDbError::TransactionConflict(_))
+            ));
+            internal.update("catalog", seed(7)).unwrap();
+            internal.commit().unwrap();
+        }
+        assert_eq!(
+            db.get("business", "seed").unwrap().unwrap().metadata["value"],
+            0
+        );
+        assert!(db.get("business", "outside").unwrap().is_none());
+        owner.rollback().unwrap();
+        restore(&db, &token);
+        db.finish_catalog_scope(&token).unwrap();
+        db.check_catalog_recovery_quiescent().unwrap();
+        db.close().unwrap();
+    }
+}
+
+#[test]
 fn a_sibling_scope_cannot_finalize_while_overlapping_internal_work_is_pending() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();

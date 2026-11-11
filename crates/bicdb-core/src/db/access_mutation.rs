@@ -905,6 +905,7 @@ impl BicDb {
             database_mutation_permit: None,
             native_wal_retention: None,
             commit_admission_ticket: None,
+            native_admission_recovery_release: None,
             committed_seq: None,
             paged_snapshot: self
                 .paged_records

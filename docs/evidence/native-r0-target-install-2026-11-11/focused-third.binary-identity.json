@@ -1,0 +1,12 @@
+{
+  "source_commit": "dd45a8c3a29f1c3466c1824955f19baa4361371f",
+  "binary_name": "bicdb_core-2804d0c8b396b15a",
+  "binary_bytes": 120879704,
+  "binary_sha256": "088c0f4a78fb96459178288834bf34608092a59095cd85030a60ba6716c1479c",
+  "measured_at_unix": 1794404639.1858077,
+  "replay_command_filter": [
+    "image_install",
+    "--test-threads=2"
+  ],
+  "scope": "software R0 empty-genesis component only"
+}

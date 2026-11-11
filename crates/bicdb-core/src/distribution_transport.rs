@@ -2715,8 +2715,21 @@ impl TcpClusterRelocationTransport {
         destination: &ClusterNodeId,
         request: crate::ClusterEventRequest,
     ) -> Result<crate::ClusterEventResponse> {
+        self.application_event_cancellable(&CancellationToken::uncancelable(), destination, request)
+    }
+
+    pub(crate) fn application_event_cancellable(
+        &self,
+        cancellation: &CancellationToken,
+        destination: &ClusterNodeId,
+        request: crate::ClusterEventRequest,
+    ) -> Result<crate::ClusterEventResponse> {
         request.operation.validate()?;
-        match self.call(destination, ClusterDataRequest::ApplicationEvent(request))? {
+        match self.call_cancellable(
+            cancellation,
+            destination,
+            ClusterDataRequest::ApplicationEvent(request),
+        )? {
             ClusterDataResponse::ApplicationEvent(result) => Ok(result),
             response => Err(unexpected_response("application event", response)),
         }
@@ -2928,14 +2941,38 @@ impl TcpClusterRelocationTransport {
         &self,
         member_node_id: &ClusterNodeId,
     ) -> Result<ClusterBootstrapSnapshot> {
-        match self.call(member_node_id, ClusterDataRequest::FetchBootstrapSnapshot)? {
+        self.fetch_metadata_snapshot_cancellable(&CancellationToken::uncancelable(), member_node_id)
+    }
+
+    pub(crate) fn fetch_metadata_snapshot_cancellable(
+        &self,
+        cancellation: &CancellationToken,
+        member_node_id: &ClusterNodeId,
+    ) -> Result<ClusterBootstrapSnapshot> {
+        match self.call_cancellable(
+            cancellation,
+            member_node_id,
+            ClusterDataRequest::FetchBootstrapSnapshot,
+        )? {
             ClusterDataResponse::BootstrapSnapshot(snapshot) => Ok(snapshot),
             response => Err(unexpected_response("metadata snapshot", response)),
         }
     }
 
     pub fn fetch_topology(&self, controller_node_id: &ClusterNodeId) -> Result<ClusterTopology> {
-        match self.call(controller_node_id, ClusterDataRequest::FetchTopology)? {
+        self.fetch_topology_cancellable(&CancellationToken::uncancelable(), controller_node_id)
+    }
+
+    pub(crate) fn fetch_topology_cancellable(
+        &self,
+        cancellation: &CancellationToken,
+        controller_node_id: &ClusterNodeId,
+    ) -> Result<ClusterTopology> {
+        match self.call_cancellable(
+            cancellation,
+            controller_node_id,
+            ClusterDataRequest::FetchTopology,
+        )? {
             ClusterDataResponse::Topology(topology) => Ok(topology),
             response => Err(unexpected_response("topology", response)),
         }
@@ -5027,9 +5064,17 @@ mod event_client_retry_tests {
         controller_reads: AtomicUsize,
     }
 
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum SilentFirst {
+        None,
+        Application,
+        Discovery,
+    }
+
     fn request_after_route_change(
         follower: bool,
         transient_failures: usize,
+        silent_first: SilentFirst,
     ) -> (Option<serde_json::Value>, Arc<Observed>) {
         let root = tempfile::tempdir().unwrap();
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -5041,7 +5086,11 @@ mod event_client_retry_tests {
             replication_factor: 1,
             transport: ClusterNetworkTransportConfig {
                 connect_timeout_ms: 100,
-                io_timeout_ms: 500,
+                io_timeout_ms: if silent_first == SilentFirst::None {
+                    500
+                } else {
+                    5_000
+                },
                 ..Default::default()
             },
             ..Default::default()
@@ -5070,6 +5119,7 @@ mod event_client_retry_tests {
             let deadline = Instant::now() + Duration::from_secs(5);
             let mut failures = transient_failures;
             let mut discovered = false;
+            let mut silent_remaining = silent_first != SilentFirst::None;
             let unavailable = || ClusterDataRemoteError {
                 code: "temporarily_unavailable".into(),
                 message: "metadata election is in progress".into(),
@@ -5089,6 +5139,37 @@ mod event_client_retry_tests {
                     .unwrap();
                 let request: ClusterDataRequestEnvelope =
                     recv_json_frame(&mut stream, max_frame_bytes).unwrap();
+                let should_be_silent = silent_remaining
+                    && match &request.request {
+                        ClusterDataRequest::ApplicationEvent(_) => {
+                            silent_first == SilentFirst::Application
+                        }
+                        ClusterDataRequest::FetchBootstrapSnapshot => {
+                            silent_first == SilentFirst::Discovery
+                        }
+                        _ => false,
+                    };
+                if should_be_silent {
+                    silent_remaining = false;
+                    // Accept a complete request but send no response. Wait for
+                    // the client's own network deadline to close this socket,
+                    // rather than restoring availability with a test timer.
+                    stream
+                        .set_read_timeout(Some(Duration::from_secs(6)))
+                        .unwrap();
+                    let mut byte = [0u8; 1];
+                    match stream.read(&mut byte) {
+                        Ok(0) => {}
+                        Err(error)
+                            if matches!(
+                                error.kind(),
+                                std::io::ErrorKind::ConnectionReset
+                                    | std::io::ErrorKind::UnexpectedEof
+                            ) => {}
+                        result => panic!("silent request was not closed by client: {result:?}"),
+                    }
+                    continue;
+                }
                 let response = match request.request {
                     ClusterDataRequest::ApplicationEvent(_) => {
                         seen.applications.fetch_add(1, Ordering::SeqCst);
@@ -5156,7 +5237,7 @@ mod event_client_retry_tests {
 
     #[test]
     fn transient_topology_refresh_does_not_abort_an_event_request() {
-        let (value, observed) = request_after_route_change(false, 2);
+        let (value, observed) = request_after_route_change(false, 2, SilentFirst::None);
         assert_eq!(value, Some(serde_json::json!({"kept": true})));
         assert_eq!(observed.applications.load(Ordering::SeqCst), 2);
         assert!(observed.controller_reads.load(Ordering::SeqCst) >= 2);
@@ -5164,7 +5245,7 @@ mod event_client_retry_tests {
 
     #[test]
     fn a_known_follower_can_supply_committed_route_discovery() {
-        let (value, observed) = request_after_route_change(true, 0);
+        let (value, observed) = request_after_route_change(true, 0, SilentFirst::None);
         assert_eq!(value, Some(serde_json::json!({"kept": true})));
         assert_eq!(observed.applications.load(Ordering::SeqCst), 2);
         assert_eq!(observed.snapshots.load(Ordering::SeqCst), 1);
@@ -5173,9 +5254,25 @@ mod event_client_retry_tests {
 
     #[test]
     fn legacy_metadata_controllers_remain_usable_for_discovery() {
-        let (value, observed) = request_after_route_change(false, 0);
+        let (value, observed) = request_after_route_change(false, 0, SilentFirst::None);
         assert_eq!(value, Some(serde_json::json!({"kept": true})));
         assert_eq!(observed.snapshots.load(Ordering::SeqCst), 1);
         assert_eq!(observed.controller_reads.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn silent_event_route_leaves_budget_for_discovery_and_retry() {
+        let started = Instant::now();
+        let (value, _) = request_after_route_change(true, 0, SilentFirst::Application);
+        assert_eq!(value, Some(serde_json::json!({"kept": true})));
+        assert!(started.elapsed() < Duration::from_millis(2500));
+    }
+
+    #[test]
+    fn silent_discovery_member_cannot_exhaust_the_retry_budget() {
+        let started = Instant::now();
+        let (value, _) = request_after_route_change(true, 0, SilentFirst::Discovery);
+        assert_eq!(value, Some(serde_json::json!({"kept": true})));
+        assert!(started.elapsed() < Duration::from_millis(2500));
     }
 }

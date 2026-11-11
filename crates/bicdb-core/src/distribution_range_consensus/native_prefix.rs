@@ -244,6 +244,9 @@ impl NativeRangeCommandIntent {
     pub(crate) fn scope_sha256(&self) -> &str {
         &self.scope_sha256
     }
+    pub(crate) fn schema_sha256(&self) -> &str {
+        &self.schema_sha256
+    }
 }
 impl NativeRangeCommitCertificate {
     pub(crate) fn intent(&self) -> &NativeRangeCommandIntent {
@@ -254,5 +257,594 @@ impl NativeRangeCommitCertificate {
     }
     pub(crate) fn required_quorum(&self) -> usize {
         self.required_quorum
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+    use crate::db::{BicDb, DbConfig, RangeImageBirthSpec};
+    use crate::distribution_range_mutation::RangeMutationAuthority;
+    use crate::{CancellationToken, DistributionConfig, DistributionStore, Record, StorageMode};
+    use serde_json::json;
+
+    type NativeCoordinator = RangeWriteCoordinator<super::super::tests::TestTransport>;
+
+    fn actual_coordinator(
+        db: &Arc<RwLock<BicDb>>,
+        parent: &Path,
+        topology: ClusterTopology,
+        spec: &RangeImageBirthSpec,
+    ) -> (Arc<NativeCoordinator>, Arc<Mutex<ClusterDataNodeService>>) {
+        let service = Arc::new(Mutex::new(
+            ClusterDataNodeService::open(
+                topology.cluster_id.clone(),
+                spec.node_id.clone(),
+                parent.join("database"),
+                Arc::clone(db),
+                true,
+            )
+            .unwrap(),
+        ));
+        let coordinator = Arc::new(
+            RangeWriteCoordinator::new_schema_fenced(
+                topology.cluster_id.clone(),
+                spec.node_id.clone(),
+                Arc::new(RwLock::new(topology)),
+                Arc::clone(&service),
+                Arc::new(super::super::tests::TestTransport { available: false }),
+            )
+            .unwrap(),
+        );
+        coordinator.recover_local_leadership(1024).unwrap();
+        db.read().install_commit_admission(coordinator.clone());
+        (coordinator, service)
+    }
+
+    /// Seed through actual ordinary RF1 admission/WAL/certificate callbacks.
+    /// Drop service/store ownership before handoff opens its own store.
+    pub(crate) fn seed_actual_origin(
+        db: &Arc<RwLock<BicDb>>,
+        topology: ClusterTopology,
+        spec: &RangeImageBirthSpec,
+        selected_range: RangeId,
+        count: usize,
+    ) {
+        let root = db.read().data_path().to_path_buf();
+        let service = Arc::new(Mutex::new(
+            ClusterDataNodeService::open(
+                topology.cluster_id.clone(),
+                spec.node_id.clone(),
+                root,
+                Arc::clone(db),
+                true,
+            )
+            .unwrap(),
+        ));
+        let coordinator = Arc::new(
+            RangeWriteCoordinator::new_schema_fenced(
+                topology.cluster_id.clone(),
+                spec.node_id.clone(),
+                Arc::new(RwLock::new(topology.clone())),
+                Arc::clone(&service),
+                Arc::new(super::super::tests::TestTransport { available: false }),
+            )
+            .unwrap(),
+        );
+        coordinator.recover_local_leadership(1024).unwrap();
+        db.read().install_commit_admission(coordinator.clone());
+        let keys = (0..)
+            .map(|i| format!("stage-actual-origin-{i}"))
+            .filter(|key| topology.range_for_key("items", key).unwrap().id == selected_range)
+            .take(count)
+            .collect::<Vec<_>>();
+        for key in keys {
+            let database = db.write();
+            let mut tx = database.begin_transaction().unwrap();
+            tx.insert("items", Record::new(key)).unwrap();
+            tx.commit().unwrap();
+        }
+        db.read().clear_commit_admission();
+        drop(coordinator);
+        drop(service);
+    }
+
+    pub(crate) fn fixture() -> (
+        tempfile::TempDir,
+        Arc<RwLock<BicDb>>,
+        ClusterTopology,
+        RangeImageBirthSpec,
+    ) {
+        let parent = tempfile::tempdir().unwrap();
+        let bootstrap_id = Uuid::now_v7();
+        let mut topology = DistributionStore::initialize_at(
+            parent.path().join("metadata"),
+            DistributionConfig {
+                enabled: true,
+                initial_ranges: 2,
+                replication_factor: 1,
+                range_image_bootstrap_id: Some(bootstrap_id),
+                ..Default::default()
+            },
+            true,
+            1,
+        )
+        .unwrap()
+        .topology()
+        .clone();
+        let node = topology.nodes.values().next().unwrap().clone();
+        let spec = RangeImageBirthSpec {
+            cluster_id: topology.cluster_id.clone(),
+            bootstrap_id,
+            node_id: node.id.clone(),
+            member_incarnation: node.incarnation,
+            restore_activation: None,
+            initial_members: topology
+                .nodes
+                .values()
+                .map(|member| {
+                    (
+                        member.id.clone(),
+                        RangeImageBirthMember {
+                            incarnation: member.incarnation,
+                            tls_certificate_sha256: member.tls_certificate_sha256.clone(),
+                            pending_tls_certificate_sha256: member
+                                .pending_tls_certificate_sha256
+                                .clone(),
+                        },
+                    )
+                })
+                .collect(),
+            initial_ranges: topology.ranges.values().cloned().collect(),
+        };
+        let config = DbConfig::default()
+            .with_fsync(true)
+            .with_storage_mode(StorageMode::ServerPaged)
+            .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
+        let root = parent.path().join("database");
+        let (mut db, _) =
+            BicDb::create_new_range_image_database(&root, config.clone(), spec.clone()).unwrap();
+        db.create_collection("items").unwrap();
+        drop(db);
+        let (db, authority) = BicDb::open_range_image_database(&root, config, &spec).unwrap();
+        let schema = db.schema_compatibility_fingerprint().unwrap();
+        topology.nodes.get_mut(&node.id).unwrap().labels.insert(
+            crate::distribution::SCHEMA_COMPATIBILITY_NODE_LABEL.into(),
+            schema.sha256,
+        );
+        let db = Arc::new(RwLock::new(db));
+        let gate = db.read().range_mutation_gate();
+        for range in &spec.initial_ranges {
+            let frozen = gate.try_freeze(range.id, Uuid::now_v7()).unwrap();
+            BicDb::initialize_range_image_genesis(
+                &db,
+                &authority,
+                range,
+                &frozen,
+                Duration::from_secs(3),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        }
+        (parent, db, topology, spec)
+    }
+    fn command(topology: &ClusterTopology, key: &str, index: u64) -> RangeWriteCommand {
+        let range = topology.range_for_key("items", key).unwrap();
+        RangeWriteCommand::new(
+            topology.cluster_id.clone(),
+            range,
+            index,
+            range.leader.clone(),
+            &CommitAdmissionIntent {
+                transaction_id: 100 + index,
+                mutations: vec![CommitAdmissionMutation {
+                    collection: "items".into(),
+                    record_id: key.into(),
+                    record: Some(Record::new(key).with_metadata(json!({"index":index}))),
+                }],
+            },
+        )
+        .unwrap()
+    }
+    #[test]
+    fn native_prefix_actual_wal_and_quorum_extend_and_reopen_with_database_seq_distinct_from_range_index(
+    ) {
+        let (parent, db, topology, spec) = fixture();
+        let first = "a";
+        let range = topology.range_for_key("items", first).unwrap();
+        let other = (0..1000)
+            .map(|id| format!("other-{id}"))
+            .find(|key| topology.range_for_key("items", key).unwrap().id != range.id)
+            .unwrap();
+        for (key, index) in [(first, 1), (other.as_str(), 1), (first, 2)] {
+            let command = command(&topology, key, index);
+            let range = topology.range_by_id(command.range_id).unwrap();
+            let intent = NativeRangeCommandIntent::plan(&command, range, &topology).unwrap();
+            let certificate = intent
+                .certify(&BTreeSet::from([range.leader.clone()]))
+                .unwrap();
+            let gate = db.read().range_mutation_gate();
+            let permit = gate.try_enter(range.id).unwrap();
+            db.read()
+                .apply_native_locally_certified_command(
+                    &certificate,
+                    &command.mutations,
+                    &RangeMutationAuthority::Mutation(&permit),
+                )
+                .unwrap();
+            let before_duplicate = db.read().current_commit_seq();
+            db.read()
+                .apply_native_locally_certified_command(
+                    &certificate,
+                    &command.mutations,
+                    &RangeMutationAuthority::Mutation(&permit),
+                )
+                .unwrap();
+            assert_eq!(db.read().current_commit_seq(), before_duplicate);
+            assert_eq!(
+                db.read()
+                    .native_range_prefix_observation(range.id)
+                    .unwrap()
+                    .native_applied_index,
+                Some(index)
+            );
+        }
+        assert!(db.read().current_commit_seq() > 2);
+        assert_eq!(
+            db.read().get("items", first).unwrap().unwrap().metadata,
+            json!({"index":2})
+        );
+        assert_eq!(
+            db.read()
+                .current_native_range_source_lineage(range.id)
+                .unwrap()
+                .range_index(),
+            2
+        );
+        drop(db);
+        let (reopened, _) = BicDb::open_range_image_database(
+            &parent.path().join("database"),
+            DbConfig::default()
+                .with_fsync(true)
+                .with_storage_mode(StorageMode::ServerPaged)
+                .with_paged_buffer_pool_bytes(8 * 1024 * 1024),
+            &spec,
+        )
+        .unwrap();
+        reopened.schema_compatibility_fingerprint().unwrap();
+        assert_eq!(
+            reopened
+                .current_native_range_source_lineage(range.id)
+                .unwrap()
+                .range_index(),
+            2
+        );
+        assert_eq!(
+            reopened
+                .native_range_prefix_observation(range.id)
+                .unwrap()
+                .native_applied_index,
+            Some(2)
+        );
+    }
+    #[test]
+    fn native_pending_never_raises_source_floor_and_survives_reopen_without_forged_quorum() {
+        let (parent, db, topology, spec) = fixture();
+        let command = command(&topology, "pending", 1);
+        let range = topology.range_by_id(command.range_id).unwrap();
+        let intent = NativeRangeCommandIntent::plan(&command, range, &topology).unwrap();
+        assert!(intent.certify(&BTreeSet::new()).is_err());
+        let gate = db.read().range_mutation_gate();
+        let permit = gate.try_enter(range.id).unwrap();
+        let _pending = db
+            .read()
+            .prepare_native_range_command(&intent, 77, &RangeMutationAuthority::Mutation(&permit))
+            .unwrap();
+        let observation = db.read().native_range_prefix_observation(range.id).unwrap();
+        assert_eq!(observation.native_applied_index, Some(0));
+        assert_eq!(observation.pending_command_index, Some(1));
+        assert_eq!(observation.materialized_pending_index, None);
+        assert!(db
+            .read()
+            .current_native_range_source_lineage(range.id)
+            .is_err());
+        drop(permit);
+        drop(db);
+        let (reopened, _) = BicDb::open_range_image_database(
+            &parent.path().join("database"),
+            DbConfig::default()
+                .with_fsync(true)
+                .with_storage_mode(StorageMode::ServerPaged)
+                .with_paged_buffer_pool_bytes(8 * 1024 * 1024),
+            &spec,
+        )
+        .unwrap();
+        reopened.schema_compatibility_fingerprint().unwrap();
+        let observation = reopened.native_range_prefix_observation(range.id).unwrap();
+        assert_eq!(observation.native_applied_index, Some(0));
+        assert_eq!(observation.pending_command_index, Some(1));
+        assert!(reopened
+            .current_native_range_source_lineage(range.id)
+            .is_err());
+    }
+
+    #[test]
+    fn native_origin_actual_coordinator_commits_under_outer_db_write_guard_without_reacquire() {
+        let (parent, db, topology, spec) = fixture();
+        let range = topology.range_for_key("items", "origin").unwrap().clone();
+        let (coordinator, service) = actual_coordinator(&db, parent.path(), topology, &spec);
+        let plain = CommitAdmissionIntent {
+            transaction_id: 77,
+            mutations: vec![CommitAdmissionMutation {
+                collection: "items".into(),
+                record_id: "origin".into(),
+                record: Some(Record::new("origin")),
+            }],
+        };
+        assert!(coordinator.admit(&plain).is_err());
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let owned = Arc::clone(&db);
+        let worker = std::thread::spawn(move || {
+            let database = owned.write();
+            let result = (|| {
+                let mut tx = database.begin_transaction()?;
+                tx.insert(
+                    "items",
+                    Record::new("origin").with_metadata(json!({"value":1})),
+                )?;
+                tx.commit()
+            })();
+            sender
+                .send(result.map_err(|error: BicDbError| error.to_string()))
+                .unwrap();
+        });
+        receiver
+            .recv_timeout(Duration::from_secs(5))
+            .expect("native callback must not reacquire its caller-owned DB write guard")
+            .unwrap();
+        worker.join().unwrap();
+        assert_eq!(
+            service
+                .lock()
+                .range_write_progress(range.id)
+                .resolved_through,
+            1
+        );
+        assert_eq!(
+            db.read()
+                .native_range_prefix_observation(range.id)
+                .unwrap()
+                .native_applied_index,
+            Some(1)
+        );
+        assert_eq!(
+            db.read().get("items", "origin").unwrap().unwrap().metadata,
+            json!({"value":1})
+        );
+        assert!(coordinator.pending_acknowledgements.lock().is_empty());
+        let gate = db.read().range_mutation_gate();
+        let frozen = gate.try_freeze(range.id, Uuid::now_v7()).unwrap();
+        drop(frozen);
+        db.read().clear_commit_admission();
+    }
+
+    #[test]
+    fn native_origin_public_ticket_without_actual_pending_scope_cannot_apply_rows() {
+        #[derive(Debug)]
+        struct BareTicket;
+        impl CommitAdmission for BareTicket {
+            fn admit(&self, _: &CommitAdmissionIntent) -> Result<CommitAdmissionTicket> {
+                Ok(CommitAdmissionTicket {
+                    authority: "plain-public-ticket".into(),
+                    command_id: Uuid::now_v7().to_string(),
+                })
+            }
+            fn local_applied(&self, _: &CommitAdmissionTicket, _: u64) -> Result<()> {
+                panic!("public ticket without native scope must not reach application callback")
+            }
+        }
+        let (_parent, db, topology, _spec) = fixture();
+        let range = topology.range_for_key("items", "unscoped").unwrap();
+        let database = db.write();
+        database.install_commit_admission(Arc::new(BareTicket));
+        let mut tx = database.begin_transaction().unwrap();
+        tx.insert("items", Record::new("unscoped")).unwrap();
+        assert!(matches!(
+            tx.commit(),
+            Err(BicDbError::CommitOutcomeUnknown { .. })
+        ));
+        assert!(database.get("items", "unscoped").unwrap().is_none());
+        let observation = database.native_range_prefix_observation(range.id).unwrap();
+        assert_eq!(observation.native_applied_index, Some(0));
+        assert_eq!(observation.pending_command_index, None);
+        database.clear_commit_admission();
+    }
+
+    #[test]
+    fn native_history_actual_coordinator_spine_exports_full_bounded_contiguous_prefix() {
+        let (parent, db, topology, spec) = fixture();
+        let first = "history-a";
+        let range = topology.range_for_key("items", first).unwrap().clone();
+        let second = (0..1000)
+            .map(|id| format!("history-{id}"))
+            .find(|key| topology.range_for_key("items", key).unwrap().id == range.id)
+            .unwrap();
+        let (_coordinator, _service) = actual_coordinator(&db, parent.path(), topology, &spec);
+        for key in [first, second.as_str()] {
+            let database = db.write();
+            let mut transaction = database.begin_transaction().unwrap();
+            transaction.insert("items", Record::new(key)).unwrap();
+            transaction.commit().unwrap();
+        }
+        let gate = db.read().range_mutation_gate();
+        let frozen = gate.try_freeze(range.id, Uuid::now_v7()).unwrap();
+        let lineage = db
+            .read()
+            .current_native_range_source_lineage(range.id)
+            .unwrap();
+        let mut next = Some(0);
+        let mut previous = None;
+        let mut entries = 0;
+        while let Some(index) = next {
+            let step = db
+                .read()
+                .export_native_logical_history_step(
+                    &lineage,
+                    &frozen,
+                    index,
+                    1,
+                    &CancellationToken::uncancelable(),
+                )
+                .unwrap();
+            assert_eq!(step.first_index, index);
+            assert_eq!(step.entries.len(), 1);
+            let entry = &step.entries[0];
+            assert_eq!(entry.index, index);
+            if let Some(previous) = &previous {
+                assert_eq!(&entry.previous_sha256, previous);
+            }
+            previous = Some(entry.commitment_sha256.clone());
+            entries += 1;
+            next = step.next_index;
+        }
+        assert_eq!(entries, 3);
+        assert_eq!(previous.as_deref(), Some(lineage.logical_history_sha256()));
+        assert_eq!(lineage.range_index(), 2);
+        db.read().clear_commit_admission();
+    }
+
+    #[test]
+    fn native_origin_post_admission_pre_wal_unknown_cleans_local_attempt_before_recovery_freeze() {
+        let (parent, db, topology, spec) = fixture();
+        let range = topology.range_for_key("items", "cut").unwrap().clone();
+        let (coordinator, service) = actual_coordinator(&db, parent.path(), topology, &spec);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let owned = Arc::clone(&db);
+        let worker = std::thread::spawn(move || {
+            let database = owned.write();
+            let mut tx = database.begin_transaction().unwrap();
+            tx.insert("items", Record::new("cut")).unwrap();
+            BicDb::test_reject_next_native_after_admission();
+            let error = tx.commit().unwrap_err();
+            sender
+                .send(matches!(error, BicDbError::CommitOutcomeUnknown { .. }))
+                .unwrap();
+        });
+        assert!(receiver.recv_timeout(Duration::from_secs(5)).unwrap());
+        worker.join().unwrap();
+        assert!(db.read().get("items", "cut").unwrap().is_none());
+        assert!(coordinator.pending_acknowledgements.lock().is_empty());
+        assert!(!coordinator.recovered_epochs.lock().contains_key(&range.id));
+        let observation = db.read().native_range_prefix_observation(range.id).unwrap();
+        assert_eq!(observation.native_applied_index, Some(0));
+        assert_eq!(observation.pending_command_index, Some(1));
+        let gate = db.read().range_mutation_gate();
+        let frozen = gate
+            .freeze(
+                range.id,
+                Uuid::now_v7(),
+                Duration::from_millis(200),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        drop(frozen);
+        assert_eq!(service.lock().range_write_progress(range.id).last_index, 1);
+        assert_eq!(
+            service
+                .lock()
+                .range_write_progress(range.id)
+                .resolved_through,
+            0
+        );
+        db.read().clear_commit_admission();
+        drop(coordinator);
+        drop(service);
+        drop(db);
+        let (reopened, _) = BicDb::open_range_image_database(
+            &parent.path().join("database"),
+            DbConfig::default()
+                .with_fsync(true)
+                .with_storage_mode(StorageMode::ServerPaged)
+                .with_paged_buffer_pool_bytes(8 * 1024 * 1024),
+            &spec,
+        )
+        .unwrap();
+        reopened.schema_compatibility_fingerprint().unwrap();
+        let reopened = Arc::new(RwLock::new(reopened));
+        let service = ClusterDataNodeService::open(
+            spec.cluster_id.clone(),
+            spec.node_id.clone(),
+            parent.path().join("database"),
+            Arc::clone(&reopened),
+            true,
+        )
+        .unwrap();
+        assert_eq!(service.range_write_progress(range.id).resolved_through, 0);
+        assert_eq!(
+            reopened
+                .read()
+                .native_range_prefix_observation(range.id)
+                .unwrap()
+                .pending_command_index,
+            Some(1)
+        );
+        assert!(reopened.read().get("items", "cut").unwrap().is_none());
+        assert!(reopened
+            .read()
+            .current_native_range_source_lineage(range.id)
+            .is_err());
+    }
+
+    #[test]
+    fn native_install_safety_preserves_floor_when_raw_repair_invalidates_source() {
+        let (_parent, db, topology, spec) = fixture();
+        let command = command(&topology, "guard", 1);
+        let range = topology.range_by_id(command.range_id).unwrap();
+        let intent = NativeRangeCommandIntent::plan(&command, range, &topology).unwrap();
+        let certificate = intent
+            .certify(&BTreeSet::from([range.leader.clone()]))
+            .unwrap();
+        let gate = db.read().range_mutation_gate();
+        {
+            let permit = gate.try_enter(range.id).unwrap();
+            let authority = RangeMutationAuthority::Mutation(&permit);
+            db.read()
+                .apply_native_locally_certified_command(
+                    &certificate,
+                    &command.mutations,
+                    &authority,
+                )
+                .unwrap();
+            db.read()
+                .apply_admitted_mutations_with_mutation(range.id, &command.mutations, &authority)
+                .unwrap();
+        }
+        assert_eq!(
+            db.read()
+                .native_range_prefix_observation(range.id)
+                .unwrap()
+                .native_applied_index,
+            None
+        );
+        let frozen = gate.try_freeze(range.id, Uuid::now_v7()).unwrap();
+        let admission = db
+            .read()
+            .native_recovery_admission(
+                &spec.cluster_id,
+                spec.bootstrap_id,
+                &spec.node_id,
+                spec.member_incarnation,
+            )
+            .unwrap();
+        let safety = db
+            .read()
+            .native_range_install_safety(&admission, range.id, &frozen)
+            .unwrap();
+        assert_eq!(safety.applied_index(), Some(1));
+        assert_eq!(safety.maximum_irreversible_index(), Some(1));
+        assert!(safety.source_invalidated());
+        safety
+            .require_current(&db.read(), &admission, &frozen)
+            .unwrap();
     }
 }

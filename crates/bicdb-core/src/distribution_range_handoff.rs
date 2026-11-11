@@ -73,6 +73,9 @@ pub(crate) struct CertifiedRangeImageCut {
     source_incarnation: u64,
     target_id: ClusterNodeId,
     target_incarnation: u64,
+    intended_activation_range: RangeDescriptor,
+    intended_activation_members:
+        std::collections::BTreeMap<ClusterNodeId, crate::db::RangeImageBirthMember>,
     bootstrap_id: Option<Uuid>,
     relocation: crate::distribution::RangeRelocation,
     old_member_credentials:
@@ -82,6 +85,34 @@ pub(crate) struct CertifiedRangeImageCut {
 }
 
 impl CertifiedRangeImageCut {
+    pub(crate) fn bootstrap_id(&self) -> Option<Uuid> {
+        self.bootstrap_id
+    }
+    pub(crate) fn schema_sha256(&self) -> Option<&str> {
+        self.expected_schema_sha256.as_deref()
+    }
+    pub(crate) fn restore_activation(
+        &self,
+    ) -> Option<&crate::distribution_consensus::MetadataRestoreActivation> {
+        self.restore_activation.as_ref()
+    }
+    pub(crate) fn capture_members(
+        &self,
+    ) -> std::collections::BTreeMap<ClusterNodeId, crate::db::RangeImageBirthMember> {
+        self.old_member_credentials
+            .iter()
+            .map(|(id, (incarnation, active, pending))| {
+                (
+                    id.clone(),
+                    crate::db::RangeImageBirthMember {
+                        incarnation: *incarnation,
+                        tls_certificate_sha256: active.clone(),
+                        pending_tls_certificate_sha256: pending.clone(),
+                    },
+                )
+            })
+            .collect()
+    }
     pub(crate) fn session_id(&self) -> Uuid {
         self.promise.session_id
     }
@@ -124,9 +155,21 @@ impl CertifiedRangeImageCut {
     pub(crate) fn activation_epoch(&self) -> u64 {
         self.promise.activation_epoch
     }
+    /// Intended configuration captured from the genuine metadata proof. This
+    /// is not evidence that the configuration has been activated or installed.
+    pub(crate) fn intended_activation_range(&self) -> &RangeDescriptor {
+        &self.intended_activation_range
+    }
+    pub(crate) fn intended_activation_members(
+        &self,
+    ) -> &std::collections::BTreeMap<ClusterNodeId, crate::db::RangeImageBirthMember> {
+        &self.intended_activation_members
+    }
 
     /// Validate only the configuration binding of an independently produced
     /// native lineage. This cannot manufacture native visibility or extend R.
+    /// Load estimates are excluded. Placement-policy and voter credential
+    /// changes require a re-attested native base in this first implementation.
     pub(crate) fn validate_source_lineage_configuration(
         &self,
         lineage: &crate::db::SourceRangeImageLineage,
@@ -325,6 +368,7 @@ pub(crate) struct HandoffCutRound {
     authority: HandoffMetadataProof,
     request: RangeHandoffPromise,
     range: RangeDescriptor,
+    intended_activation_range: RangeDescriptor,
     old_voters: std::collections::BTreeMap<ClusterNodeId, u64>,
     acknowledgements: std::collections::BTreeMap<ClusterNodeId, HandoffPromiseAck>,
 }
@@ -486,6 +530,7 @@ impl HandoffCutRound {
             authority,
             request,
             range,
+            intended_activation_range: new_range,
             old_voters,
             acknowledgements: Default::default(),
         })
@@ -565,6 +610,23 @@ impl HandoffCutRound {
             .range
             .required_schema_sha256(&topology.nodes)
             .map(str::to_string);
+        let intended_activation_members = self
+            .intended_activation_range
+            .replicas
+            .iter()
+            .filter(|replica| replica.role == crate::distribution::RangeReplicaRole::Voter)
+            .map(|replica| {
+                let node = &topology.nodes[&replica.node_id];
+                (
+                    node.id.clone(),
+                    crate::db::RangeImageBirthMember {
+                        incarnation: node.incarnation,
+                        tls_certificate_sha256: node.tls_certificate_sha256.clone(),
+                        pending_tls_certificate_sha256: node.pending_tls_certificate_sha256.clone(),
+                    },
+                )
+            })
+            .collect();
         Ok(CertifiedRangeImageCut {
             promise: self.request,
             cluster_id: topology.cluster_id.clone(),
@@ -574,6 +636,8 @@ impl HandoffCutRound {
             source_incarnation: best.incarnation,
             target_id: target.id.clone(),
             target_incarnation: target.incarnation,
+            intended_activation_range: self.intended_activation_range,
+            intended_activation_members,
             bootstrap_id: topology.range_image_bootstrap_id,
             relocation: relocation.clone(),
             old_member_credentials: self
@@ -598,7 +662,7 @@ impl HandoffCutRound {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::distribution::*;
     use crate::distribution_consensus::{
@@ -614,6 +678,13 @@ mod tests {
     }
 
     fn topology_with_ranges(initial_ranges: u32) -> ClusterTopology {
+        topology_with_load(initial_ranges, None).0
+    }
+
+    fn topology_with_load(
+        initial_ranges: u32,
+        load: Option<(u64, u64)>,
+    ) -> (ClusterTopology, (u64, u64)) {
         let root = tempfile::tempdir().unwrap();
         let cfg = DistributionConfig {
             enabled: true,
@@ -642,6 +713,12 @@ mod tests {
             store.join_node(node, &actor, 2).unwrap();
         }
         let range = store.topology().ranges.values().next().unwrap().clone();
+        let initial_load = (range.approximate_bytes, range.approximate_qps);
+        if let Some((bytes, qps)) = load {
+            store
+                .update_range_load(range.id, bytes, qps, &actor, 3)
+                .unwrap();
+        }
         let plan = RebalancePlan {
             id: "stable-handoff-test-plan".into(),
             topology_generation: store.topology().generation,
@@ -673,10 +750,10 @@ mod tests {
         }
         topology.replication_factor = 3;
         topology.validate().unwrap();
-        topology
+        (topology, initial_load)
     }
 
-    fn authority(root: &Path, topology: &ClusterTopology) -> MetadataReadAuthority {
+    pub(crate) fn authority(root: &Path, topology: &ClusterTopology) -> MetadataReadAuthority {
         authority_with_restore(root, topology, None, Duration::from_secs(10))
     }
 
@@ -989,13 +1066,17 @@ mod tests {
         use parking_lot::RwLock;
         use std::sync::Arc;
         let root = tempfile::tempdir().unwrap();
-        let mut topology = topology();
+        // Preserve actual pre-load estimates for the native base. The
+        // controller commits changed load before allocating the learner.
+        let (mut topology, initial_load) = topology_with_load(1, Some((8192, 137)));
         let bootstrap = Uuid::now_v7();
         topology.range_image_bootstrap_id = Some(bootstrap);
         let relocation_id = *topology.relocations.keys().next().unwrap();
         let relocation = &topology.relocations[&relocation_id];
         let mut base = topology.range_by_id(relocation.range_id).unwrap().clone();
         base.epoch = relocation.expected_epoch;
+        base.approximate_bytes = initial_load.0;
+        base.approximate_qps = initial_load.1;
         base.replicas
             .retain(|replica| replica.id != relocation.target_replica_id);
         let local = base.leader.clone();
@@ -1081,6 +1162,17 @@ mod tests {
             round.record(ack).unwrap();
         }
         let mut cut = round.finish().unwrap();
+        assert_eq!(
+            (cut.range.approximate_bytes, cut.range.approximate_qps),
+            (8192, 137)
+        );
+        assert_ne!(
+            (cut.range.approximate_bytes, cut.range.approximate_qps),
+            (
+                lineage.base_range().approximate_bytes,
+                lineage.base_range().approximate_qps
+            )
+        );
         cut.validate_source_lineage_configuration(&lineage).unwrap();
         assert_eq!(lineage.base_range().epoch, cut.relocation.expected_epoch);
         assert_eq!(lineage.base_range().epoch + 1, cut.range.epoch);
@@ -1127,8 +1219,77 @@ mod tests {
         assert!(cut.validate_source_lineage_configuration(&lineage).is_err());
         cut.range_index = 0;
         cut.validate_source_lineage_configuration(&lineage).unwrap();
-        // Actual empty native genesis is R=0. This does not mint the pending
-        // installed-image or certified-suffix producer for R>0.
+        // Exercise the production capture entry too: direct validator tests
+        // must not leave the actual image path unwired.
+        drop(frozen);
+        let runtime_frozen = Arc::new(gate.try_freeze(base.id, cut.session_id()).unwrap());
+        let capture_frozen = Arc::clone(&runtime_frozen);
+        let mut capture = crate::distribution_range_image::RangeImageCapture::begin(
+            Arc::clone(&database),
+            cut,
+            capture_frozen,
+            lineage,
+            Duration::from_secs(3),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+        assert!(
+            gate.try_controlled_mutation(&runtime_frozen).is_err(),
+            "Runtime's retained Arc cannot write through actual Capture's read pin"
+        );
+        {
+            let staging = capture.authorize_target_install().unwrap();
+            staging.require_current().unwrap();
+            assert_eq!(staging.bootstrap_id(), bootstrap);
+            assert_eq!(staging.cut().range_index(), 0);
+            assert!(!staging.catalog_sha256().is_empty());
+        }
+        let options = crate::RangeSnapshotOptions::default();
+        loop {
+            let cursor = capture.cursor().clone();
+            let step = capture
+                .export_step(&cursor, &options, &CancellationToken::uncancelable())
+                .unwrap();
+            if step.complete {
+                break;
+            }
+        }
+        assert!(
+            capture.completed_seal().is_err(),
+            "row completion alone cannot certify an omitted logical spine"
+        );
+        loop {
+            let cursor = capture.history_cursor().clone();
+            let step = capture
+                .export_history_step(&cursor, 256, &CancellationToken::uncancelable())
+                .unwrap();
+            if step.next_cursor.complete() {
+                break;
+            }
+        }
+        let seal = capture.completed_seal().unwrap();
+        assert_eq!(seal.record_count, 0);
+        assert_eq!(seal.range_index, 0);
+        assert_eq!(seal.bootstrap_id, bootstrap);
+        let completed = capture.complete().unwrap();
+        completed.require_current().unwrap();
+        assert_eq!(completed.seal(), &seal);
+        assert!(gate.try_enter(base.id).is_err());
+        assert!(
+            gate.try_controlled_mutation(&runtime_frozen).is_err(),
+            "Completed retains the actual source read pin"
+        );
+        drop(completed);
+        assert!(
+            gate.try_enter(base.id).is_err(),
+            "dropping Capture must not release Runtime's outstanding recovery freeze"
+        );
+        let controlled = gate.try_controlled_mutation(&runtime_frozen).unwrap();
+        drop(controlled);
+        drop(runtime_frozen);
+        assert!(gate.try_enter(base.id).is_ok());
+        // This actual healthy empty-genesis path is R=0, not proof of the
+        // pending installed-image or certified-suffix producer for R>0.
     }
 
     #[cfg(feature = "tls-replication")]

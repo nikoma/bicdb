@@ -1,0 +1,31 @@
+{
+  "git_head": "1d6dbe40de2c4e3cfbd7f2fad7c8a4a02bf8e9fc",
+  "uncommitted_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "source_version": "1.0.466-beta",
+  "scope": "unmerged actual native genesis + old-data-quorum cut + production source capture ownership only; no target install/controller/StrongGet qualification; core opt-level=0/debug=0",
+  "physical_qualification": false,
+  "environment_override": {},
+  "name": "source-capture-native-lineage",
+  "command": [
+    "cargo",
+    "test",
+    "--release",
+    "--locked",
+    "-p",
+    "bicdb-core",
+    "--features",
+    "tls-replication",
+    "--config",
+    "profile.release.package.bicdb-core.opt-level=0",
+    "--config",
+    "profile.release.package.bicdb-core.debug=0",
+    "--lib",
+    "source_lineage_requires_exact_committed_learner_transition_and_native_bindings",
+    "--",
+    "--nocapture"
+  ],
+  "exit_code": 0,
+  "interrupted_reason": null,
+  "elapsed_seconds": 62.01593885291368,
+  "minimum_available_bytes": 23980879872
+}

@@ -14,11 +14,20 @@ use uuid::Uuid;
 
 use crate::db::{RangeImageDbBindings, SourceRangeImageLineage};
 use crate::distribution::{
-    ClusterId, ClusterNodeId, RangeId, RangeSnapshotBatch, RangeSnapshotOptions, RelocationId,
+    ClusterId, ClusterNodeId, RangeId, RangeSnapshotBatch, RangeSnapshotOptions,
 };
 use crate::distribution_range_handoff::CertifiedRangeImageCut;
-use crate::distribution_range_mutation::{FrozenRangeMutationPermit, RangeMutationGate};
+use crate::distribution_range_mutation::{
+    FrozenRangeMutationPermit, RangeMutationGate, SourceCaptureReadPin,
+};
 use crate::{BicDb, BicDbError, CancellationToken, CollectionMeta, Result};
+
+mod history_export;
+pub(crate) use history_export::{RangeImageHistoryCursorV1, RangeImageHistoryStepV1};
+mod source_cut;
+pub(crate) use source_cut::{
+    CertifiedRecoveryImageCut, NativeRangeImageSourceCut, RangeImageSourcePurposeV1,
+};
 
 const IMAGE_FORMAT: u32 = 1;
 const MAX_BATCH_BYTES: usize = 8 * 1024 * 1024;
@@ -36,7 +45,7 @@ fn invalid(detail: impl Into<String>) -> BicDbError {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct RangeIndexCut(u64);
 impl RangeIndexCut {
-    fn certified(cut: &CertifiedRangeImageCut) -> Self {
+    fn certified(cut: &NativeRangeImageSourceCut) -> Self {
         Self(cut.range_index())
     }
     pub(crate) fn get(self) -> u64 {
@@ -60,6 +69,18 @@ pub(crate) struct RangeImageCursorV1 {
     step: u64,
 }
 
+impl RangeImageCursorV1 {
+    pub(crate) fn collection_index(&self) -> usize {
+        self.collection_index
+    }
+    pub(crate) fn after_key(&self) -> Option<&str> {
+        self.after_key.as_deref()
+    }
+    pub(crate) fn step(&self) -> u64 {
+        self.step
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub(crate) struct RangeImageStepV1 {
     pub format_version: u32,
@@ -81,8 +102,7 @@ pub(crate) struct LocalRangeImageSealV1 {
     pub format_version: u32,
     pub session_id: Uuid,
     pub nonce: Uuid,
-    pub plan_id: String,
-    pub relocation_id: RelocationId,
+    pub purpose: RangeImageSourcePurposeV1,
     pub cluster_id: ClusterId,
     pub bootstrap_id: Uuid,
     pub source_native_receipt_sha256: String,
@@ -106,6 +126,11 @@ pub(crate) struct LocalRangeImageSealV1 {
     pub serialized_record_bytes: u64,
     pub steps: u64,
     pub wire_chain_sha256: String,
+    pub logical_genesis_sha256: String,
+    pub logical_history_sha256: String,
+    pub history_entries: u64,
+    pub history_steps: u64,
+    pub history_wire_chain_sha256: String,
     pub local_namespace_ids: Vec<(String, Uuid)>,
 }
 
@@ -115,8 +140,9 @@ pub(crate) struct LocalRangeImageSealV1 {
 pub(crate) struct RangeImageCapture {
     db: Arc<RwLock<BicDb>>,
     gate: RangeMutationGate,
-    frozen: FrozenRangeMutationPermit,
-    cut: CertifiedRangeImageCut,
+    source_read_pin: SourceCaptureReadPin,
+    frozen: Arc<FrozenRangeMutationPermit>,
+    cut: NativeRangeImageSourceCut,
     range_index: RangeIndexCut,
     reserved: ReservedDbUpperBound,
     bindings: RangeImageDbBindings,
@@ -125,6 +151,11 @@ pub(crate) struct RangeImageCapture {
     content: Sha256,
     cursor: RangeImageCursorV1,
     previous_step: Option<RangeImageStepV1>,
+    history_cursor: RangeImageHistoryCursorV1,
+    previous_history_step: Option<RangeImageHistoryStepV1>,
+    history_verified_entries: u64,
+    history_last_sha256: Option<String>,
+    history_wire_chain_sha256: String,
     wire_chain_sha256: String,
     record_count: u64,
     serialized_record_bytes: u64,
@@ -132,6 +163,76 @@ pub(crate) struct RangeImageCapture {
     max_snapshot_db_sequence: u64,
     complete: bool,
     invalid: bool,
+}
+
+/// Permission to stage an image from this live, fenced source. This borrowed
+/// value cannot outlive the capture or be decoded from a remote seal. It does
+/// not certify completed content, target installation, membership or readiness.
+pub(crate) struct TentativeNativeRangeImageSourceAuthorization<'a> {
+    capture: &'a RangeImageCapture,
+}
+
+impl TentativeNativeRangeImageSourceAuthorization<'_> {
+    pub(crate) fn require_current(&self) -> Result<()> {
+        let database = read_database(&self.capture.db)?;
+        self.capture.validate(&database)
+    }
+    pub(crate) fn cut(&self) -> &NativeRangeImageSourceCut {
+        &self.capture.cut
+    }
+    pub(crate) fn bindings(&self) -> &RangeImageDbBindings {
+        &self.capture.bindings
+    }
+    pub(crate) fn lineage(&self) -> &SourceRangeImageLineage {
+        &self.capture.lineage
+    }
+    pub(crate) fn bootstrap_id(&self) -> Uuid {
+        self.capture.lineage.bootstrap_id()
+    }
+    pub(crate) fn catalog_sha256(&self) -> &str {
+        &self.capture.catalog_sha256
+    }
+    /// The actual source reservation bound B, never a consensus range index R.
+    pub(crate) fn reserved_db_upper_bound(&self) -> ReservedDbUpperBound {
+        self.capture.reserved
+    }
+    pub(crate) fn native_receipt_sha256(&self) -> &str {
+        self.capture.lineage.native_receipt_sha256()
+    }
+}
+
+/// A completed source image with its actual database, namespace, lineage and
+/// exclusive mutation pins still owned. The serializable seal alone cannot
+/// construct this value. Target verification and activation remain separate.
+pub(crate) struct CompletedNativeRangeImageSource {
+    capture: RangeImageCapture,
+    seal: LocalRangeImageSealV1,
+}
+
+impl CompletedNativeRangeImageSource {
+    /// Retains the same actual source capture while catalog/native finalization
+    /// is retried after a target process reopen. This does not authorize erase.
+    pub(crate) fn authorize_target_install(
+        &self,
+    ) -> Result<TentativeNativeRangeImageSourceAuthorization<'_>> {
+        self.capture.authorize_target_install()
+    }
+    pub(crate) fn require_current(&self) -> Result<()> {
+        let database = read_database(&self.capture.db)?;
+        self.capture.validate(&database)
+    }
+    pub(crate) fn seal(&self) -> &LocalRangeImageSealV1 {
+        &self.seal
+    }
+    pub(crate) fn cut(&self) -> &NativeRangeImageSourceCut {
+        &self.capture.cut
+    }
+    pub(crate) fn bindings(&self) -> &RangeImageDbBindings {
+        &self.capture.bindings
+    }
+    pub(crate) fn lineage(&self) -> &SourceRangeImageLineage {
+        &self.capture.lineage
+    }
 }
 
 fn read_database(db: &Arc<RwLock<BicDb>>) -> Result<RwLockReadGuard<'_, BicDb>> {
@@ -200,12 +301,14 @@ pub(crate) fn content_hasher(catalog: &[u8]) -> Sha256 {
 impl RangeImageCapture {
     pub(crate) fn begin(
         db: Arc<RwLock<BicDb>>,
-        cut: CertifiedRangeImageCut,
-        frozen: FrozenRangeMutationPermit,
+        cut: impl Into<NativeRangeImageSourceCut>,
+        frozen: impl Into<Arc<FrozenRangeMutationPermit>>,
         lineage: SourceRangeImageLineage,
         wait_budget: Duration,
         cancellation: &CancellationToken,
     ) -> Result<Self> {
+        let cut = cut.into();
+        let frozen = frozen.into();
         if wait_budget.is_zero()
             || wait_budget > MAX_CAPTURE_WAIT
             || frozen.owner() != cut.session_id()
@@ -217,10 +320,11 @@ impl RangeImageCapture {
         // The old-data-quorum cut does not itself qualify a native image.
         // Require the actual persisted base's exact metadata transition too.
         cut.validate_source_lineage_configuration(&lineage)?;
-        let (gate, reserved, bindings) = {
+        let (gate, reserved, bindings, source_read_pin) = {
             let database = read_database(&db)?;
             let gate = database.range_mutation_gate();
-            gate.validate_frozen(cut.range().id, &frozen)?;
+            gate.validate_quiescent_frozen(cut.range().id, &frozen)?;
+            let source_read_pin = gate.try_source_capture_read_pin(cut.range().id, &frozen)?;
             database.validate_source_range_image_lineage(
                 &lineage,
                 cut.range().id,
@@ -233,13 +337,15 @@ impl RangeImageCapture {
                 gate,
                 ReservedDbUpperBound(database.current_commit_seq()),
                 bindings,
+                source_read_pin,
             )
         };
         loop {
             wait.check()?;
             let reached = {
                 let database = read_database(&db)?;
-                gate.validate_frozen(cut.range().id, &frozen)?;
+                gate.validate_quiescent_frozen(cut.range().id, &frozen)?;
+                gate.validate_source_capture_read_pin(cut.range().id, &source_read_pin)?;
                 database.validate_range_image_bindings(&bindings)?;
                 database.replication_shippable_seq() >= reserved.0
             };
@@ -263,6 +369,7 @@ impl RangeImageCapture {
         Ok(Self {
             db,
             gate,
+            source_read_pin,
             frozen,
             cut,
             range_index,
@@ -273,6 +380,11 @@ impl RangeImageCapture {
             content,
             cursor: RangeImageCursorV1::default(),
             previous_step: None,
+            history_cursor: RangeImageHistoryCursorV1::default(),
+            previous_history_step: None,
+            history_verified_entries: 0,
+            history_last_sha256: None,
+            history_wire_chain_sha256: history_export::initial_history_chain(),
             wire_chain_sha256,
             record_count: 0,
             serialized_record_bytes: 0,
@@ -296,6 +408,22 @@ impl RangeImageCapture {
         self.reserved
     }
 
+    pub(crate) fn authorize_target_install(
+        &self,
+    ) -> Result<TentativeNativeRangeImageSourceAuthorization<'_>> {
+        let authorization = TentativeNativeRangeImageSourceAuthorization { capture: self };
+        authorization.require_current()?;
+        Ok(authorization)
+    }
+
+    pub(crate) fn complete(self) -> Result<CompletedNativeRangeImageSource> {
+        let seal = self.completed_seal()?;
+        Ok(CompletedNativeRangeImageSource {
+            capture: self,
+            seal,
+        })
+    }
+
     fn validate(&self, database: &BicDb) -> Result<()> {
         if self.invalid {
             return Err(invalid(
@@ -303,7 +431,9 @@ impl RangeImageCapture {
             ));
         }
         self.gate
-            .validate_frozen(self.cut.range().id, &self.frozen)?;
+            .validate_quiescent_frozen(self.cut.range().id, &self.frozen)?;
+        self.gate
+            .validate_source_capture_read_pin(self.cut.range().id, &self.source_read_pin)?;
         database.validate_range_image_bindings(&self.bindings)?;
         database.validate_source_range_image_lineage(
             &self.lineage,
@@ -440,8 +570,19 @@ impl RangeImageCapture {
     }
 
     pub(crate) fn completed_seal(&self) -> Result<LocalRangeImageSealV1> {
-        if !self.complete {
-            return Err(invalid("cannot seal an incomplete image"));
+        if !self.complete
+            || !self.history_cursor.complete()
+            || self.history_verified_entries
+                != self
+                    .range_index
+                    .get()
+                    .checked_add(1)
+                    .ok_or_else(|| invalid("history entry count overflow"))?
+            || self.history_last_sha256.as_deref() != Some(self.lineage.logical_history_sha256())
+        {
+            return Err(invalid(
+                "cannot seal incomplete rows or missing zero-through-R native history",
+            ));
         }
         let database = read_database(&self.db)?;
         self.validate(&database)?;
@@ -451,8 +592,7 @@ impl RangeImageCapture {
             format_version: IMAGE_FORMAT,
             session_id: self.cut.session_id(),
             nonce: self.cut.nonce(),
-            plan_id: self.cut.plan_id().to_string(),
-            relocation_id: self.cut.relocation_id(),
+            purpose: self.cut.purpose(),
             cluster_id: self.cut.cluster_id().clone(),
             bootstrap_id: self.lineage.bootstrap_id(),
             source_native_receipt_sha256: self.lineage.native_receipt_sha256().to_string(),
@@ -476,6 +616,11 @@ impl RangeImageCapture {
             serialized_record_bytes: self.serialized_record_bytes,
             steps: self.cursor.step,
             wire_chain_sha256: self.wire_chain_sha256.clone(),
+            logical_genesis_sha256: self.lineage.logical_genesis_sha256().to_string(),
+            logical_history_sha256: self.lineage.logical_history_sha256().to_string(),
+            history_entries: self.history_verified_entries,
+            history_steps: self.history_cursor.step(),
+            history_wire_chain_sha256: self.history_wire_chain_sha256.clone(),
             local_namespace_ids: self.bindings.namespace_ids(),
         })
     }

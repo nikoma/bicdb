@@ -148,6 +148,9 @@ fn mutation_hash(value: &impl Serialize) -> Result<String> {
 pub(crate) fn admission_mutations_sha256(mutations: &[CommitAdmissionMutation]) -> Result<String> {
     mutation_hash(&mutations)
 }
+pub(super) fn actual_transaction_mutations_sha256(transaction: &Transaction) -> Result<String> {
+    mutation_hash(&ActualMutations(&transaction.writes))
+}
 struct ActualMutations<'a>(&'a [TxWrite]);
 impl Serialize for ActualMutations<'_> {
     fn serialize<S: serde::Serializer>(

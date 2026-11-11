@@ -1734,6 +1734,9 @@ impl ClusterDataNodeService {
     ) -> Result<RangeWriteAck> {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
+        if try_database_read(&self.db)?.native_range_image_birth_present() {
+            return Err(data_error("native Apply requires an authenticated current-leader instruction; raw caller/CQ replay is insufficient"));
+        }
         let state = self.range_writes.state(command)?;
         if !matches!(
             state,
@@ -1812,6 +1815,12 @@ impl ClusterDataNodeService {
     }
 
     fn recover_committed_range_writes(&mut self) -> Result<()> {
+        if try_database_read(&self.db)?.native_range_image_birth_present() {
+            // Native history must be resolved under fresh recovery authority
+            // and actual certificate quorum. A bare local CQ is not enough
+            // to publish or even re-attest a physical native prefix on open.
+            return Ok(());
+        }
         for command in self.range_writes.committed_not_applied() {
             let gate = self.range_mutations.clone();
             let permit = gate.try_enter(command.range_id)?;

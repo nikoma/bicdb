@@ -335,15 +335,17 @@ impl Transaction {
         })
     }
 
-    /// Reintroduce fixed-snapshot keys removed from a live index. The caller
-    /// probes the live index first, so a later key can only have disappeared
+    /// Reconcile live index candidates against fixed-snapshot keys. The
+    /// caller probes the live index first, so a key can only have moved
     /// after its replacement version entered the MVCC chain.
-    pub fn postgres_snapshot_index_prefix_additions(
+    pub fn postgres_snapshot_index_changes(
         &self,
         name: &str,
         prefix: &[IndexValue],
+        bounds: Option<(Option<&IndexValue>, Option<&IndexValue>)>,
+        filters: &[(usize, IndexValue)],
         cancellation: &CancellationToken,
-    ) -> Result<Vec<(String, RowId)>> {
+    ) -> Result<Vec<(String, RowId, bool)>> {
         if self.postgres_serializable.is_none() {
             return Ok(Vec::new());
         }
@@ -384,7 +386,7 @@ impl Transaction {
             }
             changed
         };
-        let mut additions = Vec::new();
+        let mut matches = Vec::with_capacity(changed.len());
         for (id, rowid) in changed {
             cancellation.check()?;
             let (record, _, _) =
@@ -395,15 +397,25 @@ impl Transaction {
                     self.snapshot_tx,
                     &self.paged_snapshot,
                 )?;
-            if let Some(record) = record {
-                if crate::db::record_matches_index_predicate(&record, &index)?
-                    && index.key_for_record(&record).starts_with(prefix)
-                {
-                    additions.push((id, rowid));
+            let visible = match record {
+                Some(record) if crate::db::record_matches_index_predicate(&record, &index)? => {
+                    let key = index.key_for_record(&record);
+                    key.starts_with(prefix)
+                        && bounds.is_none_or(|(lower, upper)| {
+                            key.get(prefix.len()).is_some_and(|value| {
+                                lower.is_none_or(|lower| value >= lower)
+                                    && upper.is_none_or(|upper| value <= upper)
+                            })
+                        })
+                        && filters
+                            .iter()
+                            .all(|(field, value)| key.get(*field) == Some(value))
                 }
-            }
+                _ => false,
+            };
+            matches.push((id, rowid, visible));
         }
-        Ok(additions)
+        Ok(matches)
     }
 
     /// The index scans use inclusive first-field bounds inside the prefix.

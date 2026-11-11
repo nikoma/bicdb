@@ -3507,15 +3507,7 @@ impl<'db> SqlEngine<'db> {
                 upper,
             } => {
                 sql_profile_index_lookup();
-                if let Some(tx) = self.tx {
-                    tx.observe_postgres_index_range(
-                        index_name,
-                        &[],
-                        lower.as_ref(),
-                        upper.as_ref(),
-                    )?;
-                }
-                let ids: Rc<[String]> = Rc::from(self.db_ref().range_index(
+                let ids: Rc<[String]> = Rc::from(self.single_field_range_index_for_snapshot(
                     index_name,
                     lower.as_ref(),
                     upper.as_ref(),

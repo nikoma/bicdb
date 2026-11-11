@@ -698,6 +698,101 @@ impl<'db> SqlEngine<'db> {
         })
     }
 
+    fn reconcile_snapshot_index<T: Ord>(
+        &self,
+        candidates: &mut Vec<T>,
+        name: &str,
+        prefix: &[IndexValue],
+        bounds: Option<(Option<&IndexValue>, Option<&IndexValue>)>,
+        filters: &[(usize, IndexValue)],
+        locator: impl Fn(String, RowId) -> T,
+    ) -> Result<()> {
+        let Some(tx) = self.tx else {
+            return Ok(());
+        };
+        let changes =
+            tx.postgres_snapshot_index_changes(name, prefix, bounds, filters, &self.cancellation)?;
+        if !changes.is_empty() {
+            let by_locator: BTreeMap<T, bool> = changes
+                .into_iter()
+                .map(|(id, rowid, matches)| (locator(id, rowid), matches))
+                .collect();
+            candidates.retain(|key| by_locator.get(key).copied().unwrap_or(true));
+            candidates.extend(
+                by_locator
+                    .into_iter()
+                    .filter_map(|(key, matches)| matches.then_some(key)),
+            );
+            candidates.sort_unstable();
+            candidates.dedup();
+        }
+        Ok(())
+    }
+
+    pub(crate) fn range_index_rowids_for_snapshot(
+        &self,
+        name: &str,
+        prefix: &[IndexValue],
+        lower: Option<&IndexValue>,
+        upper: Option<&IndexValue>,
+        filters: &[(usize, IndexValue)],
+    ) -> Result<Vec<RowId>> {
+        if let Some(tx) = self.tx {
+            tx.observe_postgres_index_range(name, prefix, lower, upper)?;
+        }
+        let mut rows = self
+            .db_ref()
+            .range_index_with_prefix_filters_rowids(name, prefix, lower, upper, filters)?;
+        self.reconcile_snapshot_index(
+            &mut rows,
+            name,
+            prefix,
+            Some((lower, upper)),
+            filters,
+            |_, rowid| rowid,
+        )?;
+        Ok(rows)
+    }
+
+    pub(crate) fn range_index_pks_for_snapshot(
+        &self,
+        name: &str,
+        prefix: &[IndexValue],
+        lower: Option<&IndexValue>,
+        upper: Option<&IndexValue>,
+        filters: &[(usize, IndexValue)],
+    ) -> Result<Vec<String>> {
+        if let Some(tx) = self.tx {
+            tx.observe_postgres_index_range(name, prefix, lower, upper)?;
+        }
+        let mut rows = self
+            .db_ref()
+            .range_index_with_prefix_filters(name, prefix, lower, upper, filters)?;
+        self.reconcile_snapshot_index(
+            &mut rows,
+            name,
+            prefix,
+            Some((lower, upper)),
+            filters,
+            |id, _| id,
+        )?;
+        Ok(rows)
+    }
+
+    pub(crate) fn single_field_range_index_for_snapshot(
+        &self,
+        name: &str,
+        lower: Option<&IndexValue>,
+        upper: Option<&IndexValue>,
+    ) -> Result<Vec<String>> {
+        if let Some(tx) = self.tx {
+            tx.observe_postgres_index_range(name, &[], lower, upper)?;
+        }
+        let mut rows = self.db_ref().range_index(name, lower, upper)?;
+        self.reconcile_snapshot_index(&mut rows, name, &[], Some((lower, upper)), &[], |id, _| id)?;
+        Ok(rows)
+    }
+
     pub(crate) fn lookup_index_rowids_cached(
         &self,
         index_name: &str,
@@ -718,18 +813,9 @@ impl<'db> SqlEngine<'db> {
         #[cfg(test)]
         SQL_INDEX_STORAGE_LOOKUP_CALLS.with(|calls| *calls.borrow_mut() += 1);
         let mut rowids = self.db_ref().lookup_index_rowids(index_name, prefix)?;
-        if let Some(tx) = self.tx {
-            let added = tx.postgres_snapshot_index_prefix_additions(
-                index_name,
-                prefix,
-                &self.cancellation,
-            )?;
-            if !added.is_empty() {
-                rowids.extend(added.into_iter().map(|(_, rowid)| rowid));
-                rowids.sort_unstable();
-                rowids.dedup();
-            }
-        }
+        self.reconcile_snapshot_index(&mut rowids, index_name, prefix, None, &[], |_, rowid| {
+            rowid
+        })?;
         let rowids: Rc<[RowId]> = Rc::from(rowids);
         self.rowid_index_lookup_cache
             .borrow_mut()
@@ -759,18 +845,7 @@ impl<'db> SqlEngine<'db> {
         #[cfg(test)]
         SQL_INDEX_STORAGE_LOOKUP_CALLS.with(|calls| *calls.borrow_mut() += 1);
         let mut ids = self.db_ref().lookup_index(index_name, prefix)?;
-        if let Some(tx) = self.tx {
-            let added = tx.postgres_snapshot_index_prefix_additions(
-                index_name,
-                prefix,
-                &self.cancellation,
-            )?;
-            if !added.is_empty() {
-                ids.extend(added.into_iter().map(|(id, _)| id));
-                ids.sort_unstable();
-                ids.dedup();
-            }
-        }
+        self.reconcile_snapshot_index(&mut ids, index_name, prefix, None, &[], |id, _| id)?;
         let ids: Rc<[String]> = Rc::from(ids);
         self.index_lookup_cache
             .borrow_mut()

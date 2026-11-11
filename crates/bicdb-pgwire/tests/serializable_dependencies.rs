@@ -235,18 +235,25 @@ async fn serializable_tracks_row_and_predicate_dependencies() {
         )
         .await
         .unwrap();
-        let rows = a
-            .query("SELECT id FROM ssi_scope WHERE v=10 ORDER BY id", &[])
-            .await
-            .unwrap()
-            .into_iter()
-            .map(|row| row.get::<_, i32>(0))
-            .collect::<Vec<_>>();
-        assert_eq!(
-            rows,
-            [1],
-            "{mode:?}: a secondary-key lookup lost a row visible to the fixed snapshot"
-        );
+        for (predicate, expected) in [
+            ("v=10", &[1][..]),
+            ("v=11", &[][..]),
+            ("v BETWEEN 9 AND 10", &[1][..]),
+            ("v BETWEEN 11 AND 12", &[][..]),
+        ] {
+            let query = format!("SELECT id FROM ssi_scope WHERE {predicate} ORDER BY id");
+            let rows = a
+                .query(&query, &[])
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|row| row.get::<_, i32>(0))
+                .collect::<Vec<_>>();
+            assert_eq!(
+                rows, expected,
+                "{mode:?}: secondary index predicate {predicate} disagrees with the fixed snapshot"
+            );
+        }
         a.batch_execute("COMMIT").await.unwrap();
 
         b.batch_execute(

@@ -694,3 +694,5 @@ fn native_normal_apply_actual_rf3_services_materialize_two_acks_and_lost_apply_c
         );
     }
 }
+#[cfg(test)]
+mod reopen;

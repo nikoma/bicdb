@@ -27,8 +27,11 @@ mod image_history;
 #[cfg(test)]
 mod recovery_order_tests;
 pub(crate) use image_compatibility::{RecoverySourceHistoryRound, VerifiedRecoverySourceHistory};
+#[cfg(test)]
+pub(crate) use image_history::test_only_structural_fence_dtos;
 pub(crate) use image_history::{
-    RecoveryImageHistoryObligationsV1, RecoveryNativeHistoryPointV1, RecoveryNativePendingHistoryV1,
+    fenced_obligation_limit_error, RecoveryImageHistoryObligationsV1, RecoveryNativeHistoryPointV1,
+    RecoveryNativePendingHistoryV1, MAX_FENCED_IRREVERSIBLE_COMMANDS,
 };
 mod native_completion_provenance;
 pub(crate) use native_completion_provenance::{
@@ -131,8 +134,21 @@ pub(crate) struct RecoveryFencedProbeReply {
     pub fence: RecoveryEpochFenceReply,
     pub index: Option<u64>,
     pub entry: Option<crate::distribution_range_consensus::RangeWriteLogEntry>,
+    #[serde(deserialize_with = "deserialize_present_option")]
+    pub sparse_decision:
+        Option<crate::distribution_range_consensus::SparseHistoricalDecisionProjection>,
     pub current_certification:
         Option<crate::distribution_range_consensus::HistoricalRangeCertification>,
+}
+
+fn deserialize_present_option<'de, D, T>(
+    deserializer: D,
+) -> std::result::Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::Deserialize<'de>,
+{
+    serde::Deserialize::deserialize(deserializer)
 }
 
 /// A fresh, authenticated read of an actual persisted fence and catalogue.
@@ -142,6 +158,8 @@ pub(crate) struct RecoveryHistoryObservation {
     fence: std::sync::Arc<RecoveryFenceObservation>,
     index: Option<u64>,
     entry: Option<crate::distribution_range_consensus::RangeWriteLogEntry>,
+    sparse_decision:
+        Option<crate::distribution_range_consensus::SparseHistoricalDecisionProjection>,
     current_certification:
         Option<crate::distribution_range_consensus::HistoricalRangeCertification>,
 }
@@ -160,7 +178,10 @@ impl RecoveryHistoryObservation {
         request: &RecoveryFencedProbeRequest,
         deadline: Instant,
     ) -> Result<Self> {
-        if reply.index != request.index || (reply.index.is_none() && reply.entry.is_some()) {
+        if reply.index != request.index
+            || (reply.index.is_none() && (reply.entry.is_some() || reply.sparse_decision.is_some()))
+            || (reply.entry.is_some() && reply.sparse_decision.is_some())
+        {
             return Err(invalid("recovery observation index correlation failed"));
         }
         if let Some(entry) = &reply.entry {
@@ -171,6 +192,17 @@ impl RecoveryHistoryObservation {
                 || entry.command.range_epoch > request.scope.range_epoch
             {
                 return Err(invalid("recovery history command scope mismatch"));
+            }
+        }
+        if let Some(sparse) = &reply.sparse_decision {
+            sparse.validate_shape(&request.scope, request.index.unwrap())?;
+            if sparse.local_node_id() != peer.node_id()
+                || sparse.local_member_incarnation() != peer.member_incarnation()
+                || sparse.native_database_incarnation() != reply.fence.native_database_incarnation
+            {
+                return Err(invalid(
+                    "sparse history is not this actual peer/native incarnation",
+                ));
             }
         }
         let fence =
@@ -186,6 +218,10 @@ impl RecoveryHistoryObservation {
                     .entry
                     .as_ref()
                     .is_some_and(|entry| entry.command.checksum_sha256 != marker.command_sha256)
+                || reply
+                    .sparse_decision
+                    .as_ref()
+                    .is_some_and(|sparse| sparse.command().checksum_sha256 != marker.command_sha256)
             {
                 return Err(invalid(
                     "current historical certify-only marker scope mismatch",
@@ -196,6 +232,7 @@ impl RecoveryHistoryObservation {
             fence: std::sync::Arc::new(fence),
             index: reply.index,
             entry: reply.entry,
+            sparse_decision: reply.sparse_decision,
             current_certification: reply.current_certification,
         })
     }
@@ -211,6 +248,11 @@ impl RecoveryHistoryObservation {
     pub(crate) fn entry(&self) -> Option<&crate::distribution_range_consensus::RangeWriteLogEntry> {
         self.entry.as_ref()
     }
+    pub(crate) fn sparse_decision(
+        &self,
+    ) -> Option<&crate::distribution_range_consensus::SparseHistoricalDecisionProjection> {
+        self.sparse_decision.as_ref()
+    }
     pub(crate) fn current_certification(
         &self,
     ) -> Option<&crate::distribution_range_consensus::HistoricalRangeCertification> {
@@ -221,6 +263,7 @@ impl RecoveryHistoryObservation {
             fence: self.fence.reply.clone(),
             index: self.index,
             entry: self.entry,
+            sparse_decision: self.sparse_decision,
             current_certification: self.current_certification,
         }
     }

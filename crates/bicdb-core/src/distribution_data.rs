@@ -1123,6 +1123,35 @@ impl ClusterDataNodeService {
             scope,
             request.index,
         )?;
+        let sparse_decision = request
+            .index
+            .map(|index| {
+                self.range_writes
+                    .sparse_historical_projection(scope, index, &native)
+            })
+            .transpose()?
+            .flatten();
+        // One complete body per bounded response. A raw irreversible entry is
+        // already a durable decision; otherwise retain the independent sparse
+        // decision instead of presenting a mere raw Prepared state.
+        let (entry, sparse_decision) = match (entry, sparse_decision) {
+            (Some(entry), Some(sparse)) => {
+                if entry.command != *sparse.command() || entry.state == RangeWriteState::Aborted {
+                    return Err(data_error(
+                        "sparse committed history conflicts with actual raw history",
+                    ));
+                }
+                if matches!(
+                    entry.state,
+                    RangeWriteState::Applied | RangeWriteState::QuorumCommitted
+                ) {
+                    (Some(entry), None)
+                } else {
+                    (None, Some(sparse))
+                }
+            }
+            values => values,
+        };
         let reply = crate::distribution_range_recovery::RecoveryFencedProbeReply {
             fence: crate::distribution_range_recovery::RecoveryEpochFenceReply {
                 phase: self.range_writes.recovery_observation_phase(scope)?,
@@ -1140,6 +1169,7 @@ impl ClusterDataNodeService {
             },
             index: request.index,
             entry,
+            sparse_decision,
             current_certification: request
                 .index
                 .map(|index| {
@@ -1162,6 +1192,61 @@ impl ClusterDataNodeService {
         frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
         cancellation: &crate::CancellationToken,
     ) -> Result<crate::distribution_range_consensus::HistoricalRangeCertification> {
+        self.certify_native_historical_command_inner(
+            role,
+            decision,
+            frozen,
+            cancellation,
+            |store, native| store.certify_historical_command(role, native, decision),
+        )
+    }
+    pub(crate) fn certify_sparse_native_historical_command(
+        &mut self,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        decision: &crate::distribution_range_recovery::HistoricalCommandDecision,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<crate::distribution_range_consensus::HistoricalRangeCertification> {
+        self.certify_native_historical_command_inner(
+            role,
+            decision,
+            frozen,
+            cancellation,
+            |store, native| store.certify_sparse_historical_command(role, native, decision),
+        )
+    }
+    #[cfg(test)]
+    pub(crate) fn test_certify_sparse_native_historical_command_with(
+        &mut self,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        decision: &crate::distribution_range_recovery::HistoricalCommandDecision,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        cancellation: &crate::CancellationToken,
+        write: impl FnOnce(&std::path::Path, &[u8], bool) -> Result<()>,
+    ) -> Result<crate::distribution_range_consensus::HistoricalRangeCertification> {
+        self.certify_native_historical_command_inner(
+            role,
+            decision,
+            frozen,
+            cancellation,
+            |store, native| {
+                store.test_certify_sparse_historical_command_with(role, native, decision, write)
+            },
+        )
+    }
+    fn certify_native_historical_command_inner(
+        &mut self,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        decision: &crate::distribution_range_recovery::HistoricalCommandDecision,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        cancellation: &crate::CancellationToken,
+        certify: impl FnOnce(
+            &mut RangeWriteStore,
+            &crate::db::NativeRecoveryAdmission,
+        ) -> Result<
+            crate::distribution_range_consensus::HistoricalRangeCertification,
+        >,
+    ) -> Result<crate::distribution_range_consensus::HistoricalRangeCertification> {
         cancellation.check()?;
         decision.require_recipient_role(role)?;
         let controlled = self.range_mutations.try_controlled_mutation(frozen)?;
@@ -1176,9 +1261,7 @@ impl ClusterDataNodeService {
         native.require_current(&db)?;
         self.range_mutations
             .validate_controlled(role.current_range().id, &controlled)?;
-        let marker = self
-            .range_writes
-            .certify_historical_command(role, &native, decision)?;
+        let marker = certify(&mut self.range_writes, &native)?;
         native.require_current(&db)?;
         role.require_live_request()?;
         cancellation.check()?;
@@ -1428,6 +1511,22 @@ impl ClusterDataNodeService {
 
     pub fn range_write_progress(&self, range_id: RangeId) -> RangeWriteProgress {
         self.range_writes.progress(range_id)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_image_history_obligations(
+        &self,
+        range_id: RangeId,
+    ) -> Result<crate::distribution_range_consensus::TargetImageCatalogHistoryObligations> {
+        self.range_writes
+            .image_install_catalog_history_obligations(range_id)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_require_image_history_obligations_current(
+        &self,
+        observed: &crate::distribution_range_consensus::TargetImageCatalogHistoryObligations,
+    ) -> Result<()> {
+        observed.require_current(&self.range_writes)
     }
 
     pub fn range_write_progress_for_peer(

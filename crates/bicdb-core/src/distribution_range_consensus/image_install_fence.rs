@@ -543,6 +543,16 @@ impl RangeWriteStore {
         );
         cancellation.check()?;
         encoded?;
+        if let Some(records) = self
+            .catalog
+            .sparse_committed_decisions
+            .as_ref()
+            .and_then(|ranges| ranges.get(&range_id))
+            .filter(|records| !records.is_empty())
+        {
+            serde_json::to_writer(&mut writer, &("sparse-committed-history-v1", records))?;
+        }
+        cancellation.check()?;
         Ok(hex::encode(writer.hash.finalize()))
     }
 
@@ -809,6 +819,15 @@ impl RangeWriteStore {
         if self.catalog.backup_fences.contains_key(&range.id) {
             return Err(range_write_error(
                 "image install conflicts with a backup fence",
+            ));
+        }
+        if self
+            .sparse_irreversible_commands(range.id)?
+            .keys()
+            .any(|index| *index > source_r)
+        {
+            return Err(range_write_error(
+                "image source is below permanent sparse committed history",
             ));
         }
         if let Some(log) = self.catalog.ranges.get(&range.id) {

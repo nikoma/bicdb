@@ -257,6 +257,12 @@ impl FreshRangeRecoveryAuthority {
                     native.native_applied_index,
                     native.pending_command_index,
                     native.materialized_pending_index,
+                    observation
+                        .image_history()
+                        .irreversible_command_sha256
+                        .keys()
+                        .next_back()
+                        .copied(),
                 ]
                 .into_iter()
                 .flatten()

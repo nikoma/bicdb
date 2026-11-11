@@ -55,6 +55,8 @@ pub(crate) use native_completion_observation::LocalNativeCompletionEvidence;
 mod native_ready_observation;
 pub(crate) use native_ready_observation::LocalNativeReadyEvidence;
 mod native_activation;
+#[cfg(test)]
+mod native_activation_domain_tests;
 pub(crate) use native_activation::NativeActivationReceipt;
 use native_activation::NATIVE_ACTIVATED_FORMAT;
 mod native_ready_completion;
@@ -66,8 +68,13 @@ use native_ready_completion::NATIVE_COMPLETED_CATALOG_FORMAT;
 pub(crate) use native_ready_prepare::PreparedNativeRecoveryReady;
 use native_ready_prepare::NATIVE_READY_CATALOG_FORMAT;
 mod recovery_state;
+mod sparse_certification;
 pub(crate) use image_install_state::ImageInstallPurpose;
 use image_install_state::{ImageInstallIntent, IMAGE_INSTALL_RANGE_LOG_FORMAT};
+pub(crate) use sparse_certification::{
+    SparseDecisionAudit, SparseDecisionVoteAudit, SparseHistoricalDecisionProjection,
+};
+use sparse_certification::{SparseDecisions, SPARSE_HISTORY_CATALOG_FORMAT};
 mod image_install_fence;
 pub(crate) use image_install_fence::{
     NativeImageInstallRole, NativeImageInstallTransferPreflight, TargetImageInstallFence,
@@ -529,6 +536,10 @@ struct RangeWriteCatalog {
     recovery_fences: BTreeMap<RangeId, RecoveryFenceRecord>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     native_image_bases: BTreeMap<RangeId, NativeImageCatalogueBase>,
+    // None is legacy ONLY. Format 10 requires Some, including an empty map:
+    // a missing/null field can never silently erase sparse committed history.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sparse_committed_decisions: Option<SparseDecisions>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -562,9 +573,10 @@ impl RangeWriteEnvelope {
                 | NATIVE_READY_CATALOG_FORMAT
                 | NATIVE_COMPLETED_CATALOG_FORMAT
                 | NATIVE_ACTIVATED_FORMAT
+                | SPARSE_HISTORY_CATALOG_FORMAT
         ) {
             return Err(range_write_error(format!(
-                "unsupported range-write log format {}; supported formats are 1, 2, {}, {}, {}, {}, {}, {}, and {}",
+                "unsupported range-write log format {}; supported formats are 1, 2, {}, {}, {}, {}, {}, {}, {}, and {}",
                 self.catalog.format_version,
                 RANGE_WRITE_LOG_FORMAT_VERSION,
                 HANDOFF_RANGE_LOG_FORMAT,
@@ -572,9 +584,11 @@ impl RangeWriteEnvelope {
                 NATIVE_IMAGE_CATALOG_FORMAT,
                 NATIVE_READY_CATALOG_FORMAT,
                 NATIVE_COMPLETED_CATALOG_FORMAT,
-                NATIVE_ACTIVATED_FORMAT
+                NATIVE_ACTIVATED_FORMAT,
+                SPARSE_HISTORY_CATALOG_FORMAT
             )));
         }
+        sparse_certification::validate_sparse_catalog(&self.catalog)?;
         if self.catalog.recovery_fences.len() > recovery_state::MAX_RECOVERY_FENCES {
             return Err(range_write_error("recovery refusal catalog exceeds bound"));
         }
@@ -593,13 +607,24 @@ impl RangeWriteEnvelope {
                 .get(range_id)
                 .ok_or_else(|| range_write_error("recovery refusal has no actual range log"))?;
             for marker in fence.historical_certifications.values() {
-                if marker.index > log.last_index
+                let sparse = self
+                    .catalog
+                    .sparse_committed_decisions
+                    .as_ref()
+                    .and_then(|ranges| ranges.get(range_id))
+                    .and_then(|entries| entries.get(&marker.index));
+                let sparse_matches = sparse
+                    .is_some_and(|entry| entry.command_checksum_sha256() == marker.command_sha256);
+                if (marker.index > log.last_index && !sparse_matches)
                     || log.entries.get(&marker.index).is_some_and(|entry| {
                         entry.command.checksum_sha256 != marker.command_sha256
                             || !matches!(
                                 entry.state,
                                 RangeWriteState::QuorumCommitted | RangeWriteState::Applied
                             )
+                    })
+                    || sparse.is_some_and(|entry| {
+                        entry.command_checksum_sha256() != marker.command_sha256
                     })
                 {
                     return Err(range_write_error(
@@ -771,6 +796,7 @@ impl RangeWriteStore {
                 image_install_intents: BTreeMap::new(),
                 recovery_fences: BTreeMap::new(),
                 native_image_bases: BTreeMap::new(),
+                sparse_committed_decisions: None,
             },
             Err(error) => return Err(error.into()),
         };
@@ -1616,6 +1642,20 @@ pub trait RangeWriteTransport: std::fmt::Debug + Send + Sync + 'static {
         let _ = (destination, request, apply, parent);
         Err(range_write_error(
             "transport does not support authenticated historical recovery",
+        ))
+    }
+
+    /// Explicit sparse certification: the receiver independently selects the
+    /// committed decision and persists its full body without an ordered Apply.
+    fn recovery_sparse_historical_command_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+        let _ = (destination, request, parent);
+        Err(range_write_error(
+            "transport does not support sparse historical certification",
         ))
     }
 
@@ -4586,6 +4626,7 @@ mod tests {
             image_install_intents: BTreeMap::new(),
             recovery_fences: BTreeMap::new(),
             native_image_bases: BTreeMap::new(),
+            sparse_committed_decisions: None,
         };
         let envelope = RangeWriteEnvelope::new(catalog).unwrap();
         fs::write(
@@ -4623,6 +4664,7 @@ mod tests {
             image_install_intents: BTreeMap::new(),
             recovery_fences: BTreeMap::new(),
             native_image_bases: BTreeMap::new(),
+            sparse_committed_decisions: None,
         })
         .unwrap();
         let legacy_bytes = serde_json::to_vec_pretty(&envelope).unwrap();

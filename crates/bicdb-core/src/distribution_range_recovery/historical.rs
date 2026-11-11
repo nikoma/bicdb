@@ -21,6 +21,7 @@ struct HistoricalVote {
     fence: Arc<RecoveryFenceObservation>,
     state: Option<RangeWriteState>,
     certification: Option<HistoricalRangeCertification>,
+    sparse_decision_sha256: Option<String>,
 }
 fn verify_history(
     authority: &FreshRangeRecoveryAuthority,
@@ -95,17 +96,27 @@ fn verify_history(
             ));
         }
     }
+    if let Some(sparse) = observation.sparse_decision() {
+        sparse.validate_shape(authority.scope(), command.index)?;
+        if sparse.command() != command {
+            return Err(invalid("conflicting sparse committed command body"));
+        }
+    }
     Ok(())
 }
 fn compact_vote(observation: RecoveryHistoryObservation) -> HistoricalVote {
     let state = observation.entry().map(|entry| entry.state);
     let certification = observation.current_certification().cloned();
+    let sparse_decision_sha256 = observation
+        .sparse_decision()
+        .map(|s| s.checksum_sha256().to_owned());
     // Dropping the completed payload bounds memory to one candidate command
     // plus small authenticated observations, rather than one payload per voter.
     HistoricalVote {
         fence: observation.fence_observation(),
         state,
         certification,
+        sparse_decision_sha256,
     }
 }
 
@@ -151,7 +162,7 @@ impl HistoricalCommandDecisionRound {
                 matches!(
                     v.state,
                     Some(RangeWriteState::QuorumCommitted | RangeWriteState::Applied)
-                )
+                ) || v.sparse_decision_sha256.is_some()
             }) || self
                 .votes
                 .values()
@@ -171,7 +182,7 @@ impl HistoricalCommandDecisionRound {
             matches!(
                 v.state,
                 Some(RangeWriteState::QuorumCommitted | RangeWriteState::Applied)
-            )
+            ) || v.sparse_decision_sha256.is_some()
         });
         let committed = self
             .votes
@@ -209,6 +220,32 @@ pub(crate) struct HistoricalCommandDecision {
     votes: BTreeMap<ClusterNodeId, HistoricalVote>,
 }
 impl HistoricalCommandDecision {
+    /// Audit projection from an ACTUAL live selected decision. Persisting or
+    /// decoding this record never reconstructs this decision or its quorum.
+    pub(crate) fn sparse_persistence_audit(
+        &self,
+    ) -> Result<crate::distribution_range_consensus::SparseDecisionAudit> {
+        use crate::distribution_range_consensus::{SparseDecisionAudit, SparseDecisionVoteAudit};
+        self.require_live()?;
+        Ok(SparseDecisionAudit {
+            scope: self.scope().clone(),
+            members: self.authority.member_credentials().clone(),
+            observations: self
+                .votes
+                .iter()
+                .map(|(node, vote)| {
+                    (
+                        node.clone(),
+                        SparseDecisionVoteAudit {
+                            member_incarnation: vote.fence.member_incarnation(),
+                            observed_raw_state: vote.state,
+                            prior_sparse_decision_sha256: vote.sparse_decision_sha256.clone(),
+                        },
+                    )
+                })
+                .collect(),
+        })
+    }
     pub(crate) fn command(&self) -> &RangeWriteCommand {
         &self.command
     }
@@ -267,9 +304,10 @@ impl CurrentHistoricalCertificationRound {
             || marker.range_epoch != scope.range_epoch
             || marker.index != command.index
             || marker.command_sha256 != command.checksum_sha256
-            || command.index > observation.fence().progress().last_index
-            || (observation.entry().is_none()
-                && command.index > observation.fence().progress().compacted_through)
+            || (observation.sparse_decision().is_none()
+                && (command.index > observation.fence().progress().last_index
+                    || (observation.entry().is_none()
+                        && command.index > observation.fence().progress().compacted_through)))
             || observation.entry().is_some_and(|entry| {
                 !matches!(
                     entry.state,

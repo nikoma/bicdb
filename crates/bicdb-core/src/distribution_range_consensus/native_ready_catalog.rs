@@ -6,6 +6,60 @@ use crate::distribution_range_recovery::{
     RecoveryImageHistoryObligationsV1, RecoveryNativeHistoryPointV1, RecoveryNativePendingHistoryV1,
 };
 
+fn insert_complete_fenced_obligation(
+    values: &mut BTreeMap<u64, String>,
+    index: u64,
+    checksum: &str,
+) -> Result<()> {
+    use crate::distribution_range_recovery::{
+        fenced_obligation_limit_error, MAX_FENCED_IRREVERSIBLE_COMMANDS,
+    };
+    if let Some(previous) = values.get(&index) {
+        if previous != checksum {
+            return Err(range_write_error(
+                "current certification conflicts with retained irreversible history",
+            ));
+        }
+    } else {
+        if values.len() >= MAX_FENCED_IRREVERSIBLE_COMMANDS {
+            return Err(fenced_obligation_limit_error());
+        }
+        values.insert(index, checksum.to_owned());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod obligation_bound_tests {
+    use super::*;
+    use crate::distribution_range_recovery::MAX_FENCED_IRREVERSIBLE_COMMANDS;
+
+    #[test]
+    fn complete_fenced_obligation_producer_deduplicates_without_dropping_conflicts_or_overflow() {
+        let mut values = BTreeMap::new();
+        for index in 1..=MAX_FENCED_IRREVERSIBLE_COMMANDS as u64 {
+            insert_complete_fenced_obligation(&mut values, index, &"a".repeat(64)).unwrap();
+        }
+        let before = values.clone();
+        insert_complete_fenced_obligation(&mut values, 1, &"a".repeat(64)).unwrap();
+        assert_eq!(values, before);
+        let conflict =
+            insert_complete_fenced_obligation(&mut values, 1, &"b".repeat(64)).unwrap_err();
+        assert!(conflict.to_string().contains("conflicts"));
+        assert_eq!(values, before);
+        let overflow = insert_complete_fenced_obligation(
+            &mut values,
+            MAX_FENCED_IRREVERSIBLE_COMMANDS as u64 + 1,
+            &"a".repeat(64),
+        )
+        .unwrap_err();
+        assert!(overflow
+            .to_string()
+            .contains("complete 2049-command obligation reply bound"));
+        assert_eq!(values, before, "no partial reply or mutated accepted map");
+    }
+}
+
 #[cfg(test)]
 pub(crate) fn native_ready_test_command(
     cluster: ClusterId,
@@ -57,19 +111,25 @@ impl RangeWriteStore {
                 RangeWriteState::QuorumCommitted | RangeWriteState::Applied
             )
         }) {
-            irreversible_command_sha256
-                .insert(entry.command.index, entry.command.checksum_sha256.clone());
+            insert_complete_fenced_obligation(
+                &mut irreversible_command_sha256,
+                entry.command.index,
+                &entry.command.checksum_sha256,
+            )?;
         }
         for (index, marker) in &saved.historical_certifications {
-            if irreversible_command_sha256
-                .insert(*index, marker.command_sha256.clone())
-                .is_some_and(|prior| prior != marker.command_sha256)
-            {
-                return Err(range_write_error(
-                    "current certification conflicts with retained irreversible history",
-                ));
-            }
+            insert_complete_fenced_obligation(
+                &mut irreversible_command_sha256,
+                *index,
+                &marker.command_sha256,
+            )?;
         }
+        let sparse_commands = self.sparse_irreversible_commands(scope.range_id)?;
+        for (index, checksum) in &sparse_commands {
+            insert_complete_fenced_obligation(&mut irreversible_command_sha256, *index, checksum)?;
+        }
+        let sparse_committed_command_sha256 =
+            (!sparse_commands.is_empty()).then_some(sparse_commands);
         let native_point = safety
             .history_point()
             .map(|point| RecoveryNativeHistoryPointV1 {
@@ -95,7 +155,11 @@ impl RangeWriteStore {
             }
         };
         let observed = RecoveryImageHistoryObligationsV1 {
-            format_version: 1,
+            format_version: if sparse_committed_command_sha256.is_some() {
+                2
+            } else {
+                1
+            },
             node_id: self.catalog.node_id.clone(),
             range_id: scope.range_id,
             last_index: log.last_index,
@@ -103,6 +167,7 @@ impl RangeWriteStore {
             native_point,
             pending_native,
             irreversible_command_sha256,
+            sparse_committed_command_sha256,
         };
         observed.require_shape(scope, &self.progress(scope.range_id))?;
         self.require_persisted_recovery_scope(scope)?;
@@ -136,6 +201,14 @@ impl RangeWriteStore {
                 ));
             }
             verify(*index, &marker.command_sha256)?;
+        }
+        for (index, checksum) in self.sparse_irreversible_commands(observation.range_id())? {
+            if index > observation.resolved_index() {
+                return Err(range_write_error(
+                    "native readiness omits permanent sparse committed history",
+                ));
+            }
+            verify(index, &checksum)?;
         }
         self.revalidate_recovery_resolved_observation(observation, role, native)
     }

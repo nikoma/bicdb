@@ -2411,6 +2411,14 @@ impl<'db> SqlEngine<'db> {
                                 filters.push((*idx, value));
                             }
                         }
+                        if let Some(tx) = self.tx {
+                            tx.observe_postgres_index_range(
+                                &candidate.plan.name,
+                                candidate.prefix.as_slice(),
+                                lower.as_ref(),
+                                upper.as_ref(),
+                            )?;
+                        }
                         self.db_ref().range_index_with_prefix_filters_rowids(
                             &candidate.plan.name,
                             candidate.prefix.as_slice(),
@@ -2662,6 +2670,14 @@ impl<'db> SqlEngine<'db> {
                             &index.fields,
                             prefix.len() + 1,
                         )?;
+                        if let Some(tx) = self.tx {
+                            tx.observe_postgres_index_range(
+                                &index.name,
+                                prefix.as_slice(),
+                                lower.as_ref(),
+                                upper.as_ref(),
+                            )?;
+                        }
                         self.db_ref().range_index_with_prefix_filters_rowids(
                             &index.name,
                             prefix.as_slice(),
@@ -2863,6 +2879,14 @@ impl<'db> SqlEngine<'db> {
                             &index.fields,
                             prefix.len() + 1,
                         )?;
+                        if let Some(tx) = self.tx {
+                            tx.observe_postgres_index_range(
+                                &index.name,
+                                prefix.as_slice(),
+                                lower.as_ref(),
+                                upper.as_ref(),
+                            )?;
+                        }
                         let ids = self.db_ref().range_index_with_prefix_filters(
                             &index.name,
                             prefix.as_slice(),
@@ -3025,6 +3049,14 @@ impl<'db> SqlEngine<'db> {
                             _ => value,
                         };
                         filters.push((*idx, value));
+                    }
+                    if let Some(tx) = self.tx {
+                        tx.observe_postgres_index_range(
+                            &plan.name,
+                            prefix.as_slice(),
+                            lower.as_ref(),
+                            upper.as_ref(),
+                        )?;
                     }
                     let ids = self.db_ref().range_index_with_prefix_filters(
                         &plan.name,
@@ -4295,6 +4327,14 @@ impl<'db> SqlEngine<'db> {
                     &primary_key_fields,
                     range_idx + 1,
                 )?;
+                if let Some(tx) = self.tx {
+                    tx.observe_postgres_index_range(
+                        &index.name,
+                        prefix.as_slice(),
+                        lower.as_ref(),
+                        upper.as_ref(),
+                    )?;
+                }
                 let ids = self.db_ref().range_index_with_prefix_filters(
                     &index.name,
                     prefix.as_slice(),

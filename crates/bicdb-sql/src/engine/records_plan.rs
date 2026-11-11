@@ -703,6 +703,9 @@ impl<'db> SqlEngine<'db> {
         index_name: &str,
         prefix: &[IndexValue],
     ) -> Result<Rc<[RowId]>> {
+        if let Some(tx) = self.tx {
+            tx.observe_postgres_index_prefix(index_name, prefix)?;
+        }
         if let Some(rowids) = self
             .rowid_index_lookup_cache
             .borrow()
@@ -728,6 +731,9 @@ impl<'db> SqlEngine<'db> {
         index_name: &str,
         prefix: &[IndexValue],
     ) -> Result<Rc<[String]>> {
+        if let Some(tx) = self.tx {
+            tx.observe_postgres_index_prefix(index_name, prefix)?;
+        }
         if let Some(ids) = self
             .index_lookup_cache
             .borrow()

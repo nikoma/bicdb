@@ -3507,6 +3507,14 @@ impl<'db> SqlEngine<'db> {
                 upper,
             } => {
                 sql_profile_index_lookup();
+                if let Some(tx) = self.tx {
+                    tx.observe_postgres_index_range(
+                        index_name,
+                        &[],
+                        lower.as_ref(),
+                        upper.as_ref(),
+                    )?;
+                }
                 let ids: Rc<[String]> = Rc::from(self.db_ref().range_index(
                     index_name,
                     lower.as_ref(),
@@ -3538,6 +3546,9 @@ impl<'db> SqlEngine<'db> {
                     sql_profile_full_scan();
                     return self.scan_records(collection);
                 }
+                if let Some(tx) = self.tx {
+                    tx.observe_postgres_index_prefix(index_name, &[])?;
+                }
                 let ids = self
                     .db_ref()
                     .ordered_index_records(index_name, *descending, *limit)?;
@@ -3553,6 +3564,9 @@ impl<'db> SqlEngine<'db> {
                 if self.tx.is_some_and(|tx| tx.write_len() > 0) {
                     sql_profile_full_scan();
                     return self.scan_records(collection);
+                }
+                if let Some(tx) = self.tx {
+                    tx.observe_postgres_index_prefix(index_name, prefix)?;
                 }
                 let ids = self.db_ref().prefix_ordered_index_records(
                     index_name,

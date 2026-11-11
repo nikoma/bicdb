@@ -1,7 +1,10 @@
 use super::{
     Dependencies, KeyRange, PendingCommit, ReadKeys, ReadScope, SnapshotSafety, WriteFootprint,
 };
-use crate::db::{BicDb, BicDbError, IndexKind, IndexRecordMutation, Result, Transaction};
+use crate::db::{
+    BicDb, BicDbError, IndexDefinition, IndexKind, IndexRecordMutation, IndexValue, Result,
+    Transaction,
+};
 use crate::CancellationToken;
 use parking_lot::{Condvar, Mutex, MutexGuard};
 use std::cmp::Ordering;
@@ -9,6 +12,20 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Bound;
 use std::sync::Arc;
 use std::time::Duration;
+
+fn index_identity(definition: &IndexDefinition) -> Result<String> {
+    Ok(serde_json::to_string(definition)?)
+}
+
+fn next_key_prefix(mut key: Vec<u8>) -> Bound<Vec<u8>> {
+    while let Some(last) = key.pop() {
+        if last < u8::MAX {
+            key.push(last + 1);
+            return Bound::Excluded(key);
+        }
+    }
+    Bound::Unbounded
+}
 
 /// Keep the incarnation allocated until its last predicate or write is retired.
 #[derive(Clone, Debug)]
@@ -133,18 +150,17 @@ impl BicDb {
         for (name, changes) in mutations {
             let collection =
                 CollectionIdentity(Arc::clone(&self.collection_state(name)?.incarnation));
-            let indexes: Vec<_> = self
-                .indexes
-                .values()
-                .filter(|index| {
-                    let state = index.read();
-                    state.definition.collection == *name
-                        && state.definition.kind == IndexKind::BTree
-                })
-                .collect();
+            let mut indexes = Vec::new();
+            for index in self.indexes.values() {
+                let state = index.read();
+                if state.definition.collection == *name && state.definition.kind == IndexKind::BTree
+                {
+                    indexes.push((index, index_identity(&state.definition)?));
+                }
+            }
             for change in changes {
                 let mut index_keys = BTreeMap::new();
-                for index in &indexes {
+                for (index, identity) in &indexes {
                     let state = index.read();
                     let definition = &state.definition;
                     let mut keys = BTreeSet::new();
@@ -155,7 +171,7 @@ impl BicDb {
                             }
                         }
                     }
-                    index_keys.insert(definition.name.clone(), keys);
+                    index_keys.insert(identity.clone(), keys);
                 }
                 for record in change
                     .old_record
@@ -313,23 +329,61 @@ impl Transaction {
     }
 
     /// Record an index prefix probe, even when it returns no row locator.
-    pub fn observe_postgres_index_prefix(
+    pub fn observe_postgres_index_prefix(&self, name: &str, prefix: &[IndexValue]) -> Result<()> {
+        self.observe_postgres_index(name, || {
+            KeyRange::Prefix(crate::db::encode_index_key(prefix))
+        })
+    }
+
+    /// The index scans use inclusive first-field bounds inside the prefix.
+    pub fn observe_postgres_index_range(
         &self,
-        collection: &str,
-        identity: &str,
-        prefix: &[crate::db::IndexValue],
+        name: &str,
+        prefix: &[IndexValue],
+        lower: Option<&IndexValue>,
+        upper: Option<&IndexValue>,
     ) -> Result<()> {
+        self.observe_postgres_index(name, || {
+            let prefix = crate::db::encode_index_key(prefix);
+            let bound_key = |value: Option<&IndexValue>| {
+                let mut key = prefix.clone();
+                if let Some(value) = value {
+                    crate::db::encode_index_value(&mut key, value);
+                }
+                key
+            };
+            KeyRange::bounded(
+                Bound::Included(bound_key(lower)),
+                next_key_prefix(bound_key(upper)),
+            )
+        })
+    }
+
+    fn observe_postgres_index(&self, name: &str, range: impl FnOnce() -> KeyRange) -> Result<()> {
         if self
             .postgres_serializable
             .as_ref()
-            .is_some_and(|r| r.active)
+            .is_none_or(|r| !r.active)
         {
-            self.bind_collection_incarnation(collection)?;
-            self.observe_postgres_read(collection, || ReadKeys::Index {
-                identity: identity.to_string(),
-                range: KeyRange::Prefix(crate::db::encode_index_key(prefix)),
-            });
+            return Ok(());
         }
+        let index = self
+            .db_ref()
+            .indexes
+            .get(name)
+            .ok_or_else(|| BicDbError::Index(format!("index {name} not found")))?;
+        let (collection, identity) = {
+            let state = index.read();
+            (
+                state.definition.collection.clone(),
+                index_identity(&state.definition)?,
+            )
+        };
+        self.bind_collection_incarnation(&collection)?;
+        self.observe_postgres_read(&collection, || ReadKeys::Index {
+            identity,
+            range: range(),
+        });
         Ok(())
     }
 }

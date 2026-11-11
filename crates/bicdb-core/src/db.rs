@@ -16324,6 +16324,11 @@ impl Transaction {
             stored
         };
         let mut out = deserialize_stored_batch(stored)?;
+        if self.postgres_serializable.is_some() {
+            for record in out.iter().flatten() {
+                self.observe_postgres_record(collection, &record.id);
+            }
+        }
         if has_pending {
             for slot in out.iter_mut() {
                 let pk = match slot.as_ref() {
@@ -16409,6 +16414,11 @@ impl Transaction {
                 Some(record) => Some(record),
                 None => self.registry_stored_by_rowid(&state, collection, rowid)?,
             });
+        }
+        if self.postgres_serializable.is_some() {
+            for record in out.iter().flatten() {
+                self.observe_postgres_record(collection, &record.id);
+            }
         }
         Ok(out)
     }
@@ -16512,6 +16522,10 @@ impl Transaction {
         let db = self.db_ref();
         db.check_recovery_state()?;
         db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        if self.postgres_serializable.is_some() {
+            self.bind_collection_incarnation(collection)?;
+            self.observe_postgres_relation(collection);
+        }
         let state = db.collection_state(collection)?;
         if state.paged_lazy {
             let (Some(paged), Some(snapshot)) = (&db.paged_records, &self.paged_snapshot) else {
@@ -17250,6 +17264,7 @@ impl Transaction {
     ) -> Result<Option<VisibleRow>> {
         let db = self.db_ref();
         self.bind_collection_incarnation(collection)?;
+        self.observe_postgres_record(collection, id);
         let (row, observed_version) = {
             let state = db.collection_state(collection)?;
             let shard = state.shard(id).read();
@@ -17326,6 +17341,11 @@ impl Transaction {
         let db = self.db_ref();
         db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
         self.bind_collection_incarnation(collection)?;
+        if self.postgres_serializable.is_some() {
+            for pk in pks {
+                self.observe_postgres_record(collection, pk);
+            }
+        }
         let has_pending = self.has_pending_writes(collection);
         let snapshot = self.snapshot_tx;
         let mut observed_versions = Vec::with_capacity(pks.len());

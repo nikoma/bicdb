@@ -12,15 +12,17 @@ use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 mod certified_prefix;
 mod history;
 mod history_stage;
+mod installed_anchor;
 use certified_prefix::NativeCertifiedRangePrefix;
 pub(crate) use history::{
     NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint,
     NativeLogicalHistoryStepV1,
 };
 pub(crate) use history_stage::{
-    NativeHistoryStage, NativeHistoryStageProgress, NativeHistoryTargetContext,
-    StagedNativeHistoryProof,
+    NativeHistoryPublicationBinding, NativeHistoryStage, NativeHistoryStageProgress,
+    NativeHistoryTargetContext, StagedNativeHistoryProof,
 };
+use installed_anchor::{NativeRangeBaseBinding, NativeRangeImageAnchor};
 
 #[cfg(test)]
 thread_local! {
@@ -380,7 +382,8 @@ impl NativeRangePrefixObservation {
 #[derive(Debug)]
 pub(crate) struct SourceRangeImageLineage {
     birth: NativeDatabaseBirth,
-    receipt: NativeGenesisReceipt,
+    _anchor: NativeRangeImageAnchor,
+    base: NativeRangeBaseBinding,
     prefix: Option<NativeCertifiedRangePrefix>,
     current_database_incarnation: String,
     current_schema_generation: u64,
@@ -404,17 +407,20 @@ impl SourceRangeImageLineage {
     pub(crate) fn actual_local_visibility_sequence(&self) -> u64 {
         self.prefix
             .as_ref()
-            .map_or(self.receipt.actual_snapshot_db_sequence, |prefix| {
+            .map_or(self.base.actual_local_visibility_sequence, |prefix| {
                 prefix.actual_local_visibility_sequence()
             })
     }
     pub(crate) fn base_range(&self) -> &RangeDescriptor {
-        &self.receipt.range
+        &self.base.range
+    }
+    pub(crate) fn base_range_index(&self) -> u64 {
+        self.base.range_index
     }
     pub(crate) fn range_index(&self) -> u64 {
         self.prefix
             .as_ref()
-            .map_or(self.receipt.range_index, |prefix| prefix.range_index())
+            .map_or(self.base.range_index, |prefix| prefix.range_index())
     }
     pub(crate) fn cluster_id(&self) -> &ClusterId {
         &self.birth.spec.cluster_id
@@ -426,36 +432,36 @@ impl SourceRangeImageLineage {
         &self.birth.spec.node_id
     }
     pub(crate) fn local_member_incarnation(&self) -> u64 {
-        self.receipt.local_member_incarnation
+        self.base.local_member_incarnation
     }
     pub(crate) fn base_members(&self) -> &BTreeMap<ClusterNodeId, RangeImageBirthMember> {
-        &self.receipt.base_members
+        &self.base.base_members
     }
     pub(crate) fn restore_activation(
         &self,
     ) -> Option<&crate::distribution_consensus::MetadataRestoreActivation> {
-        self.receipt.restore_activation.as_ref()
+        self.base.restore_activation.as_ref()
     }
     pub(crate) fn native_receipt_sha256(&self) -> &str {
         self.prefix
             .as_ref()
-            .map_or(self.receipt.checksum_sha256.as_str(), |prefix| {
+            .map_or(self.base.checksum_sha256.as_str(), |prefix| {
                 prefix.checksum_sha256()
             })
     }
     pub(crate) fn schema_sha256(&self) -> &str {
-        &self.receipt.schema_sha256
+        &self.base.schema_sha256
     }
     pub(crate) fn history_generation(&self) -> Uuid {
-        self.receipt.history_generation
+        self.base.history_generation
     }
     pub(crate) fn logical_genesis_sha256(&self) -> &str {
-        &self.receipt.logical_genesis_sha256
+        &self.base.logical_genesis_sha256
     }
     pub(crate) fn logical_history_sha256(&self) -> &str {
         self.prefix
             .as_ref()
-            .map_or(self.receipt.logical_genesis_sha256.as_str(), |prefix| {
+            .map_or(self.base.logical_history_sha256.as_str(), |prefix| {
                 prefix.logical_history_sha256()
             })
     }
@@ -892,45 +898,20 @@ impl BicDb {
             observation.invalidated = true;
             return Ok(observation);
         }
-        let Some(birth) = self.read_native_birth()? else {
-            return Ok(NativeRangePrefixObservation::unknown(
-                range_id,
-                "no trusted native birth",
-            ));
+        let lineage = match self.native_range_source_lineage_contract(range_id) {
+            Ok(lineage) => lineage,
+            Err(_error) => {
+                let mut unknown = NativeRangePrefixObservation::unknown(
+                    range_id,
+                    "native base unknown/invalid; repair or re-attestation required",
+                );
+                unknown.invalidated = true;
+                return Ok(unknown);
+            }
         };
-        let Some(receipt) =
-            self.read_native_range_image_record::<NativeGenesisReceipt>(&genesis_key(range_id))?
-        else {
-            return Ok(NativeRangePrefixObservation::unknown(
-                range_id,
-                "native base has not been installed",
-            ));
-        };
-        let lineage = SourceRangeImageLineage {
-            prefix: self.read_native_certified_range_prefix(&birth, &receipt)?,
-            birth,
-            receipt,
-            current_database_incarnation: self.incarnation.clone(),
-            current_schema_generation: self.schema_compatibility.generation(),
-        };
-        if let Err(error) = self.validate_source_range_image_lineage_contract(
-            &lineage,
-            range_id,
-            lineage.range_index(),
-        ) {
-            let mut unknown = NativeRangePrefixObservation::unknown(
-                range_id,
-                "native base contract is invalid; repair/re-attestation required",
-            );
-            unknown.invalidated = true;
-            // Detailed errors remain local; metadata observers do not receive
-            // namespace values/payloads or mint readiness from an error code.
-            let _ = error;
-            return Ok(unknown);
-        }
         let mut observation = NativeRangePrefixObservation {
             range_id,
-            native_base_index: Some(lineage.receipt.range_index),
+            native_base_index: Some(lineage.base.range_index),
             native_applied_index: Some(lineage.range_index()),
             pending_command_index: None,
             materialized_pending_index: None,
@@ -976,11 +957,9 @@ impl BicDb {
         let birth = self
             .read_native_birth()?
             .ok_or_else(|| invalid("source has no trusted native database birth"))?;
-        let receipt: NativeGenesisReceipt = self
-            .read_native_range_image_record(&genesis_key(range_id))?
-            .ok_or_else(|| invalid("source has no trusted native range base"))?;
-        receipt.validate()?;
-        self.validate_native_genesis_history(&birth, &receipt)?;
+        let actual_anchor = self.actual_native_range_anchor(&birth, range_id)?;
+        let receipt = actual_anchor.binding();
+        self.validate_native_range_base_history(&birth, &receipt)?;
         let prefix = self.read_native_certified_range_prefix(&birth, &receipt)?;
         let bindings = self.capture_range_image_bindings()?;
         let catalog = canonical_range_image_catalog(
@@ -997,9 +976,10 @@ impl BicDb {
                     receipt.range_image_generation,
                 )
             || hex::encode(sha2::Sha256::digest(&catalog)) != receipt.portable_catalog_sha256
-            || hex::encode(content_hasher(&catalog).finalize()) != receipt.empty_image_root_sha256
+            || (!receipt.installed
+                && hex::encode(content_hasher(&catalog).finalize()) != receipt.image_root_sha256)
             || birth != lineage.birth
-            || receipt != lineage.receipt
+            || receipt != lineage.base
             || prefix != lineage.prefix
             || lineage.range_index() != range_index
             || receipt.range.id != range_id
@@ -1071,7 +1051,8 @@ impl BicDb {
                 {
                     let lineage = SourceRangeImageLineage {
                         birth,
-                        receipt,
+                        base: NativeRangeBaseBinding::genesis(&receipt),
+                        _anchor: NativeRangeImageAnchor::Genesis(receipt),
                         prefix: None,
                         current_database_incarnation: database.incarnation.clone(),
                         current_schema_generation: database.schema_compatibility.generation(),
@@ -1227,7 +1208,8 @@ impl BicDb {
             .validate_quiescent_frozen(range.id, frozen)?;
         let lineage = SourceRangeImageLineage {
             birth: authority.birth.clone(),
-            receipt,
+            base: NativeRangeBaseBinding::genesis(&receipt),
+            _anchor: NativeRangeImageAnchor::Genesis(receipt),
             prefix: None,
             current_database_incarnation: database.incarnation.clone(),
             current_schema_generation: database.schema_compatibility.generation(),

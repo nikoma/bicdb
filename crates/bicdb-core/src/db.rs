@@ -59,17 +59,20 @@ mod integrity_reservations;
 mod pitr_maintenance;
 mod range_image_install;
 pub(crate) use range_image_install::{
-    NativeInstalledRangeImageBase, TargetNativeImageSnapshotBound,
+    NativeInstalledRangeImageBase, NativeInstalledRangeImageIntegrity,
+    NativeTargetImageVerificationProgress, NativeTargetImageVerifier,
+    TargetNativeImageSnapshotBound,
 };
 mod native_recovery_ready;
 mod range_image_native;
 pub(crate) use native_recovery_ready::{LocalNativeRecoveryReady, NativeLocalVisibilitySequence};
 pub(crate) use range_image_native::{
-    FreshRangeGenesisAuthority, NativeHistoryStage, NativeHistoryStageProgress,
-    NativeHistoryTargetContext, NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1,
-    NativeLogicalHistoryPoint, NativeLogicalHistoryStepV1, NativeRangeInstallSafety,
-    NativeRangePendingApply, NativeRangePrefixObservation, NativeRecoveryAdmission,
-    RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage, StagedNativeHistoryProof,
+    FreshRangeGenesisAuthority, NativeHistoryPublicationBinding, NativeHistoryStage,
+    NativeHistoryStageProgress, NativeHistoryTargetContext, NativeLogicalHistoryEntryV1,
+    NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint, NativeLogicalHistoryStepV1,
+    NativeRangeInstallSafety, NativeRangePendingApply, NativeRangePrefixObservation,
+    NativeRecoveryAdmission, RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage,
+    StagedNativeHistoryProof,
 };
 mod range_image_bindings;
 pub(crate) use range_image_bindings::RangeImageDbBindings;

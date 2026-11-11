@@ -10,6 +10,27 @@ struct NormalTransport {
     captured: Mutex<Option<NativeOriginApplyRequest>>,
 }
 impl RangeWriteTransport for NormalTransport {
+    fn apply_range_write_repair(
+        &self,
+        n: &ClusterNodeId,
+        b: &RangeWriteRepairBatch,
+        limits: &RangeWriteRepairLimits,
+    ) -> Result<RangeWriteProgress> {
+        self.inner.apply_range_write_repair(n, b, limits)
+    }
+    fn fetch_range_write_repair(
+        &self,
+        n: &ClusterNodeId,
+        r: RangeId,
+        e: u64,
+        after: u64,
+        limits: &RangeWriteRepairLimits,
+    ) -> Result<RangeWriteRepairBatch> {
+        self.inner.fetch_range_write_repair(n, r, e, after, limits)
+    }
+    fn apply_range_write(&self, n: &ClusterNodeId, c: &RangeWriteCommand) -> Result<RangeWriteAck> {
+        self.inner.apply_range_write(n, c)
+    }
     fn apply_native_origin(
         &self,
         n: &ClusterNodeId,

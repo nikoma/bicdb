@@ -1,0 +1,9 @@
+{
+  "helper_sha256": "011233d579bd0884a6ff2a234a60b2bc60ed9582c01de10ec96f90bfef9141a3",
+  "observer_pid": 3097794,
+  "owner_pid": 3094394,
+  "owner_start_ticks": "431314828",
+  "started_unix_ns": 1794389456077646144,
+  "interval_seconds": 10,
+  "scope": "read-only sharedhost counters and exact owned PID/start ticks; no process memory, signals or profiling"
+}

@@ -1047,9 +1047,8 @@ pub(crate) fn eval_db_catalog_function_value(
                 .and_then(|oid| pg_format_type(oid, typmod));
             let formatted = match formatted {
                 Some(formatted) => formatted,
-                None => list_user_types(db)?
-                    .into_iter()
-                    .find_map(|user_type| {
+                None => {
+                    let standalone = list_user_types(db)?.into_iter().find_map(|user_type| {
                         if user_type.oid == oid {
                             Some(user_type.column_type(false).formatted_name())
                         } else if user_type.array_oid == oid {
@@ -1057,8 +1056,14 @@ pub(crate) fn eval_db_catalog_function_value(
                         } else {
                             None
                         }
-                    })
-                    .unwrap_or_else(|| "???".to_string()),
+                    });
+                    match standalone {
+                        Some(name) => name,
+                        None => {
+                            pg_table_row_regtype_name(db, oid)?.unwrap_or_else(|| "???".to_string())
+                        }
+                    }
+                }
             };
             Ok(Some(SqlValue::String(formatted)))
         }
@@ -1347,11 +1352,7 @@ pub(crate) fn pg_get_function_result_from_pg_proc_row(
         return Ok(SqlValue::Null);
     };
     if let Some(routine) = routine_for_oid(db, oid)? {
-        let mut rendered = routine.formatted_return_type();
-        if routine.returns_set {
-            rendered = format!("SETOF {rendered}");
-        }
-        return Ok(SqlValue::String(rendered));
+        return Ok(SqlValue::String(routine_function_result(&routine)));
     }
     if pg_proc_row_value(row, "oid")
         .as_ref()
@@ -1608,7 +1609,7 @@ pub(crate) fn pg_get_function_result(db: &BicDb, args: &[SqlValue]) -> Result<Sq
         return Ok(SqlValue::Null);
     };
     if let Some(routine) = routine_for_oid(db, oid)? {
-        return Ok(SqlValue::String(routine.formatted_return_type()));
+        return Ok(SqlValue::String(routine_function_result(&routine)));
     }
     if let Some(return_type_oid) = pg_builtin_proc_return_type_oid(oid) {
         return Ok(SqlValue::String(
@@ -1618,6 +1619,30 @@ pub(crate) fn pg_get_function_result(db: &BicDb, args: &[SqlValue]) -> Result<Sq
         ));
     }
     Ok(SqlValue::Null)
+}
+
+fn routine_function_result(routine: &RoutineSchema) -> String {
+    if let Ok(statements) = Parser::parse_sql(&PostgreSqlDialect {}, &routine.definition) {
+        if let [Statement::CreateFunction(function)] = statements.as_slice() {
+            if let Some(
+                FunctionReturnType::DataType(data_type) | FunctionReturnType::SetOf(data_type),
+            ) = &function.return_type
+            {
+                if matches!(
+                    data_type,
+                    DataType::Table(Some(_)) | DataType::NamedTable { .. }
+                ) {
+                    return data_type.to_string();
+                }
+            }
+        }
+    }
+    let rendered = routine.formatted_return_type();
+    if routine.returns_set {
+        format!("SETOF {rendered}")
+    } else {
+        rendered
+    }
 }
 
 pub(crate) fn routine_for_oid(db: &BicDb, oid: i64) -> Result<Option<RoutineSchema>> {

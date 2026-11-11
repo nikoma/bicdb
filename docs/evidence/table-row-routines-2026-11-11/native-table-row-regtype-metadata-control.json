@@ -1,0 +1,14 @@
+{
+  "status": "passed",
+  "started_unix": 1794398571.4092875,
+  "protected_application_schema_mutated": false,
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "result": [
+    [
+      "row_names_8bcead4566c7.\"MixedType\"",
+      "row_names_8bcead4566c7.\"MixedType\"[]"
+    ]
+  ],
+  "temporary_schema_removed": true,
+  "finished_unix": 1794398571.4525917
+}

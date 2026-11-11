@@ -1,0 +1,407 @@
+[
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/group.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n2-effective-routes.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n4-effective-routes.private.json",
+    "bytes": 20497,
+    "sha256": "3998eb762e3f18f901f2c3ab79420a9d54ac005fbdbb878a42a45e32512ba2cb"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n2-metric-definitions.private.json",
+    "bytes": 106018,
+    "sha256": "54ce535f65062e13545fb0f3500d20696a953829e9a6c3f2cac36cea24d91ca3"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n1-vm-model.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n0-instance-view.private.json",
+    "bytes": 4614,
+    "sha256": "990c9b111445ec13c8019216f053e651ab72aaa6ddabd1efbae3a38940fe0680"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n3-effective-nsg.private.json",
+    "bytes": 47843,
+    "sha256": "72eb862603fe488c73144d72fa6606333537a8cf480211aa11e03fe94906481b"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/nsgs.private.json",
+    "bytes": 8889,
+    "sha256": "090763f8c33277ada063b4dfb21bd05b137e0a7c1daba33451a1e8d979537a68"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n2-metric-definitions.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n4-vm-model.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n0-effective-routes.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/vnets.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n4-metric-definitions.private.json",
+    "bytes": 106018,
+    "sha256": "6dca8c53d3066e0b9be0775a1b6a0cee5791e39be140ba93fe8a2a6a7941d0a8"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n3-vm-model.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n4-metric-definitions.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/public-ips.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n4-instance-view.private.json",
+    "bytes": 4616,
+    "sha256": "1b80dce26dc25c4fe2cfee0439cebf68fedac036e2d757e40ceca8c726114ab8"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n1-effective-routes.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n1-effective-nsg.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n2-effective-nsg.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n0-effective-routes.private.json",
+    "bytes": 20497,
+    "sha256": "3998eb762e3f18f901f2c3ab79420a9d54ac005fbdbb878a42a45e32512ba2cb"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n4-effective-routes.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n3-effective-routes.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n1-effective-nsg.private.json",
+    "bytes": 47843,
+    "sha256": "ab4724c7f70ecc7d93757968bdedcd9bff30d6c2bec0680ce104a5b3dc99540a"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n2-instance-view.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n0-metric-definitions.private.json",
+    "bytes": 106018,
+    "sha256": "02cc1270218bf7dd1af00812c6c0c6938d9499d5a47b16ec861d4e6a46d4bed8"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n0-metric-definitions.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n1-effective-routes.private.json",
+    "bytes": 20497,
+    "sha256": "3998eb762e3f18f901f2c3ab79420a9d54ac005fbdbb878a42a45e32512ba2cb"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/resources.private.json",
+    "bytes": 20351,
+    "sha256": "815d753440daa7d8560936f1e91c1461b5e8ad40a3fa553d2547fef0bbfda909"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n0-effective-nsg.private.json",
+    "bytes": 47843,
+    "sha256": "9921b2e1e87bab025bc0ba99479c8bb116fc3052ddbc41b836c6d49a56786b7e"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n2-instance-view.private.json",
+    "bytes": 4616,
+    "sha256": "814f93047d0cbac22c42d175ff50d6c0abf1bd33c22f0f05634ba269d1747eb8"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n2-effective-nsg.private.json",
+    "bytes": 47843,
+    "sha256": "2f6e45572fc8f0090350d0ec3ba264d1a30eaf940c8e51c1685405e3de137c40"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/nics.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/regional-usage.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n0-vm-model.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n0-instance-view.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/group.private.json",
+    "bytes": 482,
+    "sha256": "2e74d81d19eccf84601bbbcf472fff0316cded6b618d2fe93403758bffbd2525"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n4-vm-model.private.json",
+    "bytes": 3299,
+    "sha256": "d6467cc240ed273539a088ae54504005588ef3c25c7f55e6f2abeb1e1ed7c6f6"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n3-metric-definitions.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n3-effective-routes.private.json",
+    "bytes": 20497,
+    "sha256": "3998eb762e3f18f901f2c3ab79420a9d54ac005fbdbb878a42a45e32512ba2cb"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n0-vm-model.private.json",
+    "bytes": 3312,
+    "sha256": "82328ff565c38a46c69f4260b82c2c6180a2cbf4c8b25ed9c13cd7a4883bb2ae"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n2-vm-model.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n3-instance-view.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n1-instance-view.private.json",
+    "bytes": 4616,
+    "sha256": "6f3742b10ee0acb4eaa84c440e53f1bdb36d578400f3b648f344cdc2a3b00900"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/disks.private.json",
+    "bytes": 16063,
+    "sha256": "56be3f279d59d3e2e654b8dafd523ffd3aee3af498513424a4ff7f05539049a8"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/disks.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n4-effective-nsg.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n1-vm-model.private.json",
+    "bytes": 3299,
+    "sha256": "d00c9eaf5997eed4fc36fd2999e55762817f727079ab17b6d0a9de0f80f67fa4"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n0-effective-nsg.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/nsgs.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/capture-index.json",
+    "bytes": 3809,
+    "sha256": "685cfc5c2b3d133e3e3ed6b793b6cef89eec93ebba0a1e66abbcaa6eb53bf0a6"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n3-instance-view.private.json",
+    "bytes": 4616,
+    "sha256": "5b05762ae52ffda50f08de7c68d521322cee30aa9677fc909183a07c562ebcfd"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n3-vm-model.private.json",
+    "bytes": 3299,
+    "sha256": "736973609a3eebd0ab62d4ba41f205349e23cf5e320f10dea5ea54ef9f7691d7"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/vnets.private.json",
+    "bytes": 3085,
+    "sha256": "ef0aac64f893b3928ba855db6a6917adcee2752a8b4887fb646f3f5336366a32"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n4-effective-nsg.private.json",
+    "bytes": 47843,
+    "sha256": "3fc67610e18bf659fce2df6249e7b0e5824718ba8819e8095c730e100c614024"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n3-effective-nsg.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/public-ips.private.json",
+    "bytes": 1082,
+    "sha256": "05d9c236ca8dba03eaed203c9a051034a9bda5aff3dd4bfde21f980eb8cbaead"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n1-metric-definitions.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n4-instance-view.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n1-metric-definitions.private.json",
+    "bytes": 106018,
+    "sha256": "581b2a4402f04b91030b7f8db944eeb0843658720d4471908dc459a0c6c4394f"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/resources.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/vms.private.json",
+    "bytes": 17506,
+    "sha256": "a4979768806786449d49ea87d38defb9e9646e915dd1c46a0275ddd6e32d4889"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/nics.private.json",
+    "bytes": 12212,
+    "sha256": "c2a3f92a66a9a6e60e79da9d01019d7d7a22ad5c9aa574938ee9970357b29aff"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n2-effective-routes.private.json",
+    "bytes": 20497,
+    "sha256": "3998eb762e3f18f901f2c3ab79420a9d54ac005fbdbb878a42a45e32512ba2cb"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/regional-usage.private.json",
+    "bytes": 55657,
+    "sha256": "caa628e5b07f6aef4de914da9c563c3e62585ace4f1e788720afe416b3a39a20"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n2-vm-model.private.json",
+    "bytes": 3299,
+    "sha256": "4999efcc4930deed36756b645ac6fcc2984aef8ed6b5d40c25c7cf98b0f4676e"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/vms.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n3-metric-definitions.private.json",
+    "bytes": 106018,
+    "sha256": "cbe9fdd9c0431659ad71e2d78d4e28e5a40285ad5cf6e7a4cac33a601d3b65a2"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/raw-api-1794387143430153798/n1-instance-view.private.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/allocation-preflight.private.json",
+    "bytes": 64346,
+    "sha256": "30fedc211695cd8cb7a1f729b6370b66a10abbf9c0b6bc16c6ddf29f80224e4b"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/allocated-group-guard.private.json",
+    "bytes": 581,
+    "sha256": "fb174fa5409c41e3ab5eb87cb939db531ecd5276a8ae85dc32612a84e48e08da"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/state.private.json",
+    "bytes": 1305,
+    "sha256": "08834652dde18ab356ffa7d7a1b9fdc1b705cd3461dc5e61fec73d9efda79904"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/sku.private.json",
+    "bytes": 3447,
+    "sha256": "1287ba1a6a1729f1b710b6e687e04b4bd99570feef9e84a177e1be1987958d3f"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/capture-azure.py",
+    "bytes": 2123,
+    "sha256": "b38578f2f28713e75755098f0b1e89d2a17a2c173b9538d40565f69f0ceb9d53"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/capture-metrics.py",
+    "bytes": 3516,
+    "sha256": "bcbb90d4bd7ea2916fdc5a4ba6829b17f10fbc7e59336dd75c588c0e6392c55e"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/provision.py",
+    "bytes": 2690,
+    "sha256": "35ec1f1a91d0783dfe0b6fa6bcef187aba1ea2422175d5efdb1896d6f5055bda"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/create-vms.py",
+    "bytes": 2298,
+    "sha256": "264636eb2b42ca707b9eb5e1982f9b347b57ede0c56c173b3a3c4b73521602cf"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/verify-vms.py",
+    "bytes": 2814,
+    "sha256": "e7a7a72e50f41cb75bd8dbf109fb6df843d85106a8bbd858bd3083e348828c4e"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/n1-cloud-init-check.private.json",
+    "bytes": 2831,
+    "sha256": "7d63bb415571975e9d15db9f477c038fedaf2fb648f9e34dfd4cdb171a632d99"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/n1-cloud-init-warning-evidence/logs.tgz",
+    "bytes": 23762,
+    "sha256": "bcc3ed487bb9cb1accd0b2a04602674846f30fa7f6e82d3dc8aedbeb2d37bc12"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-repro/n1-cloud-init-warning-evidence/journal.txt",
+    "bytes": 14991,
+    "sha256": "0aafa3b4018bbfa52529ded4004037ce428a5b30d5355b6927e1c021046a5da6"
+  }
+]

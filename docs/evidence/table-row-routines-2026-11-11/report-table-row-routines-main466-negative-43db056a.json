@@ -1,0 +1,28 @@
+{
+  "source": "43db056ae01c51902565db5c29b9002fa6636bf0",
+  "scope": "Tests-only control against actual main466/16962de1, without private rename runtime. Independent scalar and array table-row identity routines must preserve payload, advertised type, argument/return signature and reopen behavior, both stores. Both tests run and retain actual outcome; first mode failure within each test means later store/reopen not reached. Private aa98464e all four focused groups passed, but do not substitute that for this main negative. Native references will be retained. Prepare a separate minimal delivery of custom-array declaration and table row cast lookup fixes; full private SQL rename/concurrency goal unchanged. No timeout/assertion weakening.",
+  "started_unix": 1794397486.7904065,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "table_row_routines",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794397486.7905607,
+      "exit": 101,
+      "finished_unix": 1794397613.348369
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794397613.3486285
+}

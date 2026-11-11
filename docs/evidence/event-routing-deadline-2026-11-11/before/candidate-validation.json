@@ -1,0 +1,33 @@
+[
+  {
+    "git_head": "60154f1f9a0b7793a74aae7e8ebc32845be01e42",
+    "uncommitted_patch_sha256": "779fc87792e8db552d06b121745fecbadc553af373462e87ce4ebb74214bf81d",
+    "source_version": "1.0.468-beta",
+    "scope": "actual TCP event client network deadline and routing retries only; synthetic response server, no database/HA/strong-read guarantee; hostname resolver not bounded; core opt-level=0/debug=0",
+    "physical_qualification": false,
+    "environment_override": {},
+    "name": "event-routing-before",
+    "command": [
+      "cargo",
+      "test",
+      "--release",
+      "--locked",
+      "-p",
+      "bicdb-core",
+      "--features",
+      "tls-replication",
+      "--config",
+      "profile.release.package.bicdb-core.opt-level=0",
+      "--config",
+      "profile.release.package.bicdb-core.debug=0",
+      "--lib",
+      "event_client_retry_tests::silent_",
+      "--",
+      "--nocapture"
+    ],
+    "exit_code": 101,
+    "interrupted_reason": null,
+    "elapsed_seconds": 74.02012788597494,
+    "minimum_available_bytes": 21478256640
+  }
+]

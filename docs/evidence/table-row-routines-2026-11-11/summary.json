@@ -1,0 +1,23 @@
+{
+  "qualification_source": "221aeeda361cdd3f1a2e0b46984ee7242ff92cd6",
+  "qualification_version": "1.0.466-beta preliminary candidate",
+  "baseline_main": "16962de1fae4191cf940f2f36239a6b0f556b10a",
+  "negative_source": "43db056ae01c51902565db5c29b9002fa6636bf0",
+  "baseline_tests_failed": 2,
+  "positive_commands_passed": 6,
+  "direct_and_version_identity_tests_passed": 5,
+  "type_and_oid_integration_tests_passed": 45,
+  "routine_filter_tests_passed": 7,
+  "full_sql_library_tests_passed": 864,
+  "full_sql_library_tests_ignored": 4,
+  "full_general_sql_tests_passed": 419,
+  "test_executions_passed_including_repeated_subset": 1340,
+  "unique_test_count_claimed": false,
+  "socket_wire_qualified_here": true,
+  "all_workspace_qualified_here": false,
+  "application_qualified": false,
+  "vm_fault_or_production_qualified": false,
+  "binary_or_deployment_produced": false,
+  "socket_wire_source": "410441d3bc91eadba7314253ea9e46daa6e4afe3",
+  "socket_wire_tests_passed": 1
+}

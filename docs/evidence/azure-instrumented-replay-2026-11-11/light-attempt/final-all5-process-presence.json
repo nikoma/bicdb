@@ -1,0 +1,52 @@
+{
+  "helper_sha256": "7adc34fae76285d124a51c99e89e66129d331c409c8f5bd6b12ae85f7e48b818",
+  "completed_unix_ns": 1794390307331302804,
+  "nodes": [
+    {
+      "node": 0,
+      "scan": {
+        "unix_ns": 1794390304016221088,
+        "matching_task_processes": [],
+        "database_exists": true,
+        "process_file_exists": true
+      }
+    },
+    {
+      "node": 1,
+      "scan": {
+        "unix_ns": 1794390305377897344,
+        "matching_task_processes": [],
+        "database_exists": true,
+        "process_file_exists": true
+      }
+    },
+    {
+      "node": 2,
+      "scan": {
+        "unix_ns": 1794390304974173967,
+        "matching_task_processes": [],
+        "database_exists": true,
+        "process_file_exists": true
+      }
+    },
+    {
+      "node": 3,
+      "scan": {
+        "unix_ns": 1794390306090834384,
+        "matching_task_processes": [],
+        "database_exists": true,
+        "process_file_exists": true
+      }
+    },
+    {
+      "node": 4,
+      "scan": {
+        "unix_ns": 1794390307183557618,
+        "matching_task_processes": [],
+        "database_exists": false,
+        "process_file_exists": false
+      }
+    }
+  ],
+  "all_task_processes_absent": true
+}

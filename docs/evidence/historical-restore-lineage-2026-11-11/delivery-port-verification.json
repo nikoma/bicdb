@@ -1,0 +1,39 @@
+{
+  "delivery_source_commit": "7d2c4cb6e5016766f2552fa8086b9f47cf9cc034",
+  "engine_path": "crates/bicdb-core/src/distribution_consensus.rs",
+  "engine_file_sha256": "137e8c77ad17e66fd25bbfaefa71beab4b1863eaa6f638cbdd3e97cab595c1d2",
+  "matched_functions": [
+    {
+      "function": "commit_entry",
+      "sha256": "4779de02cad13adad1dcffc9978b90b92edcceffdfcc98d685802f6a350ab91d",
+      "matches_archived_foundation_8bf444ae": true
+    },
+    {
+      "function": "install_snapshot",
+      "sha256": "b990c5f0a35fe14bba08dd8904ab4d101a741eabfec19c8165ca173ee5ecdbd1",
+      "matches_archived_foundation_8bf444ae": true
+    },
+    {
+      "function": "validate_state",
+      "sha256": "54233659a5bbc0fb6272e94a328944f32a6d2ce7464ee69dcc80b1ea8136d4df",
+      "matches_archived_foundation_8bf444ae": true
+    },
+    {
+      "function": "validate_historical_activation_against_topology",
+      "sha256": "2c141a9b14ff50ee9fa537621fa85e8bf4e6a259969a3a8e9792f975a1ec12fd",
+      "matches_archived_foundation_8bf444ae": true
+    },
+    {
+      "function": "validate_committed_activation_progress",
+      "sha256": "f9ddd604664e1309b1a955e94d5ae7ee3fb12411f2a4c552a157e619b926a904",
+      "matches_archived_foundation_8bf444ae": true
+    },
+    {
+      "function": "validate_activation_against_topology",
+      "sha256": "457d41aa2027c9e48ec872bfcb1947a985a11e939f4d8461f2a19f8daf7277ae",
+      "matches_archived_foundation_8bf444ae": true
+    }
+  ],
+  "provider_dto_changes_excluded": true,
+  "matching_source_is_not_executed_delivery_test": true
+}

@@ -1,0 +1,42 @@
+{
+  "format": 3,
+  "completed_unix_ns": 1794386871728969406,
+  "scope": "local instrumentation readiness only; synthetic TLS peers, notHA/strong-read/production qualification",
+  "matrix": {
+    "exit_code": 0,
+    "tests_run": 32,
+    "tests_passed": 32,
+    "seconds": 51.055,
+    "actual_cli_version": "1.0.463-beta",
+    "actual_cli_sha256": "840f0124f27a1a7695c4b2b0c72b05a262456802af65e063cff12242559e2f7d",
+    "actual_linked_core_version": "1.0.463-beta",
+    "actual_linked_core_sha256": "dc714b001a0fe8758473c2c4ef80158474d7426e16630926edb65b6cc35f0356",
+    "actual_application_concurrency_fixture": 16,
+    "actual_channel_ceiling_fixture": 21,
+    "channel_pressure_max_rss_kib": 70568,
+    "controller_address_space_limit_bytes": 2147483648
+  },
+  "package_manifest_sha256": "6f506c3bca2e4de8c4066886e9af18aa3666ffc4d4e949a9984e13b21a8f395c",
+  "source_files": {
+    "wire-build.json": "5cc5cb2ff575bfb0f49f85984f5fa05d467d9d59be6cd88e284bdb7a4daa4d5c",
+    "wire-worker.rs": "07b96ffe4725f13a6632b9da9955f8fab627a252467b8f4b6b3723df87d138e3",
+    "README.md": "9298becf1dd65d17661ca84f7ad17dafe16729a2faef5b417b21055fefb6c870",
+    "wire-worker": "b8cc2607220e32f705a23fd6b7d4f41c22298cd1b0ec92cc8e83847783ef8d2c",
+    "snapshot-controller.py": "180f5ca81d78054af10b268ca221dcddaf2d3e646f33b7de8fae1247fd8a89e6",
+    "test_trace_client.py": "e1358909ffeed36e6c275c7767c29ffdf4e4eb09356b38e522e7ee2a8e6ec690",
+    "build-wire-worker.py": "c06a14396c23fef8b02f3fc9658f7634c26a6695f810a9d7b2d8bd60dbda0466",
+    "trace_client.py": "a1ab418d1031ec409ce108aeb547cf5a2ceebff46f41811d991f7182259f66fb"
+  },
+  "selfcheck_stderr_sha256": "cf58bcc0365ef4003423628e1881a9279bafbb1aefa9a201f3d758fdd5fa2036",
+  "selfcheck_stdout_sha256": "dd55ffc070934573c94ab88ea652510f56a2c60c1a40f74ecde96322ec23e693",
+  "red_prior_v2_fixture": "/tmp/bicdb-reconcile-cap-red-fixture/red-receipt.json",
+  "required_attempted_terminal_verified_target_sets_independently_checked": true,
+  "cloud_smoke_and_ssh_warmup_required": true,
+  "all_16_n0_app_sessions_before_traffic": true,
+  "all_current_leader_observer_sessions_before_traffic": true,
+  "new_node_observer_lazy_after_join": true,
+  "member_keys_exported": false,
+  "strong_read_proof": false,
+  "ha_qualified": false,
+  "production_qualified": false
+}

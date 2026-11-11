@@ -1,0 +1,52 @@
+{
+  "run": "8186dd18b83f4195b1319a85a1ee3498",
+  "attempt_id": "30cf5a05bde64ced88bd576e8b9950ea",
+  "profile": "separate4workerlightdiagnostic",
+  "prior_attempt": "<controller-task>/8186dd18b83f4195b1319a85a1ee3498",
+  "hosts": [
+    {
+      "index": 0,
+      "root": "<n0-root>",
+      "db": "<n0-root>/db",
+      "address": "n0:9444",
+      "ssh": "n0-ssh"
+    },
+    {
+      "index": 1,
+      "root": "<n1-root>",
+      "db": "<n1-root>/db",
+      "address": "n1:9444",
+      "ssh": "n1-ssh"
+    },
+    {
+      "index": 2,
+      "root": "<n2-root>",
+      "db": "<n2-root>/db",
+      "address": "n2:9444",
+      "ssh": "n2-ssh"
+    },
+    {
+      "index": 3,
+      "root": "<n3-root>",
+      "db": "<n3-root>/db",
+      "address": "n3:9444",
+      "ssh": "n3-ssh"
+    },
+    {
+      "index": 4,
+      "root": "<n4-root>",
+      "db": "<n4-root>/db",
+      "address": "n4:9444",
+      "ssh": "n4-ssh"
+    }
+  ],
+  "engine_sha256": "840f0124f27a1a7695c4b2b0c72b05a262456802af65e063cff12242559e2f7d",
+  "worker_sha256": "b8cc2607220e32f705a23fd6b7d4f41c22298cd1b0ec92cc8e83847783ef8d2c",
+  "engine_source": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+  "version": "1.0.463-beta",
+  "client_manifest_sha256": "6f506c3bca2e4de8c4066886e9af18aa3666ffc4d4e949a9984e13b21a8f395c",
+  "runner_sha256": "cea96ba34d2de81814a6a395cdcf0a869c9203ff0e26bc1391eacdc7e245d34b",
+  "host_tools_sha256": "789858ef27f414caadd99657a6b1254251bb6dc2be395ac2f896acbd6d01e320",
+  "no_fault": true,
+  "classification": "instrumented_diagnostic_not_capacity_or_strong_read_qualification"
+}

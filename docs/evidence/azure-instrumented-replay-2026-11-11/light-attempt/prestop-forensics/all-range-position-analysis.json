@@ -1,0 +1,3885 @@
+{
+  "helper_sha256": "95269d84c69a7966864c779e08e8a92d8abb9846cd7dfc401710595b876377c2",
+  "completed_unix_ns": 1794390436059478645,
+  "scope": "independent live atomic-file captures; not a coherent quorum snapshot, row-read, or signed-certificate verification",
+  "retained_command_epoch_is_not_routing_epoch": true,
+  "nodes": [
+    {
+      "node": 0,
+      "raw_catalog_sha256": "c093ba241523ff4d6a3830798fd3d4fbf5e62ebcf75e13481b18aacdab798470",
+      "catalog_checksum_valid": true,
+      "command_checksums_checked": 2799,
+      "validation_errors": [],
+      "retained_state_counts": {
+        "applied": 2798,
+        "aborted": 1
+      },
+      "topology_generation": 15432,
+      "ranges": [
+        {
+          "range_id": 1,
+          "current_epoch": 13,
+          "last_index": 50,
+          "resolved_through": 50,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 50
+          },
+          "highest_retained_index_by_state": {
+            "applied": 50
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 2,
+          "current_epoch": 12,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 3,
+          "current_epoch": 12,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 4,
+          "current_epoch": 12,
+          "last_index": 38,
+          "resolved_through": 38,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 38
+          },
+          "highest_retained_index_by_state": {
+            "applied": 38
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 5,
+          "current_epoch": 12,
+          "last_index": 46,
+          "resolved_through": 46,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 46
+          },
+          "highest_retained_index_by_state": {
+            "applied": 46
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 6,
+          "current_epoch": 12,
+          "last_index": 65,
+          "resolved_through": 65,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 65
+          },
+          "highest_retained_index_by_state": {
+            "applied": 65
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 7,
+          "current_epoch": 12,
+          "last_index": 51,
+          "resolved_through": 51,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 51
+          },
+          "highest_retained_index_by_state": {
+            "applied": 51
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 8,
+          "current_epoch": 20,
+          "last_index": 46,
+          "resolved_through": 46,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 46
+          },
+          "highest_retained_index_by_state": {
+            "applied": 46
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 9,
+          "current_epoch": 12,
+          "last_index": 35,
+          "resolved_through": 35,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 35
+          },
+          "highest_retained_index_by_state": {
+            "applied": 35
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 11,
+          "current_epoch": 16,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 12,
+          "current_epoch": 9,
+          "last_index": 47,
+          "resolved_through": 47,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 47
+          },
+          "highest_retained_index_by_state": {
+            "applied": 47
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 13,
+          "current_epoch": 9,
+          "last_index": 47,
+          "resolved_through": 47,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 47
+          },
+          "highest_retained_index_by_state": {
+            "applied": 47
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 14,
+          "current_epoch": 9,
+          "last_index": 42,
+          "resolved_through": 42,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 42
+          },
+          "highest_retained_index_by_state": {
+            "applied": 42
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 15,
+          "current_epoch": 9,
+          "last_index": 61,
+          "resolved_through": 61,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 61
+          },
+          "highest_retained_index_by_state": {
+            "applied": 61
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 16,
+          "current_epoch": 9,
+          "last_index": 47,
+          "resolved_through": 47,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 47
+          },
+          "highest_retained_index_by_state": {
+            "applied": 47
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 17,
+          "current_epoch": 9,
+          "last_index": 67,
+          "resolved_through": 67,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 67
+          },
+          "highest_retained_index_by_state": {
+            "applied": 67
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 18,
+          "current_epoch": 14,
+          "last_index": 59,
+          "resolved_through": 59,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 59
+          },
+          "highest_retained_index_by_state": {
+            "applied": 59
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 19,
+          "current_epoch": 9,
+          "last_index": 42,
+          "resolved_through": 42,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 42
+          },
+          "highest_retained_index_by_state": {
+            "applied": 42
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 20,
+          "current_epoch": 8,
+          "last_index": 43,
+          "resolved_through": 43,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 43
+          },
+          "highest_retained_index_by_state": {
+            "applied": 43
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 21,
+          "current_epoch": 8,
+          "last_index": 66,
+          "resolved_through": 66,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 66
+          },
+          "highest_retained_index_by_state": {
+            "applied": 66
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 22,
+          "current_epoch": 8,
+          "last_index": 38,
+          "resolved_through": 38,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 38
+          },
+          "highest_retained_index_by_state": {
+            "applied": 38
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 23,
+          "current_epoch": 11,
+          "last_index": 53,
+          "resolved_through": 53,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 53
+          },
+          "highest_retained_index_by_state": {
+            "applied": 53
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 24,
+          "current_epoch": 8,
+          "last_index": 72,
+          "resolved_through": 72,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 72
+          },
+          "highest_retained_index_by_state": {
+            "applied": 72
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 25,
+          "current_epoch": 8,
+          "last_index": 39,
+          "resolved_through": 39,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 39
+          },
+          "highest_retained_index_by_state": {
+            "applied": 39
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 26,
+          "current_epoch": 8,
+          "last_index": 60,
+          "resolved_through": 60,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 60
+          },
+          "highest_retained_index_by_state": {
+            "applied": 60
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 27,
+          "current_epoch": 11,
+          "last_index": 42,
+          "resolved_through": 42,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 42
+          },
+          "highest_retained_index_by_state": {
+            "applied": 42
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 29,
+          "current_epoch": 12,
+          "last_index": 68,
+          "resolved_through": 68,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 68
+          },
+          "highest_retained_index_by_state": {
+            "applied": 68
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 30,
+          "current_epoch": 18,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 31,
+          "current_epoch": 11,
+          "last_index": 49,
+          "resolved_through": 49,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 49
+          },
+          "highest_retained_index_by_state": {
+            "applied": 49
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 33,
+          "current_epoch": 12,
+          "last_index": 45,
+          "resolved_through": 45,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 45
+          },
+          "highest_retained_index_by_state": {
+            "applied": 45
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 34,
+          "current_epoch": 15,
+          "last_index": 43,
+          "resolved_through": 43,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 43
+          },
+          "highest_retained_index_by_state": {
+            "applied": 43
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 35,
+          "current_epoch": 11,
+          "last_index": 39,
+          "resolved_through": 39,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 39
+          },
+          "highest_retained_index_by_state": {
+            "applied": 39
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 36,
+          "current_epoch": 16,
+          "last_index": 41,
+          "resolved_through": 41,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 41
+          },
+          "highest_retained_index_by_state": {
+            "applied": 41
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 37,
+          "current_epoch": 14,
+          "last_index": 58,
+          "resolved_through": 58,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 58
+          },
+          "highest_retained_index_by_state": {
+            "applied": 58
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 39,
+          "current_epoch": 11,
+          "last_index": 43,
+          "resolved_through": 43,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 43
+          },
+          "highest_retained_index_by_state": {
+            "applied": 43
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 41,
+          "current_epoch": 12,
+          "last_index": 60,
+          "resolved_through": 60,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 60
+          },
+          "highest_retained_index_by_state": {
+            "applied": 60
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 43,
+          "current_epoch": 11,
+          "last_index": 57,
+          "resolved_through": 57,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 57
+          },
+          "highest_retained_index_by_state": {
+            "applied": 57
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 45,
+          "current_epoch": 10,
+          "last_index": 57,
+          "resolved_through": 57,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 57
+          },
+          "highest_retained_index_by_state": {
+            "applied": 57
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 47,
+          "current_epoch": 11,
+          "last_index": 46,
+          "resolved_through": 46,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 46
+          },
+          "highest_retained_index_by_state": {
+            "applied": 46
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 49,
+          "current_epoch": 7,
+          "last_index": 41,
+          "resolved_through": 41,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 41
+          },
+          "highest_retained_index_by_state": {
+            "applied": 41
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 50,
+          "current_epoch": 10,
+          "last_index": 46,
+          "resolved_through": 46,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 45,
+            "aborted": 1
+          },
+          "highest_retained_index_by_state": {
+            "applied": 45,
+            "aborted": 46
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 51,
+          "current_epoch": 8,
+          "last_index": 62,
+          "resolved_through": 62,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 62
+          },
+          "highest_retained_index_by_state": {
+            "applied": 62
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 52,
+          "current_epoch": 8,
+          "last_index": 53,
+          "resolved_through": 53,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 53
+          },
+          "highest_retained_index_by_state": {
+            "applied": 53
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 53,
+          "current_epoch": 7,
+          "last_index": 56,
+          "resolved_through": 56,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 56
+          },
+          "highest_retained_index_by_state": {
+            "applied": 56
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 54,
+          "current_epoch": 7,
+          "last_index": 44,
+          "resolved_through": 44,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 44
+          },
+          "highest_retained_index_by_state": {
+            "applied": 44
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 55,
+          "current_epoch": 8,
+          "last_index": 56,
+          "resolved_through": 56,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 56
+          },
+          "highest_retained_index_by_state": {
+            "applied": 56
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 56,
+          "current_epoch": 8,
+          "last_index": 47,
+          "resolved_through": 47,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 47
+          },
+          "highest_retained_index_by_state": {
+            "applied": 47
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 57,
+          "current_epoch": 7,
+          "last_index": 55,
+          "resolved_through": 55,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 55
+          },
+          "highest_retained_index_by_state": {
+            "applied": 55
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 58,
+          "current_epoch": 7,
+          "last_index": 53,
+          "resolved_through": 53,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 53
+          },
+          "highest_retained_index_by_state": {
+            "applied": 53
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 59,
+          "current_epoch": 7,
+          "last_index": 68,
+          "resolved_through": 68,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 68
+          },
+          "highest_retained_index_by_state": {
+            "applied": 68
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 60,
+          "current_epoch": 7,
+          "last_index": 52,
+          "resolved_through": 52,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 52
+          },
+          "highest_retained_index_by_state": {
+            "applied": 52
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 61,
+          "current_epoch": 7,
+          "last_index": 56,
+          "resolved_through": 56,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 56
+          },
+          "highest_retained_index_by_state": {
+            "applied": 56
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 62,
+          "current_epoch": 7,
+          "last_index": 45,
+          "resolved_through": 45,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 45
+          },
+          "highest_retained_index_by_state": {
+            "applied": 45
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 63,
+          "current_epoch": 7,
+          "last_index": 57,
+          "resolved_through": 57,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 57
+          },
+          "highest_retained_index_by_state": {
+            "applied": 57
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 64,
+          "current_epoch": 7,
+          "last_index": 54,
+          "resolved_through": 54,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 54
+          },
+          "highest_retained_index_by_state": {
+            "applied": 54
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        }
+      ]
+    },
+    {
+      "node": 1,
+      "raw_catalog_sha256": "e715d3c9a5883eaf2fbf61ccfc6f51fa0da5bf993a9eed4aea7988779e185084",
+      "catalog_checksum_valid": true,
+      "command_checksums_checked": 2626,
+      "validation_errors": [],
+      "retained_state_counts": {
+        "applied": 2626
+      },
+      "topology_generation": 15500,
+      "ranges": [
+        {
+          "range_id": 1,
+          "current_epoch": 13,
+          "last_index": 50,
+          "resolved_through": 50,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 50
+          },
+          "highest_retained_index_by_state": {
+            "applied": 50
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 2,
+          "current_epoch": 12,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 3,
+          "current_epoch": 12,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 4,
+          "current_epoch": 12,
+          "last_index": 38,
+          "resolved_through": 38,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 38
+          },
+          "highest_retained_index_by_state": {
+            "applied": 38
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 6,
+          "current_epoch": 12,
+          "last_index": 65,
+          "resolved_through": 65,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 65
+          },
+          "highest_retained_index_by_state": {
+            "applied": 65
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 8,
+          "current_epoch": 12,
+          "last_index": 45,
+          "resolved_through": 45,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 45
+          },
+          "highest_retained_index_by_state": {
+            "applied": 45
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 10,
+          "current_epoch": 12,
+          "last_index": 50,
+          "resolved_through": 50,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 50
+          },
+          "highest_retained_index_by_state": {
+            "applied": 50
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 11,
+          "current_epoch": 9,
+          "last_index": 47,
+          "resolved_through": 47,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 47
+          },
+          "highest_retained_index_by_state": {
+            "applied": 47
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 12,
+          "current_epoch": 9,
+          "last_index": 47,
+          "resolved_through": 47,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 47
+          },
+          "highest_retained_index_by_state": {
+            "applied": 47
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 13,
+          "current_epoch": 9,
+          "last_index": 47,
+          "resolved_through": 47,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 47
+          },
+          "highest_retained_index_by_state": {
+            "applied": 47
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 14,
+          "current_epoch": 9,
+          "last_index": 42,
+          "resolved_through": 42,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 42
+          },
+          "highest_retained_index_by_state": {
+            "applied": 42
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 15,
+          "current_epoch": 9,
+          "last_index": 61,
+          "resolved_through": 61,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 61
+          },
+          "highest_retained_index_by_state": {
+            "applied": 61
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 16,
+          "current_epoch": 9,
+          "last_index": 47,
+          "resolved_through": 47,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 47
+          },
+          "highest_retained_index_by_state": {
+            "applied": 47
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 17,
+          "current_epoch": 9,
+          "last_index": 67,
+          "resolved_through": 67,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 67
+          },
+          "highest_retained_index_by_state": {
+            "applied": 67
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 18,
+          "current_epoch": 14,
+          "last_index": 59,
+          "resolved_through": 59,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 59
+          },
+          "highest_retained_index_by_state": {
+            "applied": 59
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 19,
+          "current_epoch": 9,
+          "last_index": 42,
+          "resolved_through": 42,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 42
+          },
+          "highest_retained_index_by_state": {
+            "applied": 42
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 20,
+          "current_epoch": 8,
+          "last_index": 43,
+          "resolved_through": 43,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 43
+          },
+          "highest_retained_index_by_state": {
+            "applied": 43
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 21,
+          "current_epoch": 8,
+          "last_index": 66,
+          "resolved_through": 66,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 66
+          },
+          "highest_retained_index_by_state": {
+            "applied": 66
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 22,
+          "current_epoch": 8,
+          "last_index": 38,
+          "resolved_through": 38,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 38
+          },
+          "highest_retained_index_by_state": {
+            "applied": 38
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 23,
+          "current_epoch": 11,
+          "last_index": 53,
+          "resolved_through": 53,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 53
+          },
+          "highest_retained_index_by_state": {
+            "applied": 53
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 24,
+          "current_epoch": 8,
+          "last_index": 72,
+          "resolved_through": 72,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 72
+          },
+          "highest_retained_index_by_state": {
+            "applied": 72
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 25,
+          "current_epoch": 8,
+          "last_index": 39,
+          "resolved_through": 39,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 39
+          },
+          "highest_retained_index_by_state": {
+            "applied": 39
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 26,
+          "current_epoch": 8,
+          "last_index": 60,
+          "resolved_through": 60,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 60
+          },
+          "highest_retained_index_by_state": {
+            "applied": 60
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 28,
+          "current_epoch": 12,
+          "last_index": 54,
+          "resolved_through": 54,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 54
+          },
+          "highest_retained_index_by_state": {
+            "applied": 54
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 30,
+          "current_epoch": 11,
+          "last_index": 47,
+          "resolved_through": 47,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 47
+          },
+          "highest_retained_index_by_state": {
+            "applied": 47
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 32,
+          "current_epoch": 12,
+          "last_index": 40,
+          "resolved_through": 40,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 40
+          },
+          "highest_retained_index_by_state": {
+            "applied": 40
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 34,
+          "current_epoch": 15,
+          "last_index": 43,
+          "resolved_through": 43,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 43
+          },
+          "highest_retained_index_by_state": {
+            "applied": 43
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 36,
+          "current_epoch": 16,
+          "last_index": 41,
+          "resolved_through": 41,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 41
+          },
+          "highest_retained_index_by_state": {
+            "applied": 41
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 37,
+          "current_epoch": 14,
+          "last_index": 58,
+          "resolved_through": 58,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 58
+          },
+          "highest_retained_index_by_state": {
+            "applied": 58
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 38,
+          "current_epoch": 11,
+          "last_index": 56,
+          "resolved_through": 56,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 56
+          },
+          "highest_retained_index_by_state": {
+            "applied": 56
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 40,
+          "current_epoch": 12,
+          "last_index": 50,
+          "resolved_through": 50,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 50
+          },
+          "highest_retained_index_by_state": {
+            "applied": 50
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 42,
+          "current_epoch": 11,
+          "last_index": 42,
+          "resolved_through": 42,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 42
+          },
+          "highest_retained_index_by_state": {
+            "applied": 42
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 44,
+          "current_epoch": 11,
+          "last_index": 62,
+          "resolved_through": 62,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 62
+          },
+          "highest_retained_index_by_state": {
+            "applied": 62
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 46,
+          "current_epoch": 11,
+          "last_index": 52,
+          "resolved_through": 52,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 52
+          },
+          "highest_retained_index_by_state": {
+            "applied": 52
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 48,
+          "current_epoch": 11,
+          "last_index": 64,
+          "resolved_through": 64,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 64
+          },
+          "highest_retained_index_by_state": {
+            "applied": 64
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 49,
+          "current_epoch": 7,
+          "last_index": 41,
+          "resolved_through": 41,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 41
+          },
+          "highest_retained_index_by_state": {
+            "applied": 41
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 50,
+          "current_epoch": 7,
+          "last_index": 44,
+          "resolved_through": 44,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 44
+          },
+          "highest_retained_index_by_state": {
+            "applied": 44
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 51,
+          "current_epoch": 8,
+          "last_index": 62,
+          "resolved_through": 62,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 62
+          },
+          "highest_retained_index_by_state": {
+            "applied": 62
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 52,
+          "current_epoch": 8,
+          "last_index": 53,
+          "resolved_through": 53,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 53
+          },
+          "highest_retained_index_by_state": {
+            "applied": 53
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 53,
+          "current_epoch": 7,
+          "last_index": 56,
+          "resolved_through": 56,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 56
+          },
+          "highest_retained_index_by_state": {
+            "applied": 56
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 54,
+          "current_epoch": 7,
+          "last_index": 44,
+          "resolved_through": 44,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 44
+          },
+          "highest_retained_index_by_state": {
+            "applied": 44
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 55,
+          "current_epoch": 8,
+          "last_index": 56,
+          "resolved_through": 56,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 56
+          },
+          "highest_retained_index_by_state": {
+            "applied": 56
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 56,
+          "current_epoch": 8,
+          "last_index": 47,
+          "resolved_through": 47,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 47
+          },
+          "highest_retained_index_by_state": {
+            "applied": 47
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 57,
+          "current_epoch": 7,
+          "last_index": 55,
+          "resolved_through": 55,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 55
+          },
+          "highest_retained_index_by_state": {
+            "applied": 55
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 58,
+          "current_epoch": 7,
+          "last_index": 53,
+          "resolved_through": 53,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 53
+          },
+          "highest_retained_index_by_state": {
+            "applied": 53
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 59,
+          "current_epoch": 7,
+          "last_index": 68,
+          "resolved_through": 68,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 68
+          },
+          "highest_retained_index_by_state": {
+            "applied": 68
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 60,
+          "current_epoch": 7,
+          "last_index": 52,
+          "resolved_through": 52,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 52
+          },
+          "highest_retained_index_by_state": {
+            "applied": 52
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 61,
+          "current_epoch": 7,
+          "last_index": 56,
+          "resolved_through": 56,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 56
+          },
+          "highest_retained_index_by_state": {
+            "applied": 56
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 62,
+          "current_epoch": 7,
+          "last_index": 45,
+          "resolved_through": 45,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 45
+          },
+          "highest_retained_index_by_state": {
+            "applied": 45
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 63,
+          "current_epoch": 7,
+          "last_index": 57,
+          "resolved_through": 57,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 57
+          },
+          "highest_retained_index_by_state": {
+            "applied": 57
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 64,
+          "current_epoch": 7,
+          "last_index": 54,
+          "resolved_through": 54,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 54
+          },
+          "highest_retained_index_by_state": {
+            "applied": 54
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        }
+      ]
+    },
+    {
+      "node": 2,
+      "raw_catalog_sha256": "ca47d0c3d7233afe49a7ac4dc767b885a9ba2ba75a5d9c446e1597cffc603ed0",
+      "catalog_checksum_valid": true,
+      "command_checksums_checked": 2815,
+      "validation_errors": [],
+      "retained_state_counts": {
+        "applied": 2814,
+        "aborted": 1
+      },
+      "topology_generation": 15676,
+      "ranges": [
+        {
+          "range_id": 1,
+          "current_epoch": 13,
+          "last_index": 50,
+          "resolved_through": 50,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 50
+          },
+          "highest_retained_index_by_state": {
+            "applied": 50
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 2,
+          "current_epoch": 12,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 3,
+          "current_epoch": 12,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 4,
+          "current_epoch": 12,
+          "last_index": 38,
+          "resolved_through": 38,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 38
+          },
+          "highest_retained_index_by_state": {
+            "applied": 38
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 5,
+          "current_epoch": 12,
+          "last_index": 46,
+          "resolved_through": 46,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 46
+          },
+          "highest_retained_index_by_state": {
+            "applied": 46
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 6,
+          "current_epoch": 12,
+          "last_index": 65,
+          "resolved_through": 65,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 65
+          },
+          "highest_retained_index_by_state": {
+            "applied": 65
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 7,
+          "current_epoch": 12,
+          "last_index": 51,
+          "resolved_through": 51,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 51
+          },
+          "highest_retained_index_by_state": {
+            "applied": 51
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 8,
+          "current_epoch": 20,
+          "last_index": 46,
+          "resolved_through": 46,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 46
+          },
+          "highest_retained_index_by_state": {
+            "applied": 46
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 9,
+          "current_epoch": 12,
+          "last_index": 35,
+          "resolved_through": 35,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 35
+          },
+          "highest_retained_index_by_state": {
+            "applied": 35
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 10,
+          "current_epoch": 12,
+          "last_index": 50,
+          "resolved_through": 50,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 50
+          },
+          "highest_retained_index_by_state": {
+            "applied": 50
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 11,
+          "current_epoch": 16,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 13,
+          "current_epoch": 9,
+          "last_index": 47,
+          "resolved_through": 47,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 47
+          },
+          "highest_retained_index_by_state": {
+            "applied": 47
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 14,
+          "current_epoch": 9,
+          "last_index": 42,
+          "resolved_through": 42,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 42
+          },
+          "highest_retained_index_by_state": {
+            "applied": 42
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 15,
+          "current_epoch": 9,
+          "last_index": 61,
+          "resolved_through": 61,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 61
+          },
+          "highest_retained_index_by_state": {
+            "applied": 61
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 17,
+          "current_epoch": 9,
+          "last_index": 67,
+          "resolved_through": 67,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 67
+          },
+          "highest_retained_index_by_state": {
+            "applied": 67
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 18,
+          "current_epoch": 14,
+          "last_index": 59,
+          "resolved_through": 59,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 59
+          },
+          "highest_retained_index_by_state": {
+            "applied": 59
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 23,
+          "current_epoch": 11,
+          "last_index": 53,
+          "resolved_through": 53,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 53
+          },
+          "highest_retained_index_by_state": {
+            "applied": 53
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 27,
+          "current_epoch": 11,
+          "last_index": 42,
+          "resolved_through": 42,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 42
+          },
+          "highest_retained_index_by_state": {
+            "applied": 42
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 28,
+          "current_epoch": 12,
+          "last_index": 54,
+          "resolved_through": 54,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 54
+          },
+          "highest_retained_index_by_state": {
+            "applied": 54
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 29,
+          "current_epoch": 12,
+          "last_index": 68,
+          "resolved_through": 68,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 68
+          },
+          "highest_retained_index_by_state": {
+            "applied": 68
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 30,
+          "current_epoch": 18,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 31,
+          "current_epoch": 11,
+          "last_index": 49,
+          "resolved_through": 49,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 49
+          },
+          "highest_retained_index_by_state": {
+            "applied": 49
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 32,
+          "current_epoch": 12,
+          "last_index": 40,
+          "resolved_through": 40,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 40
+          },
+          "highest_retained_index_by_state": {
+            "applied": 40
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 33,
+          "current_epoch": 12,
+          "last_index": 45,
+          "resolved_through": 45,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 45
+          },
+          "highest_retained_index_by_state": {
+            "applied": 45
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 34,
+          "current_epoch": 15,
+          "last_index": 43,
+          "resolved_through": 43,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 43
+          },
+          "highest_retained_index_by_state": {
+            "applied": 43
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 35,
+          "current_epoch": 11,
+          "last_index": 39,
+          "resolved_through": 39,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 39
+          },
+          "highest_retained_index_by_state": {
+            "applied": 39
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 36,
+          "current_epoch": 16,
+          "last_index": 41,
+          "resolved_through": 41,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 41
+          },
+          "highest_retained_index_by_state": {
+            "applied": 41
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 37,
+          "current_epoch": 14,
+          "last_index": 58,
+          "resolved_through": 58,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 58
+          },
+          "highest_retained_index_by_state": {
+            "applied": 58
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 38,
+          "current_epoch": 11,
+          "last_index": 56,
+          "resolved_through": 56,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 56
+          },
+          "highest_retained_index_by_state": {
+            "applied": 56
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 39,
+          "current_epoch": 11,
+          "last_index": 43,
+          "resolved_through": 43,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 43
+          },
+          "highest_retained_index_by_state": {
+            "applied": 43
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 40,
+          "current_epoch": 12,
+          "last_index": 50,
+          "resolved_through": 50,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 50
+          },
+          "highest_retained_index_by_state": {
+            "applied": 50
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 41,
+          "current_epoch": 12,
+          "last_index": 60,
+          "resolved_through": 60,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 60
+          },
+          "highest_retained_index_by_state": {
+            "applied": 60
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 42,
+          "current_epoch": 11,
+          "last_index": 42,
+          "resolved_through": 42,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 42
+          },
+          "highest_retained_index_by_state": {
+            "applied": 42
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 43,
+          "current_epoch": 11,
+          "last_index": 57,
+          "resolved_through": 57,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 57
+          },
+          "highest_retained_index_by_state": {
+            "applied": 57
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 44,
+          "current_epoch": 11,
+          "last_index": 62,
+          "resolved_through": 62,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 62
+          },
+          "highest_retained_index_by_state": {
+            "applied": 62
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 45,
+          "current_epoch": 10,
+          "last_index": 57,
+          "resolved_through": 57,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 57
+          },
+          "highest_retained_index_by_state": {
+            "applied": 57
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 46,
+          "current_epoch": 11,
+          "last_index": 52,
+          "resolved_through": 52,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 52
+          },
+          "highest_retained_index_by_state": {
+            "applied": 52
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 47,
+          "current_epoch": 11,
+          "last_index": 46,
+          "resolved_through": 46,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 46
+          },
+          "highest_retained_index_by_state": {
+            "applied": 46
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 48,
+          "current_epoch": 11,
+          "last_index": 64,
+          "resolved_through": 64,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 64
+          },
+          "highest_retained_index_by_state": {
+            "applied": 64
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 49,
+          "current_epoch": 7,
+          "last_index": 41,
+          "resolved_through": 41,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 41
+          },
+          "highest_retained_index_by_state": {
+            "applied": 41
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 50,
+          "current_epoch": 10,
+          "last_index": 46,
+          "resolved_through": 46,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 45,
+            "aborted": 1
+          },
+          "highest_retained_index_by_state": {
+            "applied": 45,
+            "aborted": 46
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 51,
+          "current_epoch": 8,
+          "last_index": 62,
+          "resolved_through": 62,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 62
+          },
+          "highest_retained_index_by_state": {
+            "applied": 62
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 52,
+          "current_epoch": 8,
+          "last_index": 53,
+          "resolved_through": 53,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 53
+          },
+          "highest_retained_index_by_state": {
+            "applied": 53
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 53,
+          "current_epoch": 7,
+          "last_index": 56,
+          "resolved_through": 56,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 56
+          },
+          "highest_retained_index_by_state": {
+            "applied": 56
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 54,
+          "current_epoch": 7,
+          "last_index": 44,
+          "resolved_through": 44,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 44
+          },
+          "highest_retained_index_by_state": {
+            "applied": 44
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 55,
+          "current_epoch": 8,
+          "last_index": 56,
+          "resolved_through": 56,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 56
+          },
+          "highest_retained_index_by_state": {
+            "applied": 56
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 56,
+          "current_epoch": 8,
+          "last_index": 47,
+          "resolved_through": 47,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 47
+          },
+          "highest_retained_index_by_state": {
+            "applied": 47
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 57,
+          "current_epoch": 7,
+          "last_index": 55,
+          "resolved_through": 55,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 55
+          },
+          "highest_retained_index_by_state": {
+            "applied": 55
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 58,
+          "current_epoch": 7,
+          "last_index": 53,
+          "resolved_through": 53,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 53
+          },
+          "highest_retained_index_by_state": {
+            "applied": 53
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 59,
+          "current_epoch": 7,
+          "last_index": 68,
+          "resolved_through": 68,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 68
+          },
+          "highest_retained_index_by_state": {
+            "applied": 68
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 60,
+          "current_epoch": 7,
+          "last_index": 52,
+          "resolved_through": 52,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 52
+          },
+          "highest_retained_index_by_state": {
+            "applied": 52
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 61,
+          "current_epoch": 7,
+          "last_index": 56,
+          "resolved_through": 56,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 56
+          },
+          "highest_retained_index_by_state": {
+            "applied": 56
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 62,
+          "current_epoch": 7,
+          "last_index": 45,
+          "resolved_through": 45,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 45
+          },
+          "highest_retained_index_by_state": {
+            "applied": 45
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 63,
+          "current_epoch": 7,
+          "last_index": 57,
+          "resolved_through": 57,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 57
+          },
+          "highest_retained_index_by_state": {
+            "applied": 57
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 64,
+          "current_epoch": 7,
+          "last_index": 54,
+          "resolved_through": 54,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 54
+          },
+          "highest_retained_index_by_state": {
+            "applied": 54
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        }
+      ]
+    },
+    {
+      "node": 3,
+      "raw_catalog_sha256": "f7c6cf2440f9eb556dc2fed70057f68ef779bc134f54f9e910076cf771e0c017",
+      "catalog_checksum_valid": true,
+      "command_checksums_checked": 2589,
+      "validation_errors": [],
+      "retained_state_counts": {
+        "applied": 2588,
+        "aborted": 1
+      },
+      "topology_generation": 15764,
+      "ranges": [
+        {
+          "range_id": 1,
+          "current_epoch": 13,
+          "last_index": 50,
+          "resolved_through": 50,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 50
+          },
+          "highest_retained_index_by_state": {
+            "applied": 50
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 2,
+          "current_epoch": 12,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 3,
+          "current_epoch": 12,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 4,
+          "current_epoch": 12,
+          "last_index": 38,
+          "resolved_through": 38,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 38
+          },
+          "highest_retained_index_by_state": {
+            "applied": 38
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 5,
+          "current_epoch": 12,
+          "last_index": 46,
+          "resolved_through": 46,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 46
+          },
+          "highest_retained_index_by_state": {
+            "applied": 46
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 6,
+          "current_epoch": 12,
+          "last_index": 65,
+          "resolved_through": 65,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 65
+          },
+          "highest_retained_index_by_state": {
+            "applied": 65
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 7,
+          "current_epoch": 12,
+          "last_index": 51,
+          "resolved_through": 51,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 51
+          },
+          "highest_retained_index_by_state": {
+            "applied": 51
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 8,
+          "current_epoch": 20,
+          "last_index": 46,
+          "resolved_through": 46,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 46
+          },
+          "highest_retained_index_by_state": {
+            "applied": 46
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 9,
+          "current_epoch": 12,
+          "last_index": 35,
+          "resolved_through": 35,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 35
+          },
+          "highest_retained_index_by_state": {
+            "applied": 35
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 10,
+          "current_epoch": 12,
+          "last_index": 50,
+          "resolved_through": 50,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 50
+          },
+          "highest_retained_index_by_state": {
+            "applied": 50
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 11,
+          "current_epoch": 16,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 12,
+          "current_epoch": 9,
+          "last_index": 47,
+          "resolved_through": 47,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 47
+          },
+          "highest_retained_index_by_state": {
+            "applied": 47
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 13,
+          "current_epoch": 9,
+          "last_index": 47,
+          "resolved_through": 47,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 47
+          },
+          "highest_retained_index_by_state": {
+            "applied": 47
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 14,
+          "current_epoch": 9,
+          "last_index": 42,
+          "resolved_through": 42,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 42
+          },
+          "highest_retained_index_by_state": {
+            "applied": 42
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 15,
+          "current_epoch": 9,
+          "last_index": 61,
+          "resolved_through": 61,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 61
+          },
+          "highest_retained_index_by_state": {
+            "applied": 61
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 16,
+          "current_epoch": 9,
+          "last_index": 47,
+          "resolved_through": 47,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 47
+          },
+          "highest_retained_index_by_state": {
+            "applied": 47
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 17,
+          "current_epoch": 9,
+          "last_index": 67,
+          "resolved_through": 67,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 67
+          },
+          "highest_retained_index_by_state": {
+            "applied": 67
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 18,
+          "current_epoch": 9,
+          "last_index": 58,
+          "resolved_through": 58,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 58
+          },
+          "highest_retained_index_by_state": {
+            "applied": 58
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 19,
+          "current_epoch": 9,
+          "last_index": 42,
+          "resolved_through": 42,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 42
+          },
+          "highest_retained_index_by_state": {
+            "applied": 42
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 20,
+          "current_epoch": 8,
+          "last_index": 43,
+          "resolved_through": 43,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 43
+          },
+          "highest_retained_index_by_state": {
+            "applied": 43
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 21,
+          "current_epoch": 8,
+          "last_index": 66,
+          "resolved_through": 66,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 66
+          },
+          "highest_retained_index_by_state": {
+            "applied": 66
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 22,
+          "current_epoch": 8,
+          "last_index": 38,
+          "resolved_through": 38,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 38
+          },
+          "highest_retained_index_by_state": {
+            "applied": 38
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 23,
+          "current_epoch": 8,
+          "last_index": 52,
+          "resolved_through": 52,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 52
+          },
+          "highest_retained_index_by_state": {
+            "applied": 52
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 24,
+          "current_epoch": 8,
+          "last_index": 72,
+          "resolved_through": 72,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 72
+          },
+          "highest_retained_index_by_state": {
+            "applied": 72
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 25,
+          "current_epoch": 8,
+          "last_index": 39,
+          "resolved_through": 39,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 39
+          },
+          "highest_retained_index_by_state": {
+            "applied": 39
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 26,
+          "current_epoch": 8,
+          "last_index": 60,
+          "resolved_through": 60,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 60
+          },
+          "highest_retained_index_by_state": {
+            "applied": 60
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 27,
+          "current_epoch": 11,
+          "last_index": 42,
+          "resolved_through": 42,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 42
+          },
+          "highest_retained_index_by_state": {
+            "applied": 42
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 28,
+          "current_epoch": 12,
+          "last_index": 54,
+          "resolved_through": 54,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 54
+          },
+          "highest_retained_index_by_state": {
+            "applied": 54
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 29,
+          "current_epoch": 12,
+          "last_index": 68,
+          "resolved_through": 68,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 68
+          },
+          "highest_retained_index_by_state": {
+            "applied": 68
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 30,
+          "current_epoch": 18,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 31,
+          "current_epoch": 11,
+          "last_index": 49,
+          "resolved_through": 49,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 49
+          },
+          "highest_retained_index_by_state": {
+            "applied": 49
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 32,
+          "current_epoch": 12,
+          "last_index": 40,
+          "resolved_through": 40,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 40
+          },
+          "highest_retained_index_by_state": {
+            "applied": 40
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 33,
+          "current_epoch": 12,
+          "last_index": 45,
+          "resolved_through": 45,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 45
+          },
+          "highest_retained_index_by_state": {
+            "applied": 45
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 34,
+          "current_epoch": 11,
+          "last_index": 42,
+          "resolved_through": 42,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 42
+          },
+          "highest_retained_index_by_state": {
+            "applied": 42
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 35,
+          "current_epoch": 11,
+          "last_index": 39,
+          "resolved_through": 39,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 39
+          },
+          "highest_retained_index_by_state": {
+            "applied": 39
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 36,
+          "current_epoch": 12,
+          "last_index": 40,
+          "resolved_through": 40,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 40
+          },
+          "highest_retained_index_by_state": {
+            "applied": 40
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 37,
+          "current_epoch": 10,
+          "last_index": 57,
+          "resolved_through": 57,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 57
+          },
+          "highest_retained_index_by_state": {
+            "applied": 57
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 38,
+          "current_epoch": 11,
+          "last_index": 56,
+          "resolved_through": 56,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 56
+          },
+          "highest_retained_index_by_state": {
+            "applied": 56
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 39,
+          "current_epoch": 11,
+          "last_index": 43,
+          "resolved_through": 43,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 43
+          },
+          "highest_retained_index_by_state": {
+            "applied": 43
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 40,
+          "current_epoch": 12,
+          "last_index": 50,
+          "resolved_through": 50,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 50
+          },
+          "highest_retained_index_by_state": {
+            "applied": 50
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 41,
+          "current_epoch": 12,
+          "last_index": 60,
+          "resolved_through": 60,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 60
+          },
+          "highest_retained_index_by_state": {
+            "applied": 60
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 42,
+          "current_epoch": 11,
+          "last_index": 42,
+          "resolved_through": 42,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 42
+          },
+          "highest_retained_index_by_state": {
+            "applied": 42
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 43,
+          "current_epoch": 11,
+          "last_index": 57,
+          "resolved_through": 57,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 57
+          },
+          "highest_retained_index_by_state": {
+            "applied": 57
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 44,
+          "current_epoch": 11,
+          "last_index": 62,
+          "resolved_through": 62,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 62
+          },
+          "highest_retained_index_by_state": {
+            "applied": 62
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 45,
+          "current_epoch": 10,
+          "last_index": 57,
+          "resolved_through": 57,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 57
+          },
+          "highest_retained_index_by_state": {
+            "applied": 57
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 46,
+          "current_epoch": 11,
+          "last_index": 52,
+          "resolved_through": 52,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 52
+          },
+          "highest_retained_index_by_state": {
+            "applied": 52
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 47,
+          "current_epoch": 11,
+          "last_index": 46,
+          "resolved_through": 46,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 46
+          },
+          "highest_retained_index_by_state": {
+            "applied": 46
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 48,
+          "current_epoch": 11,
+          "last_index": 64,
+          "resolved_through": 64,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 64
+          },
+          "highest_retained_index_by_state": {
+            "applied": 64
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 50,
+          "current_epoch": 10,
+          "last_index": 46,
+          "resolved_through": 46,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 45,
+            "aborted": 1
+          },
+          "highest_retained_index_by_state": {
+            "applied": 45,
+            "aborted": 46
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 53,
+          "current_epoch": 7,
+          "last_index": 56,
+          "resolved_through": 56,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 56
+          },
+          "highest_retained_index_by_state": {
+            "applied": 56
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        },
+        {
+          "range_id": 59,
+          "current_epoch": 7,
+          "last_index": 68,
+          "resolved_through": 68,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 68
+          },
+          "highest_retained_index_by_state": {
+            "applied": 68
+          },
+          "unresolved_tail": [],
+          "independently_copied_route_epoch": null,
+          "independently_copied_route_leader": null,
+          "independently_copied_route_replicas": null,
+          "separate_signed_certificate_objects_present": false
+        }
+      ]
+    }
+  ]
+}

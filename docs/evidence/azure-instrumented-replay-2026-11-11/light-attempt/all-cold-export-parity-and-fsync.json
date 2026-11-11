@@ -1,0 +1,70 @@
+{
+  "completed_unix_ns": 1794390260336847323,
+  "all_match": true,
+  "archives": [
+    {
+      "attempt": "8186dd18b83f4195b1319a85a1ee3498",
+      "node": 0,
+      "archive": "n0-cold-final.private.tgz",
+      "bytes": 925642,
+      "sha256": "e5ad0db7585bdbfd21b02afb976751d436da35ca4f07a16d11b66cdec6e53a91",
+      "fsync_completed_unix_ns": 1794390260309434768
+    },
+    {
+      "attempt": "8186dd18b83f4195b1319a85a1ee3498",
+      "node": 1,
+      "archive": "n1-cold-final.private.tgz",
+      "bytes": 909431,
+      "sha256": "8db4e796522cc5b01f71f9a6c0040039d5fb5eae1bc231b00acbc378e7fa546e",
+      "fsync_completed_unix_ns": 1794390260310629358
+    },
+    {
+      "attempt": "8186dd18b83f4195b1319a85a1ee3498",
+      "node": 2,
+      "archive": "n2-cold-final.private.tgz",
+      "bytes": 901665,
+      "sha256": "43368aa6c20a4777ce047da9843553259fed87daf256142e163822e02f19c9a4",
+      "fsync_completed_unix_ns": 1794390260311567762
+    },
+    {
+      "attempt": "8186dd18b83f4195b1319a85a1ee3498",
+      "node": 3,
+      "archive": "n3-cold-final.private.tgz",
+      "bytes": 896945,
+      "sha256": "f4871494ebc809f9f8d97b50cdafb6853f9ae77bf106b5699f1471f11b70a1cf",
+      "fsync_completed_unix_ns": 1794390260312707981
+    },
+    {
+      "attempt": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "node": 0,
+      "archive": "n0-cold-light-final.private.tgz",
+      "bytes": 1365022,
+      "sha256": "f0e0d55693df07947abc5312d0952d1ef84be0e5db4f00dd1e9438bdeb3e3093",
+      "fsync_completed_unix_ns": 1794390260324117675
+    },
+    {
+      "attempt": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "node": 1,
+      "archive": "n1-cold-light-final.private.tgz",
+      "bytes": 1234449,
+      "sha256": "dd88acf2de2367af2153a43f9c14d30f8745d8bfa344c39d3e72c898fd2a4e49",
+      "fsync_completed_unix_ns": 1794390260325279675
+    },
+    {
+      "attempt": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "node": 2,
+      "archive": "n2-cold-light-final.private.tgz",
+      "bytes": 1364082,
+      "sha256": "a48631cc9632a60bd96ab88f19385f4d1f458bf184a743b3e9fa8a5f570e3960",
+      "fsync_completed_unix_ns": 1794390260326457133
+    },
+    {
+      "attempt": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "node": 3,
+      "archive": "n3-cold-light-final.private.tgz",
+      "bytes": 1586234,
+      "sha256": "91dcd0f7ac1cb2e6d934f4d16eb2f31947f3883bd7097ed23e2701bf1c67d5b8",
+      "fsync_completed_unix_ns": 1794390260328179514
+    }
+  ]
+}

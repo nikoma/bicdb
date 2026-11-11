@@ -1,0 +1,10 @@
+{
+  "unix_ns": 1794387415016274499,
+  "reason": "pre-engine runner gate review; no init/server/client dispatched",
+  "runner_pid": 2980476,
+  "owned_child_pids": [
+    "2984208"
+  ],
+  "run": "c25851d975b6420ab4bf90858c380ee2",
+  "preserved": true
+}

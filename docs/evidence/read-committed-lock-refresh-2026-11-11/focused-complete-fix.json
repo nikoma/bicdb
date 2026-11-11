@@ -1,0 +1,100 @@
+{
+  "source": "0acbe3c3306eb6654562fa288ae23c0f22715332",
+  "scope": "Candidate1.0.465-beta;464 reserved for independently coordinated HA/Azure evidence delivery. Exact source includes native snapshot62f and frontend6f. Original66f focused core passed but stronger SQL plain-read+UPDATE failed COMMIT: retained failure, not hidden. Complete coherent fix now remembers current locked version in record/stored UPDATE and DELETE mutation rechecks, including max_tx<=applied freshness fast paths, as well as locking SELECT. Shared helper preserves fixed snapshots, original buffered-write dependencies and ordinary native conservative reads. Tests retain full INT/NUMERIC and plain/FOR UPDATE/NOWAIT/SKIP LOCKED SQL matrix, add unique-key reuse after current UPDATE/DELETE. NativePG16 original8 schedules passed. Earlier source labels/versions preserved at actual values. Need predecessor463 then docs464 main and exact final-head broadCI/version verification before merge. No built standard binary or deployment. Serial one-job16GiB memory monitor and host10GiB floor.",
+  "started_unix": 1794380185.1978662,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794380185.1981366,
+      "exit": 0,
+      "finished_unix": 1794380185.2492933
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "paged_row_reservations",
+        "--test",
+        "transaction_isolation"
+      ],
+      "started_unix": 1794380185.2494457,
+      "exit": 0,
+      "finished_unix": 1794380213.6001377
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "read_committed_lock_refresh",
+        "--test",
+        "session_statement_snapshots",
+        "--test",
+        "read_committed_upsert_primary",
+        "--test",
+        "version_identity"
+      ],
+      "started_unix": 1794380213.6003494,
+      "exit": 0,
+      "finished_unix": 1794380347.2445543
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "fixed_snapshot_boundary",
+        "--test",
+        "read_only_transactions",
+        "--test",
+        "embedded_ha"
+      ],
+      "started_unix": 1794380347.2447848,
+      "exit": 0,
+      "finished_unix": 1794380488.148119
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "oracle_hr",
+        "session_transaction_defaults"
+      ],
+      "started_unix": 1794380488.1483026,
+      "exit": 0,
+      "finished_unix": 1794380493.7776544
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794380493.7779055
+}

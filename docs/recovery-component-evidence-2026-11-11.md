@@ -29,6 +29,9 @@ historical tested version below.
 
 | [Native ordinary Apply and catch-up](evidence/native-normal-apply-2026-11-11/README.md) | `18723cf4f1ddbb01e37f3762067b30000707cadb`; separate prior `87f1da00` cohort; package 1.0.471-beta | **5 distinct PASS**, with **7 earlier origin PASS** kept separate | Actual mTLS retained-command catch-up, new writes, duplicate preservation and wrong-actor/domain refusals. Original exact before-Prepare2 regression not rerun here; successful DB archives/external ACK ledgers not retained |
 | [Local native read observations](evidence/native-read-observation-foundation-2026-11-11/README.md) | `6d07ded1ec9e44d688f2263a7804c236b3aa9f14`; package 1.0.471-beta | **9 distinct PASS**; earlier compile and fixture failures retained | Actual local native R/H and target-local B, current-open activation, raw-ahead refusal, cancellation and gate invalidation. No authenticated read RPC, read quorum, admitted host/store identity, MVCC read barrier or StrongGet in this cohort |
+| [Native catalogue fsync configuration](evidence/native-catalog-fsync-2026-11-11/README.md) | `574ea56074a991368e9dae2129a0734a23bc1be3`; package 1.0.471-beta | **28 distinct PASS** on this source; initial compile failure and a zero-match filter retained | Actual native catalogue fsync-off and foreign-root refusal, legacy async preservation and related read/origin/TLS controls. Source-level unsafe configuration reproduced; no observed lost ACK or physical power-loss experiment |
+| [Authenticated read-quorum candidate](evidence/native-read-rpc-candidate-2026-11-11/README.md) | `daa77b42cd8f71a212de06596a249bfbce4d36e9`; separate `453b8682` first cohort | **15 distinct PASS**, 20 executions across two sources | Six actual RPC/candidate tests plus nine local tests at final source. Matching majority can finish with a stalled minority; expired replies cannot vote. Candidate remains **unadmitted**, without host-birth continuity, MVCC row barrier, final metadata check or StrongGet. Additional retry-count assertion at `8ce4938c` is uncompiled in this receipt |
+| [Interrupted normal-image cold resume](evidence/native-interrupted-normal-image-baseline-2026-11-11/README.md) | `8707ffa42fc0b20ff30e0dd5ebd8989e20207a0d`; package 1.0.471-beta | **Failed recovery scenario**, reproduced by one passing characterization test | Source ACK1 and resolved unknown2 survive; target remains Installing/Unknown with exact Sparse2 and no installed base. After all-owner strict reopen, ordinary target fencing refuses, only one of two required data voters contributes, and the new Runtime has no source-freeze session. Earlier compile failure and disk-guard interruption reached no assertions |
 
 The bundles overlap; their counts must not be added. Each retains commands,
 resource samples, warnings, prior failed attempts and source bytes or a complete
@@ -110,14 +113,19 @@ history with unchanged local data visibility. Raw Aborted alone is insufficient;
 no implementation or executed acceptance follows from that document.
 
 The [interrupted current-image resume review](design/native-interrupted-current-image-resume-review-2026-11-11.md)
-is a separate **source review**, not an executed recovery result. It identifies
+is a separate **source review**, not itself an executed recovery result. It identifies
 an admission cycle after all owners reopen a partially installed image: the
 ordinary target fence refuses the durable install intent, while obtaining a new
 source cut needs the currently unavailable data quorum. A persisted intent is
 a refusal fence, not evidence of fresh quorum authority. The review preserves
 the requirement for fresh InstallingFence observations and revalidation of all
-target obligations before any destructive continuation. It does not establish
-durable-data loss or explain the original Azure run.
+target obligations before any destructive continuation. The separately pinned
+8707 characterization above subsequently confirms this availability cycle in a
+small actual-storage fixture. It does not establish durable-data loss or explain
+the original Azure run. The [pre-BEGIN proposal protocol](design/native-interrupted-image-proposal-protocol-2026-11-11.md)
+is a proposed repair, not a passing recovery result: it requires a protected
+native-WAL proposal and preimage before the install intent, plus a fresh,
+separate InstallingFence quorum and revalidated source history on restart.
 
 Local native birth is likewise a fact rather than voter-continuation authority.
 A future strong coordinator must compare every counted voter's actual birth

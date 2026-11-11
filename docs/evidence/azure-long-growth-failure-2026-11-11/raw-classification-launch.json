@@ -1,0 +1,7 @@
+{
+  "unix_ns": 1794379509448931122,
+  "helper_sha256": "0e5cf43c02d0b1d70a0ba8304c6046dcf60ddae49824632ac7351b19e3953c2b",
+  "budget_seconds": 180,
+  "maximum_parallelism": 4,
+  "scope": "fresh Get observations concurrent with existing growth ledger diagnostic check; no additional restart"
+}

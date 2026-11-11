@@ -1,0 +1,9 @@
+{
+  "unix_ns": 1794375488250625314,
+  "argv": [
+    "python3",
+    "/tmp/bicdb-azure-run/long-comparison.frozen.py"
+  ],
+  "observer_sha256": "4a183d2b6edd0b91dec9eb3ec9febe11936b899b50e62afa89c63918738e9350",
+  "binary_sha256": "15ad8ad644c92fd9248020c19b1fad9d4f62e6dceef8d4bc43f1415a8ff4e028"
+}

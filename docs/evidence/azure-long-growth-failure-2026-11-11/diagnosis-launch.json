@@ -1,0 +1,7 @@
+{
+  "unix_ns": 1794378063363979626,
+  "helper_sha256": "841ab7624f0f2c08f390bd4e07ef4d5a92124fccf3ee6191a5b6cca234c2708c",
+  "source": "/tmp/bicdb-azure-run/long-recovery-diagnosis.executed.py",
+  "bounded_convergence_seconds": 300,
+  "mutations": "restart/stop exact experiment-owned processes only; no appends or reinitialization"
+}

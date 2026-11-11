@@ -1,0 +1,288 @@
+{
+  "format": 1,
+  "run": "83da6383fbae4ba38d8d15f621d03cbb",
+  "classification": "distinct_machine_measurement",
+  "binary_sha256": "15ad8ad644c92fd9248020c19b1fad9d4f62e6dceef8d4bc43f1415a8ff4e028",
+  "build_label": "release-thinlto",
+  "source_commit": "b05385d4b033edf0db03f3eccf4bdd86f7c8eddb",
+  "workload": "immutable_events_append_read",
+  "replication_factor": 3,
+  "fsync": true,
+  "ranges": 64,
+  "machines": [
+    {
+      "machine_hash": "3009b89207c13a0da2b5890107431a9f4d5aede650d9071d90d0fc5e95a78016",
+      "cpu_count": 2,
+      "kernel": "7.0.0-1017-azure",
+      "meminfo": [
+        "MemTotal:        8122984 kB",
+        "MemFree:         6474012 kB",
+        "MemAvailable:    7535672 kB"
+      ]
+    },
+    {
+      "machine_hash": "cd59a7e7b77caff64f5720a153ec75e66683fd1fa620311fd35252ab73d079b8",
+      "cpu_count": 2,
+      "kernel": "7.0.0-1017-azure",
+      "meminfo": [
+        "MemTotal:        8122976 kB",
+        "MemFree:         6600756 kB",
+        "MemAvailable:    7550340 kB"
+      ]
+    },
+    {
+      "machine_hash": "6e44beb1dc4302ec8c7811d41c001a9380e61fc35a626944309d62d192367eb1",
+      "cpu_count": 2,
+      "kernel": "7.0.0-1017-azure",
+      "meminfo": [
+        "MemTotal:        8122980 kB",
+        "MemFree:         6454572 kB",
+        "MemAvailable:    7536768 kB"
+      ]
+    },
+    {
+      "machine_hash": "8efd5fd313c14ece56c3a5c004d685458a664a2cf6e37ee229d6bba532723040",
+      "cpu_count": 2,
+      "kernel": "7.0.0-1017-azure",
+      "meminfo": [
+        "MemTotal:        8122984 kB",
+        "MemFree:         6574092 kB",
+        "MemAvailable:    7522196 kB"
+      ]
+    },
+    {
+      "machine_hash": "31333dd77f25707c495484dc6da310642a07716498ac996a5b7a6f87783f4d63",
+      "cpu_count": 2,
+      "kernel": "7.0.0-1017-azure",
+      "meminfo": [
+        "MemTotal:        8122976 kB",
+        "MemFree:         7323396 kB",
+        "MemAvailable:    7596204 kB"
+      ]
+    }
+  ],
+  "results": [
+    {
+      "phase": "steady-4",
+      "format": 1,
+      "workload": "immutable_events_append_read",
+      "run": "41c00a2d23a44d258fe42a1554db1e5d",
+      "namespace": "scale-83da6383fbae4ba38d8d15f621d03cbb",
+      "concurrency": 16,
+      "payload_bytes": 1024,
+      "encoded_value_bytes": 1079,
+      "rpc_timeout_ms": 5000,
+      "traffic_seconds": 907.003620817,
+      "successful_operations": 7592,
+      "failed_operations": 0,
+      "successful_operations_per_second": 8.370418624306447,
+      "write_latency": {
+        "samples": 3804,
+        "p50_us": 3097119,
+        "p95_us": 8003782,
+        "p99_us": 11135865,
+        "max_us": 18920425
+      },
+      "read_latency": {
+        "samples": 3788,
+        "p50_us": 96034,
+        "p95_us": 595940,
+        "p99_us": 904493,
+        "max_us": 1456575
+      },
+      "acknowledged_writes": 3804,
+      "unverified_writes": [],
+      "error_samples": [],
+      "verification_passed": true,
+      "resources": {
+        "0": {
+          "max_rss_bytes": 602791936,
+          "peak_cpu_percent": 119.77442687262474,
+          "sampled_read_bytes": 0,
+          "sampled_write_bytes": 43902017536
+        },
+        "1": {
+          "max_rss_bytes": 543186944,
+          "peak_cpu_percent": 98.80578252671276,
+          "sampled_read_bytes": 0,
+          "sampled_write_bytes": 38849413120
+        },
+        "2": {
+          "max_rss_bytes": 529948672,
+          "peak_cpu_percent": 97.4294670846395,
+          "sampled_read_bytes": 0,
+          "sampled_write_bytes": 38280237056
+        },
+        "3": {
+          "max_rss_bytes": 541122560,
+          "peak_cpu_percent": 118.36990595611286,
+          "sampled_read_bytes": 0,
+          "sampled_write_bytes": 37963767808
+        }
+      }
+    }
+  ],
+  "complete": false,
+  "node_counts": [
+    4,
+    5
+  ],
+  "timeline": [
+    {
+      "unix_ms": 1794375690189,
+      "kind": "join_started",
+      "node": 1
+    },
+    {
+      "unix_ms": 1794375692749,
+      "kind": "join_registered",
+      "node": 1
+    },
+    {
+      "unix_ms": 1794375694580,
+      "kind": "serve_started",
+      "node": 1
+    },
+    {
+      "unix_ms": 1794375694590,
+      "kind": "join_started",
+      "node": 2
+    },
+    {
+      "unix_ms": 1794375697014,
+      "kind": "join_registered",
+      "node": 2
+    },
+    {
+      "unix_ms": 1794375698725,
+      "kind": "serve_started",
+      "node": 2
+    },
+    {
+      "unix_ms": 1794375698750,
+      "kind": "join_started",
+      "node": 3
+    },
+    {
+      "unix_ms": 1794375701427,
+      "kind": "join_registered",
+      "node": 3
+    },
+    {
+      "unix_ms": 1794375703274,
+      "kind": "serve_started",
+      "node": 3
+    },
+    {
+      "unix_ms": 1794375814477,
+      "kind": "capacity_converged",
+      "nodes": 4
+    },
+    {
+      "unix_ms": 1794375816487,
+      "kind": "traffic_started",
+      "phase": "steady-4",
+      "seconds": 900
+    },
+    {
+      "unix_ms": 1794376760579,
+      "kind": "traffic_completed",
+      "phase": "steady-4"
+    },
+    {
+      "unix_ms": 1794376767554,
+      "kind": "traffic_started",
+      "phase": "growth-4-to-5",
+      "seconds": 900
+    },
+    {
+      "unix_ms": 1794376767554,
+      "kind": "join_started",
+      "node": 4
+    },
+    {
+      "unix_ms": 1794376771054,
+      "kind": "join_registered",
+      "node": 4
+    },
+    {
+      "unix_ms": 1794376772968,
+      "kind": "serve_started",
+      "node": 4
+    }
+  ],
+  "requested_storage_mode": "server_paged",
+  "requested_buffer_pool_bytes": 268435456,
+  "node_capacity_bytes": 100000000000,
+  "engine_environment": [
+    "env",
+    "BICDB_STORAGE_MODE=server_paged",
+    "BICDB_PAGED_BUFFER_POOL_BYTES=268435456"
+  ],
+  "persisted_storage_checkpoints": [
+    {
+      "nodes": 4,
+      "formats": [
+        {
+          "node": 0,
+          "format": {
+            "format_version": 2,
+            "min_reader_version": 1,
+            "min_writer_version": 2,
+            "feature_flags": [
+              "format_metadata_v2",
+              "server_paged_storage"
+            ],
+            "storage_mode": "server_paged"
+          }
+        },
+        {
+          "node": 1,
+          "format": {
+            "format_version": 2,
+            "min_reader_version": 1,
+            "min_writer_version": 2,
+            "feature_flags": [
+              "format_metadata_v2",
+              "server_paged_storage"
+            ],
+            "storage_mode": "server_paged"
+          }
+        },
+        {
+          "node": 2,
+          "format": {
+            "format_version": 2,
+            "min_reader_version": 1,
+            "min_writer_version": 2,
+            "feature_flags": [
+              "format_metadata_v2",
+              "server_paged_storage"
+            ],
+            "storage_mode": "server_paged"
+          }
+        },
+        {
+          "node": 3,
+          "format": {
+            "format_version": 2,
+            "min_reader_version": 1,
+            "min_writer_version": 2,
+            "feature_flags": [
+              "format_metadata_v2",
+              "server_paged_storage"
+            ],
+            "storage_mode": "server_paged"
+          }
+        }
+      ]
+    }
+  ],
+  "client_placement": "first_data_node",
+  "acknowledged_ledger_placement": "first_data_node_copied_after_phase",
+  "physical_failure_domains_verified": false,
+  "qualification_status": "not_qualified",
+  "independent_user_adoption": "not_measured",
+  "large_scale_certification": false,
+  "error": "node 0: Error: acknowledged event verification failed\n\n{\"format\":1,\"workload\":\"immutable_events_append_read\",\"run\":\"25d1dbd975814f4f9b0c5225b7658d2d\",\"namespace\":\"scale-83da6383fbae4ba38d8d15f621d03cbb\",\"concurrency\":16,\"payload_bytes\":1024,\"encoded_value_bytes\":1079,\"rpc_timeout_ms\":5000,\"traffic_seconds\":927.503538774,\"successful_operations\":2746,\"failed_operations\":404,\"successful_operations_per_second\":2.9606356042907818,\"write_latency\":{\"samples\":1223,\"p50_us\":4862509,\"p95_us\":15487779,\"p99_us\":21462305,\"max_us\":29723000},\"read_latency\":{\"samples\":1523,\"p50_us\":120009,\"p95_us\":946799,\"p99_us\":1939600,\"max_us\":25536804},\"acknowledged_writes\":1223,\"unverified_writes\":[\"25d1dbd975814f4f9b0c5225b7658d2d-10-636\",\"25d1dbd975814f4f9b0c5225b7658d2d-14-184\"],\"error_samples\":[\"io error: Resource temporarily unavailable (os error 11)\",\"cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: range r8 epoch 16 leader recovery is not complete; writes remain unavailable\",\"cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: range r14 epoch 16 leader recovery is not complete; writes remain unavailable\",\"io error: Resource temporarily unavailable (os error 11)\",\"cluster error: no event cluster member is reachable\",\"io error: Resource temporarily unavailable (os error 11)\",\"io error: Resource temporarily unavailable (os error 11)\",\"io error: Connection reset by peer (os error 104)\",\"io error: Resource temporarily unavailable (os error 11)\",\"cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: range r25 epoch 23 leader recovery is not complete; writes remain unavailable\",\"cluster error: cluster node n3 rejected RPC cluster_data_operation_failed: cluster error: range r29 epoch 19 leader recovery is not complete; writes remain unavailable\",\"io error: Resource temporarily unavailable (os error 11)\",\"io error: Connection reset by peer (os error 104)\",\"io error: Connection reset by peer (os error 104)\",\"io error: Connection reset by peer (os error 104)\",\"io error: Resource temporarily unavailable (os error 11)\",\"io error: Connection reset by peer (os error 104)\",\"io error: Connection reset by peer (os error 104)\",\"io error: Connection reset by peer (os error 104)\",\"io error: Connection reset by peer (os error 104)\"],\"verification_passed\":false}\n"
+}

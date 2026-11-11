@@ -1,0 +1,22 @@
+[
+  {
+    "phase": "steady-4",
+    "started_unix_ns": 1794378430897279577,
+    "response": {
+      "code": 1,
+      "stdout": "{\"checked\":3804,\"unverified\":111,\"unverified_key_samples\":[\"41c00a2d23a44d258fe42a1554db1e5d-0-94\",\"41c00a2d23a44d258fe42a1554db1e5d-0-362\",\"41c00a2d23a44d258fe42a1554db1e5d-0-588\",\"41c00a2d23a44d258fe42a1554db1e5d-0-1136\",\"41c00a2d23a44d258fe42a1554db1e5d-0-1712\",\"41c00a2d23a44d258fe42a1554db1e5d-0-3904\",\"41c00a2d23a44d258fe42a1554db1e5d-0-4014\",\"41c00a2d23a44d258fe42a1554db1e5d-0-4578\",\"41c00a2d23a44d258fe42a1554db1e5d-0-6294\",\"41c00a2d23a44d258fe42a1554db1e5d-0-6580\",\"41c00a2d23a44d258fe42a1554db1e5d-0-6616\",\"41c00a2d23a44d258fe42a1554db1e5d-0-6986\",\"41c00a2d23a44d258fe42a1554db1e5d-1-260\",\"41c00a2d23a44d258fe42a1554db1e5d-1-374\",\"41c00a2d23a44d258fe42a1554db1e5d-1-1236\",\"41c00a2d23a44d258fe42a1554db1e5d-1-6922\",\"41c00a2d23a44d258fe42a1554db1e5d-1-7284\",\"41c00a2d23a44d258fe42a1554db1e5d-1-7478\",\"41c00a2d23a44d258fe42a1554db1e5d-1-7510\",\"41c00a2d23a44d258fe42a1554db1e5d-2-212\"],\"verification_passed\":false}\n",
+      "stderr": "Error: acknowledged event verification failed\n"
+    },
+    "completed_unix_ns": 1794379281761723518
+  },
+  {
+    "phase": "growth-4-to-5",
+    "started_unix_ns": 1794379281761862497,
+    "response": {
+      "code": 1,
+      "stdout": "{\"checked\":1223,\"unverified\":18,\"unverified_key_samples\":[\"25d1dbd975814f4f9b0c5225b7658d2d-0-964\",\"25d1dbd975814f4f9b0c5225b7658d2d-0-1610\",\"25d1dbd975814f4f9b0c5225b7658d2d-0-1796\",\"25d1dbd975814f4f9b0c5225b7658d2d-0-1918\",\"25d1dbd975814f4f9b0c5225b7658d2d-0-2356\",\"25d1dbd975814f4f9b0c5225b7658d2d-0-2418\",\"25d1dbd975814f4f9b0c5225b7658d2d-5-1604\",\"25d1dbd975814f4f9b0c5225b7658d2d-5-1702\",\"25d1dbd975814f4f9b0c5225b7658d2d-5-1836\",\"25d1dbd975814f4f9b0c5225b7658d2d-5-2102\",\"25d1dbd975814f4f9b0c5225b7658d2d-5-2156\",\"25d1dbd975814f4f9b0c5225b7658d2d-5-2450\",\"25d1dbd975814f4f9b0c5225b7658d2d-5-2460\",\"25d1dbd975814f4f9b0c5225b7658d2d-6-282\",\"25d1dbd975814f4f9b0c5225b7658d2d-6-456\",\"25d1dbd975814f4f9b0c5225b7658d2d-6-490\",\"25d1dbd975814f4f9b0c5225b7658d2d-6-642\",\"25d1dbd975814f4f9b0c5225b7658d2d-6-670\"],\"verification_passed\":false}\n",
+      "stderr": "Error: acknowledged event verification failed\n"
+    },
+    "completed_unix_ns": 1794379496609335417
+  }
+]

@@ -322,6 +322,9 @@ mod tests {
     }
     impl Fixture {
         fn new(count: usize) -> Self {
+            Self::with_source_genesis(count, false)
+        }
+        fn with_source_genesis(count: usize, source_genesis: bool) -> Self {
             let root = tempfile::tempdir().unwrap();
             let bootstrap = Uuid::now_v7();
             let first = ClusterNodeId::new("n1").unwrap();
@@ -394,10 +397,14 @@ mod tests {
                     // Actual completed birth, deliberately NO range genesis.
                     // A current member can be behind and require an image;
                     // neither metadata nor an empty log can manufacture R=0.
-                    initial_ranges: vec![],
+                    initial_ranges: if source_genesis && id == &nodes[0] {
+                        topology.ranges.values().cloned().collect()
+                    } else {
+                        vec![]
+                    },
                     restore_activation: None,
                 };
-                let (db, _) = BicDb::create_new_range_image_database(
+                let (db, genesis_authority) = BicDb::create_new_range_image_database(
                     &path,
                     DbConfig::default()
                         .with_fsync(true)
@@ -412,6 +419,23 @@ mod tests {
                     fingerprint,
                 );
                 let db = Arc::new(RwLock::new(db));
+                if source_genesis && id == &nodes[0] {
+                    let range = topology.ranges.values().next().unwrap();
+                    let frozen = db
+                        .read()
+                        .range_mutation_gate()
+                        .try_freeze(range.id, Uuid::now_v7())
+                        .unwrap();
+                    BicDb::initialize_range_image_genesis(
+                        &db,
+                        &genesis_authority,
+                        range,
+                        &frozen,
+                        Duration::from_secs(3),
+                        &CancellationToken::uncancelable(),
+                    )
+                    .unwrap();
+                }
                 let service = Arc::new(Mutex::new(
                     ClusterDataNodeService::open(
                         topology.cluster_id.clone(),
@@ -579,5 +603,144 @@ mod tests {
             .unwrap();
         cancelled.store(true, Ordering::SeqCst);
         assert!(round.finish().is_err());
+    }
+
+    fn actual_source_history_inputs() -> (
+        Fixture,
+        Arc<FreshRangeRecoveryAuthority>,
+        crate::db::LocalNativeRecoveryReady,
+        crate::distribution_range_consensus::RangeWriteStore,
+        Arc<crate::distribution_range_mutation::FrozenRangeMutationPermit>,
+    ) {
+        let mut fixture = Fixture::with_source_genesis(3, true);
+        let nonce = Uuid::now_v7();
+        let mut round =
+            RecoveryFenceQuorumRound::begin(fixture.role(nonce), &fixture.parent).unwrap();
+        let scope = round.scope().clone();
+        for node in &fixture.nodes[..2] {
+            round.record(fixture.observe(node, &scope)).unwrap();
+        }
+        let authority = Arc::new(round.finish().unwrap());
+        // End the actual receiver/service owners before reopening a source
+        // catalogue handle. There are no concurrent catalogue writers. Its
+        // persisted refusal remains; no counters/fences are reset on reopen.
+        fixture.runtimes.clear();
+        let role = fixture.role(nonce);
+        let source = &fixture.nodes[0];
+        let db = &fixture.databases[source];
+        let database = db.read();
+        let frozen = Arc::new(
+            database
+                .range_mutation_gate()
+                .try_freeze(scope.range_id, nonce)
+                .unwrap(),
+        );
+        let native = database
+            .native_recovery_admission(
+                &fixture.topology.cluster_id,
+                fixture.topology.range_image_bootstrap_id.unwrap(),
+                source,
+                fixture.topology.nodes[source].incarnation,
+            )
+            .unwrap();
+        let store = crate::distribution_range_consensus::RangeWriteStore::open(
+            database.data_path(),
+            fixture.topology.cluster_id.clone(),
+            source.clone(),
+            true,
+        )
+        .unwrap();
+        let observed = store
+            .observe_recovery_resolved_prefix(&role, &native, &scope)
+            .unwrap();
+        let ready = database
+            .attest_local_native_recovery_ready(
+                native,
+                role,
+                observed,
+                &store,
+                Arc::clone(&frozen),
+                &fixture.parent,
+            )
+            .unwrap();
+        drop(database);
+        (fixture, authority, ready, store, frozen)
+    }
+
+    #[test]
+    fn actual_fenced_rf3_genesis_source_verifies_full_history_and_authorizes_current_voter_capture()
+    {
+        use crate::distribution_range_image::{CertifiedRecoveryImageCut, RangeImageCapture};
+        use crate::distribution_range_recovery::RecoverySourceHistoryRound;
+        let (fixture, authority, ready, store, frozen) = actual_source_history_inputs();
+        assert_eq!(authority.observations().len(), 2);
+        assert!(authority.observations()[&fixture.nodes[1]]
+            .image_history()
+            .native_point
+            .is_none());
+        let source = Arc::clone(&fixture.databases[&fixture.nodes[0]]);
+        let database = source.read();
+        let mut round = RecoverySourceHistoryRound::begin(
+            authority,
+            &ready,
+            fixture.nodes[2].clone(),
+            &database,
+            &store,
+        )
+        .unwrap();
+        assert!(round
+            .advance(&ready, &database, &store, &fixture.parent)
+            .unwrap());
+        let verified = round.finish(&ready, &database, &store).unwrap();
+        let cut = CertifiedRecoveryImageCut::from_verified_source_history(
+            verified, &ready, &database, &store,
+        )
+        .unwrap();
+        let lineage = database
+            .current_native_range_source_lineage(
+                fixture.topology.ranges.values().next().unwrap().id,
+            )
+            .unwrap();
+        drop(database);
+        drop(ready);
+        // The actual source pin is reacquired atomically and the SAME native
+        // receipt/DB-open/UID/schema/history is revalidated by production Begin.
+        let capture = RangeImageCapture::begin(
+            source,
+            cut,
+            frozen,
+            lineage,
+            Duration::from_secs(2),
+            &fixture.parent,
+        )
+        .unwrap();
+        assert_eq!(capture.range_index().get(), 0);
+    }
+
+    #[test]
+    fn cancelled_actual_source_history_step_poisoned_round_cannot_resume_with_fresh_timeout() {
+        use crate::distribution_range_recovery::RecoverySourceHistoryRound;
+        let (fixture, authority, ready, store, _frozen) = actual_source_history_inputs();
+        let database = fixture.databases[&fixture.nodes[0]].read();
+        let mut round = RecoverySourceHistoryRound::begin(
+            authority,
+            &ready,
+            fixture.nodes[2].clone(),
+            &database,
+            &store,
+        )
+        .unwrap();
+        let cancelled = Arc::new(AtomicBool::new(true));
+        let token = CancellationToken::new(cancelled, None);
+        assert!(round.advance(&ready, &database, &store, &token).is_err());
+        assert!(round
+            .advance(
+                &ready,
+                &database,
+                &store,
+                &CancellationToken::uncancelable()
+            )
+            .is_err());
+        assert!(round.finish(&ready, &database, &store).is_err());
     }
 }

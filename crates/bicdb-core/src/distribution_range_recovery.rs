@@ -202,6 +202,7 @@ pub(crate) struct RecoveryEpochFenceReply {
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub(crate) enum RecoveryFenceObservationPhase {
     ActiveRecovery,
+    NativePrepared,
     CompletedEpochAuthority,
 }
 

@@ -131,7 +131,12 @@ impl RecoveryFenceScope {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub(super) enum RecoveryFencePhase {
     Active,
-    Completed { resolved_index: u64 },
+    /// Durable promise to stop historical mutation at an ACTUALLY materialized
+    /// point. This is neither a serving configuration nor quorum completion.
+    NativePrepared(super::native_ready_prepare::NativePreparedPoint),
+    Completed {
+        resolved_index: u64,
+    },
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub(super) struct RecoveryFenceRecord {
@@ -158,6 +163,9 @@ pub(crate) struct HistoricalRangeCertification {
 impl RecoveryFenceRecord {
     pub(super) fn validate(&self) -> Result<()> {
         self.scope.validate()?;
+        if let RecoveryFencePhase::NativePrepared(point) = &self.phase {
+            point.validate()?;
+        }
         if self.retired_nonces.len() > 256
             || self.retired_nonces.contains(&self.scope.recovery_nonce)
             || self.retired_nonces.iter().any(Uuid::is_nil)
@@ -627,7 +635,7 @@ impl RangeWriteStore {
         drop(controlled);
         Ok(scope)
     }
-    fn recovery_range_catalog_sha256(&self, range_id: RangeId) -> Result<String> {
+    pub(super) fn recovery_range_catalog_sha256(&self, range_id: RangeId) -> Result<String> {
         let saved = self
             .catalog
             .recovery_fences
@@ -800,6 +808,7 @@ impl RangeWriteStore {
         }
         Ok(match saved.phase {
             RecoveryFencePhase::Active=>crate::distribution_range_recovery::RecoveryFenceObservationPhase::ActiveRecovery,
+            RecoveryFencePhase::NativePrepared(_) => crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativePrepared,
             RecoveryFencePhase::Completed {..}=>crate::distribution_range_recovery::RecoveryFenceObservationPhase::CompletedEpochAuthority,
         })
     }
@@ -964,7 +973,7 @@ impl RangeWriteStore {
             .recovery_fences
             .get(&range_id)
             .is_some_and(|f| {
-                matches!(f.phase, RecoveryFencePhase::Active)
+                !matches!(f.phase, RecoveryFencePhase::Completed { .. })
                     || matches!(
                         f.scope.purpose,
                         MetadataRecoveryRolePurpose::CommittedHandoff { .. }
@@ -1011,7 +1020,7 @@ impl RangeWriteStore {
         }
         Ok(())
     }
-    fn require_native_recovery_identity(
+    pub(super) fn require_native_recovery_identity(
         &self,
         role: &RecoveryRoleAdmission,
         native: &NativeRecoveryAdmission,
@@ -1107,11 +1116,9 @@ impl RangeWriteStore {
                     "recovery scope regressed or changed configuration without epoch",
                 ));
             }
-            if old.scope.same_session(scope)
-                && matches!(old.phase, RecoveryFencePhase::Completed { .. })
-            {
+            if old.scope.same_session(scope) && !matches!(old.phase, RecoveryFencePhase::Active) {
                 return Err(range_write_error(
-                    "completed recovery context requires a fresh fence round",
+                    "prepared/completed recovery cannot be reset by a repeated epoch fence",
                 ));
             }
         } else if self.catalog.recovery_fences.len() >= MAX_RECOVERY_FENCES {
@@ -1233,6 +1240,17 @@ impl RangeWriteStore {
         scope: &RecoveryFenceScope,
     ) -> Result<RecoveryResolvedCatalogObservation> {
         self.require_recovery_scope(role, native, scope)?;
+        self.observe_native_ready_resolved_prefix(role, native, scope)
+    }
+    /// Read-only re-attestation may inspect a prepared point. It grants no
+    /// historical mutation permission and cannot reset the preparation promise.
+    pub(crate) fn observe_native_ready_resolved_prefix(
+        &self,
+        role: &RecoveryRoleAdmission,
+        native: &NativeRecoveryAdmission,
+        scope: &RecoveryFenceScope,
+    ) -> Result<RecoveryResolvedCatalogObservation> {
+        self.require_native_ready_scope(role, native, scope)?;
         let log = self
             .catalog
             .ranges
@@ -1269,7 +1287,7 @@ impl RangeWriteStore {
         native: &NativeRecoveryAdmission,
     ) -> Result<()> {
         observation.require_role(role)?;
-        self.require_recovery_scope(role, native, &observation.scope)?;
+        self.require_native_ready_scope(role, native, &observation.scope)?;
         if observation.store_open_id != self.open_id
             || observation.catalog_sha256
                 != self.recovery_range_catalog_sha256(observation.range_id())?

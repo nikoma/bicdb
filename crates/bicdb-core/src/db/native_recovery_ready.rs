@@ -138,6 +138,148 @@ mod tests {
     }
 
     #[test]
+    fn actual_native_preparation_stops_mutation_and_survives_store_reopen() {
+        let fixture = Fixture::new();
+        fixture.seed(fixture.range().id, 2);
+        let role = fixture.role(Uuid::now_v7());
+        let frozen = fixture.freeze(&role);
+        let gate = fixture.db.read().range_mutation_gate();
+        let mut store = fixture.store();
+        let local = fixture
+            .attest(
+                role,
+                &mut store,
+                Arc::clone(&frozen),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        let prepared = store
+            .prepare_native_recovery_ready(&fixture.db.read(), local)
+            .unwrap();
+        assert_eq!(prepared.range_index(), 2);
+        assert_eq!(prepared.logical_history_sha256().len(), 64);
+        assert_eq!(prepared.native_receipt_sha256().len(), 64);
+        assert!(prepared.local_visibility_sequence() >= prepared.range_index());
+        prepared
+            .require_current(&fixture.db.read(), &store)
+            .unwrap();
+        let scope = RecoveryFenceScope::from_role(prepared.role()).unwrap();
+        let native = fixture.native();
+        assert!(store
+            .require_recovery_scope(prepared.role(), &native, &scope)
+            .is_err());
+        assert!(store
+            .fence_recovery_epoch(prepared.role(), &native, &scope)
+            .is_err());
+        assert!(store
+            .normal_native_write_allowed(&fixture.conflicting_command())
+            .is_err());
+        assert!(gate.try_controlled_mutation(&frozen).is_err());
+        assert_eq!(
+            store.recovery_observation_phase(&scope).unwrap(),
+            crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativePrepared
+        );
+        drop(prepared);
+        drop(frozen);
+        // Dropping the in-process freeze cannot clear the durable refusal.
+        assert!(gate.try_enter(fixture.range().id).is_ok());
+        drop(store);
+        let reopened = fixture.store();
+        assert!(reopened
+            .normal_native_write_allowed(&fixture.conflicting_command())
+            .is_err());
+        assert_eq!(
+            reopened.recovery_observation_phase(&scope).unwrap(),
+            crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativePrepared
+        );
+    }
+
+    #[test]
+    fn prepared_replica_can_be_reattested_by_a_fresh_same_session_role() {
+        let fixture = Fixture::new();
+        fixture.seed(fixture.range().id, 1);
+        let nonce = Uuid::now_v7();
+        let role = fixture.role(nonce);
+        let frozen = fixture.freeze(&role);
+        let mut store = fixture.store();
+        let local = fixture
+            .attest(
+                role,
+                &mut store,
+                Arc::clone(&frozen),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        let prepared = store
+            .prepare_native_recovery_ready(&fixture.db.read(), local)
+            .unwrap();
+        let point = (
+            prepared.range_index(),
+            prepared.logical_history_sha256().to_owned(),
+            prepared.native_receipt_sha256().to_owned(),
+            prepared.local_visibility_sequence(),
+        );
+        drop(prepared);
+        let role = fixture.role(nonce);
+        let native = fixture.native();
+        let scope = RecoveryFenceScope::from_role(&role).unwrap();
+        // Historical replay still cannot use the prepared state.
+        assert!(store
+            .observe_recovery_resolved_prefix(&role, &native, &scope)
+            .is_err());
+        let observed = store
+            .observe_native_ready_resolved_prefix(&role, &native, &scope)
+            .unwrap();
+        let local = fixture
+            .db
+            .read()
+            .attest_local_native_recovery_ready(
+                native,
+                role,
+                observed,
+                &store,
+                frozen,
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        let reissued = store
+            .prepare_native_recovery_ready(&fixture.db.read(), local)
+            .unwrap();
+        assert_eq!(
+            (
+                reissued.range_index(),
+                reissued.logical_history_sha256().to_owned(),
+                reissued.native_receipt_sha256().to_owned(),
+                reissued.local_visibility_sequence()
+            ),
+            point
+        );
+        reissued
+            .require_current(&fixture.db.read(), &store)
+            .unwrap();
+    }
+
+    #[test]
+    fn cancelled_local_ready_cannot_persist_a_native_preparation() {
+        let fixture = Fixture::new();
+        let role = fixture.role(Uuid::now_v7());
+        let frozen = fixture.freeze(&role);
+        let mut store = fixture.store();
+        let token =
+            CancellationToken::new(Arc::new(std::sync::atomic::AtomicBool::new(false)), None);
+        let local = fixture.attest(role, &mut store, frozen, &token).unwrap();
+        let scope = RecoveryFenceScope::from_role(local.role()).unwrap();
+        token.cancel();
+        assert!(store
+            .prepare_native_recovery_ready(&fixture.db.read(), local)
+            .is_err());
+        assert_eq!(
+            store.recovery_observation_phase(&scope).unwrap(),
+            crate::distribution_range_recovery::RecoveryFenceObservationPhase::ActiveRecovery
+        );
+    }
+
+    #[test]
     fn actual_empty_genesis_ready_owns_the_read_pin_until_proof_drop() {
         let fixture = Fixture::new();
         let role = fixture.role(Uuid::now_v7());
@@ -423,7 +565,13 @@ impl LocalNativeRecoveryReady {
     pub(crate) fn visibility(&self) -> &NativeLocalVisibilitySequence {
         &self.visibility
     }
-    pub(crate) fn require_current(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
+    pub(crate) fn native_admission(&self) -> &NativeRecoveryAdmission {
+        &self.native
+    }
+    /// Physical half of this owned proof. Catalogue preparation deliberately
+    /// changes its catalogue commitment, so the prepared producer must validate
+    /// the new durable record separately while retaining this SAME read pin.
+    pub(crate) fn require_physical_current(&self, db: &BicDb) -> Result<()> {
         self.cancellation.check()?;
         self.role.require_live_request()?;
         self.native.require_current(db)?;
@@ -432,11 +580,6 @@ impl LocalNativeRecoveryReady {
         db.range_mutations
             .validate_source_capture_read_pin(range_id, &self.pin)?;
         db.validate_source_range_image_lineage(&self.lineage, range_id, self.range_index())?;
-        store.revalidate_recovery_resolved_observation(
-            &self.catalogue,
-            &self.role,
-            &self.native,
-        )?;
         if self.visibility.0 != self.lineage.actual_local_visibility_sequence()
             || self.catalogue.resolved_index() != self.range_index()
         {
@@ -444,6 +587,15 @@ impl LocalNativeRecoveryReady {
                 "native materialization and resolved catalogue differ",
             ));
         }
+        Ok(())
+    }
+    pub(crate) fn require_current(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
+        self.require_physical_current(db)?;
+        store.revalidate_recovery_resolved_observation(
+            &self.catalogue,
+            &self.role,
+            &self.native,
+        )?;
         Ok(())
     }
 }
@@ -573,6 +725,7 @@ impl BicDb {
             frozen,
         };
         proof.require_current(self, store)?;
+        store.require_prepared_native_point_matches(&proof)?;
         Ok(proof)
     }
 }

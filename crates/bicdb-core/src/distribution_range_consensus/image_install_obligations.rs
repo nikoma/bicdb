@@ -4,6 +4,35 @@ use super::*;
 
 const MAX_OBLIGATIONS: usize = 65_536;
 const MAX_OBSERVATION_BYTES: usize = 16 * 1024 * 1024;
+// The sparse catalogue itself is bounded at 32 MiB. Hash its full bodies and
+// audit provenance without allocating another full encoded catalogue; leave a
+// bounded allowance for the current certification/fence provenance as well.
+const MAX_EXTENDED_OBSERVATION_BYTES: usize = 34 * 1024 * 1024;
+
+fn insert_irrevocable(
+    commands: &mut BTreeMap<u64, String>,
+    index: u64,
+    checksum: &str,
+) -> Result<()> {
+    if index == 0 || checksum.len() != 64 || !checksum.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(range_write_error("invalid image history obligation"));
+    }
+    if let Some(previous) = commands.get(&index) {
+        if previous != checksum {
+            return Err(range_write_error(
+                "image history obligations conflict at one command index",
+            ));
+        }
+    } else {
+        if commands.len() >= MAX_OBLIGATIONS {
+            return Err(range_write_error(
+                "image history obligation union exceeds bound",
+            ));
+        }
+        commands.insert(index, checksum.to_owned());
+    }
+    Ok(())
+}
 
 #[derive(Debug)]
 pub(crate) struct TargetImageCatalogHistoryObligations {
@@ -47,7 +76,8 @@ impl TargetImageCatalogHistoryObligations {
     pub(crate) fn range_log_sha256(&self) -> &str {
         &self.range_log_sha256
     }
-    /// All retained CQ/Applied obligations, including at/below native head.
+    /// All retained CQ/Applied, current-certification and permanent sparse
+    /// obligations, including at/below native head.
     /// A caller cannot filter this map or reconstruct the enclosing token.
     pub(crate) fn irrevocable_commands(&self) -> &BTreeMap<u64, String> {
         &self.irrevocable_commands
@@ -76,6 +106,7 @@ impl RangeWriteStore {
         &self,
         range_id: RangeId,
     ) -> Result<TargetImageCatalogHistoryObligations> {
+        self.require_durable_recovery_catalog()?;
         let progress = self.progress(range_id);
         let mut observations = Vec::new();
         let mut irrevocable_commands = BTreeMap::new();
@@ -97,21 +128,85 @@ impl RangeWriteStore {
                     entry.state,
                     RangeWriteState::QuorumCommitted | RangeWriteState::Applied
                 ) {
-                    irrevocable_commands.insert(*index, entry.command.checksum_sha256.clone());
+                    insert_irrevocable(
+                        &mut irrevocable_commands,
+                        *index,
+                        &entry.command.checksum_sha256,
+                    )?;
                 }
             }
         }
-        let range_log_sha256 = hex::encode(Sha256::digest(
-            crate::distribution_range_image::bounded_json(
-                &(
-                    &self.catalog.cluster_id,
-                    &self.catalog.node_id,
-                    &progress,
-                    observations,
-                ),
-                MAX_OBSERVATION_BYTES,
-            )?,
-        ));
+        let certifications = self
+            .catalog
+            .recovery_fences
+            .get(&range_id)
+            .filter(|fence| !fence.historical_certifications.is_empty());
+        if let Some(fence) = certifications {
+            fence.validate()?;
+            for (index, marker) in &fence.historical_certifications {
+                insert_irrevocable(&mut irrevocable_commands, *index, &marker.command_sha256)?;
+            }
+        }
+        // This validates every complete sparse record and its actual ordered
+        // history conflicts before exporting its checksum as an obligation.
+        for (index, checksum) in self.sparse_irreversible_commands(range_id)? {
+            insert_irrevocable(&mut irrevocable_commands, index, &checksum)?;
+        }
+        let sparse = self
+            .catalog
+            .sparse_committed_decisions
+            .as_ref()
+            .and_then(|ranges| ranges.get(&range_id))
+            .filter(|entries| !entries.is_empty());
+        let mut digest = Sha256::new();
+        digest.update(crate::distribution_range_image::bounded_json(
+            &(
+                &self.catalog.cluster_id,
+                &self.catalog.node_id,
+                &progress,
+                observations,
+            ),
+            MAX_OBSERVATION_BYTES,
+        )?);
+        if certifications.is_some() || sparse.is_some() {
+            struct HashWriter<'a> {
+                digest: &'a mut Sha256,
+                bytes: usize,
+            }
+            impl std::io::Write for HashWriter<'_> {
+                fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                    let next = self.bytes.checked_add(bytes.len()).ok_or_else(|| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "image history digest overflow",
+                        )
+                    })?;
+                    if next > MAX_EXTENDED_OBSERVATION_BYTES {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "complete image history provenance exceeds bounded digest size",
+                        ));
+                    }
+                    self.bytes = next;
+                    self.digest.update(bytes);
+                    Ok(bytes.len())
+                }
+                fn flush(&mut self) -> std::io::Result<()> {
+                    Ok(())
+                }
+            }
+            // Preserve the exact legacy digest when both additions are absent.
+            // Otherwise commit FULL saved certificate and sparse provenance,
+            // including command bodies and original audit/open/birth bindings.
+            serde_json::to_writer(
+                HashWriter {
+                    digest: &mut digest,
+                    bytes: 0,
+                },
+                &("bicdb-image-history-extended-v1", certifications, sparse),
+            )?;
+        }
+        let range_log_sha256 = hex::encode(digest.finalize());
         Ok(TargetImageCatalogHistoryObligations {
             store_open_id: self.open_id,
             cluster_id: self.catalog.cluster_id.clone(),

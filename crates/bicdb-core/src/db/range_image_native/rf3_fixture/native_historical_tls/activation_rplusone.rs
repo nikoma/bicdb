@@ -69,6 +69,19 @@ fn activated_anchor_keeps_r1_after_new_ack_and_late_prepared_follower_activates(
     .unwrap();
     eprintln!("ACTIVATED_RPLUSONE_RECOVERY {recovery_report}");
     recovered.expect("actual current-epoch coordinator recovery must precede the new origin ACK");
+    // Historical fixtures intentionally unhooked the original admission after
+    // their seed ACK. Recovering the real coordinator does not install it.
+    // Restore that ordinary host wiring only AFTER its actual recovery; this
+    // readiness boolean means installed hook, never a physical/quorum proof.
+    assert!(!fixture.native.databases[&node("n0")]
+        .read()
+        .commit_admission_ready());
+    fixture.native.databases[&node("n0")]
+        .read()
+        .install_commit_admission(fixture.native.coordinator.clone());
+    assert!(fixture.native.databases[&node("n0")]
+        .read()
+        .commit_admission_ready());
     let next = fixture.native.append("actual-rplusone-after-activation");
     let source_native = fixture.native.databases[&node("n0")]
         .read()

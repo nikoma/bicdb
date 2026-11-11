@@ -1,0 +1,83 @@
+[
+  {
+    "node": 0,
+    "success": true,
+    "cpu": "x86_64",
+    "kernel": "7.0.0-1017-azure",
+    "python": "3.12.3",
+    "root": {
+      "source": "/dev/sdb1",
+      "size": 65445814272,
+      "fstype": "ext4"
+    },
+    "data_mount": {
+      "source": "/dev/sda1",
+      "size": 134681182208,
+      "fstype": "ext4",
+      "options": "rw,noatime"
+    },
+    "machine_id_sha256": "db4254b7c3926f5027160db2417d4d5096b4acb8fafb5784bb4a0f16941f162d"
+  },
+  {
+    "node": 1,
+    "success": true,
+    "cpu": "x86_64",
+    "kernel": "7.0.0-1017-azure",
+    "python": "3.12.3",
+    "root": {
+      "source": "/dev/sda1",
+      "size": 65445814272,
+      "fstype": "ext4"
+    },
+    "data_mount": {
+      "source": "/dev/sdc1",
+      "size": 134681182208,
+      "fstype": "ext4",
+      "options": "rw,noatime"
+    },
+    "machine_id_sha256": "cc1da0bbd534fb34178032d08d68941edbe98066139b7962e9e31cb896b0c894"
+  },
+  {
+    "node": 2,
+    "success": true,
+    "cpu": "x86_64",
+    "kernel": "7.0.0-1017-azure",
+    "python": "3.12.3",
+    "root": {
+      "source": "/dev/sda1",
+      "size": 65445814272,
+      "fstype": "ext4"
+    },
+    "data_mount": {
+      "source": "/dev/sdc1",
+      "size": 134681182208,
+      "fstype": "ext4",
+      "options": "rw,noatime"
+    },
+    "machine_id_sha256": "824990ace95576b8456812cd784e64b9a35e57d92088a99a913aee88a285a143"
+  },
+  {
+    "node": 3,
+    "success": true,
+    "cpu": "x86_64",
+    "kernel": "7.0.0-1017-azure",
+    "python": "3.12.3",
+    "root": {
+      "source": "/dev/sdb1",
+      "size": 65445814272,
+      "fstype": "ext4"
+    },
+    "data_mount": {
+      "source": "/dev/sda1",
+      "size": 134681182208,
+      "fstype": "ext4",
+      "options": "rw,noatime"
+    },
+    "machine_id_sha256": "d81bbcf2a2f00b530f44af25580c90cb526b2d6ec96e6b3693c035e3beaea299"
+  },
+  {
+    "node": 4,
+    "success": false,
+    "exit": 255
+  }
+]

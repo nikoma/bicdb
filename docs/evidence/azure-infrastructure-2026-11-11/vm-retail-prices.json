@@ -1,0 +1,11 @@
+{
+  "url": "https://prices.azure.com/api/retail/prices?%24filter=armRegionName+eq+%27northeurope%27+and+serviceName+eq+%27Virtual+Machines%27+and+priceType+eq+%27Consumption%27+and+armSkuName+eq+%27Standard_D2s_v3%27&currencyCode=USD",
+  "items": [
+    {
+      "productName": "Virtual Machines DSv3 Series",
+      "skuName": "D2s v3",
+      "retailPrice": 0.107,
+      "unitOfMeasure": "1 Hour"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "queried_at_utc": "2026-11-11T07:01:06.585532+00:00",
+  "classification": "queried_after_original_resource_deletion_not_observed_effective_limits",
+  "sources": [
+    "https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/general-purpose/dsv3-series",
+    "https://learn.microsoft.com/en-us/azure/virtual-machines/disks-types#premium-ssds"
+  ],
+  "vm": {
+    "size": "Standard_D2s_v3",
+    "vcpus": 2,
+    "memory_gib": 8,
+    "max_data_disks": 4,
+    "uncached_baseline_iops": 3200,
+    "uncached_baseline_throughput_bytes_per_second": 48000000,
+    "published_uncached_burst_iops": 4000,
+    "published_uncached_burst_throughput_MB_per_second": 200,
+    "published_burst_max_minutes": 30,
+    "published_max_network_Mbps": 1000
+  },
+  "disks": {
+    "P6": {
+      "size_gib": 64,
+      "baseline_iops": 240,
+      "baseline_throughput_MB_per_second": 50,
+      "published_burst_iops": 3500,
+      "published_burst_throughput_MB_per_second": 170,
+      "published_burst_max_minutes": 30
+    },
+    "P10": {
+      "size_gib": 128,
+      "baseline_iops": 500,
+      "baseline_throughput_MB_per_second": 100,
+      "published_burst_iops": 3500,
+      "published_burst_throughput_MB_per_second": 170,
+      "published_burst_max_minutes": 30
+    }
+  },
+  "caveat": "Published ceilings and SKU capabilities are not measurements of original throttle, consumed IOPS, latency, burst credits or actual bandwidth."
+}

@@ -1,0 +1,28 @@
+{
+  "source": "38fb1da166112387c50ccb0ac67165adfc395e7a",
+  "scope": "Tests-only negative control for actual iDempiere GridTable query growth. Original parser depth40 remains enabled; expect growing filter and boolean expression regressions to fail, CAST safety guard to pass. Consolidated corrected test ownership; latest source and prior compile-only failures preserved separately.",
+  "started_unix": 1794371484.3524892,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "generated_boolean_filters",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794371484.3526185,
+      "exit": 101,
+      "finished_unix": 1794371595.8892424
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794371595.8895407
+}

@@ -1,0 +1,372 @@
+[
+  {
+    "resource_type": "microsoft.compute/disks",
+    "event_timestamp": "2026-11-11T04:01:03.4757614Z",
+    "classification": "original_creation_control_plane_response_recovered_after_deletion_not_runtime_metric",
+    "diskSizeGB": 128,
+    "diskIOPSReadWrite": 500,
+    "diskMBpsReadWrite": 100,
+    "networkAccessPolicy": "AllowAll",
+    "publicNetworkAccess": "Enabled",
+    "provisioningState": "Creating",
+    "diskState": "Attached",
+    "timeCreated": "2026-11-11T04:01:02.5682133+00:00",
+    "sku": {
+      "name": "Premium_LRS",
+      "tier": "Premium"
+    }
+  },
+  {
+    "resource_type": "microsoft.compute/disks",
+    "event_timestamp": "2026-11-11T04:01:03.3202221Z",
+    "classification": "original_creation_control_plane_response_recovered_after_deletion_not_runtime_metric",
+    "diskSizeGB": 64,
+    "diskIOPSReadWrite": 240,
+    "diskMBpsReadWrite": 50,
+    "networkAccessPolicy": "AllowAll",
+    "publicNetworkAccess": "Enabled",
+    "provisioningState": "Creating",
+    "diskState": "Attached",
+    "timeCreated": "2026-11-11T04:01:02.5687875+00:00",
+    "sku": {
+      "name": "Premium_LRS",
+      "tier": "Premium"
+    }
+  },
+  {
+    "resource_type": "microsoft.compute/virtualmachines",
+    "event_timestamp": "2026-11-11T04:01:01.5186118Z",
+    "classification": "original_creation_control_plane_response_recovered_after_deletion_not_runtime_metric",
+    "hardwareProfile": {
+      "vmSize": "Standard_D2s_v3"
+    },
+    "timeCreated": "2026-11-11T04:01:00.1001219+00:00",
+    "placement": {
+      "zones": {
+        "returned": false,
+        "value": null
+      },
+      "availabilitySet": {
+        "returned": false,
+        "value": null
+      },
+      "hostGroup": {
+        "returned": false,
+        "value": null
+      },
+      "host": {
+        "returned": false,
+        "value": null
+      },
+      "platformFaultDomain": {
+        "returned": false,
+        "value": null
+      }
+    }
+  },
+  {
+    "resource_type": "microsoft.compute/disks",
+    "event_timestamp": "2026-11-11T03:59:55.3882575Z",
+    "classification": "original_creation_control_plane_response_recovered_after_deletion_not_runtime_metric",
+    "diskSizeGB": 128,
+    "diskIOPSReadWrite": 500,
+    "diskMBpsReadWrite": 100,
+    "networkAccessPolicy": "AllowAll",
+    "publicNetworkAccess": "Enabled",
+    "provisioningState": "Creating",
+    "diskState": "Attached",
+    "timeCreated": "2026-11-11T03:59:54.6602514+00:00",
+    "sku": {
+      "name": "Premium_LRS",
+      "tier": "Premium"
+    }
+  },
+  {
+    "resource_type": "microsoft.compute/disks",
+    "event_timestamp": "2026-11-11T03:59:55.3665319Z",
+    "classification": "original_creation_control_plane_response_recovered_after_deletion_not_runtime_metric",
+    "diskSizeGB": 64,
+    "diskIOPSReadWrite": 240,
+    "diskMBpsReadWrite": 50,
+    "networkAccessPolicy": "AllowAll",
+    "publicNetworkAccess": "Enabled",
+    "provisioningState": "Creating",
+    "diskState": "Attached",
+    "timeCreated": "2026-11-11T03:59:54.6602514+00:00",
+    "sku": {
+      "name": "Premium_LRS",
+      "tier": "Premium"
+    }
+  },
+  {
+    "resource_type": "microsoft.compute/virtualmachines",
+    "event_timestamp": "2026-11-11T03:59:53.6514964Z",
+    "classification": "original_creation_control_plane_response_recovered_after_deletion_not_runtime_metric",
+    "hardwareProfile": {
+      "vmSize": "Standard_D2s_v3"
+    },
+    "timeCreated": "2026-11-11T03:59:52.2886362+00:00",
+    "placement": {
+      "zones": {
+        "returned": false,
+        "value": null
+      },
+      "availabilitySet": {
+        "returned": false,
+        "value": null
+      },
+      "hostGroup": {
+        "returned": false,
+        "value": null
+      },
+      "host": {
+        "returned": false,
+        "value": null
+      },
+      "platformFaultDomain": {
+        "returned": false,
+        "value": null
+      }
+    }
+  },
+  {
+    "resource_type": "microsoft.compute/disks",
+    "event_timestamp": "2026-11-11T03:58:47.9844681Z",
+    "classification": "original_creation_control_plane_response_recovered_after_deletion_not_runtime_metric",
+    "diskSizeGB": 64,
+    "diskIOPSReadWrite": 240,
+    "diskMBpsReadWrite": 50,
+    "networkAccessPolicy": "AllowAll",
+    "publicNetworkAccess": "Enabled",
+    "provisioningState": "Creating",
+    "diskState": "Attached",
+    "timeCreated": "2026-11-11T03:58:47.1068593+00:00",
+    "sku": {
+      "name": "Premium_LRS",
+      "tier": "Premium"
+    }
+  },
+  {
+    "resource_type": "microsoft.compute/disks",
+    "event_timestamp": "2026-11-11T03:58:47.3420143Z",
+    "classification": "original_creation_control_plane_response_recovered_after_deletion_not_runtime_metric",
+    "diskSizeGB": 128,
+    "diskIOPSReadWrite": 500,
+    "diskMBpsReadWrite": 100,
+    "networkAccessPolicy": "AllowAll",
+    "publicNetworkAccess": "Enabled",
+    "provisioningState": "Creating",
+    "diskState": "Attached",
+    "timeCreated": "2026-11-11T03:58:47.1063164+00:00",
+    "sku": {
+      "name": "Premium_LRS",
+      "tier": "Premium"
+    }
+  },
+  {
+    "resource_type": "microsoft.compute/virtualmachines",
+    "event_timestamp": "2026-11-11T03:58:46.1083244Z",
+    "classification": "original_creation_control_plane_response_recovered_after_deletion_not_runtime_metric",
+    "hardwareProfile": {
+      "vmSize": "Standard_D2s_v3"
+    },
+    "timeCreated": "2026-11-11T03:58:44.8378934+00:00",
+    "placement": {
+      "zones": {
+        "returned": false,
+        "value": null
+      },
+      "availabilitySet": {
+        "returned": false,
+        "value": null
+      },
+      "hostGroup": {
+        "returned": false,
+        "value": null
+      },
+      "host": {
+        "returned": false,
+        "value": null
+      },
+      "platformFaultDomain": {
+        "returned": false,
+        "value": null
+      }
+    }
+  },
+  {
+    "resource_type": "microsoft.compute/disks",
+    "event_timestamp": "2026-11-11T03:57:39.8886697Z",
+    "classification": "original_creation_control_plane_response_recovered_after_deletion_not_runtime_metric",
+    "diskSizeGB": 128,
+    "diskIOPSReadWrite": 500,
+    "diskMBpsReadWrite": 100,
+    "networkAccessPolicy": "AllowAll",
+    "publicNetworkAccess": "Enabled",
+    "provisioningState": "Creating",
+    "diskState": "Attached",
+    "timeCreated": "2026-11-11T03:57:38.9876701+00:00",
+    "sku": {
+      "name": "Premium_LRS",
+      "tier": "Premium"
+    }
+  },
+  {
+    "resource_type": "microsoft.compute/disks",
+    "event_timestamp": "2026-11-11T03:57:39.8648756Z",
+    "classification": "original_creation_control_plane_response_recovered_after_deletion_not_runtime_metric",
+    "diskSizeGB": 64,
+    "diskIOPSReadWrite": 240,
+    "diskMBpsReadWrite": 50,
+    "networkAccessPolicy": "AllowAll",
+    "publicNetworkAccess": "Enabled",
+    "provisioningState": "Creating",
+    "diskState": "Attached",
+    "timeCreated": "2026-11-11T03:57:38.9881951+00:00",
+    "sku": {
+      "name": "Premium_LRS",
+      "tier": "Premium"
+    }
+  },
+  {
+    "resource_type": "microsoft.compute/virtualmachines",
+    "event_timestamp": "2026-11-11T03:57:37.6874821Z",
+    "classification": "original_creation_control_plane_response_recovered_after_deletion_not_runtime_metric",
+    "hardwareProfile": {
+      "vmSize": "Standard_D2s_v3"
+    },
+    "timeCreated": "2026-11-11T03:57:36.5097629+00:00",
+    "placement": {
+      "zones": {
+        "returned": false,
+        "value": null
+      },
+      "availabilitySet": {
+        "returned": false,
+        "value": null
+      },
+      "hostGroup": {
+        "returned": false,
+        "value": null
+      },
+      "host": {
+        "returned": false,
+        "value": null
+      },
+      "platformFaultDomain": {
+        "returned": false,
+        "value": null
+      }
+    }
+  },
+  {
+    "resource_type": "microsoft.compute/disks",
+    "event_timestamp": "2026-11-11T03:56:30.4433572Z",
+    "classification": "original_creation_control_plane_response_recovered_after_deletion_not_runtime_metric",
+    "diskSizeGB": 128,
+    "diskIOPSReadWrite": 500,
+    "diskMBpsReadWrite": 100,
+    "networkAccessPolicy": "AllowAll",
+    "publicNetworkAccess": "Enabled",
+    "provisioningState": "Creating",
+    "diskState": "Attached",
+    "timeCreated": "2026-11-11T03:56:29.0616415+00:00",
+    "sku": {
+      "name": "Premium_LRS",
+      "tier": "Premium"
+    }
+  },
+  {
+    "resource_type": "microsoft.compute/disks",
+    "event_timestamp": "2026-11-11T03:56:30.3314713Z",
+    "classification": "original_creation_control_plane_response_recovered_after_deletion_not_runtime_metric",
+    "diskSizeGB": 64,
+    "diskIOPSReadWrite": 240,
+    "diskMBpsReadWrite": 50,
+    "networkAccessPolicy": "AllowAll",
+    "publicNetworkAccess": "Enabled",
+    "provisioningState": "Creating",
+    "diskState": "Attached",
+    "timeCreated": "2026-11-11T03:56:29.0637125+00:00",
+    "sku": {
+      "name": "Premium_LRS",
+      "tier": "Premium"
+    }
+  },
+  {
+    "resource_type": "microsoft.compute/virtualmachines",
+    "event_timestamp": "2026-11-11T03:56:28.1364464Z",
+    "classification": "original_creation_control_plane_response_recovered_after_deletion_not_runtime_metric",
+    "hardwareProfile": {
+      "vmSize": "Standard_D2s_v3"
+    },
+    "timeCreated": "2026-11-11T03:56:26.9084959+00:00",
+    "placement": {
+      "zones": {
+        "returned": false,
+        "value": null
+      },
+      "availabilitySet": {
+        "returned": false,
+        "value": null
+      },
+      "hostGroup": {
+        "returned": false,
+        "value": null
+      },
+      "host": {
+        "returned": false,
+        "value": null
+      },
+      "platformFaultDomain": {
+        "returned": false,
+        "value": null
+      }
+    }
+  },
+  {
+    "resource_type": "microsoft.network/networkinterfaces",
+    "event_timestamp": "2026-11-11T03:55:23.7376612Z",
+    "classification": "original_creation_control_plane_response_recovered_after_deletion_not_runtime_metric",
+    "enableAcceleratedNetworking": null,
+    "enableIPForwarding": false,
+    "nicType": "Standard",
+    "provisioningState": "Succeeded"
+  },
+  {
+    "resource_type": "microsoft.network/networkinterfaces",
+    "event_timestamp": "2026-11-11T03:55:21.126216Z",
+    "classification": "original_creation_control_plane_response_recovered_after_deletion_not_runtime_metric",
+    "enableAcceleratedNetworking": null,
+    "enableIPForwarding": false,
+    "nicType": "Standard",
+    "provisioningState": "Succeeded"
+  },
+  {
+    "resource_type": "microsoft.network/networkinterfaces",
+    "event_timestamp": "2026-11-11T03:55:19.4545022Z",
+    "classification": "original_creation_control_plane_response_recovered_after_deletion_not_runtime_metric",
+    "enableAcceleratedNetworking": null,
+    "enableIPForwarding": false,
+    "nicType": "Standard",
+    "provisioningState": "Succeeded"
+  },
+  {
+    "resource_type": "microsoft.network/networkinterfaces",
+    "event_timestamp": "2026-11-11T03:55:17.2301658Z",
+    "classification": "original_creation_control_plane_response_recovered_after_deletion_not_runtime_metric",
+    "enableAcceleratedNetworking": null,
+    "enableIPForwarding": false,
+    "nicType": "Standard",
+    "provisioningState": "Succeeded"
+  },
+  {
+    "resource_type": "microsoft.network/networkinterfaces",
+    "event_timestamp": "2026-11-11T03:55:12.6620158Z",
+    "classification": "original_creation_control_plane_response_recovered_after_deletion_not_runtime_metric",
+    "enableAcceleratedNetworking": null,
+    "enableIPForwarding": false,
+    "nicType": "Standard",
+    "provisioningState": "Updating"
+  }
+]

@@ -1,0 +1,42 @@
+{
+  "metadata_consensus": {
+    "cluster_id": "scale-a7103e2d52164d69baa04bb4b855bef9",
+    "commit_index": 1300,
+    "current_term": 10,
+    "last_log_index": 1300,
+    "last_log_term": 10,
+    "leader_id": "n2",
+    "learners": [],
+    "node_id": "n0",
+    "role": "follower",
+    "topology_generation": 8696,
+    "voted_for": "n2",
+    "voters": [
+      "n0",
+      "n1",
+      "n2",
+      "n3",
+      "n4"
+    ]
+  },
+  "metrics": {
+    "active_relocations": 0,
+    "failed_relocations": 0,
+    "generated_at_ms": 1794373911821,
+    "leader_skew": 1,
+    "leaders_total": 64,
+    "nodes_dead": 0,
+    "nodes_decommissioned": 0,
+    "nodes_draining": 0,
+    "nodes_live": 5,
+    "nodes_suspect": 0,
+    "nodes_total": 5,
+    "ranges_total": 64,
+    "replica_byte_skew": 0,
+    "replica_skew": 1,
+    "replicas_total": 192,
+    "topology_generation": 8696,
+    "unavailable_ranges": 0,
+    "under_replicated_ranges": 0
+  }
+}

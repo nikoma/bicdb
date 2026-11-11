@@ -1,0 +1,17 @@
+{
+  "after_first_guest_start_request": true,
+  "capture_scope": "post-start-request-continuity-not-continuous-off-window-health",
+  "cpu_ticks": 6220,
+  "kernel_oom": {
+    "error": null,
+    "exit": 0,
+    "matching_lines": []
+  },
+  "listener_capture_exit": 0,
+  "listener_pid_matches": true,
+  "pid": 25847,
+  "port9444_listening": true,
+  "process_start_ticks": 509144,
+  "running": true,
+  "snapshot_unix_ns": 1794374977228826705
+}

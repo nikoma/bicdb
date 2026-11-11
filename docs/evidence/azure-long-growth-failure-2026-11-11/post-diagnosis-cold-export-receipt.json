@@ -1,0 +1,74 @@
+[
+  {
+    "node": 0,
+    "database_bytes": 40799206,
+    "included_run_artifacts": [
+      "db",
+      "server.log",
+      "steady-4-ledger.json",
+      "process.json",
+      "growth-4-to-5-ledger.json"
+    ],
+    "status": "exported",
+    "archive_bytes": 2889885,
+    "sha256": "b455c7fb0c50e58ea74317abac28b2c086f6fe2796df30f2f3aa54ddf9f76911",
+    "remote_sha256": "b455c7fb0c50e58ea74317abac28b2c086f6fe2796df30f2f3aa54ddf9f76911",
+    "owned_engine_stopped_before_archive": true
+  },
+  {
+    "node": 1,
+    "database_bytes": 43154042,
+    "included_run_artifacts": [
+      "db",
+      "server.log",
+      "process.json"
+    ],
+    "status": "exported",
+    "archive_bytes": 3015494,
+    "sha256": "4c92f8829424b26250e39fb0627145066ef0baad36c6823011da998c23c3c5be",
+    "remote_sha256": "4c92f8829424b26250e39fb0627145066ef0baad36c6823011da998c23c3c5be",
+    "owned_engine_stopped_before_archive": true
+  },
+  {
+    "node": 2,
+    "database_bytes": 42255235,
+    "included_run_artifacts": [
+      "db",
+      "process.json",
+      "server.log"
+    ],
+    "status": "exported",
+    "archive_bytes": 2801144,
+    "sha256": "b361991f584240acd3395279da336c9365337d4fc39632ffde6771f2b21e4b2d",
+    "remote_sha256": "b361991f584240acd3395279da336c9365337d4fc39632ffde6771f2b21e4b2d",
+    "owned_engine_stopped_before_archive": true
+  },
+  {
+    "node": 3,
+    "database_bytes": 39467585,
+    "included_run_artifacts": [
+      "db",
+      "process.json",
+      "server.log"
+    ],
+    "status": "exported",
+    "archive_bytes": 2702386,
+    "sha256": "c207ae5b3fa655d3cc4580e06abe4a7056d6366231186c571803b7131aa29f69",
+    "remote_sha256": "c207ae5b3fa655d3cc4580e06abe4a7056d6366231186c571803b7131aa29f69",
+    "owned_engine_stopped_before_archive": true
+  },
+  {
+    "node": 4,
+    "database_bytes": 53076761,
+    "included_run_artifacts": [
+      "db",
+      "server.log",
+      "process.json"
+    ],
+    "status": "exported",
+    "archive_bytes": 3502942,
+    "sha256": "cb386ddfc7daedba1906b5798dc9e29f947cabaa305414774648edb54d1dedbd",
+    "remote_sha256": "cb386ddfc7daedba1906b5798dc9e29f947cabaa305414774648edb54d1dedbd",
+    "owned_engine_stopped_before_archive": true
+  }
+]

@@ -1,0 +1,57 @@
+{
+  "format": 1,
+  "created_unix_ns": 1794379697852534086,
+  "builder_sha256": "0cfbb66cb474612b3235d7f578e6cf3d6d4caa40ddbe4b360fc6c6d8e438d573",
+  "transformed_artifacts": [
+    {
+      "artifact": "diagnosis-summary.json",
+      "source_sha256": "ae3cc47578e26cfcc63992b10dfcf60a480bfea4899b8689e6e2751368768acb",
+      "derivation": "JSON formatting; known inventory addresses/SSH aliases redacted; scope annotation if present"
+    },
+    {
+      "artifact": "diagnosis-point-reads.json",
+      "source_sha256": "f9a2804b625e67a063705fca2e022183935df903c0d7ee86926c45ca7b619e5f",
+      "derivation": "JSON formatting; known inventory addresses/SSH aliases redacted; scope annotation if present"
+    },
+    {
+      "artifact": "diagnosis-ledger-checks.json",
+      "source_sha256": "5d9be07768bab950583f3eb3d6c05a0572a089aa80693eb05f6b307ef09a5be3",
+      "derivation": "JSON formatting; known inventory addresses/SSH aliases redacted; scope annotation if present"
+    },
+    {
+      "artifact": "diagnosis-convergence-observations.json",
+      "source_sha256": "e08e15807dcaa920031f8b7725d08355019c0c5391b55842339195f2b04bc999",
+      "derivation": "JSON formatting; known inventory addresses/SSH aliases redacted; scope annotation if present"
+    },
+    {
+      "artifact": "post-diagnosis-cold-export-receipt.json",
+      "source_sha256": "756780d161015aff94d58a8380fc903f9dc61d3a840f1ce0c690a82488cfe31b",
+      "derivation": "JSON formatting; known inventory addresses/SSH aliases redacted; scope annotation if present"
+    },
+    {
+      "artifact": "raw-classification-client-settings.json",
+      "source_sha256": "3e50d94824d37cf6a54eaa33bd88d3e5ffd2418dd9388e7c0f0480670f03b980",
+      "derivation": "JSON formatting; known inventory addresses/SSH aliases redacted; scope annotation if present"
+    },
+    {
+      "artifact": "raw-classification-original-summary.json",
+      "source_sha256": "574c812a1c4e557f59d97f6efead1922a665b5a04ce7d8acb0c42dde98bfc1ca",
+      "derivation": "JSON formatting; known inventory addresses/SSH aliases redacted; scope annotation if present"
+    },
+    {
+      "artifact": "raw-classification-results.json",
+      "source_sha256": "02e741c8aff163d61e5320319db101430162a8917fd8be3f2e7e6a7b3d7f384f",
+      "derivation": "JSON formatting; known inventory addresses/SSH aliases redacted; scope annotation if present"
+    },
+    {
+      "artifact": "raw-classification-validity.json",
+      "source_sha256": "f607489f30f2b5983827f7bec82dd84461aa941faa73a126777f1845f97a9a3d",
+      "derivation": "JSON formatting; known inventory addresses/SSH aliases redacted; scope annotation if present"
+    }
+  ],
+  "private_data_not_included": true,
+  "review_annotations": [
+    "README clarifies both full checks finished unsuccessfully within bounds",
+    "final cold topology scope marks sequential-shutdown failures cleanup-confounded; extracted generations/records unchanged"
+  ]
+}

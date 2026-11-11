@@ -91,6 +91,13 @@ impl SqlSession<'_> {
         }
         match statement {
             Statement::Query(query) => self.ensure_read_only_query(query),
+            Statement::Explain {
+                analyze: false,
+                statement,
+                ..
+            } if matches!(statement.as_ref(), Statement::Query(_)) => {
+                self.ensure_read_only_statement(statement)
+            }
             Statement::ShowVariable { .. }
             | Statement::Set(_)
             | Statement::Reset(_)

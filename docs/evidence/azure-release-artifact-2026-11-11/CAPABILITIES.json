@@ -1,0 +1,829 @@
+{
+  "artifact": {
+    "binary_sha256": "15ad8ad644c92fd9248020c19b1fad9d4f62e6dceef8d4bc43f1415a8ff4e028",
+    "component": "bicdb-cli",
+    "entrypoint": "bicdb",
+    "source_build_binding": "operator_asserted_not_attested",
+    "source_revision": "b05385d4b033edf0db03f3eccf4bdd86f7c8eddb",
+    "target": "x86_64-unknown-linux-gnu",
+    "target_binding": "operator_asserted_not_inspected",
+    "version": "1.0.461-beta"
+  },
+  "catalog_sha256": "5bec9e521787f0c711010399041d685b29ea6483416a78544b62eeb15b3873c8",
+  "format": "bicdb.release-capabilities/v1",
+  "modes": {
+    "application_fleet": {
+      "automatic_database_sharding": {
+        "conditions": [],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "docs/platform-state-groups.md",
+              "sha256": "2214580ce5d282f0d13b8e130a268a8fd89125ea9e0e5ed4272441c2558d3cda"
+            },
+            {
+              "kind": "source",
+              "path": "docs/platform-worker-fleet.md",
+              "sha256": "1d35d7836d17cf17d45e986cedf92f7a875f32c23146d18780ff069077b30900"
+            }
+          ],
+          "status": "unsupported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "Worker placement and per-application state HA do not shard one SQL database.",
+        "test_definitions": [],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "critical_workload_admission": {
+        "conditions": [],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "docs/ha-horizontal-scaling-audit-2026-11-10.md",
+              "sha256": "e8bf24428438193d23fa5683e1faa7a1d44f201d12931922be7b33f25537fa59"
+            }
+          ],
+          "status": "unsupported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "No production qualification/admission is granted by this release declaration; external exact-artifact evidence is required.",
+        "test_definitions": [],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "physical_scale_certified": {
+        "conditions": [],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "docs/ha-horizontal-scaling-audit-2026-11-10.md",
+              "sha256": "e8bf24428438193d23fa5683e1faa7a1d44f201d12931922be7b33f25537fa59"
+            }
+          ],
+          "status": "unsupported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "No production qualification/admission is granted by this release declaration; external exact-artifact evidence is required.",
+        "test_definitions": [],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "worker_replacement": {
+        "conditions": [
+          "Configured workers/capacity/isolation; state authority available or separately configured native state group."
+        ],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "crates/bicdb-app-host/src/fleet.rs",
+              "sha256": "b42896737f4119156bfb92eb1b5c74dac9fd684c5aa73b69c971e0a5d9b7ed9b"
+            },
+            {
+              "kind": "source",
+              "path": "docs/platform-worker-fleet.md",
+              "sha256": "1d35d7836d17cf17d45e986cedf92f7a875f32c23146d18780ff069077b30900"
+            }
+          ],
+          "status": "unsupported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "Worker replacement exists in the separate bic/bicdb-app-host executable, which is not included in this bicdb-cli artifact.",
+        "test_definitions": [
+          "crates/bicdb-app-host/tests/fleet.rs"
+        ],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      }
+    },
+    "cell_ha": {
+      "critical_workload_admission": {
+        "conditions": [
+          "Coherent Phase8 release/profile, live trusted evidence bundle, attestation and external fleet fencing."
+        ],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "crates/bicdb-cell/src/admission.rs",
+              "sha256": "035ec732e146b14be073858cfced123006f8712148956c1adb23e1ffa200b2d2"
+            },
+            {
+              "kind": "source",
+              "path": "docs/cell-runtime-phase8.md",
+              "sha256": "29624853bc00d553ff732e952892a109b5af82c5e65f5b7fd716ca0b4ae747ec"
+            }
+          ],
+          "status": "conditional"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "Phase8 evaluates exact external evidence and deployment attestation; this release catalog supplies none.",
+        "test_definitions": [],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "encrypted_replication": {
+        "conditions": [
+          "Valid Cell manifest, key/authority/lease documents and supported encrypted storage."
+        ],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "crates/bicdb-cell-ha/src/lib.rs",
+              "sha256": "28ba1974f6d8c0b05dcf7fa245e55e7b02857e139919f1683c8d09530aa32c44"
+            },
+            {
+              "kind": "source",
+              "path": "crates/bicdb-cell/src/lib.rs",
+              "sha256": "a616a9bfa1bd72ddb1d67e07181d034626ced9184bdd357f076a6965e60a83a7"
+            }
+          ],
+          "status": "supported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "Cell-scoped signed destination-bound asynchronous encrypted commit objects.",
+        "test_definitions": [
+          "crates/bicdb-cell-ha/src/lib.rs"
+        ],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "physical_scale_certified": {
+        "conditions": [],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "docs/ha-horizontal-scaling-audit-2026-11-10.md",
+              "sha256": "e8bf24428438193d23fa5683e1faa7a1d44f201d12931922be7b33f25537fa59"
+            }
+          ],
+          "status": "unsupported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "No production qualification/admission is granted by this release declaration; external exact-artifact evidence is required.",
+        "test_definitions": [],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "writer_fencing": {
+        "conditions": [],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "crates/bicdb-cell-ha/src/lib.rs",
+              "sha256": "28ba1974f6d8c0b05dcf7fa245e55e7b02857e139919f1683c8d09530aa32c44"
+            },
+            {
+              "kind": "source",
+              "path": "crates/bicdb-cell/src/lib.rs",
+              "sha256": "a616a9bfa1bd72ddb1d67e07181d034626ced9184bdd357f076a6965e60a83a7"
+            }
+          ],
+          "status": "supported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "Cell commit fence checks role, writer epoch and bounded lease.",
+        "test_definitions": [
+          "crates/bicdb-cell-ha/src/lib.rs"
+        ],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "zero_rpo_quorum_commits": {
+        "conditions": [],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "crates/bicdb-cell-ha/src/lib.rs",
+              "sha256": "28ba1974f6d8c0b05dcf7fa245e55e7b02857e139919f1683c8d09530aa32c44"
+            },
+            {
+              "kind": "source",
+              "path": "crates/bicdb-cell/src/lib.rs",
+              "sha256": "a616a9bfa1bd72ddb1d67e07181d034626ced9184bdd357f076a6965e60a83a7"
+            }
+          ],
+          "status": "unsupported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "Cell HA explicitly refuses SynchronousQuorum policy.",
+        "test_definitions": [
+          "crates/bicdb-cell-ha/src/lib.rs"
+        ],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      }
+    },
+    "distributed_ranges": {
+      "automatic_range_rebalancing": {
+        "conditions": [
+          "Distribution configuration, live metadata quorum, RF/failure-domain/capacity/schema eligibility; balanced controller enabled."
+        ],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "crates/bicdb-pgwire/src/distribution_controller.rs",
+              "sha256": "5b7b37a7262a653ef95724152df89e1bdf5bd005e62d79e63105d6b2094c78ac"
+            },
+            {
+              "kind": "source",
+              "path": "crates/bicdb-core/src/distribution_supervisor.rs",
+              "sha256": "1f32e58d1c09e2d50d47d4dce19e5a393a7991a2a2c74f4194bdf0bf8b8fb278"
+            }
+          ],
+          "status": "supported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "Default balanced controller moves physical range replicas and balances leader counts.",
+        "test_definitions": [
+          "crates/bicdb-pgwire/src/validation.rs"
+        ],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "automatic_range_splitting": {
+        "conditions": [],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "docs/application-cluster-events.md",
+              "sha256": "e39672df06d7a29ea83c371781fc18b2cfbdf15e91791a2c372f2bb46e7da5e2"
+            },
+            {
+              "kind": "source",
+              "path": "crates/bicdb-core/src/distribution_supervisor.rs",
+              "sha256": "1f32e58d1c09e2d50d47d4dce19e5a393a7991a2a2c74f4194bdf0bf8b8fb278"
+            }
+          ],
+          "status": "unsupported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "Metadata split/merge exists; size/load driven splitting is absent from the event serving controller.",
+        "test_definitions": [],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "critical_workload_admission": {
+        "conditions": [],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "docs/ha-horizontal-scaling-audit-2026-11-10.md",
+              "sha256": "e8bf24428438193d23fa5683e1faa7a1d44f201d12931922be7b33f25537fa59"
+            }
+          ],
+          "status": "unsupported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "No production qualification/admission is granted by this release declaration; external exact-artifact evidence is required.",
+        "test_definitions": [],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "cross_range_sql_joins": {
+        "conditions": [],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "crates/bicdb-core/src/distribution_query.rs",
+              "sha256": "3f4ba08a2694662a163f7ddb7cd41b2ac88f5c1539ac18483d4eb69caedbaa44"
+            },
+            {
+              "kind": "source",
+              "path": "docs/application-cluster-events.md",
+              "sha256": "e39672df06d7a29ea83c371781fc18b2cfbdf15e91791a2c372f2bb46e7da5e2"
+            }
+          ],
+          "status": "unsupported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "Bounded merge helpers are not a general distributed SQL join executor.",
+        "test_definitions": [],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "general_cross_range_transactions": {
+        "conditions": [],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "crates/bicdb-core/src/distribution_query.rs",
+              "sha256": "3f4ba08a2694662a163f7ddb7cd41b2ac88f5c1539ac18483d4eb69caedbaa44"
+            },
+            {
+              "kind": "source",
+              "path": "docs/application-cluster-events.md",
+              "sha256": "e39672df06d7a29ea83c371781fc18b2cfbdf15e91791a2c372f2bb46e7da5e2"
+            }
+          ],
+          "status": "unsupported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "Supplied distributed commit interface has no production ordinary-SQL coordinator.",
+        "test_definitions": [],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "physical_scale_certified": {
+        "conditions": [],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "docs/ha-horizontal-scaling-audit-2026-11-10.md",
+              "sha256": "e8bf24428438193d23fa5683e1faa7a1d44f201d12931922be7b33f25537fa59"
+            }
+          ],
+          "status": "unsupported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "No production qualification/admission is granted by this release declaration; external exact-artifact evidence is required.",
+        "test_definitions": [],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "single_range_quorum_writes": {
+        "conditions": [
+          "Current recovered range leader, schema fence, reachable synchronized quorum; ambiguous recovery can block writes."
+        ],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+              "sha256": "9a64bcc12129ef439ce112cc5c77241a6f8ff6d26a462f21d7f7242814c01a5a"
+            }
+          ],
+          "status": "supported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "One-range exact-key mutations use durable majority decisions and epoch fencing.",
+        "test_definitions": [
+          "crates/bicdb-core/src/distribution_range_consensus.rs"
+        ],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "transparent_sql_routing": {
+        "conditions": [],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "crates/bicdb-core/src/distribution_query.rs",
+              "sha256": "3f4ba08a2694662a163f7ddb7cd41b2ac88f5c1539ac18483d4eb69caedbaa44"
+            },
+            {
+              "kind": "source",
+              "path": "docs/application-cluster-events.md",
+              "sha256": "e39672df06d7a29ea83c371781fc18b2cfbdf15e91791a2c372f2bb46e7da5e2"
+            }
+          ],
+          "status": "unsupported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "General SQL forwarding across range owners is not provided by planning hooks.",
+        "test_definitions": [],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      }
+    },
+    "legacy_file_shipping": {
+      "acknowledged_commit_preservation": {
+        "conditions": [
+          "Fence old primary; verify selected standby history; async unsent changes may be lost."
+        ],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "docs/high-availability.md",
+              "sha256": "5e25667be185978deeb9ae565328284e968914388c68599cbeb58360ac7ddc33"
+            }
+          ],
+          "status": "conditional"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "Manual promotion can retain only state shipped durably to the selected standby.",
+        "test_definitions": [
+          "crates/bicdb-core/tests/ha_state_crash.rs"
+        ],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "automatic_range_rebalancing": {
+        "conditions": [],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "docs/high-availability.md",
+              "sha256": "5e25667be185978deeb9ae565328284e968914388c68599cbeb58360ac7ddc33"
+            }
+          ],
+          "status": "unsupported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "Whole-database file shipping does not distribute ranges.",
+        "test_definitions": [],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "critical_workload_admission": {
+        "conditions": [],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "docs/ha-horizontal-scaling-audit-2026-11-10.md",
+              "sha256": "e8bf24428438193d23fa5683e1faa7a1d44f201d12931922be7b33f25537fa59"
+            }
+          ],
+          "status": "unsupported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "No production qualification/admission is granted by this release declaration; external exact-artifact evidence is required.",
+        "test_definitions": [],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "physical_scale_certified": {
+        "conditions": [],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "docs/ha-horizontal-scaling-audit-2026-11-10.md",
+              "sha256": "e8bf24428438193d23fa5683e1faa7a1d44f201d12931922be7b33f25537fa59"
+            }
+          ],
+          "status": "unsupported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "No production qualification/admission is granted by this release declaration; external exact-artifact evidence is required.",
+        "test_definitions": [],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      }
+    },
+    "native_streaming_ha": {
+      "acknowledged_commit_preservation": {
+        "conditions": [
+          "Identical static voting group; K >= floor(N/2); timeout policy fail; durable storage; handshake v4; qualify exact failure model."
+        ],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "crates/bicdb-pgwire/src/high_availability.rs",
+              "sha256": "b5cf5357be4770c99e08168a506b386294aa860ad340096878317e7e3ee7f697"
+            },
+            {
+              "kind": "source",
+              "path": "crates/bicdb-core/src/db/replication_live.rs",
+              "sha256": "4ee7bd99dbb2a9cc8bb3efa90ffbb72db8423205296d9e02dad79b9e5b1c0596"
+            }
+          ],
+          "status": "conditional"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "Native synchronous HA can preserve acknowledged history with voter-majority copies and nondegrading policy.",
+        "test_definitions": [
+          "crates/bicdb-pgwire/tests/embedded_ha.rs",
+          "crates/bicdb-cli/tests/ha_failover_cli.rs"
+        ],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "automatic_primary_failover": {
+        "conditions": [
+          "At least three configured voters; client reconnection/ingress required."
+        ],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "crates/bicdb-pgwire/src/high_availability.rs",
+              "sha256": "b5cf5357be4770c99e08168a506b386294aa860ad340096878317e7e3ee7f697"
+            },
+            {
+              "kind": "source",
+              "path": "crates/bicdb-core/src/db/replication_live.rs",
+              "sha256": "4ee7bd99dbb2a9cc8bb3efa90ffbb72db8423205296d9e02dad79b9e5b1c0596"
+            }
+          ],
+          "status": "supported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "Majority election and writer leases for a single writable primary.",
+        "test_definitions": [
+          "crates/bicdb-pgwire/tests/embedded_ha.rs"
+        ],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "automatic_range_rebalancing": {
+        "conditions": [],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "docs/high-availability.md",
+              "sha256": "5e25667be185978deeb9ae565328284e968914388c68599cbeb58360ac7ddc33"
+            }
+          ],
+          "status": "unsupported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "Adding whole-database replicas does not shard primary writes.",
+        "test_definitions": [],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "critical_workload_admission": {
+        "conditions": [],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "docs/ha-horizontal-scaling-audit-2026-11-10.md",
+              "sha256": "e8bf24428438193d23fa5683e1faa7a1d44f201d12931922be7b33f25537fa59"
+            }
+          ],
+          "status": "unsupported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "No production qualification/admission is granted by this release declaration; external exact-artifact evidence is required.",
+        "test_definitions": [],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      },
+      "physical_scale_certified": {
+        "conditions": [],
+        "deployed": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "implemented": {
+          "evidence": [
+            {
+              "kind": "source",
+              "path": "docs/ha-horizontal-scaling-audit-2026-11-10.md",
+              "sha256": "e8bf24428438193d23fa5683e1faa7a1d44f201d12931922be7b33f25537fa59"
+            }
+          ],
+          "status": "unsupported"
+        },
+        "qualified": {
+          "evidence": [],
+          "status": "not_established"
+        },
+        "summary": "No production qualification/admission is granted by this release declaration; external exact-artifact evidence is required.",
+        "test_definitions": [],
+        "tested": {
+          "evidence": [],
+          "status": "not_established"
+        }
+      }
+    }
+  },
+  "scope": "release_declarations_only_not_live_configuration_or_deployment_authority"
+}

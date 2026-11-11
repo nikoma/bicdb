@@ -8983,6 +8983,8 @@ pub struct Transaction {
     /// Opt-in SQL profiles may report write conflicts at the statement
     /// boundary. Commit validation remains mandatory in either mode.
     statement_write_conflicts: bool,
+    statement_snapshot_acquired: bool,
+    statement_snapshot_deferred: bool,
     state: TxState,
     outcome_observer: OnceLock<Arc<transaction_receipts::OutcomeState>>,
     write_receipts: Option<Box<transaction_receipts::ReceiptJournal>>,
@@ -15017,6 +15019,63 @@ impl Transaction {
         self.isolation
     }
 
+    /// Whether the host has reached a statement that requires a snapshot.
+    pub fn statement_snapshot_acquired(&self) -> bool {
+        self.statement_snapshot_acquired
+    }
+
+    /// Let a host acquire the initial fixed snapshot at its first SQL
+    /// statement. Native transactions keep their already selected watermark
+    /// unless their creator explicitly opts into this host-managed boundary.
+    pub fn defer_statement_snapshot(&mut self) -> Result<()> {
+        self.ensure_statement_snapshot_can_be_deferred()?;
+        self.statement_snapshot_deferred = true;
+        Ok(())
+    }
+
+    fn ensure_statement_snapshot_can_be_deferred(&self) -> Result<()> {
+        if self.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        if self.statement_snapshot_acquired
+            || self.write_len() != 0
+            || self.lock_len() != 0
+            || !self.observed_record_versions.lock().is_empty()
+            || !self.collection_incarnations.lock().is_empty()
+        {
+            return Err(BicDbError::TransactionConflict(
+                "statement snapshot can only be deferred before transaction access".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Select a host-managed SQL mode whose initial snapshot remains deferred.
+    /// A later native set_snapshot_isolation call deliberately pins its own
+    /// watermark and cancels this opt-in.
+    pub fn set_deferred_snapshot_isolation(&mut self, fixed: bool, floor: u64) -> Result<()> {
+        self.ensure_statement_snapshot_can_be_deferred()?;
+        self.set_snapshot_isolation(fixed, floor)?;
+        self.statement_snapshot_deferred = true;
+        Ok(())
+    }
+
+    /// Pin the first SQL statement's snapshot for a host-managed fixed
+    /// transaction. Native callers keep their begin-time snapshot semantics.
+    pub fn acquire_statement_snapshot(&mut self, floor: u64) -> Result<()> {
+        if self.statement_snapshot_acquired {
+            return Ok(());
+        }
+        if self.statement_snapshot_deferred
+            && self.isolation == TransactionIsolation::RepeatableRead
+        {
+            self.set_snapshot_isolation(true, floor)?;
+        }
+        self.statement_snapshot_deferred = false;
+        self.statement_snapshot_acquired = true;
+        Ok(())
+    }
+
     /// Validate newly buffered writes against their observed snapshots before
     /// accepting a statement. The default retains deferred commit checks.
     pub fn set_statement_write_conflict_check(&mut self, enabled: bool) -> Result<()> {
@@ -15047,6 +15106,7 @@ impl Transaction {
         if fixed {
             self.isolation = TransactionIsolation::RepeatableRead;
         }
+        self.statement_snapshot_deferred = false;
         Ok(())
     }
 
@@ -15821,12 +15881,20 @@ impl Transaction {
             Err(error) => return Err(error),
         }
         if self.last_pending_write(collection, id).is_none() {
-            let changed = Self::latest_committed_record_sequence(db, collection, id)?
-                .is_none_or(|version| version > self.applied_snapshot);
+            let version = Self::latest_committed_record_sequence(db, collection, id)?;
+            let changed = version.is_none_or(|version| version > self.applied_snapshot);
             if changed {
                 return Err(BicDbError::TransactionConflict(format!(
                     "row changed since locking query snapshot: {collection}:{id}"
                 )));
+            }
+            if self.isolation == TransactionIsolation::ReadCommitted {
+                // This successful locking read returns the current statement's
+                // row. Its pinned version supersedes an earlier unlocked read,
+                // including when statement refresh already advanced snapshot.
+                if let Some(version) = version {
+                    self.remember_locked_read_committed_version(collection, id, version);
+                }
             }
         }
         Ok(true)
@@ -15908,18 +15976,20 @@ impl Transaction {
         }
         if self.last_pending_write(collection, id).is_none() {
             let max_tx = Self::latest_committed_record_sequence(db, collection, id)?;
+            if self.isolation == TransactionIsolation::ReadCommitted {
+                // The lock pins this version. Remember it even when the next
+                // SQL statement already refreshed past an earlier unlocked
+                // observation; otherwise a current locking read returns fresh
+                // data but its subsequent write still conflicts with that read.
+                if let Some(max_tx) = max_tx {
+                    self.remember_locked_read_committed_version(collection, id, max_tx);
+                }
+            }
             if max_tx.is_none_or(|max_tx| max_tx > self.applied_snapshot) {
                 if self.isolation == TransactionIsolation::ReadCommitted {
                     // The lock pins the row from here on: this transaction now
                     // works on its latest version, not the stale one it read
                     // before waiting (which would otherwise fail its writes).
-                    if let Some(max_tx) = max_tx {
-                        self.observed_record_versions
-                            .lock()
-                            .entry(collection.to_string())
-                            .or_default()
-                            .insert(id.to_string(), max_tx);
-                    }
                     return Ok(false);
                 }
                 return Err(BicDbError::TransactionConflict(format!(
@@ -17615,6 +17685,22 @@ impl Transaction {
         self.fenced(result)
     }
 
+    /// A SQL locking/recheck operation pins this committed version. It may
+    /// replace an earlier unlocked observation, including on a freshness fast
+    /// path after a statement refresh. An existing buffered write keeps its
+    /// original dependency; an ordinary native re-read remains conservative.
+    fn remember_locked_read_committed_version(&self, collection: &str, id: &str, version: u64) {
+        if self.isolation == TransactionIsolation::ReadCommitted
+            && self.last_pending_write(collection, id).is_none()
+        {
+            self.observed_record_versions
+                .lock()
+                .entry(collection.to_string())
+                .or_default()
+                .insert(id.to_string(), version);
+        }
+    }
+
     fn conflict_snapshot_for_write(
         &self,
         collection: &str,
@@ -18603,6 +18689,7 @@ impl Transaction {
         let Some(max_tx) = Self::latest_committed_record_sequence(db, collection, id)? else {
             return Ok(Some((None, 0)));
         };
+        self.remember_locked_read_committed_version(collection, id, max_tx);
         if max_tx <= self.applied_snapshot {
             // Fresh row: everything at or below the un-floored APPLIED
             // watermark was physically applied before this transaction began,
@@ -18675,6 +18762,7 @@ impl Transaction {
         let Some(max_tx) = Self::latest_committed_record_sequence(db, collection, id)? else {
             return Ok(Some((None, 0)));
         };
+        self.remember_locked_read_committed_version(collection, id, max_tx);
         if max_tx <= self.applied_snapshot {
             return Ok(None);
         }
@@ -18740,6 +18828,7 @@ impl Transaction {
         let Some(max_tx) = Self::latest_committed_record_sequence(db, collection, id)? else {
             return Ok(None);
         };
+        self.remember_locked_read_committed_version(collection, id, max_tx);
         // See read_committed_update_record: freshness is judged against the
         // un-floored applied watermark, never the floored snapshot.
         if max_tx <= self.applied_snapshot {

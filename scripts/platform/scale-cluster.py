@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise real event traffic during 3 -> 5 -> 9 node growth and failure.
+"""Exercise event traffic during node growth (including 4 -> 5) and failure.
 
 No cloud provisioning or system-wide process management. Remote mode uses
 existing SSH hosts, verifies distinct machine IDs and pins the supplied binary.
@@ -19,6 +19,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import uuid
 
@@ -80,13 +81,14 @@ else: raise RuntimeError('unknown runner action')
 
 
 class Host:
-    def __init__(self, spec, index, run, binary, local):
+    def __init__(self, spec, index, run, binary, local, storage_mode=None, buffer_pool_bytes=None):
         self.spec, self.index, self.local = spec, index, local
         self.root = f"{spec.get('directory', '/tmp')}/bicdb-scale-{run}-n{index}"
         self.binary = str(binary) if local else self.root + '/bicdb'
         self.db = self.root + '/db'
         self.address = spec['address']
         self.sql_port = spec.get('sql_port', 5432)
+        self.engine_env = storage_environment(storage_mode, buffer_pool_bytes)
         self.tls = [] if local else [
             '--cluster-tls-cert', self.root + '/tls/node.crt',
             '--cluster-tls-key', self.root + '/tls/node.key',
@@ -104,13 +106,13 @@ class Host:
         return json.loads(result.stdout)
 
     def command(self, *args, timeout=180):
-        result = self.action('run', argv=[self.binary, *map(str, args)], timeout=timeout)
+        result = self.action('run', argv=[*self.engine_env, self.binary, *map(str, args)], timeout=timeout)
         if result['code']:
             raise RuntimeError(f"node {self.index}: {result['stderr'][-4000:]}\n{result['stdout'][-4000:]}")
         return result['stdout']
 
     def start(self):
-        return self.action('launch', argv=[self.binary, 'serve', self.db, '--host', '127.0.0.1',
+        return self.action('launch', argv=[*self.engine_env, self.binary, 'serve', self.db, '--host', '127.0.0.1',
                            '--port', str(self.sql_port), '--shutdown-grace-seconds', '3'])
 
     def copy(self, source, destination):
@@ -119,6 +121,41 @@ class Host:
 
     def status(self):
         return json.loads(self.command('cluster', 'status', self.db, '--json'))
+
+
+
+def validate_storage_options(storage_mode, buffer_pool_bytes, node_capacity_bytes):
+    if storage_mode not in (None, 'embedded_memory', 'server_paged'):
+        raise ValueError('invalid explicit storage mode')
+    if buffer_pool_bytes is not None and (storage_mode != 'server_paged' or not 8192 <= buffer_pool_bytes <= 1024**4):
+        raise ValueError('buffer pool requires explicit server_paged and 8192..1099511627776 bytes')
+    if not 1 <= node_capacity_bytes <= 2**64 - 1:
+        raise ValueError('node capacity must be a positive u64 byte count')
+
+
+def storage_environment(storage_mode, buffer_pool_bytes):
+    environment = []
+    if storage_mode is not None:
+        environment.append('BICDB_STORAGE_MODE=' + storage_mode)
+    if buffer_pool_bytes is not None:
+        environment.append('BICDB_PAGED_BUFFER_POOL_BYTES=' + str(buffer_pool_bytes))
+    return ['env', *environment] if environment else []
+
+
+def persisted_storage(hosts):
+    records = []
+    for host in hosts:
+        metadata = json.loads(host.action('read', file='db/format.json')['contents'])
+        records.append({'node': host.index, 'format': metadata})
+    return records
+
+
+def validate_persisted_storage(records, requested_mode):
+    if requested_mode is not None:
+        for record in records:
+            actual = record['format'].get('storage_mode')
+            if actual != requested_mode:
+                raise RuntimeError(f"node {record['node']} persisted storage mode {actual!r} differs from requested {requested_mode!r}")
 
 
 def validate_inventory(specs, count):
@@ -148,6 +185,17 @@ def capacity_ready(status, count):
             and metrics['active_relocations'] == 0
             and metrics.get('failed_relocations', 0) == 0
             and len({r['leader'] for r in topology['ranges'].values()}) == count)
+
+
+def parse_sizes(value):
+    """Keep growth bounded and preserve the supported historical profiles."""
+    try:
+        sizes = [int(size) for size in value.split(',')]
+    except ValueError as error:
+        raise ValueError('sizes must be an increasing selection of 3,4,5,9') from error
+    if sizes != sorted(set(sizes)) or any(size not in (3, 4, 5, 9) for size in sizes):
+        raise ValueError('sizes must be an increasing selection of 3,4,5,9')
+    return sizes
 
 
 def resource_summary(samples):
@@ -218,15 +266,30 @@ def main():
     parser.add_argument('--max-operations', type=int, default=100000)
     parser.add_argument('--ranges', type=int, default=64)
     parser.add_argument('--timeout', type=int, default=300)
+    parser.add_argument('--storage-mode', choices=('embedded_memory', 'server_paged'),
+                        help='explicit storage mode for init/join/serve and all engine commands; omitted preserves inherited defaults')
+    parser.add_argument('--buffer-pool-bytes', type=int, help='explicit server_paged buffer budget per node')
+    parser.add_argument('--node-capacity-bytes', type=int, default=1024**4,
+                        help='declared placement capacity per node, not measured storage capacity')
     parser.add_argument('--build-label', default='unspecified')
     parser.add_argument('--source-commit', help='source Git object used to build the supplied binary')
+    parser.add_argument('--require-independent-qualification', action='store_true',
+                        help='fail closed: this event harness does not yet supply independent qualification')
     args = parser.parse_args()
+    if args.require_independent_qualification:
+        parser.error('independent qualification unavailable: first-data-node client and end-of-phase ledger; '
+                     'external per-acknowledgment durability and relocation-phase fault injection are not implemented')
     if args.source_commit and not re.fullmatch(r'(?:[0-9a-f]{40}|[0-9a-f]{64})', args.source_commit):
         parser.error('source-commit must be a full lowercase Git object ID')
+    try:
+        validate_storage_options(args.storage_mode, args.buffer_pool_bytes, args.node_capacity_bytes)
+    except ValueError as error:
+        parser.error(str(error))
     failure_seconds = args.failure_seconds if args.failure_seconds is not None else args.seconds
-    sizes = [int(size) for size in args.sizes.split(',')]
-    if sizes != sorted(set(sizes)) or any(size not in [3, 5, 9] for size in sizes):
-        parser.error('sizes must be an increasing selection of 3,5,9')
+    try:
+        sizes = parse_sizes(args.sizes)
+    except ValueError as error:
+        parser.error(str(error))
     if not (5 <= args.seconds <= 3600 and 5 <= failure_seconds <= 3600 and 1 <= args.concurrency <= 256
             and 100 <= args.rpc_timeout_ms <= 5000
             and 1 <= args.max_operations <= 1000000 and max(sizes) <= args.ranges <= 1024
@@ -242,7 +305,7 @@ def main():
         if inventory.get('format') != 1: parser.error('unsupported inventory format')
         specs = inventory['hosts']
         validate_inventory(specs, max(sizes))
-    hosts = [Host(spec, i, run, binary, args.local) for i, spec in enumerate(specs[:max(sizes)])]
+    hosts = [Host(spec, i, run, binary, args.local, args.storage_mode, args.buffer_pool_bytes) for i, spec in enumerate(specs[:max(sizes)])]
     identities = [host.action('probe') for host in hosts]
     if not args.local and len({identity['machine_hash'] for identity in identities}) != len(hosts):
         parser.error('remote scale results require distinct machine IDs; use --local for shared-host checks')
@@ -252,30 +315,60 @@ def main():
                   source_commit=args.source_commit,
                   workload='immutable_events_append_read', replication_factor=3, fsync=True,
                   ranges=args.ranges, machines=identities, results=[], complete=False,
+                  node_counts=sizes, timeline=[],
+                  requested_storage_mode=args.storage_mode, requested_buffer_pool_bytes=args.buffer_pool_bytes,
+                  node_capacity_bytes=args.node_capacity_bytes, engine_environment=storage_environment(args.storage_mode, args.buffer_pool_bytes),
+                  persisted_storage_checkpoints=[],
+                  client_placement='first_data_node',
+                  acknowledged_ledger_placement='first_data_node_copied_after_phase',
+                  physical_failure_domains_verified=False,
+                  qualification_status='not_qualified',
                   independent_user_adoption='not_measured', large_scale_certification=False)
     active, ledgers = [], []
-    def save(): (args.output / 'report.json').write_text(json.dumps(report, indent=2)+'\n')
+    save_lock = threading.Lock()
+    def save():
+        # Growth and workload threads both checkpoint evidence. Never expose a
+        # partial JSON report to an external collector or a concurrent reader.
+        with save_lock:
+            temporary = args.output / 'report.json.tmp'
+            with temporary.open('w') as output:
+                output.write(json.dumps(report, indent=2)+'\n')
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temporary, args.output / 'report.json')
     def record(name, value):
         (args.output / (name + '.json')).write_text(json.dumps(value, indent=2)+'\n')
+    def event(kind, **details):
+        report['timeline'].append(dict(unix_ms=int(time.time()*1000), kind=kind, **details))
+        save()
     def wait_ready(count):
         deadline = time.monotonic() + args.timeout
         while time.monotonic() < deadline:
             status = hosts[0].status()
             if capacity_ready(status, count):
                 record(f'topology-{count}-{time.time_ns()}', status)
+                formats = persisted_storage(active)
+                report['persisted_storage_checkpoints'].append({'nodes': count, 'formats': formats})
+                save()
+                validate_persisted_storage(formats, args.storage_mode)
+                event('capacity_converged', nodes=count)
                 time.sleep(2)  # Range leadership recovery follows topology publication.
                 print(f'{count}-node capacity converged', file=sys.stderr, flush=True)
                 return
             time.sleep(1)
         raise RuntimeError(f'{count}-node capacity did not converge before timeout')
     def add(host):
+        event('join_started', node=host.index)
         host.command('cluster', 'join', '--seed-node-id', 'n0', '--seed-address', hosts[0].address,
                      '--cluster-id', 'scale-' + run, '--node-id', f'n{host.index}', '--address', host.address,
-                     '--node-root', host.db, '--capacity-bytes', str(1024**4), *host.tls)
+                     '--node-root', host.db, '--capacity-bytes', str(args.node_capacity_bytes), *host.tls)
+        event('join_registered', node=host.index)
         host.start(); active.append(host)
+        event('serve_started', node=host.index)
     def traffic(name, seconds=None):
         print(f'traffic phase: {name}', file=sys.stderr, flush=True)
         seconds = args.seconds if seconds is None else seconds
+        event('traffic_started', phase=name, seconds=seconds)
         ledger = hosts[0].root + f'/{name}-ledger.json'
         result = json.loads(hosts[0].command('cluster', 'events', 'workload', hosts[0].db,
                       '--namespace', 'scale-' + run, '--seconds', seconds, '--concurrency', args.concurrency,
@@ -284,6 +377,7 @@ def main():
         ledgers.append((name, ledger)); report['results'].append(dict(phase=name, **result)); save()
         record(name, result)
         record(name + '-ledger', json.loads(hosts[0].action('read', file=f'{name}-ledger.json')['contents']))
+        event('traffic_completed', phase=name)
         return result
     def monitored(pool, name, during=None, seconds=None):
         task = pool.submit(traffic, name, seconds)
@@ -314,7 +408,7 @@ def main():
                 certificates(hosts, Path(directory))
         hosts[0].command('cluster', 'init', hosts[0].db, '--cluster-id', 'scale-' + run,
                          '--node-id', 'n0', '--address', hosts[0].address, '--replication-factor', '3',
-                         '--initial-ranges', args.ranges, '--application-events', *hosts[0].tls)
+                         '--initial-ranges', args.ranges, '--capacity-bytes', args.node_capacity_bytes, '--application-events', *hosts[0].tls)
         hosts[0].start(); active.append(hosts[0]); time.sleep(2)
         for host in hosts[1:sizes[0]]: add(host)
         wait_ready(sizes[0])
@@ -328,9 +422,12 @@ def main():
             victim = active[-1]
             def failure():
                 time.sleep(max(1, failure_seconds // 4))
+                event('process_kill_requested', node=victim.index)
                 victim.action('signal', signal='SIGKILL')
+                event('process_kill_returned', node=victim.index)
                 time.sleep(max(1, failure_seconds // 3))
                 victim.start()
+                event('process_restart_started', node=victim.index)
             monitored(pool, f'failure-{len(active)}', failure, seconds=failure_seconds)
             wait_ready(len(active))
             monitored(pool, f'recovered-{len(active)}')

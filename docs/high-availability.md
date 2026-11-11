@@ -3,6 +3,9 @@
 For the current-source capability matrix, measured evidence and independent
 4→5-node experiment, see the [2026-11-10 HA/scaling audit](ha-horizontal-scaling-audit-2026-11-10.md).
 Automatic range movement does not currently provide transparent distributed SQL.
+The [2026-11-11 focused HA validation](evidence/native-ha-current-2026-11-11/README.md)
+records exact-source voter/observer and crash-recovery results separately from
+physical qualification.
 
 For scheduled restore and promotion drills, bounded region-local reads, planned
 switchover, and role/tenant budgets, see
@@ -40,7 +43,10 @@ supports asynchronous replication with a declared commit RPO and
 Auditor-measured drill evidence. It does not claim continuous RPO enforcement
 at commit admission. A `SynchronousQuorum` policy is explicitly rejected
 because zero-RPO quorum commit replication is not yet implemented.
-Regulated-data admission remains denied.
+This Phase-5 profile does not admit regulated data. Later
+[Phase-8 admission](cell-runtime-phase8.md) requires an exact valid, live
+evidence and attestation bundle; implementing that verifier is not evidence
+of a qualified production deployment.
 
 Distributed range placement uses a different data-plane protocol: starting in
 1.0.9-beta, row transactions are epoch-fenced and majority committed through
@@ -50,7 +56,7 @@ range quorum with the legacy whole-database streaming/HA commands below.
 
 ## Synchronous streaming replication (`bicdb serve`)
 
-The native HA handshake uses protocol version **3**. All peers in a native HA
+The native HA handshake uses protocol version **4**. All peers in a native HA
 group must support this version; earlier connections are refused. Plan a
 coordinated upgrade with the application writers stopped rather than mixing
 protocol versions. Ordinary row-only commit frames and the standalone manual

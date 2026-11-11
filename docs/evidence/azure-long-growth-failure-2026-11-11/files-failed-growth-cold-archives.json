@@ -1,0 +1,147 @@
+[
+  {
+    "node": 0,
+    "files": {
+      "cluster-range-write-log.json": {
+        "bytes": 9081753,
+        "mtime_seconds": 1794377743
+      },
+      "cluster-topology.json": {
+        "bytes": 336842,
+        "mtime_seconds": 1794377854
+      },
+      "cluster-metadata-consensus.json": {
+        "bytes": 356540,
+        "mtime_seconds": 1794377854
+      },
+      "transactions.log": {
+        "bytes": 9471016,
+        "mtime_seconds": 1794377854
+      },
+      "paged/store.wal": {
+        "bytes": 3893896,
+        "mtime_seconds": 1794377854
+      },
+      "paged/store.pages": {
+        "bytes": 6987776,
+        "mtime_seconds": 1794377854
+      }
+    }
+  },
+  {
+    "node": 1,
+    "files": {
+      "cluster-range-write-log.json": {
+        "bytes": 8886642,
+        "mtime_seconds": 1794377814
+      },
+      "cluster-topology.json": {
+        "bytes": 337843,
+        "mtime_seconds": 1794377858
+      },
+      "cluster-metadata-consensus.json": {
+        "bytes": 357509,
+        "mtime_seconds": 1794377858
+      },
+      "transactions.log": {
+        "bytes": 9385120,
+        "mtime_seconds": 1794377858
+      },
+      "paged/store.wal": {
+        "bytes": 6511872,
+        "mtime_seconds": 1794377858
+      },
+      "paged/store.pages": {
+        "bytes": 6815744,
+        "mtime_seconds": 1794377858
+      }
+    }
+  },
+  {
+    "node": 2,
+    "files": {
+      "cluster-range-write-log.json": {
+        "bytes": 8786069,
+        "mtime_seconds": 1794377754
+      },
+      "cluster-topology.json": {
+        "bytes": 338394,
+        "mtime_seconds": 1794377861
+      },
+      "cluster-metadata-consensus.json": {
+        "bytes": 754654,
+        "mtime_seconds": 1794377861
+      },
+      "transactions.log": {
+        "bytes": 9281093,
+        "mtime_seconds": 1794377854
+      },
+      "paged/store.wal": {
+        "bytes": 4322040,
+        "mtime_seconds": 1794377854
+      },
+      "paged/store.pages": {
+        "bytes": 6873088,
+        "mtime_seconds": 1794377854
+      }
+    }
+  },
+  {
+    "node": 3,
+    "files": {
+      "cluster-range-write-log.json": {
+        "bytes": 8743718,
+        "mtime_seconds": 1794377744
+      },
+      "cluster-topology.json": {
+        "bytes": 338582,
+        "mtime_seconds": 1794377862
+      },
+      "cluster-metadata-consensus.json": {
+        "bytes": 755060,
+        "mtime_seconds": 1794377863
+      },
+      "transactions.log": {
+        "bytes": 9227906,
+        "mtime_seconds": 1794377854
+      },
+      "paged/store.wal": {
+        "bytes": 3144744,
+        "mtime_seconds": 1794377854
+      },
+      "paged/store.pages": {
+        "bytes": 6774784,
+        "mtime_seconds": 1794377854
+      }
+    }
+  },
+  {
+    "node": 4,
+    "files": {
+      "cluster-range-write-log.json": {
+        "bytes": 6413886,
+        "mtime_seconds": 1794377844
+      },
+      "cluster-topology.json": {
+        "bytes": 338582,
+        "mtime_seconds": 1794377861
+      },
+      "cluster-metadata-consensus.json": {
+        "bytes": 755061,
+        "mtime_seconds": 1794377866
+      },
+      "transactions.log": {
+        "bytes": 12037186,
+        "mtime_seconds": 1794377857
+      },
+      "paged/store.wal": {
+        "bytes": 0,
+        "mtime_seconds": 1794377862
+      },
+      "paged/store.pages": {
+        "bytes": 9232384,
+        "mtime_seconds": 1794377862
+      }
+    }
+  }
+]

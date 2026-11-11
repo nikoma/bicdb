@@ -1,0 +1,308 @@
+{
+  "format_version": 1,
+  "recorded_at_utc": "2026-11-11T02:42:18.029159+00:00",
+  "source_commit": "c173fa783fb8323fe02c41fb7eda96f130bc29c3",
+  "source_version": "1.0.460-beta",
+  "classification": "source_regression_single_host",
+  "complete": true,
+  "production_qualified": false,
+  "physical_scale_certified": false,
+  "deployment_verified": false,
+  "release_server_binary_produced": false,
+  "default_package_features": true,
+  "profile": "unoptimized dev/test, debug symbols disabled",
+  "environment": {
+    "kernel": "6.8.0-139-generic",
+    "machine": "x86_64",
+    "cpu_model": "AMD Ryzen 9 7900X 12-Core Processor",
+    "logical_cpus": 24,
+    "mem_total_kib": 65424196,
+    "storage": "ext4   /dev/md0",
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+    "cargo": "cargo 1.96.0 (30a34c682 2026-05-25)",
+    "network": "loopback development plaintext for embedded HA; no independent-host/mTLS qualification"
+  },
+  "runs": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "ha_state_durability",
+        "--test",
+        "ha_state_crash",
+        "--test",
+        "gap1_page_only_batches",
+        "--no-run"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/tmp/bicdb-ha-qualification-target",
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_PROFILE_DEV_DEBUG": "0",
+        "CARGO_PROFILE_TEST_DEBUG": "0",
+        "RUST_TEST_THREADS": "2"
+      },
+      "started_at_unix": 1794364490.5874949,
+      "ended_at_unix": 1794364582.6021783,
+      "exit_code": 0,
+      "min_available_bytes": 22721617920,
+      "resource_pause_count": 0,
+      "source_commit": "c173fa783fb8323fe02c41fb7eda96f130bc29c3",
+      "label": "core-build",
+      "raw_log": "raw/core-build.log.gz",
+      "resources": "raw/core-build.resources.jsonl.gz",
+      "test_result_counts": []
+    },
+    {
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "-p",
+        "bicdb-core",
+        "--example",
+        "ha_state_child"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/tmp/bicdb-ha-qualification-target",
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_PROFILE_DEV_DEBUG": "0",
+        "CARGO_PROFILE_TEST_DEBUG": "0",
+        "RUST_TEST_THREADS": "2"
+      },
+      "started_at_unix": 1794364593.6736884,
+      "ended_at_unix": 1794364595.6744254,
+      "exit_code": 0,
+      "min_available_bytes": 25098633216,
+      "resource_pause_count": 0,
+      "source_commit": "c173fa783fb8323fe02c41fb7eda96f130bc29c3",
+      "label": "ha-child-build",
+      "raw_log": "raw/ha-child-build.log.gz",
+      "resources": "raw/ha-child-build.resources.jsonl.gz",
+      "test_result_counts": []
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "ha_state_durability",
+        "--test",
+        "ha_state_crash",
+        "--test",
+        "gap1_page_only_batches",
+        "--test",
+        "live_replication",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/tmp/bicdb-ha-qualification-target",
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_PROFILE_DEV_DEBUG": "0",
+        "CARGO_PROFILE_TEST_DEBUG": "0",
+        "RUST_TEST_THREADS": "2"
+      },
+      "started_at_unix": 1794364595.6964815,
+      "ended_at_unix": 1794364657.7060583,
+      "exit_code": 0,
+      "min_available_bytes": 24616161280,
+      "resource_pause_count": 0,
+      "source_commit": "c173fa783fb8323fe02c41fb7eda96f130bc29c3",
+      "label": "core-ha-tests",
+      "raw_log": "raw/core-ha-tests.log.gz",
+      "resources": "raw/core-ha-tests.resources.jsonl.gz",
+      "test_result_counts": [
+        [
+          2,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          7,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          8,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          32,
+          0,
+          0,
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-page",
+        "--test",
+        "gap1_no_steal",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/tmp/bicdb-ha-qualification-target",
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_PROFILE_DEV_DEBUG": "0",
+        "CARGO_PROFILE_TEST_DEBUG": "0",
+        "RUST_TEST_THREADS": "2"
+      },
+      "started_at_unix": 1794364666.7522972,
+      "ended_at_unix": 1794364674.7538574,
+      "exit_code": 0,
+      "min_available_bytes": 26303705088,
+      "resource_pause_count": 0,
+      "source_commit": "c173fa783fb8323fe02c41fb7eda96f130bc29c3",
+      "label": "page-gap1-tests",
+      "raw_log": "raw/page-gap1-tests.log.gz",
+      "resources": "raw/page-gap1-tests.resources.jsonl.gz",
+      "test_result_counts": [
+        [
+          19,
+          0,
+          0,
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "embedded_ha",
+        "--",
+        "--test-threads=1"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/tmp/bicdb-ha-qualification-target",
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_PROFILE_DEV_DEBUG": "0",
+        "CARGO_PROFILE_TEST_DEBUG": "0",
+        "RUST_TEST_THREADS": "2"
+      },
+      "started_at_unix": 1794364674.7774734,
+      "ended_at_unix": 1794364900.8129776,
+      "exit_code": 0,
+      "min_available_bytes": 20469243904,
+      "resource_pause_count": 0,
+      "source_commit": "c173fa783fb8323fe02c41fb7eda96f130bc29c3",
+      "label": "embedded-ha-tests",
+      "raw_log": "raw/embedded-ha-tests.log.gz",
+      "resources": "raw/embedded-ha-tests.resources.jsonl.gz",
+      "test_result_counts": [
+        [
+          10,
+          0,
+          0,
+          0,
+          0
+        ]
+      ]
+    }
+  ],
+  "total_passed": 78,
+  "binaries": [
+    {
+      "path": "/tmp/bicdb-ha-qualification-target/debug/deps/gap1_page_only_batches-f8ea934431892a37",
+      "bytes": 43126256,
+      "sha256": "4771fb3096802e71394b82a57d51364ebaeb15d2c051081211459d8895c92156",
+      "kind": "test_executable"
+    },
+    {
+      "path": "/tmp/bicdb-ha-qualification-target/debug/deps/ha_state_crash-1950477325c259bb",
+      "bytes": 43039864,
+      "sha256": "5db9476789f36ce6c96839eb9cc2894b0d541c6cd61e75e8abd89cf7ac40eb82",
+      "kind": "test_executable"
+    },
+    {
+      "path": "/tmp/bicdb-ha-qualification-target/debug/deps/ha_state_durability-2e94116892e03833",
+      "bytes": 44558776,
+      "sha256": "74b254acd2b933c1887cc5ad486e9cb3a7aa2e9d5c9c9aa1d3f98b0b773d1439",
+      "kind": "test_executable"
+    },
+    {
+      "path": "/tmp/bicdb-ha-qualification-target/debug/deps/live_replication-be4fdb3e49f9d73c",
+      "bytes": 47155640,
+      "sha256": "6461d24714cb0cd7d20405cc8f8ad0330dea6b45bba4adcd02d3825d73d0ca6a",
+      "kind": "test_executable"
+    },
+    {
+      "path": "/tmp/bicdb-ha-qualification-target/debug/deps/gap1_no_steal-955b3f3f2659e77a",
+      "bytes": 4506544,
+      "sha256": "d59e6ea56171277eecd5d9443faf7af0c22ee2827f809a34e8208913f3b9327f",
+      "kind": "test_executable"
+    },
+    {
+      "path": "/tmp/bicdb-ha-qualification-target/debug/deps/embedded_ha-b4c888d671378bab",
+      "bytes": 414079064,
+      "sha256": "582053b16afbd6f12167e8f8bdd768ed344fd47230f654e7d5845a115de4e7d0",
+      "kind": "test_executable"
+    },
+    {
+      "path": "/tmp/bicdb-ha-qualification-target/debug/examples/ha_state_child",
+      "bytes": 42374936,
+      "sha256": "b0c92011b9ee28a98b483c40969d995df2c0da332f031c1bc1d9eb2aec2f3dfa",
+      "kind": "crash_helper"
+    }
+  ],
+  "source_file_sha256": {
+    "Cargo.toml": "7c756098550cdd9c86d781044c6427a369dc9983ce9296df07ed4d720ae7a3ad",
+    "Cargo.lock": "bd7dcba353b240f5b34594d1a5eeb9b0ff6febbf116a76ed823b8670cfd0f831",
+    "rust-toolchain.toml": "66894b16254576f70fc56e3e3abf4d489c678e08feaec17e101ec405207b9d84",
+    "crates/bicdb-core/Cargo.toml": "6f20400d36f36f664de1fc6364d4c0648b320268c6b36bbefed1ef4e7b10984c",
+    "crates/bicdb-page/Cargo.toml": "99e639c251755480fc0616c1f1f01df8b745635aa5f3e1786e1b8183fdf89ddc",
+    "crates/bicdb-sql/Cargo.toml": "c77d47cd9848bd6aab95f6c7783f518854cec2ff63e8b8c45e239bc4f8ab31b5",
+    "crates/bicdb-pgwire/Cargo.toml": "bbaa5e64c511e00f2f8056fc8e0ed643e683229f390ff2009c0060d430a33566",
+    "crates/bicdb-core/tests/ha_state_durability.rs": "192c423ae5b6ccbe9d2d628710b0896d4270cb4f96bb905cb9672bb2ecf04d91",
+    "crates/bicdb-core/tests/ha_state_crash.rs": "78681bbc9b8dcbf376dbbaf5875a79902b0c9e682701870b8da48040e13b6f1a",
+    "crates/bicdb-core/examples/ha_state_child.rs": "e4ab14386b23e431eef49cc458abe71ff7cfee8cd78a34014d3f64d841076e0b",
+    "crates/bicdb-core/tests/gap1_page_only_batches.rs": "6146cd9217b4f99f26efd6198077d81b462f44d5db6ffc2198f24ec5bedd8cab",
+    "crates/bicdb-core/tests/live_replication.rs": "75cf58e2cfad3fe5a41ed6b8ff3e6f7e905d707ea621b4817b651b4fae7a521c",
+    "crates/bicdb-page/tests/gap1_no_steal.rs": "88211e64fe6b548dd27bd7c9e02a7159baea77adc5f100c4d76db362eb997bd3",
+    "crates/bicdb-pgwire/tests/embedded_ha.rs": "f93bf1a1f8052e3a3707b060f89c9cc13b65e9fe312ca4deba8af24688f26c34",
+    "crates/bicdb-pgwire/src/high_availability.rs": "b5cf5357be4770c99e08168a506b386294aa860ad340096878317e7e3ee7f697",
+    "crates/bicdb-core/src/db/replication_live.rs": "4ee7bd99dbb2a9cc8bb3efa90ffbb72db8423205296d9e02dad79b9e5b1c0596"
+  },
+  "metrics_not_produced": [
+    "physical_rpo",
+    "physical_rto",
+    "application_latency_percentiles",
+    "sustained_scaleout_goodput"
+  ],
+  "remaining_cache_bytes": 4361378097,
+  "artifact_cleanup": {
+    "reclaimed_bytes": 0,
+    "reason": "Only current test/crash-helper executables and reusable dependencies were produced; no superseded task-owned binaries or interrupted compiler objects to remove."
+  }
+}

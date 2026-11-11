@@ -12,11 +12,19 @@ use bicdb_pgwire::{
 use bicdb_sql::SqlSession;
 
 fn port() -> u16 {
-    TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
+    // Closing a port-zero probe makes that number immediately eligible for
+    // another probe, including another node in this same HA cluster. Keep
+    // every chosen number unique across concurrent tests and later restarts.
+    static USED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<u16>>> =
+        std::sync::OnceLock::new();
+    let mut used = USED.get_or_init(Default::default).lock().unwrap();
+    loop {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        if used.insert(port) {
+            return port;
+        }
+    }
 }
 fn config(index: usize, ports: &[u16], failover: bool) -> PgWireConfig {
     let address = |index: usize| format!("127.0.0.1:{}", ports[index]);
@@ -388,10 +396,22 @@ fn journal_replicas_share_author_identity_and_preserve_it_after_promotion() {
             .unwrap()
             .replication
             .record_journal = true;
-        EmbeddedHaDatabase::open(
+        EmbeddedHaDatabase::open_with_initializer(
             root.path().join(format!("journal-n{index}")),
             configuration,
             DbConfig::default().with_audit_events(true),
+            |db| {
+                // Schema bootstrap is local initialization, before lease and
+                // quorum services start. with_write callbacks may perform
+                // several independent engine commits; they do not make a
+                // multi-step SQL DDL operation atomic across lease expiry.
+                if index == 0 {
+                    SqlSession::new(db).execute(
+                        "CREATE TABLE IF NOT EXISTS entries (id TEXT PRIMARY KEY, value INT)",
+                    )?;
+                }
+                Ok(())
+            },
         )
         .unwrap()
     };
@@ -431,20 +451,6 @@ fn journal_replicas_share_author_identity_and_preserve_it_after_promotion() {
     // one: holding it across schema and journal setup can starve the peer
     // confirmations past this test's short write lease on a busy runner.
     let writer = hosts[0].as_ref().unwrap();
-    // Cold schema initialization can outlast the short fixture lease while
-    // holding the engine guard on a busy runner. A lease refusal is correct;
-    // retry only that transient result with an idempotent setup statement.
-    wait(|| {
-        match writer.with_write(|db| {
-            SqlSession::new(db)
-                .execute("CREATE TABLE IF NOT EXISTS entries (id TEXT PRIMARY KEY, value INT)")?;
-            Ok(())
-        }) {
-            Ok(()) => true,
-            Err(error) if error.to_string().contains("write lease") => false,
-            Err(error) => panic!("journal fixture schema setup failed: {error}"),
-        }
-    });
     writer
         .with_write(|db| {
             db.set_collection_mesh_sync_enabled("entries", true)?;

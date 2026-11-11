@@ -3,6 +3,14 @@
 The source snapshot contains the current BicDB license and scope notices,
 engineering documentation, tests, and selected historical benchmark evidence.
 
+## Release capability declarations
+
+New CLI packages include an artifact-bound `CAPABILITIES.json`; see
+[release capability declarations](release-capabilities.md). Implementation,
+executed tests, production qualification and deployment are separate fields.
+Missing qualification fails placement preflight; this does not update existing
+release assets or constitute runtime deployment authorization.
+
 ## Historical evidence and examples
 
 Host addresses, infrastructure hostnames, SSH account names, and machine-local

@@ -1,0 +1,20 @@
+{
+  "observations": [
+    {
+      "observed_state": "absent",
+      "operation_id": "probe-1182",
+      "unix_ns": 1794375133070484360
+    },
+    {
+      "observed_state": "absent",
+      "operation_id": "probe-1242",
+      "unix_ns": 1794375134264027670
+    },
+    {
+      "observed_state": "whole_present",
+      "operation_id": "probe-1305",
+      "unix_ns": 1794375135417768248
+    }
+  ],
+  "scope": "post-convergence point-read observations, not an atomic/global snapshot"
+}

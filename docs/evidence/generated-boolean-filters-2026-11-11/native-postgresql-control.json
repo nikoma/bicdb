@@ -1,0 +1,44 @@
+{
+  "backend": "native_pg16",
+  "profile": "postgres",
+  "status": "passed",
+  "cases": [
+    {
+      "appended_ids": 21,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "duration_seconds": 0.0015457759145647287,
+      "status": "passed",
+      "raw_query_bytes": 526
+    },
+    {
+      "appended_ids": 100,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "duration_seconds": 0.001893443986773491,
+      "status": "passed",
+      "raw_query_bytes": 2265
+    },
+    {
+      "appended_ids": 1000,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "duration_seconds": 0.004611458862200379,
+      "status": "passed",
+      "raw_query_bytes": 22966
+    }
+  ],
+  "original_assertions_changed": false,
+  "normalization_used": false,
+  "private_schema_dropped": true,
+  "finished_unix": 1794371277.200119
+}

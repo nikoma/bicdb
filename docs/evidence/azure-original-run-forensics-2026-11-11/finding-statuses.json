@@ -1,0 +1,147 @@
+[
+  {
+    "finding": "runtime_guest_identity",
+    "status": "passed",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "short_automatic_data_and_leader_count_movement",
+    "status": "passed",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "native_growth_availability",
+    "status": "failed",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "original_growth_ack_read_pass",
+    "status": "failed",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "later_baseline_full_ledger_read_pass",
+    "status": "failed",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "later_growth_full_ledger_read_pass",
+    "status": "failed",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "original_two_later_routed_value_matches",
+    "status": "passed",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "all_known_ack_applied_resolved_catalog_records",
+    "status": "passed",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "permanent_ack_record_loss",
+    "status": "inconclusive",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "original_two_read_failure_cause",
+    "status": "inconclusive",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "policy_convergence_within_300s",
+    "status": "failed",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "bounded_relocation_progress_vs_churn_or_deadlock",
+    "status": "inconclusive",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "sustained_four_to_five_capacity_gain",
+    "status": "inconclusive",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "live_byte_hotspot_weighted_placement",
+    "status": "failed",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "relocation_phase_fault_and_subsystem_matrix",
+    "status": "not_tested",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "unchanged_postgresql_business_sql_multi_range_atomicity",
+    "status": "not_tested",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "independent_physical_host_device_rpo_rto_production_qualification",
+    "status": "not_tested",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "original_scale_out_qualification_attempt",
+    "status": "failed",
+    "scope": "Availability/read verification and 300-second convergence checks failed; capacity gain not demonstrated."
+  },
+  {
+    "finding": "external_107_per_ack_ledger_reconciliation",
+    "status": "passed",
+    "scope": "107 ACK payloads checked after documented process/guest recovery; internal stock-client retries not exposed."
+  },
+  {
+    "finding": "guest_off_fresh_writes_and_38_ack_reconciliation",
+    "status": "passed",
+    "scope": "Five calls wholly within confirmed-off interval, all 38 targeted ACKs later matched; not host/device loss."
+  },
+  {
+    "finding": "three_uncertain_targeted_call_outcomes",
+    "status": "passed",
+    "scope": "One later whole value present/two absent; no rollback inference."
+  },
+  {
+    "finding": "original_two_visibility_restoration_event",
+    "status": "inconclusive",
+    "scope": "First retained successful observations cannot identify the causal replay/catch-up/routing event."
+  },
+  {
+    "finding": "complete_original_failed_attempt_retry_classification",
+    "status": "inconclusive",
+    "scope": "384 failed-call bodies and internal retry history were not retained."
+  },
+  {
+    "finding": "raw_per_call_latency_capture",
+    "status": "not_tested",
+    "scope": "Native workload retained successful-only aggregates, not raw samples or failure latencies."
+  },
+  {
+    "finding": "stable_fifteen_minute_post_convergence_five_node_comparison",
+    "status": "not_tested",
+    "scope": "Long run aborted before steady five; short phase convergence checkpoint does not establish uninterrupted stability."
+  },
+  {
+    "finding": "cleanup_overlapped_optional_classification",
+    "status": "inconclusive",
+    "scope": "All 20 calls excluded from fault/commit-count/availability conclusions."
+  },
+  {
+    "finding": "recovered_original_creation_models",
+    "status": "passed",
+    "scope": "Five VM/ten disk/five NIC creation responses recovered; runtime/physical placement not established."
+  },
+  {
+    "finding": "original_cloud_performance_metric_series",
+    "status": "inconclusive",
+    "scope": "Fifteen post-delete queries unavailable; never interpreted as zero."
+  },
+  {
+    "finding": "original_resource_deletion_and_guard_removal",
+    "status": "passed",
+    "scope": "Exact group absent, independent inventory zero, all 23 resources accounted; owned units removed after absence."
+  }
+]

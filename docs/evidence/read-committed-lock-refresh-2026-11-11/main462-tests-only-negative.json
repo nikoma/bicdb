@@ -1,0 +1,28 @@
+{
+  "source": "a5035d2c5e6f4e9ffd8b51262a55e6205359e288",
+  "scope": "TESTS-ONLY NEGATIVE on verified main462, no lock-observation implementation fix. Direct INT/NUMERIC primary-key SQL schedules: earlier plain read, peer commit, optional FOR UPDATE/NOWAIT/SKIP LOCKED, current UPDATE RETURNING and commit. Expected behavior10->20->21, both stores. Earlier non-primary-key SQL control passed without fix; do not claim that was a reproduction. This control determines whether numeric/primary SQL path really exposes actionable defect on current main. Original assertions retained. Compiler/source lock serialized with live rename batch, one job/incremental off/16GiB cap/memory monitor.",
+  "started_unix": 1794379230.008787,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "read_committed_lock_refresh",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794379230.0088832,
+      "exit": 101,
+      "finished_unix": 1794379332.453568
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794379332.4540145
+}

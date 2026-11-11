@@ -103,7 +103,8 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
     reject_oversized_sql(sql)?;
     let parse_sql = rewrite_postgres_parse_compat(sql);
     let sql_for_parse = parse_sql.as_deref().unwrap_or(sql);
-    reject_deep_parse_nesting(sql_for_parse)?;
+    let bounded_sql = crate::boolean_parse::prepare(sql_for_parse)?;
+    let sql_for_parse = bounded_sql.as_ref();
     let mut statements = match crate::table_queries::parse(sql_for_parse) {
         Ok(statements) => statements,
         Err(original) => {
@@ -323,6 +324,59 @@ pub fn leading_keyword_bypasses_raw_probes(sql: &str) -> bool {
             .iter()
             .any(|verb| keyword.eq_ignore_ascii_case(verb))
     })
+}
+
+/// Utility commands that PostgreSQL executes before acquiring a transaction
+/// snapshot. The other statements acquire one at execution even if Parse
+/// was able to prepare them without it.
+pub fn postgres_execution_requires_snapshot(sql: &str) -> bool {
+    if sql_has_no_statements(sql) {
+        return false;
+    }
+    !leading_sql_keyword(sql).is_some_and(|keyword| {
+        [
+            "begin",
+            "start",
+            "commit",
+            "end",
+            "rollback",
+            "abort",
+            "savepoint",
+            "release",
+            "lock",
+            "set",
+            "reset",
+            "show",
+            "fetch",
+            "move",
+            "listen",
+            "notify",
+            "unlisten",
+            "checkpoint",
+        ]
+        .iter()
+        .any(|utility| keyword.eq_ignore_ascii_case(utility))
+    })
+}
+
+/// Extended-protocol Parse and Bind take a snapshot for statements that need
+/// parse analysis or planning. A parameterized Bind also needs a snapshot.
+pub fn postgres_parse_requires_snapshot(sql: &str) -> bool {
+    let Ok(statements) = parse_statements(sql) else {
+        return false;
+    };
+    match statements.as_slice() {
+        [Statement::CreateTable(table)] => table.query.is_some(),
+        [Statement::Query(_)
+        | Statement::Insert(_)
+        | Statement::Update(_)
+        | Statement::Delete(_)
+        | Statement::Merge(_)
+        | Statement::Declare { .. }
+        | Statement::Explain { .. }
+        | Statement::Call(_)] => true,
+        _ => false,
+    }
 }
 
 pub fn split_sql_statements(sql: &str) -> Vec<String> {
@@ -686,6 +740,16 @@ pub fn parse_transaction_control_for_profile(
     sql: &str,
     profile: &str,
 ) -> Result<Option<TransactionControl>> {
+    parse_transaction_control_for_session(sql, profile, false)
+}
+
+/// Classify transport commands that can inherit an active transaction's
+/// access mode. BEGIN and session defaults use their own modes.
+pub fn parse_transaction_control_for_session(
+    sql: &str,
+    profile: &str,
+    transaction_read_only: bool,
+) -> Result<Option<TransactionControl>> {
     let statements = parse_statements(sql)?;
     let [statement] = statements.as_slice() else {
         return Ok(None);
@@ -705,7 +769,14 @@ pub fn parse_transaction_control_for_profile(
                     "transaction snapshots are not supported".to_string(),
                 ));
             }
-            validate_profile_transaction_modes(modes, profile == oracle::ORACLE_PREVIEW_PROFILE)?;
+            if *session || profile == oracle::ORACLE_PREVIEW_PROFILE {
+                validate_profile_transaction_modes(
+                    modes,
+                    profile == oracle::ORACLE_PREVIEW_PROFILE,
+                )?;
+            } else {
+                validate_postgres_transaction_modes(modes, transaction_read_only)?;
+            }
             Ok((!session).then_some(TransactionControl::SetTransaction))
         }
         _ => Ok(None),
@@ -791,12 +862,20 @@ pub(crate) fn validate_set_transaction_modes(modes: &[TransactionMode]) -> Resul
 }
 
 pub(crate) fn validate_transaction_modes(modes: &[TransactionMode]) -> Result<()> {
-    let read_only = modes.iter().any(|mode| {
-        matches!(
-            mode,
-            TransactionMode::AccessMode(TransactionAccessMode::ReadOnly)
-        )
-    });
+    validate_postgres_transaction_modes(modes, false)
+}
+
+pub(crate) fn validate_postgres_transaction_modes(
+    modes: &[TransactionMode],
+    inherited_read_only: bool,
+) -> Result<()> {
+    let read_only = modes
+        .iter()
+        .find_map(|mode| match mode {
+            TransactionMode::AccessMode(mode) => Some(*mode == TransactionAccessMode::ReadOnly),
+            _ => None,
+        })
+        .unwrap_or(inherited_read_only);
     for mode in modes {
         if let TransactionMode::IsolationLevel(level) = mode {
             match level {

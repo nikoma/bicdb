@@ -1,0 +1,297 @@
+{
+  "format": "bicdb.capability-catalog/v1",
+  "modes": {
+    "legacy_file_shipping": {
+      "automatic_range_rebalancing": {
+        "status": "unsupported",
+        "summary": "Whole-database file shipping does not distribute ranges.",
+        "source_paths": [
+          "docs/high-availability.md"
+        ],
+        "test_paths": [],
+        "conditions": []
+      },
+      "acknowledged_commit_preservation": {
+        "status": "conditional",
+        "summary": "Manual promotion can retain only state shipped durably to the selected standby.",
+        "source_paths": [
+          "docs/high-availability.md"
+        ],
+        "test_paths": [
+          "crates/bicdb-core/tests/ha_state_crash.rs"
+        ],
+        "conditions": [
+          "Fence old primary; verify selected standby history; async unsent changes may be lost."
+        ]
+      },
+      "physical_scale_certified": {
+        "status": "unsupported",
+        "summary": "No production qualification/admission is granted by this release declaration; external exact-artifact evidence is required.",
+        "source_paths": [
+          "docs/ha-horizontal-scaling-audit-2026-11-10.md"
+        ],
+        "test_paths": [],
+        "conditions": []
+      },
+      "critical_workload_admission": {
+        "status": "unsupported",
+        "summary": "No production qualification/admission is granted by this release declaration; external exact-artifact evidence is required.",
+        "source_paths": [
+          "docs/ha-horizontal-scaling-audit-2026-11-10.md"
+        ],
+        "test_paths": [],
+        "conditions": []
+      }
+    },
+    "native_streaming_ha": {
+      "acknowledged_commit_preservation": {
+        "status": "conditional",
+        "summary": "Native synchronous HA can preserve acknowledged history with voter-majority copies and nondegrading policy.",
+        "source_paths": [
+          "crates/bicdb-pgwire/src/high_availability.rs",
+          "crates/bicdb-core/src/db/replication_live.rs"
+        ],
+        "test_paths": [
+          "crates/bicdb-pgwire/tests/embedded_ha.rs",
+          "crates/bicdb-cli/tests/ha_failover_cli.rs"
+        ],
+        "conditions": [
+          "Identical static voting group; K >= floor(N/2); timeout policy fail; durable storage; handshake v4; qualify exact failure model."
+        ]
+      },
+      "automatic_primary_failover": {
+        "status": "supported",
+        "summary": "Majority election and writer leases for a single writable primary.",
+        "source_paths": [
+          "crates/bicdb-pgwire/src/high_availability.rs",
+          "crates/bicdb-core/src/db/replication_live.rs"
+        ],
+        "test_paths": [
+          "crates/bicdb-pgwire/tests/embedded_ha.rs"
+        ],
+        "conditions": [
+          "At least three configured voters; client reconnection/ingress required."
+        ]
+      },
+      "automatic_range_rebalancing": {
+        "status": "unsupported",
+        "summary": "Adding whole-database replicas does not shard primary writes.",
+        "source_paths": [
+          "docs/high-availability.md"
+        ],
+        "test_paths": [],
+        "conditions": []
+      },
+      "physical_scale_certified": {
+        "status": "unsupported",
+        "summary": "No production qualification/admission is granted by this release declaration; external exact-artifact evidence is required.",
+        "source_paths": [
+          "docs/ha-horizontal-scaling-audit-2026-11-10.md"
+        ],
+        "test_paths": [],
+        "conditions": []
+      },
+      "critical_workload_admission": {
+        "status": "unsupported",
+        "summary": "No production qualification/admission is granted by this release declaration; external exact-artifact evidence is required.",
+        "source_paths": [
+          "docs/ha-horizontal-scaling-audit-2026-11-10.md"
+        ],
+        "test_paths": [],
+        "conditions": []
+      }
+    },
+    "distributed_ranges": {
+      "automatic_range_rebalancing": {
+        "status": "supported",
+        "summary": "Default balanced controller moves physical range replicas and balances leader counts.",
+        "source_paths": [
+          "crates/bicdb-pgwire/src/distribution_controller.rs",
+          "crates/bicdb-core/src/distribution_supervisor.rs"
+        ],
+        "test_paths": [
+          "crates/bicdb-pgwire/src/validation.rs"
+        ],
+        "conditions": [
+          "Distribution configuration, live metadata quorum, RF/failure-domain/capacity/schema eligibility; balanced controller enabled."
+        ]
+      },
+      "single_range_quorum_writes": {
+        "status": "supported",
+        "summary": "One-range exact-key mutations use durable majority decisions and epoch fencing.",
+        "source_paths": [
+          "crates/bicdb-core/src/distribution_range_consensus.rs"
+        ],
+        "test_paths": [
+          "crates/bicdb-core/src/distribution_range_consensus.rs"
+        ],
+        "conditions": [
+          "Current recovered range leader, schema fence, reachable synchronized quorum; ambiguous recovery can block writes."
+        ]
+      },
+      "transparent_sql_routing": {
+        "status": "unsupported",
+        "summary": "General SQL forwarding across range owners is not provided by planning hooks.",
+        "source_paths": [
+          "crates/bicdb-core/src/distribution_query.rs",
+          "docs/application-cluster-events.md"
+        ],
+        "test_paths": [],
+        "conditions": []
+      },
+      "general_cross_range_transactions": {
+        "status": "unsupported",
+        "summary": "Supplied distributed commit interface has no production ordinary-SQL coordinator.",
+        "source_paths": [
+          "crates/bicdb-core/src/distribution_query.rs",
+          "docs/application-cluster-events.md"
+        ],
+        "test_paths": [],
+        "conditions": []
+      },
+      "cross_range_sql_joins": {
+        "status": "unsupported",
+        "summary": "Bounded merge helpers are not a general distributed SQL join executor.",
+        "source_paths": [
+          "crates/bicdb-core/src/distribution_query.rs",
+          "docs/application-cluster-events.md"
+        ],
+        "test_paths": [],
+        "conditions": []
+      },
+      "automatic_range_splitting": {
+        "status": "unsupported",
+        "summary": "Metadata split/merge exists; size/load driven splitting is absent from the event serving controller.",
+        "source_paths": [
+          "docs/application-cluster-events.md",
+          "crates/bicdb-core/src/distribution_supervisor.rs"
+        ],
+        "test_paths": [],
+        "conditions": []
+      },
+      "physical_scale_certified": {
+        "status": "unsupported",
+        "summary": "No production qualification/admission is granted by this release declaration; external exact-artifact evidence is required.",
+        "source_paths": [
+          "docs/ha-horizontal-scaling-audit-2026-11-10.md"
+        ],
+        "test_paths": [],
+        "conditions": []
+      },
+      "critical_workload_admission": {
+        "status": "unsupported",
+        "summary": "No production qualification/admission is granted by this release declaration; external exact-artifact evidence is required.",
+        "source_paths": [
+          "docs/ha-horizontal-scaling-audit-2026-11-10.md"
+        ],
+        "test_paths": [],
+        "conditions": []
+      }
+    },
+    "cell_ha": {
+      "encrypted_replication": {
+        "status": "supported",
+        "summary": "Cell-scoped signed destination-bound asynchronous encrypted commit objects.",
+        "source_paths": [
+          "crates/bicdb-cell-ha/src/lib.rs",
+          "crates/bicdb-cell/src/lib.rs"
+        ],
+        "test_paths": [
+          "crates/bicdb-cell-ha/src/lib.rs"
+        ],
+        "conditions": [
+          "Valid Cell manifest, key/authority/lease documents and supported encrypted storage."
+        ]
+      },
+      "zero_rpo_quorum_commits": {
+        "status": "unsupported",
+        "summary": "Cell HA explicitly refuses SynchronousQuorum policy.",
+        "source_paths": [
+          "crates/bicdb-cell-ha/src/lib.rs",
+          "crates/bicdb-cell/src/lib.rs"
+        ],
+        "test_paths": [
+          "crates/bicdb-cell-ha/src/lib.rs"
+        ],
+        "conditions": []
+      },
+      "writer_fencing": {
+        "status": "supported",
+        "summary": "Cell commit fence checks role, writer epoch and bounded lease.",
+        "source_paths": [
+          "crates/bicdb-cell-ha/src/lib.rs",
+          "crates/bicdb-cell/src/lib.rs"
+        ],
+        "test_paths": [
+          "crates/bicdb-cell-ha/src/lib.rs"
+        ],
+        "conditions": []
+      },
+      "critical_workload_admission": {
+        "status": "conditional",
+        "summary": "Phase8 evaluates exact external evidence and deployment attestation; this release catalog supplies none.",
+        "source_paths": [
+          "crates/bicdb-cell/src/admission.rs",
+          "docs/cell-runtime-phase8.md"
+        ],
+        "test_paths": [],
+        "conditions": [
+          "Coherent Phase8 release/profile, live trusted evidence bundle, attestation and external fleet fencing."
+        ]
+      },
+      "physical_scale_certified": {
+        "status": "unsupported",
+        "summary": "No production qualification/admission is granted by this release declaration; external exact-artifact evidence is required.",
+        "source_paths": [
+          "docs/ha-horizontal-scaling-audit-2026-11-10.md"
+        ],
+        "test_paths": [],
+        "conditions": []
+      }
+    },
+    "application_fleet": {
+      "worker_replacement": {
+        "status": "unsupported",
+        "summary": "Worker replacement exists in the separate bic/bicdb-app-host executable, which is not included in this bicdb-cli artifact.",
+        "source_paths": [
+          "crates/bicdb-app-host/src/fleet.rs",
+          "docs/platform-worker-fleet.md"
+        ],
+        "test_paths": [
+          "crates/bicdb-app-host/tests/fleet.rs"
+        ],
+        "conditions": [
+          "Configured workers/capacity/isolation; state authority available or separately configured native state group."
+        ]
+      },
+      "automatic_database_sharding": {
+        "status": "unsupported",
+        "summary": "Worker placement and per-application state HA do not shard one SQL database.",
+        "source_paths": [
+          "docs/platform-state-groups.md",
+          "docs/platform-worker-fleet.md"
+        ],
+        "test_paths": [],
+        "conditions": []
+      },
+      "physical_scale_certified": {
+        "status": "unsupported",
+        "summary": "No production qualification/admission is granted by this release declaration; external exact-artifact evidence is required.",
+        "source_paths": [
+          "docs/ha-horizontal-scaling-audit-2026-11-10.md"
+        ],
+        "test_paths": [],
+        "conditions": []
+      },
+      "critical_workload_admission": {
+        "status": "unsupported",
+        "summary": "No production qualification/admission is granted by this release declaration; external exact-artifact evidence is required.",
+        "source_paths": [
+          "docs/ha-horizontal-scaling-audit-2026-11-10.md"
+        ],
+        "test_paths": [],
+        "conditions": []
+      }
+    }
+  }
+}

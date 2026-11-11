@@ -1,0 +1,17 @@
+{
+  "started_unix_ns": 1794379509559578465,
+  "helper_sha256": "0e5cf43c02d0b1d70a0ba8304c6046dcf60ddae49824632ac7351b19e3953c2b",
+  "harness_sha256": "789858ef27f414caadd99657a6b1254251bb6dc2be395ac2f896acbd6d01e320",
+  "binary_sha256": "15ad8ad644c92fd9248020c19b1fad9d4f62e6dceef8d4bc43f1415a8ff4e028",
+  "overall_dispatch_and_completion_budget_seconds": 180,
+  "maximum_parallelism": 4,
+  "new_application_event_writes": false,
+  "client_path": "fresh CLI cluster events get using node0 persisted member context; no explicit refresh override",
+  "persisted_get_connect_timeout_ms": 10000,
+  "persisted_get_io_timeout_ms": 30000,
+  "verify_rpc_io_timeout_ms": 1000,
+  "overlap": "concurrent with diagnostic growth1223 full-ledger verification; adds diagnostic SSH/process/read load",
+  "per_command_timeout_seconds_max": 30,
+  "ssh_timeout_grace_seconds": 20,
+  "sample_scope": "only retained20 baseline111unverified samples; cannot classify omitted91 or retroactively resolve original failure"
+}

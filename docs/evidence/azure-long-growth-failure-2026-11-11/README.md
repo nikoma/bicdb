@@ -1,0 +1,42 @@
+# Azure 4→5 growth failure — November 11, 2026
+
+**The native comparison failed during growth. It did not establish a throughput gain or production qualification.** The preserved runtime is BicDB **1.0.461-beta**, source `b05385d4b033edf0db03f3eccf4bdd86f7c8eddb`, optimized default-feature release artifact SHA256 `15ad8ad644c92fd9248020c19b1fad9d4f62e6dceef8d4bc43f1415a8ff4e028`. Later documentation/source versions do not change which bytes ran.
+
+Five isolated Azure VMs had distinct guest machine IDs, two vCPUs/~8 GiB RAM each, dedicated 128 GiB Premium data disks with host caching None, ext4/noatime, and fsync enabled. Physical-host separation was not verified. The command requested four then five nodes, RF3, 64 ranges, 256 MiB paged buffer pools, `server_paged`, 100,000,000,000 declared capacity bytes per node, 16 native workload workers, 1 KiB payloads, 900-second traffic windows, a 5,000 ms RPC timeout, and a 1,000,000-operation ceiling. The client ran on the first data VM; its fsynced ACK ledger was written at phase end. There was no concurrent external append workload. This was a small, growing corpus, without an 8 GiB preload or independent RPC client.
+
+| Recorded traffic | Successful operations | Failed operations | Acknowledged writes | Successes/s | Write p50 / p95 / p99 |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Steady four, 907.004 s | 7,592 | 0 | 3,804 | 8.370 | 3.097 / 8.004 / 11.136 s |
+| Growing four→five, 927.504 s | 2,746 | 404 | 1,223 | 2.961 | 4.863 / 15.488 / 21.462 s |
+
+Rates count successful reads plus writes. Latency percentiles include successful calls only; individual successful-call latency samples and failed-call latencies are not retained by this workload, so the reported percentiles cannot be independently recomputed from this bundle. The configured window can overrun while in-flight calls drain; ACK verification occurs afterward.
+
+The growth command then returned **`acknowledged event verification failed`** for two known ACK IDs. The verifier collapses absent values, value mismatches, and read/transport errors into `unverified_writes` (`crates/bicdb-cli/src/cluster_events_command.rs` at the runtime revision). This initial result alone does not establish permanent data loss. All 404 operation failures are counted, but only 20 bounded error samples were retained by the native workload; it does not provide a full failed-attempt ledger. Samples include resource-temporarily-unavailable, connection reset, no reachable event member, and range-leader recovery-not-complete errors.
+
+The harness stopped its exact owned processes. The completed report contains only the steady-four result; the failed growth output is preserved in the original report error and separately extracted without changing it. No steady-five, planned process-fault, recovered-five, or final harness all-ledger phase executed. This therefore supplies no completed four-versus-five capacity comparison. Different data volumes and histories also confound the two recorded windows.
+
+One additional timestamped read-only local status observation during growth recorded 28 completed relocations to node five, totaling 2,194,913 snapshot bytes, while other moves were unfinished. Its local liveness metrics simultaneously classified all five nodes dead and all ranges unavailable. This establishes recorded movement progress and degraded status, not a completed rebalance or an exact service outage interval. Zero estimated byte/QPS fields in populated range descriptors do not prove live load-aware balancing.
+
+Before any diagnostic restart, all five stopped database directories, native ACK ledgers, server logs, and process records were exported, with matching remote/controller SHA256. Public receipts retain digests and sizes; archives containing task-generated database identity material remain private. Their file sizes are reported separately. CPU/RSS/I/O samples are compressed losslessly and describe sampled process counters; they do not isolate the cause of write volume or latency. Growing metadata catalogs, relocation work, client placement, SSH observation overhead, and storage activity are possible confounders, not diagnosed causes.
+
+The subsequent bounded diagnostic restart uses the same five persisted roots, binary and storage settings, generates no new application/event writes, preserves the original failure, reads the two IDs through all five member client contexts, and checks both full ACK ledgers. Recovery, background metadata updates, and relocation activity continue. These contexts route requests to the current range owner; matching results do not prove five physical copies. Its outcomes are recorded separately in `diagnosis-summary.json`, `diagnosis-point-reads.json`, and `diagnosis-ledger-checks.json`. A later successful read does not turn the original growth trial into a pass.
+
+The diagnostic `cluster events verify` command explicitly refreshes its client before iterating every ledger key, using a 1,000 ms per-RPC I/O timeout setting (not an overall per-key deadline). A returned `Some(value)` equal to the expected full payload passes; a transport/recovery error, missing value, or mismatch all increment `unverified`. The baseline command checked all 3,804 known ACKs: 3,693 matched and 111 were unverified, returning exit 1 after 850.864 seconds. Only the first 20 unverified IDs are retained, not the complete 111-ID list; the full original ACK ledger remains included. This is a failed read-verification pass and does not establish 111 lost records.
+
+Run the portable evidence check from the repository root:
+
+```sh
+python3 scripts/verify-azure-long-growth-failure-evidence.py
+```
+
+This checks artifact digests, executed-helper provenance, original failure/phase boundaries, ACK ledger identities/counts, archive receipts, and consistency of later diagnostic claims. It replays no database operations and proves neither historical execution independently nor durability under untested failures. The binary, private databases and cloud credentials are excluded. Public evidence contains generated test keys and immutable payloads only. `manifest.json` identifies the retained public bytes.
+
+The diagnostic policy gate did not converge within 300 seconds. Both original IDs subsequently matched the expected complete payload through all five routed member contexts (10 matching reads). Both full-ledger commands completed with structured unsuccessful results within their declared bounds; see the exact command responses. The combined unverified predicates establish neither permanent loss nor successful full reconciliation.
+
+The growth diagnostic check returned a structured failure: all 1,223 ACKs checked, 1,205 matched, 18 unverified, all 18 IDs retained, after 214.847 seconds. Neither full-ledger command timed out. Combined, 4,898 exact matches and 129 unverified predicate failures were observed across disjoint ledgers; this is not a count of lost records. The later complete 18-ID growth list has no overlap with the original two failed IDs.
+
+One additional raw classification attempt was invalid for engine-availability analysis: the final completion check was missed before launch, and growth verification had already ended 12.950243 seconds earlier. All 20 fresh Get calls occurred within the existing helper owned-cleanup window. Its raw ten matches/ten connection-refused results and erroneous concurrent-intent annotation are retained, but all calls are explicitly cleanup-confounded and contribute no availability or commit-count claim. No additional restart or retry followed. Exact per-node SIGINT times were not recorded; the conservative cleanup window is bounded by the second ledger completion and final cleanup summary.
+
+Separate [read-only original cold-catalog reconciliation](../azure-cold-catalog-reconciliation-2026-11-11/README.md) found exact payloads in retained Applied commands at/below resolved watermarks for all 5,027 ACK identities. That command/catalog evidence does not establish row visibility, cryptographic quorum evidence, physical-host independence, or a passing live verification.
+
+Final post-diagnosis cold topology files were captured after sequential owned-engine shutdown. Their differing generations and later connection-refused relocation failures are cleanup-confounded, not new live-run failure counts. The separately retained bounded 300-second status snapshot records three failed moves (257/258/259, connection reset); final cold snapshots preserve later filesystem state only.

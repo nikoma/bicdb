@@ -880,6 +880,8 @@ impl BicDb {
             catalog_admission: Arc::clone(&self.catalog_admission),
             catalog_actor_scope,
             statement_write_conflicts: false,
+            statement_snapshot_acquired: false,
+            statement_snapshot_deferred: false,
             state: TxState::Pending,
             outcome_observer: OnceLock::new(),
             write_receipts: None,

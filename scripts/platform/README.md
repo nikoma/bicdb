@@ -2,7 +2,7 @@
 
 `scale-cluster.py` uses the public CLI and the immutable cluster-event data path.
 It bootstraps RF=3 with fsync enabled, joins nodes while append/read traffic is
-running, waits for placement, measures steady traffic at 3, 5 and 9 nodes,
+running, waits for placement, measures steady traffic at selected node counts,
 kills one of **its own** server processes, restarts it, and rechecks every
 acknowledged write from every phase after recovery.
 
@@ -55,7 +55,30 @@ by promotion, bounded range movement and leader recovery. The declared
 capacity is 1 TiB per node; this short run does not measure storage capacity.
 Adjust the workload duration upward if growth outlasts the traffic window.
 
-`--sizes 3` or `--sizes 3,5` permits a smaller experiment. A useful qualification
+`--sizes 4,5` runs a four-node baseline and admits exactly one new node while
+traffic runs. Historical `--sizes 3`, `--sizes 3,5` and `--sizes 3,5,9` remain
+supported; all sizes must be an increasing selection of 3,4,5,9. Supply only
+the selected maximum number of hosts. For example:
+
+```sh
+python3 scripts/platform/scale-cluster.py --inventory /path/to/five-hosts.json \
+  --binary /path/to/immutable/bicdb --build-label release \
+  --source-commit FULL_SOURCE_COMMIT --output /path/to/new-four-to-five-results \
+  --sizes 4,5 --ranges 64 --seconds 900 --failure-seconds 120 \
+  --concurrency 32 --max-operations 1000000
+```
+
+This is a runnable **event-path** experiment, not the complete physical
+qualification plan. `--require-independent-qualification` fails closed before
+accessing a binary or host; reports always state `qualification_status=not_qualified`. The workload and its end-of-phase fsynced ledger run on
+the first data node; the controller copies that ledger after each phase. It
+does not fsync each acknowledgment on an independent machine before proceeding,
+preload an 8 GiB corpus, target every relocation failure boundary, or perform
+the unchanged-SQL acceptance case. Those require a separate client/fault driver.
+See the [isolated Azure execution plan](../../docs/scale-out-experiment-2026-11-11.md)
+for concrete infrastructure, current blockers and evidence requirements.
+
+A useful qualification
 run uses a release build, repeated trials, substantially more data than this
 default smoke workload, and machine/storage/network envelopes appropriate to
 the intended deployment. This tool does not certify a multi-terabyte profile,
@@ -90,6 +113,12 @@ successful-operation p50/p95/p99/max latency, failed-operation counts and error
 samples. Resource artifacts contain `/proc` CPU, RSS and physical I/O counters;
 the report summarizes per-node peak RSS, sampled CPU percentage and I/O deltas.
 Resource CPU percentage can exceed 100% for a multi-core process.
+Reports state the client/ledger placement and retain
+`physical_failure_domains_verified=false`; SSH machine-ID checks do not prove
+physical separation. A timestamped timeline records join registration, server
+launch, traffic windows, capacity convergence, kill request/return and restart.
+Kill return is not proof of the service's recovery time. Report checkpoints
+are serialized between worker threads and atomically replaced after file fsync.
 `--rpc-timeout-ms` sets the measured client's per-call I/O timeout (100–5000 ms,
 default 1000). The emitted report records it. A heavily loaded shared-host debug
 run may need 5000 ms; keep failed operations visible and do not interpret that
@@ -125,3 +154,73 @@ Harness validation:
 python3 -m unittest discover -s scripts/platform -p 'test_*.py'
 node --test examples/platform/notebook/*.test.mjs
 ```
+
+## Independent acknowledgment ledger for exploratory Azure trials
+
+`external-event-ledger.py` runs on a controller outside the five data VMs. It
+uses existing `cluster events append/get` commands over pinned SSH; it never
+copies member topology or certificates. The actual RPC client still runs on
+members, and every operation pays SSH/process overhead plus external-ledger
+fsync. Its numbers **cannot certify engine throughput scaling**. It is a separate
+write/verification phase from the existing lower-overhead mixed workload.
+
+Provision the cluster first with the ordinary runner. Build an owner-only
+inventory naming its existing member contexts (not fresh database directories):
+
+```json
+{"format":1,"members":[
+  {"ssh":"bench-n1","binary":"/tmp/bicdb-scale-RUN-n0/bicdb",
+   "member_root":"/tmp/bicdb-scale-RUN-n0/db"}
+]}
+```
+
+Include other live members if desired; member selection is a gateway choice,
+not application-managed physical shard routing. Host keys must already be pinned.
+Run controller traffic while the separate growth/fault orchestrator operates:
+
+```sh
+python3 scripts/platform/external-event-ledger.py --inventory /private/members.json \
+  traffic --namespace isolated-RUN --output /evidence/new-phase \
+  --seconds 60 --concurrency 4 --max-operations 10000
+
+python3 scripts/platform/external-event-ledger.py --inventory /private/members.json \
+  verify --ledger /evidence/new-phase/ledger.jsonl
+```
+
+Each unique attempt is fsynced before its RPC dispatch. After a server response,
+its ACK identity and payload digest are fsynced before the driver reports success.
+Timeouts, malformed responses and transport failures are recorded as uncertain,
+never silently treated as rollback. Retries must retain the same operation ID,
+key, namespace and value; changed identities are refused before dispatch. The
+verifier rechecks every unique acknowledged payload, rejects torn/malformed ledger
+records and keeps read unavailability separate from a successful reconciliation.
+A failed ledger write fences later dispatch; a failed run may leave only its raw
+ledger and exception, which must be preserved rather than relabeled complete.
+
+The driver does not automatically replay uncertain appends, inject relocation
+faults, implement stock SQL, certify physical failure domains or prove a durable
+cluster snapshot. The independently durable controller itself must survive the
+chosen data-node fault, and evidence must be exported before its teardown. It
+emits `qualification_status=not_qualified`, `throughput_certification=false` and
+explicit client/ledger placement. Eight regression tests exercise acknowledgment
+ordering, ambiguous responses, persistence failures, stable retry identities,
+reconciliation and SSH quoting.
+
+For an explicit paged-store trial, pass the storage and placement declarations:
+
+```sh
+python3 scripts/platform/scale-cluster.py --inventory /private/hosts.json \
+  --binary /immutable/bicdb --output /evidence/new-run --sizes 4,5 \
+  --storage-mode server_paged --buffer-pool-bytes 268435456 \
+  --node-capacity-bytes 100000000000
+```
+
+The runner passes these as `env` argv entries to init, join, serve, workload and
+other engine commands. It reads every active node's persisted `db/format.json`
+after each convergence checkpoint and refuses an explicit mode mismatch before
+starting the next traffic phase. Reports retain requested mode/pool, environment,
+capacity and persisted-format checkpoints. The pool value is an explicit runtime
+request; `format.json` proves storage mode, not effective pool telemetry. Declared
+capacity must fit the actual test volume; it is not a measured data-set size.
+Omitting storage flags preserves historical inherited defaults, which may be
+`embedded_memory`; never relabel an old unspecified run as paged evidence.

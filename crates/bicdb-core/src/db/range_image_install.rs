@@ -2,6 +2,7 @@
 //! range configuration, data-catalog floor, or strong-read permission.
 use super::range_image_native::{native_key, MAX_NATIVE_RECEIPT_BYTES};
 use super::*;
+use crate::distribution::{ClusterId, ClusterNodeId, RangeId};
 use crate::distribution_range_consensus::{
     ImageInstallPurpose, NativeImageInstallRole, TargetImageInstallFence,
 };

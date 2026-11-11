@@ -1230,3 +1230,6 @@ fn native_completion_actual_tls_canceled_socket_after_real_persistence_recovers_
     // This preserves an UNKNOWN client outcome until fresh readonly resolution;
     // no activation, new-write, StrongGet or physical-fault qualification.
 }
+
+#[cfg(test)]
+mod activation_smoke;

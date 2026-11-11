@@ -4111,9 +4111,7 @@ impl<'db> SqlSession<'db> {
             memo.insert(key, std::rc::Rc::clone(&built));
             built
         });
-        let mut frame = RoutineFrame::from_template_with_defaults(&template, args, |expr| {
-            self.eval_routine_default_expr(expr)
-        })?;
+        let mut frame = RoutineFrame::from_template(&template, args)?;
         frame.oracle_statement_rollback = ir.oracle_statement_rollback;
         frame.oracle_procedural_evaluation = ir.oracle_procedural_evaluation;
         frame.oracle_error_diagnostics = ir.oracle_error_diagnostics.clone();

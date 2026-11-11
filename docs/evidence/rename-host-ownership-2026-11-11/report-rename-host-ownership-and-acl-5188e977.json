@@ -1,0 +1,151 @@
+{
+  "source": "5188e977d01b307492673ec33287586d77aee863",
+  "scope": "Private focused ownership and permission batch. Actual negative controls retained: ece30483 leaks changed creation defaults onto renamed table; 21e26367 fixes that but fails valid leading ALTER DEFAULT PRIVILEGES migration batch; 2cbcf517 leaves retained host scope closing after demoted commit refusal. This head leaves multi-statement default privileges to existing SQL-safe split dispatcher and routes standby commit errors through shared scope reopening. Original assertions unchanged. Checks all 9 host lifecycle tests, native reservation races, rename and default ACL regressions, read-only and snapshot behavior, native grants/isolation, and replication/fault regressions. Runtime host admission foundation only; full SQL scoped producer/metadata/type/routine/Describe bridge remains OPEN. Not full workspace, VM, application acceptance, deployed binary, or production qualification. At 0ca35a4d the original role-fence test advances past reopened access, then actually fails because internal.update can buffer on a standby. This source adds the same writable-node gate to common host-actor upsert/delete buffering, without changing client or authenticated replica actors. Retains all original test assertions. Prior ACL/SQL commands did not run at 0ca because the first Core group stopped the batch.",
+  "started_unix": 1794394681.7159755,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rename_default_privileges"
+      ],
+      "started_unix": 1794394681.7163637,
+      "exit": 0,
+      "finished_unix": 1794394796.158953
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "catalog_host_scope",
+        "--test",
+        "catalog_scope_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794394796.1591218,
+      "exit": 0,
+      "finished_unix": 1794394832.7867029
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794394832.7869022,
+      "exit": 0,
+      "finished_unix": 1794394964.6964278
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rename_pending_composites",
+        "--test",
+        "table_rename_views",
+        "--test",
+        "schema_table_rename",
+        "--test",
+        "session_statement_snapshots",
+        "--test",
+        "read_only_transactions"
+      ],
+      "started_unix": 1794394964.6966789,
+      "exit": 0,
+      "finished_unix": 1794394997.57159
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "sql",
+        "alter_default_privileges",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794394997.5718696,
+      "exit": 0,
+      "finished_unix": 1794395004.2889266
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "mutation_grants",
+        "--test",
+        "transaction_isolation"
+      ],
+      "started_unix": 1794395004.2891576,
+      "exit": 0,
+      "finished_unix": 1794395006.039492
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "live_replication",
+        "--test",
+        "replication_durable_frames",
+        "--test",
+        "replication_journal"
+      ],
+      "started_unix": 1794395006.0397224,
+      "exit": 0,
+      "finished_unix": 1794395053.3666143
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794395053.366878
+}

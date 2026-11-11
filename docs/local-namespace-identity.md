@@ -39,6 +39,15 @@ strict local metadata equality includes it. Whole-database byte copies retain th
 copied physical history, so this UUID alone is no global instance/authentication
 identifier.
 
+This API does not provide a donor-to-recipient identity mapping for logical
+replication. A journal which refers to the donor's UUID cannot use it directly as
+the recipient's physical backing identity. Such a consumer needs a separate,
+durable and authenticated binding from the logical origin and backing generation
+to the actual recipient UUID, scoped to the appropriate database incarnation and
+restore history. Names, SQL OIDs and retired aliases do not establish that binding.
+Until it exists and is qualified, local journal replay evidence does not establish
+safe replicated journal replay or promotion.
+
 The capability is optional. Ordinary create/open paths preserve the legacy `None`
 encoding, omitted from serialized metadata. Activation changes the persistent
 format: older binaries refuse it before modifying database files. A compatibility

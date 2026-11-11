@@ -1,0 +1,125 @@
+{
+  "binary_release_produced": false,
+  "compile_run": "selected-key-decision",
+  "distinct_passing_tests": 10,
+  "earlier_source_deltas": [
+    {
+      "path": "source-d77f4743.patch.gz",
+      "sha256": "42f06733f38d6267aa64ec77d1082c65226e4790c6fc321cc813ac4327384d67",
+      "source_revision": "d77f474397c5beeea42e26bbde06552dd0099c17"
+    },
+    {
+      "path": "source-958d087d.patch.gz",
+      "sha256": "88e5c99c3c1993d508eb2950c79bb2245f9c913e4f00d0b8798f623d377e6de7",
+      "source_revision": "958d087d522e53a32b97cc1daa74f69250e549db"
+    }
+  ],
+  "green_database_archive_retained": false,
+  "incoming_activate_rpc_tested": false,
+  "late_prepared_after_one_endpoint_loss_tested": true,
+  "main_merged": false,
+  "minimum_available_bytes": 21556211712,
+  "native_activation_tested": true,
+  "new_application_write_after_activation_tested": false,
+  "passing_executions": 10,
+  "passing_test_ids": [
+    "db::range_image_native::rf3_fixture::native_historical_tls::activation_smoke::actual_native_completion_quorum_rejects_duplicate_and_original_cancellation",
+    "db::range_image_native::rf3_fixture::native_historical_tls::activation_smoke::actual_native_same_voter_activation_releases_only_after_durable_decision_and_never_returns_ready",
+    "db::range_image_native::rf3_fixture::native_historical_tls::activation_tests::actual_late_prepared_follower_after_two_activations_and_one_endpoint_loss_completes",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_canceled_socket_after_real_persistence_recovers_by_readonly_status",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_sequential_replicas_keep_frozen_pins_and_duplicate_sha",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_wrong_actor_cannot_complete_but_current_voter_can_observe",
+    "db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_actual_quorum_publishes_before_catalogue_and_reuses_original_audit",
+    "db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_immutable_history_corruption_cannot_mint_a_receipt",
+    "db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_missing_record_and_reused_pre_quorum_context_refuse",
+    "db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_strict_cold_open_reissues_only_actual_native_record"
+  ],
+  "patch_sha256": "2be742eb9de04c9e608eafd0a69c705fbaa3a6f39e2cbea5f29bc42fd7cbf41f",
+  "physical_failure_tested": false,
+  "production_qualified": false,
+  "protected_native_decision_cold_reissue_tested": true,
+  "public_patch_base": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "runs": [
+    {
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "selected-key-decision",
+      "passed_test_ids": [
+        "db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_immutable_history_corruption_cannot_mint_a_receipt",
+        "db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_actual_quorum_publishes_before_catalogue_and_reuses_original_audit",
+        "db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_missing_record_and_reused_pre_quorum_context_refuse",
+        "db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_strict_cold_open_reissues_only_actual_native_record"
+      ],
+      "source_revision": "7b36642b444dc57051dde1fbb369f15ddb3cc3e1"
+    },
+    {
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "decision-activation-controls",
+      "passed_test_ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::activation_smoke::actual_native_completion_quorum_rejects_duplicate_and_original_cancellation",
+        "db::range_image_native::rf3_fixture::native_historical_tls::activation_smoke::actual_native_same_voter_activation_releases_only_after_durable_decision_and_never_returns_ready"
+      ],
+      "source_revision": "7b36642b444dc57051dde1fbb369f15ddb3cc3e1"
+    },
+    {
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "decision-late-control",
+      "passed_test_ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::activation_tests::actual_late_prepared_follower_after_two_activations_and_one_endpoint_loss_completes"
+      ],
+      "source_revision": "7b36642b444dc57051dde1fbb369f15ddb3cc3e1"
+    },
+    {
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "decision-incoming-complete-controls",
+      "passed_test_ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_canceled_socket_after_real_persistence_recovers_by_readonly_status",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_sequential_replicas_keep_frozen_pins_and_duplicate_sha",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_wrong_actor_cannot_complete_but_current_voter_can_observe"
+      ],
+      "source_revision": "7b36642b444dc57051dde1fbb369f15ddb3cc3e1"
+    },
+    {
+      "exit_code": 101,
+      "failed_test_ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::activation_rplusone::activated_anchor_keeps_r1_after_new_ack_and_late_prepared_follower_activates"
+      ],
+      "name": "activated-rplusone",
+      "passed_test_ids": [],
+      "source_revision": "7b36642b444dc57051dde1fbb369f15ddb3cc3e1"
+    },
+    {
+      "exit_code": 101,
+      "failed_test_ids": [
+        "db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_strict_cold_open_reissues_only_actual_native_record"
+      ],
+      "name": "d77f4743-native-decision",
+      "passed_test_ids": [
+        "db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_immutable_history_corruption_cannot_mint_a_receipt",
+        "db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_actual_quorum_publishes_before_catalogue_and_reuses_original_audit",
+        "db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_missing_record_and_reused_pre_quorum_context_refuse"
+      ],
+      "source_revision": "d77f474397c5beeea42e26bbde06552dd0099c17"
+    },
+    {
+      "exit_code": 101,
+      "failed_test_ids": [
+        "db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_strict_cold_open_reissues_only_actual_native_record"
+      ],
+      "name": "corrected-native-decision",
+      "passed_test_ids": [
+        "db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_immutable_history_corruption_cannot_mint_a_receipt",
+        "db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_actual_quorum_publishes_before_catalogue_and_reuses_original_audit",
+        "db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_missing_record_and_reused_pre_quorum_context_refuse"
+      ],
+      "source_revision": "958d087d522e53a32b97cc1daa74f69250e549db"
+    }
+  ],
+  "source_revision": "7b36642b444dc57051dde1fbb369f15ddb3cc3e1",
+  "source_version": "1.0.471-beta",
+  "strong_get_tested": false,
+  "worktree": "/tmp/bicdb-native-activation-participants"
+}

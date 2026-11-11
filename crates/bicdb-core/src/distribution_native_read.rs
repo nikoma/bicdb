@@ -17,6 +17,11 @@ pub(crate) fn canonical_range(range: &RangeDescriptor) -> RangeDescriptor {
     let mut result = range.clone();
     result.approximate_bytes = 0;
     result.approximate_qps = 0;
+    // Learner placement grants no vote/read permission. The epoch, leader,
+    // span and current voter identities/roles remain exact.
+    result
+        .replicas
+        .retain(|r| r.role == RangeReplicaRole::Voter);
     result.replicas.sort_by_key(|r| r.id);
     result
 }
@@ -137,11 +142,9 @@ pub(crate) struct LocalNativeRangeReadObservation {
 }
 impl LocalNativeRangeReadObservation {
     pub(crate) fn from_actual_service(
-        request: &NativeRangeReadRequest,
-        physical: crate::db::NativeRangeReadPhysical,
-        catalogue: crate::distribution_range_consensus::NativeRangeReadCatalogue,
-        cancellation: CancellationToken,
+        evidence: crate::distribution_data::ActualServiceNativeReadEvidence,
     ) -> Result<Self> {
+        let (request, physical, catalogue, cancellation) = evidence.into_parts();
         let cancellation = request.cancellation(&cancellation)?;
         if !physical.matches_scope(&request.scope)? {
             return Err(invalid("actual local observation scope differs"));

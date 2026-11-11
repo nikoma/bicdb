@@ -51,6 +51,9 @@ impl NativeRangeReadPhysical {
     pub(crate) fn range_index(&self) -> u64 {
         self.point.range_index
     }
+    pub(crate) fn native_admission(&self) -> &NativeRecoveryAdmission {
+        &self.native
+    }
     pub(crate) fn require_lifetime(&self) -> Result<()> {
         self.cancellation.check()?;
         self.stamp.require_current()?;
@@ -211,6 +214,7 @@ impl BicDb {
         &self,
         scope: &NativeRangeReadScope,
         catalogue: &NativeRangeReadCatalogue,
+        native: NativeRecoveryAdmission,
         parent: &CancellationToken,
     ) -> Result<NativeRangeReadPhysical> {
         parent.check()?;
@@ -219,15 +223,7 @@ impl BicDb {
             .range_mutation_gate()
             .observe_native_read_stamp(scope.range.id)?;
         let _journal = self.try_native_image_journal()?;
-        let birth = self
-            .read_native_birth()?
-            .ok_or_else(|| invalid("native read has no actual birth"))?;
-        let native = self.native_recovery_admission(
-            &scope.cluster_id,
-            scope.bootstrap_id,
-            &birth.spec.node_id,
-            birth.spec.member_incarnation,
-        )?;
+        native.require_current(self)?;
         let point = self.native_read_physical_point(scope, catalogue, parent)?;
         if native.birth_id() != point.birth_id || native.birth_sha256() != point.birth_sha256 {
             return Err(invalid(

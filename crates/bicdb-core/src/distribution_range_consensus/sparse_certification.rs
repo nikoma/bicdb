@@ -94,6 +94,9 @@ impl SparseHistoricalDecision {
     pub(super) fn command_checksum_sha256(&self) -> &str {
         &self.command.checksum_sha256
     }
+    pub(super) fn record_checksum_sha256(&self) -> &str {
+        &self.checksum_sha256
+    }
     fn from_actual_decision(
         decision: &HistoricalCommandDecision,
         role: &RecoveryRoleAdmission,

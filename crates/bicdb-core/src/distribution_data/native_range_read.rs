@@ -2,6 +2,32 @@
 //! or recovery session is acquired here. Caller scope remains untrusted.
 use super::*;
 use crate::distribution_native_read::{LocalNativeRangeReadObservation, NativeRangeReadRequest};
+/// Only this SAME-service producer can construct the owned evidence bundle.
+/// Callers cannot retag separately retained physical/catalogue tokens.
+#[derive(Debug)]
+pub(crate) struct ActualServiceNativeReadEvidence {
+    request: NativeRangeReadRequest,
+    physical: crate::db::NativeRangeReadPhysical,
+    catalogue: crate::distribution_range_consensus::NativeRangeReadCatalogue,
+    cancellation: CancellationToken,
+}
+impl ActualServiceNativeReadEvidence {
+    pub(crate) fn into_parts(
+        self,
+    ) -> (
+        NativeRangeReadRequest,
+        crate::db::NativeRangeReadPhysical,
+        crate::distribution_range_consensus::NativeRangeReadCatalogue,
+        CancellationToken,
+    ) {
+        (
+            self.request,
+            self.physical,
+            self.catalogue,
+            self.cancellation,
+        )
+    }
+}
 impl ClusterDataNodeService {
     pub(crate) fn observe_current_native_range(
         &self,
@@ -17,14 +43,22 @@ impl ClusterDataNodeService {
                 "native read source belongs to another actual service",
             ));
         }
+        let native = database.native_recovery_admission(
+            &self.cluster_id,
+            request.scope.bootstrap_id,
+            &self.node_id,
+            lineage.local_member_incarnation(),
+        )?;
         let catalogue = self.range_writes.observe_native_read_catalogue(
             &request.scope,
             lineage.range_index(),
             database.data_path(),
+            &native,
         )?;
         let physical = database.observe_native_range_read_physical(
             &request.scope,
             &catalogue,
+            native,
             &cancellation,
         )?;
         catalogue.require_current(
@@ -32,14 +66,15 @@ impl ClusterDataNodeService {
             &request.scope,
             physical.range_index(),
             database.data_path(),
+            physical.native_admission(),
         )?;
         cancellation.check()?;
-        LocalNativeRangeReadObservation::from_actual_service(
-            request,
+        LocalNativeRangeReadObservation::from_actual_service(ActualServiceNativeReadEvidence {
+            request: request.clone(),
             physical,
             catalogue,
             cancellation,
-        )
+        })
     }
     pub(crate) fn revalidate_current_native_range(
         &self,
@@ -48,6 +83,10 @@ impl ClusterDataNodeService {
         observation.require_lifetime()?;
         let database = try_database_read(&self.db)?;
         let scope = observation.scope();
+        observation
+            .physical()
+            .native_admission()
+            .require_current(&database)?;
         if self.cluster_id != scope.cluster_id || self.node_id != observation.facts().node_id {
             return Err(data_error(
                 "native read observation belongs to another service",
@@ -58,6 +97,7 @@ impl ClusterDataNodeService {
             scope,
             observation.facts().range_index,
             database.data_path(),
+            observation.physical().native_admission(),
         )?;
         observation
             .physical()

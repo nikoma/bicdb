@@ -38,6 +38,7 @@ impl NativeRangeReadCatalogue {
         scope: &NativeRangeReadScope,
         native_r: u64,
         data_path: &Path,
+        native: &crate::db::NativeRecoveryAdmission,
     ) -> Result<()> {
         if self.store_open_id != store.open_id
             || self.range_id != scope.range.id
@@ -46,7 +47,7 @@ impl NativeRangeReadCatalogue {
         {
             return Err(invalid("actual native read store/open/path changed"));
         }
-        let current = store.observe_native_read_catalogue(scope, native_r, data_path)?;
+        let current = store.observe_native_read_catalogue(scope, native_r, data_path, native)?;
         if self.checksum != current.checksum
             || self.decisions != current.decisions
             || self.recovered != current.recovered
@@ -62,10 +63,12 @@ impl RangeWriteStore {
         scope: &NativeRangeReadScope,
         native_r: u64,
         data_path: &Path,
+        native: &crate::db::NativeRecoveryAdmission,
     ) -> Result<NativeRangeReadCatalogue> {
         scope.validate()?;
         self.require_durable_recovery_catalog()?;
         let range = scope.range.id;
+        self.require_sparse_native_binding(range, native)?;
         self.require_no_image_install(range)?;
         if self.root != data_path
             || self.catalog.cluster_id != scope.cluster_id
@@ -154,6 +157,15 @@ impl RangeWriteStore {
         for (index, checksum) in self.sparse_irreversible_commands(range)? {
             insert(index, NativeReadCatalogueDecision::Applied(checksum))?;
         }
+        let sparse_record_commitments = self
+            .catalog
+            .sparse_committed_decisions
+            .as_ref()
+            .and_then(|ranges| ranges.get(&range))
+            .into_iter()
+            .flat_map(|entries| entries.iter())
+            .map(|(index, record)| (*index, record.record_checksum_sha256()))
+            .collect::<BTreeMap<_, _>>();
         let commitment = (
             "bicdb-native-read-catalogue-v1",
             &self.catalog.cluster_id,
@@ -162,6 +174,7 @@ impl RangeWriteStore {
             self.catalog.recovery_fences.get(&range),
             self.catalog.native_image_bases.get(&range),
             &decisions,
+            &sparse_record_commitments,
         );
         validate_native_json_size(&commitment, 4 * 1024 * 1024)?;
         struct HashWriter(Sha256);

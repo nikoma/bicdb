@@ -228,6 +228,42 @@ fn native_read_observation_scope_cancellation_and_store_replacement_are_not_perm
         fixture.request.scope.checksum_sha256().unwrap()
     );
     load_observation.require_current(fixture.service()).unwrap();
+    let mut learner_only = fixture.request.clone();
+    learner_only
+        .scope
+        .range
+        .replicas
+        .push(crate::distribution::RangeReplica {
+            id: crate::distribution::ReplicaId::new(999).unwrap(),
+            node_id: crate::ClusterNodeId::new("observation-only-learner").unwrap(),
+            role: crate::RangeReplicaRole::Learner,
+        });
+    let learner = fixture
+        .service()
+        .observe_current_native_range(&learner_only, &CancellationToken::uncancelable())
+        .unwrap();
+    assert_eq!(
+        learner.facts().scope_sha256,
+        fixture.request.scope.checksum_sha256().unwrap()
+    );
+    learner.require_current(fixture.service()).unwrap();
+    let added = learner_only.scope.range.replicas.last_mut().unwrap();
+    added.role = crate::RangeReplicaRole::Voter;
+    learner_only.scope.members.insert(
+        added.node_id.clone(),
+        RecoveryMemberIdentity {
+            incarnation: 1,
+            active_certificate_sha256: None,
+            pending_certificate_sha256: None,
+        },
+    );
+    assert!(
+        fixture
+            .service()
+            .observe_current_native_range(&learner_only, &CancellationToken::uncancelable())
+            .is_err(),
+        "promoting the learner needs real native configuration authority"
+    );
     let parent = CancellationToken::uncancelable().child();
     let cancelled = fixture
         .service()

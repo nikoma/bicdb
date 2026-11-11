@@ -206,6 +206,25 @@ impl RangeRecoveryRuntime {
         let mut failures = BTreeMap::new();
         loop {
             token.check()?;
+            if round.has_matching_majority()? {
+                // Close the factual collection after draining all results
+                // already delivered. A known higher/conflicting point vetoes;
+                // a stalled minority never holds the majority verdict hostage.
+                while let Ok((node, result)) = results.try_recv() {
+                    outstanding
+                        .remove(&node)
+                        .ok_or_else(|| invalid("unexpected native read drain result"))?;
+                    match result {
+                        Ok(observation) => round.record(observation)?,
+                        Err(error) => {
+                            failures.insert(node, error.to_string());
+                        }
+                    }
+                }
+                if round.has_matching_majority()? {
+                    break;
+                }
+            }
             while outstanding.len() < workers {
                 let Some((node, attempt)) = queue.pop_front() else {
                     break;
@@ -256,10 +275,11 @@ impl RangeRecoveryRuntime {
             }
         }
         drop(tx);
+        worker_token.cancel();
         // Local catalogue/history revalidation is also actual IO: run it in an
         // owned worker, retaining this same context through its actual drain.
         let runtime = Arc::clone(self);
-        let finish_token = worker_token.clone();
+        let finish_token = token.clone();
         let (out, result) = mpsc::sync_channel(1);
         std::thread::Builder::new()
             .name("native-read-candidate".into())

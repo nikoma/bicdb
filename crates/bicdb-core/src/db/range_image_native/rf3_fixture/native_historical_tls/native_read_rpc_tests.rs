@@ -63,7 +63,7 @@ fn native_read_rpc_actual_tls_fresh_metadata_unadmitted_candidate() {
     assert_eq!(candidate.business_request_id(), business);
     assert_eq!(candidate.challenge(), challenge);
     assert_eq!(candidate.scope().range.leader, node("n1"));
-    assert_eq!(candidate.matching_member_ids().len(), 3);
+    assert!(candidate.matching_member_ids().len() >= 2);
     assert_eq!(candidate.point().0, 1);
     assert_ne!(candidate.point().1, candidate.point().2);
     fixture.wait_idle();
@@ -187,4 +187,25 @@ fn native_read_rpc_actual_local_io_context_outlives_canceled_collector() {
     barrier.release();
     fixture.wait_idle();
     assert_eq!(runtime.test_active_context_count(), 0);
+}
+
+#[test]
+fn native_read_rpc_actual_tls_majority_returns_while_minority_worker_retains_context() {
+    let fixture = live_fixture();
+    let parent = CancellationToken::uncancelable();
+    let business = Uuid::now_v7();
+    let metadata = fresh_metadata(&fixture, business, &parent);
+    fixture.read_hold.armed.store(true, Ordering::SeqCst);
+    let candidate = fixture.runtimes[&node("n1")]
+        .acquire_native_read_candidate(metadata, business, Uuid::now_v7(), &parent)
+        .unwrap();
+    candidate.require_lifetime().unwrap();
+    assert_eq!(candidate.point().0, 1);
+    assert!(candidate.matching_member_ids().contains(&node("n1")));
+    assert!(candidate.matching_member_ids().contains(&node("n2")));
+    assert!(fixture.read_hold.entered.load(Ordering::SeqCst));
+    assert!(fixture.runtimes[&node("n1")].test_active_context_count() > 0);
+    fixture.read_hold.released.store(true, Ordering::SeqCst);
+    fixture.wait_idle();
+    candidate.require_lifetime().unwrap();
 }

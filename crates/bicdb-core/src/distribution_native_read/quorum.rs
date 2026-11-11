@@ -124,6 +124,20 @@ impl NativeReadQuorumRound {
     pub(crate) fn request(&self) -> &NativeRangeReadRequest {
         &self.request
     }
+    pub(crate) fn has_matching_majority(&self) -> Result<bool> {
+        self.require_live()?;
+        self.require_no_known_conflict()?;
+        let Some(local) = self.observations.get(&self.local_node) else {
+            return Ok(false);
+        };
+        local.require_live()?;
+        Ok(self
+            .observations
+            .values()
+            .filter(|o| o.facts().range_index == local.facts().range_index)
+            .count()
+            >= self.request.scope.members.len() / 2 + 1)
+    }
     pub(crate) fn record(&mut self, observation: NativeRangeReadObservation) -> Result<()> {
         let result = self.record_inner(observation);
         if result.is_err() {

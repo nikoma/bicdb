@@ -102,6 +102,7 @@ struct ObservedTlsTransport {
     inner: Arc<TcpClusterRelocationTransport>,
     hold: Arc<ProbeHold>,
     ready_hold: Arc<ProbeHold>,
+    read_hold: Arc<ProbeHold>,
     lag_status_seen: Arc<AtomicBool>,
 }
 impl RangeWriteTransport for ObservedTlsTransport {
@@ -111,8 +112,26 @@ impl RangeWriteTransport for ObservedTlsTransport {
         request: &crate::distribution_native_read::NativeRangeReadRequest,
         parent: &CancellationToken,
     ) -> Result<crate::distribution_native_read::NativeRangeReadObservation> {
-        self.inner
-            .observe_current_native_range(destination, request, parent)
+        if destination == &node("n2") && self.read_hold.armed.load(Ordering::SeqCst) {
+            while !self.read_hold.entered.load(Ordering::SeqCst) {
+                parent.check()?;
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        }
+        let actual = self
+            .inner
+            .observe_current_native_range(destination, request, parent)?;
+        if destination == &node("n0") && self.read_hold.armed.load(Ordering::SeqCst) {
+            self.read_hold.entered.store(true, Ordering::SeqCst);
+            // Test-only uncancellable return barrier AFTER the genuine TLS
+            // response. Its held result is not counted in a candidate.
+            let until = Instant::now() + Duration::from_secs(5);
+            while !self.read_hold.released.load(Ordering::SeqCst) && Instant::now() < until {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        }
+        parent.check()?;
+        Ok(actual)
     }
 
     fn observe_native_completion_observation(
@@ -247,6 +266,7 @@ struct NetworkFixture {
     servers: Vec<ClusterDataServerHandle>,
     hold: Arc<ProbeHold>,
     ready_hold: Arc<ProbeHold>,
+    read_hold: Arc<ProbeHold>,
     lag_status_seen: Arc<AtomicBool>,
     _keys: tempfile::TempDir,
 }
@@ -412,6 +432,7 @@ impl NetworkFixture {
             .collect::<BTreeMap<_, _>>();
         let hold = Arc::new(ProbeHold::default());
         let ready_hold = Arc::new(ProbeHold::default());
+        let read_hold = Arc::new(ProbeHold::default());
         let lag_status_seen = Arc::new(AtomicBool::new(false));
         let runtimes = live_names
             .iter()
@@ -432,6 +453,11 @@ impl NetworkFixture {
                         },
                         ready_hold: if name == "n1" {
                             Arc::clone(&ready_hold)
+                        } else {
+                            Arc::new(ProbeHold::default())
+                        },
+                        read_hold: if name == "n1" {
+                            Arc::clone(&read_hold)
                         } else {
                             Arc::new(ProbeHold::default())
                         },
@@ -474,6 +500,7 @@ impl NetworkFixture {
             servers,
             hold,
             ready_hold,
+            read_hold,
             lag_status_seen,
             _keys: keys,
         }

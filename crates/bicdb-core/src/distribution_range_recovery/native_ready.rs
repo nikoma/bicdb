@@ -169,7 +169,7 @@ impl NativeReadyObservation {
     pub(crate) fn authenticated_peer(&self) -> &MetadataReadParticipant {
         &self.peer
     }
-    pub(super) fn into_reply(self) -> NativeReadyReply {
+    pub(crate) fn into_reply(self) -> NativeReadyReply {
         self.reply
     }
 }

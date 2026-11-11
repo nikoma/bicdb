@@ -80,7 +80,7 @@ pub(crate) fn scope_from_metadata(
 #[derive(Debug)]
 pub(crate) struct NativeReadQuorumRound {
     metadata: MetadataReadObservation,
-    request: NativeRangeReadRequest,
+    request: NativeRangeReadProbeRequest,
     business: Uuid,
     local_node: ClusterNodeId,
     cancellation: CancellationToken,
@@ -102,13 +102,17 @@ impl NativeReadQuorumRound {
             .deadline()
             .and_then(|d| d.checked_duration_since(Instant::now()))
             .ok_or_else(|| invalid("read candidate needs original finite deadline"))?;
-        let request = NativeRangeReadRequest {
-            protocol_version: NATIVE_RANGE_READ_VERSION,
-            scope,
-            challenge,
-            budget_ms: u64::try_from(remaining.as_millis())
-                .unwrap_or(5000)
-                .clamp(1, 5000),
+        let request = NativeRangeReadProbeRequest {
+            business_request_id: business,
+            requested_metadata_context_id: metadata.context_id(),
+            observation: NativeRangeReadRequest {
+                protocol_version: NATIVE_RANGE_READ_VERSION,
+                scope,
+                challenge,
+                budget_ms: u64::try_from(remaining.as_millis())
+                    .unwrap_or(5000)
+                    .clamp(1, 5000),
+            },
         };
         request.cancellation(&cancellation)?;
         Ok(Self {
@@ -121,7 +125,7 @@ impl NativeReadQuorumRound {
             poisoned: false,
         })
     }
-    pub(crate) fn request(&self) -> &NativeRangeReadRequest {
+    pub(crate) fn request(&self) -> &NativeRangeReadProbeRequest {
         &self.request
     }
     pub(crate) fn has_matching_majority(&self) -> Result<bool> {
@@ -149,7 +153,7 @@ impl NativeReadQuorumRound {
         self.require_live()?;
         observation.require_live()?;
         let facts = observation.facts();
-        facts.require_request(&self.request, observation.authenticated_peer())?;
+        observation.require_request(&self.request)?;
         if self.observations.contains_key(&facts.node_id)
             || (facts.node_id == self.local_node && observation.local().is_none())
             || (facts.node_id != self.local_node && observation.local().is_some())

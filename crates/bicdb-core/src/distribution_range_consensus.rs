@@ -1566,7 +1566,7 @@ pub trait RangeWriteTransport: std::fmt::Debug + Send + Sync + 'static {
     fn observe_current_native_range(
         &self,
         _destination: &ClusterNodeId,
-        _request: &crate::distribution_native_read::NativeRangeReadRequest,
+        _request: &crate::distribution_native_read::NativeRangeReadProbeRequest,
         _parent: &CancellationToken,
     ) -> Result<crate::distribution_native_read::NativeRangeReadObservation> {
         Err(range_write_error(

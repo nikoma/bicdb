@@ -4,8 +4,8 @@
 use super::*;
 use crate::distribution_consensus::MetadataReadObservation;
 use crate::distribution_native_read::{
-    require_peer, NativeRangeReadObservation, NativeRangeReadRequest, NativeReadQuorumCandidate,
-    NativeReadQuorumRound,
+    require_peer, NativeRangeReadObservation, NativeRangeReadProbeRequest,
+    NativeReadQuorumCandidate, NativeReadQuorumRound,
 };
 use std::collections::VecDeque;
 use std::sync::mpsc;
@@ -52,7 +52,7 @@ impl RangeRecoveryRuntime {
     pub(crate) fn observe_current_native_range(
         self: &Arc<Self>,
         caller: &MetadataReadParticipant,
-        request: &NativeRangeReadRequest,
+        request: &NativeRangeReadProbeRequest,
         parent: &CancellationToken,
     ) -> Result<NativeRangeReadObservation> {
         let token = request.cancellation(parent)?;
@@ -92,7 +92,7 @@ impl RangeRecoveryRuntime {
     }
     fn observe_current_native_range_inner(
         &self,
-        request: &NativeRangeReadRequest,
+        request: &NativeRangeReadProbeRequest,
         token: &CancellationToken,
     ) -> Result<NativeRangeReadObservation> {
         token.check()?;
@@ -102,7 +102,7 @@ impl RangeRecoveryRuntime {
                 break service;
             }
         };
-        let actual = service.observe_current_native_range(request, token)?;
+        let actual = service.observe_current_native_range_probe(request, token)?;
         drop(service);
         #[cfg(test)]
         if let Some(barrier) = self.test_read_io_barrier.lock().take() {
@@ -119,12 +119,7 @@ impl RangeRecoveryRuntime {
             }
         }
         token.check()?;
-        NativeRangeReadObservation::from_actual_local(
-            actual,
-            self.provider.local_participant(),
-            request,
-            token,
-        )
+        NativeRangeReadObservation::from_actual_service(actual, self.provider.local_participant())
     }
     /// The result is deliberately UNADMITTED. Actual generic fresh metadata
     /// is consumed, but durable host/birth enrollment and snapshot/final-MQ

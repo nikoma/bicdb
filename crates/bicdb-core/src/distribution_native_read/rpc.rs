@@ -3,6 +3,58 @@
 use super::*;
 use crate::distribution_consensus::MetadataReadParticipant;
 
+/// Requested labels are not recipient metadata authority. The sender's round
+/// independently binds both to its consumed actual fresh MQ observation.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct NativeRangeReadProbeRequest {
+    pub business_request_id: Uuid,
+    pub requested_metadata_context_id: Uuid,
+    pub observation: NativeRangeReadRequest,
+}
+impl std::ops::Deref for NativeRangeReadProbeRequest {
+    type Target = NativeRangeReadRequest;
+    fn deref(&self) -> &Self::Target {
+        &self.observation
+    }
+}
+impl std::ops::DerefMut for NativeRangeReadProbeRequest {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.observation
+    }
+}
+impl NativeRangeReadProbeRequest {
+    pub(crate) fn cancellation(&self, parent: &CancellationToken) -> Result<CancellationToken> {
+        if self.business_request_id.is_nil() || self.requested_metadata_context_id.is_nil() {
+            return Err(invalid("read probe business/MQ context binding is missing"));
+        }
+        self.observation.cancellation(parent)
+    }
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct NativeRangeReadProbeReply {
+    pub business_request_id: Uuid,
+    pub requested_metadata_context_id: Uuid,
+    pub facts: NativeRangeReadFacts,
+}
+impl NativeRangeReadProbeReply {
+    fn require_request(
+        &self,
+        request: &NativeRangeReadProbeRequest,
+        peer: &MetadataReadParticipant,
+    ) -> Result<()> {
+        if self.business_request_id != request.business_request_id
+            || self.requested_metadata_context_id != request.requested_metadata_context_id
+        {
+            return Err(invalid(
+                "actual read reply business/MQ context binding differs",
+            ));
+        }
+        self.facts.require_request(request, peer)
+    }
+}
+
 pub(crate) fn require_peer(
     scope: &NativeRangeReadScope,
     peer: &MetadataReadParticipant,
@@ -78,23 +130,26 @@ impl NativeRangeReadFacts {
 
 #[derive(Debug)]
 pub(crate) struct NativeRangeReadObservation {
-    facts: NativeRangeReadFacts,
+    reply: NativeRangeReadProbeReply,
     peer: MetadataReadParticipant,
     cancellation: CancellationToken,
     local: Option<LocalNativeRangeReadObservation>,
 }
 impl NativeRangeReadObservation {
-    pub(crate) fn from_actual_local(
-        local: LocalNativeRangeReadObservation,
+    pub(crate) fn from_actual_service(
+        evidence: crate::distribution_data::ActualServiceNativeReadProbeEvidence,
         peer: MetadataReadParticipant,
-        request: &NativeRangeReadRequest,
-        parent: &CancellationToken,
     ) -> Result<Self> {
-        let cancellation = request.cancellation(parent)?;
+        let (request, local, cancellation) = evidence.into_parts();
+        cancellation.check()?;
         local.require_lifetime()?;
-        local.facts().require_request(request, &peer)?;
+        local.facts().require_request(&request, &peer)?;
         Ok(Self {
-            facts: local.facts().clone(),
+            reply: NativeRangeReadProbeReply {
+                business_request_id: request.business_request_id,
+                requested_metadata_context_id: request.requested_metadata_context_id,
+                facts: local.facts().clone(),
+            },
             peer,
             cancellation,
             local: Some(local),
@@ -102,21 +157,24 @@ impl NativeRangeReadObservation {
     }
     pub(crate) fn from_transport(
         authenticated: crate::distribution_transport::AuthenticatedNativeRangeReadReply,
-        request: &NativeRangeReadRequest,
+        request: &NativeRangeReadProbeRequest,
         cancellation: CancellationToken,
     ) -> Result<Self> {
         cancellation.check()?;
-        let (facts, peer) = authenticated.into_parts();
-        facts.require_request(request, &peer)?;
+        let (reply, peer) = authenticated.into_parts();
+        reply.require_request(request, &peer)?;
         Ok(Self {
-            facts,
+            reply,
             peer,
             cancellation,
             local: None,
         })
     }
     pub(crate) fn facts(&self) -> &NativeRangeReadFacts {
-        &self.facts
+        &self.reply.facts
+    }
+    pub(super) fn require_request(&self, request: &NativeRangeReadProbeRequest) -> Result<()> {
+        self.reply.require_request(request, &self.peer)
     }
     pub(crate) fn authenticated_peer(&self) -> &MetadataReadParticipant {
         &self.peer
@@ -128,9 +186,9 @@ impl NativeRangeReadObservation {
         }
         Ok(())
     }
-    pub(crate) fn into_facts(self) -> Result<NativeRangeReadFacts> {
+    pub(crate) fn into_reply(self) -> Result<NativeRangeReadProbeReply> {
         self.require_live()?;
-        Ok(self.facts)
+        Ok(self.reply)
     }
     pub(super) fn local(&self) -> Option<&LocalNativeRangeReadObservation> {
         self.local.as_ref()

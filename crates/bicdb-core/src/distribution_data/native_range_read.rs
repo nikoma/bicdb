@@ -2,6 +2,26 @@
 //! or recovery session is acquired here. Caller scope remains untrusted.
 use super::*;
 use crate::distribution_native_read::{LocalNativeRangeReadObservation, NativeRangeReadRequest};
+/// A request-bound single-use bundle. Only the actual SAME-service RPC
+/// producer can create it; retained local tokens cannot be relabeled under a
+/// different business/MQ context by the observation wrapper.
+#[derive(Debug)]
+pub(crate) struct ActualServiceNativeReadProbeEvidence {
+    request: crate::distribution_native_read::NativeRangeReadProbeRequest,
+    local: LocalNativeRangeReadObservation,
+    cancellation: CancellationToken,
+}
+impl ActualServiceNativeReadProbeEvidence {
+    pub(crate) fn into_parts(
+        self,
+    ) -> (
+        crate::distribution_native_read::NativeRangeReadProbeRequest,
+        LocalNativeRangeReadObservation,
+        CancellationToken,
+    ) {
+        (self.request, self.local, self.cancellation)
+    }
+}
 /// Only this SAME-service producer can construct the owned evidence bundle.
 /// Callers cannot retag separately retained physical/catalogue tokens.
 #[derive(Debug)]
@@ -29,6 +49,20 @@ impl ActualServiceNativeReadEvidence {
     }
 }
 impl ClusterDataNodeService {
+    pub(crate) fn observe_current_native_range_probe(
+        &self,
+        request: &crate::distribution_native_read::NativeRangeReadProbeRequest,
+        parent: &CancellationToken,
+    ) -> Result<ActualServiceNativeReadProbeEvidence> {
+        let cancellation = request.cancellation(parent)?;
+        let local = self.observe_current_native_range(request, &cancellation)?;
+        cancellation.check()?;
+        Ok(ActualServiceNativeReadProbeEvidence {
+            request: request.clone(),
+            local,
+            cancellation,
+        })
+    }
     pub(crate) fn require_native_read_ancestor(
         &self,
         local: &LocalNativeRangeReadObservation,

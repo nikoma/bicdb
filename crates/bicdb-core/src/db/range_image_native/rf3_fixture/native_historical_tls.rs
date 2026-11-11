@@ -109,7 +109,7 @@ impl RangeWriteTransport for ObservedTlsTransport {
     fn observe_current_native_range(
         &self,
         destination: &ClusterNodeId,
-        request: &crate::distribution_native_read::NativeRangeReadRequest,
+        request: &crate::distribution_native_read::NativeRangeReadProbeRequest,
         parent: &CancellationToken,
     ) -> Result<crate::distribution_native_read::NativeRangeReadObservation> {
         if destination == &node("n2") && self.read_hold.armed.load(Ordering::SeqCst) {

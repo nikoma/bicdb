@@ -105,17 +105,17 @@ impl AuthenticatedNativeCompletionReply {
 /// Only the authenticated transport can construct this request-bound reply.
 #[derive(Debug)]
 pub(crate) struct AuthenticatedNativeRangeReadReply {
-    facts: crate::distribution_native_read::NativeRangeReadFacts,
+    reply: crate::distribution_native_read::NativeRangeReadProbeReply,
     peer: MetadataReadParticipant,
 }
 impl AuthenticatedNativeRangeReadReply {
     pub(crate) fn into_parts(
         self,
     ) -> (
-        crate::distribution_native_read::NativeRangeReadFacts,
+        crate::distribution_native_read::NativeRangeReadProbeReply,
         MetadataReadParticipant,
     ) {
-        (self.facts, self.peer)
+        (self.reply, self.peer)
     }
 }
 
@@ -335,7 +335,7 @@ enum ClusterDataRequest {
         request: crate::distribution_range_recovery::NativeCompletionRequest,
     },
     ObserveCurrentNativeRange {
-        request: crate::distribution_native_read::NativeRangeReadRequest,
+        request: crate::distribution_native_read::NativeRangeReadProbeRequest,
     },
     RecoveryCertifyHistorical {
         request: crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
@@ -517,7 +517,7 @@ enum ClusterDataResponse {
     RecoveryFencedProbe(crate::distribution_range_recovery::RecoveryFencedProbeReply),
     NativeReady(crate::distribution_range_recovery::NativeReadyReply),
     NativeCompletion(crate::distribution_range_recovery::NativeCompletionReply),
-    NativeRangeRead(crate::distribution_native_read::NativeRangeReadFacts),
+    NativeRangeRead(crate::distribution_native_read::NativeRangeReadProbeReply),
     NativeReplica(crate::distribution_native_apply::NativeReplicaProgressReply),
     RangeWrite(RangeWriteAck),
     RangeWriteProgress(RangeWriteProgress),
@@ -1084,7 +1084,7 @@ fn handle_cluster_data_connection(
                 CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
             return runtime
                 .observe_current_native_range(caller, &request, &token)
-                .and_then(|o| o.into_facts())
+                .and_then(|o| o.into_reply())
                 .map(ClusterDataResponse::NativeRangeRead);
         }
         if let ClusterDataRequest::ObserveNativeCompletion { request } = request.request {
@@ -3598,7 +3598,7 @@ impl TcpClusterRelocationTransport {
     pub(crate) fn observe_current_native_range(
         &self,
         destination: &ClusterNodeId,
-        request: &crate::distribution_native_read::NativeRangeReadRequest,
+        request: &crate::distribution_native_read::NativeRangeReadProbeRequest,
         parent: &CancellationToken,
     ) -> Result<crate::distribution_native_read::NativeRangeReadObservation> {
         let token = request.cancellation(parent)?;
@@ -3629,14 +3629,14 @@ impl TcpClusterRelocationTransport {
         let (response, peer) =
             self.call_with_read_participant_cancellable(&token, destination, payload)?;
         match response {
-            ClusterDataResponse::NativeRangeRead(facts) => {
-                if &facts.node_id != destination || peer.node_id() != destination {
+            ClusterDataResponse::NativeRangeRead(reply) => {
+                if &reply.facts.node_id != destination || peer.node_id() != destination {
                     return Err(transport_error(
                         "native read response destination identity differs",
                     ));
                 }
                 crate::distribution_native_read::NativeRangeReadObservation::from_transport(
-                    AuthenticatedNativeRangeReadReply { facts, peer },
+                    AuthenticatedNativeRangeReadReply { reply, peer },
                     request,
                     token,
                 )
@@ -4267,7 +4267,7 @@ impl RangeWriteTransport for TcpClusterRelocationTransport {
     fn observe_current_native_range(
         &self,
         destination: &ClusterNodeId,
-        request: &crate::distribution_native_read::NativeRangeReadRequest,
+        request: &crate::distribution_native_read::NativeRangeReadProbeRequest,
         parent: &CancellationToken,
     ) -> Result<crate::distribution_native_read::NativeRangeReadObservation> {
         self.observe_current_native_range(destination, request, parent)

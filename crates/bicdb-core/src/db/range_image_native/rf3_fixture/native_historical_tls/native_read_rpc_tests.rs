@@ -104,6 +104,21 @@ fn native_read_rpc_actual_tls_rejects_old_challenge_actor_incarnation_and_pins()
         next.record(old).is_err(),
         "a genuine old response cannot answer a new challenge"
     );
+    let old_same_challenge = fixture.clients[&node("n1")]
+        .observe_current_native_range(&node("n0"), &request, &parent)
+        .unwrap();
+    fixture.wait_idle();
+    let business3 = Uuid::now_v7();
+    let mut reused = NativeReadQuorumRound::begin(
+        fresh_metadata(&fixture, business3, &parent),
+        business3,
+        request.challenge,
+        &node("n1"),
+        &parent,
+    )
+    .unwrap();
+    assert!(reused.record(old_same_challenge).is_err(),
+        "even deliberate challenge reuse cannot relabel a genuine response under a new MQ context/business");
     assert!(fixture.clients[&node("n2")]
         .observe_current_native_range(&node("n0"), &request, &parent)
         .is_err());

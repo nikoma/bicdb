@@ -12,7 +12,10 @@ use uuid::Uuid;
 mod quorum;
 mod rpc;
 pub(crate) use quorum::{NativeReadQuorumCandidate, NativeReadQuorumRound};
-pub(crate) use rpc::{require_peer, NativeRangeReadObservation};
+pub(crate) use rpc::{
+    require_peer, NativeRangeReadObservation, NativeRangeReadProbeReply,
+    NativeRangeReadProbeRequest,
+};
 
 pub(crate) fn invalid(detail: &str) -> crate::BicDbError {
     crate::BicDbError::Cluster(format!("native range read observation: {detail}"))

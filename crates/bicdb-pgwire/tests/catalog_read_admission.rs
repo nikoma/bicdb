@@ -101,6 +101,10 @@ fn connect(address: std::net::SocketAddr) -> TcpStream {
 }
 
 fn concurrent_sql_rename(ending: &str) {
+    concurrent_sql_rename_with_isolation(ending, "READ COMMITTED");
+}
+
+fn concurrent_sql_rename_with_isolation(ending: &str, isolation: &str) {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let root = tempfile::tempdir().unwrap();
         let mut db = BicDb::open_with_config(
@@ -130,6 +134,11 @@ fn concurrent_sql_rename(ending: &str) {
         let mut observer = connect(address);
         // Always stop our serving thread, including a failed semantic assertion.
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let response = query(
+                &mut owner,
+                &format!("SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL {isolation}"),
+            );
+            assert!(codes(&response).is_empty(), "{response:?}");
             let response = query(
                 &mut writer,
                 "BEGIN; UPDATE unrelated SET payload=99 WHERE id=2",
@@ -243,6 +252,20 @@ fn concurrent_wire_rename_savepoint_keeps_prior_writes_and_unrelated_commit() {
 #[test]
 fn concurrent_wire_rename_autocommit_keeps_the_unrelated_commit() {
     concurrent_sql_rename("autocommit");
+}
+
+#[test]
+fn concurrent_wire_rename_retains_repeatable_read_across_each_decision_path() {
+    for ending in ["commit", "rollback", "savepoint", "autocommit"] {
+        concurrent_sql_rename_with_isolation(ending, "REPEATABLE READ");
+    }
+}
+
+#[test]
+fn concurrent_wire_rename_retains_serializable_across_each_decision_path() {
+    for ending in ["commit", "rollback", "savepoint", "autocommit"] {
+        concurrent_sql_rename_with_isolation(ending, "SERIALIZABLE");
+    }
 }
 
 #[derive(Clone, Copy)]

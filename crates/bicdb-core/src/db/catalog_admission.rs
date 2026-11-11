@@ -722,14 +722,14 @@ impl Transaction {
                 continue;
             }
             if let Some(bindings) = registration.bindings.upgrade() {
-                if bindings
-                    .lock()
+                let bindings = bindings.lock();
+                if let Some((name, _)) = bindings
                     .iter()
-                    .any(|(name, binding)| scope.intersects_observation(name, binding))
+                    .find(|(name, binding)| scope.intersects_observation(name, binding))
                 {
-                    return Err(BicDbError::TransactionConflict(
-                        "catalog scope has an existing transaction observation".into(),
-                    ));
+                    return Err(BicDbError::TransactionConflict(format!(
+                        "catalog scope has an existing transaction observation on collection `{name}`"
+                    )));
                 }
             }
         }

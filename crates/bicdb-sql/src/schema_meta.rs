@@ -9,12 +9,28 @@
 // code compiles unchanged.
 use crate::*;
 
+/// Discover candidates internally, then admit only the actual parent and
+/// referencing descriptors before exposing them. An unrelated UPDATE must
+/// not observe every table merely to establish that it has no incoming FK.
+fn inbound_foreign_key_schemas(db: &BicDb, table: &str) -> Result<Vec<TableSchema>> {
+    check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(table))?;
+    let schemas = schema_catalog_snapshot_shared(db)?;
+    let mut matches = Vec::new();
+    for schema in schemas.iter().filter(|schema| schema.constraints.iter().any(|constraint| {
+        matches!(constraint, ConstraintSchema::ForeignKey { foreign_table, .. } if foreign_table.eq_ignore_ascii_case(table))
+    })) {
+        check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(&schema.name))?;
+        matches.push(schema.clone());
+    }
+    Ok(matches)
+}
+
 pub(crate) fn inbound_foreign_key_update_constraints_uncached(
     db: &BicDb,
     table: &str,
 ) -> Result<Vec<InboundForeignKeyUpdate>> {
     let mut constraints = Vec::new();
-    for child_schema in list_schemas_shared(db)?.iter() {
+    for child_schema in inbound_foreign_key_schemas(db, table)?.iter() {
         for constraint in &child_schema.constraints {
             let ConstraintSchema::ForeignKey {
                 name,
@@ -47,7 +63,7 @@ pub(crate) fn inbound_foreign_key_delete_constraints_uncached(
 ) -> Result<Vec<InboundForeignKeyDelete>> {
     sql_profile_foreign_key_parent_delete_schema_scan();
     let mut constraints = Vec::new();
-    for child_schema in list_schemas_shared(db)?.iter() {
+    for child_schema in inbound_foreign_key_schemas(db, table)?.iter() {
         for constraint in &child_schema.constraints {
             let ConstraintSchema::ForeignKey {
                 name,

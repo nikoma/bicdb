@@ -66,6 +66,18 @@ fn db_key(db: &BicDb) -> u64 {
     db.instance_id()
 }
 
+fn admit_inbound_foreign_key_schemas<'a>(
+    db: &BicDb,
+    table: &str,
+    schemas: impl Iterator<Item = &'a TableSchema>,
+) -> Result<()> {
+    crate::check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(table))?;
+    for schema in schemas {
+        crate::check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(&schema.name))?;
+    }
+    Ok(())
+}
+
 /// All triggers, shared. Validated against the trigger catalog generation.
 pub(crate) fn triggers_shared(db: &BicDb) -> Result<Arc<Vec<TriggerSchema>>> {
     let generation = db.collection_generation(TRIGGER_COLLECTION);
@@ -134,6 +146,11 @@ pub(crate) fn inbound_foreign_key_updates_shared(
             .map(|entry| Arc::clone(&entry.value))
     });
     if let Some(hit) = hit {
+        admit_inbound_foreign_key_schemas(
+            db,
+            table,
+            hit.iter().map(|constraint| &constraint.child_schema),
+        )?;
         return Ok(hit);
     }
     let value = Arc::new(inbound_foreign_key_update_constraints_uncached(db, table)?);
@@ -169,6 +186,11 @@ pub(crate) fn inbound_foreign_key_deletes_shared(
             .map(|entry| Arc::clone(&entry.value))
     });
     if let Some(hit) = hit {
+        admit_inbound_foreign_key_schemas(
+            db,
+            table,
+            hit.iter().map(|constraint| &constraint.child_schema),
+        )?;
         return Ok(hit);
     }
     let value = Arc::new(inbound_foreign_key_delete_constraints_uncached(db, table)?);

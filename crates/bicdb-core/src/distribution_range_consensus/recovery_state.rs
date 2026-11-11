@@ -201,6 +201,73 @@ pub(crate) struct RecoveryResolvedCatalogObservation {
     catalog_sha256: String,
     local_role_context_id: Uuid,
 }
+
+/// Actual saved-session state for target-install preflight, NOT permission to
+/// bypass a DB-open mismatch or install rows. Only an independently validated
+/// existing target intent can justify a cold-open rebind.
+#[derive(Debug)]
+pub(crate) struct RecoveryImageInstallSessionObservation {
+    store_open_id: Uuid,
+    scope: RecoveryFenceScope,
+    saved_native_database_incarnation: String,
+    current_native_database_incarnation: String,
+    native_birth_id: Uuid,
+    native_birth_sha256: String,
+    range_catalog_sha256: String,
+}
+impl RecoveryImageInstallSessionObservation {
+    pub(crate) fn saved_scope(&self) -> &RecoveryFenceScope {
+        &self.scope
+    }
+    pub(crate) fn store_open_id(&self) -> Uuid {
+        self.store_open_id
+    }
+    pub(crate) fn saved_native_database_incarnation(&self) -> &str {
+        &self.saved_native_database_incarnation
+    }
+    pub(crate) fn current_native_database_incarnation(&self) -> &str {
+        &self.current_native_database_incarnation
+    }
+    pub(crate) fn native_birth_id(&self) -> Uuid {
+        self.native_birth_id
+    }
+    pub(crate) fn native_birth_sha256(&self) -> &str {
+        &self.native_birth_sha256
+    }
+    pub(crate) fn require_current(
+        &self,
+        store: &RangeWriteStore,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        role: &RecoveryRoleAdmission,
+    ) -> Result<()> {
+        native.require_current(db)?;
+        store.require_native_recovery_identity(role, native)?;
+        store.require_durable_recovery_catalog()?;
+        self.scope.require_role(role)?;
+        let saved = store
+            .catalog
+            .recovery_fences
+            .get(&self.scope.range_id)
+            .ok_or_else(|| range_write_error("target preflight recovery session disappeared"))?;
+        if self.store_open_id != store.open_id
+            || !saved.scope.same_session(&self.scope)
+            || !matches!(saved.phase, RecoveryFencePhase::Active)
+            || saved.native_database_incarnation != self.saved_native_database_incarnation
+            || native.database_incarnation() != self.current_native_database_incarnation
+            || native.birth_id() != self.native_birth_id
+            || native.birth_sha256() != self.native_birth_sha256
+            || db.data_path().canonicalize()? != store.root.canonicalize()?
+            || self.range_catalog_sha256
+                != store.recovery_range_catalog_sha256(self.scope.range_id)?
+        {
+            return Err(range_write_error(
+                "actual target preflight session/store/native state changed",
+            ));
+        }
+        Ok(())
+    }
+}
 impl RecoveryResolvedCatalogObservation {
     pub(crate) fn store_open_id(&self) -> Uuid {
         self.store_open_id
@@ -248,6 +315,110 @@ impl RecoveryResolvedCatalogObservation {
 }
 
 impl RangeWriteStore {
+    pub(crate) fn observe_image_install_recovery_session(
+        &mut self,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        role: &RecoveryRoleAdmission,
+    ) -> Result<RecoveryImageInstallSessionObservation> {
+        native.require_current(db)?;
+        self.require_native_recovery_identity(role, native)?;
+        if !matches!(role.purpose(), MetadataRecoveryRolePurpose::NormalRecovery)
+            || db.data_path().canonicalize()? != self.root.canonicalize()?
+        {
+            return Err(range_write_error(
+                "current-voter image preflight requires its actual normal-recovery DB/store",
+            ));
+        }
+        let saved = self
+            .catalog
+            .recovery_fences
+            .get(&role.current_range().id)
+            .ok_or_else(|| {
+                range_write_error("current-voter image target has no saved recovery session")
+            })?;
+        saved.scope.require_role(role)?;
+        if !matches!(saved.phase, RecoveryFencePhase::Active)
+            || &saved.local_node_id != role.local_node_id()
+            || saved.local_member_incarnation != role.local_member_incarnation()
+        {
+            return Err(range_write_error(
+                "current-voter image target has another recovery session",
+            ));
+        }
+        // Resolve an ambiguous prior refusal-only sync, without modifying any
+        // nonce, config, native open, intent, history or physical row state.
+        if self.recovery_persistence_uncertain {
+            self.persist_recovery_catalog()?;
+        }
+        role.require_live_request()?;
+        let saved = &self.catalog.recovery_fences[&role.current_range().id];
+        let observed = RecoveryImageInstallSessionObservation {
+            store_open_id: self.open_id,
+            scope: saved.scope.clone(),
+            saved_native_database_incarnation: saved.native_database_incarnation.clone(),
+            current_native_database_incarnation: native.database_incarnation().to_string(),
+            native_birth_id: native.birth_id(),
+            native_birth_sha256: native.birth_sha256().to_string(),
+            range_catalog_sha256: self.recovery_range_catalog_sha256(role.current_range().id)?,
+        };
+        observed.require_current(self, db, native, role)?;
+        Ok(observed)
+    }
+
+    pub(crate) fn rebind_recovery_open_after_image_fence(
+        &mut self,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        role: &super::NativeImageInstallRole<'_>,
+        fence: &super::TargetImageInstallFence,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+    ) -> Result<RecoveryFenceScope> {
+        if !matches!(role, super::NativeImageInstallRole::CurrentVoterRepair(_)) {
+            return Err(range_write_error(
+                "only actual current-voter repair can rebind a normal recovery open",
+            ));
+        }
+        self.validate_native_image_install_fence(fence, db, native, role, frozen)?;
+        let actual = role.role();
+        self.require_native_recovery_identity(actual, native)?;
+        let saved = self
+            .catalog
+            .recovery_fences
+            .get(&fence.range().id)
+            .ok_or_else(|| {
+                range_write_error("image repair cannot create a missing recovery session")
+            })?;
+        saved.scope.require_role(actual)?;
+        if !matches!(saved.phase, RecoveryFencePhase::Active)
+            || !matches!(
+                saved.scope.purpose,
+                MetadataRecoveryRolePurpose::NormalRecovery
+            )
+            || fence.session_id() != saved.scope.recovery_nonce
+            || fence.nonce() != saved.scope.recovery_nonce
+            || saved.local_node_id != *fence.target_node_id()
+            || saved.local_member_incarnation != fence.target_member_incarnation()
+        {
+            return Err(range_write_error(
+                "actual image intent cannot replace another recovery session",
+            ));
+        }
+        let gate = db.range_mutation_gate();
+        let controlled = gate.try_controlled_mutation(frozen)?;
+        let scope = saved.scope.clone();
+        self.catalog
+            .recovery_fences
+            .get_mut(&scope.range_id)
+            .expect("matched recovery record")
+            .native_database_incarnation = native.database_incarnation().to_string();
+        // Always re-fsync even after an ambiguous previous same-open attempt.
+        self.persist_recovery_catalog()?;
+        native.require_current(db)?;
+        actual.require_live_request()?;
+        drop(controlled);
+        Ok(scope)
+    }
     fn recovery_range_catalog_sha256(&self, range_id: RangeId) -> Result<String> {
         let saved = self
             .catalog

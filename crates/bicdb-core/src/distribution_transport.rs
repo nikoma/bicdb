@@ -3309,6 +3309,17 @@ impl TcpClusterRelocationTransport {
                 request: request.clone(),
             }
         };
+        crate::distribution_range_consensus::validate_native_json_size(
+            &ClusterDataRequestEnvelope {
+                protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
+                cluster_id: self.cluster_id.clone(),
+                caller_node_id: self.caller_node_id.clone(),
+                destination_node_id: destination.clone(),
+                request_id: u64::MAX,
+                request: &payload,
+            },
+            self.config.max_frame_bytes,
+        )?;
         let (response, peer) =
             self.call_with_read_participant_cancellable(&token, destination, payload)?;
         match response {

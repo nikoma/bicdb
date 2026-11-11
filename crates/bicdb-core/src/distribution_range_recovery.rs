@@ -66,6 +66,7 @@ pub(crate) struct RecoveryHistoricalCommandRequest {
 impl RecoveryHistoricalCommandRequest {
     pub(crate) fn probe(&self) -> Result<RecoveryFencedProbeRequest> {
         self.command.validate()?;
+        crate::distribution_range_consensus::validate_native_recovery_command_size(&self.command)?;
         if self.command.cluster_id != self.scope.cluster_id
             || self.command.range_id != self.scope.range_id
             || self.command.range_epoch > self.scope.range_epoch

@@ -88,6 +88,8 @@ impl NativeActivationDecisionRecord {
             || self.post_quorum_metadata_context_id == self.provenance.metadata_context_id
             || self.provenance.voters.values().any(|voter| {
                 voter.observed_metadata_context_id == self.post_quorum_metadata_context_id
+                    || voter.observed_metadata_term > self.post_quorum_metadata_term
+                    || voter.observed_metadata_read_index > self.post_quorum_metadata_read_index
             })
             || self.post_quorum_metadata_term < self.provenance.metadata_term
             || self.post_quorum_metadata_read_index < self.provenance.metadata_read_index
@@ -108,6 +110,16 @@ impl NativeActivationDecisionRecord {
             || self.checksum()? != self.checksum_sha256
         {
             return Err(invalid("damaged protected native activation decision"));
+        }
+        Ok(())
+    }
+    fn require_fresh_anchor(&self, term: u64, read_index: u64) -> Result<()> {
+        if term < self.post_quorum_metadata_term
+            || read_index < self.post_quorum_metadata_read_index
+        {
+            return Err(invalid(
+                "metadata observation is behind the protected activation decision",
+            ));
         }
         Ok(())
     }
@@ -264,6 +276,7 @@ impl BicDb {
             self.read_native_range_image_record::<NativeActivationDecisionRecord>(&pointer)?;
         if let Some(old) = &old {
             old.require_native_domain(self, &native, false)?;
+            old.require_fresh_anchor(fresh.metadata_term(), fresh.metadata_read_index())?;
             let archived = self
                 .read_native_range_image_record::<NativeActivationDecisionRecord>(
                     &decision_history_key(old.scope.range_id, &old.checksum_sha256),
@@ -437,6 +450,7 @@ impl BicDb {
             h,
         )?;
         let record = &receipt.record;
+        record.require_fresh_anchor(fresh.metadata_term(), fresh.metadata_read_index())?;
         if record.range != canonical(fresh.current_range())
             || record.members != *fresh.member_credentials()
             || fresh.expected_schema_sha256() != Some(record.schema_sha256.as_str())
@@ -477,6 +491,7 @@ impl BicDb {
             h,
         )?;
         let record = &receipt.record;
+        record.require_fresh_anchor(observer.metadata_term(), observer.metadata_read_index())?;
         if record.range != canonical(observer.current_range())
             || record.members != *observer.member_credentials()
             || observer.expected_schema_sha256() != Some(record.schema_sha256.as_str())

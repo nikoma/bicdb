@@ -178,6 +178,22 @@ fn native_activation_decision_actual_quorum_publishes_before_catalogue_and_reuse
         .persist_native_activation_decision(&prepared, &store, &quorum, &fresh)
         .unwrap();
     receipt.require_current(&fixture.db.read()).unwrap();
+    // Binding-rule negative only: no numeric values mint a fresh role. The
+    // actual role/observer readers feed this check their opaque MQ evidence.
+    assert!(receipt
+        .record
+        .require_fresh_anchor(
+            receipt.record.post_quorum_metadata_term - 1,
+            receipt.record.post_quorum_metadata_read_index,
+        )
+        .is_err());
+    assert!(receipt
+        .record
+        .require_fresh_anchor(
+            receipt.record.post_quorum_metadata_term,
+            receipt.record.post_quorum_metadata_read_index - 1,
+        )
+        .is_err());
     assert_eq!(receipt.completion_quorum_sha256(), original_qq);
     assert_eq!(receipt.range_index(), 1);
     assert!(receipt.record.native_page_xid > 0);
@@ -266,6 +282,20 @@ fn native_activation_decision_missing_record_and_reused_pre_quorum_context_refus
     assert!(
         forged.validate().is_err(),
         "a new role must not be inferred from old metadata counters"
+    );
+    forged = receipt.record.clone();
+    forged
+        .provenance
+        .voters
+        .values_mut()
+        .next()
+        .unwrap()
+        .observed_metadata_read_index = forged.post_quorum_metadata_read_index + 1;
+    forged.completion_quorum_sha256 = forged.provenance.checksum_sha256().unwrap();
+    forged.checksum_sha256 = forged.checksum().unwrap();
+    assert!(
+        forged.validate().is_err(),
+        "post-quorum metadata cannot predate a recorded voter's anchor"
     );
     forged = receipt.record.clone();
     forged.provenance.voters.clear();

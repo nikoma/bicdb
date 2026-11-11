@@ -12,6 +12,27 @@ fn seeded(mode: StorageMode, path: &std::path::Path) -> BicDb {
 }
 
 #[test]
+fn imported_native_fixed_snapshot_is_not_advanced_by_its_first_sql_statement() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let db = seeded(mode, root.path());
+        let mut native = db.begin_transaction().unwrap();
+        native.set_snapshot_isolation(true, 0).unwrap();
+        let original_watermark = native.visibility_watermark();
+        let mut peer = db.begin_transaction().unwrap();
+        peer.insert("statement_rows", Record::new("other")
+            .with_metadata(serde_json::json!({"rowkey":2,"payload":20}))).unwrap();
+        peer.commit().unwrap();
+        let mut sql = SqlSession::new_shared(&db).with_pending_transaction(native);
+        assert_eq!(sql.execute("SELECT rowkey FROM statement_rows ORDER BY rowkey").unwrap().rows,
+            vec![vec![SqlValue::Int(1)]]);
+        let native = sql.take_pending_transaction().unwrap();
+        assert_eq!(native.visibility_watermark(),original_watermark);
+        native.rollback().unwrap();
+    }
+}
+
+#[test]
 fn read_committed_direct_session_observes_commits_between_client_statements() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let root = tempfile::tempdir().unwrap();

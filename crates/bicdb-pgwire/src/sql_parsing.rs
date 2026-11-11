@@ -1305,6 +1305,7 @@ pub(crate) fn begin_buffered_transaction(
                 watermark,
             )
         };
+        tx.defer_statement_snapshot()?;
         if isolation == "serializable" {
             tx.set_snapshot_isolation(true, state.last_commit_seq)?;
             tx.set_statement_write_conflict_check(true)?;

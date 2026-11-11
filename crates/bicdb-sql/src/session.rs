@@ -2617,6 +2617,7 @@ impl<'db> SqlSession<'db> {
             .snapshot_floor
             .max(crate::statement_context::latest_independent_commit());
         let mut tx = self.db_ref().begin_transaction_after(floor)?;
+        tx.defer_statement_snapshot()?;
         tx.set_blocking_row_waits(self.blocking_row_wait_token());
         if isolation == "serializable" {
             tx.set_snapshot_isolation(true, floor)?;

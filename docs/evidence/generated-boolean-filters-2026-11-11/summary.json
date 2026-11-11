@@ -22,16 +22,16 @@
     "allocation_bound": "raw normalization input at most8 times expression-node limit in bytes, token arena at most4 times expression-node limit in tokens"
   },
   "delivery": {
-    "candidate_version": "1.0.464-beta",
+    "candidate_version": "1.0.463-beta",
     "stacked_after": [
-      "snapshot462",
-      "diagnostic463"
+      "snapshot462"
     ],
     "final_versioned_candidate_tested_separately": false,
     "broad_ci": "pending",
     "merged": false,
     "binary_built": false,
     "published_release": false,
-    "deployed": false
+    "deployed": false,
+    "batch": "Parser-depth and NUL diagnostic-framing frontend fixes share one versioned delivery batch; private464 candidate retired before execution."
   }
 }

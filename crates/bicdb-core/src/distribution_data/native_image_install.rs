@@ -15,6 +15,35 @@ use crate::distribution_range_image_install::{
 };
 
 impl ClusterDataNodeService {
+    /// The sealed actual image return is consumed under this SAME catalogue.
+    /// Its intent remains present throughout physical attestation; preparation
+    /// atomically exchanges that exact refusal for the durable Prepared phase.
+    pub(crate) fn prepare_finalized_native_recovery_image(
+        &mut self,
+        image: crate::distribution_range_image_install::FinalizedNativeRecoveryImage,
+        role: crate::distribution_range_recovery::RecoveryRoleAdmission,
+        frozen: Arc<crate::distribution_range_mutation::FrozenRangeMutationPermit>,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_consensus::PreparedNativeRecoveryReady> {
+        parent.check()?;
+        role.require_live_request()?;
+        if role.cluster_id() != &self.cluster_id || role.local_node_id() != &self.node_id {
+            return Err(data_error(
+                "finalized image preparation belongs to another service",
+            ));
+        }
+        let db = try_database_read(&self.db)?;
+        let physical = db.attest_finalized_native_recovery_image(
+            image,
+            role,
+            &self.range_writes,
+            frozen,
+            parent,
+        )?;
+        self.range_writes
+            .prepare_native_recovery_ready(&db, physical)
+    }
+
     /// Inspect this service's actual source catalogue without opening another
     /// writer. Fresh quorum authority is acquired by the caller beforehand.
     pub(crate) fn begin_native_recovery_source_history(

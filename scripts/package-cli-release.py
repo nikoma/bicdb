@@ -12,6 +12,8 @@ import tarfile
 import tempfile
 import tomllib
 
+from capability_manifest import build_manifest
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -102,12 +104,18 @@ def main():
             'binary_sha256': hashlib.sha256((stage / 'bicdb').read_bytes()).hexdigest(),
             'dependencies': len(index),
         }, indent=2) + '\n')
+        capabilities = build_manifest(root, stage / 'bicdb', args.revision)
+        (stage / 'CAPABILITIES.json').write_text(
+            json.dumps(capabilities, indent=2, sort_keys=True) + '\n')
         (stage / 'README.txt').write_text(f'''BicDB {version} — Linux x86-64 beta
 
 Run ./bicdb --version, then follow the repository five-minute quickstart.
 Validated on Ubuntu 24.04 x86-64; requires glibc 2.39 and OpenSSL 3 shared
 libraries. Install libssl3t64 and libgcc-s1 on Ubuntu if absent.
 No installer, daemon registration, or automatic data migration is performed.
+CAPABILITIES.json binds conservative capability declarations to these exact
+stripped binary bytes. Test definitions are not execution evidence; this package
+does not grant production qualification or deployment authority.
 
 Source: https://github.com/nikoma/bicdb/tree/{args.revision}
 Build: cargo build --locked --release -p bicdb-cli (Rust 1.96.0)

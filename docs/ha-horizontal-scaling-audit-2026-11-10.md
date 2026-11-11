@@ -56,9 +56,12 @@ the frozen optimized **1.0.461-beta** binary at `b05385d4b033edf0db03f3eccf4bdd8
 The [actual-results report](azure-scale-out-results-2026-11-11.md)
 links the build, actual five-VM infrastructure, completed short growth, abrupt
 guest poweroff, placement-input correction and longer failed growth trial. Real
-data and leadership moved automatically. Sustained capacity did not improve,
+data and leadership moved automatically. No sustained capacity gain was demonstrated: short-run goodput was lower,
 and the longer trial aborted on acknowledged-event read verification. Its
-missing/error distinction and subsequent diagnosis must be reported explicitly.
+missing/error distinction and subsequent diagnosis are reported explicitly:
+post-restart native checks matched 4,898 of 5,027 ACKs and left 129 unverified;
+independent cold-catalog inspection found exact Applied payloads for all 5,027.
+These command records do not substitute for a passing live row-read check.
 These are actual exploratory VM results, not physical-host power-loss or
 production qualification; neither arbitrary PostgreSQL routing nor multi-range
 SQL transactions was added.

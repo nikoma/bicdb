@@ -52,7 +52,7 @@ is outside the reported traffic duration.
 | failure 5 | 90.90 | 575 | 6 | 287 | 6.33 | 791.064 / 3907.361 / 12873.140 | 12.203 / 81.310 / 223.491 |
 | recovered 5 | 63.18 | 123 | 0 | 64 | 1.95 | 3505.353 / 8935.123 / 11856.031 | 10.352 / 96.335 / 146.509 |
 
-**Sustained capacity did not improve in this run.** Five-node and recovered-phase
+**No sustained capacity gain was demonstrated in this run.** Five-node and recovered-phase
 throughput were lower, and write tails were higher. Additional SSH and diagnostic
 load, placement/recovery work, tiny corpus and phase sequencing confound causality;
 these observations do not establish that node count alone caused the difference.

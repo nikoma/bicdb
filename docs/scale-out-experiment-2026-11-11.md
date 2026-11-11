@@ -58,7 +58,10 @@ the stronger plan below. The corpus remained small and cache-resident.
   client contexts (10/10 matching reads). These are routed reads, not five
   independent physical copies. Policy convergence still failed its 300-second
   diagnostic bound, with active/failed relocations and degraded liveness.
-  The initial failure remains a failed availability/verification trial.
+  The subsequent baseline/growth ledger passes matched 4,898 of 5,027 and
+  left 129 unverified under the combined predicate; the original cold catalogs
+  retained exact Applied payloads for all 5,027. These are different evidence
+  types. The initial failure remains a failed availability/verification trial.
 
 The original qualification protocol below remains **unpassed**: no large fixed
 working set, repeated matched read/write/mixed capacity windows, operation-aware

@@ -67,7 +67,8 @@ benchmarks or an equal-latency/error-budget capacity result.
 | Longer growth 4→5, aborted | 927.50 | 2.96 | 404 | 1223 | 4862.509 / 15487.779 / 21462.305 | 120.009 / 946.799 / 1939.600 |
 
 The longer run never reached steady-five, its later fault, or recovered-five
-phases. Its native verifier collapsed read errors, absent values and mismatches
+phases. Growth failed 404 of 3,150 logical operations (about 12.8%); these are
+logical-call outcomes, not a count of individual network attempts. Its native verifier collapsed read errors, absent values and mismatches
 into two unverified ACK IDs. The original failure, all known ACK identities,
 20 bounded error samples out of 404 failed calls, and stopped database images
 were preserved. After one bounded same-root restart, both IDs returned the exact
@@ -77,8 +78,37 @@ not five independent replica copies). Policy convergence still failed its
 Those failed moves to n4 reported connection resets while learner-allocated.
 No successful subsequent read erases that failed availability/verification trial.
 
-Full post-restart baseline/growth ledger verification is reported in the final
-long-trial evidence; it must be distinguished from the original failed pass.
+The post-restart baseline ledger pass checked all 3,804 ACK identities in
+850.864 seconds: **3,693 matched and 111 were unverified**. It retained only the
+first 20 unverified IDs. `Verify` refreshes membership once and uses a 1,000 ms
+RPC configuration, versus the traffic workload's 5,000 ms setting; these are
+not identical client paths or guaranteed wall-clock bounds. The collapsed
+predicate prevents classifying 111 as lost records. The growth-ledger pass
+checked all 1,223 in 214.847 seconds: **1,205 matched and 18 were unverified**,
+with all 18 IDs retained. Those 18 do not include the original two IDs, which
+matched in the earlier ten routed reads. Both passes completed within their
+1,200-second command limits. Combined: **4,898 matched, 129 unverified**, not a
+passing end-to-end reconciliation. No finding of 129 permanently missing rows
+can be made from that combined predicate.
+
+An optional fresh-Get classification attempt launched 12.950243 seconds after
+the growth-ledger command completed because its final prelaunch completion
+check was missed. All 20 calls overlapped or followed the conservative owned
+cleanup window; ten matched and ten received connection refusals. **The entire
+classification attempt is invalid for diagnosing the original failures** and
+is excluded from fault/availability/commit-count conclusions. Exact first
+engine-stop signal timing was unavailable. The raw attempt and this timing
+mistake remain in the longer-trial evidence; there was no further restart,
+retry or workload trial.
+
+A [separate read-only inspection](evidence/azure-cold-catalog-reconciliation-2026-11-11/README.md)
+of all five original cold archives found exact
+expected payloads for all **5,027** baseline/growth ACK identities in retained
+`Applied` commands at or below their resolved watermarks. Catalog/command SHA
+and watermark/index consistency checks passed. Both disputed keys appeared in
+four catalogs. These are retained command records, not end-to-end row reads,
+independently verified signatures/election quorums or five physical replicas.
+Snapshot/cleanup/retention semantics mean catalog-copy counts are not live RF.
 
 ## Observed durability and recovery intervals
 

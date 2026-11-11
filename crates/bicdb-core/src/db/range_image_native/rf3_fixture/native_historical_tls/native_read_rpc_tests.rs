@@ -148,13 +148,12 @@ fn initial_metadata_binds_another_genuine_birth(
         .with_fsync(true)
         .with_storage_mode(StorageMode::ServerPaged)
         .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
-    let (mut db, factory) = BicDb::create_new_range_image_database(
-        &root.join("other-actual-native-birth"),
-        config,
-        spec.clone(),
-    )
-    .unwrap();
+    let path = root.join("other-actual-native-birth");
+    let (mut db, _) =
+        BicDb::create_new_range_image_database(&path, config.clone(), spec.clone()).unwrap();
     db.create_collection("items").unwrap();
+    drop(db);
+    let (db, factory) = BicDb::open_range_image_database(&path, config, &spec).unwrap();
     let db = Arc::new(RwLock::new(db));
     db.read().schema_compatibility_fingerprint().unwrap();
     for range in &spec.initial_ranges {

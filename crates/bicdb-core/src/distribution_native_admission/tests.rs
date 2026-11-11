@@ -38,9 +38,10 @@ fn fresh_same_spec(
     root: &std::path::Path,
     spec: &RangeImageBirthSpec,
 ) -> (Arc<RwLock<BicDb>>, FreshRangeGenesisAuthority) {
-    let (mut db, factory) =
-        BicDb::create_new_range_image_database(root, config(), spec.clone()).unwrap();
+    let (mut db, _) = BicDb::create_new_range_image_database(root, config(), spec.clone()).unwrap();
     db.create_collection("items").unwrap();
+    drop(db);
+    let (db, factory) = BicDb::open_range_image_database(root, config(), spec).unwrap();
     let db = Arc::new(RwLock::new(db));
     reattest_empty_genesis(&db, &factory, spec);
     (db, factory)

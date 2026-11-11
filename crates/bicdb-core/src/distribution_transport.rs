@@ -32,6 +32,7 @@ use crate::distribution_consensus::{
     MetadataAppendRequest, MetadataAppendResponse, MetadataConsensusStore, MetadataReadAck,
     MetadataReadAcquireRequest, MetadataReadAcquireResponse, MetadataReadObservation,
     MetadataReadParticipant, MetadataReadProbeRequest, MetadataReadProbeResponse,
+    MetadataRecoveryRoleObservation, MetadataRecoveryRoleRequest, MetadataRecoveryRoleResponse,
     MetadataVoteRequest, MetadataVoteResponse, METADATA_READ_ACQUISITION_PROTOCOL_VERSION,
 };
 use crate::distribution_data::{
@@ -180,6 +181,9 @@ enum ClusterDataRequest {
     MetadataReadAcquire {
         request: MetadataReadAcquireRequest,
     },
+    AcquireMetadataRecoveryRole {
+        request: MetadataRecoveryRoleRequest,
+    },
     PrepareRangeWrite {
         command: RangeWriteCommand,
     },
@@ -291,7 +295,8 @@ impl ClusterDataRequest {
             | Self::MetadataVote { .. }
             | Self::MetadataAppend { .. }
             | Self::MetadataReadProbe { .. }
-            | Self::MetadataReadAcquire { .. } => None,
+            | Self::MetadataReadAcquire { .. }
+            | Self::AcquireMetadataRecoveryRole { .. } => None,
         }
     }
 }
@@ -326,6 +331,7 @@ enum ClusterDataResponse {
     MetadataAppend(MetadataAppendResponse),
     MetadataReadProbe(MetadataReadProbeResponse),
     MetadataReadAcquire(MetadataReadAcquireResponse),
+    MetadataRecoveryRole(MetadataRecoveryRoleResponse),
     RangeWrite(RangeWriteAck),
     RangeWriteProgress(RangeWriteProgress),
     RangeWriteRepair(RangeWriteRepairBatch),
@@ -692,6 +698,19 @@ fn handle_cluster_data_connection(
             return provider
                 .acquire(caller, request, &cancellation)
                 .map(ClusterDataResponse::MetadataReadAcquire);
+        }
+        if let ClusterDataRequest::AcquireMetadataRecoveryRole { request } = request.request {
+            let provider = metadata_read_provider.ok_or_else(|| {
+                transport_error("fresh metadata recovery-role provider is not active")
+            })?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("recovery-role witness requires an authenticated recipient member")
+            })?;
+            let cancellation =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return provider
+                .acquire_recovery_role(caller, request, &cancellation)
+                .map(ClusterDataResponse::MetadataRecoveryRole);
         }
         dispatch_cluster_data_request(
             service,
@@ -2106,6 +2125,9 @@ fn dispatch_cluster_data_request(
             }
             Ok(ClusterDataResponse::MetadataReadProbe(response))
         }
+        ClusterDataRequest::AcquireMetadataRecoveryRole { .. } => Err(transport_error(
+            "metadata recovery-role acquisition requires the authenticated runtime",
+        )),
         ClusterDataRequest::MetadataReadAcquire { .. } => Err(transport_error(
             "metadata acquisition requires its authenticated runtime provider",
         )),
@@ -2388,6 +2410,14 @@ impl std::fmt::Debug for TcpClusterRelocationTransport {
 }
 
 impl MetadataReadProbeTransport for TcpClusterRelocationTransport {
+    fn acquire_recovery_role(
+        &self,
+        destination: &ClusterNodeId,
+        request: MetadataRecoveryRoleRequest,
+        parent: &CancellationToken,
+    ) -> Result<MetadataRecoveryRoleObservation> {
+        self.acquire_metadata_recovery_role_observation(destination, request, parent)
+    }
     fn local_participant(&self) -> MetadataReadParticipant {
         self.local_metadata_read_participant()
     }
@@ -2950,6 +2980,49 @@ impl TcpClusterRelocationTransport {
         }
     }
 
+    pub(crate) fn acquire_metadata_recovery_role_observation(
+        &self,
+        metadata_leader: &ClusterNodeId,
+        request: MetadataRecoveryRoleRequest,
+        parent: &CancellationToken,
+    ) -> Result<MetadataRecoveryRoleObservation> {
+        let started = Instant::now();
+        request.validate()?;
+        if request.recipient_node_id != self.caller_node_id
+            || request.recipient_incarnation != self.caller_incarnation
+        {
+            return Err(transport_error(
+                "recovery-role request is not this authenticated recipient",
+            ));
+        }
+        let token = parent.child_with_deadline(started + Duration::from_millis(request.budget_ms));
+        self.require_numeric_metadata_destination(metadata_leader, &token)?;
+        let (response, participant) = self.call_with_read_participant_cancellable(
+            &token,
+            metadata_leader,
+            ClusterDataRequest::AcquireMetadataRecoveryRole {
+                request: request.clone(),
+            },
+        )?;
+        match response {
+            ClusterDataResponse::MetadataRecoveryRole(response) => {
+                MetadataRecoveryRoleObservation::from_transport(
+                    &request,
+                    &self.cluster_id,
+                    metadata_leader,
+                    participant,
+                    response,
+                    token.deadline().unwrap(),
+                    started,
+                )
+            }
+            response => Err(unexpected_response(
+                "fresh metadata recovery-role witness",
+                response,
+            )),
+        }
+    }
+
     /// Obtain fresh metadata from its actual leader, including when the range
     /// leader is another member. Unsupported/unwired servers fail closed;
     /// there is no cached-topology, ordinary Append or eventual-read fallback.
@@ -3056,6 +3129,7 @@ impl TcpClusterRelocationTransport {
             &request,
             ClusterDataRequest::MetadataReadProbe { .. }
                 | ClusterDataRequest::MetadataReadAcquire { .. }
+                | ClusterDataRequest::AcquireMetadataRecoveryRole { .. }
         );
         let network_deadline = Instant::now() + Duration::from_millis(self.config.io_timeout_ms);
         let deadline = cancellation

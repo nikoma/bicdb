@@ -99,6 +99,340 @@ pub struct MetadataReadAcquireResponse {
     pub restore_activation: Option<MetadataRestoreActivation>,
 }
 
+/// Narrow operation purpose. Neither variant grants SQL or native readiness.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) enum MetadataRecoveryRolePurpose {
+    NormalRecovery,
+    CommittedHandoff {
+        relocation_id: crate::distribution::RelocationId,
+        plan_id: String,
+        session_id: Uuid,
+        nonce: Uuid,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct MetadataRecoveryRoleRequest {
+    pub protocol_version: u32,
+    pub acquisition_id: Uuid,
+    pub read_request_id: Uuid,
+    pub initiator_node_id: ClusterNodeId,
+    pub initiator_incarnation: u64,
+    pub initiator_certificate_sha256: Option<String>,
+    pub initiator_plaintext_loopback: bool,
+    pub recipient_node_id: ClusterNodeId,
+    pub recipient_incarnation: u64,
+    pub range_id: RangeId,
+    pub range_epoch: u64,
+    pub recovery_nonce: Uuid,
+    pub recipient_challenge: Uuid,
+    pub purpose: MetadataRecoveryRolePurpose,
+    pub budget_ms: u64,
+}
+
+impl MetadataRecoveryRoleRequest {
+    pub(crate) fn validate(&self) -> Result<()> {
+        self.subject_request().validate()?;
+        if self.recipient_incarnation == 0
+            || self.recovery_nonce.is_nil()
+            || self.recipient_challenge.is_nil()
+            || self
+                .initiator_certificate_sha256
+                .as_ref()
+                .is_some_and(|pin| pin.len() != 64 || !pin.bytes().all(|b| b.is_ascii_hexdigit()))
+        {
+            return Err(metadata_error("invalid metadata recovery-role request"));
+        }
+        if let MetadataRecoveryRolePurpose::CommittedHandoff {
+            plan_id,
+            session_id,
+            nonce,
+            ..
+        } = &self.purpose
+        {
+            if plan_id.is_empty()
+                || plan_id.len() > 1024
+                || session_id.is_nil()
+                || nonce.is_nil()
+                || *nonce != self.recovery_nonce
+            {
+                return Err(metadata_error("invalid recovery-role handoff purpose"));
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn subject_request(&self) -> MetadataReadAcquireRequest {
+        MetadataReadAcquireRequest {
+            protocol_version: self.protocol_version,
+            acquisition_id: self.acquisition_id,
+            read_request_id: self.read_request_id,
+            requester_node_id: self.initiator_node_id.clone(),
+            requester_incarnation: self.initiator_incarnation,
+            range_id: self.range_id,
+            range_epoch: self.range_epoch,
+            budget_ms: self.budget_ms,
+        }
+    }
+    pub(crate) fn matches_initiator(&self, participant: &MetadataReadParticipant) -> bool {
+        self.initiator_node_id == participant.node_id
+            && self.initiator_incarnation == participant.member_incarnation
+            && self.initiator_certificate_sha256 == participant.certificate_sha256
+            && self.initiator_plaintext_loopback == participant.plaintext_loopback
+    }
+    fn validate_configuration(
+        &self,
+        topology: &ClusterTopology,
+        metadata_leader: &ClusterNodeId,
+    ) -> Result<crate::distribution::RangeDescriptor> {
+        use crate::distribution::{RangeReplicaRole, RelocationPhase};
+        self.validate()?;
+        let invalid = || {
+            metadata_error(
+                "metadata recovery-role identity, purpose or committed configuration changed",
+            )
+        };
+        let range = topology.range_by_id(self.range_id).ok_or_else(invalid)?;
+        let initiator = topology
+            .nodes
+            .get(&self.initiator_node_id)
+            .ok_or_else(invalid)?;
+        let recipient = topology
+            .nodes
+            .get(&self.recipient_node_id)
+            .ok_or_else(invalid)?;
+        let pin_ok = match initiator.tls_certificate_sha256.as_deref() {
+            Some(pin) => {
+                self.initiator_certificate_sha256.as_deref() == Some(pin)
+                    || initiator
+                        .pending_tls_certificate_sha256
+                        .as_deref()
+                        .is_some_and(|pending| {
+                            self.initiator_certificate_sha256.as_deref() == Some(pending)
+                        })
+            }
+            None => {
+                self.initiator_certificate_sha256.is_some() || self.initiator_plaintext_loopback
+            }
+        };
+        if range.epoch != self.range_epoch
+            || initiator.incarnation != self.initiator_incarnation
+            || recipient.incarnation != self.recipient_incarnation
+            || initiator.lifecycle == ClusterNodeLifecycle::Decommissioned
+            || recipient.lifecycle == ClusterNodeLifecycle::Decommissioned
+            || !pin_ok
+        {
+            return Err(invalid());
+        }
+        let recipient_voter = range
+            .replicas
+            .iter()
+            .any(|r| r.node_id == recipient.id && r.role == RangeReplicaRole::Voter);
+        match &self.purpose {
+            MetadataRecoveryRolePurpose::NormalRecovery => {
+                if range.leader != initiator.id || !recipient_voter {
+                    return Err(invalid());
+                }
+            }
+            MetadataRecoveryRolePurpose::CommittedHandoff {
+                relocation_id,
+                plan_id,
+                session_id,
+                nonce,
+            } => {
+                let plan = topology
+                    .relocations
+                    .get(relocation_id)
+                    .ok_or_else(invalid)?;
+                let session = plan.handoff_session.as_ref().ok_or_else(invalid)?;
+                let exact_target = range.replicas.iter().any(|r| {
+                    r.id == plan.target_replica_id
+                        && r.node_id == recipient.id
+                        && r.node_id == plan.target
+                        && r.role == RangeReplicaRole::Learner
+                });
+                if (range.leader != initiator.id && metadata_leader != &initiator.id)
+                    || plan.plan_id != *plan_id
+                    || plan.range_id != range.id
+                    || plan.learner_epoch != range.epoch
+                    || !matches!(
+                        plan.phase,
+                        RelocationPhase::LearnerAllocated
+                            | RelocationPhase::SnapshotCopying
+                            | RelocationPhase::CatchingUp
+                            | RelocationPhase::ReadyToPromote
+                    )
+                    || session.session_id != *session_id
+                    || session.nonce != *nonce
+                    || (!recipient_voter && !exact_target)
+                {
+                    return Err(invalid());
+                }
+            }
+        }
+        Ok(range.clone())
+    }
+}
+
+/// Transfer evidence only. No decoded field constructs local Authority.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct MetadataRecoveryRoleResponse {
+    pub request: MetadataRecoveryRoleRequest,
+    pub evidence: MetadataReadAcquireResponse,
+}
+impl MetadataRecoveryRoleResponse {
+    fn validate(&self, request: &MetadataRecoveryRoleRequest) -> Result<()> {
+        if &self.request != request {
+            return Err(metadata_error("recovery-role response request mismatch"));
+        }
+        self.evidence
+            .validate_quorum_evidence(&request.subject_request())?;
+        request.validate_configuration(
+            &self.evidence.committed_topology,
+            &self.evidence.metadata_leader_id,
+        )?;
+        Ok(())
+    }
+}
+
+/// One independently fresh metadata witness, never a local Authority, lease,
+/// native admission, row-read barrier or transferable data-quorum certificate.
+#[derive(Debug)]
+pub(crate) struct MetadataRecoveryRoleObservation {
+    response: MetadataRecoveryRoleResponse,
+    deadline: Instant,
+}
+impl MetadataRecoveryRoleObservation {
+    pub(crate) fn request(&self) -> &MetadataRecoveryRoleRequest {
+        &self.response.request
+    }
+    pub(crate) fn context_id(&self) -> Uuid {
+        self.response.evidence.context_id
+    }
+    pub(crate) fn term(&self) -> u64 {
+        self.response.evidence.term
+    }
+    pub(crate) fn read_index(&self) -> u64 {
+        self.response.evidence.read_index
+    }
+    pub(crate) fn deadline(&self) -> Instant {
+        self.deadline
+    }
+    pub(crate) fn remaining_budget(&self) -> Option<Duration> {
+        self.deadline
+            .checked_duration_since(Instant::now())
+            .filter(|d| !d.is_zero())
+    }
+    pub(crate) fn require_live_request(&self, read_request: Uuid, challenge: Uuid) -> Result<()> {
+        if self.request().read_request_id != read_request
+            || self.request().recipient_challenge != challenge
+            || self.remaining_budget().is_none()
+        {
+            return Err(metadata_error(
+                "recovery-role witness scope changed or expired",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn committed_topology(
+        &self,
+        read_request: Uuid,
+        challenge: Uuid,
+    ) -> Result<&ClusterTopology> {
+        self.require_live_request(read_request, challenge)?;
+        Ok(&self.response.evidence.committed_topology)
+    }
+    pub(crate) fn restore_activation(
+        &self,
+        read_request: Uuid,
+        challenge: Uuid,
+    ) -> Result<Option<&MetadataRestoreActivation>> {
+        self.require_live_request(read_request, challenge)?;
+        Ok(self.response.evidence.restore_activation.as_ref())
+    }
+    pub(crate) fn require_initiator(&self, actual: &MetadataReadParticipant) -> Result<()> {
+        self.require_live_request(
+            self.request().read_request_id,
+            self.request().recipient_challenge,
+        )?;
+        if !self.request().matches_initiator(actual) {
+            return Err(metadata_error(
+                "recovery-role witness does not bind the actual initiating TLS peer",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn from_transport(
+        request: &MetadataRecoveryRoleRequest,
+        cluster: &ClusterId,
+        destination: &ClusterNodeId,
+        participant: MetadataReadParticipant,
+        response: MetadataRecoveryRoleResponse,
+        deadline: Instant,
+        started: Instant,
+    ) -> Result<Self> {
+        response.validate(request)?;
+        let evidence = &response.evidence;
+        let deadline = deadline.min(started + Duration::from_millis(evidence.context_budget_ms));
+        if Instant::now() >= deadline
+            || evidence.committed_topology.cluster_id != *cluster
+            || evidence.metadata_leader_id != *destination
+            || participant.node_id != *destination
+            || participant.member_incarnation != evidence.metadata_leader_incarnation
+        {
+            return Err(metadata_error(
+                "recovery-role metadata source or deadline mismatch",
+            ));
+        }
+        let node = evidence
+            .committed_topology
+            .nodes
+            .get(destination)
+            .ok_or_else(|| metadata_error("recovery-role metadata source missing"))?;
+        let identity = MetadataReadVoterIdentity {
+            incarnation: node.incarnation,
+            active_certificate: node.tls_certificate_sha256.clone(),
+            pending_certificate: node.pending_tls_certificate_sha256.clone(),
+        };
+        if !identity.accepts(&participant) {
+            return Err(metadata_error("recovery-role metadata source pin mismatch"));
+        }
+        Ok(Self { response, deadline })
+    }
+    pub(crate) fn from_local_authority(
+        authority: MetadataReadAuthority,
+        request: MetadataRecoveryRoleRequest,
+        recipient: &MetadataReadParticipant,
+    ) -> Result<Self> {
+        let deadline = authority.deadline();
+        let response = authority.into_recovery_role_response(request.clone())?;
+        if recipient.node_id != request.recipient_node_id
+            || recipient.member_incarnation != request.recipient_incarnation
+        {
+            return Err(metadata_error("local recovery-role recipient mismatch"));
+        }
+        response.validate(&request)?;
+        let node = &response.evidence.committed_topology.nodes[&request.recipient_node_id];
+        let identity = MetadataReadVoterIdentity {
+            incarnation: node.incarnation,
+            active_certificate: node.tls_certificate_sha256.clone(),
+            pending_certificate: node.pending_tls_certificate_sha256.clone(),
+        };
+        if response.evidence.metadata_leader_id != recipient.node_id || !identity.accepts(recipient)
+        {
+            return Err(metadata_error(
+                "local recovery-role is not its actual metadata leader participant",
+            ));
+        }
+        if Instant::now() >= deadline {
+            return Err(metadata_error("local recovery-role witness expired"));
+        }
+        Ok(Self { response, deadline })
+    }
+}
+
 /// A request-bound metadata observation minted only after transport checks.
 /// It cannot be deserialized or converted into MetadataReadAuthority. It is
 /// neither a range-image permit nor an implementation of strong row reads.
@@ -206,6 +540,17 @@ impl MetadataReadObservation {
 
 impl MetadataReadAcquireResponse {
     fn validate(&self, request: &MetadataReadAcquireRequest) -> Result<()> {
+        self.validate_quorum_evidence(request)?;
+        validate_acquire_requester(request, &self.committed_topology)?;
+        if self.committed_topology.nodes[&self.metadata_leader_id].lifecycle
+            != ClusterNodeLifecycle::Active
+        {
+            return Err(metadata_error("metadata acquisition leader is not active"));
+        }
+        Ok(())
+    }
+
+    fn validate_quorum_evidence(&self, request: &MetadataReadAcquireRequest) -> Result<()> {
         self.committed_topology.validate()?;
         if self.protocol_version != METADATA_READ_ACQUISITION_PROTOCOL_VERSION
             || &self.request != request
@@ -237,14 +582,13 @@ impl MetadataReadAcquireResponse {
                 "metadata acquisition current anchor digest differs",
             ));
         }
-        validate_acquire_requester(request, &self.committed_topology)?;
         let leader = self
             .committed_topology
             .nodes
             .get(&self.metadata_leader_id)
             .ok_or_else(|| metadata_error("metadata acquisition leader missing"))?;
         if leader.incarnation != self.metadata_leader_incarnation
-            || leader.lifecycle != ClusterNodeLifecycle::Active
+            || leader.lifecycle == ClusterNodeLifecycle::Decommissioned
             || leader.metadata_role != MetadataMemberRole::Voter
         {
             return Err(metadata_error(
@@ -520,6 +864,18 @@ pub struct MetadataReadParticipant {
 }
 
 impl MetadataReadParticipant {
+    pub(crate) fn node_id(&self) -> &ClusterNodeId {
+        &self.node_id
+    }
+    pub(crate) fn member_incarnation(&self) -> u64 {
+        self.member_incarnation
+    }
+    pub(crate) fn certificate_sha256(&self) -> Option<&str> {
+        self.certificate_sha256.as_deref()
+    }
+    pub(crate) fn plaintext_loopback(&self) -> bool {
+        self.plaintext_loopback
+    }
     pub(crate) fn from_transport(
         node_id: ClusterNodeId,
         member_incarnation: u64,
@@ -695,6 +1051,23 @@ impl MetadataReadAuthority {
         self,
         request: MetadataReadAcquireRequest,
     ) -> Result<MetadataReadAcquireResponse> {
+        let response = self.into_quorum_evidence(request)?;
+        response.validate(&response.request)?;
+        Ok(response)
+    }
+    pub(crate) fn into_recovery_role_response(
+        self,
+        request: MetadataRecoveryRoleRequest,
+    ) -> Result<MetadataRecoveryRoleResponse> {
+        let evidence = self.into_quorum_evidence(request.subject_request())?;
+        let response = MetadataRecoveryRoleResponse { request, evidence };
+        response.validate(&response.request)?;
+        Ok(response)
+    }
+    fn into_quorum_evidence(
+        self,
+        request: MetadataReadAcquireRequest,
+    ) -> Result<MetadataReadAcquireResponse> {
         if !self.is_current_budget() {
             return Err(metadata_error(
                 "completed metadata authority budget expired",
@@ -724,7 +1097,7 @@ impl MetadataReadAuthority {
             fresh_new_voters: self.fresh_new_voters,
             restore_activation: self.restore_activation,
         };
-        response.validate(&response.request)?;
+        response.validate_quorum_evidence(&response.request)?;
         Ok(response)
     }
     pub fn context_id(&self) -> Uuid {
@@ -824,6 +1197,35 @@ impl MetadataConsensusStore {
             .range_by_id(request.range_id)
             .unwrap()
             .clone())
+    }
+
+    pub(crate) fn validate_recovery_role_caller(
+        &self,
+        request: &MetadataRecoveryRoleRequest,
+        caller: &MetadataReadParticipant,
+    ) -> Result<crate::RangeDescriptor> {
+        let range =
+            request.validate_configuration(&self.state.committed_topology, &self.state.node_id)?;
+        let member = self
+            .state
+            .committed_topology
+            .nodes
+            .get(&request.recipient_node_id)
+            .ok_or_else(|| metadata_error("recovery-role recipient absent"))?;
+        let identity = MetadataReadVoterIdentity {
+            incarnation: member.incarnation,
+            active_certificate: member.tls_certificate_sha256.clone(),
+            pending_certificate: member.pending_tls_certificate_sha256.clone(),
+        };
+        if caller.node_id != request.recipient_node_id
+            || caller.member_incarnation != request.recipient_incarnation
+            || !identity.accepts(caller)
+        {
+            return Err(metadata_error(
+                "recovery-role recipient is not its authenticated member",
+            ));
+        }
+        Ok(range)
     }
 
     pub(crate) fn read_authority_ready(&self, context: &MetadataReadContext) -> Result<bool> {

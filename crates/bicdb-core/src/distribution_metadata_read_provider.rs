@@ -13,9 +13,10 @@ use parking_lot::{Mutex, MutexGuard};
 
 use crate::distribution::{ClusterNodeId, RangeDescriptor};
 use crate::distribution_consensus::{
-    MetadataConsensusStore, MetadataReadAck, MetadataReadAcquireRequest,
-    MetadataReadAcquireResponse, MetadataReadContext, MetadataReadParticipant,
-    MetadataReadProbeRequest,
+    MetadataConsensusRole, MetadataConsensusStore, MetadataReadAck, MetadataReadAcquireRequest,
+    MetadataReadAcquireResponse, MetadataReadAuthority, MetadataReadContext,
+    MetadataReadParticipant, MetadataReadProbeRequest, MetadataRecoveryRoleObservation,
+    MetadataRecoveryRolePurpose, MetadataRecoveryRoleRequest, MetadataRecoveryRoleResponse,
 };
 use crate::error::{BicDbError, Result};
 use crate::CancellationToken;
@@ -26,6 +27,16 @@ fn acquisition_error(message: impl Into<String>) -> BicDbError {
 
 pub trait MetadataReadProbeTransport: Send + Sync + std::fmt::Debug + 'static {
     fn local_participant(&self) -> MetadataReadParticipant;
+    fn acquire_recovery_role(
+        &self,
+        _destination: &ClusterNodeId,
+        _request: MetadataRecoveryRoleRequest,
+        _parent: &CancellationToken,
+    ) -> Result<MetadataRecoveryRoleObservation> {
+        Err(acquisition_error(
+            "fresh recovery-role transport is unavailable",
+        ))
+    }
     fn probe(
         &self,
         destination: &ClusterNodeId,
@@ -89,6 +100,24 @@ impl Drop for CancelOnReturn {
         self.0.cancel();
     }
 }
+enum ReadAdmission<'a> {
+    Leader,
+    RecoveryWitness(&'a MetadataRecoveryRoleRequest),
+}
+impl ReadAdmission<'_> {
+    fn validate(
+        &self,
+        store: &MetadataConsensusStore,
+        request: &MetadataReadAcquireRequest,
+        caller: &MetadataReadParticipant,
+    ) -> Result<RangeDescriptor> {
+        match self {
+            Self::Leader => store.validate_read_acquisition_caller(request, caller),
+            Self::RecoveryWitness(role) => store.validate_recovery_role_caller(role, caller),
+        }
+    }
+}
+
 struct ProbeJob {
     destination: ClusterNodeId,
     request: MetadataReadProbeRequest,
@@ -168,6 +197,109 @@ impl MetadataReadProvider {
         request: MetadataReadAcquireRequest,
         parent: &CancellationToken,
     ) -> Result<MetadataReadAcquireResponse> {
+        let authority =
+            self.acquire_authority(caller, request.clone(), ReadAdmission::Leader, parent)?;
+        let response = authority.into_acquisition_response(request)?;
+        self.bound_response(&response)?;
+        Ok(response)
+    }
+
+    fn bound_response(&self, response: &impl serde::Serialize) -> Result<()> {
+        serde_json::to_writer(&mut SizeBound(self.limits.max_payload_bytes), response)
+            .map_err(|_| acquisition_error("completed proof exceeds byte bound"))?;
+        Ok(())
+    }
+
+    pub(crate) fn acquire_recovery_role(
+        &self,
+        caller: &MetadataReadParticipant,
+        request: MetadataRecoveryRoleRequest,
+        parent: &CancellationToken,
+    ) -> Result<MetadataRecoveryRoleResponse> {
+        request.validate()?;
+        let authority = self.acquire_authority(
+            caller,
+            request.subject_request(),
+            ReadAdmission::RecoveryWitness(&request),
+            parent,
+        )?;
+        let response = authority.into_recovery_role_response(request)?;
+        self.bound_response(&response)?;
+        Ok(response)
+    }
+
+    /// The fresh query runs before callers acquire any data/service/DB latch.
+    /// A cached leader ID is only a routing hint; it can never grant a role.
+    pub(crate) fn witness_recovery_role(
+        &self,
+        initiator: &MetadataReadParticipant,
+        read_request_id: uuid::Uuid,
+        range_id: crate::RangeId,
+        range_epoch: u64,
+        recovery_nonce: uuid::Uuid,
+        recipient_challenge: uuid::Uuid,
+        purpose: MetadataRecoveryRolePurpose,
+        parent: &CancellationToken,
+    ) -> Result<MetadataRecoveryRoleObservation> {
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        token.check()?;
+        let local = self.transport.local_participant();
+        let budget = token
+            .deadline()
+            .unwrap()
+            .checked_duration_since(Instant::now())
+            .ok_or_else(|| acquisition_error("recovery-role budget expired"))?;
+        let request = MetadataRecoveryRoleRequest {
+            protocol_version: crate::METADATA_READ_ACQUISITION_PROTOCOL_VERSION,
+            acquisition_id: uuid::Uuid::now_v7(),
+            read_request_id,
+            initiator_node_id: initiator.node_id().clone(),
+            initiator_incarnation: initiator.member_incarnation(),
+            initiator_certificate_sha256: initiator.certificate_sha256().map(str::to_string),
+            initiator_plaintext_loopback: initiator.plaintext_loopback(),
+            recipient_node_id: local.node_id().clone(),
+            recipient_incarnation: local.member_incarnation(),
+            range_id,
+            range_epoch,
+            recovery_nonce,
+            recipient_challenge,
+            purpose,
+            budget_ms: budget
+                .as_millis()
+                .try_into()
+                .map_err(|_| acquisition_error("recovery-role duration overflow"))?,
+        };
+        request.validate()?;
+        let status = self.lock_consensus(&token)?.status();
+        if status.role == MetadataConsensusRole::Leader {
+            let authority = self.acquire_authority(
+                &local,
+                request.subject_request(),
+                ReadAdmission::RecoveryWitness(&request),
+                &token,
+            )?;
+            return MetadataRecoveryRoleObservation::from_local_authority(
+                authority, request, &local,
+            );
+        }
+        let leader = status.leader_id.ok_or_else(|| {
+            acquisition_error("metadata leader hint unavailable; retry fresh recovery-role query")
+        })?;
+        let observation = self
+            .transport
+            .acquire_recovery_role(&leader, request, &token)?;
+        observation.require_initiator(initiator)?;
+        token.check()?;
+        Ok(observation)
+    }
+
+    fn acquire_authority(
+        &self,
+        caller: &MetadataReadParticipant,
+        request: MetadataReadAcquireRequest,
+        admission: ReadAdmission<'_>,
+        parent: &CancellationToken,
+    ) -> Result<MetadataReadAuthority> {
         request.validate()?;
         parent.check()?;
         self.inflight
@@ -182,7 +314,7 @@ impl MetadataReadProvider {
         let (mut context, range) = {
             let consensus = self.lock_consensus(&token)?;
             consensus.read_authority_payload_fits(self.limits.max_payload_bytes - 128 * 1024)?;
-            let range = consensus.validate_read_acquisition_caller(&request, caller)?;
+            let range = admission.validate(&consensus, &request, caller)?;
             let budget = token
                 .deadline()
                 .unwrap()
@@ -253,7 +385,7 @@ impl MetadataReadProvider {
                 let consensus = self.lock_consensus(&token)?;
                 if consensus.read_authority_ready(&context)? {
                     if !same_range_read_authority(
-                        &consensus.validate_read_acquisition_caller(&request, caller)?,
+                        &admission.validate(&consensus, &request, caller)?,
                         &range,
                     ) {
                         return Err(acquisition_error(
@@ -262,16 +394,11 @@ impl MetadataReadProvider {
                     }
                     consensus
                         .read_authority_payload_fits(self.limits.max_payload_bytes - 128 * 1024)?;
-                    let response = consensus
-                        .finish_read_authority(context)?
-                        .into_acquisition_response(request)?;
-                    let mut counter = SizeBound(self.limits.max_payload_bytes);
-                    serde_json::to_writer(&mut counter, &response)
-                        .map_err(|_| acquisition_error("completed proof exceeds byte bound"))?;
+                    let authority = consensus.finish_read_authority(context)?;
                     token.check()?;
                     // Sibling cancellation happens on return, without joining a
                     // silent voter and allowing its timeout to expire this proof.
-                    return Ok(response);
+                    return Ok(authority);
                 }
             }
             while outstanding.len() < workers {
@@ -523,8 +650,10 @@ mod tests {
     }
     impl Fixture {
         fn new() -> Self {
+            Self::with_topology(topology_with_count(3))
+        }
+        fn with_topology(topology: ClusterTopology) -> Self {
             let root = tempfile::tempdir().unwrap();
-            let topology = topology_with_count(3);
             let mut leader = open(&root.path().join("n1"), "n1", &topology);
             let mut follower = open(&root.path().join("n2"), "n2", &topology);
             leader.start_election().unwrap();
@@ -581,6 +710,236 @@ mod tests {
             )
         }
     }
+    fn role_request(
+        fixture: &Fixture,
+        recipient: &str,
+        initiator: &str,
+        purpose: MetadataRecoveryRolePurpose,
+    ) -> MetadataRecoveryRoleRequest {
+        MetadataRecoveryRoleRequest {
+            protocol_version: crate::METADATA_READ_ACQUISITION_PROTOCOL_VERSION,
+            acquisition_id: Uuid::now_v7(),
+            read_request_id: Uuid::now_v7(),
+            initiator_node_id: node(initiator),
+            initiator_incarnation: fixture.topology.nodes[&node(initiator)].incarnation,
+            initiator_certificate_sha256: None,
+            initiator_plaintext_loopback: true,
+            recipient_node_id: node(recipient),
+            recipient_incarnation: fixture.topology.nodes[&node(recipient)].incarnation,
+            range_id: crate::RangeId::new(1).unwrap(),
+            range_epoch: fixture.topology.ranges.values().next().unwrap().epoch,
+            recovery_nonce: Uuid::now_v7(),
+            recipient_challenge: Uuid::now_v7(),
+            purpose,
+            budget_ms: 1000,
+        }
+    }
+    #[test]
+    fn fresh_role_is_data_voter_scoped_and_drain_is_not_removal() {
+        let mut topology = topology_with_count(3);
+        topology.nodes.get_mut(&node("n2")).unwrap().lifecycle =
+            crate::ClusterNodeLifecycle::Draining;
+        let fixture = Fixture::with_topology(topology);
+        let request = role_request(
+            &fixture,
+            "n2",
+            "n2",
+            MetadataRecoveryRolePurpose::NormalRecovery,
+        );
+        let response = fixture
+            .provider
+            .acquire_recovery_role(
+                &participant(&fixture.topology, "n2"),
+                request.clone(),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        assert_eq!(response.request, request);
+        assert!(
+            fixture.acquire(fixture.request()).is_err(),
+            "ordinary acquisition remains strict"
+        );
+        let request = role_request(
+            &fixture,
+            "n3",
+            "n2",
+            MetadataRecoveryRolePurpose::NormalRecovery,
+        );
+        assert!(
+            fixture
+                .provider
+                .acquire_recovery_role(
+                    &participant(&fixture.topology, "n3"),
+                    request,
+                    &CancellationToken::uncancelable()
+                )
+                .is_err(),
+            "metadata membership alone is not a data voter role"
+        );
+        let busy = Fixture::new();
+        busy.provider.inflight.store(4, Ordering::SeqCst);
+        assert!(busy
+            .provider
+            .acquire_recovery_role(
+                &participant(&fixture.topology, "n2"),
+                role_request(
+                    &fixture,
+                    "n2",
+                    "n2",
+                    MetadataRecoveryRolePurpose::NormalRecovery
+                ),
+                &CancellationToken::uncancelable()
+            )
+            .is_err());
+    }
+    #[test]
+    fn handoff_witness_is_exact_plan_purpose_for_metadata_coordinator_and_target_learner() {
+        use crate::{MetadataMemberRole, PlannedReplicaMove, RebalancePlan, ReplicaMoveReason};
+        let root = tempfile::tempdir().unwrap();
+        let cfg = DistributionConfig {
+            enabled: true,
+            cluster_id: crate::ClusterId::new("metadata-provider-test").unwrap(),
+            node_id: node("n1"),
+            node_address: "127.0.0.1:10001".into(),
+            replication_factor: 1,
+            initial_ranges: 1,
+            ..DistributionConfig::default()
+        };
+        let mut store = DistributionStore::initialize_at(root.path(), cfg, false, 10).unwrap();
+        store
+            .install_authoritative_topology(topology_with_count(3))
+            .unwrap();
+        let range = store.topology().ranges.values().next().unwrap().clone();
+        let plan = RebalancePlan {
+            id: "exact-role-plan".into(),
+            topology_generation: store.topology().generation,
+            created_at_ms: 20,
+            replica_moves: vec![PlannedReplicaMove {
+                range_id: range.id,
+                expected_epoch: range.epoch,
+                source: Some(node("n2")),
+                target: node("n3"),
+                estimated_bytes: 0,
+                reason: ReplicaMoveReason::LoadBalance,
+            }],
+            leader_transfers: vec![],
+            unplaced_ranges: vec![],
+            estimated_bytes_in_flight: 0,
+        };
+        store.apply_rebalance_plan(&plan, &node("n1"), 20).unwrap();
+        let mut topology = store.topology().clone();
+        // Current topology invariants promote metadata membership before a
+        // data learner is allocated; only the DATA role is Learner here.
+        let relocation = topology.relocations.values().next().unwrap();
+        let session = relocation.handoff_session.as_ref().unwrap();
+        let nonce = session.nonce;
+        let purpose = MetadataRecoveryRolePurpose::CommittedHandoff {
+            relocation_id: relocation.id,
+            plan_id: relocation.plan_id.clone(),
+            session_id: session.session_id,
+            nonce,
+        };
+        let fixture = Fixture::with_topology(topology);
+        let mut request = role_request(&fixture, "n3", "n1", purpose.clone());
+        request.recovery_nonce = nonce;
+        let response = fixture
+            .provider
+            .acquire_recovery_role(
+                &participant(&fixture.topology, "n3"),
+                request.clone(),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        assert_eq!(response.request.purpose, purpose);
+        let mut normal = role_request(
+            &fixture,
+            "n3",
+            "n2",
+            MetadataRecoveryRolePurpose::NormalRecovery,
+        );
+        normal.recovery_nonce = nonce;
+        assert!(fixture
+            .provider
+            .acquire_recovery_role(
+                &participant(&fixture.topology, "n3"),
+                normal,
+                &CancellationToken::uncancelable()
+            )
+            .is_err());
+        if let MetadataRecoveryRolePurpose::CommittedHandoff { session_id, .. } =
+            &mut request.purpose
+        {
+            *session_id = Uuid::now_v7();
+        }
+        assert!(fixture
+            .provider
+            .acquire_recovery_role(
+                &participant(&fixture.topology, "n3"),
+                request,
+                &CancellationToken::uncancelable()
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn role_scope_rejects_wrong_peer_epoch_nonce_and_response_challenge() {
+        let fixture = Fixture::new();
+        let request = role_request(
+            &fixture,
+            "n2",
+            "n2",
+            MetadataRecoveryRolePurpose::NormalRecovery,
+        );
+        let started = Instant::now();
+        let response = fixture
+            .provider
+            .acquire_recovery_role(
+                &participant(&fixture.topology, "n2"),
+                request.clone(),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        let observation = MetadataRecoveryRoleObservation::from_transport(
+            &request,
+            &fixture.topology.cluster_id,
+            &node("n1"),
+            participant(&fixture.topology, "n1"),
+            response,
+            started + Duration::from_secs(1),
+            started,
+        )
+        .unwrap();
+        observation
+            .require_initiator(&participant(&fixture.topology, "n2"))
+            .unwrap();
+        assert!(observation
+            .require_initiator(&participant(&fixture.topology, "n1"))
+            .is_err());
+        assert!(observation
+            .require_live_request(request.read_request_id, Uuid::now_v7())
+            .is_err());
+        let mut invalid = request.clone();
+        invalid.range_epoch += 1;
+        assert!(fixture
+            .provider
+            .acquire_recovery_role(
+                &participant(&fixture.topology, "n2"),
+                invalid,
+                &CancellationToken::uncancelable()
+            )
+            .is_err());
+        let mut invalid = request;
+        invalid.recovery_nonce = Uuid::nil();
+        assert!(fixture
+            .provider
+            .acquire_recovery_role(
+                &participant(&fixture.topology, "n2"),
+                invalid,
+                &CancellationToken::uncancelable()
+            )
+            .is_err());
+    }
+
     #[test]
     fn fresh_quorum_returns_without_waiting_for_silent_voter() {
         let fixture = Fixture::new();
@@ -1179,6 +1538,62 @@ mod tests {
                 .committed_topology(observation.request().read_request_id)
                 .is_ok());
         }
+        #[test]
+        fn actual_mtls_role_witness_binds_the_real_recipient_and_initiator() {
+            let fixture = NetworkFixture::new(true);
+            let request = MetadataRecoveryRoleRequest {
+                protocol_version: crate::METADATA_READ_ACQUISITION_PROTOCOL_VERSION,
+                acquisition_id: Uuid::now_v7(),
+                read_request_id: Uuid::now_v7(),
+                initiator_node_id: node("n2"),
+                initiator_incarnation: fixture
+                    .client
+                    .local_metadata_read_participant()
+                    .member_incarnation(),
+                initiator_certificate_sha256: fixture
+                    .client
+                    .local_metadata_read_participant()
+                    .certificate_sha256()
+                    .map(str::to_string),
+                initiator_plaintext_loopback: false,
+                recipient_node_id: node("n2"),
+                recipient_incarnation: fixture
+                    .client
+                    .local_metadata_read_participant()
+                    .member_incarnation(),
+                range_id: RangeId::new(1).unwrap(),
+                range_epoch: fixture.range_epoch,
+                recovery_nonce: Uuid::now_v7(),
+                recipient_challenge: Uuid::now_v7(),
+                purpose: MetadataRecoveryRolePurpose::NormalRecovery,
+                budget_ms: 1500,
+            };
+            let observation = fixture
+                .client
+                .acquire_metadata_recovery_role_observation(
+                    &node("n1"),
+                    request.clone(),
+                    &CancellationToken::uncancelable(),
+                )
+                .unwrap();
+            observation
+                .require_initiator(&fixture.client.local_metadata_read_participant())
+                .unwrap();
+            assert!(observation
+                .require_initiator(&fixture.leader_client.local_metadata_read_participant())
+                .is_err());
+            let mut wrong = request;
+            wrong.recipient_node_id = node("n3");
+            assert!(fixture
+                .client
+                .acquire_metadata_recovery_role_observation(
+                    &node("n1"),
+                    wrong,
+                    &CancellationToken::uncancelable()
+                )
+                .is_err());
+        }
+
         #[test]
         fn unwired_server_and_non_range_leader_refuse_acquisition() {
             let fixture = NetworkFixture::new(false);

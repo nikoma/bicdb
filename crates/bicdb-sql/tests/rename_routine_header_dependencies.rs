@@ -101,7 +101,7 @@ fn routine_defaults_keep_the_callers_privileges_before_definer_entry() {
         )
         .unwrap();
         let mut sql = SqlSession::new(&mut db);
-        sql.execute("CREATE ROLE header_guest; CREATE FUNCTION header_secret() RETURNS TEXT LANGUAGE sql AS 'SELECT ''secret'''; REVOKE ALL ON FUNCTION header_secret() FROM PUBLIC; CREATE FUNCTION header_definer(arg TEXT DEFAULT header_secret()) RETURNS TEXT LANGUAGE sql SECURITY DEFINER AS 'SELECT arg'; CREATE PROCEDURE header_definer_proc(arg TEXT DEFAULT header_secret()) LANGUAGE sql SECURITY DEFINER AS 'SELECT 1'; CREATE FUNCTION header_definer_rows(arg TEXT DEFAULT header_secret()) RETURNS TABLE(item TEXT) LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN RETURN; END $$; SET ROLE header_guest").unwrap();
+        sql.execute("CREATE ROLE header_guest; CREATE FUNCTION header_secret() RETURNS TEXT LANGUAGE sql AS 'SELECT ''secret'''; REVOKE ALL ON FUNCTION header_secret() FROM PUBLIC; CREATE FUNCTION header_definer(arg TEXT DEFAULT header_secret()) RETURNS TEXT LANGUAGE sql SECURITY DEFINER AS 'SELECT arg'; CREATE PROCEDURE header_definer_proc(arg TEXT DEFAULT header_secret()) LANGUAGE sql SECURITY DEFINER AS 'SELECT 1'; CREATE FUNCTION header_definer_rows(arg TEXT DEFAULT header_secret()) RETURNS TABLE(item TEXT) LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN RETURN; END $$; GRANT EXECUTE ON FUNCTION header_definer(TEXT) TO header_guest; GRANT EXECUTE ON FUNCTION header_definer_proc(TEXT) TO header_guest; GRANT EXECUTE ON FUNCTION header_definer_rows(TEXT) TO header_guest; SET ROLE header_guest").unwrap();
         for statement in [
             "SELECT header_definer()",
             "CALL header_definer_proc()",
@@ -109,6 +109,10 @@ fn routine_defaults_keep_the_callers_privileges_before_definer_entry() {
         ] {
             let error = sql.execute(statement).unwrap_err();
             assert_eq!(error.sqlstate(), "42501", "{statement}: {error}");
+            assert!(
+                error.to_string().contains("header_secret"),
+                "{statement}: {error}"
+            );
         }
         assert_eq!(
             sql.execute("SELECT header_definer('explicit')")

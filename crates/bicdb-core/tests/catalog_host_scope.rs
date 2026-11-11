@@ -254,7 +254,7 @@ fn demotion_during_an_outer_decision_keeps_readonly_host_cleanup_access() {
         fenced(&db);
         {
             // Cleanup may inspect its existing catalog prefix, while the
-            // demoted node still refuses every mutation and promotion API.
+            // demoted node still refuses mutations and local recovery.
             let _access=db.enter_catalog_scope(&token).expect("a refused predecision role-fenced commit must not leave its host scope permanently closing");
             let mut internal = db.begin_transaction().unwrap();
             assert_eq!(

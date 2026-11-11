@@ -326,10 +326,11 @@ impl BicDb {
         self.check_recovery_state()?;
         self.catalog_admission
             .prepare_commit(tx.id, tx.catalog_actor_scope)?;
-        if tx.state == TxState::Pending && self.ensure_writable("commit").is_err() {
-            return self.commit_read_only_on_standby(tx);
-        }
-        let committed = self.commit_transaction_tracked(tx);
+        let committed = if tx.state == TxState::Pending && self.ensure_writable("commit").is_err() {
+            self.commit_read_only_on_standby(tx)
+        } else {
+            self.commit_transaction_tracked(tx)
+        };
         // A commit that failed before its decision on a database fenced in
         // the meantime reports the fence (58030), not whatever it tripped
         // over: rows a failed materialization touched can have resident

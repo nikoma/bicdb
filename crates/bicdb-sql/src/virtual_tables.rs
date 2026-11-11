@@ -4525,6 +4525,11 @@ pub(crate) fn parse_raw_alter_default_privileges(
     let Some(mut rest) = normalized.strip_prefix("alter default privileges ") else {
         return Ok(None);
     };
+    // The raw handler owns one statement, not the rest of a migration batch.
+    // Let the split dispatcher apply it separately to each statement.
+    if split_sql_statements(trimmed).len() != 1 {
+        return Ok(None);
+    }
     let schema_name = if let Some(schema_rest) = rest.strip_prefix("in schema ") {
         let (schema_name, after_schema) = parse_leading_sql_identifier(schema_rest)?;
         if !schema_name.chars().all(is_ident_char) {

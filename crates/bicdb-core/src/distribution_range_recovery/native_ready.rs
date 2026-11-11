@@ -1,11 +1,11 @@
 //! Closed, actual native-prepared voter agreement. This proof is distinct from
 //! epoch fencing, raw Applied counters, image placement and completed serving.
+use super::image_history::MAX_NATIVE_READY_IRREVERSIBLE_COMMANDS;
 use super::*;
 use crate::distribution_range_consensus::{
     PreparedNativeRecoveryReady, RangeWriteProgress, RangeWriteStore,
 };
 use crate::CancellationToken;
-use super::image_history::MAX_NATIVE_READY_IRREVERSIBLE_COMMANDS;
 
 const NATIVE_READY_EVIDENCE_VERSION: u32 = 1;
 
@@ -92,9 +92,7 @@ mod obligation_bound_tests {
             challenge: Uuid::new_v4(),
             budget_ms: 5000,
         };
-        let peer = MetadataReadParticipant::from_transport(
-            progress.node_id.clone(), 1, None, true,
-        );
+        let peer = MetadataReadParticipant::from_transport(progress.node_id.clone(), 1, None, true);
         let mut reply = NativeReadyReply {
             stage: FrozenNativeReadyStage::NativePrepared,
             evidence_version: NATIVE_READY_EVIDENCE_VERSION,
@@ -118,7 +116,9 @@ mod obligation_bound_tests {
         };
         assert_eq!(reply.irreversible_command_sha256.len(), 2048);
         reply.test_validate_shape_only(&request, &peer).unwrap();
-        reply.irreversible_command_sha256.insert(u64::MAX - 2049, "f".repeat(64));
+        reply
+            .irreversible_command_sha256
+            .insert(u64::MAX - 2049, "f".repeat(64));
         assert!(reply.test_validate_shape_only(&request, &peer).is_err());
         assert_eq!(reply.irreversible_command_sha256.len(), 2049);
     }

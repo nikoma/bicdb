@@ -196,7 +196,9 @@ mod obligation_bound_tests {
         let (scope, progress, oversized) =
             test_only_structural_fence_dtos(MAX_FENCED_IRREVERSIBLE_COMMANDS + 1);
         let error = oversized.require_shape(&scope, &progress).unwrap_err();
-        assert!(error.to_string().contains("complete 2049-command obligation reply bound"));
+        assert!(error
+            .to_string()
+            .contains("complete 2049-command obligation reply bound"));
         assert_eq!(oversized.irreversible_command_sha256.len(), 2050);
     }
 }

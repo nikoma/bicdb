@@ -43,13 +43,19 @@ mod obligation_bound_tests {
         let before = values.clone();
         insert_complete_fenced_obligation(&mut values, 1, &"a".repeat(64)).unwrap();
         assert_eq!(values, before);
-        let conflict = insert_complete_fenced_obligation(&mut values, 1, &"b".repeat(64)).unwrap_err();
+        let conflict =
+            insert_complete_fenced_obligation(&mut values, 1, &"b".repeat(64)).unwrap_err();
         assert!(conflict.to_string().contains("conflicts"));
         assert_eq!(values, before);
         let overflow = insert_complete_fenced_obligation(
-            &mut values, MAX_FENCED_IRREVERSIBLE_COMMANDS as u64 + 1, &"a".repeat(64),
-        ).unwrap_err();
-        assert!(overflow.to_string().contains("complete 2049-command obligation reply bound"));
+            &mut values,
+            MAX_FENCED_IRREVERSIBLE_COMMANDS as u64 + 1,
+            &"a".repeat(64),
+        )
+        .unwrap_err();
+        assert!(overflow
+            .to_string()
+            .contains("complete 2049-command obligation reply bound"));
         assert_eq!(values, before, "no partial reply or mutated accepted map");
     }
 }

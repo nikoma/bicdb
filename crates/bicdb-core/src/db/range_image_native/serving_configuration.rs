@@ -314,6 +314,14 @@ impl BicDb {
         }
         // The actual point is still held by Prepared; a decoded record cannot
         // supply this proof or the independently collected closed ready quorum.
+        // Preserve the native-record writer's storage/recovery preconditions
+        // when publishing the archive and pointer in one page transaction.
+        self.check_recovery_state()?;
+        if !self.config.fsync || !format::range_image_install_active(&self.path)? {
+            return Err(invalid(
+                "native serving publication requires the sticky fsync reader fence",
+            ));
+        }
         format::enable_native_recovery_serving(&self.path)?;
         if lineage.serving.as_ref() != Some(&record) {
             // Keep every actual old/new record immutable. Append history

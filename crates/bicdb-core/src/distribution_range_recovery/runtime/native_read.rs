@@ -210,7 +210,9 @@ impl RangeRecoveryRuntime {
                         .remove(&node)
                         .ok_or_else(|| invalid("unexpected native read drain result"))?;
                     match result {
-                        Ok(observation) => round.record(observation)?,
+                        Ok(observation) => {
+                            round.record_attempt(observation)?;
+                        }
                         Err(error) => {
                             failures.insert(node, error.to_string());
                         }
@@ -253,7 +255,16 @@ impl RangeRecoveryRuntime {
                         .ok_or_else(|| invalid("unexpected native read worker result"))?;
                     match result {
                         Ok(observation) => {
-                            round.record(observation)?;
+                            if !round.record_attempt(observation)? {
+                                failures.insert(
+                                    node.clone(),
+                                    "expired authenticated attempt; point retained without vote"
+                                        .into(),
+                                );
+                                if attempt < 2 {
+                                    queue.push_back((node, attempt));
+                                }
+                            }
                         }
                         Err(error) => {
                             failures.insert(node.clone(), error.to_string());

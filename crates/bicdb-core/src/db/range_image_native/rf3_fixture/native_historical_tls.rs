@@ -103,6 +103,7 @@ struct ObservedTlsTransport {
     hold: Arc<ProbeHold>,
     ready_hold: Arc<ProbeHold>,
     read_hold: Arc<ProbeHold>,
+    read_expired_once: Arc<AtomicBool>,
     lag_status_seen: Arc<AtomicBool>,
 }
 impl RangeWriteTransport for ObservedTlsTransport {
@@ -121,6 +122,17 @@ impl RangeWriteTransport for ObservedTlsTransport {
         let actual = self
             .inner
             .observe_current_native_range(destination, request, parent)?;
+        if destination == &node("n2") && self.read_expired_once.swap(false, Ordering::SeqCst) {
+            let until =
+                parent.deadline().expect("bounded actual read attempt") + Duration::from_millis(5);
+            while Instant::now() < until {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            // Return a genuinely authenticated but expired observation once.
+            // It must constrain history, never count as a vote or reset TTL.
+            return Ok(actual);
+        }
+
         if destination == &node("n0") && self.read_hold.armed.load(Ordering::SeqCst) {
             self.read_hold.entered.store(true, Ordering::SeqCst);
             // Test-only uncancellable return barrier AFTER the genuine TLS
@@ -267,6 +279,7 @@ struct NetworkFixture {
     hold: Arc<ProbeHold>,
     ready_hold: Arc<ProbeHold>,
     read_hold: Arc<ProbeHold>,
+    read_expired_once: Arc<AtomicBool>,
     lag_status_seen: Arc<AtomicBool>,
     _keys: tempfile::TempDir,
 }
@@ -433,6 +446,7 @@ impl NetworkFixture {
         let hold = Arc::new(ProbeHold::default());
         let ready_hold = Arc::new(ProbeHold::default());
         let read_hold = Arc::new(ProbeHold::default());
+        let read_expired_once = Arc::new(AtomicBool::new(false));
         let lag_status_seen = Arc::new(AtomicBool::new(false));
         let runtimes = live_names
             .iter()
@@ -460,6 +474,11 @@ impl NetworkFixture {
                             Arc::clone(&read_hold)
                         } else {
                             Arc::new(ProbeHold::default())
+                        },
+                        read_expired_once: if name == "n1" {
+                            Arc::clone(&read_expired_once)
+                        } else {
+                            Arc::new(AtomicBool::new(false))
                         },
                         lag_status_seen: Arc::clone(&lag_status_seen),
                     }))
@@ -501,6 +520,7 @@ impl NetworkFixture {
             hold,
             ready_hold,
             read_hold,
+            read_expired_once,
             lag_status_seen,
             _keys: keys,
         }

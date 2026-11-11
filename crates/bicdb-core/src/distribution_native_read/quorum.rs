@@ -85,6 +85,9 @@ pub(crate) struct NativeReadQuorumRound {
     local_node: ClusterNodeId,
     cancellation: CancellationToken,
     observations: BTreeMap<ClusterNodeId, NativeRangeReadObservation>,
+    // Expired attempts never vote. Their authenticated immutable points still
+    // constrain the verdict, so retry cannot erase known higher/conflict data.
+    expired_constraints: Vec<NativeRangeReadFacts>,
     poisoned: bool,
 }
 impl NativeReadQuorumRound {
@@ -122,6 +125,7 @@ impl NativeReadQuorumRound {
             local_node: local.clone(),
             cancellation,
             observations: BTreeMap::new(),
+            expired_constraints: Vec::new(),
             poisoned: false,
         })
     }
@@ -143,7 +147,51 @@ impl NativeReadQuorumRound {
             >= self.request.scope.members.len() / 2 + 1)
     }
     pub(crate) fn record(&mut self, observation: NativeRangeReadObservation) -> Result<()> {
+        let result = match observation.require_live() {
+            Ok(()) => self.record_inner(observation),
+            Err(error) => Err(error),
+        };
+        if result.is_err() {
+            self.poisoned = true;
+        }
+        result
+    }
+    /// Consumes attempt freshness exactly once. A successful observation is
+    /// recorded as a point fact under the ORIGINAL round lifetime; an expired
+    /// remote attempt never votes and may be retried without erasing its point.
+    pub(crate) fn record_attempt(
+        &mut self,
+        observation: NativeRangeReadObservation,
+    ) -> Result<bool> {
+        if observation.require_live().is_err() {
+            self.constrain_expired_attempt(&observation)?;
+            return Ok(false);
+        }
         let result = self.record_inner(observation);
+        if result.is_err() {
+            self.poisoned = true;
+        }
+        result.map(|_| true)
+    }
+    pub(crate) fn constrain_expired_attempt(
+        &mut self,
+        observation: &NativeRangeReadObservation,
+    ) -> Result<()> {
+        let result = (|| {
+            self.require_live()?;
+            observation.require_request(&self.request)?;
+            if observation.local().is_some()
+                || observation.facts().node_id == self.local_node
+                || observation.require_live().is_ok()
+                || self.expired_constraints.len() >= 128
+            {
+                return Err(invalid(
+                    "invalid or unbounded expired remote attempt constraint",
+                ));
+            }
+            self.expired_constraints.push(observation.facts().clone());
+            self.require_no_known_conflict()
+        })();
         if result.is_err() {
             self.poisoned = true;
         }
@@ -151,7 +199,6 @@ impl NativeReadQuorumRound {
     }
     fn record_inner(&mut self, observation: NativeRangeReadObservation) -> Result<()> {
         self.require_live()?;
-        observation.require_live()?;
         let facts = observation.facts();
         observation.require_request(&self.request)?;
         if self.observations.contains_key(&facts.node_id)
@@ -175,8 +222,12 @@ impl NativeReadQuorumRound {
             return Ok(());
         };
         let point = local.facts();
-        for observation in self.observations.values() {
-            let peer = observation.facts();
+        for peer in self
+            .observations
+            .values()
+            .map(|o| o.facts())
+            .chain(self.expired_constraints.iter())
+        {
             if peer.logical_genesis_sha256 != point.logical_genesis_sha256
                 || peer.range_index > point.range_index
                 || (peer.range_index == point.range_index
@@ -208,6 +259,11 @@ impl NativeReadQuorumRound {
             if facts.range_index == point.range_index {
                 matching.insert(node.clone());
             } else {
+                service.require_native_read_ancestor(local, facts)?;
+            }
+        }
+        for facts in &self.expired_constraints {
+            if facts.range_index < point.range_index {
                 service.require_native_read_ancestor(local, facts)?;
             }
         }

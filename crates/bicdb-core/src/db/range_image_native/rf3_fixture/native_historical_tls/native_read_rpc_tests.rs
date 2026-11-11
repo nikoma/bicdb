@@ -224,3 +224,33 @@ fn native_read_rpc_actual_tls_majority_returns_while_minority_worker_retains_con
     fixture.wait_idle();
     candidate.require_lifetime().unwrap();
 }
+
+#[test]
+fn native_read_rpc_actual_tls_expired_healthy_attempt_retries_without_renewing_parent() {
+    let mut fixture = live_fixture();
+    let parent = CancellationToken::uncancelable()
+        .child_with_deadline(Instant::now() + Duration::from_secs(5));
+    let business = Uuid::now_v7();
+    let metadata = fresh_metadata(&fixture, business, &parent);
+    let original_deadline = metadata.deadline();
+    fixture.servers.remove(0).join().unwrap();
+    fixture.read_expired_once.store(true, Ordering::SeqCst);
+    let candidate = fixture.runtimes[&node("n1")]
+        .acquire_native_read_candidate(metadata, business, Uuid::now_v7(), &parent)
+        .unwrap();
+    assert!(!fixture.read_expired_once.load(Ordering::SeqCst));
+    assert_eq!(
+        candidate.matching_member_ids(),
+        &std::collections::BTreeSet::from([node("n1"), node("n2")])
+    );
+    candidate.require_lifetime().unwrap();
+    fixture.wait_idle();
+    // Revalidation neither renews the actual MQ round nor the caller budget.
+    let mut cancellation_checked = false;
+    while Instant::now() < original_deadline {
+        cancellation_checked = true;
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(cancellation_checked);
+    assert!(candidate.require_lifetime().is_err());
+}

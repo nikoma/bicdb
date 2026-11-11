@@ -2754,6 +2754,139 @@ mod tests {
     }
 
     #[test]
+    fn restore_activation_historical_lineage_survives_load_commit_reopen_and_snapshot() {
+        let topology = topology_with_nodes(3);
+        let roots = (0..3)
+            .map(|_| tempfile::tempdir().unwrap())
+            .collect::<Vec<_>>();
+        let open_durable = |index: usize, name: &str| {
+            MetadataConsensusStore::open(
+                roots[index].path(),
+                topology.cluster_id.clone(),
+                ClusterNodeId::new(name).unwrap(),
+                topology.clone(),
+                true,
+            )
+        };
+        let mut leader = open_durable(0, "n1").unwrap();
+        let mut follower = open_durable(1, "n2").unwrap();
+        let mut snapshot_target = open_durable(2, "n3").unwrap();
+        let election = leader.start_election().unwrap();
+        let mut votes = BTreeSet::from([election.candidate_id.clone()]);
+        for peer in [&mut follower, &mut snapshot_target] {
+            let vote = peer.handle_vote_request(election.clone()).unwrap();
+            assert!(vote.vote_granted);
+            assert_eq!(vote.term, election.term);
+            votes.insert(vote.voter_id);
+        }
+        leader.become_leader(&votes).unwrap();
+        let reply = follower
+            .handle_append_request(leader.append_request_from(1, 8).unwrap())
+            .unwrap();
+        assert!(leader
+            .record_append_response(&reply.node_id, &reply)
+            .unwrap());
+        follower
+            .handle_append_request(
+                leader
+                    .append_request_from(leader.status().commit_index + 1, 8)
+                    .unwrap(),
+            )
+            .unwrap();
+
+        let activation = restore_activation(&topology, 10_000);
+        let decision = leader
+            .propose_restore_activation(activation.clone())
+            .unwrap();
+        let reply = follower
+            .handle_append_request(leader.append_request_from(decision.index, 8).unwrap())
+            .unwrap();
+        assert!(leader
+            .record_append_response(&reply.node_id, &reply)
+            .unwrap());
+        follower
+            .handle_append_request(leader.append_request_from(decision.index + 1, 8).unwrap())
+            .unwrap();
+        assert_eq!(leader.committed_restore_activation(), Some(&activation));
+        assert_eq!(follower.committed_restore_activation(), Some(&activation));
+
+        // Obtain the ordinary load-only successor through real distribution
+        // operations, rather than forging a generation or catalog watermark.
+        let plan_root = tempfile::tempdir().unwrap();
+        let config = DistributionConfig {
+            enabled: true,
+            cluster_id: topology.cluster_id.clone(),
+            node_id: election.candidate_id.clone(),
+            node_address: "127.0.0.1:10001".into(),
+            replication_factor: 1,
+            initial_ranges: 2,
+            ..DistributionConfig::default()
+        };
+        let mut plan =
+            DistributionStore::initialize_at(plan_root.path(), config, true, 10).unwrap();
+        plan.install_authoritative_topology(topology.clone())
+            .unwrap();
+        let range_id = topology.ranges.values().next().unwrap().id;
+        assert!(plan
+            .update_range_load(range_id, 4321, 17, &election.candidate_id, 10_001)
+            .unwrap());
+        let changed = plan.topology().clone();
+        assert!(changed.generation > activation.topology_generation);
+        let load_entry = leader.propose_topology(changed.clone()).unwrap();
+        let reply = follower
+            .handle_append_request(leader.append_request_from(load_entry.index, 8).unwrap())
+            .unwrap();
+        assert!(leader
+            .record_append_response(&reply.node_id, &reply)
+            .unwrap());
+        follower
+            .handle_append_request(leader.append_request_from(load_entry.index + 1, 8).unwrap())
+            .unwrap();
+        assert_eq!(leader.committed_topology(), &changed);
+        assert_eq!(follower.committed_topology(), &changed);
+        assert_eq!(leader.committed_restore_activation(), Some(&activation));
+        assert_eq!(follower.committed_restore_activation(), Some(&activation));
+
+        // This is a trusted-caller store/protocol test, not an mTLS test. The
+        // actual leader creates the compacted snapshot; no state is forged.
+        let snapshot = leader.append_request_from(1, 8).unwrap();
+        assert!(snapshot.snapshot.is_some());
+        let snapshot_result = snapshot_target.handle_append_request(snapshot);
+        let snapshot_error = snapshot_result.as_ref().err().map(ToString::to_string);
+        if let Ok(reply) = &snapshot_result {
+            assert!(reply.success);
+            assert_eq!(snapshot_target.committed_topology(), &changed);
+            assert_eq!(
+                snapshot_target.committed_restore_activation(),
+                Some(&activation)
+            );
+        }
+        drop(leader);
+        drop(follower);
+        let leader_reopen = open_durable(0, "n1");
+        let follower_reopen = open_durable(1, "n2");
+        let report = serde_json::json!({
+            "scope": "three fsync-on stores; trusted-caller vote/Append/snapshot protocol; no TLS or power loss",
+            "activation_generation": activation.topology_generation,
+            "current_generation": changed.generation,
+            "activation_index": decision.index,
+            "load_commit_index": load_entry.index,
+            "snapshot_error": snapshot_error,
+            "leader_reopen_error": leader_reopen.as_ref().err().map(ToString::to_string),
+            "follower_reopen_error": follower_reopen.as_ref().err().map(ToString::to_string)
+        });
+        eprintln!("RESTORE_LINEAGE_REPORT {report}");
+        assert!(
+            snapshot_result.is_ok() && leader_reopen.is_ok() && follower_reopen.is_ok(),
+            "{report}"
+        );
+        for store in [leader_reopen.unwrap(), follower_reopen.unwrap()] {
+            assert_eq!(store.committed_topology(), &changed);
+            assert_eq!(store.committed_restore_activation(), Some(&activation));
+        }
+    }
+
+    #[test]
     fn five_node_partition_and_process_restart_preserve_one_authority() {
         let topology = topology_with_nodes(5);
         let roots = (0..5)

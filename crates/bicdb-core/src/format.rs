@@ -587,6 +587,7 @@ pub(crate) fn enable_sql_rename_intents(root: &Path) -> Result<()> {
         persist_metadata(root, &metadata, true)?;
     }
     Ok(())
+}
 
 /// Persist the reader/writer fence before any Oracle-v1 key definition or build
 /// checkpoint becomes durable. The capability is sticky even after index DROP.

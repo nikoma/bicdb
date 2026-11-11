@@ -1,9 +1,63 @@
 # Isolated four-to-five-node scale-out experiment
 
 Prepared against runtime source `c173fa783fb8323fe02c41fb7eda96f130bc29c3`
-(**1.0.460-beta**). Status: **runner prepared; physical experiment not executed**.
-No VM, disk, network, key or production deployment was created or changed.
+(**1.0.460-beta**). Original status: runner prepared, before infrastructure
+authorization. **Subsequently executed on isolated Azure VMs at 1.0.461-beta**;
+see the execution update below. The original plan/preflight is retained as such.
 This is Track C, independent of distributed SQL design and durability qualification.
+
+## Azure execution update — 2026-11-11
+
+The owner authorized the $25/eight-hour disposable experiment. Subscription
+quota and region restrictions reduced allocation to five North Europe
+`Standard_D2s_v3` VMs (2 vCPU/8 GiB each), dedicated uncached Premium data disks,
+private cluster traffic and one restricted SSH entry. There was no sixth client VM
+or verified five-host physical separation. No production service was changed.
+The [infrastructure evidence](evidence/azure-infrastructure-2026-11-11/README.md)
+records the actual configuration and bounded cleanup guard. Original candidate
+prices and unavailable SKUs below are historical, not the deployed configuration.
+
+The exact optimized binary is **1.0.461-beta**, source
+`b05385d4b033edf0db03f3eccf4bdd86f7c8eddb`, SHA-256
+`15ad8ad644c92fd9248020c19b1fad9d4f62e6dceef8d4bc43f1415a8ff4e028`.
+[Build evidence](evidence/azure-release-artifact-2026-11-11/README.md) records
+source, flags and bytes. RF3/64 ranges, `server_paged`, 256 MiB pools, fsync and
+mTLS were observed. Native client traffic ran on n0; separate controller
+per-attempt/per-ACK fsync probes invoked member clients through SSH. This is
+exploratory functional/fault evidence, not the independent capacity client in
+the stronger plan below. The corpus remained small and cache-resident.
+
+- [Completed short growth/process-fault smoke](evidence/azure-scale-smoke-2026-11-11/README.md):
+  node five received real records and leadership automatically. At first
+  convergence, 38 relocations to n4 reported 537,266 snapshot bytes. All 1,281
+  native ACKs and 107 external ACKs were later reconciled under their documented
+  recovery scopes. Throughput was lower after expansion; no capacity gain.
+- [Abrupt guest-poweroff probe](evidence/azure-vm-poweroff-2026-11-11/README.md):
+  five fresh writes completed wholly between confirmed victim stop and the first
+  restart request. First such ACK was 97.495 seconds after confirmed stop;
+  this is an observed probe recovery interval, not certified service RTO. All
+  38 new, 107 external and 1,281 native ACKs were verified after restart.
+  Three uncertain calls and stale/all-dead status observations remain preserved.
+- [Placement-input correction](distributed-placement-load-inputs-2026-11-11.md):
+  automatic replica/leader count balancing is real, but live byte/QPS inputs
+  remained zero. Measured byte/hotspot balancing is not established.
+- A separate longer native trial used 16 workers and 900-second target windows
+  without extra append probes. Baseline completed: 7,592 successful operations,
+  zero failures, 3,804 verified ACK writes over 907.00 seconds. Growth aborted
+  after 927.50 seconds: 2,746 successful operations, 404 failures, 1,223 ACKs,
+  and two ACKs unverified by the initial read pass. This verifier collapses
+  transport/recovery errors, missing values and mismatches; that result alone
+  does not prove lost commits. No steady-five, later fault or recovered phase
+  ran. All five stopped databases/logs/ledgers were exported with hash parity
+  before a bounded recovery/read diagnosis. Preserve the failed trial even if
+  subsequent reads recover all records.
+
+The original qualification protocol below remains **unpassed**: no large fixed
+working set, repeated matched read/write/mixed capacity windows, operation-aware
+relocation fault matrix, physical-host power-loss claim, unchanged SQL business
+application, or FTS/queue/audit qualification was delivered. Existing
+`--require-independent-qualification` refusal is retained. No engine feature
+was implemented or production admission enabled by these experiments.
 
 ## What is ready
 

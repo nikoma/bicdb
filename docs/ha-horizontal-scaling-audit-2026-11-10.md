@@ -30,9 +30,9 @@ The independent engineering tracks now have separate artifacts:
   durable decision/participant recovery, global read visibility and logical
   locality as an optimization. This is design, not an implemented SQL service.
 - [Four-to-five experiment](scale-out-experiment-2026-11-11.md): runnable growth
-  profile and sanitized Azure preflight. External per-ack ledger, operation-aware
-  faults, quota/placement, bounded infrastructure authorization and cleanup
-  remain execution gates. No independent cluster experiment has run.
+  profile and the subsequently executed Azure VM experiment. See its execution
+  update for measured results, failed growth verification and remaining gates;
+  the original preflight below remains historical evidence.
 - [Release capability declarations](release-capabilities.md): exact-artifact
   identity, separate implementation/test/qualification/deployment fields and
   fail-closed placement preflight. No qualification evidence is fabricated;
@@ -76,7 +76,7 @@ that head; that report does not prove all HA suites passed on the merged head.
 |---|---|---|---|
 | 1a. Legacy file shipping | `bicdb ha ship/status/promote`; whole-database copy, `role=standby`, explicit fencing and client repointing. Async bootstrap/repair fallback. See [HA](high-availability.md), core `src/db/ha_node.rs`, `src/db/ha_bootstrap.rs`. | `crates/bicdb-core/tests/ha_state_durability.rs`, `ha_state_crash.rs`: promotion/apply failure ordering, persisted votes/fences, interrupted ship refuses ordinary promotion. | RPO is changes since last successful ship, not zero; RTO operator-dependent. No current-artifact independent-host RPO/RTO/latency bundle found. Adding replicas does not distribute primary writes. |
 | 1b. Native single-primary streaming | `bicdb serve --replication-cluster-id/--replication-node-id`, pinned mTLS, `--allow-standby`, `--standby-of`; `--synchronous-standbys K` (0 async), timeout `fail` or `degrade`; `--ha-peer` and timeout enable majority elections/primary lease. `crates/bicdb-pgwire/src/embedded_ha.rs`, core `src/db/replication_live.rs`, `src/db/ha_node.rs`. | `crates/bicdb-cli/tests/ha_failover_cli.rs`: acknowledged-write kill and planned switchover; `crates/bicdb-pgwire/tests/embedded_ha.rs`: quorum loss, returning-writer fencing, journal identity. [HA](high-availability.md) reports three kills, 5–7 s recovery with 4 s timeout; no independent-host raw measurement bundle accompanies that statement. | Conditional zero-loss synchronous acknowledgment contract; async/degrade can lose acknowledged suffix. Configure enough synchronous copies for election-quorum intersection (majority total durable copies); arbitrary K in a larger group is not a universal zero-loss election guarantee. No current production qualification established. SQL compatibility/application deployments elsewhere do not establish topology-specific HA qualification. |
-| 2. Distributed virtual ranges | `cluster init/join`, `cluster-topology.json`, `bicdb-distribution.json`; RF3, failure-domain labels, mTLS; default balanced `serve` controller, manual opt-out. Separate durable metadata quorum and range write quorum; bounded snapshot/catch-up/promotion/cleanup. Core `distribution*.rs`, pgwire `distribution_controller.rs`, `checkpoint_driver.rs`. | Metadata joint-quorum/restart/partition tests, range decision/recovery tests and relocation restart tests detailed below. Completed event-binding 3→5→9 **shared-host debug** run at `69866e48c02f28affe2e763da8bec5f756384dea`: all 353 acknowledged writes retained. | Automatic movement implemented and functionally exercised. No independent-machine scale-out proof found; no sustained throughput gain demonstrated. Ordinary SQL forwarding, distributed joins and concrete durable cross-range SQL commit service absent. All hardware Phase-9 certification items remain open. No current production cluster deployment verified. |
+| 2. Distributed virtual ranges | `cluster init/join`, `cluster-topology.json`, `bicdb-distribution.json`; RF3, failure-domain labels, mTLS; default balanced `serve` controller, manual opt-out. Separate durable metadata quorum and range write quorum; bounded snapshot/catch-up/promotion/cleanup. Core `distribution*.rs`, pgwire `distribution_controller.rs`, `checkpoint_driver.rs`. | Metadata joint-quorum/restart/partition tests, range decision/recovery tests and relocation restart tests detailed below. Completed event-binding 3→5→9 **shared-host debug** run at `69866e48c02f28affe2e763da8bec5f756384dea`: all 353 acknowledged writes retained. | Automatic movement implemented and functionally exercised, including the subsequent five-Azure-VM trial at 1.0.461-beta linked above. Separate physical-host placement was not established; no sustained throughput gain demonstrated. Ordinary SQL forwarding, distributed joins and concrete durable cross-range SQL commit service absent. All hardware Phase-9 certification items remain open. No current production cluster deployment verified. |
 | 3. Cell-scoped HA/encryption | `bicdb-cell serve` / `BICDB_RUNTIME_MODE=cell`, signed manifest, one-shot key lease, HA trust/epoch/replica documents. `bicdb-cell-ha/src/lib.rs`, `bicdb-cell/src/lib.rs`; `CellHaCommitFence`, `CellFailoverSupervisor`. Distinct lease/recovery/auditor authority; encrypted signed per-destination async commit objects. | Unit tests check insufficient authority, expiry/fence promotion, rollback refusal, object scope, signed drill validation and route publication order. Synthetic signed drill fixtures test validation, not real measured RPO/RTO. | `SynchronousQuorum` explicitly refused; positive declared commit RPO is not continuously enforced by admission. Encrypted Cell refuses unencrypted `server_paged`. No archived current-artifact operational drill/independent audit/deployment proved here. Phase8 can admit only an exact valid evidence/attestation bundle; Phase5's denied-admission statement is phase-scoped. |
 | 4. Application fleets/state groups | `bic serve --fleet-config` with operator workers, region/isolation/capacity; optional `--state-config` pins per-application 3/5/7/9-node HA groups. Worker leases, execution capability rotation and state receipts. `bicdb-app-host/src/fleet.rs`, `bicdb-fleet/src/lib.rs` (signed rollout authority, not SQL allocator). | `bicdb-app-host/tests/fleet.rs`: loopback separate processes, worker crash, reassignment, capacity, dedup, suspended-state lease expiry. Optional external-assets microVM test is ignored unless explicitly enabled. [State groups](platform-state-groups.md), [worker fleets](platform-worker-fleet.md). | Adds compute placement, not automatic sharding of an application's database. State groups remain one writer per application, not active/active SQL. Capacity counts applications, not RPS/memory. No measured independent-machine fleet scaling or current qualified deployment established. Cell fleet rollout authorizes immutable releases without database/key authority. |
 
@@ -89,9 +89,13 @@ that head; that report does not prove all HA suites passed on the merged head.
 four movement steps/tick, four planned replica moves and two moves/node.
 A remote `cluster join` self-registers an authenticated learner; `serve` catches
 it up and joint metadata quorum promotes it before placement. Placement balances
-replica bytes/count and leader count, excludes unhealthy/draining nodes, checks
-schema identity/capacity/failure domains and limits concurrent movement. This is
-not proof of request-rate or latency-aware load balancing.
+replica and leader counts, uses estimated bytes to rank moves and constrain
+capacity, excludes unhealthy/draining nodes, checks schema identity/failure
+domains and limits concurrent movement. The initial audit overstated byte
+balancing: the default host has no live byte/QPS sampler, and equal replica
+counts with unequal bytes do not alone trigger redistribution. See the
+[source and observed-input correction](distributed-placement-load-inputs-2026-11-11.md).
+Neither mechanism proves request-rate or latency-aware load balancing.
 
 Core [supervisor](../crates/bicdb-core/src/distribution_supervisor.rs) test
 `supervisor_rebalances_new_node_and_exports_bounded_metrics` and pgwire
@@ -239,9 +243,12 @@ is required. Relevant tests include
 
 ## What was actually measured
 
-**There is no current-main independent-physical-node HA/rebalance dataset from
-which to report actual RPO/RTO or p50/p95/p99.** The following retained results
-must not be substituted for one.
+**The original audit found no current-main independent-physical-node
+HA/rebalance dataset.** The subsequent source-pinned Azure VM experiment is
+linked in the execution update above. It provides actual VM measurements and
+negative availability/capacity findings, without establishing five independent
+physical hosts or production qualification. The historical results below retain
+their original scope and must not be substituted for current-artifact evidence.
 
 [Functional cluster report](reports/cluster-events-functional-2026-10-16.json),
 source `69866e48c02f28affe2e763da8bec5f756384dea`, debug SHA-256
@@ -313,17 +320,17 @@ PostgreSQL compatibility; transaction retries and hot keys still matter.
 |---|---|
 | Any SQL gateway, transparent cross-range SQL/joins | Missing general executor/forwarding integration. Planning and merge hooks do not meet it. |
 | Recoverable atomic multi-range SQL | Supplied protocol trait only; normal SQL rejects spanning writes. |
-| Automatic data and leader/lease load placement | Byte/count/leader placement implemented; physical traffic-aware convergence and throughput gain unproved. BicDB range epochs must not be equated with CockroachDB's entire lease/read-consistency model. |
+| Automatic data and leader/lease load placement | Replica/leader count placement implemented; estimated bytes rank/constrain moves, but live byte feedback and a bytes-only trigger are missing. Physical traffic-aware convergence and throughput gain unproved. BicDB range epochs must not be equated with CockroachDB's entire lease/read-consistency model. |
 | Automatic range splitting | Metadata operations exist; event serving lacks automatic splitting based on size/load. |
 | Online relocation | Implemented bounded durable phases and fencing; independent physical fault/FTS/queue/audit qualification missing. |
 | Node replacement/failover | Learners, incarnation fencing, repair and metadata elections implemented; hardware RTO and full current-artifact recovery gates open. |
 | Add nodes without application-specific shard management | Event binding satisfies a narrow append/get contract; ordinary PostgreSQL business application does not. |
-| Sustained aggregate read/write gain | No independent-machine evidence; retained shared-host run shows no gain. |
+| Sustained aggregate read/write gain | No demonstrated sustained gain; retained shared-host and later five-VM exploratory runs show no gain. The longer VM trial aborted during growth. |
 
 ## Smallest independent four-to-five-node experiment
 
-This is a proposed scoped experiment, not a completed run or production
-certification. It can falsify automatic movement/safety claims today. It cannot
+This is the original proposed scoped qualification experiment. The later Azure
+execution used a smaller exploratory profile and did not complete this gate. It can falsify automatic movement/safety claims today. It cannot
 prove transparent SQL support that is absent in source.
 
 1. **Isolation and topology.** Five dedicated identical Linux data VMs plus an

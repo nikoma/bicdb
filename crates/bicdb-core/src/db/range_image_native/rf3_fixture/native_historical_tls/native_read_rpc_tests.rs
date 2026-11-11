@@ -239,6 +239,10 @@ fn native_read_rpc_actual_tls_expired_healthy_attempt_retries_without_renewing_p
         .acquire_native_read_candidate(metadata, business, Uuid::now_v7(), &parent)
         .unwrap();
     assert!(!fixture.read_expired_once.load(Ordering::SeqCst));
+    assert!(
+        fixture.read_n2_successful_calls.load(Ordering::SeqCst) >= 2,
+        "candidate needs a second actual successful TLS RPC; the expired first reply never votes"
+    );
     assert_eq!(
         candidate.matching_member_ids(),
         &std::collections::BTreeSet::from([node("n1"), node("n2")])

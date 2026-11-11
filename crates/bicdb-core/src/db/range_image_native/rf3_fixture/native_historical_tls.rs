@@ -104,6 +104,7 @@ struct ObservedTlsTransport {
     ready_hold: Arc<ProbeHold>,
     read_hold: Arc<ProbeHold>,
     read_expired_once: Arc<AtomicBool>,
+    read_n2_successful_calls: Arc<std::sync::atomic::AtomicUsize>,
     lag_status_seen: Arc<AtomicBool>,
 }
 impl RangeWriteTransport for ObservedTlsTransport {
@@ -122,6 +123,10 @@ impl RangeWriteTransport for ObservedTlsTransport {
         let actual = self
             .inner
             .observe_current_native_range(destination, request, parent)?;
+        if destination == &node("n2") {
+            self.read_n2_successful_calls.fetch_add(1, Ordering::SeqCst);
+        }
+
         if destination == &node("n2") && self.read_expired_once.swap(false, Ordering::SeqCst) {
             let until =
                 parent.deadline().expect("bounded actual read attempt") + Duration::from_millis(5);
@@ -280,6 +285,7 @@ struct NetworkFixture {
     ready_hold: Arc<ProbeHold>,
     read_hold: Arc<ProbeHold>,
     read_expired_once: Arc<AtomicBool>,
+    read_n2_successful_calls: Arc<std::sync::atomic::AtomicUsize>,
     lag_status_seen: Arc<AtomicBool>,
     _keys: tempfile::TempDir,
 }
@@ -447,6 +453,7 @@ impl NetworkFixture {
         let ready_hold = Arc::new(ProbeHold::default());
         let read_hold = Arc::new(ProbeHold::default());
         let read_expired_once = Arc::new(AtomicBool::new(false));
+        let read_n2_successful_calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let lag_status_seen = Arc::new(AtomicBool::new(false));
         let runtimes = live_names
             .iter()
@@ -479,6 +486,11 @@ impl NetworkFixture {
                             Arc::clone(&read_expired_once)
                         } else {
                             Arc::new(AtomicBool::new(false))
+                        },
+                        read_n2_successful_calls: if name == "n1" {
+                            Arc::clone(&read_n2_successful_calls)
+                        } else {
+                            Arc::new(std::sync::atomic::AtomicUsize::new(0))
                         },
                         lag_status_seen: Arc::clone(&lag_status_seen),
                     }))
@@ -521,6 +533,7 @@ impl NetworkFixture {
             ready_hold,
             read_hold,
             read_expired_once,
+            read_n2_successful_calls,
             lag_status_seen,
             _keys: keys,
         }

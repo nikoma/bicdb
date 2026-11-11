@@ -109,13 +109,31 @@ impl PreparedNativeRecoveryReady {
     pub(crate) fn local_visibility_sequence(&self) -> u64 {
         self.point.local_visibility_sequence
     }
+    pub(crate) fn scope(&self) -> &RecoveryFenceScope {
+        &self.scope
+    }
+    pub(crate) fn store_open_id(&self) -> Uuid {
+        self.store_open_id
+    }
+    pub(crate) fn native_database_incarnation(&self) -> &str {
+        self.physical.native_admission().database_incarnation()
+    }
     pub(crate) fn require_current(&self, db: &crate::BicDb, store: &RangeWriteStore) -> Result<()> {
         self.physical.require_physical_current(db)?;
-        store.require_native_ready_scope(
-            self.role(),
-            self.physical.native_admission(),
-            &self.scope,
-        )?;
+        self.require_current_under_role(db, store, self.role())
+    }
+    /// A separately challenged fresh role may use the persisted preparation;
+    /// this never renews the old request or treats its context as a time lease.
+    pub(crate) fn require_current_under_role(
+        &self,
+        db: &crate::BicDb,
+        store: &RangeWriteStore,
+        fresh: &RecoveryRoleAdmission,
+    ) -> Result<()> {
+        fresh.require_live_request()?;
+        self.scope.require_role(fresh)?;
+        self.physical.require_owned_materialization_current(db)?;
+        store.require_native_ready_scope(fresh, self.physical.native_admission(), &self.scope)?;
         store.require_prepared_native_point_matches(&self.physical)?;
         if self.store_open_id != store.open_id
             || self.catalog_sha256 != store.recovery_range_catalog_sha256(self.scope.range_id)?

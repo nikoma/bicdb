@@ -260,6 +260,39 @@ mod tests {
     }
 
     #[test]
+    fn durable_preparation_requires_new_authority_after_original_request_cancellation() {
+        let fixture = Fixture::new();
+        fixture.seed(fixture.range().id, 1);
+        let nonce = Uuid::now_v7();
+        let role = fixture.role(nonce);
+        let frozen = fixture.freeze(&role);
+        let mut store = fixture.store();
+        let token =
+            CancellationToken::new(Arc::new(std::sync::atomic::AtomicBool::new(false)), None);
+        let local = fixture.attest(role, &mut store, frozen, &token).unwrap();
+        let prepared = store
+            .prepare_native_recovery_ready(&fixture.db.read(), local)
+            .unwrap();
+        token.cancel();
+        assert!(prepared
+            .require_current(&fixture.db.read(), &store)
+            .is_err());
+        // The saved materialized point may outlive its original request, but
+        // only an actual newly challenged role for the SAME session can use it.
+        let fresh = fixture.role(nonce);
+        prepared
+            .require_current_under_role(&fixture.db.read(), &store, &fresh)
+            .unwrap();
+        let wrong = fixture.role(Uuid::now_v7());
+        assert!(prepared
+            .require_current_under_role(&fixture.db.read(), &store, &wrong)
+            .is_err());
+        assert!(store
+            .require_recovery_scope(&fresh, &fixture.native(), prepared.scope())
+            .is_err());
+    }
+
+    #[test]
     fn cancelled_local_ready_cannot_persist_a_native_preparation() {
         let fixture = Fixture::new();
         let role = fixture.role(Uuid::now_v7());
@@ -574,6 +607,12 @@ impl LocalNativeRecoveryReady {
     pub(crate) fn require_physical_current(&self, db: &BicDb) -> Result<()> {
         self.cancellation.check()?;
         self.role.require_live_request()?;
+        self.require_owned_materialization_current(db)
+    }
+    /// Pure materialization validation under the SAME owned pin. A durable
+    /// preparation may outlive the request which created it; its consumer must
+    /// independently validate a fresh role and the exact saved preparation.
+    pub(crate) fn require_owned_materialization_current(&self, db: &BicDb) -> Result<()> {
         self.native.require_current(db)?;
         let range_id = self.role.current_range().id;
         db.range_mutations.validate_frozen(range_id, &self.frozen)?;

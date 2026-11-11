@@ -1,0 +1,37 @@
+{
+  "format": 1,
+  "version": "1.0.474-beta",
+  "source_code_commit": "406688a36f729af7f6406a09485c445bd0920564",
+  "binary_sha256": "12a3824cd35a952f760de55521e3b728cf31670f31fa44359ccd5e5cc29b0066",
+  "driver": "Node v22.23.1, no Rust tests",
+  "change": "Preserve existing values when a field enum gains variants; recurse through unchanged optional wrappers only. Enum removal and scalar substitutions remain refused. Tenant, collection, mutation, audit and finance policies are unchanged.",
+  "reproduced_on_previous_host": "/tmp/bicdb-enum-upgrade-bb0xgw: native473 refused the valid additive expansion",
+  "evidence": [
+    {
+      "path": "/tmp/bicdb-enum-upgrade-MGSxKK/qualification.json",
+      "sha256": "0f1890ecb80d84000d33cc523edf61127f0f209d146af095fe97e104e4862d80"
+    },
+    {
+      "path": "/tmp/bicdb-optimistic-upgrade-PUpw5V/qualification.json",
+      "sha256": "3dc64f64dc53ca74cb553f6467d04ae8bbb9864e196ebcaabea74d692989ac0b"
+    },
+    {
+      "path": "/tmp/bicdb-native-oidc-GhuzZX/results.json",
+      "sha256": "7067741466adc81c3b8892ec4ff344e4dc5448249a30a6b659a11b78f18f30aa"
+    },
+    {
+      "path": "/root/erp-modernization/evidence/financial-upgrade-1794427988264/qualification.json",
+      "sha256": "688a49de279896380ddf940615d19a5248bce8e23983f41f0f65c6f000fdfbf7"
+    },
+    {
+      "path": "/root/erp-modernization/evidence/financial-upgrade-1794428144632/qualification.json",
+      "sha256": "08d7c4c47ce1031e07ef81220314a1f118a5d2eed7ef3a8d89b76d567e560c6c"
+    },
+    {
+      "path": "/root/erp-modernization/evidence/native-scenarios/1794427988616/results.json",
+      "sha256": "a00386a62f16453eee641239a71f64705aff7f88301f6f513a291d775727b764"
+    }
+  ],
+  "workflow": "Populated ERP graph v8→v9 and v9→v10 signed all-nine-module stage/activate-batch; frozen journals, postings, receivable/settlement records, primary and book reports identical; fenced backup pre-traffic rollback verified.",
+  "scope": "Native platform qualification; real human Hub acceptance remains deferred."
+}

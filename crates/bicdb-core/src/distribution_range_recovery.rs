@@ -36,7 +36,8 @@ pub(crate) use native_completion_provenance::{
 };
 mod native_completion_quorum;
 pub(crate) use native_completion_quorum::{
-    NativeCompletionQuorum, NativeCompletionQuorumRound, NativeCompletionSelection,
+    ActivatedNativeCompletionDecision, NativeCompletionQuorum, NativeCompletionQuorumRound,
+    NativeCompletionSelection,
 };
 mod native_completion;
 pub(crate) use native_completion::{

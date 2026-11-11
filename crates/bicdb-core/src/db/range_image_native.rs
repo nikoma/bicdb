@@ -829,6 +829,13 @@ impl BicDb {
         if reason.len() > 256 {
             return Err(invalid("invalidation reason bound exceeded"));
         }
+        // Invalidate actual-open native serving before the first persistent
+        // native-generation change, including unscoped imports/DDL. The token
+        // never survives a generation replacement even if the DB stays open.
+        match range_id {
+            Some(range) => self.range_mutations.invalidate_serving_generation(range),
+            None => self.range_mutations.invalidate_all_serving_generations(),
+        }
         let key = range_id
             .map(|range| format!("range-invalidation:{}", range.get()))
             .unwrap_or_else(|| INVALIDATION_KEY.to_string());

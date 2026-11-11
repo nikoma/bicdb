@@ -187,12 +187,14 @@ fn history_key(range_id: RangeId, checksum: &str) -> String {
 enum NativeServingDecision<'a> {
     Closed(&'a ClosedNativeReadyQuorum),
     Completed(&'a crate::distribution_range_recovery::NativeCompletionQuorum),
+    Activated(&'a crate::distribution_range_recovery::ActivatedNativeCompletionDecision),
 }
 impl NativeServingDecision<'_> {
     fn require_recipient_role(&self, fresh: &RecoveryRoleAdmission) -> Result<()> {
         match self {
             Self::Closed(q) => q.require_recipient_role(fresh),
             Self::Completed(q) => q.require_recipient_role(fresh),
+            Self::Activated(q) => q.require_recipient_role(fresh),
         }
     }
     fn require_local_prepared(
@@ -205,6 +207,7 @@ impl NativeServingDecision<'_> {
         match self {
             Self::Closed(q) => q.require_local_prepared(p, db, s, f),
             Self::Completed(q) => q.require_local_prepared(p, db, s, f),
+            Self::Activated(q) => q.require_local_prepared(p, db, s, f),
         }
     }
 }
@@ -385,6 +388,20 @@ impl BicDb {
             prepared,
             store,
             NativeServingDecision::Completed(quorum),
+            fresh,
+        )
+    }
+    pub(crate) fn persist_native_serving_from_activated_decision(
+        &self,
+        prepared: &PreparedNativeRecoveryReady,
+        store: &RangeWriteStore,
+        decision: &crate::distribution_range_recovery::ActivatedNativeCompletionDecision,
+        fresh: &RecoveryRoleAdmission,
+    ) -> Result<NativeRecoveredServingReceipt> {
+        self.persist_native_serving_from_decision(
+            prepared,
+            store,
+            NativeServingDecision::Activated(decision),
             fresh,
         )
     }

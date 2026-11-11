@@ -463,6 +463,15 @@ impl RangeMutationGate {
             }
         }
     }
+    pub(crate) fn invalidate_all_serving_generations(&self) {
+        let mut slots = self.inner.serving_generations.lock();
+        for (_, weak) in slots.values() {
+            if let Some(live) = weak.upgrade() {
+                live.store(false, Ordering::Release);
+            }
+        }
+        slots.clear();
+    }
     pub(crate) fn bind_serving_generation(
         &self,
         range_id: RangeId,

@@ -45,6 +45,23 @@ impl ClusterDataNodeService {
         self.range_writes
             .observe_native_completion_for_role(&db, prepared, fresh, request)
     }
+    pub(crate) fn adopt_local_native_activated_decision(
+        &mut self,
+        prepared: &PreparedNativeRecoveryReady,
+        decision: crate::distribution_range_recovery::ActivatedNativeCompletionDecision,
+        fresh: &RecoveryRoleAdmission,
+        request: &NativeCompletionRequest,
+        parent: &CancellationToken,
+    ) -> Result<LocalNativeCompletionEvidence> {
+        parent.check()?;
+        request.scope.require_role(fresh)?;
+        let db = try_database_read(&self.db)?;
+        self.range_writes
+            .adopt_native_activated_decision(&db, prepared, decision, fresh)?;
+        parent.check()?;
+        self.range_writes
+            .observe_native_completion_for_role(&db, prepared, fresh, request)
+    }
     pub(crate) fn native_completion_is_activated(
         &self,
         request: &NativeCompletionRequest,

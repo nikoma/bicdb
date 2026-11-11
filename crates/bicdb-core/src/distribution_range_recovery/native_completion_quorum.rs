@@ -111,6 +111,13 @@ impl NativeCompletionQuorumRound {
     pub(crate) fn is_ready(&self) -> bool {
         !self.poisoned && self.observations.len() >= self.role.member_credentials().len() / 2 + 1
     }
+    pub(crate) fn has_activated_decision(&self) -> bool {
+        !self.poisoned
+            && self
+                .observations
+                .values()
+                .any(|o| o.reply().stage == NativeCompletionStage::ActivatedAnchor)
+    }
     pub(crate) fn finish_selection(
         self,
         parent: &CancellationToken,
@@ -126,6 +133,19 @@ impl NativeCompletionQuorumRound {
             && self.role.require_live_request().is_ok()
         {
             return Ok(NativeCompletionSelection::Quorum(self.finish()?));
+        }
+        if self.has_activated_decision() {
+            let mut observations = self.observations;
+            let node = observations
+                .iter()
+                .find(|(_, o)| o.reply().stage == NativeCompletionStage::ActivatedAnchor)
+                .unwrap()
+                .0
+                .clone();
+            let observation = observations.remove(&node).unwrap();
+            return Ok(NativeCompletionSelection::Decision(
+                ActivatedNativeCompletionDecision::from_recorded(&self.role, observation, parent)?,
+            ));
         }
         let point = self.observations.values().next().map(|o| {
             let r = o.reply();
@@ -165,6 +185,7 @@ impl NativeCompletionQuorumRound {
 #[derive(Debug)]
 pub(crate) enum NativeCompletionSelection {
     Quorum(NativeCompletionQuorum),
+    Decision(ActivatedNativeCompletionDecision),
     Constraint(NativeCompletionConstraint),
 }
 #[derive(Debug)]
@@ -316,5 +337,112 @@ impl NativeCompletionQuorum {
     }
     pub(crate) fn decision_sha256(&self) -> Result<String> {
         self.decision_provenance()?.checksum_sha256()
+    }
+}
+
+// Prior activated decision constructor stays PRIVATE to this actual recorded-observation module.
+#[derive(Debug)]
+pub(crate) struct ActivatedNativeCompletionDecision {
+    scope: RecoveryFenceScope,
+    local_node: ClusterNodeId,
+    local_incarnation: u64,
+    observation: NativeCompletionObservation,
+    cancellation: CancellationToken,
+}
+impl ActivatedNativeCompletionDecision {
+    fn from_recorded(
+        role: &RecoveryRoleAdmission,
+        observation: NativeCompletionObservation,
+        parent: &CancellationToken,
+    ) -> Result<Self> {
+        parent.check()?;
+        observation.require_live()?;
+        if observation.reply().stage != NativeCompletionStage::ActivatedAnchor
+            || observation.reply().activation_decision_sha256.is_none()
+        {
+            return Err(invalid(
+                "a merely completed/prepared vote cannot attest a prior activation decision",
+            ));
+        }
+        // Called ONLY after the actual quorum round authenticated current pins,
+        // incarnation/scope/metadata anchor and checked all observed conflicts.
+        let proof = Self {
+            scope: RecoveryFenceScope::from_role(role)?,
+            local_node: role.local_node_id().clone(),
+            local_incarnation: role.local_member_incarnation(),
+            observation,
+            cancellation: parent.child(),
+        };
+        proof.require_recipient_role(role)?;
+        Ok(proof)
+    }
+    pub(crate) fn scope(&self) -> &RecoveryFenceScope {
+        &self.scope
+    }
+    pub(crate) fn range_index(&self) -> u64 {
+        self.observation.reply().range_index
+    }
+    pub(crate) fn logical_genesis_sha256(&self) -> &str {
+        &self.observation.reply().logical_genesis_sha256
+    }
+    pub(crate) fn logical_history_sha256(&self) -> &str {
+        &self.observation.reply().logical_history_sha256
+    }
+    pub(crate) fn activation_decision_sha256(&self) -> &str {
+        self.observation
+            .reply()
+            .activation_decision_sha256
+            .as_deref()
+            .expect("sealed activated decision")
+    }
+    pub(crate) fn require_recipient_role(&self, fresh: &RecoveryRoleAdmission) -> Result<()> {
+        self.cancellation.check()?;
+        self.scope.require_role(fresh)?;
+        let source = self.observation.authenticated_peer();
+        let reply = self.observation.reply();
+        let member = fresh
+            .member_credentials()
+            .get(source.node_id())
+            .ok_or_else(|| invalid("activated decision source is not a current voter"))?;
+        let pin = match (
+            &member.active_certificate_sha256,
+            &member.pending_certificate_sha256,
+        ) {
+            (None, None) => source.plaintext_loopback(),
+            (a, p) => source
+                .certificate_sha256()
+                .is_some_and(|s| a.as_deref() == Some(s) || p.as_deref() == Some(s)),
+        };
+        if self.local_node != *fresh.local_node_id()
+            || self.local_incarnation != fresh.local_member_incarnation()
+            || member.incarnation != source.member_incarnation()
+            || member.incarnation != reply.member_incarnation
+            || !pin
+            || fresh.metadata_term() < reply.observed_metadata_term
+            || fresh.metadata_read_index() < reply.observed_metadata_read_index
+        {
+            return Err(invalid(
+                "prior activated decision source/recipient or fresh metadata scope changed",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn require_local_prepared(
+        &self,
+        prepared: &PreparedNativeRecoveryReady,
+        db: &crate::BicDb,
+        store: &RangeWriteStore,
+        fresh: &RecoveryRoleAdmission,
+    ) -> Result<()> {
+        self.require_recipient_role(fresh)?;
+        prepared.require_current_under_role(db, store, fresh)?;
+        if !prepared.scope().same_session(&self.scope)
+            || prepared.range_index() != self.range_index()
+            || prepared.logical_genesis_sha256() != self.logical_genesis_sha256()
+            || prepared.logical_history_sha256() != self.logical_history_sha256()
+        {
+            return Err(invalid("local actual prepared prefix does not match the prior immutable activation decision"));
+        }
+        Ok(())
     }
 }

@@ -70,12 +70,14 @@ impl NativeRecoveryCompletedFrozenReceipt {
 enum NativeCompletionDecision {
     Closed(ClosedNativeReadyQuorum),
     Completed(crate::distribution_range_recovery::NativeCompletionQuorum),
+    Activated(crate::distribution_range_recovery::ActivatedNativeCompletionDecision),
 }
 impl NativeCompletionDecision {
     fn require_recipient_role(&self, f: &RecoveryRoleAdmission) -> Result<()> {
         match self {
             Self::Closed(q) => q.require_recipient_role(f),
             Self::Completed(q) => q.require_recipient_role(f),
+            Self::Activated(q) => q.require_recipient_role(f),
         }
     }
     fn require_local_prepared(
@@ -88,6 +90,7 @@ impl NativeCompletionDecision {
         match self {
             Self::Closed(q) => q.require_local_prepared(p, db, s, f),
             Self::Completed(q) => q.require_local_prepared(p, db, s, f),
+            Self::Activated(q) => q.require_local_prepared(p, db, s, f),
         }
     }
     fn persist_native(
@@ -100,6 +103,7 @@ impl NativeCompletionDecision {
         match self {
             Self::Closed(q) => db.persist_native_recovered_serving_configuration(p, s, q, f),
             Self::Completed(q) => db.persist_native_serving_from_completion_decision(p, s, q, f),
+            Self::Activated(q) => db.persist_native_serving_from_activated_decision(p, s, q, f),
         }
     }
 }
@@ -157,6 +161,21 @@ impl RangeWriteStore {
             db,
             prepared,
             NativeCompletionDecision::Completed(quorum),
+            fresh,
+            crate::storage::write_atomic,
+        )
+    }
+    pub(crate) fn adopt_native_activated_decision(
+        &mut self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        decision: crate::distribution_range_recovery::ActivatedNativeCompletionDecision,
+        fresh: &RecoveryRoleAdmission,
+    ) -> Result<NativeRecoveryCompletedFrozenReceipt> {
+        self.persist_native_completion_decision_with(
+            db,
+            prepared,
+            NativeCompletionDecision::Activated(decision),
             fresh,
             crate::storage::write_atomic,
         )

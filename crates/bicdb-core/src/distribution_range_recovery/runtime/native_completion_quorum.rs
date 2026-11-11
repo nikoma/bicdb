@@ -4,6 +4,10 @@ use super::*;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::mpsc;
 
+enum CompletionCollectionMode {
+    RequireQuorum,
+    CompleteOrDecision,
+}
 struct CompletionJob {
     node: ClusterNodeId,
     request: NativeCompletionRequest,
@@ -32,11 +36,16 @@ impl RangeRecoveryRuntime {
         parent: &CancellationToken,
         operation: Arc<Operation>,
     ) -> Result<NativeCompletionQuorum> {
-        match self
-            .select_native_completion_protocol(initiator, request, parent, parent, operation)?
-        {
+        match self.collect_native_completion_protocol(
+            initiator,
+            request,
+            parent,
+            parent,
+            operation,
+            CompletionCollectionMode::RequireQuorum,
+        )? {
             NativeCompletionSelection::Quorum(q) => Ok(q),
-            NativeCompletionSelection::Constraint(_) => {
+            NativeCompletionSelection::Constraint(_) | NativeCompletionSelection::Decision(_) => {
                 Err(invalid("distinct durable completion quorum unavailable"))
             }
         }
@@ -48,6 +57,24 @@ impl RangeRecoveryRuntime {
         parent: &CancellationToken,
         original_parent: &CancellationToken,
         operation: Arc<Operation>,
+    ) -> Result<NativeCompletionSelection> {
+        self.collect_native_completion_protocol(
+            initiator,
+            request,
+            parent,
+            original_parent,
+            operation,
+            CompletionCollectionMode::CompleteOrDecision,
+        )
+    }
+    fn collect_native_completion_protocol(
+        &self,
+        initiator: &MetadataReadParticipant,
+        request: &NativeCompletionRequest,
+        parent: &CancellationToken,
+        original_parent: &CancellationToken,
+        operation: Arc<Operation>,
+        mode: CompletionCollectionMode,
     ) -> Result<NativeCompletionSelection> {
         let token = request.cancellation(parent)?;
         let scope = &request.scope;
@@ -93,6 +120,11 @@ impl RangeRecoveryRuntime {
             self.observe_native_completion_inner(&self.provider.local_participant(), &local, &token)
         {
             round.record(observation)?;
+            if matches!(mode, CompletionCollectionMode::CompleteOrDecision)
+                && round.has_activated_decision()
+            {
+                return round.finish_selection(original_parent);
+            }
             if round.is_ready() {
                 return Ok(NativeCompletionSelection::Quorum(round.finish()?));
             }
@@ -146,6 +178,11 @@ impl RangeRecoveryRuntime {
         let mut last_error = None;
         loop {
             if token.check().is_err() {
+                return round.finish_selection(original_parent);
+            }
+            if matches!(mode, CompletionCollectionMode::CompleteOrDecision)
+                && round.has_activated_decision()
+            {
                 return round.finish_selection(original_parent);
             }
             if round.is_ready() {

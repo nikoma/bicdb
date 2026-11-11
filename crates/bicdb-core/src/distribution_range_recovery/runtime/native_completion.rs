@@ -4,12 +4,14 @@ use super::*;
 enum IncomingCompletionDecision {
     Closed(ClosedNativeReadyQuorum),
     Completed(NativeCompletionQuorum),
+    Activated(ActivatedNativeCompletionDecision),
 }
 impl IncomingCompletionDecision {
     fn require_recipient_role(&self, f: &RecoveryRoleAdmission) -> Result<()> {
         match self {
             Self::Closed(q) => q.require_recipient_role(f),
             Self::Completed(q) => q.require_recipient_role(f),
+            Self::Activated(q) => q.require_recipient_role(f),
         }
     }
 }
@@ -52,6 +54,20 @@ impl RangeRecoveryRuntime {
                         None
                     },
                     IncomingCompletionDecision::Completed(q),
+                )
+            }
+            NativeCompletionSelection::Decision(d) => {
+                let has = {
+                    let sessions = self.sessions.lock();
+                    sessions.current.contains_key(&request.scope.range_id)
+                };
+                (
+                    if has {
+                        self.retained_native_prepared(&request.scope)?
+                    } else {
+                        None
+                    },
+                    IncomingCompletionDecision::Activated(d),
                 )
             }
             NativeCompletionSelection::Constraint(constraint) => {
@@ -115,21 +131,24 @@ impl RangeRecoveryRuntime {
         }
         let prepared = prepared
             .ok_or_else(|| invalid("completion has no actual local prepared materialization"))?;
-        let evidence =
-            {
-                let mut service = loop {
-                    token.check()?;
-                    if let Some(s) = self.service.try_lock_for(LATCH_POLL) {
-                        break s;
-                    }
-                };
-                match quorum {
-                    IncomingCompletionDecision::Closed(q) => service
-                        .complete_local_native_recovery(&prepared, q, &fresh, request, &token)?,
-                    IncomingCompletionDecision::Completed(q) => service
-                        .adopt_local_native_completion(&prepared, q, &fresh, request, &token)?,
+        let evidence = {
+            let mut service = loop {
+                token.check()?;
+                if let Some(s) = self.service.try_lock_for(LATCH_POLL) {
+                    break s;
                 }
             };
+            match quorum {
+                IncomingCompletionDecision::Closed(q) => {
+                    service.complete_local_native_recovery(&prepared, q, &fresh, request, &token)?
+                }
+                IncomingCompletionDecision::Completed(q) => {
+                    service.adopt_local_native_completion(&prepared, q, &fresh, request, &token)?
+                }
+                IncomingCompletionDecision::Activated(d) => service
+                    .adopt_local_native_activated_decision(&prepared, d, &fresh, request, &token)?,
+            }
+        };
         token.check()?;
         NativeCompletionObservation::from_local(
             evidence,

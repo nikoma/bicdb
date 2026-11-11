@@ -14,6 +14,11 @@ impl RenameDependencies {
     pub(super) fn plan(db: &BicDb, previous: &TableSchema, updated: &TableSchema) -> Result<Self> {
         let old = &previous.name;
         let new = &updated.name;
+        let physical_relations = db
+            .collections()
+            .into_iter()
+            .map(|meta| meta.name)
+            .collect::<BTreeSet<_>>();
         let mut plan = Self {
             relations: BTreeSet::from([old.clone(), new.clone()]),
             metadata: BTreeSet::from([
@@ -64,10 +69,10 @@ impl RenameDependencies {
                 plan.metadata
                     .insert((VIEW_COLLECTION.into(), view.name.clone()));
             }
-            // Virtual views have no rows of their own. A materialized view
-            // does: its stored composite values require the same before-image
-            // coverage as an ordinary table using this row type.
-            if values && view.materialized {
+            // A view descriptor alone does not imply a physical backing.
+            // Legacy materialized descriptors are still query-expanded. If a
+            // backing exists, its stored values need ordinary row coverage.
+            if values && view.materialized && physical_relations.contains(&view.name) {
                 plan.value_tables.insert(view.name);
             }
         }
@@ -196,6 +201,14 @@ mod tests {
                 ] { session.execute(statement).unwrap_or_else(|e|panic!("{statement}: {e}")); }
             }
             let previous = load_schema(&db, "original").unwrap().unwrap();
+            // Model a descriptor with a real native backing, independently
+            // of the legacy SQL materialized-view query-expansion behavior.
+            db.create_collection("stored_row").unwrap();
+            db.insert(
+                "stored_row",
+                Record::new("captured").with_metadata(serde_json::json!({"audit":"acknowledged"})),
+            )
+            .unwrap();
             let mut updated = previous.clone();
             updated.primary_key_name = Some(previous.primary_key_constraint_name());
             updated.name = "renamed".into();
@@ -232,9 +245,18 @@ mod tests {
                     vec![vec![SqlValue::String("renamed".into())]]
                 );
             }
+            db.insert(
+                "stored_row",
+                Record::new("captured").with_metadata(serde_json::json!({"audit":"during rename"})),
+            )
+            .unwrap();
             // Deliberately leave the captured decision uncommitted to exercise
             // undo of all real mutators before ordinary SQL dispatch is wired.
             rename_journal::rollback(&mut db, prepared.id()).unwrap();
+            assert_eq!(
+                db.get("stored_row", "captured").unwrap().unwrap().metadata,
+                serde_json::json!({"audit":"acknowledged"})
+            );
             assert_eq!(catalog(list_schemas(&db).unwrap()), schemas);
             assert_eq!(catalog(list_user_types(&db).unwrap()), types);
             assert_eq!(catalog(list_privileges(&db).unwrap()), privileges);
@@ -323,7 +345,13 @@ mod tests {
         for name in ["direct_row", "indirect_row", "stored_row"] {
             assert!(plan.relations.contains(name), "{name}");
         }
-        assert!(plan.value_tables.contains("stored_row"));
+        assert!(
+            !plan.value_tables.contains("stored_row"),
+            "descriptor has no physical rows"
+        );
+        db.create_collection("stored_row").unwrap();
+        let backed = RenameDependencies::plan(&db, &before, &after).unwrap();
+        assert!(backed.value_tables.contains("stored_row"));
         assert!(
             load_view(&db, "indirect_row").unwrap().unwrap().columns[0]
                 .user_type

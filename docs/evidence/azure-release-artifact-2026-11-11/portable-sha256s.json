@@ -1,0 +1,10 @@
+{
+  "build-context.json": "c08c69c1b68acb4fc6cb9f333eb29305bd565b15e73b296a9705be37a4e979e1",
+  "result.json": "db65eb2e2ef48e1477b360279080ee0905478338311a4c3558a74cbb55d9fe75",
+  "artifact.json": "c5419a357249199cc970f12fe1d071cc3ff83f6707e8fe951592205827aab85a",
+  "CAPABILITIES.json": "7ed4ac50c1b0c257bce035c0f909364cebaa2005c5251a2b9efbc3d5cb8dd15a",
+  "build.log.gz": "dadf744a7765888d13a26aa0f93f08ce8ca0a470d784d9cec295567d48ce00f3",
+  "resources.jsonl.gz": "49e3a67e91c2a9b799fcd514541a60aab490df0410bcce905dfa46ef36fe3d87",
+  "build_monitored.py": "c11d4d7ce68c24fa60154d8382503b6a0065e3e1a9d314d3ca2423d197d4b15e",
+  "finalize_artifact.py": "23201f9dcccaceaa2197db7e998bd131811422a478d201e182f537989872ea28"
+}

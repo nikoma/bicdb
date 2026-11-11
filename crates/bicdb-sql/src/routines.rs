@@ -2812,6 +2812,7 @@ pub(crate) fn find_top_level_operator(sql: &str, operator: &str) -> Option<usize
 }
 
 pub(crate) fn list_routines(db: &BicDb) -> Result<Vec<RoutineSchema>> {
+    check_sql_catalog_read(db, ROUTINE_COLLECTION, None)?;
     let records = match db.scan_collection(ROUTINE_COLLECTION) {
         Ok(records) => records,
         Err(BicDbError::CollectionNotFound(_)) => return Ok(Vec::new()),

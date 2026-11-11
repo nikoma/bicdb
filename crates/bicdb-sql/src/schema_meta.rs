@@ -1022,6 +1022,7 @@ pub(crate) fn load_schema_raw_shared(
     db: &BicDb,
     table: &str,
 ) -> Result<Option<std::sync::Arc<TableSchema>>> {
+    check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(table))?;
     if let Some(schema) = sql_schema_cache_get(db, table) {
         return Ok(schema);
     }
@@ -1112,6 +1113,7 @@ pub(crate) fn load_schema(db: &BicDb, table: &str) -> Result<Option<TableSchema>
 }
 
 pub(crate) fn list_schemas_raw(db: &BicDb) -> Result<Vec<TableSchema>> {
+    check_sql_catalog_read(db, SCHEMA_COLLECTION, None)?;
     #[cfg(test)]
     SQL_SCHEMA_LIST_RAW_LOADS.with(|loads| *loads.borrow_mut() += 1);
 
@@ -1129,6 +1131,7 @@ pub(crate) fn list_schemas_raw(db: &BicDb) -> Result<Vec<TableSchema>> {
 }
 
 pub(crate) fn list_schemas_shared(db: &BicDb) -> Result<std::sync::Arc<Vec<TableSchema>>> {
+    check_sql_catalog_read(db, SCHEMA_COLLECTION, None)?;
     if let Some(schemas) = sql_schema_list_cache_get(db) {
         return Ok(schemas);
     }
@@ -1380,6 +1383,7 @@ pub(crate) fn primary_key_index_definition_for_schema(
 }
 
 pub(crate) fn list_table_catalog_summaries(db: &BicDb) -> Result<Vec<TableCatalogSummary>> {
+    check_sql_catalog_read(db, SCHEMA_COLLECTION, None)?;
     let records = match db.scan_collection(SCHEMA_COLLECTION) {
         Ok(records) => records,
         Err(BicDbError::CollectionNotFound(_)) => return Ok(Vec::new()),
@@ -1763,6 +1767,7 @@ pub(crate) fn user_type_key(schema_name: &str, name: &str) -> String {
 }
 
 pub(crate) fn list_user_types(db: &BicDb) -> Result<Vec<UserTypeSchema>> {
+    check_sql_catalog_read(db, USER_TYPE_COLLECTION, None)?;
     let records = match db.scan_collection(USER_TYPE_COLLECTION) {
         Ok(records) => records,
         Err(BicDbError::CollectionNotFound(_)) => return Ok(Vec::new()),
@@ -1814,6 +1819,7 @@ thread_local! {
 }
 
 fn row_type_oid_index(db: &BicDb) -> Result<std::sync::Arc<RowTypeOidIndex>> {
+    check_sql_catalog_read(db, SCHEMA_COLLECTION, None)?;
     let key = db.instance_id();
     let generation = db.collection_generation(SCHEMA_COLLECTION);
     let hit = ROW_TYPE_OID_INDEX.with(|memo| {
@@ -1845,6 +1851,7 @@ fn row_type_oid_index(db: &BicDb) -> Result<std::sync::Arc<RowTypeOidIndex>> {
 }
 
 fn user_types_shared(db: &BicDb) -> Result<std::sync::Arc<Vec<UserTypeSchema>>> {
+    check_sql_catalog_read(db, USER_TYPE_COLLECTION, None)?;
     let key = db.instance_id();
     let generation = db.collection_generation(USER_TYPE_COLLECTION);
     let hit = USER_TYPES_MEMO.with(|memo| {
@@ -2487,6 +2494,7 @@ pub(crate) fn role_exists(db: &BicDb, name: &str) -> Result<bool> {
 }
 
 pub(crate) fn list_roles(db: &BicDb) -> Result<Vec<RoleSchema>> {
+    check_sql_catalog_read(db, ROLE_COLLECTION, None)?;
     let mut roles = vec![current_role_schema()];
     let records = match db.scan_collection(ROLE_COLLECTION) {
         Ok(records) => records,
@@ -2597,6 +2605,7 @@ pub(crate) fn delete_privilege(db: &mut BicDb, grant: &PrivilegeGrant) -> Result
 }
 
 pub(crate) fn list_privileges(db: &BicDb) -> Result<Vec<PrivilegeGrant>> {
+    check_sql_catalog_read(db, PRIVILEGE_COLLECTION, None)?;
     let records = match db.scan_collection(PRIVILEGE_COLLECTION) {
         Ok(records) => records,
         Err(BicDbError::CollectionNotFound(_)) => return Ok(Vec::new()),
@@ -2932,6 +2941,7 @@ pub(crate) fn role_schema_shared(
     db: &BicDb,
     name: &str,
 ) -> Result<Option<std::sync::Arc<RoleSchema>>> {
+    check_sql_catalog_read(db, ROLE_COLLECTION, None)?;
     let name = normalize_role_name(name);
     if name == current_role_name() {
         return Ok(Some(std::sync::Arc::new(current_role_schema())));
@@ -4558,6 +4568,7 @@ pub(crate) fn unqualified_relation(name: &str) -> String {
 }
 
 pub(crate) fn load_view(db: &BicDb, view: &str) -> Result<Option<ViewSchema>> {
+    check_sql_catalog_read(db, VIEW_COLLECTION, Some(view))?;
     match db.get(VIEW_COLLECTION, view) {
         Ok(Some(record)) => Ok(Some(serde_json::from_value(record.metadata.clone())?)),
         Ok(None) => match legacy_public_relation_name(view) {
@@ -4581,6 +4592,7 @@ thread_local! {
 
 /// The view definitions, decoded once per change of the view catalog.
 pub(crate) fn list_views_shared(db: &BicDb) -> Result<ViewList> {
+    check_sql_catalog_read(db, VIEW_COLLECTION, None)?;
     #[cfg(test)]
     VIEW_CATALOG_ENUMERATIONS.with(|count| count.set(count.get() + 1));
     let key = db.instance_id();
@@ -4827,6 +4839,7 @@ pub(crate) fn load_routine(
     kind: RoutineKind,
     name: &str,
 ) -> Result<Option<RoutineSchema>> {
+    check_sql_catalog_read(db, ROUTINE_COLLECTION, Some(&routine_key(kind, name)))?;
     match db.get(ROUTINE_COLLECTION, &routine_key(kind, name)) {
         Ok(Some(record)) => {
             let routine = serde_json::from_value::<RoutineSchema>(record.metadata.clone())?
@@ -4872,6 +4885,7 @@ pub(crate) fn resolve_routine_cached(
     kind: RoutineKind,
     name: &str,
 ) -> Result<Option<CachedRoutine>> {
+    check_sql_catalog_read(db, ROUTINE_COLLECTION, None)?;
     let generation = db.collection_generation(ROUTINE_COLLECTION);
     let database_id = db.instance_id();
     // Borrow-key lookup: the cache is keyed by the lowercase name alone (one

@@ -237,7 +237,9 @@ pub(crate) use row_types::{
     eval_populate_record_call, populate_record_call, populate_record_value,
     rewrite_row_type_constructs, RECORD_STAR_MARKER,
 };
+mod catalog_reads;
 mod engine;
+pub(crate) use catalog_reads::{check_sql_catalog_read, validate_catalog_reads};
 mod external_sort;
 pub mod plan_diagnostics;
 mod predicate_contradiction;

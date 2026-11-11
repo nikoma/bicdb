@@ -19,8 +19,37 @@ struct AccessFrame {
     identity: Arc<()>,
 }
 
+#[derive(Clone)]
+struct ReadFrame {
+    admission: Weak<CatalogAdmission>,
+    owner: TransactionId,
+    bindings: Weak<Bindings>,
+    actor: Option<u64>,
+    identity: Arc<()>,
+}
+
 thread_local! {
     static HOST_ACCESS: RefCell<Vec<AccessFrame>> = const { RefCell::new(Vec::new()) };
+    static READ_ACCESS: RefCell<Vec<ReadFrame>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Read-only catalog identity for a live transaction. This does not turn
+/// transactions begun on this thread into trusted internal catalog writers.
+/// An expired owner refuses reads; dropping this guard uses owned handles only.
+#[derive(Debug)]
+pub struct CatalogReadAccess {
+    identity: Arc<()>,
+    _not_send: PhantomData<std::rc::Rc<()>>,
+}
+
+impl Drop for CatalogReadAccess {
+    fn drop(&mut self) {
+        let _ = READ_ACCESS.try_with(|frames| {
+            frames
+                .borrow_mut()
+                .retain(|frame| !Arc::ptr_eq(&frame.identity, &self.identity));
+        });
+    }
 }
 
 /// Temporary authority for trusted internal catalog operations on this thread.
@@ -354,6 +383,29 @@ impl CatalogAdmission {
 }
 
 impl Transaction {
+    /// Carry this owner's identity through SQL catalog readers without granting
+    /// host mutation authority. The owner must still be pending at every read.
+    pub fn enter_catalog_read_access(&self) -> Result<CatalogReadAccess> {
+        self.db_ref().check_recovery_state()?;
+        if self.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        let identity = Arc::new(());
+        READ_ACCESS.with(|frames| {
+            frames.borrow_mut().push(ReadFrame {
+                admission: Arc::downgrade(&self.catalog_admission),
+                owner: self.id,
+                bindings: Arc::downgrade(&self.collection_incarnations),
+                actor: self.catalog_actor_scope,
+                identity: Arc::clone(&identity),
+            })
+        });
+        Ok(CatalogReadAccess {
+            identity,
+            _not_send: PhantomData,
+        })
+    }
+
     pub(super) fn ensure_catalog_mutation_scope(&self, collection: &str) -> Result<()> {
         let Some(actor) = self.catalog_actor_scope else {
             return Ok(());
@@ -573,6 +625,76 @@ impl Transaction {
 }
 
 impl BicDb {
+    /// Check a SQL catalog read before consulting any cache. `None` describes
+    /// a collection scan; point identities are retained for row-level resource
+    /// admission. Current collection reservations protect every record.
+    ///
+    /// The host must use this for each metadata dependency; it is not a query
+    /// parser, a durable journal, or authority to bypass ordinary data policy.
+    pub fn check_catalog_read_access(&self, collection: &str, _id: Option<&str>) -> Result<()> {
+        if self.catalog_admission.active.load(AtomicOrdering::Acquire) == 0
+            && HOST_ACCESS.with(|frames| frames.borrow().is_empty())
+            && READ_ACCESS.with(|frames| frames.borrow().is_empty())
+        {
+            return Ok(());
+        }
+        self.check_recovery_state()?;
+        if let Some(actor) = self.catalog_admission.ambient_actor()? {
+            self.catalog_admission.state.read().check_access(
+                TransactionId(0),
+                Some(actor),
+                collection,
+                None,
+            )?;
+            return self.check_recovery_state();
+        }
+        let admission = Arc::downgrade(&self.catalog_admission);
+        let frame = READ_ACCESS.with(|frames| {
+            frames
+                .borrow()
+                .iter()
+                .rev()
+                .find(|frame| Weak::ptr_eq(&frame.admission, &admission))
+                .cloned()
+        });
+        let incarnation = self
+            .collections
+            .get(collection)
+            .map(|current| Arc::clone(&current.read().incarnation));
+        let state = self.catalog_admission.state.read();
+        if let Some(frame) = frame {
+            let registrations = self.catalog_admission.registrations.lock();
+            let registration = registrations
+                .get(&frame.owner.0)
+                .filter(|entry| {
+                    Weak::ptr_eq(&entry.bindings, &frame.bindings)
+                        && entry.actor_scope == frame.actor
+                })
+                .ok_or_else(|| {
+                    BicDbError::TransactionConflict("catalog read owner is no longer active".into())
+                })?;
+            let bindings = registration.bindings.upgrade().ok_or_else(|| {
+                BicDbError::TransactionConflict("catalog read owner has expired".into())
+            })?;
+            state.check_access(frame.owner, frame.actor, collection, incarnation.as_ref())?;
+            if state.scopes.values().any(|scope| {
+                scope.owner == frame.owner
+                    && scope.closing
+                    && scope.covers(collection, incarnation.as_ref())
+            }) {
+                return Err(BicDbError::TransactionConflict(
+                    "catalog read owner is finalizing its decision".into(),
+                ));
+            }
+            if let Some(incarnation) = incarnation {
+                CatalogAdmission::remember(&bindings, collection, incarnation)?;
+            }
+        } else {
+            state.check_access(TransactionId(0), None, collection, incarnation.as_ref())?;
+        }
+        self.check_recovery_state()
+    }
+
     /// Enter this capability only around trusted internal catalog effects.
     /// Transactions begun on this thread capture it; ordinary transactions on
     /// other threads retain their own authority and remain fenced. This is

@@ -49,7 +49,9 @@ async fn verify_fixed_index_visibility(profile: &str, levels: &[&str]) {
         .unwrap();
         let serving = server.clone();
         let task = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
-        let config = format!("host=127.0.0.1 port={port} user=bicdb dbname=bicdb");
+        let config = format!(
+            "host=127.0.0.1 port={port} user=bicdb dbname=bicdb options='-c bicdb.sql_profile={profile}'"
+        );
         let (reader, connection) = tokio_postgres::connect(&config, NoTls).await.unwrap();
         let reader_task = tokio::spawn(connection);
         let (writer, connection) = tokio_postgres::connect(&config, NoTls).await.unwrap();

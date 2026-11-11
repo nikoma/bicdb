@@ -74,6 +74,7 @@ pub(crate) use range_image_native::rf3_fixture::{
 };
 pub(crate) use range_image_native::NativeActivationDecisionReceipt;
 pub(crate) use range_image_native::NativeReplicaMaterialization;
+pub(crate) use range_image_native::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 pub(crate) use range_image_native::{
     FreshRangeGenesisAuthority, KnownNativeRecoveryPrefix, NativeHistoryPublicationBinding,
     NativeHistoryStage, NativeHistoryStageProgress, NativeHistoryTargetContext,

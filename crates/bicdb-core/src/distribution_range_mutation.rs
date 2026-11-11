@@ -23,7 +23,6 @@ fn invalid(detail: impl Into<String>) -> BicDbError {
 
 #[derive(Debug, Default)]
 struct RangeState {
-    observation_generation: Uuid,
     active: BTreeSet<Uuid>,
     pending: Option<(Uuid, Uuid)>,
     frozen: Option<(Uuid, Uuid)>,
@@ -36,6 +35,7 @@ struct RangeState {
 #[derive(Debug, Default)]
 struct Inner {
     observation_database_generation: Mutex<Uuid>,
+    observation_range_generations: Mutex<BTreeMap<RangeId, Uuid>>,
     ranges: Mutex<BTreeMap<RangeId, RangeState>>,
     serving_generations: Mutex<BTreeMap<RangeId, (Uuid, Weak<AtomicBool>)>>,
     changed: Condvar,
@@ -96,7 +96,12 @@ impl NativeRangeReadStamp {
         let ranges = inner.ranges.lock();
         let state = ranges.get(&self.range_id);
         require_readable_gate(&inner, state)?;
-        if state.map(|s| s.observation_generation) != self.range_generation
+        if inner
+            .observation_range_generations
+            .lock()
+            .get(&self.range_id)
+            .copied()
+            != self.range_generation
             || *inner.observation_database_generation.lock() != self.database_generation
         {
             return Err(invalid("native read observation generation changed"));
@@ -193,6 +198,17 @@ pub(crate) enum RangeMutationAuthority<'a> {
 }
 
 impl RangeMutationGate {
+    // Called only under ranges, by actual mutator admission. Retain stamps
+    // after idle RangeState removal to prevent None -> writer -> None ABA.
+    // Reads never allocate. Exhaustion refuses new mutation identities.
+    fn rotate_native_read_generation(&self, range_id: RangeId) -> Result<()> {
+        let mut generations = self.inner.observation_range_generations.lock();
+        if !generations.contains_key(&range_id) && generations.len() >= MAX_GATE_RANGES {
+            return Err(invalid("native read invalidation range bound reached"));
+        }
+        generations.insert(range_id, Uuid::now_v7());
+        Ok(())
+    }
     pub(crate) fn observe_native_read_stamp(
         &self,
         range_id: RangeId,
@@ -203,7 +219,12 @@ impl RangeMutationGate {
         Ok(NativeRangeReadStamp {
             inner: Arc::downgrade(&self.inner),
             range_id,
-            range_generation: state.map(|s| s.observation_generation),
+            range_generation: self
+                .inner
+                .observation_range_generations
+                .lock()
+                .get(&range_id)
+                .copied(),
             database_generation: *self.inner.observation_database_generation.lock(),
         })
     }
@@ -272,7 +293,7 @@ impl RangeMutationGate {
             return Err(invalid("range mutation permit bound reached"));
         }
         let lease = Uuid::now_v7();
-        state.observation_generation = Uuid::now_v7();
+        self.rotate_native_read_generation(range_id)?;
         state.active.insert(lease);
         self.inner.range_active.fetch_add(1, Ordering::Relaxed);
         Ok(RangeMutationPermit {
@@ -308,7 +329,7 @@ impl RangeMutationGate {
                 "{range_id} already has a capture or is invalid"
             )));
         }
-        state.observation_generation = Uuid::now_v7();
+        self.rotate_native_read_generation(range_id)?;
         state.pending = Some((owner, lease));
         // Keep all fallible exits inside this closure so the range-map lock is
         // released before pending-request cleanup reacquires it.
@@ -371,7 +392,7 @@ impl RangeMutationGate {
             )));
         }
         let lease = Uuid::now_v7();
-        state.observation_generation = Uuid::now_v7();
+        self.rotate_native_read_generation(range_id)?;
         state.frozen = Some((owner, lease));
         self.invalidate_serving_generation(range_id);
         Ok(FrozenRangeMutationPermit {
@@ -491,7 +512,7 @@ impl RangeMutationGate {
             return Err(invalid("controlled writer freeze invalid or capacity busy"));
         }
         let lease = Uuid::now_v7();
-        state.observation_generation = Uuid::now_v7();
+        self.rotate_native_read_generation(permit.range_id)?;
         state.controlled.insert(lease);
         self.inner.range_active.fetch_add(1, Ordering::Relaxed);
         Ok(ControlledFrozenMutationPermit {
@@ -1025,5 +1046,64 @@ mod tests {
         let replacement = gate.try_freeze(range(1), Uuid::now_v7()).unwrap();
         assert!(gate.validate_claim(&frozen_claim).is_err());
         drop(replacement);
+    }
+}
+
+#[cfg(test)]
+mod native_read_stamp_tests {
+    use super::*;
+    #[test]
+    fn native_read_stamp_never_allocates_and_failed_writer_cannot_aba() {
+        let gate = RangeMutationGate::default();
+        let range = RangeId::new(1).unwrap();
+        let before = gate.observe_native_read_stamp(range).unwrap();
+        for _ in 0..32 {
+            gate.observe_native_read_stamp(range)
+                .unwrap()
+                .require_current()
+                .unwrap();
+        }
+        assert!(gate.inner.ranges.lock().is_empty());
+        assert!(gate.inner.observation_range_generations.lock().is_empty());
+        let permit = gate.try_enter(range).unwrap();
+        assert!(before.require_current().is_err());
+        assert!(gate.observe_native_read_stamp(range).is_err());
+        drop(permit);
+        assert!(
+            gate.inner.ranges.lock().is_empty(),
+            "normal idle cleanup remains intact"
+        );
+        assert!(
+            before.require_current().is_err(),
+            "idle removal must not restore None generation"
+        );
+        assert_eq!(gate.inner.observation_range_generations.lock().len(), 1);
+        gate.observe_native_read_stamp(range)
+            .unwrap()
+            .require_current()
+            .unwrap();
+    }
+    #[test]
+    fn native_read_stamp_invalidates_database_freeze_and_controlled_paths() {
+        let gate = RangeMutationGate::default();
+        let range = RangeId::new(1).unwrap();
+        let before = gate.observe_native_read_stamp(range).unwrap();
+        let database = gate.try_enter_database().unwrap();
+        assert!(before.require_current().is_err());
+        drop(database);
+        assert!(before.require_current().is_err());
+        let before = gate.observe_native_read_stamp(range).unwrap();
+        let frozen = gate.try_freeze(range, Uuid::now_v7()).unwrap();
+        assert!(before.require_current().is_err());
+        assert!(gate.observe_native_read_stamp(range).is_err());
+        let controlled = gate.try_controlled_mutation(&frozen).unwrap();
+        assert!(gate.observe_native_read_stamp(range).is_err());
+        drop(controlled);
+        drop(frozen);
+        assert!(before.require_current().is_err());
+        gate.observe_native_read_stamp(range)
+            .unwrap()
+            .require_current()
+            .unwrap();
     }
 }

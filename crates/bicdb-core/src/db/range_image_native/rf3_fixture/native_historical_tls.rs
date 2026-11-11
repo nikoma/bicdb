@@ -1262,3 +1262,6 @@ mod activation_tests;
 
 #[cfg(test)]
 mod activation_rplusone;
+
+#[cfg(test)]
+mod native_read_observation_tests;

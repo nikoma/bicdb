@@ -51,6 +51,8 @@ pub(crate) use image_install_obligations::TargetImageCatalogHistoryObligations;
 mod image_install_state;
 mod native_completion_observation;
 mod native_ready_catalog;
+mod native_read_catalog;
+pub(crate) use native_read_catalog::{NativeReadCatalogueDecision, NativeRangeReadCatalogue};
 pub(crate) use native_completion_observation::LocalNativeCompletionEvidence;
 mod native_ready_observation;
 pub(crate) use native_ready_observation::LocalNativeReadyEvidence;

@@ -14,6 +14,8 @@ mod history;
 mod history_stage;
 mod installed_anchor;
 mod serving_configuration;
+mod native_read;
+pub(crate) use native_read::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 use serving_configuration::NativeRecoveredServingConfiguration;
 pub(crate) use serving_configuration::{
     NativeActivationDecisionReceipt, NativeRecoveredServingReceipt,

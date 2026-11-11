@@ -10,6 +10,9 @@ use crate::distribution_range_consensus::{
 };
 use crate::distribution_range_recovery::{ClosedNativeReadyQuorum, RecoveryRoleAdmission};
 
+#[cfg(test)]
+mod floor_tests;
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub(super) struct NativeRecoveredServingConfiguration {

@@ -1587,24 +1587,7 @@ fn relation_display_name(schema: &TableSchema) -> String {
 }
 
 fn resolve_regtype_name(db: &BicDb, oid: i64) -> Result<Option<String>> {
-    if let Some(name) = list_schemas(db)?.into_iter().find_map(|schema| {
-        let display = relation_display_name(&schema);
-        if schema.row_type_oid() == oid {
-            Some(if schema.schema_name.eq_ignore_ascii_case("public") {
-                display
-            } else {
-                format!("{}.{}", schema.schema_name, display)
-            })
-        } else if schema.row_array_type_oid() == oid {
-            Some(if schema.schema_name.eq_ignore_ascii_case("public") {
-                format!("{display}[]")
-            } else {
-                format!("{}.{display}[]", schema.schema_name)
-            })
-        } else {
-            None
-        }
-    }) {
+    if let Some(name) = pg_table_row_regtype_name(db, oid)? {
         return Ok(Some(name));
     }
     let formatted = eval_db_catalog_function_value(

@@ -53,6 +53,12 @@ fn check(array: bool) {
                 .clone();
             assert_eq!(signature[0][1], type_oid);
             assert_eq!(signature[0][0].to_cell(), type_oid.to_cell());
+            assert_eq!(
+                sql.execute(&format!("SELECT format_type({},-1)", type_oid.to_cell()))
+                    .unwrap()
+                    .rows,
+                vec![vec![SqlValue::String(pg_type.into())]]
+            );
         }
         db.close().unwrap();
         let mut db = BicDb::open_with_config(root.path(), cfg).unwrap();

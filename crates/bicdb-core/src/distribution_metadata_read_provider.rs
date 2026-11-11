@@ -20,6 +20,7 @@ use crate::distribution_consensus::{
 };
 use crate::error::{BicDbError, Result};
 use crate::CancellationToken;
+mod host_read;
 
 fn acquisition_error(message: impl Into<String>) -> BicDbError {
     BicDbError::Cluster(format!("metadata read acquisition: {}", message.into()))
@@ -103,6 +104,7 @@ impl Drop for CancelOnReturn {
 enum ReadAdmission<'a> {
     Leader,
     RecoveryWitness(&'a MetadataRecoveryRoleRequest),
+    HostMember(&'a crate::distribution_consensus::HostMetadataReadAcquireRequest),
 }
 impl ReadAdmission<'_> {
     fn validate(
@@ -114,6 +116,7 @@ impl ReadAdmission<'_> {
         match self {
             Self::Leader => store.validate_read_acquisition_caller(request, caller),
             Self::RecoveryWitness(role) => store.validate_recovery_role_caller(role, caller),
+            Self::HostMember(host) => store.validate_host_metadata_caller(host, request, caller),
         }
     }
 }
@@ -389,10 +392,10 @@ impl MetadataReadProvider {
             {
                 let consensus = self.lock_consensus(&token)?;
                 if consensus.read_authority_ready(&context)? {
-                    if !same_range_read_authority(
-                        &admission.validate(&consensus, &request, caller)?,
-                        &range,
-                    ) {
+                    let current_subject = admission.validate(&consensus, &request, caller)?;
+                    if !matches!(&admission, ReadAdmission::HostMember(_))
+                        && !same_range_read_authority(&current_subject, &range)
+                    {
                         return Err(acquisition_error(
                             "range configuration changed during fresh quorum round",
                         ));

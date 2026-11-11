@@ -24,6 +24,10 @@ pub const DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE: &str = "cluster-metadata-con
 const MAX_RESTORE_ACTIVATION_ACKNOWLEDGEMENTS: u64 = 100_000;
 pub const METADATA_READ_AUTHORITY_PROTOCOL_VERSION: u32 = 1;
 pub const METADATA_READ_ACQUISITION_PROTOCOL_VERSION: u32 = 1;
+mod host_read;
+pub(crate) use host_read::{
+    HostMetadataReadAcquireRequest, HostMetadataReadAcquireResponse, HostMetadataReadObservation,
+};
 
 /// Wire request only. This is not a read authority or a row-read permit.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

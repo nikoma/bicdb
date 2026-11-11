@@ -302,7 +302,7 @@ impl RangeImageCapture {
         let (gate, reserved, bindings) = {
             let database = read_database(&db)?;
             let gate = database.range_mutation_gate();
-            gate.validate_frozen(cut.range().id, &frozen)?;
+            gate.validate_quiescent_frozen(cut.range().id, &frozen)?;
             database.validate_source_range_image_lineage(
                 &lineage,
                 cut.range().id,
@@ -321,7 +321,7 @@ impl RangeImageCapture {
             wait.check()?;
             let reached = {
                 let database = read_database(&db)?;
-                gate.validate_frozen(cut.range().id, &frozen)?;
+                gate.validate_quiescent_frozen(cut.range().id, &frozen)?;
                 database.validate_range_image_bindings(&bindings)?;
                 database.replication_shippable_seq() >= reserved.0
             };
@@ -401,7 +401,7 @@ impl RangeImageCapture {
             ));
         }
         self.gate
-            .validate_frozen(self.cut.range().id, &self.frozen)?;
+            .validate_quiescent_frozen(self.cut.range().id, &self.frozen)?;
         database.validate_range_image_bindings(&self.bindings)?;
         database.validate_source_range_image_lineage(
             &self.lineage,

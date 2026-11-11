@@ -794,7 +794,7 @@ mod tests {
     }
     #[test]
     fn handoff_witness_is_exact_plan_purpose_for_metadata_coordinator_and_target_learner() {
-        use crate::{MetadataMemberRole, PlannedReplicaMove, RebalancePlan, ReplicaMoveReason};
+        use crate::{PlannedReplicaMove, RebalancePlan, ReplicaMoveReason};
         let root = tempfile::tempdir().unwrap();
         let cfg = DistributionConfig {
             enabled: true,
@@ -851,6 +851,43 @@ mod tests {
             )
             .unwrap();
         assert_eq!(response.request.purpose, purpose);
+        let mut admitted_topology = fixture.topology.clone();
+        admitted_topology.range_image_bootstrap_id = Some(Uuid::now_v7());
+        let relocation_id = *admitted_topology.relocations.keys().next().unwrap();
+        let admission = crate::distribution_range_recovery::test_handoff_role_admission(
+            &root.path().join("fresh-role"),
+            &admitted_topology,
+            &node("n1"),
+            &node("n1"),
+            &node("n3"),
+            relocation_id,
+            Duration::from_secs(2),
+        )
+        .unwrap();
+        assert_eq!(
+            admission.target_member_identity().incarnation,
+            admitted_topology.nodes[&node("n3")].incarnation
+        );
+        let session = admitted_topology.relocations[&relocation_id]
+            .handoff_session
+            .as_ref()
+            .unwrap();
+        admission
+            .require_live_scope(
+                relocation_id,
+                "exact-role-plan",
+                session.session_id,
+                session.nonce,
+            )
+            .unwrap();
+        assert!(admission
+            .require_live_scope(
+                relocation_id,
+                "wrong-plan",
+                session.session_id,
+                session.nonce
+            )
+            .is_err());
         let mut normal = role_request(
             &fixture,
             "n3",

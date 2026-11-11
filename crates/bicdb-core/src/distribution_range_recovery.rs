@@ -22,6 +22,8 @@ fn invalid(message: &str) -> BicDbError {
     BicDbError::Cluster(format!("range recovery: {message}"))
 }
 
+mod quorum;
+pub(crate) use quorum::{FreshRangeRecoveryAuthority, RecoveryFenceQuorumRound};
 mod runtime;
 pub(crate) use runtime::RangeRecoveryRuntime;
 

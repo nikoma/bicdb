@@ -8,7 +8,7 @@ use super::{invalid, RecoveryFenceObservation, RecoveryMemberIdentity, RecoveryR
 use crate::distribution::{ClusterNodeId, RangeDescriptor, RangeReplicaRole};
 use crate::distribution_consensus::MetadataRecoveryRolePurpose;
 use crate::distribution_range_consensus::{RangeWriteCommand, RecoveryFenceScope};
-use crate::Result;
+use crate::{CancellationToken, Result};
 
 const MAX_VOTERS: usize = 64;
 const MAX_OBSERVATION_TEXT: usize = 16 * 1024;
@@ -16,14 +16,18 @@ const MAX_OBSERVATION_TEXT: usize = 16 * 1024;
 /// No caller-supplied counters, duplicate-voter counting or decoded DTOs can
 /// construct this round's observations. Each observation has already traversed
 /// an authenticated transport or the actual local receiver's drain/persist path.
+#[derive(Debug)]
 pub(crate) struct RecoveryFenceQuorumRound {
     role: RecoveryRoleAdmission,
     scope: RecoveryFenceScope,
+    cancellation: CancellationToken,
     observations: BTreeMap<ClusterNodeId, RecoveryFenceObservation>,
 }
 
 impl RecoveryFenceQuorumRound {
-    pub(crate) fn begin(role: RecoveryRoleAdmission) -> Result<Self> {
+    pub(crate) fn begin(role: RecoveryRoleAdmission, parent: &CancellationToken) -> Result<Self> {
+        let cancellation = parent.child_with_deadline(role.deadline());
+        cancellation.check()?;
         role.require_live_request()?;
         let members = role.member_credentials();
         if members.is_empty()
@@ -42,6 +46,7 @@ impl RecoveryFenceQuorumRound {
         Ok(Self {
             role,
             scope,
+            cancellation,
             observations: BTreeMap::new(),
         })
     }
@@ -57,6 +62,7 @@ impl RecoveryFenceQuorumRound {
     }
 
     pub(crate) fn record(&mut self, observation: RecoveryFenceObservation) -> Result<()> {
+        self.cancellation.check()?;
         self.role.require_live_request()?;
         observation.require_live()?;
         // Recipients obtain independent fresh metadata contexts. Their durable
@@ -156,6 +162,7 @@ impl RecoveryFenceQuorumRound {
     }
 
     pub(crate) fn finish(self) -> Result<FreshRangeRecoveryAuthority> {
+        self.cancellation.check()?;
         self.role.require_live_request()?;
         if self.observations.len() < self.required_quorum() {
             return Err(invalid(
@@ -168,6 +175,7 @@ impl RecoveryFenceQuorumRound {
         Ok(FreshRangeRecoveryAuthority {
             role: self.role,
             scope: self.scope,
+            cancellation: self.cancellation,
             observations: self.observations,
         })
     }
@@ -176,13 +184,16 @@ impl RecoveryFenceQuorumRound {
 /// Actual current-data majority fencing, not native-ready or strong-read
 /// authority. Receiver-side mutation still requires its independently fresh
 /// role, owned freeze and an actual distinct per-command certificate quorum.
+#[derive(Debug)]
 pub(crate) struct FreshRangeRecoveryAuthority {
     role: RecoveryRoleAdmission,
     scope: RecoveryFenceScope,
+    cancellation: CancellationToken,
     observations: BTreeMap<ClusterNodeId, RecoveryFenceObservation>,
 }
 impl FreshRangeRecoveryAuthority {
     pub(crate) fn require_live(&self) -> Result<()> {
+        self.cancellation.check()?;
         self.role.require_live_request()
     }
     pub(crate) fn role(&self) -> &RecoveryRoleAdmission {
@@ -201,7 +212,9 @@ impl FreshRangeRecoveryAuthority {
         &self.observations
     }
     pub(crate) fn deadline(&self) -> Instant {
-        self.role.deadline()
+        self.cancellation
+            .deadline()
+            .expect("role supplies a finite deadline")
     }
     pub(crate) fn require_historical_scope(&self, command: &RangeWriteCommand) -> Result<()> {
         self.require_live()?;
@@ -251,5 +264,295 @@ impl FreshRangeRecoveryAuthority {
                 .then_with(|| left.node_id().cmp(right.node_id()))
         });
         candidates
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::{RangeImageBirthMember, RangeImageBirthSpec};
+    use crate::distribution::{DistributionConfig, DistributionStore, RangeReplica, ReplicaId};
+    use crate::distribution_data::ClusterDataNodeService;
+    use crate::distribution_metadata_read_provider::MetadataReadProvider;
+    use crate::distribution_range_recovery::{
+        test_recovery_metadata_cluster, RangeRecoveryRuntime, RecoveryEpochFenceRequest,
+    };
+    use crate::{BicDb, ClusterTopology, DbConfig, StorageMode};
+    use parking_lot::{Mutex, RwLock};
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
+    use std::time::Duration;
+    use uuid::Uuid;
+
+    struct Fixture {
+        _root: tempfile::TempDir,
+        topology: ClusterTopology,
+        nodes: Vec<ClusterNodeId>,
+        providers: BTreeMap<ClusterNodeId, Arc<MetadataReadProvider>>,
+        runtimes: BTreeMap<ClusterNodeId, RangeRecoveryRuntime>,
+        databases: BTreeMap<ClusterNodeId, Arc<RwLock<BicDb>>>,
+        parent: CancellationToken,
+    }
+    impl Fixture {
+        fn new(count: usize) -> Self {
+            let root = tempfile::tempdir().unwrap();
+            let bootstrap = Uuid::now_v7();
+            let first = ClusterNodeId::new("n1").unwrap();
+            let config = DistributionConfig {
+                enabled: true,
+                cluster_id: crate::ClusterId::new("actual-fence-quorum").unwrap(),
+                node_id: first.clone(),
+                node_address: "127.0.0.1:10001".into(),
+                initial_ranges: 1,
+                replication_factor: 1,
+                range_image_bootstrap_id: Some(bootstrap),
+                ..Default::default()
+            };
+            let mut topology = DistributionStore::initialize_at(
+                root.path().join("initial-metadata"),
+                config,
+                true,
+                1,
+            )
+            .unwrap()
+            .topology()
+            .clone();
+            let nodes: Vec<_> = (1..=count)
+                .map(|i| ClusterNodeId::new(format!("n{i}")).unwrap())
+                .collect();
+            let prototype = topology.nodes[&first].clone();
+            for (i, id) in nodes.iter().enumerate().skip(1) {
+                let mut node = prototype.clone();
+                node.id = id.clone();
+                node.address = format!("127.0.0.1:{}", 10001 + i);
+                topology.nodes.insert(id.clone(), node);
+            }
+            topology.replication_factor = count as u8;
+            topology.next_replica_id = count as u64 + 1;
+            topology.ranges.values_mut().next().unwrap().replicas = nodes
+                .iter()
+                .enumerate()
+                .map(|(i, node)| RangeReplica {
+                    id: ReplicaId::new(i as u64 + 1).unwrap(),
+                    node_id: node.clone(),
+                    role: RangeReplicaRole::Voter,
+                })
+                .collect();
+            topology.validate().unwrap();
+            let mut databases = BTreeMap::new();
+            let mut services = BTreeMap::new();
+            for id in &nodes {
+                let path = root.path().join(format!("db-{id}"));
+                let spec = RangeImageBirthSpec {
+                    cluster_id: topology.cluster_id.clone(),
+                    bootstrap_id: bootstrap,
+                    node_id: id.clone(),
+                    member_incarnation: topology.nodes[id].incarnation,
+                    initial_members: topology
+                        .nodes
+                        .iter()
+                        .map(|(id, node)| {
+                            (
+                                id.clone(),
+                                RangeImageBirthMember {
+                                    incarnation: node.incarnation,
+                                    tls_certificate_sha256: node.tls_certificate_sha256.clone(),
+                                    pending_tls_certificate_sha256: node
+                                        .pending_tls_certificate_sha256
+                                        .clone(),
+                                },
+                            )
+                        })
+                        .collect(),
+                    // Actual completed birth, deliberately NO range genesis.
+                    // A current member can be behind and require an image;
+                    // neither metadata nor an empty log can manufacture R=0.
+                    initial_ranges: vec![],
+                    restore_activation: None,
+                };
+                let (db, _) = BicDb::create_new_range_image_database(
+                    &path,
+                    DbConfig::default()
+                        .with_fsync(true)
+                        .with_storage_mode(StorageMode::ServerPaged)
+                        .with_paged_buffer_pool_bytes(8 * 1024 * 1024),
+                    spec,
+                )
+                .unwrap();
+                let fingerprint = db.schema_compatibility_fingerprint().unwrap().sha256;
+                topology.nodes.get_mut(id).unwrap().labels.insert(
+                    crate::distribution::SCHEMA_COMPATIBILITY_NODE_LABEL.into(),
+                    fingerprint,
+                );
+                let db = Arc::new(RwLock::new(db));
+                let service = Arc::new(Mutex::new(
+                    ClusterDataNodeService::open(
+                        topology.cluster_id.clone(),
+                        id.clone(),
+                        &path,
+                        Arc::clone(&db),
+                        true,
+                    )
+                    .unwrap(),
+                ));
+                databases.insert(id.clone(), db);
+                services.insert(id.clone(), service);
+            }
+            topology.validate().unwrap();
+            // Deliberately different metadata and data leaders for RF3.
+            let metadata_leader = nodes.get(1).unwrap_or(&nodes[0]);
+            let providers = test_recovery_metadata_cluster(
+                &root.path().join("shared-metadata"),
+                &topology,
+                metadata_leader,
+            )
+            .unwrap();
+            let runtimes = services
+                .into_iter()
+                .map(|(node, service)| {
+                    let runtime = RangeRecoveryRuntime::new(service, Arc::clone(&providers[&node]));
+                    (node, runtime)
+                })
+                .collect();
+            Self {
+                _root: root,
+                topology,
+                nodes,
+                providers,
+                runtimes,
+                databases,
+                parent: CancellationToken::uncancelable()
+                    .child_with_deadline(Instant::now() + Duration::from_secs(5)),
+            }
+        }
+        fn role(&self, nonce: Uuid) -> RecoveryRoleAdmission {
+            let id = &self.nodes[0];
+            let provider = &self.providers[id];
+            let actual = provider.local_participant();
+            let business = Uuid::now_v7();
+            let challenge = Uuid::now_v7();
+            let range = self.topology.ranges.values().next().unwrap();
+            let purpose = MetadataRecoveryRolePurpose::NormalRecovery;
+            let witness = provider
+                .witness_recovery_role(
+                    &actual,
+                    business,
+                    range.id,
+                    range.epoch,
+                    nonce,
+                    challenge,
+                    purpose.clone(),
+                    &self.parent,
+                )
+                .unwrap();
+            RecoveryRoleAdmission::from_witness(
+                witness,
+                &actual,
+                id,
+                business,
+                range.id,
+                range.epoch,
+                nonce,
+                challenge,
+                &purpose,
+            )
+            .unwrap()
+        }
+        fn observe(
+            &self,
+            node: &ClusterNodeId,
+            scope: &RecoveryFenceScope,
+        ) -> RecoveryFenceObservation {
+            let actual = self.providers[&self.nodes[0]].local_participant();
+            self.runtimes[node]
+                .fence_epoch(
+                    &actual,
+                    &RecoveryEpochFenceRequest {
+                        scope: scope.clone(),
+                        budget_ms: 3000,
+                    },
+                    &self.parent,
+                )
+                .unwrap()
+        }
+    }
+
+    #[test]
+    fn actual_rf1_fence_is_durable_but_unknown_native_floor_never_becomes_zero_ready() {
+        let fixture = Fixture::new(1);
+        let mut round =
+            RecoveryFenceQuorumRound::begin(fixture.role(Uuid::now_v7()), &fixture.parent).unwrap();
+        let scope = round.scope().clone();
+        let observation = fixture.observe(&fixture.nodes[0], &scope);
+        assert_eq!(observation.native().native_applied_index, None);
+        round.record(observation).unwrap();
+        let authority = round.finish().unwrap();
+        authority.require_live().unwrap();
+        assert_eq!(authority.observations().len(), 1);
+        assert_eq!(authority.highest_observed_index(), 0); // diagnostic ONLY
+        assert!(authority.clean_source_candidates().is_empty());
+        assert!(fixture.databases[&fixture.nodes[0]]
+            .read()
+            .range_mutation_gate()
+            .try_enter(scope.range_id)
+            .is_err());
+    }
+    #[test]
+    fn actual_rf3_distinct_fences_succeed_without_waiting_for_data_leader_ack() {
+        let fixture = Fixture::new(3);
+        let mut round =
+            RecoveryFenceQuorumRound::begin(fixture.role(Uuid::now_v7()), &fixture.parent).unwrap();
+        assert_eq!(round.required_quorum(), 2);
+        let scope = round.scope().clone();
+        for id in &fixture.nodes[1..] {
+            round.record(fixture.observe(id, &scope)).unwrap();
+        }
+        let authority = round.finish().unwrap();
+        assert_eq!(authority.observations().len(), 2);
+        assert!(!authority.observations().contains_key(&fixture.nodes[0]));
+        assert!(authority.clean_source_candidates().is_empty());
+    }
+    #[test]
+    fn actual_duplicate_and_insufficient_fences_cannot_create_majority() {
+        let fixture = Fixture::new(3);
+        let mut round =
+            RecoveryFenceQuorumRound::begin(fixture.role(Uuid::now_v7()), &fixture.parent).unwrap();
+        let scope = round.scope().clone();
+        round
+            .record(fixture.observe(&fixture.nodes[1], &scope))
+            .unwrap();
+        assert!(round
+            .record(fixture.observe(&fixture.nodes[1], &scope))
+            .is_err());
+        assert!(round.finish().is_err());
+    }
+    #[test]
+    fn independently_real_but_different_session_fence_is_rejected() {
+        let fixture = Fixture::new(3);
+        let mut round =
+            RecoveryFenceQuorumRound::begin(fixture.role(Uuid::now_v7()), &fixture.parent).unwrap();
+        let other = RecoveryFenceScope::from_role(&fixture.role(Uuid::now_v7())).unwrap();
+        assert!(round
+            .record(fixture.observe(&fixture.nodes[1], &other))
+            .is_err());
+        assert!(!round.has_observation(&fixture.nodes[1]));
+    }
+    #[test]
+    fn original_parent_cancellation_prevents_consuming_a_real_fence_quorum() {
+        let fixture = Fixture::new(1);
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let parent = CancellationToken::new(
+            Arc::clone(&cancelled),
+            Some(fixture.parent.deadline().unwrap()),
+        );
+        let mut round =
+            RecoveryFenceQuorumRound::begin(fixture.role(Uuid::now_v7()), &parent).unwrap();
+        round
+            .record(fixture.observe(&fixture.nodes[0], round.scope()))
+            .unwrap();
+        cancelled.store(true, Ordering::SeqCst);
+        assert!(round.finish().is_err());
     }
 }

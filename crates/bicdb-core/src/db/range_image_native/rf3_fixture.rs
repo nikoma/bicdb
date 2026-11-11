@@ -194,6 +194,16 @@ impl ActualNativeRf3Fixture {
     pub(crate) fn new_with_network_precondition(
         network: &BTreeMap<ClusterNodeId, (String, String)>,
     ) -> Self {
+        Self::new_with_network_and_initial_ranges(network, 1)
+    }
+    pub(crate) fn new_with_initial_ranges(initial_ranges: u32) -> Self {
+        Self::new_with_network_and_initial_ranges(&BTreeMap::new(), initial_ranges)
+    }
+    fn new_with_network_and_initial_ranges(
+        network: &BTreeMap<ClusterNodeId, (String, String)>,
+        initial_ranges: u32,
+    ) -> Self {
+        assert!(matches!(initial_ranges, 1 | 2));
         let root = tempfile::tempdir().unwrap();
         let cluster = ClusterId::new("actual-native-rf3-origin").unwrap();
         let leader = ClusterNodeId::new("n0").unwrap();
@@ -205,7 +215,7 @@ impl ActualNativeRf3Fixture {
                 cluster_id: cluster.clone(),
                 node_id: leader.clone(),
                 node_address: "127.0.0.1:19000".into(),
-                initial_ranges: 1,
+                initial_ranges,
                 replication_factor: 3,
                 range_image_bootstrap_id: Some(bootstrap),
                 ..Default::default()
@@ -234,19 +244,15 @@ impl ActualNativeRf3Fixture {
         // Explicit INITIAL topology fixture, before any birth/data/genesis.
         // Do not represent this as executing an online learner-promotion plan.
         for id in ["n1", "n2"] {
-            let replica_id = ReplicaId::new(topology.next_replica_id).unwrap();
-            topology.next_replica_id += 1;
-            topology
-                .ranges
-                .values_mut()
-                .next()
-                .unwrap()
-                .replicas
-                .push(RangeReplica {
+            for range in topology.ranges.values_mut() {
+                let replica_id = ReplicaId::new(topology.next_replica_id).unwrap();
+                topology.next_replica_id += 1;
+                range.replicas.push(RangeReplica {
                     id: replica_id,
                     node_id: ClusterNodeId::new(id).unwrap(),
                     role: RangeReplicaRole::Voter,
                 });
+            }
         }
         if !network.is_empty() {
             assert_eq!(network.len(), topology.nodes.len());
@@ -257,7 +263,7 @@ impl ActualNativeRf3Fixture {
             }
         }
         topology.validate().unwrap();
-        let range = topology.ranges.values().next().unwrap().clone();
+        let ranges = topology.ranges.values().cloned().collect::<Vec<_>>();
         let members = topology
             .nodes
             .iter()
@@ -287,7 +293,7 @@ impl ActualNativeRf3Fixture {
                 member_incarnation: node.incarnation,
                 initial_members: members.clone(),
                 restore_activation: None,
-                initial_ranges: vec![range.clone()],
+                initial_ranges: ranges.clone(),
             };
             let path = root.path().join(node.id.as_str());
             let (mut db, _) =
@@ -305,17 +311,19 @@ impl ActualNativeRf3Fixture {
             }
             let db = Arc::new(RwLock::new(db));
             let gate = db.read().range_mutation_gate();
-            let frozen = gate.try_freeze(range.id, Uuid::now_v7()).unwrap();
-            BicDb::initialize_range_image_genesis(
-                &db,
-                &genesis,
-                &range,
-                &frozen,
-                Duration::from_secs(3),
-                &CancellationToken::uncancelable(),
-            )
-            .unwrap();
-            drop(frozen);
+            for range in &ranges {
+                let frozen = gate.try_freeze(range.id, Uuid::now_v7()).unwrap();
+                BicDb::initialize_range_image_genesis(
+                    &db,
+                    &genesis,
+                    range,
+                    &frozen,
+                    Duration::from_secs(3),
+                    &CancellationToken::uncancelable(),
+                )
+                .unwrap();
+                drop(frozen);
+            }
             databases.insert(node.id.clone(), db);
             specs.insert(node.id.clone(), spec);
         }
@@ -505,3 +513,44 @@ fn native_rf3_oversize_refuses_before_any_durable_quorum_or_native_pending() {
 
 #[cfg(feature = "tls-replication")]
 mod native_historical_tls;
+
+#[test]
+fn actual_rf3_two_initial_ranges_have_real_genesis_and_independent_origin_indices() {
+    let fixture = ActualNativeRf3Fixture::new_with_initial_ranges(2);
+    let topology = fixture.topology.read().clone();
+    let ranges = topology.ranges.values().collect::<Vec<_>>();
+    for range in &ranges {
+        for db in fixture.databases.values() {
+            assert_eq!(
+                db.read()
+                    .current_native_range_source_lineage(range.id)
+                    .unwrap()
+                    .range_index(),
+                0
+            );
+        }
+    }
+    for (position, range) in ranges.iter().enumerate() {
+        let key = (0..)
+            .map(|i| format!("actual-rf3-independent-range-{position}-{i}"))
+            .find(|key| topology.range_for_key("items", key).unwrap().id == range.id)
+            .unwrap();
+        fixture.append(&key).unwrap();
+        let db = fixture.databases[&fixture.leader()].read();
+        assert_eq!(
+            db.current_native_range_source_lineage(range.id)
+                .unwrap()
+                .range_index(),
+            1
+        );
+        assert!(db.get("items", &key).unwrap().is_some());
+    }
+    assert_ne!(
+        fixture.databases[&fixture.leader()]
+            .read()
+            .current_commit_seq(),
+        1
+    );
+    // Real local RF3 origin services, not ordinary follower materialization or
+    // actual participant image/config activation. Native remote Apply stays refused.
+}

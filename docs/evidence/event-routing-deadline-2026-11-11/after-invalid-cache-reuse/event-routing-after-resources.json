@@ -1,0 +1,56 @@
+[
+  {
+    "elapsed_seconds": 0.0003647292032837868,
+    "available_bytes": 26955022336,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.02 avg300=0.03 total=4750564428\nfull avg10=0.00 avg60=0.02 avg300=0.03 total=4578615061\n",
+    "disk_free_bytes": 33802043392
+  },
+  {
+    "elapsed_seconds": 1.0005909120664,
+    "available_bytes": 26446237696,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.02 avg300=0.03 total=4750564428\nfull avg10=0.00 avg60=0.02 avg300=0.03 total=4578615061\n",
+    "disk_free_bytes": 33764196352
+  },
+  {
+    "elapsed_seconds": 2.000862860120833,
+    "available_bytes": 27270098944,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.02 avg300=0.03 total=4750565725\nfull avg10=0.00 avg60=0.02 avg300=0.03 total=4578616357\n",
+    "disk_free_bytes": 33651937280
+  },
+  {
+    "elapsed_seconds": 3.001117043197155,
+    "available_bytes": 27285676032,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.02 avg300=0.03 total=4750565869\nfull avg10=0.00 avg60=0.02 avg300=0.03 total=4578616501\n",
+    "disk_free_bytes": 33651871744
+  },
+  {
+    "elapsed_seconds": 4.001370864920318,
+    "available_bytes": 27261976576,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.01 avg300=0.03 total=4750565869\nfull avg10=0.00 avg60=0.01 avg300=0.03 total=4578616501\n",
+    "disk_free_bytes": 33651826688
+  },
+  {
+    "elapsed_seconds": 5.001631619408727,
+    "available_bytes": 27273465856,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.01 avg300=0.03 total=4750565869\nfull avg10=0.00 avg60=0.01 avg300=0.03 total=4578616501\n",
+    "disk_free_bytes": 33651761152
+  }
+]

@@ -1,0 +1,11 @@
+
+running 6 tests
+test distribution_transport::event_client_retry_tests::a_known_follower_can_supply_committed_route_discovery ... ok
+test distribution_transport::event_client_retry_tests::legacy_metadata_controllers_remain_usable_for_discovery ... ok
+test distribution_transport::event_client_retry_tests::silent_discovery_member_cannot_exhaust_the_retry_budget ... ok
+test distribution_transport::event_client_retry_tests::silent_event_route_leaves_budget_for_discovery_and_retry ... ok
+test distribution_transport::event_client_retry_tests::permanently_silent_old_leader_refreshes_from_another_member ... ok
+test distribution_transport::event_client_retry_tests::transient_topology_refresh_does_not_abort_an_event_request ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 505 filtered out; finished in 2.89s
+

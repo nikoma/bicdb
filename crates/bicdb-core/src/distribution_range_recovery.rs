@@ -24,6 +24,8 @@ fn invalid(message: &str) -> BicDbError {
 
 mod image_compatibility;
 mod image_history;
+mod image_proposal;
+pub(crate) use image_proposal::{HistoricalCurrentImageAcceptanceV1, HistoricalCurrentImageSourceAcceptance};
 #[cfg(test)]
 mod recovery_order_tests;
 pub(crate) use image_compatibility::{RecoverySourceHistoryRound, VerifiedRecoverySourceHistory};

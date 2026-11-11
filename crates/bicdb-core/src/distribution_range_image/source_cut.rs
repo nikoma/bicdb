@@ -33,9 +33,16 @@ pub(crate) struct CertifiedRecoveryImageCut {
     source_native_receipt_sha256: String,
     source_logical_genesis_sha256: String,
     source_logical_history_sha256: String,
+    historical_acceptance:
+        crate::distribution_range_recovery::HistoricalCurrentImageSourceAcceptance,
 }
 
 impl CertifiedRecoveryImageCut {
+    pub(crate) fn historical_acceptance(
+        &self,
+    ) -> &crate::distribution_range_recovery::HistoricalCurrentImageSourceAcceptance {
+        &self.historical_acceptance
+    }
     pub(crate) fn from_verified_source_history(
         history: crate::distribution_range_recovery::VerifiedRecoverySourceHistory,
         source: &crate::db::LocalNativeRecoveryReady,
@@ -87,6 +94,8 @@ impl CertifiedRecoveryImageCut {
             source_native_receipt_sha256: source.native_receipt_sha256().to_string(),
             source_logical_genesis_sha256: source.logical_genesis_sha256().to_string(),
             source_logical_history_sha256: source.logical_history_sha256().to_string(),
+            historical_acceptance: history
+                .historical_current_image_acceptance(source, database, store)?,
         };
         history.require_current(source, database, store)?;
         Ok(cut)
@@ -121,6 +130,14 @@ fn semantic_range(a: &RangeDescriptor, b: &RangeDescriptor) -> bool {
     a == b
 }
 impl NativeRangeImageSourceCut {
+    pub(crate) fn historical_current_acceptance(
+        &self,
+    ) -> Option<&crate::distribution_range_recovery::HistoricalCurrentImageSourceAcceptance> {
+        match self {
+            Self::CurrentVoterRepair(cut) => Some(cut.historical_acceptance()),
+            Self::CommittedHandoff(_) => None,
+        }
+    }
     pub(crate) fn purpose(&self) -> RangeImageSourcePurposeV1 {
         match self {
             Self::CommittedHandoff(cut) => RangeImageSourcePurposeV1::CommittedHandoff {

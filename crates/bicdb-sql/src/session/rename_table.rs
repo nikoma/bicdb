@@ -303,6 +303,93 @@ mod tests {
     }
 
     #[test]
+    fn promoted_primary_recovers_an_undecided_replicated_rename_before_sql_writes() {
+        use bicdb_core::ReplicationMode;
+        for paged in [false, true] {
+            for profile in [oracle::POSTGRES_PROFILE, oracle::ORACLE_HR_PROFILE] {
+                let root = tempfile::tempdir().unwrap();
+                let mut primary = BicDb::open_with_config(
+                    root.path().join("primary"),
+                    replica_config(paged, ReplicationMode::Primary),
+                )
+                .unwrap();
+                primary.sync_quorum().hold("sql-promotion-control", 0);
+                primary.persist_standby_slots().unwrap();
+                oracle::ensure_database_profile(&mut primary, profile).unwrap();
+                let standby_path = root.path().join("standby");
+                let mut standby = BicDb::open_with_config(
+                    &standby_path,
+                    replica_config(paged, ReplicationMode::Standby),
+                )
+                .unwrap();
+                {
+                    let mut sql = SqlSession::new(&mut primary);
+                    sql.execute("CREATE TABLE source(id INT PRIMARY KEY,payload TEXT); INSERT INTO source VALUES(1,'acknowledged'); BEGIN; UPDATE source SET payload='uncommitted' WHERE id=1").unwrap();
+                    let mut schema = load_schema(sql.db_ref(), "source").unwrap().unwrap();
+                    // Persist and replicate the host operation's prefix, not
+                    // an Oracle client statement with implicit-DDL commits.
+                    apply(&mut sql, "source", "renamed", &mut schema).unwrap();
+                    ship(sql.db_ref(), &mut standby);
+                    // Stop the producer without publishing a SQL decision.
+                    // Discarding its native owner does not undo catalog WAL.
+                    sql.take_pending_transaction().unwrap().rollback().unwrap();
+                }
+                primary.close().unwrap();
+                assert_eq!(rename_journal::pending(&standby).unwrap().len(), 1);
+                assert_eq!(
+                    SqlSession::new_shared(&standby)
+                        .execute("SELECT payload FROM renamed")
+                        .unwrap_err()
+                        .sqlstate(),
+                    "55000"
+                );
+                // This is the real persisted promotion/restart API, but a
+                // local control, not a network election or VM-fault proof.
+                standby
+                    .promote_by_election(1, "sql-successor", None)
+                    .unwrap();
+                drop(standby);
+                for reopen in [false, true] {
+                    let mut promoted = BicDb::open_with_config(
+                        &standby_path,
+                        replica_config(paged, ReplicationMode::Primary),
+                    )
+                    .unwrap();
+                    assert!(!promoted.is_standby_role());
+                    assert_eq!(promoted.replication_epoch(), 1);
+                    if reopen {
+                        oracle::initialize_existing_database_profile(&mut promoted).unwrap();
+                    } else {
+                        oracle::ensure_database_profile(&mut promoted, profile).unwrap();
+                    }
+                    assert!(rename_journal::pending(&promoted).unwrap().is_empty());
+                    let mut sql = SqlSession::new(&mut promoted);
+                    assert_eq!(
+                        sql.execute("SELECT payload FROM source WHERE id=1")
+                            .unwrap()
+                            .rows,
+                        vec![vec![SqlValue::String("acknowledged".into())]],
+                        "paged={paged} {profile} reopen={reopen}"
+                    );
+                    assert!(load_schema(sql.db_ref(), "renamed").unwrap().is_none());
+                    if !reopen {
+                        sql.execute("INSERT INTO source VALUES(2,'after-promotion')")
+                            .unwrap();
+                    }
+                    assert_eq!(
+                        sql.execute("SELECT payload FROM source WHERE id=2")
+                            .unwrap()
+                            .rows,
+                        vec![vec![SqlValue::String("after-promotion".into())]]
+                    );
+                    drop(sql);
+                    promoted.close().unwrap();
+                }
+            }
+        }
+    }
+
+    #[test]
     fn configured_profile_initialization_recovers_an_undecided_primary_rename() {
         for paged in [false, true] {
             for profile in [oracle::POSTGRES_PROFILE, oracle::ORACLE_HR_PROFILE] {

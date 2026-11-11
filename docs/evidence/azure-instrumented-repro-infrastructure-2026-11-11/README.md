@@ -49,6 +49,37 @@ One public IP exposes SSH on the jump/data node, restricted to the controller's
 admin IPv4 /32. Data/SQL endpoints are private. Implicit subnet outbound access
 is disabled. Independent persistent cleanup pins subscription, full new group ID
 and purpose/experiment tags, retries failures, and triggers at 11:22:51 UTC.
-Application stop is 10:55 UTC, preserving export/deletion time. This snapshot
-records allocation and health, not workload success, scale qualification or
-teardown. Workload and deletion evidence follow separately.
+Application stop was bounded at 10:55 UTC, preserving export/deletion time.
+
+## Final export and teardown
+
+The driver confirmed all five hosts had zero owned engine/wire/timeout processes.
+Four nodes had stopped runtime databases; n4 never joined and had no runtime DB,
+configuration or log. Eight stopped database archives across the two diagnostic
+runs were exported outside Azure with matching remote/controller hashes and
+explicit controller fsync. This is five allocated VMs and four runtime nodes,
+not a completed four-to-five-node runtime expansion.
+
+Before deletion, all 34 final ARM/model/placement/network/metric-definition
+queries succeeded. Twenty final metrics requests succeeded, retaining 6,918
+numeric one-minute observations through the query window ending
+09:44:18.629830 UTC. [The CSV](platform-metric-points.csv) preserves numerical
+series without subscription/resource identities. [The summary](platform-metric-summary.json)
+retains per-metric missing/empty counts; [capture history](platform-metric-capture-history.json)
+also preserves earlier failed requests. Standard metric ingestion lag is not
+bounded here. Platform minute aggregates are not application p50/p95/p99 or
+proof that subminute stalls/throttling did not occur. The 142 Activity Log events
+and final official SKU model remain private, with digests; raw Activity Log can
+contain injected host-key configuration and must not be published.
+
+The exact tagged group delete was requested at 09:46:19.895182 UTC. Azure
+confirmed group absence at **09:49:21.693380 UTC**; a separate subscription
+inventory found zero resources in its exact scope. All 23 resources were
+accounted for: five VMs, ten managed disks, five NICs, VNet, NSG and public IP.
+Only afterward were the owned cleanup timer/service removed and confirmed
+unloaded/inactive, the verified owned metric sampler stopped, and its private
+guard directory archived then removed. The original deleted group was not
+recreated or modified. See [deletion-receipt.json](deletion-receipt.json) and
+[final-export-summary.json](final-export-summary.json). Actual billing is
+unverified. These receipts establish export/deletion, not production
+qualification or successful elastic capacity.

@@ -452,3 +452,5 @@ fn actual_gap_refusal_preserves_durable_observations_and_retained_prefix_recover
         serde_json::json!({"acknowledged_commits":1,"uncertain_calls":1,"initial_source_native":1,"initial_source_raw":2,"initial_available_peer_native":0,"initial_available_peer_raw":0,"direct_tail_gap_correctly_refused":true,"prefix_export_without_source_ready":true,"prefix_recertify_apply_then_tail":true,"final_available_native":2,"final_available_resolved":2,"activation_proven":false,"physical_qualification":false})
     );
 }
+
+mod copied_obligation_case;

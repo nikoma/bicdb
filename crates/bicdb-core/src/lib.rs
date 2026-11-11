@@ -28,6 +28,7 @@ mod distribution_gateway;
 mod distribution_io;
 mod distribution_metadata_read_provider;
 mod distribution_native_apply;
+mod distribution_native_read;
 mod distribution_query;
 mod distribution_range_consensus;
 mod distribution_range_handoff;

@@ -1285,3 +1285,6 @@ mod activation_tests;
 mod activation_rplusone;
 
 mod native_normal_tls;
+
+#[cfg(test)]
+mod native_read_observation_tests;

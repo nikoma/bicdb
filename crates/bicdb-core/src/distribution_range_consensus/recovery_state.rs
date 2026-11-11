@@ -1049,6 +1049,7 @@ impl RangeWriteStore {
         Ok(())
     }
     pub(crate) fn normal_native_write_allowed(&self, command: &RangeWriteCommand) -> Result<()> {
+        self.require_native_catalog_durability(&self.root)?;
         self.require_no_active_recovery(command.range_id)?;
         self.require_no_image_install(command.range_id)?;
         if self

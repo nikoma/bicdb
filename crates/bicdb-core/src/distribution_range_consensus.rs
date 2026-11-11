@@ -50,8 +50,10 @@ mod image_install_obligations;
 pub(crate) use image_install_obligations::TargetImageCatalogHistoryObligations;
 mod image_install_state;
 mod native_completion_observation;
+mod native_read_catalog;
 mod native_ready_catalog;
 pub(crate) use native_completion_observation::LocalNativeCompletionEvidence;
+pub(crate) use native_read_catalog::{NativeRangeReadCatalogue, NativeReadCatalogueDecision};
 mod native_ready_observation;
 pub(crate) use native_ready_observation::LocalNativeReadyEvidence;
 mod native_activation;
@@ -92,6 +94,7 @@ pub(crate) use native_limits::{
     validate_native_recovery_entry_size, MAX_NATIVE_RECOVERY_ENTRY_BYTES,
     MIN_NATIVE_RECOVERY_FRAME_BYTES,
 };
+mod native_durability;
 mod native_normal;
 mod native_prefix;
 #[cfg(test)]
@@ -1954,6 +1957,14 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         })?;
         let local_incarnation = database_guard.incarnation_id().to_string();
         let native_image_mode = database_guard.native_range_image_birth_present();
+        if native_image_mode {
+            local_service
+                .try_lock()
+                .ok_or_else(|| {
+                    range_write_error("service busy while checking native catalog configuration")
+                })?
+                .require_native_catalog_database(&database_guard)?;
+        }
         drop(database_guard);
         Ok(Self {
             cluster_id,
@@ -3017,6 +3028,11 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                 ))
             }
         };
+        if let Some(database) = native_database {
+            self.local_service
+                .lock()
+                .require_native_catalog_database(database)?;
+        }
         let range = self.resolve_range(intent)?;
         self.require_recovered_epoch(&range)?;
         let mutation = self.range_mutations.try_enter(range.id)?;

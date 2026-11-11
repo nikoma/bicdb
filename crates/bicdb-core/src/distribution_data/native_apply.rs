@@ -19,6 +19,7 @@ impl ClusterDataNodeService {
             ));
         }
         let database = try_database_read(&self.db)?;
+        self.require_native_catalog_database(&database)?;
         let actual = database.observe_native_replica_for_role(role)?;
         let progress = self.range_writes.progress(role.current_range().id);
         let observation = NativeReplicaApplyObservation::from_native_materialization(
@@ -56,6 +57,7 @@ impl ClusterDataNodeService {
             ));
         }
         let database = try_database_read(&self.db)?;
+        self.require_native_catalog_database(&database)?;
         // Raw Applied is intentionally not a physical fast path. The native
         // adapter verifies immutable history or performs a real new WAL apply.
         let actual = database.apply_native_origin_instruction(admission, &authority, parent)?;
@@ -85,6 +87,7 @@ impl ClusterDataNodeService {
     ) -> Result<NativeReplicaApplyObservation> {
         self.validate_range_write_peer(range, caller)?;
         let database = try_database_read(&self.db)?;
+        self.require_native_catalog_database(&database)?;
         let actual = database.observe_native_embedded_replica(range, None)?;
         NativeReplicaApplyObservation::from_native_materialization(
             &actual,
@@ -119,6 +122,7 @@ impl ClusterDataNodeService {
             ));
         }
         let database = try_database_read(&self.db)?;
+        self.require_native_catalog_database(&database)?;
         let before = database.current_native_range_source_lineage(range.id)?;
         certificate
             .intent()

@@ -5,6 +5,28 @@ use tokio_postgres::NoTls;
 
 #[tokio::test]
 async fn fixed_snapshots_retain_rows_removed_from_live_index_candidates() {
+    verify_fixed_index_visibility(
+        "postgres",
+        &[
+            "REPEATABLE READ",
+            "REPEATABLE READ READ ONLY",
+            "SERIALIZABLE",
+            "SERIALIZABLE READ ONLY",
+        ],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn oracle_snapshot_isolation_retains_historical_index_candidates() {
+    verify_fixed_index_visibility(
+        "oracle-preview-v1",
+        &["SERIALIZABLE", "SERIALIZABLE READ ONLY"],
+    )
+    .await;
+}
+
+async fn verify_fixed_index_visibility(profile: &str, levels: &[&str]) {
     let mut failures = Vec::new();
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let root = tempfile::tempdir().unwrap();
@@ -17,7 +39,14 @@ async fn fixed_snapshots_retain_rows_removed_from_live_index_candidates() {
         );
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
-        let server = PgWireServer::open(root.path(), PgWireConfig::default()).unwrap();
+        let server = PgWireServer::open(
+            root.path(),
+            PgWireConfig {
+                sql_profile: profile.into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
         let serving = server.clone();
         let task = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
         let config = format!("host=127.0.0.1 port={port} user=bicdb dbname=bicdb");
@@ -33,12 +62,7 @@ async fn fixed_snapshots_retain_rows_removed_from_live_index_candidates() {
             )
             .await
             .unwrap();
-        for isolation in [
-            "REPEATABLE READ",
-            "REPEATABLE READ READ ONLY",
-            "SERIALIZABLE",
-            "SERIALIZABLE READ ONLY",
-        ] {
+        for isolation in levels {
             writer
                 .batch_execute(
                     "DELETE FROM history;

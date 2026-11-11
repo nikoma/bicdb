@@ -1108,9 +1108,9 @@ impl<'db> SqlEngine<'db> {
             .flatten()
             .cloned()
             .collect::<Vec<_>>();
-        let committed_primary_key_extreme_is_safe = self
-            .tx
-            .is_none_or(|tx| tx.write_len() == 0 && !tx.is_postgres_serializable());
+        let committed_primary_key_extreme_is_safe = self.tx.is_none_or(|tx| {
+            tx.write_len() == 0 && tx.isolation() == bicdb_core::TransactionIsolation::ReadCommitted
+        });
         if committed_primary_key_extreme_is_safe && !primary_key_requires_typed_identity(schema) {
             if let Some(index) = readable_primary_key_index_for_schema(self.db_ref(), schema) {
                 let prefix = prefix_values
@@ -2494,7 +2494,10 @@ impl<'db> SqlEngine<'db> {
         let Some(bounded) = self.bounded_ordered_index_plan(from, select, query)? else {
             return Ok(None);
         };
-        let ids = if self.tx.is_some_and(Transaction::is_postgres_serializable) {
+        let ids = if self
+            .tx
+            .is_some_and(|tx| tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted)
+        {
             // Apply the limit after the caller's snapshot-aware row sort.
             // A limited live cursor can miss both the old winner and rows
             // displaced by a key that the snapshot cannot see.

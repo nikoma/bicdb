@@ -339,8 +339,10 @@ impl Transaction {
         })
     }
 
-    /// Reconcile live index candidates against fixed-snapshot keys. The
-    /// caller probes the live index first, so a key can only have moved
+    /// Reconcile live index candidates against fixed-snapshot keys for both
+    /// Repeatable Read and Serializable. SSI registration controls dependency
+    /// tracking, independently of historical tuple visibility. The caller
+    /// probes the live index first, so a key can only have moved
     /// after its replacement version entered the MVCC chain.
     pub fn postgres_snapshot_index_changes(
         &self,
@@ -350,7 +352,7 @@ impl Transaction {
         filters: &[(usize, IndexValue)],
         cancellation: &CancellationToken,
     ) -> Result<Vec<(String, RowId, bool)>> {
-        if self.postgres_serializable.is_none() {
+        if self.isolation == crate::TransactionIsolation::ReadCommitted {
             return Ok(Vec::new());
         }
         let db = self.db_ref();

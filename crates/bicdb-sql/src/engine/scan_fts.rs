@@ -3534,10 +3534,10 @@ impl<'db> SqlEngine<'db> {
                 limit,
             } => {
                 sql_profile_index_lookup();
-                if self
-                    .tx
-                    .is_some_and(|tx| tx.write_len() > 0 || tx.is_postgres_serializable())
-                {
+                if self.tx.is_some_and(|tx| {
+                    tx.write_len() > 0
+                        || tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted
+                }) {
                     sql_profile_full_scan();
                     return self.scan_records(collection);
                 }
@@ -3557,7 +3557,9 @@ impl<'db> SqlEngine<'db> {
                     sql_profile_full_scan();
                     return self.scan_records(collection);
                 }
-                if self.tx.is_some_and(Transaction::is_postgres_serializable) {
+                if self.tx.is_some_and(|tx| {
+                    tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted
+                }) {
                     let ids = self.lookup_index_cached(index_name, prefix)?;
                     return self.records_for_ids(collection, &ids);
                 }

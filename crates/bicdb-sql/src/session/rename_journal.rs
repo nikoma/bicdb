@@ -545,7 +545,7 @@ mod tests {
                 bin_name: bin.clone(),
                 table: "renamed".into(),
                 owner: BOOTSTRAP_ROLE_NAME.into(),
-                dropped_at_micros: unix_micros_now(),
+                dropped_at_micros: 0,
                 schema: renamed_schema,
                 grants: vec![],
                 triggers: vec![],

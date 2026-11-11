@@ -3894,9 +3894,29 @@ impl<'db> SqlSession<'db> {
         let _clock = oracle::current_time::StatementScope::new();
         oracle::lock_waits::validate(self.db_ref(), statement)?;
         let previous = std::mem::replace(&mut self.in_routine_expression, false);
-        let result = self.execute_parsed_statement_in_sql(statement);
+        let result = self.execute_with_postgres_default_isolation(statement);
         self.in_routine_expression = previous;
         result
+    }
+
+    fn execute_with_postgres_default_isolation(
+        &mut self,
+        statement: &Statement,
+    ) -> Result<SqlResult> {
+        if self.tx.is_some()
+            || self
+                .session_gucs
+                .get("default_transaction_isolation")
+                .is_none_or(|level| level != "serializable")
+            || !postgres_statement_has_parse_snapshot(statement)
+            || oracle::preview_routine_language_enabled(self.db_ref())?
+        {
+            return self.execute_parsed_statement_in_sql(statement);
+        }
+        self.with_statement_transaction(|session| {
+            session.set_transaction_isolation_label("serializable")?;
+            session.execute_parsed_statement_in_sql(statement)
+        })
     }
 
     fn execute_parsed_statement_in_sql(&mut self, statement: &Statement) -> Result<SqlResult> {

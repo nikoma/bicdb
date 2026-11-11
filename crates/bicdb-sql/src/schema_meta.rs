@@ -364,16 +364,20 @@ pub fn postgres_parse_requires_snapshot(sql: &str) -> bool {
     let Ok(statements) = parse_statements(sql) else {
         return false;
     };
-    match statements.as_slice() {
-        [Statement::CreateTable(table)] => table.query.is_some(),
-        [Statement::Query(_)
+    matches!(statements.as_slice(), [statement] if postgres_statement_has_parse_snapshot(statement))
+}
+
+pub(crate) fn postgres_statement_has_parse_snapshot(statement: &Statement) -> bool {
+    match statement {
+        Statement::CreateTable(table) => table.query.is_some(),
+        Statement::Query(_)
         | Statement::Insert(_)
         | Statement::Update(_)
         | Statement::Delete(_)
         | Statement::Merge(_)
         | Statement::Declare { .. }
         | Statement::Explain { .. }
-        | Statement::Call(_)] => true,
+        | Statement::Call(_) => true,
         _ => false,
     }
 }

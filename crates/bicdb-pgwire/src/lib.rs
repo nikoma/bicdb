@@ -4130,6 +4130,30 @@ fn execute_server_db_sql_for_state_inner(
         state.catalog_cache = session.into_catalog_cache();
         return result;
     }
+    if !bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
+        && state
+            .session_state
+            .default_transaction_isolation(&server.config.sql_profile)?
+            == "serializable"
+        && bicdb_sql::postgres_parse_requires_snapshot(sql)
+    {
+        begin_buffered_transaction(server, state)?;
+        let result =
+            acquire_postgres_statement_snapshot(server, state, Some(cancellation), || true)
+                .and_then(|()| {
+                    execute_server_transaction_sql(server, state, sql, normalized, cancellation)
+                });
+        return match result {
+            Ok(result) => {
+                commit_buffered_transaction(server, state, cancellation)?;
+                Ok(result)
+            }
+            Err(error) => {
+                rollback_open_transaction(server, state)?;
+                Err(error)
+            }
+        };
+    }
     let read_only_candidate = is_read_only_sql_for_shared_execution_normalized(normalized);
     if !read_only_candidate {
         ensure_server_writable(server)?;

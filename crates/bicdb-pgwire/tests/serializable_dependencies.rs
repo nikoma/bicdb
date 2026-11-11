@@ -280,6 +280,34 @@ async fn serializable_tracks_row_and_predicate_dependencies() {
         a.batch_execute("ROLLBACK").await.unwrap();
         b.batch_execute("COMMIT").await.unwrap();
 
+        b.batch_execute("BEGIN; INSERT INTO ssi_scope VALUES (100,10)")
+            .await
+            .unwrap();
+        {
+            let update = a.batch_execute(
+                "INSERT INTO ssi_scope VALUES (100,20) ON CONFLICT (id) DO UPDATE SET v=excluded.v",
+            );
+            tokio::pin!(update);
+            assert!(
+                tokio::time::timeout(Duration::from_millis(200), &mut update)
+                    .await
+                    .is_err(),
+                "{mode:?}: implicit Serializable upsert did not wait for the conflicting insert"
+            );
+            b.batch_execute("COMMIT").await.unwrap();
+            let error = tokio::time::timeout(Duration::from_secs(5), &mut update)
+                .await
+                .expect("implicit Serializable upsert did not finish after the owner committed")
+                .unwrap_err();
+            assert_eq!(error.code().unwrap().code(), "40001");
+        }
+        let value = a
+            .query_one("SELECT v FROM ssi_scope WHERE id=100", &[])
+            .await
+            .unwrap()
+            .get::<_, i32>(0);
+        assert_eq!(value, 10, "{mode:?}: implicit upsert changed the winner");
+
         drop((a, b, peer));
         a_task.abort();
         b_task.abort();

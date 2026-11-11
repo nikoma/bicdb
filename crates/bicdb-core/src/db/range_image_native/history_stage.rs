@@ -680,6 +680,46 @@ impl BicDb {
         Ok(())
     }
 
+    /// Read-only custody commitment; no mutation, floor or serving authority.
+    pub(crate) fn native_history_stage_state_commitment(
+        &self,
+        range: RangeId,
+    ) -> Result<Option<String>> {
+        let header: Option<StageHeader> = self.read_native_range_image_record(&stage_key(range))?;
+        header
+            .map(|header| {
+                header.validate()?;
+                if header.source.range_id != range {
+                    return Err(invalid("native history stage key/range differ"));
+                }
+                Ok(header.checksum_sha256)
+            })
+            .transpose()
+    }
+    /// An unrelated preexisting completed/partial stage is not this attempt.
+    /// Malformed state remains an error; absence is never a readiness proof.
+    pub(crate) fn require_no_native_history_stage_for_attempt(
+        &self,
+        range: RangeId,
+        attempt: Uuid,
+    ) -> Result<()> {
+        if attempt.is_nil() {
+            return Err(invalid(
+                "native history absence check requires an actual attempt",
+            ));
+        }
+        let header: Option<StageHeader> = self.read_native_range_image_record(&stage_key(range))?;
+        if let Some(header) = header {
+            header.validate()?;
+            if header.source.range_id != range || header.attempt_id == attempt {
+                return Err(invalid(
+                    "actual native history stage exists for this attempt or range differs",
+                ));
+            }
+        }
+        Ok(())
+    }
+
     fn read_history_stage(&self, range: RangeId) -> Result<StageHeader> {
         let header: StageHeader = self
             .read_native_range_image_record(&stage_key(range))?

@@ -1597,9 +1597,9 @@ fn resolve_regtype_name(db: &BicDb, oid: i64) -> Result<Option<String>> {
             })
         } else if schema.row_array_type_oid() == oid {
             Some(if schema.schema_name.eq_ignore_ascii_case("public") {
-                format!("_{display}")
+                format!("{display}[]")
             } else {
-                format!("{}._{}", schema.schema_name, display)
+                format!("{}.{display}[]", schema.schema_name)
             })
         } else {
             None

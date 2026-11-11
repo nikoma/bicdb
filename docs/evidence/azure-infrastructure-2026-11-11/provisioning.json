@@ -72,8 +72,9 @@
     "compute_per_vm_usd_per_hour": 0.107,
     "compute_total_usd_per_hour": 0.535,
     "premium_disks": "WestEurope reference5P6+5P10, not a NorthEurope bill",
-    "disk_price_refresh": "NorthEurope retail API HTTP429; no fabricated quote",
-    "public_ip_and_egress": "bounded exploratory setup; actual invoice not measured"
+    "disk_price_refresh": "NorthEurope retry succeeded at04:49UTC; publicIP queryHTTP429",
+    "public_ip_and_egress": "bounded exploratory setup; actual invoice not measured",
+    "compute_plus_disks_and_optional_mounts_usd_per_hour": 0.7512534246575343
   },
   "verified_at_utc": "2026-11-11T04:03:36.704607+00:00",
   "bootstrap_probe": {

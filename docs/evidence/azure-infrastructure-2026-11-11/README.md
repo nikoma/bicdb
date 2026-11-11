@@ -77,3 +77,17 @@ For resource-provider registration behavior, see Microsoft's
 [registration documentation](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-providers-and-types).
 Registration and allocation are setup operations; neither establishes an HA or
 horizontal-throughput guarantee.
+
+## Pricing refresh at 04:49 UTC
+
+The bounded North Europe disk retail retry succeeded after the earlier HTTP429.
+`refreshed-retail-prices.json` retains the actual query/response: P6 LRS
+USD 10.207/month and P10 LRS USD 19.710/month, plus separate published mount meters
+of USD 0.564/month and USD 1.092/month respectively. At five of each disk and 730
+hours/month, compute plus disks is approximately **USD 0.740/hour**, or
+**USD 0.751/hour including both mount meters if applicable**. Eight hours is
+approximately **USD 6.01 including those mount meters**, before public IP,
+network, taxes and any account-specific adjustments. These are retail planning
+rates, not an actual invoice. The separate bounded public-IP query returned
+HTTP429; no public-IP price is fabricated. The original failed query remains
+part of the provenance rather than being relabeled successful.

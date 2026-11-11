@@ -358,6 +358,9 @@ fn internal_catalog_writes_stay_inside_the_declared_effect_scope() {
         {
             let _access = db.enter_catalog_scope(&token).unwrap();
             let mut internal = db.begin_transaction().unwrap();
+            // This child retains its captured authority. Later native work
+            // on this thread must begin outside the ambient host context.
+            drop(_access);
             // An ordinary read may inspect an unrelated dependency. Its
             // mutation must first belong to the declared undo/effect scope.
             assert_eq!(

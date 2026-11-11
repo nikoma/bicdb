@@ -143,6 +143,37 @@ impl NativeImageInstallRole<'_> {
     }
 }
 
+fn require_intent_live_role(
+    intent: &ImageInstallIntent,
+    role: &NativeImageInstallRole<'_>,
+) -> Result<()> {
+    role.require_scope(&intent.source_purpose, intent.session_id, intent.nonce)?;
+    let actual = role.role();
+    let (intended_range, intended_members) = role.intended_configuration()?;
+    if !semantic_range(&intended_range, &intent.intended_range)
+        || intended_members != intent.intended_members
+        || actual.cluster_id() != &intent.cluster_id
+        || actual.bootstrap_id() != intent.bootstrap_id
+        || !semantic_range(actual.current_range(), &intent.range)
+        || actual
+            .member_credentials()
+            .iter()
+            .map(|(id, member)| (id.clone(), credentials(member)))
+            .collect::<BTreeMap<_, _>>()
+            != intent.current_voter_credentials
+        || credentials(actual.local_member_identity()) != intent.target_credentials
+        || actual.restore_activation() != intent.restore_activation.as_ref()
+        || actual.expected_schema_sha256() != Some(intent.schema_sha256.as_str())
+        || actual.local_node_id() != &intent.target_node_id
+        || actual.local_member_incarnation() != intent.target_member_incarnation
+    {
+        return Err(range_write_error(
+            "image install fresh role/configuration changed",
+        ));
+    }
+    Ok(())
+}
+
 /// Actual read-only transfer preflight. It grants no row mutation, catalog
 /// floor or user admission, and is neither cloneable nor deserializable.
 #[derive(Debug)]
@@ -152,6 +183,9 @@ pub(crate) struct NativeImageInstallTransferPreflight {
     original_freeze_owner: Uuid,
     intent: ImageInstallIntent,
     source_database_incarnation: String,
+    original_control_commitment: String,
+    original_native_phase_commitment: String,
+    target_reader_features: Vec<String>,
     native_safety: NativeRangeInstallSafety,
     catalog: super::TargetImageCatalogHistoryObligations,
     saved_session: Option<super::RecoveryImageInstallSessionObservation>,
@@ -228,6 +262,18 @@ impl NativeImageInstallTransferPreflight {
         source.require_current()?;
         self.native_safety
             .require_current(database, native, frozen)?;
+        if self.original_control_commitment
+            != store.image_transfer_control_commitment(self.range_id(), &self.cancellation)?
+            || self.original_native_phase_commitment
+                != database.native_image_install_phase_commitment(self.range_id(), frozen)?
+            || self.target_reader_features
+                != database.capture_range_image_bindings()?.reader_features()
+        {
+            return Err(range_write_error(
+                "image transfer original target/control phase changed",
+            ));
+        }
+
         self.catalog.require_current(store)?;
         if let Some(saved) = &self.saved_session {
             saved.require_current(store, database, native, role.role())?;
@@ -252,6 +298,96 @@ impl NativeImageInstallTransferPreflight {
             ));
         }
         store.validate_install_local_log(&self.intent.range, self.intent.source_range_index)?;
+        self.cancellation.check()
+    }
+}
+
+/// Freshly authorized return of an untouched transfer to its original frozen
+/// owner. This never clears recovery/image refusal or grants rows/serving.
+#[derive(Debug)]
+pub(crate) struct UntouchedNativeImageTransferReturn {
+    store_open_id: Uuid,
+    database_incarnation: String,
+    original_freeze_owner: Uuid,
+    intent: ImageInstallIntent,
+    control_commitment: String,
+    native_phase_commitment: String,
+    target_reader_features: Vec<String>,
+    native_safety: NativeRangeInstallSafety,
+    catalog: super::TargetImageCatalogHistoryObligations,
+    saved_session: Option<super::RecoveryImageInstallSessionObservation>,
+    cancellation: crate::CancellationToken,
+}
+impl UntouchedNativeImageTransferReturn {
+    pub(crate) fn range_id(&self) -> RangeId {
+        self.intent.range.id
+    }
+    pub(crate) fn attempt_id(&self) -> Uuid {
+        self.intent.attempt_id
+    }
+    pub(crate) fn nonce(&self) -> Uuid {
+        self.intent.nonce
+    }
+    pub(crate) fn session_id(&self) -> Uuid {
+        self.intent.session_id
+    }
+    pub(crate) fn original_freeze_owner(&self) -> Uuid {
+        self.original_freeze_owner
+    }
+    pub(crate) fn require_current(
+        &self,
+        store: &RangeWriteStore,
+        database: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        role: &NativeImageInstallRole<'_>,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        self.cancellation.check()?;
+        require_intent_live_role(&self.intent, role)?;
+        native.require_current(database)?;
+        self.native_safety
+            .require_current(database, native, frozen)?;
+        self.catalog.require_current(store)?;
+        if let Some(saved) = &self.saved_session {
+            saved.require_current(store, database, native, role.role())?;
+        }
+        store.require_no_native_image_catalogue_adoption_for_attempt(
+            self.range_id(),
+            self.attempt_id(),
+        )?;
+        if store
+            .catalog
+            .image_install_intents
+            .get(&self.range_id())
+            .is_some_and(|intent| intent.attempt_id == self.attempt_id())
+        {
+            return Err(range_write_error(
+                "this attempt has persisted an image intent",
+            ));
+        }
+        database.require_no_native_image_install_state_for_attempt(
+            self.range_id(),
+            self.attempt_id(),
+            frozen,
+        )?;
+        let bindings = database.capture_range_image_bindings()?;
+        if self.store_open_id != store.open_id
+            || self.database_incarnation != native.database_incarnation()
+            || self.intent.target_birth_id != native.birth_id()
+            || self.intent.target_birth_sha256 != native.birth_sha256()
+            || frozen.owner() != self.attempt_id()
+            || bindings.namespace_ids() != self.intent.target_namespace_ids
+            || bindings.schema_sha256() != self.intent.schema_sha256
+            || bindings.reader_features() != self.target_reader_features
+            || self.control_commitment
+                != store.image_transfer_control_commitment(self.range_id(), &self.cancellation)?
+            || self.native_phase_commitment
+                != database.native_image_install_phase_commitment(self.range_id(), frozen)?
+        {
+            return Err(range_write_error(
+                "untouched transfer target/control facts changed",
+            ));
+        }
         self.cancellation.check()
     }
 }
@@ -347,35 +483,69 @@ impl TargetImageInstallFence {
     /// This check is deliberately not a lease: each caller supplies a live,
     /// purpose-bound fresh observation before its next bounded operation.
     pub(crate) fn require_live_role(&self, role: &NativeImageInstallRole<'_>) -> Result<()> {
-        role.require_scope(self.source_purpose(), self.session_id(), self.nonce())?;
-        let actual = role.role();
-        let (intended_range, intended_members) = role.intended_configuration()?;
-        if !semantic_range(&intended_range, &self.intent.intended_range)
-            || intended_members != self.intent.intended_members
-            || actual.cluster_id() != self.cluster_id()
-            || actual.bootstrap_id() != self.bootstrap_id()
-            || !semantic_range(actual.current_range(), self.range())
-            || actual
-                .member_credentials()
-                .iter()
-                .map(|(id, member)| (id.clone(), credentials(member)))
-                .collect::<BTreeMap<_, _>>()
-                != self.intent.current_voter_credentials
-            || credentials(actual.local_member_identity()) != self.intent.target_credentials
-            || actual.restore_activation() != self.intent.restore_activation.as_ref()
-            || actual.expected_schema_sha256() != Some(self.intent.schema_sha256.as_str())
-            || actual.local_node_id() != self.target_node_id()
-            || actual.local_member_incarnation() != self.target_member_incarnation()
-        {
-            return Err(range_write_error(
-                "image install fresh role/configuration changed",
-            ));
-        }
-        Ok(())
+        require_intent_live_role(&self.intent, role)
     }
 }
 
 impl RangeWriteStore {
+    fn image_transfer_control_commitment(
+        &self,
+        range_id: RangeId,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<String> {
+        struct HashWriter<'a> {
+            hash: Sha256,
+            bytes: usize,
+            cancellation: &'a crate::CancellationToken,
+        }
+        impl std::io::Write for HashWriter<'_> {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                self.cancellation
+                    .check()
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                self.bytes = self.bytes.checked_add(bytes.len()).ok_or_else(|| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "image control commitment overflow",
+                    )
+                })?;
+                if self.bytes > 32 * 1024 * 1024 {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "image control commitment exceeds bound",
+                    ));
+                }
+                self.hash.update(bytes);
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        cancellation.check()?;
+        let mut writer = HashWriter {
+            hash: Sha256::new(),
+            bytes: 0,
+            cancellation,
+        };
+        let encoded = serde_json::to_writer(
+            &mut writer,
+            &(
+                "bicdb.image-transfer-control.v1",
+                &self.catalog.cluster_id,
+                &self.catalog.node_id,
+                range_id,
+                self.catalog.image_install_intents.get(&range_id),
+                self.catalog.native_image_bases.get(&range_id),
+                self.catalog.recovery_fences.get(&range_id),
+                self.catalog.handoff_promises.get(&range_id),
+            ),
+        );
+        cancellation.check()?;
+        encoded?;
+        Ok(hex::encode(writer.hash.finalize()))
+    }
+
     /// Capture real facts under Runtime's existing frozen owner. A later
     /// unique-owner lease rotates that SAME drained permit to this attempt;
     /// no caller-selected owner is accepted as a write authority.
@@ -439,6 +609,11 @@ impl RangeWriteStore {
             database_incarnation: native.database_incarnation().to_string(),
             original_freeze_owner: frozen.owner(),
             source_database_incarnation: source.bindings().database_incarnation().to_string(),
+            original_control_commitment: self
+                .image_transfer_control_commitment(candidate.range.id, &cancellation)?,
+            original_native_phase_commitment: database
+                .native_image_install_phase_commitment(candidate.range.id, frozen)?,
+            target_reader_features: bindings.reader_features().to_vec(),
             intent: candidate,
             native_safety,
             catalog,
@@ -447,6 +622,67 @@ impl RangeWriteStore {
         };
         token.require_transfer_current(self, database, native, source, role, frozen)?;
         Ok(token)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn prove_untouched_image_transfer_return(
+        &mut self,
+        original: &NativeImageInstallTransferPreflight,
+        database: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        role: &NativeImageInstallRole<'_>,
+        frozen: &FrozenRangeMutationPermit,
+        parent: &crate::CancellationToken,
+    ) -> Result<UntouchedNativeImageTransferReturn> {
+        let cancellation = parent.child_with_deadline(role.role().deadline());
+        cancellation.check()?;
+        require_intent_live_role(&original.intent, role)?;
+        native.require_current(database)?;
+        // Fresh observation may re-fsync an unchanged prior refusal. It never
+        // changes its nonce, native open, scope, floor, intent or physical data.
+        let saved_session = match role {
+            NativeImageInstallRole::CurrentVoterRepair(recovery) => {
+                Some(self.observe_image_install_recovery_session(database, native, recovery)?)
+            }
+            NativeImageInstallRole::CommittedHandoff(_) => None,
+        };
+        if let Some(saved) = &original.saved_session {
+            saved.require_current(self, database, native, role.role())?;
+        }
+        original
+            .native_safety
+            .require_current(database, native, frozen)?;
+        original.catalog.require_current(self)?;
+        if original.store_open_id != self.open_id
+            || original.database_incarnation != native.database_incarnation()
+            || original.original_control_commitment
+                != self.image_transfer_control_commitment(original.range_id(), &cancellation)?
+            || original.original_native_phase_commitment
+                != database.native_image_install_phase_commitment(original.range_id(), frozen)?
+        {
+            return Err(range_write_error(
+                "original transfer was changed; actual resume/adoption is required",
+            ));
+        }
+        let proof = UntouchedNativeImageTransferReturn {
+            store_open_id: self.open_id,
+            database_incarnation: native.database_incarnation().to_string(),
+            original_freeze_owner: original.original_freeze_owner,
+            intent: original.intent.clone(),
+            control_commitment: original.original_control_commitment.clone(),
+            native_phase_commitment: original.original_native_phase_commitment.clone(),
+            target_reader_features: original.target_reader_features.clone(),
+            native_safety: database.native_range_install_safety(
+                native,
+                original.range_id(),
+                frozen,
+            )?,
+            catalog: self.image_install_catalog_history_obligations(original.range_id())?,
+            saved_session,
+            cancellation,
+        };
+        proof.require_current(self, database, native, role, frozen)?;
+        Ok(proof)
     }
 
     /// Reissue an exact unfinished catalog token after the native image has

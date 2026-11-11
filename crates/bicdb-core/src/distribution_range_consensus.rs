@@ -54,6 +54,7 @@ use image_install_state::{ImageInstallIntent, IMAGE_INSTALL_RANGE_LOG_FORMAT};
 mod image_install_fence;
 pub(crate) use image_install_fence::{
     NativeImageInstallRole, NativeImageInstallTransferPreflight, TargetImageInstallFence,
+    UntouchedNativeImageTransferReturn,
 };
 use recovery_state::RecoveryFenceRecord;
 pub(crate) use recovery_state::{

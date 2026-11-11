@@ -1,0 +1,9 @@
+{
+  "binary_retained_in_this_bundle": false,
+  "bytes": 400333360,
+  "hash_scope": "existing immutable exercised copy rehashed during evidence export; not independent launch attestation",
+  "path": "/tmp/bicdb-azure-artifact-463-evidence/bicdb-1.0.463-beta-d49a391b",
+  "sha256": "840f0124f27a1a7695c4b2b0c72b05a262456802af65e063cff12242559e2f7d",
+  "source_revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+  "version": "bicdb 1.0.463-beta"
+}

@@ -44,13 +44,61 @@ fn options() -> RangeSnapshotOptions {
     }
 }
 
+/// Target exclusion is either exclusively owned by this component or leased
+/// from the real recovery Runtime. The recovery lease cannot be extracted as
+/// a raw Frozen or implicitly returned to a serving/recovery owner on Drop.
+pub(crate) enum NativeImageInstallFreeze {
+    Standalone(FrozenRangeMutationPermit),
+    Recovery(crate::distribution_range_recovery::RecoveryImageInstallFreeze),
+}
+impl From<FrozenRangeMutationPermit> for NativeImageInstallFreeze {
+    fn from(frozen: FrozenRangeMutationPermit) -> Self {
+        Self::Standalone(frozen)
+    }
+}
+impl From<crate::distribution_range_recovery::RecoveryImageInstallFreeze>
+    for NativeImageInstallFreeze
+{
+    fn from(lease: crate::distribution_range_recovery::RecoveryImageInstallFreeze) -> Self {
+        Self::Recovery(lease)
+    }
+}
+impl NativeImageInstallFreeze {
+    pub(crate) fn as_frozen(&self) -> &FrozenRangeMutationPermit {
+        match self {
+            Self::Standalone(frozen) => frozen,
+            Self::Recovery(lease) => lease.as_frozen(),
+        }
+    }
+    fn require_install_start(
+        &self,
+        store: &RangeWriteStore,
+        database: &BicDb,
+        native: &NativeRecoveryAdmission,
+        source: &TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &NativeImageInstallRole<'_>,
+    ) -> Result<()> {
+        if let Self::Recovery(lease) = self {
+            lease.preflight().require_install_start(
+                store,
+                database,
+                native,
+                source,
+                role,
+                lease.as_frozen(),
+            )?;
+        }
+        Ok(())
+    }
+}
+
 /// One owned attempt. Dropping this releases only local exclusion; its catalog
 /// intent/native dirty marker remain durable refusals. Restart requires a new
 /// authenticated attempt and starts the bounded clear/copy again.
 pub(crate) struct NativeRangeImageInstaller {
     database: Arc<RwLock<BicDb>>,
     admission: NativeRecoveryAdmission,
-    frozen: FrozenRangeMutationPermit,
+    frozen: NativeImageInstallFreeze,
     fence: TargetImageInstallFence,
     bindings: RangeImageDbBindings,
     source_reserved_db_upper_bound: u64,
@@ -77,7 +125,7 @@ pub(crate) struct NativeRangeImageInstaller {
 pub(crate) struct NativeRangeImageVerification {
     database: Arc<RwLock<BicDb>>,
     admission: NativeRecoveryAdmission,
-    frozen: FrozenRangeMutationPermit,
+    frozen: NativeImageInstallFreeze,
     fence: TargetImageInstallFence,
     bindings: RangeImageDbBindings,
     source: CompletedNativeRangeImageSource,
@@ -106,7 +154,7 @@ impl NativeRangeImageVerification {
             &db,
             &self.admission,
             role,
-            &self.frozen,
+            self.frozen.as_frozen(),
         )?;
         if let Some((safety, catalog, proof)) = &self.history {
             let context = NativeHistoryTargetContext::new(
@@ -117,7 +165,7 @@ impl NativeRangeImageVerification {
                 safety,
                 catalog,
                 role,
-                &self.frozen,
+                self.frozen.as_frozen(),
             )?;
             proof.require_current(&db, &context, &self.source.authorize_target_install()?)?;
         } else if !self.recover_completed {
@@ -127,7 +175,7 @@ impl NativeRangeImageVerification {
             &mut self.verifier,
             &self.fence,
             &self.admission,
-            &self.frozen,
+            self.frozen.as_frozen(),
             &self.bindings,
             role,
             &self.source,
@@ -150,13 +198,13 @@ impl NativeRangeImageVerification {
             &db,
             &self.admission,
             role,
-            &self.frozen,
+            self.frozen.as_frozen(),
         )?;
         let contents = db.finish_native_target_image_verification(
             self.verifier,
             &self.fence,
             &self.admission,
-            &self.frozen,
+            self.frozen.as_frozen(),
             &self.bindings,
             role,
             &self.source,
@@ -174,7 +222,7 @@ impl NativeRangeImageVerification {
                     safety,
                     catalog,
                     role,
-                    &self.frozen,
+                    self.frozen.as_frozen(),
                 )
             })
             .transpose()?;
@@ -185,7 +233,7 @@ impl NativeRangeImageVerification {
         let base = db.finish_native_target_image_install(
             &self.fence,
             &self.admission,
-            &self.frozen,
+            self.frozen.as_frozen(),
             &self.bindings,
             role,
             &self.source,
@@ -214,7 +262,7 @@ impl NativeRangeImageVerification {
 pub(crate) struct VerifiedNativeRangeImageInstall {
     database: Arc<RwLock<BicDb>>,
     admission: NativeRecoveryAdmission,
-    frozen: FrozenRangeMutationPermit,
+    frozen: NativeImageInstallFreeze,
     fence: TargetImageInstallFence,
     source: CompletedNativeRangeImageSource,
     base: NativeInstalledRangeImageBase,
@@ -347,7 +395,7 @@ impl VerifiedNativeRangeImageInstall {
             &db,
             &self.admission,
             role,
-            &self.frozen,
+            self.frozen.as_frozen(),
         )?;
         self.base.require_current(&db, &self.admission)
     }
@@ -364,27 +412,42 @@ impl NativeRangeImageInstaller {
         admission: NativeRecoveryAdmission,
         source: CompletedNativeRangeImageSource,
         role: &NativeImageInstallRole<'_>,
-        frozen: FrozenRangeMutationPermit,
+        frozen: impl Into<NativeImageInstallFreeze>,
         purpose: ImageInstallPurpose,
         attempt_id: Uuid,
         cancellation: &CancellationToken,
     ) -> Result<NativeRangeImageVerification> {
+        let frozen = frozen.into();
         cancellation.check()?;
         source.require_current()?;
         let db = database
             .try_read()
             .ok_or_else(|| invalid("target DB busy before completed image recovery"))?;
         let bindings = db.capture_range_image_bindings()?;
+        frozen.require_install_start(
+            store,
+            &db,
+            &admission,
+            &source.authorize_target_install()?,
+            role,
+        )?;
         let prior = db
             .native_installed_range_image_base(&admission, source.cut().range().id)?
             .ok_or_else(|| invalid("completed recovery has no actual native receipt"))?;
         let fence = store.reacquire_completed_native_image_install(
-            &db, &admission, &source, role, &frozen, purpose, attempt_id, &prior,
+            &db,
+            &admission,
+            &source,
+            role,
+            frozen.as_frozen(),
+            purpose,
+            attempt_id,
+            &prior,
         )?;
         let verifier = db.begin_native_target_image_verification(
             &fence,
             &admission,
-            &frozen,
+            frozen.as_frozen(),
             &bindings,
             role,
             &source,
@@ -412,10 +475,11 @@ impl NativeRangeImageInstaller {
         admission: NativeRecoveryAdmission,
         source: &TentativeNativeRangeImageSourceAuthorization<'_>,
         role: &NativeImageInstallRole<'_>,
-        frozen: FrozenRangeMutationPermit,
+        frozen: impl Into<NativeImageInstallFreeze>,
         purpose: ImageInstallPurpose,
         attempt_id: Uuid,
     ) -> Result<Self> {
+        let frozen = frozen.into();
         source.require_current()?;
         let db = database
             .try_read()
@@ -439,15 +503,32 @@ impl NativeRangeImageInstaller {
                 return Err(invalid("physical namespace aliases/rename recovery are unsupported by this image codec"));
             }
         }
-        let safety =
-            db.native_range_install_safety(&admission, source.cut().range().id, &frozen)?;
-        let fence = store.begin_native_image_install(
-            &db, &admission, &safety, source, role, &frozen, purpose, attempt_id,
+        frozen.require_install_start(store, &db, &admission, source, role)?;
+        let safety = db.native_range_install_safety(
+            &admission,
+            source.cut().range().id,
+            frozen.as_frozen(),
         )?;
-        store.validate_native_image_install_step(&fence, &db, &admission, role, &frozen)?;
+        let fence = store.begin_native_image_install(
+            &db,
+            &admission,
+            &safety,
+            source,
+            role,
+            frozen.as_frozen(),
+            purpose,
+            attempt_id,
+        )?;
+        store.validate_native_image_install_step(
+            &fence,
+            &db,
+            &admission,
+            role,
+            frozen.as_frozen(),
+        )?;
         // The catalog refusal is already durably confirmed. From this point
         // any crash/timeout is dirty/unready until a fresh authorized restart.
-        db.begin_native_target_image_install(&fence, &admission, &frozen, &bindings)?;
+        db.begin_native_target_image_install(&fence, &admission, frozen.as_frozen(), &bindings)?;
         let catalog_obligations =
             store.image_install_catalog_history_obligations(fence.range().id)?;
         let context = NativeHistoryTargetContext::new(
@@ -458,7 +539,7 @@ impl NativeRangeImageInstaller {
             &safety,
             &catalog_obligations,
             role,
-            &frozen,
+            frozen.as_frozen(),
         )?;
         let history_stage = db.begin_native_history_stage(&context, source)?;
         let catalog = canonical_range_image_catalog(
@@ -532,7 +613,7 @@ impl NativeRangeImageInstaller {
             &self.safety,
             &self.catalog,
             role,
-            &self.frozen,
+            self.frozen.as_frozen(),
         )?;
         db.append_native_history_stage(
             &self.history_stage,
@@ -566,7 +647,7 @@ impl NativeRangeImageInstaller {
             &self.safety,
             &self.catalog,
             role,
-            &self.frozen,
+            self.frozen.as_frozen(),
         )?;
         let progress = db.audit_native_history_stage_step(
             &self.history_stage,
@@ -599,7 +680,7 @@ impl NativeRangeImageInstaller {
             &self.safety,
             &self.catalog,
             role,
-            &self.frozen,
+            self.frozen.as_frozen(),
         )?;
         self.history_proof
             .as_ref()
@@ -607,7 +688,7 @@ impl NativeRangeImageInstaller {
             .require_current(&db, &context, source)?;
         if !self.destructive_started {
             self.safety
-                .require_current(&db, &self.admission, &self.frozen)?;
+                .require_current(&db, &self.admission, self.frozen.as_frozen())?;
         }
         Ok(())
     }
@@ -621,7 +702,7 @@ impl NativeRangeImageInstaller {
             &db,
             &self.admission,
             role,
-            &self.frozen,
+            self.frozen.as_frozen(),
         )?;
         db.validate_range_image_bindings(&self.bindings)
     }
@@ -662,7 +743,7 @@ impl NativeRangeImageInstaller {
         )?;
         let controlled = db
             .range_mutation_gate()
-            .try_controlled_mutation(&self.frozen)?;
+            .try_controlled_mutation(self.frozen.as_frozen())?;
         self.destructive_started = true;
         db.delete_range_records_as_local_with_mutation(
             self.fence.range(),
@@ -739,7 +820,7 @@ impl NativeRangeImageInstaller {
                 .ok_or_else(|| invalid("target DB busy before image batch"))?;
             let controlled = db
                 .range_mutation_gate()
-                .try_controlled_mutation(&self.frozen)?;
+                .try_controlled_mutation(self.frozen.as_frozen())?;
             self.destructive_started = true;
             db.apply_range_snapshot_batch_preinstalled_with_mutation(
                 self.fence.range(),
@@ -796,7 +877,7 @@ impl NativeRangeImageInstaller {
         let verifier = db.begin_native_target_image_verification(
             &self.fence,
             &self.admission,
-            &self.frozen,
+            self.frozen.as_frozen(),
             &self.bindings,
             role,
             &source,

@@ -158,3 +158,35 @@ fn disjoint_catalog_owners_can_publish_their_own_metadata_without_crossing_scope
         );
     }
 }
+
+#[test]
+fn a_pending_internal_record_write_leaves_other_record_reservations_available() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let db = database(root.path(), mode);
+        let one = db.begin_transaction().unwrap();
+        let first = reserve(&one, &["first"]).unwrap();
+        let mut child = {
+            let _access = db.enter_catalog_scope(&first).unwrap();
+            db.begin_transaction().unwrap()
+        };
+        child.update("catalog", value("first", 1)).unwrap();
+        assert_eq!(child.write_len(), 1);
+        let two = db.begin_transaction().unwrap();
+        let second = reserve(&two, &["second"])
+            .expect("a declared single-record internal write must not observe the whole catalog");
+        assert!(matches!(
+            reserve(&two, &["first"]),
+            Err(BicDbError::TransactionConflict(_))
+        ));
+        child.commit().unwrap();
+        one.release_catalog_scope(&first).unwrap();
+        two.release_catalog_scope(&second).unwrap();
+        one.rollback().unwrap();
+        two.rollback().unwrap();
+        assert_eq!(
+            db.get("catalog", "first").unwrap().unwrap().metadata["value"],
+            1
+        );
+    }
+}

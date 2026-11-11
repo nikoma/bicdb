@@ -126,3 +126,41 @@ fn catalog_read_identity_is_database_bound_and_its_drop_never_dereferences_datab
     two.check_catalog_read_access("catalog", None).unwrap();
     drop(read);
 }
+
+#[test]
+fn catalog_identity_reads_do_not_acquire_a_data_snapshot_or_erase_observations() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for scan in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open_with_config(root.path(), config(mode)).unwrap();
+            db.create_collection("catalog").unwrap();
+            db.insert("catalog", Record::new("metadata")).unwrap();
+            let mut reader = db.begin_transaction().unwrap();
+            {
+                let _read = reader.enter_catalog_read_access().unwrap();
+                db.check_catalog_read_access("catalog", if scan { None } else { Some("metadata") })
+                    .unwrap();
+            }
+            assert!(!reader.statement_snapshot_acquired());
+            reader
+                .defer_statement_snapshot()
+                .expect("metadata identity does not observe MVCC data");
+            reader.set_deferred_snapshot_isolation(true, 0).unwrap();
+            let owner = db.begin_transaction().unwrap();
+            assert!(matches!(
+                owner.reserve_catalog_resources(&[], &[("catalog".into(), "metadata".into())]),
+                Err(BicDbError::TransactionConflict(_))
+            ));
+            // A subsequent ordinary native data read must permanently restore
+            // the original refusal to defer after observing transaction data.
+            assert!(reader.get("catalog", "metadata").unwrap().is_some());
+            refused(reader.defer_statement_snapshot());
+            reader.rollback().unwrap();
+            let token = owner
+                .reserve_catalog_resources(&[], &[("catalog".into(), "metadata".into())])
+                .unwrap();
+            owner.release_catalog_scope(&token).unwrap();
+            owner.rollback().unwrap();
+        }
+    }
+}

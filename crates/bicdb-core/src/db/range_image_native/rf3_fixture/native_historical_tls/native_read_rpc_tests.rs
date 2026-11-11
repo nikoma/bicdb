@@ -72,6 +72,78 @@ fn native_read_rpc_actual_tls_fresh_metadata_unadmitted_candidate() {
     parent.cancel();
     assert!(candidate.require_lifetime().is_err());
 }
+
+#[test]
+fn native_read_rpc_actual_tls_enrolled_births_require_actual_metadata_and_peer_facts() {
+    let fixture =
+        NetworkFixture::new_ready_network_with_enrollment(true, true, false, "n1", "n2", true);
+    let scope = fixture.scope();
+    for name in ["n0", "n1", "n2"] {
+        fixture.call(name, &scope, false).unwrap();
+        fixture.wait_idle();
+    }
+    for name in ["n0", "n1", "n2"] {
+        fixture.call(name, &scope, true).unwrap();
+        fixture.wait_idle();
+        fixture.prepare_ready(name, &scope).unwrap();
+        fixture.wait_idle();
+    }
+    for name in ["n0", "n1", "n2"] {
+        fixture.complete(name, &scope).unwrap();
+        fixture.wait_idle();
+    }
+    for name in ["n0", "n1", "n2"] {
+        fixture.runtimes[&node(name)]
+            .activate_native_recovery(
+                &fixture.actor(),
+                &fixture.completion_request(&scope),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        fixture.wait_idle();
+    }
+    let parent = CancellationToken::uncancelable();
+    let business = Uuid::now_v7();
+    let metadata = fresh_metadata(&fixture, business, &parent);
+    assert_eq!(
+        metadata
+            .committed_topology(business)
+            .unwrap()
+            .format_version,
+        2
+    );
+    let candidate = fixture.runtimes[&node("n1")]
+        .acquire_native_read_candidate(metadata, business, Uuid::now_v7(), &parent)
+        .unwrap();
+    let checked = candidate.check_enrolled_voter_births().unwrap();
+    checked.require_lifetime().unwrap();
+    assert_eq!(checked.point_for_test().0, 1);
+    parent.cancel();
+    assert!(checked.require_lifetime().is_err());
+    fixture.wait_idle();
+    // Birth continuity checked, not a StrongGet or row/absence permission.
+}
+
+#[test]
+fn native_read_rpc_actual_tls_unenrolled_quorum_cannot_be_admitted() {
+    let fixture = live_fixture();
+    let parent = CancellationToken::uncancelable();
+    let business = Uuid::now_v7();
+    let candidate = fixture.runtimes[&node("n1")]
+        .acquire_native_read_candidate(
+            fresh_metadata(&fixture, business, &parent),
+            business,
+            Uuid::now_v7(),
+            &parent,
+        )
+        .unwrap();
+    assert!(candidate
+        .check_enrolled_voter_births()
+        .unwrap_err()
+        .to_string()
+        .contains("no fenced native birth registry"));
+    fixture.wait_idle();
+}
 #[test]
 fn native_read_rpc_actual_tls_rejects_old_challenge_actor_incarnation_and_pins() {
     let fixture = live_fixture();

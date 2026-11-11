@@ -303,6 +303,23 @@ impl NetworkFixture {
         data_leader: &str,
         metadata_leader: &str,
     ) -> Self {
+        Self::new_ready_network_with_enrollment(
+            wired,
+            all_nodes,
+            lagging_two,
+            data_leader,
+            metadata_leader,
+            false,
+        )
+    }
+    fn new_ready_network_with_enrollment(
+        wired: bool,
+        all_nodes: bool,
+        lagging_two: bool,
+        data_leader: &str,
+        metadata_leader: &str,
+        enroll: bool,
+    ) -> Self {
         assert!((data_leader == "n1" && metadata_leader == "n2") || all_nodes);
         assert!(!lagging_two || all_nodes);
         let live_names = if all_nodes {
@@ -328,7 +345,11 @@ impl NetworkFixture {
                 )
             })
             .collect();
-        let native = ActualNativeRf3Fixture::new_with_network_precondition(&network);
+        let native = if enroll {
+            ActualNativeRf3Fixture::new_with_enrolled_network_precondition(&network)
+        } else {
+            ActualNativeRf3Fixture::new_with_network_precondition(&network)
+        };
         if lagging_two {
             native.transport.set_unavailable(&node("n2"), true);
         }

@@ -288,6 +288,50 @@ pub(crate) struct NativeReadQuorumCandidate {
     matching: BTreeSet<ClusterNodeId>,
 }
 impl NativeReadQuorumCandidate {
+    /// Birth-continuity check only. This consumes the ACTUAL fresh metadata
+    /// observation and sealed peer responses already held by the round. It
+    /// does not create an MVCC snapshot or authorize a successful row/absence.
+    pub(crate) fn check_enrolled_voter_births(self) -> Result<EnrolledNativeReadQuorum> {
+        self.require_lifetime()?;
+        let topology = self
+            .round
+            .metadata
+            .committed_topology(self.round.business)?;
+        if topology.format_version != 2 {
+            return Err(invalid("read voters have no fenced native birth registry"));
+        }
+        for (id, member) in &self.scope().members {
+            let node = topology
+                .nodes
+                .get(id)
+                .ok_or_else(|| invalid("enrolled read voter is absent"))?;
+            let binding = node
+                .native_store_birth_v1
+                .as_ref()
+                .ok_or_else(|| invalid("current read voter has no enrolled native birth"))?;
+            binding.validate_for(topology.range_image_bootstrap_id, member.incarnation)?;
+        }
+        for id in &self.matching {
+            let facts = self
+                .round
+                .observations
+                .get(id)
+                .ok_or_else(|| invalid("matching read voter has no actual observation"))?
+                .facts();
+            let binding = topology.nodes[id].native_store_birth_v1.as_ref().unwrap();
+            if binding.birth_id() != facts.native_birth_id
+                || binding.birth_sha256() != facts.native_birth_sha256
+                || binding.node_incarnation() != facts.member_incarnation
+                || binding.bootstrap_id() != self.scope().bootstrap_id
+            {
+                return Err(invalid(
+                    "actual read voter birth differs from quorum-committed enrollment",
+                ));
+            }
+        }
+        self.require_lifetime()?;
+        Ok(EnrolledNativeReadQuorum { candidate: self })
+    }
     pub(crate) fn scope(&self) -> &NativeRangeReadScope {
         &self.round.request.scope
     }
@@ -314,5 +358,22 @@ impl NativeReadQuorumCandidate {
     pub(crate) fn require_lifetime(&self) -> Result<()> {
         self.round.require_live()?;
         self.round.observations[&self.round.local_node].require_live()
+    }
+}
+
+/// Actual read quorum with enrolled physical birth continuity checked. Still
+/// no row/absence permission: the actual MVCC barrier, local revalidation and
+/// final fresh metadata observation remain mandatory separate producers.
+#[derive(Debug)]
+pub(crate) struct EnrolledNativeReadQuorum {
+    candidate: NativeReadQuorumCandidate,
+}
+impl EnrolledNativeReadQuorum {
+    pub(crate) fn require_lifetime(&self) -> Result<()> {
+        self.candidate.require_lifetime()
+    }
+    #[cfg(test)]
+    pub(crate) fn point_for_test(&self) -> (u64, &str, &str) {
+        self.candidate.point()
     }
 }

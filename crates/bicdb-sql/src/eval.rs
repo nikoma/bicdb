@@ -1549,7 +1549,8 @@ fn resolve_named_oid_output(oid: i64, objects: &[(u32, &str)]) -> Option<String>
         .find_map(|(candidate, name)| (i64::from(*candidate) == oid).then(|| (*name).to_string()))
 }
 
-fn resolve_regtype_oid(db: &BicDb, value: &str) -> Result<Option<u32>> {
+pub(crate) fn resolve_regtype_oid(db: &BicDb, value: &str) -> Result<Option<u32>> {
+    let array = value.ends_with("[]");
     let (schema, relation) = alias_schema_and_name(value.trim_end_matches("[]"));
     if alias_schema_is(schema.as_deref(), "pg_catalog") {
         if let Some(pg_type) = pg_type_regtype_name(value) {
@@ -1576,7 +1577,14 @@ fn resolve_regtype_oid(db: &BicDb, value: &str) -> Result<Option<u32>> {
                     |requested| candidate.schema_name.eq_ignore_ascii_case(requested),
                 )
         })
-        .and_then(|candidate| u32::try_from(candidate.row_type_oid()).ok()))
+        .and_then(|candidate| {
+            u32::try_from(if array {
+                candidate.row_array_type_oid()
+            } else {
+                candidate.row_type_oid()
+            })
+            .ok()
+        }))
 }
 
 /// How a relation should be spelled in catalog output: the logical name a user
@@ -1587,24 +1595,7 @@ fn relation_display_name(schema: &TableSchema) -> String {
 }
 
 fn resolve_regtype_name(db: &BicDb, oid: i64) -> Result<Option<String>> {
-    if let Some(name) = list_schemas(db)?.into_iter().find_map(|schema| {
-        let display = relation_display_name(&schema);
-        if schema.row_type_oid() == oid {
-            Some(if schema.schema_name.eq_ignore_ascii_case("public") {
-                display
-            } else {
-                format!("{}.{}", schema.schema_name, display)
-            })
-        } else if schema.row_array_type_oid() == oid {
-            Some(if schema.schema_name.eq_ignore_ascii_case("public") {
-                format!("_{display}")
-            } else {
-                format!("{}._{}", schema.schema_name, display)
-            })
-        } else {
-            None
-        }
-    }) {
+    if let Some(name) = pg_table_row_regtype_name(db, oid)? {
         return Ok(Some(name));
     }
     let formatted = eval_db_catalog_function_value(

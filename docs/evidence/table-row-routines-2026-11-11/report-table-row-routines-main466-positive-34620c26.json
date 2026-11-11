@@ -1,0 +1,40 @@
+{
+  "source": "34620c26f8f2b1c0ac3ab546b5e93db48c907d6c",
+  "scope": "Standalone delivery candidate based on real main466/16962de1, three-file diff only. Main43db control actually fails both scalar call (unsupported cast typed_row) and array declaration (unregistered typed_row). Extract AA table-OID row/array return/frame cast lookup and 5e custom array routine declaration fallback; no private rename/native admission code. Original direct function assertions retained and strengthened with pg_typeof, exact table regtype argument/return OIDs, procedure calls and reopen, both stores. Native PostgreSQL2 function/type cases and2 procedure cases pass. Focus then broad full SQL library and entire general SQL target on this exact candidate. Still source version466 for pre-final validation; final delivery reserves469 only after pending467/468 are remote and integrated, unique next patch, version check and exact final-head CI. Full private rename/concurrency/application/VM goal unchanged.",
+  "started_unix": 1794397880.3360896,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794397880.336188,
+      "exit": 0,
+      "finished_unix": 1794397880.3866582
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "table_row_routines",
+        "--test",
+        "version_identity",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794397880.386773,
+      "exit": 101,
+      "finished_unix": 1794397959.6193998
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794397959.6196482
+}

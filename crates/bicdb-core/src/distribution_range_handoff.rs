@@ -127,6 +127,8 @@ impl CertifiedRangeImageCut {
 
     /// Validate only the configuration binding of an independently produced
     /// native lineage. This cannot manufacture native visibility or extend R.
+    /// Load estimates are excluded. Placement-policy and voter credential
+    /// changes require a re-attested native base in this first implementation.
     pub(crate) fn validate_source_lineage_configuration(
         &self,
         lineage: &crate::db::SourceRangeImageLineage,
@@ -614,6 +616,13 @@ mod tests {
     }
 
     fn topology_with_ranges(initial_ranges: u32) -> ClusterTopology {
+        topology_with_load(initial_ranges, None).0
+    }
+
+    fn topology_with_load(
+        initial_ranges: u32,
+        load: Option<(u64, u64)>,
+    ) -> (ClusterTopology, (u64, u64)) {
         let root = tempfile::tempdir().unwrap();
         let cfg = DistributionConfig {
             enabled: true,
@@ -642,6 +651,12 @@ mod tests {
             store.join_node(node, &actor, 2).unwrap();
         }
         let range = store.topology().ranges.values().next().unwrap().clone();
+        let initial_load = (range.approximate_bytes, range.approximate_qps);
+        if let Some((bytes, qps)) = load {
+            store
+                .update_range_load(range.id, bytes, qps, &actor, 3)
+                .unwrap();
+        }
         let plan = RebalancePlan {
             id: "stable-handoff-test-plan".into(),
             topology_generation: store.topology().generation,
@@ -673,7 +688,7 @@ mod tests {
         }
         topology.replication_factor = 3;
         topology.validate().unwrap();
-        topology
+        (topology, initial_load)
     }
 
     fn authority(root: &Path, topology: &ClusterTopology) -> MetadataReadAuthority {
@@ -989,13 +1004,17 @@ mod tests {
         use parking_lot::RwLock;
         use std::sync::Arc;
         let root = tempfile::tempdir().unwrap();
-        let mut topology = topology();
+        // Preserve actual pre-load estimates for the native base. The
+        // controller commits changed load before allocating the learner.
+        let (mut topology, initial_load) = topology_with_load(1, Some((8192, 137)));
         let bootstrap = Uuid::now_v7();
         topology.range_image_bootstrap_id = Some(bootstrap);
         let relocation_id = *topology.relocations.keys().next().unwrap();
         let relocation = &topology.relocations[&relocation_id];
         let mut base = topology.range_by_id(relocation.range_id).unwrap().clone();
         base.epoch = relocation.expected_epoch;
+        base.approximate_bytes = initial_load.0;
+        base.approximate_qps = initial_load.1;
         base.replicas
             .retain(|replica| replica.id != relocation.target_replica_id);
         let local = base.leader.clone();
@@ -1081,6 +1100,17 @@ mod tests {
             round.record(ack).unwrap();
         }
         let mut cut = round.finish().unwrap();
+        assert_eq!(
+            (cut.range.approximate_bytes, cut.range.approximate_qps),
+            (8192, 137)
+        );
+        assert_ne!(
+            (cut.range.approximate_bytes, cut.range.approximate_qps),
+            (
+                lineage.base_range().approximate_bytes,
+                lineage.base_range().approximate_qps
+            )
+        );
         cut.validate_source_lineage_configuration(&lineage).unwrap();
         assert_eq!(lineage.base_range().epoch, cut.relocation.expected_epoch);
         assert_eq!(lineage.base_range().epoch + 1, cut.range.epoch);

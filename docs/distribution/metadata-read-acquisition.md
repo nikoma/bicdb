@@ -12,7 +12,10 @@ validates the authenticated caller against its committed range descriptor,
 begins a fresh current-term read-index round, probes its old and pending voter
 configurations, records transport-verified responses and finishes only after both
 fresh majorities apply the captured committed index. It rechecks leadership,
-voter identities and the exact range descriptor before returning.
+voter identities and semantic range authority before returning. Range ID, token
+span, epoch, leader, replica identities/roles and placement policy must remain
+unchanged. Committed byte/QPS estimates may change without invalidating that
+authority.
 
 The returned `MetadataReadObservation` is opaque and cannot be deserialized,
 cloned or converted into a local `MetadataReadAuthority`. Its request-bound
@@ -34,7 +37,11 @@ Admission is bounded to four contexts and four workers per context, with at most
 64 metadata voters, four attempts per voter by default, bounded queues and a
 2 MiB serialized proof bound. On fresh quorum the service cancels sibling work
 and returns without joining an unreachable voter. Detached workers retain their
-context admission permit until they drain. Consensus latches are released before
+context admission permit until they drain. Each probe receives a finite slice of
+the original context budget, reserving time for remaining voter waves. Failed
+attempts join the queue tail within the existing attempt cap; a sorted prefix of
+silent voters cannot monopolize all workers for the entire round. Successful
+quorum still returns immediately. Consensus latches are released before
 network RPCs. Metadata persistence still uses ordinary non-preemptible OS file
 I/O; a deadline cannot interrupt an in-progress local filesystem fsync.
 
@@ -58,10 +65,19 @@ Validation of this implementation batch, based on
 
 - `cargo test --release --locked -p bicdb-core --config
   profile.release.package.bicdb-core.opt-level=0 --config
-  profile.release.package.bicdb-core.debug=0 --lib distribution_` passed 148
-  tests, including eight acquisition-provider tests.
+  profile.release.package.bicdb-core.debug=0 --lib distribution_` passed 151
+  tests, including eleven acquisition-provider tests.
 - Compilation used one job with incremental compilation disabled and an active
   12 GiB available-memory guard. No guard pause or resource interruption occurred.
 - This result applies to the provider source batch, not an earlier Azure binary
   and not a deployed production configuration. The optional runtime must still
   be integrated with certified image capture and application visibility gates.
+
+The availability regression fixtures first reproduced the earlier provider
+behavior at `86194f54`: a held probe followed by a genuinely committed load-only
+update was rejected, and four sorted silent voters prevented a healthy majority
+of a nine-voter group from being contacted before the original deadline. The
+fixed batch passes those cases, the single-worker equivalent, and refusal when
+no majority is available. It retains epoch-change rejection, worker/context
+caps and admission permits until canceled workers drain. These source-level
+reproductions do not establish the cause of any retained Azure experiment.

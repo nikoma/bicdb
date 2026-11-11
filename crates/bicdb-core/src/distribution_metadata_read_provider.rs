@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use parking_lot::{Mutex, MutexGuard};
 
-use crate::distribution::ClusterNodeId;
+use crate::distribution::{ClusterNodeId, RangeDescriptor};
 use crate::distribution_consensus::{
     MetadataConsensusStore, MetadataReadAck, MetadataReadAcquireRequest,
     MetadataReadAcquireResponse, MetadataReadContext, MetadataReadParticipant,
@@ -92,6 +92,7 @@ impl Drop for CancelOnReturn {
 struct ProbeJob {
     destination: ClusterNodeId,
     request: MetadataReadProbeRequest,
+    deadline: Instant,
 }
 struct Candidate {
     destination: ClusterNodeId,
@@ -143,6 +144,7 @@ impl MetadataReadProvider {
         context: &MetadataReadContext,
         candidate: &Candidate,
         cancellation: &CancellationToken,
+        deadline: Instant,
     ) -> Result<ProbeJob> {
         let consensus = self.lock_consensus(cancellation)?;
         let request = consensus.bounded_read_authority_probe(
@@ -154,6 +156,7 @@ impl MetadataReadProvider {
         Ok(ProbeJob {
             destination: candidate.destination.clone(),
             request,
+            deadline,
         })
     }
 
@@ -229,7 +232,9 @@ impl MetadataReadProvider {
                                 if token.check().is_err() {
                                     break;
                                 }
-                                let result = transport.probe(&job.destination, job.request, &token);
+                                let attempt = token.child_with_deadline(job.deadline);
+                                let result =
+                                    transport.probe(&job.destination, job.request, &attempt);
                                 if results.send((job.destination, result)).is_err() {
                                     break;
                                 }
@@ -247,7 +252,10 @@ impl MetadataReadProvider {
             {
                 let consensus = self.lock_consensus(&token)?;
                 if consensus.read_authority_ready(&context)? {
-                    if consensus.validate_read_acquisition_caller(&request, caller)? != range {
+                    if !same_range_read_authority(
+                        &consensus.validate_read_acquisition_caller(&request, caller)?,
+                        &range,
+                    ) {
                         return Err(acquisition_error(
                             "range configuration changed during fresh quorum round",
                         ));
@@ -270,7 +278,22 @@ impl MetadataReadProvider {
                 let Some(mut candidate) = candidates.pop_front() else {
                     break;
                 };
-                let job = self.prepare_job(&context, &candidate, &token)?;
+                // Reserve time for every queued voter instead of allowing
+                // the first sorted silent peers to occupy all workers until
+                // the context expires. Each attempt is a child of the SAME
+                // original deadline; retrying never renews the round.
+                let queued = candidates.len() + outstanding.len() + 1;
+                let waves = queued.div_ceil(workers.max(1));
+                let remaining = context
+                    .deadline()
+                    .checked_duration_since(Instant::now())
+                    .ok_or_else(|| acquisition_error("deadline expired before probe admission"))?;
+                let slice = remaining / u32::try_from(waves + 1).unwrap_or(u32::MAX);
+                if slice.is_zero() {
+                    return Err(acquisition_error("probe deadline slice exhausted"));
+                }
+                let attempt_deadline = (Instant::now() + slice).min(context.deadline());
+                let job = self.prepare_job(&context, &candidate, &token, attempt_deadline)?;
                 candidate.attempts += 1;
                 jobs_tx
                     .try_send(job)
@@ -287,18 +310,24 @@ impl MetadataReadProvider {
                     let mut candidate = outstanding
                         .remove(&voter)
                         .ok_or_else(|| acquisition_error("unexpected probe worker result"))?;
-                    if let Ok(ack) = result {
+                    let retry = if let Ok(ack) = result {
                         let accepted = self
                             .lock_consensus(&token)?
                             .record_read_authority_ack(&mut context, &ack)?;
-                        if !accepted && candidate.attempts < self.limits.max_attempts_per_voter {
+                        if !accepted {
                             candidate.next_index = ack
                                 .conflict_index()
                                 .unwrap_or(1)
                                 .max(1)
                                 .min(context.read_index().saturating_add(1));
-                            candidates.push_back(candidate);
                         }
+                        !accepted
+                    } else {
+                        true
+                    };
+                    if retry && candidate.attempts < self.limits.max_attempts_per_voter {
+                        // Retries join the tail behind all not-yet-tried voters.
+                        candidates.push_back(candidate);
                     }
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
@@ -308,6 +337,28 @@ impl MetadataReadProvider {
             }
         }
     }
+}
+
+// Load estimates are placement inputs, not ownership authority. Preserve
+// every other descriptor field, including replica identities/roles and policy.
+fn same_range_read_authority(left: &RangeDescriptor, right: &RangeDescriptor) -> bool {
+    left.id == right.id
+        && left.start_token == right.start_token
+        && left.end_token == right.end_token
+        && left.epoch == right.epoch
+        && left.leader == right.leader
+        && left.replicas.len() == right.replicas.len()
+        && left
+            .replicas
+            .iter()
+            .map(|r| (r.id, (&r.node_id, r.role)))
+            .collect::<BTreeMap<_, _>>()
+            == right
+                .replicas
+                .iter()
+                .map(|r| (r.id, (&r.node_id, r.role)))
+                .collect::<BTreeMap<_, _>>()
+        && left.placement == right.placement
 }
 
 struct SizeBound(usize);
@@ -349,7 +400,7 @@ mod tests {
             true,
         )
     }
-    fn topology() -> ClusterTopology {
+    fn topology_with_count(count: u64) -> ClusterTopology {
         let root = tempfile::tempdir().unwrap();
         let config = DistributionConfig {
             enabled: true,
@@ -361,7 +412,7 @@ mod tests {
             ..DistributionConfig::default()
         };
         let mut store = DistributionStore::initialize_at(root.path(), config, false, 10).unwrap();
-        for i in 2..=3 {
+        for i in 2..=count {
             store
                 .join_node(
                     ClusterNode::new(
@@ -405,6 +456,7 @@ mod tests {
         leader: Arc<Mutex<MetadataConsensusStore>>,
         mode: AtomicUsize,
         stalled_started: AtomicUsize,
+        gate: Mutex<Option<(mpsc::SyncSender<()>, mpsc::Receiver<()>)>>,
     }
     impl MetadataReadProbeTransport for FakeTransport {
         fn local_participant(&self) -> MetadataReadParticipant {
@@ -421,6 +473,19 @@ mod tests {
                 loop {
                     token.check()?;
                     thread::sleep(Duration::from_millis(2));
+                }
+            }
+            if let Some((entered, released)) = self.gate.lock().take() {
+                entered.send(()).unwrap();
+                loop {
+                    token.check()?;
+                    match released.recv_timeout(Duration::from_millis(2)) {
+                        Ok(()) => break,
+                        Err(mpsc::RecvTimeoutError::Timeout) => {}
+                        Err(mpsc::RecvTimeoutError::Disconnected) => {
+                            return Err(acquisition_error("test probe gate disconnected"))
+                        }
+                    }
                 }
             }
             match self.mode.load(Ordering::SeqCst) {
@@ -459,7 +524,7 @@ mod tests {
     impl Fixture {
         fn new() -> Self {
             let root = tempfile::tempdir().unwrap();
-            let topology = topology();
+            let topology = topology_with_count(3);
             let mut leader = open(&root.path().join("n1"), "n1", &topology);
             let mut follower = open(&root.path().join("n2"), "n2", &topology);
             leader.start_election().unwrap();
@@ -479,6 +544,7 @@ mod tests {
                 leader: leader.clone(),
                 mode: AtomicUsize::new(0),
                 stalled_started: AtomicUsize::new(0),
+                gate: Mutex::new(None),
             });
             let provider = MetadataReadProvider::new(leader, transport.clone()).unwrap();
             Self {
@@ -627,6 +693,226 @@ mod tests {
         assert_eq!(fixture.provider.inflight_contexts(), 4);
     }
     #[test]
+    fn held_probe_allows_committed_load_only_update_but_rejects_epoch_change() {
+        for change_epoch in [false, true] {
+            let fixture = Fixture::new();
+            let (entered_tx, entered_rx) = mpsc::sync_channel(1);
+            let (released_tx, released_rx) = mpsc::sync_channel(1);
+            *fixture.transport.gate.lock() = Some((entered_tx, released_rx));
+            thread::scope(|scope| {
+                let acquisition = scope.spawn(|| fixture.acquire(fixture.request()));
+                entered_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+                // Exercise the actual distribution load-update operation and
+                // commit its topology through the actual metadata stores.
+                let mut loads = DistributionStore::initialize_at(
+                    fixture._root.path().join("loads"),
+                    DistributionConfig {
+                        enabled: true,
+                        cluster_id: fixture.topology.cluster_id.clone(),
+                        node_id: node("n1"),
+                        node_address: "127.0.0.1:10001".into(),
+                        replication_factor: 1,
+                        initial_ranges: 1,
+                        ..DistributionConfig::default()
+                    },
+                    false,
+                    10,
+                )
+                .unwrap();
+                loads
+                    .install_authoritative_topology(fixture.topology.clone())
+                    .unwrap();
+                assert!(loads
+                    .update_range_load(RangeId::new(1).unwrap(), 999_999, 876, &node("n1"), 40)
+                    .unwrap());
+                let mut changed = loads.topology().clone();
+                if change_epoch {
+                    changed.ranges.values_mut().next().unwrap().epoch += 1;
+                }
+                let mut leader = fixture.transport.leader.lock();
+                let entry = leader.propose_topology(changed).unwrap();
+                let response = fixture
+                    .transport
+                    .follower
+                    .lock()
+                    .handle_append_request(leader.append_request_from(1, 16).unwrap())
+                    .unwrap();
+                leader
+                    .record_append_response(&node("n2"), &response)
+                    .unwrap();
+                assert_eq!(leader.status().commit_index, entry.index);
+                drop(leader);
+                released_tx.send(()).unwrap();
+                let result = acquisition.join().unwrap();
+                if change_epoch {
+                    assert!(result.is_err());
+                } else {
+                    let response = result.unwrap();
+                    let range = response
+                        .committed_topology
+                        .range_by_id(RangeId::new(1).unwrap())
+                        .unwrap();
+                    assert_eq!(range.approximate_bytes, 999_999);
+                    assert_eq!(range.approximate_qps, 876);
+                }
+            });
+        }
+    }
+
+    #[derive(Debug)]
+    struct QuorumTransport {
+        topology: ClusterTopology,
+        peers: BTreeMap<ClusterNodeId, Mutex<MetadataConsensusStore>>,
+        silent: BTreeSet<ClusterNodeId>,
+        contacted: Mutex<BTreeSet<ClusterNodeId>>,
+        active: AtomicUsize,
+        peak: AtomicUsize,
+        original_deadline: Instant,
+    }
+    impl MetadataReadProbeTransport for QuorumTransport {
+        fn local_participant(&self) -> MetadataReadParticipant {
+            participant(&self.topology, "n1")
+        }
+        fn probe(
+            &self,
+            destination: &ClusterNodeId,
+            request: MetadataReadProbeRequest,
+            token: &CancellationToken,
+        ) -> Result<MetadataReadAck> {
+            let active = self.active.fetch_add(1, Ordering::SeqCst) + 1;
+            self.peak.fetch_max(active, Ordering::SeqCst);
+            struct Active<'a>(&'a AtomicUsize);
+            impl Drop for Active<'_> {
+                fn drop(&mut self) {
+                    self.0.fetch_sub(1, Ordering::SeqCst);
+                }
+            }
+            let _active = Active(&self.active);
+            assert!(token.deadline().unwrap() <= self.original_deadline);
+            self.contacted.lock().insert(destination.clone());
+            if self.silent.contains(destination) {
+                loop {
+                    token.check()?;
+                    thread::sleep(Duration::from_millis(2));
+                }
+            }
+            let response = self.peers[destination]
+                .lock()
+                .handle_read_authority_probe(request.clone())?;
+            MetadataReadAck::from_transport(
+                &request,
+                destination,
+                participant(&self.topology, destination.as_str()),
+                response,
+            )
+        }
+    }
+    fn sliced_quorum_case(
+        count: u64,
+        workers: usize,
+        silent: BTreeSet<ClusterNodeId>,
+        expected: bool,
+    ) {
+        let root = tempfile::tempdir().unwrap();
+        let topology = topology_with_count(count);
+        let mut leader = open(&root.path().join("n1"), "n1", &topology);
+        let mut peers = (2..=count)
+            .map(|i| {
+                let name = format!("n{i}");
+                (
+                    node(&name),
+                    Mutex::new(open(&root.path().join(&name), &name, &topology)),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        leader.start_election().unwrap();
+        leader
+            .become_leader(&topology.nodes.keys().cloned().collect())
+            .unwrap();
+        for (id, peer) in &mut peers {
+            let response = peer
+                .get_mut()
+                .handle_append_request(leader.append_request_from(1, 16).unwrap())
+                .unwrap();
+            leader.record_append_response(id, &response).unwrap();
+        }
+        let deadline = Instant::now() + Duration::from_millis(900);
+        let transport = Arc::new(QuorumTransport {
+            topology: topology.clone(),
+            peers,
+            silent,
+            contacted: Mutex::new(BTreeSet::new()),
+            active: AtomicUsize::new(0),
+            peak: AtomicUsize::new(0),
+            original_deadline: deadline,
+        });
+        let limits = MetadataReadProviderLimits {
+            workers_per_context: workers,
+            ..MetadataReadProviderLimits::default()
+        };
+        let provider = MetadataReadProvider::with_limits(
+            Arc::new(Mutex::new(leader)),
+            transport.clone(),
+            limits,
+        )
+        .unwrap();
+        let range = topology.ranges.values().next().unwrap();
+        let request = MetadataReadAcquireRequest {
+            protocol_version: METADATA_READ_ACQUISITION_PROTOCOL_VERSION,
+            acquisition_id: Uuid::now_v7(),
+            read_request_id: Uuid::now_v7(),
+            requester_node_id: node("n2"),
+            requester_incarnation: topology.nodes[&node("n2")].incarnation,
+            range_id: range.id,
+            range_epoch: range.epoch,
+            budget_ms: 900,
+        };
+        let token = CancellationToken::uncancelable().child_with_deadline(deadline);
+        let result = provider.acquire(&participant(&topology, "n2"), request, &token);
+        assert_eq!(result.is_ok(), expected, "{result:?}");
+        assert!(transport.peak.load(Ordering::SeqCst) <= workers);
+        let drain = Instant::now() + Duration::from_secs(1);
+        while provider.inflight_contexts() != 0 && Instant::now() < drain {
+            thread::sleep(Duration::from_millis(2));
+        }
+        assert_eq!(provider.inflight_contexts(), 0);
+        assert_eq!(transport.active.load(Ordering::SeqCst), 0);
+        for id in topology
+            .nodes
+            .keys()
+            .filter(|id| **id != node("n1") && !transport.silent.contains(*id))
+        {
+            assert!(
+                transport.contacted.lock().contains(id),
+                "healthy voter {id} was starved"
+            );
+        }
+        if let Ok(response) = result {
+            assert!(response.fresh_old_voters.len() >= count as usize / 2 + 1);
+        }
+    }
+    #[test]
+    fn four_silent_sorted_voters_do_not_starve_healthy_nine_node_quorum() {
+        sliced_quorum_case(
+            9,
+            4,
+            (2..=5).map(|i| node(&format!("n{i}"))).collect(),
+            true,
+        );
+        // The configurable single-worker case must also make progress.
+        sliced_quorum_case(3, 1, BTreeSet::from([node("n2")]), true);
+    }
+    #[test]
+    fn sliced_probes_never_admit_an_unavailable_quorum() {
+        sliced_quorum_case(
+            9,
+            4,
+            (2..=6).map(|i| node(&format!("n{i}"))).collect(),
+            false,
+        );
+    }
+
+    #[test]
     fn finished_local_authority_keeps_original_context_deadline() {
         let fixture = Fixture::new();
         let leader = fixture.transport.leader.lock();
@@ -745,7 +1031,7 @@ mod tests {
             fn new(wired: bool) -> Self {
                 let root = tempfile::tempdir().unwrap();
                 let identities = identities(root.path());
-                let mut topology = topology();
+                let mut topology = topology_with_count(3);
                 let one = TcpListener::bind("127.0.0.1:0").unwrap();
                 let two = TcpListener::bind("127.0.0.1:0").unwrap();
                 let silent = TcpListener::bind("127.0.0.1:0").unwrap();

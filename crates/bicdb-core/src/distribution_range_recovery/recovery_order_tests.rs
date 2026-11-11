@@ -159,7 +159,7 @@ fn wait_for_contexts(receivers: &BTreeMap<ClusterNodeId, Arc<RangeRecoveryRuntim
 }
 
 #[test]
-fn actual_raw_behind_zero_recovers_retained_prefix_before_uncertain_tail_without_source_ready() {
+fn actual_gap_refusal_preserves_durable_observations_and_retained_prefix_recovers() {
     let fixture = ActualNativeRf3Fixture::new();
     let range = fixture
         .topology
@@ -285,12 +285,47 @@ fn actual_raw_behind_zero_recovers_retained_prefix_before_uncertain_tail_without
     runtimes[&node("n0")]
         .certify_historical(&initiator, &tail_request, &parent)
         .unwrap();
+    let catalogue_path = fixture.databases[&node("n1")]
+        .read()
+        .data_path()
+        .join(crate::distribution_range_consensus::DEFAULT_RANGE_WRITE_LOG);
+    let catalogue_before = std::fs::read(&catalogue_path).unwrap();
     let direct_gap = runtimes[&node("n1")]
         .certify_historical(&initiator, &tail_request, &parent)
         .unwrap_err();
     assert!(
         direct_gap.to_string().contains("compacted/unavailable gap"),
         "{direct_gap}"
+    );
+    assert_eq!(
+        std::fs::read(&catalogue_path).unwrap(),
+        catalogue_before,
+        "a pure validation refusal must not publish a changed catalogue"
+    );
+    // This is a real fresh readonly observation, not inspection or clearing of
+    // the uncertainty flag. No fence re-fsync, store reopen or state reset is
+    // performed between the rejected request and this observation.
+    let after_gap = runtimes[&node("n1")]
+        .observe_history(
+            &initiator,
+            &RecoveryFencedProbeRequest {
+                scope: scope.clone(),
+                index: None,
+                budget_ms: 5000,
+            },
+            &parent,
+        )
+        .unwrap();
+    assert!(after_gap.fence().is_active_recovery());
+    assert_eq!(after_gap.fence().progress().last_index, 0);
+    assert_eq!(after_gap.fence().progress().resolved_through, 0);
+    assert_eq!(
+        fixture.databases[&node("n1")]
+            .read()
+            .current_native_range_source_lineage(range.id)
+            .unwrap()
+            .range_index(),
+        0
     );
     let frozen = runtimes[&node("n0")].source_capture_freeze(&scope).unwrap();
     let role = fresh_role(&providers, &initiator, &range, nonce);

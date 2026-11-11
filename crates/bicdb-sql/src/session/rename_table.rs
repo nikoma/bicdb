@@ -391,6 +391,57 @@ mod tests {
         concurrent_rename_with_native_writer("call");
     }
 
+    #[cfg(feature = "adaptive-procs")]
+    #[test]
+    fn concurrent_rename_compiled_wrapper_releases_only_durably_decided_scope() {
+        for paged in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
+            SqlSession::new(&mut db).execute("CREATE TABLE source(id INT PRIMARY KEY,payload INT); INSERT INTO source VALUES(1,10); CREATE VIEW dependent AS SELECT source AS item FROM source; CREATE PROCEDURE wasm_rename() LANGUAGE plpgsql AS $$ BEGIN ALTER TABLE source RENAME TO renamed; END; $$").unwrap();
+            db.create_collection("native_unrelated").unwrap();
+            rename_journal::initialize_rename_journal_identities(&mut db).unwrap();
+            let routine = list_routines(&db)
+                .unwrap()
+                .into_iter()
+                .find(|routine| routine.name == "wasm_rename")
+                .unwrap();
+            let mut ir = compile_routine_ir(&routine).unwrap();
+            assert!(ir.params.is_empty() && ir.declarations.is_empty());
+            // Exercise the existing integer prototype's host wrapper directly.
+            // A spare unused slot makes a no-argument statement body lowerable;
+            // declared-type guards and live adaptive selection are unchanged.
+            ir.symbol_names.push("unused_test_slot".into());
+            let compiled = adaptive::lower::get_or_build(
+                adaptive::routine_signature("scope_wasm_rename", &[]),
+                &ir,
+            )
+            .expect("statement-only fixture must compile");
+            let mut unrelated = db.begin_transaction().unwrap();
+            unrelated
+                .insert("native_unrelated", Record::new("acknowledged"))
+                .unwrap();
+            {
+                let mut sql = SqlSession::new(&mut db);
+                sql.run_wasm_procedure_in_auto_transaction(&[], &compiled)
+                    .unwrap();
+                assert!(sql.take_pending_transaction().is_none());
+                assert_eq!(
+                    sql.execute("SELECT (item).payload FROM dependent")
+                        .unwrap()
+                        .rows,
+                    vec![vec![SqlValue::Int(10)]]
+                );
+                unrelated.commit().unwrap();
+            }
+            assert!(db
+                .get("native_unrelated", "acknowledged")
+                .unwrap()
+                .is_some());
+            assert!(rename_journal::pending(&db).unwrap().is_empty());
+            db.close().unwrap();
+        }
+    }
+
     #[test]
     fn standby_initialization_preserves_an_undecided_primary_rename_and_follows_its_decision() {
         use bicdb_core::ReplicationMode;

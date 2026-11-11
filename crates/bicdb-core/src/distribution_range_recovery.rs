@@ -187,6 +187,7 @@ impl RecoveryEpochFenceRequest {
 #[serde(deny_unknown_fields)]
 pub(crate) struct RecoveryEpochFenceReply {
     pub phase: RecoveryFenceObservationPhase,
+    pub image_history: RecoveryImageHistoryObligationsV1,
     pub scope: RecoveryFenceScope,
     pub node_id: ClusterNodeId,
     pub member_incarnation: u64,
@@ -234,6 +235,9 @@ impl RecoveryFenceObservation {
         expected: &RecoveryFenceScope,
         deadline: Instant,
     ) -> Result<Self> {
+        reply
+            .image_history
+            .require_shape(expected, &reply.progress)?;
         if Instant::now() >= deadline
             || reply.scope != *expected
             || reply.store_open_id.is_nil()
@@ -280,6 +284,9 @@ impl RecoveryFenceObservation {
     }
     pub(crate) fn native(&self) -> &crate::db::NativeRangePrefixObservation {
         &self.reply.native
+    }
+    pub(crate) fn image_history(&self) -> &RecoveryImageHistoryObligationsV1 {
+        &self.reply.image_history
     }
     pub(crate) fn deadline(&self) -> Instant {
         self.deadline

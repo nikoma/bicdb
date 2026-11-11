@@ -2242,6 +2242,37 @@ mod tests {
             thread::sleep(Duration::from_millis(25));
         }
 
+        // Exercise the actual host wiring, not only a manually supplied test
+        // provider. This is metadata authority only; it proves no row readiness.
+        let current = rpc.fetch_topology(&leader_id).unwrap();
+        rpc.install_topology(current.clone()).unwrap();
+        let range = current
+            .ranges
+            .values()
+            .find(|range| range.leader == leader_id)
+            .unwrap();
+        let read_request = Uuid::new_v4();
+        let observation = rpc
+            .acquire_metadata_read_observation(
+                &leader_id,
+                read_request,
+                range.id,
+                range.epoch,
+                Duration::from_secs(2),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        assert!(observation.applied_index() >= observation.read_index());
+        assert_eq!(
+            observation
+                .committed_topology(read_request)
+                .unwrap()
+                .range_by_id(range.id)
+                .unwrap()
+                .leader,
+            leader_id
+        );
+
         let learner = bicdb_core::ClusterNode::new(
             learner_id.clone(),
             learner_address,

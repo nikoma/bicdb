@@ -19,8 +19,11 @@ fn replicated(mode: StorageMode, role: ReplicationMode) -> DbConfig {
         cluster_id: "bootstrap-reader-control".into(),
         listen_addr: Some("127.0.0.1:0".into()),
         tls: Some(ReplicationTlsConfig {
+            cert_path: Default::default(),
+            key_path: Default::default(),
+            ca_path: Default::default(),
+            require_client_cert: true,
             dev_localhost_plaintext: true,
-            ..Default::default()
         }),
         ..Default::default()
     })
@@ -115,8 +118,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 assert_eq!(export.records_exported, 2);
             }
             assert_eq!(
-                target.get("business", "acknowledged")?.unwrap(),
-                acknowledged()
+                target.get("business", "acknowledged")?.unwrap().as_ref(),
+                &acknowledged()
             );
             target.close()?;
             let format: serde_json::Value =

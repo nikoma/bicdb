@@ -916,6 +916,9 @@ impl ClusterDataNodeService {
         Ok(
             crate::distribution_range_recovery::RecoveryEpochFenceReply {
                 phase: self.range_writes.recovery_observation_phase(scope)?,
+                image_history: self
+                    .range_writes
+                    .observe_recovery_image_obligations(&db, &native, scope, frozen)?,
                 scope: scope.clone(),
                 node_id: self.node_id.clone(),
                 member_incarnation: role.local_member_incarnation(),
@@ -961,6 +964,9 @@ impl ClusterDataNodeService {
         let reply = crate::distribution_range_recovery::RecoveryFencedProbeReply {
             fence: crate::distribution_range_recovery::RecoveryEpochFenceReply {
                 phase: self.range_writes.recovery_observation_phase(scope)?,
+                image_history: self
+                    .range_writes
+                    .observe_recovery_image_obligations(&db, &native, scope, frozen)?,
                 scope: scope.clone(),
                 node_id: self.node_id.clone(),
                 member_incarnation: role.local_member_incarnation(),

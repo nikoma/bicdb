@@ -15,6 +15,18 @@ use crate::distribution_range_image_install::{
 };
 
 impl ClusterDataNodeService {
+    #[cfg(test)]
+    pub(crate) fn test_corrupt_adopted_image_marker(
+        &mut self,
+        scope: &crate::distribution_range_consensus::RecoveryFenceScope,
+        index: u64,
+        checksum: String,
+    ) -> Result<()> {
+        // Negative durable-corruption injection, NOT a legal authority path.
+        self.range_writes
+            .test_corrupt_compacted_marker(scope, index, checksum)
+    }
+
     /// The sealed actual image return is consumed under this SAME catalogue.
     /// Its intent remains present throughout physical attestation; preparation
     /// atomically exchanges that exact refusal for the durable Prepared phase.

@@ -31,6 +31,39 @@ impl FinalizedNativeImageCatalogueObservation {
 }
 
 impl RangeWriteStore {
+    /// An image snapshot may compact every payload while durable historical
+    /// certificates remain. Their bytes being stable is NOT native agreement:
+    /// independently compare every original command checksum to actual history.
+    pub(crate) fn verify_finalized_native_image_historical_markers(
+        &self,
+        image: &FinalizedNativeRecoveryImage,
+        database: &crate::BicDb,
+        role: &RecoveryRoleAdmission,
+        frozen: &FrozenRangeMutationPermit,
+        mut verify: impl FnMut(u64, &str) -> Result<()>,
+    ) -> Result<()> {
+        self.verify_finalized_native_image_catalogue(image, database, role, frozen)?;
+        let saved = self
+            .catalog
+            .recovery_fences
+            .get(&image.scope().range_id)
+            .ok_or_else(|| range_write_error("finalized image markers lost their saved fence"))?;
+        if saved.historical_certifications.len() > 1024 {
+            return Err(range_write_error(
+                "finalized image marker scan exceeds its bound",
+            ));
+        }
+        for (index, marker) in &saved.historical_certifications {
+            if *index > image.base().range_index() {
+                return Err(range_write_error(
+                    "finalized image omits an irreversible historical marker",
+                ));
+            }
+            verify(*index, &marker.command_sha256)?;
+        }
+        self.verify_finalized_native_image_catalogue(image, database, role, frozen)
+    }
+
     pub(crate) fn observe_finalizing_native_image_catalogue(
         &self,
         actual: &crate::distribution_range_image_install::NativeImageCatalogueFinalization,

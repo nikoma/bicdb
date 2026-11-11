@@ -1213,6 +1213,21 @@ impl BicDb {
             }
             LocalNativeRecoveryCatalogue::FinalizedImage(image) => {
                 image.require_current(self, store, &role, &frozen)?;
+                store.verify_finalized_native_image_historical_markers(
+                    image, self, &role, &frozen, |index, checksum| {
+                        cancellation.check()?;
+                        let step = self.export_native_logical_history_step_with_source_pin(
+                            &lineage, &frozen, &pin, index, 1, &cancellation,
+                        )?;
+                        if !matches!(step.entries.first().map(|entry| &entry.outcome),
+                            Some(NativeLogicalHistoryOutcomeV1::Applied { command_checksum_sha256 })
+                                if command_checksum_sha256 == checksum)
+                        {
+                            return Err(invalid("finalized image historical certification marker conflicts with actual native history"));
+                        }
+                        Ok(())
+                    },
+                )?;
             }
         }
         let proof = LocalNativeRecoveryReady {

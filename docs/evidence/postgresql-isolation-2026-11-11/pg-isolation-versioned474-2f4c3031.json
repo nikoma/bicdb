@@ -1,0 +1,68 @@
+{
+  "label": "pg-isolation-versioned474-2f4c3031",
+  "source": "2f4c3031919843a200a26c810d3deb8a7882a809",
+  "base": "d2428c565aa62b7625e2e54b7586a6d79f646180",
+  "repo": "/root/bicdb-pg-isolation-delivery",
+  "wait_units": [
+    "bicdb-pg-isolation-current-main-d2428c56"
+  ],
+  "required_receipts": [
+    {
+      "path": "report-pg-isolation-current-main-d2428c56.json",
+      "equals": {
+        "source": "d2428c565aa62b7625e2e54b7586a6d79f646180",
+        "status": "focused_passed"
+      }
+    }
+  ],
+  "scope": "Exact version474 candidate2f4c3031 forPR151, includes473 evidence parent3c38190d (main473 merge prerequisite). Runtime identical to d2428c56 broad validation; synchronized crate/dependency/lockfile/current-doc version bump plus evidence-only parent. Require prior broad pass, validate final source version identity and snapshot/SSI/writableRR/historical index closure. GitHub finalhead9CI and actualremote473/nextunusedpatch required before merge; no binary/release/application completion implied.",
+  "commands": [
+    [
+      "python3",
+      "scripts/bump-version.py",
+      "--check"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "version_identity"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-pgwire",
+      "--test",
+      "fixed_snapshot_index_visibility",
+      "--test",
+      "writable_repeatable_read",
+      "--test",
+      "serializable_dependencies",
+      "--test",
+      "fixed_snapshot_boundary"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "session::transaction_defaults"
+    ]
+  ]
+}

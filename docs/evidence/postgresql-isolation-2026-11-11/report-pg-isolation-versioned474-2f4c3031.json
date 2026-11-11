@@ -1,0 +1,76 @@
+{
+  "source": "2f4c3031919843a200a26c810d3deb8a7882a809",
+  "scope": "Exact version474 candidate2f4c3031 forPR151, includes473 evidence parent3c38190d (main473 merge prerequisite). Runtime identical to d2428c56 broad validation; synchronized crate/dependency/lockfile/current-doc version bump plus evidence-only parent. Require prior broad pass, validate final source version identity and snapshot/SSI/writableRR/historical index closure. GitHub finalhead9CI and actualremote473/nextunusedpatch required before merge; no binary/release/application completion implied.",
+  "started_unix": 1794420449.2871842,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794420449.2876263,
+      "exit": 0,
+      "finished_unix": 1794420449.3552182
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "version_identity"
+      ],
+      "started_unix": 1794420449.3554356,
+      "exit": 0,
+      "finished_unix": 1794420613.9628537
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "fixed_snapshot_index_visibility",
+        "--test",
+        "writable_repeatable_read",
+        "--test",
+        "serializable_dependencies",
+        "--test",
+        "fixed_snapshot_boundary"
+      ],
+      "started_unix": 1794420613.963062,
+      "exit": 0,
+      "finished_unix": 1794420818.7049568
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::transaction_defaults"
+      ],
+      "started_unix": 1794420818.7051575,
+      "exit": 0,
+      "finished_unix": 1794420943.4551988
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794420943.4554107
+}

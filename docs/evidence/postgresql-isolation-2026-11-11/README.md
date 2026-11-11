@@ -45,3 +45,39 @@ The Oracle profile uses its separate snapshot-isolation contract.
 Build logs include the active host/cgroup memory monitor. Tests ran serially
 under the shared source/build lock with one Cargo build job and incremental
 compilation disabled; useful application runs were preserved.
+
+
+## Later complete and CI evidence
+
+Runtime source `d2428c56` passed eight commands: 2,094 test executions and seven
+existing ignored tests, including full Core/SQL libraries, general SQL and
+Oracle/protocol/read-only wire regressions. The exact `2f4c3031` version 474
+candidate then passed version consistency and 14 focused test executions.
+These counts include separately executed isolated children where logged.
+
+CI on `2f4c3031` passed eight checks but the remaining-workspace scorecard failed
+because two probes still demanded unsupported errors for the newly implemented
+modes. `61efd7f8` replaces those probes with retained RR snapshots/stale-write
+rejection and SSI disjoint-commit/write-skew checks, retains a SNAPSHOT unsupported
+probe, and keeps the scorecard zero-failure assertion. The focused scorecard and
+all 14 reporting tests passed (15 executions).
+
+A new CI run on `61efd7f8` found a first-write lease refusal in the embedded HA
+fixture's compound schema-bootstrap/INSERT callback. The log proves the refusal;
+the source shows that the exclusive callback guard can delay replication-stream
+progress. No timing trace of that CI callback was captured. The existing journal
+fixture already uses `open_with_initializer` for schema bootstrap before HA starts.
+`5a3aa209` applies that setup to the effects fixture while retaining its original
+ACK, failover and returning-writer assertions. A new control enters a callback
+under a live lease, stops both peers inside it, waits for authority to become
+invalid while retaining the guard, then requires a write-lease refusal and zero
+inserted rows. All eleven HA tests passed three times with four test threads
+(33 executions). Lease duration, fsync, production runtime and failover assertions
+were unchanged. Initialization is local setup, not an acknowledged quorum write;
+a callback may commit multiple transactions and owns their atomicity.
+
+Both original failed CI logs, successful source-pinned receipts and complete
+compressed logs are retained. The actual external main 473 runtime changes were
+subsequently integrated while retaining source 474 and all synchronized version
+files. Final integrated-head CI remains a separate merge requirement; these
+receipts do not imply that an application, release or deployment was completed.

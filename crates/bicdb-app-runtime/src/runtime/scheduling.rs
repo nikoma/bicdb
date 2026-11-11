@@ -878,6 +878,28 @@ pub(crate) fn validate_unique_target_evolution(
     Ok(changed)
 }
 
+// Expanding an enum preserves every persisted value. Keep this deliberately
+// narrower than general assignability: removals, scalar substitutions and
+// container changes still need an explicit supported migration.
+fn preserves_field_value_type(
+    previous: &bicdb_extension::abi_v2::ApplicationRouteParameterTypeV1,
+    candidate: &bicdb_extension::abi_v2::ApplicationRouteParameterTypeV1,
+) -> bool {
+    use bicdb_extension::abi_v2::ApplicationRouteParameterTypeV1 as FieldType;
+    if previous == candidate {
+        return true;
+    }
+    match (previous, candidate) {
+        (FieldType::Enum { values: old }, FieldType::Enum { values: new }) => {
+            old.iter().all(|value| new.contains(value))
+        }
+        (FieldType::Optional { value: old }, FieldType::Optional { value: new }) => {
+            preserves_field_value_type(old, new)
+        }
+        _ => false,
+    }
+}
+
 pub(crate) fn validate_additive_contracts(
     previous: &bicdb_extension::abi_v2::ApplicationManifestV2,
     candidate: &bicdb_extension::abi_v2::ApplicationManifestV2,
@@ -997,7 +1019,11 @@ pub(crate) fn validate_additive_contracts(
             let value_type_is_compatible =
                 match (old_field.value_type.as_ref(), new_field.value_type.as_ref()) {
                     (None, _) => true,
-                    (Some(previous), Some(candidate)) if previous == candidate => true,
+                    (Some(previous), Some(candidate))
+                        if preserves_field_value_type(previous, candidate) =>
+                    {
+                        true
+                    }
                     (
                         Some(previous),
                         Some(bicdb_extension::abi_v2::ApplicationRouteParameterTypeV1::Optional {

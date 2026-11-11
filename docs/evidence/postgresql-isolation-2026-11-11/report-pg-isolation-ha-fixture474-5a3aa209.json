@@ -1,0 +1,76 @@
+{
+  "source": "5a3aa20909ae4fd934e54e0f7cea54b7d5821139",
+  "scope": "ActualCI61wirefailureeffectsfixture initialCREATE+INSERTcompoundcallbacklost1.5squorumlease; guardcorrectlyrefused. UseexistingjournalfixtureAPIpatternopen_with_initializerforinitialschema, preserveallACK/failover/returningwriterassertions,1.5slease/fsync/runtimeunchanged. Addcontrolcallbackenteredunderfreshlease,stopbothpeersINSIDEcallback,waitnonblockingleasefalsewhileDBguardheld, INSERTmustrefusewriteleaseandCOUNT0. Threeall11embeddedHAparallel4runs address observedCIintermittency. Noapplicationassertions/timeoutschanged. Onlytestfixturechanges;Core/SQLruntimeidenticalprevious2094+14validated. Newhead9CIrequired.",
+  "started_unix": 1794423989.5173337,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794423989.5175672,
+      "exit": 0,
+      "finished_unix": 1794423989.5790567
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "embedded_ha",
+        "--",
+        "--test-threads=4"
+      ],
+      "started_unix": 1794423989.5792358,
+      "exit": 0,
+      "finished_unix": 1794424173.9096081
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "embedded_ha",
+        "--",
+        "--test-threads=4"
+      ],
+      "started_unix": 1794424173.9098754,
+      "exit": 0,
+      "finished_unix": 1794424182.2660887
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "embedded_ha",
+        "--",
+        "--test-threads=4"
+      ],
+      "started_unix": 1794424182.2663493,
+      "exit": 0,
+      "finished_unix": 1794424190.5281856
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794424190.5284715
+}

@@ -1,0 +1,163 @@
+{
+  "source": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "source_version": "1.0.471-beta",
+  "binary_sha256": "e23d7c1a078b7ce6722237f35cfa67a822727d9762c928c808f3ce2767c543c2",
+  "observed_unix": 1794426258.4548824,
+  "connection_read_only": true,
+  "queries": [
+    {
+      "sql": "SELECT C_Order_ID,DocumentNo,Description,DocStatus,Processed,TotalLines,GrandTotal FROM IDEMPIERE_QUAL.C_Order WHERE Description='BicDB main471 browser acceptance 20261111'",
+      "columns": [
+        "C_ORDER_ID",
+        "DOCUMENTNO",
+        "DESCRIPTION",
+        "DOCSTATUS",
+        "PROCESSED",
+        "TOTALLINES",
+        "GRANDTOTAL"
+      ],
+      "rows": [
+        [
+          "1000000",
+          "50000",
+          "BicDB main471 browser acceptance 20261111",
+          "CO",
+          "Y",
+          "33.75",
+          "33.75"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT o.DocumentNo,l.Line,l.QtyOrdered,l.PriceActual,l.LineNetAmt FROM IDEMPIERE_QUAL.C_Order o JOIN IDEMPIERE_QUAL.C_OrderLine l ON o.C_Order_ID=l.C_Order_ID WHERE o.Description='BicDB main471 browser acceptance 20261111' ORDER BY l.Line",
+      "columns": [
+        "DOCUMENTNO",
+        "LINE",
+        "QTYORDERED",
+        "PRICEACTUAL",
+        "LINENETAMT"
+      ],
+      "rows": [
+        [
+          "50000",
+          "10",
+          "1",
+          "33.75",
+          "33.75"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT i.C_Invoice_ID,i.DocumentNo,i.DocStatus,i.Processed,i.Posted,i.GrandTotal,i.IsPaid FROM IDEMPIERE_QUAL.C_Invoice i JOIN IDEMPIERE_QUAL.C_Order o ON i.C_Order_ID=o.C_Order_ID WHERE o.Description='BicDB main471 browser acceptance 20261111'",
+      "columns": [
+        "C_INVOICE_ID",
+        "DOCUMENTNO",
+        "DOCSTATUS",
+        "PROCESSED",
+        "POSTED",
+        "GRANDTOTAL",
+        "ISPAID"
+      ],
+      "rows": [
+        [
+          "1000000",
+          "100001",
+          "CO",
+          "Y",
+          "Y",
+          "33.75",
+          "Y"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT f.C_AcctSchema_ID,SUM(f.AmtAcctDr),SUM(f.AmtAcctCr) FROM IDEMPIERE_QUAL.Fact_Acct f JOIN IDEMPIERE_QUAL.C_Invoice i ON f.Record_ID=i.C_Invoice_ID JOIN IDEMPIERE_QUAL.C_Order o ON i.C_Order_ID=o.C_Order_ID WHERE f.AD_Table_ID=318 AND o.Description='BicDB main471 browser acceptance 20261111' GROUP BY f.C_AcctSchema_ID ORDER BY f.C_AcctSchema_ID",
+      "columns": [
+        "C_ACCTSCHEMA_ID",
+        "sum",
+        "sum"
+      ],
+      "rows": [
+        [
+          "101",
+          "33.75",
+          "33.75"
+        ],
+        [
+          "200000",
+          "28.69",
+          "28.69"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT p.C_Payment_ID,p.DocumentNo,p.DocStatus,p.Processed,p.Posted,p.PayAmt,p.DiscountAmt,p.IsAllocated FROM IDEMPIERE_QUAL.C_Payment p JOIN IDEMPIERE_QUAL.C_Invoice i ON p.C_Invoice_ID=i.C_Invoice_ID JOIN IDEMPIERE_QUAL.C_Order o ON i.C_Order_ID=o.C_Order_ID WHERE o.Description='BicDB main471 browser acceptance 20261111'",
+      "columns": [
+        "C_PAYMENT_ID",
+        "DOCUMENTNO",
+        "DOCSTATUS",
+        "PROCESSED",
+        "POSTED",
+        "PAYAMT",
+        "DISCOUNTAMT",
+        "ISALLOCATED"
+      ],
+      "rows": [
+        [
+          "1000000",
+          "400001",
+          "CO",
+          "Y",
+          "Y",
+          "33.07",
+          "0.68",
+          "Y"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT h.DocStatus,h.Processed,h.Posted,l.Amount,l.DiscountAmt,l.WriteOffAmt,l.OverUnderAmt FROM IDEMPIERE_QUAL.C_AllocationLine l JOIN IDEMPIERE_QUAL.C_AllocationHdr h ON l.C_AllocationHdr_ID=h.C_AllocationHdr_ID JOIN IDEMPIERE_QUAL.C_Invoice i ON l.C_Invoice_ID=i.C_Invoice_ID JOIN IDEMPIERE_QUAL.C_Order o ON i.C_Order_ID=o.C_Order_ID WHERE o.Description='BicDB main471 browser acceptance 20261111'",
+      "columns": [
+        "DOCSTATUS",
+        "PROCESSED",
+        "POSTED",
+        "AMOUNT",
+        "DISCOUNTAMT",
+        "WRITEOFFAMT",
+        "OVERUNDERAMT"
+      ],
+      "rows": [
+        [
+          "CO",
+          "Y",
+          "Y",
+          "33.07",
+          "0.68",
+          "0",
+          "0"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT f.C_AcctSchema_ID,SUM(f.AmtAcctDr),SUM(f.AmtAcctCr) FROM IDEMPIERE_QUAL.Fact_Acct f JOIN IDEMPIERE_QUAL.C_Payment p ON f.Record_ID=p.C_Payment_ID JOIN IDEMPIERE_QUAL.AD_Table t ON t.AD_Table_ID=f.AD_Table_ID JOIN IDEMPIERE_QUAL.C_Invoice i ON p.C_Invoice_ID=i.C_Invoice_ID JOIN IDEMPIERE_QUAL.C_Order o ON i.C_Order_ID=o.C_Order_ID WHERE t.TableName='C_Payment' AND o.Description='BicDB main471 browser acceptance 20261111' GROUP BY f.C_AcctSchema_ID ORDER BY f.C_AcctSchema_ID",
+      "columns": [
+        "C_ACCTSCHEMA_ID",
+        "sum",
+        "sum"
+      ],
+      "rows": [
+        [
+          "101",
+          "33.07",
+          "33.07"
+        ],
+        [
+          "200000",
+          "28.11",
+          "28.11"
+        ]
+      ]
+    }
+  ],
+  "observer_sha256": "74e289ac82720482c46a9c279278eda2d237f01e57dab5ee5d38cbd5d7dcb29a"
+}

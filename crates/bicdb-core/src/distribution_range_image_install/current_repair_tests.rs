@@ -4,7 +4,7 @@
 //! explicit test precondition; this is not TCP/TLS or physical qualification.
 use super::*;
 use crate::db::ActualNativeRf3Fixture;
-use crate::distribution::{ClusterNodeId, ClusterTopology, RangeDescriptor};
+use crate::distribution::{ClusterNodeId, RangeDescriptor};
 use crate::distribution_consensus::{MetadataReadParticipant, MetadataRecoveryRolePurpose};
 use crate::distribution_data::ClusterDataNodeService;
 use crate::distribution_metadata_read_provider::MetadataReadProvider;
@@ -27,7 +27,6 @@ struct CurrentRepairFixture {
     providers: BTreeMap<ClusterNodeId, Arc<MetadataReadProvider>>,
     runtimes: BTreeMap<ClusterNodeId, Arc<RangeRecoveryRuntime>>,
     initiator: MetadataReadParticipant,
-    topology: ClusterTopology,
     range: RangeDescriptor,
     scope: RecoveryFenceScope,
     capture: Option<RangeImageCapture>,
@@ -245,7 +244,6 @@ impl CurrentRepairFixture {
             providers,
             runtimes,
             initiator,
-            topology,
             range,
             scope,
             capture: Some(capture),
@@ -537,6 +535,18 @@ fn actual_rf3_nonempty_current_voter_repair_uses_same_catalogue_and_keeps_recove
             .require_persisted_recovery_scope(&fixture.scope)
             .is_err(),
         "retained image intent must refuse generic recovery readiness"
+    );
+    let frozen = fixture.runtimes[&node("n1")]
+        .source_capture_freeze(&fixture.scope)
+        .unwrap();
+    let role = fixture.role();
+    assert!(
+        fixture
+            .service
+            .lock()
+            .attest_native_recovery_ready(role, frozen, &CancellationToken::uncancelable(),)
+            .is_err(),
+        "an adopted physical image cannot bypass the retained intent into NativeReady"
     );
     let persisted: serde_json::Value = serde_json::from_slice(
         &std::fs::read(target.read().data_path().join(DEFAULT_RANGE_WRITE_LOG)).unwrap(),

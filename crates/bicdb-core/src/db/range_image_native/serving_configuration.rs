@@ -10,6 +10,9 @@ use crate::distribution_range_consensus::{
 };
 use crate::distribution_range_recovery::{ClosedNativeReadyQuorum, RecoveryRoleAdmission};
 
+#[cfg(test)]
+mod floor_tests;
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub(super) struct NativeRecoveredServingConfiguration {
@@ -49,17 +52,25 @@ impl NativeRecoveredServingConfiguration {
             MAX_NATIVE_RECEIPT_BYTES,
         )?)))
     }
-    fn validate(&self, birth: &NativeDatabaseBirth, base: &NativeRangeBaseBinding) -> Result<()> {
+    /// A durable historical floor survives a compatible physical image
+    /// replacement. Its former base checksum is evidence of that old binding,
+    /// never a current serving grant for the new image.
+    fn validate_historical_floor(
+        &self,
+        birth: &NativeDatabaseBirth,
+        base: &NativeRangeBaseBinding,
+    ) -> Result<()> {
         let digest = |s: &str| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit());
         self.scope.validate()?;
         if self.format_version != 1
             || self.birth_id != birth.birth_id
             || self.birth_sha256 != birth.checksum_sha256
-            || self.physical_base_sha256 != base.checksum_sha256
+            || !digest(&self.physical_base_sha256)
             || self.scope.cluster_id != birth.spec.cluster_id
             || self.scope.bootstrap_id != birth.spec.bootstrap_id
             || self.local_node_id != birth.spec.node_id
             || self.local_member_incarnation != base.local_member_incarnation
+            || base.restore_activation != birth.spec.restore_activation
             || !matches!(
                 self.scope.purpose,
                 MetadataRecoveryRolePurpose::NormalRecovery
@@ -71,17 +82,59 @@ impl NativeRecoveredServingConfiguration {
             || self.range.start_token != base.range.start_token
             || self.range.end_token != base.range.end_token
             || self.range.placement != base.range.placement
-            || self.range.epoch < base.range.epoch
             || self.range.replicas.len() != base.range.replicas.len()
             || replicas(&self.range).len() != self.range.replicas.len()
             || replicas(&self.range) != replicas(&base.range)
-            || self.activation_index < base.range_index
             || self.logical_genesis_sha256 != base.logical_genesis_sha256
             || !digest(&self.activation_history_sha256)
             || !digest(&self.native_receipt_at_activation_sha256)
             || self.checksum()? != self.checksum_sha256
         {
             return Err(invalid("recovered serving record does not bind the actual same-voter physical/native domain"));
+        }
+        Ok(())
+    }
+
+    pub(super) fn binds_current_base(&self, base: &NativeRangeBaseBinding) -> bool {
+        self.physical_base_sha256 == base.checksum_sha256
+    }
+
+    fn validate_current_grant(
+        &self,
+        birth: &NativeDatabaseBirth,
+        base: &NativeRangeBaseBinding,
+    ) -> Result<()> {
+        self.validate_historical_floor(birth, base)?;
+        if !self.binds_current_base(base)
+            || self.range.epoch < base.range.epoch
+            || self.activation_index < base.range_index
+        {
+            return Err(invalid(
+                "recovered serving grant does not bind the current physical/native image",
+            ));
+        }
+        Ok(())
+    }
+
+    fn require_role_floor(&self, role: &RecoveryRoleAdmission) -> Result<()> {
+        role.require_live_request()?;
+        if role.current_range().epoch < self.range.epoch
+            || (role.current_range().epoch == self.range.epoch
+                && role.range_configuration_sha256()? != self.scope.range_configuration_sha256)
+        {
+            return Err(invalid("fresh recovery role is below the durable serving floor or changes its same-epoch semantic domain"));
+        }
+        Ok(())
+    }
+}
+
+impl SourceRangeImageLineage {
+    pub(crate) fn require_native_serving_role_floor(
+        &self,
+        role: &RecoveryRoleAdmission,
+    ) -> Result<()> {
+        if let Some(record) = &self.serving {
+            record.require_role_floor(role)?;
         }
         Ok(())
     }
@@ -108,7 +161,9 @@ impl NativeRecoveredServingReceipt {
     pub(crate) fn require_current(&self, db: &BicDb) -> Result<()> {
         self.native.require_current(db)?;
         let actual = db.current_native_range_source_lineage(self.record.range.id)?;
-        if actual.serving.as_ref() != Some(&self.record) {
+        if actual.serving.as_ref() != Some(&self.record)
+            || !self.record.binds_current_base(&actual.base)
+        {
             return Err(invalid(
                 "actual recovered serving receipt/native open changed",
             ));
@@ -119,6 +174,9 @@ impl NativeRecoveredServingReceipt {
 
 fn key(range_id: RangeId) -> String {
     format!("serving-configuration/{range_id}")
+}
+fn history_key(range_id: RangeId, checksum: &str) -> String {
+    format!("serving-configuration-history/{range_id}/{checksum}")
 }
 impl BicDb {
     pub(super) fn read_native_recovered_serving_configuration(
@@ -139,7 +197,7 @@ impl BicDb {
                 "recovered serving record lacks its older-writer reader fence",
             ));
         }
-        record.validate(birth, base)?;
+        record.validate_historical_floor(birth, base)?;
         let actual_index = prefix.map_or(base.range_index, |p| p.range_index());
         let actual_visibility = prefix.map_or(base.actual_local_visibility_sequence, |p| {
             p.actual_local_visibility_sequence()
@@ -176,7 +234,8 @@ impl BicDb {
         let record = actual
             .serving
             .ok_or_else(|| invalid("completed refusal has no actual native serving record"))?;
-        if record.checksum_sha256 != expected_checksum
+        if !record.binds_current_base(&actual.base)
+            || record.checksum_sha256 != expected_checksum
             || !record.scope.same_session(scope)
             || record.activation_index != physical.range_index()
             || record.activation_history_sha256 != physical.logical_history_sha256()
@@ -218,14 +277,19 @@ impl BicDb {
         }
         let journal = self.try_native_image_journal()?;
         let lineage = self.current_native_range_source_lineage(fresh.current_range().id)?;
+        lineage.require_native_serving_role_floor(fresh)?;
         let base = &lineage.base;
+        let mut canonical_range = fresh.current_range().clone();
+        canonical_range.approximate_bytes = 0;
+        canonical_range.approximate_qps = 0;
+        canonical_range.replicas.sort_by_key(|replica| replica.id);
         let mut record = NativeRecoveredServingConfiguration {
             format_version: 1,
             birth_id: lineage.birth.birth_id,
             birth_sha256: lineage.birth.checksum_sha256.clone(),
             physical_base_sha256: base.checksum_sha256.clone(),
             scope: prepared.scope().clone(),
-            range: fresh.current_range().clone(),
+            range: canonical_range,
             local_node_id: fresh.local_node_id().clone(),
             local_member_incarnation: fresh.local_member_incarnation(),
             activation_index: prepared.range_index(),
@@ -236,11 +300,13 @@ impl BicDb {
             checksum_sha256: String::new(),
         };
         record.checksum_sha256 = record.checksum()?;
-        record.validate(&lineage.birth, base)?;
+        record.validate_current_grant(&lineage.birth, base)?;
         if lineage.serving.as_ref().is_some_and(|old| {
             old.range.epoch > record.range.epoch
                 || old.activation_index > record.activation_index
-                || (old.range.epoch == record.range.epoch && old.range != record.range)
+                || (old.range.epoch == record.range.epoch
+                    && old.scope.range_configuration_sha256
+                        != record.scope.range_configuration_sha256)
         }) {
             return Err(invalid(
                 "recovered serving configuration would regress or conflict",
@@ -250,7 +316,43 @@ impl BicDb {
         // supply this proof or the independently collected closed ready quorum.
         format::enable_native_recovery_serving(&self.path)?;
         if lineage.serving.as_ref() != Some(&record) {
-            self.write_native_range_image_record(&key(record.range.id), &record)?;
+            // Keep every actual old/new record immutable. Append history
+            // BEFORE replacing the active pointer in the SAME native page-WAL
+            // transaction, so interruption leaves the former fence intact.
+            let mut append = Vec::new();
+            for item in lineage.serving.iter().chain(std::iter::once(&record)) {
+                let history = history_key(item.range.id, &item.checksum_sha256);
+                if let Some(existing) = self
+                    .read_native_range_image_record::<NativeRecoveredServingConfiguration>(
+                        &history,
+                    )?
+                {
+                    if &existing != item {
+                        return Err(invalid("immutable native serving history conflicts"));
+                    }
+                } else {
+                    append.push((
+                        native_key(&history),
+                        bounded_json(item, MAX_NATIVE_RECEIPT_BYTES)?,
+                    ));
+                }
+            }
+            let current_key = native_key(&key(record.range.id));
+            let encoded = bounded_json(&record, MAX_NATIVE_RECEIPT_BYTES)?;
+            self.in_paged_transaction(|paged, xid| {
+                for (history, bytes) in &append {
+                    paged
+                        .store()
+                        .put(xid, history, bytes)
+                        .map_err(|error| BicDbError::PagedStorage(error.to_string()))?;
+                }
+                paged
+                    .store()
+                    .put(xid, &current_key, &encoded)
+                    .map_err(|error| BicDbError::PagedStorage(error.to_string()))?;
+                Ok(())
+            })?
+            .ok_or_else(|| invalid("native serving publication has no page store"))?;
         }
         drop(journal);
         let native = self.native_recovery_admission(

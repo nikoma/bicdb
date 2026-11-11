@@ -16,6 +16,46 @@ use crate::distribution_range_image_install::{
 
 impl ClusterDataNodeService {
     #[cfg(test)]
+    pub(crate) fn test_prepare_existing_native_source(
+        &mut self,
+        role: crate::distribution_range_recovery::RecoveryRoleAdmission,
+        frozen: Arc<crate::distribution_range_mutation::FrozenRangeMutationPermit>,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_consensus::PreparedNativeRecoveryReady> {
+        let local = self.attest_native_recovery_ready(role, frozen, parent)?;
+        let db = try_database_read(&self.db)?;
+        self.range_writes.prepare_native_recovery_ready(&db, local)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_project_actual_prepared_native(
+        &self,
+        prepared: &crate::distribution_range_consensus::PreparedNativeRecoveryReady,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        request: &crate::distribution_range_recovery::NativeReadyRequest,
+    ) -> Result<crate::distribution_range_consensus::LocalNativeReadyEvidence> {
+        let db = try_database_read(&self.db)?;
+        self.range_writes
+            .observe_prepared_native_for_role(&db, prepared, role, request)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_persist_actual_prepared_serving(
+        &self,
+        prepared: &crate::distribution_range_consensus::PreparedNativeRecoveryReady,
+        quorum: &crate::distribution_range_recovery::ClosedNativeReadyQuorum,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+    ) -> Result<crate::db::NativeRecoveredServingReceipt> {
+        let db = try_database_read(&self.db)?;
+        db.persist_native_recovered_serving_configuration(
+            prepared,
+            &self.range_writes,
+            quorum,
+            role,
+        )
+    }
+
+    #[cfg(test)]
     pub(crate) fn test_corrupt_adopted_image_marker(
         &mut self,
         scope: &crate::distribution_range_consensus::RecoveryFenceScope,

@@ -517,7 +517,10 @@ mod tests {
             .current_native_range_source_lineage(fixture.range().id)
             .unwrap();
         assert_eq!(actual.base_range().epoch, physical_epoch);
-        assert_eq!(actual.native_write_range().epoch, physical_epoch + 1);
+        assert_eq!(
+            actual.native_write_range().unwrap().epoch,
+            physical_epoch + 1
+        );
         assert_eq!(actual.range_index(), 1);
         assert_eq!(
             actual.logical_history_sha256(),
@@ -623,7 +626,7 @@ mod tests {
             .current_native_range_source_lineage(range_id)
             .unwrap();
         assert_eq!(lineage.base_range().epoch + 1, epoch);
-        assert_eq!(lineage.native_write_range().epoch, epoch);
+        assert_eq!(lineage.native_write_range().unwrap().epoch, epoch);
         assert_eq!(lineage.range_index(), 1);
         assert_eq!(lineage.logical_history_sha256(), history);
         let reopened_store = RangeWriteStore::open(
@@ -673,6 +676,7 @@ mod tests {
                 .current_native_range_source_lineage(fixture.range().id)
                 .unwrap()
                 .native_write_range()
+                .unwrap()
                 .epoch,
             fixture.range().epoch
         );
@@ -1297,6 +1301,7 @@ impl BicDb {
             .range_mutations
             .try_source_capture_read_pin(range.id, &frozen)?;
         let lineage = self.current_native_range_source_lineage(range.id)?;
+        lineage.require_native_serving_role_floor(&role)?;
         let base = lineage.base_range();
         let members = role
             .member_credentials()

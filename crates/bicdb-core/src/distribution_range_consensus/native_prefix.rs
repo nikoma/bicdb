@@ -98,6 +98,17 @@ fn same_range_configuration(left: &RangeDescriptor, right: &RangeDescriptor) -> 
         && replicas(left) == replicas(right)
 }
 
+#[cfg(test)]
+pub(crate) fn test_validate_ordinary_native_intent(
+    command: &RangeWriteCommand,
+    range: &RangeDescriptor,
+    topology: &ClusterTopology,
+    lineage: &SourceRangeImageLineage,
+) -> Result<()> {
+    // A proposed client command, NOT an ACK/certificate or a numeric floor.
+    NativeRangeCommandIntent::plan(command, range, topology)?.validate_native_base(lineage)
+}
+
 impl NativeRangeCommandIntent {
     /// Derive exact original command identity only from an actual distinct
     /// current-session certificate quorum. This does not rebind the physical
@@ -337,7 +348,7 @@ impl NativeRangeCommandIntent {
                 if self.historical_recovery {
                     lineage.base_range()
                 } else {
-                    lineage.native_write_range()
+                    lineage.native_write_range()?
                 },
                 &self.expected_base,
             )

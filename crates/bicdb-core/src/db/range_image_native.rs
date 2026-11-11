@@ -14,8 +14,8 @@ mod history;
 mod history_stage;
 mod installed_anchor;
 mod serving_configuration;
-pub(crate) use serving_configuration::NativeRecoveredServingReceipt;
 use serving_configuration::NativeRecoveredServingConfiguration;
+pub(crate) use serving_configuration::NativeRecoveredServingReceipt;
 #[cfg(test)]
 pub(crate) mod rf3_fixture;
 use certified_prefix::NativeCertifiedRangePrefix;
@@ -426,8 +426,14 @@ impl SourceRangeImageLineage {
     }
     /// The physical capture anchor stays immutable. New ordinary writes use
     /// the independently native-WAL-persisted recovered serving configuration.
-    pub(crate) fn native_write_range(&self) -> &RangeDescriptor {
-        self.serving.as_ref().map_or(&self.base.range, |serving| serving.range())
+    pub(crate) fn native_write_range(&self) -> Result<&RangeDescriptor> {
+        match &self.serving {
+            Some(serving) if serving.binds_current_base(&self.base) => Ok(serving.range()),
+            Some(_) => Err(invalid(
+                "historical native serving floor has no current physical-base grant",
+            )),
+            None => Ok(&self.base.range),
+        }
     }
     pub(crate) fn base_range_index(&self) -> u64 {
         self.base.range_index
@@ -1073,7 +1079,8 @@ impl BicDb {
                     .is_some()
                 {
                     let base = NativeRangeBaseBinding::genesis(&receipt);
-                    let serving = database.read_native_recovered_serving_configuration(&birth, &base, None)?;
+                    let serving = database
+                        .read_native_recovered_serving_configuration(&birth, &base, None)?;
                     let lineage = SourceRangeImageLineage {
                         birth,
                         base,
@@ -1233,7 +1240,8 @@ impl BicDb {
             .range_mutations
             .validate_quiescent_frozen(range.id, frozen)?;
         let base = NativeRangeBaseBinding::genesis(&receipt);
-        let serving = database.read_native_recovered_serving_configuration(&authority.birth, &base, None)?;
+        let serving =
+            database.read_native_recovered_serving_configuration(&authority.birth, &base, None)?;
         let lineage = SourceRangeImageLineage {
             birth: authority.birth.clone(),
             base,

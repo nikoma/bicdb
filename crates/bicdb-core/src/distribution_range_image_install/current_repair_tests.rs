@@ -998,3 +998,551 @@ fn actual_adopted_image_compacted_marker_conflict_refuses_native_preparation() {
         .is_err());
     eprintln!("RF3_IMAGE_MARKER_CORRUPTION_REFUSAL {error}");
 }
+
+impl CurrentRepairFixture {
+    fn prepare_actual_current_image(
+        &mut self,
+        attempt: Uuid,
+    ) -> crate::distribution_range_consensus::PreparedNativeRecoveryReady {
+        let install = self.begin(attempt);
+        let verified = self.materialize(install);
+        let role = self.role();
+        let adopted = self
+            .service
+            .lock()
+            .adopt_native_range_image_catalogue(
+                verified,
+                &NativeImageInstallRole::CurrentVoterRepair(&role),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        let role = self.role();
+        let (freeze, finalization) = self
+            .service
+            .lock()
+            .finalize_native_range_image_catalogue(
+                adopted,
+                &NativeImageInstallRole::CurrentVoterRepair(&role),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        let NativeImageInstallFreeze::Recovery(lease) = freeze else {
+            panic!("actual Runtime lease required");
+        };
+        let role = self.role();
+        let image = lease
+            .return_after_catalogue_adoption(
+                finalization,
+                &NativeImageInstallRole::CurrentVoterRepair(&role),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        let frozen = self.runtimes[&node("n1")]
+            .source_capture_freeze(&self.scope)
+            .unwrap();
+        let role = self.role();
+        self.service
+            .lock()
+            .prepare_finalized_native_recovery_image(
+                image,
+                role,
+                frozen,
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap()
+    }
+
+    fn recapture_actual_source_under_new_nonce(&mut self, nonce: Uuid) {
+        let parent = CancellationToken::uncancelable();
+        let role = Self::fresh_role_for(
+            &self.providers,
+            &self.initiator,
+            &node("n0"),
+            &self.range,
+            nonce,
+        );
+        let mut round = RecoveryFenceQuorumRound::begin(role, &parent).unwrap();
+        let scope = round.scope().clone();
+        assert_ne!(scope.recovery_nonce, self.scope.recovery_nonce);
+        assert_eq!(scope.range_epoch, self.scope.range_epoch);
+        for id in [node("n0"), node("n1"), node("n2")] {
+            let observed = self.runtimes[&id]
+                .fence_epoch(
+                    &self.initiator,
+                    &RecoveryEpochFenceRequest {
+                        scope: scope.clone(),
+                        budget_ms: 5000,
+                    },
+                    &parent,
+                )
+                .unwrap();
+            if id != node("n2") {
+                round.record(observed).unwrap();
+            }
+        }
+        let authority = Arc::new(round.finish().unwrap());
+        let frozen = self.runtimes[&node("n0")]
+            .source_capture_freeze(&scope)
+            .unwrap();
+        let source_service = &self.origin.services[&node("n0")];
+        let ready = source_service
+            .lock()
+            .attest_native_recovery_ready(
+                Self::fresh_role_for(
+                    &self.providers,
+                    &self.initiator,
+                    &node("n0"),
+                    &self.range,
+                    nonce,
+                ),
+                Arc::clone(&frozen),
+                &parent,
+            )
+            .unwrap();
+        assert_eq!(ready.range_index(), 1);
+        let mut history = source_service
+            .lock()
+            .begin_native_recovery_source_history(authority, &ready, node("n1"))
+            .unwrap();
+        let mut done = false;
+        for _ in 0..16 {
+            if source_service
+                .lock()
+                .advance_native_recovery_source_history(&mut history, &ready, &parent)
+                .unwrap()
+            {
+                done = true;
+                break;
+            }
+        }
+        assert!(done);
+        let cut = source_service
+            .lock()
+            .finish_native_recovery_source_history(history, &ready)
+            .unwrap();
+        let source = Arc::clone(&self.origin.databases[&node("n0")]);
+        let lineage = source
+            .read()
+            .current_native_range_source_lineage(self.range.id)
+            .unwrap();
+        drop(ready);
+        self.capture = Some(
+            RangeImageCapture::begin(
+                source,
+                cut,
+                frozen,
+                lineage,
+                Duration::from_secs(30),
+                &parent,
+            )
+            .unwrap(),
+        );
+        self.scope = scope;
+    }
+}
+
+#[test]
+fn actual_prepared_serving_record_survives_a_second_current_voter_image_attempt() {
+    use crate::distribution_range_recovery::{
+        ClosedNativeReadyQuorumRound, NativeReadyObservation, NativeReadyRequest,
+    };
+    let mut fixture = CurrentRepairFixture::new();
+    // Keep all actual native/catalogue roots even if a healthy precondition
+    // fails before the second-attempt boundary. The source methods own their
+    // existing concrete paths; replacing this cleanup owner changes no DB.
+    let retained = std::mem::replace(&mut fixture.origin.root, tempfile::tempdir().unwrap()).keep();
+    eprintln!(
+        "ACTUAL_SERVING_IMAGE_WITNESS_RETAINED_ROOT {}",
+        retained.display()
+    );
+    std::fs::write(
+        retained.join("serving-image-witness-start.json"),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "scope":fixture.scope,"target_birth_spec":fixture.origin.specs[&node("n1")],
+            "target_uid":fixture.original_target_uid,"source_b":fixture.source_b,
+            "target_b_before":fixture.target_b_before,"physical_qualification":false,
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let target = Arc::clone(&fixture.origin.databases[&node("n1")]);
+    let attempt_a = Uuid::now_v7();
+    let target_prepared = fixture.prepare_actual_current_image(attempt_a);
+    let source_frozen = fixture.runtimes[&node("n0")]
+        .source_capture_freeze(&fixture.scope)
+        .unwrap();
+    let source_role = CurrentRepairFixture::fresh_role_for(
+        &fixture.providers,
+        &fixture.initiator,
+        &node("n0"),
+        &fixture.range,
+        fixture.scope.recovery_nonce,
+    );
+    let source_prepared = fixture.origin.services[&node("n0")]
+        .lock()
+        .test_prepare_existing_native_source(
+            source_role,
+            Arc::clone(&source_frozen),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    assert_eq!(source_prepared.range_index(), 1);
+    assert_eq!(
+        source_prepared.logical_history_sha256(),
+        target_prepared.logical_history_sha256()
+    );
+    // This closed quorum is for the ACTUAL target recipient. The initiating
+    // data leader remains n0; acquiring target-local metadata evidence does
+    // not substitute a caller-selected subject or manufacture voter replies.
+    let fresh = CurrentRepairFixture::fresh_role_for(
+        &fixture.providers,
+        &fixture.initiator,
+        &node("n1"),
+        &fixture.range,
+        fixture.scope.recovery_nonce,
+    );
+    let request = NativeReadyRequest {
+        scope: RecoveryFenceScope::from_role(&fresh).unwrap(),
+        challenge: Uuid::now_v7(),
+        budget_ms: 5000,
+    };
+    let mut round =
+        ClosedNativeReadyQuorumRound::begin(fresh, &CancellationToken::uncancelable()).unwrap();
+    for (id, prepared) in [
+        (node("n0"), &source_prepared),
+        (node("n1"), &target_prepared),
+    ] {
+        let role = CurrentRepairFixture::fresh_role_for(
+            &fixture.providers,
+            &fixture.initiator,
+            &id,
+            &fixture.range,
+            fixture.scope.recovery_nonce,
+        );
+        let actual = fixture.origin.services[&id]
+            .lock()
+            .test_project_actual_prepared_native(prepared, &role, &request)
+            .unwrap();
+        let observation = NativeReadyObservation::from_local(
+            actual,
+            fixture.providers[&id].local_participant(),
+            &request,
+            role.deadline(),
+        )
+        .unwrap();
+        round.record(observation).unwrap();
+    }
+    let closed = round.finish().unwrap();
+    assert_eq!(closed.range_index(), 1);
+    let fresh = fixture.role();
+    let serving = fixture
+        .service
+        .lock()
+        .test_persist_actual_prepared_serving(&target_prepared, &closed, &fresh)
+        .unwrap();
+    serving.require_current(&target.read()).unwrap();
+    let serving_a = target
+        .read()
+        .test_native_serving_record_json(fixture.range.id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(serving_a["checksum_sha256"], serving.checksum_sha256());
+    assert_eq!(serving_a["activation_index"], 1);
+    assert_eq!(serving_a["range"]["epoch"], fixture.range.epoch);
+    let native_a = target_prepared.native_receipt_sha256().to_string();
+    let history = target_prepared.logical_history_sha256().to_string();
+    let target_uid = fixture.original_target_uid;
+    // The first record is genuine durable native Serving metadata while the
+    // catalogue is STILL NativePrepared/fenced. No activation or post-recovery
+    // ACK is invented. End every old pin before a new actual recovery nonce.
+    drop(serving);
+    drop(closed);
+    drop(source_prepared);
+    drop(target_prepared);
+    drop(source_frozen);
+    let old_nonce = fixture.scope.recovery_nonce;
+    fixture.recapture_actual_source_under_new_nonce(Uuid::now_v7());
+    assert_ne!(fixture.scope.recovery_nonce, old_nonce);
+    assert_eq!(
+        target
+            .read()
+            .test_native_serving_record_json(fixture.range.id)
+            .unwrap()
+            .unwrap(),
+        serving_a
+    );
+    let attempt_b = Uuid::now_v7();
+    // On a baseline failure retain the actual stopped native/catalogue roots
+    // after unwinding. On success remove them explicitly. This is local test
+    // custody, not a crash/power-loss or physical qualification claim.
+    let before: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(target.read().data_path().join(DEFAULT_RANGE_WRITE_LOG)).unwrap(),
+    )
+    .unwrap();
+    let stage = serde_json::json!({"scope":"ACTUAL_LOCAL_INTERRUPTED_COMPLETION_THEN_SECOND_REPAIR","attempt_a":attempt_a,"attempt_b":attempt_b,"old_nonce":old_nonce,"new_scope":fixture.scope,"serving_a":serving_a,"native_receipt_a":native_a,"logical_history_sha256":history,"target_uid":target_uid,"catalogue_before_b":before,"physical_qualification":false});
+    {
+        use std::io::Write;
+        let mut file =
+            std::fs::File::create(retained.join("serving-image-witness-before-b.json")).unwrap();
+        file.write_all(&serde_json::to_vec_pretty(&stage).unwrap())
+            .unwrap();
+        file.sync_all().unwrap();
+        std::fs::File::open(&retained).unwrap().sync_all().unwrap();
+    }
+    eprintln!(
+        "ACTUAL_SERVING_IMAGE_WITNESS_RETAINED_ROOT {}",
+        retained.display()
+    );
+    let install = fixture.begin(attempt_b);
+    let verified = fixture.materialize(install);
+    assert_eq!(verified.base().range_index(), 1);
+    assert_eq!(verified.base().logical_history_sha256(), history);
+    assert_ne!(verified.base().native_receipt_sha256(), native_a);
+    assert_eq!(
+        target
+            .read()
+            .test_native_serving_record_json(fixture.range.id)
+            .unwrap()
+            .unwrap(),
+        serving_a
+    );
+    let role = fixture.role();
+    let adopted = fixture
+        .service
+        .lock()
+        .adopt_native_range_image_catalogue(
+            verified,
+            &NativeImageInstallRole::CurrentVoterRepair(&role),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    let role = fixture.role();
+    let (freeze, finalization) = fixture
+        .service
+        .lock()
+        .finalize_native_range_image_catalogue(
+            adopted,
+            &NativeImageInstallRole::CurrentVoterRepair(&role),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    let NativeImageInstallFreeze::Recovery(lease) = freeze else {
+        panic!("actual Runtime lease required")
+    };
+    let role = fixture.role();
+    let image = lease
+        .return_after_catalogue_adoption(
+            finalization,
+            &NativeImageInstallRole::CurrentVoterRepair(&role),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    let frozen = fixture.runtimes[&node("n1")]
+        .source_capture_freeze(&fixture.scope)
+        .unwrap();
+    let role = fixture.role();
+    let second = fixture
+        .service
+        .lock()
+        .prepare_finalized_native_recovery_image(
+            image,
+            role,
+            frozen,
+            &CancellationToken::uncancelable(),
+        );
+    let after: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(target.read().data_path().join(DEFAULT_RANGE_WRITE_LOG)).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(retained.join("serving-image-witness-after-b.json"),serde_json::to_vec_pretty(&serde_json::json!({"catalogue":after,"serving_record":target.read().test_native_serving_record_json(fixture.range.id).unwrap(),"result":second.as_ref().map(|prepared|prepared.range_index()).map_err(|error|error.to_string())})).unwrap()).unwrap();
+    std::fs::File::open(retained.join("serving-image-witness-after-b.json"))
+        .unwrap()
+        .sync_all()
+        .unwrap();
+    std::fs::File::open(&retained).unwrap().sync_all().unwrap();
+    assert_eq!(
+        target
+            .read()
+            .test_native_serving_record_json(fixture.range.id)
+            .unwrap()
+            .unwrap(),
+        serving_a,
+        "the prior durable native serving record/floor must remain unchanged",
+    );
+    assert!(second.is_ok(),"a new actual compatible image must prepare without deleting the prior durable serving epoch fence: {:?}",second.as_ref().err());
+    let prepared = second.unwrap();
+    assert_eq!(prepared.range_index(), 1);
+    assert_eq!(prepared.logical_history_sha256(), history);
+    assert_eq!(
+        target.read().local_namespace_identity("items").unwrap(),
+        Some(target_uid)
+    );
+    let retained_serving = target
+        .read()
+        .test_native_serving_record_json(fixture.range.id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        retained_serving, serving_a,
+        "physical repair may not delete/relabel the historical epoch fence"
+    );
+    let proposed = crate::distribution_range_consensus::native_ready_test_command(
+        fixture.scope.cluster_id.clone(),
+        &fixture.range,
+        2,
+        node("n0"),
+        &crate::CommitAdmissionIntent {
+            transaction_id: 999_003,
+            mutations: vec![crate::CommitAdmissionMutation {
+                collection: "items".into(),
+                record_id: fixture.selected_key.clone(),
+                record: Some(crate::Record::new(&fixture.selected_key)),
+            }],
+        },
+    )
+    .unwrap();
+    let topology = fixture.origin.topology.read().clone();
+    let physical_only = target
+        .read()
+        .current_native_range_source_lineage(fixture.range.id)
+        .unwrap();
+    assert!(
+        physical_only.native_write_range().is_err(),
+        "historical A cannot become B's current grant"
+    );
+    let refused = crate::distribution_range_consensus::test_validate_ordinary_native_intent(
+        &proposed,
+        &fixture.range,
+        &topology,
+        &physical_only,
+    )
+    .unwrap_err();
+    assert!(refused
+        .to_string()
+        .contains("no current physical-base grant"));
+    drop(physical_only);
+
+    // Obtain a NEW genuine closed native-ready quorum for nonce B. Only that
+    // proof can rebind a serving grant to actual base B; readiness alone cannot.
+    let frozen_source_b = fixture.runtimes[&node("n0")]
+        .source_capture_freeze(&fixture.scope)
+        .unwrap();
+    let role_source_b = CurrentRepairFixture::fresh_role_for(
+        &fixture.providers,
+        &fixture.initiator,
+        &node("n0"),
+        &fixture.range,
+        fixture.scope.recovery_nonce,
+    );
+    let source_prepared_b = fixture.origin.services[&node("n0")]
+        .lock()
+        .test_prepare_existing_native_source(
+            role_source_b,
+            Arc::clone(&frozen_source_b),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    let collector = fixture.role();
+    let request_b = NativeReadyRequest {
+        scope: RecoveryFenceScope::from_role(&collector).unwrap(),
+        challenge: Uuid::now_v7(),
+        budget_ms: 5000,
+    };
+    let mut round_b =
+        ClosedNativeReadyQuorumRound::begin(collector, &CancellationToken::uncancelable()).unwrap();
+    for (id, local) in [(node("n0"), &source_prepared_b), (node("n1"), &prepared)] {
+        let fresh = CurrentRepairFixture::fresh_role_for(
+            &fixture.providers,
+            &fixture.initiator,
+            &id,
+            &fixture.range,
+            fixture.scope.recovery_nonce,
+        );
+        let evidence = fixture.origin.services[&id]
+            .lock()
+            .test_project_actual_prepared_native(local, &fresh, &request_b)
+            .unwrap();
+        round_b
+            .record(
+                NativeReadyObservation::from_local(
+                    evidence,
+                    fixture.providers[&id].local_participant(),
+                    &request_b,
+                    fresh.deadline(),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+    }
+    let closed_b = round_b.finish().unwrap();
+    let fresh = fixture.role();
+    let grant_b = fixture
+        .service
+        .lock()
+        .test_persist_actual_prepared_serving(&prepared, &closed_b, &fresh)
+        .unwrap();
+    grant_b.require_current(&target.read()).unwrap();
+    let fresh = fixture.role();
+    let repeated = fixture
+        .service
+        .lock()
+        .test_persist_actual_prepared_serving(&prepared, &closed_b, &fresh)
+        .unwrap();
+    assert_eq!(
+        grant_b.checksum_sha256(),
+        repeated.checksum_sha256(),
+        "same actual grant is idempotent"
+    );
+    assert_eq!(
+        target
+            .read()
+            .test_native_serving_history_json(
+                fixture.range.id,
+                serving_a["checksum_sha256"].as_str().unwrap()
+            )
+            .unwrap(),
+        Some(serving_a.clone())
+    );
+    let current = target
+        .read()
+        .test_native_serving_record_json(fixture.range.id)
+        .unwrap()
+        .unwrap();
+    assert_ne!(
+        current["physical_base_sha256"],
+        serving_a["physical_base_sha256"]
+    );
+    assert_eq!(current["range"]["epoch"], serving_a["range"]["epoch"]);
+    assert_eq!(current["activation_index"], 1);
+    let granted = target
+        .read()
+        .current_native_range_source_lineage(fixture.range.id)
+        .unwrap();
+    crate::distribution_range_consensus::test_validate_ordinary_native_intent(
+        &proposed,
+        &fixture.range,
+        &topology,
+        &granted,
+    )
+    .unwrap();
+    // Passing ONE intent prerequisite is not an activated user-write grant.
+    assert!(fixture
+        .service
+        .lock()
+        .prepare_range_write(&fixture.range, &node("n0"), proposed)
+        .is_err());
+    eprintln!(
+        "SERVING_FLOOR_REPAIR_GREEN {}",
+        serde_json::json!({"range_index":1,"epoch_floor":fixture.range.epoch,"history":history,"old_record_preserved":true,"ordinary_intent_refused_before_new_grant":true,"grant_b_idempotent":true,"actual_user_write_still_refused":true,"activation_proven":false})
+    );
+    drop(granted);
+    drop(repeated);
+    drop(grant_b);
+    drop(closed_b);
+    drop(source_prepared_b);
+    drop(frozen_source_b);
+    drop(prepared);
+    drop(target);
+    drop(fixture);
+    std::fs::remove_dir_all(retained).unwrap();
+}

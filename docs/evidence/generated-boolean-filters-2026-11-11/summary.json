@@ -1,0 +1,37 @@
+{
+  "status": "implementation_focused_passed_final_delivery_pending",
+  "implementation_source": "da76993d79cecefd1792e3563f5e68fd46692662",
+  "negative_source": "38fb1da166112387c50ccb0ac67165adfc395e7a",
+  "scope": "Generated GridTable Boolean filter parsing only. Original UI400-order workload did not complete; these focused results do not qualify that application run.",
+  "observed_application_failure": {
+    "source": "c173fa783fb8323fe02c41fb7eda96f130bc29c3",
+    "version": "1.0.460-beta",
+    "sqlstate": "54001",
+    "shape": "SELECT COUNT(*) ... WHERE (((prior_filter) OR (new_id))) ...",
+    "saved_orders_per_active_worker_before_failure": 20
+  },
+  "controls": {
+    "negative": "Corrected tests-only source compiled; generated filter and truth/NULL tests failed with original depth40 refusal, nested CAST rejection passed. Earlier compile-only attempts are not behavioral negative controls.",
+    "native": "PostgreSQL16 original generated SQL passed21,100,1000 appended IDs without normalization.",
+    "positive": "Unit grammar preservation and generated filter execution/inference in both stores, 3VL/mixed operators, CAST rejection, existing parser_tree_depth and rls_boolean_depth passed."
+  },
+  "algorithm": {
+    "ordinary_input": "unchanged when the original depth guard accepts it",
+    "over_depth": "iterative token arena balances associative AND/OR groups while retaining leaf order and mixed-operator boundaries",
+    "guard": "original nesting limit must accept normalized SQL; non-Boolean deep grammar remains refused",
+    "allocation_bound": "raw normalization input at most8 times expression-node limit in bytes, token arena at most4 times expression-node limit in tokens"
+  },
+  "delivery": {
+    "candidate_version": "1.0.463-beta",
+    "stacked_after": [
+      "snapshot462"
+    ],
+    "final_versioned_candidate_tested_separately": false,
+    "broad_ci": "pending",
+    "merged": false,
+    "binary_built": false,
+    "published_release": false,
+    "deployed": false,
+    "batch": "Parser-depth and NUL diagnostic-framing frontend fixes share one versioned delivery batch; the superseded private464 focused run had already started and is preserved as source-scoped evidence."
+  }
+}

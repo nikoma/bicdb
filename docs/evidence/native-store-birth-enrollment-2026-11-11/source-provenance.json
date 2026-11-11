@@ -1,0 +1,68 @@
+{
+  "documentation_base": "f3a063902d2fe316c29264fe20549c2fdd270242",
+  "primary_revision": "ee5cb1880a946b97816a15aa4e0cb12f7d03778d",
+  "public_patch_base": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "reconstruction_prefixes": [
+    "Cargo.toml",
+    "Cargo.lock",
+    ".cargo",
+    "crates",
+    "examples/extensions"
+  ],
+  "sources": [
+    {
+      "files": 1372,
+      "patch_base": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+      "patch_path": "sources/ee5cb188/engine.patch.gz",
+      "patch_uncompressed_sha256": "30d1cede82b3bebb2859e881fced41094e8b5c75f16cd4239ac702d6898a5887",
+      "revision": "ee5cb1880a946b97816a15aa4e0cb12f7d03778d",
+      "source_files_path": "sources/ee5cb188/source-files.json",
+      "source_files_sha256": "e40f71a37f245f66fc99d45f3657198b4dbcf303a0dfd6acadaefcfc940ac078"
+    },
+    {
+      "files": 1372,
+      "patch_base": "ee5cb1880a946b97816a15aa4e0cb12f7d03778d",
+      "patch_path": "sources/06da7179/engine.patch.gz",
+      "patch_uncompressed_sha256": "6a78802868cd5564347a7e4ebc23d8a1e496a9754e766e0c0eadd9e98877030c",
+      "revision": "06da717949a062319646be72d14b31273321540a",
+      "source_files_path": "sources/06da7179/source-files.json",
+      "source_files_sha256": "4d0cf464f8c85eb95a46779b143e31206a3ff91d4163c1f3af4d653ee053f5e5"
+    },
+    {
+      "files": 1372,
+      "patch_base": "ee5cb1880a946b97816a15aa4e0cb12f7d03778d",
+      "patch_path": "sources/256d7978/engine.patch.gz",
+      "patch_uncompressed_sha256": "5ebb338694d2f4f5c479edbbe0fdf645319fb3b8a2614d4de1871e312893723a",
+      "revision": "256d797860b740884ffea082a6b77f83aaf036b7",
+      "source_files_path": "sources/256d7978/source-files.json",
+      "source_files_sha256": "30bb6018d4c9cc034ffaf8ffeda9616e7045a53c5241d3580d76e6b00da9e248"
+    },
+    {
+      "files": 1372,
+      "patch_base": "ee5cb1880a946b97816a15aa4e0cb12f7d03778d",
+      "patch_path": "sources/6641e13b/engine.patch.gz",
+      "patch_uncompressed_sha256": "dd3f8503b22add723fb231bb2db525cb27c299ce7444db2a5ac81c612a110013",
+      "revision": "6641e13bc2a1f95773cc416929a1977b91340ffa",
+      "source_files_path": "sources/6641e13b/source-files.json",
+      "source_files_sha256": "30da5adb6fbc645211038f20c17567ae2f0746b7c1625988a916acb1dfdb352e"
+    },
+    {
+      "files": 1372,
+      "patch_base": "ee5cb1880a946b97816a15aa4e0cb12f7d03778d",
+      "patch_path": "sources/8a021a49/engine.patch.gz",
+      "patch_uncompressed_sha256": "2783b157a4cf3b060acd6a3426092157136bf7fc2f37711b6f9f7ff99989f39f",
+      "revision": "8a021a49c546d7d762650cf08c82a0c568a7c618",
+      "source_files_path": "sources/8a021a49/source-files.json",
+      "source_files_sha256": "88450eead0b1813305ec26c529fe0bfab5bbc5185e0cbf035111e68451c3bb78"
+    },
+    {
+      "files": 1372,
+      "patch_base": "ee5cb1880a946b97816a15aa4e0cb12f7d03778d",
+      "patch_path": "sources/0c687a96/engine.patch.gz",
+      "patch_uncompressed_sha256": "4144d6a42d839ffb2631648835e9f7148c73fe8094212e01a0a4d07fd95f4bb0",
+      "revision": "0c687a9692667edbabf7b78b87118d839b4d26ce",
+      "source_files_path": "sources/0c687a96/source-files.json",
+      "source_files_sha256": "d4a90fdf7dbfc9dccb990ac4c9c24bdbc34fcccc0f89284618154cea884085b9"
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "observed_at_utc": "2026-11-11T02:36:39Z",
+  "runtime_source": "c173fa783fb8323fe02c41fb7eda96f130bc29c3",
+  "status": "not_executed",
+  "azure_account_enabled": true,
+  "existing_vm_count": 0,
+  "region": "westeurope",
+  "sku_restrictions": {
+    "Standard_D4s_v5": {
+      "reason": "NotAvailableForSubscription",
+      "zones": [
+        "1",
+        "3"
+      ]
+    },
+    "Standard_D4as_v5": {
+      "reason": "NotAvailableForSubscription",
+      "zones": [
+        "1",
+        "3"
+      ]
+    }
+  },
+  "quota_query": "returned_no_rows_not_verified",
+  "resources_created": 0,
+  "benchmark_runs": 0,
+  "prices": [
+    {
+      "sku": "Standard_D4s_v5",
+      "retail_price_usd": 0.23,
+      "unit": "1 Hour",
+      "product": "Virtual Machines Dsv5 Series",
+      "source": "https://prices.azure.com/api/retail/prices?%24filter=serviceName+eq+%27Virtual+Machines%27+and+armRegionName+eq+%27westeurope%27+and+armSkuName+eq+%27Standard_D4s_v5%27+and+priceType+eq+%27Consumption%27",
+      "effective_start": "2021-11-01T00:00:00Z"
+    },
+    {
+      "sku": "Standard_D2s_v5",
+      "retail_price_usd": 0.115,
+      "unit": "1 Hour",
+      "product": "Virtual Machines Dsv5 Series",
+      "source": "https://prices.azure.com/api/retail/prices?%24filter=serviceName+eq+%27Virtual+Machines%27+and+armRegionName+eq+%27westeurope%27+and+armSkuName+eq+%27Standard_D2s_v5%27+and+priceType+eq+%27Consumption%27",
+      "effective_start": "2021-11-01T00:00:00Z"
+    },
+    {
+      "sku": "P6 LRS",
+      "retail_price_usd": 11.2272,
+      "separate_mount_meter_usd": 0.611,
+      "unit": "1/Month",
+      "product": "Premium SSD Managed Disks",
+      "source": "https://prices.azure.com/api/retail/prices?%24filter=serviceName+eq+%27Storage%27+and+armRegionName+eq+%27westeurope%27+and+productName+eq+%27Premium+SSD+Managed+Disks%27+and+skuName+eq+%27P6+LRS%27+and+priceType+eq+%27Consumption%27",
+      "effective_start": "2018-05-01T00:00:00Z"
+    },
+    {
+      "sku": "P10 LRS",
+      "retail_price_usd": 21.68,
+      "separate_mount_meter_usd": 1.183,
+      "unit": "1/Month",
+      "product": "Premium SSD Managed Disks",
+      "source": "https://prices.azure.com/api/retail/prices?%24filter=serviceName+eq+%27Storage%27+and+armRegionName+eq+%27westeurope%27+and+productName+eq+%27Premium+SSD+Managed+Disks%27+and+skuName+eq+%27P10+LRS%27+and+priceType+eq+%27Consumption%27",
+      "effective_start": "2018-05-01T00:00:00Z"
+    }
+  ],
+  "pricing_notes": [
+    "Unauthenticated public retail API, USD Linux consumption, excluding Windows/Spot/Low Priority.",
+    "Monthly disk normalization uses 730 hours solely for a planning estimate.",
+    "Not an account quote; network, public IP, taxes, dedicated-host isolation and other services excluded."
+  ]
+}

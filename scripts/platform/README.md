@@ -2,7 +2,7 @@
 
 `scale-cluster.py` uses the public CLI and the immutable cluster-event data path.
 It bootstraps RF=3 with fsync enabled, joins nodes while append/read traffic is
-running, waits for placement, measures steady traffic at 3, 5 and 9 nodes,
+running, waits for placement, measures steady traffic at selected node counts,
 kills one of **its own** server processes, restarts it, and rechecks every
 acknowledged write from every phase after recovery.
 
@@ -55,7 +55,30 @@ by promotion, bounded range movement and leader recovery. The declared
 capacity is 1 TiB per node; this short run does not measure storage capacity.
 Adjust the workload duration upward if growth outlasts the traffic window.
 
-`--sizes 3` or `--sizes 3,5` permits a smaller experiment. A useful qualification
+`--sizes 4,5` runs a four-node baseline and admits exactly one new node while
+traffic runs. Historical `--sizes 3`, `--sizes 3,5` and `--sizes 3,5,9` remain
+supported; all sizes must be an increasing selection of 3,4,5,9. Supply only
+the selected maximum number of hosts. For example:
+
+```sh
+python3 scripts/platform/scale-cluster.py --inventory /path/to/five-hosts.json \
+  --binary /path/to/immutable/bicdb --build-label release \
+  --source-commit FULL_SOURCE_COMMIT --output /path/to/new-four-to-five-results \
+  --sizes 4,5 --ranges 64 --seconds 900 --failure-seconds 120 \
+  --concurrency 32 --max-operations 1000000
+```
+
+This is a runnable **event-path** experiment, not the complete physical
+qualification plan. `--require-independent-qualification` fails closed before
+accessing a binary or host; reports always state `qualification_status=not_qualified`. The workload and its end-of-phase fsynced ledger run on
+the first data node; the controller copies that ledger after each phase. It
+does not fsync each acknowledgment on an independent machine before proceeding,
+preload an 8 GiB corpus, target every relocation failure boundary, or perform
+the unchanged-SQL acceptance case. Those require a separate client/fault driver.
+See the [isolated Azure execution plan](../../docs/scale-out-experiment-2026-11-11.md)
+for concrete infrastructure, current blockers and evidence requirements.
+
+A useful qualification
 run uses a release build, repeated trials, substantially more data than this
 default smoke workload, and machine/storage/network envelopes appropriate to
 the intended deployment. This tool does not certify a multi-terabyte profile,
@@ -90,6 +113,12 @@ successful-operation p50/p95/p99/max latency, failed-operation counts and error
 samples. Resource artifacts contain `/proc` CPU, RSS and physical I/O counters;
 the report summarizes per-node peak RSS, sampled CPU percentage and I/O deltas.
 Resource CPU percentage can exceed 100% for a multi-core process.
+Reports state the client/ledger placement and retain
+`physical_failure_domains_verified=false`; SSH machine-ID checks do not prove
+physical separation. A timestamped timeline records join registration, server
+launch, traffic windows, capacity convergence, kill request/return and restart.
+Kill return is not proof of the service's recovery time. Report checkpoints
+are serialized between worker threads and atomically replaced after file fsync.
 `--rpc-timeout-ms` sets the measured client's per-call I/O timeout (100–5000 ms,
 default 1000). The emitted report records it. A heavily loaded shared-host debug
 run may need 5000 ms; keep failed operations visible and do not interpret that

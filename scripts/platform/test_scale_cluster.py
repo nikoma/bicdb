@@ -2,6 +2,8 @@ import importlib.util
 from pathlib import Path
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 import uuid
@@ -12,6 +14,33 @@ spec.loader.exec_module(scale)
 
 
 class HarnessContracts(unittest.TestCase):
+    def test_four_to_five_and_historical_growth_profiles_are_supported(self):
+        self.assertEqual(scale.parse_sizes('4,5'), [4, 5])
+        self.assertEqual(scale.parse_sizes('3,5,9'), [3, 5, 9])
+        self.assertEqual(scale.parse_sizes('3,4,5,9'), [3, 4, 5, 9])
+        for invalid in ('', '4,4', '5,4', '2,4', '4,6', '4,five', '4,'):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                scale.parse_sizes(invalid)
+
+    def test_four_to_five_cli_reaches_workload_validation_without_starting_nodes(self):
+        result = subprocess.run([sys.executable, str(Path(scale.__file__)), '--local',
+                                 '--binary', '/does/not/exist', '--output', '/does/not/exist',
+                                 '--sizes', '4,5', '--seconds', '0'],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('invalid workload bounds', result.stderr)
+        self.assertNotIn('sizes must be', result.stderr)
+
+    def test_independent_qualification_request_refuses_before_accessing_hosts_or_binary(self):
+        result = subprocess.run([sys.executable, str(Path(scale.__file__)), '--local',
+                                 '--binary', '/does/not/exist', '--output', '/does/not/exist',
+                                 '--sizes', '4,5', '--require-independent-qualification'],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('independent qualification unavailable', result.stderr)
+        self.assertIn('external per-acknowledgment durability', result.stderr)
+        self.assertNotIn('Traceback', result.stderr)
+
     def test_remote_inventory_rejects_duplicate_addresses_and_option_injection(self):
         with self.assertRaises(ValueError):
             scale.validate_inventory([dict(ssh='-oProxyCommand=anything', address='10.0.0.1:9444')], 1)

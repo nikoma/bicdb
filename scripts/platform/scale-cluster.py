@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise real event traffic during 3 -> 5 -> 9 node growth and failure.
+"""Exercise event traffic during node growth (including 4 -> 5) and failure.
 
 No cloud provisioning or system-wide process management. Remote mode uses
 existing SSH hosts, verifies distinct machine IDs and pins the supplied binary.
@@ -19,6 +19,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import uuid
 
@@ -150,6 +151,17 @@ def capacity_ready(status, count):
             and len({r['leader'] for r in topology['ranges'].values()}) == count)
 
 
+def parse_sizes(value):
+    """Keep growth bounded and preserve the supported historical profiles."""
+    try:
+        sizes = [int(size) for size in value.split(',')]
+    except ValueError as error:
+        raise ValueError('sizes must be an increasing selection of 3,4,5,9') from error
+    if sizes != sorted(set(sizes)) or any(size not in (3, 4, 5, 9) for size in sizes):
+        raise ValueError('sizes must be an increasing selection of 3,4,5,9')
+    return sizes
+
+
 def resource_summary(samples):
     nodes, previous = {}, {}
     for sample in samples:
@@ -220,13 +232,19 @@ def main():
     parser.add_argument('--timeout', type=int, default=300)
     parser.add_argument('--build-label', default='unspecified')
     parser.add_argument('--source-commit', help='source Git object used to build the supplied binary')
+    parser.add_argument('--require-independent-qualification', action='store_true',
+                        help='fail closed: this event harness does not yet supply independent qualification')
     args = parser.parse_args()
+    if args.require_independent_qualification:
+        parser.error('independent qualification unavailable: first-data-node client and end-of-phase ledger; '
+                     'external per-acknowledgment durability and relocation-phase fault injection are not implemented')
     if args.source_commit and not re.fullmatch(r'(?:[0-9a-f]{40}|[0-9a-f]{64})', args.source_commit):
         parser.error('source-commit must be a full lowercase Git object ID')
     failure_seconds = args.failure_seconds if args.failure_seconds is not None else args.seconds
-    sizes = [int(size) for size in args.sizes.split(',')]
-    if sizes != sorted(set(sizes)) or any(size not in [3, 5, 9] for size in sizes):
-        parser.error('sizes must be an increasing selection of 3,5,9')
+    try:
+        sizes = parse_sizes(args.sizes)
+    except ValueError as error:
+        parser.error(str(error))
     if not (5 <= args.seconds <= 3600 and 5 <= failure_seconds <= 3600 and 1 <= args.concurrency <= 256
             and 100 <= args.rpc_timeout_ms <= 5000
             and 1 <= args.max_operations <= 1000000 and max(sizes) <= args.ranges <= 1024
@@ -252,30 +270,53 @@ def main():
                   source_commit=args.source_commit,
                   workload='immutable_events_append_read', replication_factor=3, fsync=True,
                   ranges=args.ranges, machines=identities, results=[], complete=False,
+                  node_counts=sizes, timeline=[],
+                  client_placement='first_data_node',
+                  acknowledged_ledger_placement='first_data_node_copied_after_phase',
+                  physical_failure_domains_verified=False,
+                  qualification_status='not_qualified',
                   independent_user_adoption='not_measured', large_scale_certification=False)
     active, ledgers = [], []
-    def save(): (args.output / 'report.json').write_text(json.dumps(report, indent=2)+'\n')
+    save_lock = threading.Lock()
+    def save():
+        # Growth and workload threads both checkpoint evidence. Never expose a
+        # partial JSON report to an external collector or a concurrent reader.
+        with save_lock:
+            temporary = args.output / 'report.json.tmp'
+            with temporary.open('w') as output:
+                output.write(json.dumps(report, indent=2)+'\n')
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temporary, args.output / 'report.json')
     def record(name, value):
         (args.output / (name + '.json')).write_text(json.dumps(value, indent=2)+'\n')
+    def event(kind, **details):
+        report['timeline'].append(dict(unix_ms=int(time.time()*1000), kind=kind, **details))
+        save()
     def wait_ready(count):
         deadline = time.monotonic() + args.timeout
         while time.monotonic() < deadline:
             status = hosts[0].status()
             if capacity_ready(status, count):
                 record(f'topology-{count}-{time.time_ns()}', status)
+                event('capacity_converged', nodes=count)
                 time.sleep(2)  # Range leadership recovery follows topology publication.
                 print(f'{count}-node capacity converged', file=sys.stderr, flush=True)
                 return
             time.sleep(1)
         raise RuntimeError(f'{count}-node capacity did not converge before timeout')
     def add(host):
+        event('join_started', node=host.index)
         host.command('cluster', 'join', '--seed-node-id', 'n0', '--seed-address', hosts[0].address,
                      '--cluster-id', 'scale-' + run, '--node-id', f'n{host.index}', '--address', host.address,
                      '--node-root', host.db, '--capacity-bytes', str(1024**4), *host.tls)
+        event('join_registered', node=host.index)
         host.start(); active.append(host)
+        event('serve_started', node=host.index)
     def traffic(name, seconds=None):
         print(f'traffic phase: {name}', file=sys.stderr, flush=True)
         seconds = args.seconds if seconds is None else seconds
+        event('traffic_started', phase=name, seconds=seconds)
         ledger = hosts[0].root + f'/{name}-ledger.json'
         result = json.loads(hosts[0].command('cluster', 'events', 'workload', hosts[0].db,
                       '--namespace', 'scale-' + run, '--seconds', seconds, '--concurrency', args.concurrency,
@@ -284,6 +325,7 @@ def main():
         ledgers.append((name, ledger)); report['results'].append(dict(phase=name, **result)); save()
         record(name, result)
         record(name + '-ledger', json.loads(hosts[0].action('read', file=f'{name}-ledger.json')['contents']))
+        event('traffic_completed', phase=name)
         return result
     def monitored(pool, name, during=None, seconds=None):
         task = pool.submit(traffic, name, seconds)
@@ -328,9 +370,12 @@ def main():
             victim = active[-1]
             def failure():
                 time.sleep(max(1, failure_seconds // 4))
+                event('process_kill_requested', node=victim.index)
                 victim.action('signal', signal='SIGKILL')
+                event('process_kill_returned', node=victim.index)
                 time.sleep(max(1, failure_seconds // 3))
                 victim.start()
+                event('process_restart_started', node=victim.index)
             monitored(pool, f'failure-{len(active)}', failure, seconds=failure_seconds)
             wait_ready(len(active))
             monitored(pool, f'recovered-{len(active)}')

@@ -522,6 +522,7 @@ pub struct RangeWriteStore {
     root: PathBuf,
     fsync: bool,
     catalog: RangeWriteCatalog,
+    open_id: Uuid,
 }
 
 impl RangeWriteStore {
@@ -637,6 +638,7 @@ impl RangeWriteStore {
             root,
             fsync,
             catalog,
+            open_id: Uuid::now_v7(),
         };
         if migrated {
             store.persist()?;

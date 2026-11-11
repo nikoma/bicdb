@@ -612,6 +612,12 @@ mod tests {
             &spec,
         )
         .unwrap();
+        let fingerprint = reopened.schema_compatibility_fingerprint().unwrap();
+        assert_eq!(
+            fingerprint.sha256,
+            topology.nodes[&spec.node_id].labels
+                [crate::distribution::SCHEMA_COMPATIBILITY_NODE_LABEL]
+        );
         let lineage = reopened
             .current_native_range_source_lineage(range_id)
             .unwrap();

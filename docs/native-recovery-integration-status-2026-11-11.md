@@ -14,10 +14,13 @@ merge/push verification, and independent physical qualification.
 | Event-client silent-route budget and discovery retry | Passed | Main PR146, exact tested `c895ef71`, source merge `f42bdf94`/1.0.470-beta; six focused tests and all nine CI checks | Eventual client behavior only; does not establish strong-read readiness |
 | Local physical prefix proof and actual local MVCC sequence | Passed component tests | Private `10a10ba6`; [32 distinct tests](evidence/local-native-readiness-2026-11-11/README.md), eight specifically exercise local readiness | New assembled source must be revalidated; no leader/serving or strong-read permit |
 | Actual native image publication and full history beyond raw payload retention | Passed component tests | Private `8a7ddf6e`; [34 distinct tests](evidence/native-nonzero-target-install-2026-11-11/README.md), including R1 and R1025 | Actual current-voter recovery, activation, RPCs, faults and physical scale-out remain open |
-| Current-quorum source compatibility and physical repair-cut producer | Not tested on current assembly | New private source in `distribution_range_recovery/image_history.rs`, `image_compatibility.rs`, and `distribution_range_image/source_cut.rs`; initial RF3 genesis/poisoned-round tests added | Compile and run against actual receiver observations, including nonempty positive and conflicting-history negatives |
-| Replica/leader/strong-read readiness separation | Incomplete | Local physical proof is opaque and owns its actual read pin; permanent source promises and target refusal remain | Qualified serving configuration, complete historical recovery, leader recovery, and actual strong-read barrier/endpoint |
-| Audit/sync/broker effects in distributed range decisions | Source-confirmed protocol coverage gap; dynamic failure not tested | Source analysis below | Exact original effects and replay identity must survive leader loss; ordinary row checks cannot qualify this |
-| Four-to-five-node expansion and sustained gain after convergence | Failed qualification / not demonstrated | Original Azure evidence remains authoritative; no new campaign | Zero lost ACKs, correct consistency/routing, bounded fault-safe convergence, stable five-node throughput comparison |
+| Current-quorum source compatibility and physical repair-cut producer | Passed initial genesis component scenarios; nonempty/fault cases open | Private `da378dd9`/1.0.471-beta; [56 distinct integrated tests](evidence/native-recovery-compose-471-2026-11-11/README.md), including actual RF3-configured genesis source verification/capture and poisoned retry | Nonempty quorum-compatible cut, authenticated conflicting-history negatives, actual repair completion and activation |
+| Replica/leader/strong-read readiness separation | Not tested end-to-end; implementation incomplete | Local physical proof is opaque and owns its actual read pin; permanent source promises and target refusal remain | Qualified serving configuration, complete historical recovery, leader recovery, and actual strong-read barrier/endpoint |
+| Audit/sync/broker effects in distributed range decisions | Failed source coverage against the complete-effect requirement; runtime loss not tested | Source analysis below | Exact original effects and replay identity must survive leader loss; ordinary row checks cannot qualify this |
+| Four-to-five-node expansion and sustained gain after convergence | Failed original qualification; new physical campaign not tested | Original Azure evidence remains authoritative; no new campaign | Zero lost ACKs, correct consistency/routing, bounded fault-safe convergence, stable five-node throughput comparison |
+
+Classifications are scoped to each stated assertion: passed, failed, inconclusive,
+or not tested. Implementation status is separate from those results.
 
 These test sets cover different revisions and overlapping components. Do not add
 their counts as independent guarantees or report them as CI on the private branch.
@@ -43,12 +46,53 @@ successful strong read. Activation still requires independent old/new quorum
 safety and a durable configuration ancestry receipt. The physical capture anchor
 and intended future configuration must remain distinct.
 
-The working global-catalogue digest is also too conservative for availability:
-unrelated ranges can invalidate an otherwise frozen local proof. A separate
-range-scoped digest change is being tested. This is a source/integration finding,
-not an explanation established for the Azure convergence failure.
+The earlier global-catalogue digest was too conservative for availability:
+unrelated ranges could invalidate an otherwise frozen local proof. A range-scoped
+digest is now integrated and focused tests at `da378dd9` preserve actual range
+observations across other-range decisions and same-session provenance refresh.
+This fixes a source/integration condition; it does not establish the historical
+Azure convergence cause.
+
+## Availability and remaining configuration boundary
+
+The current native image path retains the old-quorum permanent promise and the
+source freeze through the complete copy. User writes on that affected range remain
+unavailable until actual new-configuration activation. A capture's exclusive source
+read pin can also make another local-ready acquisition busy. Correct retryable
+unavailability is not false not-found, but this does not meet a continuously
+writable online-relocation contract. Legacy online snapshot/catch-up code and this
+new native correctness path must not be treated as one qualified implementation.
+A final campaign must measure the complete affected-range outage and request
+outcomes. Improving this requires a qualified live snapshot/retained catch-up path
+with a bounded final fenced cut; a full-copy write pause cannot silently become the
+final product requirement.
+
+An installed target's physical capture descriptor can still name old voters/epoch
+E2 while its intended descriptor names future E4. The intended descriptor alone is
+not proof of activation. Source repair after replacement requires an ACTUAL durable
+configuration-transition/ancestry proof, prepared by the required native new-data
+quorum and checked against committed final metadata. Keep the physical anchor and
+current serving configuration distinct. Literal old physical voter IDs cannot be
+silently treated as current, and replacing those IDs with metadata would discard
+the required safety proof. That integration, catalogue adoption and strong-read
+readiness remain open.
+
+Ordinary remote native Apply is also unimplemented at the tested seam. The real
+RF3 characterization at `da378dd9` gets an originating ACK/native R1 after actual
+Prepare/Commit/Certify responses, while both remote services remain CQ1/native R0
+and correctly refuse bare Apply. Those replicas cannot be advertised as readable
+or caught up. The next fixes require an actual authenticated current-leader
+instruction or separately proved historical certification, exact native/WAL
+materialization and Store Applied progress; never a decoded voter list, equal-row
+shortcut or fabricated ordinary certificate. Larger unresolved CQ backlogs also
+need a bounded recovery/evidence strategy; the 1024-entry observation bound must
+refuse excess rather than omit obligations. The RF1 R1025 image test is not an RF3
+backlog/recovery qualification.
 
 ## Reproducible issue: distributed range decisions omit original effects
+
+Tracked as [issue #148](https://github.com/nikoma/bicdb/issues/148), with immutable
+main-source links and a deterministic survivor/effect reconciliation experiment.
 
 Scope: distributed virtual-range write admission. This finding does not classify
 legacy/native whole-WAL HA, Cell replication, or application fleet behavior.

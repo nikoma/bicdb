@@ -43,6 +43,14 @@ reads and again after actual reopen. The actual target-local snapshot bound
 is smaller than 1,025; the test would reject using source R as that bound.
 This is not an RF3 fault experiment or a throughput measurement.
 
+The copied source records in these positive fixtures are ordinary `Record::new`
+rows with empty metadata. The R1 case additionally checks replacement of stale
+metadata and retention of other-range metadata. There are no user secondary
+indexes, FTS workloads, queues, application audit/event reconciliations, SQL
+joins or multi-range business transactions in this bundle. A complete record
+root plus matching schema definitions does not independently prove those
+subsystems' query parity or failover behavior.
+
 Before any target row removal, the installer persists catalog refusal and a
 native Installing marker, then requires an opaque proof from a complete
 ordered source-history transfer and reread of the actual stored inactive

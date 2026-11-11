@@ -39,6 +39,9 @@ use crate::distribution_range_mutation::{
 use crate::distribution_supervisor::ClusterBackupMetadata;
 use crate::error::{BicDbError, Result};
 
+mod native_image_base;
+pub(crate) use native_image_base::NativeImageCatalogueAdoptionReceipt;
+use native_image_base::{NativeImageCatalogueBase, NATIVE_IMAGE_CATALOG_FORMAT};
 mod image_install_obligations;
 pub(crate) use image_install_obligations::TargetImageCatalogHistoryObligations;
 mod image_install_state;
@@ -445,6 +448,8 @@ struct RangeWriteCatalog {
     image_install_intents: BTreeMap<RangeId, ImageInstallIntent>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     recovery_fences: BTreeMap<RangeId, RecoveryFenceRecord>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    native_image_bases: BTreeMap<RangeId, NativeImageCatalogueBase>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -474,13 +479,15 @@ impl RangeWriteEnvelope {
                 | RANGE_WRITE_LOG_FORMAT_VERSION
                 | HANDOFF_RANGE_LOG_FORMAT
                 | IMAGE_INSTALL_RANGE_LOG_FORMAT
+                | NATIVE_IMAGE_CATALOG_FORMAT
         ) {
             return Err(range_write_error(format!(
-                "unsupported range-write log format {}; supported formats are 1, 2, {}, {}, and {}",
+                "unsupported range-write log format {}; supported formats are 1, 2, {}, {}, {}, and {}",
                 self.catalog.format_version,
                 RANGE_WRITE_LOG_FORMAT_VERSION,
                 HANDOFF_RANGE_LOG_FORMAT,
-                IMAGE_INSTALL_RANGE_LOG_FORMAT
+                IMAGE_INSTALL_RANGE_LOG_FORMAT,
+                NATIVE_IMAGE_CATALOG_FORMAT
             )));
         }
         if self.catalog.recovery_fences.len() > recovery_state::MAX_RECOVERY_FENCES {
@@ -562,6 +569,7 @@ impl RangeWriteEnvelope {
             }
         }
         image_install_state::validate_catalog_install_intents(&self.catalog)?;
+        native_image_base::validate_catalog_native_image_bases(&self.catalog)?;
         Ok(self.catalog)
     }
 }
@@ -675,6 +683,7 @@ impl RangeWriteStore {
                 handoff_promises: BTreeMap::new(),
                 image_install_intents: BTreeMap::new(),
                 recovery_fences: BTreeMap::new(),
+                native_image_bases: BTreeMap::new(),
             },
             Err(error) => return Err(error.into()),
         };
@@ -716,7 +725,10 @@ impl RangeWriteStore {
         // failed directory sync while the same live DB remained open. Reading
         // that visible JSON is not durability evidence: re-fsync unchanged
         // validated refusals before this new store-open can expose proofs.
-        if migrated || !store.catalog.recovery_fences.is_empty() {
+        if migrated
+            || !store.catalog.recovery_fences.is_empty()
+            || !store.catalog.native_image_bases.is_empty()
+        {
             store.persist()?;
         }
         Ok(store)
@@ -4363,6 +4375,7 @@ mod tests {
             handoff_promises: BTreeMap::new(),
             image_install_intents: BTreeMap::new(),
             recovery_fences: BTreeMap::new(),
+            native_image_bases: BTreeMap::new(),
         };
         let envelope = RangeWriteEnvelope::new(catalog).unwrap();
         fs::write(
@@ -4399,6 +4412,7 @@ mod tests {
             handoff_promises: BTreeMap::new(),
             image_install_intents: BTreeMap::new(),
             recovery_fences: BTreeMap::new(),
+            native_image_bases: BTreeMap::new(),
         })
         .unwrap();
         let legacy_bytes = serde_json::to_vec_pretty(&envelope).unwrap();

@@ -216,7 +216,31 @@ fn load(db: &BicDb, id: &str) -> Result<Option<Header>> {
 /// Startup-only undo. The host must merge intents with other DDL journals in
 /// reverse `order`; it must never run this against live SQL transactions.
 pub(super) fn rollback(db: &mut BicDb, id: &str) -> Result<()> {
-    db.check_catalog_recovery_quiescent()?;
+    rollback_inner(db, id, None)
+}
+
+/// The caller restores its write/lock savepoint first. Earlier buffered writes
+/// survive and are rebound by the core rename API during catalog undo.
+pub(super) fn rollback_owned(db: &mut BicDb, id: &str, owner: &mut Transaction) -> Result<()> {
+    rollback_inner(db, id, Some(owner))
+}
+
+pub(super) fn undo_session(session: &mut SqlSession<'_>, id: &str) -> Result<()> {
+    let mut owner = session.tx.take();
+    let result = session.db_mut().and_then(|db| match owner.as_mut() {
+        Some(tx) => rollback_owned(db, id, tx),
+        None => rollback(db, id),
+    });
+    // Even refused undo must retain the transaction and its rollback state.
+    session.tx = owner;
+    result
+}
+
+fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>) -> Result<()> {
+    match owner.as_deref() {
+        Some(tx) => db.check_catalog_undo_owner(tx)?,
+        None => db.check_catalog_recovery_quiescent()?,
+    }
     let Some(mut header) = load(db, id)? else {
         return Ok(());
     };
@@ -322,7 +346,12 @@ pub(super) fn rollback(db: &mut BicDb, id: &str) -> Result<()> {
                     if db.collections().iter().any(|meta| meta.name == old) {
                         return Err(invalid("rollback target was reused"));
                     }
-                    db.rename_collection(&new, &old)?;
+                    match owner.as_deref_mut() {
+                        Some(tx) => {
+                            db.rename_collection_preserving_pending_writes(tx, &new, &old)?
+                        }
+                        None => db.rename_collection(&new, &old)?,
+                    }
                 } else if name != old {
                     return Err(invalid("backing has an unexpected logical name"));
                 }
@@ -606,6 +635,86 @@ mod tests {
             db.get("business", "value").unwrap().unwrap().metadata["value"],
             2
         );
+        db.close().unwrap();
+    }
+    #[test]
+    fn live_undo_preserves_rows_buffered_before_the_rename_savepoint() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db =
+                BicDb::open_with_config(root.path(), DbConfig::default().with_storage_mode(mode))
+                    .unwrap();
+            db.create_collection("original").unwrap();
+            db.insert("original", row("seed", 1)).unwrap();
+            let mut owner = db.begin_transaction().unwrap();
+            owner.insert("original", row("pending", 7)).unwrap();
+            let mark = owner.rollback_mark();
+            let mut plan = prepare(&mut db).unwrap();
+            capture_rename(&db, &mut plan, "original", "renamed").unwrap();
+            db.rename_collection_preserving_pending_writes(&mut owner, "original", "renamed")
+                .unwrap();
+            owner.update("renamed", row("pending", 8)).unwrap();
+            decide(&plan, &mut owner).unwrap();
+            owner.rollback_to_mark(mark).unwrap();
+            {
+                let mut session = SqlSession::new(&mut db);
+                session.tx = Some(owner);
+                session.ddl_undo.push(DdlUndo::RestoreRenameJournal {
+                    id: plan.header.id.clone(),
+                });
+                session.rollback_ddl_to_len(0).unwrap();
+                owner = session.tx.take().unwrap();
+            }
+            assert_eq!(
+                owner.get("original", "pending").unwrap().unwrap().metadata["value"],
+                7
+            );
+            owner.commit().unwrap();
+            assert_eq!(
+                db.get("original", "seed").unwrap().unwrap().metadata["value"],
+                1
+            );
+            assert_eq!(
+                db.get("original", "pending").unwrap().unwrap().metadata["value"],
+                7
+            );
+            db.close().unwrap();
+        }
+    }
+
+    #[test]
+    fn live_undo_refuses_other_owners_before_changing_the_backing() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        db.create_collection("original").unwrap();
+        let mut owner = db.begin_transaction().unwrap();
+        let mut plan = prepare(&mut db).unwrap();
+        capture_rename(&db, &mut plan, "original", "renamed").unwrap();
+        db.rename_collection_preserving_pending_writes(&mut owner, "original", "renamed")
+            .unwrap();
+        let mut other = db.begin_transaction().unwrap();
+        let owner_id = owner.id();
+        {
+            let mut session = SqlSession::new(&mut db);
+            session.tx = Some(owner);
+            assert!(undo_session(&mut session, &plan.header.id).is_err());
+            assert_eq!(session.tx.as_ref().unwrap().id(), owner_id);
+            owner = session.tx.take().unwrap();
+        }
+        assert!(db.collections().iter().any(|m| m.name == "renamed"));
+        assert!(load(&db, &plan.header.id)
+            .unwrap()
+            .unwrap()
+            .remaining
+            .is_none());
+        other.rollback().unwrap();
+        let foreign_root = tempfile::tempdir().unwrap();
+        let foreign_db = BicDb::open(foreign_root.path()).unwrap();
+        let mut foreign = foreign_db.begin_transaction().unwrap();
+        assert!(rollback_owned(&mut db, &plan.header.id, &mut foreign).is_err());
+        foreign.rollback().unwrap();
+        rollback_owned(&mut db, &plan.header.id, &mut owner).unwrap();
+        owner.rollback().unwrap();
         db.close().unwrap();
     }
 }

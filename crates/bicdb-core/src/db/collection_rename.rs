@@ -568,6 +568,37 @@ impl BicDb {
 }
 
 impl BicDb {
+    /// Validate a host's live catalog-undo owner. Startup recovery still
+    /// requires complete quiescence; live undo may retain only this pending
+    /// transaction. This does not grant mutation authority or relax rename's
+    /// checks on native grants, incarnations, or row-lock ownership.
+    pub fn check_catalog_undo_owner(&self, tx: &Transaction) -> Result<()> {
+        self.check_recovery_state()?;
+        if !std::ptr::eq(tx.db.as_ptr(), self) || !Arc::ptr_eq(&tx.tx_states, &self.tx_states) {
+            return Err(BicDbError::Unsupported(
+                "catalog undo owner belongs to a different database".into(),
+            ));
+        }
+        if tx.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        let other_pending = self.tx_states.shards.iter().any(|shard| {
+            shard
+                .lock()
+                .iter()
+                .any(|(id, state)| *id != tx.id.0 && *state == TxState::Pending)
+        });
+        let other_locks = self.write_locks.values_any(|owner| *owner != tx.id);
+        if other_pending || other_locks {
+            return Err(BicDbError::TransactionConflict(
+                "cannot undo catalog while another transaction is pending or holds row locks"
+                    .into(),
+            ));
+        }
+        self.validate_transaction_collection_incarnations(tx)?;
+        self.check_recovery_state()
+    }
+
     /// Rename a collection and retain one transaction's writes/read observations
     /// on that same backing. Catalog mutation requires an exclusive database
     /// borrow and no other pending transaction or retained row lock; its host

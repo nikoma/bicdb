@@ -1,0 +1,10 @@
+test_deterministic_gzip_projection (test_project_evidence.ProjectionTests.test_deterministic_gzip_projection) ... ok
+test_every_record_failure_latency_and_original_source_are_retained (test_project_evidence.ProjectionTests.test_every_record_failure_latency_and_original_source_are_retained) ... ok
+test_payload_and_received_body_limits_are_explicit (test_project_evidence.ProjectionTests.test_payload_and_received_body_limits_are_explicit) ... ok
+test_private_key_text_is_refused (test_project_evidence.ProjectionTests.test_private_key_text_is_refused) ... ok
+test_torn_tail_never_produces_completed_receipt (test_project_evidence.ProjectionTests.test_torn_tail_never_produces_completed_receipt) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.039s
+
+OK

@@ -1,0 +1,37 @@
+{
+  "raw_journal_sha256": "409ecb766419e0e53c8849dd890762593a5b737b666e58d0f6ba6383f2659e37",
+  "raw_journal_bytes": 56045352,
+  "raw_hash_chain_validated": true,
+  "projected_records": 21675,
+  "record_counts": {
+    "run_started": 1,
+    "session_start_started": 8,
+    "worker_ready": 8,
+    "session_admitted": 8,
+    "observer_current_leaders_warmed": 1,
+    "reconciliation_inputs_loaded": 1,
+    "traffic_window_started": 1,
+    "operation_started": 2939,
+    "route_attempt_started": 2939,
+    "event_route": 2939,
+    "rpc_started": 3338,
+    "rpc_completed": 3338,
+    "read_observed": 2939,
+    "operation_terminal": 2939,
+    "watermark_observation_trigger": 133,
+    "watermark_observation_completed": 133,
+    "reconciliation_coverage": 1,
+    "run_completed": 1,
+    "worker_stderr_final_status": 8
+  },
+  "terminal_outcomes": {
+    "exact_match": 2939
+  },
+  "raw_latency_sample_counts": {
+    "get:exact_match": 2939
+  },
+  "projection_sha256": "6657fa2fe5a95edf01b20a39b33d6fcbccd01f8226d257dee79113b7f035c0da",
+  "projection_is_raw_wire_capture": false,
+  "strong_read_proof": false,
+  "qualification_status": "not_qualified"
+}

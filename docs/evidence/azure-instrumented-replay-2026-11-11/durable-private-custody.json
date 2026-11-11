@@ -1,0 +1,14 @@
+{
+  "destination": "/root/.local/state/bicdb/ha-scaling-2026-11-11/private/instrumented-463-8186dd18",
+  "manifest_sha256": "9351cacbfc489c14b1af4635a4dd5c4bbbfd0c74f98c2b7c2d5ae318f5fa1fc0",
+  "superseded_copy_time_manifest_sha256": "c52a2d9883739653a4239f71c1c1bffe8ca5f2ea4902dfd0591baf8b0c117dbf",
+  "files": 1401,
+  "bytes": 933356662,
+  "restricted_files": 21,
+  "all_stable_source_destination_hashes_reverified_after_copier_exit": true,
+  "own_active_capture_logs_excluded": [
+    "operations/durable-custody.stdout",
+    "operations/durable-custody.stderr"
+  ],
+  "completed_unix_ns": 1794391076078511174
+}

@@ -1,0 +1,34 @@
+{
+  "enabled": true,
+  "cluster_id": "trace-8186dd18b83f4195b1319a85a1ee3498",
+  "node_id": "n0",
+  "node_address": "n0:9444",
+  "node_tls_certificate_sha256": "44628987e68f5cd3c6876d1d10daa83b30d35338bdbad0c4eb3e09f9b9b104cb",
+  "node_incarnation": 1,
+  "node_capacity_bytes": 100000000000,
+  "replication_factor": 3,
+  "initial_ranges": 64,
+  "default_placement": {
+    "required_node_labels": {},
+    "distinct_failure_domains": []
+  },
+  "suspect_after_ms": 5000,
+  "dead_after_ms": 15000,
+  "topology_history_limit": 64,
+  "metadata_election_timeout_ms": 1500,
+  "metadata_heartbeat_interval_ms": 300,
+  "transport": {
+    "connect_timeout_ms": 10000,
+    "io_timeout_ms": 30000,
+    "max_frame_bytes": 134217728,
+    "max_inbound_connections": 64,
+    "dev_localhost_plaintext": false,
+    "tls": {
+      "cert_path": "<n0-root>/tls/node.crt",
+      "key_path": "<n0-root>/tls/node.key",
+      "ca_path": "<n0-root>/tls/ca.crt",
+      "require_client_cert": true,
+      "dev_localhost_plaintext": false
+    }
+  }
+}

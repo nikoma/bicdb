@@ -1,0 +1,21 @@
+test_ack_requires_durable_receipt (test_verify_azure_instrumented_replay_evidence.EvidenceTests.test_ack_requires_durable_receipt) ... ok
+test_ack_requires_prior_appended_response (test_verify_azure_instrumented_replay_evidence.EvidenceTests.test_ack_requires_prior_appended_response) ... ok
+test_complete_projection_and_uncertain_outcome_accounting (test_verify_azure_instrumented_replay_evidence.EvidenceTests.test_complete_projection_and_uncertain_outcome_accounting) ... ok
+test_critical_omission_rejected_even_when_manifest_is_updated (test_verify_azure_instrumented_replay_evidence.EvidenceTests.test_critical_omission_rejected_even_when_manifest_is_updated) ... ok
+test_missing_phase_rejected_after_rehash (test_verify_azure_instrumented_replay_evidence.EvidenceTests.test_missing_phase_rejected_after_rehash) ... ok
+test_nearest_rank_extreme_boundaries (test_verify_azure_instrumented_replay_evidence.EvidenceTests.test_nearest_rank_extreme_boundaries) ... ok
+test_numeric_claim_is_recomputed (test_verify_azure_instrumented_replay_evidence.EvidenceTests.test_numeric_claim_is_recomputed) ... ok
+test_observer_pending_is_recomputed (test_verify_azure_instrumented_replay_evidence.EvidenceTests.test_observer_pending_is_recomputed) ... ok
+test_private_comparison_detects_side_effect (test_verify_azure_instrumented_replay_evidence.EvidenceTests.test_private_comparison_detects_side_effect) ... ok
+test_private_comparison_suppresses_bytecode_and_preserves_inputs (test_verify_azure_instrumented_replay_evidence.EvidenceTests.test_private_comparison_suppresses_bytecode_and_preserves_inputs) ... ok
+test_reconciliation_verified_set_is_independently_recomputed (test_verify_azure_instrumented_replay_evidence.EvidenceTests.test_reconciliation_verified_set_is_independently_recomputed) ... ok
+test_retained_client_source_is_bound_to_identity (test_verify_azure_instrumented_replay_evidence.EvidenceTests.test_retained_client_source_is_bound_to_identity) ... ok
+test_symlink_rejected (test_verify_azure_instrumented_replay_evidence.EvidenceTests.test_symlink_rejected) ... ok
+test_tamper_rejected (test_verify_azure_instrumented_replay_evidence.EvidenceTests.test_tamper_rejected) ... ok
+test_unlisted_file_rejected (test_verify_azure_instrumented_replay_evidence.EvidenceTests.test_unlisted_file_rejected) ... ok
+test_unsupported_qualification_claim_rejected_after_rehash (test_verify_azure_instrumented_replay_evidence.EvidenceTests.test_unsupported_qualification_claim_rejected_after_rehash) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 4.679s
+
+OK

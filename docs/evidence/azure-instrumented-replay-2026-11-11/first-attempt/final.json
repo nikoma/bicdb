@@ -1,0 +1,12 @@
+{
+  "finished_unix_ns": 1794389167109393107,
+  "run": "8186dd18b83f4195b1319a85a1ee3498",
+  "output": "<controller-task>/8186dd18b83f4195b1319a85a1ee3498",
+  "classification": "diagnostic_only",
+  "all_trace_paths": [
+    "<controller-task>/8186dd18b83f4195b1319a85a1ee3498/cloud-smoke/trace.jsonl",
+    "<controller-task>/8186dd18b83f4195b1319a85a1ee3498/smoke-reconciliation/trace.jsonl",
+    "<controller-task>/8186dd18b83f4195b1319a85a1ee3498/baseline-4/trace.jsonl",
+    "<controller-task>/8186dd18b83f4195b1319a85a1ee3498/finally-reconciliation-0/trace.jsonl"
+  ]
+}

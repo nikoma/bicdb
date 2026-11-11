@@ -1,0 +1,87 @@
+{
+  "qualification_status": "not_qualified",
+  "runtime_source": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+  "first_attempt": {
+    "requested_baseline_seconds": 900,
+    "observed_until_dispatch_fence_seconds": 715.141608878,
+    "logical_attempts": 5862,
+    "acknowledged": 2939,
+    "exact_gets": 2923,
+    "application_transport_rpc_failures": 239,
+    "application_remote_rpc_failures": 46,
+    "observer_transport_rpc_failures": 23,
+    "observer_coverage_gaps": 1,
+    "planned_experiment_complete": false,
+    "fifth_node_join_attempted": false,
+    "subsequent_all_ack_values_matched": 2939,
+    "acknowledged_logical_ids_with_earlier_unknown_rpc_history": 237
+  },
+  "second_light_attempt": {
+    "fixture_acknowledged": 2,
+    "fixture_gets_exact": 2,
+    "steady_four_requested_seconds": 60,
+    "steady_four_logical_attempts": 9,
+    "steady_four_acknowledged": 1,
+    "steady_four_uncertain_write": 8,
+    "available_client_telemetry_complete": true,
+    "steady_four_workload_passed": false,
+    "fifth_node_join_attempted": false,
+    "dedicated_two_target_gets_exact": 2,
+    "latest_main_reconciliation_required": 2948,
+    "latest_main_reconciliation_attempted": 2948,
+    "latest_main_reconciliation_exact": 2947,
+    "latest_main_reconciliation_absent_uncertain": 1,
+    "latest_main_reconciliation_ack_targets": 2940,
+    "latest_main_reconciliation_ack_targets_unverified": 0,
+    "latest_smoke_targets_exact": 319
+  },
+  "all_known_ack_keys_observed_exact_after_graceful_restart": 3261,
+  "uncertain_writes": {
+    "present": 7,
+    "none_observed": 1,
+    "none_establishes_rollback": false
+  },
+  "four_to_five_cluster_join_executed": false,
+  "data_movement_to_fifth_node_demonstrated": false,
+  "fault_test_executed": false,
+  "sustained_capacity_gain_demonstrated": false,
+  "strong_read_proof": false,
+  "production_qualified": false,
+  "deletion_verified_utc": "2026-11-11T09:49:21Z",
+  "provider_resources_remaining": 0,
+  "controller_io_confounds_first_attempt": [
+    {
+      "unix_start": 1794388626.51,
+      "unix_end": 1794388659.79,
+      "approximately_reported_gb": "6.46",
+      "precision": "rounded parent-supplied total; not an exact byte counter"
+    },
+    {
+      "unix_start": 1794388727.25,
+      "unix_end": 1794388758.52,
+      "approximately_reported_gb": "6.49",
+      "precision": "rounded parent-supplied total; not an exact byte counter"
+    }
+  ],
+  "other_confounds": [
+    "parent local Cargo/unit work overlapped first baseline",
+    "shared controller services and per-record fsync",
+    "member-side gateway/observer CPU and SSH client-policy replica",
+    "small growing corpus and retained-catalog history; no matched data/history capacity comparison",
+    "no verified independent physical-host allocation",
+    "Event Get eventual/local-applied-on-named-leader; no read-index barrier"
+  ],
+  "gaps_remaining": [
+    "current-artifact graceful-restart write availability",
+    "leader recovery schema/quorum/epoch readiness integration",
+    "observer capacity for sustained error-triggered probes under16workers",
+    "current463 automatic four-to-five physical data and leadership movement not reached",
+    "ordinary PostgreSQL transparent distributed SQL/multi-range transactions not tested or supplied by this client",
+    "production RPO/RTO/scale-out qualification remains open"
+  ],
+  "external_context_verification": {
+    "controller_io_confounds_first_attempt": "parent supplied rounded context; not recomputed by replay verifier",
+    "deletion_verified_utc_and_provider_resources_remaining": "separate infrastructure evidence and verifier",
+    "runtime_storage_capacity_and_vm_configuration": "recorded Host source, persisted format/environment captures and separate provider model evidence; not inferred from throughput"
+  }
+}

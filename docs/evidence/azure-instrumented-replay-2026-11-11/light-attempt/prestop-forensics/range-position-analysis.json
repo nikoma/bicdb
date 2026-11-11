@@ -1,0 +1,504 @@
+{
+  "classification": "independent_live_file_captures_not_coherent_quorum_snapshot",
+  "nodes": [
+    {
+      "node": 0,
+      "ranges": [
+        {
+          "range_id": 18,
+          "current_epoch": 14,
+          "last_index": 59,
+          "resolved_through": 59,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 59
+          },
+          "highest_retained_index_by_state": {
+            "applied": 59
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 2,
+          "current_epoch": 12,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 48,
+          "absent": true
+        },
+        {
+          "range_id": 49,
+          "current_epoch": 7,
+          "last_index": 41,
+          "resolved_through": 41,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 41
+          },
+          "highest_retained_index_by_state": {
+            "applied": 41
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 51,
+          "current_epoch": 8,
+          "last_index": 62,
+          "resolved_through": 62,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 62
+          },
+          "highest_retained_index_by_state": {
+            "applied": 62
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 52,
+          "current_epoch": 8,
+          "last_index": 53,
+          "resolved_through": 53,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 53
+          },
+          "highest_retained_index_by_state": {
+            "applied": 53
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 41,
+          "current_epoch": 12,
+          "last_index": 60,
+          "resolved_through": 60,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 60
+          },
+          "highest_retained_index_by_state": {
+            "applied": 60
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 11,
+          "current_epoch": 16,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        }
+      ]
+    },
+    {
+      "node": 1,
+      "ranges": [
+        {
+          "range_id": 18,
+          "current_epoch": 14,
+          "last_index": 59,
+          "resolved_through": 59,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 59
+          },
+          "highest_retained_index_by_state": {
+            "applied": 59
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 2,
+          "current_epoch": 12,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 48,
+          "current_epoch": 11,
+          "last_index": 64,
+          "resolved_through": 64,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 64
+          },
+          "highest_retained_index_by_state": {
+            "applied": 64
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 49,
+          "current_epoch": 7,
+          "last_index": 41,
+          "resolved_through": 41,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 41
+          },
+          "highest_retained_index_by_state": {
+            "applied": 41
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 51,
+          "current_epoch": 8,
+          "last_index": 62,
+          "resolved_through": 62,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 62
+          },
+          "highest_retained_index_by_state": {
+            "applied": 62
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 52,
+          "current_epoch": 8,
+          "last_index": 53,
+          "resolved_through": 53,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 53
+          },
+          "highest_retained_index_by_state": {
+            "applied": 53
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 41,
+          "absent": true
+        },
+        {
+          "range_id": 11,
+          "current_epoch": 9,
+          "last_index": 47,
+          "resolved_through": 47,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 47
+          },
+          "highest_retained_index_by_state": {
+            "applied": 47
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        }
+      ]
+    },
+    {
+      "node": 2,
+      "ranges": [
+        {
+          "range_id": 18,
+          "current_epoch": 14,
+          "last_index": 59,
+          "resolved_through": 59,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 59
+          },
+          "highest_retained_index_by_state": {
+            "applied": 59
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 2,
+          "current_epoch": 12,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 48,
+          "current_epoch": 11,
+          "last_index": 64,
+          "resolved_through": 64,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 64
+          },
+          "highest_retained_index_by_state": {
+            "applied": 64
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 49,
+          "current_epoch": 7,
+          "last_index": 41,
+          "resolved_through": 41,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 41
+          },
+          "highest_retained_index_by_state": {
+            "applied": 41
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 51,
+          "current_epoch": 8,
+          "last_index": 62,
+          "resolved_through": 62,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 62
+          },
+          "highest_retained_index_by_state": {
+            "applied": 62
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 52,
+          "current_epoch": 8,
+          "last_index": 53,
+          "resolved_through": 53,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 53
+          },
+          "highest_retained_index_by_state": {
+            "applied": 53
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 41,
+          "current_epoch": 12,
+          "last_index": 60,
+          "resolved_through": 60,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 60
+          },
+          "highest_retained_index_by_state": {
+            "applied": 60
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 11,
+          "current_epoch": 16,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        }
+      ]
+    },
+    {
+      "node": 3,
+      "ranges": [
+        {
+          "range_id": 18,
+          "current_epoch": 9,
+          "last_index": 58,
+          "resolved_through": 58,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 58
+          },
+          "highest_retained_index_by_state": {
+            "applied": 58
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 2,
+          "current_epoch": 12,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 48,
+          "current_epoch": 11,
+          "last_index": 64,
+          "resolved_through": 64,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 64
+          },
+          "highest_retained_index_by_state": {
+            "applied": 64
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 49,
+          "absent": true
+        },
+        {
+          "range_id": 51,
+          "absent": true
+        },
+        {
+          "range_id": 52,
+          "absent": true
+        },
+        {
+          "range_id": 41,
+          "current_epoch": 12,
+          "last_index": 60,
+          "resolved_through": 60,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 60
+          },
+          "highest_retained_index_by_state": {
+            "applied": 60
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        },
+        {
+          "range_id": 11,
+          "current_epoch": 16,
+          "last_index": 48,
+          "resolved_through": 48,
+          "compacted_through": 0,
+          "retained_state_counts": {
+            "applied": 48
+          },
+          "highest_retained_index_by_state": {
+            "applied": 48
+          },
+          "entry_field_names": [
+            "command",
+            "state"
+          ]
+        }
+      ]
+    }
+  ]
+}

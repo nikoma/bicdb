@@ -3926,6 +3926,7 @@ impl<'db> SqlSession<'db> {
                         return Err(error.into());
                     }
                 }
+                finish_committed_catalog_scopes(self.db_ref(), &self.ddl_undo)?;
                 self.ddl_undo.truncate(ddl_undo_len);
                 self.savepoints.truncate(savepoint_len);
                 Ok(result)
@@ -4000,6 +4001,7 @@ impl<'db> SqlSession<'db> {
                         return Err(error.into());
                     }
                 }
+                finish_committed_catalog_scopes(self.db_ref(), &self.ddl_undo)?;
                 self.ddl_undo.truncate(ddl_undo_len);
                 self.savepoints.truncate(savepoint_len);
                 Ok(result)

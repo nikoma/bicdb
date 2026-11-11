@@ -4493,6 +4493,10 @@ impl<'db> SqlSession<'db> {
     ) -> Result<RoutineControl> {
         let _clock = oracle::current_time::StatementScope::new();
         self.ensure_autonomous_transaction()?;
+        // COMMIT/ROLLBACK and autonomous calls may replace the owner within
+        // one routine. Expression assignments need its current read identity
+        // just as SQL nodes do; no snapshot or mutation authority is granted.
+        let _catalog_reads = self.enter_current_catalog_reads()?;
         let was_active = self.oracle_autonomous_active;
         let epoch = self.oracle_autonomous_epoch;
         let lock_epoch = self.oracle_autonomous_lock_epoch;

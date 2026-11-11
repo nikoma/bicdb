@@ -192,3 +192,49 @@ fn deferred_procedure_retains_the_routine_definition_read_before_auto_transactio
 fn deferred_procedure_retains_default_type_metadata_read_before_auto_transaction() {
     deferred_call_retains_pre_transaction_metadata(true);
 }
+
+#[test]
+fn unused_and_failed_call_preflight_owners_do_not_outlive_the_statement() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = database(root.path(), mode);
+        SqlSession::new(&mut db)
+            .execute("CREATE PROCEDURE idle_call() LANGUAGE sql AS 'SELECT 1'")
+            .unwrap();
+        let mut sql = SqlSession::new_shared(&db).with_deferred_commit();
+        sql.execute("CALL idle_call()").unwrap();
+        assert!(sql.take_pending_transaction().is_none());
+        db.check_catalog_recovery_quiescent().unwrap();
+        sql.call_procedure("idle_call", &[]).unwrap();
+        assert!(sql.take_pending_transaction().is_none());
+        db.check_catalog_recovery_quiescent().unwrap();
+        assert!(sql.execute("CALL absent_call()").is_err());
+        db.check_catalog_recovery_quiescent().unwrap();
+        assert!(sql.call_procedure("absent_call", &[]).is_err());
+        db.check_catalog_recovery_quiescent().unwrap();
+    }
+}
+
+#[test]
+fn routine_expression_reads_select_the_new_owner_after_an_internal_commit() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = database(root.path(), mode);
+        SqlSession::new(&mut db)
+            .execute("CREATE PROCEDURE commit_then_type(INOUT value TEXT) LANGUAGE plpgsql AS $$ BEGIN INSERT INTO unrelated VALUES(3); COMMIT; value := (ROW(1,'after')::source).payload; END; $$")
+            .unwrap();
+        let mut sql = SqlSession::new_shared(&db);
+        assert_eq!(
+            sql.execute("CALL commit_then_type('before')").unwrap().rows,
+            vec![vec![SqlValue::String("after".into())]]
+        );
+        assert!(sql.take_pending_transaction().is_none());
+        db.check_catalog_recovery_quiescent().unwrap();
+        assert_eq!(
+            sql.execute("SELECT id FROM unrelated ORDER BY id")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(2)], vec![SqlValue::Int(3)]]
+        );
+    }
+}

@@ -1097,6 +1097,20 @@ fn resolve_base_codec_routine<'a>(
 }
 
 #[derive(Debug)]
+struct CatalogPreflightScope {
+    transaction: Rc<RefCell<Option<Transaction>>>,
+}
+
+impl Drop for CatalogPreflightScope {
+    fn drop(&mut self) {
+        // A writing routine transfers this same owner into its ordinary
+        // transaction. Otherwise the read-only preflight owner ends here,
+        // including early errors and unwinding, without a durable commit.
+        self.transaction.borrow_mut().take();
+    }
+}
+
+#[derive(Debug)]
 pub struct SqlSession<'db> {
     /// Per-statement memo for the unique arbiter backing an ON CONFLICT
     /// target. Resolving it calls `index_definitions()`, which read-locks and
@@ -1142,6 +1156,10 @@ pub struct SqlSession<'db> {
     pub(crate) cancellation: CancellationToken,
     pub(crate) fts_limits: bicdb_core::FtsQueryLimits,
     pub(crate) tx: Option<Transaction>,
+    /// Metadata read while resolving an autocommit CALL belongs to the same
+    /// owner later used for its buffered writes. This owner carries no SQL
+    /// transaction semantics until begin_session_transaction consumes it.
+    catalog_preflight_tx: Rc<RefCell<Option<Transaction>>>,
     /// True only for the child session that runs a PL/pgSQL function for one
     /// row of an engine-evaluated statement (`SqlSession::for_row_routine_call`).
     /// Such a session never begins or owns a transaction and refuses
@@ -2503,6 +2521,7 @@ impl<'db> SqlSession<'db> {
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
             tx: None,
+            catalog_preflight_tx: Rc::new(RefCell::new(None)),
             row_routine_call: false,
             in_oracle_sql_function: false,
             in_routine_expression: false,
@@ -2713,7 +2732,14 @@ impl<'db> SqlSession<'db> {
         let floor = self
             .snapshot_floor
             .max(crate::statement_context::latest_independent_commit());
-        let mut tx = self.db_ref().begin_transaction_after(floor)?;
+        let preflight = self.catalog_preflight_tx.borrow_mut().take();
+        let mut tx = match preflight {
+            Some(mut tx) => {
+                tx.refresh_read_committed_snapshot_after(floor)?;
+                tx
+            }
+            None => self.db_ref().begin_transaction_after(floor)?,
+        };
         tx.set_blocking_row_waits(self.blocking_row_wait_token());
         if isolation == "serializable" {
             tx.set_snapshot_isolation(true, floor)?;
@@ -3140,6 +3166,7 @@ impl<'db> SqlSession<'db> {
     }
 
     pub fn execute(&mut self, sql: &str) -> Result<SqlResult> {
+        let _preflight = self.prepare_catalog_preflight_text(sql)?;
         let preprocessing_reads = if !sql.contains(';') || split_sql_statements(sql).len() == 1 {
             self.enter_statement_catalog_reads(sql)?
         } else {
@@ -3234,6 +3261,7 @@ impl<'db> SqlSession<'db> {
     /// Statement text through the profiled executor; a read-only transaction
     /// checks a single statement before it runs.
     fn execute_text_statements(&mut self, sql: &str) -> Result<SqlResult> {
+        let _preflight = self.prepare_catalog_preflight_text(sql)?;
         let _catalog_reads = if !sql.contains(';') || split_sql_statements(sql).len() == 1 {
             self.enter_statement_catalog_reads(sql)?
         } else {
@@ -3388,6 +3416,7 @@ impl<'db> SqlSession<'db> {
     /// diagnostics that want to preserve normal statement semantics without
     /// measuring parser or SQL-string construction cost.
     pub fn execute_statement_ast(&mut self, statement: &Statement) -> Result<SqlResult> {
+        let _preflight = self.prepare_catalog_preflight(matches!(statement, Statement::Call(_)))?;
         let _catalog_reads = self.enter_parsed_catalog_reads(statement)?;
         let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.statement_error_recovered = false;
@@ -3409,6 +3438,8 @@ impl<'db> SqlSession<'db> {
     /// Execute a stored procedure directly from its already-typed arguments,
     /// bypassing SQL text parsing and `CALL` AST construction.
     pub fn call_procedure(&mut self, name: &str, args: &[SqlValue]) -> Result<SqlResult> {
+        let _preflight = self.prepare_catalog_preflight(true)?;
+        let _catalog_reads = self.enter_catalog_reads_requiring_snapshot(true)?;
         let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.statement_error_recovered = false;
         self.db_ref().check_recovery_state()?;
@@ -3680,6 +3711,8 @@ impl<'db> SqlSession<'db> {
     ) -> Result<SqlResult> {
         let mut last_result = None;
         for statement in statements {
+            let _preflight =
+                self.prepare_catalog_preflight(matches!(statement, Statement::Call(_)))?;
             let _catalog_reads = self.enter_parsed_catalog_reads(statement)?;
             if check_columns && self.column_references_checkable() {
                 self.sql_engine()
@@ -3701,7 +3734,7 @@ impl<'db> SqlSession<'db> {
         &mut self,
         statement: &Statement,
     ) -> Result<Option<bicdb_core::CatalogReadAccess>> {
-        if self.read_tx().is_none() {
+        if self.read_tx().is_none() && self.catalog_preflight_tx.borrow().is_none() {
             return self
                 .db_ref()
                 .enter_catalog_read_access(None)
@@ -3723,11 +3756,45 @@ impl<'db> SqlSession<'db> {
     ) -> Result<Option<bicdb_core::CatalogReadAccess>> {
         if needs_snapshot {
             self.acquire_postgres_statement_snapshot(|| true)?;
+            return self.enter_current_catalog_reads();
         }
-        let owner = if needs_snapshot { self.read_tx() } else { None };
         self.db_ref()
-            .enter_catalog_read_access(owner)
+            .enter_catalog_read_access(None)
             .map_err(Into::into)
+    }
+
+    fn enter_current_catalog_reads(&self) -> Result<Option<bicdb_core::CatalogReadAccess>> {
+        let preflight = self.catalog_preflight_tx.borrow();
+        self.db_ref()
+            .enter_catalog_read_access(self.read_tx().or(preflight.as_ref()))
+            .map_err(Into::into)
+    }
+
+    fn prepare_catalog_preflight_text(&self, sql: &str) -> Result<Option<CatalogPreflightScope>> {
+        let call =
+            leading_sql_keyword(sql).is_some_and(|keyword| keyword.eq_ignore_ascii_case("call"));
+        self.prepare_catalog_preflight(
+            call && (!sql.contains(';') || split_sql_statements(sql).len() == 1),
+        )
+    }
+
+    fn prepare_catalog_preflight(&self, call: bool) -> Result<Option<CatalogPreflightScope>> {
+        if !call
+            || self.read_tx().is_some()
+            || self.catalog_preflight_tx.borrow().is_some()
+            || self.row_routine_call
+        {
+            return Ok(None);
+        }
+        let floor = self
+            .snapshot_floor
+            .max(crate::statement_context::latest_independent_commit());
+        let mut tx = self.db_ref().begin_transaction_after(floor)?;
+        tx.defer_statement_snapshot()?;
+        *self.catalog_preflight_tx.borrow_mut() = Some(tx);
+        Ok(Some(CatalogPreflightScope {
+            transaction: Rc::clone(&self.catalog_preflight_tx),
+        }))
     }
 
     /// Direct embedding sessions need the same READ COMMITTED statement
@@ -4001,6 +4068,7 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_parsed_statement(&mut self, statement: &Statement) -> Result<SqlResult> {
+        let _preflight = self.prepare_catalog_preflight(matches!(statement, Statement::Call(_)))?;
         let _catalog_reads = self.enter_parsed_catalog_reads(statement)?;
         let _clock = oracle::current_time::StatementScope::new();
         oracle::lock_waits::validate(self.db_ref(), statement)?;

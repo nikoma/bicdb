@@ -22,6 +22,10 @@ fn invalid(message: &str) -> BicDbError {
     BicDbError::Cluster(format!("range recovery: {message}"))
 }
 
+mod image_history;
+pub(crate) use image_history::{
+    RecoveryImageHistoryObligationsV1, RecoveryNativeHistoryPointV1, RecoveryNativePendingHistoryV1,
+};
 mod runtime;
 pub(crate) use runtime::RangeRecoveryRuntime;
 mod quorum;

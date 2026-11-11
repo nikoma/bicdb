@@ -30,8 +30,8 @@ pub(crate) use image_history::{
 };
 mod native_ready;
 pub(crate) use native_ready::{
-    ClosedNativeReadyQuorum, ClosedNativeReadyQuorumRound, NativeReadyObservation,
-    NativeReadyPhysicalDomain, NativeReadyReply, NativeReadyRequest,
+    ClosedNativeReadyQuorum, ClosedNativeReadyQuorumRound, FrozenNativeReadyStage,
+    NativeReadyObservation, NativeReadyPhysicalDomain, NativeReadyReply, NativeReadyRequest,
 };
 mod runtime;
 pub(crate) use runtime::{RangeRecoveryRuntime, RecoveryImageInstallFreeze};

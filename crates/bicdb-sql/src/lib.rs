@@ -65,8 +65,8 @@ use thiserror::Error;
 pub type Result<T> = std::result::Result<T, SqlError>;
 
 mod aggregate_evaluation;
-mod builtin_signatures;
 mod boolean_parse;
+mod builtin_signatures;
 mod identity;
 pub mod oracle;
 pub mod sql_text;

@@ -32,6 +32,6 @@
     "binary_built": false,
     "published_release": false,
     "deployed": false,
-    "batch": "Parser-depth and NUL diagnostic-framing frontend fixes share one versioned delivery batch; private464 candidate retired before execution."
+    "batch": "Parser-depth and NUL diagnostic-framing frontend fixes share one versioned delivery batch; the superseded private464 focused run had already started and is preserved as source-scoped evidence."
   }
 }

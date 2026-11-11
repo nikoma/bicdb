@@ -1,0 +1,78 @@
+{
+  "source": "92b8456d795f7576636a1b10269fe2336af92a08",
+  "binary_sha256": "115bc5c6a9d65ec6954e1e485d59d65c7c4c11b27ea7bc3252745c76b3048847",
+  "result_sha256": "a62e9ca83e84ab87579216ea50322893e09242b008ee6b67fad7388a852cf4fe",
+  "engine_opened": false,
+  "expectation_source": "ACK ledger phases; snapshot counters only cross-checked",
+  "cases": [
+    {
+      "voters": 3,
+      "acknowledged": 48,
+      "known_readonly_refusals": 169,
+      "snapshots_verified": 12,
+      "ledger_phase_counts": {
+        "round0-before": 10,
+        "round0-successor": 1,
+        "round0-after": 5,
+        "round1-before": 10,
+        "round1-successor": 1,
+        "round1-after": 5,
+        "round2-before": 10,
+        "round2-successor": 1,
+        "round2-after": 5
+      },
+      "paged_formats": [
+        {
+          "path": "/root/bicdb-durability-s3/ha-ack-main457-92b8456d/voters-3/n0/format.json",
+          "sha256": "54f5d977028abbac7ea27f18181076c5ca63c6f052bbea62c647aec3a9302123"
+        },
+        {
+          "path": "/root/bicdb-durability-s3/ha-ack-main457-92b8456d/voters-3/n1/format.json",
+          "sha256": "54f5d977028abbac7ea27f18181076c5ca63c6f052bbea62c647aec3a9302123"
+        },
+        {
+          "path": "/root/bicdb-durability-s3/ha-ack-main457-92b8456d/voters-3/n2/format.json",
+          "sha256": "54f5d977028abbac7ea27f18181076c5ca63c6f052bbea62c647aec3a9302123"
+        }
+      ]
+    },
+    {
+      "voters": 5,
+      "acknowledged": 32,
+      "known_readonly_refusals": 287,
+      "snapshots_verified": 12,
+      "ledger_phase_counts": {
+        "round0-before": 10,
+        "round0-successor": 1,
+        "round0-after": 5,
+        "round1-before": 10,
+        "round1-successor": 1,
+        "round1-after": 5
+      },
+      "paged_formats": [
+        {
+          "path": "/root/bicdb-durability-s3/ha-ack-main457-92b8456d/voters-5/n0/format.json",
+          "sha256": "54f5d977028abbac7ea27f18181076c5ca63c6f052bbea62c647aec3a9302123"
+        },
+        {
+          "path": "/root/bicdb-durability-s3/ha-ack-main457-92b8456d/voters-5/n1/format.json",
+          "sha256": "54f5d977028abbac7ea27f18181076c5ca63c6f052bbea62c647aec3a9302123"
+        },
+        {
+          "path": "/root/bicdb-durability-s3/ha-ack-main457-92b8456d/voters-5/n2/format.json",
+          "sha256": "54f5d977028abbac7ea27f18181076c5ca63c6f052bbea62c647aec3a9302123"
+        },
+        {
+          "path": "/root/bicdb-durability-s3/ha-ack-main457-92b8456d/voters-5/n3/format.json",
+          "sha256": "54f5d977028abbac7ea27f18181076c5ca63c6f052bbea62c647aec3a9302123"
+        },
+        {
+          "path": "/root/bicdb-durability-s3/ha-ack-main457-92b8456d/voters-5/n4/format.json",
+          "sha256": "54f5d977028abbac7ea27f18181076c5ca63c6f052bbea62c647aec3a9302123"
+        }
+      ]
+    }
+  ],
+  "checked_unix": 1794413653.697783,
+  "status": "passed"
+}

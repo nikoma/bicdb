@@ -10,9 +10,9 @@ use crate::distribution_consensus::MetadataRestoreActivation;
 pub(crate) use crate::distribution_range_image_scope::RangeImageSourcePurposeV1;
 
 /// No Serialize/Deserialize, public fields, number constructor or fake plan.
-/// Its only future production factory must consume the actual fresh fenced
-/// current-data-quorum resolved-cut proof AND selected actual native lineage.
-/// Until that producer is integrated this type cannot be constructed.
+/// Its factory consumes actual fresh fenced-current-quorum history agreement
+/// AND independently materialized local native lineage. Physical repair does
+/// not grant serving-configuration, leader, Apply or strong-read authority.
 #[derive(Debug)]
 pub(crate) struct CertifiedRecoveryImageCut {
     cluster_id: ClusterId,
@@ -31,6 +31,66 @@ pub(crate) struct CertifiedRecoveryImageCut {
     schema_sha256: String,
     restore_activation: Option<MetadataRestoreActivation>,
     source_native_receipt_sha256: String,
+    source_logical_genesis_sha256: String,
+    source_logical_history_sha256: String,
+}
+
+impl CertifiedRecoveryImageCut {
+    pub(crate) fn from_verified_source_history(
+        history: crate::distribution_range_recovery::VerifiedRecoverySourceHistory,
+        source: &crate::db::LocalNativeRecoveryReady,
+        database: &BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<Self> {
+        history.require_current(source, database, store)?;
+        let authority = history.authority();
+        let role = authority.role();
+        let target = history.target();
+        let target_identity = authority
+            .member_credentials()
+            .get(target)
+            .ok_or_else(|| invalid("image repair target is no longer a current voter"))?;
+        let schema_sha256 = role
+            .expected_schema_sha256()
+            .ok_or_else(|| invalid("image repair has no committed schema contract"))?;
+        let cut = Self {
+            cluster_id: role.cluster_id().clone(),
+            bootstrap_id: role.bootstrap_id(),
+            range: role.current_range().clone(),
+            native_base_range: source.physical_base_range().clone(),
+            range_index: source.range_index(),
+            source_id: source.role().local_node_id().clone(),
+            source_incarnation: source.role().local_member_incarnation(),
+            target_id: target.clone(),
+            target_incarnation: target_identity.incarnation,
+            session_id: role.recovery_nonce(),
+            nonce: role.recovery_nonce(),
+            current_config_sha256: role.configuration_sha256()?,
+            members: role
+                .member_credentials()
+                .iter()
+                .map(|(id, identity)| {
+                    (
+                        id.clone(),
+                        RangeImageBirthMember {
+                            incarnation: identity.incarnation,
+                            tls_certificate_sha256: identity.active_certificate_sha256.clone(),
+                            pending_tls_certificate_sha256: identity
+                                .pending_certificate_sha256
+                                .clone(),
+                        },
+                    )
+                })
+                .collect(),
+            schema_sha256: schema_sha256.to_string(),
+            restore_activation: role.restore_activation().cloned(),
+            source_native_receipt_sha256: source.native_receipt_sha256().to_string(),
+            source_logical_genesis_sha256: source.logical_genesis_sha256().to_string(),
+            source_logical_history_sha256: source.logical_history_sha256().to_string(),
+        };
+        history.require_current(source, database, store)?;
+        Ok(cut)
+    }
 }
 
 #[derive(Debug)]
@@ -194,6 +254,8 @@ impl NativeRangeImageSourceCut {
                     || lineage.local_member_incarnation() != cut.source_incarnation
                     || lineage.range_index() != cut.range_index
                     || lineage.native_receipt_sha256() != cut.source_native_receipt_sha256
+                    || lineage.logical_genesis_sha256() != cut.source_logical_genesis_sha256
+                    || lineage.logical_history_sha256() != cut.source_logical_history_sha256
                     || lineage.schema_sha256() != cut.schema_sha256
                     || lineage.restore_activation() != cut.restore_activation.as_ref()
                     || !semantic_range(lineage.base_range(), &cut.native_base_range)

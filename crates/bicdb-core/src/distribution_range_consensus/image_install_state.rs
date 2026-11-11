@@ -27,6 +27,9 @@ pub(super) struct ImageInstallIntent {
     pub(super) target_member_incarnation: u64,
     pub(super) target_birth_id: Uuid,
     pub(super) target_birth_sha256: String,
+    // Actual target-local physical namespace lineage, durable even in the
+    // catalog-intent-before-native-marker crash window. Never source UUIDs.
+    pub(super) target_namespace_ids: Vec<(String, Uuid)>,
     pub(super) source_id: ClusterNodeId,
     pub(super) source_incarnation: u64,
     pub(super) source_range_index: u64,
@@ -51,6 +54,15 @@ impl ImageInstallIntent {
             || self.session_id.is_nil()
             || self.nonce.is_nil()
             || self.target_birth_id.is_nil()
+            || self.target_namespace_ids.len() > 65_536
+            || self
+                .target_namespace_ids
+                .windows(2)
+                .any(|pair| pair[0].0 >= pair[1].0)
+            || self
+                .target_namespace_ids
+                .iter()
+                .any(|(name, id)| name.is_empty() || id.is_nil())
             || self.target_member_incarnation == 0
             || self.source_incarnation == 0
             || self.range.epoch == 0

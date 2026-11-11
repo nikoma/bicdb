@@ -139,6 +139,8 @@ impl ActualNativeRf3Fixture {
             services: services.clone(),
             observations: Mutex::new(Vec::new()),
             unavailable: Mutex::new(BTreeSet::new()),
+            native_delivery: std::sync::atomic::AtomicBool::new(false),
+            native_drop_once: Mutex::new(None),
         });
         let coordinator = Arc::new(RangeWriteCoordinator::new_schema_fenced(
             cluster,

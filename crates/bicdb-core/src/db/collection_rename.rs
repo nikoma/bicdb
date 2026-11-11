@@ -652,7 +652,16 @@ impl BicDb {
                 ));
             }
         }
+        self.validate_transaction_collection_incarnations(tx)?;
+        tx.bind_collection_incarnation(old)?;
         self.rename_collection(old, new)?;
+        {
+            let mut bindings = tx.collection_incarnations.lock();
+            bindings.remove(new);
+            if let Some(incarnation) = bindings.remove(old) {
+                bindings.insert(new.to_string(), incarnation);
+            }
+        }
         // The logical name is the row-lock identity. Publish the renamed lock
         // before releasing its former identity, and retain acquisition order
         // so existing rollback marks still release the same suffix.

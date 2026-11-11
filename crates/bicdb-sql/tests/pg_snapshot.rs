@@ -1,4 +1,4 @@
-use bicdb_core::BicDb;
+use bicdb_core::{BicDb, DbConfig, Record, StorageMode};
 use bicdb_sql::{infer_query_result_types, SqlSession, SqlValue};
 
 #[test]
@@ -167,30 +167,53 @@ fn pg_snapshot_storage_functions_and_catalogs_match_postgres() {
 
 #[test]
 fn current_snapshots_follow_the_transaction_visibility_watermark() {
-    let root = tempfile::tempdir().unwrap();
-    let mut db = BicDb::open(root.path()).unwrap();
-    let mut session = SqlSession::new(&mut db);
-
-    session.execute("BEGIN").unwrap();
-    let before = session
-        .execute(
-            "SELECT pg_current_snapshot(), txid_current_snapshot(),
-                    pg_typeof(pg_current_snapshot()),
-                    pg_typeof(txid_current_snapshot())",
+    const SNAPSHOT: &str = "SELECT pg_current_snapshot(), txid_current_snapshot(),
+                                  pg_typeof(pg_current_snapshot()),
+                                  pg_typeof(txid_current_snapshot())";
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            DbConfig::default().with_storage_mode(mode.clone()),
         )
         .unwrap();
-    assert_eq!(before.rows[0][0], before.rows[0][1]);
-    assert_eq!(before.rows[0][2], SqlValue::String("pg_snapshot".into()));
-    assert_eq!(before.rows[0][3], SqlValue::String("txid_snapshot".into()));
-    session
-        .execute("CREATE TABLE snapshot_commit_probe (id int4 PRIMARY KEY); INSERT INTO snapshot_commit_probe VALUES (1)")
-        .unwrap();
-    let still_fixed = session.execute("SELECT pg_current_snapshot()").unwrap();
-    assert_eq!(still_fixed.rows[0][0], before.rows[0][0]);
-    session.execute("COMMIT").unwrap();
+        SqlSession::new(&mut db)
+            .execute("CREATE TABLE snapshot_commit_probe (id int4 PRIMARY KEY)")
+            .unwrap();
+        let mut session = SqlSession::new_shared(&db);
 
-    let after = session.execute("SELECT pg_current_snapshot()").unwrap();
-    assert_ne!(after.rows[0][0], before.rows[0][0]);
+        for (id, begin, fixed_snapshot) in [
+            (1, "BEGIN ISOLATION LEVEL READ COMMITTED", false),
+            (2, "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY", true),
+        ] {
+            session.execute(begin).unwrap();
+            let before = session.execute(SNAPSHOT).unwrap();
+            let before = &before.rows[0];
+            assert_eq!(before[0], before[1]);
+            assert_eq!(before[2], SqlValue::String("pg_snapshot".into()));
+            assert_eq!(before[3], SqlValue::String("txid_snapshot".into()));
+
+            let mut peer = db.begin_transaction().unwrap();
+            peer.insert(
+                "snapshot_commit_probe",
+                Record::new(id.to_string()).with_metadata(serde_json::json!({ "id": id })),
+            )
+            .unwrap();
+            peer.commit().unwrap();
+            let during = session.execute(SNAPSHOT).unwrap();
+            assert_eq!(during.rows[0][0], during.rows[0][1]);
+            assert_eq!(
+                during.rows[0][0] == before[0],
+                fixed_snapshot,
+                "{mode:?}: {begin}"
+            );
+            session.execute("COMMIT").unwrap();
+
+            let after = session.execute(SNAPSHOT).unwrap();
+            assert_eq!(after.rows[0][0], after.rows[0][1]);
+            assert_ne!(after.rows[0][0], before[0], "{mode:?}: {begin}");
+        }
+    }
 }
 
 #[test]

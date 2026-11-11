@@ -554,10 +554,20 @@ impl PagedRecords {
     }
 
     pub fn get(&self, snapshot: &Snapshot, collection: &str, id: &str) -> Result<Option<Record>> {
-        RECORD_GETS.with(|gets| gets.set(gets.get() + 1));
         let physical = self.physical_collection(collection);
-        let collection: &str = &physical;
-        let key = record_key(collection, id);
+        self.get_physical_record(snapshot, &physical, id)
+    }
+
+    /// Hydrate a pinned row from its already-resolved physical collection.
+    /// A later catalog rename or name reuse must not redirect an older stub.
+    pub(crate) fn get_physical_record(
+        &self,
+        snapshot: &Snapshot,
+        physical: &str,
+        id: &str,
+    ) -> Result<Option<Record>> {
+        RECORD_GETS.with(|gets| gets.set(gets.get() + 1));
+        let key = record_key(physical, id);
         match self.store.get_as_of(snapshot, &key).map_err(page_error)? {
             Some(bytes) => Ok(Some(decode_record(&bytes)?)),
             None => Ok(None),

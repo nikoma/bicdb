@@ -34,6 +34,7 @@ pub use replication_live::{
     take_thread_commit_seq, ReplicationCursor, ReplicationFeed, SyncQuorum, SyncQuorumStatus,
     SyncTimeoutPolicy,
 };
+mod collection_write_identity;
 mod compact_wal;
 #[cfg(test)]
 mod first_lock_tests;
@@ -8941,6 +8942,9 @@ pub struct Transaction {
     // lower commit sequence is still applying. Carrying the row observation
     // into a later write prevents the raised snapshot from masking that change.
     observed_record_versions: Mutex<FxHashMap<String, FxHashMap<String, u64>>>,
+    // Owned capabilities prevent a reused logical/storage name from receiving
+    // writes authored against a dropped or renamed-away collection.
+    collection_incarnations: Mutex<FxHashMap<String, Arc<()>>>,
     /// Opt-in SQL profiles may report write conflicts at the statement
     /// boundary. Commit validation remains mandatory in either mode.
     statement_write_conflicts: bool,
@@ -10272,9 +10276,10 @@ impl BicDb {
                 let as_of = paged.latest_snapshot();
                 let fetch: PagedStubFetch = {
                     let paged = Arc::clone(paged);
-                    let collection: Arc<str> = Arc::from(meta.name.as_str());
+                    let physical: Arc<str> =
+                        Arc::from(paged.physical_collection(meta.name.as_str()).as_ref());
                     let as_of = as_of.clone();
-                    Arc::new(move |pk: &str| paged.get(&as_of, &collection, pk))
+                    Arc::new(move |pk: &str| paged.get_physical_record(&as_of, &physical, pk))
                 };
                 let mut record_arcs: Vec<Arc<StoredRecord>> = Vec::new();
                 // Identity-only decode: stubs keep exactly these fields, and
@@ -15841,7 +15846,7 @@ impl Transaction {
         I: IntoIterator<Item = &'a str>,
     {
         let db = self.db_ref();
-        db.ensure_collection(collection)?;
+        self.bind_collection_incarnation(collection)?;
         let state = db.collection_state(collection)?;
         let snapshot = self.snapshot_tx;
         let ids = ids.into_iter();
@@ -15875,6 +15880,7 @@ impl Transaction {
 
     fn get_visible_unchecked(&self, collection: &str, id: &str) -> Result<Option<Arc<Record>>> {
         let db = self.db_ref();
+        self.bind_collection_incarnation(collection)?;
         let (record, observed_version, read_stored) =
             record_read_snapshot::read_record_at_snapshot_unchecked(
                 db,
@@ -15952,7 +15958,7 @@ impl Transaction {
         rows_materialized: bool,
     ) -> Result<Vec<Option<RecordSystemMetadata>>> {
         let db = self.db_ref();
-        db.ensure_collection(collection)?;
+        self.bind_collection_incarnation(collection)?;
         let pending: FxHashMap<&str, &TxWrite> = self
             .pending_writes_for_collection(collection)
             .map(|write| (write.record_id.as_str(), write))
@@ -16062,7 +16068,7 @@ impl Transaction {
     pub fn get_by_rowid(&self, collection: &str, rowid: RowId) -> Result<Option<Arc<Record>>> {
         let db = self.db_ref();
         db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
-        db.ensure_collection(collection)?;
+        self.bind_collection_incarnation(collection)?;
         let has_pending = self.has_pending_writes(collection);
         let state = db.collection_state(collection)?;
         let shard = state.shard_by_rowid(rowid).read();
@@ -16167,7 +16173,7 @@ impl Transaction {
         rowids: &[RowId],
     ) -> Result<Vec<Option<Arc<Record>>>> {
         let db = self.db_ref();
-        db.ensure_collection(collection)?;
+        self.bind_collection_incarnation(collection)?;
         let has_pending = self.has_pending_writes(collection);
         let snapshot = self.snapshot_tx;
         let stored: Vec<Option<Arc<StoredRecord>>> = {
@@ -16254,7 +16260,7 @@ impl Transaction {
         rowids: &[RowId],
     ) -> Result<Vec<Option<Arc<StoredRecord>>>> {
         let db = self.db_ref();
-        db.ensure_collection(collection)?;
+        self.bind_collection_incarnation(collection)?;
         debug_assert!(
             !self.has_pending_writes(collection),
             "typed-row stored fetch requires no pending writes for the collection"
@@ -16309,7 +16315,7 @@ impl Transaction {
         pks: &[String],
     ) -> Result<Vec<Option<Arc<Record>>>> {
         let db = self.db_ref();
-        db.ensure_collection(collection)?;
+        self.bind_collection_incarnation(collection)?;
         let has_pending = self.has_pending_writes(collection);
         let snapshot = self.snapshot_tx;
         let (stored, lazy_misses): (Vec<Option<Arc<StoredRecord>>>, Vec<usize>) = {
@@ -16661,7 +16667,7 @@ impl Transaction {
             BicDbError::Authorization("row locks require an application transaction".to_string())
         })?;
         let db = self.db_ref();
-        db.ensure_collection(collection)?;
+        self.bind_collection_incarnation(collection)?;
         if let Some(policy) = db.collection_state(collection)?.meta.policy.as_ref() {
             let context = mutation_security_context(actor)?;
             BicDb::authorize_read_without_audit(collection, policy, &context)?;
@@ -16751,7 +16757,7 @@ impl Transaction {
 
     fn scan_collection_visible_unchecked(&self, collection: &str) -> Result<Vec<Record>> {
         let db = self.db_ref();
-        db.ensure_collection(collection)?;
+        self.bind_collection_incarnation(collection)?;
         let mut records = BTreeMap::<String, Record>::new();
         let mut retained_bytes = 0usize;
         let state = db.collection_state(collection)?;
@@ -16879,7 +16885,7 @@ impl Transaction {
         id_prefix: &str,
     ) -> Result<Vec<String>> {
         let db = self.db_ref();
-        db.ensure_collection(collection)?;
+        self.bind_collection_incarnation(collection)?;
         let state = db.collection_state(collection)?;
         let mut ids = if state.paged_lazy {
             // Base ids from the page store, then per-key chain overrides —
@@ -16961,7 +16967,7 @@ impl Transaction {
         limit: usize,
     ) -> Result<(Vec<String>, bool)> {
         let db = self.db_ref();
-        db.ensure_collection(collection)?;
+        self.bind_collection_incarnation(collection)?;
         let state = db.collection_state(collection)?;
         if !state.paged_lazy {
             drop(state);
@@ -17022,7 +17028,7 @@ impl Transaction {
         id_prefix: &str,
     ) -> Result<Vec<String>> {
         let db = self.db_ref();
-        db.ensure_collection(collection)?;
+        self.bind_collection_incarnation(collection)?;
         let state = db.collection_state(collection)?;
         if !state.paged_lazy {
             return self.scan_collection_record_ids_with_prefix_unchecked(collection, id_prefix);
@@ -17098,7 +17104,7 @@ impl Transaction {
         id: &str,
     ) -> Result<Option<VisibleRow>> {
         let db = self.db_ref();
-        db.ensure_collection(collection)?;
+        self.bind_collection_incarnation(collection)?;
         let (row, observed_version) = {
             let state = db.collection_state(collection)?;
             let shard = state.shard(id).read();
@@ -17174,7 +17180,7 @@ impl Transaction {
     ) -> Result<Vec<Option<VisibleRow>>> {
         let db = self.db_ref();
         db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
-        db.ensure_collection(collection)?;
+        self.bind_collection_incarnation(collection)?;
         let has_pending = self.has_pending_writes(collection);
         let snapshot = self.snapshot_tx;
         let mut observed_versions = Vec::with_capacity(pks.len());
@@ -17292,6 +17298,13 @@ impl Transaction {
     /// Appends buffered writes and indexes them. The only sanctioned way to
     /// grow `writes`.
     fn push_writes(&mut self, writes: Vec<TxWrite>) -> Result<()> {
+        let mut previous_collection = None;
+        for write in &writes {
+            if previous_collection != Some(write.collection.as_str()) {
+                self.bind_collection_incarnation(&write.collection)?;
+                previous_collection = Some(write.collection.as_str());
+            }
+        }
         if self.statement_write_conflicts {
             self.db_ref()
                 .detect_buffered_write_conflicts(self, &writes)?;
@@ -17488,7 +17501,7 @@ impl Transaction {
         if enforce_legacy_access {
             db.ensure_unprotected_legacy_access(collection, SecureOperation::Delete)?;
         }
-        db.ensure_collection(collection)?;
+        self.bind_collection_incarnation(collection)?;
         for (id, statement_snapshot) in ids {
             if id.is_empty() {
                 return Err(BicDbError::EmptyRecordId);
@@ -17943,7 +17956,7 @@ impl Transaction {
             if enforce_legacy_access {
                 db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?;
             }
-            db.ensure_collection(collection)?;
+            self.bind_collection_incarnation(collection)?;
             let (mut next_dim, policy) = {
                 let state = db.collection_state(collection)?;
                 (state.meta.vector_dim, state.meta.policy.clone())
@@ -18133,7 +18146,7 @@ impl Transaction {
         {
             let db = self.db_ref();
             db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?;
-            db.ensure_collection(collection)?;
+            self.bind_collection_incarnation(collection)?;
             let (mut next_dim, policy) = {
                 let state = db.collection_state(collection)?;
                 (state.meta.vector_dim, state.meta.policy.clone())
@@ -18175,6 +18188,11 @@ impl Transaction {
                 }
                 let statement_snapshot =
                     self.conflict_snapshot_for_write(collection, &record_id, statement_snapshot);
+                let statement_snapshot = if repair.is_some() {
+                    statement_snapshot.min(self.applied_snapshot)
+                } else {
+                    statement_snapshot
+                };
                 writes.push(TxWrite {
                     collection: collection.to_string(),
                     op: TxWriteOp::Upsert,
@@ -18216,7 +18234,7 @@ impl Transaction {
         {
             let db = self.db_ref();
             db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?;
-            db.ensure_collection(collection)?;
+            self.bind_collection_incarnation(collection)?;
             let mut next_dim = db.collection_state(collection)?.meta.vector_dim;
             for (record, statement_snapshot, repair) in records {
                 let record_id = record.id.clone();
@@ -18233,6 +18251,11 @@ impl Transaction {
                 }
                 let statement_snapshot =
                     self.conflict_snapshot_for_write(collection, &record_id, statement_snapshot);
+                let statement_snapshot = if repair.is_some() {
+                    statement_snapshot.min(self.applied_snapshot)
+                } else {
+                    statement_snapshot
+                };
                 writes.push(TxWrite {
                     collection: collection.to_string(),
                     op: TxWriteOp::Upsert,
@@ -18351,7 +18374,7 @@ impl Transaction {
             }
             None => db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?,
         }
-        db.ensure_collection(collection)?;
+        self.bind_collection_incarnation(collection)?;
         if wait {
             self.lock_row_for_write(tx_id, collection, id, true)?;
         } else {
@@ -18431,7 +18454,7 @@ impl Transaction {
         let tx_id = self.id;
         let db = self.db_ref();
         db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?;
-        db.ensure_collection(collection)?;
+        self.bind_collection_incarnation(collection)?;
         if reservation {
             db.lock_tx_first_record_for_reservation(tx_id, collection, id, &self.locked_keys)?;
         } else {
@@ -18498,7 +18521,7 @@ impl Transaction {
             )?,
             None => db.ensure_unprotected_legacy_access(collection, SecureOperation::Delete)?,
         }
-        db.ensure_collection(collection)?;
+        self.bind_collection_incarnation(collection)?;
         self.lock_row_for_write(tx_id, collection, id, true)?;
         let Some(max_tx) = Self::latest_committed_record_sequence(db, collection, id)? else {
             return Ok(None);
@@ -20166,13 +20189,25 @@ fn apply_unmaterialized_transaction_log(
                             };
                             let post: PagedStubFetch = {
                                 let paged = Arc::clone(paged);
-                                let collection: Arc<str> = Arc::from(write.collection.as_str());
-                                Arc::new(move |pk: &str| paged.get(&post_snapshot, &collection, pk))
+                                let physical: Arc<str> = Arc::from(
+                                    paged
+                                        .physical_collection(write.collection.as_str())
+                                        .as_ref(),
+                                );
+                                Arc::new(move |pk: &str| {
+                                    paged.get_physical_record(&post_snapshot, &physical, pk)
+                                })
                             };
                             let pre: PagedStubFetch = {
                                 let paged = Arc::clone(paged);
-                                let collection: Arc<str> = Arc::from(write.collection.as_str());
-                                Arc::new(move |pk: &str| paged.get(&pre_snapshot, &collection, pk))
+                                let physical: Arc<str> = Arc::from(
+                                    paged
+                                        .physical_collection(write.collection.as_str())
+                                        .as_ref(),
+                                );
+                                Arc::new(move |pk: &str| {
+                                    paged.get_physical_record(&pre_snapshot, &physical, pk)
+                                })
                             };
                             Some(PagedApplyCtx { xid, post, pre })
                         }

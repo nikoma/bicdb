@@ -127,7 +127,7 @@ pub struct StoredRecord {
 /// ignorant of the page engine.
 pub(crate) struct EvictedPayload {
     /// Fetches the full record this stub stands for. Must resolve as of the
-    /// pinned snapshot, not as of now.
+    /// pinned snapshot and physical collection, not the current catalog alias.
     pub(crate) fetch: Arc<dyn Fn(&str) -> Result<Option<Record>> + Send + Sync>,
     /// The record id to fetch (same as `StoredRecord::id`; kept here so the
     /// fetch closure needs no access to the stub itself).

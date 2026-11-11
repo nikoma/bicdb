@@ -560,6 +560,7 @@ impl BicDb {
         for idx in order {
             let collection = tx.writes[idx].collection.clone();
             let record_id = tx.writes[idx].record_id.clone();
+            let statement_snapshot = tx.writes[idx].statement_snapshot;
             // Generous budget: a statement-time locker holds for the rest of
             // its procedure (~ms); event-driven waits keep the cost bounded.
             // A transaction that waits for row owners (see
@@ -590,21 +591,17 @@ impl BicDb {
                     continue;
                 };
                 let max_tx = version_chain_max_tx(&shard.versions, rowid);
-                // Freshness must be judged against the un-floored APPLIED
-                // watermark, not the (possibly floored) snapshot: a commit seq
-                // in the (applied, snapshot] gap may not have been applied yet
-                // when this transaction's statement read the row, so the
-                // buffered absolute record can predate it even though the seq
-                // is "within snapshot". (Observed in the wild as a payment
-                // regressing d_next_o_id and minting duplicate order ids.)
-                if max_tx <= tx.applied_snapshot {
+                // Use the applied boundary captured when the repair was
+                // buffered. A later READ COMMITTED statement can advance the
+                // transaction's watermark without updating this write's image.
+                if max_tx <= statement_snapshot {
                     // Genuinely fresh — and the lock we now hold keeps it
                     // fresh through apply.
                     repair_trace(
                         &collection,
                         &record_id,
                         tx.id.0,
-                        tx.applied_snapshot,
+                        statement_snapshot,
                         max_tx,
                         || "fresh".to_owned(),
                     );
@@ -623,14 +620,17 @@ impl BicDb {
                     }
                     continue;
                 }
-                let Some(entry) = shard.records.get(&rowid) else {
-                    continue;
-                };
+                let entry = shard.records.get(&rowid).ok_or_else(|| {
+                    BicDbError::TransactionConflict(format!(
+                        "{collection}:{record_id} was deleted after transaction {} snapshot",
+                        tx.id.0,
+                    ))
+                })?;
                 repair_trace(
                     &collection,
                     &record_id,
                     tx.id.0,
-                    tx.applied_snapshot,
+                    statement_snapshot,
                     max_tx,
                     || format!("rebuild latest_meta={}", entry.record.metadata.get()),
                 );

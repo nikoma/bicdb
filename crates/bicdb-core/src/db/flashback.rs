@@ -500,7 +500,7 @@ impl BicDb {
                 changed: None,
             });
         }
-        tx.push_writes(history);
+        tx.push_writes(history)?;
         Ok(())
     }
 

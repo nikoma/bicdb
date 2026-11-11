@@ -3127,6 +3127,7 @@ impl<'db> SqlSession<'db> {
     /// Statement text through the profiled executor; a read-only transaction
     /// checks a single statement before it runs.
     fn execute_text_statements(&mut self, sql: &str) -> Result<SqlResult> {
+        self.refresh_client_statement_snapshot()?;
         if !self.transaction_read_only() {
             return self.execute_profiled(sql);
         }
@@ -3571,6 +3572,23 @@ impl<'db> SqlSession<'db> {
         last_result.ok_or_else(|| SqlError::InvalidSql("empty SQL statement".to_string()))
     }
 
+    /// Direct embedding sessions need the same READ COMMITTED statement
+    /// boundary as pgwire. Native DDL copy/undo commits must be visible to the
+    /// next client statement, including statements in one submitted SQL batch.
+    /// Row/routine evaluators retain their existing enclosing-statement view;
+    /// fixed-snapshot transactions are unchanged by the native refresh API.
+    fn refresh_client_statement_snapshot(&mut self) -> Result<()> {
+        if self.column_references_checkable() {
+            let floor = self
+                .snapshot_floor
+                .max(crate::statement_context::latest_independent_commit());
+            if let Some(tx) = self.tx.as_mut() {
+                tx.refresh_read_committed_snapshot_after(floor)?;
+            }
+        }
+        Ok(())
+    }
+
     /// Column references are checked for client statements only: routine and
     /// trigger bodies resolve their variables through frames this check does
     /// not model.
@@ -3812,6 +3830,7 @@ impl<'db> SqlSession<'db> {
 
     fn execute_parsed_statement_in_sql(&mut self, statement: &Statement) -> Result<SqlResult> {
         self.ensure_read_only_statement(statement)?;
+        self.refresh_client_statement_snapshot()?;
         if let Some(result) = self.apply_instead_rule(statement)? {
             return Ok(result);
         }

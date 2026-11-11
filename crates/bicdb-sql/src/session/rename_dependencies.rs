@@ -1,5 +1,6 @@
 //! Exact record scope for rename undo. The caller must reserve these relations
-//! before capture or mutation; ordinary SQL dispatch is not connected yet.
+//! before capture or mutation. SQL dispatch currently retains conservative
+//! native quiescence; scoped concurrent admission is still unqualified.
 use super::*;
 
 pub(super) struct RenameDependencies {

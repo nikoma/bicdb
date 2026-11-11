@@ -70,7 +70,7 @@ pub(super) fn apply(
             id: prepared.id().into(),
         });
     }
-    let result = (|| {
+    let result = (|| -> Result<()> {
         move_source(session, old, new)?;
         stage("backing");
         delete_schema(session.db_mut()?, old)?;

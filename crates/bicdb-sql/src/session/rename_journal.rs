@@ -1,6 +1,7 @@
 //! Durable undo for generic rename, connected to ordered startup DDL recovery.
-//! SQL dispatch integration must still reserve affected relations and capture
-//! the complete dependency closure before producing these journal records.
+//! SQL dispatch captures its dependency closure before mutation and stages the
+//! decision with its business transaction. Scoped concurrent admission and
+//! replication qualification remain gates for the unmerged prototype.
 use super::*;
 
 const HEADERS: &str = "__bicdb_rename_intents";

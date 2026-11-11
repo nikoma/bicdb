@@ -16,6 +16,7 @@ const CASES: &[(&str,&str)] = &[
     ("function_star", "SELECT count(source.*) FROM source"),
     ("union", "SELECT id,payload FROM source UNION ALL SELECT id,payload FROM source WHERE id>1"),
     ("literal", "SELECT 'source' AS literal,source.payload FROM source"),
+    ("table_query", "TABLE public.source"),
 ];
 
 #[test]

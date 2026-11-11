@@ -286,6 +286,42 @@ impl VisitorMut for Rebinder<'_> {
                     .insert(cte_key(&result.name), result);
             }
         }
+        // TABLE query bodies do not contain a TableFactor for the visitor.
+        // Resolve them with the same lexical CTE and schema rules as FROM.
+        let mut bodies = vec![query.body.as_mut()];
+        while let Some(body) = bodies.pop() {
+            match body {
+                SetExpr::SetOperation { left, right, .. } => {
+                    bodies.push(left.as_mut());
+                    bodies.push(right.as_mut());
+                }
+                SetExpr::Table(table) => {
+                    if let Some(name) = &table.table_name {
+                        let cte = table.schema_name.is_none()
+                            && self
+                                .ctes
+                                .last()
+                                .is_some_and(|ctes| ctes.values().any(|cte| cte.name == *name));
+                        let mut parts = Vec::new();
+                        if let Some(schema) = &table.schema_name {
+                            parts.push(schema.clone());
+                        }
+                        parts.push(name.clone());
+                        match relation_name_from_parts(&parts) {
+                            Ok(physical) if !cte && physical == self.old => {
+                                table.table_name = Some(
+                                    logical_relation_name(self.new)
+                                        .unwrap_or_else(|| self.new.into()),
+                                );
+                            }
+                            Err(error) => return ControlFlow::Break(error),
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
         let scope = self.scopes.len();
         self.scopes.push(Scope::default());
         self.frames.push(QueryFrame {

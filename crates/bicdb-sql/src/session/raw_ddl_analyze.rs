@@ -767,6 +767,29 @@ impl<'db> SqlSession<'db> {
             return Err(protected_security_setting_error(&setting));
         }
         match setting.as_str() {
+            "transaction_isolation"
+                if !oracle::preview_routine_language_enabled(self.db_ref())? =>
+            {
+                let value = value.to_cell();
+                let level = super::transaction_defaults::transaction_isolation_level(&value)
+                    .ok_or_else(|| {
+                        SqlError::invalid_parameter_value(format!(
+                            "invalid value for parameter transaction_isolation: {value}"
+                        ))
+                    })?;
+                self.apply_transaction_modes(&[TransactionMode::IsolationLevel(level)])
+            }
+            "transaction_deferrable"
+                if !oracle::preview_routine_language_enabled(self.db_ref())? =>
+            {
+                let enabled =
+                    crate::eval::parse_pg_bool_text(&value.to_cell()).ok_or_else(|| {
+                        SqlError::invalid_parameter_value(
+                            "transaction_deferrable requires a boolean",
+                        )
+                    })?;
+                self.apply_transaction_deferrability(enabled)
+            }
             "default_transaction_isolation" => {
                 let value = super::transaction_defaults::validate_default_isolation(
                     &value.to_cell(),

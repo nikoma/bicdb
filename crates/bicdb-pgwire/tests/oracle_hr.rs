@@ -108,7 +108,7 @@ async fn session_transaction_defaults_preserve_visibility_and_explicit_overrides
         if profile == "postgres" {
             let error = a
                 .batch_execute(
-                    "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+                    "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL SNAPSHOT",
                 )
                 .await
                 .unwrap_err();
@@ -117,6 +117,22 @@ async fn session_transaction_defaults_preserve_visibility_and_explicit_overrides
                 transaction_defaults_text(&a, "SHOW default_transaction_isolation").await,
                 "read committed"
             );
+            a.batch_execute(
+                "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL SERIALIZABLE; BEGIN",
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                transaction_defaults_text(&a, "SHOW transaction_isolation").await,
+                "serializable"
+            );
+            assert_eq!(transaction_defaults_text(&a, count).await, "4");
+            b.batch_execute("INSERT INTO session_rows VALUES(5,0)")
+                .await
+                .unwrap();
+            assert_eq!(transaction_defaults_text(&a, count).await, "4");
+            a.batch_execute("COMMIT").await.unwrap();
+            assert_eq!(transaction_defaults_text(&a, count).await, "5");
         }
         drop(a);
         drop(b);

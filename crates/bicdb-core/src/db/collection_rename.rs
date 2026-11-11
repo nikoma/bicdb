@@ -151,7 +151,8 @@ impl BicDb {
             return Ok(());
         }
         if !self.collections.contains_key(CATALOG_LOG_COLLECTION) {
-            let meta = CollectionMeta::standard(CATALOG_LOG_COLLECTION);
+            let meta = self
+                .new_local_collection_metadata(&CollectionMeta::standard(CATALOG_LOG_COLLECTION));
             self.collections.insert(
                 CATALOG_LOG_COLLECTION.to_string(),
                 RwLock::new(CollectionState::new(meta)),
@@ -183,6 +184,7 @@ impl BicDb {
                         let mut meta = CollectionMeta::standard(name.clone());
                         meta.mode = mode;
                         meta.storage_name = storage_name.clone();
+                        meta = self.new_local_collection_metadata(&meta);
                         if let Some(storage) = storage_name {
                             self.set_storage_alias(&name, &storage);
                         }
@@ -226,7 +228,8 @@ impl BicDb {
         if !self.replicates_catalog() || self.collections.contains_key(CATALOG_LOG_COLLECTION) {
             return Ok(());
         }
-        let meta = CollectionMeta::standard(CATALOG_LOG_COLLECTION);
+        let meta =
+            self.new_local_collection_metadata(&CollectionMeta::standard(CATALOG_LOG_COLLECTION));
         self.collections.insert(
             CATALOG_LOG_COLLECTION.to_string(),
             RwLock::new(CollectionState::new(meta)),
@@ -614,6 +617,7 @@ impl BicDb {
         let target = self.collection_state_mut(&source.name)?;
         let mut copied = source.clone();
         copied.storage_name = target.meta.storage_name.clone();
+        copied.local_namespace_id = target.meta.local_namespace_id;
         copied.renamed_from = None;
         target.meta = copied;
         self.persist_catalog()?;

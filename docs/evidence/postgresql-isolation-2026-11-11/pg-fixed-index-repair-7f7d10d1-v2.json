@@ -1,0 +1,59 @@
+{
+  "label": "pg-fixed-index-repair-7f7d10d1-v2",
+  "source": "7f7d10d1252bddc533fe61d0b641c6912bb8242f",
+  "base": "2d29fb83b8986786f40d1ccfdd435b1c608c13ba",
+  "repo": "/root/bicdb-pg-isolation-delivery",
+  "wait_units": [
+    "bicdb-pg-fixed-index-negative-2d29fb83"
+  ],
+  "scope": "Generalize historical candidate reconciliation and current-only plan avoidance from SSI-only registration to fixed snapshots. Verify original PG historical controls across RR/read-only RR/SSI/read-only SSI plus independent Oracle snapshot profile, both stores; retain matrix and SET/CHAIN regressions. No global rename/recovery gate changed, no original assertions/timeouts changed.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-pgwire",
+      "--test",
+      "fixed_snapshot_index_visibility",
+      "--test",
+      "writable_repeatable_read",
+      "--test",
+      "serializable_dependencies",
+      "--test",
+      "fixed_snapshot_boundary"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "rls_index_candidates",
+      "--test",
+      "explain_matches_execution",
+      "--test",
+      "plan_diagnostics"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-pgwire",
+      "--test",
+      "oracle_hr",
+      "session_transaction_defaults"
+    ]
+  ]
+}

@@ -1,0 +1,13 @@
+
+running 8 tests
+test distribution_range_mutation::tests::bounded_busy_attempt_does_not_park_or_leave_a_pending_freeze ... ok
+test distribution_range_mutation::tests::cancelled_drain_cleans_its_pending_state_without_revoking_writer ... ok
+test distribution_range_mutation::tests::controlled_writer_prevents_rotation_and_quiescent_readiness ... ok
+test distribution_range_mutation::tests::controlled_callback_keeps_tombstone_frozen_after_owner_drop ... ok
+test distribution_range_mutation::tests::database_mutations_drain_and_cannot_enter_a_range_capture ... ok
+test distribution_range_mutation::tests::permits_cannot_be_reused_for_another_range_database_or_freeze ... ok
+test distribution_range_mutation::tests::transaction_claim_cannot_survive_its_actual_owner_or_reuse_another_lease ... ok
+test distribution_range_mutation::tests::owned_permits_cross_threads_and_capture_drains_the_last_callback ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 573 filtered out; finished in 0.03s
+

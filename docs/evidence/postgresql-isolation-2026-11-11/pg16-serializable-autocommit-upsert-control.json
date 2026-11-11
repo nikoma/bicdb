@@ -1,0 +1,8 @@
+{
+  "status": "passed",
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "wait_event_type": "Lock",
+  "wait_event": "transactionid",
+  "upsert_sqlstate": "40001",
+  "winner": 10
+}

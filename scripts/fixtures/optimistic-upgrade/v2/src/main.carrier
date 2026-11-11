@@ -1,0 +1,76 @@
+service VersionUpgradeQualification {}
+
+auth jwt FixtureAuth {
+  issuer: "https://auth.parau.org"
+  audience: "walknorth-ehr-api"
+  algorithm: "RS256"
+  roles_claim: "roles"
+}
+
+role draft_editor { title: "Draft editor" }
+
+model Draft {
+  id: UUID @primary
+  tenant_id: UUID @index
+  title: String @length(min: 1, max: 120)
+  version: Int @version = 1
+}
+
+policy Draft {
+  tenant_field: tenant_id
+  read: roles [draft_editor]
+  write: roles [draft_editor]
+}
+
+crud Draft at "/drafts" {
+  create: protect FixtureAuth roles [draft_editor]
+  get: protect FixtureAuth roles [draft_editor]
+  list: protect FixtureAuth roles [draft_editor]
+  update: protect FixtureAuth roles [draft_editor]
+}
+
+test "draft version rejects a stale edit" {
+  auth {
+    id: 9610 email: "draft@example.com" name: "Draft editor"
+    roles: ["draft_editor"] tenant_id: "96109610-9610-4610-8610-961096109610"
+  }
+  given {
+    let draft = http.request_as("Draft", method: "POST", path: "/drafts", body: { title: "Original" })
+    let path = "/drafts/" + string.replace(json.stringify(draft.id), "\"", "")
+  }
+  when {
+    let edited = http.request(method: "PATCH", path: path, body: { title: "Winner" version: draft.version })
+    let stale = http.request(method: "PATCH", path: path, body: { title: "Stale" version: draft.version })
+    let current = Draft.get(id: draft.id)
+  }
+  then draft.version == 1 && edited.status == 200 && stale.status == 409
+  && current.title == "Winner" && current.version == 2
+}
+
+test "upgrade backfills an existing draft and keeps its data" {
+  auth {
+    id: 9610 email: "draft@example.com" name: "Draft editor"
+    roles: ["draft_editor"] tenant_id: "96109610-9610-4610-8610-961096109610"
+  }
+  given {
+    let rows = Draft.Where(d => d.title == "Before upgrade").ToList()
+    let draft = rows[0]
+    let path = "/drafts/" + string.replace(json.stringify(draft.id), "\"", "")
+  }
+  when {
+    let edited = http.request(method: "PATCH", path: path, body: { title: "After upgrade" version: draft.version })
+    let current = Draft.get(id: draft.id)
+  }
+  then array.length(rows) == 1 && draft.version == 1
+  && edited.status == 200 && current.title == "After upgrade" && current.version == 2
+}
+
+test "restart and refused upgrade retain the current counter" {
+  auth {
+    id: 9610 email: "draft@example.com" name: "Draft editor"
+    roles: ["draft_editor"] tenant_id: "96109610-9610-4610-8610-961096109610"
+  }
+  given {}
+  when { let rows = Draft.Where(d => d.title == "After upgrade").ToList() }
+  then array.length(rows) == 1 && rows[0].version == 2
+}

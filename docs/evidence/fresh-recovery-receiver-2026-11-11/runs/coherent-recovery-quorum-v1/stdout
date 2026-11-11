@@ -1,0 +1,11 @@
+
+running 6 tests
+test distribution_range_recovery::quorum::tests::actual_rf1_fence_is_durable_but_unknown_native_floor_never_becomes_zero_ready ... ok
+test distribution_range_recovery::quorum::tests::actual_duplicate_and_insufficient_fences_cannot_create_majority ... ok
+test distribution_range_recovery::quorum::tests::actual_rf3_distinct_fences_succeed_without_waiting_for_data_leader_ack ... ok
+test distribution_range_recovery::quorum::tests::original_parent_cancellation_prevents_consuming_a_real_fence_quorum ... ok
+test distribution_range_recovery::quorum::tests::independently_real_but_different_session_fence_is_rejected ... ok
+test distribution_range_recovery::runtime::tests::actual_runtime_handoff_uses_committed_session_owner_after_normal_preflight ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 619 filtered out; finished in 5.77s
+

@@ -1470,6 +1470,14 @@ impl<'db> SqlEngine<'db> {
         schema: Option<&TableSchema>,
         selection: Option<&Expr>,
     ) -> Result<Option<Vec<Arc<Record>>>> {
+        if self
+            .tx
+            .is_some_and(|tx| tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted)
+        {
+            // These postings describe current records only. The heap path
+            // can see older versions and records the relation predicate.
+            return Ok(None);
+        }
         let Some(selection) = selection else {
             return Ok(None);
         };
@@ -2411,7 +2419,7 @@ impl<'db> SqlEngine<'db> {
                                 filters.push((*idx, value));
                             }
                         }
-                        self.db_ref().range_index_with_prefix_filters_rowids(
+                        self.range_index_rowids_for_snapshot(
                             &candidate.plan.name,
                             candidate.prefix.as_slice(),
                             lower.as_ref(),
@@ -2597,7 +2605,11 @@ impl<'db> SqlEngine<'db> {
         if self.selection_contradiction_proven(table, alias, schema, selection) {
             return Ok(Some(RecordLocators::Rowids(Vec::new())));
         }
-        if let Some(schema) = schema {
+        if let Some(schema) = schema.filter(|_| {
+            !self
+                .tx
+                .is_some_and(|tx| tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted)
+        }) {
             if let Some((index_name, candidate)) =
                 self.trigram_index_candidate(table, alias, schema, selection)?
             {
@@ -2662,7 +2674,7 @@ impl<'db> SqlEngine<'db> {
                             &index.fields,
                             prefix.len() + 1,
                         )?;
-                        self.db_ref().range_index_with_prefix_filters_rowids(
+                        self.range_index_rowids_for_snapshot(
                             &index.name,
                             prefix.as_slice(),
                             lower.as_ref(),
@@ -2863,7 +2875,7 @@ impl<'db> SqlEngine<'db> {
                             &index.fields,
                             prefix.len() + 1,
                         )?;
-                        let ids = self.db_ref().range_index_with_prefix_filters(
+                        let ids = self.range_index_pks_for_snapshot(
                             &index.name,
                             prefix.as_slice(),
                             lower.as_ref(),
@@ -3026,7 +3038,7 @@ impl<'db> SqlEngine<'db> {
                         };
                         filters.push((*idx, value));
                     }
-                    let ids = self.db_ref().range_index_with_prefix_filters(
+                    let ids = self.range_index_pks_for_snapshot(
                         &plan.name,
                         prefix.as_slice(),
                         lower.as_ref(),
@@ -4295,7 +4307,7 @@ impl<'db> SqlEngine<'db> {
                     &primary_key_fields,
                     range_idx + 1,
                 )?;
-                let ids = self.db_ref().range_index_with_prefix_filters(
+                let ids = self.range_index_pks_for_snapshot(
                     &index.name,
                     prefix.as_slice(),
                     lower.as_ref(),

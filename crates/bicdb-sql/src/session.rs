@@ -1680,6 +1680,16 @@ struct GucAssignmentTargets {
 }
 
 impl GucAssignmentTargets {
+    fn is_current_transaction_mode(&self) -> bool {
+        self.gucs.len() == 1
+            && self.gucs.iter().any(|key| {
+                matches!(
+                    key.as_str(),
+                    "transaction_isolation" | "transaction_deferrable"
+                )
+            })
+    }
+
     fn setting(setting: &str) -> Self {
         match setting {
             "bicdb.vector_search" => Self {
@@ -1710,6 +1720,8 @@ impl GucAssignmentTargets {
             CURRENT_ROLE_GUC,
             INITIAL_SESSION_AUTHORIZATION_GUC,
             "transaction_isolation",
+            "transaction_deferrable",
+            "transaction_read_only",
         ];
         Self {
             gucs: local_restore
@@ -2741,7 +2753,7 @@ impl<'db> SqlSession<'db> {
             None => self.db_ref().begin_transaction_after(floor)?,
         };
         tx.set_blocking_row_waits(self.blocking_row_wait_token());
-        if isolation == "serializable" {
+        if matches!(isolation, "repeatable read" | "serializable") {
             tx.set_snapshot_isolation(true, floor)?;
             tx.set_statement_write_conflict_check(true)?;
         }
@@ -2981,6 +2993,9 @@ impl<'db> SqlSession<'db> {
     ) -> Result<()> {
         let previous_gucs = self.session_gucs.clone();
         let previous_settings = self.settings;
+        let local = local
+            || (targets.is_current_transaction_mode()
+                && !oracle::preview_routine_language_enabled(self.db_ref())?);
         apply(self)?;
         self.reconcile_guc_assignments(previous_gucs, previous_settings, local);
         if !local {
@@ -3275,7 +3290,11 @@ impl<'db> SqlSession<'db> {
         if !self.transaction_read_only() {
             return self.execute_profiled(sql);
         }
-        let statements = parse_statements(sql).map_err(|_| read_only::violation())?;
+        let options = postgres_transaction_deferrability(sql)?;
+        let parse_sql = options
+            .as_ref()
+            .map_or(sql, |(stripped, _)| stripped.as_str());
+        let statements = parse_statements(parse_sql).map_err(|_| read_only::violation())?;
         if statements.len() > 1 {
             return self.execute_statement_list(&statements);
         }
@@ -3684,6 +3703,20 @@ impl<'db> SqlSession<'db> {
     /// Parse and run the statements of `sql`; the raw-text handlers above
     /// have either declined or been bypassed.
     fn execute_parsed_sql(&mut self, sql: &str) -> Result<SqlResult> {
+        if let Some((stripped, deferrable)) = postgres_transaction_deferrability(sql)? {
+            if oracle::preview_routine_language_enabled(self.db_ref())? {
+                return Err(SqlError::Unsupported(
+                    "DEFERRABLE transaction mode requires the PostgreSQL profile".into(),
+                ));
+            }
+            let statements = parse_statements(&stripped)?;
+            if matches!(statements.as_slice(), [Statement::Set(_)]) {
+                self.validate_transaction_deferrability()?;
+            }
+            let result = self.execute_statement_list(&statements)?;
+            self.apply_transaction_deferrability(deferrable)?;
+            return Ok(result);
+        }
         if crate::statement_cache::statement_is_cacheable(sql) {
             if let Some(result) = self.execute_cached_statements(sql)? {
                 return Ok(result);
@@ -3831,7 +3864,24 @@ impl<'db> SqlSession<'db> {
         let floor = self
             .snapshot_floor
             .max(crate::statement_context::latest_independent_commit());
-        if let Some(tx) = self.tx.as_mut() {
+        let serializable = self
+            .session_gucs
+            .get("transaction_isolation")
+            .is_some_and(|level| level == "serializable");
+        let deferrable = self
+            .session_gucs
+            .get("transaction_deferrable")
+            .is_some_and(|value| value == "on");
+        let read_only = self.transaction_read_only();
+        let tx = self.tx.as_mut().unwrap();
+        if serializable {
+            tx.acquire_postgres_serializable_snapshot(
+                floor,
+                read_only,
+                deferrable,
+                &self.cancellation,
+            )?;
+        } else {
             tx.acquire_statement_snapshot(floor)?;
         }
         Ok(())
@@ -4073,9 +4123,29 @@ impl<'db> SqlSession<'db> {
         let _clock = oracle::current_time::StatementScope::new();
         oracle::lock_waits::validate(self.db_ref(), statement)?;
         let previous = std::mem::replace(&mut self.in_routine_expression, false);
-        let result = self.execute_parsed_statement_in_sql(statement);
+        let result = self.execute_with_postgres_default_isolation(statement);
         self.in_routine_expression = previous;
         result
+    }
+
+    fn execute_with_postgres_default_isolation(
+        &mut self,
+        statement: &Statement,
+    ) -> Result<SqlResult> {
+        if self.tx.is_some()
+            || self
+                .session_gucs
+                .get("default_transaction_isolation")
+                .is_none_or(|level| level != "serializable")
+            || !postgres_statement_has_parse_snapshot(statement)
+            || oracle::preview_routine_language_enabled(self.db_ref())?
+        {
+            return self.execute_parsed_statement_in_sql(statement);
+        }
+        self.with_statement_transaction(|session| {
+            session.set_transaction_isolation_label("serializable")?;
+            session.execute_parsed_statement_in_sql(statement)
+        })
     }
 
     fn execute_parsed_statement_in_sql(&mut self, statement: &Statement) -> Result<SqlResult> {
@@ -4183,6 +4253,10 @@ impl<'db> SqlSession<'db> {
             })?;
         let fixed = tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted;
         let read_only = self.transaction_read_only();
+        let deferrable = self
+            .session_gucs
+            .get("transaction_deferrable")
+            .is_some_and(|value| value == "on");
         let isolation = self
             .session_gucs
             .get("transaction_isolation")
@@ -4204,9 +4278,12 @@ impl<'db> SqlSession<'db> {
         } else {
             next.set_deferred_snapshot_isolation(fixed, floor)?;
         }
-        next.set_statement_write_conflict_check(oracle && fixed)?;
+        next.set_statement_write_conflict_check(fixed)?;
         self.set_transaction_read_only_label(read_only)?;
         self.set_transaction_isolation_label(&isolation)?;
+        let mut state = self.take_session_guc_state();
+        state.set_transaction_deferrable(deferrable);
+        self.install_session_guc_state(state);
         self.tx = Some(next);
         Ok(result)
     }
@@ -5230,7 +5307,7 @@ impl<'db> SqlSession<'db> {
             } else {
                 tx.set_deferred_snapshot_isolation(fixed, floor)?;
             }
-            tx.set_statement_write_conflict_check(oracle_preview && fixed)?;
+            tx.set_statement_write_conflict_check(fixed)?;
             self.set_transaction_isolation_label(transaction_defaults::isolation_label(level))?;
         }
         Ok(())
@@ -5767,6 +5844,7 @@ impl<'db> SqlSession<'db> {
                 "bicdb.sql_profile",
                 "transaction_isolation",
                 "transaction_read_only",
+                "transaction_deferrable",
             ];
             Arc::make_mut(&mut self.session_gucs).retain(|key, _| {
                 preserved.contains(&key.as_str())
@@ -5788,6 +5866,13 @@ impl<'db> SqlSession<'db> {
             normalize_object_name(raw)
         };
         let targets = GucAssignmentTargets::setting(&setting);
+        if targets.is_current_transaction_mode()
+            && !oracle::preview_routine_language_enabled(self.db_ref())?
+        {
+            return Err(SqlError::Unsupported(format!(
+                "parameter \"{setting}\" cannot be reset"
+            )));
+        }
         if setting == read_only::SETTING {
             return Err(SqlError::Unsupported(
                 "transaction access mode must be changed with SET TRANSACTION".into(),

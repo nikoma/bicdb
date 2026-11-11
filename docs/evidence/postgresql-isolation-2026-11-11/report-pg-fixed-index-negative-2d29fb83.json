@@ -1,0 +1,28 @@
+{
+  "source": "2d29fb83b8986786f40d1ccfdd435b1c608c13ba",
+  "scope": "Tests-only negative control against integrated RR/SSI runtime. Historical secondary equality/ranges, bounded ordered winner, MIN/MAX, GIN, and primary rows independently across writable/read-only RR/SSI in both stores. Preserve actual failures; no claim of correctness from prior SSI-only index controls.",
+  "started_unix": 1794419309.821869,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "fixed_snapshot_index_visibility",
+        "--",
+        "--nocapture"
+      ],
+      "started_unix": 1794419309.8222134,
+      "exit": 101,
+      "finished_unix": 1794419317.111149
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794419317.1113997
+}

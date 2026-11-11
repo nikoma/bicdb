@@ -12,24 +12,50 @@ pub(super) fn isolation_label(level: &TransactionIsolationLevel) -> &'static str
 }
 
 pub(super) fn validate_default_isolation(value: &str, oracle: bool) -> Result<&'static str> {
-    let level = match value.to_ascii_lowercase().as_str() {
-        "read committed" => TransactionIsolationLevel::ReadCommitted,
-        "read uncommitted" => TransactionIsolationLevel::ReadUncommitted,
-        "repeatable read" => TransactionIsolationLevel::RepeatableRead,
-        "serializable" => TransactionIsolationLevel::Serializable,
-        _ => {
-            return Err(SqlError::invalid_parameter_value(format!(
-                "invalid value for parameter default_transaction_isolation: {value}"
-            )))
-        }
-    };
-    // The Oracle profile's SERIALIZABLE contract is snapshot isolation. Do not
-    // enable PostgreSQL SERIALIZABLE through a setting without its SSI contract.
+    let level = transaction_isolation_level(value).ok_or_else(|| {
+        SqlError::invalid_parameter_value(format!(
+            "invalid value for parameter default_transaction_isolation: {value}"
+        ))
+    })?;
     validate_profile_transaction_modes(&[TransactionMode::IsolationLevel(level.clone())], oracle)?;
     Ok(isolation_label(&level))
 }
 
+pub(super) fn transaction_isolation_level(value: &str) -> Option<TransactionIsolationLevel> {
+    Some(match value.to_ascii_lowercase().as_str() {
+        "read committed" => TransactionIsolationLevel::ReadCommitted,
+        "read uncommitted" => TransactionIsolationLevel::ReadUncommitted,
+        "repeatable read" => TransactionIsolationLevel::RepeatableRead,
+        "serializable" => TransactionIsolationLevel::Serializable,
+        _ => return None,
+    })
+}
+
 impl SqlSessionGucState {
+    pub fn transaction_is_serializable(&self) -> bool {
+        self.session_gucs
+            .get("transaction_isolation")
+            .is_some_and(|level| level == "serializable")
+    }
+
+    pub fn transaction_deferrable(&self) -> bool {
+        self.session_gucs
+            .get("transaction_deferrable")
+            .is_some_and(|value| value == "on")
+    }
+
+    pub fn set_transaction_deferrable(&mut self, enabled: bool) {
+        let key = "transaction_deferrable";
+        if !enabled && !self.session_gucs.contains_key(key) {
+            return;
+        }
+        self.begin_transaction();
+        let previous = self.session_gucs.get(key).cloned();
+        self.local_restore.entry(key.into()).or_insert(previous);
+        Arc::make_mut(&mut self.session_gucs)
+            .insert(key.into(), if enabled { "on" } else { "off" }.into());
+    }
+
     /// Validate and return the connection's default under its fixed SQL profile.
     pub fn default_transaction_isolation(&self, profile: &str) -> Result<&'static str> {
         validate_default_isolation(
@@ -62,6 +88,33 @@ impl SqlSessionGucState {
 }
 
 impl SqlSession<'_> {
+    pub(super) fn validate_transaction_deferrability(&self) -> Result<()> {
+        if self
+            .tx
+            .as_ref()
+            .is_some_and(Transaction::statement_snapshot_acquired)
+            || !self.savepoints.is_empty()
+        {
+            return Err(SqlError::data_exception(
+                "25001",
+                "SET TRANSACTION DEFERRABLE must precede the first query",
+                None,
+            ));
+        }
+        Ok(())
+    }
+
+    pub(super) fn apply_transaction_deferrability(&mut self, deferrable: bool) -> Result<()> {
+        self.validate_transaction_deferrability()?;
+        if self.tx.is_none() {
+            return Ok(());
+        }
+        let mut state = self.take_session_guc_state();
+        state.set_transaction_deferrable(deferrable);
+        self.install_session_guc_state(state);
+        Ok(())
+    }
+
     pub(crate) fn default_transaction_isolation(&self) -> Result<&'static str> {
         let Some(value) = self.session_gucs.get("default_transaction_isolation") else {
             return Ok("read committed");
@@ -136,6 +189,60 @@ mod tests {
                 .unwrap();
         }
         db
+    }
+
+    #[test]
+    fn postgres_transaction_gucs_enforce_snapshot_and_reset_boundaries() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = open(root.path(), false);
+        let mut session = SqlSession::new(&mut db);
+        session
+            .execute("SET transaction_isolation='serializable'")
+            .unwrap();
+        assert_eq!(
+            shown(&mut session, false, "transaction_isolation"),
+            "read committed"
+        );
+        session.execute("BEGIN READ ONLY").unwrap();
+        session
+            .execute("SET transaction_isolation='serializable'")
+            .unwrap();
+        session.execute("SET TRANSACTION DEFERRABLE").unwrap();
+        session.execute("RESET ALL").unwrap();
+        assert_eq!(
+            shown(&mut session, false, "transaction_isolation"),
+            "serializable"
+        );
+        assert_eq!(shown(&mut session, false, "transaction_deferrable"), "on");
+        session.execute("SELECT 1").unwrap();
+        assert!(session.tx.as_ref().unwrap().is_postgres_serializable());
+        for sql in [
+            "SET transaction_isolation='read committed'",
+            "SET transaction_deferrable=off",
+            "SELECT set_config('transaction_isolation','read committed',false)",
+        ] {
+            assert_eq!(
+                session.execute(sql).unwrap_err().sqlstate(),
+                "25001",
+                "{sql}"
+            );
+        }
+        for sql in [
+            "RESET transaction_isolation",
+            "RESET transaction_deferrable",
+        ] {
+            assert_eq!(
+                session.execute(sql).unwrap_err().sqlstate(),
+                "0A000",
+                "{sql}"
+            );
+        }
+        session.execute("ROLLBACK").unwrap();
+        assert_eq!(
+            shown(&mut session, false, "transaction_isolation"),
+            "read committed"
+        );
+        assert_eq!(shown(&mut session, false, "transaction_deferrable"), "off");
     }
 
     #[test]
@@ -308,7 +415,7 @@ mod tests {
             if !oracle {
                 assert!(run(
                     &mut session,
-                    "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+                    "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL SNAPSHOT",
                     false
                 )
                 .is_err());

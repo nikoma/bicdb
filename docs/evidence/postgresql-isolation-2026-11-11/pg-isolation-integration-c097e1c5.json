@@ -1,0 +1,90 @@
+{
+  "label": "pg-isolation-integration-c097e1c5",
+  "source": "c097e1c5e78f1a39ef176ab80ca5a0eda1c3489e",
+  "base": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "repo": "/root/bicdb-pg-isolation-delivery",
+  "scope": "Current-main integration of writable PostgreSQL RR and SSI. Retains native deferred-snapshot guard and source471 features; adds SET and AND CHAIN stale update controls in both stores. Original upstream application assertions and 10s timeouts unchanged. Focused regression, not full application acceptance.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "sql_serializable"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--test",
+      "transaction_isolation",
+      "--test",
+      "mutation_grants"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-pgwire",
+      "--test",
+      "writable_repeatable_read",
+      "--test",
+      "serializable_dependencies",
+      "--test",
+      "fixed_snapshot_boundary"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "session::transaction_defaults"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "read_committed_upsert_grants",
+      "--test",
+      "read_committed_upsert_signed_arbiters"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-pgwire",
+      "--test",
+      "oracle_hr",
+      "session_transaction_defaults"
+    ]
+  ]
+}

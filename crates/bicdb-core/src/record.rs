@@ -1320,12 +1320,25 @@ pub struct CollectionMeta {
     /// open map index definitions still recorded under the old name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub renamed_from: Option<String>,
+    /// Optional identity of this node's physical namespace backing. It is
+    /// trusted only under the local_namespace_identity_v1 reader/writer fence.
+    /// Portable schema/replication metadata must not transfer this identity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_namespace_id: Option<uuid::Uuid>,
 }
 
 impl CollectionMeta {
     /// The physical storage name (see [`CollectionMeta::storage_name`]).
     pub fn storage(&self) -> &str {
         self.storage_name.as_deref().unwrap_or(&self.name)
+    }
+
+    /// Logical contract for cross-node schema/content comparison. A local
+    /// backing identity is deliberately not part of the portable schema.
+    pub fn portable_contract(&self) -> Self {
+        let mut portable = self.clone();
+        portable.local_namespace_id = None;
+        portable
     }
 
     pub fn standard(name: impl Into<String>) -> Self {
@@ -1339,6 +1352,7 @@ impl CollectionMeta {
             flashback: None,
             storage_name: None,
             renamed_from: None,
+            local_namespace_id: None,
         }
     }
 
@@ -1353,6 +1367,7 @@ impl CollectionMeta {
             flashback: None,
             storage_name: None,
             renamed_from: None,
+            local_namespace_id: None,
         }
     }
 }

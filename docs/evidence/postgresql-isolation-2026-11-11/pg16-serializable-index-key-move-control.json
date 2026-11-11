@@ -1,0 +1,16 @@
+{
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "plan": [
+    "Sort",
+    "  Sort Key: id",
+    "  ->  Index Scan using ssi_scope_value on ssi_scope",
+    "        Index Cond: (v = 10)"
+  ],
+  "old_snapshot": [
+    [
+      1
+    ]
+  ],
+  "current_snapshot": [],
+  "outcome": "passed"
+}

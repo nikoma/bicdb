@@ -1124,7 +1124,7 @@ pub(crate) fn canonical_unique_reservation_key(
     )?)?))
 }
 
-fn json_unique_existing_records(
+fn reserved_unique_existing_records(
     db: &BicDb,
     tx: Option<&Transaction>,
     table: &str,
@@ -1303,9 +1303,14 @@ fn validate_unique_arbiter_records_vacating(
             .iter()
             .any(|value| matches!(value, SqlValue::Json(_)))
     });
-    if arbiter.index_name.is_none() || contains_json {
-        let existing_records = if contains_json {
-            json_unique_existing_records(db, tx, table, schema, arbiter, records)?
+    let fixed_typed_primary = primary_key_requires_typed_identity(schema)
+        && primary_key_columns_for_unique_arbiter(schema, arbiter).is_some()
+        && postgres_fixed_snapshot(db, tx)?.is_some();
+    if arbiter.index_name.is_none() || contains_json || fixed_typed_primary {
+        let existing_records = if contains_json || fixed_typed_primary {
+            reserved_unique_existing_records(db, tx, table, schema, arbiter, records)?
+        } else if postgres_fixed_snapshot(db, tx)?.is_some() {
+            current_integrity_records(db, tx, table)?
         } else {
             match tx {
                 Some(tx) => tx.scan_collection_for_integrity_check(table)?,
@@ -1384,6 +1389,18 @@ fn validate_unique_arbiter_records_vacating(
     Ok(())
 }
 
+pub(crate) fn postgres_fixed_snapshot<'tx>(
+    db: &BicDb,
+    tx: Option<&'tx Transaction>,
+) -> Result<Option<&'tx Transaction>> {
+    let Some(tx) =
+        tx.filter(|tx| tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted)
+    else {
+        return Ok(None);
+    };
+    Ok((!oracle::preview_routine_language_enabled(db)?).then_some(tx))
+}
+
 pub(crate) fn non_conflicting_records(
     db: &BicDb,
     tx: Option<&Transaction>,
@@ -1392,14 +1409,23 @@ pub(crate) fn non_conflicting_records(
     arbiter: &UniqueConflictArbiter,
     records: Vec<Record>,
 ) -> Result<Vec<Record>> {
+    let fixed = postgres_fixed_snapshot(db, tx)?;
+    let visibility_check = fixed.map(|tx| (tx, table));
     if let Some(columns) = primary_key_columns_for_unique_arbiter(schema, arbiter) {
         if primary_key_requires_typed_identity(schema) {
-            let existing_records = match tx {
-                Some(tx) => tx.scan_collection_for_integrity_check(table)?,
-                None => db.scan_collection_unchecked(table)?,
+            let existing_records = match (fixed, tx) {
+                (Some(_), _) => current_integrity_records(db, tx, table)?,
+                (_, Some(tx)) => tx.scan_collection_for_integrity_check(table)?,
+                (_, None) => db.scan_collection_unchecked(table)?,
             };
             sql_profile_full_scan();
-            return non_conflicting_records_from_scan(schema, arbiter, records, &existing_records);
+            return non_conflicting_records_from_scan(
+                schema,
+                arbiter,
+                records,
+                &existing_records,
+                visibility_check,
+            );
         }
         return non_conflicting_records_by_primary_key(db, tx, table, schema, &columns, records);
     }
@@ -1411,7 +1437,9 @@ pub(crate) fn non_conflicting_records(
     });
     if arbiter.index_name.is_none() || contains_json {
         let existing_records = if contains_json {
-            json_unique_existing_records(db, tx, table, schema, arbiter, &records)?
+            reserved_unique_existing_records(db, tx, table, schema, arbiter, &records)?
+        } else if fixed.is_some() {
+            current_integrity_records(db, tx, table)?
         } else {
             match tx {
                 Some(tx) => tx.scan_collection_for_integrity_check(table)?,
@@ -1419,7 +1447,13 @@ pub(crate) fn non_conflicting_records(
             }
         };
         sql_profile_full_scan();
-        return non_conflicting_records_from_scan(schema, arbiter, records, &existing_records);
+        return non_conflicting_records_from_scan(
+            schema,
+            arbiter,
+            records,
+            &existing_records,
+            visibility_check,
+        );
     }
     let index_name = arbiter.index_name.as_ref().expect("checked above");
 
@@ -1434,13 +1468,15 @@ pub(crate) fn non_conflicting_records(
             }
             sql_profile_index_lookup();
             let index_values = unique_key_index_values(schema, &arbiter.key, &key_values)?;
-            if !committed_ids_still_present(
+            let conflicts = committed_ids_still_present(
                 tx,
                 table,
                 db.lookup_index_exact(index_name, &index_values)?,
-            )
-            .is_empty()
-            {
+            );
+            if let Some(conflict) = conflicts.first() {
+                if let Some(tx) = fixed {
+                    tx.require_conflict_tuple_in_snapshot(table, conflict)?;
+                }
                 continue;
             }
             // The index is committed state only. A row this transaction has
@@ -1488,6 +1524,7 @@ pub(crate) fn validate_unique_primary_key_arbiter_records(
     if primary_key_requires_typed_identity(schema) {
         return Ok(false);
     }
+    let fixed = postgres_fixed_snapshot(db, tx)?;
     for record in records {
         let key_values = record_column_values(record, schema, &columns);
         if arbiter.skips_null_key(&key_values) {
@@ -1498,9 +1535,12 @@ pub(crate) fn validate_unique_primary_key_arbiter_records(
         // Through the transaction when there is one: `db.get` sees committed
         // state only, so a row inserted earlier in this same transaction was
         // invisible and the duplicate silently replaced it.
-        let existing = match tx {
-            Some(tx) => tx.get_for_integrity_check(table, &record_id)?,
-            None => db.get_unchecked(table, &record_id)?,
+        let existing = match (fixed, tx) {
+            (Some(tx), _) => {
+                tx.overlay_pending_write(table, &record_id, db.get_unchecked(table, &record_id)?)
+            }
+            (_, Some(tx)) => tx.get_for_integrity_check(table, &record_id)?,
+            (_, None) => db.get_unchecked(table, &record_id)?,
         };
         if existing.is_some_and(|existing| !allow_existing_same_id || existing.id != record.id) {
             return Err(unique_violation(schema, &arbiter.name));
@@ -1517,6 +1557,7 @@ pub(crate) fn non_conflicting_records_by_primary_key(
     columns: &[String],
     records: Vec<Record>,
 ) -> Result<Vec<Record>> {
+    let fixed = postgres_fixed_snapshot(db, tx)?;
     let mut seen = BTreeSet::<Vec<String>>::new();
     let mut inserted = Vec::new();
     for record in records {
@@ -1529,11 +1570,19 @@ pub(crate) fn non_conflicting_records_by_primary_key(
             }
             sql_profile_index_lookup();
             let record_id = record_id_from_column_values(table, schema, columns, &key_values)?;
-            let existing = match tx {
-                Some(tx) => tx.get_for_integrity_check(table, &record_id)?,
-                None => db.get_unchecked(table, &record_id)?,
+            let existing = match (fixed, tx) {
+                (Some(tx), _) => tx.overlay_pending_write(
+                    table,
+                    &record_id,
+                    db.get_unchecked(table, &record_id)?,
+                ),
+                (_, Some(tx)) => tx.get_for_integrity_check(table, &record_id)?,
+                (_, None) => db.get_unchecked(table, &record_id)?,
             };
             if existing.is_some() {
+                if let Some(tx) = fixed {
+                    tx.require_conflict_tuple_in_snapshot(table, &record_id)?;
+                }
                 continue;
             }
         }
@@ -1834,6 +1883,7 @@ pub(crate) fn non_conflicting_records_from_scan(
     arbiter: &UniqueConflictArbiter,
     records: Vec<Record>,
     existing_records: &[Record],
+    visibility_check: Option<(&Transaction, &str)>,
 ) -> Result<Vec<Record>> {
     let existing_records = arbiter
         .covered(existing_records)?
@@ -1847,7 +1897,15 @@ pub(crate) fn non_conflicting_records_from_scan(
         let key_values = unique_key_values(&record, schema, &arbiter.key);
         if !arbiter.skips_null_key(&key_values) && arbiter.applies_to(&record)? {
             let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
-            if existing.contains_key(&key) || !seen.insert(key) {
+            if let Some(ids) = existing.get(&key) {
+                if let Some((tx, table)) = visibility_check {
+                    for id in ids {
+                        tx.require_conflict_tuple_in_snapshot(table, id)?;
+                    }
+                }
+                continue;
+            }
+            if !seen.insert(key) {
                 continue;
             }
         }

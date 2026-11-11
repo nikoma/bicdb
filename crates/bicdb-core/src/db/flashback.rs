@@ -327,6 +327,9 @@ impl BicDb {
         self.catalog_admission
             .prepare_commit(tx.id, tx.catalog_actor_scope)?;
         let committed = if tx.state == TxState::Pending && self.ensure_writable("commit").is_err() {
+            if tx.postgres_serializable.is_some() {
+                self.ensure_writable("commit serializable transaction")?;
+            }
             self.commit_read_only_on_standby(tx)
         } else {
             self.commit_transaction_tracked(tx)

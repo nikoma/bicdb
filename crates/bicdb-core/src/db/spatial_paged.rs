@@ -2628,6 +2628,21 @@ impl BicDb {
         let _unique_claims = self.claim_unique_keys(tx, &index_mutations_by_collection)?;
         let _exclusion_claims = self.claim_exclusion_ranges(tx, &index_mutations_by_collection)?;
         self.validate_index_mutations(&index_mutations_by_collection)?;
+        if !tx.writes.is_empty()
+            && tx
+                .postgres_serializable
+                .as_ref()
+                .is_some_and(|state| state.read_only)
+        {
+            return Err(BicDbError::Unsupported(
+                "cannot commit writes in a PostgreSQL read-only transaction".into(),
+            ));
+        }
+        let mut postgres_registry = self.postgres_commit_registry(tx);
+        let postgres_commit = postgres_registry
+            .as_mut()
+            .map(|registry| registry.prepare(self, tx, &index_mutations_by_collection))
+            .transpose()?;
         let admission = if tx.bypass_commit_admission || tx.writes.is_empty() {
             None
         } else {
@@ -2922,6 +2937,8 @@ impl BicDb {
         }
         tx.state = TxState::Committed;
         tx.committed_seq = Some(commit_seq);
+        postgres_commit.map(|attempt| attempt.committed(tx));
+        drop(postgres_registry);
         // The decision is already durable. Complete the outboxes while this
         // commit still holds admission: a checkpoint must not cut their redo
         // between the durable decision and publication. The caller's legacy

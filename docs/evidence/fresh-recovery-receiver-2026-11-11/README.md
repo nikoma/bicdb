@@ -1,0 +1,22 @@
+This bundle retains **44 distinct passing local focused tests** (45 executions) for the fresh metadata-role/recovery receiver foundation. It is not CI, physical scale-out, failover qualification, a deployed binary, or proof that the complete recovery path is implemented.
+
+The compiled private source was `9979638e73b0a0812e868cf199eb82f1140fb13f` plus the exact retained patch SHA-256 `b9ef05cbf087f4ae35f05bdbb3e324812530f57ac40321e5662bde177a8baed0`; the equivalent committed source is `bcddd35a` (full identifier in `claims.json`). Its package metadata says **1.0.466-beta**. This is a composed experimental source, not a qualification result for any published release or later main revision. `source.tar.gz` contains the pinned workspace crates, path dependencies, example workspace members and Cargo inputs; `compiled-core-source.json` binds the 142 captured core source files to those bytes. Source archive and result integrity can be checked without relying on a private Git branch.
+
+| Focused group | Executions | Evidence scope |
+| --- | ---: | --- |
+| Actual runtime handoff owner | 1 | Committed handoff session differs from recovery nonce; real local metadata/native birth/store/freeze |
+| Recovery state | 5 | Durable epoch fence preserves tail; delayed retired nonce refusal; real rename then injected directory-sync failure; store-open binding; unrelated-range/provenance churn |
+| Recovery quorum/runtime | 6 | Actual local metadata stores/native births/fences, distinct voter counting and cancellation; repeats the owner test above |
+| Metadata provider | 16 | Fresh leader/quorum admission, bounded fair fanout, role/pin/challenge/config checks; three actual loopback mTLS transport cases |
+| Mutation gate | 9 | Counted controlled writers, read-only freeze, source read pin, drain/owner lifetime |
+| Local native readiness | 8 | Actual native physical prefix/history/local visibility and store/DB-open checks; local physical proof only |
+
+The first invocation forced a fresh core compilation from the recorded worktree; its stderr records that path. Subsequent filters used that same frozen executable/source. Rust was `1.96.0`; dependencies used release settings but `bicdb-core` explicitly used **opt-level 0, debug 0**, one build job, incremental disabled, and two test threads. This is not a performance build. An active RAM/swap/pressure/disk monitor guarded every invocation; no guard pause or interruption occurred. The first invocation took approximately 66 seconds including compilation and its test. Its minimum sampled available memory was 22,549,598,208 bytes. Raw compiler warnings remain in the compressed stderr files.
+
+The tests use actual temporary local stores, native databases and fsync calls where their names describe those boundaries. Most metadata networks are bounded in-process registered transports. The three `tls::` provider cases use actual loopback mTLS sockets; they do not establish independent-machine failures. The directory-sync regression injects an error after actual local file sync and rename. It does not simulate a device power-loss guarantee.
+
+`prior-attempts/` preserves earlier compiler errors, fixture failures, corrected attempts and one zero-test filter. These have different source identities and are excluded from the 44-test claim. In particular, an incomplete native birth was correctly refused; a purported readonly positive initially chose a metadata-only node rather than a data voter and failed; an earlier missing observation-phase initializer did not compile. The original errors are retained rather than counted as passing coverage.
+
+Later historical native Apply, image-transfer leases, recipient-local participant RPC collection, recovery completion, native serving/configuration activation and StrongGet are **outside this tested source claim**. The local physical readiness proof is not a leader/read permit. This bundle supplies no throughput, p50/p95/p99, physical RPO/RTO, general distributed SQL, audit/queue integrity, production admission or deployment claim.
+
+Run `python3 verify.py` to check exact manifest coverage, all source/archive hashes, source-snapshot equivalence, unique test identities, command/source identity, raw result summaries and resource bounds. Run `PYTHONDONTWRITEBYTECODE=1 python3 test_verify.py` for four verifier integrity cases. The verifier checks retained results; it does not independently attest that tests ran, rerun Rust, or certify external packet provenance.

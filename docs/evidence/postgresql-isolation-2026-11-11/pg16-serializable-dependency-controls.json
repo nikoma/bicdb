@@ -1,0 +1,163 @@
+{
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "results": [
+    {
+      "case": "disjoint point reads and writes",
+      "read_a": [
+        [
+          10
+        ]
+      ],
+      "read_b": [
+        [
+          20
+        ]
+      ],
+      "outcomes": {
+        "write_a": {
+          "sqlstate": "00000",
+          "status": "UPDATE 1"
+        },
+        "write_b": {
+          "sqlstate": "00000",
+          "status": "UPDATE 1"
+        },
+        "end_a": {
+          "sqlstate": "00000",
+          "status": "COMMIT"
+        },
+        "end_b": {
+          "sqlstate": "00000",
+          "status": "COMMIT"
+        }
+      },
+      "final": [
+        [
+          1,
+          11
+        ],
+        [
+          2,
+          21
+        ]
+      ]
+    },
+    {
+      "case": "one read-write dependency",
+      "read_a": [
+        [
+          10
+        ]
+      ],
+      "read_b": [
+        [
+          10
+        ]
+      ],
+      "outcomes": {
+        "write_a": {
+          "sqlstate": "00000",
+          "status": "UPDATE 1"
+        },
+        "write_b": {
+          "sqlstate": "00000",
+          "status": "UPDATE 1"
+        },
+        "end_a": {
+          "sqlstate": "00000",
+          "status": "COMMIT"
+        },
+        "end_b": {
+          "sqlstate": "00000",
+          "status": "COMMIT"
+        }
+      },
+      "final": [
+        [
+          1,
+          11
+        ],
+        [
+          2,
+          21
+        ]
+      ]
+    },
+    {
+      "case": "write skew",
+      "read_a": [
+        [
+          20
+        ]
+      ],
+      "read_b": [
+        [
+          10
+        ]
+      ],
+      "outcomes": {
+        "write_a": {
+          "sqlstate": "00000",
+          "status": "UPDATE 1"
+        },
+        "write_b": {
+          "sqlstate": "00000",
+          "status": "UPDATE 1"
+        },
+        "end_a": {
+          "sqlstate": "00000",
+          "status": "COMMIT"
+        },
+        "end_b": {
+          "sqlstate": "40001"
+        }
+      },
+      "final": [
+        [
+          1,
+          11
+        ],
+        [
+          2,
+          20
+        ]
+      ]
+    },
+    {
+      "case": "phantom in a previously empty predicate",
+      "read_a": [],
+      "read_b": [
+        [
+          10
+        ]
+      ],
+      "outcomes": {
+        "write_a": {
+          "sqlstate": "00000",
+          "status": "UPDATE 1"
+        },
+        "write_b": {
+          "sqlstate": "00000",
+          "status": "INSERT 0 1"
+        },
+        "end_a": {
+          "sqlstate": "00000",
+          "status": "COMMIT"
+        },
+        "end_b": {
+          "sqlstate": "40001"
+        }
+      },
+      "final": [
+        [
+          1,
+          11
+        ],
+        [
+          2,
+          20
+        ]
+      ]
+    }
+  ]
+}

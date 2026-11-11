@@ -1,0 +1,39 @@
+{
+  "status": "passed",
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "results": [
+    {
+      "case": "ordered_limit",
+      "plan": [
+        "Limit",
+        "  ->  Index Scan using ssi_ranked_order on ssi_ranked",
+        "        Index Cond: (grp = 1)"
+      ],
+      "snapshot": [
+        [
+          1
+        ]
+      ],
+      "current": [
+        [
+          2
+        ]
+      ]
+    },
+    {
+      "case": "jsonb_gin",
+      "plan": [
+        "Bitmap Heap Scan on ssi_documents",
+        "  Recheck Cond: (body @> '{\"tag\": \"old\"}'::jsonb)",
+        "  ->  Bitmap Index Scan on ssi_documents_body",
+        "        Index Cond: (body @> '{\"tag\": \"old\"}'::jsonb)"
+      ],
+      "snapshot": [
+        [
+          1
+        ]
+      ],
+      "current": []
+    }
+  ]
+}

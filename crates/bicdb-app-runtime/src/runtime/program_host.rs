@@ -1033,6 +1033,38 @@ impl<'a> CapabilityApplicationProgramHost<'a> {
             method if method.starts_with("upsert_by_") => {
                 self.call_model_upsert(&contract, method, named)
             }
+            "patch" => {
+                if self.current_transaction().is_none() {
+                    return Err(AppRuntimeError::CapabilityDenied(
+                        "BicDB application model.patch requires an enclosing transaction".to_string(),
+                    ));
+                }
+                let id = named.remove("id").ok_or_else(|| AppRuntimeError::InvalidRequest(
+                    "model.patch requires id".to_string(),
+                ))?;
+                let changes = named.remove("changes").filter(Value::is_object).ok_or_else(|| AppRuntimeError::InvalidRequest(
+                    "model.patch requires an object of changes".to_string(),
+                ))?;
+                let expected_version = named.remove("expected_version").map(|value| {
+                    value.as_u64().filter(|version| *version > 0).ok_or_else(|| AppRuntimeError::InvalidRequest(
+                        "model.patch expected_version must be a positive integer".to_string(),
+                    ))
+                }).transpose()?;
+                if !named.is_empty() {
+                    return Err(AppRuntimeError::InvalidRequest(
+                        "model.patch contains unexpected arguments".to_string(),
+                    ));
+                }
+                let mut request = carrier_resource_request(ResourceOperation::Update);
+                request.id = Some(carrier_scalar_id(id, target, method)?);
+                request.body = changes;
+                request.scope = scope;
+                request.expected_version = expected_version;
+                request.internal_model_call = true;
+                // Ordinary Update, never Upsert/SQL: all signed mutation bindings,
+                // native field/tenant restrictions and optimistic checks execute.
+                self.execute_model_mutation(&contract, request).map(|response| response.body)
+            }
             "bulk_insert" | "bulk_upsert" => {
                 self.call_model_bulk(&contract, method, positional, named)
             }

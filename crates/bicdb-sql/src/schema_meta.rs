@@ -365,16 +365,20 @@ pub fn postgres_parse_requires_snapshot(sql: &str) -> bool {
     let Ok(statements) = parse_statements(sql) else {
         return false;
     };
-    match statements.as_slice() {
-        [Statement::CreateTable(table)] => table.query.is_some(),
-        [Statement::Query(_)
+    matches!(statements.as_slice(), [statement] if postgres_statement_has_parse_snapshot(statement))
+}
+
+pub(crate) fn postgres_statement_has_parse_snapshot(statement: &Statement) -> bool {
+    match statement {
+        Statement::CreateTable(table) => table.query.is_some(),
+        Statement::Query(_)
         | Statement::Insert(_)
         | Statement::Update(_)
         | Statement::Delete(_)
         | Statement::Merge(_)
         | Statement::Declare { .. }
         | Statement::Explain { .. }
-        | Statement::Call(_)] => true,
+        | Statement::Call(_) => true,
         _ => false,
     }
 }
@@ -751,6 +755,95 @@ pub fn parse_transaction_control(sql: &str) -> Result<Option<TransactionControl>
     parse_transaction_control_for_profile(sql, oracle::POSTGRES_PROFILE)
 }
 
+/// Extract the PostgreSQL transaction option that sqlparser's transaction AST
+/// cannot represent. Keep the other modes in SQL for ordinary AST validation.
+pub fn postgres_transaction_deferrability(sql: &str) -> Result<Option<(String, bool)>> {
+    use sqlparser::keywords::Keyword;
+    use sqlparser::tokenizer::{Token, Tokenizer};
+
+    if !leading_sql_keyword(sql).is_some_and(|word| {
+        ["begin", "start", "set"]
+            .iter()
+            .any(|keyword| word.eq_ignore_ascii_case(keyword))
+    }) || !sql
+        .split(|ch: char| !ch.is_ascii_alphabetic())
+        .any(|word| word.eq_ignore_ascii_case("deferrable"))
+    {
+        return Ok(None);
+    }
+    if split_sql_statements(sql).len() != 1 {
+        return Ok(None);
+    }
+    let tokens = Tokenizer::new(&PostgreSqlDialect {}, sql)
+        .tokenize()
+        .map_err(|error| SqlError::InvalidSql(error.to_string()))?
+        .into_iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_) | Token::EOF))
+        .collect::<Vec<_>>();
+    let keyword = |token: &Token| match token {
+        Token::Word(word) if word.quote_style.is_none() => word.keyword,
+        _ => Keyword::NoKeyword,
+    };
+    let starts_with = |prefix: &[Keyword]| {
+        tokens.len() >= prefix.len()
+            && tokens
+                .iter()
+                .zip(prefix)
+                .all(|(token, k)| keyword(token) == *k)
+    };
+    if !starts_with(&[Keyword::BEGIN])
+        && !starts_with(&[Keyword::START, Keyword::TRANSACTION])
+        && !starts_with(&[Keyword::SET, Keyword::TRANSACTION])
+    {
+        return Ok(None);
+    }
+    let mut options = tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, token)| keyword(token) == Keyword::DEFERRABLE);
+    let Some((end, _)) = options.next() else {
+        return Ok(None);
+    };
+    if options.next().is_some() {
+        return Err(SqlError::InvalidSql(
+            "conflicting or redundant transaction options".into(),
+        ));
+    }
+    let render = |tokens: &[Token]| {
+        tokens
+            .iter()
+            .map(Token::to_string)
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let deferrable = keyword(&tokens[end - 1]) != Keyword::NOT;
+    let start = if deferrable { end } else { end - 1 };
+    let left = if tokens.get(start - 1) == Some(&Token::Comma) {
+        start - 1
+    } else {
+        start
+    };
+    // A complete prefix prevents accepting the option inside another mode,
+    // such as READ DEFERRABLE ONLY.
+    parse_statements(&render(&tokens[..left]))?;
+    let right = if left == start && tokens.get(end + 1) == Some(&Token::Comma) {
+        end + 2
+    } else {
+        end + 1
+    };
+    let stripped = format!("{} {}", render(&tokens[..left]), render(&tokens[right..]));
+    if !matches!(
+        parse_statements(&stripped)?.as_slice(),
+        [Statement::StartTransaction { .. }]
+            | [Statement::Set(Set::SetTransaction { session: false, .. })]
+    ) {
+        return Err(SqlError::InvalidSql(
+            "invalid DEFERRABLE transaction command".into(),
+        ));
+    }
+    Ok(Some((stripped, deferrable)))
+}
+
 /// Parse transport transaction commands under the database's fixed SQL profile.
 pub fn parse_transaction_control_for_profile(
     sql: &str,
@@ -766,7 +859,12 @@ pub fn parse_transaction_control_for_session(
     profile: &str,
     transaction_read_only: bool,
 ) -> Result<Option<TransactionControl>> {
-    let statements = parse_statements(sql)?;
+    let deferrable = if profile == oracle::ORACLE_PREVIEW_PROFILE {
+        None
+    } else {
+        postgres_transaction_deferrability(sql)?
+    };
+    let statements = parse_statements(deferrable.as_ref().map_or(sql, |(sql, _)| sql))?;
     let [statement] = statements.as_slice() else {
         return Ok(None);
     };
@@ -805,7 +903,12 @@ pub fn parse_transaction_isolation_for_profile(
     sql: &str,
     profile: &str,
 ) -> Result<Option<&'static str>> {
-    let statements = parse_statements(sql)?;
+    let deferrable = if profile == oracle::ORACLE_PREVIEW_PROFILE {
+        None
+    } else {
+        postgres_transaction_deferrability(sql)?
+    };
+    let statements = parse_statements(deferrable.as_ref().map_or(sql, |(sql, _)| sql))?;
     let [statement] = statements.as_slice() else {
         return Ok(None);
     };
@@ -854,19 +957,25 @@ pub(crate) fn validate_profile_transaction_modes(
                 .into(),
         ));
     }
-    // Oracle SERIALIZABLE provides snapshot isolation. PostgreSQL SERIALIZABLE
-    // remains unsupported here; it requires its separate concurrency contract.
-    let modes = modes
-        .iter()
-        .filter(|mode| {
-            !matches!(
+    let read_only = modes.iter().any(|mode| {
+        matches!(
+            mode,
+            TransactionMode::AccessMode(TransactionAccessMode::ReadOnly)
+        )
+    });
+    if !read_only
+        && modes.iter().any(|mode| {
+            matches!(
                 mode,
-                TransactionMode::IsolationLevel(TransactionIsolationLevel::Serializable)
+                TransactionMode::IsolationLevel(TransactionIsolationLevel::RepeatableRead)
             )
         })
-        .cloned()
-        .collect::<Vec<_>>();
-    validate_transaction_modes(&modes)
+    {
+        return Err(SqlError::Unsupported(
+            "transaction isolation level REPEATABLE READ requires READ ONLY".into(),
+        ));
+    }
+    validate_transaction_modes(modes)
 }
 
 pub(crate) fn validate_start_transaction_modes(modes: &[TransactionMode]) -> Result<()> {
@@ -883,34 +992,17 @@ pub(crate) fn validate_transaction_modes(modes: &[TransactionMode]) -> Result<()
 
 pub(crate) fn validate_postgres_transaction_modes(
     modes: &[TransactionMode],
-    inherited_read_only: bool,
+    _inherited_read_only: bool,
 ) -> Result<()> {
-    let read_only = modes
-        .iter()
-        .find_map(|mode| match mode {
-            TransactionMode::AccessMode(mode) => Some(*mode == TransactionAccessMode::ReadOnly),
-            _ => None,
-        })
-        .unwrap_or(inherited_read_only);
     for mode in modes {
         if let TransactionMode::IsolationLevel(level) = mode {
             match level {
                 // PostgreSQL implements READ UNCOMMITTED with READ COMMITTED
                 // visibility while preserving the requested isolation label.
                 TransactionIsolationLevel::ReadCommitted
-                | TransactionIsolationLevel::ReadUncommitted => {}
-                TransactionIsolationLevel::RepeatableRead if read_only => {}
-                TransactionIsolationLevel::RepeatableRead => {
-                    return Err(SqlError::Unsupported(
-                        "transaction isolation level REPEATABLE READ requires READ ONLY"
-                            .to_string(),
-                    ));
-                }
-                TransactionIsolationLevel::Serializable => {
-                    return Err(SqlError::Unsupported(
-                        "transaction isolation level SERIALIZABLE is not supported".to_string(),
-                    ));
-                }
+                | TransactionIsolationLevel::ReadUncommitted
+                | TransactionIsolationLevel::RepeatableRead
+                | TransactionIsolationLevel::Serializable => {}
                 TransactionIsolationLevel::Snapshot => {
                     return Err(SqlError::Unsupported(
                         "transaction isolation level SNAPSHOT is not supported".to_string(),

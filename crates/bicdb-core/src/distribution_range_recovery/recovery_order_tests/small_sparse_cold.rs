@@ -376,6 +376,122 @@ fn actual_small_sparse_current_quorum_and_strict_cold_reopen_preserve_decision()
         .unwrap_err()
         .to_string()
         .contains("sparse history is not fully materialized"));
+    // Explicit wrong-backing negative: create another REAL physical birth with
+    // the same member/bootstrap/schema and place only an inert copied logical
+    // catalogue beside it. No edited DTO or forged admission is used.
+    let wrong_root = tempfile::tempdir().unwrap();
+    wrong_root.disable_cleanup(true);
+    let wrong_path = wrong_root.path().join("different-birth-n1");
+    let spec = reopened.specs[&node("n1")].clone();
+    let config = crate::DbConfig::default()
+        .with_fsync(true)
+        .with_storage_mode(crate::StorageMode::ServerPaged)
+        .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
+    let (mut wrong_db, _) =
+        BicDb::create_new_range_image_database(&wrong_path, config.clone(), spec.clone()).unwrap();
+    wrong_db.create_collection("items").unwrap();
+    drop(wrong_db);
+    let (wrong_db, genesis) = BicDb::open_range_image_database(&wrong_path, config, &spec).unwrap();
+    let wrong_db = Arc::new(parking_lot::RwLock::new(wrong_db));
+    let gate = wrong_db.read().range_mutation_gate();
+    let freeze = gate.try_freeze(range.id, Uuid::now_v7()).unwrap();
+    BicDb::initialize_range_image_genesis(
+        &wrong_db,
+        &genesis,
+        &range,
+        &freeze,
+        Duration::from_secs(3),
+        &parent,
+    )
+    .unwrap();
+    let native = wrong_db
+        .read()
+        .native_recovery_admission(
+            &topology.cluster_id,
+            spec.bootstrap_id,
+            &node("n1"),
+            spec.member_incarnation,
+        )
+        .unwrap();
+    let real_native = reopened.databases[&node("n1")]
+        .read()
+        .native_recovery_admission(
+            &topology.cluster_id,
+            spec.bootstrap_id,
+            &node("n1"),
+            spec.member_incarnation,
+        )
+        .unwrap();
+    assert_ne!(native.birth_id(), real_native.birth_id());
+    let catalog_name = crate::distribution_range_consensus::DEFAULT_RANGE_WRITE_LOG;
+    let copied_catalog = std::fs::read(reopened.root.path().join("n1").join(catalog_name)).unwrap();
+    crate::storage::write_atomic(&wrong_path.join(catalog_name), &copied_catalog, true).unwrap();
+    let mut wrong_store = crate::distribution_range_consensus::RangeWriteStore::open(
+        &wrong_path,
+        topology.cluster_id.clone(),
+        node("n1"),
+        true,
+    )
+    .unwrap();
+    let business = Uuid::now_v7();
+    let challenge = Uuid::now_v7();
+    let purpose = MetadataRecoveryRolePurpose::NormalRecovery;
+    let observed = providers[&node("n1")]
+        .witness_recovery_role(
+            &actor,
+            business,
+            range.id,
+            range.epoch,
+            renewed_scope.recovery_nonce,
+            challenge,
+            purpose.clone(),
+            &parent,
+        )
+        .unwrap();
+    let wrong_role = RecoveryRoleAdmission::from_witness(
+        observed,
+        &actor,
+        &node("n1"),
+        business,
+        range.id,
+        range.epoch,
+        renewed_scope.recovery_nonce,
+        challenge,
+        &purpose,
+    )
+    .unwrap();
+    let wrong_scope = RecoveryFenceScope::from_role(&wrong_role).unwrap();
+    gate.validate_quiescent_frozen(range.id, &freeze).unwrap();
+    native.require_current(&wrong_db.read()).unwrap();
+    let wrong_error = wrong_store
+        .fence_recovery_epoch(&wrong_role, &native, &wrong_scope)
+        .unwrap_err();
+    assert!(
+        wrong_error
+            .to_string()
+            .contains("another actual native birth/restore"),
+        "{wrong_error}"
+    );
+    assert_eq!(
+        std::fs::read(wrong_path.join(catalog_name)).unwrap(),
+        copied_catalog,
+        "wrong stable birth must refuse BEFORE persistence or catalogue changes"
+    );
+    assert_eq!(
+        wrong_db
+            .read()
+            .native_range_prefix_observation(range.id)
+            .unwrap()
+            .native_applied_index,
+        Some(0)
+    );
+    std::fs::write(wrong_root.path().join("wrong-birth-refusal.json"), serde_json::to_vec_pretty(
+        &serde_json::json!({"expected_birth":real_native.birth_id(),"actual_distinct_birth":native.birth_id(),"error":wrong_error.to_string(),"catalogue_bytes_unchanged":true})
+    ).unwrap()).unwrap();
+    eprintln!(
+        "SMALL_SPARSE_COLD_WRONG_BIRTH_ROOT {}",
+        wrong_root.path().display()
+    );
     wait_for_contexts(&runtimes);
     let report = serde_json::json!({"classification":"ACTUAL_SPARSE_CURRENT_QUORUM_AND_COLD_REOPEN","original_root":original_root,"copied_root":reopened.root.path(),"source_native_after_actual_apply":2,"behind_raw_native":0,"stable_sparse_sha256":decision_sha,"original_observed_open":original_open,"cold_observed_open":cold_sparse.native_database_incarnation(),"actual_postpublication_error_refused_observations":true,"actual_same_session_refsync":true,"new_nonce_preserved_old_full_decision":true,"image_token_includes_sparse_and_stales":true,"missing_complete_command_or_birth_or_open_fields_rejected":true,"acknowledged_values_reconciled":1,"unknown_calls":1,"new_application_ack_tested":false,"physical_qualification":false,"strong_get_tested":false});
     std::fs::write(

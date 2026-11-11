@@ -127,6 +127,9 @@ pub(crate) struct NativeRangeInstallSafety {
     materialized_pending_index: Option<u64>,
     source_invalidated: bool,
     records_sha256: String,
+    irreversible_records_sha256: String,
+    history_point: Option<history::NativeLogicalHistoryPoint>,
+    pending_command_checksum_sha256: Option<String>,
 }
 impl NativeRangeInstallSafety {
     pub(crate) fn base_index(&self) -> Option<u64> {
@@ -158,6 +161,34 @@ impl NativeRangeInstallSafety {
     }
     pub(crate) fn records_sha256(&self) -> &str {
         &self.records_sha256
+    }
+    pub(crate) fn irreversible_records_sha256(&self) -> &str {
+        &self.irreversible_records_sha256
+    }
+    pub(crate) fn history_point(&self) -> Option<&history::NativeLogicalHistoryPoint> {
+        self.history_point.as_ref()
+    }
+    pub(crate) fn pending_command_checksum_sha256(&self) -> Option<&str> {
+        self.pending_command_checksum_sha256.as_deref()
+    }
+    /// For an already-authorized install after its own invalidations. This
+    /// checks immutable lower bounds only, never authorizes destructive work.
+    pub(crate) fn require_irreversible_current(
+        &self,
+        database: &BicDb,
+        admission: &NativeRecoveryAdmission,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        let current = database.native_range_install_safety(admission, self.range_id, frozen)?;
+        if self.database_incarnation != current.database_incarnation
+            || self.birth_id != current.birth_id
+            || self.irreversible_records_sha256 != current.irreversible_records_sha256
+        {
+            return Err(invalid(
+                "immutable native history/pending lower bounds changed during install",
+            ));
+        }
+        Ok(())
     }
     pub(crate) fn require_current(
         &self,
@@ -197,6 +228,9 @@ pub(super) struct NativeCertifiedRangePrefix {
     required_quorum: usize,
     global_image_generation: Uuid,
     range_image_generation: Uuid,
+    history_generation: Uuid,
+    logical_genesis_sha256: String,
+    logical_history_sha256: String,
     checksum_sha256: String,
 }
 impl NativeCertifiedRangePrefix {
@@ -214,12 +248,15 @@ impl NativeCertifiedRangePrefix {
     pub(super) fn checksum_sha256(&self) -> &str {
         &self.checksum_sha256
     }
+    pub(super) fn logical_history_sha256(&self) -> &str {
+        &self.logical_history_sha256
+    }
     pub(super) fn validate(
         &self,
         birth: &NativeDatabaseBirth,
         base: &NativeGenesisReceipt,
     ) -> Result<()> {
-        if self.format_version != 1
+        if self.format_version != 2
             || self.birth_id != birth.birth_id
             || self.base_receipt_sha256 != base.checksum_sha256
             || self.range_id != base.range.id
@@ -227,6 +264,9 @@ impl NativeCertifiedRangePrefix {
             || self.previous_index.checked_add(1) != Some(self.range_index)
             || self.global_image_generation != base.global_image_generation
             || self.range_image_generation != base.range_image_generation
+            || self.history_generation != base.history_generation
+            || self.logical_genesis_sha256 != base.logical_genesis_sha256
+            || self.logical_history_sha256.len() != 64
             || self.certified_voters.len() < self.required_quorum
             || self.required_quorum == 0
             || self.certified_voters.len() > 64
@@ -371,6 +411,16 @@ impl BicDb {
             ),
             MAX_NATIVE_RECEIPT_BYTES,
         )?));
+        let irreversible_records_sha256 = hex::encode(sha2::Sha256::digest(bounded_json(
+            &(&birth.checksum_sha256, range_id, &base, &prefix, &pending),
+            MAX_NATIVE_RECEIPT_BYTES,
+        )?));
+        let history_point = base
+            .as_ref()
+            .map(|base| history::actual_history_point(&birth, base, prefix.as_ref()));
+        let pending_command_checksum_sha256 = pending
+            .as_ref()
+            .map(|pending| pending.command_checksum_sha256.clone());
         Ok(NativeRangeInstallSafety {
             database_incarnation: self.incarnation.clone(),
             birth_id: birth.birth_id,
@@ -383,6 +433,9 @@ impl BicDb {
                 .and_then(|pending| pending.materialized.as_ref().map(|_| pending.range_index)),
             source_invalidated,
             records_sha256,
+            irreversible_records_sha256,
+            history_point,
+            pending_command_checksum_sha256,
         })
     }
     /// Narrow local replica materialization: a concrete coordinator certificate
@@ -466,8 +519,23 @@ impl BicDb {
     ) -> Result<Option<NativeCertifiedRangePrefix>> {
         let prefix: Option<NativeCertifiedRangePrefix> =
             self.read_native_range_image_record(&prefix_key(base.range.id))?;
+        self.validate_native_genesis_history(birth, base)?;
         if let Some(prefix) = &prefix {
             prefix.validate(birth, base)?;
+            let entry = self.read_native_history_entry(
+                prefix.range_id,
+                prefix.history_generation,
+                prefix.range_index,
+            )?;
+            let expected = history::NativeLogicalHistoryOutcomeV1::Applied {
+                command_checksum_sha256: prefix.command_checksum_sha256.clone(),
+            };
+            if entry.commitment_sha256 != prefix.logical_history_sha256 || entry.outcome != expected
+            {
+                return Err(invalid(
+                    "native prefix logical-history head differs from actual immutable entry",
+                ));
+            }
         }
         Ok(prefix)
     }
@@ -713,6 +781,17 @@ impl BicDb {
             .map_or(base.checksum_sha256.as_str(), |previous| {
                 previous.checksum_sha256.as_str()
             });
+        let previous_logical_sha = old
+            .as_ref()
+            .map_or(base.logical_genesis_sha256.as_str(), |previous| {
+                previous.logical_history_sha256.as_str()
+            });
+        let history_entry = history::NativeLogicalHistoryEntryV1::applied(
+            record.range_id,
+            record.range_index,
+            previous_logical_sha,
+            &record.command_checksum_sha256,
+        )?;
         if previous_index != record.previous_index || previous_sha != record.previous_receipt_sha256
         {
             return Err(invalid(
@@ -720,7 +799,7 @@ impl BicDb {
             ));
         }
         let mut prefix = NativeCertifiedRangePrefix {
-            format_version: 1,
+            format_version: 2,
             birth_id: record.birth_id,
             base_receipt_sha256: base.checksum_sha256.clone(),
             range_id: record.range_id,
@@ -736,12 +815,21 @@ impl BicDb {
             required_quorum: certificate.required_quorum(),
             global_image_generation: record.global_image_generation,
             range_image_generation: record.range_image_generation,
+            history_generation: base.history_generation,
+            logical_genesis_sha256: base.logical_genesis_sha256.clone(),
+            logical_history_sha256: history_entry.commitment_sha256.clone(),
             checksum_sha256: String::new(),
         };
         prefix.checksum_sha256 = prefix.checksum()?;
         prefix.validate(&birth, &base)?;
         let encoded = bounded_json(&prefix, MAX_NATIVE_RECEIPT_BYTES)?;
         self.in_paged_transaction(|paged, xid| {
+            history::put_immutable_history_entry(
+                paged,
+                xid,
+                prefix.history_generation,
+                &history_entry,
+            )?;
             paged
                 .store()
                 .put(xid, &native_key(&prefix_key(prefix.range_id)), &encoded)

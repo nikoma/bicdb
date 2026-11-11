@@ -61,9 +61,10 @@ mod range_image_install;
 pub(crate) use range_image_install::{NativeInstalledRangeImageBase, TargetNativeImageSnapshotBound};
 mod range_image_native;
 pub(crate) use range_image_native::{
-    FreshRangeGenesisAuthority, NativeRangeInstallSafety, NativeRangePendingApply,
-    NativeRangePrefixObservation, NativeRecoveryAdmission, RangeImageBirthMember,
-    RangeImageBirthSpec, SourceRangeImageLineage,
+    FreshRangeGenesisAuthority, NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1,
+    NativeLogicalHistoryPoint, NativeLogicalHistoryStepV1, NativeRangeInstallSafety,
+    NativeRangePendingApply, NativeRangePrefixObservation, NativeRecoveryAdmission,
+    RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage,
 };
 mod range_image_bindings;
 pub(crate) use range_image_bindings::RangeImageDbBindings;

@@ -613,6 +613,59 @@ mod tests {
     }
 
     #[test]
+    fn native_history_actual_coordinator_spine_exports_full_bounded_contiguous_prefix() {
+        let (parent, db, topology, spec) = fixture();
+        let first = "history-a";
+        let range = topology.range_for_key("items", first).unwrap().clone();
+        let second = (0..1000)
+            .map(|id| format!("history-{id}"))
+            .find(|key| topology.range_for_key("items", key).unwrap().id == range.id)
+            .unwrap();
+        let (_coordinator, _service) = actual_coordinator(&db, parent.path(), topology, &spec);
+        for key in [first, second.as_str()] {
+            let database = db.write();
+            let mut transaction = database.begin_transaction().unwrap();
+            transaction.insert("items", Record::new(key)).unwrap();
+            transaction.commit().unwrap();
+        }
+        let gate = db.read().range_mutation_gate();
+        let frozen = gate.try_freeze(range.id, Uuid::now_v7()).unwrap();
+        let lineage = db
+            .read()
+            .current_native_range_source_lineage(range.id)
+            .unwrap();
+        let mut next = Some(0);
+        let mut previous = None;
+        let mut entries = 0;
+        while let Some(index) = next {
+            let step = db
+                .read()
+                .export_native_logical_history_step(
+                    &lineage,
+                    &frozen,
+                    index,
+                    1,
+                    &CancellationToken::uncancelable(),
+                )
+                .unwrap();
+            assert_eq!(step.first_index, index);
+            assert_eq!(step.entries.len(), 1);
+            let entry = &step.entries[0];
+            assert_eq!(entry.index, index);
+            if let Some(previous) = &previous {
+                assert_eq!(&entry.previous_sha256, previous);
+            }
+            previous = Some(entry.commitment_sha256.clone());
+            entries += 1;
+            next = step.next_index;
+        }
+        assert_eq!(entries, 3);
+        assert_eq!(previous.as_deref(), Some(lineage.logical_history_sha256()));
+        assert_eq!(lineage.range_index(), 2);
+        db.read().clear_commit_admission();
+    }
+
+    #[test]
     fn native_origin_post_admission_pre_wal_unknown_cleans_local_attempt_before_recovery_freeze() {
         let (parent, db, topology, spec) = fixture();
         let range = topology.range_for_key("items", "cut").unwrap().clone();

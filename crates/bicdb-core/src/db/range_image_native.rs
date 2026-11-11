@@ -10,7 +10,12 @@ use crate::distribution_range_image::{
 use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 
 mod certified_prefix;
+mod history;
 use certified_prefix::NativeCertifiedRangePrefix;
+pub(crate) use history::{
+    NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint,
+    NativeLogicalHistoryStepV1,
+};
 
 #[cfg(test)]
 thread_local! {
@@ -281,6 +286,8 @@ struct NativeGenesisReceipt {
     reader_features: Vec<String>,
     local_namespace_ids: Vec<(String, Uuid)>,
     native_page_xid: u64,
+    history_generation: Uuid,
+    logical_genesis_sha256: String,
     checksum_sha256: String,
 }
 impl NativeGenesisReceipt {
@@ -293,7 +300,7 @@ impl NativeGenesisReceipt {
         )?)))
     }
     fn validate(&self) -> Result<()> {
-        if self.format_version != 1
+        if self.format_version != 2
             || self.range.epoch != 1
             || self.local_member_incarnation == 0
             || self
@@ -303,6 +310,8 @@ impl NativeGenesisReceipt {
             || self.local_namespace_ids.iter().any(|(_, id)| id.is_nil())
             || self.range_index != 0
             || self.birth_id.is_nil()
+            || self.history_generation.is_nil()
+            || self.logical_genesis_sha256.len() != 64
             || self.actual_snapshot_db_sequence < self.reserved_db_upper_bound
             || self.checksum()? != self.checksum_sha256
         {
@@ -406,6 +415,19 @@ impl SourceRangeImageLineage {
     }
     pub(crate) fn schema_sha256(&self) -> &str {
         &self.receipt.schema_sha256
+    }
+    pub(crate) fn history_generation(&self) -> Uuid {
+        self.receipt.history_generation
+    }
+    pub(crate) fn logical_genesis_sha256(&self) -> &str {
+        &self.receipt.logical_genesis_sha256
+    }
+    pub(crate) fn logical_history_sha256(&self) -> &str {
+        self.prefix
+            .as_ref()
+            .map_or(self.receipt.logical_genesis_sha256.as_str(), |prefix| {
+                prefix.logical_history_sha256()
+            })
     }
 }
 
@@ -762,6 +784,7 @@ impl BicDb {
                 self.read_native_range_image_record(&genesis_key(range.id))?;
             if let Some(receipt) = receipt {
                 receipt.validate()?;
+                self.validate_native_genesis_history(birth, &receipt)?;
                 if receipt.birth_id != birth.birth_id
                     || receipt.birth_sha256 != birth.checksum_sha256
                     || receipt.range != *range
@@ -924,6 +947,7 @@ impl BicDb {
             .read_native_range_image_record(&genesis_key(range_id))?
             .ok_or_else(|| invalid("source has no trusted native range base"))?;
         receipt.validate()?;
+        self.validate_native_genesis_history(&birth, &receipt)?;
         let prefix = self.read_native_certified_range_prefix(&birth, &receipt)?;
         let bindings = self.capture_range_image_bindings()?;
         let catalog = canonical_range_image_catalog(
@@ -1093,7 +1117,7 @@ impl BicDb {
         let (global_image_generation, range_image_generation) =
             database.native_range_image_generations(&authority.birth, range.id)?;
         let mut receipt = NativeGenesisReceipt {
-            format_version: 1,
+            format_version: 2,
             birth_id: authority.birth.birth_id,
             birth_sha256: authority.birth.checksum_sha256.clone(),
             range: range.clone(),
@@ -1112,14 +1136,26 @@ impl BicDb {
             reader_features: bindings.reader_features().to_vec(),
             local_namespace_ids: bindings.namespace_ids(),
             native_page_xid: 0,
+            history_generation: Uuid::now_v7(),
+            logical_genesis_sha256: String::new(),
             checksum_sha256: String::new(),
         };
+        receipt.logical_genesis_sha256 = history::logical_genesis_hash(&authority.birth, &receipt)?;
         // The page commit orders/syncs the earlier prefix; this is not a claim
         // that separate catalog/record transactions became one atomic txn.
         database
             .in_paged_transaction(|paged, xid| {
                 receipt.native_page_xid = xid;
                 receipt.checksum_sha256 = receipt.checksum()?;
+                history::put_immutable_history_entry(
+                    paged,
+                    xid,
+                    receipt.history_generation,
+                    &history::NativeLogicalHistoryEntryV1::genesis(
+                        range.id,
+                        &receipt.logical_genesis_sha256,
+                    )?,
+                )?;
                 let encoded = bounded_json(&receipt, MAX_NATIVE_RECEIPT_BYTES)?;
                 paged
                     .store()
@@ -1147,13 +1183,13 @@ mod tests {
     use crate::distribution_range_mutation::RangeMutationAuthority;
     use crate::{DistributionConfig, DistributionStore};
 
-    fn config() -> DbConfig {
+    pub(super) fn config() -> DbConfig {
         DbConfig::default()
             .with_fsync(true)
             .with_storage_mode(StorageMode::ServerPaged)
             .with_paged_buffer_pool_bytes(8 * 1024 * 1024)
     }
-    fn spec() -> RangeImageBirthSpec {
+    pub(super) fn spec() -> RangeImageBirthSpec {
         let metadata = tempfile::tempdir().unwrap();
         let topology = DistributionStore::initialize_at(
             metadata.path(),
@@ -1213,7 +1249,7 @@ mod tests {
         visit(root, root, &mut result);
         result
     }
-    fn schema_ready_database(
+    pub(super) fn schema_ready_database(
         root: &Path,
         expected: &RangeImageBirthSpec,
     ) -> (Arc<RwLock<BicDb>>, FreshRangeGenesisAuthority) {
@@ -1225,7 +1261,7 @@ mod tests {
         db.schema_compatibility_fingerprint().unwrap();
         (Arc::new(RwLock::new(db)), authority)
     }
-    fn initialize(
+    pub(super) fn initialize(
         db: &Arc<RwLock<BicDb>>,
         authority: &FreshRangeGenesisAuthority,
         range: &RangeDescriptor,

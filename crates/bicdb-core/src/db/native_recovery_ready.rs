@@ -399,6 +399,48 @@ mod tests {
     }
 
     #[test]
+    fn corrupt_compacted_certification_marker_cannot_become_native_ready() {
+        let fixture = Fixture::new();
+        fixture.seed(fixture.range().id, 1);
+        let role = fixture.role(Uuid::now_v7());
+        let native = fixture.native();
+        let scope = RecoveryFenceScope::from_role(&role).unwrap();
+        let frozen = fixture.freeze(&role);
+        let mut store = fixture.store();
+        store.fence_recovery_epoch(&role, &native, &scope).unwrap();
+        // This deliberately damaged persisted catalogue is a negative fixture,
+        // not evidence that valid protocol operations can produce corruption.
+        store
+            .test_corrupt_compacted_marker(&scope, 1, "f".repeat(64))
+            .unwrap();
+        let observed = store
+            .observe_recovery_resolved_prefix(&role, &native, &scope)
+            .unwrap();
+        let result = fixture.db.read().attest_local_native_recovery_ready(
+            native,
+            role,
+            observed,
+            &store,
+            frozen,
+            &CancellationToken::uncancelable(),
+        );
+        let error = result.unwrap_err();
+        assert!(
+            error.to_string().contains("certification marker conflicts"),
+            "{error}"
+        );
+        assert_eq!(
+            fixture
+                .db
+                .read()
+                .native_range_prefix_observation(fixture.range().id)
+                .unwrap()
+                .native_applied_index,
+            Some(1)
+        );
+    }
+
+    #[test]
     fn actual_empty_genesis_ready_owns_the_read_pin_until_proof_drop() {
         let fixture = Fixture::new();
         let role = fixture.role(Uuid::now_v7());
@@ -839,6 +881,17 @@ impl BicDb {
                 Ok(())
             },
         )?;
+        store.verify_native_ready_historical_markers(&catalogue, &role, &native, |index, checksum| {
+            cancellation.check()?;
+            let step = self.export_native_logical_history_step_with_source_pin(
+                &lineage, &frozen, &pin, index, 1, &cancellation)?;
+            if !matches!(step.entries.first().map(|entry| &entry.outcome),
+                Some(NativeLogicalHistoryOutcomeV1::Applied { command_checksum_sha256 }) if command_checksum_sha256 == checksum)
+            {
+                return Err(invalid("durable historical certification marker conflicts with actual native history"));
+            }
+            Ok(())
+        })?;
         let proof = LocalNativeRecoveryReady {
             visibility: NativeLocalVisibilitySequence(lineage.actual_local_visibility_sequence()),
             role,

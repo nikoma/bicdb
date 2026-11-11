@@ -108,6 +108,69 @@ impl RangeWriteStore {
         self.require_persisted_recovery_scope(scope)?;
         Ok(observed)
     }
+    /// Compaction may remove a command payload while the durable current-
+    /// session certification marker remains. Every such irreversible checksum
+    /// must also match ACTUAL native history before a ready proof is minted.
+    pub(crate) fn verify_native_ready_historical_markers(
+        &self,
+        observation: &RecoveryResolvedCatalogObservation,
+        role: &RecoveryRoleAdmission,
+        native: &NativeRecoveryAdmission,
+        mut verify: impl FnMut(u64, &str) -> Result<()>,
+    ) -> Result<()> {
+        self.revalidate_recovery_resolved_observation(observation, role, native)?;
+        let saved = self
+            .catalog
+            .recovery_fences
+            .get(&observation.range_id())
+            .ok_or_else(|| range_write_error("native marker readiness has no saved fence"))?;
+        if saved.historical_certifications.len() > 1024 {
+            return Err(range_write_error(
+                "native marker readiness exceeds its bounded scan",
+            ));
+        }
+        for (index, marker) in &saved.historical_certifications {
+            if *index > observation.resolved_index() {
+                return Err(range_write_error(
+                    "native readiness omits an irreversible certification marker",
+                ));
+            }
+            verify(*index, &marker.command_sha256)?;
+        }
+        self.revalidate_recovery_resolved_observation(observation, role, native)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_corrupt_compacted_marker(
+        &mut self,
+        scope: &RecoveryFenceScope,
+        index: u64,
+        checksum: String,
+    ) -> Result<()> {
+        // Deliberately corrupt durable logical metadata while leaving genuine
+        // native rows/WAL/history intact. This is a NEGATIVE fault-injection
+        // fixture, not a legal compaction/authority producer or Azure cause.
+        let saved = self
+            .catalog
+            .recovery_fences
+            .get_mut(&scope.range_id)
+            .unwrap();
+        saved.historical_certifications.insert(
+            index,
+            HistoricalRangeCertification {
+                recovery_nonce: scope.recovery_nonce,
+                configuration_sha256: scope.configuration_sha256.clone(),
+                range_epoch: scope.range_epoch,
+                index,
+                command_sha256: checksum,
+            },
+        );
+        let log = self.catalog.ranges.get_mut(&scope.range_id).unwrap();
+        assert_eq!(log.resolved_through, index);
+        assert_eq!(log.last_index, index);
+        log.entries.retain(|position, _| *position > index);
+        log.compacted_through = index;
+        self.persist_recovery_catalog()
+    }
     /// The callback observes only actual retained resolved entries, while this
     /// store is immutably borrowed. A numeric resolved watermark is insufficient:
     /// every retained decision must agree with the corresponding native history.

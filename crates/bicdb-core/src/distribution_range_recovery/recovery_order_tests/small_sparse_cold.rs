@@ -379,7 +379,7 @@ fn actual_small_sparse_current_quorum_and_strict_cold_reopen_preserve_decision()
     // Explicit wrong-backing negative: create another REAL physical birth with
     // the same member/bootstrap/schema and place only an inert copied logical
     // catalogue beside it. No edited DTO or forged admission is used.
-    let wrong_root = tempfile::tempdir().unwrap();
+    let mut wrong_root = tempfile::tempdir().unwrap();
     wrong_root.disable_cleanup(true);
     let wrong_path = wrong_root.path().join("different-birth-n1");
     let spec = reopened.specs[&node("n1")].clone();

@@ -167,6 +167,19 @@ fn copied_actual_1025_prefix_fences_complete_obligations_then_reveals_compacted_
         tail_gap.to_string().contains("compacted/unavailable gap"),
         "{tail_gap}"
     );
+    // Pure gap refusal must also leave the repaired validation path usable;
+    // no second manual refsync or direct uncertainty reset is allowed here.
+    runtimes[&node("n1")]
+        .observe_history(
+            &initiator,
+            &RecoveryFencedProbeRequest {
+                scope: scope.clone(),
+                index: Some(1026),
+                budget_ms: 5000,
+            },
+            &parent,
+        )
+        .unwrap();
     let frozen = runtimes[&node("n0")].source_capture_freeze(&scope).unwrap();
     let role = fresh_role(&providers, &initiator, &range, scope.recovery_nonce);
     let ready_error = fixture.services[&node("n0")]

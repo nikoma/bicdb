@@ -310,6 +310,20 @@ impl BicDb {
     /// collection take the flashback clock for their whole commit and carry
     /// their history rows; all others go straight to the commit body.
     pub(crate) fn commit_transaction(&self, tx: &mut Transaction) -> Result<u64> {
+        if tx.state == TxState::Pending && !tx.writes.is_empty() {
+            if self.range_image_initializing.load(AtomicOrdering::Acquire) {
+                return Err(BicDbError::Cluster("fresh image-aware database genesis is incomplete; ordinary writes remain closed".into()));
+            }
+            if let Some(claim) = &tx.range_mutation_claim {
+                self.range_mutations.validate_claim(claim)?;
+            } else if (tx.bypass_commit_admission || self.commit_admission.read().is_none())
+                && tx.database_mutation_permit.is_none()
+            {
+                // Keep unscoped native/standalone admission through the real
+                // WAL callback (the transaction may be group committed).
+                tx.database_mutation_permit = Some(self.range_mutations.try_enter_database()?);
+            }
+        }
         if tx.has_deferred_hooks() {
             return Err(BicDbError::TransactionConflict(
                 "pending SQL constraint effects must be validated before commit".into(),

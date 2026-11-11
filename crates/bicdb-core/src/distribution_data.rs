@@ -26,6 +26,7 @@ use crate::distribution_range_consensus::{
     RangeBackupWriteFence, RangeWriteAck, RangeWriteCommand, RangeWriteProbe, RangeWriteProgress,
     RangeWriteRepairBatch, RangeWriteRepairLimits, RangeWriteState, RangeWriteStore,
 };
+use crate::distribution_range_mutation::{RangeMutationAuthority, RangeMutationGate};
 use crate::distribution_supervisor::{
     CatchUpProgress, CleanupProgress, ClusterRelocationTransport, SnapshotCopyProgress,
 };
@@ -721,6 +722,7 @@ pub struct ClusterDataNodeService {
     schema_compatibility_window: Option<ClusterSchemaCompatibilityWindow>,
     learner: RangeLearnerStore,
     range_writes: RangeWriteStore,
+    range_mutations: RangeMutationGate,
     range_digest_root: PathBuf,
     range_digest_repair_root: PathBuf,
     schema_signing_keys: BTreeMap<String, [u8; 32]>,
@@ -813,7 +815,13 @@ impl ClusterDataNodeService {
                 "range digest repair state directory must not be a symbolic link",
             ));
         }
-        let schema_compatibility = db.read().schema_compatibility_authority();
+        let (schema_compatibility, range_mutations) = {
+            let database = db.read();
+            (
+                database.schema_compatibility_authority(),
+                database.range_mutation_gate(),
+            )
+        };
         let schema_compatibility_window = if schema_signing_keys.is_empty() {
             None
         } else {
@@ -832,6 +840,7 @@ impl ClusterDataNodeService {
             schema_compatibility_window,
             learner,
             range_writes,
+            range_mutations,
             range_digest_root,
             range_digest_repair_root,
             schema_signing_keys,
@@ -849,6 +858,10 @@ impl ClusterDataNodeService {
 
     pub fn node_id(&self) -> &ClusterNodeId {
         &self.node_id
+    }
+
+    pub(crate) fn range_mutation_gate(&self) -> RangeMutationGate {
+        self.range_mutations.clone()
     }
 
     pub fn database(&self) -> Arc<RwLock<BicDb>> {
@@ -1073,6 +1086,28 @@ impl ClusterDataNodeService {
         installed_at_ms: u64,
         expires_at_ms: u64,
     ) -> Result<RangeWriteProgress> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.install_range_backup_fence_with_mutation(
+            range,
+            caller,
+            plan_id,
+            installed_at_ms,
+            expires_at_ms,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn install_range_backup_fence_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        plan_id: Uuid,
+        installed_at_ms: u64,
+        expires_at_ms: u64,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteProgress> {
+        self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write_peer(range, caller)?;
         self.range_writes.install_backup_fence(
             plan_id,
@@ -1089,6 +1124,24 @@ impl ClusterDataNodeService {
         caller: &ClusterNodeId,
         plan_id: Uuid,
     ) -> Result<bool> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.release_range_backup_fence_with_mutation(
+            range,
+            caller,
+            plan_id,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn release_range_backup_fence_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        plan_id: Uuid,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<bool> {
+        self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write_peer(range, caller)?;
         self.range_writes
             .release_backup_fence(plan_id, range.id, range.epoch)
@@ -1132,6 +1185,26 @@ impl ClusterDataNodeService {
         batch: &RangeWriteRepairBatch,
         limits: &RangeWriteRepairLimits,
     ) -> Result<RangeWriteProgress> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_range_write_repair_with_mutation(
+            range,
+            caller,
+            batch,
+            limits,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_range_write_repair_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        batch: &RangeWriteRepairBatch,
+        limits: &RangeWriteRepairLimits,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteProgress> {
+        self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write_peer(range, caller)?;
         batch.validate(limits)?;
         if batch.source_node_id != *caller
@@ -1142,7 +1215,7 @@ impl ClusterDataNodeService {
                 "range-write repair source/range/epoch fencing failed",
             ));
         }
-        self.apply_range_write_suffix(range, batch, limits)
+        self.apply_range_write_suffix(range, batch, limits, authority)
     }
 
     /// Install a quorum-evidenced resolved prefix on the newly designated
@@ -1155,6 +1228,26 @@ impl ClusterDataNodeService {
         batch: &RangeWriteRepairBatch,
         limits: &RangeWriteRepairLimits,
     ) -> Result<RangeWriteProgress> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_range_write_leader_recovery_with_mutation(
+            range,
+            source_voter,
+            batch,
+            limits,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_range_write_leader_recovery_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        source_voter: &ClusterNodeId,
+        batch: &RangeWriteRepairBatch,
+        limits: &RangeWriteRepairLimits,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteProgress> {
+        self.range_mutations.validate(range.id, authority)?;
         let source_is_voter = range.replicas.iter().any(|replica| {
             replica.node_id == *source_voter
                 && replica.role == crate::distribution::RangeReplicaRole::Voter
@@ -1172,7 +1265,7 @@ impl ClusterDataNodeService {
         // commit lock. Replaying exact resolved mutations here closes the gap
         // between physical snapshot parity and commands committed during the
         // final promotion boundary.
-        self.apply_range_write_suffix(range, batch, limits)
+        self.apply_range_write_suffix(range, batch, limits, authority)
     }
 
     /// Resolve one old-epoch tail command from quorum probe evidence. A
@@ -1185,6 +1278,26 @@ impl ClusterDataNodeService {
         command: &RangeWriteCommand,
         outcome: RangeWriteState,
     ) -> Result<RangeWriteProgress> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.resolve_range_write_leader_tail_with_mutation(
+            range,
+            evidence_voter,
+            command,
+            outcome,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn resolve_range_write_leader_tail_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        evidence_voter: &ClusterNodeId,
+        command: &RangeWriteCommand,
+        outcome: RangeWriteState,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteProgress> {
+        self.range_mutations.validate(range.id, authority)?;
         let source_is_voter = range.replicas.iter().any(|replica| {
             replica.node_id == *evidence_voter
                 && replica.role == crate::distribution::RangeReplicaRole::Voter
@@ -1214,7 +1327,11 @@ impl ClusterDataNodeService {
                 self.range_writes.commit(command)?;
                 let state = self.range_writes.certify(command)?;
                 if state != RangeWriteState::Applied {
-                    try_database_read(&self.db)?.apply_admitted_mutations(&command.mutations)?;
+                    try_database_read(&self.db)?.apply_admitted_mutations_with_mutation(
+                        command.range_id,
+                        &command.mutations,
+                        authority,
+                    )?;
                     self.range_writes.mark_applied(command)?;
                 }
             }
@@ -1233,6 +1350,7 @@ impl ClusterDataNodeService {
         range: &RangeDescriptor,
         batch: &RangeWriteRepairBatch,
         limits: &RangeWriteRepairLimits,
+        authority: &RangeMutationAuthority<'_>,
     ) -> Result<RangeWriteProgress> {
         batch.validate(limits)?;
         let mut progress = self.range_writes.progress(range.id);
@@ -1262,8 +1380,11 @@ impl ClusterDataNodeService {
                     self.range_writes.commit(&entry.command)?;
                     let state = self.range_writes.certify(&entry.command)?;
                     if state != RangeWriteState::Applied {
-                        try_database_read(&self.db)?
-                            .apply_admitted_mutations(&entry.command.mutations)?;
+                        try_database_read(&self.db)?.apply_admitted_mutations_with_mutation(
+                            entry.command.range_id,
+                            &entry.command.mutations,
+                            authority,
+                        )?;
                         self.range_writes.mark_applied(&entry.command)?;
                     }
                 }
@@ -1293,6 +1414,24 @@ impl ClusterDataNodeService {
         caller: &ClusterNodeId,
         command: RangeWriteCommand,
     ) -> Result<RangeWriteAck> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.prepare_range_write_with_mutation(
+            range,
+            caller,
+            command,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn prepare_range_write_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        command: RangeWriteCommand,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteAck> {
+        self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, &command)?;
         let state = self.range_writes.prepare(command.clone())?;
         Ok(self.range_write_ack(&command, state))
@@ -1307,6 +1446,24 @@ impl ClusterDataNodeService {
         caller: &ClusterNodeId,
         command: &RangeWriteCommand,
     ) -> Result<RangeWriteAck> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.commit_range_write_decision_with_mutation(
+            range,
+            caller,
+            command,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn commit_range_write_decision_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        command: &RangeWriteCommand,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteAck> {
+        self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
         let state = self.range_writes.commit(command)?;
         Ok(self.range_write_ack(command, state))
@@ -1318,6 +1475,24 @@ impl ClusterDataNodeService {
         caller: &ClusterNodeId,
         command: &RangeWriteCommand,
     ) -> Result<RangeWriteAck> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.certify_range_write_with_mutation(
+            range,
+            caller,
+            command,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn certify_range_write_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        command: &RangeWriteCommand,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteAck> {
+        self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
         let state = self.range_writes.certify(command)?;
         Ok(self.range_write_ack(command, state))
@@ -1331,6 +1506,24 @@ impl ClusterDataNodeService {
         caller: &ClusterNodeId,
         command: &RangeWriteCommand,
     ) -> Result<RangeWriteAck> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.commit_range_write_with_mutation(
+            range,
+            caller,
+            command,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn commit_range_write_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        command: &RangeWriteCommand,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteAck> {
+        self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
         let state = self.range_writes.commit(command)?;
         Ok(self.range_write_ack(command, state))
@@ -1345,6 +1538,24 @@ impl ClusterDataNodeService {
         caller: &ClusterNodeId,
         command: &RangeWriteCommand,
     ) -> Result<RangeWriteAck> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_certified_range_write_with_mutation(
+            range,
+            caller,
+            command,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_certified_range_write_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        command: &RangeWriteCommand,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteAck> {
+        self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
         let state = self.range_writes.state(command)?;
         if !matches!(
@@ -1357,7 +1568,11 @@ impl ClusterDataNodeService {
             )));
         }
         if state != RangeWriteState::Applied {
-            try_database_read(&self.db)?.apply_admitted_mutations(&command.mutations)?;
+            try_database_read(&self.db)?.apply_admitted_mutations_with_mutation(
+                command.range_id,
+                &command.mutations,
+                authority,
+            )?;
             self.range_writes.mark_applied(command)?;
         }
         Ok(self.range_write_ack(command, RangeWriteState::Applied))
@@ -1369,22 +1584,66 @@ impl ClusterDataNodeService {
         caller: &ClusterNodeId,
         command: &RangeWriteCommand,
     ) -> Result<RangeWriteAck> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.abort_range_write_with_mutation(
+            range,
+            caller,
+            command,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn abort_range_write_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        command: &RangeWriteCommand,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteAck> {
+        self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
         let state = self.range_writes.abort(command)?;
         Ok(self.range_write_ack(command, state))
     }
 
     pub fn mark_range_write_applied(&mut self, command_id: &str) -> Result<()> {
+        let range_id = self
+            .range_writes
+            .command_by_id(command_id)
+            .ok_or_else(|| data_error(format!("unknown range-write command {command_id}")))?
+            .range_id;
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range_id)?;
+        self.mark_range_write_applied_with_mutation(
+            command_id,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn mark_range_write_applied_with_mutation(
+        &mut self,
+        command_id: &str,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<()> {
         let command = self
             .range_writes
             .command_by_id(command_id)
             .ok_or_else(|| data_error(format!("unknown range-write command {command_id}")))?;
+        self.range_mutations.validate(command.range_id, authority)?;
         self.range_writes.mark_applied(&command)
     }
 
     fn recover_committed_range_writes(&mut self) -> Result<()> {
         for command in self.range_writes.committed_not_applied() {
-            try_database_read(&self.db)?.apply_admitted_mutations(&command.mutations)?;
+            let gate = self.range_mutations.clone();
+            let permit = gate.try_enter(command.range_id)?;
+            let authority = &RangeMutationAuthority::Mutation(&permit);
+            try_database_read(&self.db)?.apply_admitted_mutations_with_mutation(
+                command.range_id,
+                &command.mutations,
+                authority,
+            )?;
             self.range_writes.mark_applied(&command)?;
         }
         Ok(())
@@ -1785,6 +2044,28 @@ impl ClusterDataNodeService {
         limits: &RangeDigestRepairLimits,
         now_ms: u64,
     ) -> Result<RangeDigestRepairState> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_range_digest_repair_batch_with_mutation(
+            range,
+            caller,
+            batch,
+            limits,
+            now_ms,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_range_digest_repair_batch_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        batch: &RangeDigestRepairBatch,
+        limits: &RangeDigestRepairLimits,
+        now_ms: u64,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeDigestRepairState> {
+        self.range_mutations.validate(range.id, authority)?;
         batch.validate(limits)?;
         let current_voters = range
             .replicas
@@ -1861,8 +2142,11 @@ impl ClusterDataNodeService {
         let mut next = state;
         next.record_applied(batch, limits)?;
         self.ensure_range_digest_fence(range, caller, &digest_state, now_ms)?;
-        try_database_read(&self.db)?
-            .apply_range_anti_entropy_mutations_as_local(range, &batch.mutations)?;
+        try_database_read(&self.db)?.apply_range_anti_entropy_mutations_as_local_with_mutation(
+            range,
+            &batch.mutations,
+            authority,
+        )?;
         // The data RPC holds the node service mutex for this whole method, so a
         // prepare cannot release the fence between the two checks and commit.
         self.ensure_range_digest_fence(range, caller, &digest_state, now_ms)?;
@@ -2051,6 +2335,24 @@ impl ClusterDataNodeService {
         range: &RangeDescriptor,
         step: &SnapshotSourceStep,
     ) -> Result<SnapshotCopyProgress> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_snapshot_step_with_mutation(
+            relocation,
+            range,
+            step,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_snapshot_step_with_mutation(
+        &mut self,
+        relocation: &RangeRelocation,
+        range: &RangeDescriptor,
+        step: &SnapshotSourceStep,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<SnapshotCopyProgress> {
+        self.range_mutations.validate(range.id, authority)?;
         self.ensure_target(relocation)?;
         match step {
             SnapshotSourceStep::Batch {
@@ -2066,13 +2368,19 @@ impl ClusterDataNodeService {
                 // ordinary copied rows use shared access below.
                 if missing {
                     let mut db = try_database_write(&self.db)?;
-                    return self.learner.apply_snapshot_batch(
-                        &mut db,
+                    return self.learner.apply_snapshot_batch_with(
                         relocation,
-                        range,
                         relocation.snapshot_resume_after_key.as_deref(),
                         collection_meta,
                         batch,
+                        || {
+                            db.apply_range_snapshot_batch_with_mutation(
+                                range,
+                                collection_meta,
+                                batch,
+                                authority,
+                            )
+                        },
                     );
                 }
                 let db = try_database_read(&self.db)?;
@@ -2081,7 +2389,14 @@ impl ClusterDataNodeService {
                     relocation.snapshot_resume_after_key.as_deref(),
                     collection_meta,
                     batch,
-                    || db.apply_range_snapshot_batch_preinstalled(range, collection_meta, batch),
+                    || {
+                        db.apply_range_snapshot_batch_preinstalled_with_mutation(
+                            range,
+                            collection_meta,
+                            batch,
+                            authority,
+                        )
+                    },
                 )
             }
             SnapshotSourceStep::Advance {
@@ -2152,6 +2467,24 @@ impl ClusterDataNodeService {
         range: &RangeDescriptor,
         batch: &CatchUpSourceBatch,
     ) -> Result<CatchUpProgress> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_catch_up_with_mutation(
+            relocation,
+            range,
+            batch,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_catch_up_with_mutation(
+        &mut self,
+        relocation: &RangeRelocation,
+        range: &RangeDescriptor,
+        batch: &CatchUpSourceBatch,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<CatchUpProgress> {
+        self.range_mutations.validate(range.id, authority)?;
         self.ensure_target(relocation)?;
         let needs_catalog_install = {
             let db = try_database_read(&self.db)?;
@@ -2168,12 +2501,11 @@ impl ClusterDataNodeService {
         };
         if needs_catalog_install {
             let mut db = try_database_write(&self.db)?;
-            return self.learner.apply_commit_frames(
-                &mut db,
+            return self.learner.apply_commit_frames_with(
                 relocation,
-                range,
                 &batch.frames,
                 batch.source_commit_sequence,
+                |frame| db.apply_range_commit_frame_as_local_with_mutation(range, frame, authority),
             );
         }
         let db = try_database_read(&self.db)?;
@@ -2181,7 +2513,11 @@ impl ClusterDataNodeService {
             relocation,
             &batch.frames,
             batch.source_commit_sequence,
-            |frame| db.apply_range_commit_frame_as_local_preinstalled(range, frame),
+            |frame| {
+                db.apply_range_commit_frame_as_local_preinstalled_with_mutation(
+                    range, frame, authority,
+                )
+            },
         )
     }
 
@@ -2192,6 +2528,26 @@ impl ClusterDataNodeService {
         resume_after_key: Option<&str>,
         max_records: usize,
     ) -> Result<CleanupProgress> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.cleanup_source_step_with_mutation(
+            relocation,
+            range,
+            resume_after_key,
+            max_records,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn cleanup_source_step_with_mutation(
+        &mut self,
+        relocation: &RangeRelocation,
+        range: &RangeDescriptor,
+        resume_after_key: Option<&str>,
+        max_records: usize,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<CleanupProgress> {
+        self.range_mutations.validate(range.id, authority)?;
         if relocation.source.as_ref() != Some(&self.node_id) {
             return Err(data_error(format!(
                 "node {} is not cleanup source for {}",
@@ -2246,11 +2602,8 @@ impl ClusterDataNodeService {
         )?;
         if !ids.is_empty() {
             let after_id = ids.last().cloned().expect("non-empty cleanup batch");
-            let deleted = try_database_read(&self.db)?.delete_range_records_as_local(
-                range,
-                &collection,
-                &ids,
-            )?;
+            let deleted = try_database_read(&self.db)?
+                .delete_range_records_as_local_with_mutation(range, &collection, &ids, authority)?;
             return Ok(CleanupProgress {
                 resume_after_key: Some(encode_cursor(&CollectionScanCursor {
                     collection,
@@ -2281,6 +2634,21 @@ impl ClusterDataNodeService {
     }
 
     pub fn complete_relocation(&mut self, relocation: &RangeRelocation) -> Result<bool> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(relocation.range_id)?;
+        self.complete_relocation_with_mutation(
+            relocation,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn complete_relocation_with_mutation(
+        &mut self,
+        relocation: &RangeRelocation,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<bool> {
+        self.range_mutations
+            .validate(relocation.range_id, authority)?;
         self.ensure_target(relocation)?;
         self.learner.complete_relocation(relocation.id)
     }

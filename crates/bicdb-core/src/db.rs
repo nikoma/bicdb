@@ -54,6 +54,12 @@ mod index_build;
 use index_binding::load_btree_bindings;
 mod integrity_reservations;
 mod pitr_maintenance;
+mod range_image_native;
+pub(crate) use range_image_native::{
+    FreshRangeGenesisAuthority, RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage,
+};
+mod range_image_bindings;
+pub(crate) use range_image_bindings::RangeImageDbBindings;
 mod read_committed_reservation;
 mod record_read_snapshot;
 pub use record_read_snapshot::RecordReadSnapshot;
@@ -990,7 +996,7 @@ impl ClusterSchemaBundle {
         }
         let mut collection_names = BTreeSet::new();
         for collection in &self.collections {
-            validate_collection_name(&collection.name)?;
+            validate_collection_meta_namespaces(collection)?;
             if collection.vector_dim == Some(0) {
                 return Err(BicDbError::Cluster(format!(
                     "cluster schema bundle collection `{}` has a zero vector dimension",
@@ -3901,6 +3907,8 @@ pub struct BicDb {
     /// call site so direct API, SQL, pgwire and extension writes cannot bypass
     /// range quorum once the database is opened in distributed mode.
     commit_admission: RwLock<Option<Arc<dyn CommitAdmission>>>,
+    range_mutations: crate::distribution_range_mutation::RangeMutationGate,
+    range_image_initializing: AtomicBool,
     schema_compatibility: SchemaCompatibilityAuthority,
     encryption: EncryptionRuntime,
     // Per-collection interior mutability: each collection's mutable state lives
@@ -8854,7 +8862,9 @@ fn replication_writes_to_tx_writes(frame: &CommitFrame) -> Result<Vec<TxWrite>> 
 }
 
 fn validate_replication_collection_meta(write: &ReplicationWrite) -> Result<()> {
+    validate_collection_name(&write.collection)?;
     if let Some(meta) = write.collection_meta.as_ref() {
+        validate_collection_meta_namespaces(meta)?;
         if meta.name != write.collection {
             return Err(replication_error(format!(
                 "replication collection metadata mismatch: write targets {}, metadata names {}",
@@ -9056,6 +9066,8 @@ pub struct Transaction {
     /// Used only by authenticated range-log replay. It is private to the core
     /// crate and therefore cannot be selected by SQL, pgwire, or extensions.
     bypass_commit_admission: bool,
+    range_mutation_claim: Option<crate::distribution_range_mutation::RangeMutationClaim>,
+    database_mutation_permit: Option<crate::distribution_range_mutation::DatabaseMutationPermit>,
     commit_admission_ticket: Option<(Arc<dyn CommitAdmission>, CommitAdmissionTicket)>,
     committed_seq: Option<u64>,
     // Paged mode: the page-store snapshot captured when this transaction began,
@@ -9774,6 +9786,12 @@ impl BicDb {
         *self.commit_admission.write() = None;
     }
 
+    pub(crate) fn range_mutation_gate(
+        &self,
+    ) -> crate::distribution_range_mutation::RangeMutationGate {
+        self.range_mutations.clone()
+    }
+
     pub fn commit_admission_ready(&self) -> bool {
         self.commit_admission.read().is_some()
     }
@@ -9782,15 +9800,23 @@ impl BicDb {
     /// boundary. This is deliberately narrower than exposing a general bypass:
     /// callers provide only concrete row mutations and still pass through the
     /// ordinary transaction/WAL/index/constraint machinery.
-    pub(crate) fn apply_admitted_mutations(
+    pub(crate) fn apply_admitted_mutations_with_mutation(
         &self,
+        range_id: crate::RangeId,
         mutations: &[CommitAdmissionMutation],
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
     ) -> Result<()> {
+        self.range_mutations.validate(range_id, authority)?;
         if mutations.is_empty() {
             return Ok(());
         }
+        self.invalidate_native_range_images_before_mutation(
+            Some(range_id),
+            "apply_admitted_mutations_with_mutation",
+        )?;
         let mut tx = self.begin_transaction()?;
         tx.bypass_commit_admission = true;
+        tx.range_mutation_claim = Some(authority.claim());
         for mutation in mutations {
             match &mutation.record {
                 Some(record) => tx.insert(&mutation.collection, record.clone())?,
@@ -9810,6 +9836,22 @@ impl BicDb {
         range: &RangeDescriptor,
         mutations: &[CommitAdmissionMutation],
     ) -> Result<usize> {
+        let gate = self.range_mutation_gate();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_range_anti_entropy_mutations_as_local_with_mutation(
+            range,
+            mutations,
+            &crate::distribution_range_mutation::RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_range_anti_entropy_mutations_as_local_with_mutation(
+        &self,
+        range: &RangeDescriptor,
+        mutations: &[CommitAdmissionMutation],
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+    ) -> Result<usize> {
+        self.range_mutations.validate(range.id, authority)?;
         for mutation in mutations {
             if !range.contains_token(distribution_key_token(
                 &mutation.collection,
@@ -9829,8 +9871,13 @@ impl BicDb {
         if mutations.is_empty() {
             return Ok(0);
         }
+        self.invalidate_native_range_images_before_mutation(
+            Some(range.id),
+            "apply_range_anti_entropy_mutations_as_local_with_mutation",
+        )?;
         let mut tx = self.begin_transaction()?;
         tx.bypass_commit_admission = true;
+        tx.range_mutation_claim = Some(authority.claim());
         for mutation in mutations {
             match &mutation.record {
                 Some(record) => {
@@ -10214,7 +10261,7 @@ impl BicDb {
         open_trace!("snapshot_load");
 
         for mut meta in metas {
-            validate_collection_name(&meta.name)?;
+            validate_collection_meta_namespaces(&meta)?;
             let segment_path = segment_path_for(&path, meta.storage());
 
             // PAGED OPEN: in `server_paged` the page store is the durable home
@@ -10820,6 +10867,8 @@ impl BicDb {
             replication_state,
             consensus_state,
             commit_admission: RwLock::new(None),
+            range_mutations: crate::distribution_range_mutation::RangeMutationGate::default(),
+            range_image_initializing: AtomicBool::new(false),
             schema_compatibility: SchemaCompatibilityAuthority::new(),
             encryption,
             collections,
@@ -10895,6 +10944,7 @@ impl BicDb {
                 db.persist_record_audit_publication(*tx_id, events)?;
             }
         }
+        db.load_native_range_image_admission()?;
         db.recover_pending_replication_catalog()?;
         db.prepare_replication_journal_origin()?;
         db.flashback_after_open()?;
@@ -11926,11 +11976,50 @@ impl BicDb {
         range: &RangeDescriptor,
         frames: &[CommitFrame],
     ) -> Result<ReplicationApplyReport> {
+        let gate = self.range_mutation_gate();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_range_replication_batch_with_mutation(
+            range,
+            frames,
+            &crate::distribution_range_mutation::RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_range_replication_batch_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        frames: &[CommitFrame],
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+    ) -> Result<ReplicationApplyReport> {
+        self.range_mutations.validate(range.id, authority)?;
         let filtered = frames
             .iter()
             .map(|frame| filter_commit_frame_for_range(frame, range))
             .collect::<Result<Vec<_>>>()?;
-        self.apply_replication_batch(&filtered)
+        let expected_cluster = self.config.replication.cluster_id.clone();
+        let mut applied = 0usize;
+        let mut duplicates = 0usize;
+        for frame in &filtered {
+            let report = match self.apply_replication_frame_inner_with_mutation(
+                frame,
+                true,
+                &expected_cluster,
+                Some(authority),
+            ) {
+                Ok(report) => report,
+                Err(error) => {
+                    let _ = self.record_replication_apply_error(error.to_string());
+                    return Err(error);
+                }
+            };
+            applied += report.applied;
+            duplicates += report.duplicates;
+        }
+        Ok(ReplicationApplyReport {
+            applied,
+            duplicates,
+            last_applied_commit_seq: self.last_applied_commit_seq(),
+        })
     }
 
     /// Install one bounded learner snapshot batch as an idempotent local
@@ -11943,6 +12032,24 @@ impl BicDb {
         collection_meta: &CollectionMeta,
         batch: &RangeSnapshotBatch,
     ) -> Result<usize> {
+        let gate = self.range_mutation_gate();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_range_snapshot_batch_with_mutation(
+            range,
+            collection_meta,
+            batch,
+            &crate::distribution_range_mutation::RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_range_snapshot_batch_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        collection_meta: &CollectionMeta,
+        batch: &RangeSnapshotBatch,
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+    ) -> Result<usize> {
+        self.range_mutations.validate(range.id, authority)?;
         Self::validate_range_snapshot_fields(range, collection_meta, batch)?;
         if !self.collections.contains_key(&batch.collection) {
             validate_collection_name(&batch.collection)?;
@@ -11954,7 +12061,12 @@ impl BicDb {
             self.persist_catalog()?;
             self.schema_compatibility.invalidate();
         }
-        self.apply_range_snapshot_batch_preinstalled(range, collection_meta, batch)
+        self.apply_range_snapshot_batch_preinstalled_with_mutation(
+            range,
+            collection_meta,
+            batch,
+            authority,
+        )
     }
 
     fn validate_range_snapshot_fields(
@@ -11962,6 +12074,7 @@ impl BicDb {
         collection_meta: &CollectionMeta,
         batch: &RangeSnapshotBatch,
     ) -> Result<()> {
+        validate_collection_meta_namespaces(collection_meta)?;
         if batch.range_id != range.id || batch.range_epoch != range.epoch {
             return Err(BicDbError::Cluster(format!(
                 "snapshot batch range/epoch {}/{} does not match {}/{}",
@@ -11994,6 +12107,24 @@ impl BicDb {
         collection_meta: &CollectionMeta,
         batch: &RangeSnapshotBatch,
     ) -> Result<usize> {
+        let gate = self.range_mutation_gate();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_range_snapshot_batch_preinstalled_with_mutation(
+            range,
+            collection_meta,
+            batch,
+            &crate::distribution_range_mutation::RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_range_snapshot_batch_preinstalled_with_mutation(
+        &self,
+        range: &RangeDescriptor,
+        collection_meta: &CollectionMeta,
+        batch: &RangeSnapshotBatch,
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+    ) -> Result<usize> {
+        self.range_mutations.validate(range.id, authority)?;
         Self::validate_range_snapshot_fields(range, collection_meta, batch)?;
         if self
             .collection_state(&batch.collection)?
@@ -12010,12 +12141,17 @@ impl BicDb {
             return Ok(0);
         }
         let count = batch.records.len();
+        self.invalidate_native_range_images_before_mutation(
+            Some(range.id),
+            "apply_range_snapshot_batch_preinstalled_with_mutation",
+        )?;
         let mut tx = self.begin_transaction()?;
         // The authenticated relocation service has already fenced this batch
         // to an exact range and learner epoch.  Sending it back through the
         // ordinary client-write admission path would make the learner try to
         // lead a second quorum decision while it is still a non-leader.
         tx.bypass_commit_admission = true;
+        tx.range_mutation_claim = Some(authority.claim());
         tx.write_upserts_unchecked(&batch.collection, batch.records.clone())?;
         tx.commit()?;
         Ok(count)
@@ -12030,9 +12166,25 @@ impl BicDb {
         range: &RangeDescriptor,
         frame: &CommitFrame,
     ) -> Result<usize> {
+        let gate = self.range_mutation_gate();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_range_commit_frame_as_local_with_mutation(
+            range,
+            frame,
+            &crate::distribution_range_mutation::RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_range_commit_frame_as_local_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        frame: &CommitFrame,
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+    ) -> Result<usize> {
+        self.range_mutations.validate(range.id, authority)?;
         let filtered = filter_commit_frame_for_range(frame, range)?;
         self.ensure_replication_frame_collections(&filtered)?;
-        self.apply_range_commit_frame_as_local_preinstalled(range, frame)
+        self.apply_range_commit_frame_as_local_preinstalled_with_mutation(range, frame, authority)
     }
 
     pub(crate) fn apply_range_commit_frame_as_local_preinstalled(
@@ -12040,6 +12192,22 @@ impl BicDb {
         range: &RangeDescriptor,
         frame: &CommitFrame,
     ) -> Result<usize> {
+        let gate = self.range_mutation_gate();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_range_commit_frame_as_local_preinstalled_with_mutation(
+            range,
+            frame,
+            &crate::distribution_range_mutation::RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_range_commit_frame_as_local_preinstalled_with_mutation(
+        &self,
+        range: &RangeDescriptor,
+        frame: &CommitFrame,
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+    ) -> Result<usize> {
+        self.range_mutations.validate(range.id, authority)?;
         let filtered = filter_commit_frame_for_range(frame, range)?;
         for write in &filtered.writes {
             validate_replication_collection_meta(write)?;
@@ -12058,11 +12226,16 @@ impl BicDb {
             return Ok(0);
         }
         let count = writes.len();
+        self.invalidate_native_range_images_before_mutation(
+            Some(range.id),
+            "apply_range_commit_frame_as_local_preinstalled_with_mutation",
+        )?;
         let mut tx = self.begin_transaction()?;
         // Catch-up frames are authenticated physical replication, not new
         // logical client writes.  Their source commit is already authoritative
         // and the relocation watermark provides continuity/idempotence.
         tx.bypass_commit_admission = true;
+        tx.range_mutation_claim = Some(authority.claim());
         for write in writes {
             match write.op {
                 TxWriteOp::Upsert => {
@@ -12090,6 +12263,24 @@ impl BicDb {
         collection: &str,
         record_ids: &[String],
     ) -> Result<usize> {
+        let gate = self.range_mutation_gate();
+        let permit = gate.try_enter(range.id)?;
+        self.delete_range_records_as_local_with_mutation(
+            range,
+            collection,
+            record_ids,
+            &crate::distribution_range_mutation::RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn delete_range_records_as_local_with_mutation(
+        &self,
+        range: &RangeDescriptor,
+        collection: &str,
+        record_ids: &[String],
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+    ) -> Result<usize> {
+        self.range_mutations.validate(range.id, authority)?;
         for record_id in record_ids {
             if !range.contains_token(distribution_key_token(collection, record_id)) {
                 return Err(BicDbError::Cluster(format!(
@@ -12102,11 +12293,16 @@ impl BicDb {
             return Ok(0);
         }
         self.ensure_collection(collection)?;
+        self.invalidate_native_range_images_before_mutation(
+            Some(range.id),
+            "delete_range_records_as_local_with_mutation",
+        )?;
         let mut tx = self.begin_transaction()?;
         // Source cleanup runs only after range ownership has moved.  It is a
         // fenced relocation operation and must not attempt a fresh quorum write
         // as the old (now non-leader) source.
         tx.bypass_commit_admission = true;
+        tx.range_mutation_claim = Some(authority.claim());
         tx.delete_many(collection, record_ids)?;
         tx.commit()?;
         Ok(record_ids.len())
@@ -12133,6 +12329,27 @@ impl BicDb {
         require_standby: bool,
         expected_cluster_id: &str,
     ) -> Result<ReplicationApplyReport> {
+        self.apply_replication_frame_inner_with_mutation(
+            frame,
+            require_standby,
+            expected_cluster_id,
+            None,
+        )
+    }
+
+    fn apply_replication_frame_inner_with_mutation(
+        &mut self,
+        frame: &CommitFrame,
+        require_standby: bool,
+        expected_cluster_id: &str,
+        authority: Option<&crate::distribution_range_mutation::RangeMutationAuthority<'_>>,
+    ) -> Result<ReplicationApplyReport> {
+        let _database_mutation = if let Some(authority) = authority {
+            self.range_mutations.validate_claim(&authority.claim())?;
+            None
+        } else {
+            Some(self.range_mutations.try_enter_database()?)
+        };
         if !self.replication_verification_healthy() {
             return Err(replication_error("replica verification failed; snapshot bootstrap required before importing more commits"));
         }
@@ -12177,12 +12394,13 @@ impl BicDb {
         self.ensure_replication_frame_collections(frame)?;
         let writes = replication_writes_to_tx_writes(frame)?;
         self.stage_pending_replication_catalog(frame)?;
-        self.apply_imported_replication_commit(
+        self.apply_imported_replication_commit_with_mutation(
             frame.tx_id,
             frame.commit_seq,
             frame.timestamp,
             &writes,
             &frame.journal,
+            authority,
         )?;
         self.apply_replicated_catalog_ops(frame)?;
         self.finish_pending_replication_catalog()?;
@@ -12397,6 +12615,8 @@ impl BicDb {
             return Ok(());
         }
 
+        let _database_mutation = self.range_mutations.try_enter_database()?;
+        self.invalidate_native_range_images_before_mutation(None, "create collection")?;
         let storage_name = self.storage_name_for_new(name);
         let logged_mode = mode.clone();
         let meta = CollectionMeta {
@@ -12993,6 +13213,8 @@ impl BicDb {
         if !self.collections.contains_key(name) {
             return Ok(false);
         }
+        let _database_mutation = self.range_mutations.try_enter_database()?;
+        self.invalidate_native_range_images_before_mutation(None, "drop collection")?;
         // In server-paged mode the catalog is not the row store. Purge both
         // the record keyspace and its intern dictionary before publishing the
         // DROP; otherwise a same-name CREATE exposes the prior relation's
@@ -21450,7 +21672,7 @@ fn verify_integrity_for(
     };
 
     for meta in metas {
-        validate_collection_name(&meta.name)?;
+        validate_collection_meta_namespaces(&meta)?;
         let verification = storage::verify_frames(
             &segment_path_for(path, meta.storage()),
             FrameKind::Record,
@@ -21514,7 +21736,7 @@ fn load_catalog(path: &Path, encryption: &EncryptionRuntime) -> Result<Vec<Colle
 
     let catalog: CollectionCatalog = serde_json::from_slice(&bytes)?;
     for collection in &catalog.collections {
-        validate_collection_name(&collection.name)?;
+        validate_collection_meta_namespaces(collection)?;
     }
     Ok(catalog.collections)
 }
@@ -27548,6 +27770,13 @@ fn serialized_size_bounded(value: &impl Serialize, limit: usize) -> Result<usize
     }
     result?;
     Ok(writer.written)
+}
+
+fn validate_collection_meta_namespaces(meta: &CollectionMeta) -> Result<()> {
+    validate_collection_name(&meta.name)?;
+    // Physical backing names are input too: a permitted logical alias must
+    // never smuggle a reserved/invalid native namespace into ordinary storage.
+    validate_collection_name(meta.storage())
 }
 
 fn validate_collection_name(name: &str) -> Result<()> {

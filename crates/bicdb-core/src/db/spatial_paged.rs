@@ -2699,6 +2699,12 @@ impl BicDb {
                 "injected pre-decision rejection".into(),
             ));
         }
+        if tx.database_mutation_permit.is_some() && !tx.writes.is_empty() {
+            self.invalidate_native_range_images_before_mutation(
+                None,
+                "unscoped native/standalone commit",
+            )?;
+        }
         bicdb_page::test_faults::crash_point("commit.before_decision");
         // Past validation: reserve and durably log the transaction decision.
         // A plain atomic add is monotonic; the seq-keyed writer queue tolerates

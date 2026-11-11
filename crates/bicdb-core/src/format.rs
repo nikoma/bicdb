@@ -44,6 +44,28 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
     ONLINE_BACKUP_EXTENT_FEATURE_FLAG,
 ];
 
+// Capture-only subset of the c3 portable-reader contract. Rename journals
+// are deliberately absent until their actual recovery implementation lands;
+// knowing a future flag before implementing its reader would be unsafe.
+const REPLICATED_READER_FEATURES: &[&str] = &[
+    ORACLE_INVALID_ROUTINES_FEATURE_FLAG,
+    ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG,
+    UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG,
+    SQL_CATALOG_INTENTS_FEATURE_FLAG,
+];
+
+pub(crate) fn required_reader_features(root: &Path) -> Result<Vec<String>> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .into_iter()
+        .filter(|flag| REPLICATED_READER_FEATURES.contains(&flag.as_str()))
+        .collect())
+}
+
 fn feature_flags_lock(root: &Path) -> std::sync::Arc<parking_lot::Mutex<()>> {
     use std::sync::{Arc, OnceLock, Weak};
     type Locks = std::collections::HashMap<PathBuf, Weak<parking_lot::Mutex<()>>>;

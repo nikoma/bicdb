@@ -32,6 +32,9 @@ use crate::distribution_data::ClusterDataNodeService;
 use crate::distribution_range_handoff::{
     RangeHandoffPromise, HANDOFF_RANGE_LOG_FORMAT, MAX_HANDOFF_PROMISES,
 };
+use crate::distribution_range_mutation::{
+    RangeMutationAuthority, RangeMutationGate, RangeMutationPermit,
+};
 use crate::distribution_supervisor::ClusterBackupMetadata;
 use crate::error::{BicDbError, Result};
 
@@ -1438,6 +1441,7 @@ pub struct RangeWriteCoordinator<Transport: RangeWriteTransport> {
     local_service: Arc<Mutex<ClusterDataNodeService>>,
     transport: Arc<Transport>,
     repair_limits: RangeWriteRepairLimits,
+    range_mutations: RangeMutationGate,
     active_ranges: Mutex<BTreeMap<RangeId, String>>,
     active_range_changed: Condvar,
     recovered_epochs: Mutex<BTreeMap<RangeId, u64>>,
@@ -1455,6 +1459,7 @@ struct RangeAcknowledgementEvidence {
     transaction_id: u64,
     certified: usize,
     required_quorum: usize,
+    mutation: RangeMutationPermit,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -1585,7 +1590,10 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         // Construction must not wait behind a caller-owned database write lock.
         // The incarnation is immutable for this database handle; callbacks run
         // under database guards and must not attempt to reacquire that lock.
-        let database = local_service.lock().database();
+        let (database, range_mutations) = {
+            let service = local_service.lock();
+            (service.database(), service.range_mutation_gate())
+        };
         let local_incarnation = database
             .try_read()
             .ok_or_else(|| {
@@ -1600,6 +1608,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             local_service,
             transport,
             repair_limits,
+            range_mutations,
             active_ranges: Mutex::new(BTreeMap::new()),
             active_range_changed: Condvar::new(),
             recovered_epochs: Mutex::new(BTreeMap::new()),
@@ -1684,6 +1693,8 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         }
         self.require_local_schema_compatibility(&range)?;
         self.require_recovered_epoch(&range)?;
+        let mutation = self.range_mutations.try_enter(range.id)?;
+        let authority = RangeMutationAuthority::Mutation(&mutation);
         let _reservation = self.reserve_range(range.id)?;
         let voters = range
             .replicas
@@ -1710,13 +1721,17 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             )));
         }
 
-        let local_progress = self.local_service.lock().install_range_backup_fence(
-            &range,
-            &self.local_node_id,
-            plan_id,
-            installed_at_ms,
-            expires_at_ms,
-        )?;
+        let local_progress = self
+            .local_service
+            .lock()
+            .install_range_backup_fence_with_mutation(
+                &range,
+                &self.local_node_id,
+                plan_id,
+                installed_at_ms,
+                expires_at_ms,
+                &authority,
+            )?;
         let cut = local_progress.resolved_through;
         let mut observations = vec![local_progress];
         let mut fenced_remotes = Vec::new();
@@ -1755,7 +1770,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             }
         }
         if divergent_fence || observations.len() < required_quorum {
-            self.rollback_backup_fences(&range, plan_id, &fenced_remotes);
+            self.rollback_backup_fences(&range, plan_id, &fenced_remotes, &authority);
             return Err(range_write_error(format!(
                 "backup fence for {} reached only {}/{} exact-cut voters: {}",
                 range.id,
@@ -1772,7 +1787,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                 })
         };
         if !still_current {
-            self.rollback_backup_fences(&range, plan_id, &fenced_remotes);
+            self.rollback_backup_fences(&range, plan_id, &fenced_remotes, &authority);
             return Err(range_write_error(format!(
                 "topology changed while fencing {} epoch {}",
                 range.id, range.epoch
@@ -1841,6 +1856,8 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                 "backup fence release evidence has no current leader-inclusive quorum",
             ));
         }
+        let mutation = self.range_mutations.try_enter(range.id)?;
+        let authority = RangeMutationAuthority::Mutation(&mutation);
         let _reservation = self.reserve_range(range.id)?;
         let mut released = 0usize;
         let mut failures = Vec::new();
@@ -1863,11 +1880,16 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                 failures.join(" | ")
             )));
         }
-        if self.local_service.lock().release_range_backup_fence(
-            &range,
-            &self.local_node_id,
-            plan_id,
-        )? {
+        if self
+            .local_service
+            .lock()
+            .release_range_backup_fence_with_mutation(
+                &range,
+                &self.local_node_id,
+                plan_id,
+                &authority,
+            )?
+        {
             released = released.saturating_add(1);
         }
         Ok(released)
@@ -1908,17 +1930,22 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         range: &RangeDescriptor,
         plan_id: Uuid,
         fenced_remotes: &[ClusterNodeId],
+        authority: &RangeMutationAuthority<'_>,
     ) {
         for voter in fenced_remotes {
             let _ =
                 self.transport
                     .release_range_backup_fence(voter, plan_id, range.id, range.epoch);
         }
-        let _ = self.local_service.lock().release_range_backup_fence(
-            range,
-            &self.local_node_id,
-            plan_id,
-        );
+        let _ = self
+            .local_service
+            .lock()
+            .release_range_backup_fence_with_mutation(
+                range,
+                &self.local_node_id,
+                plan_id,
+                authority,
+            );
     }
 
     /// Recover a bounded number of ranges for which this node is the current
@@ -1984,6 +2011,8 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
 
     fn recover_one_range_leadership(&self, range: &RangeDescriptor) -> Result<()> {
         self.require_local_schema_compatibility(range)?;
+        let mutation = self.range_mutations.try_enter(range.id)?;
+        let authority = &RangeMutationAuthority::Mutation(&mutation);
         let _reservation = self.try_reserve_range(range.id)?;
         let voters = range
             .replicas
@@ -1991,8 +2020,8 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             .filter(|replica| replica.role == RangeReplicaRole::Voter)
             .map(|replica| replica.node_id.clone())
             .collect::<Vec<_>>();
-        self.recover_leader_prefix(range, &voters)?;
-        self.recover_leader_tail(range, &voters)?;
+        self.recover_leader_prefix(range, &voters, authority)?;
+        self.recover_leader_tail(range, &voters, authority)?;
         let still_current = self
             .topology
             .read()
@@ -2218,20 +2247,24 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         range: &RangeDescriptor,
         voters: &[ClusterNodeId],
         command: &RangeWriteCommand,
+        authority: &RangeMutationAuthority<'_>,
     ) {
         for voter in voters.iter().filter(|node| **node != self.local_node_id) {
             let _ = self.transport.abort_range_write(voter, command);
         }
-        let _ = self
-            .local_service
-            .lock()
-            .abort_range_write(range, &self.local_node_id, command);
+        let _ = self.local_service.lock().abort_range_write_with_mutation(
+            range,
+            &self.local_node_id,
+            command,
+            authority,
+        );
     }
 
     fn recover_leader_prefix(
         &self,
         range: &RangeDescriptor,
         voters: &[ClusterNodeId],
+        authority: &RangeMutationAuthority<'_>,
     ) -> Result<()> {
         let quorum = voters.len() / 2 + 1;
         let mut progress_by_node = BTreeMap::new();
@@ -2337,11 +2370,12 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             let next = self
                 .local_service
                 .lock()
-                .apply_range_write_leader_recovery(
+                .apply_range_write_leader_recovery_with_mutation(
                     range,
                     &chosen.source_node_id,
                     &chosen,
                     &self.repair_limits,
+                    authority,
                 )?;
             if next.resolved_through <= local_resolved || next.resolved_through > quorum_resolved {
                 return Err(range_write_error(
@@ -2359,7 +2393,12 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         Ok(())
     }
 
-    fn recover_leader_tail(&self, range: &RangeDescriptor, voters: &[ClusterNodeId]) -> Result<()> {
+    fn recover_leader_tail(
+        &self,
+        range: &RangeDescriptor,
+        voters: &[ClusterNodeId],
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<()> {
         let quorum = voters.len() / 2 + 1;
         let command_budget = self
             .repair_limits
@@ -2478,12 +2517,16 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             } else {
                 RangeWriteState::Aborted
             };
-            let progress = self.local_service.lock().resolve_range_write_leader_tail(
-                range,
-                &evidence_voter,
-                &command,
-                outcome,
-            )?;
+            let progress = self
+                .local_service
+                .lock()
+                .resolve_range_write_leader_tail_with_mutation(
+                    range,
+                    &evidence_voter,
+                    &command,
+                    outcome,
+                    authority,
+                )?;
             if progress.resolved_through != index {
                 return Err(range_write_error(format!(
                     "range-write tail resolution for {} made invalid progress at index {index}",
@@ -2593,6 +2636,8 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
     fn admit(&self, intent: &CommitAdmissionIntent) -> Result<CommitAdmissionTicket> {
         let range = self.resolve_range(intent)?;
         self.require_recovered_epoch(&range)?;
+        let mutation = self.range_mutations.try_enter(range.id)?;
+        let authority = &RangeMutationAuthority::Mutation(&mutation);
         let mut reservation = self.reserve_recovered_range(&range)?;
         let voters = range
             .replicas
@@ -2609,11 +2654,14 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
             self.local_node_id.clone(),
             intent,
         )?;
-        self.local_service.lock().prepare_range_write(
-            &range,
-            &self.local_node_id,
-            command.clone(),
-        )?;
+        self.local_service
+            .lock()
+            .prepare_range_write_with_mutation(
+                &range,
+                &self.local_node_id,
+                command.clone(),
+                authority,
+            )?;
 
         let quorum = voters.len() / 2 + 1;
         let mut prepared = 1usize;
@@ -2641,7 +2689,7 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
             // A prepare may have become durable even when its response was
             // lost or malformed. Broadcast the abort to every voter so those
             // unknown outcomes cannot accumulate unresolved entries forever.
-            self.abort_prepared(&range, &voters, &command);
+            self.abort_prepared(&range, &voters, &command, authority);
             return Err(range_write_error(format!(
                 "range {} write {} failed prepare quorum: {prepared}/{quorum}; repair failures: {}",
                 range.id,
@@ -2657,11 +2705,14 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
         // Persist the local decision before telling any follower to commit.
         // Therefore a committed follower always implies a recoverable decision
         // on the designated leader.
-        self.local_service.lock().commit_range_write_decision(
-            &range,
-            &self.local_node_id,
-            &command,
-        )?;
+        self.local_service
+            .lock()
+            .commit_range_write_decision_with_mutation(
+                &range,
+                &self.local_node_id,
+                &command,
+                authority,
+            )?;
         let mut committed = 1usize;
         let mut committed_nodes = Vec::new();
         for voter in &prepared_nodes {
@@ -2683,7 +2734,7 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
             // No row has been applied yet. Provisional decisions are
             // abortable until a decision quorum exists, so a minority outcome
             // cannot leak visible follower state or resurrect on restart.
-            self.abort_prepared(&range, &voters, &command);
+            self.abort_prepared(&range, &voters, &command, authority);
             return Err(range_write_error(format!(
                 "range {} write {} failed decision quorum: {committed}/{quorum}; provisional decisions were aborted",
                 range.id, command.command_id
@@ -2695,7 +2746,7 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
         // recovered/applied and may not be overtaken by a later command.
         self.local_service
             .lock()
-            .certify_range_write(&range, &self.local_node_id, &command)?;
+            .certify_range_write_with_mutation(&range, &self.local_node_id, &command, authority)?;
         reservation.preserve_for_recovery(&command.command_id);
         let mut certified_voters = 1usize;
         for voter in &committed_nodes {
@@ -2725,6 +2776,7 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
                 transaction_id: command.transaction_id,
                 certified: certified_voters,
                 required_quorum: quorum,
+                mutation,
             },
         );
         Ok(CommitAdmissionTicket {
@@ -2758,7 +2810,10 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
         let applied = self
             .local_service
             .lock()
-            .mark_range_write_applied(&ticket.command_id);
+            .mark_range_write_applied_with_mutation(
+                &ticket.command_id,
+                &RangeMutationAuthority::Mutation(&evidence.mutation),
+            );
         let uncertainty = match applied {
             Err(error) => Some(format!("local range applied checkpoint failed: {error}")),
             Ok(()) if evidence.certified < evidence.required_quorum => Some(format!(
@@ -4095,6 +4150,44 @@ mod tests {
     }
 
     #[test]
+    fn range_image_gate_keeps_owned_leader_permit_through_actual_wal_callback() {
+        let topology = topology(1);
+        let range_id = topology
+            .range_for_key("items", "owned-until-wal-callback")
+            .unwrap()
+            .id;
+        let other_range = topology
+            .ranges
+            .values()
+            .find(|range| range.id != range_id)
+            .unwrap()
+            .id;
+        let (_directory, db) = coordinated_database(topology, true);
+        let (gate, log, sequence, mut tx) = {
+            let database = db.read();
+            let gate = database.range_mutation_gate();
+            let mut tx = database.begin_transaction().unwrap();
+            tx.insert("items", Record::new("owned-until-wal-callback"))
+                .unwrap();
+            let sequence = database.commit_buffered_transaction(&mut tx).unwrap();
+            (gate, database.tx_log_handle(), sequence, tx)
+        };
+        assert!(gate.try_freeze(range_id, Uuid::now_v7()).is_err());
+        let other_frozen = gate.try_freeze(other_range, Uuid::now_v7()).unwrap();
+        log.write_durable(sequence).unwrap();
+        assert!(gate.try_freeze(range_id, Uuid::now_v7()).is_err());
+        tx.finalize_commit_admission().unwrap();
+        let frozen = gate.try_freeze(range_id, Uuid::now_v7()).unwrap();
+        assert!(db
+            .read()
+            .get("items", "owned-until-wal-callback")
+            .unwrap()
+            .is_some());
+        drop(frozen);
+        drop(other_frozen);
+    }
+
+    #[test]
     fn three_voter_write_does_not_apply_without_majority() {
         let (_directory, db) = coordinated_database(topology(3), false);
         let error = db
@@ -4258,10 +4351,18 @@ mod tests {
                 leader
                     .certify_range_write(&current_range, &leader_id, &command)
                     .unwrap();
-                leader_db
-                    .read()
-                    .apply_admitted_mutations(&command.mutations)
-                    .unwrap();
+                {
+                    let database = leader_db.read();
+                    let gate = database.range_mutation_gate();
+                    let permit = gate.try_enter(command.range_id).unwrap();
+                    database
+                        .apply_admitted_mutations_with_mutation(
+                            command.range_id,
+                            &command.mutations,
+                            &RangeMutationAuthority::Mutation(&permit),
+                        )
+                        .unwrap();
+                }
                 leader
                     .mark_range_write_applied(&command.command_id)
                     .unwrap();

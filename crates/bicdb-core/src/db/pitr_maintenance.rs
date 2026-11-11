@@ -1886,9 +1886,40 @@ impl BicDb {
         range: &RangeDescriptor,
         after_id: Option<&str>,
         options: &RangeSnapshotOptions,
+        visit: impl FnMut(RangeSnapshotBatch) -> Result<bool>,
+    ) -> Result<RangeSnapshotExport> {
+        self.for_each_range_snapshot_batch_with_cancellation(
+            collection,
+            range,
+            after_id,
+            options,
+            usize::MAX,
+            &CancellationToken::uncancelable(),
+            visit,
+        )
+    }
+
+    /// Additive bounded scanner for a trusted frozen image. The scan budget
+    /// counts every raw row, including keys belonging to other ranges, so a
+    /// skewed collection can resume rather than repeatedly time out at its
+    /// beginning. This is local copying, not a read/quorum certificate.
+    pub(crate) fn for_each_range_snapshot_batch_with_cancellation(
+        &self,
+        collection: &str,
+        range: &RangeDescriptor,
+        after_id: Option<&str>,
+        options: &RangeSnapshotOptions,
+        max_scanned_records: usize,
+        cancellation: &CancellationToken,
         mut visit: impl FnMut(RangeSnapshotBatch) -> Result<bool>,
     ) -> Result<RangeSnapshotExport> {
         options.validate()?;
+        if max_scanned_records == 0 {
+            return Err(BicDbError::Cluster(
+                "range image scan budget must be positive".into(),
+            ));
+        }
+        cancellation.check()?;
         let state = self.collection_state(collection)?;
         if !state.paged_lazy {
             return Err(BicDbError::Cluster(format!(
@@ -1918,6 +1949,7 @@ impl BicDb {
         let mut last_scanned_key = after_id.map(ToOwned::to_owned);
         let mut last_emitted_resume = after_id.map(ToOwned::to_owned);
         let mut stopped = false;
+        let mut scanned_records = 0usize;
 
         paged.for_each_batch_after(
             paged_snapshot,
@@ -1925,7 +1957,9 @@ impl BicDb {
             options.max_records_per_batch,
             after_id,
             |records| {
+                cancellation.check()?;
                 for record in records {
+                    cancellation.check()?;
                     let record_id = record.id.clone();
                     let encoded_bytes = serde_json::to_vec(&record)?.len();
                     if encoded_bytes > options.max_record_bytes {
@@ -1998,6 +2032,27 @@ impl BicDb {
                             return Ok(false);
                         }
                     }
+                    scanned_records = scanned_records.saturating_add(1);
+                    if scanned_records >= max_scanned_records {
+                        // Publish all matching rows before advancing the scan
+                        // cursor over nonmatching rows. No unreturned record
+                        // may be hidden behind a successful resume cursor.
+                        if !pending.is_empty() {
+                            let batch_records = std::mem::take(&mut pending);
+                            let batch_bytes = std::mem::take(&mut pending_bytes);
+                            records_exported = records_exported.saturating_add(batch_records.len() as u64);
+                            serialized_record_bytes = serialized_record_bytes.saturating_add(batch_bytes as u64);
+                            visit(RangeSnapshotBatch {
+                                collection: collection.to_string(), range_id: range.id,
+                                range_epoch: range.epoch, snapshot_commit_sequence,
+                                resume_after_key: last_scanned_key.clone().ok_or_else(|| BicDbError::Cluster("range image scan lost its resume key".into()))?,
+                                serialized_record_bytes: batch_bytes, records: batch_records,
+                            })?;
+                        }
+                        last_emitted_resume = last_scanned_key.clone();
+                        stopped = true;
+                        return Ok(false);
+                    }
                 }
                 Ok(true)
             },
@@ -2025,6 +2080,7 @@ impl BicDb {
             }
         }
 
+        cancellation.check()?;
         Ok(RangeSnapshotExport {
             range_id: range.id,
             range_epoch: range.epoch,

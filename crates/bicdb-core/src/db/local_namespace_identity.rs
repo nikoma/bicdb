@@ -5,6 +5,7 @@ use super::*;
 pub(super) fn validate_catalog(metas: &[CollectionMeta], active: bool) -> Result<()> {
     let mut seen = BTreeSet::new();
     for meta in metas {
+        validate_collection_meta_namespaces(meta)?;
         let Some(id) = meta.local_namespace_id else {
             // A flag-only interrupted activation remains explicitly untrusted.
             continue;

@@ -30,6 +30,8 @@ mod distribution_metadata_read_provider;
 mod distribution_query;
 mod distribution_range_consensus;
 mod distribution_range_handoff;
+mod distribution_range_image;
+mod distribution_range_mutation;
 mod distribution_restore;
 mod distribution_restore_activation;
 mod distribution_routing;

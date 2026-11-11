@@ -1,0 +1,1171 @@
+//! Native birth and empty-genesis receipts for explicitly new image-aware DBs.
+//!
+//! Hidden records use the page store's own WAL/root. They are not public
+//! collections and cannot be supplied as JSON files to manufacture lineage.
+use super::*;
+use crate::distribution::{ClusterId, ClusterNodeId, RangeId, RangeReplicaRole};
+use crate::distribution_range_image::{
+    bounded_json, canonical_range_image_catalog, content_hasher,
+};
+use crate::distribution_range_mutation::FrozenRangeMutationPermit;
+
+fn native_key(key: &str) -> Vec<u8> {
+    let mut encoded = crate::paged_collection::RANGE_IMAGE_NATIVE_NS_V1.to_vec();
+    encoded.extend_from_slice(key.as_bytes());
+    encoded
+}
+const BIRTH_KEY: &str = "birth";
+const READY_KEY: &str = "initialized";
+const INVALIDATION_KEY: &str = "unscoped-invalidation";
+const FACTORY_PREFLIGHT: &str = "range-image-factory.json";
+const MAX_NATIVE_RECEIPT_BYTES: usize = 8 * 1024 * 1024;
+const MAX_GENESIS_RANGES: usize = 65_536;
+const MAX_WAIT: Duration = Duration::from_secs(300);
+
+fn invalid(detail: impl Into<String>) -> BicDbError {
+    BicDbError::Cluster(format!("native range image: {}", detail.into()))
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RangeImageBirthMember {
+    pub incarnation: u64,
+    pub tls_certificate_sha256: Option<String>,
+    pub pending_tls_certificate_sha256: Option<String>,
+}
+
+/// Trusted bootstrap input, not an authority. Only successful atomic creation
+/// and native birth persistence produce the opaque factory authority below.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RangeImageBirthSpec {
+    pub cluster_id: ClusterId,
+    pub bootstrap_id: Uuid,
+    pub node_id: ClusterNodeId,
+    pub member_incarnation: u64,
+    pub initial_members: BTreeMap<ClusterNodeId, RangeImageBirthMember>,
+    pub restore_activation: Option<crate::distribution_consensus::MetadataRestoreActivation>,
+    pub initial_ranges: Vec<RangeDescriptor>,
+}
+impl RangeImageBirthSpec {
+    fn validate(&self) -> Result<()> {
+        if self.bootstrap_id.is_nil()
+            || self.member_incarnation == 0
+            || self.initial_ranges.len() > MAX_GENESIS_RANGES
+        {
+            return Err(invalid("invalid fresh bootstrap identity/range bound"));
+        }
+        if self.initial_members.len() > MAX_GENESIS_RANGES
+            || self
+                .initial_members
+                .get(&self.node_id)
+                .map(|member| member.incarnation)
+                != Some(self.member_incarnation)
+        {
+            return Err(invalid(
+                "fresh bootstrap local incarnation/member map mismatch",
+            ));
+        }
+        for member in self.initial_members.values() {
+            let valid_pin = |pin: &Option<String>| {
+                pin.as_ref().is_none_or(|pin| {
+                    pin.len() == 64 && pin.bytes().all(|byte| byte.is_ascii_hexdigit())
+                })
+            };
+            if member.incarnation == 0
+                || !valid_pin(&member.tls_certificate_sha256)
+                || !valid_pin(&member.pending_tls_certificate_sha256)
+            {
+                return Err(invalid(
+                    "fresh bootstrap member identity or TLS pin is invalid",
+                ));
+            }
+        }
+        if let Some(restore) = &self.restore_activation {
+            restore.validate()?;
+            if restore.cluster_id != self.cluster_id || !self.initial_ranges.is_empty() {
+                return Err(invalid("restored cluster can add a fresh learner, but cannot initialize old data as empty genesis"));
+            }
+        }
+        let mut ids = BTreeSet::new();
+        for range in &self.initial_ranges {
+            for replica in &range.replicas {
+                if !self.initial_members.contains_key(&replica.node_id) {
+                    return Err(invalid(
+                        "initial range refers to an unbound member identity",
+                    ));
+                }
+            }
+            if range.epoch != 1
+                || !ids.insert(range.id)
+                || range.voter_count() == 0
+                || !range
+                    .replicas
+                    .iter()
+                    .any(|r| r.node_id == self.node_id && r.role == RangeReplicaRole::Voter)
+                || range.end_token.is_some_and(|end| end <= range.start_token)
+            {
+                return Err(invalid(
+                    "fresh bootstrap needs unique initial epoch-1 local voter ranges",
+                ));
+            }
+        }
+        bounded_json(self, MAX_NATIVE_RECEIPT_BYTES)?;
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+struct NativeDatabaseBirth {
+    format_version: u32,
+    birth_id: Uuid,
+    spec: RangeImageBirthSpec,
+    image_generation: Uuid,
+    checksum_sha256: String,
+}
+impl NativeDatabaseBirth {
+    fn new(spec: RangeImageBirthSpec) -> Result<Self> {
+        spec.validate()?;
+        let mut birth = Self {
+            format_version: 1,
+            birth_id: Uuid::now_v7(),
+            spec,
+            image_generation: Uuid::now_v7(),
+            checksum_sha256: String::new(),
+        };
+        birth.checksum_sha256 = birth.checksum()?;
+        Ok(birth)
+    }
+    fn checksum(&self) -> Result<String> {
+        Ok(hex::encode(sha2::Sha256::digest(bounded_json(
+            &(
+                self.format_version,
+                self.birth_id,
+                &self.spec,
+                self.image_generation,
+            ),
+            MAX_NATIVE_RECEIPT_BYTES,
+        )?)))
+    }
+    fn validate(&self) -> Result<()> {
+        self.spec.validate()?;
+        if self.format_version != 1
+            || self.birth_id.is_nil()
+            || self.image_generation.is_nil()
+            || self.checksum()? != self.checksum_sha256
+        {
+            return Err(invalid("damaged native birth record"));
+        }
+        Ok(())
+    }
+}
+
+/// A preflight refusal fence only. This sidecar never grants native lineage;
+/// its exact hash is checked against the actual page-WAL birth after opening.
+#[derive(Debug, Serialize, Deserialize)]
+struct FactoryPreflight {
+    format_version: u32,
+    spec: RangeImageBirthSpec,
+    native_birth_sha256: Option<String>,
+}
+#[derive(Debug, Serialize, Deserialize)]
+struct NativeImageInvalidation {
+    birth_id: Uuid,
+    image_generation: Uuid,
+    reason: String,
+}
+#[derive(Debug, Serialize, Deserialize)]
+struct NativeInitializationComplete {
+    birth_id: Uuid,
+    birth_sha256: String,
+    genesis_sha256: BTreeMap<RangeId, String>,
+}
+
+/// Not deserializable and not obtainable by opening an arbitrary empty DB.
+/// Strict reopen reissues it only from the existing native birth and exact
+/// expected cluster/bootstrap/member/config bindings.
+#[derive(Debug)]
+pub(crate) struct FreshRangeGenesisAuthority {
+    birth: NativeDatabaseBirth,
+    root: PathBuf,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+struct NativeGenesisReceipt {
+    format_version: u32,
+    birth_id: Uuid,
+    birth_sha256: String,
+    range: RangeDescriptor,
+    base_members: BTreeMap<ClusterNodeId, RangeImageBirthMember>,
+    local_member_incarnation: u64,
+    restore_activation: Option<crate::distribution_consensus::MetadataRestoreActivation>,
+    range_index: u64,
+    source_database_incarnation: String,
+    reserved_db_upper_bound: u64,
+    actual_snapshot_db_sequence: u64,
+    schema_sha256: String,
+    global_image_generation: Uuid,
+    range_image_generation: Uuid,
+    portable_catalog_sha256: String,
+    empty_image_root_sha256: String,
+    reader_features: Vec<String>,
+    local_namespace_ids: Vec<(String, Uuid)>,
+    native_page_xid: u64,
+    checksum_sha256: String,
+}
+impl NativeGenesisReceipt {
+    fn checksum(&self) -> Result<String> {
+        let mut unsigned = self.clone();
+        unsigned.checksum_sha256.clear();
+        Ok(hex::encode(sha2::Sha256::digest(bounded_json(
+            &unsigned,
+            MAX_NATIVE_RECEIPT_BYTES,
+        )?)))
+    }
+    fn validate(&self) -> Result<()> {
+        if self.format_version != 1
+            || self.range.epoch != 1
+            || self.local_member_incarnation == 0
+            || self
+                .local_namespace_ids
+                .windows(2)
+                .any(|pair| pair[0].0 >= pair[1].0)
+            || self.local_namespace_ids.iter().any(|(_, id)| id.is_nil())
+            || self.range_index != 0
+            || self.birth_id.is_nil()
+            || self.actual_snapshot_db_sequence < self.reserved_db_upper_bound
+            || self.checksum()? != self.checksum_sha256
+        {
+            return Err(invalid("damaged native genesis receipt"));
+        }
+        Ok(())
+    }
+}
+
+/// Actual native genesis/base lineage, not merely a range-log counter. The
+/// initial producer below verifies a fresh native birth and scans the range
+/// empty under its owned freeze, then commits this receipt in the page WAL.
+/// Suffix extension/installed-image producers are a separate required layer.
+#[derive(Debug)]
+pub(crate) struct SourceRangeImageLineage {
+    birth: NativeDatabaseBirth,
+    receipt: NativeGenesisReceipt,
+    current_database_incarnation: String,
+    current_schema_generation: u64,
+}
+
+impl FreshRangeGenesisAuthority {
+    pub(crate) fn birth_id(&self) -> Uuid {
+        self.birth.birth_id
+    }
+    pub(crate) fn cluster_id(&self) -> &ClusterId {
+        &self.birth.spec.cluster_id
+    }
+    pub(crate) fn node_id(&self) -> &ClusterNodeId {
+        &self.birth.spec.node_id
+    }
+}
+impl SourceRangeImageLineage {
+    pub(crate) fn base_range(&self) -> &RangeDescriptor {
+        &self.receipt.range
+    }
+    pub(crate) fn range_index(&self) -> u64 {
+        self.receipt.range_index
+    }
+    pub(crate) fn cluster_id(&self) -> &ClusterId {
+        &self.birth.spec.cluster_id
+    }
+    pub(crate) fn bootstrap_id(&self) -> Uuid {
+        self.birth.spec.bootstrap_id
+    }
+    pub(crate) fn local_node_id(&self) -> &ClusterNodeId {
+        &self.birth.spec.node_id
+    }
+    pub(crate) fn local_member_incarnation(&self) -> u64 {
+        self.receipt.local_member_incarnation
+    }
+    pub(crate) fn base_members(&self) -> &BTreeMap<ClusterNodeId, RangeImageBirthMember> {
+        &self.receipt.base_members
+    }
+    pub(crate) fn restore_activation(
+        &self,
+    ) -> Option<&crate::distribution_consensus::MetadataRestoreActivation> {
+        self.receipt.restore_activation.as_ref()
+    }
+    pub(crate) fn native_receipt_sha256(&self) -> &str {
+        &self.receipt.checksum_sha256
+    }
+    pub(crate) fn schema_sha256(&self) -> &str {
+        &self.receipt.schema_sha256
+    }
+}
+
+fn genesis_key(range_id: RangeId) -> String {
+    format!("genesis:{}", range_id.get())
+}
+
+impl BicDb {
+    pub(crate) fn create_new_range_image_database(
+        root: &Path,
+        config: DbConfig,
+        spec: RangeImageBirthSpec,
+    ) -> Result<(Self, FreshRangeGenesisAuthority)> {
+        Self::create_new_range_image_database_with(root, config, spec, |_| Ok(()))
+    }
+    fn create_new_range_image_database_with(
+        root: &Path,
+        config: DbConfig,
+        spec: RangeImageBirthSpec,
+        after_flags: impl FnOnce(&mut Self) -> Result<()>,
+    ) -> Result<(Self, FreshRangeGenesisAuthority)> {
+        spec.validate()?;
+        if !config.fsync || config.storage_mode != StorageMode::ServerPaged {
+            return Err(invalid(
+                "fresh image-aware database requires fsync server_paged",
+            ));
+        }
+        // Atomic refusal is essential: emptiness/epoch1 does not establish
+        // freshness. Never delete or overwrite an existing/partial directory.
+        fs::create_dir(root).map_err(|error| {
+            invalid(format!("atomic fresh-directory creation refused: {error}"))
+        })?;
+        let parent = root
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
+        File::open(parent)?.sync_all()?;
+        crate::storage::write_atomic(
+            &root.join(FACTORY_PREFLIGHT),
+            &bounded_json(
+                &FactoryPreflight {
+                    format_version: 1,
+                    spec: spec.clone(),
+                    native_birth_sha256: None,
+                },
+                MAX_NATIVE_RECEIPT_BYTES,
+            )?,
+            true,
+        )?;
+        let mut db = Self::open_with_config(root, config.with_required_commit_admission(true))?;
+        db.activate_local_namespace_identity_v1()?;
+        format::enable_range_image_install(root)?;
+        after_flags(&mut db)?;
+        let birth = NativeDatabaseBirth::new(spec)?;
+        db.write_native_range_image_record(BIRTH_KEY, &birth)?;
+        crate::storage::write_atomic(
+            &root.join(FACTORY_PREFLIGHT),
+            &bounded_json(
+                &FactoryPreflight {
+                    format_version: 1,
+                    spec: birth.spec.clone(),
+                    native_birth_sha256: Some(birth.checksum_sha256.clone()),
+                },
+                MAX_NATIVE_RECEIPT_BYTES,
+            )?,
+            true,
+        )?;
+        db.finish_native_genesis_initialization(&birth)?;
+        let authority = FreshRangeGenesisAuthority {
+            birth,
+            root: root.canonicalize()?,
+        };
+        Ok((db, authority))
+    }
+
+    pub(crate) fn open_range_image_database(
+        root: &Path,
+        config: DbConfig,
+        expected: &RangeImageBirthSpec,
+    ) -> Result<(Self, FreshRangeGenesisAuthority)> {
+        expected.validate()?;
+        if !config.fsync || config.storage_mode != StorageMode::ServerPaged {
+            return Err(invalid(
+                "strict image-aware reopen requires fsync server_paged",
+            ));
+        }
+        // This JSON can only refuse an open, never attest a base. Native
+        // page-WAL birth verification below is still mandatory.
+        let file = File::open(root.join(FACTORY_PREFLIGHT)).map_err(|_| {
+            invalid("existing/partial root has no completed factory preflight; do not reuse it")
+        })?;
+        let mut bytes = Vec::new();
+        file.take((MAX_NATIVE_RECEIPT_BYTES + 1) as u64)
+            .read_to_end(&mut bytes)?;
+        if bytes.len() > MAX_NATIVE_RECEIPT_BYTES {
+            return Err(invalid("factory preflight bound exceeded"));
+        }
+        let preflight: FactoryPreflight = serde_json::from_slice(&bytes)?;
+        if preflight.format_version != 1
+            || &preflight.spec != expected
+            || preflight.native_birth_sha256.is_none()
+            || !root.is_dir()
+            || !format::range_image_install_active(root)?
+        {
+            return Err(invalid(
+                "incomplete/mismatched factory; strict reopen refuses before engine recovery",
+            ));
+        }
+        let db = Self::open_with_config(root, config.with_required_commit_admission(true))?;
+        let birth = db
+            .read_native_birth()?
+            .ok_or_else(|| invalid("incomplete factory: native birth is missing"))?;
+        if &birth.spec != expected
+            || Some(&birth.checksum_sha256) != preflight.native_birth_sha256.as_ref()
+        {
+            return Err(invalid(
+                "native birth cluster/bootstrap/member/config differs; authorized restore required",
+            ));
+        }
+        let authority = FreshRangeGenesisAuthority {
+            birth,
+            root: root.canonicalize()?,
+        };
+        Ok((db, authority))
+    }
+
+    fn write_native_range_image_record(&self, key: &str, value: &impl Serialize) -> Result<()> {
+        self.check_recovery_state()?;
+        if !self.config.fsync || !format::range_image_install_active(&self.path)? {
+            return Err(invalid(
+                "native receipt requires the sticky fsync reader fence",
+            ));
+        }
+        let encoded = bounded_json(value, MAX_NATIVE_RECEIPT_BYTES)?;
+        let key = native_key(key);
+        self.in_paged_transaction(|paged, xid| {
+            paged
+                .store()
+                .put(xid, &key, &encoded)
+                .map_err(|error| BicDbError::PagedStorage(error.to_string()))?;
+            Ok(())
+        })?
+        .ok_or_else(|| invalid("native receipt has no page store"))?;
+        Ok(())
+    }
+    fn read_native_range_image_record<T: serde::de::DeserializeOwned>(
+        &self,
+        key: &str,
+    ) -> Result<Option<T>> {
+        self.check_recovery_state()?;
+        if !format::range_image_install_active(&self.path)? {
+            return Ok(None);
+        }
+        let paged = self
+            .paged_records
+            .as_ref()
+            .ok_or_else(|| invalid("native image reader has no page store"))?;
+        let encoded = paged
+            .store()
+            .get_as_of(&paged.latest_snapshot(), &native_key(key))
+            .map_err(|error| BicDbError::PagedStorage(error.to_string()))?;
+        encoded
+            .map(|encoded| {
+                if encoded.len() > MAX_NATIVE_RECEIPT_BYTES {
+                    return Err(invalid("native receipt byte bound exceeded"));
+                }
+                Ok(serde_json::from_slice(&encoded)?)
+            })
+            .transpose()
+    }
+    fn read_native_birth(&self) -> Result<Option<NativeDatabaseBirth>> {
+        let birth: Option<NativeDatabaseBirth> = self.read_native_range_image_record(BIRTH_KEY)?;
+        if let Some(birth) = &birth {
+            birth.validate()?;
+        }
+        Ok(birth)
+    }
+    fn native_range_image_generations(
+        &self,
+        birth: &NativeDatabaseBirth,
+        range_id: RangeId,
+    ) -> Result<(Uuid, Uuid)> {
+        let read = |key: &str| -> Result<Uuid> {
+            let invalidation: Option<NativeImageInvalidation> =
+                self.read_native_range_image_record(key)?;
+            if let Some(invalidation) = invalidation {
+                if invalidation.birth_id != birth.birth_id || invalidation.image_generation.is_nil()
+                {
+                    return Err(invalid(
+                        "native invalidation belongs to another database birth",
+                    ));
+                }
+                Ok(invalidation.image_generation)
+            } else {
+                Ok(birth.image_generation)
+            }
+        };
+        Ok((
+            read(INVALIDATION_KEY)?,
+            read(&format!("range-invalidation:{}", range_id.get()))?,
+        ))
+    }
+    /// Must finish durably BEFORE physical mutation. A known-range operation
+    /// invalidates only its own base; unscoped imports/DDL invalidate all. No
+    /// local mutation permit, raw DTO or counter re-establishes the floor.
+    pub(super) fn invalidate_native_range_images_before_mutation(
+        &self,
+        range_id: Option<RangeId>,
+        reason: &str,
+    ) -> Result<()> {
+        let Some(birth) = self.read_native_birth()? else {
+            return Ok(());
+        };
+        if self
+            .read_native_range_image_record::<NativeInitializationComplete>(READY_KEY)?
+            .is_none()
+        {
+            return Ok(()); // unpublished factory genesis is still closed
+        }
+        if reason.len() > 256 {
+            return Err(invalid("invalidation reason bound exceeded"));
+        }
+        let key = range_id
+            .map(|range| format!("range-invalidation:{}", range.get()))
+            .unwrap_or_else(|| INVALIDATION_KEY.to_string());
+        self.write_native_range_image_record(
+            &key,
+            &NativeImageInvalidation {
+                birth_id: birth.birth_id,
+                image_generation: Uuid::now_v7(),
+                reason: reason.to_string(),
+            },
+        )
+    }
+
+    fn native_genesis_receipts(
+        &self,
+        birth: &NativeDatabaseBirth,
+    ) -> Result<BTreeMap<RangeId, String>> {
+        let mut receipts = BTreeMap::new();
+        for range in &birth.spec.initial_ranges {
+            let receipt: Option<NativeGenesisReceipt> =
+                self.read_native_range_image_record(&genesis_key(range.id))?;
+            if let Some(receipt) = receipt {
+                receipt.validate()?;
+                if receipt.birth_id != birth.birth_id
+                    || receipt.birth_sha256 != birth.checksum_sha256
+                    || receipt.range != *range
+                    || receipt.base_members != birth.spec.initial_members
+                    || receipt.local_member_incarnation != birth.spec.member_incarnation
+                    || receipt.restore_activation != birth.spec.restore_activation
+                {
+                    return Err(invalid(
+                        "genesis receipt does not match its native birth/config",
+                    ));
+                }
+                receipts.insert(range.id, receipt.checksum_sha256);
+            }
+        }
+        Ok(receipts)
+    }
+    pub(super) fn load_native_range_image_admission(&self) -> Result<()> {
+        let Some(birth) = self.read_native_birth()? else {
+            return Ok(());
+        };
+        let ready: Option<NativeInitializationComplete> =
+            self.read_native_range_image_record(READY_KEY)?;
+        if let Some(ready) = ready {
+            if ready.birth_id != birth.birth_id
+                || ready.birth_sha256 != birth.checksum_sha256
+                || ready.genesis_sha256.len() != birth.spec.initial_ranges.len()
+                || self.native_genesis_receipts(&birth)? != ready.genesis_sha256
+            {
+                return Err(invalid(
+                    "completed native genesis is damaged; never reinitialize from emptiness",
+                ));
+            }
+            self.range_image_initializing
+                .store(false, AtomicOrdering::Release);
+        } else {
+            // Even all receipts without the final ordered native marker stay
+            // closed until the idempotent initialization retry seals it.
+            self.range_image_initializing
+                .store(true, AtomicOrdering::Release);
+        }
+        Ok(())
+    }
+    fn finish_native_genesis_initialization(&self, birth: &NativeDatabaseBirth) -> Result<()> {
+        let receipts = self.native_genesis_receipts(birth)?;
+        if receipts.len() == birth.spec.initial_ranges.len() {
+            self.write_native_range_image_record(
+                READY_KEY,
+                &NativeInitializationComplete {
+                    birth_id: birth.birth_id,
+                    birth_sha256: birth.checksum_sha256.clone(),
+                    genesis_sha256: receipts,
+                },
+            )?;
+        }
+        self.load_native_range_image_admission()
+    }
+
+    pub(crate) fn validate_source_range_image_lineage(
+        &self,
+        lineage: &SourceRangeImageLineage,
+        range_id: RangeId,
+        range_index: u64,
+    ) -> Result<()> {
+        self.check_recovery_state()?;
+        let birth = self
+            .read_native_birth()?
+            .ok_or_else(|| invalid("source has no trusted native database birth"))?;
+        let receipt: NativeGenesisReceipt = self
+            .read_native_range_image_record(&genesis_key(range_id))?
+            .ok_or_else(|| invalid("source has no trusted native range base"))?;
+        receipt.validate()?;
+        let bindings = self.capture_range_image_bindings()?;
+        let catalog = canonical_range_image_catalog(
+            &birth.spec.cluster_id,
+            &receipt.range,
+            receipt.range_index,
+            &bindings,
+        )?;
+        if self.incarnation != lineage.current_database_incarnation
+            || self.schema_compatibility.generation() != lineage.current_schema_generation
+            || self.native_range_image_generations(&birth, range_id)?
+                != (
+                    receipt.global_image_generation,
+                    receipt.range_image_generation,
+                )
+            || hex::encode(sha2::Sha256::digest(&catalog)) != receipt.portable_catalog_sha256
+            || hex::encode(content_hasher(&catalog).finalize()) != receipt.empty_image_root_sha256
+            || birth != lineage.birth
+            || receipt != lineage.receipt
+            || receipt.range_index != range_index
+            || receipt.range.id != range_id
+            || !self.config.fsync
+        {
+            return Err(invalid(
+                "source lineage/base/floor changed; re-establish actual native proof",
+            ));
+        }
+        for (name, id) in &receipt.local_namespace_ids {
+            if self.local_namespace_identity(name)? != Some(*id) {
+                return Err(invalid("source native base namespace lineage changed"));
+            }
+        }
+        if self.collections.len() != receipt.local_namespace_ids.len()
+            || self.schema_compatibility.verified_sha256().as_deref()
+                != Some(receipt.schema_sha256.as_str())
+            || format::required_reader_features(&self.path)? != receipt.reader_features
+        {
+            return Err(invalid(
+                "source native base schema/reader contract changed; re-attestation required",
+            ));
+        }
+        Ok(())
+    }
+
+    /// No DB/service latch may be held by the caller. This initial producer
+    /// establishes only actual empty genesis; it never backfills legacy R>0.
+    pub(crate) fn initialize_range_image_genesis(
+        db: &Arc<RwLock<BicDb>>,
+        authority: &FreshRangeGenesisAuthority,
+        range: &RangeDescriptor,
+        frozen: &FrozenRangeMutationPermit,
+        budget: Duration,
+        cancellation: &CancellationToken,
+    ) -> Result<SourceRangeImageLineage> {
+        if budget.is_zero() || budget > MAX_WAIT {
+            return Err(invalid("invalid genesis wait budget"));
+        }
+        let cancellation = cancellation.child_with_deadline(Instant::now() + budget);
+        let (reserved, bindings) = {
+            let database = db
+                .try_read()
+                .ok_or_else(|| invalid("database busy; retry genesis outside locks"))?;
+            database.range_mutations.validate_frozen(range.id, frozen)?;
+            let birth = database
+                .read_native_birth()?
+                .ok_or_else(|| invalid("empty legacy database has no factory birth"))?;
+            if birth != authority.birth
+                || database.path.canonicalize()? != authority.root
+                || !birth
+                    .spec
+                    .initial_ranges
+                    .iter()
+                    .any(|initial| initial == range)
+            {
+                return Err(invalid(
+                    "factory authority does not bind this physical database/range/config",
+                ));
+            }
+            if let Some(receipt) = database
+                .read_native_range_image_record::<NativeGenesisReceipt>(&genesis_key(range.id))?
+            {
+                // Once published, empty genesis is immutable. This cannot
+                // reset a later/invalidated base or erase an acknowledged cut.
+                if database
+                    .read_native_range_image_record::<NativeInitializationComplete>(READY_KEY)?
+                    .is_some()
+                {
+                    let lineage = SourceRangeImageLineage {
+                        birth,
+                        receipt,
+                        current_database_incarnation: database.incarnation.clone(),
+                        current_schema_generation: database.schema_compatibility.generation(),
+                    };
+                    database.validate_source_range_image_lineage(&lineage, range.id, 0)?;
+                    return Ok(lineage);
+                }
+            }
+            (
+                database.current_commit_seq(),
+                database.capture_range_image_bindings()?,
+            )
+        };
+        loop {
+            cancellation.check()?;
+            let reached = {
+                let database = db
+                    .try_read()
+                    .ok_or_else(|| invalid("database busy; retry genesis outside locks"))?;
+                database.range_mutations.validate_frozen(range.id, frozen)?;
+                database.validate_range_image_bindings(&bindings)?;
+                database.replication_shippable_seq() >= reserved
+            };
+            if reached {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let mut actual_snapshot = reserved;
+        for meta in bindings.collections() {
+            let mut after = None;
+            loop {
+                cancellation.check()?;
+                let database = db
+                    .try_read()
+                    .ok_or_else(|| invalid("database busy during genesis scan"))?;
+                database.range_mutations.validate_frozen(range.id, frozen)?;
+                database.validate_range_image_bindings(&bindings)?;
+                let exported = database.for_each_range_snapshot_batch_with_cancellation(
+                    &meta.name,
+                    range,
+                    after.as_deref(),
+                    &RangeSnapshotOptions {
+                        max_records_per_batch: 128,
+                        max_bytes_per_batch: 8 * 1024 * 1024,
+                        max_record_bytes: 8 * 1024 * 1024,
+                    },
+                    16_384,
+                    &cancellation,
+                    |_batch| Err(invalid("fresh genesis range is not actually empty")),
+                )?;
+                if exported.snapshot_commit_sequence < reserved {
+                    return Err(invalid(
+                        "actual genesis snapshot is below the captured reservation bound",
+                    ));
+                }
+                actual_snapshot = actual_snapshot.max(exported.snapshot_commit_sequence);
+                if exported.completed {
+                    break;
+                }
+                if exported.resume_after_key <= after {
+                    return Err(invalid("genesis empty scan failed to advance"));
+                }
+                after = exported.resume_after_key;
+            }
+        }
+        let database = db
+            .try_read()
+            .ok_or_else(|| invalid("database busy before native genesis receipt"))?;
+        database.range_mutations.validate_frozen(range.id, frozen)?;
+        database.validate_range_image_bindings(&bindings)?;
+        cancellation.check()?;
+        let key = genesis_key(range.id);
+        let catalog =
+            canonical_range_image_catalog(&authority.birth.spec.cluster_id, range, 0, &bindings)?;
+        let (global_image_generation, range_image_generation) =
+            database.native_range_image_generations(&authority.birth, range.id)?;
+        let mut receipt = NativeGenesisReceipt {
+            format_version: 1,
+            birth_id: authority.birth.birth_id,
+            birth_sha256: authority.birth.checksum_sha256.clone(),
+            range: range.clone(),
+            base_members: authority.birth.spec.initial_members.clone(),
+            local_member_incarnation: authority.birth.spec.member_incarnation,
+            restore_activation: authority.birth.spec.restore_activation.clone(),
+            range_index: 0,
+            source_database_incarnation: database.incarnation.clone(),
+            reserved_db_upper_bound: reserved,
+            actual_snapshot_db_sequence: actual_snapshot,
+            schema_sha256: bindings.schema_sha256().to_string(),
+            global_image_generation,
+            range_image_generation,
+            portable_catalog_sha256: hex::encode(sha2::Sha256::digest(&catalog)),
+            empty_image_root_sha256: hex::encode(content_hasher(&catalog).finalize()),
+            reader_features: bindings.reader_features().to_vec(),
+            local_namespace_ids: bindings.namespace_ids(),
+            native_page_xid: 0,
+            checksum_sha256: String::new(),
+        };
+        // The page commit orders/syncs the earlier prefix; this is not a claim
+        // that separate catalog/record transactions became one atomic txn.
+        database
+            .in_paged_transaction(|paged, xid| {
+                receipt.native_page_xid = xid;
+                receipt.checksum_sha256 = receipt.checksum()?;
+                let encoded = bounded_json(&receipt, MAX_NATIVE_RECEIPT_BYTES)?;
+                paged
+                    .store()
+                    .put(xid, &native_key(&key), &encoded)
+                    .map_err(|error| BicDbError::PagedStorage(error.to_string()))?;
+                Ok(())
+            })?
+            .ok_or_else(|| invalid("genesis receipt has no native WAL transaction"))?;
+        database.finish_native_genesis_initialization(&authority.birth)?;
+        let lineage = SourceRangeImageLineage {
+            birth: authority.birth.clone(),
+            receipt,
+            current_database_incarnation: database.incarnation.clone(),
+            current_schema_generation: database.schema_compatibility.generation(),
+        };
+        database.validate_source_range_image_lineage(&lineage, range.id, 0)?;
+        Ok(lineage)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::distribution_range_mutation::RangeMutationAuthority;
+    use crate::{DistributionConfig, DistributionStore};
+
+    fn config() -> DbConfig {
+        DbConfig::default()
+            .with_fsync(true)
+            .with_storage_mode(StorageMode::ServerPaged)
+            .with_paged_buffer_pool_bytes(8 * 1024 * 1024)
+    }
+    fn spec() -> RangeImageBirthSpec {
+        let metadata = tempfile::tempdir().unwrap();
+        let topology = DistributionStore::initialize_at(
+            metadata.path(),
+            DistributionConfig {
+                enabled: true,
+                initial_ranges: 2,
+                replication_factor: 1,
+                ..Default::default()
+            },
+            false,
+            1,
+        )
+        .unwrap()
+        .topology()
+        .clone();
+        RangeImageBirthSpec {
+            cluster_id: topology.cluster_id,
+            bootstrap_id: Uuid::now_v7(),
+            node_id: topology.nodes.keys().next().unwrap().clone(),
+            member_incarnation: 1,
+            restore_activation: None,
+            initial_members: topology
+                .nodes
+                .into_iter()
+                .map(|(id, node)| {
+                    (
+                        id,
+                        RangeImageBirthMember {
+                            incarnation: node.incarnation,
+                            tls_certificate_sha256: node.tls_certificate_sha256,
+                            pending_tls_certificate_sha256: node.pending_tls_certificate_sha256,
+                        },
+                    )
+                })
+                .collect(),
+            initial_ranges: topology.ranges.into_values().collect(),
+        }
+    }
+    fn tree(root: &Path) -> BTreeMap<String, String> {
+        fn visit(root: &Path, directory: &Path, result: &mut BTreeMap<String, String>) {
+            for entry in fs::read_dir(directory).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    visit(root, &path, result);
+                } else {
+                    result.insert(
+                        path.strip_prefix(root)
+                            .unwrap()
+                            .to_string_lossy()
+                            .to_string(),
+                        hex::encode(sha2::Sha256::digest(fs::read(path).unwrap())),
+                    );
+                }
+            }
+        }
+        let mut result = BTreeMap::new();
+        visit(root, root, &mut result);
+        result
+    }
+    fn schema_ready_database(
+        root: &Path,
+        expected: &RangeImageBirthSpec,
+    ) -> (Arc<RwLock<BicDb>>, FreshRangeGenesisAuthority) {
+        let (mut db, _authority) =
+            BicDb::create_new_range_image_database(root, config(), expected.clone()).unwrap();
+        db.create_collection("items").unwrap();
+        drop(db);
+        let (db, authority) = BicDb::open_range_image_database(root, config(), expected).unwrap();
+        db.schema_compatibility_fingerprint().unwrap();
+        (Arc::new(RwLock::new(db)), authority)
+    }
+    fn initialize(
+        db: &Arc<RwLock<BicDb>>,
+        authority: &FreshRangeGenesisAuthority,
+        range: &RangeDescriptor,
+    ) -> SourceRangeImageLineage {
+        let gate = db.read().range_mutation_gate();
+        let frozen = gate.try_freeze(range.id, Uuid::now_v7()).unwrap();
+        BicDb::initialize_range_image_genesis(
+            db,
+            authority,
+            range,
+            &frozen,
+            Duration::from_secs(3),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn native_range_image_factory_refuses_existing_legacy_and_binding_mismatch_without_mutation() {
+        let parent = tempfile::tempdir().unwrap();
+        let legacy = parent.path().join("legacy");
+        let db = BicDb::open_with_config(&legacy, config()).unwrap();
+        drop(db);
+        let expected = spec();
+        let before = tree(&legacy);
+        assert!(
+            BicDb::create_new_range_image_database(&legacy, config(), expected.clone()).is_err()
+        );
+        assert!(BicDb::open_range_image_database(&legacy, config(), &expected).is_err());
+        assert_eq!(tree(&legacy), before);
+        let fresh = parent.path().join("fresh");
+        let (db, _) =
+            BicDb::create_new_range_image_database(&fresh, config(), expected.clone()).unwrap();
+        drop(db);
+        let before = tree(&fresh);
+        let mut wrong = expected;
+        wrong.bootstrap_id = Uuid::now_v7();
+        assert!(BicDb::open_range_image_database(&fresh, config(), &wrong).is_err());
+        assert_eq!(tree(&fresh), before);
+    }
+
+    #[test]
+    fn native_range_image_factory_after_flags_failure_preserves_partial_root_and_refuses_strict_reopen(
+    ) {
+        let parent = tempfile::tempdir().unwrap();
+        let root = parent.path().join("partial");
+        let expected = spec();
+        let error =
+            BicDb::create_new_range_image_database_with(&root, config(), expected.clone(), |_db| {
+                Err(invalid(
+                    "injected partial initialization after sticky flags, before native birth",
+                ))
+            })
+            .unwrap_err();
+        assert!(error.to_string().contains("injected partial"));
+        assert!(format::range_image_install_active(&root).unwrap());
+        let before = tree(&root);
+        assert!(BicDb::open_range_image_database(&root, config(), &expected)
+            .unwrap_err()
+            .to_string()
+            .contains("incomplete"));
+        assert!(BicDb::create_new_range_image_database(&root, config(), expected).is_err());
+        assert_eq!(tree(&root), before);
+    }
+
+    #[test]
+    fn native_range_image_genesis_is_actual_empty_native_durable_and_reopens_without_row_counter_shortcut(
+    ) {
+        let parent = tempfile::tempdir().unwrap();
+        let root = parent.path().join("node");
+        let expected = spec();
+        let (db, authority) = schema_ready_database(&root, &expected);
+        {
+            let mut database = db.write();
+            assert!(database
+                .insert("items", Record::new("early"))
+                .unwrap_err()
+                .to_string()
+                .contains("genesis is incomplete"));
+        }
+        let first = initialize(&db, &authority, &expected.initial_ranges[0]);
+        assert!(db
+            .read()
+            .range_image_initializing
+            .load(AtomicOrdering::Acquire));
+        let second = initialize(&db, &authority, &expected.initial_ranges[1]);
+        assert!(!db
+            .read()
+            .range_image_initializing
+            .load(AtomicOrdering::Acquire));
+        assert_eq!(first.receipt.range_index, 0);
+        assert_eq!(first.receipt.reserved_db_upper_bound, 0);
+        assert!(first.receipt.native_page_xid > 0);
+        let first_hash = first.receipt.checksum_sha256.clone();
+        assert_eq!(
+            initialize(&db, &authority, &expected.initial_ranges[0])
+                .receipt
+                .checksum_sha256,
+            first_hash
+        );
+        db.read()
+            .validate_source_range_image_lineage(&second, expected.initial_ranges[1].id, 0)
+            .unwrap();
+        drop(first);
+        drop(second);
+        drop(authority);
+        drop(db);
+        let (db, authority) = BicDb::open_range_image_database(&root, config(), &expected).unwrap();
+        db.schema_compatibility_fingerprint().unwrap();
+        assert!(!db.range_image_initializing.load(AtomicOrdering::Acquire));
+        let db = Arc::new(RwLock::new(db));
+        let recovered = initialize(&db, &authority, &expected.initial_ranges[0]);
+        assert_eq!(recovered.receipt.checksum_sha256, first_hash);
+        assert!(db
+            .read()
+            .collections()
+            .iter()
+            .all(|meta| !meta.name.contains('\0')));
+    }
+
+    #[test]
+    fn native_range_image_scoped_import_invalidates_only_affected_floor_and_ddl_invalidates_before_recreate(
+    ) {
+        let parent = tempfile::tempdir().unwrap();
+        let root = parent.path().join("node");
+        let expected = spec();
+        let (db, authority) = schema_ready_database(&root, &expected);
+        let a = initialize(&db, &authority, &expected.initial_ranges[0]);
+        let b = initialize(&db, &authority, &expected.initial_ranges[1]);
+        let range = &expected.initial_ranges[1];
+        let key = (0..10_000)
+            .map(|i| format!("k{i}"))
+            .find(|key| range.contains_token(distribution_key_token("items", key)))
+            .unwrap();
+        let record = Record::new(key.clone()).with_metadata(json!({"from":"raw-copy"}));
+        let batch = RangeSnapshotBatch {
+            collection: "items".into(),
+            range_id: range.id,
+            range_epoch: range.epoch,
+            snapshot_commit_sequence: 0,
+            resume_after_key: key.clone(),
+            serialized_record_bytes: serde_json::to_vec(&record).unwrap().len(),
+            records: vec![record],
+        };
+        let gate = db.read().range_mutation_gate();
+        let permit = gate.try_enter(range.id).unwrap();
+        {
+            let database = db.read();
+            let meta = database.collections().into_iter().next().unwrap();
+            database
+                .apply_range_snapshot_batch_preinstalled_with_mutation(
+                    range,
+                    &meta,
+                    &batch,
+                    &RangeMutationAuthority::Mutation(&permit),
+                )
+                .unwrap();
+            assert!(database
+                .validate_source_range_image_lineage(&b, range.id, 0)
+                .is_err());
+            database
+                .validate_source_range_image_lineage(&a, expected.initial_ranges[0].id, 0)
+                .unwrap();
+            assert!(database.current_commit_seq() > a.receipt.range_index); // DBseq != range index
+            assert!(database.get("items", &key).unwrap().is_some());
+        }
+        drop(permit);
+        let before = db.read().local_namespace_identity("items").unwrap();
+        db.write().drop_collection("items").unwrap();
+        db.write().create_collection("items").unwrap();
+        db.read().schema_compatibility_fingerprint().unwrap();
+        assert_ne!(db.read().local_namespace_identity("items").unwrap(), before);
+        assert!(db
+            .read()
+            .validate_source_range_image_lineage(&a, expected.initial_ranges[0].id, 0)
+            .is_err());
+        // Completed native genesis cannot reset an invalidated base merely
+        // because the hard-recreated relation happens to be empty again.
+        let frozen = gate
+            .try_freeze(expected.initial_ranges[0].id, Uuid::now_v7())
+            .unwrap();
+        assert!(BicDb::initialize_range_image_genesis(
+            &db,
+            &authority,
+            &expected.initial_ranges[0],
+            &frozen,
+            Duration::from_secs(1),
+            &CancellationToken::uncancelable()
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn native_range_image_keyspace_cannot_be_chosen_by_collection_or_snapshot_storage_alias() {
+        let parent = tempfile::tempdir().unwrap();
+        let root = parent.path().join("node");
+        let expected = spec();
+        let (mut db, _) =
+            BicDb::create_new_range_image_database(&root, config(), expected.clone()).unwrap();
+        assert!(db
+            .create_collection("\0bicdb.range-image.native.v1")
+            .is_err());
+        let mut meta = CollectionMeta::standard("items");
+        meta.storage_name = Some("\0receipt".into());
+        let batch = RangeSnapshotBatch {
+            collection: "items".into(),
+            range_id: expected.initial_ranges[0].id,
+            range_epoch: 1,
+            snapshot_commit_sequence: 0,
+            resume_after_key: "birth".into(),
+            serialized_record_bytes: 0,
+            records: vec![],
+        };
+        assert!(matches!(
+            db.apply_range_snapshot_batch(&expected.initial_ranges[0], &meta, &batch),
+            Err(BicDbError::InvalidCollectionName(_))
+        ));
+        meta.storage_name = Some(String::new());
+        assert!(matches!(
+            db.apply_range_snapshot_batch(&expected.initial_ranges[0], &meta, &batch),
+            Err(BicDbError::InvalidCollectionName(_))
+        ));
+        let paged = db.paged_records.as_ref().unwrap();
+        let (xid, _) = paged.begin();
+        assert!(paged.put(xid, "", &Record::new("\u{10}birth")).is_err());
+        paged.abort(xid).unwrap();
+        assert!(db.read_native_birth().unwrap().is_some());
+    }
+    #[test]
+    fn native_range_image_fresh_learner_empty_initial_set_grants_no_range_genesis() {
+        let parent = tempfile::tempdir().unwrap();
+        let root = parent.path().join("learner");
+        let mut expected = spec();
+        let unrelated_range = expected.initial_ranges[0].clone();
+        expected.initial_ranges.clear();
+        let (db, authority) =
+            BicDb::create_new_range_image_database(&root, config(), expected).unwrap();
+        assert!(!db.range_image_initializing.load(AtomicOrdering::Acquire));
+        db.schema_compatibility_fingerprint().unwrap();
+        let gate = db.range_mutation_gate();
+        let frozen = gate.try_freeze(unrelated_range.id, Uuid::now_v7()).unwrap();
+        let db = Arc::new(RwLock::new(db));
+        assert!(BicDb::initialize_range_image_genesis(
+            &db,
+            &authority,
+            &unrelated_range,
+            &frozen,
+            Duration::from_secs(1),
+            &CancellationToken::uncancelable()
+        )
+        .is_err());
+        assert!(db
+            .read()
+            .read_native_range_image_record::<NativeGenesisReceipt>(&genesis_key(
+                unrelated_range.id
+            ))
+            .unwrap()
+            .is_none());
+    }
+}

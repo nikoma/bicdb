@@ -1047,9 +1047,8 @@ pub(crate) fn eval_db_catalog_function_value(
                 .and_then(|oid| pg_format_type(oid, typmod));
             let formatted = match formatted {
                 Some(formatted) => formatted,
-                None => list_user_types(db)?
-                    .into_iter()
-                    .find_map(|user_type| {
+                None => {
+                    let standalone = list_user_types(db)?.into_iter().find_map(|user_type| {
                         if user_type.oid == oid {
                             Some(user_type.column_type(false).formatted_name())
                         } else if user_type.array_oid == oid {
@@ -1057,9 +1056,14 @@ pub(crate) fn eval_db_catalog_function_value(
                         } else {
                             None
                         }
-                    })
-                    .or(pg_table_row_regtype_name(db, oid)?)
-                    .unwrap_or_else(|| "???".to_string()),
+                    });
+                    match standalone {
+                        Some(name) => name,
+                        None => {
+                            pg_table_row_regtype_name(db, oid)?.unwrap_or_else(|| "???".to_string())
+                        }
+                    }
+                }
             };
             Ok(Some(SqlValue::String(formatted)))
         }

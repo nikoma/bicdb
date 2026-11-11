@@ -254,5 +254,20 @@ fn postgres_reuses_renamed_table_name_without_reusing_the_old_primary_index() {
             ),
             vec![vec!["inferred_restored_pk"]]
         );
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("ALTER TABLE inferred_source DROP CONSTRAINT inferred_restored_pk")
+            .unwrap();
+        sql.execute("ALTER TABLE inferred_source ADD PRIMARY KEY (id)")
+            .unwrap();
+        drop(sql);
+        ensure_primary_key_indexes(&mut db).unwrap();
+        assert_eq!(
+            text_rows(
+                &mut db,
+                "SELECT indexname FROM pg_catalog.pg_indexes WHERE tablename = 'inferred_source'",
+                false,
+            ),
+            vec![vec!["inferred_source_pkey1"]]
+        );
     }
 }

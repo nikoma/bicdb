@@ -619,6 +619,7 @@ pub(crate) fn alter_table_drop_constraint(
             column.primary_key = false;
         }
         schema.primary_key_name = None;
+        schema.implicit_primary_key_name = None;
         return Ok(Some(dropped_constraint.to_string()));
     }
     if !dropped_metadata_constraint && !if_exists {
@@ -645,6 +646,7 @@ pub(crate) fn alter_table_rename_constraint(
         && schema.primary_key_constraint_name() == old_name
     {
         schema.primary_key_name = Some(new_name.to_string());
+        schema.implicit_primary_key_name = None;
         return Ok(Some((old_name.to_string(), new_name.to_string())));
     }
     let renames_unique_index = schema.constraints.iter().any(|constraint| {

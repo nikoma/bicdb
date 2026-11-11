@@ -1,0 +1,29 @@
+{
+  "source": "410441d3bc91eadba7314253ea9e46daa6e4afe3",
+  "scope": "Production source unchanged from standalone221 six-command/864library+419generalSQL positive; test-only extension of existing pgwire composite binary regression. Preserve original direct table result assertions, then run same row through SQL identity routine and require exact same composite OID, binary format and bytes. Real local socket, standard extended Parse/Bind/Describe/Execute protocol, no timeout increases. Source still466 preliminary; source469 version/parent integration/CI/delivery remain pending, whole private concurrency/application/VM goal unchanged.",
+  "started_unix": 1794400088.9200382,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "protocol",
+        "extended_query_table_rows_use_composite_oid_and_binary_codec",
+        "--",
+        "--exact"
+      ],
+      "started_unix": 1794400088.9201286,
+      "exit": 0,
+      "finished_unix": 1794400210.4692452
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794400210.4694912
+}

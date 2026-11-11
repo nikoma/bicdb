@@ -614,13 +614,23 @@ mod tests {
                 initial_ranges,
             };
             let source_spec = spec("n1", vec![original.clone()]);
-            let (mut source, genesis) = BicDb::create_new_range_image_database(
+            let (mut source, _) = BicDb::create_new_range_image_database(
                 &root.path().join("source"),
                 config(),
                 source_spec.clone(),
             )
             .unwrap();
             source.create_collection("items").unwrap();
+            // As in the existing actual SourceCapture fixture, provision the
+            // fresh schema, then reopen its real paged namespace before minting
+            // any native genesis/image proof. No paged_lazy flag is forged.
+            drop(source);
+            let (source, genesis) = BicDb::open_range_image_database(
+                &root.path().join("source"),
+                config(),
+                &source_spec,
+            )
+            .unwrap();
             let target_spec = spec("n2", vec![]);
             let (mut target, _) = BicDb::create_new_range_image_database(
                 &root.path().join("target"),
@@ -629,6 +639,13 @@ mod tests {
             )
             .unwrap();
             target.create_collection("items").unwrap();
+            drop(target);
+            let (target, _) = BicDb::open_range_image_database(
+                &root.path().join("target"),
+                config(),
+                &target_spec,
+            )
+            .unwrap();
             let schema = source.schema_compatibility_fingerprint().unwrap().sha256;
             assert_eq!(
                 schema,

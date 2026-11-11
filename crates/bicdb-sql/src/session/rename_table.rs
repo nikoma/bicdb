@@ -230,6 +230,11 @@ mod tests {
                         replica_config(paged, ReplicationMode::Primary),
                     )
                     .unwrap();
+                    // This control follows a retained WAL prefix. Register a
+                    // real bootstrap hold before schema/index checkpoints;
+                    // the hold is not a durability acknowledgement.
+                    primary.sync_quorum().hold("sql-startup-control", 0);
+                    primary.persist_standby_slots().unwrap();
                     oracle::ensure_database_profile(&mut primary, profile).unwrap();
                     let standby_path = root.path().join("standby");
                     let mut standby = BicDb::open_with_config(

@@ -1,0 +1,218 @@
+[
+  {
+    "elapsed_seconds": 0.0004669288173317909,
+    "available_bytes": 24899215360,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.14 avg60=0.03 avg300=0.00 total=4754587576\nfull avg10=0.14 avg60=0.03 avg300=0.00 total=4582595812\n",
+    "disk_free_bytes": 18476482560
+  },
+  {
+    "elapsed_seconds": 1.0006975065916777,
+    "available_bytes": 24511696896,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.12 avg60=0.02 avg300=0.00 total=4754587576\nfull avg10=0.12 avg60=0.02 avg300=0.00 total=4582595812\n",
+    "disk_free_bytes": 18476208128
+  },
+  {
+    "elapsed_seconds": 2.0009219516068697,
+    "available_bytes": 24330735616,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.12 avg60=0.02 avg300=0.00 total=4754587576\nfull avg10=0.12 avg60=0.02 avg300=0.00 total=4582595812\n",
+    "disk_free_bytes": 18476417024
+  },
+  {
+    "elapsed_seconds": 3.001150985248387,
+    "available_bytes": 23791796224,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.09 avg60=0.02 avg300=0.00 total=4754587576\nfull avg10=0.09 avg60=0.02 avg300=0.00 total=4582595812\n",
+    "disk_free_bytes": 18476343296
+  },
+  {
+    "elapsed_seconds": 4.00138690136373,
+    "available_bytes": 23746396160,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.09 avg60=0.02 avg300=0.00 total=4754587576\nfull avg10=0.09 avg60=0.02 avg300=0.00 total=4582595812\n",
+    "disk_free_bytes": 18476249088
+  },
+  {
+    "elapsed_seconds": 5.001681486144662,
+    "available_bytes": 23864913920,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.44 avg60=0.09 avg300=0.01 total=4754631870\nfull avg10=0.26 avg60=0.06 avg300=0.01 total=4582639648\n",
+    "disk_free_bytes": 18476302336
+  },
+  {
+    "elapsed_seconds": 6.001932800747454,
+    "available_bytes": 23770832896,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.44 avg60=0.09 avg300=0.01 total=4754652992\nfull avg10=0.26 avg60=0.06 avg300=0.01 total=4582660606\n",
+    "disk_free_bytes": 18475511808
+  },
+  {
+    "elapsed_seconds": 7.002181109972298,
+    "available_bytes": 24102920192,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.54 avg60=0.12 avg300=0.02 total=4754663915\nfull avg10=0.39 avg60=0.09 avg300=0.01 total=4582671511\n",
+    "disk_free_bytes": 18450853888
+  },
+  {
+    "elapsed_seconds": 8.002432836219668,
+    "available_bytes": 23631630336,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.54 avg60=0.12 avg300=0.02 total=4754676679\nfull avg10=0.39 avg60=0.09 avg300=0.01 total=4582684139\n",
+    "disk_free_bytes": 18450530304
+  },
+  {
+    "elapsed_seconds": 9.002685903571546,
+    "available_bytes": 23985414144,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.62 avg60=0.15 avg300=0.03 total=4754705460\nfull avg10=0.50 avg60=0.12 avg300=0.02 total=4582712384\n",
+    "disk_free_bytes": 18450915328
+  },
+  {
+    "elapsed_seconds": 10.002929403446615,
+    "available_bytes": 24010354688,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.62 avg60=0.15 avg300=0.03 total=4754715275\nfull avg10=0.50 avg60=0.12 avg300=0.02 total=4582721911\n",
+    "disk_free_bytes": 18450698240
+  },
+  {
+    "elapsed_seconds": 11.003179744817317,
+    "available_bytes": 24072007680,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.69 avg60=0.18 avg300=0.03 total=4754731548\nfull avg10=0.59 avg60=0.15 avg300=0.03 total=4582738043\n",
+    "disk_free_bytes": 18450849792
+  },
+  {
+    "elapsed_seconds": 12.00343678984791,
+    "available_bytes": 23969304576,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.69 avg60=0.18 avg300=0.03 total=4754748287\nfull avg10=0.59 avg60=0.15 avg300=0.03 total=4582754684\n",
+    "disk_free_bytes": 18450513920
+  },
+  {
+    "elapsed_seconds": 13.003681100904942,
+    "available_bytes": 24180641792,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.93 avg60=0.23 avg300=0.05 total=4754795060\nfull avg10=0.85 avg60=0.21 avg300=0.04 total=4582801078\n",
+    "disk_free_bytes": 18450812928
+  },
+  {
+    "elapsed_seconds": 14.003911174833775,
+    "available_bytes": 23824904192,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.93 avg60=0.23 avg300=0.05 total=4754805288\nfull avg10=0.85 avg60=0.21 avg300=0.04 total=4582811240\n",
+    "disk_free_bytes": 18450751488
+  },
+  {
+    "elapsed_seconds": 15.004149184562266,
+    "available_bytes": 23826653184,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.94 avg60=0.26 avg300=0.06 total=4754811915\nfull avg10=0.87 avg60=0.23 avg300=0.05 total=4582817867\n",
+    "disk_free_bytes": 18450776064
+  },
+  {
+    "elapsed_seconds": 16.004424151964486,
+    "available_bytes": 24024227840,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.94 avg60=0.26 avg300=0.06 total=4754833577\nfull avg10=0.87 avg60=0.23 avg300=0.05 total=4582839397\n",
+    "disk_free_bytes": 18450235392
+  },
+  {
+    "elapsed_seconds": 17.004667489789426,
+    "available_bytes": 23739822080,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.95 avg60=0.28 avg300=0.06 total=4754847119\nfull avg10=0.89 avg60=0.26 avg300=0.06 total=4582852769\n",
+    "disk_free_bytes": 18450571264
+  },
+  {
+    "elapsed_seconds": 18.005068711936474,
+    "available_bytes": 24418897920,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.95 avg60=0.28 avg300=0.06 total=4754864338\nfull avg10=0.89 avg60=0.26 avg300=0.06 total=4582869701\n",
+    "disk_free_bytes": 18450845696
+  },
+  {
+    "elapsed_seconds": 19.00534897018224,
+    "available_bytes": 24156835840,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.96 avg60=0.31 avg300=0.07 total=4754899225\nfull avg10=0.91 avg60=0.28 avg300=0.06 total=4582904223\n",
+    "disk_free_bytes": 18450657280
+  },
+  {
+    "elapsed_seconds": 20.00557870324701,
+    "available_bytes": 23979515904,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=0.96 avg60=0.31 avg300=0.07 total=4754916290\nfull avg10=0.91 avg60=0.28 avg300=0.06 total=4582921174\n",
+    "disk_free_bytes": 18467262464
+  },
+  {
+    "elapsed_seconds": 21.00582332443446,
+    "available_bytes": 24265248768,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=1.15 avg60=0.36 avg300=0.08 total=4754929371\nfull avg10=1.11 avg60=0.34 avg300=0.08 total=4582934115\n",
+    "disk_free_bytes": 18450698240
+  },
+  {
+    "elapsed_seconds": 22.006068205460906,
+    "available_bytes": 24023289856,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=1.15 avg60=0.36 avg300=0.08 total=4754930425\nfull avg10=1.11 avg60=0.34 avg300=0.08 total=4582935153\n",
+    "disk_free_bytes": 18450710528
+  },
+  {
+    "elapsed_seconds": 23.006323996931314,
+    "available_bytes": 24088068096,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 69632,
+    "memory_pressure": "some avg10=1.12 avg60=0.38 avg300=0.09 total=4754945392\nfull avg10=1.09 avg60=0.36 avg300=0.08 total=4582949874\n",
+    "disk_free_bytes": 18450706432
+  }
+]

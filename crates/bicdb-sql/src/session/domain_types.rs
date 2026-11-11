@@ -1395,7 +1395,6 @@ impl<'db> SqlSession<'db> {
                     }
                 }
                 AlterTableOperation::RenameTable { table_name } => {
-                    let previous_schema = schema.clone();
                     let target = match table_name {
                         RenameTableNameKind::To(name) | RenameTableNameKind::As(name) => name,
                     };
@@ -1417,68 +1416,7 @@ impl<'db> SqlSession<'db> {
                             Some(new_name.clone()),
                         ));
                     }
-                    let view_updates = rename_views::plan_queries(self.db_ref(), &table, &new_table)?;
-                    let in_tx = self.tx.is_some();
-                    if let Some(undo) = alter_table_rename_table(
-                        self.db_mut()?,
-                        &table,
-                        &new_table,
-                        &mut schema,
-                        in_tx,
-                    )? {
-                        self.ddl_undo.push(undo);
-                    }
-                    // Foreign keys retain the referenced relation's identity
-                    // when PostgreSQL renames it. Our persisted metadata uses
-                    // collection names, so update every incoming reference,
-                    // including self references, with ordinary schema undo.
-                    for mut dependent in list_schemas(self.db_ref())? {
-                        let mut changed = false;
-                        for constraint in &mut dependent.constraints {
-                            if let ConstraintSchema::ForeignKey { foreign_table, .. } = constraint {
-                                if foreign_table == &table {
-                                    *foreign_table = new_table.clone();
-                                    changed = true;
-                                }
-                            }
-                        }
-                        if changed {
-                            self.save_session_schema(&dependent)?;
-                            if dependent.name == new_table {
-                                schema = dependent;
-                            }
-                        }
-                    }
-                    for mut grant in list_privileges(self.db_ref())? {
-                        if grant.object_type == PrivilegeObjectType::Table
-                            && grant.object_name == table
-                        {
-                            self.delete_session_privilege(&grant)?;
-                            grant.object_name = new_table.clone();
-                            self.save_session_privilege(&grant)?;
-                        }
-                    }
-                    // Trigger identity includes its owning relation. Rebind
-                    // through session metadata helpers so statement errors,
-                    // savepoints and full rollback restore both identities.
-                    for mut trigger in list_triggers(self.db_ref())? {
-                        if trigger.table_name == table {
-                            self.delete_session_trigger(&trigger.name, Some(&table))?;
-                            trigger.table_name = new_table.clone();
-                            self.save_session_trigger(&trigger)?;
-                        }
-                    }
-                    for view in view_updates {
-                        self.save_session_view(&view)?;
-                    }
-                    let renamed_type = table_row_type_schema(&schema)
-                        .column_type(false)
-                        .formatted_name();
-                    self.apply_table_row_type_change(
-                        &previous_schema,
-                        &schema,
-                        &CompositeAttributeMutation::RenameType { name: renamed_type },
-                    )?;
+                    rename_table::apply(self, &table, &new_table, &mut schema)?;
                     table = new_table;
                 }
                 AlterTableOperation::AlterColumn { column_name, op } => {

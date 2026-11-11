@@ -4620,6 +4620,23 @@ mod point_relation_lookup_tests {
     }
 }
 
+/// Older view descriptors retained only a type spelling. Resolve custom OIDs
+/// while the original relation is still present, so rename can retain its
+/// identity rather than looking up a dropped spelling after publication.
+pub(crate) fn hydrate_view_column_type(db: &BicDb, column: &mut ColumnSchema) -> Result<()> {
+    if column.user_type.is_some() || pg_type_oid_by_name(&column.pg_type).is_some() {
+        return Ok(());
+    }
+    let Some(oid) = pg_user_type_oid_by_name(db, &column.pg_type)? else { return Ok(()); };
+    if let Some(user_type) = load_user_type_by_oid(db, i64::from(oid))? {
+        column.user_type = Some(user_type.column_type(user_type.array_oid == i64::from(oid)));
+    } else if let Some(schema) = list_schemas(db)?.into_iter().find(|schema|
+        schema.row_type_oid() == i64::from(oid) || schema.row_array_type_oid() == i64::from(oid)) {
+        column.user_type = Some(table_row_type_column(&schema, schema.row_array_type_oid() == i64::from(oid)));
+    }
+    Ok(())
+}
+
 pub(crate) fn save_view(db: &mut BicDb, view: &ViewSchema) -> Result<()> {
     require_user_relation_name(&view.name)?;
     oracle::prepare_hierarchy_save(db, &view.query_sql)?;

@@ -1822,12 +1822,15 @@ pub(crate) fn inherit_view_source_column_types(
             continue;
         }
         target.pg_type = source.pg_type.clone();
+        target.user_type = source.user_type.clone();
+        target.collation = source.collation.clone();
         target.type_modifier = source.type_modifier.clone();
         target.vector_dim = source.vector_dim;
         target.array_ndims = source.array_ndims;
         // An outer join can make a NOT NULL source column nullable. View
         // columns remain conservatively nullable as PostgreSQL reports them.
     }
+    for column in columns { hydrate_view_column_type(db, column)?; }
     Ok(())
 }
 

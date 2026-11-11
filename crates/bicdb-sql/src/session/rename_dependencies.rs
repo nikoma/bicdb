@@ -53,6 +53,9 @@ impl RenameDependencies {
         for view in list_views(db)? {
             let direct = view_dependencies::relations(&view.query_sql)?.contains(old);
             let mut columns = view.columns.clone();
+            for column in &mut columns {
+                hydrate_view_column_type(db, column)?;
+            }
             let values = columns.iter_mut().fold(false, |changed, column| {
                 replace_column_user_type_references(column, &replacements) || changed
             });
@@ -297,5 +300,36 @@ mod tests {
                 .all(|i| i.valid));
             db.close().unwrap();
         }
+    }
+    #[test]
+    fn legacy_view_type_spellings_are_captured_by_oid_before_rename() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        SqlSession::new(&mut db).execute("CREATE TABLE original(id INT,payload TEXT); INSERT INTO original VALUES(1,'kept'); CREATE VIEW direct_row AS SELECT original AS item FROM original; CREATE VIEW indirect_row AS SELECT item FROM direct_row; CREATE MATERIALIZED VIEW stored_row AS SELECT item FROM direct_row").unwrap();
+        assert!(load_view(&db, "direct_row").unwrap().unwrap().columns[0]
+            .user_type
+            .is_some());
+        // This is the descriptor shape produced by the independently tested
+        // ef48/a683 binaries. Keep the payloads; remove only the newer marker.
+        for name in ["direct_row", "indirect_row", "stored_row"] {
+            let mut view = load_view(&db, name).unwrap().unwrap();
+            view.columns[0].user_type = None;
+            save_view(&mut db, &view).unwrap();
+        }
+        let before = load_schema(&db, "original").unwrap().unwrap();
+        let mut after = before.clone();
+        after.name = "renamed".into();
+        let plan = RenameDependencies::plan(&db, &before, &after).unwrap();
+        for name in ["direct_row", "indirect_row", "stored_row"] {
+            assert!(plan.relations.contains(name), "{name}");
+        }
+        assert!(plan.value_tables.contains("stored_row"));
+        assert!(
+            load_view(&db, "indirect_row").unwrap().unwrap().columns[0]
+                .user_type
+                .is_none(),
+            "planning must not rewrite legacy metadata"
+        );
+        db.close().unwrap();
     }
 }

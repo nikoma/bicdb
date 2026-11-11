@@ -3,6 +3,8 @@ mod branching;
 mod collection_rename;
 mod commit_snapshot;
 mod deferred_materialize;
+#[cfg(test)]
+mod snapshot_reader_tests;
 pub use deferred_materialize::DeferredMaterializeStats;
 mod ha_bootstrap;
 mod ha_node;
@@ -186,7 +188,7 @@ pub const DEFAULT_REPLICATION_STATE: &str = "replication-state.json";
 pub const DEFAULT_MODEL_REGISTRY: &str = "model-registry.json";
 pub const DEFAULT_MEMORY_INDEX_CATALOG: &str = "memory-indexes.json";
 pub const SCHEMA_COMPATIBILITY_FORMAT_VERSION: u32 = 1;
-pub const CLUSTER_SCHEMA_BUNDLE_FORMAT_VERSION: u32 = 1;
+pub const CLUSTER_SCHEMA_BUNDLE_FORMAT_VERSION: u32 = 2;
 pub const SIGNED_CLUSTER_SCHEMA_BUNDLE_FORMAT_VERSION: u32 = 1;
 pub const CLUSTER_SCHEMA_STAGE_FORMAT_VERSION: u32 = 1;
 pub const CLUSTER_SCHEMA_ACTIVATION_FORMAT_VERSION: u32 = 1;
@@ -573,6 +575,8 @@ pub struct ClusterSchemaBundle {
     pub indexes: Vec<IndexDefinition>,
     pub structural_records: Vec<ClusterSchemaCatalogRecord>,
     pub checksum_sha256: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_reader_features: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -943,6 +947,8 @@ impl ClusterSchemaBundle {
             collections: &'a [CollectionMeta],
             indexes: &'a [IndexDefinition],
             structural_records: &'a [ClusterSchemaCatalogRecord],
+            #[serde(skip_serializing_if = "<[String]>::is_empty")]
+            required_reader_features: &'a [String],
         }
         Ok(hex::encode(sha2::Sha256::digest(serde_json::to_vec(
             &Payload {
@@ -951,18 +957,37 @@ impl ClusterSchemaBundle {
                 collections: &self.collections,
                 indexes: &self.indexes,
                 structural_records: &self.structural_records,
+                required_reader_features: &self.required_reader_features,
             },
         )?)))
     }
 
     pub fn verify(&self) -> Result<()> {
-        if self.format_version != CLUSTER_SCHEMA_BUNDLE_FORMAT_VERSION
+        let expected_format = if self.required_reader_features.is_empty() {
+            1
+        } else {
+            CLUSTER_SCHEMA_BUNDLE_FORMAT_VERSION
+        };
+        if self.format_version != expected_format
             || self.fingerprint.format_version != SCHEMA_COMPATIBILITY_FORMAT_VERSION
         {
             return Err(BicDbError::Cluster(format!(
                 "unsupported cluster schema bundle format {}/{}",
                 self.format_version, self.fingerprint.format_version
             )));
+        }
+        format::validate_replicated_reader_features(&self.required_reader_features)?;
+        for meta in &self.collections {
+            format::validate_collection_reader_features(
+                &meta.name,
+                &self.required_reader_features,
+            )?;
+        }
+        for record in &self.structural_records {
+            format::validate_collection_reader_features(
+                &record.collection,
+                &self.required_reader_features,
+            )?;
         }
         if self.structural_records.len() > MAX_CLUSTER_SCHEMA_BUNDLE_RECORDS {
             return Err(BicDbError::Cluster(format!(
@@ -10898,7 +10923,9 @@ impl BicDb {
     /// Fence older SQL runtimes before publishing invalid routine metadata.
     pub fn enable_oracle_invalid_routines_v1(&mut self) -> Result<()> {
         self.ensure_writable("enable Oracle invalid routine metadata")?;
-        let result = format::enable_oracle_invalid_routines(&self.path);
+        let result = self.install_replicated_reader_features(&[
+            format::ORACLE_INVALID_ROUTINES_FEATURE_FLAG.into(),
+        ]);
         self.check_recovery_state()?;
         result
     }
@@ -10907,7 +10934,8 @@ impl BicDb {
     /// Older readers must refuse stores whose pending DDL they cannot recover.
     pub fn enable_sql_catalog_intents(&mut self) -> Result<()> {
         self.ensure_writable("enable SQL catalog intents")?;
-        let result = format::enable_sql_catalog_intents(&self.path);
+        let result = self
+            .install_replicated_reader_features(&[format::SQL_CATALOG_INTENTS_FEATURE_FLAG.into()]);
         self.check_recovery_state()?;
         result
     }
@@ -10917,9 +10945,19 @@ impl BicDb {
     /// only installs the format capability; it does not perform DDL recovery.
     pub fn enable_sql_rename_intents(&mut self) -> Result<()> {
         self.ensure_writable("enable SQL rename intents")?;
-        let result = format::enable_sql_rename_intents(&self.path);
+        let result = self
+            .install_replicated_reader_features(&[format::SQL_RENAME_INTENTS_FEATURE_FLAG.into()]);
         self.check_recovery_state()?;
         result
+    }
+
+    pub(crate) fn install_replicated_reader_features(&self, features: &[String]) -> Result<()> {
+        if format::install_replicated_reader_features(&self.path, features)? {
+            // Capabilities affect interpretation even when no SQL structural
+            // record changes. Recompute placement/readiness identity.
+            self.schema_compatibility.invalidate();
+        }
+        Ok(())
     }
 
     /// Require a healthy, quiescent database before startup catalog repair.
@@ -11940,6 +11978,7 @@ impl BicDb {
         batch: &RangeSnapshotBatch,
     ) -> Result<usize> {
         Self::validate_range_snapshot_fields(range, collection_meta, batch)?;
+        self.install_replicated_reader_features(&batch.required_reader_features)?;
         if !self.collections.contains_key(&batch.collection) {
             validate_collection_name(&batch.collection)?;
             let mut state = CollectionState::new(collection_meta.clone());
@@ -11957,6 +11996,7 @@ impl BicDb {
         collection_meta: &CollectionMeta,
         batch: &RangeSnapshotBatch,
     ) -> Result<()> {
+        batch.verify_reader_requirements()?;
         if batch.range_id != range.id || batch.range_epoch != range.epoch {
             return Err(BicDbError::Cluster(format!(
                 "snapshot batch range/epoch {}/{} does not match {}/{}",
@@ -11996,6 +12036,7 @@ impl BicDb {
                 batch.collection
             )));
         }
+        self.install_replicated_reader_features(&batch.required_reader_features)?;
         if batch.records.is_empty() {
             return Ok(0);
         }
@@ -12022,7 +12063,7 @@ impl BicDb {
     ) -> Result<usize> {
         let filtered = filter_commit_frame_for_range(frame, range)?;
         Self::validate_replication_reader_requirements(&filtered)?;
-        format::install_replicated_reader_features(&self.path, &filtered.required_reader_features)?;
+        self.install_replicated_reader_features(&filtered.required_reader_features)?;
         self.ensure_replication_frame_collections(&filtered)?;
         self.apply_range_commit_frame_as_local_preinstalled(range, frame)
     }
@@ -12034,7 +12075,7 @@ impl BicDb {
     ) -> Result<usize> {
         let filtered = filter_commit_frame_for_range(frame, range)?;
         Self::validate_replication_reader_requirements(&filtered)?;
-        format::install_replicated_reader_features(&self.path, &filtered.required_reader_features)?;
+        self.install_replicated_reader_features(&filtered.required_reader_features)?;
         for write in &filtered.writes {
             validate_replication_collection_meta(write)?;
             let state = self.collection_state(&write.collection)?;
@@ -12156,10 +12197,7 @@ impl BicDb {
         Self::validate_replication_reader_requirements(frame)?;
         let current = self.last_applied_commit_seq();
         if frame.commit_seq <= current {
-            format::install_replicated_reader_features(
-                &self.path,
-                &frame.required_reader_features,
-            )?;
+            self.install_replicated_reader_features(&frame.required_reader_features)?;
             return Ok(ReplicationApplyReport {
                 applied: 0,
                 duplicates: 1,
@@ -12175,7 +12213,7 @@ impl BicDb {
         }
 
         self.verify_replication_attachments(frame)?;
-        format::install_replicated_reader_features(&self.path, &frame.required_reader_features)?;
+        self.install_replicated_reader_features(&frame.required_reader_features)?;
         self.ensure_replication_frame_collections(frame)?;
         let writes = replication_writes_to_tx_writes(frame)?;
         self.stage_pending_replication_catalog(frame)?;

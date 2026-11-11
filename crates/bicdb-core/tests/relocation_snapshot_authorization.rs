@@ -112,6 +112,7 @@ fn snapshot_ingestion_service_api_has_no_caller_argument() {
     let forged = Record::new(&inside_id).with_metadata(json!({"forged_by": "not-the-source"}));
     let forged_bytes = serde_json::to_vec(&forged).unwrap().len();
     let batch = RangeSnapshotBatch {
+        required_reader_features: Vec::new(),
         collection: "documents".to_string(),
         range_id: range.id,
         range_epoch: range.epoch,

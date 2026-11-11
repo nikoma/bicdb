@@ -89,18 +89,42 @@ pub(crate) fn validate_replicated_reader_features(features: &[String]) -> Result
     Ok(())
 }
 
-pub(crate) fn install_replicated_reader_features(root: &Path, features: &[String]) -> Result<()> {
+pub(crate) fn validate_collection_reader_features(name: &str, features: &[String]) -> Result<()> {
+    let required = match name {
+        "__bicdb_rename_intents" | "__bicdb_rename_images" | "__bicdb_rename_gc" => {
+            Some(SQL_RENAME_INTENTS_FEATURE_FLAG)
+        }
+        "__bicdb_recycle_intents" | "__bicdb_recycle_purges" | "__bicdb_recycle_creations" => {
+            Some(SQL_CATALOG_INTENTS_FEATURE_FLAG)
+        }
+        _ => None,
+    };
+    if let Some(required) = required {
+        if !features.iter().any(|feature| feature == required) {
+            return Err(BicDbError::FormatCompatibility(format!(
+                "replicated collection `{name}` requires reader capability `{required}`"
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn install_replicated_reader_features(root: &Path, features: &[String]) -> Result<bool> {
     validate_replicated_reader_features(features)?;
     if features.is_empty() {
-        return Ok(());
+        return Ok(false);
     }
-    enable_feature_flags(
+    enable_feature_flags_changed(
         root,
         &features.iter().map(String::as_str).collect::<Vec<_>>(),
     )
 }
 
 fn enable_feature_flags(root: &Path, features: &[&str]) -> Result<()> {
+    enable_feature_flags_changed(root, features).map(|_| ())
+}
+
+fn enable_feature_flags_changed(root: &Path, features: &[&str]) -> Result<bool> {
     // Shared range-apply workers can install different capabilities at once.
     // Serialize the read/merge/fsync with local feature enables so neither
     // writer can replace a flag that the other has just made durable.
@@ -114,7 +138,7 @@ fn enable_feature_flags(root: &Path, features: &[&str]) -> Result<()> {
     if changed {
         persist_metadata(root, &metadata, true)?;
     }
-    Ok(())
+    Ok(changed)
 }
 
 /// Which storage engine owns a database's durable state. See

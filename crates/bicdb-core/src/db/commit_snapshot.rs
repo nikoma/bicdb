@@ -1672,7 +1672,9 @@ impl BicDb {
         definition: &IndexDefinition,
     ) -> Result<()> {
         if definition.uses_oracle_simple_case_v1() {
-            format::enable_oracle_simple_case_v1(&self.path)?;
+            self.install_replicated_reader_features(&[
+                format::ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG.into()
+            ])?;
         }
         Ok(())
     }
@@ -1682,7 +1684,9 @@ impl BicDb {
         let mut indexes = self.index_definitions();
         indexes.sort_by(|left, right| left.name.cmp(&right.name));
         if indexes.iter().any(|index| index.nulls_not_distinct) {
-            format::enable_unique_nulls_not_distinct(&self.path)?;
+            self.install_replicated_reader_features(&[
+                format::UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG.into(),
+            ])?;
         }
         for definition in &indexes {
             self.enable_index_format_capabilities(definition)?;

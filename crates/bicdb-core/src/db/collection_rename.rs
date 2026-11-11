@@ -520,7 +520,7 @@ impl BicDb {
             ));
         }
         Self::validate_replication_reader_requirements(&frame)?;
-        format::install_replicated_reader_features(&self.path, &frame.required_reader_features)?;
+        self.install_replicated_reader_features(&frame.required_reader_features)?;
         if frame.commit_seq <= self.current_commit_seq() {
             self.apply_replicated_catalog_ops(&frame)?;
         }

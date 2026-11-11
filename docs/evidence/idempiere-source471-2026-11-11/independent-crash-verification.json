@@ -1,0 +1,54 @@
+{
+  "status": "four_active_user_sessions_process_crash_ack_rows_verified_on_two_reopens",
+  "source": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "binary_sha256": "e23d7c1a078b7ce6722237f35cfa67a822727d9762c928c808f3ce2767c543c2",
+  "attempts": 84,
+  "acknowledged": 83,
+  "per_worker": {
+    "0": 20,
+    "1": 21,
+    "2": 21,
+    "3": 21
+  },
+  "captures": [
+    {
+      "errors": [],
+      "missing_acknowledged": [],
+      "unacknowledged_committed": [],
+      "rows": 83
+    },
+    {
+      "errors": [],
+      "missing_acknowledged": [],
+      "unacknowledged_committed": [],
+      "rows": 83
+    }
+  ],
+  "negative_controls_rejected": [
+    "lost_ACK_row",
+    "changed_document_number",
+    "changed_user_identity",
+    "duplicate_row",
+    "row_outside_attempt_ledger"
+  ],
+  "prior_completed_posted_invoice_and_allocated_payment_preserved": true,
+  "signal_sent_unix": 1794429229.7481103,
+  "cut_source_process_start_ticks": "155701002",
+  "actual_pidfd_cut": true,
+  "all_logs_fsync": true,
+  "sync_outbox": "off",
+  "experimental_flags_enabled": false,
+  "physical_power_loss": false,
+  "application_fully_qualified": false,
+  "ui_first_use_failures_remain_preserved": true,
+  "original_assertions_and_waits_unchanged": true,
+  "frontend_idle_synchronization_added": true,
+  "inputs": {
+    "client-acks.sqlite": "e3ba06536f7dbba337dee3c1c5f01b43660ce276abb54c5cee2d5defc5b970aa",
+    "result.json": "7310c86fb26923eb47822dc3373d5e7166197421507bf515ee37126ac51f9818",
+    "crash-coordinator.json": "9433af88a337485db5f7c4dafe9ba418a1f8d3c75cf0b59b9d1ea637eb35a064",
+    "remote-recovery-capture.json": "3d48fd635cec70ea104fa97198c08fa2752ae79dce1a85d3bf43d8f89ef30cab",
+    "main471-ui-load-v4-worker-shape.json": "732c69da98972712d050ffd4741e5bcadb32414bb1eb3d90883d3205a10fbf42"
+  },
+  "finished_unix": 1794429288.141997
+}

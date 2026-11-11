@@ -1,0 +1,105 @@
+{
+  "status": "same_first_use_listbox_customization_race_reproduced_on_native_oracle_ui",
+  "bicdb_source": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "bicdb_binary_sha256": "e23d7c1a078b7ce6722237f35cfa67a822727d9762c928c808f3ce2767c543c2",
+  "native_engine": "Oracle23.26.3.0.0",
+  "constraint": "IDEMPIERE_QUAL.AD_WLISTBOX_CUSTOM_NAME_IDX",
+  "original_partner_location_assertion_unchanged": true,
+  "original_worker_ast_unchanged": true,
+  "bicdb_sessions": {
+    "0": {
+      "username": "GardenAdmin",
+      "status": "finished",
+      "acks": 100,
+      "stage": "save"
+    },
+    "1": {
+      "username": "GardenUser",
+      "status": "finished",
+      "acks": 100,
+      "stage": "save"
+    },
+    "2": {
+      "username": "GardenAdmin",
+      "status": "finished",
+      "acks": 100,
+      "stage": "save"
+    },
+    "3": {
+      "username": "GardenUser",
+      "status": "error",
+      "acks": 0,
+      "stage": "partner"
+    }
+  },
+  "native_sessions": {
+    "0": {
+      "username": "GardenAdmin",
+      "status": "finished",
+      "acks": 100,
+      "stage": "save"
+    },
+    "1": {
+      "username": "GardenUser",
+      "status": "finished",
+      "acks": 100,
+      "stage": "save"
+    },
+    "2": {
+      "username": "GardenAdmin",
+      "status": "error",
+      "acks": 0,
+      "stage": "partner"
+    },
+    "3": {
+      "username": "GardenUser",
+      "status": "error",
+      "acks": 0,
+      "stage": "partner"
+    }
+  },
+  "bicdb_failures": [
+    {
+      "worker": "3",
+      "username": "GardenUser",
+      "stage": "partner",
+      "error": "AssertionError('Locator expected to have Value \\'Hartford\\'\\nActual value:  \\nCall log:\\n  - Expect \"to_have_value\" with timeout 30000ms\\n  - waiting for locator(\"[instancename=\\\\\"C_Order0C_BPartner_Location_ID\\\\\"] input\").filter(visible=True)\\n    33 \u00d7 locator resolved to <input type=\"text\" value=\"Hartford\" id=\"m63Cwu0-real\" autocomplete=\"off\" class=\"z-combobox-input\" aria-autocomplete=\"none\" aria-controls=\"m63Cwu0-pp\"/>\\n       - unexpected value \"\"\\n')",
+      "body": "GardenUser@GardenWorld.Fertilizer/GardenWorld User\nFeedback\n\u00a0\nPreference\n\u00a0\nChange Role\n\u00a0\nLog Out\nFavorites\n Sales Order\nRecent Items\nTool Tip\n\nInvoice Partner\n\nBusiness Partner to be invoiced\n\nIf empty the shipment business partner will be invoiced\n\nHow To\n\nOrder\n\nOrder Header\n\nThe Order Header Tab defines the parameters of an Order. Changing the Organization, Business Partner, Warehouse, Date Promised, etc. changes these values on all the lines.\n\nHome\n *Sales Order: <80003>\n\u00a01\n\u00a0\nOrder\n+*2/2\nInserted\u00a0\nTenant*\n\t\t\nOrganization*\n\t\n\t\u00a0\n\nDocument No\n\t\t\nOrder Reference\n\t\t\u00a0\n\nDescription\n\t\t\u00a0\n\nTarget Document Type*\n\t\n\t\u00a0\tSelf-Service\t\u00a0\n\nDate Ordered*\n\t\n\t\n\t\t\u00a0\n\nBusiness Partner*\n\t\n\t\nInvoice Partner\n\t\n\t\u00a0\n\nPartner Location*\n\t\n\t\nInvoice Location\n\t\n\t\u00a0\n\nUser/Contact\n\t\n\t\nInvoice Contact\n\t\n\t\u00a0\n\nDelivery\n\n\nWarehouse*\n\t\n\t\u00a0\tDrop Shipment\t\u00a0\n\nDelivery Via*\n\t\n\t\n\t\t\u00a0\n\nInvoicing\n\n\nPrice List*\n\t\n\t\nCurrency*\n\t\t\u00a0\n\nSales Representative*\n\t\n\t\u00a0\tDiscount Printed\t\u00a0\n\nPayment Rule*\n\t\n\t\n\t\t\u00a0\n\nPromotion Code\n\t\t\u00a0\n\nReference\n\n\nProject\n\t\n\t\n\t\t\u00a0\n\nCampaign\n\t\n\t\n\t\t\u00a0\n\nStatus\n\n\nTotal Lines*\n\t\n\t\nGrand Total*\n\t\n\t\u00a0\n\nDocument Status*\n\t\t\nDocument Type*\n\t\t\u00a0\n\u00a0\tPay Schedule valid\t\u00a0\t\nDocument Action\t\u00a0\n\nOrder Source\n\t\n\t\u00a0\t\t\u00a0\n\nCash Plan Line\n\t\n\t\u00a0\n\nOrder Line\nOrder Tax\nPayment Schedule\n\u00a0\n0 Records\n\u00a0\n\t\n\u00a0\n\t\nOrganization\n\t\nOrder\n\t\nBusiness Partner\n\t\nPartner Location\n\t\nDate Promised\n\t\nDate Ordered\n\t\nLine No\n\t\nWarehouse\n\t\nProduct\n\t\nCharge\n\t\nAttribute Set Instance\n\t\nResource Assignment\n\t\nDescription\n\t\nQuantity\n\t\nUOM\n\t\nOrdered Quantity\n\t\nDelivered Quantity\n\t\nReserved Quantity\n\t\nQuantity Invoiced\n\t\nShipper\n\t\nPrice\n\t\nUnit Price\n\t\nList Price\n\t\nFreight Amount\n\t\nTax\n\t\nDiscount %\n\t\nProject\n\t\nActivity\n\t\nCampaign\n\t\nTrx Organization\n\t\nUser Element List 1\n\t\nUser Element List 2\n\t\nLine Amount\n\t\nLost Sales Qty\n\t\nProcessed\n\t\nDepartment\n\t\nCost Center\n\t\nNo Records found\niDempiere\nCould not save record - Require unique data:\n\nPlease change information.: ERROR: ORA-00001: unique constraint (IDEMPIERE_QUAL.AD_WLISTBOX_CUSTOM_NAME_IDX) violated\nDetail: {\"oracle_error_stack\":[{\"code\":-1,\"message\":\"ORA-00001: unique constraint (IDEMPIERE_QUAL.AD_WLISTBOX_CUSTOM_NAME_IDX) violated\"}]}[SQL: 0, 23505]\nOK",
+      "constraint": "IDEMPIERE_QUAL.AD_WLISTBOX_CUSTOM_NAME_IDX"
+    }
+  ],
+  "native_failures": [
+    {
+      "worker": "2",
+      "username": "GardenAdmin",
+      "stage": "partner",
+      "error": "AssertionError('Locator expected to have Value \\'Hartford\\'\\nActual value:  \\nCall log:\\n  - Expect \"to_have_value\" with timeout 30000ms\\n  - waiting for locator(\"[instancename=\\\\\"C_Order0C_BPartner_Location_ID\\\\\"] input\").filter(visible=True)\\n    33 \u00d7 locator resolved to <input value=\"\" type=\"text\" id=\"sDCZ6g1-real\" autocomplete=\"off\" class=\"z-combobox-input\" aria-autocomplete=\"none\" aria-controls=\"sDCZ6g1-pp\"/>\\n       - unexpected value \"\"\\n')",
+      "body": "GardenAdmin@GardenWorld.*/GardenWorld Admin\nFeedback\n\u00a0\nPreference\n\u00a0\nChange Role\n\u00a0\nLog Out\nFavorites\n Sales Order\n\n\n Product\n\n\n Business Partner\nRecent Items\nTool Tip\n\nInvoice Partner\n\nBusiness Partner to be invoiced\n\nIf empty the shipment business partner will be invoiced\n\nHow To\n\nOrder\n\nOrder Header\n\nThe Order Header Tab defines the parameters of an Order. Changing the Organization, Business Partner, Warehouse, Date Promised, etc. changes these values on all the lines.\n\nHome (1)\n *Sales Order: <80003>\n\u00a01\n\u00a0\nOrder\n+*1/1\nInserted\u00a0\nTenant*\n\t\t\nOrganization*\n\t\n\t\u00a0\n\nDocument No\n\t\t\nOrder Reference\n\t\t\u00a0\n\nDescription\n\t\t\u00a0\n\nTarget Document Type*\n\t\n\t\u00a0\tSelf-Service\t\u00a0\n\nDate Ordered*\n\t\n\t\n\t\t\u00a0\n\nBusiness Partner*\n\t\n\t\nInvoice Partner\n\t\n\t\u00a0\n\nPartner Location*\n\t\n\t\nInvoice Location\n\t\n\t\u00a0\n\nUser/Contact\n\t\n\t\nInvoice Contact\n\t\n\t\u00a0\n\nDelivery\n\n\nWarehouse*\n\t\n\t\u00a0\tDrop Shipment\t\u00a0\n\nDelivery Via*\n\t\n\t\n\t\t\u00a0\n\nInvoicing\n\n\nPrice List*\n\t\n\t\nCurrency*\n\t\t\u00a0\n\nSales Representative*\n\t\n\t\u00a0\tDiscount Printed\t\u00a0\n\nPayment Rule*\n\t\n\t\n\t\t\u00a0\n\nPromotion Code\n\t\t\u00a0\n\nReference\n\n\nProject\n\t\n\t\n\t\t\u00a0\n\nCampaign\n\t\n\t\n\t\t\u00a0\n\nStatus\n\n\nTotal Lines*\n\t\n\t\nGrand Total*\n\t\n\t\u00a0\n\nDocument Status*\n\t\t\nDocument Type*\n\t\t\u00a0\n\u00a0\tPay Schedule valid\t\u00a0\t\nDocument Action\t\u00a0\n\nOrder Source\n\t\n\t\u00a0\t\t\u00a0\n\nCash Plan Line\n\t\n\t\u00a0\n\nOrder Line\nOrder Tax\nPayment Schedule\n\u00a0\n0 Records\n\u00a0\n\t\n\u00a0\n\t\nOrganization\n\t\nOrder\n\t\nBusiness Partner\n\t\nPartner Location\n\t\nDate Promised\n\t\nDate Ordered\n\t\nLine No\n\t\nWarehouse\n\t\nProduct\n\t\nCharge\n\t\nAttribute Set Instance\n\t\nResource Assignment\n\t\nDescription\n\t\nQuantity\n\t\nUOM\n\t\nOrdered Quantity\n\t\nDelivered Quantity\n\t\nReserved Quantity\n\t\nQuantity Invoiced\n\t\nShipper\n\t\nPrice\n\t\nUnit Price\n\t\nList Price\n\t\nFreight Amount\n\t\nTax\n\t\nDiscount %\n\t\nProject\n\t\nActivity\n\t\nCampaign\n\t\nTrx Organization\n\t\nUser Element List 1\n\t\nUser Element List 2\n\t\nLine Amount\n\t\nLost Sales Qty\n\t\nProcessed\n\t\nDepartment\n\t\nCost Center\n\t\nNo Records found\niDempiere\nCould not save record - Require unique data:\n\nPlease change information.: ORA-00001: unique constraint (IDEMPIERE_QUAL.AD_WLISTBOX_CUSTOM_NAME_IDX) violated on table IDEMPIERE_QUAL.AD_WLISTBOX_CUSTOMIZATION columns (AD_CLIENT_ID, AD_USER_ID, WLISTBOXNAME)\nORA-03301: (ORA-00001 details) row with column values (AD_CLIENT_ID:11, AD_USER_ID:101, WLISTBOXNAME:'AD_InfoWindow_UU|bdb6ccb3-1aed-4b9e-92f4-9db792480cb4') already exists\n\nhttps://docs.oracle.com/error-help/db/ora-00001/[SQL: 1, 23000]\nOK",
+      "constraint": "IDEMPIERE_QUAL.AD_WLISTBOX_CUSTOM_NAME_IDX"
+    },
+    {
+      "worker": "3",
+      "username": "GardenUser",
+      "stage": "partner",
+      "error": "AssertionError('Locator expected to have Value \\'Hartford\\'\\nActual value:  \\nCall log:\\n  - Expect \"to_have_value\" with timeout 30000ms\\n  - waiting for locator(\"[instancename=\\\\\"C_Order0C_BPartner_Location_ID\\\\\"] input\").filter(visible=True)\\n    33 \u00d7 locator resolved to <input value=\"\" type=\"text\" id=\"nOAXpu0-real\" autocomplete=\"off\" class=\"z-combobox-input\" aria-autocomplete=\"none\" aria-controls=\"nOAXpu0-pp\"/>\\n       - unexpected value \"\"\\n')",
+      "body": "GardenUser@GardenWorld.Fertilizer/GardenWorld User\nFeedback\n\u00a0\nPreference\n\u00a0\nChange Role\n\u00a0\nLog Out\nFavorites\n Sales Order\nRecent Items\nTool Tip\n\nInvoice Partner\n\nBusiness Partner to be invoiced\n\nIf empty the shipment business partner will be invoiced\n\nHow To\n\nOrder\n\nOrder Header\n\nThe Order Header Tab defines the parameters of an Order. Changing the Organization, Business Partner, Warehouse, Date Promised, etc. changes these values on all the lines.\n\nHome\n *Sales Order: <80003>\n\u00a01\n\u00a0\nOrder\n+*1/1\nInserted\u00a0\nTenant*\n\t\t\nOrganization*\n\t\n\t\u00a0\n\nDocument No\n\t\t\nOrder Reference\n\t\t\u00a0\n\nDescription\n\t\t\u00a0\n\nTarget Document Type*\n\t\n\t\u00a0\tSelf-Service\t\u00a0\n\nDate Ordered*\n\t\n\t\n\t\t\u00a0\n\nBusiness Partner*\n\t\n\t\nInvoice Partner\n\t\n\t\u00a0\n\nPartner Location*\n\t\n\t\nInvoice Location\n\t\n\t\u00a0\n\nUser/Contact\n\t\n\t\nInvoice Contact\n\t\n\t\u00a0\n\nDelivery\n\n\nWarehouse*\n\t\n\t\u00a0\tDrop Shipment\t\u00a0\n\nDelivery Via*\n\t\n\t\n\t\t\u00a0\n\nInvoicing\n\n\nPrice List*\n\t\n\t\nCurrency*\n\t\t\u00a0\n\nSales Representative*\n\t\n\t\u00a0\tDiscount Printed\t\u00a0\n\nPayment Rule*\n\t\n\t\n\t\t\u00a0\n\nPromotion Code\n\t\t\u00a0\n\nReference\n\n\nProject\n\t\n\t\n\t\t\u00a0\n\nCampaign\n\t\n\t\n\t\t\u00a0\n\nStatus\n\n\nTotal Lines*\n\t\n\t\nGrand Total*\n\t\n\t\u00a0\n\nDocument Status*\n\t\t\nDocument Type*\n\t\t\u00a0\n\u00a0\tPay Schedule valid\t\u00a0\t\nDocument Action\t\u00a0\n\nOrder Source\n\t\n\t\u00a0\t\t\u00a0\n\nCash Plan Line\n\t\n\t\u00a0\n\nOrder Line\nOrder Tax\nPayment Schedule\n\u00a0\n0 Records\n\u00a0\n\t\n\u00a0\n\t\nOrganization\n\t\nOrder\n\t\nBusiness Partner\n\t\nPartner Location\n\t\nDate Promised\n\t\nDate Ordered\n\t\nLine No\n\t\nWarehouse\n\t\nProduct\n\t\nCharge\n\t\nAttribute Set Instance\n\t\nResource Assignment\n\t\nDescription\n\t\nQuantity\n\t\nUOM\n\t\nOrdered Quantity\n\t\nDelivered Quantity\n\t\nReserved Quantity\n\t\nQuantity Invoiced\n\t\nShipper\n\t\nPrice\n\t\nUnit Price\n\t\nList Price\n\t\nFreight Amount\n\t\nTax\n\t\nDiscount %\n\t\nProject\n\t\nActivity\n\t\nCampaign\n\t\nTrx Organization\n\t\nUser Element List 1\n\t\nUser Element List 2\n\t\nLine Amount\n\t\nLost Sales Qty\n\t\nProcessed\n\t\nDepartment\n\t\nCost Center\n\t\nNo Records found\niDempiere\nCould not save record - Require unique data:\n\nPlease change information.: ORA-00001: unique constraint (IDEMPIERE_QUAL.AD_WLISTBOX_CUSTOM_NAME_IDX) violated on table IDEMPIERE_QUAL.AD_WLISTBOX_CUSTOMIZATION columns (AD_CLIENT_ID, AD_USER_ID, WLISTBOXNAME)\nORA-03301: (ORA-00001 details) row with column values (AD_CLIENT_ID:11, AD_USER_ID:102, WLISTBOXNAME:'AD_InfoWindow_UU|bdb6ccb3-1aed-4b9e-92f4-9db792480cb4') already exists\n\nhttps://docs.oracle.com/error-help/db/ora-00001/[SQL: 1, 23000]\nOK",
+      "constraint": "IDEMPIERE_QUAL.AD_WLISTBOX_CUSTOM_NAME_IDX"
+    }
+  ],
+  "protected_source_unchanged": true,
+  "native_clone_restored_mounted": true,
+  "bicdb_final_ack_reconciliation": "/root/.local/state/bicdb/typed-compare/main471-ui-load-v2/final-ack-reconciliation.json",
+  "original_failure_retained": true,
+  "four_session_all_passed": false,
+  "process_crash_performed": false,
+  "application_qualified": false,
+  "scope": "Listbox first-use failure comparison only; Native warm fixture follows native cold-login control, BicDB follows complete single-user workflow and cold-login control. Both use original UI/model bytecode and identical four-worker actions/assertions. Driver exception code/SQLState and JDK patch differ.",
+  "inputs": {
+    "/root/.local/state/bicdb/typed-compare/main471-ui-load-v2/result.json": "021ce9643f9c22d91090d9993fde8d10cb115b52b9f14ef8131c803d057d7a55",
+    "/root/.local/state/bicdb/native-oracle-app/native-ui-warm-load-v1/result.json": "0af586e14f737f158c8a4bfd6b4bd32184cb9bc48ac3f8c2a08938580f9d4107",
+    "/root/.local/state/bicdb/native-oracle-app/ui-control-v4.json": "0b5252cbcca086162af8c1b556869c4ae255d98e21d8a5a4ea4d5d8414d70bd7",
+    "/root/.local/state/bicdb/native-oracle-app/warm-ui-workload-bytecode-shape.json": "44ed3e00df50f3f5ebe001027de2e8bc960c552b0187c73ebf66b646e08dfa01",
+    "/root/.local/state/bicdb/typed-compare/main471-ui-load-v2/final-ack-reconciliation.json": "8f4e50c67d3297f69dcfe61ac463d545198ab831f01107551f09fe4804027c2a"
+  },
+  "verified_unix": 1794428563.6632128
+}

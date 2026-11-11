@@ -1,0 +1,27 @@
+{
+  "source": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "binary_sha256": "e23d7c1a078b7ce6722237f35cfa67a822727d9762c928c808f3ce2767c543c2",
+  "status": "completed_producer_client_ack_rows_verified",
+  "acked": 300,
+  "observed_rows": 300,
+  "attempts": 300,
+  "missing": [],
+  "mismatched": [],
+  "duplicate_markers": [],
+  "exact_marker_sets_match": true,
+  "per_worker": {
+    "0": 100,
+    "1": 100,
+    "2": 100,
+    "3": 0
+  },
+  "original_partner_assertion_failed": true,
+  "process_crash_performed": false,
+  "full_four_session_load_qualified": false,
+  "observed_unix": 1794428407.6119916,
+  "inputs": {
+    "final-ack-snapshot.json": "b4465ff8d1dd86f42601ee205f4506ee8350b20dc2fe10ccaff633720017e450",
+    "final-row-capture.json": "e5c88665832d642969e492d2677262c56c29b36b65f680f53f499faac2720de5",
+    "result.json": "021ce9643f9c22d91090d9993fde8d10cb115b52b9f14ef8131c803d057d7a55"
+  }
+}

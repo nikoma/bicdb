@@ -1,0 +1,71 @@
+{
+  "profile": "existing_login_and_listbox_preferences_after_retained_native_reproduced_first_use_failures",
+  "prior_failed_runs": [
+    "main471-ui-load-v1",
+    "main471-ui-load-v2"
+  ],
+  "native_comparison": "main471-ui-load-v1/native-preference-race-comparison.json",
+  "fixture_state": "same private fixture after original UI created login and listbox preferences in retained failed first-use runs; no SQL preference seeding",
+  "frontend_synchronization": "Wait for installed ZK zAu.processing() and zk.processing queues to become idle; actions/assertions/values/users unchanged",
+  "source": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "source_version": "1.0.471-beta",
+  "status": "stopped_after_requested_crash",
+  "binary_sha256": "e23d7c1a078b7ce6722237f35cfa67a822727d9762c928c808f3ce2767c543c2",
+  "coordinator_receipt": "main471-ui-coordinator.json",
+  "prefix": "BicdbLoad471460e688ece75",
+  "sessions": {
+    "0": {
+      "username": "GardenAdmin",
+      "user_id": 101,
+      "status": "error",
+      "acks": 20,
+      "desktop": "GardenAdmin@GardenWorld.*/GardenWorld Admin\nFeedback\n\u00a0\nPreference\n\u00a0\nChange Role\n\u00a0\nLog Out\nFavorites\n Sales Order\n\n\n Business Partner\n\n\n Product\nRecent Items\nSales Order: 50600\nSales Order: 50599\nSales Order: 50597\nSales Order: 50595\nSales Order: 5059",
+      "stage": "document_type",
+      "last_document": "50681",
+      "error": "AssertionError('Locator expected to have Value \\'re.compile(\\'^<5[0-9]+>$\\')\\'\\nActual value: <80003>\\nError: element(s) not found \\nCall log:\\n  - Expect \"to_have_value\" with timeout 30000ms\\n  - waiting for locator(\"input[instancename=\\\\\"C_Order0DocumentNo\\\\\"]\").filter(visible=True)\\n    5 \u00d7 locator resolved to <input size=\"20\" type=\"text\" id=\"g66Uvc1\" value=\"50600\" maxlength=\"30\" class=\"z-textbox\" instancename=\"C_Order0DocumentNo\" title=\"Document sequence number of the document\"/>\\n      - unexpected value \"<80003>\"\\n')",
+      "fields": [],
+      "body": "This page isn\u2019t working\n\n127.0.0.1 didn\u2019t send any data.\n\nERR_EMPTY_RESPONSE\nReload"
+    },
+    "1": {
+      "username": "GardenUser",
+      "user_id": 102,
+      "status": "error",
+      "acks": 21,
+      "desktop": "GardenUser@GardenWorld.Fertilizer/GardenWorld User\nFeedback\n\u00a0\nPreference\n\u00a0\nChange Role\n\u00a0\nLog Out\nFavorites\n Sales Order\nRecent Items\nSales Order: 50598\nSales Order: 50596\nSales Order: 50593\nSales Order: 50590\nSales Order: 50587\nSales Order: 50584\nSal",
+      "stage": "save",
+      "last_document": "50680",
+      "error": "TimeoutError('Page.wait_for_function: Timeout 30000ms exceeded.')",
+      "fields": [],
+      "body": "This page isn\u2019t working\n\n127.0.0.1 didn\u2019t send any data.\n\nERR_EMPTY_RESPONSE\nReload"
+    },
+    "2": {
+      "username": "GardenAdmin",
+      "user_id": 101,
+      "status": "error",
+      "acks": 21,
+      "desktop": "GardenAdmin@GardenWorld.*/GardenWorld Admin\nFeedback\n\u00a0\nPreference\n\u00a0\nChange Role\n\u00a0\nLog Out\nFavorites\n Sales Order\n\n\n Business Partner\n\n\n Product\nRecent Items\nSales Order: 50600\nSales Order: 50599\nSales Order: 50597\nSales Order: 50595\nSales Order: 5059",
+      "stage": "new_record",
+      "last_document": "50683",
+      "error": "TimeoutError('Page.wait_for_function: Timeout 30000ms exceeded.')",
+      "fields": [],
+      "body": "This page isn\u2019t working\n\n127.0.0.1 didn\u2019t send any data.\n\nERR_EMPTY_RESPONSE\nReload"
+    },
+    "3": {
+      "username": "GardenUser",
+      "user_id": 102,
+      "status": "error",
+      "acks": 21,
+      "desktop": "GardenUser@GardenWorld.Fertilizer/GardenWorld User\nFeedback\n\u00a0\nPreference\n\u00a0\nChange Role\n\u00a0\nLog Out\nFavorites\n Sales Order\nRecent Items\nSales Order: 50598\nSales Order: 50596\nSales Order: 50593\nSales Order: 50590\nSales Order: 50587\nSales Order: 50584\nSal",
+      "stage": "organization",
+      "last_document": "50682",
+      "error": "AssertionError('Locator expected to have Value \\'HQ Warehouse\\'\\nActual value: Fertilizer\\nError: element(s) not found \\nCall log:\\n  - Expect \"to_have_value\" with timeout 30000ms\\n  - waiting for locator(\"[instancename=\\\\\"C_Order0M_Warehouse_ID\\\\\"] input\").filter(visible=True)\\n    5 \u00d7 locator resolved to <input type=\"text\" id=\"sGXCwx0-real\" autocomplete=\"off\" value=\"HQ Warehouse\" class=\"z-combobox-input\" aria-autocomplete=\"none\" aria-controls=\"sGXCwx0-pp\"/>\\n      - unexpected value \"Fertilizer\"\\n')",
+      "fields": [],
+      "body": "This page isn\u2019t working\n\n127.0.0.1 didn\u2019t send any data.\n\nERR_EMPTY_RESPONSE\nReload"
+    }
+  },
+  "started_unix": 1794429107.7790213,
+  "process_crash_qualified": false,
+  "physical_power_loss": false,
+  "tunnel_pid": 1162627,
+  "finished_unix": 1794429261.0674732
+}

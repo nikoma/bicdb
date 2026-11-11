@@ -3140,6 +3140,11 @@ impl<'db> SqlSession<'db> {
     }
 
     pub fn execute(&mut self, sql: &str) -> Result<SqlResult> {
+        let preprocessing_reads = if !sql.contains(';') || split_sql_statements(sql).len() == 1 {
+            self.enter_statement_catalog_reads(sql)?
+        } else {
+            None
+        };
         let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.statement_error_recovered = false;
         self.db_ref().check_recovery_state()?;
@@ -3167,6 +3172,7 @@ impl<'db> SqlSession<'db> {
         if let Some(tx) = self.tx.as_ref() {
             tx.set_blocking_row_waits(self.blocking_row_wait_token());
         }
+        drop(preprocessing_reads);
         let effects = crate::statement_context::StatementScope::enter();
         let atomic = self.tx.is_some() && oracle::preview_routine_language_enabled(self.db_ref())?;
         let execute = |session: &mut Self| {
@@ -3175,6 +3181,8 @@ impl<'db> SqlSession<'db> {
                     Some(statements) => {
                         let mut last = None;
                         for statement in statements {
+                            let preprocessing_reads =
+                                session.enter_statement_catalog_reads(statement)?;
                             let path = crate::search_path::binding_path(
                                 session.db_ref(),
                                 &session.session_gucs,
@@ -3189,6 +3197,7 @@ impl<'db> SqlSession<'db> {
                             };
                             let _path_scope = crate::search_path::PathScope::enter(path);
                             session.conflict_arbiter_memo.borrow_mut().take();
+                            drop(preprocessing_reads);
                             last =
                                 Some(session.execute_text_statements(
                                     bound.as_deref().unwrap_or(statement),
@@ -3225,6 +3234,11 @@ impl<'db> SqlSession<'db> {
     /// Statement text through the profiled executor; a read-only transaction
     /// checks a single statement before it runs.
     fn execute_text_statements(&mut self, sql: &str) -> Result<SqlResult> {
+        let _catalog_reads = if !sql.contains(';') || split_sql_statements(sql).len() == 1 {
+            self.enter_statement_catalog_reads(sql)?
+        } else {
+            None
+        };
         self.acquire_postgres_statement_snapshot(|| {
             (!sql.contains(';') || split_sql_statements(sql).len() == 1)
                 && postgres_execution_requires_snapshot(sql)
@@ -3374,6 +3388,7 @@ impl<'db> SqlSession<'db> {
     /// diagnostics that want to preserve normal statement semantics without
     /// measuring parser or SQL-string construction cost.
     pub fn execute_statement_ast(&mut self, statement: &Statement) -> Result<SqlResult> {
+        let _catalog_reads = self.enter_parsed_catalog_reads(statement)?;
         let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.statement_error_recovered = false;
         let _clock = oracle::current_time::StatementScope::new();
@@ -3665,6 +3680,7 @@ impl<'db> SqlSession<'db> {
     ) -> Result<SqlResult> {
         let mut last_result = None;
         for statement in statements {
+            let _catalog_reads = self.enter_parsed_catalog_reads(statement)?;
             if check_columns && self.column_references_checkable() {
                 self.sql_engine()
                     .check_statement_column_references(statement)?;
@@ -3672,6 +3688,46 @@ impl<'db> SqlSession<'db> {
             last_result = Some(self.execute_parsed_statement(statement)?);
         }
         last_result.ok_or_else(|| SqlError::InvalidSql("empty SQL statement".to_string()))
+    }
+
+    fn enter_statement_catalog_reads(
+        &mut self,
+        sql: &str,
+    ) -> Result<Option<bicdb_core::CatalogReadAccess>> {
+        self.enter_catalog_reads_requiring_snapshot(postgres_execution_requires_snapshot(sql))
+    }
+
+    fn enter_parsed_catalog_reads(
+        &mut self,
+        statement: &Statement,
+    ) -> Result<Option<bicdb_core::CatalogReadAccess>> {
+        if self.read_tx().is_none() {
+            return self
+                .db_ref()
+                .enter_catalog_read_access(None)
+                .map_err(Into::into);
+        }
+        let needs_snapshot = match statement {
+            Statement::Query(_)
+            | Statement::Insert(_)
+            | Statement::Update(_)
+            | Statement::Delete(_) => true,
+            _ => postgres_execution_requires_snapshot(&statement.to_string()),
+        };
+        self.enter_catalog_reads_requiring_snapshot(needs_snapshot)
+    }
+
+    fn enter_catalog_reads_requiring_snapshot(
+        &mut self,
+        needs_snapshot: bool,
+    ) -> Result<Option<bicdb_core::CatalogReadAccess>> {
+        if needs_snapshot {
+            self.acquire_postgres_statement_snapshot(|| true)?;
+        }
+        let owner = if needs_snapshot { self.read_tx() } else { None };
+        self.db_ref()
+            .enter_catalog_read_access(owner)
+            .map_err(Into::into)
     }
 
     /// Direct embedding sessions need the same READ COMMITTED statement
@@ -3945,6 +4001,7 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_parsed_statement(&mut self, statement: &Statement) -> Result<SqlResult> {
+        let _catalog_reads = self.enter_parsed_catalog_reads(statement)?;
         let _clock = oracle::current_time::StatementScope::new();
         oracle::lock_waits::validate(self.db_ref(), statement)?;
         let previous = std::mem::replace(&mut self.in_routine_expression, false);

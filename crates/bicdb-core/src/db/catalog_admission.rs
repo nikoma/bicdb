@@ -388,9 +388,9 @@ impl CatalogAdmission {
             }
             Some(binding) => {
                 match (binding.records.as_mut(), record) {
+                    (Some(records), Some(id)) if records.contains(id) => {}
                     (Some(records), Some(id))
-                        if records.len() < RECORD_OBSERVATIONS_PER_COLLECTION
-                            || records.contains(id) =>
+                        if records.len() < RECORD_OBSERVATIONS_PER_COLLECTION =>
                     {
                         records.insert(id.to_string());
                     }
@@ -817,6 +817,47 @@ impl Transaction {
 }
 
 impl BicDb {
+    /// Select the actual statement owner, or explicitly mask an enclosing
+    /// owner's identity after a statement ended its transaction. An unowned
+    /// context grants no access to another owner's reserved catalog.
+    pub fn enter_catalog_read_access(
+        &self,
+        owner: Option<&Transaction>,
+    ) -> Result<Option<CatalogReadAccess>> {
+        if let Some(owner) = owner {
+            if !Arc::ptr_eq(&self.catalog_admission, &owner.catalog_admission) {
+                return Err(BicDbError::Unsupported(
+                    "foreign catalog read transaction".into(),
+                ));
+            }
+            return owner.enter_catalog_read_access().map(Some);
+        }
+        let admission = Arc::downgrade(&self.catalog_admission);
+        if !READ_ACCESS.with(|frames| {
+            frames
+                .borrow()
+                .iter()
+                .any(|frame| Weak::ptr_eq(&frame.admission, &admission))
+        }) {
+            return Ok(None);
+        }
+        self.check_recovery_state()?;
+        let identity = Arc::new(());
+        READ_ACCESS.with(|frames| {
+            frames.borrow_mut().push(ReadFrame {
+                admission,
+                owner: TransactionId(0),
+                bindings: Weak::new(),
+                actor: None,
+                identity: Arc::clone(&identity),
+            })
+        });
+        Ok(Some(CatalogReadAccess {
+            identity,
+            _not_send: PhantomData,
+        }))
+    }
+
     /// Check a SQL catalog read before consulting any cache. `None` describes
     /// a collection scan. Whole collection reservations protect every record;
     /// record reservations protect their declared keys and backing identity.
@@ -864,6 +905,16 @@ impl BicDb {
         });
         let state = self.catalog_admission.state.read();
         if let Some(frame) = frame {
+            if frame.owner == TransactionId(0) {
+                state.check_record_access(
+                    TransactionId(0),
+                    None,
+                    collection,
+                    incarnation.as_ref(),
+                    id,
+                )?;
+                return self.check_recovery_state();
+            }
             let registrations = self.catalog_admission.registrations.lock();
             let registration = registrations
                 .get(&frame.owner.0)

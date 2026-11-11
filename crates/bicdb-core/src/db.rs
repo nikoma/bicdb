@@ -15660,6 +15660,58 @@ impl Transaction {
         latest.into_values().flatten().collect()
     }
 
+    /// Whether the caller has buffered an upsert or deletion for this key.
+    /// Unlike an overlaid read, this distinguishes a pending delete from an
+    /// untouched absent row without copying the collection's write set.
+    pub fn has_pending_write_for_record(&self, collection: &str, id: &str) -> bool {
+        self.last_pending_write(collection, id).is_some()
+    }
+
+    /// Transform each effective pending upsert using constant scratch space.
+    /// Replacements use ordinary checked writes and append to the write log,
+    /// preserving earlier savepoint marks. Deletes and superseded writes are
+    /// skipped, and replacements are not visited again. On a callback error,
+    /// the caller can restore its existing statement/savepoint rollback mark.
+    pub fn transform_pending_records<E, F>(
+        &mut self,
+        collection: &str,
+        mut transform: F,
+    ) -> std::result::Result<(), E>
+    where
+        E: From<BicDbError>,
+        F: FnMut(&Record) -> std::result::Result<Record, E>,
+    {
+        if self.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending.into());
+        }
+        let end = self.writes.len();
+        for index in 0..end {
+            let write = &self.writes[index];
+            if write.collection != collection
+                || self
+                    .write_index
+                    .get(collection)
+                    .and_then(|rows| rows.get(&write.record_id))
+                    .copied()
+                    != Some(index)
+            {
+                continue;
+            }
+            let Some(record) = write.record_opt().cloned() else {
+                continue;
+            };
+            let rewritten = transform(&record)?;
+            if rewritten.id != record.id {
+                return Err(BicDbError::InvalidRecordId(
+                    "pending transform must preserve record identity".into(),
+                )
+                .into());
+            }
+            self.insert(collection, rewritten).map_err(E::from)?;
+        }
+        Ok(())
+    }
+
     pub fn get(&self, collection: &str, id: &str) -> Result<Option<Arc<Record>>> {
         let db = self.db_ref();
         db.check_recovery_state()?;

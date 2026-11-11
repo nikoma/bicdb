@@ -1906,6 +1906,126 @@ impl<'db> SqlSession<'db> {
         self.apply_composite_type_change(&previous, &updated, mutation, false)
     }
 
+    /// The rename journal already owns durable before-images for this exact
+    /// dependency closure. Do not duplicate whole tables in a heap undo list.
+    /// Keep the caller's pending values in its own transaction, while committed
+    /// rows are rewritten one bounded key batch at a time under journal undo.
+    pub(super) fn apply_journaled_table_row_type_rename(
+        &mut self,
+        previous_schema: &TableSchema,
+        updated_schema: &TableSchema,
+    ) -> Result<()> {
+        let previous = table_row_type_schema(previous_schema);
+        let updated = table_row_type_schema(updated_schema);
+        let mutation = CompositeAttributeMutation::RenameType {
+            name: updated.column_type(false).formatted_name(),
+        };
+        let replacements = composite_type_replacements(self.db_ref(), &updated)?;
+        for user_type in replacements.values().filter(|kind| kind.oid != updated.oid) {
+            self.save_session_user_type(user_type)?;
+        }
+        for schema in list_schemas(self.db_ref())? {
+            let mut next = schema.clone();
+            let changed = next
+                .columns
+                .iter_mut()
+                .enumerate()
+                .filter_map(|(index, column)| {
+                    replace_column_user_type_references(column, &replacements).then_some(index)
+                })
+                .collect::<Vec<_>>();
+            if changed.is_empty() {
+                continue;
+            }
+            let rewrite = |record: &Record| -> Result<Record> {
+                let mut record = record.clone();
+                for &index in &changed {
+                    let old_column = &schema.columns[index];
+                    if old_column.primary_key {
+                        continue;
+                    }
+                    let value = record_column_value(&record, &schema, &old_column.name);
+                    let value = rewrite_composite_value(
+                        value,
+                        previous.oid,
+                        &previous.column_type(false).formatted_name(),
+                        &mutation,
+                    )?;
+                    let value = cast_value_to_column_type(value, &next.columns[index])?;
+                    set_record_column(&mut record, Some(&next), &next.columns[index].name, value)?;
+                }
+                Ok(record)
+            };
+            if let Some(owner) = self.tx.as_mut() {
+                owner.transform_pending_records(&schema.name, &rewrite)?;
+            }
+            let reader = self.db_ref().begin_transaction()?;
+            let mut after: Option<String> = None;
+            loop {
+                let lower = after
+                    .as_deref()
+                    .map(std::ops::Bound::Excluded)
+                    .unwrap_or(std::ops::Bound::Unbounded);
+                let (ids, complete) = reader
+                    .scan_collection_record_key_candidates_in_range_unchecked(
+                        &schema.name,
+                        lower,
+                        std::ops::Bound::Unbounded,
+                        false,
+                        128,
+                    )?;
+                if ids.is_empty() && !complete {
+                    return Err(SqlError::InvalidSql(
+                        "rename value scan made no progress".into(),
+                    ));
+                }
+                for id in &ids {
+                    if self
+                        .tx
+                        .as_ref()
+                        .is_some_and(|owner| owner.has_pending_write_for_record(&schema.name, id))
+                    {
+                        // Includes deletes: never resurrect a row the owner
+                        // deleted, and never overwrite its transformed upsert.
+                        continue;
+                    }
+                    let owned = self
+                        .tx
+                        .as_ref()
+                        .is_some_and(|owner| owner.holds_record_lock(&schema.name, id));
+                    let record = if owned {
+                        self.tx
+                            .as_ref()
+                            .expect("owner lock")
+                            .get(&schema.name, id)?
+                    } else {
+                        reader.get(&schema.name, id)?
+                    };
+                    let Some(record) = record else {
+                        continue;
+                    };
+                    let record = rewrite(&record)?;
+                    if owned {
+                        self.tx
+                            .as_mut()
+                            .expect("owner lock")
+                            .insert(&schema.name, record)?;
+                    } else {
+                        self.db_mut()?.insert(&schema.name, record)?;
+                    }
+                    rename_table::stage("value_row");
+                }
+                if complete {
+                    break;
+                }
+                after = ids.last().cloned();
+            }
+            reader.rollback()?;
+            self.save_session_schema(&next)?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn execute_alter_type(
         &mut self,
         alter_type: &sqlparser::ast::AlterType,

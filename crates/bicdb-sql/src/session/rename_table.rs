@@ -132,14 +132,7 @@ pub(super) fn apply(
             session.save_session_view(&view)?;
         }
         stage("views");
-        let name = table_row_type_schema(schema)
-            .column_type(false)
-            .formatted_name();
-        session.apply_table_row_type_change(
-            &previous,
-            schema,
-            &CompositeAttributeMutation::RenameType { name },
-        )?;
+        session.apply_journaled_table_row_type_rename(&previous, schema)?;
         stage("values_complete");
         sql_index_definitions_cache_clear();
         Ok(())

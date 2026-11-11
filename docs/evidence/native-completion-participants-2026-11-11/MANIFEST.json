@@ -1,0 +1,342 @@
+[
+  {
+    "path": "README.md",
+    "bytes": 6200,
+    "sha256": "8e13aeb4073b8eafd3c0cde934e4ff8693af3caffe09761ce74942668b952ffc"
+  },
+  {
+    "path": "claims.json",
+    "bytes": 19552,
+    "sha256": "ccede16c43d9818bc6fc607f2954410d89adc0fc28b7dd7b703dfcab4feba100"
+  },
+  {
+    "path": "engine.patch.gz",
+    "bytes": 306611,
+    "sha256": "5701fc9aae64acb05f1c124e4e6480fbe321594ab8004477ba73032e56aec770"
+  },
+  {
+    "path": "run_cargo_guarded.executed.py",
+    "bytes": 2922,
+    "sha256": "2cfd8fa2d9b558c4ae72210e333ce714d71a0abb81603e3a6895137793dfe333"
+  },
+  {
+    "path": "runs/cad84207-completion/inputs.json",
+    "bytes": 704,
+    "sha256": "63c7587655447571115af9f0f5674f053fa3150904ceff2315a2bdf68a92cb5a"
+  },
+  {
+    "path": "runs/cad84207-completion/resources.jsonl.gz",
+    "bytes": 2109,
+    "sha256": "5a2cfa1d23ff2a0c4d64656fe04d9af560bca863d78a7a8fd0f91464804cad8a"
+  },
+  {
+    "path": "runs/cad84207-completion/result.json",
+    "bytes": 886,
+    "sha256": "662438dd019663054183a5c10fea67ec5f93f95a18a687f9f1490741cd4cb42a"
+  },
+  {
+    "path": "runs/cad84207-completion/stderr.gz",
+    "bytes": 13350,
+    "sha256": "24f0b2d585d565d334dadf2324fc09b0bbc9cfe47b6a8691f8e894c6f5a8e0bf"
+  },
+  {
+    "path": "runs/cad84207-completion/stdout",
+    "bytes": 599,
+    "sha256": "62fb79a3d721ef6a61edbb59832958d4de537f1fa70c413913da49bd309584f1"
+  },
+  {
+    "path": "runs/cad84207-current-repair/inputs.json",
+    "bytes": 731,
+    "sha256": "b4f2660ccd427c1ac47c691f454183803d9aa9f13e45909fa6d3027f3444fa6e"
+  },
+  {
+    "path": "runs/cad84207-current-repair/resources.jsonl.gz",
+    "bytes": 599,
+    "sha256": "5cb0a467f7ef951c24f5f5e292eebb24c5b6787b174095d54495c9ce88cc790c"
+  },
+  {
+    "path": "runs/cad84207-current-repair/result.json",
+    "bytes": 912,
+    "sha256": "9029657a53221a8e30b3a4746a1da36fe82ceed102f8fd7df3574cbedbec1e75"
+  },
+  {
+    "path": "runs/cad84207-current-repair/stderr.gz",
+    "bytes": 14004,
+    "sha256": "016374e9f72bae16f700350defb37fecc2609b7c05e0a9a1187c8db307607695"
+  },
+  {
+    "path": "runs/cad84207-current-repair/stdout",
+    "bytes": 698,
+    "sha256": "953a21f6b9613ec66eb81777daa97cc5f4a3ab14e907a91b3b6040db063143b4"
+  },
+  {
+    "path": "runs/cad84207-floor-negative/inputs.json",
+    "bytes": 758,
+    "sha256": "915be47928e2dc4110e03c3c0d42d9caf23d687b4ba3047d59ac40dad9e685ce"
+  },
+  {
+    "path": "runs/cad84207-floor-negative/resources.jsonl.gz",
+    "bytes": 217,
+    "sha256": "60f2672f37066a7d13a6a8faf31603b95c5e5c5918275b3618b71061c99d83e2"
+  },
+  {
+    "path": "runs/cad84207-floor-negative/result.json",
+    "bytes": 940,
+    "sha256": "151b78d1d85e9e71992e37132b1b91c78d9cad03d0371cf434896cccd1fd3164"
+  },
+  {
+    "path": "runs/cad84207-floor-negative/stderr.gz",
+    "bytes": 13323,
+    "sha256": "41401c13f7aed9ab1c122282cf90ae0ac9b956afab5627c326740caf454d3603"
+  },
+  {
+    "path": "runs/cad84207-floor-negative/stdout",
+    "bytes": 270,
+    "sha256": "f664135f0143af18d143f39b90a80fa530527f41deab83bfe3cf961941b41d5f"
+  },
+  {
+    "path": "runs/cad84207-floor-witness/inputs.json",
+    "bytes": 751,
+    "sha256": "59c4afa2e8f4b35da62a07e53452ea110aebb44989b2585ab0d1bbbfc8a78909"
+  },
+  {
+    "path": "runs/cad84207-floor-witness/resources.jsonl.gz",
+    "bytes": 319,
+    "sha256": "1822e475b0328564683205917c95443789182fafb56049a0a2e93cbd14de3963"
+  },
+  {
+    "path": "runs/cad84207-floor-witness/result.json",
+    "bytes": 933,
+    "sha256": "618301f7b5e10d02807763ad16ecada8a20ae7486f6f87c32199a65c15d50f3a"
+  },
+  {
+    "path": "runs/cad84207-floor-witness/stderr.gz",
+    "bytes": 13433,
+    "sha256": "c0d6b3d5d259985413815cb43cbada8eeccf3b20b68e6bedb9bb350226c526bd"
+  },
+  {
+    "path": "runs/cad84207-floor-witness/stdout",
+    "bytes": 259,
+    "sha256": "5edda9955633d522fce70aba251a11b6d3e908ce4d38fd2fc9b2c9587fcdaf78"
+  },
+  {
+    "path": "runs/cad84207-gate/inputs.json",
+    "bytes": 711,
+    "sha256": "5d2596e2c1817ff102a695baebedbf648e616968f9922cc32a897a22082a3871"
+  },
+  {
+    "path": "runs/cad84207-gate/resources.jsonl.gz",
+    "bytes": 187,
+    "sha256": "a890a8163c69019fe8735d7fcb5af911e11230d5c4abcab08a1dbc6e4a478870"
+  },
+  {
+    "path": "runs/cad84207-gate/result.json",
+    "bytes": 893,
+    "sha256": "3430bc51154810e8f9b4d7fccd23ba0fa179ec79c238d7417d0506dafecd5d0a"
+  },
+  {
+    "path": "runs/cad84207-gate/stderr.gz",
+    "bytes": 13183,
+    "sha256": "59c5b112ef8709801ff673d84c0c0a69402e9d053e147e06c15e4ff06c36cfcf"
+  },
+  {
+    "path": "runs/cad84207-gate/stdout",
+    "bytes": 1106,
+    "sha256": "18c3a3b9831737c6b4a54bcc6549fcd0cc49456c00c4b5d72d2162b2afbe03c6"
+  },
+  {
+    "path": "runs/cad84207-historical-tls/inputs.json",
+    "bytes": 687,
+    "sha256": "528ac8d0870711839ab4dfc45355d33508dc3bf8f6439e083c9f095977230afc"
+  },
+  {
+    "path": "runs/cad84207-historical-tls/resources.jsonl.gz",
+    "bytes": 353,
+    "sha256": "d1785245831a55848a9e55f32392761f7407ce86f6ebb23a49688c431b43bbb4"
+  },
+  {
+    "path": "runs/cad84207-historical-tls/result.json",
+    "bytes": 869,
+    "sha256": "3f87b22781d8a142c5efd4be30bbecb71f42b71fbe2a665a181df2202914b0aa"
+  },
+  {
+    "path": "runs/cad84207-historical-tls/stderr.gz",
+    "bytes": 13183,
+    "sha256": "a5c7bb51e6c26c4e65891ba5518315e71ce6cc70ca5822b78b583c28a0384431"
+  },
+  {
+    "path": "runs/cad84207-historical-tls/stdout",
+    "bytes": 864,
+    "sha256": "92e24250a9161a2bf4dd9de041c0f434b14bccbc0497c1e17c747878dc1deeb4"
+  },
+  {
+    "path": "runs/cad84207-lease/inputs.json",
+    "bytes": 722,
+    "sha256": "5401a3a534f9f2ca35139fb296f2730ff1ed0d2cb4eace366928eda9de9a3243"
+  },
+  {
+    "path": "runs/cad84207-lease/resources.jsonl.gz",
+    "bytes": 299,
+    "sha256": "e44c2018eaba822140cfcdf0c10e7772ad0275d89a9779b4b2439ecc9d981f26"
+  },
+  {
+    "path": "runs/cad84207-lease/result.json",
+    "bytes": 904,
+    "sha256": "b68d5e12b2e7c30b64a21a91aedfb5416bb72574d4e1def7c9853ff168d2cc22"
+  },
+  {
+    "path": "runs/cad84207-lease/stderr.gz",
+    "bytes": 13183,
+    "sha256": "ae1131fc42c7776d984d553562beb536fcf75085d0a05c05b4618f0fa6d22597"
+  },
+  {
+    "path": "runs/cad84207-lease/stdout",
+    "bytes": 538,
+    "sha256": "c47be51e2e79aa12fbacc661a783b7e939499cfb82a562160ac95106f27b0844"
+  },
+  {
+    "path": "runs/cad84207-local-ready/inputs.json",
+    "bytes": 709,
+    "sha256": "c417ce9f3956dc901cb0a552bc171518a0dbab7a09366e6ed8e4471bb53502b9"
+  },
+  {
+    "path": "runs/cad84207-local-ready/resources.jsonl.gz",
+    "bytes": 530,
+    "sha256": "9d8f9db1c666aaf53dfec91edb9e33734ae1efd5328ea4589e89d4268e18bd52"
+  },
+  {
+    "path": "runs/cad84207-local-ready/result.json",
+    "bytes": 891,
+    "sha256": "3201da0a48b35bdd9595c6b109830d415368ac5a73a5a090c6285c29a3e4f86a"
+  },
+  {
+    "path": "runs/cad84207-local-ready/stderr.gz",
+    "bytes": 13183,
+    "sha256": "a5c7bb51e6c26c4e65891ba5518315e71ce6cc70ca5822b78b583c28a0384431"
+  },
+  {
+    "path": "runs/cad84207-local-ready/stdout",
+    "bytes": 2349,
+    "sha256": "f980b8b74c2b22865d12014ff6e51e6d45c74f4a4dfa57513b4228c813f177ed"
+  },
+  {
+    "path": "runs/cad84207-origin/inputs.json",
+    "bytes": 727,
+    "sha256": "f2e73f76bfccb359fe1f86fcd3a14c463b1c3a6474d5292ea3a9df4b2ba25998"
+  },
+  {
+    "path": "runs/cad84207-origin/resources.jsonl.gz",
+    "bytes": 280,
+    "sha256": "23ff5a486e7e1da619ee5e5ff8d0e645a92399a1ae4751ffd14f2ec6bce81b0c"
+  },
+  {
+    "path": "runs/cad84207-origin/result.json",
+    "bytes": 909,
+    "sha256": "350b3d8f982145c688b10db9597ba9c434eb7e869787f80f6c146474caba061a"
+  },
+  {
+    "path": "runs/cad84207-origin/stderr.gz",
+    "bytes": 13183,
+    "sha256": "59c5b112ef8709801ff673d84c0c0a69402e9d053e147e06c15e4ff06c36cfcf"
+  },
+  {
+    "path": "runs/cad84207-origin/stdout",
+    "bytes": 1146,
+    "sha256": "ad5332078fbb5c561722fa63aaf05534011f9f18098e68b9fd7cb98968a00e5d"
+  },
+  {
+    "path": "runs/cad84207-quorum/inputs.json",
+    "bytes": 719,
+    "sha256": "1284e21438064f0a9eaf8311879212366118b12c8e9bb35638718dcf7cbb1cc3"
+  },
+  {
+    "path": "runs/cad84207-quorum/resources.jsonl.gz",
+    "bytes": 370,
+    "sha256": "0e5c15755537dbedd27bafedc414d73423f87f8159b616531e7cb9cd617a5a06"
+  },
+  {
+    "path": "runs/cad84207-quorum/result.json",
+    "bytes": 900,
+    "sha256": "21df2bf433470e3b6ae48ae78851facb407a872bfe170103f1492e494a551fec"
+  },
+  {
+    "path": "runs/cad84207-quorum/stderr.gz",
+    "bytes": 13183,
+    "sha256": "9ddb6a77b7a31e76f88e817a5787dc0009a06457d2b9b3f363fdd7616b023776"
+  },
+  {
+    "path": "runs/cad84207-quorum/stdout",
+    "bytes": 1024,
+    "sha256": "6e1f9a7b6c606aecf38c8e41fec1d77ca96f110f03936ae0b4372a1429734df7"
+  },
+  {
+    "path": "runs/cad84207-ready/inputs.json",
+    "bytes": 699,
+    "sha256": "4952648dacc2925ad8be4a25df3955f67f1b82df1dea5dbf3836b384da888375"
+  },
+  {
+    "path": "runs/cad84207-ready/resources.jsonl.gz",
+    "bytes": 395,
+    "sha256": "29217a4b5b7b971c6ffc0874e7cac7656813bc367dba4575060080fb910468bf"
+  },
+  {
+    "path": "runs/cad84207-ready/result.json",
+    "bytes": 881,
+    "sha256": "b0a778483ee69455037ca859e7c40777e5780881122e4034f7a83bc5e025489a"
+  },
+  {
+    "path": "runs/cad84207-ready/stderr.gz",
+    "bytes": 13224,
+    "sha256": "bf59b23045862cb9463b1f711f472b0f1f3adb2415e46198c84601d7e10110c2"
+  },
+  {
+    "path": "runs/cad84207-ready/stdout",
+    "bytes": 558,
+    "sha256": "8d831007f69fb6f21abb5e47cb31852ec030f26c38a6d057d0473eb2cf98959b"
+  },
+  {
+    "path": "runs/cad84207-state/inputs.json",
+    "bytes": 728,
+    "sha256": "6a928943a860cdd26d1b773ede029e255dccd3e2c0b1ce03f75f320da316f0d1"
+  },
+  {
+    "path": "runs/cad84207-state/resources.jsonl.gz",
+    "bytes": 260,
+    "sha256": "9a157394d246a6736e7434175fde4563243ad08c05bddfbcd8d498f03bff7c02"
+  },
+  {
+    "path": "runs/cad84207-state/result.json",
+    "bytes": 910,
+    "sha256": "4d3e2665f031df345899db3eeae88d3c2fa9620918d0e49bdadac4072c1a9b32"
+  },
+  {
+    "path": "runs/cad84207-state/stderr.gz",
+    "bytes": 13183,
+    "sha256": "ae1131fc42c7776d984d553562beb536fcf75085d0a05c05b4618f0fa6d22597"
+  },
+  {
+    "path": "runs/cad84207-state/stdout",
+    "bytes": 798,
+    "sha256": "cce1c875cf39bd261c10d5b5f9c93cc8a9ae14d341d12fd89c67ec91d0d3fc81"
+  },
+  {
+    "path": "source-files.json",
+    "bytes": 29573,
+    "sha256": "b3fcfe729785b72c34930c1f4cca4dcbd2e3e273a566bf041975c00fbec9ca3a"
+  },
+  {
+    "path": "test-executable.json",
+    "bytes": 316,
+    "sha256": "ca859e4f1c0bac1411745977d72543134be20e72f287b97136ffa5ff377cddb0"
+  },
+  {
+    "path": "test_verify.py",
+    "bytes": 1882,
+    "sha256": "6285d1f49c3b55c6fae8106ca5b9ea5b7e480b05fd48fea3d66e98651b9eb359"
+  },
+  {
+    "path": "verify.py",
+    "bytes": 5595,
+    "sha256": "380227a8f4422b66838f45ec98ae27578dfa895721106a95a2d28cc1ed6a11aa"
+  }
+]

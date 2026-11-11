@@ -1,0 +1,71 @@
+{
+  "acknowledged_values_reconciled_on_source": 1,
+  "activation_proven": false,
+  "azure_cause_proven": false,
+  "characterization_test_passed": true,
+  "ci_tested": false,
+  "cold_recovery_success": false,
+  "data_loss_proven": false,
+  "deployed": false,
+  "ledger_acknowledged_records": 1,
+  "native_runtime_fix_implemented": false,
+  "new_current_source_cut_constructed": false,
+  "passing_characterization_tests": 1,
+  "patch_sha256": "4ca7aa2c4ee0b8e2968d9e3388054fcbda720a43fc230b0f06809e346ec8d2a1",
+  "physical_qualification": false,
+  "prior_source": {
+    "patch_sha256": "f1dfa9e802428af4f59f7ca3ec9ff331293fec0bb3480963afe4aa0421ae090e",
+    "source_revision": "5c65eb9b6f785f18dedbe483b274805ed454e8ef"
+  },
+  "private_custody": {
+    "bytes": 1055754,
+    "classification": "FAILED_UNSUPPORTED_COLD_RESUME",
+    "database_opened_for_copy": false,
+    "directory_mode": "0700",
+    "file_mode": "0600",
+    "files": 107,
+    "manifest_sha256": "6f958adcf53821fbea5d7159b22c1a2695fbf7956b9d7bf8c0a2c1a9043e111a",
+    "source_destination_hash_parity": true,
+    "source_revision": "8707ffa42fc0b20ff30e0dd5ebd8989e20207a0d"
+  },
+  "production_qualified": false,
+  "public_engine_merge_tested": false,
+  "public_patch_base": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "recovery_scenario": "FAILED_UNSUPPORTED_COLD_RESUME",
+  "runs": [
+    {
+      "exit_code": 101,
+      "guard_stop_reason": null,
+      "name": "coherent-interrupted-normal-cold",
+      "source_revision": "5c65eb9b6f785f18dedbe483b274805ed454e8ef"
+    },
+    {
+      "exit_code": -15,
+      "guard_stop_reason": "resource_or1800s_wall_guard",
+      "name": "coherent-interrupted-normal-cold-v2",
+      "source_revision": "8707ffa42fc0b20ff30e0dd5ebd8989e20207a0d"
+    },
+    {
+      "exit_code": 0,
+      "guard_stop_reason": null,
+      "name": "coherent-interrupted-normal-cold-v3",
+      "source_revision": "8707ffa42fc0b20ff30e0dd5ebd8989e20207a0d"
+    }
+  ],
+  "source_revision": "8707ffa42fc0b20ff30e0dd5ebd8989e20207a0d",
+  "source_version": "1.0.471-beta",
+  "stale_authority_reused": false,
+  "strong_get_tested": false,
+  "target_intent_retained": true,
+  "target_native_unknown_not_zero": true,
+  "target_sparse_index": 2,
+  "test_executable": {
+    "bytes": 136517008,
+    "mutable_shared_test_executable": true,
+    "path": "/tmp/bicdb-azure-artifact-target/release/deps/bicdb_core-b0702f49611c59ed",
+    "recorded_mtime_within_successful_run": true,
+    "release_binary": false,
+    "sha256": "1e054519a4e62110b9770338eae6fe4cc2e7f107983936896ea78d1032936aa8"
+  },
+  "unknown2_resolved_on_source_but_not_new_ack": true
+}

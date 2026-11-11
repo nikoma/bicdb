@@ -1,0 +1,8 @@
+
+running 3 tests
+test distribution_range_image_install::lease_tests::actual_runtime_lease_post_intent_drop_refuses_untouched_return ... ok
+test distribution_range_image_install::lease_tests::actual_runtime_lease_full_image_adoption_returns_only_control_and_preserves_all_refusals ... ok
+test distribution_range_image_install::lease_tests::actual_runtime_lease_untouched_cancel_drop_requires_fresh_authority_and_keeps_recovery_fenced ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 671 filtered out; finished in 4.82s
+

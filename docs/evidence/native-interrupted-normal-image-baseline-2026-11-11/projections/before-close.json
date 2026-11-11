@@ -1,0 +1,322 @@
+{
+  "ack_record_sha256": "6eae81d838039ffe8f207016f4cd9fb6cf9b46d9b48102f00473be02ea73b768",
+  "catalogue": {
+    "catalog": {
+      "cluster_id": "actual-native-rf3-origin",
+      "format_version": 10,
+      "image_install_intents": {
+        "1": {
+          "activation_epoch": 1,
+          "attempt_id": "01a1ccc9-e1e2-73b0-95fa-d5a2b4f9ebb1",
+          "bootstrap_id": "01a1ccc9-d458-7302-8b16-d11f3fd5dfb6",
+          "cluster_id": "actual-native-rf3-origin",
+          "current_voter_credentials": {
+            "n0": {
+              "incarnation": 1,
+              "pending_tls_certificate_sha256": null,
+              "tls_certificate_sha256": null
+            },
+            "n1": {
+              "incarnation": 1,
+              "pending_tls_certificate_sha256": null,
+              "tls_certificate_sha256": null
+            },
+            "n2": {
+              "incarnation": 1,
+              "pending_tls_certificate_sha256": null,
+              "tls_certificate_sha256": null
+            }
+          },
+          "intended_config_sha256": "c55f2853500ff2e527145a557774e59e61f471a03c5d2a6b5a80b355df5c23b9",
+          "intended_members": {
+            "n0": {
+              "incarnation": 1,
+              "pending_tls_certificate_sha256": null,
+              "tls_certificate_sha256": null
+            },
+            "n1": {
+              "incarnation": 1,
+              "pending_tls_certificate_sha256": null,
+              "tls_certificate_sha256": null
+            },
+            "n2": {
+              "incarnation": 1,
+              "pending_tls_certificate_sha256": null,
+              "tls_certificate_sha256": null
+            }
+          },
+          "intended_range": {
+            "approximate_bytes": 0,
+            "approximate_qps": 0,
+            "end_token": null,
+            "epoch": 1,
+            "id": 1,
+            "leader": "n0",
+            "placement": {
+              "distinct_failure_domains": [],
+              "required_node_labels": {}
+            },
+            "replicas": [
+              {
+                "id": 1,
+                "node_id": "n0",
+                "role": "voter"
+              },
+              {
+                "id": 2,
+                "node_id": "n1",
+                "role": "voter"
+              },
+              {
+                "id": 3,
+                "node_id": "n2",
+                "role": "voter"
+              }
+            ],
+            "start_token": 0
+          },
+          "nonce": "01a1ccc9-dd13-7b43-a9c7-a4913b9a7ca6",
+          "old_config_sha256": "c55f2853500ff2e527145a557774e59e61f471a03c5d2a6b5a80b355df5c23b9",
+          "purpose": "CurrentVoterRepair",
+          "range": {
+            "approximate_bytes": 0,
+            "approximate_qps": 0,
+            "end_token": null,
+            "epoch": 1,
+            "id": 1,
+            "leader": "n0",
+            "placement": {
+              "distinct_failure_domains": [],
+              "required_node_labels": {}
+            },
+            "replicas": [
+              {
+                "id": 1,
+                "node_id": "n0",
+                "role": "voter"
+              },
+              {
+                "id": 2,
+                "node_id": "n1",
+                "role": "voter"
+              },
+              {
+                "id": 3,
+                "node_id": "n2",
+                "role": "voter"
+              }
+            ],
+            "start_token": 0
+          },
+          "restore_activation": null,
+          "schema_sha256": "4f570aab088385d8fc2a445c8ef274bfca030734de14fc58d049e8fa8a9461d4",
+          "session_id": "01a1ccc9-dd13-7b43-a9c7-a4913b9a7ca6",
+          "source_catalog_sha256": "ef9bf37d16954e5701aeef63de87006b18a2881659cb4fbe6f608b25a96b92fb",
+          "source_id": "n0",
+          "source_incarnation": 1,
+          "source_native_receipt_sha256": "699ca5fafd46c942ccdb451d69142cbf3e16c6fb8af88453cb7ac71e0e1bf9fd",
+          "source_purpose": "CurrentVoterRepair",
+          "source_range_index": 2,
+          "target_birth_id": "01a1ccc9-d7ef-7231-a40a-68e53520b588",
+          "target_birth_sha256": "212f9cbd24db51f1d8d7fe5659dc02741603eaef5ec1cb5d4aa3d96b23b28155",
+          "target_credentials": {
+            "incarnation": 1,
+            "pending_tls_certificate_sha256": null,
+            "tls_certificate_sha256": null
+          },
+          "target_member_incarnation": 1,
+          "target_namespace_ids": [
+            [
+              "items",
+              "abbdc1d3-216f-4539-8a81-aea5e83b7e0e"
+            ]
+          ],
+          "target_node_id": "n1"
+        }
+      },
+      "node_id": "n1",
+      "ranges": {
+        "1": {
+          "compacted_through": 0,
+          "current_epoch": 1,
+          "entries": {},
+          "last_index": 0,
+          "resolved_through": 0
+        }
+      },
+      "recovery_fences": {
+        "1": {
+          "historical_certifications": {
+            "2": {
+              "command_sha256": "39e4265e24fa42c51636809174f60be4531d084b97a5f4e7af7a06eb8658a013",
+              "configuration_sha256": "c55f2853500ff2e527145a557774e59e61f471a03c5d2a6b5a80b355df5c23b9",
+              "index": 2,
+              "range_epoch": 1,
+              "recovery_nonce": "01a1ccc9-dd13-7b43-a9c7-a4913b9a7ca6"
+            }
+          },
+          "local_member_incarnation": 1,
+          "local_node_id": "n1",
+          "native_database_incarnation": "1a3b8e24-2c04-47ef-8241-805d22644442",
+          "phase": "Active",
+          "scope": {
+            "bootstrap_id": "01a1ccc9-d458-7302-8b16-d11f3fd5dfb6",
+            "business_request_id": "01a1ccc9-dd13-7b43-a9c7-a4aebd8f6fa3",
+            "cluster_id": "actual-native-rf3-origin",
+            "configuration_sha256": "c55f2853500ff2e527145a557774e59e61f471a03c5d2a6b5a80b355df5c23b9",
+            "initiator_incarnation": 1,
+            "initiator_node_id": "n0",
+            "metadata_context_id": "01a1ccc9-dd13-7b43-a9c7-a4d4a3e60bdd",
+            "metadata_read_index": 1,
+            "metadata_term": 1,
+            "protocol_version": 1,
+            "purpose": "NormalRecovery",
+            "range_configuration_sha256": "a9e7e02df0a1c2015a0075045f666c5151df5392f595f18960f0c8378f4358ae",
+            "range_epoch": 1,
+            "range_id": 1,
+            "recovery_nonce": "01a1ccc9-dd13-7b43-a9c7-a4913b9a7ca6"
+          }
+        }
+      },
+      "sparse_committed_decisions": {
+        "1": {
+          "2": {
+            "audit": {
+              "members": {
+                "n0": {
+                  "active_certificate_sha256": null,
+                  "incarnation": 1,
+                  "pending_certificate_sha256": null
+                },
+                "n1": {
+                  "active_certificate_sha256": null,
+                  "incarnation": 1,
+                  "pending_certificate_sha256": null
+                },
+                "n2": {
+                  "active_certificate_sha256": null,
+                  "incarnation": 1,
+                  "pending_certificate_sha256": null
+                }
+              },
+              "observations": {
+                "n0": {
+                  "member_incarnation": 1,
+                  "observed_raw_state": "quorum_committed",
+                  "prior_sparse_decision_sha256": null
+                },
+                "n1": {
+                  "member_incarnation": 1,
+                  "observed_raw_state": null,
+                  "prior_sparse_decision_sha256": null
+                }
+              },
+              "scope": {
+                "bootstrap_id": "01a1ccc9-d458-7302-8b16-d11f3fd5dfb6",
+                "business_request_id": "01a1ccc9-deab-70d3-ba7c-28fef5313fb3",
+                "cluster_id": "actual-native-rf3-origin",
+                "configuration_sha256": "c55f2853500ff2e527145a557774e59e61f471a03c5d2a6b5a80b355df5c23b9",
+                "initiator_incarnation": 1,
+                "initiator_node_id": "n0",
+                "metadata_context_id": "01a1ccc9-deb1-77f1-b17e-6e8cc24976b6",
+                "metadata_read_index": 1,
+                "metadata_term": 1,
+                "protocol_version": 1,
+                "purpose": "NormalRecovery",
+                "range_configuration_sha256": "a9e7e02df0a1c2015a0075045f666c5151df5392f595f18960f0c8378f4358ae",
+                "range_epoch": 1,
+                "range_id": 1,
+                "recovery_nonce": "01a1ccc9-dd13-7b43-a9c7-a4913b9a7ca6"
+              }
+            },
+            "checksum_sha256": "183274b634dbfae206ce691715a72ec71180979fa3411a646f02dce77a0d5a35",
+            "command": {
+              "checksum_sha256": "39e4265e24fa42c51636809174f60be4531d084b97a5f4e7af7a06eb8658a013",
+              "cluster_id": "actual-native-rf3-origin",
+              "command_id": "01a1ccc9-db1f-7d60-a8e9-5511c55bc66d",
+              "index": 2,
+              "leader_node_id": "n0",
+              "mutations": [
+                {
+                  "collection": "items",
+                  "record": {
+                    "id": "interrupted-normal-uncertain-2",
+                    "metadata": {},
+                    "payload": null,
+                    "timestamp": null,
+                    "vector": null
+                  },
+                  "record_id": "interrupted-normal-uncertain-2"
+                }
+              ],
+              "protocol_version": 2,
+              "range_epoch": 1,
+              "range_id": 1,
+              "transaction_id": 3
+            },
+            "format_version": 1,
+            "local_member_incarnation": 1,
+            "local_node_id": "n1",
+            "native_birth_id": "01a1ccc9-d7ef-7231-a40a-68e53520b588",
+            "native_birth_sha256": "212f9cbd24db51f1d8d7fe5659dc02741603eaef5ec1cb5d4aa3d96b23b28155",
+            "native_database_incarnation": "1a3b8e24-2c04-47ef-8241-805d22644442",
+            "restore_activation": null
+          }
+        }
+      }
+    },
+    "checksum_sha256": "9da368cbe54d255fc8221b6fb97d08f4ee085b4627ab3dc2c453fd223c3067f1"
+  },
+  "history_stage_id": "01a1ccc9-e224-71d2-b3f3-fc43cfe0fcdb",
+  "history_stage_sha256": "545a8b3ae69a4a94b5e99704bd2bb2105520ace9c4c368566ea4155c3111c3ac",
+  "image_attempt": "01a1ccc9-e1e2-73b0-95fa-d5a2b4f9ebb1",
+  "scope": {
+    "bootstrap_id": "01a1ccc9-d458-7302-8b16-d11f3fd5dfb6",
+    "business_request_id": "01a1ccc9-dd13-7b43-a9c7-a4aebd8f6fa3",
+    "cluster_id": "actual-native-rf3-origin",
+    "configuration_sha256": "c55f2853500ff2e527145a557774e59e61f471a03c5d2a6b5a80b355df5c23b9",
+    "initiator_incarnation": 1,
+    "initiator_node_id": "n0",
+    "metadata_context_id": "01a1ccc9-dd13-7b43-a9c7-a4d4a3e60bdd",
+    "metadata_read_index": 1,
+    "metadata_term": 1,
+    "protocol_version": 1,
+    "purpose": "NormalRecovery",
+    "range_configuration_sha256": "a9e7e02df0a1c2015a0075045f666c5151df5392f595f18960f0c8378f4358ae",
+    "range_epoch": 1,
+    "range_id": 1,
+    "recovery_nonce": "01a1ccc9-dd13-7b43-a9c7-a4913b9a7ca6"
+  },
+  "source_identity": {
+    "birth": "01a1ccc9-d5e6-7f03-9d14-5bbb70ceeadc",
+    "birth_sha256": "d33d7416d6e9c98f5888418a451b0299fc7b8b3bece243645f94f9625afefce2",
+    "db_open": "c2d547a9-c1ae-4898-a94b-fe6794cb086d",
+    "db_sequence_observed": 2,
+    "items_local_uid": "655f3046-ccd1-44ff-8df9-c2680cf5b125",
+    "logical_history_sha256": "ba18e242289e899007b2d32790c7f48f75c8d0d002694ac69ddb575157a330af",
+    "native_range_index": 2,
+    "native_receipt_sha256": "699ca5fafd46c942ccdb451d69142cbf3e16c6fb8af88453cb7ac71e0e1bf9fd"
+  },
+  "source_logical_history_sha256": "ba18e242289e899007b2d32790c7f48f75c8d0d002694ac69ddb575157a330af",
+  "source_native": 2,
+  "sparse_sha256": "183274b634dbfae206ce691715a72ec71180979fa3411a646f02dce77a0d5a35",
+  "stage": "AFTER_CLEAR_BEFORE_ANY_ROW_COPY",
+  "target_birth": "01a1ccc9-d7ef-7231-a40a-68e53520b588",
+  "target_birth_sha256": "212f9cbd24db51f1d8d7fe5659dc02741603eaef5ec1cb5d4aa3d96b23b28155",
+  "target_local_db_sequence": 0,
+  "target_native": {
+    "diagnostic": "native image installation is incomplete",
+    "factory_initialization_complete": false,
+    "invalidated": true,
+    "materialized_pending_index": null,
+    "native_applied_index": null,
+    "native_base_index": null,
+    "native_receipt_sha256": null,
+    "pending_command_id": null,
+    "pending_command_index": null,
+    "range_id": 1
+  },
+  "target_open": "1a3b8e24-2c04-47ef-8241-805d22644442",
+  "target_uid": "abbdc1d3-216f-4539-8a81-aea5e83b7e0e",
+  "uncertain_call": "commit outcome unknown: commit_seq=none transaction_id=3 incarnation=c2d547a9-c1ae-4898-a94b-fe6794cb086d: native distributed command was admitted before the local attempt failed: cluster error: injected native post-admission/pre-WAL rejection; durable certificate/pending state is preserved for recovery; do not assume it committed or rolled back. Reopen the database, then re-read the operation's result: it has no commit sequence, and the page store's recovery kept it only if its commit record reached the disk"
+}

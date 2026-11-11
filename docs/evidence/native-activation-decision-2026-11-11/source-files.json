@@ -1,0 +1,912 @@
+[
+  {
+    "bytes": 105824,
+    "path": "crates/bicdb-core/src/aggregate_projection.rs",
+    "sha256": "ad7c7c843cae9dc5f34885a309eb6962f0819662c2fe50f990ec2c98cf43e352"
+  },
+  {
+    "bytes": 10775,
+    "path": "crates/bicdb-core/src/aggregate_sketch.rs",
+    "sha256": "84fa56134ea77297c249289007a252bc2aa8c71bdfb98812cac02471ecec3913"
+  },
+  {
+    "bytes": 27256,
+    "path": "crates/bicdb-core/src/archive_guard.rs",
+    "sha256": "090e1fd6283415d635ee6faebdf0bf22ae16a9b6be61b7adefd474467a3e5828"
+  },
+  {
+    "bytes": 113816,
+    "path": "crates/bicdb-core/src/backup.rs",
+    "sha256": "d1a1cffa4d3115a493b37e440cd363683adeda7b7b2358280d0e779e2dbe8078"
+  },
+  {
+    "bytes": 15374,
+    "path": "crates/bicdb-core/src/backup/capture.rs",
+    "sha256": "aebbe1d4e93e63ff23fb6a5778d08a47aa5765c599b75dba67076ff152956374"
+  },
+  {
+    "bytes": 48403,
+    "path": "crates/bicdb-core/src/backup/repository.rs",
+    "sha256": "84464f3f792547307e161784bca370316d1c9f08047b4863fe0aa15a5999212c"
+  },
+  {
+    "bytes": 105371,
+    "path": "crates/bicdb-core/src/broker.rs",
+    "sha256": "2e5f6cc8b617042d0e55454b42bcd27ee36825b5f5f9850701cc0b177c702dba"
+  },
+  {
+    "bytes": 4318,
+    "path": "crates/bicdb-core/src/cancellation.rs",
+    "sha256": "6271164253d98f74e5e4e77a5d95a4609cbff1676a4a649905392c640e35d94d"
+  },
+  {
+    "bytes": 21704,
+    "path": "crates/bicdb-core/src/consensus.rs",
+    "sha256": "944f05e1db7b4440b217bd82c427d640e4516e56ba7ed8fa2a2095e190e1670a"
+  },
+  {
+    "bytes": 1381710,
+    "path": "crates/bicdb-core/src/db.rs",
+    "sha256": "b3b1823b3ea6ab2f7f86255946aa02dec130928739d012b8191004091469092a"
+  },
+  {
+    "bytes": 110337,
+    "path": "crates/bicdb-core/src/db/access_mutation.rs",
+    "sha256": "b3a5909c474819d2238eaff0be7e53506e3051340b44283214f555fd7168719b"
+  },
+  {
+    "bytes": 8118,
+    "path": "crates/bicdb-core/src/db/branching.rs",
+    "sha256": "09399b1be8c8398c3a1ee246af5f19e5e8b6acac8317dba60b18968197e6c9a7"
+  },
+  {
+    "bytes": 29738,
+    "path": "crates/bicdb-core/src/db/collection_rename.rs",
+    "sha256": "78546f5b593328ccb6d103e72c62fd3f15af533e012df8dccd4acef769aab1c5"
+  },
+  {
+    "bytes": 2549,
+    "path": "crates/bicdb-core/src/db/collection_write_identity.rs",
+    "sha256": "c2f50e5650844ddedb6b615b16bbf7d4501f2efde10f904a313d48e4a0b8827c"
+  },
+  {
+    "bytes": 9810,
+    "path": "crates/bicdb-core/src/db/commit_resolution.rs",
+    "sha256": "c7110955c6a2be4776c157eb4ac905d84ada91aa1efc473d15b4ed7a12f3ae75"
+  },
+  {
+    "bytes": 150414,
+    "path": "crates/bicdb-core/src/db/commit_snapshot.rs",
+    "sha256": "655c9c0750f74b48c8df4b332499afb5b800ff6983ae462a14c3069911a48fe6"
+  },
+  {
+    "bytes": 10463,
+    "path": "crates/bicdb-core/src/db/compact_wal.rs",
+    "sha256": "9a3780991a465ff6adb68727412539d894c7d6d6aec2330fa8099c64f891ef80"
+  },
+  {
+    "bytes": 9605,
+    "path": "crates/bicdb-core/src/db/deferred_materialize.rs",
+    "sha256": "dc3fc436dbeafd508f599ac998d8d15cc3eb095ff467ab2b550306ae7548ca29"
+  },
+  {
+    "bytes": 3792,
+    "path": "crates/bicdb-core/src/db/distribution_event_retry_tests.rs",
+    "sha256": "9382c3dec3841089885063cf7698f52b71950fe7faf2a164a2ea5910100e59fa"
+  },
+  {
+    "bytes": 14286,
+    "path": "crates/bicdb-core/src/db/first_lock_tests.rs",
+    "sha256": "b97d3bdb8ae0f474b56fe126bf56687aa5eb3441274e25dc94ce6936d7947e94"
+  },
+  {
+    "bytes": 54541,
+    "path": "crates/bicdb-core/src/db/flashback.rs",
+    "sha256": "df28eaaaab6013a8b6d7db147cfb2ece810c4e3588f710d832c8d1b7da43e24a"
+  },
+  {
+    "bytes": 129007,
+    "path": "crates/bicdb-core/src/db/fts_build.rs",
+    "sha256": "5ae99dac687cb47a359fe409dda7c4dafa73c226b4e1de147f287803a67bfe97"
+  },
+  {
+    "bytes": 151648,
+    "path": "crates/bicdb-core/src/db/fts_query.rs",
+    "sha256": "6cbc3938fd3495c4a33b23ff6ab56cda95e2d9b4f25ecb3c65bc49ae5ef2becb"
+  },
+  {
+    "bytes": 10290,
+    "path": "crates/bicdb-core/src/db/ha_bootstrap.rs",
+    "sha256": "c2c3e5241c625698a099dd94410740abed4490f8da6d65efedcffe9e2544ae94"
+  },
+  {
+    "bytes": 20179,
+    "path": "crates/bicdb-core/src/db/ha_node.rs",
+    "sha256": "364b818892ce6ae0d2ff404d8bfd6b57fcf65491ab338c507af3f2b6bee685a9"
+  },
+  {
+    "bytes": 21765,
+    "path": "crates/bicdb-core/src/db/index_binding.rs",
+    "sha256": "cc61b37601ce05bb758ba2dc48c957022d7248a9af3a2d52388ce3b6964e2742"
+  },
+  {
+    "bytes": 137597,
+    "path": "crates/bicdb-core/src/db/index_build.rs",
+    "sha256": "f263967b471ba15ea4ebf2d4bc9e37c4655f518bc7a1cd14db6bb5c9468d898f"
+  },
+  {
+    "bytes": 12413,
+    "path": "crates/bicdb-core/src/db/integrity_reservations.rs",
+    "sha256": "5fe3d47fc8d4bd27be34e8e41dde4f84e27c8c2edf9706087986b8a9e0465202"
+  },
+  {
+    "bytes": 21104,
+    "path": "crates/bicdb-core/src/db/local_namespace_identity.rs",
+    "sha256": "897fc159628b13df5ae5be9fa242de616b4dbc33728afc2ba726d77ca520e4e3"
+  },
+  {
+    "bytes": 21557,
+    "path": "crates/bicdb-core/src/db/log_archiving.rs",
+    "sha256": "cfdd783ae2f62803766f2c97a11b09f30fbf306c9ac30476f2444a8c36b419d1"
+  },
+  {
+    "bytes": 5187,
+    "path": "crates/bicdb-core/src/db/logical_copy.rs",
+    "sha256": "d5b9af3994d5d4c502287e05bb42004fbc03cc9b2f98104cff52e93ce16df66f"
+  },
+  {
+    "bytes": 2530,
+    "path": "crates/bicdb-core/src/db/native_activation.rs",
+    "sha256": "c12b03ca0987d3f52fc904bc1fb54072c9db4130d1ac5a80916c109bb54a1049"
+  },
+  {
+    "bytes": 55692,
+    "path": "crates/bicdb-core/src/db/native_recovery_ready.rs",
+    "sha256": "63ee101472ab37aab558b5f6646675f273f98fe6dee70b8692ec92a057c0826b"
+  },
+  {
+    "bytes": 23862,
+    "path": "crates/bicdb-core/src/db/native_wal_apply.rs",
+    "sha256": "528420820512fe11971aac956351fa054f1c172917aadaa24d8074cb38c1b2c7"
+  },
+  {
+    "bytes": 1772,
+    "path": "crates/bicdb-core/src/db/online_backup.rs",
+    "sha256": "b49542a72a831a3797ee0339343c884c5962f7211f12299c431ddcafc7779db7"
+  },
+  {
+    "bytes": 133241,
+    "path": "crates/bicdb-core/src/db/pitr_maintenance.rs",
+    "sha256": "556c296490e31898a8dd8ad0850f41aabd28528c767dbb74f0b03859a9069ba1"
+  },
+  {
+    "bytes": 12927,
+    "path": "crates/bicdb-core/src/db/range_image_bindings.rs",
+    "sha256": "28db15d6ddb63146e920e52154e2a27c7e2b531f74bb1ab7512acf0bfd81f227"
+  },
+  {
+    "bytes": 53977,
+    "path": "crates/bicdb-core/src/db/range_image_install.rs",
+    "sha256": "8c453571d86697cb4096b704f48b5359716117432e054570ff5a8e977edb1a17"
+  },
+  {
+    "bytes": 71798,
+    "path": "crates/bicdb-core/src/db/range_image_native.rs",
+    "sha256": "c09ebdfe6870b5ba0841f2b316b2bc052cdf30adeb275e8adf1c6b05246446aa"
+  },
+  {
+    "bytes": 37606,
+    "path": "crates/bicdb-core/src/db/range_image_native/certified_prefix.rs",
+    "sha256": "9e723987824106e3e1c759f373fa714f1dd0eb31b3565b64e3af4661094c2dc4"
+  },
+  {
+    "bytes": 26274,
+    "path": "crates/bicdb-core/src/db/range_image_native/certified_prefix/recovery_apply.rs",
+    "sha256": "cb4bd57abdaceb0e56fbe39231bbc2b7dd58e39f42645362bf03ed979433a88a"
+  },
+  {
+    "bytes": 15749,
+    "path": "crates/bicdb-core/src/db/range_image_native/certified_prefix/recovery_apply/tests.rs",
+    "sha256": "0bcf9f88dee45c1bdcb71f3de0a8514cb3b14b2d0113eaaad29991d4d56fe4aa"
+  },
+  {
+    "bytes": 19255,
+    "path": "crates/bicdb-core/src/db/range_image_native/history.rs",
+    "sha256": "4b8fd4be2f5dca307f644db6f1ed10bba98b3bdc14d9150631d89807c6807572"
+  },
+  {
+    "bytes": 63943,
+    "path": "crates/bicdb-core/src/db/range_image_native/history_stage.rs",
+    "sha256": "ebc885767748507752ec1333ec22c7728bf37317c23066de823a350075246aea"
+  },
+  {
+    "bytes": 10000,
+    "path": "crates/bicdb-core/src/db/range_image_native/installed_anchor.rs",
+    "sha256": "7b2e941e62ec5dba044bd5aba7105974f37f6bf437f907daedbe4c080b94930c"
+  },
+  {
+    "bytes": 21485,
+    "path": "crates/bicdb-core/src/db/range_image_native/rf3_fixture.rs",
+    "sha256": "27628fabf6af862967f1724c9287aa97548737abe0b8b6625b79731453ebe6df"
+  },
+  {
+    "bytes": 44963,
+    "path": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls.rs",
+    "sha256": "ddb9ea5ae49278aed365fee1838abe1ee797bce28761248f45baf5937dfe0708"
+  },
+  {
+    "bytes": 8940,
+    "path": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/activation_rplusone.rs",
+    "sha256": "042c6932ec873b8a5c715fede6b15ea875ce57532046816058bc549c1c2de933"
+  },
+  {
+    "bytes": 4359,
+    "path": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/activation_smoke.rs",
+    "sha256": "69fdb94cce5a969b64c3f7dd03d1116908105a6d3ed557ce0ea6b22169cc0be0"
+  },
+  {
+    "bytes": 7052,
+    "path": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/activation_tests.rs",
+    "sha256": "8b4bf16ced0de5fedd335deaf81b950df29e25e93dffd8ceb77807aae96a5e54"
+  },
+  {
+    "bytes": 22246,
+    "path": "crates/bicdb-core/src/db/range_image_native/serving_configuration.rs",
+    "sha256": "3b3117e4ef1230f5adcff234b725c84ab712b36919cade7bee98fe608915555b"
+  },
+  {
+    "bytes": 22902,
+    "path": "crates/bicdb-core/src/db/range_image_native/serving_configuration/activation_decision.rs",
+    "sha256": "4f41ece53896ac116b39791195334cc6e889b580232be18dcb8fc314bc7e3cad"
+  },
+  {
+    "bytes": 15541,
+    "path": "crates/bicdb-core/src/db/range_image_native/serving_configuration/activation_decision/tests.rs",
+    "sha256": "c703739def7f4afd3c3a5579fc0632381ac53a79bd92993b0f55f48d4c381867"
+  },
+  {
+    "bytes": 12076,
+    "path": "crates/bicdb-core/src/db/range_image_native/serving_configuration/floor_tests.rs",
+    "sha256": "d11eda16941939af97a8551784a6b5e9f22d6d9fda5ee69ae3dec7b79d7b88b3"
+  },
+  {
+    "bytes": 16888,
+    "path": "crates/bicdb-core/src/db/read_committed_reservation.rs",
+    "sha256": "8d7a12699a0e83e96b2970a079b9cf1507e67b846ebcf2e36f531d727b39dc67"
+  },
+  {
+    "bytes": 19346,
+    "path": "crates/bicdb-core/src/db/record_read_snapshot.rs",
+    "sha256": "abf6b52158b64bb940a050100f97386a33ce4ae82a648e75eac0742e87f231f7"
+  },
+  {
+    "bytes": 13519,
+    "path": "crates/bicdb-core/src/db/replication_journal.rs",
+    "sha256": "0417585a19107137da8e68dcede350f05273dd05850eb5c83c3679db6d0576d2"
+  },
+  {
+    "bytes": 34576,
+    "path": "crates/bicdb-core/src/db/replication_live.rs",
+    "sha256": "5e0a89b2371fec6d6fd5ed7884bfcf46b5d70509cde1dd5f2e4699a721ade370"
+  },
+  {
+    "bytes": 11709,
+    "path": "crates/bicdb-core/src/db/row_lock_waiters.rs",
+    "sha256": "6aac349041048bec4e79d632bf0d1ac2897b1c9464e56f3742ba1e4a695aa203"
+  },
+  {
+    "bytes": 141111,
+    "path": "crates/bicdb-core/src/db/spatial_paged.rs",
+    "sha256": "994be3800e12edb403db54b9574057fa2504b58f99f97dd06928ebc2cbe6cca2"
+  },
+  {
+    "bytes": 4866,
+    "path": "crates/bicdb-core/src/db/switchover.rs",
+    "sha256": "7703e971479714b3bc6ba5e876108b2fe151f27dc8a9e0ba62bd724905b242ab"
+  },
+  {
+    "bytes": 12385,
+    "path": "crates/bicdb-core/src/db/transaction_receipts.rs",
+    "sha256": "d92ecb12fa8a5d19167920e60cd0adf839e03fb998450a1c0c24acc771abe9de"
+  },
+  {
+    "bytes": 6709,
+    "path": "crates/bicdb-core/src/db/transaction_suspension.rs",
+    "sha256": "c517f86b8d80fdac47e36715a3d741374f8f118c50a2de0212db47c82555439d"
+  },
+  {
+    "bytes": 12061,
+    "path": "crates/bicdb-core/src/db/unique_reservations.rs",
+    "sha256": "b8a5195d4a3a83994af4c0859ed5c72bb46df7d1f1bbf537ae3f1da50c78eb39"
+  },
+  {
+    "bytes": 12266,
+    "path": "crates/bicdb-core/src/db/verification.rs",
+    "sha256": "e1a4ff4fec43476c28845ac199d0f42e351bb1c42cf34a7e7384a9bf901293c9"
+  },
+  {
+    "bytes": 4714,
+    "path": "crates/bicdb-core/src/db/wait_graph.rs",
+    "sha256": "a3b6ca7713ecf989fbd9a32ce6112ecc867bcf24cb95deee9289c9f898797925"
+  },
+  {
+    "bytes": 253921,
+    "path": "crates/bicdb-core/src/distribution.rs",
+    "sha256": "a105a485aade8ad697a4c88a9b29f52d1a12cf0e0dbfeff43ca0c7ed365989b1"
+  },
+  {
+    "bytes": 49706,
+    "path": "crates/bicdb-core/src/distribution_anti_entropy.rs",
+    "sha256": "0d6f3188ebc0ea8345f60c7b8d5defbadaa855bab4b18fbf3c16617655979115"
+  },
+  {
+    "bytes": 48398,
+    "path": "crates/bicdb-core/src/distribution_anti_entropy_auto.rs",
+    "sha256": "778d6b079f409e2a6f26ed42d321821d33d5a8097c5e114fb19cba959758edb6"
+  },
+  {
+    "bytes": 27575,
+    "path": "crates/bicdb-core/src/distribution_anti_entropy_repair.rs",
+    "sha256": "9b3926b712a68871da3beffc09b2c9c8c249752f0445c371b6295b641c07da7c"
+  },
+  {
+    "bytes": 29143,
+    "path": "crates/bicdb-core/src/distribution_anti_entropy_repair_certificate.rs",
+    "sha256": "638e9e978018f37c50af9edb2858de4836458b17aba3bad13d6212dda591b389"
+  },
+  {
+    "bytes": 76996,
+    "path": "crates/bicdb-core/src/distribution_anti_entropy_repair_run.rs",
+    "sha256": "c1594136062310efd14a60a48764c33bdb084c0381d7916069a0b232e1607773"
+  },
+  {
+    "bytes": 36851,
+    "path": "crates/bicdb-core/src/distribution_anti_entropy_run.rs",
+    "sha256": "9fd9dd4f9acfac02ad06e89a4444e311b8745f1c4d884ac1df234bed8503e1bb"
+  },
+  {
+    "bytes": 25408,
+    "path": "crates/bicdb-core/src/distribution_anti_entropy_scheduler.rs",
+    "sha256": "b1d955fede55d788cafe8b19a3f299beaf86ccc1f8ef9ff5a8e716f4ebf15ed0"
+  },
+  {
+    "bytes": 40808,
+    "path": "crates/bicdb-core/src/distribution_backup.rs",
+    "sha256": "479ad4359874ad2a420cfcef0307acd35305184d5e37abb57299c32448465236"
+  },
+  {
+    "bytes": 66357,
+    "path": "crates/bicdb-core/src/distribution_backup_run.rs",
+    "sha256": "0c08e2318ff8187a2743eb0c160beca49714d45f2f25da089d328d24cbd9b746"
+  },
+  {
+    "bytes": 239238,
+    "path": "crates/bicdb-core/src/distribution_certification.rs",
+    "sha256": "7d5195d30f8c5418c5703e93ddc3c8dfb9bb25377f75618fc8cd76ebba1c8101"
+  },
+  {
+    "bytes": 151936,
+    "path": "crates/bicdb-core/src/distribution_consensus.rs",
+    "sha256": "55468897d71651c90fe92452c6478043165a5c48aa300487e0fee094e3b7046c"
+  },
+  {
+    "bytes": 136428,
+    "path": "crates/bicdb-core/src/distribution_data.rs",
+    "sha256": "b43129a9383fd2ef115a87668cf40f9ff28a534fac9ecd062492575b6b636d05"
+  },
+  {
+    "bytes": 1910,
+    "path": "crates/bicdb-core/src/distribution_data/native_activation.rs",
+    "sha256": "4286efc917a9284562d9b12d01dab1af29df2dae8030d38e0f3c5e7b017afa6e"
+  },
+  {
+    "bytes": 3972,
+    "path": "crates/bicdb-core/src/distribution_data/native_completion.rs",
+    "sha256": "4f13a19ccda3469585f25186a1ef434ccc6e1e2556a8b7348dfded81dad35f81"
+  },
+  {
+    "bytes": 14548,
+    "path": "crates/bicdb-core/src/distribution_data/native_image_install.rs",
+    "sha256": "a50d131053135b83f1f0ac6a0b28bb489f93528f6142657b532b96038e4d7f67"
+  },
+  {
+    "bytes": 5238,
+    "path": "crates/bicdb-core/src/distribution_data/native_ready.rs",
+    "sha256": "024e7680129ccb40af1f1dac7ed03b6072bc712babe46aabd22f449ce35a047c"
+  },
+  {
+    "bytes": 25271,
+    "path": "crates/bicdb-core/src/distribution_events.rs",
+    "sha256": "c72cfa5eb0cf27aa37ae09ea1151b3c54a1d701df4486f088b5d234cf2294fc9"
+  },
+  {
+    "bytes": 22690,
+    "path": "crates/bicdb-core/src/distribution_gateway.rs",
+    "sha256": "331ba5f601b8463230224f29bb44c32f2c41b0227564e9c4e76f65eeb68bf4cd"
+  },
+  {
+    "bytes": 6529,
+    "path": "crates/bicdb-core/src/distribution_io.rs",
+    "sha256": "d25ad1738112899ee7e265d6e6ff17c9bc8039a8b4dea7ef4a4997c742eabec3"
+  },
+  {
+    "bytes": 71908,
+    "path": "crates/bicdb-core/src/distribution_metadata_read_provider.rs",
+    "sha256": "2fc88c626ca57a69af1db90ef7ffb0903ccc6c354bbb1269762571c8199fe8b7"
+  },
+  {
+    "bytes": 61225,
+    "path": "crates/bicdb-core/src/distribution_query.rs",
+    "sha256": "3f4ba08a2694662a163f7ddb7cd41b2ac88f5c1539ac18483d4eb69caedbaa44"
+  },
+  {
+    "bytes": 225216,
+    "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+    "sha256": "0f9f7110f3b6c6586eae9a057c02c1e6ba91ba0aeae73dbf57cc94429ead2023"
+  },
+  {
+    "bytes": 54737,
+    "path": "crates/bicdb-core/src/distribution_range_consensus/image_install_fence.rs",
+    "sha256": "dd4852ebe5670814a36ad08821c9aa5b033b531e9ac17a8e99e20061a01dd46c"
+  },
+  {
+    "bytes": 7769,
+    "path": "crates/bicdb-core/src/distribution_range_consensus/image_install_obligations.rs",
+    "sha256": "f461141b28b82b1562fc015619279161fd81cfaac03af31f310df9c3c6108288"
+  },
+  {
+    "bytes": 7830,
+    "path": "crates/bicdb-core/src/distribution_range_consensus/image_install_state.rs",
+    "sha256": "963cd93ae4f29770662c97ebef6ee6e03ec036e2a4f0325d700585f00e1120e9"
+  },
+  {
+    "bytes": 11928,
+    "path": "crates/bicdb-core/src/distribution_range_consensus/native_activation.rs",
+    "sha256": "de3f94ce226ead9cead16d3fdbd209bf4de1d5c4e8f80ea4d3ac909fb161b68f"
+  },
+  {
+    "bytes": 7382,
+    "path": "crates/bicdb-core/src/distribution_range_consensus/native_completion_observation.rs",
+    "sha256": "5c9ca4d67228120655e340a177717ade87d69eb7dc1ed170815e676e3dfe0494"
+  },
+  {
+    "bytes": 13180,
+    "path": "crates/bicdb-core/src/distribution_range_consensus/native_image_base.rs",
+    "sha256": "eb6658602d8b13462c06b1651bb0eb4f412a8d936cf97854cbe553fb8d4c8c4b"
+  },
+  {
+    "bytes": 6862,
+    "path": "crates/bicdb-core/src/distribution_range_consensus/native_image_ready.rs",
+    "sha256": "49534430e6c0390f545f8b2ffe052f819c6d033b6b9aed764a48c6001d79e383"
+  },
+  {
+    "bytes": 4786,
+    "path": "crates/bicdb-core/src/distribution_range_consensus/native_limits.rs",
+    "sha256": "e6699a239589f7646cd4a784ec00ba3c412eec50ea198ef97c5e25822ad3062a"
+  },
+  {
+    "bytes": 41270,
+    "path": "crates/bicdb-core/src/distribution_range_consensus/native_prefix.rs",
+    "sha256": "75b32de3d8f2deb9530ba9d880596758ed6df55b72ec18bdaf3b6a0ad86809c1"
+  },
+  {
+    "bytes": 9283,
+    "path": "crates/bicdb-core/src/distribution_range_consensus/native_ready_catalog.rs",
+    "sha256": "66da07d42c42503faa86a4fd69882dba94858e8c6ec054eff7f2bcde0f9e83e5"
+  },
+  {
+    "bytes": 8887,
+    "path": "crates/bicdb-core/src/distribution_range_consensus/native_ready_completion.rs",
+    "sha256": "df9613ee6d1ce860b0d0b9355345331a597f3d76247d246ebec4b213a0a37f91"
+  },
+  {
+    "bytes": 7597,
+    "path": "crates/bicdb-core/src/distribution_range_consensus/native_ready_observation.rs",
+    "sha256": "aa73f92ed3eb11fa2361b770b39f1d8d3c6ff35a2ae765d0ad7aa9c2982baffe"
+  },
+  {
+    "bytes": 27473,
+    "path": "crates/bicdb-core/src/distribution_range_consensus/native_ready_prepare.rs",
+    "sha256": "a4c17b874c561869bcb983d8c0c666b9350c8e226b0d5b6747120cef8348d10e"
+  },
+  {
+    "bytes": 75220,
+    "path": "crates/bicdb-core/src/distribution_range_consensus/recovery_state.rs",
+    "sha256": "d4b3b9fb981b1d96dab924d2996a68b5eeddfe95f01f91a389e4439c116be5bc"
+  },
+  {
+    "bytes": 67179,
+    "path": "crates/bicdb-core/src/distribution_range_handoff.rs",
+    "sha256": "e830556f38f82dec418421576bef954637d918f367e0158ee361011de3750d5c"
+  },
+  {
+    "bytes": 24634,
+    "path": "crates/bicdb-core/src/distribution_range_image.rs",
+    "sha256": "b0fbe76eacab34a5a07e8cd7fc413118452e5d50256a2e4d76a071ab8da40381"
+  },
+  {
+    "bytes": 6414,
+    "path": "crates/bicdb-core/src/distribution_range_image/history_export.rs",
+    "sha256": "5b895ca7c4d52382c6078536bc9cfbd13454c2f195dd2a70adfe44e88eb1cd23"
+  },
+  {
+    "bytes": 11736,
+    "path": "crates/bicdb-core/src/distribution_range_image/source_cut.rs",
+    "sha256": "80139218a192a553971847ba5299045706871335a91f10307205886a21fe98db"
+  },
+  {
+    "bytes": 99559,
+    "path": "crates/bicdb-core/src/distribution_range_image_install.rs",
+    "sha256": "31c5b336510a1b5ecc4e72341ef6595b37ad6d5d0cf515fddc154a3ae3e5cb56"
+  },
+  {
+    "bytes": 56634,
+    "path": "crates/bicdb-core/src/distribution_range_image_install/current_repair_tests.rs",
+    "sha256": "73f8a9f9d7de3431519005a38e596c07ee4f42b12051798e78282118d90b07e7"
+  },
+  {
+    "bytes": 4475,
+    "path": "crates/bicdb-core/src/distribution_range_image_install/finalized_recovery.rs",
+    "sha256": "ed5aa959d07736aca45cf7ba81e131eb26e1c8d5a2860c64b74c42d81b9dd089"
+  },
+  {
+    "bytes": 17331,
+    "path": "crates/bicdb-core/src/distribution_range_image_install/lease_tests.rs",
+    "sha256": "c44bc3713a246a61468c6094450aa86cf170c2132c7b072739625cae2b9fc5d1"
+  },
+  {
+    "bytes": 346,
+    "path": "crates/bicdb-core/src/distribution_range_image_scope.rs",
+    "sha256": "1db82bb9a05dd45b3c09ca2347c7f5948fb58547989e93a42b5fb325382488e7"
+  },
+  {
+    "bytes": 36145,
+    "path": "crates/bicdb-core/src/distribution_range_mutation.rs",
+    "sha256": "8b905d36d522869a6151a683f5cd22afece6560020dea80455a5c9b8787cc0eb"
+  },
+  {
+    "bytes": 46085,
+    "path": "crates/bicdb-core/src/distribution_range_recovery.rs",
+    "sha256": "96f8f54e78da97157f8606ec0337027dbad6879224fe37ab3b9a5427d3755f69"
+  },
+  {
+    "bytes": 14213,
+    "path": "crates/bicdb-core/src/distribution_range_recovery/historical.rs",
+    "sha256": "5c0c29656160921e2f6c5dff124998b7976b7d17558f77af85a5e69ff975c85d"
+  },
+  {
+    "bytes": 12265,
+    "path": "crates/bicdb-core/src/distribution_range_recovery/image_compatibility.rs",
+    "sha256": "94624464f364e0c42ece618f19e2de240646dc2e86754a5645897b8f0e1a4db7"
+  },
+  {
+    "bytes": 4261,
+    "path": "crates/bicdb-core/src/distribution_range_recovery/image_history.rs",
+    "sha256": "35b86f0cdd951d3878a252eea30e3d5b9e6faf987c5c279d3437d5d7a68ea11c"
+  },
+  {
+    "bytes": 7265,
+    "path": "crates/bicdb-core/src/distribution_range_recovery/native_completion.rs",
+    "sha256": "b23dce61b96d41f3c72f02b0dfbae333d3cce773aa764cba2995535d6094c000"
+  },
+  {
+    "bytes": 5318,
+    "path": "crates/bicdb-core/src/distribution_range_recovery/native_completion_provenance.rs",
+    "sha256": "806b554f16ec95e0be22b1d96484636738821a15650267ed67563c7e8b3c2eb3"
+  },
+  {
+    "bytes": 17791,
+    "path": "crates/bicdb-core/src/distribution_range_recovery/native_completion_quorum.rs",
+    "sha256": "245cdc8e3e46b66fda6b08d20fa13a5f7c815ff16514b2aeecdcab2b14b5309b"
+  },
+  {
+    "bytes": 16274,
+    "path": "crates/bicdb-core/src/distribution_range_recovery/native_ready.rs",
+    "sha256": "07fba4df69deeb227204188dbbcf934343b4c02fd7808a37f7c005381191edb3"
+  },
+  {
+    "bytes": 30495,
+    "path": "crates/bicdb-core/src/distribution_range_recovery/quorum.rs",
+    "sha256": "6d1adc58e7b2523704ebe0efd6cc5d2f59d7516ebfe8dc189660f8141a14a2fd"
+  },
+  {
+    "bytes": 15733,
+    "path": "crates/bicdb-core/src/distribution_range_recovery/recovery_order_tests.rs",
+    "sha256": "cb43563b9d4af440f49169df852a2af7abf4b90c729090b7f1068a3974693d18"
+  },
+  {
+    "bytes": 36554,
+    "path": "crates/bicdb-core/src/distribution_range_recovery/runtime.rs",
+    "sha256": "a1a5de8a6ef31c74c754173ff16b7fd9d8492807f0732b3d3e9455f25465f912"
+  },
+  {
+    "bytes": 5518,
+    "path": "crates/bicdb-core/src/distribution_range_recovery/runtime/native_activation.rs",
+    "sha256": "b3512cd867750dca1061f52702624a0cb82cc34e05b4fc38c0c1922b2647da42"
+  },
+  {
+    "bytes": 8551,
+    "path": "crates/bicdb-core/src/distribution_range_recovery/runtime/native_completion.rs",
+    "sha256": "84ab57ef19bb9913ba07871b0d763bba33e9c48f98452f21aff0385b736ff4aa"
+  },
+  {
+    "bytes": 10040,
+    "path": "crates/bicdb-core/src/distribution_range_recovery/runtime/native_completion_quorum.rs",
+    "sha256": "689f0d90fd1344b60a70b4b89d66289bc1fc17c041382db7250d6ce75ee71975"
+  },
+  {
+    "bytes": 6216,
+    "path": "crates/bicdb-core/src/distribution_range_recovery/runtime/native_ready.rs",
+    "sha256": "1ba15f7964a62996560884b5fe978f8f64cd96020784476955bd555d07a623ae"
+  },
+  {
+    "bytes": 8392,
+    "path": "crates/bicdb-core/src/distribution_range_recovery/runtime/native_ready_quorum.rs",
+    "sha256": "b90988bc3154acc15c66b08c70decc16030c4552cb96de296734818bf0f3342c"
+  },
+  {
+    "bytes": 14651,
+    "path": "crates/bicdb-core/src/distribution_range_recovery/runtime/participants.rs",
+    "sha256": "b5e9e0034d1f17821c49d421267d6414ee155b5705c30443a881877c7b1d50a5"
+  },
+  {
+    "bytes": 66970,
+    "path": "crates/bicdb-core/src/distribution_restore.rs",
+    "sha256": "051662b2c8d87b8e51ee8968b3d06666c44dcc81f60989da06bc76879fdfd40c"
+  },
+  {
+    "bytes": 57652,
+    "path": "crates/bicdb-core/src/distribution_restore_activation.rs",
+    "sha256": "24c0bcfb64d9dfd86abaa811cc6a2b140e00a294332dbc55d3afc36e21a5ebf6"
+  },
+  {
+    "bytes": 32020,
+    "path": "crates/bicdb-core/src/distribution_routing.rs",
+    "sha256": "66fc2fe3ba49495af537c1e3f8478cda17f33c83805134dfc00b5b052f891f4b"
+  },
+  {
+    "bytes": 64059,
+    "path": "crates/bicdb-core/src/distribution_schema_rollout.rs",
+    "sha256": "bbd6a5a6494425c2edacfcf0f5252fc61d19f49def0793c9218d440eb78900c6"
+  },
+  {
+    "bytes": 41085,
+    "path": "crates/bicdb-core/src/distribution_supervisor.rs",
+    "sha256": "51ca9ec5100e4c99f2afa32cc84f6a3353be5105a36b3bf9b6f977ea54f129c7"
+  },
+  {
+    "bytes": 231310,
+    "path": "crates/bicdb-core/src/distribution_transport.rs",
+    "sha256": "bfcd5c9525edb794d9ceab07c88748a1798f10872ab9ef6dff8cf42c65d9a342"
+  },
+  {
+    "bytes": 36285,
+    "path": "crates/bicdb-core/src/encryption.rs",
+    "sha256": "cd3ec27238ab7d2bfe0506798d07b1b00d11ad060c4b02bf066b85f995e0e147"
+  },
+  {
+    "bytes": 28585,
+    "path": "crates/bicdb-core/src/encryption_rotation.rs",
+    "sha256": "2e21c17593edb37fd1f04766399c467e9b5304173b267b05b2afd30771ec4597"
+  },
+  {
+    "bytes": 10024,
+    "path": "crates/bicdb-core/src/error.rs",
+    "sha256": "125c3b1d516f83e23bdbacaf8fb3cb5d6beeadb3fe97ee47f4c2f600d118cc8f"
+  },
+  {
+    "bytes": 28179,
+    "path": "crates/bicdb-core/src/event.rs",
+    "sha256": "7dae6af21f600746abb64f90f631f5f58df28d3f4087fe236111183e465b34aa"
+  },
+  {
+    "bytes": 33945,
+    "path": "crates/bicdb-core/src/format.rs",
+    "sha256": "33ff81f17fee3e58785e6e7fc31f1daa7f3ffd3240b98e47f099ddc8e03b388b"
+  },
+  {
+    "bytes": 61840,
+    "path": "crates/bicdb-core/src/fts_build.rs",
+    "sha256": "2ce4006ce39f3c32b98481500a59cad74e045bd4561573b9efb9d958ca0c8d4a"
+  },
+  {
+    "bytes": 10702,
+    "path": "crates/bicdb-core/src/fts_cache.rs",
+    "sha256": "84db11130f90ffae312e909753a839cff3293f51b4a71e8988b2d83acf20f1dc"
+  },
+  {
+    "bytes": 10977,
+    "path": "crates/bicdb-core/src/fts_filters.rs",
+    "sha256": "c577963563a7d7fde8c823ecfd065a58f384a2533f68b0cf2ec6611dd57cb460"
+  },
+  {
+    "bytes": 23299,
+    "path": "crates/bicdb-core/src/fts_format.rs",
+    "sha256": "956bda44c828399f295ed197bdcade8aad7b82d0f05b362af5fe44163e402ed3"
+  },
+  {
+    "bytes": 106603,
+    "path": "crates/bicdb-core/src/fts_postings.rs",
+    "sha256": "f02c891dfdd9f4a80669fae25ceca39b04c1b9cbdac2fafdf1c38519dd11c71d"
+  },
+  {
+    "bytes": 6984,
+    "path": "crates/bicdb-core/src/fts_scoring.rs",
+    "sha256": "41c68b9897b1026513ecbd8b520954c62e283fc1803d3b5bb56fddf9912c4d62"
+  },
+  {
+    "bytes": 129292,
+    "path": "crates/bicdb-core/src/fts_segment.rs",
+    "sha256": "3d912a9be88aa0ce152cc206957cfca397e03a94c7e938618ee3b05057a4c06b"
+  },
+  {
+    "bytes": 57420,
+    "path": "crates/bicdb-core/src/geometry.rs",
+    "sha256": "d9ea255325650e106c08a80e9f45fec4478bbcfa3717c074993db361e591b8ff"
+  },
+  {
+    "bytes": 18633,
+    "path": "crates/bicdb-core/src/graph.rs",
+    "sha256": "fc5314588286065b0d9913b4df181b08cc0c89ac21d59b688fea7786125dc1ea"
+  },
+  {
+    "bytes": 24844,
+    "path": "crates/bicdb-core/src/hnsw.rs",
+    "sha256": "e3bb1b69edc6dbe348261a577533b32b5a5d64fe53e21e33d7887bb50ebe50e1"
+  },
+  {
+    "bytes": 18257,
+    "path": "crates/bicdb-core/src/large_value.rs",
+    "sha256": "0f4e01c029a3540defb8c382236cd48c0762943e27849efb3d1333a9ef126040"
+  },
+  {
+    "bytes": 30910,
+    "path": "crates/bicdb-core/src/lib.rs",
+    "sha256": "df7c846e6f10d05b4127cca773b0248b1b6ee848ccd35c0ab3ed577c677a11f1"
+  },
+  {
+    "bytes": 31276,
+    "path": "crates/bicdb-core/src/log_archive.rs",
+    "sha256": "f6251e055f33f0b3b538aac356482b395e5d3eccaab2f03f73af7b654a7fb8da"
+  },
+  {
+    "bytes": 3165,
+    "path": "crates/bicdb-core/src/lua.rs",
+    "sha256": "fd4ac910073857aae44624fe6a06f73ce24ba6806736c9c19f7d3ffbc543ddd8"
+  },
+  {
+    "bytes": 33324,
+    "path": "crates/bicdb-core/src/memory.rs",
+    "sha256": "38a9848381a65034eb1ac8ff3bf9292fd58d502736c9126b881d2f6774b46790"
+  },
+  {
+    "bytes": 20365,
+    "path": "crates/bicdb-core/src/memory_index.rs",
+    "sha256": "af1f59631106663f83f5047ac14a93c9a945236538cfaca897aa18f72c9c91fc"
+  },
+  {
+    "bytes": 7798,
+    "path": "crates/bicdb-core/src/mutation.rs",
+    "sha256": "1f2044c631643c76904e728403ed0b771f6aadd3f95d499e2bc72ca102d685c7"
+  },
+  {
+    "bytes": 3310,
+    "path": "crates/bicdb-core/src/numeric_key.rs",
+    "sha256": "74b740a2bd5c3fc99f974eca87d0aaf892073b3df93460862dcb9fa6521f803a"
+  },
+  {
+    "bytes": 53778,
+    "path": "crates/bicdb-core/src/observability.rs",
+    "sha256": "2addc4aa4941ef170dec0dd939a24f7d13d60a5f610d75229c6f6bc735ab336c"
+  },
+  {
+    "bytes": 69987,
+    "path": "crates/bicdb-core/src/oracle_simple_case.rs",
+    "sha256": "f18167edb6124c0ae74fee2dcaa7cddc510c8a0337ff8f485a5551fe2aa70c3f"
+  },
+  {
+    "bytes": 38610,
+    "path": "crates/bicdb-core/src/paged_checkpoint_maintenance.rs",
+    "sha256": "a818145749b1fe9f6df0a241ba921db7ac1960de80a705b1f8b6cdc47bb879dc"
+  },
+  {
+    "bytes": 275784,
+    "path": "crates/bicdb-core/src/paged_collection.rs",
+    "sha256": "7a80bdeeb63477420fd93aa799eb880ad1f257f26848b0d41ca88a45564553ff"
+  },
+  {
+    "bytes": 57095,
+    "path": "crates/bicdb-core/src/paged_integrity_maintenance.rs",
+    "sha256": "87aa91d52add455a98514941bf2d5382124b0e211b95e870241ec608fc29a9af"
+  },
+  {
+    "bytes": 49450,
+    "path": "crates/bicdb-core/src/paged_maintenance.rs",
+    "sha256": "c06240b6857607c1fddc9731336337f75fcac13c25e8d4e6b800c8fbf22edf96"
+  },
+  {
+    "bytes": 9173,
+    "path": "crates/bicdb-core/src/parse_budget.rs",
+    "sha256": "cadf57d5587243542707273a829ff1f891f94158d61a17002b2b2286f865c262"
+  },
+  {
+    "bytes": 23044,
+    "path": "crates/bicdb-core/src/protected_data.rs",
+    "sha256": "86190579db98c70299c5b951e2fc7be9ec4c1fb99e68fa41b043353aeda53d7c"
+  },
+  {
+    "bytes": 3966,
+    "path": "crates/bicdb-core/src/query_budget.rs",
+    "sha256": "23e01d6e1e82de338624128fbde21a456d6754a709b311f7c587fa8750e1969e"
+  },
+  {
+    "bytes": 4022,
+    "path": "crates/bicdb-core/src/query_exec.rs",
+    "sha256": "29a4790addc7eef4937226d809ee6ea9d6a58990edc6abfb948bd30c5e8edbfb"
+  },
+  {
+    "bytes": 82300,
+    "path": "crates/bicdb-core/src/record.rs",
+    "sha256": "b86e6740423fed2afc5e33fb59224fc41221ae0b04188574712cb5e477dcc310"
+  },
+  {
+    "bytes": 18619,
+    "path": "crates/bicdb-core/src/replication.rs",
+    "sha256": "3a407a53abccd7a123ff2f22d3632800c3cd9b8b76a8a5355355ac6a77e2413e"
+  },
+  {
+    "bytes": 22430,
+    "path": "crates/bicdb-core/src/replication_transport.rs",
+    "sha256": "90e1fb4ef9b6a428c027940e0dc6883a2f02b02537a67d4575f0faa0e7caa48b"
+  },
+  {
+    "bytes": 14016,
+    "path": "crates/bicdb-core/src/residency.rs",
+    "sha256": "dc299addbd511dcb06eaa4fac359c9b7bdbbda247bf6d7de7e2e6b1c40f0d4da"
+  },
+  {
+    "bytes": 25252,
+    "path": "crates/bicdb-core/src/resource_governor.rs",
+    "sha256": "cb8fb11f346f19dd6417b32a43eae1679cde7b7de9c4255c580e50eef7b0d4f2"
+  },
+  {
+    "bytes": 16210,
+    "path": "crates/bicdb-core/src/snapshot.rs",
+    "sha256": "b207b52ead9dae2774427803f0a6775e9ab17217288341368331b9e178b451d0"
+  },
+  {
+    "bytes": 16253,
+    "path": "crates/bicdb-core/src/spatial_pack_build.rs",
+    "sha256": "12f941cd76c673f7fede4accba4ed2e58a07fffae8d73693475e3eea7bdb1e1c"
+  },
+  {
+    "bytes": 41067,
+    "path": "crates/bicdb-core/src/spatial_packed.rs",
+    "sha256": "462b91447d8c01f9f4c66af0fc5b44cc7c793d184b29d5b3d5e4f5098a76d0ea"
+  },
+  {
+    "bytes": 124759,
+    "path": "crates/bicdb-core/src/storage.rs",
+    "sha256": "e77ccd6c2d2498f592e335931048ad6992c39c600cb3cd479bb6e8203cb4e5a2"
+  },
+  {
+    "bytes": 9128,
+    "path": "crates/bicdb-core/src/storage_mode_migration.rs",
+    "sha256": "fd0856f6b1e1512e54a7c334fe15750184649873bc51dbdbe8f2439f8b0d820c"
+  },
+  {
+    "bytes": 12466,
+    "path": "crates/bicdb-core/src/sync.rs",
+    "sha256": "420be586b214dad68264a38d84271ca14c6b00ec5a9c430ac91c51ab6b746c94"
+  },
+  {
+    "bytes": 34337,
+    "path": "crates/bicdb-core/src/sync_mesh.rs",
+    "sha256": "b9c6afda8b4a33f2a1ad085cab12c2dba3fb54c41ff70c4b12d5f3b47d7940a7"
+  },
+  {
+    "bytes": 15491,
+    "path": "crates/bicdb-core/src/vector.rs",
+    "sha256": "002051090e4db14066023d6048b90989bd93976a45ab13f288d79bd4f59730d2"
+  }
+]

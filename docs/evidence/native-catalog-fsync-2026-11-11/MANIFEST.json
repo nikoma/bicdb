@@ -1,0 +1,242 @@
+[
+  {
+    "bytes": 5666,
+    "path": "README.md",
+    "sha256": "2cd001a92de929431937af7f9adda96649c2be84ea0f57d4b2d22f58a24dcc9f"
+  },
+  {
+    "bytes": 12005,
+    "path": "claims.json",
+    "sha256": "b71c0cd4488471efe4abbe3d543427c1781795850b5502d676d8207163f6c58e"
+  },
+  {
+    "bytes": 696,
+    "path": "custody-receipt.json",
+    "sha256": "36f40a8d23e38ff478b79d807b8040e5ec0ed9bd24897274c38f3b6e443a743e"
+  },
+  {
+    "bytes": 15028,
+    "path": "export-provenance.json",
+    "sha256": "20c52e9621c830faa73c7047ed0555665f2fa78d4aed30708790026b76650c05"
+  },
+  {
+    "bytes": 2897,
+    "path": "run_cargo_guarded.executed.py",
+    "sha256": "d855adccf5fd874d5b8e51ff9985be19759d27eb934d055c4f09e0e593f9de77"
+  },
+  {
+    "bytes": 687,
+    "path": "runs/native-fsync-actual-mtls-available/inputs.json",
+    "sha256": "e403bb476b652e23397ac2b3541c542bbebb63a31d612a440f8da3f6c8f44de1"
+  },
+  {
+    "bytes": 366,
+    "path": "runs/native-fsync-actual-mtls-available/resources.jsonl.gz",
+    "sha256": "c7b1459e7dc6f5b2dc0a54924e617a887d63b9668d1879a657b3b3dae5127f1f"
+  },
+  {
+    "bytes": 868,
+    "path": "runs/native-fsync-actual-mtls-available/result.json",
+    "sha256": "a0ae7145c7b7f36bde991f383566d96726ade02b2d063ed911369bdece9d4e4b"
+  },
+  {
+    "bytes": 14291,
+    "path": "runs/native-fsync-actual-mtls-available/stderr.gz",
+    "sha256": "156d2e22150ca3dd3e930eb250b2efda164bb7c133cc982cee3013dc1fff8d1b"
+  },
+  {
+    "bytes": 372,
+    "path": "runs/native-fsync-actual-mtls-available/stdout.gz",
+    "sha256": "128db296402bf38c041155a7a12b0b7255714c25b588fea16d6c329bf541dfd5"
+  },
+  {
+    "bytes": 705,
+    "path": "runs/native-fsync-normal-embedded/inputs.json",
+    "sha256": "c370c8fd8b9cd9bc23e50dceba31c4ebcafcb2b94c42b40ec94ad96f56bae76a"
+  },
+  {
+    "bytes": 250,
+    "path": "runs/native-fsync-normal-embedded/resources.jsonl.gz",
+    "sha256": "bb10410c5fa645e7a64b96e1f0cbc61e29d23f55b93dc4324d515f2bb12a5c62"
+  },
+  {
+    "bytes": 887,
+    "path": "runs/native-fsync-normal-embedded/result.json",
+    "sha256": "6485ee6162a30993ce4ec5875cdfbc69b2fa9cf3b28796a0768604dc3667e5d7"
+  },
+  {
+    "bytes": 14291,
+    "path": "runs/native-fsync-normal-embedded/stderr.gz",
+    "sha256": "0528683306b88d68d34805b46c4d2d1ca206bc7c5354323c290bad524086f7d0"
+  },
+  {
+    "bytes": 189,
+    "path": "runs/native-fsync-normal-embedded/stdout.gz",
+    "sha256": "6536a933ee4a340800ea791e44b87519139d4856462d38c60f11f7030cbd2ca1"
+  },
+  {
+    "bytes": 725,
+    "path": "runs/native-fsync-origin-controls/inputs.json",
+    "sha256": "4077f6e39d2674fb38aa2aaa177b51f176576e0cc421fdeae833dfd1a7e0c336"
+  },
+  {
+    "bytes": 277,
+    "path": "runs/native-fsync-origin-controls/resources.jsonl.gz",
+    "sha256": "74129c134ef78091596aea0ba2d0178c0d0b99687535039dbd1c9e4605824e3d"
+  },
+  {
+    "bytes": 907,
+    "path": "runs/native-fsync-origin-controls/result.json",
+    "sha256": "f06e6057934cdf2e1bb199c724a6d188e1c215b19e9242923de6f3d5850ae4a1"
+  },
+  {
+    "bytes": 14291,
+    "path": "runs/native-fsync-origin-controls/stderr.gz",
+    "sha256": "0528683306b88d68d34805b46c4d2d1ca206bc7c5354323c290bad524086f7d0"
+  },
+  {
+    "bytes": 439,
+    "path": "runs/native-fsync-origin-controls/stdout.gz",
+    "sha256": "53e3b9e88eb913e7b164ee5203756eb2bf5a790383b04de23e97e324a80cc820"
+  },
+  {
+    "bytes": 687,
+    "path": "runs/native-fsync-read-controls/inputs.json",
+    "sha256": "66f69ab26a124353985e82727b9f56d8ab6983e89b8f1025dc88e8004e6526f5"
+  },
+  {
+    "bytes": 532,
+    "path": "runs/native-fsync-read-controls/resources.jsonl.gz",
+    "sha256": "45d0f8534ff52f6475e3f7759451d23938f43bd3ce72d556a9d3548617606608"
+  },
+  {
+    "bytes": 868,
+    "path": "runs/native-fsync-read-controls/result.json",
+    "sha256": "76a220b84efa9f7f0d563cd44f6d266eb0fac05193c764286bac63a1c033b8bf"
+  },
+  {
+    "bytes": 14562,
+    "path": "runs/native-fsync-read-controls/stderr.gz",
+    "sha256": "bffd80fd8d432bac29bc3b3d2958d7d742d5738e78721f5b231f4e58a33953fc"
+  },
+  {
+    "bytes": 449,
+    "path": "runs/native-fsync-read-controls/stdout.gz",
+    "sha256": "3e04d0f2d352bc458bbadb7abd7b1efd835abdbd8c01e29b26ea6d0a59d90901"
+  },
+  {
+    "bytes": 700,
+    "path": "runs/native-fsync-tls-controls/inputs.json",
+    "sha256": "26d1aea13cec94422091a420cce8e1b60bc98483f64655a56ae738751339b60f"
+  },
+  {
+    "bytes": 185,
+    "path": "runs/native-fsync-tls-controls/resources.jsonl.gz",
+    "sha256": "f94b82cf6ed6ef196448b9cb1ab455282e0649f618a4255f052ddf992e056f3b"
+  },
+  {
+    "bytes": 881,
+    "path": "runs/native-fsync-tls-controls/result.json",
+    "sha256": "15773ccd4090fdfa04fb18589ef57079599c74280c3b47f4c515a0b5831ced58"
+  },
+  {
+    "bytes": 14291,
+    "path": "runs/native-fsync-tls-controls/stderr.gz",
+    "sha256": "0528683306b88d68d34805b46c4d2d1ca206bc7c5354323c290bad524086f7d0"
+  },
+  {
+    "bytes": 105,
+    "path": "runs/native-fsync-tls-controls/stdout.gz",
+    "sha256": "f33b5d2a4d16e534af745d64a8b702fdf44c22c68ce9e2157ed967d23037494b"
+  },
+  {
+    "bytes": 690,
+    "path": "runs/native-fsync-v1/inputs.json",
+    "sha256": "2cb26543b5935c76a03a01d9dccfce84fea6c2707050ff9258a12f068a663d98"
+  },
+  {
+    "bytes": 829,
+    "path": "runs/native-fsync-v1/resources.jsonl.gz",
+    "sha256": "ec44244e4efd70352f9449d31d24218d7a026a90601d5fb36fb55b6c6347fd04"
+  },
+  {
+    "bytes": 874,
+    "path": "runs/native-fsync-v1/result.json",
+    "sha256": "25b775451aa778ff76530a2571e80da7d333a86550fabd60389e4e43bc547934"
+  },
+  {
+    "bytes": 3079,
+    "path": "runs/native-fsync-v1/stderr.gz",
+    "sha256": "eab6caf36c2dd4dc3566e16d623fbf65b2d5046cadf57066cd533109206c3218"
+  },
+  {
+    "bytes": 20,
+    "path": "runs/native-fsync-v1/stdout.gz",
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  {
+    "bytes": 690,
+    "path": "runs/native-fsync-v2/inputs.json",
+    "sha256": "591243b591749a85bd20f0c1ddd9a8a821dc5a71e1fc04c338ac3cd31f9f5932"
+  },
+  {
+    "bytes": 1903,
+    "path": "runs/native-fsync-v2/resources.jsonl.gz",
+    "sha256": "463a28cc229e361cdba6a83b003478d4230b966b370a466a4f10cb5cb2b28b0d"
+  },
+  {
+    "bytes": 867,
+    "path": "runs/native-fsync-v2/result.json",
+    "sha256": "3f111aa6808804f98c959ea674dd2f49219fb6d16b43b11737ccf530d3af07e4"
+  },
+  {
+    "bytes": 14340,
+    "path": "runs/native-fsync-v2/stderr.gz",
+    "sha256": "c68d3fe847afbfc6fc6b03609675d8ae066077f1e92c942978b011e3e56f10fb"
+  },
+  {
+    "bytes": 350,
+    "path": "runs/native-fsync-v2/stdout.gz",
+    "sha256": "b8df991314fdf8911b50afac32a06c5964f75c92e51368aba457b7f9abe845f6"
+  },
+  {
+    "bytes": 438,
+    "path": "source/compile-failure/engine.patch.gz",
+    "sha256": "592e62b08439cf613218202346ea757260a4e3afe7b3b76f7e541a8822904954"
+  },
+  {
+    "bytes": 232255,
+    "path": "source/compile-failure/source-inputs.json",
+    "sha256": "f92a9567c391d09bee9a93a191242d882f6c6078c447515aad57031ffc5ae02f"
+  },
+  {
+    "bytes": 378082,
+    "path": "source/primary/engine.patch.gz",
+    "sha256": "4a57aedec5502e77c5ee34d42906260529d84d0648f1eb66a7eb1decc1c99cf2"
+  },
+  {
+    "bytes": 232255,
+    "path": "source/primary/source-inputs.json",
+    "sha256": "7b9564f1dca4dd6e68686039da0cbb9b99eb646e77c2186a6e1de4c3c37fbe05"
+  },
+  {
+    "bytes": 2805,
+    "path": "source-finding.json",
+    "sha256": "216c29b4c2e58147d1326f55f815124954dbdc2ecee268bbcd0c609c6ba97b78"
+  },
+  {
+    "bytes": 357,
+    "path": "test-executable.json",
+    "sha256": "def988929d8841aa51ae92d2c761b8c0512211517c9632b6009d0345d6025251"
+  },
+  {
+    "bytes": 2670,
+    "path": "test_verify.py",
+    "sha256": "cf838b90a6749dd9807f0af7d793d99423b1db0e1905844dfe19f5c3f533120a"
+  },
+  {
+    "bytes": 10010,
+    "path": "verify.py",
+    "sha256": "39e3bea26ff3f36d57c61830ef1379463355015cec45ff4cfacd57b120cd5a8c"
+  }
+]

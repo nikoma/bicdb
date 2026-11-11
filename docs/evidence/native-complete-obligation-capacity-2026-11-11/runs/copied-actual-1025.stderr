@@ -1,0 +1,2420 @@
+warning: methods `node_kind`, `child_value`, and `child_for` are never used
+   --> crates/bicdb-page/src/btree.rs:376:16
+    |
+337 |         impl $ty {
+    |         -------- methods in this implementation
+...
+376 |             fn node_kind(&self, page_id: PageId) -> Result<bool> {
+    |                ^^^^^^^^^
+...
+389 |             fn child_value(&self, page_id: PageId, index: usize) -> Result<PageId> {
+    |                ^^^^^^^^^^^
+...
+430 |             fn child_for(&self, page_id: PageId, needle: &[u8]) -> Result<PageId> {
+    |                ^^^^^^^^^
+...
+449 | node_reads!(Node<'_>);
+    | --------------------- in this macro invocation
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+    = note: this warning originates in the macro `node_reads` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: methods `free_start`, `free_end`, `page_id`, `is_leaf`, and `free_space` are never used
+   --> crates/bicdb-page/src/btree.rs:349:16
+    |
+337 |         impl $ty {
+    |         -------- methods in this implementation
+...
+349 |             fn free_start(&self) -> usize {
+    |                ^^^^^^^^^^
+...
+354 |             fn free_end(&self) -> usize {
+    |                ^^^^^^^^
+...
+359 |             fn page_id(&self) -> PageId {
+    |                ^^^^^^^
+...
+368 |             fn is_leaf(&self) -> bool {
+    |                ^^^^^^^
+...
+442 |             fn free_space(&self) -> usize {
+    |                ^^^^^^^^^^
+...
+450 | node_reads!(NodeRef<'_>);
+    | ------------------------ in this macro invocation
+    |
+    = note: this warning originates in the macro `node_reads` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: `bicdb-page` (lib) generated 2 warnings
+warning: unused import: `TargetNativeImageSnapshotBound`
+  --> crates/bicdb-core/src/db.rs:64:5
+   |
+64 |     TargetNativeImageSnapshotBound,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `NativeLocalVisibilitySequence`
+  --> crates/bicdb-core/src/db.rs:68:66
+   |
+68 | pub(crate) use native_recovery_ready::{LocalNativeRecoveryReady, NativeLocalVisibilitySequence};
+   |                                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `ActualNativeRf3RpcObservation`
+  --> crates/bicdb-core/src/db.rs:71:29
+   |
+71 |     ActualNativeRf3Fixture, ActualNativeRf3RpcObservation,
+   |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `FreshRangeGenesisAuthority`, `NativeHistoryPublicationBinding`, `NativeLogicalHistoryEntryV1`, and `NativeLogicalHistoryPoint`
+  --> crates/bicdb-core/src/db.rs:74:5
+   |
+74 |     FreshRangeGenesisAuthority, KnownNativeRecoveryPrefix, NativeRecoveredServingReceipt, NativeHistoryPublicationBinding,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+75 |     NativeHistoryStage, NativeHistoryStageProgress, NativeHistoryTargetContext,
+76 |     NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^                                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `bundle_event_for_stored`
+   --> crates/bicdb-core/src/db.rs:177:11
+    |
+177 |     self, bundle_event_for_stored, envelope_from_metadata, event_with_sync_metadata, EventEnvelope,
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `FrozenNativeReadyStage`
+ --> crates/bicdb-core/src/distribution_range_consensus/native_ready_observation.rs:5:5
+  |
+5 |     FrozenNativeReadyStage, NativeReadyPhysicalDomain, NativeReadyReply, NativeReadyRequest,
+  |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `native_ready_completion::NativeRecoveryCompletedFrozenReceipt`
+  --> crates/bicdb-core/src/distribution_range_consensus.rs:61:16
+   |
+61 | pub(crate) use native_ready_completion::NativeRecoveryCompletedFrozenReceipt;
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `UntouchedNativeImageTransferReturn`
+  --> crates/bicdb-core/src/distribution_range_consensus.rs:71:5
+   |
+71 |     UntouchedNativeImageTransferReturn,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `PathBuf`
+  --> crates/bicdb-core/src/aggregate_projection.rs:23:23
+   |
+23 | use std::path::{Path, PathBuf};
+   |                       ^^^^^^^
+
+warning: unused import: `Verifier`
+  --> crates/bicdb-core/src/db.rs:93:32
+   |
+93 | use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+   |                                ^^^^^^^^
+
+warning: variable does not need to be mutable
+    --> crates/bicdb-core/src/broker.rs:2624:13
+     |
+2624 |         let mut db = BicDb::open(root.path()).unwrap();
+     |             ----^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/bicdb-core/src/db/collection_rename.rs:304:23
+    |
+304 |             if let Ok(mut state) = self.collection_state_mut(name) {
+    |                       ----^^^^^
+    |                       |
+    |                       help: remove this `mut`
+
+warning: unused variable: `impact_seq`
+    --> crates/bicdb-core/src/db/fts_build.rs:2569:28
+     |
+2569 | ...                   impact_seq: &mut u32,
+     |                       ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_impact_seq`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `sink`
+    --> crates/bicdb-core/src/db/fts_build.rs:2606:25
+     |
+2606 |             if let Some(sink) = &segment_sink {
+     |                         ^^^^ help: if this is intentional, prefix it with an underscore: `_sink`
+
+warning: variable does not need to be mutable
+    --> crates/bicdb-core/src/db/fts_query.rs:1287:13
+     |
+1287 |         let mut emit_tail = |index: usize,
+     |             ----^^^^^^^^^
+     |             |
+     |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> crates/bicdb-core/src/db/fts_query.rs:1875:13
+     |
+1875 |         let mut probe = |label: &str,
+     |             ----^^^^^
+     |             |
+     |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/bicdb-core/src/db/index_build.rs:628:13
+    |
+628 |         let mut flush = |pending: &mut Vec<(u64, Vec<u8>)>,
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> crates/bicdb-core/src/db/index_build.rs:1361:29
+     |
+1361 |                         let mut resolve = |pk: &str| -> Option<RowId> {
+     |                             ----^^^^^^^
+     |                             |
+     |                             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/bicdb-core/src/db/range_image_native/certified_prefix/recovery_apply/tests.rs:263:13
+    |
+263 |         let mut db = fixture.databases[&original_leader].write();
+    |             ----^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/bicdb-core/src/db/transaction_suspension.rs:179:13
+    |
+179 |         let mut db = BicDb::open(root.path()).unwrap();
+    |             ----^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:22604:17
+      |
+22604 |             let mut apply = || -> Result<()> {
+      |                 ----^^^^^
+      |                 |
+      |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:24551:13
+      |
+24551 |         let mut consume = |triple: ImpactTriple,
+      |             ----^^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:27606:13
+      |
+27606 |         let mut file = fs::OpenOptions::new()
+      |             ----^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:28852:13
+      |
+28852 |         let mut fresh = audit_db(&fresh_root);
+      |             ----^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:28858:13
+      |
+28858 |         let mut reopened = audit_db(&temp.path().join("a"));
+      |             ----^^^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:29597:13
+      |
+29597 |         let mut shadow = ShadowIndexStore::new(
+      |             ----^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:29632:13
+      |
+29632 |         let mut sharded = ShardedBTreeIndexStore::with_shards(16);
+      |             ----^^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:29633:13
+      |
+29633 |         let mut reference = BTreeIndexStore::default();
+      |             ----^^^^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:29706:13
+      |
+29706 |         let mut s = ShardedBTreeIndexStore::with_shards(shards);
+      |             ----^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:29756:13
+      |
+29756 |         let mut reference = BTreeIndexStore::default();
+      |             ----^^^^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:29821:13
+      |
+29821 |         let mut reference = BTreeIndexStore::default();
+      |             ----^^^^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:29822:13
+      |
+29822 |         let mut shadow_inner_a = BTreeIndexStore::default();
+      |             ----^^^^^^^^^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:29823:13
+      |
+29823 |         let mut shadow_inner_b = BTreeIndexStore::default();
+      |             ----^^^^^^^^^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:32924:17
+      |
+32924 |             let mut pinned = db.begin_transaction().unwrap();
+      |                 ----^^^^^^
+      |                 |
+      |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/bicdb-core/src/distribution_metadata_read_provider.rs:998:13
+    |
+998 |         let mut topology = store.topology().clone();
+    |             ----^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `collection`
+    --> crates/bicdb-core/src/paged_collection.rs:4573:13
+     |
+4573 |         let collection: &str = &physical;
+     |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_collection`
+
+warning: variable does not need to be mutable
+   --> crates/bicdb-core/src/spatial_packed.rs:257:9
+    |
+257 |     let mut emit_leaf = |leaf: &mut Vec<PackedSpatialEntry>,
+    |         ----^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: type `db::ClockPairTable` is more private than the item `access_mutation::<impl db::BicDb>::clock_pair_table`
+     --> crates/bicdb-core/src/db/access_mutation.rs:2342:5
+      |
+ 2342 |     pub(crate) fn clock_pair_table(&self) -> Result<ClockPairTable> {
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `access_mutation::<impl db::BicDb>::clock_pair_table` is reachable at visibility `pub(crate)`
+      |
+note: but type `db::ClockPairTable` is only usable at visibility `pub(self)`
+     --> crates/bicdb-core/src/db.rs:21653:1
+      |
+21653 | struct ClockPairTable {
+      | ^^^^^^^^^^^^^^^^^^^^^
+      = note: `#[warn(private_interfaces)]` on by default
+
+warning: type `db::PitrAuditBatch` is more private than the item `access_mutation::<impl db::BicDb>::pitr_audit_batch`
+    --> crates/bicdb-core/src/db/access_mutation.rs:2561:5
+     |
+2561 | /     pub(crate) fn pitr_audit_batch(
+2562 | |         &self,
+2563 | |         after_offset: Option<u64>,
+2564 | |         timestamp: i64,
+2565 | |         max_events: usize,
+2566 | |         max_bytes: usize,
+2567 | |     ) -> Result<PitrAuditBatch> {
+     | |_______________________________^ method `access_mutation::<impl db::BicDb>::pitr_audit_batch` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::PitrAuditBatch` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:7456:1
+     |
+7456 | struct PitrAuditBatch {
+     | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::claim_unique_keys`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:369:5
+     |
+ 369 | /     pub(crate) fn claim_unique_keys<'db>(
+ 370 | |         &'db self,
+ 371 | |         tx: &Transaction,
+ 372 | |         index_mutations_by_collection: &BTreeMap<String, Vec<IndexRecordMutation>>,
+ 373 | |     ) -> Result<UniqueClaimsGuard<'db>> {
+     | |_______________________________________^ method `commit_snapshot::<impl db::BicDb>::claim_unique_keys` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9536:1
+     |
+9536 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::UniqueClaimsGuard<'db>` is more private than the item `commit_snapshot::<impl db::BicDb>::claim_unique_keys`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:369:5
+     |
+ 369 | /     pub(crate) fn claim_unique_keys<'db>(
+ 370 | |         &'db self,
+ 371 | |         tx: &Transaction,
+ 372 | |         index_mutations_by_collection: &BTreeMap<String, Vec<IndexRecordMutation>>,
+ 373 | |     ) -> Result<UniqueClaimsGuard<'db>> {
+     | |_______________________________________^ method `commit_snapshot::<impl db::BicDb>::claim_unique_keys` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::UniqueClaimsGuard<'db>` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:3333:1
+     |
+3333 | struct UniqueClaimsGuard<'db> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::claim_exclusion_ranges`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:439:5
+     |
+ 439 | /     pub(crate) fn claim_exclusion_ranges<'db>(
+ 440 | |         &'db self,
+ 441 | |         tx: &Transaction,
+ 442 | |         index_mutations_by_collection: &BTreeMap<String, Vec<IndexRecordMutation>>,
+ 443 | |     ) -> Result<ExclusionClaimsGuard<'db>> {
+     | |__________________________________________^ method `commit_snapshot::<impl db::BicDb>::claim_exclusion_ranges` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9536:1
+     |
+9536 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::ExclusionClaimsGuard<'db>` is more private than the item `commit_snapshot::<impl db::BicDb>::claim_exclusion_ranges`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:439:5
+     |
+ 439 | /     pub(crate) fn claim_exclusion_ranges<'db>(
+ 440 | |         &'db self,
+ 441 | |         tx: &Transaction,
+ 442 | |         index_mutations_by_collection: &BTreeMap<String, Vec<IndexRecordMutation>>,
+ 443 | |     ) -> Result<ExclusionClaimsGuard<'db>> {
+     | |__________________________________________^ method `commit_snapshot::<impl db::BicDb>::claim_exclusion_ranges` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::ExclusionClaimsGuard<'db>` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:3351:1
+     |
+3351 | struct ExclusionClaimsGuard<'db> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::validate_exclusion_record_mutations`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:496:5
+     |
+ 496 | /     pub(crate) fn validate_exclusion_record_mutations(
+ 497 | |         &self,
+ 498 | |         definition: &IndexDefinition,
+ 499 | |         mutations: &[IndexRecordMutation],
+ 500 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::validate_exclusion_record_mutations` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9536:1
+     |
+9536 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::record_audit_events_for_commit`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:857:5
+     |
+ 857 | /     pub(crate) fn record_audit_events_for_commit(
+ 858 | |         &self,
+ 859 | |         index_mutations_by_collection: &BTreeMap<String, Vec<IndexRecordMutation>>,
+ 860 | |     ) -> Result<Vec<Event>> {
+     | |___________________________^ method `commit_snapshot::<impl db::BicDb>::record_audit_events_for_commit` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9536:1
+     |
+9536 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::sync_ops_for_commit`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:922:5
+     |
+ 922 | /     pub(crate) fn sync_ops_for_commit(
+ 923 | |         &self,
+ 924 | |         index_mutations_by_collection: &BTreeMap<String, Vec<IndexRecordMutation>>,
+ 925 | |     ) -> Result<Vec<SyncOp>> {
+     | |____________________________^ method `commit_snapshot::<impl db::BicDb>::sync_ops_for_commit` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9536:1
+     |
+9536 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::validate_index_mutations`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:994:5
+     |
+ 994 | /     pub(crate) fn validate_index_mutations(
+ 995 | |         &self,
+ 996 | |         index_mutations_by_collection: &BTreeMap<String, Vec<IndexRecordMutation>>,
+ 997 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::validate_index_mutations` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9536:1
+     |
+9536 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::validate_paged_btree_record_mutations`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1029:5
+     |
+1029 | /     pub(crate) fn validate_paged_btree_record_mutations(
+1030 | |         &self,
+1031 | |         definition: &IndexDefinition,
+1032 | |         mutations: &[IndexRecordMutation],
+1033 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::validate_paged_btree_record_mutations` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9536:1
+     |
+9536 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::apply_index_mutations`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1129:5
+     |
+1129 | /     pub(crate) fn apply_index_mutations(
+1130 | |         &self,
+1131 | |         index_mutations_by_collection: &BTreeMap<String, Vec<IndexRecordMutation>>,
+1132 | |     ) -> Result<Vec<Event>> {
+     | |___________________________^ method `commit_snapshot::<impl db::BicDb>::apply_index_mutations` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9536:1
+     |
+9536 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::apply_committed_record_writes`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1211:5
+     |
+1211 | /     pub(crate) fn apply_committed_record_writes(
+1212 | |         &self,
+1213 | |         commit_seq: u64,
+1214 | |         writes_by_collection: &BTreeMap<&str, Vec<&TxWrite>>,
+...    |
+1218 | |         deferred_page_commit: Option<&mut Option<bicdb_page::Lsn>>,
+1219 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::apply_committed_record_writes` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9536:1
+     |
+9536 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::LockedKeys` is more private than the item `commit_snapshot::<impl db::BicDb>::lock_tx_record`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1330:5
+     |
+1330 | /     pub(crate) fn lock_tx_record(
+1331 | |         &self,
+1332 | |         tx_id: TransactionId,
+1333 | |         collection: &str,
+1334 | |         record_id: &str,
+1335 | |         locked_keys: &Mutex<LockedKeys>,
+1336 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::lock_tx_record` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::LockedKeys` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:2363:1
+     |
+2363 | struct LockedKeys {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::LockedKeys` is more private than the item `commit_snapshot::<impl db::BicDb>::lock_tx_record_for_read_committed_update`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1353:5
+     |
+1353 | /     pub(crate) fn lock_tx_record_for_read_committed_update(
+1354 | |         &self,
+1355 | |         tx_id: TransactionId,
+1356 | |         collection: &str,
+1357 | |         record_id: &str,
+1358 | |         locked_keys: &Mutex<LockedKeys>,
+1359 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::lock_tx_record_for_read_committed_update` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::LockedKeys` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:2363:1
+     |
+2363 | struct LockedKeys {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::LockedKeys` is more private than the item `commit_snapshot::<impl db::BicDb>::lock_tx_record_for_read_committed_update_with_first_wait`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1369:5
+     |
+1369 | /     pub(crate) fn lock_tx_record_for_read_committed_update_with_first_wait(
+1370 | |         &self,
+1371 | |         tx_id: TransactionId,
+1372 | |         collection: &str,
+...    |
+1375 | |         first_wait: bool,
+1376 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::lock_tx_record_for_read_committed_update_with_first_wait` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::LockedKeys` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:2363:1
+     |
+2363 | struct LockedKeys {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::LockedKeys` is more private than the item `commit_snapshot::<impl db::BicDb>::lock_tx_first_record_for_reservation`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1407:5
+     |
+1407 | /     pub(crate) fn lock_tx_first_record_for_reservation(
+1408 | |         &self,
+1409 | |         tx_id: TransactionId,
+1410 | |         collection: &str,
+1411 | |         record_id: &str,
+1412 | |         locked_keys: &Mutex<LockedKeys>,
+1413 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::lock_tx_first_record_for_reservation` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::LockedKeys` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:2363:1
+     |
+2363 | struct LockedKeys {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::LockedKeys` is more private than the item `commit_snapshot::<impl db::BicDb>::lock_tx_record_with_attempts`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1426:5
+     |
+1426 | /     pub(crate) fn lock_tx_record_with_attempts(
+1427 | |         &self,
+1428 | |         tx_id: TransactionId,
+1429 | |         collection: &str,
+...    |
+1434 | |         locked_keys: &Mutex<LockedKeys>,
+1435 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::lock_tx_record_with_attempts` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::LockedKeys` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:2363:1
+     |
+2363 | struct LockedKeys {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::LockedKeys` is more private than the item `commit_snapshot::<impl db::BicDb>::lock_tx_record_cancellable`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1450:5
+     |
+1450 | /     pub(crate) fn lock_tx_record_cancellable(
+1451 | |         &self,
+1452 | |         tx_id: TransactionId,
+1453 | |         collection: &str,
+...    |
+1456 | |         cancellation: &crate::CancellationToken,
+1457 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::lock_tx_record_cancellable` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::LockedKeys` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:2363:1
+     |
+2363 | struct LockedKeys {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::PreparedMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::prepare_mutations`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1625:5
+     |
+1625 | /     pub(crate) fn prepare_mutations(
+1626 | |         &mut self,
+1627 | |         collection: &str,
+1628 | |         records: Vec<Record>,
+1629 | |     ) -> Result<Vec<PreparedMutation>> {
+     | |______________________________________^ method `commit_snapshot::<impl db::BicDb>::prepare_mutations` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::PreparedMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9240:1
+     |
+9240 | struct PreparedMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexMaintenanceCatalog` is more private than the item `commit_snapshot::<impl db::BicDb>::load_index_maintenance_catalog`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1773:5
+     |
+1773 |     pub(crate) fn load_index_maintenance_catalog(&self) -> Result<IndexMaintenanceCatalog> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `commit_snapshot::<impl db::BicDb>::load_index_maintenance_catalog` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexMaintenanceCatalog` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:5358:1
+     |
+5358 | struct IndexMaintenanceCatalog {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexMaintenanceCatalog` is more private than the item `commit_snapshot::<impl db::BicDb>::persist_index_maintenance_catalog`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1781:5
+     |
+1781 | /     pub(crate) fn persist_index_maintenance_catalog(
+1782 | |         &self,
+1783 | |         catalog: &IndexMaintenanceCatalog,
+1784 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::persist_index_maintenance_catalog` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexMaintenanceCatalog` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:5358:1
+     |
+5358 | struct IndexMaintenanceCatalog {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexMaintenanceStatus` is more private than the item `commit_snapshot::<impl db::BicDb>::persist_index_maintenance_status`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1799:5
+     |
+1799 | /     pub(crate) fn persist_index_maintenance_status(
+1800 | |         &self,
+1801 | |         definition: &IndexDefinition,
+1802 | |         status: IndexMaintenanceStatus,
+1803 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::persist_index_maintenance_status` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexMaintenanceStatus` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:5364:1
+     |
+5364 | struct IndexMaintenanceStatus {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexMaintenanceStatus` is more private than the item `commit_snapshot::<impl db::BicDb>::index_maintenance_status`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1809:5
+     |
+1809 | /     pub(crate) fn index_maintenance_status(
+1810 | |         &self,
+1811 | |         name: &str,
+1812 | |     ) -> Result<Option<IndexMaintenanceStatus>> {
+     | |_______________________________________________^ method `commit_snapshot::<impl db::BicDb>::index_maintenance_status` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexMaintenanceStatus` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:5364:1
+     |
+5364 | struct IndexMaintenanceStatus {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::validate_collection_index_mutations`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:2000:5
+     |
+2000 | /     pub(crate) fn validate_collection_index_mutations(
+2001 | |         &self,
+2002 | |         collection: &str,
+2003 | |         mutations: &[IndexRecordMutation],
+2004 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::validate_collection_index_mutations` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9536:1
+     |
+9536 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::apply_collection_index_mutations`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:2030:5
+     |
+2030 | /     pub(crate) fn apply_collection_index_mutations(
+2031 | |         &self,
+2032 | |         collection: &str,
+2033 | |         mutations: &mut [IndexRecordMutation],
+2034 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::apply_collection_index_mutations` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9536:1
+     |
+9536 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::PreparedMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::prepared_index_mutations`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:2069:5
+     |
+2069 | /     pub(crate) fn prepared_index_mutations(
+2070 | |         &self,
+2071 | |         collection: &str,
+2072 | |         prepared: &[PreparedMutation],
+2073 | |     ) -> Result<Vec<IndexRecordMutation>> {
+     | |_________________________________________^ method `commit_snapshot::<impl db::BicDb>::prepared_index_mutations` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::PreparedMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9240:1
+     |
+9240 | struct PreparedMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::prepared_index_mutations`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:2069:5
+     |
+2069 | /     pub(crate) fn prepared_index_mutations(
+2070 | |         &self,
+2071 | |         collection: &str,
+2072 | |         prepared: &[PreparedMutation],
+2073 | |     ) -> Result<Vec<IndexRecordMutation>> {
+     | |_________________________________________^ method `commit_snapshot::<impl db::BicDb>::prepared_index_mutations` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9536:1
+     |
+9536 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::delete_index_mutation`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:2120:5
+     |
+2120 | /     pub(crate) fn delete_index_mutation(
+2121 | |         &self,
+2122 | |         collection: &str,
+2123 | |         record_id: &str,
+2124 | |     ) -> Result<Option<IndexRecordMutation>> {
+     | |____________________________________________^ method `commit_snapshot::<impl db::BicDb>::delete_index_mutation` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9536:1
+     |
+9536 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::tx_index_mutations`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:2149:5
+     |
+2149 | /     pub(crate) fn tx_index_mutations(
+2150 | |         &self,
+2151 | |         collection: &str,
+2152 | |         writes: &[&TxWrite],
+2153 | |         writes_are_unique: bool,
+2154 | |     ) -> Result<Vec<IndexRecordMutation>> {
+     | |_________________________________________^ method `commit_snapshot::<impl db::BicDb>::tx_index_mutations` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9536:1
+     |
+9536 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::tx_index_mutations_by_collection`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:2280:5
+     |
+2280 | /     pub(crate) fn tx_index_mutations_by_collection(
+2281 | |         &self,
+2282 | |         writes_by_collection: &BTreeMap<&str, Vec<&TxWrite>>,
+2283 | |         writes_are_unique: bool,
+2284 | |     ) -> Result<BTreeMap<String, Vec<IndexRecordMutation>>> {
+     | |___________________________________________________________^ method `commit_snapshot::<impl db::BicDb>::tx_index_mutations_by_collection` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9536:1
+     |
+9536 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::fill_index_mutation_rowids`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:2301:5
+     |
+2301 | /     pub(crate) fn fill_index_mutation_rowids(
+2302 | |         &self,
+2303 | |         collection: &str,
+2304 | |         mutations: &mut [IndexRecordMutation],
+2305 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::fill_index_mutation_rowids` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9536:1
+     |
+9536 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::fill_all_index_mutation_rowids`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:2322:5
+     |
+2322 | /     pub(crate) fn fill_all_index_mutation_rowids(
+2323 | |         &self,
+2324 | |         index_mutations_by_collection: &mut BTreeMap<String, Vec<IndexRecordMutation>>,
+2325 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::fill_all_index_mutation_rowids` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9536:1
+     |
+9536 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::CompactionCheckpointPhase` is more private than the item `commit_snapshot::<impl db::BicDb>::write_compaction_checkpoint`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:2667:5
+     |
+2667 | /     pub(crate) fn write_compaction_checkpoint(
+2668 | |         &self,
+2669 | |         checkpoint_id: &str,
+2670 | |         phase: CompactionCheckpointPhase,
+...    |
+2674 | |         sync_log_bytes_before: u64,
+2675 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::write_compaction_checkpoint` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::CompactionCheckpointPhase` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:7385:1
+     |
+7385 | enum CompactionCheckpointPhase {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::CollectionState` is more private than the item `commit_snapshot::<impl db::BicDb>::collection_state`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:3129:5
+     |
+3129 | /     pub(crate) fn collection_state(
+3130 | |         &self,
+3131 | |         collection: &str,
+3132 | |     ) -> Result<RwLockReadGuard<'_, CollectionState>> {
+     | |_____________________________________________________^ method `commit_snapshot::<impl db::BicDb>::collection_state` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::CollectionState` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:4481:1
+     |
+4481 | struct CollectionState {
+     | ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::CollectionState` is more private than the item `commit_snapshot::<impl db::BicDb>::collection_state_mut`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:3144:5
+     |
+3144 | /     pub(crate) fn collection_state_mut(
+3145 | |         &mut self,
+3146 | |         collection: &str,
+3147 | |     ) -> Result<&mut CollectionState> {
+     | |_____________________________________^ method `commit_snapshot::<impl db::BicDb>::collection_state_mut` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::CollectionState` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:4481:1
+     |
+4481 | struct CollectionState {
+     | ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::CollectionState` is more private than the item `commit_snapshot::<impl db::BicDb>::collection_state_write`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:3159:5
+     |
+3159 | /     pub(crate) fn collection_state_write(
+3160 | |         &self,
+3161 | |         collection: &str,
+3162 | |     ) -> Result<RwLockWriteGuard<'_, CollectionState>> {
+     | |______________________________________________________^ method `commit_snapshot::<impl db::BicDb>::collection_state_write` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::CollectionState` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:4481:1
+     |
+4481 | struct CollectionState {
+     | ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::AuditMergeReport` is more private than the item `commit_snapshot::<impl db::BicDb>::merge_record_audit_events`
+     --> crates/bicdb-core/src/db/commit_snapshot.rs:3215:5
+      |
+ 3215 | /     pub(crate) fn merge_record_audit_events(
+ 3216 | |         &mut self,
+ 3217 | |         incoming: Vec<Event>,
+ 3218 | |     ) -> Result<AuditMergeReport> {
+      | |_________________________________^ method `commit_snapshot::<impl db::BicDb>::merge_record_audit_events` is reachable at visibility `pub(crate)`
+      |
+note: but type `db::AuditMergeReport` is only usable at visibility `pub(self)`
+     --> crates/bicdb-core/src/db.rs:21701:1
+      |
+21701 | struct AuditMergeReport {
+      | ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::PagedDurableIndexDef` is more private than the item `db::fts_build::<impl db::BicDb>::backfill_full_text_direct_blocks`
+     --> crates/bicdb-core/src/db/fts_build.rs:1543:5
+      |
+ 1543 | /     pub(crate) fn backfill_full_text_direct_blocks(
+ 1544 | |         &self,
+ 1545 | |         paged: &Arc<crate::paged_collection::PagedRecords>,
+ 1546 | |         definition: &IndexDefinition,
+ 1547 | |         def: &PagedDurableIndexDef,
+ 1548 | |     ) -> Result<bool> {
+      | |_____________________^ method `db::fts_build::<impl db::BicDb>::backfill_full_text_direct_blocks` is reachable at visibility `pub(crate)`
+      |
+note: but type `db::PagedDurableIndexDef` is only usable at visibility `pub(self)`
+     --> crates/bicdb-core/src/db.rs:24990:1
+      |
+24990 | struct PagedDurableIndexDef {
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::PagedDurableIndexDef` is more private than the item `db::fts_build::<impl db::BicDb>::prepare_and_complete_external_full_text_build`
+     --> crates/bicdb-core/src/db/fts_build.rs:1848:5
+      |
+ 1848 | /     pub(crate) fn prepare_and_complete_external_full_text_build(
+ 1849 | |         &self,
+ 1850 | |         paged: &Arc<crate::paged_collection::PagedRecords>,
+ 1851 | |         definition: &IndexDefinition,
+ 1852 | |         def: &PagedDurableIndexDef,
+ 1853 | |         step_budget_documents: Option<u64>,
+ 1854 | |     ) -> Result<ExternalFullTextBuildOutcome> {
+      | |_____________________________________________^ method `db::fts_build::<impl db::BicDb>::prepare_and_complete_external_full_text_build` is reachable at visibility `pub(crate)`
+      |
+note: but type `db::PagedDurableIndexDef` is only usable at visibility `pub(self)`
+     --> crates/bicdb-core/src/db.rs:24990:1
+      |
+24990 | struct PagedDurableIndexDef {
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::ExternalFullTextBuildOutcome` is more private than the item `db::fts_build::<impl db::BicDb>::prepare_and_complete_external_full_text_build`
+     --> crates/bicdb-core/src/db/fts_build.rs:1848:5
+      |
+ 1848 | /     pub(crate) fn prepare_and_complete_external_full_text_build(
+ 1849 | |         &self,
+ 1850 | |         paged: &Arc<crate::paged_collection::PagedRecords>,
+ 1851 | |         definition: &IndexDefinition,
+ 1852 | |         def: &PagedDurableIndexDef,
+ 1853 | |         step_budget_documents: Option<u64>,
+ 1854 | |     ) -> Result<ExternalFullTextBuildOutcome> {
+      | |_____________________________________________^ method `db::fts_build::<impl db::BicDb>::prepare_and_complete_external_full_text_build` is reachable at visibility `pub(crate)`
+      |
+note: but type `db::ExternalFullTextBuildOutcome` is only usable at visibility `pub(self)`
+     --> crates/bicdb-core/src/db.rs:34607:1
+      |
+34607 | enum ExternalFullTextBuildOutcome {
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::FullTextBm25Mode` is more private than the item `fts_query::<impl db::BicDb>::full_text_bm25_top_k_impl`
+    --> crates/bicdb-core/src/db/fts_query.rs:906:5
+     |
+ 906 | /     pub(crate) fn full_text_bm25_top_k_impl(
+ 907 | |         &self,
+ 908 | |         name: &str,
+ 909 | |         terms: &[&str],
+...    |
+ 914 | |         cancellation: Option<&CancellationToken>,
+ 915 | |     ) -> Result<Option<Vec<crate::fts_postings::FullTextRankedPosting>>> {
+     | |________________________________________________________________________^ method `fts_query::<impl db::BicDb>::full_text_bm25_top_k_impl` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::FullTextBm25Mode` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:1242:1
+     |
+1242 | enum FullTextBm25Mode {
+     | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::RouteAlgorithm` is more private than the item `fts_query::<impl db::BicDb>::emit_route_path_computed`
+     --> crates/bicdb-core/src/db/fts_query.rs:3247:5
+      |
+ 3247 | /     pub(crate) fn emit_route_path_computed(
+ 3248 | |         &mut self,
+ 3249 | |         operation: &str,
+ 3250 | |         algorithm: RouteAlgorithm,
+ 3251 | |         path: &RoutePath,
+ 3252 | |     ) -> Result<()> {
+      | |___________________^ method `fts_query::<impl db::BicDb>::emit_route_path_computed` is reachable at visibility `pub(crate)`
+      |
+note: but type `db::RouteAlgorithm` is only usable at visibility `pub(self)`
+     --> crates/bicdb-core/src/db.rs:26281:1
+      |
+26281 | enum RouteAlgorithm {
+      | ^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::RouteAlgorithm` is more private than the item `fts_query::<impl db::BicDb>::shortest_path_with_algorithm`
+     --> crates/bicdb-core/src/db/fts_query.rs:3274:5
+      |
+ 3274 | /     pub(crate) fn shortest_path_with_algorithm(
+ 3275 | |         &self,
+ 3276 | |         graph: &str,
+ 3277 | |         start: &Geometry,
+ 3278 | |         end: &Geometry,
+ 3279 | |         algorithm: RouteAlgorithm,
+ 3280 | |     ) -> Result<RoutePath> {
+      | |__________________________^ method `fts_query::<impl db::BicDb>::shortest_path_with_algorithm` is reachable at visibility `pub(crate)`
+      |
+note: but type `db::RouteAlgorithm` is only usable at visibility `pub(self)`
+     --> crates/bicdb-core/src/db.rs:26281:1
+      |
+26281 | enum RouteAlgorithm {
+      | ^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::RouteDistanceMatrix` is more private than the item `fts_query::<impl db::BicDb>::route_distance_matrix`
+     --> crates/bicdb-core/src/db/fts_query.rs:3305:5
+      |
+ 3305 | /     pub(crate) fn route_distance_matrix(
+ 3306 | |         &self,
+ 3307 | |         graph: &str,
+ 3308 | |         stops: &[Geometry],
+ 3309 | |     ) -> Result<RouteDistanceMatrix> {
+      | |____________________________________^ method `fts_query::<impl db::BicDb>::route_distance_matrix` is reachable at visibility `pub(crate)`
+      |
+note: but type `db::RouteDistanceMatrix` is only usable at visibility `pub(self)`
+     --> crates/bicdb-core/src/db.rs:26287:1
+      |
+26287 | struct RouteDistanceMatrix {
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::RoadGraph` is more private than the item `fts_query::<impl db::BicDb>::load_road_graph`
+     --> crates/bicdb-core/src/db/fts_query.rs:3364:5
+      |
+ 3364 |     pub(crate) fn load_road_graph(&self, graph: &str) -> Result<RoadGraph> {
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `fts_query::<impl db::BicDb>::load_road_graph` is reachable at visibility `pub(crate)`
+      |
+note: but type `db::RoadGraph` is only usable at visibility `pub(self)`
+     --> crates/bicdb-core/src/db.rs:26293:1
+      |
+26293 | struct RoadGraph {
+      | ^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexState` is more private than the item `fts_query::<impl db::BicDb>::packed_spatial_envelope_hits`
+    --> crates/bicdb-core/src/db/fts_query.rs:3584:5
+     |
+3584 | /     pub(crate) fn packed_spatial_envelope_hits(
+3585 | |         &self,
+3586 | |         state: &IndexState,
+3587 | |         envelope: &AABB<[f64; 2]>,
+3588 | |     ) -> Result<Vec<SpatialIndexEntry>> {
+     | |_______________________________________^ method `fts_query::<impl db::BicDb>::packed_spatial_envelope_hits` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexState` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:6378:1
+     |
+6378 | struct IndexState {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::SpatialIndexEntry` is more private than the item `fts_query::<impl db::BicDb>::packed_spatial_envelope_hits`
+    --> crates/bicdb-core/src/db/fts_query.rs:3584:5
+     |
+3584 | /     pub(crate) fn packed_spatial_envelope_hits(
+3585 | |         &self,
+3586 | |         state: &IndexState,
+3587 | |         envelope: &AABB<[f64; 2]>,
+3588 | |     ) -> Result<Vec<SpatialIndexEntry>> {
+     | |_______________________________________^ method `fts_query::<impl db::BicDb>::packed_spatial_envelope_hits` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::SpatialIndexEntry` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:6602:1
+     |
+6602 | struct SpatialIndexEntry {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexState` is more private than the item `fts_query::<impl db::BicDb>::packed_spatial_contains`
+    --> crates/bicdb-core/src/db/fts_query.rs:3625:5
+     |
+3625 | /     pub(crate) fn packed_spatial_contains(
+3626 | |         &self,
+3627 | |         state: &IndexState,
+3628 | |         entry: &SpatialIndexEntry,
+3629 | |     ) -> Result<bool> {
+     | |_____________________^ method `fts_query::<impl db::BicDb>::packed_spatial_contains` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexState` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:6378:1
+     |
+6378 | struct IndexState {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::SpatialIndexEntry` is more private than the item `fts_query::<impl db::BicDb>::packed_spatial_contains`
+    --> crates/bicdb-core/src/db/fts_query.rs:3625:5
+     |
+3625 | /     pub(crate) fn packed_spatial_contains(
+3626 | |         &self,
+3627 | |         state: &IndexState,
+3628 | |         entry: &SpatialIndexEntry,
+3629 | |     ) -> Result<bool> {
+     | |_____________________^ method `fts_query::<impl db::BicDb>::packed_spatial_contains` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::SpatialIndexEntry` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:6602:1
+     |
+6602 | struct SpatialIndexEntry {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexState` is more private than the item `fts_query::<impl db::BicDb>::packed_spatial_live_count`
+    --> crates/bicdb-core/src/db/fts_query.rs:3641:5
+     |
+3641 |     pub(crate) fn packed_spatial_live_count(&self, state: &IndexState) -> Result<usize> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `fts_query::<impl db::BicDb>::packed_spatial_live_count` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexState` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:6378:1
+     |
+6378 | struct IndexState {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexState` is more private than the item `fts_query::<impl db::BicDb>::spatial_candidates_in_envelope`
+    --> crates/bicdb-core/src/db/fts_query.rs:3677:5
+     |
+3677 | /     pub(crate) fn spatial_candidates_in_envelope(
+3678 | |         &self,
+3679 | |         state: &IndexState,
+3680 | |         envelope: &AABB<[f64; 2]>,
+3681 | |     ) -> Result<Vec<SpatialIndexEntry>> {
+     | |_______________________________________^ method `fts_query::<impl db::BicDb>::spatial_candidates_in_envelope` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexState` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:6378:1
+     |
+6378 | struct IndexState {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::SpatialIndexEntry` is more private than the item `fts_query::<impl db::BicDb>::spatial_candidates_in_envelope`
+    --> crates/bicdb-core/src/db/fts_query.rs:3677:5
+     |
+3677 | /     pub(crate) fn spatial_candidates_in_envelope(
+3678 | |         &self,
+3679 | |         state: &IndexState,
+3680 | |         envelope: &AABB<[f64; 2]>,
+3681 | |     ) -> Result<Vec<SpatialIndexEntry>> {
+     | |_______________________________________^ method `fts_query::<impl db::BicDb>::spatial_candidates_in_envelope` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::SpatialIndexEntry` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:6602:1
+     |
+6602 | struct SpatialIndexEntry {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexState` is more private than the item `fts_query::<impl db::BicDb>::spatial_index_state`
+    --> crates/bicdb-core/src/db/fts_query.rs:3697:5
+     |
+3697 | /     pub(crate) fn spatial_index_state(
+3698 | |         &self,
+3699 | |         name: &str,
+3700 | |     ) -> Result<RwLockReadGuard<'_, IndexState>> {
+     | |________________________________________________^ method `fts_query::<impl db::BicDb>::spatial_index_state` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexState` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:6378:1
+     |
+6378 | struct IndexState {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexState` is more private than the item `index_build::<impl db::BicDb>::index_state_for_build`
+    --> crates/bicdb-core/src/db/index_build.rs:1024:5
+     |
+1024 |     pub(crate) fn index_state_for_build(&self, definition: IndexDefinition) -> Result<IndexState> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `index_build::<impl db::BicDb>::index_state_for_build` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexState` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:6378:1
+     |
+6378 | struct IndexState {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::PitrAuditAction` is more private than the item `pitr_maintenance::<impl db::BicDb>::pitr_apply_actions`
+    --> crates/bicdb-core/src/db/pitr_maintenance.rs:41:5
+     |
+  41 |     pub(crate) fn pitr_apply_actions(&self, actions: Vec<PitrAuditAction>) -> Result<usize> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `pitr_maintenance::<impl db::BicDb>::pitr_apply_actions` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::PitrAuditAction` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:7450:1
+     |
+7450 | struct PitrAuditAction {
+     | ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::CompactionCheckpointPhase` is more private than the item `spatial_paged::<impl db::BicDb>::write_incremental_compatibility_checkpoint`
+    --> crates/bicdb-core/src/db/spatial_paged.rs:886:5
+     |
+ 886 | /     pub(crate) fn write_incremental_compatibility_checkpoint(
+ 887 | |         &self,
+ 888 | |         state: &IncrementalCompactionState,
+ 889 | |         phase: CompactionCheckpointPhase,
+ 890 | |     ) -> Result<()> {
+     | |___________________^ method `spatial_paged::<impl db::BicDb>::write_incremental_compatibility_checkpoint` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::CompactionCheckpointPhase` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:7385:1
+     |
+7385 | enum CompactionCheckpointPhase {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::PagedDurableIndexDef` is more private than the item `spatial_paged::<impl db::BicDb>::paged_durable_index_defs`
+     --> crates/bicdb-core/src/db/spatial_paged.rs:1436:5
+      |
+ 1436 | /     pub(crate) fn paged_durable_index_defs(
+ 1437 | |         &self,
+ 1438 | |         collection: &str,
+ 1439 | |     ) -> Result<Vec<PagedDurableIndexDef>> {
+      | |__________________________________________^ method `spatial_paged::<impl db::BicDb>::paged_durable_index_defs` is reachable at visibility `pub(crate)`
+      |
+note: but type `db::PagedDurableIndexDef` is only usable at visibility `pub(self)`
+     --> crates/bicdb-core/src/db.rs:24990:1
+      |
+24990 | struct PagedDurableIndexDef {
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::PagedApplyCtx` is more private than the item `spatial_paged::<impl db::BicDb>::paged_apply_ctx`
+    --> crates/bicdb-core/src/db/spatial_paged.rs:1572:5
+     |
+1572 | /     pub(crate) fn paged_apply_ctx(
+1573 | |         &self,
+1574 | |         collection: &str,
+1575 | |         xid: bicdb_page::Xid,
+1576 | |     ) -> Option<PagedApplyCtx> {
+     | |______________________________^ method `spatial_paged::<impl db::BicDb>::paged_apply_ctx` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::PagedApplyCtx` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:1306:1
+     |
+1306 | struct PagedApplyCtx {
+     | ^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_consensus::MetadataRecoveryRoleRequest` is more private than the item `distribution_metadata_read_provider::MetadataReadProbeTransport::acquire_recovery_role`
+   --> crates/bicdb-core/src/distribution_metadata_read_provider.rs:30:5
+    |
+ 30 | /     fn acquire_recovery_role(
+ 31 | |         &self,
+ 32 | |         _destination: &ClusterNodeId,
+ 33 | |         _request: MetadataRecoveryRoleRequest,
+ 34 | |         _parent: &CancellationToken,
+ 35 | |     ) -> Result<MetadataRecoveryRoleObservation> {
+    | |________________________________________________^ method `distribution_metadata_read_provider::MetadataReadProbeTransport::acquire_recovery_role` is reachable at visibility `pub`
+    |
+note: but type `distribution_consensus::MetadataRecoveryRoleRequest` is only usable at visibility `pub(crate)`
+   --> crates/bicdb-core/src/distribution_consensus.rs:134:1
+    |
+134 | pub(crate) struct MetadataRecoveryRoleRequest {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_consensus::MetadataRecoveryRoleObservation` is more private than the item `distribution_metadata_read_provider::MetadataReadProbeTransport::acquire_recovery_role`
+   --> crates/bicdb-core/src/distribution_metadata_read_provider.rs:30:5
+    |
+ 30 | /     fn acquire_recovery_role(
+ 31 | |         &self,
+ 32 | |         _destination: &ClusterNodeId,
+ 33 | |         _request: MetadataRecoveryRoleRequest,
+ 34 | |         _parent: &CancellationToken,
+ 35 | |     ) -> Result<MetadataRecoveryRoleObservation> {
+    | |________________________________________________^ method `distribution_metadata_read_provider::MetadataReadProbeTransport::acquire_recovery_role` is reachable at visibility `pub`
+    |
+note: but type `distribution_consensus::MetadataRecoveryRoleObservation` is only usable at visibility `pub(crate)`
+   --> crates/bicdb-core/src/distribution_consensus.rs:388:1
+    |
+388 | pub(crate) struct MetadataRecoveryRoleObservation {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_range_recovery::native_ready::NativeReadyRequest` is more private than the item `distribution_range_consensus::RangeWriteTransport::prepare_native_ready_observation`
+    --> crates/bicdb-core/src/distribution_range_consensus.rs:1529:5
+     |
+1529 | /     fn prepare_native_ready_observation(
+1530 | |         &self,
+1531 | |         destination: &ClusterNodeId,
+1532 | |         request: &crate::distribution_range_recovery::NativeReadyRequest,
+1533 | |         parent: &CancellationToken,
+1534 | |     ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+     | |___________________________________________________________________________^ method `distribution_range_consensus::RangeWriteTransport::prepare_native_ready_observation` is reachable at visibility `pub`
+     |
+note: but type `distribution_range_recovery::native_ready::NativeReadyRequest` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_range_recovery/native_ready.rs:14:1
+     |
+  14 | pub(crate) struct NativeReadyRequest {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_range_recovery::native_ready::NativeReadyObservation` is more private than the item `distribution_range_consensus::RangeWriteTransport::prepare_native_ready_observation`
+    --> crates/bicdb-core/src/distribution_range_consensus.rs:1529:5
+     |
+1529 | /     fn prepare_native_ready_observation(
+1530 | |         &self,
+1531 | |         destination: &ClusterNodeId,
+1532 | |         request: &crate::distribution_range_recovery::NativeReadyRequest,
+1533 | |         parent: &CancellationToken,
+1534 | |     ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+     | |___________________________________________________________________________^ method `distribution_range_consensus::RangeWriteTransport::prepare_native_ready_observation` is reachable at visibility `pub`
+     |
+note: but type `distribution_range_recovery::native_ready::NativeReadyObservation` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_range_recovery/native_ready.rs:190:1
+     |
+ 190 | pub(crate) struct NativeReadyObservation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_range_recovery::native_ready::NativeReadyRequest` is more private than the item `distribution_range_consensus::RangeWriteTransport::observe_native_ready_observation`
+    --> crates/bicdb-core/src/distribution_range_consensus.rs:1540:5
+     |
+1540 | /     fn observe_native_ready_observation(
+1541 | |         &self,
+1542 | |         destination: &ClusterNodeId,
+1543 | |         request: &crate::distribution_range_recovery::NativeReadyRequest,
+1544 | |         parent: &CancellationToken,
+1545 | |     ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+     | |___________________________________________________________________________^ method `distribution_range_consensus::RangeWriteTransport::observe_native_ready_observation` is reachable at visibility `pub`
+     |
+note: but type `distribution_range_recovery::native_ready::NativeReadyRequest` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_range_recovery/native_ready.rs:14:1
+     |
+  14 | pub(crate) struct NativeReadyRequest {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_range_recovery::native_ready::NativeReadyObservation` is more private than the item `distribution_range_consensus::RangeWriteTransport::observe_native_ready_observation`
+    --> crates/bicdb-core/src/distribution_range_consensus.rs:1540:5
+     |
+1540 | /     fn observe_native_ready_observation(
+1541 | |         &self,
+1542 | |         destination: &ClusterNodeId,
+1543 | |         request: &crate::distribution_range_recovery::NativeReadyRequest,
+1544 | |         parent: &CancellationToken,
+1545 | |     ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+     | |___________________________________________________________________________^ method `distribution_range_consensus::RangeWriteTransport::observe_native_ready_observation` is reachable at visibility `pub`
+     |
+note: but type `distribution_range_recovery::native_ready::NativeReadyObservation` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_range_recovery/native_ready.rs:190:1
+     |
+ 190 | pub(crate) struct NativeReadyObservation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_range_recovery::RecoveryHistoricalCommandRequest` is more private than the item `distribution_range_consensus::RangeWriteTransport::recovery_historical_command_observation`
+    --> crates/bicdb-core/src/distribution_range_consensus.rs:1552:5
+     |
+1552 | /     fn recovery_historical_command_observation(
+1553 | |         &self,
+1554 | |         destination: &ClusterNodeId,
+1555 | |         request: &crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+1556 | |         apply: bool,
+1557 | |         parent: &CancellationToken,
+1558 | |     ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+     | |_______________________________________________________________________________^ method `distribution_range_consensus::RangeWriteTransport::recovery_historical_command_observation` is reachable at visibility `pub`
+     |
+note: but type `distribution_range_recovery::RecoveryHistoricalCommandRequest` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_range_recovery.rs:75:1
+     |
+  75 | pub(crate) struct RecoveryHistoricalCommandRequest {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_range_recovery::RecoveryHistoryObservation` is more private than the item `distribution_range_consensus::RangeWriteTransport::recovery_historical_command_observation`
+    --> crates/bicdb-core/src/distribution_range_consensus.rs:1552:5
+     |
+1552 | /     fn recovery_historical_command_observation(
+1553 | |         &self,
+1554 | |         destination: &ClusterNodeId,
+1555 | |         request: &crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+1556 | |         apply: bool,
+1557 | |         parent: &CancellationToken,
+1558 | |     ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+     | |_______________________________________________________________________________^ method `distribution_range_consensus::RangeWriteTransport::recovery_historical_command_observation` is reachable at visibility `pub`
+     |
+note: but type `distribution_range_recovery::RecoveryHistoryObservation` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_range_recovery.rs:134:1
+     |
+ 134 | pub(crate) struct RecoveryHistoryObservation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_range_recovery::RecoveryFencedProbeRequest` is more private than the item `distribution_range_consensus::RangeWriteTransport::recovery_fenced_history_observation`
+    --> crates/bicdb-core/src/distribution_range_consensus.rs:1575:5
+     |
+1575 | /     fn recovery_fenced_history_observation(
+1576 | |         &self,
+1577 | |         destination: &ClusterNodeId,
+1578 | |         request: &crate::distribution_range_recovery::RecoveryFencedProbeRequest,
+1579 | |         parent: &CancellationToken,
+1580 | |     ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+     | |_______________________________________________________________________________^ method `distribution_range_consensus::RangeWriteTransport::recovery_fenced_history_observation` is reachable at visibility `pub`
+     |
+note: but type `distribution_range_recovery::RecoveryFencedProbeRequest` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_range_recovery.rs:65:1
+     |
+  65 | pub(crate) struct RecoveryFencedProbeRequest {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_range_recovery::RecoveryHistoryObservation` is more private than the item `distribution_range_consensus::RangeWriteTransport::recovery_fenced_history_observation`
+    --> crates/bicdb-core/src/distribution_range_consensus.rs:1575:5
+     |
+1575 | /     fn recovery_fenced_history_observation(
+1576 | |         &self,
+1577 | |         destination: &ClusterNodeId,
+1578 | |         request: &crate::distribution_range_recovery::RecoveryFencedProbeRequest,
+1579 | |         parent: &CancellationToken,
+1580 | |     ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+     | |_______________________________________________________________________________^ method `distribution_range_consensus::RangeWriteTransport::recovery_fenced_history_observation` is reachable at visibility `pub`
+     |
+note: but type `distribution_range_recovery::RecoveryHistoryObservation` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_range_recovery.rs:134:1
+     |
+ 134 | pub(crate) struct RecoveryHistoryObservation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_range_recovery::RecoveryEpochFenceRequest` is more private than the item `distribution_range_consensus::RangeWriteTransport::recovery_epoch_fence_observation`
+    --> crates/bicdb-core/src/distribution_range_consensus.rs:1586:5
+     |
+1586 | /     fn recovery_epoch_fence_observation(
+1587 | |         &self,
+1588 | |         destination: &ClusterNodeId,
+1589 | |         request: &crate::distribution_range_recovery::RecoveryEpochFenceRequest,
+1590 | |         parent: &CancellationToken,
+1591 | |     ) -> Result<crate::distribution_range_recovery::RecoveryFenceObservation> {
+     | |_____________________________________________________________________________^ method `distribution_range_consensus::RangeWriteTransport::recovery_epoch_fence_observation` is reachable at visibility `pub`
+     |
+note: but type `distribution_range_recovery::RecoveryEpochFenceRequest` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_range_recovery.rs:58:1
+     |
+  58 | pub(crate) struct RecoveryEpochFenceRequest {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_range_recovery::RecoveryFenceObservation` is more private than the item `distribution_range_consensus::RangeWriteTransport::recovery_epoch_fence_observation`
+    --> crates/bicdb-core/src/distribution_range_consensus.rs:1586:5
+     |
+1586 | /     fn recovery_epoch_fence_observation(
+1587 | |         &self,
+1588 | |         destination: &ClusterNodeId,
+1589 | |         request: &crate::distribution_range_recovery::RecoveryEpochFenceRequest,
+1590 | |         parent: &CancellationToken,
+1591 | |     ) -> Result<crate::distribution_range_recovery::RecoveryFenceObservation> {
+     | |_____________________________________________________________________________^ method `distribution_range_consensus::RangeWriteTransport::recovery_epoch_fence_observation` is reachable at visibility `pub`
+     |
+note: but type `distribution_range_recovery::RecoveryFenceObservation` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_range_recovery.rs:261:1
+     |
+ 261 | pub(crate) struct RecoveryFenceObservation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_consensus::MetadataRecoveryRoleRequest` is more private than the item `<distribution_transport::TcpClusterRelocationTransport as distribution_metadata_read_provider::MetadataReadProbeTransport>::acquire_recovery_role`
+    --> crates/bicdb-core/src/distribution_transport.rs:2696:5
+     |
+2696 | /     fn acquire_recovery_role(
+2697 | |         &self,
+2698 | |         destination: &ClusterNodeId,
+2699 | |         request: MetadataRecoveryRoleRequest,
+2700 | |         parent: &CancellationToken,
+2701 | |     ) -> Result<MetadataRecoveryRoleObservation> {
+     | |________________________________________________^ method `<distribution_transport::TcpClusterRelocationTransport as distribution_metadata_read_provider::MetadataReadProbeTransport>::acquire_recovery_role` is reachable at visibility `pub`
+     |
+note: but type `distribution_consensus::MetadataRecoveryRoleRequest` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_consensus.rs:134:1
+     |
+ 134 | pub(crate) struct MetadataRecoveryRoleRequest {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_consensus::MetadataRecoveryRoleObservation` is more private than the item `<distribution_transport::TcpClusterRelocationTransport as distribution_metadata_read_provider::MetadataReadProbeTransport>::acquire_recovery_role`
+    --> crates/bicdb-core/src/distribution_transport.rs:2696:5
+     |
+2696 | /     fn acquire_recovery_role(
+2697 | |         &self,
+2698 | |         destination: &ClusterNodeId,
+2699 | |         request: MetadataRecoveryRoleRequest,
+2700 | |         parent: &CancellationToken,
+2701 | |     ) -> Result<MetadataRecoveryRoleObservation> {
+     | |________________________________________________^ method `<distribution_transport::TcpClusterRelocationTransport as distribution_metadata_read_provider::MetadataReadProbeTransport>::acquire_recovery_role` is reachable at visibility `pub`
+     |
+note: but type `distribution_consensus::MetadataRecoveryRoleObservation` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_consensus.rs:388:1
+     |
+ 388 | pub(crate) struct MetadataRecoveryRoleObservation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_range_recovery::native_ready::NativeReadyRequest` is more private than the item `<distribution_transport::TcpClusterRelocationTransport as distribution_range_consensus::RangeWriteTransport>::prepare_native_ready_observation`
+    --> crates/bicdb-core/src/distribution_transport.rs:3861:5
+     |
+3861 | /     fn prepare_native_ready_observation(
+3862 | |         &self,
+3863 | |         destination: &ClusterNodeId,
+3864 | |         request: &crate::distribution_range_recovery::NativeReadyRequest,
+3865 | |         parent: &CancellationToken,
+3866 | |     ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+     | |___________________________________________________________________________^ method `<distribution_transport::TcpClusterRelocationTransport as distribution_range_consensus::RangeWriteTransport>::prepare_native_ready_observation` is reachable at visibility `pub`
+     |
+note: but type `distribution_range_recovery::native_ready::NativeReadyRequest` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_range_recovery/native_ready.rs:14:1
+     |
+  14 | pub(crate) struct NativeReadyRequest {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_range_recovery::native_ready::NativeReadyObservation` is more private than the item `<distribution_transport::TcpClusterRelocationTransport as distribution_range_consensus::RangeWriteTransport>::prepare_native_ready_observation`
+    --> crates/bicdb-core/src/distribution_transport.rs:3861:5
+     |
+3861 | /     fn prepare_native_ready_observation(
+3862 | |         &self,
+3863 | |         destination: &ClusterNodeId,
+3864 | |         request: &crate::distribution_range_recovery::NativeReadyRequest,
+3865 | |         parent: &CancellationToken,
+3866 | |     ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+     | |___________________________________________________________________________^ method `<distribution_transport::TcpClusterRelocationTransport as distribution_range_consensus::RangeWriteTransport>::prepare_native_ready_observation` is reachable at visibility `pub`
+     |
+note: but type `distribution_range_recovery::native_ready::NativeReadyObservation` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_range_recovery/native_ready.rs:190:1
+     |
+ 190 | pub(crate) struct NativeReadyObservation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_range_recovery::native_ready::NativeReadyRequest` is more private than the item `<distribution_transport::TcpClusterRelocationTransport as distribution_range_consensus::RangeWriteTransport>::observe_native_ready_observation`
+    --> crates/bicdb-core/src/distribution_transport.rs:3869:5
+     |
+3869 | /     fn observe_native_ready_observation(
+3870 | |         &self,
+3871 | |         destination: &ClusterNodeId,
+3872 | |         request: &crate::distribution_range_recovery::NativeReadyRequest,
+3873 | |         parent: &CancellationToken,
+3874 | |     ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+     | |___________________________________________________________________________^ method `<distribution_transport::TcpClusterRelocationTransport as distribution_range_consensus::RangeWriteTransport>::observe_native_ready_observation` is reachable at visibility `pub`
+     |
+note: but type `distribution_range_recovery::native_ready::NativeReadyRequest` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_range_recovery/native_ready.rs:14:1
+     |
+  14 | pub(crate) struct NativeReadyRequest {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_range_recovery::native_ready::NativeReadyObservation` is more private than the item `<distribution_transport::TcpClusterRelocationTransport as distribution_range_consensus::RangeWriteTransport>::observe_native_ready_observation`
+    --> crates/bicdb-core/src/distribution_transport.rs:3869:5
+     |
+3869 | /     fn observe_native_ready_observation(
+3870 | |         &self,
+3871 | |         destination: &ClusterNodeId,
+3872 | |         request: &crate::distribution_range_recovery::NativeReadyRequest,
+3873 | |         parent: &CancellationToken,
+3874 | |     ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+     | |___________________________________________________________________________^ method `<distribution_transport::TcpClusterRelocationTransport as distribution_range_consensus::RangeWriteTransport>::observe_native_ready_observation` is reachable at visibility `pub`
+     |
+note: but type `distribution_range_recovery::native_ready::NativeReadyObservation` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_range_recovery/native_ready.rs:190:1
+     |
+ 190 | pub(crate) struct NativeReadyObservation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_range_recovery::RecoveryHistoricalCommandRequest` is more private than the item `<distribution_transport::TcpClusterRelocationTransport as distribution_range_consensus::RangeWriteTransport>::recovery_historical_command_observation`
+    --> crates/bicdb-core/src/distribution_transport.rs:3878:5
+     |
+3878 | /     fn recovery_historical_command_observation(
+3879 | |         &self,
+3880 | |         destination: &ClusterNodeId,
+3881 | |         request: &crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+3882 | |         apply: bool,
+3883 | |         parent: &CancellationToken,
+3884 | |     ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+     | |_______________________________________________________________________________^ method `<distribution_transport::TcpClusterRelocationTransport as distribution_range_consensus::RangeWriteTransport>::recovery_historical_command_observation` is reachable at visibility `pub`
+     |
+note: but type `distribution_range_recovery::RecoveryHistoricalCommandRequest` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_range_recovery.rs:75:1
+     |
+  75 | pub(crate) struct RecoveryHistoricalCommandRequest {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_range_recovery::RecoveryHistoryObservation` is more private than the item `<distribution_transport::TcpClusterRelocationTransport as distribution_range_consensus::RangeWriteTransport>::recovery_historical_command_observation`
+    --> crates/bicdb-core/src/distribution_transport.rs:3878:5
+     |
+3878 | /     fn recovery_historical_command_observation(
+3879 | |         &self,
+3880 | |         destination: &ClusterNodeId,
+3881 | |         request: &crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+3882 | |         apply: bool,
+3883 | |         parent: &CancellationToken,
+3884 | |     ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+     | |_______________________________________________________________________________^ method `<distribution_transport::TcpClusterRelocationTransport as distribution_range_consensus::RangeWriteTransport>::recovery_historical_command_observation` is reachable at visibility `pub`
+     |
+note: but type `distribution_range_recovery::RecoveryHistoryObservation` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_range_recovery.rs:134:1
+     |
+ 134 | pub(crate) struct RecoveryHistoryObservation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_range_recovery::RecoveryFencedProbeRequest` is more private than the item `<distribution_transport::TcpClusterRelocationTransport as distribution_range_consensus::RangeWriteTransport>::recovery_fenced_history_observation`
+    --> crates/bicdb-core/src/distribution_transport.rs:3926:5
+     |
+3926 | /     fn recovery_fenced_history_observation(
+3927 | |         &self,
+3928 | |         destination: &ClusterNodeId,
+3929 | |         request: &crate::distribution_range_recovery::RecoveryFencedProbeRequest,
+3930 | |         parent: &CancellationToken,
+3931 | |     ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+     | |_______________________________________________________________________________^ method `<distribution_transport::TcpClusterRelocationTransport as distribution_range_consensus::RangeWriteTransport>::recovery_fenced_history_observation` is reachable at visibility `pub`
+     |
+note: but type `distribution_range_recovery::RecoveryFencedProbeRequest` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_range_recovery.rs:65:1
+     |
+  65 | pub(crate) struct RecoveryFencedProbeRequest {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_range_recovery::RecoveryHistoryObservation` is more private than the item `<distribution_transport::TcpClusterRelocationTransport as distribution_range_consensus::RangeWriteTransport>::recovery_fenced_history_observation`
+    --> crates/bicdb-core/src/distribution_transport.rs:3926:5
+     |
+3926 | /     fn recovery_fenced_history_observation(
+3927 | |         &self,
+3928 | |         destination: &ClusterNodeId,
+3929 | |         request: &crate::distribution_range_recovery::RecoveryFencedProbeRequest,
+3930 | |         parent: &CancellationToken,
+3931 | |     ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+     | |_______________________________________________________________________________^ method `<distribution_transport::TcpClusterRelocationTransport as distribution_range_consensus::RangeWriteTransport>::recovery_fenced_history_observation` is reachable at visibility `pub`
+     |
+note: but type `distribution_range_recovery::RecoveryHistoryObservation` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_range_recovery.rs:134:1
+     |
+ 134 | pub(crate) struct RecoveryHistoryObservation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_range_recovery::RecoveryEpochFenceRequest` is more private than the item `<distribution_transport::TcpClusterRelocationTransport as distribution_range_consensus::RangeWriteTransport>::recovery_epoch_fence_observation`
+    --> crates/bicdb-core/src/distribution_transport.rs:3934:5
+     |
+3934 | /     fn recovery_epoch_fence_observation(
+3935 | |         &self,
+3936 | |         destination: &ClusterNodeId,
+3937 | |         request: &crate::distribution_range_recovery::RecoveryEpochFenceRequest,
+3938 | |         parent: &CancellationToken,
+3939 | |     ) -> Result<crate::distribution_range_recovery::RecoveryFenceObservation> {
+     | |_____________________________________________________________________________^ method `<distribution_transport::TcpClusterRelocationTransport as distribution_range_consensus::RangeWriteTransport>::recovery_epoch_fence_observation` is reachable at visibility `pub`
+     |
+note: but type `distribution_range_recovery::RecoveryEpochFenceRequest` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_range_recovery.rs:58:1
+     |
+  58 | pub(crate) struct RecoveryEpochFenceRequest {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `distribution_range_recovery::RecoveryFenceObservation` is more private than the item `<distribution_transport::TcpClusterRelocationTransport as distribution_range_consensus::RangeWriteTransport>::recovery_epoch_fence_observation`
+    --> crates/bicdb-core/src/distribution_transport.rs:3934:5
+     |
+3934 | /     fn recovery_epoch_fence_observation(
+3935 | |         &self,
+3936 | |         destination: &ClusterNodeId,
+3937 | |         request: &crate::distribution_range_recovery::RecoveryEpochFenceRequest,
+3938 | |         parent: &CancellationToken,
+3939 | |     ) -> Result<crate::distribution_range_recovery::RecoveryFenceObservation> {
+     | |_____________________________________________________________________________^ method `<distribution_transport::TcpClusterRelocationTransport as distribution_range_consensus::RangeWriteTransport>::recovery_epoch_fence_observation` is reachable at visibility `pub`
+     |
+note: but type `distribution_range_recovery::RecoveryFenceObservation` is only usable at visibility `pub(crate)`
+    --> crates/bicdb-core/src/distribution_range_recovery.rs:261:1
+     |
+ 261 | pub(crate) struct RecoveryFenceObservation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: methods `contains_record` and `forget_if_empty` are never used
+    --> crates/bicdb-core/src/db.rs:4464:8
+     |
+4343 | impl Shard {
+     | ---------- methods in this implementation
+...
+4464 |     fn contains_record(&self, pk: &str) -> bool {
+     |        ^^^^^^^^^^^^^^^
+...
+4472 |     fn forget_if_empty(&mut self, pk: &str, rid: RowId) {
+     |        ^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: methods `write_all` and `bump_generation` are never used
+    --> crates/bicdb-core/src/db.rs:4594:8
+     |
+4523 | impl CollectionState {
+     | -------------------- methods in this implementation
+...
+4594 |     fn write_all(&self) -> Vec<RwLockWriteGuard<'_, Shard>> {
+     |        ^^^^^^^^^
+...
+4662 |     fn bump_generation(&self) {
+     |        ^^^^^^^^^^^^^^^
+
+warning: methods `apply_range_anti_entropy_mutations_as_local` and `apply_range_commit_frame_as_local_preinstalled` are never used
+     --> crates/bicdb-core/src/db.rs:9940:19
+      |
+ 9853 | impl BicDb {
+      | ---------- methods in this implementation
+...
+ 9940 |     pub(crate) fn apply_range_anti_entropy_mutations_as_local(
+      |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+12299 |     pub(crate) fn apply_range_commit_frame_as_local_preinstalled(
+      |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated function `from_event` is never used
+     --> crates/bicdb-core/src/db.rs:21707:8
+      |
+21706 | impl AuditMutation {
+      | ------------------ associated function in this implementation
+21707 |     fn from_event(owner_node_id: &NodeId, stored: &StoredEvent) -> Result<Option<Self>> {
+      |        ^^^^^^^^^^
+
+warning: function `build_indexes` is never used
+     --> crates/bicdb-core/src/db.rs:22253:4
+      |
+22253 | fn build_indexes(
+      |    ^^^^^^^^^^^^^
+
+warning: function `decode_record_frame` is never used
+     --> crates/bicdb-core/src/db.rs:27365:4
+      |
+27365 | fn decode_record_frame(payload: &[u8]) -> Result<RecordFrame> {
+      |    ^^^^^^^^^^^^^^^^^^^
+
+warning: methods `prepare_mutations`, `validate_collection_index_mutations`, `apply_collection_index_mutations`, `prepared_index_mutations`, and `delete_index_mutation` are never used
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1625:19
+     |
+   5 | impl BicDb {
+     | ---------- methods in this implementation
+...
+1625 |     pub(crate) fn prepare_mutations(
+     |                   ^^^^^^^^^^^^^^^^^
+...
+2000 |     pub(crate) fn validate_collection_index_mutations(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+2030 |     pub(crate) fn apply_collection_index_mutations(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+2069 |     pub(crate) fn prepared_index_mutations(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+2120 |     pub(crate) fn delete_index_mutation(
+     |                   ^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple methods are never used
+   --> crates/bicdb-core/src/db/range_image_install.rs:167:19
+    |
+154 | impl NativeInstalledRangeImageIntegrity {
+    | --------------------------------------- methods in this implementation
+...
+167 |     pub(crate) fn history_verified_through(&self) -> u64 {
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+173 |     pub(crate) fn target_observed_min_snapshot_sequence(&self) -> u64 {
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+179 |     pub(crate) fn intent_sha256(&self) -> &str {
+    |                   ^^^^^^^^^^^^^
+...
+188 |     pub(crate) fn source_purpose(
+    |                   ^^^^^^^^^^^^^^
+...
+196 |     pub(crate) fn intended_activation_range(&self) -> &RangeDescriptor {
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+199 |     pub(crate) fn purpose(&self) -> ImageInstallPurpose {
+    |                   ^^^^^^^
+...
+205 |     pub(crate) fn cluster_id(&self) -> &ClusterId {
+    |                   ^^^^^^^^^^
+...
+208 |     pub(crate) fn bootstrap_id(&self) -> Uuid {
+    |                   ^^^^^^^^^^^^
+...
+211 |     pub(crate) fn local_node_id(&self) -> &ClusterNodeId {
+    |                   ^^^^^^^^^^^^^
+...
+217 |     pub(crate) fn intended_activation_members(
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: methods `target_observed_min_snapshot_sequence`, `intended_activation_range`, `purpose`, and `intended_activation_members` are never used
+   --> crates/bicdb-core/src/db/range_image_install.rs:417:19
+    |
+398 | impl NativeInstalledRangeImageBase {
+    | ---------------------------------- methods in this implementation
+...
+417 |     pub(crate) fn target_observed_min_snapshot_sequence(&self) -> u64 {
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+440 |     pub(crate) fn intended_activation_range(&self) -> &RangeDescriptor {
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+443 |     pub(crate) fn purpose(&self) -> ImageInstallPurpose {
+    |                   ^^^^^^^
+...
+461 |     pub(crate) fn intended_activation_members(
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: method `require_normal_native_range_mutation_allowed` is never used
+   --> crates/bicdb-core/src/db/range_image_install.rs:653:19
+    |
+556 | impl BicDb {
+    | ---------- method in this implementation
+...
+653 |     pub(crate) fn require_normal_native_range_mutation_allowed(
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: methods `cluster_id` and `node_id` are never used
+   --> crates/bicdb-core/src/db/range_image_native.rs:406:19
+    |
+402 | impl FreshRangeGenesisAuthority {
+    | ------------------------------- methods in this implementation
+...
+406 |     pub(crate) fn cluster_id(&self) -> &ClusterId {
+    |                   ^^^^^^^^^^
+...
+409 |     pub(crate) fn node_id(&self) -> &ClusterNodeId {
+    |                   ^^^^^^^
+
+warning: method `base_range_index` is never used
+   --> crates/bicdb-core/src/db/range_image_native.rs:438:19
+    |
+413 | impl SourceRangeImageLineage {
+    | ---------------------------- method in this implementation
+...
+438 |     pub(crate) fn base_range_index(&self) -> u64 {
+    |                   ^^^^^^^^^^^^^^^^
+
+warning: field `base_index` is never read
+   --> crates/bicdb-core/src/db/range_image_native/certified_prefix.rs:133:5
+    |
+129 | pub(crate) struct NativeRangeInstallSafety {
+    |                   ------------------------ field in this struct
+...
+133 |     base_index: Option<u64>,
+    |     ^^^^^^^^^^
+    |
+    = note: `NativeRangeInstallSafety` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: methods `base_index`, `birth_id`, `records_sha256`, and `require_irreversible_current` are never used
+   --> crates/bicdb-core/src/db/range_image_native/certified_prefix.rs:144:19
+    |
+143 | impl NativeRangeInstallSafety {
+    | ----------------------------- methods in this implementation
+144 |     pub(crate) fn base_index(&self) -> Option<u64> {
+    |                   ^^^^^^^^^^
+...
+165 |     pub(crate) fn birth_id(&self) -> Uuid {
+    |                   ^^^^^^^^
+...
+171 |     pub(crate) fn records_sha256(&self) -> &str {
+    |                   ^^^^^^^^^^^^^^
+...
+185 |     pub(crate) fn require_irreversible_current(
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: method `native_receipt_sha256` is never used
+   --> crates/bicdb-core/src/db/range_image_native/certified_prefix/recovery_apply.rs:441:19
+    |
+425 | impl NativeRecoveryAppliedReceipt {
+    | --------------------------------- method in this implementation
+...
+441 |     pub(crate) fn native_receipt_sha256(&self) -> &str {
+    |                   ^^^^^^^^^^^^^^^^^^^^^
+
+warning: field `root` is never read
+  --> crates/bicdb-core/src/db/range_image_native/certified_prefix/recovery_apply/tests.rs:16:5
+   |
+15 | struct ActualHistoricalContext {
+   |        ----------------------- field in this struct
+16 |     root: tempfile::TempDir,
+   |     ^^^^
+
+warning: method `range_id` is never used
+   --> crates/bicdb-core/src/db/range_image_native/history_stage.rs:351:19
+    |
+320 | impl NativeHistoryPublicationBinding<'_> {
+    | ---------------------------------------- method in this implementation
+...
+351 |     pub(crate) fn range_id(&self) -> RangeId {
+    |                   ^^^^^^^^
+
+warning: method `scope` is never used
+   --> crates/bicdb-core/src/db/range_image_native/serving_configuration.rs:158:19
+    |
+151 | impl NativeRecoveredServingReceipt {
+    | ---------------------------------- method in this implementation
+...
+158 |     pub(crate) fn scope(&self) -> &RecoveryFenceScope {
+    |                   ^^^^^
+
+warning: field `coordinator` is never read
+   --> crates/bicdb-core/src/db/range_image_native/rf3_fixture.rs:198:16
+    |
+191 | pub(crate) struct ActualNativeRf3Fixture {
+    |                   ---------------------- field in this struct
+...
+198 |     pub(crate) coordinator: Arc<RangeWriteCoordinator<ActualNativeRf3ServiceTransport>>,
+    |                ^^^^^^^^^^^
+
+warning: method `paged_stub_fetch` is never used
+    --> crates/bicdb-core/src/db/spatial_paged.rs:1561:19
+     |
+   5 | impl BicDb {
+     | ---------- method in this implementation
+...
+1561 |     pub(crate) fn paged_stub_fetch(
+     |                   ^^^^^^^^^^^^^^^^
+
+warning: method `initialize_relocation_handoff_session` is never used
+    --> crates/bicdb-core/src/distribution.rs:3766:19
+     |
+2884 | impl DistributionStore {
+     | ---------------------- method in this implementation
+...
+3766 |     pub(crate) fn initialize_relocation_handoff_session(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: method `preflight_recovery_nonce` is never used
+   --> crates/bicdb-core/src/distribution_data.rs:880:19
+    |
+738 | impl ClusterDataNodeService {
+    | --------------------------- method in this implementation
+...
+880 |     pub(crate) fn preflight_recovery_nonce(
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: method `recover_completed_native_range_image_install` is never used
+   --> crates/bicdb-core/src/distribution_data/native_image_install.rs:227:19
+    |
+ 17 | impl ClusterDataNodeService {
+    | --------------------------- method in this implementation
+...
+227 |     pub(crate) fn recover_completed_native_range_image_install(
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: method `logical_history_sha256` is never used
+   --> crates/bicdb-core/src/distribution_range_consensus/native_image_base.rs:111:19
+    |
+ 89 | impl NativeImageCatalogueAdoptionReceipt {
+    | ---------------------------------------- method in this implementation
+...
+111 |     pub(crate) fn logical_history_sha256(&self) -> &str {
+    |                   ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: fields `current_epoch`, `resolved_through`, and `compacted_through` are never read
+  --> crates/bicdb-core/src/distribution_range_consensus/image_install_obligations.rs:15:5
+   |
+ 9 | pub(crate) struct TargetImageCatalogHistoryObligations {
+   |                   ------------------------------------ fields in this struct
+...
+15 |     current_epoch: u64,
+   |     ^^^^^^^^^^^^^
+16 |     last_index: u64,
+17 |     resolved_through: u64,
+   |     ^^^^^^^^^^^^^^^^
+18 |     compacted_through: u64,
+   |     ^^^^^^^^^^^^^^^^^
+   |
+   = note: `TargetImageCatalogHistoryObligations` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: methods `database_root`, `current_epoch`, `resolved_through`, and `compacted_through` are never used
+  --> crates/bicdb-core/src/distribution_range_consensus/image_install_obligations.rs:32:19
+   |
+22 | impl TargetImageCatalogHistoryObligations {
+   | ----------------------------------------- methods in this implementation
+...
+32 |     pub(crate) fn database_root(&self) -> &Path {
+   |                   ^^^^^^^^^^^^^
+...
+35 |     pub(crate) fn current_epoch(&self) -> u64 {
+   |                   ^^^^^^^^^^^^^
+...
+41 |     pub(crate) fn resolved_through(&self) -> u64 {
+   |                   ^^^^^^^^^^^^^^^^
+...
+44 |     pub(crate) fn compacted_through(&self) -> u64 {
+   |                   ^^^^^^^^^^^^^^^^^
+
+warning: method `store_open_id` is never used
+   --> crates/bicdb-core/src/distribution_range_consensus/native_ready_prepare.rs:227:19
+    |
+109 | impl PreparedNativeRecoveryReady {
+    | -------------------------------- method in this implementation
+...
+227 |     pub(crate) fn store_open_id(&self) -> Uuid {
+    |                   ^^^^^^^^^^^^^
+
+warning: field `compacted_through` is never read
+   --> crates/bicdb-core/src/distribution_range_consensus/recovery_state.rs:215:5
+    |
+210 | pub(crate) struct RecoveryResolvedCatalogObservation {
+    |                   ---------------------------------- field in this struct
+...
+215 |     compacted_through: u64,
+    |     ^^^^^^^^^^^^^^^^^
+    |
+    = note: `RecoveryResolvedCatalogObservation` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: multiple methods are never used
+   --> crates/bicdb-core/src/distribution_range_consensus/recovery_state.rs:249:19
+    |
+248 | impl RecoveryLocalHistoricalApplyObservation {
+    | -------------------------------------------- methods in this implementation
+249 |     pub(crate) fn store_open_id(&self) -> Uuid {
+    |                   ^^^^^^^^^^^^^
+...
+252 |     pub(crate) fn native_database_incarnation(&self) -> &str {
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+255 |     pub(crate) fn range_id(&self) -> RangeId {
+    |                   ^^^^^^^^
+...
+258 |     pub(crate) fn command_id(&self) -> &str {
+    |                   ^^^^^^^^^^
+...
+261 |     pub(crate) fn command_sha256(&self) -> &str {
+    |                   ^^^^^^^^^^^^^^
+...
+264 |     pub(crate) fn command_index(&self) -> u64 {
+    |                   ^^^^^^^^^^^^^
+...
+267 |     pub(crate) fn role_context_id(&self) -> Uuid {
+    |                   ^^^^^^^^^^^^^^^
+...
+270 |     pub(crate) fn scope(&self) -> &RecoveryFenceScope {
+    |                   ^^^^^
+
+warning: methods `saved_scope` and `store_open_id` are never used
+   --> crates/bicdb-core/src/distribution_range_consensus/recovery_state.rs:303:19
+    |
+302 | impl RecoveryImageInstallSessionObservation {
+    | ------------------------------------------- methods in this implementation
+303 |     pub(crate) fn saved_scope(&self) -> &RecoveryFenceScope {
+    |                   ^^^^^^^^^^^
+...
+306 |     pub(crate) fn store_open_id(&self) -> Uuid {
+    |                   ^^^^^^^^^^^^^
+
+warning: multiple methods are never used
+   --> crates/bicdb-core/src/distribution_range_consensus/recovery_state.rs:356:19
+    |
+355 | impl RecoveryResolvedCatalogObservation {
+    | --------------------------------------- methods in this implementation
+356 |     pub(crate) fn store_open_id(&self) -> Uuid {
+    |                   ^^^^^^^^^^^^^
+...
+359 |     pub(crate) fn node_id(&self) -> &ClusterNodeId {
+    |                   ^^^^^^^
+...
+362 |     pub(crate) fn cluster_id(&self) -> &ClusterId {
+    |                   ^^^^^^^^^^
+...
+368 |     pub(crate) fn range_epoch(&self) -> u64 {
+    |                   ^^^^^^^^^^^
+...
+371 |     pub(crate) fn recovery_nonce(&self) -> Uuid {
+    |                   ^^^^^^^^^^^^^^
+...
+374 |     pub(crate) fn configuration_sha256(&self) -> &str {
+    |                   ^^^^^^^^^^^^^^^^^^^^
+...
+380 |     pub(crate) fn compacted_through(&self) -> u64 {
+    |                   ^^^^^^^^^^^^^^^^^
+...
+383 |     pub(crate) fn local_role_context_id(&self) -> Uuid {
+    |                   ^^^^^^^^^^^^^^^^^^^^^
+...
+386 |     pub(crate) fn scope(&self) -> &RecoveryFenceScope {
+    |                   ^^^^^
+
+warning: field `origin_transaction_id` is never read
+  --> crates/bicdb-core/src/distribution_range_consensus/native_prefix.rs:16:5
+   |
+13 | pub(crate) struct NativeRangeCommandIntent {
+   |                   ------------------------ field in this struct
+...
+16 |     origin_transaction_id: u64,
+   |     ^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `NativeRangeCommandIntent` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: methods `origin_transaction_id`, `cluster_id`, `bootstrap_id`, and `schema_sha256` are never used
+   --> crates/bicdb-core/src/distribution_range_consensus/native_prefix.rs:403:19
+    |
+112 | impl NativeRangeCommandIntent {
+    | ----------------------------- methods in this implementation
+...
+403 |     pub(crate) fn origin_transaction_id(&self) -> u64 {
+    |                   ^^^^^^^^^^^^^^^^^^^^^
+...
+415 |     pub(crate) fn cluster_id(&self) -> &ClusterId {
+    |                   ^^^^^^^^^^
+...
+418 |     pub(crate) fn bootstrap_id(&self) -> Uuid {
+    |                   ^^^^^^^^^^^^
+...
+424 |     pub(crate) fn schema_sha256(&self) -> &str {
+    |                   ^^^^^^^^^^^^^
+
+warning: methods `bootstrap_id`, `schema_sha256`, and `restore_activation` are never used
+  --> crates/bicdb-core/src/distribution_range_handoff.rs:88:19
+   |
+87 | impl CertifiedRangeImageCut {
+   | --------------------------- methods in this implementation
+88 |     pub(crate) fn bootstrap_id(&self) -> Option<Uuid> {
+   |                   ^^^^^^^^^^^^
+...
+91 |     pub(crate) fn schema_sha256(&self) -> Option<&str> {
+   |                   ^^^^^^^^^^^^^
+...
+94 |     pub(crate) fn restore_activation(
+   |                   ^^^^^^^^^^^^^^^^^^
+
+warning: method `lineage` is never used
+   --> crates/bicdb-core/src/distribution_range_image.rs:233:19
+    |
+212 | impl CompletedNativeRangeImageSource {
+    | ------------------------------------ method in this implementation
+...
+233 |     pub(crate) fn lineage(&self) -> &SourceRangeImageLineage {
+    |                   ^^^^^^^
+
+warning: methods `collections` and `reserved_upper_bound` are never used
+   --> crates/bicdb-core/src/distribution_range_image.rs:401:19
+    |
+301 | impl RangeImageCapture {
+    | ---------------------- methods in this implementation
+...
+401 |     pub(crate) fn collections(&self) -> &[CollectionMeta] {
+    |                   ^^^^^^^^^^^
+...
+407 |     pub(crate) fn reserved_upper_bound(&self) -> ReservedDbUpperBound {
+    |                   ^^^^^^^^^^^^^^^^^^^^
+
+warning: methods `bootstrap_id`, `schema_sha256`, and `restore_activation` are never used
+   --> crates/bicdb-core/src/distribution_range_image/source_cut.rs:139:19
+    |
+123 | impl NativeRangeImageSourceCut {
+    | ------------------------------ methods in this implementation
+...
+139 |     pub(crate) fn bootstrap_id(&self) -> Option<Uuid> {
+    |                   ^^^^^^^^^^^^
+...
+231 |     pub(crate) fn schema_sha256(&self) -> Option<&str> {
+    |                   ^^^^^^^^^^^^^
+...
+237 |     pub(crate) fn restore_activation(&self) -> Option<&MetadataRestoreActivation> {
+    |                   ^^^^^^^^^^^^^^^^^^
+
+warning: method `range_id` is never used
+   --> crates/bicdb-core/src/distribution_range_mutation.rs:468:19
+    |
+467 | impl FrozenRangeMutationPermit {
+    | ------------------------------ method in this implementation
+468 |     pub(crate) fn range_id(&self) -> RangeId {
+    |                   ^^^^^^^^
+
+warning: method `range_id` is never used
+   --> crates/bicdb-core/src/distribution_range_mutation.rs:514:19
+    |
+513 | impl RangeMutationAuthority<'_> {
+    | ------------------------------- method in this implementation
+514 |     pub(crate) fn range_id(&self) -> RangeId {
+    |                   ^^^^^^^^
+
+warning: methods `range_id` and `owner` are never used
+   --> crates/bicdb-core/src/distribution_range_mutation.rs:588:19
+    |
+587 | impl SourceCaptureReadPin {
+    | ------------------------- methods in this implementation
+588 |     pub(crate) fn range_id(&self) -> RangeId {
+    |                   ^^^^^^^^
+...
+591 |     pub(crate) fn owner(&self) -> Uuid {
+    |                   ^^^^^
+
+warning: method `deadline` is never used
+   --> crates/bicdb-core/src/distribution_range_recovery.rs:343:19
+    |
+266 | impl RecoveryFenceObservation {
+    | ----------------------------- method in this implementation
+...
+343 |     pub(crate) fn deadline(&self) -> Instant {
+    |                   ^^^^^^^^
+
+warning: method `remaining_budget` is never used
+   --> crates/bicdb-core/src/distribution_range_recovery.rs:681:19
+    |
+380 | impl RecoveryRoleAdmission {
+    | -------------------------- method in this implementation
+...
+681 |     pub(crate) fn remaining_budget(&self) -> Option<Duration> {
+    |                   ^^^^^^^^^^^^^^^^
+
+warning: field `peer` is never read
+  --> crates/bicdb-core/src/distribution_range_recovery/native_completion.rs:57:5
+   |
+55 | pub(crate) struct NativeCompletionObservation {
+   |                   --------------------------- field in this struct
+56 |     reply: NativeCompletionReply,
+57 |     peer: MetadataReadParticipant,
+   |     ^^^^
+   |
+   = note: `NativeCompletionObservation` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: method `authenticated_peer` is never used
+   --> crates/bicdb-core/src/distribution_range_recovery/native_completion.rs:103:19
+    |
+ 60 | impl NativeCompletionObservation {
+    | -------------------------------- method in this implementation
+...
+103 |     pub(crate) fn authenticated_peer(&self) -> &MetadataReadParticipant {
+    |                   ^^^^^^^^^^^^^^^^^^
+
+warning: methods `role` and `scope` are never used
+   --> crates/bicdb-core/src/distribution_range_recovery/native_ready.rs:420:19
+    |
+415 | impl ClosedNativeReadyQuorum {
+    | ---------------------------- methods in this implementation
+...
+420 |     pub(crate) fn role(&self) -> &RecoveryRoleAdmission {
+    |                   ^^^^
+...
+423 |     pub(crate) fn scope(&self) -> &RecoveryFenceScope {
+    |                   ^^^^^
+
+warning: fields `fence` and `certification` are never read
+  --> crates/bicdb-core/src/distribution_range_recovery/historical.rs:21:5
+   |
+20 | struct HistoricalVote {
+   |        -------------- fields in this struct
+21 |     fence: Arc<RecoveryFenceObservation>,
+   |     ^^^^^
+22 |     state: Option<RangeWriteState>,
+23 |     certification: Option<HistoricalRangeCertification>,
+   |     ^^^^^^^^^^^^^
+   |
+   = note: `HistoricalVote` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: field `votes` is never read
+   --> crates/bicdb-core/src/distribution_range_recovery/historical.rs:209:5
+    |
+206 | pub(crate) struct HistoricalCommandDecision {
+    |                   ------------------------- field in this struct
+...
+209 |     votes: BTreeMap<ClusterNodeId, HistoricalVote>,
+    |     ^^^^^
+    |
+    = note: `HistoricalCommandDecision` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: method `observed_members` is never used
+   --> crates/bicdb-core/src/distribution_range_recovery/historical.rs:224:19
+    |
+211 | impl HistoricalCommandDecision {
+    | ------------------------------ method in this implementation
+...
+224 |     pub(crate) fn observed_members(&self) -> impl Iterator<Item = &ClusterNodeId> {
+    |                   ^^^^^^^^^^^^^^^^
+
+warning: methods `purpose`, `deadline`, and `remaining_budget` are never used
+   --> crates/bicdb-core/src/distribution_range_recovery/historical.rs:337:19
+    |
+315 | impl RecoveryApplyAdmission {
+    | --------------------------- methods in this implementation
+...
+337 |     pub(crate) fn purpose(&self) -> &MetadataRecoveryRolePurpose {
+    |                   ^^^^^^^
+...
+355 |     pub(crate) fn deadline(&self) -> Instant {
+    |                   ^^^^^^^^
+...
+358 |     pub(crate) fn remaining_budget(&self) -> Option<Duration> {
+    |                   ^^^^^^^^^^^^^^^^
+
+warning: function `ensure_open_compatible` is never used
+   --> crates/bicdb-core/src/format.rs:267:8
+    |
+267 | pub fn ensure_open_compatible(root: &Path, fsync: bool) -> Result<FormatMigrationReport> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `read_u64` is never used
+    --> crates/bicdb-core/src/fts_build.rs:1574:4
+     |
+1574 | fn read_u64(reader: &mut impl Read) -> Result<u64> {
+     |    ^^^^^^^^
+
+warning: associated function `uncached` is never used
+  --> crates/bicdb-core/src/fts_cache.rs:29:12
+   |
+28 | impl CachedPostingBlock {
+   | ----------------------- associated function in this implementation
+29 |     pub fn uncached(
+   |            ^^^^^^^^
+
+warning: method `len` is never used
+   --> crates/bicdb-core/src/fts_segment.rs:499:8
+    |
+488 | impl TermsBacking {
+    | ----------------- method in this implementation
+...
+499 |     fn len(&self) -> usize {
+    |        ^^^
+
+warning: method `sole` is never used
+    --> crates/bicdb-core/src/fts_segment.rs:1947:19
+     |
+1902 | impl SegmentSet {
+     | --------------- method in this implementation
+...
+1947 |     pub(crate) fn sole(&self) -> Option<&Arc<FtsSegmentReader>> {
+     |                   ^^^^
+
+warning: associated function `verify` is never used
+    --> crates/bicdb-core/src/fts_segment.rs:2380:19
+     |
+2261 | impl FtsSegmentReader {
+     | --------------------- associated function in this implementation
+...
+2380 |     pub(crate) fn verify(segments_root: &Path, physical: &str) -> Result<()> {
+     |                   ^^^^^^
+
+warning: function `scan_sql_value_end` is never used
+    --> crates/bicdb-core/src/observability.rs:1193:4
+     |
+1193 | fn scan_sql_value_end(input: &str, start: usize) -> usize {
+     |    ^^^^^^^^^^^^^^^^^^
+
+warning: method `scan_all_numeric_posting_blocks_paged` is never used
+    --> crates/bicdb-core/src/paged_collection.rs:2892:8
+     |
+ 251 | impl PagedRecords {
+     | ----------------- method in this implementation
+...
+2892 |     fn scan_all_numeric_posting_blocks_paged<'store>(
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `INDEX_ENTRY_TERM_V2` is never used
+    --> crates/bicdb-core/src/paged_collection.rs:4174:18
+     |
+4174 | pub(crate) const INDEX_ENTRY_TERM_V2: [u8; 2] = [0, 0];
+     |                  ^^^^^^^^^^^^^^^^^^^
+
+warning: function `decode_doc_terms_header` is never used
+    --> crates/bicdb-core/src/paged_collection.rs:5798:15
+     |
+5798 | pub(crate) fn decode_doc_terms_header(bytes: &[u8]) -> Result<(u32, u32)> {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: field `0` is never read
+    --> crates/bicdb-core/src/record.rs:1015:19
+     |
+1015 |     struct RawMap(std::collections::BTreeMap<(), ()>);
+     |            ------ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |            |
+     |            field in this struct
+     |
+     = help: consider removing this field
+
+warning: constant `BTREE_ENTRY_OVERHEAD` is never used
+    --> crates/bicdb-core/src/aggregate_projection.rs:1070:15
+     |
+1070 |         const BTREE_ENTRY_OVERHEAD: u64 = 24;
+     |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `reset_append_sync_mode_counts` is never used
+   --> crates/bicdb-core/src/storage.rs:756:15
+    |
+756 | pub(crate) fn reset_append_sync_mode_counts() {
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `read_bytes_at` is never used
+    --> crates/bicdb-core/src/storage.rs:1577:15
+     |
+1577 | pub(crate) fn read_bytes_at(path: &Path, offset: u64, len: usize) -> Result<Option<Vec<u8>>> {
+     |               ^^^^^^^^^^^^^
+
+warning: function `bundle_event_for_stored` is never used
+   --> crates/bicdb-core/src/sync_mesh.rs:725:15
+    |
+725 | pub(crate) fn bundle_event_for_stored(
+    |               ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `envelope_for_event` is never used
+   --> crates/bicdb-core/src/sync_mesh.rs:744:15
+    |
+744 | pub(crate) fn envelope_for_event(
+    |               ^^^^^^^^^^^^^^^^^^
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+     --> crates/bicdb-core/src/db.rs:18613:17
+      |
+18613 |                 drop(db);
+      |                 ^^^^^--^
+      |                      |
+      |                      argument has type `&db::BicDb`
+      |
+      = note: `#[warn(dropping_references)]` on by default
+help: use `let _ = ...` to ignore the expression or result
+      |
+18613 -                 drop(db);
+18613 +                 let _ = db;
+      |
+
+warning: `bicdb-core` (lib test) generated 186 warnings (run `cargo fix --lib -p bicdb-core --tests` to apply 36 suggestions)
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.19s
+     Running unittests src/lib.rs (/tmp/bicdb-azure-artifact-target/release/deps/bicdb_core-b0702f49611c59ed)
+COPIED_OBLIGATION_RETAINED_ROOT /tmp/.tmppWe2tL
+COPIED_OBLIGATION_RESULT {"acknowledged_values_reconciled":1025,"activation_proven":false,"actual_fresh_metadata_and_same_session_refsync":true,"actual_source_obligations":{"compacted_through":1,"format_version":1,"irreversible_command_sha256":{"10":"201eb89af63617c9641aeff9a4d52c5fada4227f4e38ff0ae46a7908abfdae0d","100":"ad0c941736d10b9baf5f32b661a09f475a1fdbab7f2a6b159f173fb286c19f01","1000":"05ef089cb8eaf55b88c231dded4713b1d0388d1c7de7f05b5baad50dddb05bb8","1001":"9bc8eba50705d9792c67526559b5c88cba576469a83bd53d375ee6d43cc030a6","1002":"1be1a31e52ee8cc0a98b97ec894b1206f74815f008db96f4dace3c650b9eb35d","1003":"58dec6de31e9a5979e8371862df0432b8cdc609aa3e9669e9caaad846abfbef0","1004":"7665d368dc5c8668c7bb3c2c712ea74268309a8a1eb8a0b76a910657caaae922","1005":"ad747679999947dc16ccd0474e030b15872a6e2830c9276ea24fc8936612054f","1006":"481cd4cfae324e39eee0b5d6f1a91837d852cbad80dba2b0a1d2970e8c6fede2","1007":"8cb681cc088522f72ebbf33c7dc0a8c6d8ddb9c30a586beecc88d12d25340f0c","1008":"2655aa938a9d34c1abfa1deb0894435372c7055bb6c641f415de08e419346bd3","1009":"40d70da8ba29ec3dbb187af560403d230e63c3a373889e4f3f66344b5c43ebad","101":"d710f269f9b6012ec1556231ee9b43d59ffb79d2c7d89a3e6f2a613390be66d9","1010":"c7f8d6e5d3a1df9f15b2d0caccf86cf0006b75569eb4940d31305a5a61ee8d3f","1011":"309aa14d9befe63f09f1a2a7c7c84fc162b441858ab7b2f50d4767177239d2b4","1012":"5431a312b67604c83541caf77cc97f19b6bcc62dbd05f37e258d1b9f63dd588d","1013":"5920fa4d651c3da78cf5b56cb3acc24121f1f007217f32d24e0c2b2fe4a872a7","1014":"c33b6f0b59192b14db34eb6e0673814acc36c63e1e73d3327db99ffa2e6a9262","1015":"3f0ad2c649e8ac5cd41765e0adbe098982d0c40ae6411e4f231997ccc17c8270","1016":"dae75c65314747384c5e1a6942d584f516e7ce2439611a8b21d7028c9535f12b","1017":"a2b986ffde57ce2b23b3604521f0c7ec81d724ac1a349f268decf52a88720e90","1018":"ee358ace81e04ee42bbd7b1dd22b216420c821355fe72c7aca9967274953835d","1019":"866c48bf7000b49162c1da73376b93f084388e3a20cbb4bc6a589155d15b956b","102":"ebb3ede4857983c449550c9a5e59c7d1e348f17c9e34eabb5b4bfb9b8a24c7fa","1020":"f2de09b4d1475efe96d237758cd3edbcb84728709c179b727d1223448bea4e17","1021":"cb32aeb349d0a5c6ada5fd5c98e34a461a6cf11b338cf388c843cead08f82405","1022":"87975e1aff8ed54e24d2fc3567c101143b670cc89b78ee30dcd4251b5a301de0","1023":"a03aabc087281ab156ff6271e0e31c7ba08ef3aa4f50c357b4d00d6e5483cc66","1024":"fef9a46bc79d7a28c99fbf563102702f27a657e9eac465741758a24778ae5450","1025":"e69dfeedfcee938585cf14e3fd78e854980a2a62ae1f6ab8bc335de7cdba2d03","1026":"af25af163cba2a11e2eca75f13b165cfd53372c32174a36c5cb2f3c8057d8672","103":"584bd040cbcf74a51fbeccf63401de703e006ad4af821a11c4947629331507f9","104":"76d462c76bcdc1094c7592a5bea2a5e252bb5c23b7d7a87c0e1be9f626ba6227","105":"492edfdd1ae527497d3f463e9317e0904d64cc00a7730cc791d83416acc3511e","106":"e49a7a052dfc45fbefc3c4a85a4980dd1338448dcb041b43bad46b32f77b45dc","107":"23852c88c52101546a54326f3014aff694b95795e01d8115e3bfcadd95503c77","108":"4c2aebe610df7520c99bf4ef1602ea941cfd18d38476a5c68ffde629eb16df36","109":"995b2a6bee86cfafe005b23c7cca3061065d1ccedc394be616a4c3785eea1949","11":"7eb60abd711fae99122e6eeddd92f39b065bb68d0f2cfaf153169d0c063c6d0a","110":"f4dfd46269e15b0dde99a3b72b2960db9635e6e00a534b97003a1d3a60fe3c8c","111":"3899001198a17cd2501c12a9ecffe190fe176e101dcf50d36d6dc04f6a1afdd6","112":"1a7220cca2e17020f26789f3a1142e162a939afa820b47020793bfbb317a1d2e","113":"26a9fdd4e442dca376b7a682a9198b4bde3f3a1662d848ffb39aa3c554bef0fe","114":"c5f8245f8ea57eeae213e46010020359234004dcedfac6092ab090e6cc316836","115":"31fdcfd43477a09d1f389a16eddfa258dfad08a9bb0c69fd867f8a05e9b9e017","116":"351c6fea91feb63f11c893ed5d9dc096912d1e6b2522e75d7bcee7cd7efd892a","117":"aa3b41b36b5523c8efca28cc295db23a055e8d3feedc77598257dbb68f492524","118":"13f1a30d3ede08aa267f712abd275eae30c81f6b0c6fb0d475011daee0652db5","119":"d40b85a41e57193c0ecea08fae9c9d889736d3dd90bf2aed9ca53798718094bd","12":"b33943db300bbc44b927c88f3f88ca32ef8fb9d01efda58a7f366ee35fad3577","120":"e743947f545bd33cf7caf1f15a796eaeffb0cb3a97a8bef51c3d539d626e66fd","121":"e88bfeb3f6d1d45a77923aa9a87c5b65059397bb893a2bb06bd90d43d392dff3","122":"c467a3b8189e0cf54eee4faaae319eb743da350a9361ffc170add98bb46cbbf4","123":"a6b8d55d2b571877b5270bf8d58957eff4e22390b4d223e94f44c7ce1017925b","124":"20ec3f85992138ae6807fe14ff50dd63da5537c0a13ee7dacf71f6275d71d352","125":"05ff99f8de032044ee87f7ed5068bb7e94ffe27abab82bfa64f1130a67702c9e","126":"8df8a4a9f88866c6a13014c917a91b4a75bd7e7e3dc9fb7c28cf10b23a1dc81a","127":"4d641ee9148cb373f97fb14da8d74b483b094977ad49573c60a7c4449a5544cd","128":"57a4a3c1bf63aaad1889ddf66f5e622f7f1b80259c20971e0d42c37e288c2e7d","129":"79338f5112c1b6bd36382548e7bf8c9ecc7667de761096711b8d6fd5d9cec576","13":"4fe98534c3daf0c005afe2cbcabe8542490317e2a82058f564a5ad7fccf3df91","130":"46ed1f7302e5a6deda7792da8e4185b746eb39240c6fc76da68d0cd7db67c26f","131":"445389d32073b79050aa3ed52b38aaae5ff92dd5e86efb77d92afc61e2a5ac2c","132":"a87fbd389c80cd3bf9fad950bc35614adbb088169b4735dacb4cfd8ecf3cc48e","133":"e9de07377357727148c52afdaeb01544b4d8df9f53c744dcadc2437332a9967a","134":"04573732e4db4dbe7209fc2c0a227469fb2667cabb53299507e4a9df0da1b4af","135":"611c46da059c809a2b173c2292196b4a4909e1f93802f9e56711d63d42da6cbd","136":"9e8c3936ce702078e4ed2b5c24b427ca13438dd26e0cb61298fc3421f9b589de","137":"e0cb9f6e3c0ce5263821c12c635ea2639644a165f38a73ef9c9c419c8738016e","138":"d7d280911eac4e7317301ffe2d23fc3ac17128af13e5aad39638ca49459a1970","139":"a813c2d83eb1059ef4906eed1a675899ce40a7f0d117f1568ba932826e6fdb26","14":"efe6613e6cd7ebc397053afb0c5066f82bc8880d0523051f62d508609c95d490","140":"2a6fed07f3da346c8f9b9f03f318146f288976e839b32eca0235e4f50a91279e","141":"e453fb8f97f928c1c72fc422aef4fe0f4956a8fb271a341c503c90e5251dfc8a","142":"b092e44e367759de849459a1cdb499003807d25f858310d3913940a5b7ddb847","143":"badbced21a66f4c3eccb1aca028d596a9acf84d33a6bb809f656e2dc98196769","144":"fd3ca149d981ca962bc1c8da7226e24c5fe9e1b879ac5a1d041f8e0290ba9081","145":"61bf489b301d8ac3042f842fc8037b65bcf8a0f6eeffec959e446f3726506412","146":"0a5bea2a3b19bb980b1229e4bb4ae88f03a444b1a1edb4951897bc930020e92f","147":"0fd46d879381569844daaa12a726b12114fdf2e5f20d229104181b70fe428896","148":"3533cba1fb97f65a6023d68324cb75eefc24f6e561ff0f1ed45159933a338f36","149":"0f0192117f37536f833059ceb798fa0f6e16cb2394457cb1521b42ae5c928f92","15":"a8fc9e6d9dd47cbc9e77f08c891ed337f872c7c43a786a89e254cda5cd24eb73","150":"a0f9d7af0f614d679dd99c39b03ce3c64bd8a3489f5d93a37bdf4c853a111a79","151":"a760190c9f00c8285e00aa5b8d2f235187287124cafc1dccc6505f95a50ee687","152":"ffd314a36f1685b39636385647bdc1a0d1103893de4287d739ac28a684a020b2","153":"9d7fbc381d242151b5acfb495dc992ddf3f44f3e5cfdf6e05a77c68794fa6d40","154":"eaa7c0cd68612dd388a85673abf132b3788c4e78222230ef967c0a3849c81d69","155":"1d83ea1d7e62a5e768964a968b10e9868a445f40db997ddd505e53a325ba2b70","156":"e0b69ff00cf5281cd7500ed47a2d95d39d4bfa0d23000ec9f785dfb540b7a5d9","157":"9f81a7fdafc9094ba335551480330ac6bc59cc532fae49cace4726574893a85b","158":"91343894d5f97e78505cf7567f72c47053a8a31b01b78b2fc08cc144f6797240","159":"34ea52864608cb4614c2b93c2fd6aa9cad255a6aa8a10e1b224a9de8351116ee","16":"10ac5ba0a3332c4444c61671630c7a5a2f0748091810cdaaf1d72805629033e5","160":"1ae54bf940ac6f0d2a29b69a30266a8d90301a8796e97bd0a821fa50c8964ceb","161":"df242dc99e68ee2a231d351c257235e7e9cf0db00f985bb1781524f969d1d011","162":"851ccc5d3e53493bf823fb39237102ec2d4ad3715ab1ea64b03f1ec310aaa20b","163":"149c55f1e22c68c49fb68f8f125e500e1047c38659b2c9d1ed46b81d86d61719","164":"323e161854adc202c2f1ae8fe20f3819a383867bb01c0cd25d86030d12a667fb","165":"7e77bb652834cd770057b76d6714131a2aa24f889cb46e1085e7adb32816c807","166":"e727cf25b9bfdf2207ff8a5860f225bda3b7c60481c4cdda0abb83ceb5e44e5a","167":"ab6a22ffe21f479940b6d137fbdd856664ca32a6f97ecd3036c333829f777419","168":"ab157ed550b4fc1740e4fdfaddc61097a0dbbab2c8aa2adb5c7c085834fdd4c1","169":"90fe567861f765160b993a874512e4dba4e08b552a15adb4c51eee066ac66ff5","17":"ee689bee34d754c531d635f9ba5cacf9270ae85d381b83d8c884af689852e394","170":"b4cc070e3ec2ab5331cf20c661b4c191bc317e68ee067846e29cc76b17072e37","171":"50dd3d06941d85460e1ea128f47c1dcc1a0a4920719681e957e6d809ea5d1131","172":"06e215474c1220bc05e9258e683aebf5d54ed416513aa8f01127de842e2808ea","173":"7ed5d09c85cf339413af07b6cb90e0283887f6f7e5faf9e2e89882b70cd80f2b","174":"7784103ba57c9324fadeecf8f9211e3dfa0454f6441bd5882914f92a73457d0c","175":"d654ada54de7630d67f64c0caba267bb695c9a17d7a6281e486aa1a5d74f0f8a","176":"5302cd91b85a05e28d05f37c7765b7b41633482375bf8625c6d34a9ead90d4f2","177":"fe8ccdfd9bc671d7864cfa7dfa08e7ff0395c0e4bd19a3cecc6568e55813ebbe","178":"e4b0d449d70f410747cc31f474b666c213b7ee2a7aec19ded26e53172cea1c73","179":"03750ee790eefcc5af81ce0e40d7187c5781571720727bf5467d4023d0869635","18":"a18a044fd9e59f6f2bac161008af165e7102a2c407948201cfe149f1b3889a93","180":"f8101e2870cc63642b4e2addedb344f9e80869af0d9ed17e3274a1453c1f1ca2","181":"3ff827a06928f0a2e90209dc9b90c1136468305ae137ed1ea38064a625184c6a","182":"66e575752b46eb0fa7d5ccabdcd11fbceda30f65fd6a0a13869844054074fcf3","183":"5bbe2331a91955725d9d2442f6f839ffc530ebd7d83aa78f3771685dbcbe7244","184":"2b6b0d8a68a3c7e2de2e0ea57b8306eac996d3ef72dbdbf08592574a3304600e","185":"320809f86e4daba40c169f46e6e39a9b85ef896b7038aaa69400ff582993458c","186":"bfcef661febedb490ece6a0e3f29adb97e942bac8d1cd6465c5bbe691c9b0911","187":"68be624fbd9ccf126d6ad2c6c7b64949d051fa2682585f50b4100031645ce541","188":"e63eeb6f857be6f57b6e821c64865d036ad95eab471c60b841fb338f8a31c058","189":"53ba15c1e705a9c48255a0ac7fa4f4cf4df05582cd10a26fb507fe57818d1474","19":"dd062026a74405dc972b4a7f7cbdc4653efdbbb10dc225e4513e880f487d2e02","190":"eb508a3fd8a4ff170af983d0b313724c8045c352075f2fbc8fecfc784d270cdc","191":"cb7b6de8f2e6e57b645bd870d1df16b140f9e56849af4f71defe311511ba8f1b","192":"ea0e86d10c6a2589122b67504f0df996f5f2100eee891b3a245500b8d31f9b5d","193":"859e8679761c0d922cf8e33bddc4e25ab1639a5355d9bed51bb091f2bff95296","194":"ddfbade86e4b6e117fb22cc5c55804023e4de37eceeadddd3c5efebe9477702d","195":"1443dd0817eca4443554e45b55aad71e0592ac64d27691700fdf485033ecf3f5","196":"d02753350e5471f213094d6f7817189e0104541f65ef9020112bcde983f0ef80","197":"309e94ca3bb02a4bcb6c2e54fedd9c4f578a0607a3e5193ba17c92136eac3e19","198":"e00921fbe6135aef6af7c9c9640d654e6ab5349e09117391f7a6f5c3e32c4431","199":"964cb5669c558cadda1bd3bfcca27b5aadf9359f56436255c007b90d914d1036","2":"876647bf6e3705043e850bbb0b31f9d181ac6cec1f41ca3dfb12817cdac9649e","20":"6c530de4a12ddd0646faa4314dda3f26ecd21a8a0196bd268eea11d257ae7474","200":"3f7de2808e81d2417786ae11a8b165fec4ec45147c0d163e58ddf0f2ca5d7c64","201":"0d7cb00f598515bea7bd8e174ea92e74bfc84323d4cb42cff9e9a462e2dcf805","202":"398a39892dc338865f05ab9266f34541392d42cd9ac256ee8e13e4b00e3fa55a","203":"4698c445ba8733a91cfeadb2b7a53b7794b9b8486030ff7a8d6def89d26a8376","204":"83beb559c4b32468b6a598db7d457077907ba4df8423b0f5c176f60356390a87","205":"7fe45471940ba0c79fd4f563b66a250593c1ffcf8f4dc1e10554eb3f20c5c558","206":"5a17a0dd7c4b1d75a00edf056e4b9360071fcf757a6a172601b1445c28bbf5ab","207":"ffa75d8ea32110016d84496ec46e89024f82471699e093c25e7af3bf8073c301","208":"2fa21b2cea6be4fbe0bf9640e987784c94eda0a362b0fadd7c3a318231d7f9e6","209":"fe6f77c5a9f95d4c31d49f3a1025138ecdb033dd20db67d13c3565b2c5d4ba6e","21":"d45e7a2ba140b56a240d34e103c6f4ea3671e2208dd8a8a2dcbe982fe1190566","210":"3a391043407b9dfa028b59f8885bd2898bdcd037d145e9ee83b0b6f9fb5a6681","211":"0d67cb6a882da51e88edef1094b0a87720d1adf3cee5ce9c3e920cf5110758e1","212":"1fdbe0b7ef81a1b2889b765c332260390bdd32f6c334ade912298d4865e3c1a1","213":"3eb9944ecc30154b8fa4cc90969aeb1fdc086b05b8431f1cd2c3c4b8fafee37f","214":"33b8f0c6319f120fd1dcc04f61b4a29f22753aa8eda4daad2820be875fe575aa","215":"16b8ee6c63fb679839594c4bc0ce01311f1c89bd15a1fa82f30a491d6776018b","216":"c1fedf2dbfdfa293555916e5fc8ad8dd9c28f5c97f36e84d369338c1125e379b","217":"eddf60b71e90623de79abfb43814f465c3d4b478333c82e4bfd685f4a779975c","218":"cbd3958da3724144c4def57273f8d04250a5b1d67de4cac01124c84924a7c81d","219":"9692054087a1ea7eb4948e24a37123feeef3e446e663c8334a990db59d0bb5c3","22":"670be0c60afcf4bb21a32ede25c694dd4725ad404a501d2bcd6c559e832e9dd6","220":"697413e4968c84fad399c467fba11b010df37b66eaf7410ccd2cb6a921319816","221":"1002bd0b322967bdf4335dbba87a20c315a006cb18e3623552d503e564a471c1","222":"420545ef02a1383188e19904c44ab03eb18f433f29ccc4dbdf8dcadd960b867b","223":"1f5eb396bdaf2eda2fce25785dc6dd3a998889fb0076bebd947751596ac250ae","224":"9f1b3855f7791194b12b2c70fa464c23fab806a5f31f270b5fab7e9961fd03cf","225":"70bc3fdb8f81a4881b945f14a0e97b0b9551094d492e40b5efed63769c659a88","226":"e313ecd1bcaa3b7d9dbf7f9bce00d747a2a4fadd3f32f87a1983266f7a48f016","227":"6aee6a50b5312932331c8b62a489ae79f02a1d18379c275915a4ec84bec6d58e","228":"e8c36b7d4c0342e6359c9a048be67872b44c64f74e9cc13772adab7a3bb5e50c","229":"f1dd6d1e64f9df46d37616155ccd22e2143db24113a3258519f4c533af5dacf4","23":"12ae766c1a620cca55b7e12934e7c7a1e4329d0fe83c57ee30340063db814528","230":"d14ddefaf50a78465cd1c4c41761160e0586c3974057840209234642be730eaf","231":"c3a02af36fe62f4c76771be9f252b6135fa0fa9abc7ed34f7b086bb79598d58b","232":"9ca6b138f619f8ed3da3f2cdf7dcefa3002d6fc41ff394b47d48de53e464c5a1","233":"a80848cf2d8ebd84e90fd55973f35dc24a215515d6ce90a63a94e7b148f79bbf","234":"1d4bba16e802e34c5e334ad13f2bdabd36b480c0773c1085ac2cb0596622ecac","235":"3383875c34b0aedf87985dcbd0037db60a58416e7d01ef41c2bee8f6c9fe1d67","236":"2f3ac19bc2d8059360ecb4581bf8dd65e6a31fef41216a9a2bfc618912020381","237":"d39b7822d841ed996749d9b8c1ec4b8ddb15d7406f7cc4a1995e92b282820680","238":"23a1d4f39bb13326fe445869afc0307f4405afa5f205e4a6817a47c0858daefb","239":"c6a8c0e20f48696328020a004c6b54b36ecd2d96798e3b4d2f09d1440eadbcd0","24":"200a828a3bd23ad0e0ea111e71184c800f58c592160b5d9cb5eeffe4202804cc","240":"1b2d795ee90e75a8a2ec4b1dc8618c0be3e30eef34166b7da223c96b4659c0e3","241":"f0503adf38d03049c65cbf1ee618c782170021eda05ba56820aeb2cba3b333d1","242":"b577b4d929ec5fc6c546e82130c580dc9d5a5e34c7fc2ce7eee27c4820f48566","243":"86ca604a04caa87ac1411933be71e4b1e5a0819fcc630fe7a331deda937e2f40","244":"3dbc41496a0a130ea5cd7c8409e7ac86e934ea3e6c4817787ff83519b94e06af","245":"9b4a49c72a217bdfacb53fdba5065417a63bd8d2b847f37f88f0b8eaed7ca795","246":"4e94f50833323af141ec16a6719f8596d3d794216906f0a188037a04f6ab58ba","247":"b474cf288a5da30989e94a50251a48d09d1b5447aa41004415dbf8ee59c2a586","248":"abbaea02f0027e3bd20d33182a15ec971bac756925088eb58dd87fd22ea51ce8","249":"b361a3de3b3bc4bd8953226c20ae47cfd0e6703aefc1d8475a6b9aca31aed272","25":"fc0752943323d3b58647e1426263f158d497ac1476cbfa4b908b3ef95a8c68f9","250":"e4f550d62799e8b12c144aa344ba9ee170888927205bf3b1566155d1097e61e1","251":"7c7679df35647fddc4107f7534c6b3ac931aff59ebb1624a305870a2f779512d","252":"c0a0a763419238676fd53f389049bdd65a9e453177c8c617cd93875f7ecc1f85","253":"0b145af64772b8eeed1829edcc0b63010651970e2bec39c23b047671e907f779","254":"f7cd36d4b2d97fe38cfabeb5f74bbd9906fb6e31f70b5a508f9a75197f32c29b","255":"7ae5e474a32e09538a9cd534d4401da0e058f48c4cb68a71106d4db598e2e614","256":"1a303828738a4df9f9b9074d326f4419302d894b1e2e44d3de292490733f45f1","257":"81d21a52595f0fe9ceece1c5776c49c26a4ce46ce06dcf7d6a2199e80769f1e4","258":"85cf700821fa60bd82c3624ad704a604f66f6f3e36ba7fc2037cca873c0b4757","259":"b8811675c0e2c9a65a6ccca0df425ce0a56a3e43d621665a79d145aaf3bd17cb","26":"752d4f5f3cabd801a867b564bf309303a3316a736ebd646e195c5a3ce9abc574","260":"eef4a5c0f0c02dc8962f9a0354dc695486ca15bcdf37e18246c7f898e56b35da","261":"c29b250f2c0424aee7ad5b05362753990a7edcb5e88a25d0301ee8df9765265f","262":"a8c7324e92ab45ecb0023755230033d16366d28b87c5e40c58f6b4b7823ffae8","263":"bbdf858fad3d08bc4ea32fd8bf2b0a9f968a07dffd6404ac912c9e69a1fcda68","264":"1e06f43ab11ef51e8c12b6ce74df344d4c1c6411dd14fb64ecd25268ce4a674e","265":"92e8f89d4c50e73af4e6234df6ab5874f98c9fe24985ea4be735c2ae11f56447","266":"a82e8610f363343b8315855e6cb19822894a8d6dee2e3fd6ddeec7599b373f05","267":"36a81a6051506342481f4cde09775fe9d1c1a4ed0971799033e0dab9afea2e33","268":"bc831148f4c692e8e35198750e8420d2e49fa2b25bdec0c9a83349e498eefbcd","269":"e81fd98f55f33ec483476af11373143278545201e6bd871a356be6d388f01b00","27":"1100e9087183d8538c13f2dbc3738930225e73f0404dda9d8e0f7d26d75d19ef","270":"2652780b4f8a6ce46fe872558536b972dcafe25e747b95535a67505601f87563","271":"407205bf1b2dd97ddc85a08eb2379a51bd16693b8821e8299cf3d6842e83951a","272":"f900bbeb294eeeb9ed389e693cffecb5cb8cce970ef424fe781a154fdc100ddb","273":"48c8373ab4e400c24cf305907a66d4fb6271bce0498bb78fa757d8949f09f2e3","274":"baca51032327238c05836d7fb663d757fee146285d9243e38ccdeca28c239a55","275":"44e89b98c9df107955c56e5cba750535e507269b150facb8195fca397ecdc93f","276":"9c06046b963a47e00f565acfb57964d2b0c1b551348a0d98ccfb42d50d3c9ed4","277":"b5502f7f9d54b8f76a6bd907fc72de79be789bf2dae49475cdab7c419ebde750","278":"202a0fc75471a5ad3be0b886d39947ebcd04f34ae4379006f5189e292f6664fc","279":"c5cdec6be6376844bd6f0dc2fb15266b14ac9d3a5b52dcf97487c2271497ac46","28":"65f7edb176194c2ad087a3e1d861346e32e28a8de297edb033b4726f7d4a9195","280":"d8285e36b8ebb9354701e514eb6bb8df0eb9c0ee008aea24813145af57476737","281":"858d7fafdc3c18b6c20070f58f9171fe986fc39121b6235c3c385c2d3f83d070","282":"07774b0e5bbf6db590c3c92dafc631ef1676a01e30001ac08f23688663a463c2","283":"56273d1b6ddf74f177ef089064416b25eb56327e67fb88017cbdb88faa64d5ae","284":"c66cb4fa434dbeb20eea97bcf1f675a7839cb7427cb32eb2a3d6d715025a8dc1","285":"6d7515c9ffd8ed63e8f3b9c7c1e41c1dca53dfd79ff97b83e0d24c76b3fa7742","286":"2926b79f0ee3cc82ff7b0912ba9a51c25222385eb1be2d6a3fbd9bcf0ec20c83","287":"1ea0704d6e7134038b568cd478cdbba05e665dc23524ac04f7348402c7f5b619","288":"731e5f37b433b722805b1a9f94bf803e4c9443758fba312275de082341d0056f","289":"a3bd799c72d4749afd96aa8acaa97905781f7306c51cea7a2a7dd6e368d903b1","29":"71179ff487f39539bafbd0cf76ff9e5a9a4f8562cedf14bbf186de102a813905","290":"52dc239729014d9dd3e7721c17134478bf15a4f442edcbf725552d3472133833","291":"89ad7bd803053a97bd600c57f0263e9b95e504d3976069b0067704ab0286a7f5","292":"3a0603bee4b67f0a664a0af32af19c6fdfb8effdc5956a06c1a7698ce10b1cc4","293":"55e9f6d55d100858b46f498f368b589c2c8162dde7791a79954ed0e510c7488c","294":"798e609eecd5a07894335b2eae08bc71ef72eba0b3f489cee2e6b314e957e303","295":"9879951965d3bb667a30436569d5af0f616eb7c4aed9d7a37b3b097ba1678c0b","296":"809ebf70a7ae7f875467829e565c4c52c64c05c8447a68068b62812f8c727195","297":"799e8aecfe769289489aef330982761178b9a4160666339aaeff46c98781647d","298":"28b5e05aa1a2ebb57f8b70e8004d5699749d6d014dec4b1ad224890dcf2701c5","299":"6ee289de27693171a27942e22d8484363116d74ea861195fe4d7d7a4599d151d","3":"64bcb43bef1d985290fe1e4b8d1002ffca9a68fdb22bb5b67521f40b160becad","30":"35568b7829137a0369743cb61d5015a17e2f9f6ea437efc730165c259a77f3b0","300":"cf7a5e950bb10fd79660239a41fa8c5381e5ed95ed1a235a689227c5e3ddfb69","301":"b6ce66230484dc0ca5ccd3a8ef7cccbc37812547f30444413e2532facc281cc6","302":"87b25ad7013089670a3353dcb3a101eb9eae084d731cd00eab952b20563754b5","303":"2254dd0c64acb3f802958de595b9053db0ea5ac10d847ae291411d46c3a78567","304":"e3dc8bb850149f4be620297d1dcd8a768de519e527f51e000984c5c14064a90a","305":"515a2c0a07155c24f2fb97f13703e54e90523dceb43ab7cb9fb45e547ff44fb6","306":"f67562b25a486a30b4d51a00b5a107d6b4632492720bf10b693d78396cef5b73","307":"4877c7e1f6fd02f8bef5b20f9d718e700f6a26aa987f54ffb5fc27e69d86fa8b","308":"11563f64cc0f5705f69f99ab9e368e338c7f3de6b01c304c3646e2e7754418d9","309":"f7e18532dbb0f0af875c52c04f115e59ef56fc2b4d5783a289a32ffb09d73d71","31":"5732117f91b39d0b3046877189c1b249677c742ecab634c858637504c7977547","310":"7207389a4d2dee239abc7bc881d096df77eec4ea45041cb68abb21b80dd0bd87","311":"132ccd224ff1e15ccc438c9c10bd1504b703422e38e0b674cb2fb871cb3484cd","312":"b47f7278a320c508d17eb83d09e72f1067c21dd657ff11dc259eb15dd905725f","313":"9c5c67f377403418f0319795e976716f53a344cde671d5a1ef26eb2bb10e987b","314":"af1fd3668a73522159294e8dbe780c2ed19d1fba492b1c46db6c158531401716","315":"f224cf6129136606e4ff9c77680aa0b571ebf72b163fc336a35ca48a7bb07a9f","316":"a97b88ce6658339083d774ffdc0a22d59d53679498426206d7941b5cce23765d","317":"636c49cefe4f5b3e288111621f557b9cdf0c659ece7e4dd32866a00d191a3fd4","318":"fc09ee9c44e27fd74b5b674b467772f03d0585c0b706cc7acee5f128c1c031ea","319":"2650ef0a509246a4bec304606e6c10358100e870765b7dc3fc7afe1945d5a1dc","32":"cc2a7a06e6d96fd6d08c723b18966abbc847d555cebdae416a1d1fa7eef9fd16","320":"63cce54b89a7604d95acb94b099982fb4b0451cc863b0b738f40199bdd3e8978","321":"006b5a8095efeab1715ab5208159f65e13f709e3a5482b5b6e51c56b0c3819d6","322":"775ec0601e4594786f48bd70be7d0bd53381fc5a8d9dbcdec07d4342221b9938","323":"376fed085272aef5ee3fc7b9b3ac36dfb6a3941e29ec85b7e7ab156cbf2778f6","324":"572ea48c273f19d104d9d1bb360f4bfa41acf3f336f4e660ef299d4f5dc89561","325":"238b71cee5a4e8110e75625b868da004987d9210bb817a3c8f85afa86b34f190","326":"ce8e784fbda122f3bcbd32ae11baf83e6dd4cbbc6832b2bcbe03d235d31c5270","327":"c293916666803d237a4d9196e1279bd779fb01990921e3210561dc5e1f40234d","328":"4c87307d2b3cca0e70111ec788384da05632af09ca640bdb9f41d9db9d0a97ae","329":"8e975dafa1d5745c76e0f9958f637affee69288b3149050b6f3c69042d361a49","33":"5e679f7f315984647b9137cf55a74a4b949b6694c8b878ea89273d0deb945773","330":"b5c617090fc4d240f31349e514de5e273a7d526fcd43e16be89c17c123e78c35","331":"b620d9e09b51b2e1d81fa895a7833b87690bc92a61eec3bdd2478023d8ed6af6","332":"cb8ad1b265af9d8927b3e70d0ca07112f7bebb9be74cfb8c0d4368637e2e22de","333":"f96d3443e4549f905a4f01733a14899f1775cf7deb0883ba1469c59ced2d8409","334":"4f7e129ed050947641a5e2cc9e5d0ba067e7de8fb7aeb261885a6074c1f93e1f","335":"44b6f1c9e86f3d1374e5753532cffd074567677e6c6f7b6414ccf7312531cfb5","336":"390944a8bd2a9ce75dd13e4c72fd6022534b9096f8c4f19de01e6f25e7c31f41","337":"3f7a1bc600e7d5a16074041828882659166c8859330f6c88a6808d0123aae550","338":"7c336ca3920e45d8f1d04d2644f9fa4fbebfc168a8b17c761eb710ca360252c8","339":"9005b8175d41ae6baf190c71ddc91c259417b40851b4dfd7f02ca92536e8190c","34":"f5decfc64a882edf8c48f51c35e2428eca8e8ee40dbb9140cafb28a35858c989","340":"4ca91785ff730d9d530fc421f8a265acdc8aa47c97f087108de34bedccf5ed42","341":"d0f88f09e99975812feb7977179a788296e2507833918b2b97565654b6a6834e","342":"1d6d0716dc08207fa0398a5adeced0f832142ab6127f970963586678f09ef31f","343":"b1545455bc2f9bffc8953243d74f0ca78d651c0236b03af4953c7c890f84bb5a","344":"d323fa5a97c0308caf388d98958f46edb898fc405fa5c0bb8e667f25e5265b33","345":"9812bfaabfeb926649ee492121c379481fff87189b76febbcc92b5c15663eb51","346":"d52b033b539bf9d4f7c4449d1dfc6ff98a99b9fc01e99f093f6878ac573e1fad","347":"d2fcc9668e92e27c0bf7adcbb667c1cf13542064b1bd2be37b9473e89f1b6393","348":"03fa61b2c8a525b0341c303951e6b20bfe175fab78f2393adcb978c21b79caa0","349":"35b429ea093d56cce991e5b7ef4dc02400479be355c796c1941f2c09b25e1f82","35":"3483420e08b3ccdc4f07ffc6cc2f81d5432ff464b285453ccc96152473ed78fc","350":"2c1c874763595f6e4db0e040a73c1249954f092646b3d385ec8f675d2d69b6e9","351":"17b4ac94f7aff2850af3c528224921cf060d61400ed95591414bb4797975e696","352":"72d20329ed2f242ff4c8e08d5ddb172c78042bb4ef02af5a3778d5d6f86ab39d","353":"1d9d36ca2a9ed4493317106e6e3ce1d715a6c4aaedf381aa6b684cb3ed6a13ab","354":"69f3b8010d30ba09d76eab04c19c031574ef467a582d0a20be091c2437b68815","355":"d98c92f6687a26376951f21b47c4748571afc9f7510d9b2ea4e35ee0e8663b04","356":"9ecf777d5c8709e6efdfa1d52eb5d5204c70508ae629c2a59023ba66e1d781d6","357":"d8f1b3b53c58c6265df588588b4da017b1d2d76f80cf59dcebcc47c87804408b","358":"71eca725fbcf262f1c57fe0ab3ff99ead9b9ef3138285ffcf2b6cecfd5866341","359":"ac413ee47e37200913a15070f135da9dac15c622137a06e567cc17689c61134c","36":"f3e0f11441558ad5c9be3c2de08e22131269edf343146c5bccfc49e0dca86af2","360":"063958d9da24ee296208cb44def244884e870a3ed91696afdfabe7ea96cb1bfc","361":"1338f2c97ee41a48f7c2dae27b1aa0a2f8fee54189d04d627451eabdb67a84f8","362":"8e132fafbd1128af4f7b2bb70fb0af8b6468b76c2abc227b71211d60a2d6acfa","363":"dc3ddce0a34aec7875466a473d59b204d486dfa33a0c5fd7f1c7850d7985271b","364":"6a78000dc9cd9385e81421e0942c4f7e03141da87f44067f5fb418d00d4c1e7d","365":"570429149d4ee7824144d0fbf43dff7594a787f726a5bacc10b4581907042e21","366":"874f9fa0865b352994d2aa2e821f4fac618ba715cb4bb16532e4ee9e0fc3f791","367":"5615d06c7cc44889d51519753cec4e3f0e9f5790d64447df64c14e99fbde0cb9","368":"4a0e1b85fb28fd68e1f316ef8e9c01969de0313fa317fd4662fb56f1f26a9096","369":"3a31cc195c2c910a3325b3e30ec08b7e850c1f5baf56c95d701e1ff520505c0c","37":"2995aed6716a71d26027c661b8da773918139bdfcf4b663b253573456eeaefef","370":"c1f4dd103b329127ad3dcbb763ffb7442e07ca308962526b9d7bf8293e5f7077","371":"12269eaf9cfbe5c937bc503f8596b4ec66a091d9992f43750e013b301ce4e543","372":"63b06c0896fa2055743ddb2b896fb7186952558906dc597c1cc0079fc4eda1e9","373":"6066388fcc2769bdea96c0ba3ac465dbf8ee4ab2c021107c396a1837005db675","374":"ac0b3b1b6d36351ff68887a392224cbfa26ef5b2b10cc5fb2f1a28108344095a","375":"9f132e408be2888ee8aff249b008045ecbd3dc54430ce6a65b91e5d9edeac0f4","376":"cb20aef32f9302be669af2af231a720b287611781bd266bddd5572c51a79913d","377":"03b322b6f6c744b95c19a7843f1d8a2246c55584082acc710570098534c5eaec","378":"9ab5a955f688a57c1927847828f27ae11f681a51d98706f94af784327b69f56c","379":"c129bb0051a64d4fa01207fd8bb858cb8399178257b3c26f453f62983d627322","38":"e5610da048561c0debf95884df559f86dc02f2f0db8b6c1d6d7e3dd773afae77","380":"87326c1797d54ac91f2e49c2cfe348ce492d532c611d07bbc82d10d9421623e8","381":"9ad83e6b1a8954c2c08500f71b55938ff86a0066375143cd16b38c1778e22bb5","382":"22192b597c98932255bd0277e8f1fc069a51ff4bd400d8c2e74ead8f350a4fc5","383":"f40447b09507b5e489fb95faadc37fa0c711e12eb59bb797d902c6fac1cc13e5","384":"2426a5b095145ef76659eb8c893c02ba6bf38195597341b62a63511f0b4c8b90","385":"de7e07c645560d64c008d298b10b1826d07f6883b2b711ce204a81ddbf865909","386":"ddded26cba2393d234d426263bd68e60c70d4eae4652caae18c89fe73376270b","387":"8422debfbba2abb96dc7a25588aa6745ae225a5aeb173d5c28331237fdee2a99","388":"a9310394511076d86bdc3e0d4ea3fb36a531566475141f9e6f9a8314e45304f8","389":"413949b56a851a151b11c3b4e00f17448a5d51c350cac0148c14d243e26e7f08","39":"aabe08e92d55ccb54dfec8159c46e3418304d4a06440076a4f9dc6db04c6a96e","390":"fbd2b54a0d7a33324baa59fc92dc181ada60af0c6cb7d954d912f55584206224","391":"3d9661d0538149db2c7d8fe7e2532805036f5dd927ab42fe44bd9d87fa75c7b2","392":"3359899ff7b8dfc9a010a3a7bb412ec8bad0b7e23dc13c8bf363cc72b20dc62e","393":"4a32e108205ba62959a8db292c9ce2a38ad6388e65638c4aa642905674bc7e7a","394":"28cdc5e09e2cd528c284dc5ff5c00ac1433ceaf84721802617156fd71ed893a8","395":"037d07f1abb2235e7041537596d3138f327e94bbf57e18d16f5f15a0b03cd635","396":"f3d98f1ddad763817b3b5ee1840da39309164e8a9cb218bb890aa16cae53b37a","397":"68adef8e4cb4e177dbff8fd90e4bc8d9c3bf5a2704018d467b6156eb022de6a6","398":"d70d637fd1aa404eda03a4394399526467d98c9e80df328e740b20c267dadf21","399":"e85e2777212a8149d005730d5c9134ec7dbba6f507175412fe99454c218d2d09","4":"bb36aa46fdcd8c9980ecfaf9cad6b4d983f4e41494b194a77460435407e55e38","40":"dd9c2c2c40b5949510823a75bef279b42080c6b19d4791e60b29699c226e9a9f","400":"8395188b2a43c21301ec91cf2dbb9109a9b5c3dee82cb642421296149f445981","401":"0d1df91b34645890f7de13d17307796650ab437762d95617a58100418a7fc330","402":"581786548a708cf2f4b2a88a4b2deab01e244e7eaaaa58270dd8acb04de8097e","403":"352ab8f362ac0ce13e71f6f7accc35141d02e7acff73bc2187684a7afb466555","404":"7adc0d5ab9b0485f28e661e333ef703c849adebb99ad23ebc7c670d5783b1dc4","405":"9d7e8677111dee7e98f0cd93813a21c259882b1bda65cc310c99a3b801154e88","406":"e9eb597800d6438fe9fe43fc860ad86ce3b857619434c6f130dd7de6863424ed","407":"84af72b17115c12a94fc587988cfc066e6ea314a18e6c527679d3a608c44252c","408":"4128e593d362ad888e2f51badfc8567f77a091171a024ddfac7649475a9b7013","409":"5e5c294bfe5cb3bf2d84743ba0c17c0b637cb9ea6c30c5f2aa085feca8e44150","41":"4890dc3213186fb8d12298f8a6b8631406cec05ace1cbe7b50ab70371cf1ed6a","410":"18c27ed537e28c0caddae65e7281a236176648bdcd2762ca56e04a7b13ef013e","411":"4b873e764c30bc15498b619547b1191e08bbbfba0eaa317627c90f57f763eda1","412":"309a6d09d6b941d47fbed47cae6e7e94def919a5f90f4f19d38cd0f8374b5427","413":"fa7fec160491e8eab6ea751bc9fe1105089547c64e55c8f7d7ab80cd0b1f34aa","414":"5fd9b6803e6c91fe92d0348e1abe8c9cd7a9e8e20f2c3d352fb5dda130aca714","415":"6b36d0d332512f93463d222bbe93d040e132b88bf0273e93af0bfce95eb7381c","416":"d8b3eab35dc5f16aaa96a20b99aa4577c17d23544e9267542f4afd18a6dd613b","417":"a44d223f23d66b3cc9ffdd31fb7b2b293c31c0ca7447256ef5b7ae93bb7d4897","418":"689be75881415520795395cf84b97d7be87ca1f224ad73fd93d5ca2443d863c3","419":"970cc7f03a54877df24f8f7cdc00997304c71d1e649b0a0d5b59cb227b0ba081","42":"89b840e2e4959aa70b1ac012649a339676d1896fcfc8f3f605025aebeef786e4","420":"8737d2b96057d630a4c9606fc0fc03bd7d2018030346baba726b915a81a4a320","421":"8ab84f10bc989494864bdf5c9f1eae31bcaddb83892c7d6cdd852002b8edc18a","422":"9fefa20c8fbf9acb5edbc0d1999977eafd92148b2f65c61287bfb7ba38e69685","423":"69048fc76132313e842837c884d9a655652bf27e918f9a1b466a3c2056bc1ac1","424":"4013dbf45fb2aaff2ab0b358470e10c7af94130f8e362ace175e89ce6f535cca","425":"8d1c8b07f4adef2e2586aefc2c3d048250063e3165680b3c59dc94b05f297a11","426":"cfd78c7e41f173c4a20a45cf05c7b32ba5c4f32824226f74dbb342b02d36e644","427":"9734775f1cd2ea3c20f48e81e1739a2516dcde916ef336b404f493836efe19bb","428":"a3fdb04e6ec0ef29f9fb6c0b4e8ad0a91541226adf072b4a6919516680796add","429":"9501d9deeabe9a8985217aceb90536219332fed190410df887036612861cd57e","43":"b9b9de3cbfca1842b27a22eb0f6b77d1649bbb58fbd739dd51ab854b106e8e0c","430":"795fd68abccfb6cc96f92fdfc3f7e7c154b218932d865496e7b16ee1916f116c","431":"8b3b8373a03a40fffc9741d7c21800a6cf1e8b23401a0e9ebee18e6ad1d1079a","432":"067568fe2edff18efec94b59903e99b978f8bd70c4f1bd9e4dddba641273b0b4","433":"f67a32d1220725cff9557c35b911418cf7c20ba7480ea4da532a2d2009037a61","434":"87e6f058f42b9cd7b8cfbd63f2f9bddac37d4a6740a4e002160415a6a88ad01d","435":"6182a6eb639e77db109c00e2d1a61763bf79a8757f18525ac0b211a34672e6b0","436":"3d5268fdbd706b2646209fb51d64aa53180e7c6bab7c445f4564a8dc6046fd23","437":"daec643976e8531f2ee2ef228a95dd894908d140b91101ca5489b1864820dd47","438":"4e1a4ae73c8781e535917173eb8c4442eb60d47a493aeafb492b9fbb2696e72d","439":"7465346fbb791ad3d5ac2329bd1b49a64b2ffe88c2f2afaf4fbacc49ec2b1b57","44":"a0b89d5ce7ec5107bb9d5284b706767706617ee436ad0936850b74bf825abc18","440":"a06e6b9a12a8d5b0877d302ba3fcc0be63991eab683cabc281d04c49987dc340","441":"c0c97974d4e98d0462e041e4e62294318b72ba18211635864b003ec85f047c81","442":"d8bdef2dcb525165cee8a63aafe54eac9bbac249f0733780b8cf30d9dc1b8cba","443":"01d69d2087e119053e91dcf209a24071e3b1414db1346cefa9964ce41839e78a","444":"295f685726d4c7a86032f5aa964ab420ea33c049759d7ec74407b81ff3e89a52","445":"b3abfede102774f7076686bcd6157b5943c18a4be8ec5de518b950a400f9dcab","446":"50f0c7bf18e391d0feca526421d6ca9e4e57b01a251860d1db9dd8eb4c8db634","447":"06bbfe224506d91c5db94a75bb04d54bc08a06f3e7a7848b4c0e8680a74a9e07","448":"7864f0ff5e56d1ad99c122763e29fa3871731e3ff719e882a4730278f03f9207","449":"3921cb01c5ef1cbb6b02b958cacb36a9369724171f08195a370de9ba0bd2af93","45":"00e75d1049125497a056322afe0d5946963fd095d84020e3dba91bbb71c8c970","450":"bfed0913a7de2541f4228fcdbd53fbdc97289ce5f9e34774d519ab05be032fae","451":"d68a518704b2b8cbb2036d6ffcab95ec0ab15f77a94fc1d93635af2fe2c68e35","452":"0013161ad1336d1faad5ee1eed6ea36573d1b84cd576734065df0261d102afc5","453":"361dc329d2a7c793a96d723f2f41e4263a64dbaa6d8d4c8030c7d8bb8be85bfa","454":"3b67eccd876988bd3d56e9530371d5446eea9f17c702480140d59b9d443e5f77","455":"bf140701d503b4483b7513eef7b74d806ea928036dc93df9a0b08d348c59632e","456":"2a2a572bc23c8d785f90096d64c5b66110323ba3e61c38199d81c5d31f0d128d","457":"ad7e89e51e23650c776591505258de6d14279908660ef6f1d031e32b390050f0","458":"21da4ef31bb3a60358a2b8d3046be574b2be06eed3def3a12d49935e6c900ef6","459":"e1b44aa8a3cb3dbd28c7668a93efeea8339505de7d5b7ef1c1c10c5d44d80f09","46":"22e30777935727d2a99f3aaf609b9ec750a2bde43b19907d9e36285bb5f291fb","460":"4555e2e8437bc213a555d0ab290a191a679cf17708f650336d2d5c15e15fd525","461":"06646aa798c393eec48e7313b4edfa331db0995fe7d9814cfb5e156a0164889a","462":"f4cda9c366e9566306a695d6396733e0da269cfa9637e36443358cc664318696","463":"c812f7fbe69ca1068926d2fcf1963d4a99b115eade241bca94ff0824b044d951","464":"140a677146661ed5580d3a5b9de7080dade3fdbdb01dfe79e809173096135d3b","465":"8fcaa3b6e2f10cac12682c75ca50e0b8aa395726c13029f2e5ff69694cfbe45a","466":"e510f07161969d77452abdd77d0436d218bc21078298820f0c604d59ee8dc690","467":"707d81a0b5287e4c530de03b6d20bcbbdb27904f88e83d59afb3028adbd6e50d","468":"7fd4d0a7369f5a43509afc56c095753c54bf9544c071b986f1b0097f63d99fed","469":"0e0b265b0457d3bce34eae8d42e633072ac2975896f0ceec586be5409f366537","47":"dbf01174d7bd89bb320644df11ed2e2ffdbbf64142c189ee11a3aeb0b544aa5b","470":"170b3cbf5471bff8b84dce876cf4ca4815eb8b372718b625ad8afa1bdfe4c143","471":"922d7ce6ca05e9b8c5f79ba1f9b25035c8ce044dcf8d272d142234b444cd6359","472":"e0730cacaceaf03d28236bbdf4626569ee2dc31188d1caa094fbfa764c3eb5fb","473":"107798556a409a369e3f34f1e31d4ff3bcd840b83deca69d15751633b5bcb703","474":"b15352b427c79ab5dbbe1c4b4387f029944f47f4b8f69998751be241fea0a0a6","475":"82702e534f1a8377b701e6a959d14feb88401c9f38474aada96af0c98b40c01a","476":"32add18f86d8a3b5e28e0846bee52978fbf80cb8b0c6999ce209675741604f6a","477":"ed23bbbd9c27a64fa6e25982a49ec12cc6457968cc5ea644a2571065c87c1b9d","478":"846cb45c71ef35c0044bb37d6834f5341632cc6362677f60e735a5c9f90a6a90","479":"eb0ca6a4607fd1b923c634343d23044e40988f8727b7321a1101a569fc29d694","48":"8af1e4725ec6cd44dde98ebf47666c0ae4f6a87b9133ac425cbe98e2b506c76e","480":"548a6fbd3bc7b2ea77fc06db0df0da5f5de12ecf164b69c366254036051ca0b4","481":"65dc07ce2b3293c940ed793d10722cfb36bee275f402e819cea264edbc8bf498","482":"8b7194fa5b3d9706d7efde07768e8f71eb277f24ff9658031aa9a78c0deb3236","483":"da8c92d32fa4cd63e2967e33df641fd527beb4f3bb72f0bfbf973d536ad50010","484":"d6d075de6b44a290f93d390aff30c180da84e071e377531c2d889d80dd3190ee","485":"6c57aec308e633583dbd084cf2386f4dba9a1d6082a59e488b243a98c633e699","486":"b6d7aacdc673750c6b4b1e391ad0ab686ab362947e195856d5f71d33b9a7b11f","487":"272d978a3c0e597b42033f98c5047962a54dfb2e75cd235f06c9de7a64a799cd","488":"fa72b7b7e9051a5e8d3c51a49a4f29212348753eed65e1be527859f23c35e86f","489":"7da84f2ea34fd87bb13bca6ed8450a0044036c54a83dee8408e515837f56a091","49":"a30da1688b1c140e30c6b86b0d44f89eee7d3331f47c924bb8fc31c50166785d","490":"ffc74e9e41244ddc1268372e1f29227f0fe70b7353ed99803e833d9879561d76","491":"ec47f5b433842811acc3346d20182d4cb3c9b8b6d2e54c868c884905840c394c","492":"5a94d8337de921972e06fbc6c7e8f96399814aa8bcaa70cacadedd4144eb8294","493":"ffb4d48e618edf7665c74dcfad5d76d7554508265a8ae8dfe5333c961670e470","494":"d924b2bf6c31a99264674c70b0102b395fcb7144ad933f905282748ba7859f81","495":"c2dbebde8330e798bdcde4c6da11aa345f810b1cf33aa9680d5da0e7f23db6d5","496":"13eacc78bee7e7cc9bc2b7db4792d9ca477993986f2fef3cbdb2d320eff5ffc1","497":"19114d00cbf07ec22775a034e6ee22522e31f3334f534345c5708392248b8a00","498":"d269a76d3c82c9105b9bb7644378a507c613fed254486544e902c5fab50364e0","499":"e22d05fbc9c0e84eb2186abc3491f70d4cfbf650038ef572535c3be2af967843","5":"33074220f94373f2fddf0fcfef63028e6fe26ae985e058d7c19f4c1cb555a813","50":"723089d61741941eb67bc792872e4f095b6f931629746575a6441d26d39c1f41","500":"c409f8d19d09d76da0ecf95ca5ed73e9fc5ae96e3aa6cb36a1b3cdbbc2927c29","501":"3c17682b06afaea70cb5d1b8b4ae26fdd95689e94d647b08e21818cca222c15d","502":"4f08c2ee49b47ef71f62559c5e53a1242fcc5232211b30847a3644438f204276","503":"35987e9b5be628c64e56dabc4782eacf72341f2364439f16812cf8d7dde9b5e6","504":"64958f2c6a3961116ee6f6c279e982a5d37af64345b82fb8a7780012bb9d838a","505":"46de64b903b9ebe99f776675c5c14afeb7a36ec6563952f9960a54db9c003487","506":"a564ee72a7d1fa97a206ccdda6f0b319944cc06297b8f9afd385b8ed03ce4114","507":"e15defa3b1d6af6c131501c485f189d74b1289b9ffe61e4b39416e23ad7caef9","508":"72ce6bfc70574b0b6d04d797c0ab48edc145b7045736b12075b077cbbffb3a1d","509":"8e9fee3ef887f246398110f941d959173cf3a0823ce8be1ac4374b5e85377fc7","51":"7c39112b0a66a68f6b300e21be91fe39637dcd020cfcb8eda8a78bab1d77c139","510":"4191eb5d4b0d8c47690d05ddcd7a2c38d0feda57f3008b69d03daa855d768c38","511":"7d0709ece288b650ced989399ca7f2bac81430b02ab58ed1f2ab418c61258564","512":"ccee39eeb31652452b781b4843a195a22194a406fadad6c234f46023c0888f8a","513":"198747fab9d55335e6c694d7da522e8a8fc738728aad9d87ee840fde731d2179","514":"e1253146886b1787de1d53905d48d3a73edc39dca415430b362cf5033c842285","515":"fb553405b4f5f169bca3f975dd4a9ba9bf14d16239e0a7e2f9068d8fd23aa5d4","516":"c0003506f1864064bbf98c3495cfa7fc3cb381ea73f6e667ec90f6a10f32ad66","517":"32e3b642d7380ab577de5cb49774f25d6ca6c6d2de36f065489d96168ca6c976","518":"296af4ab4d345f04fbadbcaffe4b4b0fd2d1bd2d60f8d14160c9ed0c743d2514","519":"dddda16b53a266aa69554ebc9fa34e67f069520b8ab545aa08adf94a3c81484e","52":"99ec3ed051e32b1ab6c4317a4a5c3fa46f517e10c97873c01b9491db242ed9e3","520":"21573394331360d0cace8fb4be4ca569da4f058ea648ba72bd98bcf90cf50ca0","521":"560b8f15065ce05cec02e3c6de7b15318359efbf3108a3af30bc3bf0505e1670","522":"7e05b8cc2f94cebc838ff58a6f5a898fa13a01290e1e4d742da7d0d1d4d6f1f9","523":"af240504942f854561893ed2fbb67078b63b9041362cbce5720582c0e735301a","524":"01486c82fd913f83ad0c7033db97520abf86aaa4d401c03053e1bf00109a5919","525":"b757aa2a877785b41858bd721aca43f7b08d713800970b4c16b69844174fd405","526":"1de77211fcf1fa54d8732aa4087d897b2739bebc2475321f49703f93fdcce0f6","527":"7aad0abadeacb3bf0592f54703783aba0422e1b48fe857536e913344a80898b0","528":"377071563bd7a86caa4a39d8af460eec39c8757ca04d83fd9008d6e4791c47f1","529":"0ffbcf194a633c07a7eab8f417148eeebde79b17de724eff3cbaefad21565bad","53":"684bdb368f281df57adaa464f99bd9217d8ebd09b9873557e411b1c0a2bc581c","530":"953ef846f228977a041f92eab368afee75033fa6d7e5babeb35cf9618f4e6095","531":"15b72d19b49e078718fb64c5a68bcc21bf669a054d7939f7d7df775ad403b5dd","532":"a7271a6f20198ab3b53bfa3837d0c9295fbf4d61bdc861c46edf707639fd5257","533":"26dbdee990c81e6b49c7ee858613f11af0a4fd41c829bb1e58a61447a2e7387b","534":"34adf5c44111ba472b89368c123d7935a23b65fa8c486358085bc03492ea7402","535":"d369a782932581116df5b7b59b769308ba63b6367a5ed6e08da93c456e15e6ac","536":"a68bf0a3e9c1b1b6b378bc497306e50accd767639e41a966f3d187fd1087b4dc","537":"c19e6b3015f683e91bf0d4c9dbb50aa28b0ea071830b92e9748e48ceb4f48bb7","538":"c7a3b9751e17cca858f61c67137075b898edb36475d0ee7cb0101b2f832662f1","539":"23cdf97bd63d21f6a7e40647ff71d08a839430c43633df21ffb73bb238c550c6","54":"ba8683bf4df9bbc87653608157e0f83501019afdcdb498db3552c0bd65b2b69c","540":"31ae3c90d4d3bfc132b01a4e8fa8aa98f397ee38ea3c722b5f89e01b1d896b9d","541":"45cbfc605d72023bac5414158248874e16dfcbe4d387457851d34b1b7db79b88","542":"6a2b98c61cd738057d180d36209472f85f8519cfe933f0b0e33063f1667906a1","543":"03adc105b8c9857225d20753cebbdcd6b303e106ef41dddacd43c9cf218141ca","544":"ff1d7ba3fa913b784924ba52e05221e395c2b95845be891a342704a14ed07a4d","545":"4d895e20bb4819098b4fe33b02aac55bb3085500c68235cd61fd821a5c7646dc","546":"3bfae400918ac4a03d2d3dd049119df637526f4da8cb767869d6f7e9ebff65a4","547":"d563e78b506b9b270007e90b188a5ff61dc5e920e1ce428208b76a272b4eab6d","548":"c8e57bbf356eb7ad71aa52f797a89d08880a3937c7950146e5050b0240dfab51","549":"084d4477450c2fa715679ca32fd02db26e88e560072cea684f74310244cbb048","55":"5af0e6f6a0a61fd90ab90ac6f8f65110eaee373a054c9edcee8595eb8e132f10","550":"1d72a9c11873c37df8c42a1797dea8a83c58b996ff694ec0de4c82c58fc57d54","551":"f49282bfbf35219c7f2750544121a9a5ac00822aaf1ec05b072addfd2c33e660","552":"4f4e38b639a7a2e0b6cb236d33ced23713e7e95cbda66922a5c38fab333fc82d","553":"0ebaf0d2c7f7e1bc86ec5e5e4e5feb7bea3984696887f0251b2bc152a8e4d3a0","554":"d5941e65c00402c37e88c3b2837312c0f1c18c5208934e53039a9387120044df","555":"e9a116bcd8770d523b0c6c00cc3c593a15872d244a5df659af8446a6335f0bd3","556":"0b60058885b3d32f89602ab445bb7bd441bb356da759deb1fb7421bebf3ca0a0","557":"59a1a5122843a0cc473b8d8f221a9464a08721fa11fe750396eb91a3b5829864","558":"d2c8278c2566e84f86c70bc67d1202ba49b96c9fae53275328f7c929b43c7e97","559":"7e5f4b88e49928b3b728863d6b088bd8ee43c3d69d286179a3e928a1162b3fe0","56":"d0d30da90eeef1cedc278c7517d94fa6f105bb188cd6e751a64c5cf704145f01","560":"d7e650ab0079853790254373dde9251ae0a516f3832d5db9f357618329cfff4a","561":"0f68d4f55fd8b119d810634c07b641c81360c8f2ad617166f40295f57fe2399d","562":"c36dd23ccdb46416cb0cbbdb1cbf3e026f4961955a4f530768224d043df93359","563":"c60df7fec623a2b5e25a83390a73080a49beb33ff7d2cf27a4837eda518ee13f","564":"54a1e8aefb5135584737da121b44fb0593d79be01c330b7f1fa125edd6b7e4d9","565":"327966a666a8f72c02a69a96da966193cfa6c9611348b5cd95894387efb50dcb","566":"4d8b946e808a15570692a9cb8a52b22f6a67218be0404fba6b7efa89a3b9f55f","567":"45fc02f8b44ef4b5aeb970d7c3c2e6d2e74f8ca8c27111de8c5fa8b9513b60b3","568":"7a94d1fcaf82d7c62e6cb33f987db8f73ef0a53a9fc6a28ffd2639735dc61458","569":"6f51624797f36497978ad0ac1c30c0be945cdfa011e9303bbdfabb38c8aa7aab","57":"7a727dfa2addcf6d5b26f4e56d029210d6648443cdffdbd5a1844503f7f3cfdc","570":"1e4771f6c4c42a3f803dedc99f326b12d44d7817089a846a7da6bf0cb4ec4c9a","571":"58fce99c437f22832a1e34ecb83ba6bca6034c907fd36a7f10be7cd2e8387523","572":"845cb54d94e953b0872b6aa61fee623b58909d124865cc7e88c4eb402105763d","573":"3bfc95a2b0c3d059251c303e5eead27c75f88524afeca5fd1f8057a59a6e0fae","574":"e11f1f4d00d43f3cbb9ab244b0ed1fdf84725420e110987311ee173c65106600","575":"c2f5127feb571160b0d7266e1c07078a281133e0415ad549a789dbb004be342e","576":"7b889a3cf406e4c273a88c3afd59a4a8977d2f29830e6c91e1da1c9da09fcaeb","577":"85c2f9db3b3e5fa78d3ae75e22d91f805d787d4d9fcbe35aa0c5f0da42e0d6ec","578":"eb96d45e4d291163bb34eb781bb6c08fba1e0f127dc4cc97a126a7b4cda58fe9","579":"948986d94c6f08f68566555158b17879cb07866de01ae767b276a1fc5e119b16","58":"2c27af5713d2a4cbe80175c71fd6a354d011500e6289836ea16e555f255ef2f1","580":"a86e8c6332f889591d9a1184edb8724224d669c8d5ddb1e9ab363ef105009654","581":"59f4ffe73474afe69efdf547faa32ec4efd3de6f0d8cd6b78506e8bca9e6a8bd","582":"79696c91a3a1964924e2dead61b8124ed2b0e53b01e6c6416ef8062d7dec8cb7","583":"af8a2f4c76f090f787ee0ea9c16beae30018826c444a2e9fd0de08d0a6c210c5","584":"b86cb52465dca28f50abaf208163fbeb61edaa3b8b8907e1e62f10c2b2157f02","585":"d13f53b823cf9b844f2de0cabad06161739c4aae36a36082f30fe127849b7baf","586":"671ce6dc312b316f9c2a19e6adb4fe348fafdf8432ad5b5d214c1fa4ed4208da","587":"665a8693fca5bef3845dad157d40fbcec620ead2343239f680fc574bd37e606e","588":"cacd2ef6e96159f3d9e36bca21dbfb8e4622bf504332902a2f7dcdbba251eaa9","589":"7f600e7f5b17170f333e64f35e071a3cad94dcbff3601f111523b8634595b435","59":"0821e2f5e7c2631c9a217105b2c0dc28d2800e12a3e27232125cd07154771d1c","590":"f2a6715f53eb7bb24edfdd5ce21493a47e281fa445449f6bb88ad808b4ca89a6","591":"faeb77f7ad649de3c253868f34c43a1e3ccca3cf9eaffecb8bbdb02f658f2639","592":"93d891ad8076144c9685352014392abadf3a5c5254659c30ad85a8351d130e57","593":"8e81b170075990bae0012fffcc43211bf362006b68c50b89253132379f285b81","594":"04ab60d8303621d58b12fa1c1d26276db3aeecdb9f4a47e636071ebe607fca37","595":"cc14186d6008cbb945a4dcb8e9a8419d10e29203b5a5263bb2d03074adc37fc6","596":"84d3555c61392133003aac34bef512bcc2d7c901abe707a6dc341d2dbe3dd042","597":"d43a79de231d990fbe5e3e9f25c2c6897aa4c35b500686aff7702c4b5cb22fbf","598":"b75443aa76f99f1302626bf191119bd5734806bc278fe526a7da316cb67f30a1","599":"b1d6978e4194b4d4b329574336f7071e9b1270461ecb32ee25b07391b669a4c0","6":"b1495b815fc00bfd4e832163086145c14d66452d1dea195f068524341fb1e84d","60":"ac0af2c08f5f7130cadfdbe68fcf1f99920db39496e763bf1978376effd8d139","600":"adddcea909c6625f9e9cf67729a367e197f50cf22899c5b23e66354a1e00cc4e","601":"97821094a97fa52dd914f14803bb3ce6e7a5c68146d97a060721823a481f4d39","602":"711851350286b9235c8e8c484df9451b17e5cb294c496273ebb022a179f4d756","603":"1ea4a3b4b1cfd067287b7555f974bbc7418b9b5ec62563b21c4a4f42921bf4fa","604":"b011b9dfd383e425c27f164e878ccdda0572be6cb94fc72365c6893af41a5d5e","605":"bc5233747757be7568a78a19fd67e05e5f12f0f5eb832de69ce8fa1267ca96d4","606":"47010bc089bdc9a1af0d653d13b1c2d3d280a5214662079d27cc1005dcdc6a7c","607":"e02cc3fbbca5c700cfc759faeb353679235a1dc72c5190ccecfe6467f90f9aed","608":"4313bd9ccb09839557340ee9608ea17c1df5c1216e5fe5292d52eb48100ff5d4","609":"fcd4ac0c2060c6c14cf9af8f9e12b425ab641c4e2c621ccf2266500f7cbdf1f5","61":"d2d909f7b26cf1ac888630d4660c85e9922fa5500bf064ada940a0bae9b63e37","610":"67db5233813709df7f147a9cbe9a302345707bc0b48b3a913b9ae82ddaf7061e","611":"36f0f2fddc66aa7f8c8ea8f9fcd8c1677930f6aca3c8f49fd37b58c07909aa5b","612":"f19dcbe624b0616340131b3b7aa758b2d3fd44ef344047c7828943bbcc32cf18","613":"764b15dd8fdb9673a8437abb322b8180749176e28bc8bde01a7418e5416a6e71","614":"bc9470cc0778190a72e665c39f5d0282260039b66b3c2e8fd4c1abca9bde5c42","615":"8dd20dfbc799272e6d2dbaa8cead00b6064f886ea6d6ee2201ea1662b745c4ff","616":"edd9b49c0f06dc228467c579f3a8afb09a8097b7e9b8b9b8a1985884ffd6e852","617":"735d903749a5fdf18043e88f571ee32b103e193ea6528abead357e4b22487210","618":"73ca1c5b18b708232c56c81b6562eb31e61510e80b06dd856b00e65f83feccbd","619":"dfeaf5633195d3ce18758d306629e5a4a82060cbcc126222002178afc9d68e90","62":"ce1e7f301a1e433217d63dda9133f96eac26c80c41816d4c8bee8b3aced95108","620":"f0e870d7ed167f725f481a0b970a0ac58955524ae117167c8567ac15bc85e7c3","621":"d47c0ef3898b7597e31fd713ed64d1f9a412daff472f65ceabcb656027da2035","622":"fc1cf41900460f62c6e8fd7aed5aa6d615d4953a3f129a0e60bd416fd4837809","623":"b1a45240d531c5381aebf1b7b81bbe5961589f8003997503300c6fcd14bd7923","624":"87280bfbb2f83d283ad6869d0a10320e9afdf426b2d1945d24631ff2ae6153cd","625":"82a68919e23d88fa57f5eb11d79b4072f04bc53f85c5800f2c16c8cf75c012e2","626":"ad858b5bef0db7ad36a100b641d89681d070fd5b1222440b62a04f526efa49bf","627":"9e32e0b51c026cd4e76ea80859792587315ec881a9207788eb6f1aca900f269e","628":"2cdd2b012e71b407c47b55b806a275284d2073200f952b0d1896877d39a232c2","629":"6b25dc5070707fe93304fa50dcd0ac93d62333967b467b7233cfa2770771d24d","63":"aae1c0d5ea08e3874daf978c1552badf96116ebb80a7088933b4b270d7589c5a","630":"79e7b437ba2e67d96da0b5258de9bf9a86e8c27df8dee248fc0fbaa711406114","631":"c9087f44b13641de62c832b7ab8c6d1567ec8813d945ea00288ec1e9f073f8a6","632":"1012ef204224ad7d842a2939f02d8ce072948d4272389c68a3905039af16be64","633":"ac98c6bc16327f7d0fcf399cfd689a472aafcb3c7f27e4e6a4fc313b72712b38","634":"5c7ebf71b202aa9d3982696cdf12985f371d8b4b8a910cce28442d79c1d3031f","635":"1a20109b01a4e0600944a5353be25a9c2eebb9f0d011582351d348b48da9a046","636":"a77f2cac4fd631baecd97f8ec24e0a0d8c0d09088082af50ccbbd2e564415678","637":"20a408604a16da8a419739ac49e87aa7af2c40fffd2daa6788d0ef346ff71e66","638":"2ffba89dde218658b0a448b9d30d10e11cfaa7139142ac0f43572a48c6b5bc11","639":"cb620c2ad4d2b8f7bc4f44578e09b3a9f7b05c1725013e3ccf03e5305072ffc9","64":"cce5404254a3a3373df8b1e1c2df5ca4d103efba1fca73ff51cf1274a360d891","640":"4b45fcb2431d68ec017b7723d6a989c35c4cddc270a033f6b23bb12f3de056c6","641":"efcbe693183a11eb8ab559f78fd3bcfd9a8835964a0a2ce0578de492441efb34","642":"9831905a4401cbc8e41cea88b844631d0a9145bb2dc7434d8eae89da55e72025","643":"3f6334f4c0c3897d00a481595b63eeddb8d51114f1089495abc50598c140c391","644":"174cc1d11bdabdacccc7fabaffbcfa6919e0330c9c9d5f20a95407916ab99b54","645":"7a14da5e54481aadeb421f3661ad875637ef62b8f31b835a5c743f35bcf5117d","646":"e435f38515b353cafda84e084f8048c21886e6ace0e63f839bec5494e926aabf","647":"75daea0f30c8ee6a3f9942db4473e3becb8ee496a63428c7e9f3a0027e13be0d","648":"f658e65735802e5a09b7bfb21d49c1be61b27295df9644e60045a66c99e74903","649":"4b0a55d1ec951eb5deb9d6d5640e1e5c06860f5e745d8491648eafd4c2d15f56","65":"2b3cf5830fadecd772c521d843c397a83fb63591595662a99281fca958b4ab69","650":"600ff514780ecf69737fde5fc02108e5258803adc9e86863aeb610dedeec64d9","651":"4e2c0b249208d89852f6bf2a527473e77fc025ec24b24c45cc884f509eaf933e","652":"93d250e508b15643172af6591681e6f734f93b87d587766c50b512ddf068f7a5","653":"5e466c9eca29f7eb0c86556d02c222a855c840c709b7651e17a937936b1ca417","654":"e0625a1863892862471a14ea1b27aa4e32cc7db0e4d581c2e6e8eb54f35e82eb","655":"93536461b12a65100b8aad6a3a9fa9d8c8c6e77f118f0e04754f285c05b7a3b2","656":"5ab6d648258e8f06944dd119a15bbc18e55f39e73b575756bbdc31950e48bcaa","657":"c81217c30d8effba0782ffb056049c26ff8dccbf4617137001add0dc2eb777c1","658":"8ee57fb76cf3468250473a17d6e6145e4d1025477353142e43d82b5934efa769","659":"4251f164fbfce1897a9a36e89c1d7ee0769171ce54be4e61ae76d96a57d4e19f","66":"380fdf704e30e1d95ab381ace31ebaae5d9a68d8528e236a5ea797e064ac6310","660":"9741876f07c990eb4f9a35fe6eeebc040f04330de84844cb06e847823185bd72","661":"95b3160dc1b939261f840fdd9867c751b1a203a8ecfab3cf0117a909706268d6","662":"8c9ab1db21165eb6a1d89b4846a6e108b7e3dd673317392c21f3227fae955e56","663":"434bc5ed4d27937d697beaacf9f15e05885312114d3bc472b1c6259e9d85f14b","664":"808db3260687837b2d974d5120222dddb7fb96212e444c3c474e866e068a69e1","665":"a3a70074b256dd455d78c23fd32c274c4b3e3d37de67222d46c01e4cda778623","666":"b99c52197a6c08a72b967bbef22b4c09b8b30391d8e060e1c6e45bc4dd596e26","667":"51e24f78cf0ad227d70acd54f7f31bb53489ebc1f2305f3efef573e24a9ba94b","668":"111a8c1acae8fb4fd18be01f5fc55c3926c562cba99bfa674ab31adee6a62138","669":"89a07e6358381e6eda71ef7b012adda011bd63ddc0a0ca09f27bed38a31419d1","67":"b5be8c3edb23ef6099cb33d620a17dee4e2038e6ba6bea3524ef0d1435a96177","670":"48438465f61711a7c8957b299c8be65cb3eaf379e61d17fb308d958c54ed739b","671":"58e7b3434fcf1a80085ea1f4275bb735e6003b79690caba00e882900749c1dca","672":"69b5027ecc3f6fa7f3df6c4a7bdaefbfd6c434bd663f6bd0996a335d5561b737","673":"6639917fa3c33bbeabb975d4a3054c927eb021de33c7739ab9d3c1a6b5dbc0c3","674":"fc6a9db390e403633a3588cf37daecbbb2223b92a93f15a4ff0bb87adc9e49a8","675":"790bf24bceaa53d5c04cd7c410145f7ccd270eaccaa494d1342e3c1ec43d3043","676":"3b3b1ec10e60be0d6b649fd170d6f1c240bfbfe6c8bf3e9be24f89cb36e0d8ba","677":"512abe40adc782d7335a7989c9245491b339c7af2f57e93a32329eb43703ca8a","678":"78d6588022ed142358ea928cc7686abf829e04860cd2d449be80fdb48c749874","679":"ed3b255b1c38f22a108fb5127c01e014364556a7f6290919c102b89a3dee1dcf","68":"6c6880b62f3a6dd4388a33cfa216c086675ca8d2d33165f1eb01c575f4055b5b","680":"900377c7df81533dd754b9a498e38471fcff01926cd77f07dd2bfdbd086a0427","681":"07ae9d71392b9d1c09ce36a17cfc656c914909de710fe6219244ffdf57493d65","682":"1b130f6a2b21dce0b417fe20c2b7d6426aaa8e1622161d66182701916622a280","683":"0fad0a6859d62a090c3f39000223549ed011698356d801c35411832cd361ba25","684":"d041a5eeda6c13d74dcac159c36833abaa8d229a4491cf1c4a37c5e7c6a64348","685":"767bbfcca973a06b7006f45196ccf0d5744c0e4d3d04e5b9cbc244a1b7583d4c","686":"f311a4da2d1685f30fdf6f104b7e1b266594f0f4079c8bf2ea88a9d7217c5777","687":"e0416ae96839b226a55159df48405e1c97fcbbea026ff3cf89fc14826b42c45b","688":"b97be3b46c363bfb46786306c1d314ff7c2f8b5be604a0bc50c39dc0272bae25","689":"367007adf294d0885bc86f9216dd41ba4af754e9f2a1e35d6d57970ee1d90a75","69":"6bf0067a3b1475f6fb199adc81e0c0d46493f6f04209e32735ab9dd78fc2eb92","690":"0637747c7d47cc0f55274768d075594d10aeca40135a1a78df6180d182110aca","691":"cf5c1825aa227a171b5f2c860d98103310911b86ae679904a99c6b1962e8ecbd","692":"92f49e0582232ec1e9333be39de02b488381fe8750c4f5dfe705d0257f91a386","693":"c9fcfc698f4dbf4919d9b0768564bed65cbb8d1d509ffbb938bedc6a1d539209","694":"e747d9bbca02214a0f48420738da927e207f125fc54377074e592c9e7b2d8438","695":"e7e2fa1111ea9144ee467e69b290918a4f8daa8c70ce61217920c8f331b63314","696":"23459f05d4add251879d7498f1df87cee0ce1d234e41d149af20835537ad9733","697":"b319b79e413a56b235f0fd2f53a023cbdcfe9ce90442aee5fc2504927ba736a7","698":"0dee68dec6ef8671beb3dd0dcd6a4298753c1cb9a0f43d275dd03ef296bdc97a","699":"df2e3a1fa66dccd5abb6d5780fb81d0131ee373b61e2980142cd536c8820a69a","7":"89dad2c252e102aeff5f24090d3117de6a5d53b6d2acbbf340c7d45dea2d8500","70":"ceea7ee728d9c1186b578213b729172bfaebe5ad3bd27bf82ea85f68eefe146f","700":"c54122f4efcaf25ace0ff3b84320ab361f9fb1c15e49c8702a59a3bdb1545de2","701":"9ed4e3a00ef10c50e0d114272c897be266e9dd4ecf2189ec5a037bd6aa4d923f","702":"25166e6a866f81297202caf1dcefefd7ced8e3223b1185dc2fcb36f86678121a","703":"5f65aaa67ccf1d942e66c4f618a478f3d8cab0ddee3e29cfc19a0e9620897a77","704":"f34231621598df7c5016cbd4daab81bb7843b31c23ed5553c60e237e31b19cc7","705":"7778dba535505ec9a1a361d5065e23329e9f2addc47724df18a2a79b7ae734c6","706":"c41c1296584a1c6b2d7a1c8fc8d195021a1b8779ff3e511be5e7252e4624dd9c","707":"943fb193ac3b944d15879591c85048de376f3d2a308588f5519a0def828887ed","708":"5de46dacf7b55c1f75f8bfb945d59579e326dc0a5831220100cd7ad344e8af80","709":"5a35b299ea8f2a329b1212609528f05368665fa430d66d67d86055107aa4b7f7","71":"ba4217a8b7e720876a9e1b5d3d0151e3c1c8c6be5685fedfc654e9b6875690a8","710":"5e8a32e348a2298ad96088c7fd0583c7fc99e80b4bdc2a22259fcdd919d29a68","711":"72f072132e4d9c41ce0330477f15ccdd2445439eb70c25a6e6e940a15a6bd71d","712":"c6576951dea4619ac6d9488d91eca35231b7d7731d1c7377b3623272bd824c11","713":"ef28ef6381ee55dd232142cb29f6fa8f66941e82bc25ab3335a4b9d61bb8194c","714":"12fff713db82d56ee298675a91a00115a265e086d9ef20744ea0595bca56a0bc","715":"96d19426942696f228377bf20603278c96e0eedcf86df623b619294c38571c4e","716":"0614367f8bef7ff34854f27f5ad8574a3699a5bc3bb2ac1b9e8af964655c1746","717":"80a24bf847d3a9caa03c8c64d9dd0f881795c070ecc87439b900d44f6303d9af","718":"add9a229e204afdfd07f6c510e3f974c7b0be9e8d175569df83ea7397170f87f","719":"1dfc4786069895690d0131ce21518268eaeaed74cea57d0a8519d3a171eaccc6","72":"36923eceb2f47a5088326d69cbb3c0905320c7acb727369303bb6089e10c7b52","720":"56e5de0482167197f1c8db227431af7c73a9b37a5d3535239bcd300d86ada3f2","721":"67bc8f19f2c3f39ee4ec63ec906ea992f7f6f0927cefeec56bad7e73c7496332","722":"ed9fbac44357bb98e667243abe75b87f26fed4f9489660da9edd71904a63d65f","723":"c6afe8552a8df0b176ab6e16cbde21e9350d56d0b101e1819ce4fd08216f3ac9","724":"cbaf90f1a3e724fa2ed3bb040ea17b3874e75111fd05c6db024505a14e14cc6c","725":"a558d8203f02bd394479460cb062465659fcf8d59baf51d976b4befc45d6d9d0","726":"af5fe0148bf802c663278451ab851e00a1c6b028f90029790a381df0b26903af","727":"da03c04e28c9a0cb55126c99950426b53e40abcf2997d17d042947518768fd8d","728":"a840713d60dbb4e081dbd76674a3e7933a1b2274672addf3716a1008d55010b8","729":"d4d21a44189cd0c581b544ff9490e9077760f48eee0f9f54766f1a549766f9c8","73":"f81f40aa2840b68e14f146e7fde2d5dee7407deb63705160255586e270ef0f3b","730":"2333eb52c6f98f56f8950b2f152adcf43906e9e16f9772089a3375fea11e7a85","731":"f02198eb7f6d4b3ed41f67d308e385a7d69aa2dca866c327c57c18ac2dd1d8db","732":"5320c845fc3a23754ab778c5f773ab2e1621bfd5b24d19ee24b33df51f419a99","733":"bb22f9f86b2b219c8c79f4aaa17db613f511c9e19c83afa14c15d2058fb10f1d","734":"d485f0ef38abb3a04479f8164bf1e1d15ed6b8edc9b433dca65024441229e1db","735":"bdbf44df1340f39e3686294192da93e8ac0a7f5252a8634c912d23097e8d3640","736":"26ddb30396a73a1bad5ee9efecdffdc3803b219bc092be738c15cb338c225c9a","737":"ff2290444b50e8eea3c43bde22399302ba924d741e5f64cd24f27930225f6b8b","738":"2d190604617ab7f3968f58414b8b9f5883763a2043a0d7032c688e4e7a6821d1","739":"c1841fad895a86357ca7da1bd0b3b6f1d3176acb1841457cdc6f489203f9cc48","74":"a66584518583a54e19e89b6016b871b191f39ac1fd6e5e619609d5c8e0fbf2b7","740":"da721113283a45fce7fa9b14aa3d948e7e9d30f87a047bba494af54f7e81cf09","741":"f9c400f7dc02a6a6d6c55f7d65eb6344840a77a520988d3d91653d7b2c047fd6","742":"b9ec0c1756d277ab6f8421daa29288ccbd67e2296f82a64415f665797369f3f3","743":"8d27c0d2d8868764464bdd9f12bd118ce296b9ad7cc604cfb1706cd744df18d1","744":"7b29bf84247db5a46d7d89c8f7c7c744845631115b727fd2679cb09d1e0c2e0a","745":"dd9c44f4651af8d187b689e8135cd55beecdee76b9d29ea74894222eeac453b9","746":"623699d467b3987924f73c969e6c9bf3c8079110f4c8a84f38367f0095b7ea60","747":"9e67d19adb566a09708d811dd0c98ab822ba3577cdb726c80f734326fb9c0169","748":"baa2f191898edce6bf68d496670b1943c57e40d6466695b13d56422020607412","749":"0559c9fe20dd454c2f180860c49537f911322a1431e131cb65e8509fb4f61692","75":"a9b506e7677ea5e4c2504ff9c9cb604f355e8119a9d54ac0fc0eb841e2c17a11","750":"89bb7fa978b11e3b0efde2f60c0207c2b5cabbd20e911ed1a8266c760e64446a","751":"a9ac253051851759f464a4b429927e30169572eb2ef4f31b4d1b07d572608596","752":"fd82c45a5e27e139e8410e17b1ecca3cb4b929b4c31e97d93bea6665f2f0de0d","753":"eea135ef742b894ba40c13293d3423a248c2d770df6d067394a7da0dd68ac3de","754":"073bfcb3b4007e1c6f6bca9cb66cdccf22eff924b3ff32483d390db0628d80f2","755":"04228871b0eb1b83ff4e5bdbed6b2c793014bb23bd5576ef55797923acf76146","756":"191126f87f5d037674d4d6b3cf3ec264af48af0d3d6e7589e223177713a89193","757":"9cbd9e0bbb841ff35b1bcf8485c8d912355c51500069aeace643195f25eedd62","758":"d32094ed358e6852c197c54492bf59942d9082365d144e27151265eb8f1f7c22","759":"a7d408a431a9c544a4da3f6e3616f5a52fd23ce6461335704123a175ec61835b","76":"d0f761ef03df0aa653bc2527e5ea0d77452ff90df0a1f6e4031066f43b7ddcc2","760":"6bd71f3e1cd5dbb47f3df036553006b92022a8ef6f0af938f39866c039a2e3d4","761":"8064ae6d16523347426f468ebb1aa2c011e912cd9b8981d23960a813904ccd8c","762":"5e714754b9f32073a8f30786b3e5db91f6c90dce812615fe59713dff257cd31b","763":"44b9de1b213fd14707d05f775fb846c27aaf7dfe48b31739d6e67649a27e9a2d","764":"2ce3711dee86d1dafcaf302227079b6b5082adf5b03055e4b422673599d5a865","765":"21a5b961baac1876d37386afda3e123d134788999e8418a9a586cf0001fc1c7f","766":"04f2498ea04ef296b64b2437fa285963c245c24c1d3d042b3fa2b2b85584c69a","767":"959a66de1594559c3e7b9af4ef5a3c8ceb3cb228f63d8b319e1b388d790152df","768":"b13ee323ad413b6423b66d4f568b5b6aa8b2c98d686e093256cdbd9e5b11fda9","769":"db399114da20cb7d27e1eb3a9dca45b5cb8ad45940d11d182b5be9072e81e504","77":"d0cbf60bdcd13307d222f81c2ddc0ddfba8e3ba45914dd388269ad86a578a205","770":"c88260d9567e5ea14e228f6c8d866835348ce52784163288547f1bc818abc9de","771":"3dd5fae9604f2ed9abf0fd321d79fdfda4871823948344fb8b0eaac49614f667","772":"79ab4da6ced1ed4b4a4d39b47b41efcd5a7e86e253a8e495d53768872d794a34","773":"9d9825100236fafc5f869f12bc427a1fdfb2b888fdc9f5cae4fb6448d15da580","774":"c134a92fb9e54b356ebd3b0a3e034dd9b30046ea096e43d698d1187e7b668b91","775":"75049edbe1d5559bf00500b4489da060db547d06e99fb21c52cbccab06d6941e","776":"96c30fe31c8974b8287bad263c4ecb3dd08ae6b53679b0ad44d4ed6e61809cc3","777":"9253435f9013a3769b21af86e0f8dba55c1be3fa2de994f402e680f5ca8da0b1","778":"b67967e4031e26a9601948e397192f1130c19f9e4662408865a3a8a6c32dc123","779":"ae7e93ef7ac069cc5e75415bad405cfa08bed743365171e82e0811772b1a450e","78":"5734c0527b6ce7b029f9b4940353b116782dd8ed8f93f75643abf33bf30971e9","780":"61ee28959f1f3a4c1b4e5f3f8846df105cb8eaf8927a3072c78562215644abf7","781":"392d9922212741b98c0d1f0abce659a7b9dd7db8ece5996ef00df4b2bd0d4690","782":"3dc415fd2f940a859636113c12d63fa80f91272cbfe2fd8610ae0f569e2cce0c","783":"674b09134c434a0a1a0b2662b23e0bebfd225912a974037fdc6d79aec5361e15","784":"18be56f5c2b421201ef0ddc715d60798356978b8f22b07b7fa750bfd121a89cc","785":"070026ab1075591dabb2129012eef5560a5badf6a889789c3dfc29bb07630ad1","786":"fcc3eebc776df3955534cc29b127a12848575e7961da243744a301e25c0e4d36","787":"b044fc9dd01c27e2e1eb4894c566545d72139eb775931961e23b8aff2aa180c3","788":"11628fae1e77b9e2d57022d42ba9b2e4ad694129edb02839dd0840b4a6d32a87","789":"fc243bef8a2c060d100c6e78872ae0eb37ca844c568a3a9de3f5d828371229f9","79":"10b249079aa12368e1b6633daeb6c1c79decee9f18bf07ed935fed7c8ef65231","790":"2b286ddfa1970d8b88ccfad43b8e211bf147b9c5c21ba2da86b41d0fcbedab20","791":"4def06f4b4e694e3bd9b501f8d0985e2e659f8895f06c848fdde6dde9f517cd1","792":"132394324df2612e83502aab000685b811dda025c1913a8b9ba80b12ac68d103","793":"5cbcfc571bd910710cec23c3f437bd8b884e2b6ec7b92a15ecde6c3538ceaf65","794":"5c703404be19f5e6789fc31a4d2d53b7759a2207a2a5730e9a17489bf9b6a391","795":"0416d2a66c0baed1937be235c66e7814ccd742b04d31257fbaeee9a8fde7075a","796":"06ac20a69ef7af8f32aa0cdcd42e5a68db873eb6bdb0c97a5d1b313e764df62f","797":"11416ee1b0c87cbbf6a8306bf9e945a0fc39639a3b18c8ee435bfddd627f1731","798":"5eb27ec3dbe272d38654d98c0d3cd218dfc6f59a30113af229cd4bf8c39041f1","799":"09c7e3e095424d0c036760c7890c09d760a21c05301b143c49c930c82bf02153","8":"46fe5c691a8a949db233e3322a7a93a71f39b77041ccec56ff947af5c59e21be","80":"ec139966dab756ec5cb9a946ee76f5d063b5e8e2a0f3eddec18b279836c19527","800":"ce00b1e746ca5e70758a56b4edb6a8aacf389ff9db38c305f2d058417daf7151","801":"7c1a74240e13b539aee8930b53b30f6af4edf2d0869bc83717cd4be044a8b92c","802":"37e199945a79b072af3639f07941d80fa04fee7759788ae8997eee170722fbfa","803":"f34de18c24ead97f83ec0d8dd7c674472c16ace5bea95108d3d09694f7931ee9","804":"7315254006706ad22787ddd6d89f9268c366e4ebd0a27c5444abe557382db19a","805":"3229122e20eac69717c01f4a54757f8190e29a3c801e35a39dd63c19910537d3","806":"ab87a9e14b923a42f63bf06d6379775c4b12a4c04470e674f69513903e1777b7","807":"8a5606a0132ba9dd818b241d30f347f9d92e1c42af3b7355c2ef7a823cdf0f21","808":"a6d53933ed399a524a602fd6ce9d280445bc9357c13904ece3850ff6ebba4d62","809":"697f9355d272cfb86ba6131052e68d8a440e3c54fe19ec26dfa97d1db7a2dd27","81":"d09aee295f9f1800cc5d185a0387ddd9dc5765d3423ae050fff546cfa57ead0f","810":"49ee043506c5bbd53f4395ea85df8070a2b9f20f345c7ccdf7cdb4ddde7a9ea3","811":"a13cc722150906e919f31e07b6f84abc9eb2f6c81999acbcfd42ab2ada753df3","812":"d87cf230268da127de6ced8011822be0f2b54ceb51dac2d09e6e9a125c8dfa32","813":"83e3f276afdddf47663bf6ee340d74891c62093a68f0b8c0f3a7a2bcfc3df91f","814":"9626cf0d7dfa701eb18bd947b6a9be70a76d5b3f819813ee5387824941e85c82","815":"d7e514e7a9543eec766342f3588c67866fceaeff54236755fc7ceeee80bed48c","816":"29664172b7c19c18cb5f8c51765d0f6eb7c8cebf5b4fa5738adcbebdcba7c63c","817":"2b4f9db2ddb25161b8ea8f7ba7de894a47f73791afe1fa4dcd6d1b2b91cf8366","818":"c1e955a066d4be5057bdf9d3527749d9c4a5f7fc9cd0f2667e9d8334b00bdb31","819":"9d7c8b26333ad984042307c9746bd7ca6fecde9a852ad7e6f58ad6e875ef3c14","82":"0c6c76cd2ecaff74bc6165164917700120488f526422c05f53df200b3e066a74","820":"a3873abf8c434b0cc18ad820b8455ce670dfeaa335c29138ef51198d2bb8358c","821":"d64d34ce9a09b82ee994085213f5f1b2445c64d1b09b16a823f1f25060f3e83c","822":"d82bcfc05ad8caa1ffac34ce98ae94ae7c9b7a29f47021a5653479de54069123","823":"8f078ea4b2e513364cbbd814602fd1f24c37fd7583bbec38d42a0c8d12ce63e8","824":"1cf3bbd69d217a6c6485ff738d613b7ba670f7c37e5f68a4723d1b510fb57846","825":"4469f164d76a37a782c77eacb4f8154f317b0c1f8e7eb3cd01ed2561fde76462","826":"ea9a4fe20426a7b36d420242c0808853792401f95c3e8c7e53a74b3ef6652e00","827":"4a1347d3b5b538c76d71759e0a487fd066ef5149bb0934dc8c7d1db66b7fec10","828":"5721e36b1dde96948a47c2ef256732210884c062f665f7ec589bf8fff17940df","829":"6edc910e3f42408d5f0b7d3cf3e399da604ba36413a5b2285f6cabdd04d59d3c","83":"702f9cc3f28574c39cb7fff8392a5502c04da83bd2512caa05d369e49322b580","830":"56bc752385a829a608862f14b00d2adca94ddfaf760595b214f92c0a018836ef","831":"b90c5504150548792be3dc2e78f60a7524b793054bfec1c4ffc39273438f19ef","832":"fe4ede8953e941a418414f9d14683f63295b46a0af6c543bd7e3168729a713f5","833":"a2c2114260d6beb05bffd4c108eb0b1c14b40bbf0a04d39833001d91f4978373","834":"e7f6df5c2e625c2c77ad337ad4315f537348671e0a1d467b210a61668506471e","835":"2f66c02c04f7971c8c51ef1ac329c295eed4d386b949d57e0de203dc0f9f1557","836":"c528900fff82f7e3046e1988fa567713747ad62ea051a47e5ebe806552cbe58c","837":"21808e4661fa4c573f59c6f0f38c2a93af9c027af7bdd6225244b5adbda6b5ad","838":"520c0e8a42b118e5ad44492a3ce2fb3f850dc026cbc704668889d02edc060e03","839":"409d95f8e1a6903e80ba8efdc1937ba2318b680363d39988e8c6d9892db5d50b","84":"eed6455aac3ace98173f04c89de4b1342c7130c672ddbbcd4df1031953f58a9a","840":"5614484bbec8b6c695d89d651f4c6ae8c3b98ba5eaeee041cd9f5bfa07a8f847","841":"f4ed38025c35bc1f2540eb188d389007d3a5186de26001f71855d5db24988947","842":"c7b68bc570f82adbce915d96b1f1f900265db19846ff2d689fba9e3935c97edb","843":"136f52c24a283d13cd66fe63f40693cb4173e511ba7aa7997cacc81e715e5b40","844":"55e8d69e31fae611c1bd0a74d8473f93a8bfa7fa470bdc6e1e0826f284670109","845":"b4f83963bb934070b071d2d848dfda052ae2ce0e02028b73b7f2e2d4647ea5ff","846":"72f6e3a07c0494871c96ea0670674a2aa1c1be4ba315dd97476cacabcec1a1f1","847":"11acfbca8404053ede223266530e6a61304f11c72983f8a1b7546c22ab231b74","848":"5a1d3ecfaaf6d898fff6f5edee89b84986b53d4a871cf9956cb1ad3e7772dd6f","849":"de2f562cf0dd70d3f750fac48f364d8fc66099151329e78c9011a34edb7c5b1c","85":"fb10d16b3f1db7ede730fea35fe5bede77299a137b680c5ca32838c94401af25","850":"6f0717aff3ae3296a2ccc068baeb016a61a27490f6f4f3b4b09694bd09507a92","851":"124b97c05c9b17be96a1ea61f7cbebfd3d9c0130ebc116c9ee6ff4ad6fedb1f7","852":"eb48397596e1c9706372e88b4bffaa06bbf124d1f997bea510371de2af790630","853":"724b1726a2418e6e8c477f5528c3aa74cf249d6e7de99ca5079b0d28229889b7","854":"1647d6208a287ee4c95db26ca30c15fbca63d617707f02ea26065b73f60bb050","855":"eebcd38c6ef9c2cdcf892fc75e202c1b3c6814f8a2551f0b92b57e0c194b7cc9","856":"3647ef4952df0554f94412d19ddedb58c703e2ab2382c27f006b831b9c00b783","857":"0c5cb05831bd7e9b1659b224622a79942f67d6326d4498c871552696295a0903","858":"9204c31fd9a7ad871cfb51ea5b0c4ed18c12ef29492186621cca3404123feea7","859":"dd49c64642ee3e269c4b5ef3b27db9227e0b5825af364265a172404488c5697b","86":"e8dc03250006eadf4fe9feb10f53840f9117f98c777899e90fd5533452b8504e","860":"bab013cb33ef6fb4be48b24eed01f6082100a9236b414051c808604a9c64b46d","861":"281cbd9a4f012eee9734f907bf96bf8a437ef526200192799407d200102162e4","862":"a51b4c4b4d8dc059a11624a980dd92bb04fa33e176c61907ebaa2a42b9aee8a5","863":"4431682b83e1cd8e7599bb7480f4369ab01c1468b49824968223ca3e6bfc910e","864":"922c57aed5f6166afc67e79a5ce5a53a80044e5959054f707382ee7b48e674dc","865":"b7a887cda09f69f2330aaa4f1f3e17d5ce80908d0386bf3385073a2221ef3cfb","866":"dffb8bad969b28c79f44ebeb09f24029c32ffc4c6c6d6ab8c93fccd3d5688893","867":"fee1eb23165e9573d948506a14c255974778d9676e4b9c62f449377b412c9c52","868":"080ddcf695ba340ac206becf71b95de79ac0291ee7f7d6742a55fc5d58b1a165","869":"10ded267c3ab5da85d43c540f56a0b22f2b820002086f5c80ac3d8830c01bf75","87":"b995e47e134a2672c4155c45ec0f7e8163115c97a240bee3d4bb9ea0160df4eb","870":"18c59310fb861b4cca0d1a9e05cf5cd128f52a3f5a0954a7849cd0345ddca95d","871":"91ed00479b89db6062fb2c8a4a37554184e96ca410cd8e2a55fa8482a2c24f78","872":"0e2e355bb820760253acea8d00bca3abecd7871931020aba0e6508be7ce7d56e","873":"6cd10daa4926b408a7b647270196f4342906122a79fa3b246029461ae85e8369","874":"d953e2dad15f91458f7f5422f975ab59d5985b33cc1836190a2e371e93f688a0","875":"bd1cf485071642d3cbc91009355308197253446caf214dd7e09756d0ca8174d4","876":"83ff9547b774a4578b672e228f4c91c0808e77919b78f4cc76ca322799f21de7","877":"804d0891677b2f34e4dcbb85a82bb6900b548c72d90725bc11cad4d757a31654","878":"9ce9b14f4ee766c93b57801e062a3ad7651693390c0f1dd62d95e7f5f911bc76","879":"d9c9174b7bb077b2eae1d7a9fe2d489f79dcd805c61820b8f18eda78a2901e19","88":"b8783e9b84f4565a442c88272abadb1eb27230a88c807b93e9c68fac184fbf82","880":"8c927d2a9ff8271117557f3a027e9c169339a39d965b40c1fc57660900d78038","881":"94dcf75a1f18cdf861a407458089d4f848054a819779f2540b8c2408a9637579","882":"5f36eb2381673a4dc5deb35c3bc2ae8fb03d322c2990155e3cb5fc0f668b167c","883":"905ede291213d79f2dffa2b6bf70fea5339845be9c3edb1f88eff4a4e6483cd6","884":"a465f7364d5aa63add9f6aeefdbd52a820d20573e58f63f9060ce04e8d86cc9e","885":"396663f2b90ef7744ce659642e7f92f6b108a425f9b6a472c67cd475b9bf8f5b","886":"05e2a43136b151f78a4cdbd0e64c95d5e0f0d4a34be563ca32065c8e39185cde","887":"33e6873853aedf719dd2ba9317cac884fd2b969abd7ebb35ca6ad7614f0756c8","888":"8707a8b8b95ccbfbdf2d5bb0a152933c3a63a76fa2839bf815742bb8776b723f","889":"341356c7aae798f0440168d8266e3748cbb20ce3d345a13b11d241a98ecb243b","89":"ee869bce09238418af1e2a1dcb83adc1d1fc82dab4ed02c6bee367a7a421edc4","890":"08632c430911ef25fe916e97a2dd6ff3f1cebe1865f1f29057d59a93bceecd24","891":"f4231c09055e4820071368a83151aa71dff93e0972af7db9b72cfdb0efda7628","892":"6212ba77c8a585f2653065d960464411ec5ad8e676ede63a924b2b16b71ca816","893":"f08a78111e0365cb89650ff1a32e56e8fcf8dd607e550b519055c7c119103012","894":"6e7afe82a10e4fc70af2da99007b0e4388e8d30282c68d395ea23cded6a783b6","895":"0a181a5c92ec87583e7a5ff4275b0e1b8380e69787c759a95fd74c2054b2a3c4","896":"9e1f0f0fa13b36dabaef5713a1c60239515e74023252f3d8657d796301059fc7","897":"9a90c437a69d5e5168fa7699fc7c2b81bd42033fd22235817a1d8736f843116d","898":"0c2f7a7bbf7fcb9cee0b6bf087f271e882df4b32f52a9719816cbe5ded6738e6","899":"20eec71ec1177a1a0b246c8eec19ca0da1e4a556d2aae8f74f45c00bdfd29e17","9":"6346ac71e49b4e96872fd397e5d5ee2b89b1abb2e448015a37ac5869b5f203f6","90":"a40768fd87f8e28be061df1373f5e52c1b17ce2ab6817ffecb0dcdceac53b667","900":"8d324d62c0bf8673edc0c22b55683c98f820e419c0b0f55b0bb23bdd4af94020","901":"89daf84380b30ddd9a08903db277739e56d38b768163488779a59162719c664a","902":"67ccaa7f5675ee80fe30ede116b22e3ffe5b0c21d4757e153bddec74cc4c1e82","903":"48d5e050b249366def0bf00d253d1d517d8bc8b096c59f816f5afb6c076647e7","904":"46307bf82ab6b2ca05425d5439bf400cb4c8d267d7a58b0e233c2c526da2d1ea","905":"b3cab197a7290b49f3930960444abd25480293a3e4c96f40946684bff698c7da","906":"b6d0d22d9611a08e0ca07f1c868c5f12ab5af260d5795851e791f211bebc286b","907":"6dded66634ab44ec13a758b007ad18fca08726926692fc023fff661005852425","908":"5c18be9149dd01aeba17515f1181fb875dcf2387587d477e0d00caf685e534a0","909":"2f29f37c1af5468da22b9c11f1460be45a68a0e5c821062454f64aa0b4340c10","91":"9093b0c322ed966762f3074bcaf2beb44bdf259465bcea6e7b4864d2fd47cdcd","910":"c6a3915370d367b68deb8091ecc1ed0f5eb62fcf7fdf55f2acb872c6337a3008","911":"dce6d637019af6940fc5bf4df4075bd6bcaaf4d5c87f46f485c2cd6d7e56a9cc","912":"d06c0c94af7683cd29244f75dcf076e393f693cbe54a79781ca522140bfca9d4","913":"4cff6fdf281f7963f794a9c7dbbaaa8afab21173104cfe5b6452c8e980cafd00","914":"3238480d3e7e09f47d1d10ce879660f143ef97f9cbe8bd08c3c2963e08ce08ef","915":"329f5983ba5b2fe79c9ffe06532f3c0d23039667efa2c7f118132802db7a897d","916":"98f8ff0c36aa05154f137135fa7aba5fbc81f17b377423bce4b3c9e4d8bf6638","917":"0d8c99d8d403c8a1896cf6f409b9d8af14d399894cf1d45eb3a7f24eba20af3b","918":"6f7ae16a006f7926f6e665de53b6d29549d414a0b6ce01dfaa994dfecb53f956","919":"884f660e5bf128c3372735e4998201ade3b00cf8364cb311dfac380d01a448ec","92":"8c0432e7aaebaeec6dfcfb2b2318c1e125007d0155ea567ad1f9070045993abf","920":"7b1146d5006b3c7dcea02b8d02e5adb9e5da86307b72583268f6ddcebb48c894","921":"e9626de596da6e672d8be57e0b63701ac5a0d0027a47b0ef628504d32154222e","922":"f6819fac0bdd6b4db76c79078fd275a225f241f13f1b5d470946ea8ef0341787","923":"827c3fb229323c03a1136f372e13443610a25d59a46d58ac942f928d4e491f86","924":"e4d5bbf8d244bcd2085a355cd93ec50a8e8fa9b56cd29cae4be6dfc242584ed3","925":"e278ee8591b1f396c33398998780549c7b4475fc612395b878972cd53ba0caec","926":"cd6155a26f2b47df4a80c57051541fec414332a9068c1011147acff310e0176d","927":"1fa0d1ca5c1e8d9ac1b67598e2c01becbeca3200aeb3bd6b4b0987631403821f","928":"c9b713aee1e418895c6b2416af7657df3b8e86b41445b3e56a6f1e00bc0929e4","929":"088e1911d4bcf5076ee6b3b8b70c8ed647272f4091f02db4bf0b69b4f752ac09","93":"d6dacf87d3fcd26648cec31682db84bb2193a49182a20a0d83cacb24c7623dd5","930":"218048ba21b85fc57efa4d972ad5253a777662b883ae498c65fda4bce467480c","931":"95243f8bef40065f3990bd683938050d440e798b4420702a0486740a80b9b210","932":"0b384cafc56c18a8190b821ac83ed3b356193ab28c8a71e1a731ad98f9acb5c4","933":"e1ff0ec319f35b1612da2bf7545183e3cc6a9d86f1cc891da8f19fdd8c879c66","934":"2a58441f6fc636a2a95ab9f3c3e32119b90f3f5735c08e77cafaa393544032a5","935":"2860bba415c799742b359d3d84b14e7a35529fc87f250bd003366e83e7ab755d","936":"651749071f82e72dcf7eff3aa5fcd16a0fbb84ff2fce408f3216fc1a30d631bb","937":"a71bec428f8266b60c4ab14bdf6b9f6ccb55d60452219d9de444f6b82c809a26","938":"8ec181ec672504fe253090d336c08e1b7905dde4b6327857f6082e59736fc4bc","939":"6acf7af4c05f22774cce01febc410e1697a329f0437f26017358fe6867a55d34","94":"1e3e1c382ea4375a6b2e2c343f742b20c11c72e189cbe294b5e04993fb6f2a14","940":"850c84abc8bd93e0da94a20702140269d9d9c7d6fd2e59a9f8ab7b856a098eb4","941":"82ffb88788466c23a9d05f81ad884c77d7488bbffbd8d69dcec7a1c582e4524f","942":"55f297243e44b3b3d2606cc8a01838af2c6562c508bdf89c1cdce55fccb504d9","943":"f8ebb52f446d24b2fe28ea43228f5bb042a6ca37e53ef27cc13479de21d8730b","944":"692669017c4ec3bc1b11ca68b701f3162576207f4d1bbec5829a7cfa8c65f477","945":"9252062d51bf93d57f5a1df4fa07fd00c2201c7fb26df97e4bd541d580a5b13c","946":"0745bbf1ed16657adc4d09f885fc7440ea397aba4f6cd6f2e2d387070ff717e0","947":"903a726856d514fe3deb19af10c40062543f51a81c6a7c71b7caa6dbf3af038e","948":"f67c9414739db64dc4eea03b409d56a91a613e1d67a3d64f0c273a8edfeef90c","949":"1ad9d03f563cb9830dd7f6f26a3e08068ca055e28eb11cec1857bf61fa0d2927","95":"6a6cb7713b478c7e3a59bc154437f95aa19ffc044f97dc7fa1bdc078b33d7720","950":"06f21741438954d5bbed63b89b39057c8b7f7c4ba988423335ecf7f789d54a7c","951":"9f8a0fb2cccc26a2829e06a52ccda69712bb7be74c6159c6400186939e441e5a","952":"f6b8330a1a653635619e2bf220e0dcf764904dd9906f46be28bafe3be80ed281","953":"4c8b7674f3cd4a84b539811d00f2791e78e160c3f008f7b881656e5d531e8bab","954":"6773d474de9b5d958620fd542b1001c486d2999da9b8dd893dab12366793ff83","955":"39f90f9831015424b05871bf4953fa136943c932cc2070501e54373f1c0f88b3","956":"debb055487a8cc6044899f96946f6e97618bbbf56352ff2b02f174057523b7ac","957":"cd511759437c3772df2d962dee5db391298b3e16907d14da9024e128aa5b32b5","958":"b08c7fe52ca6a8ed4f1cf663fc54bd5da29da4f057146511c95b3aa07e7626ca","959":"1b214b17d28501b080cabada9d5c8d121254c62eae19c5154f3a46dd2bbcd4f7","96":"5cf331acccecd36993004df39c6c1c074ebbdaef2ae06f40f6b97cf8708ba99d","960":"fb792f979c2d85e7ccc2e27916fbefcc3f385e7c7f67d100c36e0a0733cc5102","961":"edbfe8eaf66994c2142125e8ef7b890f88d154a12cda51a7bc534b58e3d0413a","962":"abf42942bfed4425873341632a97a199e6ba39e4a0247800ad7080b011b4f1c8","963":"fed21b7de42880fd0c0afa3ba842191cb3cc81b47625eb3be25fdd47e99f5c43","964":"c58748ddcfacdb77f3f686320681bb209e604d3df64d6dff0b29a96d9ae25197","965":"d4eecd015ddb2b1d96761b11cf74d412d6d1e8cb903a56d882ecdbcdf01f37b3","966":"7fbe6a3311b35103554bf2e1d408415fd6df9f007f28d38c1a174744809837f4","967":"504ad84b212348580462a5fe442f643fbdb61e2f07b2daf980ad9dae9625fe8c","968":"ff455018381cf369abf0b45d31f6a1ad9d933af11a0660437bf727943f9d0207","969":"0005733b30cc85d0fdb6df2ee827c48583a1008bc20791bc9c7c34c710200939","97":"a28035f56731442008abb03e5d68d667f15349197a8e9737b46cff30bbc2b4ef","970":"1cbc159fffdc8334911041f49cfcae95b4e386f8f7955788dfc68bbac1efb93a","971":"b65bd368175c67600058798697ae97f34bd45e8cec80e434aa67614dccdd5cd1","972":"5fd06397cac9dbe338b77d0d9bb43768396ddd3443e5a3d1f4c5cb608b19c944","973":"a074e3fba8401f188b1eb3a9f5d5d2490bdf4c6c8d74e0df70a5b9e0ca3200e6","974":"94fd7b5ad11110ea9bd90f9e0635019d726527537951a5804307b45a2baed848","975":"3f9f02e2d9c1db0af21461b8a04b86d1d642dda1e36577729edece25323b0b83","976":"9929163bcb68c33b00fcaafebcb357e09ae77110ec1950c6b1133b39a252a526","977":"3da1baed1461e535f2ce9d67c4e091c872a1ba3594e6f439d33b127c336f01e8","978":"16edcf0683182602bf5577ab616e23a0cd5b029addce166106892513babf0c3d","979":"e756e3ede594169137056fe40e4186783cbbc0ffc686ace9cf21a86965473183","98":"b284ab7c056d84c49c941dfe60cb5b0e6b4d1e636e2acc89e400ae3831c3f7bd","980":"0a0f05beea7473bf44acde4650ed082c9643d6d6284e9f73ff99396f91514a8e","981":"5c371764fcf4334cb9ff1c2d402baefec905b7d7f0325fc54a67947520e893b9","982":"14c310a3f3757da29f405dde5d93fcdce7aee12a8c630d7c7caa4d9926ad3a44","983":"4657af90df1728970b752320ca22faad45856c5f535bb56419edf59cab312c8a","984":"f464e765b2fb83cdcfdd8844f43bc15833841407632f498322b799ef5bb93cb9","985":"c75a9dc30b7b5c50132fca6d41adae4200648d2a8f971a08f9f7a463b22f48d0","986":"f857ef15cb01f25b69956ebda8d4515e0fad57531970499d7b5b3e61bd7a64cf","987":"9bc2c3a0b8d1c7192263598a5bdf29962b94696b4db7f6a6b941a0b6013926b5","988":"d344d824f8dabb311f306f2edcd946fccb14cbd2b9339e35ea0f41939442a7c5","989":"6a81d598238bd2c9a55ee41b1d4ee2a85a1b691709a33ee8c5c3cd38f20739e5","99":"6de5cfb6c8016b442e3a4fb986ef48c30090192d7c96b9676be70cfc14a3cf19","990":"e55107693708a307c4db0d4730c5f5a5b913aca11c46e7598f4d23561a4ec336","991":"b42a01d372d65ffdfb877ad4bb50e98ad850845d6ce3b39cb07d57a8444be2db","992":"d308115cb5f27f7cc1a7c5b5923b01729809c09b1fb3ad0a5bacda08c2c95d88","993":"8069a2587f29c1abc2bec1cfba6f81db007615aa940ebc8b655a5a55c44ef921","994":"ef66b5b1bf23a22574180f78089dadf4943e774e12807510a57fb1d6334e2fb6","995":"67c540f009da19257abaf002761eadac78466eeab8716ab9d739182ccba03186","996":"10b878380426df8b78cec1643131fd0364a86981d2652413015a8ea0e727f0d1","997":"b9d7711ac2a64c124df93d507bc898a807c03ff7c05895d6d683c753b53d36af","998":"1981c5a7cf1cb0c59350bc85e3188b05377d055953652bfa1b6896e47ba7af4e","999":"d9f82c2503e1d560a95341c16bded2811c47899f048e76826f63ce30d18a9aa5"},"last_index":1026,"native_point":{"logical_genesis_sha256":"eb9ec4035f58c8e23076c9f440248e696c45fa4f207d9a98f1d52682f02bbc0e","logical_history_sha256":"d8cf30c570c84c66bdd0ecb22f38f1ce9caba4c398fb138c4a7f78265bb6668e","native_receipt_sha256":"109568d326122e50ddf51c84adb42a18e2db4cfa746a9bfcc58996d61701e4a6","range_index":1025},"node_id":"n0","pending_native":{"command_checksum_sha256":"af25af163cba2a11e2eca75f13b165cfd53372c32174a36c5cb2f3c8057d8672","index":1026,"materialized":false},"range_id":1},"classification":"COMPLETE_FENCE_OBLIGATIONS_THEN_FAIL_CLOSED_COMPACTED_GAPS","direct_tail_error":"cluster error: historical certification has a compacted/unavailable gap; native image/history repair is required","irretrievable_loss_proven":false,"new_application_ack_tested":false,"original_catalog_and_refusal_bytes_unchanged":true,"physical_qualification":false,"prefix_export_error":"cluster error: range-write repair for r1 requires a range snapshot: follower resolved 0, leader compacted through 1","source_native":{"n0":{"diagnostic":"unfinished native command; source image unavailable","factory_initialization_complete":true,"invalidated":false,"materialized_pending_index":null,"native_applied_index":1025,"native_base_index":0,"native_receipt_sha256":"109568d326122e50ddf51c84adb42a18e2db4cfa746a9bfcc58996d61701e4a6","pending_command_id":"01a1cc1f-ca2f-7920-b777-c836cfec4b8a","pending_command_index":1026,"range_id":1},"n1":{"diagnostic":null,"factory_initialization_complete":true,"invalidated":false,"materialized_pending_index":null,"native_applied_index":0,"native_base_index":0,"native_receipt_sha256":"77f22f9f8461e352c32dcd1f6cf1f386ab06aee49d36372e5067ed24c3d3d87a","pending_command_id":null,"pending_command_index":null,"range_id":1},"n2":{"diagnostic":"native base unknown/invalid; repair or re-attestation required","factory_initialization_complete":false,"invalidated":true,"materialized_pending_index":null,"native_applied_index":null,"native_base_index":null,"native_receipt_sha256":null,"pending_command_id":null,"pending_command_index":null,"range_id":1}},"source_ready_error":"cluster error: historical prefix/tail is not fully resolved","source_scope_is_untrusted_request":true}

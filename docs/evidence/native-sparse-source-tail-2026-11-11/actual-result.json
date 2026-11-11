@@ -1,0 +1,112 @@
+{
+  "acknowledged_values_reconciled": 1025,
+  "activation_proven": false,
+  "behind_image_install_tested": false,
+  "behind_native_after_sparse": {
+    "diagnostic": null,
+    "factory_initialization_complete": true,
+    "invalidated": false,
+    "materialized_pending_index": null,
+    "native_applied_index": 0,
+    "native_base_index": 0,
+    "native_receipt_sha256": "77f22f9f8461e352c32dcd1f6cf1f386ab06aee49d36372e5067ed24c3d3d87a",
+    "pending_command_id": null,
+    "pending_command_index": null,
+    "range_id": 1
+  },
+  "behind_obligations": {
+    "compacted_through": 0,
+    "format_version": 2,
+    "irreversible_command_sha256": {
+      "1026": "af25af163cba2a11e2eca75f13b165cfd53372c32174a36c5cb2f3c8057d8672"
+    },
+    "last_index": 0,
+    "native_point": {
+      "logical_genesis_sha256": "eb9ec4035f58c8e23076c9f440248e696c45fa4f207d9a98f1d52682f02bbc0e",
+      "logical_history_sha256": "eb9ec4035f58c8e23076c9f440248e696c45fa4f207d9a98f1d52682f02bbc0e",
+      "native_receipt_sha256": "77f22f9f8461e352c32dcd1f6cf1f386ab06aee49d36372e5067ed24c3d3d87a",
+      "range_index": 0
+    },
+    "node_id": "n1",
+    "pending_native": null,
+    "range_id": 1,
+    "sparse_committed_command_sha256": {
+      "1026": "af25af163cba2a11e2eca75f13b165cfd53372c32174a36c5cb2f3c8057d8672"
+    }
+  },
+  "behind_progress_after_sparse": {
+    "compacted_through": 0,
+    "current_epoch": 1,
+    "last_index": 0,
+    "node_id": "n1",
+    "range_id": 1,
+    "resolved_through": 0
+  },
+  "behind_ready_error": "cluster error: committed sparse history is not fully materialized",
+  "classification": "SPARSE_CURRENT_CERTIFICATION_FINISHES_NATIVE_SOURCE_TAIL",
+  "new_application_ack_tested": false,
+  "normal_tail_gap_refusal": "cluster error: historical certification has a compacted/unavailable gap; native image/history repair is required",
+  "original_catalog_and_refusal_bytes_unchanged": true,
+  "physical_qualification": false,
+  "source_native_after": {
+    "diagnostic": null,
+    "factory_initialization_complete": true,
+    "invalidated": false,
+    "materialized_pending_index": null,
+    "native_applied_index": 1026,
+    "native_base_index": 0,
+    "native_receipt_sha256": "110d7a3cb4a583a7dd4d76b38c9c252390ddf4c1ea3c2ba868f9eea99af2eb89",
+    "pending_command_id": null,
+    "pending_command_index": null,
+    "range_id": 1
+  },
+  "source_native_before": {
+    "n0": {
+      "diagnostic": "unfinished native command; source image unavailable",
+      "factory_initialization_complete": true,
+      "invalidated": false,
+      "materialized_pending_index": null,
+      "native_applied_index": 1025,
+      "native_base_index": 0,
+      "native_receipt_sha256": "109568d326122e50ddf51c84adb42a18e2db4cfa746a9bfcc58996d61701e4a6",
+      "pending_command_id": "01a1cc1f-ca2f-7920-b777-c836cfec4b8a",
+      "pending_command_index": 1026,
+      "range_id": 1
+    },
+    "n1": {
+      "diagnostic": null,
+      "factory_initialization_complete": true,
+      "invalidated": false,
+      "materialized_pending_index": null,
+      "native_applied_index": 0,
+      "native_base_index": 0,
+      "native_receipt_sha256": "77f22f9f8461e352c32dcd1f6cf1f386ab06aee49d36372e5067ed24c3d3d87a",
+      "pending_command_id": null,
+      "pending_command_index": null,
+      "range_id": 1
+    },
+    "n2": {
+      "diagnostic": "native base unknown/invalid; repair or re-attestation required",
+      "factory_initialization_complete": false,
+      "invalidated": true,
+      "materialized_pending_index": null,
+      "native_applied_index": null,
+      "native_base_index": null,
+      "native_receipt_sha256": null,
+      "pending_command_id": null,
+      "pending_command_index": null,
+      "range_id": 1
+    }
+  },
+  "source_progress_after": {
+    "compacted_through": 2,
+    "current_epoch": 1,
+    "last_index": 1026,
+    "node_id": "n0",
+    "range_id": 1,
+    "resolved_through": 1026
+  },
+  "source_ready_index": 1026,
+  "sparse_decision_sha256": "809b357ed26767b04a9034bbab0c25e478246e6cab30dc24e50026838e2501e7",
+  "unknown_tail_is_not_new_application_ack": true
+}

@@ -1,0 +1,6 @@
+
+running 1 test
+test distribution_range_recovery::recovery_order_tests::actual_gap_refusal_preserves_durable_observations_and_retained_prefix_recovers ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 679 filtered out; finished in 4.57s
+

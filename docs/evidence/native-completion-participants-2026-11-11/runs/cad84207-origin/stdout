@@ -1,0 +1,12 @@
+
+running 7 tests
+test distribution_range_consensus::native_prefix::tests::native_install_safety_preserves_floor_when_raw_repair_invalidates_source ... ok
+test distribution_range_consensus::native_prefix::tests::native_history_actual_coordinator_spine_exports_full_bounded_contiguous_prefix ... ok
+test distribution_range_consensus::native_prefix::tests::native_origin_actual_coordinator_commits_under_outer_db_write_guard_without_reacquire ... ok
+test distribution_range_consensus::native_prefix::tests::native_origin_post_admission_pre_wal_unknown_cleans_local_attempt_before_recovery_freeze ... ok
+test distribution_range_consensus::native_prefix::tests::native_origin_public_ticket_without_actual_pending_scope_cannot_apply_rows ... ok
+test distribution_range_consensus::native_prefix::tests::native_pending_never_raises_source_floor_and_survives_reopen_without_forged_quorum ... ok
+test distribution_range_consensus::native_prefix::tests::native_prefix_actual_wal_and_quorum_extend_and_reopen_with_database_seq_distinct_from_range_index ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 667 filtered out; finished in 4.54s
+

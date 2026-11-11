@@ -1,0 +1,25 @@
+{
+  "behind_progress": {
+    "compacted_through": 0,
+    "current_epoch": 0,
+    "last_index": 0,
+    "node_id": "n1",
+    "range_id": 1,
+    "resolved_through": 0
+  },
+  "classification": "FIRST_ACTUAL_RECOVERY_REFUSAL",
+  "error": "cluster error: range recovery: malformed fenced image-history obligations",
+  "fixture_root": "/tmp/.tmpEmRrHy",
+  "irretrievable_loss_proven": false,
+  "operation": "fence_epoch",
+  "physical_qualification": false,
+  "recipient": "n0",
+  "source_progress": {
+    "compacted_through": 1,
+    "current_epoch": 1,
+    "last_index": 1026,
+    "node_id": "n0",
+    "range_id": 1,
+    "resolved_through": 1025
+  }
+}

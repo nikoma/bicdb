@@ -1,0 +1,31 @@
+{
+  "git_head": "d52e73726edaedc90d1a5d134f205e99c7c46d0a",
+  "uncommitted_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "source_version": "1.0.471-beta",
+  "scope": "Actual finalized Normal image-to-Prepared atomic refusal replacement and historical-marker proof; actual NativeCompletedFrozen catalogue+native config persistence retains pin/refusal; authenticated Prepare/Status/LOCAL closedQQ control. No NativeActivated/newpostrecoverywrite/StrongGet/physical qualification; core opt-level=0/debug=0",
+  "physical_qualification": false,
+  "environment_override": {},
+  "name": "legacy-v1-catalogue-compatibility",
+  "command": [
+    "cargo",
+    "test",
+    "--release",
+    "--locked",
+    "-p",
+    "bicdb-core",
+    "--features",
+    "tls-replication",
+    "--config",
+    "profile.release.package.bicdb-core.opt-level=0",
+    "--config",
+    "profile.release.package.bicdb-core.debug=0",
+    "--lib",
+    "distribution_range_consensus::tests::v1_committed_log_is_atomically_migrated_to_quorum_certified_current_format",
+    "--",
+    "--nocapture"
+  ],
+  "exit_code": 0,
+  "interrupted_reason": null,
+  "elapsed_seconds": 1.0006254464387894,
+  "minimum_available_bytes": 25918738432
+}

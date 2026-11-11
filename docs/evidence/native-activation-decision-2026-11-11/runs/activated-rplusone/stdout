@@ -1,0 +1,11 @@
+
+running 1 test
+test db::range_image_native::rf3_fixture::native_historical_tls::activation_rplusone::activated_anchor_keeps_r1_after_new_ack_and_late_prepared_follower_activates ... FAILED
+
+failures:
+
+failures:
+    db::range_image_native::rf3_fixture::native_historical_tls::activation_rplusone::activated_anchor_keeps_r1_after_new_ack_and_late_prepared_follower_activates
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 682 filtered out; finished in 7.05s
+

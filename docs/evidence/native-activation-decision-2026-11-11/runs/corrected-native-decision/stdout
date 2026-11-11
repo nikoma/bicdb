@@ -1,0 +1,14 @@
+
+running 4 tests
+test db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_immutable_history_corruption_cannot_mint_a_receipt ... ok
+test db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_actual_quorum_publishes_before_catalogue_and_reuses_original_audit ... ok
+test db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_missing_record_and_reused_pre_quorum_context_refuse ... ok
+test db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_strict_cold_open_reissues_only_actual_native_record ... FAILED
+
+failures:
+
+failures:
+    db::range_image_native::serving_configuration::activation_decision::tests::native_activation_decision_strict_cold_open_reissues_only_actual_native_record
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 678 filtered out; finished in 4.72s
+

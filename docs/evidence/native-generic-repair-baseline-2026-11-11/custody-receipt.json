@@ -1,0 +1,11 @@
+{
+  "custody_root": "/root/.local/state/bicdb/ha-scaling-2026-11-11/private/native-generic-repair-035fd22f",
+  "manifest_sha256": "4aedc3ce0768b4575406791bc01d526f130b0d3c8b2b048e0f7f253345050877",
+  "files": 55,
+  "bytes": 686899,
+  "source_destination_hash_parity": true,
+  "files_and_directories_fsynced": true,
+  "completed_unix": 1794428222.7173126,
+  "contains_generated_test_database_keys": true,
+  "global_credentials_included": false
+}

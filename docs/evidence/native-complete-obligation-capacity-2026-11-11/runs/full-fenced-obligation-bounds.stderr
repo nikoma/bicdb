@@ -1,0 +1,342 @@
+   Compiling bicdb-page v1.0.471-beta (/tmp/bicdb-native-obligation-capacity/crates/bicdb-page)
+warning: methods `node_kind`, `child_value`, and `child_for` are never used
+   --> crates/bicdb-page/src/btree.rs:376:16
+    |
+337 |         impl $ty {
+    |         -------- methods in this implementation
+...
+376 |             fn node_kind(&self, page_id: PageId) -> Result<bool> {
+    |                ^^^^^^^^^
+...
+389 |             fn child_value(&self, page_id: PageId, index: usize) -> Result<PageId> {
+    |                ^^^^^^^^^^^
+...
+430 |             fn child_for(&self, page_id: PageId, needle: &[u8]) -> Result<PageId> {
+    |                ^^^^^^^^^
+...
+449 | node_reads!(Node<'_>);
+    | --------------------- in this macro invocation
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+    = note: this warning originates in the macro `node_reads` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: methods `free_start`, `free_end`, `page_id`, `is_leaf`, and `free_space` are never used
+   --> crates/bicdb-page/src/btree.rs:349:16
+    |
+337 |         impl $ty {
+    |         -------- methods in this implementation
+...
+349 |             fn free_start(&self) -> usize {
+    |                ^^^^^^^^^^
+...
+354 |             fn free_end(&self) -> usize {
+    |                ^^^^^^^^
+...
+359 |             fn page_id(&self) -> PageId {
+    |                ^^^^^^^
+...
+368 |             fn is_leaf(&self) -> bool {
+    |                ^^^^^^^
+...
+442 |             fn free_space(&self) -> usize {
+    |                ^^^^^^^^^^
+...
+450 | node_reads!(NodeRef<'_>);
+    | ------------------------ in this macro invocation
+    |
+    = note: this warning originates in the macro `node_reads` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: `bicdb-page` (lib) generated 2 warnings
+   Compiling bicdb-lua v1.0.471-beta (/tmp/bicdb-native-obligation-capacity/crates/bicdb-lua)
+   Compiling bicdb-core v1.0.471-beta (/tmp/bicdb-native-obligation-capacity/crates/bicdb-core)
+warning: unused import: `TargetNativeImageSnapshotBound`
+  --> crates/bicdb-core/src/db.rs:64:5
+   |
+64 |     TargetNativeImageSnapshotBound,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `NativeLocalVisibilitySequence`
+  --> crates/bicdb-core/src/db.rs:68:66
+   |
+68 | pub(crate) use native_recovery_ready::{LocalNativeRecoveryReady, NativeLocalVisibilitySequence};
+   |                                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `ActualNativeRf3RpcObservation`
+  --> crates/bicdb-core/src/db.rs:71:29
+   |
+71 |     ActualNativeRf3Fixture, ActualNativeRf3RpcObservation,
+   |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `FreshRangeGenesisAuthority`, `NativeHistoryPublicationBinding`, `NativeLogicalHistoryEntryV1`, and `NativeLogicalHistoryPoint`
+  --> crates/bicdb-core/src/db.rs:74:5
+   |
+74 |     FreshRangeGenesisAuthority, KnownNativeRecoveryPrefix, NativeRecoveredServingReceipt, NativeHistoryPublicationBinding,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+75 |     NativeHistoryStage, NativeHistoryStageProgress, NativeHistoryTargetContext,
+76 |     NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^                                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `bundle_event_for_stored`
+   --> crates/bicdb-core/src/db.rs:177:11
+    |
+177 |     self, bundle_event_for_stored, envelope_from_metadata, event_with_sync_metadata, EventEnvelope,
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `FrozenNativeReadyStage`
+ --> crates/bicdb-core/src/distribution_range_consensus/native_ready_observation.rs:5:5
+  |
+5 |     FrozenNativeReadyStage, NativeReadyPhysicalDomain, NativeReadyReply, NativeReadyRequest,
+  |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `native_ready_completion::NativeRecoveryCompletedFrozenReceipt`
+  --> crates/bicdb-core/src/distribution_range_consensus.rs:61:16
+   |
+61 | pub(crate) use native_ready_completion::NativeRecoveryCompletedFrozenReceipt;
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `UntouchedNativeImageTransferReturn`
+  --> crates/bicdb-core/src/distribution_range_consensus.rs:71:5
+   |
+71 |     UntouchedNativeImageTransferReturn,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `PathBuf`
+  --> crates/bicdb-core/src/aggregate_projection.rs:23:23
+   |
+23 | use std::path::{Path, PathBuf};
+   |                       ^^^^^^^
+
+error[E0308]: mismatched types
+  --> crates/bicdb-core/src/distribution_range_recovery/image_history.rs:20:13
+   |
+20 |       invalid(format!(
+   |  _____________^
+21 | |         "fenced history exceeds the complete {MAX_FENCED_IRREVERSIBLE_COMMANDS}-command obligation reply bound; paginated history ...
+22 | |     ))
+   | |_____^ expected `&str`, found `String`
+
+warning: unused import: `Verifier`
+  --> crates/bicdb-core/src/db.rs:93:32
+   |
+93 | use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+   |                                ^^^^^^^^
+
+warning: variable does not need to be mutable
+    --> crates/bicdb-core/src/broker.rs:2624:13
+     |
+2624 |         let mut db = BicDb::open(root.path()).unwrap();
+     |             ----^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/bicdb-core/src/db/collection_rename.rs:304:23
+    |
+304 |             if let Ok(mut state) = self.collection_state_mut(name) {
+    |                       ----^^^^^
+    |                       |
+    |                       help: remove this `mut`
+
+warning: unused variable: `impact_seq`
+    --> crates/bicdb-core/src/db/fts_build.rs:2569:28
+     |
+2569 | ...                   impact_seq: &mut u32,
+     |                       ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_impact_seq`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `sink`
+    --> crates/bicdb-core/src/db/fts_build.rs:2606:25
+     |
+2606 |             if let Some(sink) = &segment_sink {
+     |                         ^^^^ help: if this is intentional, prefix it with an underscore: `_sink`
+
+warning: variable does not need to be mutable
+    --> crates/bicdb-core/src/db/fts_query.rs:1287:13
+     |
+1287 |         let mut emit_tail = |index: usize,
+     |             ----^^^^^^^^^
+     |             |
+     |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> crates/bicdb-core/src/db/fts_query.rs:1875:13
+     |
+1875 |         let mut probe = |label: &str,
+     |             ----^^^^^
+     |             |
+     |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/bicdb-core/src/db/index_build.rs:628:13
+    |
+628 |         let mut flush = |pending: &mut Vec<(u64, Vec<u8>)>,
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> crates/bicdb-core/src/db/index_build.rs:1361:29
+     |
+1361 |                         let mut resolve = |pk: &str| -> Option<RowId> {
+     |                             ----^^^^^^^
+     |                             |
+     |                             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/bicdb-core/src/db/range_image_native/certified_prefix/recovery_apply/tests.rs:263:13
+    |
+263 |         let mut db = fixture.databases[&original_leader].write();
+    |             ----^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/bicdb-core/src/db/transaction_suspension.rs:179:13
+    |
+179 |         let mut db = BicDb::open(root.path()).unwrap();
+    |             ----^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:22604:17
+      |
+22604 |             let mut apply = || -> Result<()> {
+      |                 ----^^^^^
+      |                 |
+      |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:24551:13
+      |
+24551 |         let mut consume = |triple: ImpactTriple,
+      |             ----^^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:27606:13
+      |
+27606 |         let mut file = fs::OpenOptions::new()
+      |             ----^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:28852:13
+      |
+28852 |         let mut fresh = audit_db(&fresh_root);
+      |             ----^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:28858:13
+      |
+28858 |         let mut reopened = audit_db(&temp.path().join("a"));
+      |             ----^^^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:29597:13
+      |
+29597 |         let mut shadow = ShadowIndexStore::new(
+      |             ----^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:29632:13
+      |
+29632 |         let mut sharded = ShardedBTreeIndexStore::with_shards(16);
+      |             ----^^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:29633:13
+      |
+29633 |         let mut reference = BTreeIndexStore::default();
+      |             ----^^^^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:29706:13
+      |
+29706 |         let mut s = ShardedBTreeIndexStore::with_shards(shards);
+      |             ----^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:29756:13
+      |
+29756 |         let mut reference = BTreeIndexStore::default();
+      |             ----^^^^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:29821:13
+      |
+29821 |         let mut reference = BTreeIndexStore::default();
+      |             ----^^^^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:29822:13
+      |
+29822 |         let mut shadow_inner_a = BTreeIndexStore::default();
+      |             ----^^^^^^^^^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:29823:13
+      |
+29823 |         let mut shadow_inner_b = BTreeIndexStore::default();
+      |             ----^^^^^^^^^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:32924:17
+      |
+32924 |             let mut pinned = db.begin_transaction().unwrap();
+      |                 ----^^^^^^
+      |                 |
+      |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/bicdb-core/src/distribution_metadata_read_provider.rs:998:13
+    |
+998 |         let mut topology = store.topology().clone();
+    |             ----^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `collection`
+    --> crates/bicdb-core/src/paged_collection.rs:4573:13
+     |
+4573 |         let collection: &str = &physical;
+     |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_collection`
+
+warning: variable does not need to be mutable
+   --> crates/bicdb-core/src/spatial_packed.rs:257:9
+    |
+257 |     let mut emit_leaf = |leaf: &mut Vec<PackedSpatialEntry>,
+    |         ----^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+For more information about this error, try `rustc --explain E0308`.
+warning: `bicdb-core` (lib test) generated 37 warnings
+error: could not compile `bicdb-core` (lib test) due to 1 previous error; 37 warnings emitted

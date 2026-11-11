@@ -1,0 +1,14 @@
+
+running 9 tests
+test db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_recovered_serving_requires_actual_activated_open ... ok
+test db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_uses_current_r2_not_activation_anchor_and_refuses_cq_only_peer ... ok
+test distribution_native_read::tests::native_read_observation_actual_cold_open_invalidates_old_lifetime ... ok
+test distribution_native_read::tests::native_read_observation_actual_genesis_and_r1_use_target_local_data_b ... ok
+test distribution_native_read::tests::native_read_observation_failed_mutation_and_health_invalidate_owned_observation ... ok
+test distribution_native_read::tests::native_read_observation_rejects_actual_raw_prepare_and_cq_ahead_of_native ... ok
+test distribution_range_mutation::native_read_stamp_tests::native_read_stamp_invalidates_database_freeze_and_controlled_paths ... ok
+test distribution_range_mutation::native_read_stamp_tests::native_read_stamp_never_allocates_and_failed_writer_cannot_aba ... ok
+test distribution_native_read::tests::native_read_observation_scope_cancellation_and_store_replacement_are_not_permissions ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 694 filtered out; finished in 15.23s
+

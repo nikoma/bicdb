@@ -32,6 +32,17 @@ not change engine behavior or qualify a newer source version.
 
 ## P0 source follow-up — 2026-11-11
 
+The [revision-scoped recovery evidence matrix](recovery-component-evidence-2026-11-11.md)
+and [subsequent engineering findings](native-recovery-progress-2026-11-11.md)
+classify the later private engine experiments separately. They retain failed
+certification, native catch-up, abort and late-completion witnesses alongside
+focused repairs. A later local test acknowledges a new write and late-activates
+an older completion decision, while the lagging follower still honestly refuses
+current Ready. These are neither merged runtime capabilities nor proof of strong
+reads, automatic fault-safe relocation, physical throughput or production
+admission. Their source patches remain evidence artifacts, separate from engine
+implementation delivery and from the original failed Azure runs.
+
 The [opt-in local namespace identity API](local-namespace-identity.md) supplies a
 durable physical backing UUID for trusted storage and journal consumers. Its
 [source-pinned validation](evidence/local-namespace-identity-2026-11-11/README.md)

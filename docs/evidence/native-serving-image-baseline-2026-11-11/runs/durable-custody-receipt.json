@@ -1,0 +1,10 @@
+{
+  "destination": "/root/.local/state/bicdb/ha-scaling-2026-11-11/private/native-serving-image-witness-1978a0ea",
+  "files": 118,
+  "bytes": 4550410,
+  "manifest_sha256": "d1e10ab900e82f49bf95f677ae143d98d9c4ffeaf71cd8fe716b54ffef2dbdf8",
+  "all_source_destination_hashes_match": true,
+  "global_authentication_caches_included": false,
+  "binaries_or_rlibs_included": false,
+  "private_keys_included": false
+}

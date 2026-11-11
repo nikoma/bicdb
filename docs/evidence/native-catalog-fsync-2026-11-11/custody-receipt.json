@@ -1,0 +1,18 @@
+{
+  "bytes": 1725403,
+  "custody_is_additional_qualification": false,
+  "database_engine_opened": false,
+  "database_keys_restricted": true,
+  "directory_mode": "0700",
+  "external_ack_ledger_retained": false,
+  "file_mode": "0600",
+  "files": 84,
+  "files_and_directories_fsynced": true,
+  "global_credentials_included": false,
+  "manifest_sha256": "dd48abef28f9268b0182830d4de14f82014f1db923a087f4636ab9f69b4d7725",
+  "relative_private_path": "private/native-catalog-fsync-574ea560",
+  "separate_tls_key_and_metadata_consensus_tempdirs_retained": false,
+  "source_destination_hash_parity": true,
+  "source_revision": "574ea56074a991368e9dae2129a0734a23bc1be3",
+  "stopped_native_r2_roots": 1
+}

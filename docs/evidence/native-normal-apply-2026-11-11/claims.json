@@ -1,0 +1,193 @@
+{
+  "aborted_slot_catchup_tested": false,
+  "actual_loopback_mtls_tested": true,
+  "automatic_election_tested": false,
+  "binary_release_produced": false,
+  "broken_pipe_diagnostics_primary": 5,
+  "changed_epoch_command_checksum_recomputed_in_negative": false,
+  "cohorts_combined_into_total": false,
+  "compacted_catchup_tested": false,
+  "effects_issue_148_closed": false,
+  "external_ack_ledger_retained": false,
+  "main_merged_at_measurement": false,
+  "membership_transition_tested": false,
+  "minimum_primary_available_bytes": 21403254784,
+  "original_035_baseline_modified": false,
+  "physical_fault_tested": false,
+  "primary_distinct_passing_tests": 5,
+  "primary_passing_test_ids": [
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_normal_tls::native_normal_actual_mtls_catchup_then_two_acks_and_old_duplicate_preserves_new_value",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_normal_tls::native_normal_actual_mtls_wrong_actor_bootstrap_scope_epoch_refuse_before_native_mutation",
+    "db::range_image_native::rf3_fixture::native_normal_apply_actual_rf3_services_materialize_two_acks_and_lost_apply_catchup",
+    "db::range_image_native::rf3_fixture::native_rf3_actual_services_ack_origin_while_bare_replica_apply_remains_refused",
+    "db::range_image_native::rf3_fixture::native_rf3_oversize_refuses_before_any_durable_quorum_or_native_pending"
+  ],
+  "prior_origin_distinct_passing_tests": 7,
+  "prior_origin_passing_test_ids": [
+    "distribution_range_consensus::native_prefix::tests::native_history_actual_coordinator_spine_exports_full_bounded_contiguous_prefix",
+    "distribution_range_consensus::native_prefix::tests::native_install_safety_preserves_floor_when_raw_repair_invalidates_source",
+    "distribution_range_consensus::native_prefix::tests::native_origin_actual_coordinator_commits_under_outer_db_write_guard_without_reacquire",
+    "distribution_range_consensus::native_prefix::tests::native_origin_post_admission_pre_wal_unknown_cleans_local_attempt_before_recovery_freeze",
+    "distribution_range_consensus::native_prefix::tests::native_origin_public_ticket_without_actual_pending_scope_cannot_apply_rows",
+    "distribution_range_consensus::native_prefix::tests::native_pending_never_raises_source_floor_and_survives_reopen_without_forged_quorum",
+    "distribution_range_consensus::native_prefix::tests::native_prefix_actual_wal_and_quorum_extend_and_reopen_with_database_seq_distinct_from_range_index"
+  ],
+  "prior_origin_revision": "87f1da00c53126d86796abe8048e36098d9d05f7",
+  "production_qualified": false,
+  "public_patch_base": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "raw_individual_rpc_trace_retained": false,
+  "reconstruction_prefixes": [
+    "Cargo.toml",
+    "Cargo.lock",
+    ".cargo",
+    "crates",
+    "examples/extensions"
+  ],
+  "runs": [
+    {
+      "broken_pipe_diagnostics": 5,
+      "cohort": "primary-final",
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "actual-mtls-v2",
+      "passed_test_ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_normal_tls::native_normal_actual_mtls_catchup_then_two_acks_and_old_duplicate_preserves_new_value",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_normal_tls::native_normal_actual_mtls_wrong_actor_bootstrap_scope_epoch_refuse_before_native_mutation"
+      ],
+      "rust_tests_started": true,
+      "source_revision": "18723cf4f1ddbb01e37f3762067b30000707cadb"
+    },
+    {
+      "broken_pipe_diagnostics": 0,
+      "cohort": "primary-final",
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "final-bare-controls",
+      "passed_test_ids": [
+        "db::range_image_native::rf3_fixture::native_rf3_actual_services_ack_origin_while_bare_replica_apply_remains_refused",
+        "db::range_image_native::rf3_fixture::native_rf3_oversize_refuses_before_any_durable_quorum_or_native_pending"
+      ],
+      "rust_tests_started": true,
+      "source_revision": "18723cf4f1ddbb01e37f3762067b30000707cadb"
+    },
+    {
+      "broken_pipe_diagnostics": 0,
+      "cohort": "primary-final",
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "final-embedded-positive",
+      "passed_test_ids": [
+        "db::range_image_native::rf3_fixture::native_normal_apply_actual_rf3_services_materialize_two_acks_and_lost_apply_catchup"
+      ],
+      "rust_tests_started": true,
+      "source_revision": "18723cf4f1ddbb01e37f3762067b30000707cadb"
+    },
+    {
+      "broken_pipe_diagnostics": 0,
+      "cohort": "prior-origin-only",
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "prior-origin-controls",
+      "passed_test_ids": [
+        "distribution_range_consensus::native_prefix::tests::native_install_safety_preserves_floor_when_raw_repair_invalidates_source",
+        "distribution_range_consensus::native_prefix::tests::native_history_actual_coordinator_spine_exports_full_bounded_contiguous_prefix",
+        "distribution_range_consensus::native_prefix::tests::native_origin_actual_coordinator_commits_under_outer_db_write_guard_without_reacquire",
+        "distribution_range_consensus::native_prefix::tests::native_origin_post_admission_pre_wal_unknown_cleans_local_attempt_before_recovery_freeze",
+        "distribution_range_consensus::native_prefix::tests::native_origin_public_ticket_without_actual_pending_scope_cannot_apply_rows",
+        "distribution_range_consensus::native_prefix::tests::native_pending_never_raises_source_floor_and_survives_reopen_without_forged_quorum",
+        "distribution_range_consensus::native_prefix::tests::native_prefix_actual_wal_and_quorum_extend_and_reopen_with_database_seq_distinct_from_range_index"
+      ],
+      "rust_tests_started": true,
+      "source_revision": "87f1da00c53126d86796abe8048e36098d9d05f7"
+    },
+    {
+      "broken_pipe_diagnostics": 0,
+      "cohort": "earlier-supporting-not-added",
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "second-coherence",
+      "passed_test_ids": [
+        "db::range_image_native::rf3_fixture::native_normal_apply_actual_rf3_services_materialize_two_acks_and_lost_apply_catchup"
+      ],
+      "rust_tests_started": true,
+      "source_revision": "87f1da00c53126d86796abe8048e36098d9d05f7"
+    },
+    {
+      "broken_pipe_diagnostics": 0,
+      "cohort": "earlier-supporting-not-added",
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "prior-rf3-controls",
+      "passed_test_ids": [
+        "db::range_image_native::rf3_fixture::native_rf3_actual_services_ack_origin_while_bare_replica_apply_remains_refused",
+        "db::range_image_native::rf3_fixture::native_rf3_oversize_refuses_before_any_durable_quorum_or_native_pending"
+      ],
+      "rust_tests_started": true,
+      "source_revision": "87f1da00c53126d86796abe8048e36098d9d05f7"
+    },
+    {
+      "broken_pipe_diagnostics": 0,
+      "cohort": "compile-failure",
+      "exit_code": 101,
+      "failed_test_ids": [],
+      "name": "first-coherence",
+      "passed_test_ids": [],
+      "rust_tests_started": false,
+      "source_revision": "73ab4f636e66f9e165e30b7736b7d263f812d6fc"
+    },
+    {
+      "broken_pipe_diagnostics": 0,
+      "cohort": "compile-failure",
+      "exit_code": 101,
+      "failed_test_ids": [],
+      "name": "actual-mtls-v1",
+      "passed_test_ids": [],
+      "rust_tests_started": false,
+      "source_revision": "7b8e5229f3d3572c6c512b1d4c471649a1909bd7"
+    }
+  ],
+  "same_epoch_retained_applied_catchup_tested": true,
+  "schema": 1,
+  "source_package_version_bumped": false,
+  "source_revision": "18723cf4f1ddbb01e37f3762067b30000707cadb",
+  "source_version": "1.0.471-beta",
+  "sources": [
+    {
+      "directory": "source/primary",
+      "input_files": 1350,
+      "name": "primary",
+      "patch_parent": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+      "patch_sha256": "786e078a85e25ba2d8f03a6447182504c2fc39079386901c1871495e2e49e81c",
+      "revision": "18723cf4f1ddbb01e37f3762067b30000707cadb"
+    },
+    {
+      "directory": "source/prior-origin",
+      "input_files": 1349,
+      "name": "prior-origin",
+      "patch_parent": "18723cf4f1ddbb01e37f3762067b30000707cadb",
+      "patch_sha256": "9e447e239dc0020c1792c9a7b2307e6b1caa9fffeaee0ceb3f3e7aa6349150b3",
+      "revision": "87f1da00c53126d86796abe8048e36098d9d05f7"
+    },
+    {
+      "directory": "source/compile-first",
+      "input_files": 1349,
+      "name": "compile-first",
+      "patch_parent": "18723cf4f1ddbb01e37f3762067b30000707cadb",
+      "patch_sha256": "3ef9e92fb98c0a08a673c9b48ff02e680f7f0f7dc306aa86d1b590201d9ab4c5",
+      "revision": "73ab4f636e66f9e165e30b7736b7d263f812d6fc"
+    },
+    {
+      "directory": "source/compile-mtls",
+      "input_files": 1350,
+      "name": "compile-mtls",
+      "patch_parent": "18723cf4f1ddbb01e37f3762067b30000707cadb",
+      "patch_sha256": "54df3a9a4d25bb4d10bf75d19a6f38c88bd356db1eec200061809681f4cb0027",
+      "revision": "7b8e5229f3d3572c6c512b1d4c471649a1909bd7"
+    }
+  ],
+  "strong_get_tested": false,
+  "successful_database_archive_retained": false,
+  "successful_root_identity_retained": false,
+  "test_executable_digest_retained": false,
+  "worktree": "/tmp/bicdb-native-normal-apply"
+}

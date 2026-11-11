@@ -1,0 +1,22 @@
+{
+  "source_revision": "035fd22f40028a4d7c23e4a086af19791674677f",
+  "source_version": "1.0.471-beta",
+  "baseline_outcome": "FAIL",
+  "exit_code": 101,
+  "actual_origin_acks": 2,
+  "native_before": 0,
+  "native_after": null,
+  "native_after_meaning": "UNKNOWN_INVALIDATED",
+  "repair_reported_success": true,
+  "raw_resolved_after": 1,
+  "expected_native_after_successful_repair": 1,
+  "bare_native_apply_is_explicit_fixture_limitation": true,
+  "production_rpc_same_path_source_inspected": true,
+  "production_rpc_dynamically_exercised": false,
+  "main_or_azure_cause_claim": false,
+  "new_leader_ready_tested": false,
+  "strong_get_tested": false,
+  "physical_qualification": false,
+  "production_qualified": false,
+  "irretrievable_loss_proven": false
+}

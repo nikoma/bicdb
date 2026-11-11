@@ -156,6 +156,7 @@ fn initial_metadata_binds_another_genuine_birth(
     .unwrap();
     db.create_collection("items").unwrap();
     let db = Arc::new(RwLock::new(db));
+    db.read().schema_compatibility_fingerprint().unwrap();
     for range in &spec.initial_ranges {
         let gate = db.read().range_mutation_gate();
         let frozen = gate.try_freeze(range.id, Uuid::now_v7()).unwrap();

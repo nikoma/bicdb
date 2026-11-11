@@ -18,6 +18,8 @@ fn reattest_empty_genesis(
     factory: &FreshRangeGenesisAuthority,
     spec: &RangeImageBirthSpec,
 ) {
+    // Actual schema scan for this open; no cache or digest is assigned.
+    db.read().schema_compatibility_fingerprint().unwrap();
     for range in &spec.initial_ranges {
         let gate = db.read().range_mutation_gate();
         let frozen = gate.try_freeze(range.id, Uuid::now_v7()).unwrap();
@@ -40,19 +42,7 @@ fn fresh_same_spec(
         BicDb::create_new_range_image_database(root, config(), spec.clone()).unwrap();
     db.create_collection("items").unwrap();
     let db = Arc::new(RwLock::new(db));
-    for range in &spec.initial_ranges {
-        let gate = db.read().range_mutation_gate();
-        let frozen = gate.try_freeze(range.id, Uuid::now_v7()).unwrap();
-        BicDb::initialize_range_image_genesis(
-            &db,
-            &factory,
-            range,
-            &frozen,
-            Duration::from_secs(3),
-            &CancellationToken::uncancelable(),
-        )
-        .unwrap();
-    }
+    reattest_empty_genesis(&db, &factory, spec);
     (db, factory)
 }
 
